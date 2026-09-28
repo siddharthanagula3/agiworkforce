@@ -1550,7 +1550,7 @@ describe('ChatComposerNew', () => {
     expect(screen.queryByText(/extended thinking/i)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /use style/i })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /deep research/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /create office files/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^output/i })).toBeInTheDocument();
   });
 
   it('keeps routed Auto capabilities actionable for a paid plan', () => {
@@ -1560,7 +1560,7 @@ describe('ChatComposerNew', () => {
     fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
 
     expect(screen.getByRole('button', { name: /deep research/i })).toBeEnabled();
-    expect(screen.getByRole('button', { name: /create office files/i })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /^output/i })).toBeEnabled();
   });
 
   it('enables Deep Research for a tool-capable model the catalog marks research false', () => {
@@ -1591,9 +1591,10 @@ describe('ChatComposerNew', () => {
 
     render(<ChatComposerNew onSend={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
-    fireEvent.click(screen.getByRole('button', { name: /create office files/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^output/i }));
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Presentation' }));
 
-    expect(screen.getByRole('status', { name: 'Active options: Office files' })).toBeVisible();
+    expect(screen.getByRole('status', { name: 'Active options: Presentation' })).toBeVisible();
   });
 
   it('exposes the toggle state of + menu rows to assistive technology', () => {
@@ -1602,14 +1603,16 @@ describe('ChatComposerNew', () => {
     render(<ChatComposerNew onSend={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
 
-    const officeFiles = screen.getByRole('button', { name: /create office files/i });
-    expect(officeFiles).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(screen.getByRole('button', { name: /^output/i }));
+    const documentOutput = screen.getByRole('menuitemradio', { name: 'Document' });
+    expect(documentOutput).toHaveAttribute('aria-checked', 'false');
 
-    fireEvent.click(officeFiles);
+    fireEvent.click(documentOutput);
     fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^output/i }));
 
-    expect(screen.getByRole('button', { name: /create office files/i })).toHaveAttribute(
-      'aria-pressed',
+    expect(screen.getByRole('menuitemradio', { name: 'Document' })).toHaveAttribute(
+      'aria-checked',
       'true',
     );
   });
@@ -1659,7 +1662,8 @@ describe('ChatComposerNew', () => {
     render(<ChatComposerNew onSend={onSendMock} />);
 
     fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
-    fireEvent.click(screen.getByRole('button', { name: /create office files/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^output/i }));
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Presentation' }));
 
     const textarea = screen.getByRole('textbox', { name: /message input/i });
     await userEvent.type(textarea, 'Create a release plan deck');
@@ -1670,7 +1674,7 @@ describe('ChatComposerNew', () => {
         'Create a release plan deck',
         undefined,
         undefined,
-        expect.objectContaining({ officeCreationEnabled: true }),
+        expect.objectContaining({ officeCreationEnabled: true, officeOutputFormat: 'pptx' }),
       ),
     );
   });

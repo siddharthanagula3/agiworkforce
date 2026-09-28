@@ -360,6 +360,7 @@ export {
   type SettingsDataAdapter,
   type SettingsConnector,
   type ConnectedConnector,
+  type CustomConnectorPreset,
   type SettingsSkill,
   type SettingsPlugin,
   type SettingsSectionKey,

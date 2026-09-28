@@ -20,6 +20,7 @@ import {
   toolApprovalPolicySentence,
   TOOL_APPROVAL_PRECEDENCE,
 } from '@/lib/tool-approval-view';
+import { PolicyVersionsLink } from '@shared/components/legal/PolicyVersionsLink';
 
 export const metadata = buildMetadata({
   title: 'Approvals',
@@ -96,7 +97,8 @@ export default function AgentPermissionsPage() {
               <a href="/acceptable-use" className="agi-ds-link">
                 /acceptable-use
               </a>
-              . Last updated: {POLICY_LAST_UPDATED.agentPermissions}.
+              . Last updated: {POLICY_LAST_UPDATED.agentPermissions}.{' '}
+              <PolicyVersionsLink policy="agentPermissions" />
             </>
           }
           ctas={[]}

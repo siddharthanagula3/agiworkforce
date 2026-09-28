@@ -4,14 +4,20 @@ import {
   type AgentActivityState,
   type AgentActivityToolEntry,
 } from '@agiworkforce/client-runtime';
-import { isAllowedMapSearchProviderUrl } from '@agiworkforce/cloud-contracts';
+import {
+  isAllowedMapSearchProviderUrl,
+  TOOL_APPROVAL_GUIDANCE_MAX_LENGTH,
+} from '@agiworkforce/cloud-contracts';
 import {
   agentTaskStateLabel,
   getModelMetadataById,
+  interactiveCardRendersBeforeProse,
   resolveInteractiveCardRenderer,
+  toolApprovalStakes,
   type InteractiveCard,
   type InteractiveCardRegistry,
   type InteractiveCardRenderContext,
+  type InteractiveCardResponsePayload,
   type MapSearchCardBody,
 } from '@agiworkforce/types';
 import {
@@ -30,6 +36,7 @@ import {
   CircleCheck,
   CircleX,
   Clock,
+  Code2,
   Loader2,
   Monitor,
   RotateCcw,
@@ -48,6 +55,11 @@ import { answerFiles, buildAnswerFiles, type AnswerFileAccess } from './generate
 import { wirePopupMenu } from './menu';
 import { buildSourcesFooter, decorateCitations, sourceHost } from './sources';
 import { buildMapPreview } from './mapPreview';
+import {
+  buildClarifyCard,
+  buildItineraryCard,
+  buildProductComparisonCard,
+} from './interactiveCards';
 
 type ChatMessage = SidePanelChatMessage;
 export type ManagedApprovalDecision = 'approved' | 'rejected';
@@ -65,7 +77,10 @@ export interface RegenerateModelOption {
 export interface BubbleInteractionOptions {
   approvalDecisions?: Readonly<Record<string, ManagedApprovalDecision>>;
   approvalError?: string;
+  approvalGuidance?: Readonly<Record<string, string>>;
   onResolveApproval?: (toolCallId: string, decision: ManagedApprovalDecision) => void;
+  onApproveForChat?: (toolCallId: string, toolName: string) => void;
+  onApprovalGuidanceChange?: (toolCallId: string, guidance: string) => void;
   onRetry?: (messageId: string) => void;
   onSwitchModel?: () => void;
   quotaRecovery?: QuotaRecoveryControl;
@@ -73,6 +88,7 @@ export interface BubbleInteractionOptions {
   regenerateModels?: readonly RegenerateModelOption[];
   imagePreviews?: readonly string[];
   fileAccess?: AnswerFileAccess;
+  onRespondToCard?: (cardId: string, payload: InteractiveCardResponsePayload) => void;
 }
 
 export function openInteractiveCardUrl(value: string): void {
@@ -160,34 +176,53 @@ function interactiveCardRegistry(
   access: AnswerFileAccess | undefined,
 ): InteractiveCardRegistry<HTMLElement> {
   return {
+    'clarify.v1': ({ card, body, ctx }) => buildClarifyCard(card, body, ctx),
+    'itinerary.v1': ({ body }) => buildItineraryCard(body, access),
     'map-search.v1': ({ body, ctx }) => buildMapSearchCard(body, ctx, access),
+    'product-comparison.v1': ({ body }) => buildProductComparisonCard(body),
   };
 }
 
 export function buildInteractiveCardEl(
   card: InteractiveCard,
   access?: AnswerFileAccess,
+  onRespond?: (payload: InteractiveCardResponsePayload) => void,
 ): HTMLElement {
   const renderer = resolveInteractiveCardRenderer(interactiveCardRegistry(access), card);
   if (!renderer || !card.recognized) return buildInteractiveCardFallback(card);
   return renderer({
     card,
     body: card.body,
-    ctx: { canRespond: false, onOpenUrl: openInteractiveCardUrl },
+    ctx: {
+      canRespond: onRespond !== undefined,
+      ...(onRespond ? { onRespond } : {}),
+      onOpenUrl: openInteractiveCardUrl,
+    },
   });
 }
 
-function appendInteractiveCards(
-  parent: HTMLElement,
+function buildInteractiveCardStack(
   message: ChatMessage,
-  access: AnswerFileAccess | undefined,
-): void {
-  if (message.role !== 'assistant' || !message.interactiveCards?.length) return;
+  options: BubbleInteractionOptions,
+  leading: boolean,
+): HTMLElement | null {
+  if (message.role !== 'assistant') return null;
+  const selected = (message.interactiveCards ?? []).filter(
+    (card) => interactiveCardRendersBeforeProse(card.kind) === leading,
+  );
+  if (selected.length === 0) return null;
+  const respond = options.onRespondToCard;
   const cards = el('div', { class: 'sp-interactive-card-stack' });
-  for (const card of message.interactiveCards) {
-    cards.appendChild(buildInteractiveCardEl(card, access));
+  for (const card of selected) {
+    cards.appendChild(
+      buildInteractiveCardEl(
+        card,
+        options.fileAccess,
+        respond ? (payload) => respond(card.cardId, payload) : undefined,
+      ),
+    );
   }
-  parent.appendChild(cards);
+  return cards;
 }
 
 function buildRetryButton(msg: ChatMessage, onRetry: (messageId: string) => void): HTMLElement {
@@ -460,6 +495,62 @@ function buildTransientStatus(msg: ChatMessage): HTMLElement | null {
   return status;
 }
 
+function buildCodeExecution(msg: ChatMessage): HTMLElement | null {
+  const execution = msg.codeExecution;
+  if (!execution || (execution.status === 'running' && !msg.streaming)) return null;
+  const running = execution.status === 'running';
+  const returnCode = execution.returnCode ?? 0;
+  const passed = execution.status === 'completed' && returnCode === 0;
+  const detail = el('div', { class: 'sp-code-run__detail' });
+  if (execution.stdout) {
+    detail.appendChild(el('div', { class: 'sp-code-run__label' }, t('spCodeOutput')));
+    detail.appendChild(el('pre', { class: 'sp-code-run__output' }, execution.stdout));
+  }
+  if (execution.stderr) {
+    detail.appendChild(el('div', { class: 'sp-code-run__label' }, t('spCodeStderr')));
+    detail.appendChild(
+      el('pre', { class: 'sp-code-run__output sp-code-run__output--error' }, execution.stderr),
+    );
+  }
+  if (execution.status === 'failed') {
+    detail.appendChild(
+      el(
+        'div',
+        { class: 'sp-code-run__error' },
+        t('spCodeFailed', [execution.errorCode ?? 'unknown_error']),
+      ),
+    );
+  } else if (returnCode !== 0) {
+    detail.appendChild(
+      el('div', { class: 'sp-code-run__error' }, t('spCodeExitCode', [String(returnCode)])),
+    );
+  }
+  const hasDetail = detail.childElementCount > 0;
+  const block = document.createElement(hasDetail ? 'details' : 'div');
+  block.className = 'sp-code-run';
+  if (block instanceof HTMLDetailsElement) block.open = true;
+  const summary = document.createElement(hasDetail ? 'summary' : 'div');
+  summary.className = 'sp-code-run__summary';
+  summary.appendChild(renderIcon(Code2, 14));
+  summary.appendChild(
+    el(
+      'span',
+      { class: 'sp-code-run__title' },
+      running ? t('spCodeRunning') : t('spCodeExecution'),
+    ),
+  );
+  summary.appendChild(
+    renderIcon(
+      running ? Loader2 : passed ? CircleCheck : CircleX,
+      13,
+      `sp-code-run__status sp-code-run__status--${running ? 'running' : passed ? 'passed' : 'failed'}`,
+    ),
+  );
+  block.appendChild(summary);
+  if (hasDetail) block.appendChild(detail);
+  return block;
+}
+
 function appendAnswerExtras(
   wrapper: HTMLElement,
   msg: ChatMessage,
@@ -469,12 +560,15 @@ function appendAnswerExtras(
   if (msg.role !== 'assistant') return;
   const transient = buildTransientStatus(msg);
   if (transient) wrapper.appendChild(transient);
+  const codeRun = buildCodeExecution(msg);
+  if (codeRun) wrapper.appendChild(codeRun);
   const files = buildAnswerFiles(
     answerFiles(msg.generatedFiles, msg.agentActivity),
     options.fileAccess,
   );
   if (files) wrapper.appendChild(files);
-  appendInteractiveCards(wrapper, msg, options.fileAccess);
+  const cards = buildInteractiveCardStack(msg, options, false);
+  if (cards) wrapper.appendChild(cards);
   if (!msg.streaming) {
     const footer = buildSourcesFooter(sources);
     if (footer) wrapper.appendChild(footer);
@@ -501,6 +595,8 @@ function buildBubble(msg: ChatMessage, options: BubbleInteractionOptions = {}): 
   } else {
     fillAnswerBubble(bubble, msg.content, markers);
   }
+  const leadingCards = buildInteractiveCardStack(msg, options, true);
+  if (leadingCards) wrapper.appendChild(leadingCards);
   wrapper.appendChild(bubble);
 
   const errorFooter = buildErrorFooter(
@@ -688,6 +784,49 @@ function appendArtifactAction(parent: HTMLElement, entry: AgentActivityArtifactE
   parent.appendChild(link);
 }
 
+function approvalArguments(input: unknown): Record<string, unknown> | undefined {
+  let value = input;
+  if (typeof value === 'string') {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      return undefined;
+    }
+  }
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+function buildApprovalStakes(entry: AgentActivityToolEntry): HTMLElement | null {
+  const stakes = toolApprovalStakes(entry.name, approvalArguments(entry.input));
+  if (stakes.length === 0) return null;
+  const list = el('dl', { class: 'sp-agent-approval__stakes' });
+  for (const stake of stakes) {
+    list.appendChild(el('dt', {}, stake.label));
+    list.appendChild(el('dd', {}, stake.value));
+  }
+  return list;
+}
+
+function buildApprovalGuidance(
+  entry: AgentActivityToolEntry,
+  options: BubbleInteractionOptions,
+): HTMLElement | null {
+  const onChange = options.onApprovalGuidanceChange;
+  if (!onChange) return null;
+  const guidance = el('textarea', {
+    class: 'sp-agent-approval__guidance',
+    rows: '2',
+    maxlength: String(TOOL_APPROVAL_GUIDANCE_MAX_LENGTH),
+    placeholder: t('spApprovalGuidancePlaceholder'),
+    'aria-label': t('spApprovalGuidanceNamed', [entry.name]),
+  });
+  guidance.value = options.approvalGuidance?.[entry.toolCallId] ?? '';
+  guidance.addEventListener('input', () => onChange(entry.toolCallId, guidance.value));
+  return guidance;
+}
+
 function appendApprovalActions(
   parent: HTMLElement,
   entry: AgentActivityToolEntry,
@@ -705,6 +844,8 @@ function appendApprovalActions(
         : t('spApprovalRequired'),
     ),
   );
+  const stakes = buildApprovalStakes(entry);
+  if (stakes) approval.appendChild(stakes);
   if (options.approvalError) {
     approval.appendChild(
       el('div', { class: 'sp-agent-approval__error', role: 'alert' }, options.approvalError),
@@ -719,6 +860,8 @@ function appendApprovalActions(
       ),
     );
   } else if (options.onResolveApproval) {
+    const guidance = buildApprovalGuidance(entry, options);
+    if (guidance) approval.appendChild(guidance);
     const actions = el('div', { class: 'sp-agent-approval__actions' });
     const approve = el(
       'button',
@@ -732,6 +875,23 @@ function appendApprovalActions(
     approve.addEventListener('click', () =>
       options.onResolveApproval?.(entry.toolCallId, 'approved'),
     );
+    actions.appendChild(approve);
+    const onApproveForChat = options.onApproveForChat;
+    if (onApproveForChat && entry.approval.riskLevel !== 'high') {
+      const approveForChat = el(
+        'button',
+        {
+          class: 'sp-agent-approval__button',
+          type: 'button',
+          'aria-label': t('spApprovalAllowForChatNamed', [entry.name]),
+        },
+        t('spApprovalAllowForChat'),
+      );
+      approveForChat.addEventListener('click', () =>
+        onApproveForChat(entry.toolCallId, entry.name),
+      );
+      actions.appendChild(approveForChat);
+    }
     const decline = el(
       'button',
       {
@@ -744,7 +904,6 @@ function appendApprovalActions(
     decline.addEventListener('click', () =>
       options.onResolveApproval?.(entry.toolCallId, 'rejected'),
     );
-    actions.appendChild(approve);
     actions.appendChild(decline);
     approval.appendChild(actions);
   } else {
@@ -944,6 +1103,8 @@ export function buildBubbleWithTools(
   }
 
   if (msg.agentActivity) wrapper.appendChild(buildAgentActivityEl(msg.agentActivity, options));
+  const leadingCards = buildInteractiveCardStack(msg, options, true);
+  if (leadingCards) wrapper.appendChild(leadingCards);
   const { markers, all } = answerSourceLists(msg);
 
   if (

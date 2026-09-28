@@ -7,7 +7,8 @@ export type AlwaysAskReason =
   | 'unidentified_input'
   | 'sensitive_site'
   | 'authorization'
-  | 'permission_change';
+  | 'permission_change'
+  | 'purchase';
 
 export interface ActionApprovalRequirement {
   readonly alwaysAsk: boolean;
@@ -129,6 +130,26 @@ const READ_ONLY_TOOLS: ReadonlySet<string> = new Set([
   'ask_user_to_take_over',
 ]);
 
+const PAGE_READING_TOOLS: ReadonlySet<string> = new Set([
+  ...READ_ONLY_TOOLS,
+  'screenshot',
+  'scroll',
+  'read_dom',
+  'find',
+]);
+
+const PURCHASE_CONTROL_LABEL =
+  /\b(place (your |my )?order|buy (it )?now|complete (your |my )?(purchase|order|payment|checkout)|confirm (and pay|your order|order|purchase|payment)|pay now|submit (order|payment)|subscribe and pay|start (your |my )?(paid )?(subscription|membership)|send money|transfer (money|funds))\b|^\s*(pay|purchase|buy|donate)\b/i;
+
+export const PURCHASE_REFUSAL =
+  'Not done: this completes a purchase or payment, which the browser agent never does itself. Call ask_user_to_take_over so the user can check the amount and finish it.';
+
+export function readsWithoutActing(toolName: string, siteToolEffect?: 'read' | 'write'): boolean {
+  return siteToolEffect === undefined
+    ? PAGE_READING_TOOLS.has(toolName)
+    : siteToolEffect === 'read';
+}
+
 const FILE_INPUT_SELECTOR = /type\s*=\s*["']?file\b/i;
 
 const SENSITIVE_FIELD_LABEL =
@@ -182,6 +203,7 @@ export function isPermissionChangePage(url: string | null | undefined): boolean 
 
 interface SignatureParts {
   tag: string;
+  role: string;
   type: string;
   name: string;
   label: string;
@@ -189,13 +211,23 @@ interface SignatureParts {
 
 function parseSignature(signature: string | null | undefined): SignatureParts | null {
   if (typeof signature !== 'string' || signature.length === 0) return null;
-  const [tag = '', , type = '', name = '', ...rest] = signature.split('|');
+  const [tag = '', role = '', type = '', name = '', ...rest] = signature.split('|');
   return {
     tag: tag.toLowerCase(),
+    role: role.toLowerCase(),
     type: type.toLowerCase(),
     name,
     label: rest.join('|'),
   };
+}
+
+function isButtonLike(target: SignatureParts): boolean {
+  if (target.tag === 'button' || target.role === 'button') return true;
+  return target.tag === 'input' && ['submit', 'button', 'image'].includes(target.type);
+}
+
+function completesPurchase(target: SignatureParts | null): boolean {
+  return target !== null && isButtonLike(target) && PURCHASE_CONTROL_LABEL.test(target.label);
 }
 
 function targetsFileInput(input: ActionApprovalInput, target: SignatureParts | null): boolean {
@@ -222,6 +254,9 @@ export function approvalRequirement(input: ActionApprovalInput): ActionApprovalR
   }
   if (toolName === 'type' && targetsSensitiveField(target)) {
     return { alwaysAsk: true, reason: 'sensitive_input' };
+  }
+  if (toolName === 'click' && completesPurchase(target)) {
+    return { alwaysAsk: true, reason: 'purchase' };
   }
 
   if (toolName === 'navigate') {
@@ -278,6 +313,8 @@ export function describeApprovalReason(requirement: ActionApprovalRequirement): 
       return 'This page grants another app access to an account.';
     case 'permission_change':
       return 'This page changes account permissions or access.';
+    case 'purchase':
+      return 'This completes a purchase or payment, which you finish yourself.';
     default:
       return 'This step always needs your approval.';
   }
