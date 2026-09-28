@@ -1,31 +1,28 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
+import {
+  CONNECTOR_POLICY_PATH,
+  ConnectorPolicyResponseSchema,
+  type ConnectorPolicyResponse,
+  type UpdateConnectorPolicyRequest,
+} from '@agiworkforce/cloud-contracts';
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
 
-export interface ConnectorPolicyLists {
-  allowedConnectors: string[];
-  blockedConnectors: string[];
-  allowCustomConnectors: boolean;
-  allowedPlugins: string[];
-  blockedPlugins: string[];
-  allowedMcpHosts: string[];
-}
-
-export interface ConnectorPolicyResult {
-  organizationId: string;
-  configured: boolean;
-  canManagePolicy: boolean;
-  currentUserRole: 'owner' | 'admin' | 'member' | 'viewer';
-  policy: ConnectorPolicyLists & { updatedAt: string | null };
-  catalog: string[];
-}
+export type ConnectorPolicyLists = UpdateConnectorPolicyRequest;
+export type ConnectorPolicyResult = ConnectorPolicyResponse;
 
 export const CONNECTOR_POLICY_QUERY_KEY = ['workspace', 'connector-policy'] as const;
 
-const ENDPOINT = '/api/settings/organization/connector-policy';
+const UNREADABLE_POLICY = 'The connector policy could not be read. Try again.';
+
+async function readPolicy(res: Response): Promise<ConnectorPolicyResult> {
+  const parsed = ConnectorPolicyResponseSchema.safeParse(await res.json().catch(() => null));
+  if (!parsed.success) throw new Error(UNREADABLE_POLICY);
+  return parsed.data;
+}
 
 async function readApiError(res: Response): Promise<string> {
   const fallback = `Request failed (${res.status}).`;
@@ -48,10 +45,12 @@ export function useConnectorPolicy(): UseQueryResult<ConnectorPolicyResult | nul
     queryFn: async () => {
       const token = await getAuthToken();
       if (!token) throw new Error('User not authenticated');
-      const res = await fetch(ENDPOINT, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(CONNECTOR_POLICY_PATH, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (res.status === 403) return null;
       if (!res.ok) throw new Error(await readApiError(res));
-      return (await res.json()) as ConnectorPolicyResult;
+      return readPolicy(res);
     },
     staleTime: 60 * 1000,
     meta: { errorMessage: 'Failed to load the connector policy' },
@@ -64,7 +63,7 @@ export function useUpdateConnectorPolicy() {
     mutationFn: async (lists: ConnectorPolicyLists) => {
       const token = await getAuthToken();
       if (!token) throw new Error('User not authenticated');
-      const res = await fetch(ENDPOINT, {
+      const res = await fetch(CONNECTOR_POLICY_PATH, {
         method: 'PUT',
         headers: await addCsrfHeaders({
           Authorization: `Bearer ${token}`,
@@ -73,7 +72,7 @@ export function useUpdateConnectorPolicy() {
         body: JSON.stringify(lists),
       });
       if (!res.ok) throw new Error(await readApiError(res));
-      return (await res.json()) as ConnectorPolicyResult;
+      return readPolicy(res);
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: CONNECTOR_POLICY_QUERY_KEY });

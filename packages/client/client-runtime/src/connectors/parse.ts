@@ -1,6 +1,8 @@
 import {
   ConnectorConnectionSchema,
   ConnectorOAuthStartResponseSchema,
+  ConnectorPolicyListsSchema,
+  ConnectorPolicyResponseSchema,
   ConnectorToolPermissionSchema,
   CreatedCustomConnectorSchema,
   CustomConnectorSchema,
@@ -39,14 +41,21 @@ const CustomConnectorResponseSchema = CreatedCustomConnectorSchema.pick({ connec
   },
 );
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
+const policyLists = ConnectorPolicyListsSchema.shape;
 
-function stringArrayOrNull(value: unknown): string[] | null {
-  if (!Array.isArray(value)) return null;
-  return value.every((entry) => typeof entry === 'string') ? [...(value as string[])] : null;
-}
+const ConnectorPolicyBodySchema = ConnectorPolicyResponseSchema.pick({ configured: true })
+  .partial()
+  .extend({
+    policy: ConnectorPolicyListsSchema.pick({
+      allowedConnectors: true,
+      blockedConnectors: true,
+    }).extend({
+      allowCustomConnectors: policyLists.allowCustomConnectors.catch(true),
+      allowedPlugins: policyLists.allowedPlugins.catch([]),
+      blockedPlugins: policyLists.blockedPlugins.catch([]),
+      allowedMcpHosts: policyLists.allowedMcpHosts.catch([]),
+    }),
+  });
 
 export function parseConnectedConnector(value: unknown): ConnectedConnector {
   const parsed = ConnectorConnectionSchema.safeParse(value);
@@ -70,21 +79,9 @@ export function parseConnectorList(value: unknown): ParsedConnectorList {
 
 /** Absent or unreadable is ungoverned, not denied, so this never refuses. */
 export function parseConnectorPolicy(value: unknown): ConnectorAccessPolicy | null {
-  if (!isRecord(value)) return null;
-  if (value['configured'] === false) return null;
-  const policy = value['policy'];
-  if (!isRecord(policy)) return null;
-  const allowedConnectors = stringArrayOrNull(policy['allowedConnectors']);
-  const blockedConnectors = stringArrayOrNull(policy['blockedConnectors']);
-  if (allowedConnectors === null || blockedConnectors === null) return null;
-  return {
-    allowedConnectors,
-    blockedConnectors,
-    allowCustomConnectors: policy['allowCustomConnectors'] !== false,
-    allowedPlugins: stringArrayOrNull(policy['allowedPlugins']) ?? [],
-    blockedPlugins: stringArrayOrNull(policy['blockedPlugins']) ?? [],
-    allowedMcpHosts: stringArrayOrNull(policy['allowedMcpHosts']) ?? [],
-  };
+  const parsed = ConnectorPolicyBodySchema.safeParse(value);
+  if (!parsed.success || parsed.data.configured === false) return null;
+  return parsed.data.policy;
 }
 
 export function parseConnectorToolPermission(value: unknown): ConnectorToolPermission {
