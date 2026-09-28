@@ -10,7 +10,7 @@ import type {
   SettingsNavBadge,
 } from '@agiworkforce/ui';
 import { CONNECTORS } from '@/features/connectors/data/connectors';
-import { ConnectorAccountSelector } from '@/features/connectors/components/ConnectorAccountSelector';
+import { ConnectorAccountSummary } from '@/features/connectors/components/ConnectorAccountSummary';
 import { ConnectorApiKeyForm } from '@/features/connectors/components/ConnectorApiKeyForm';
 import { ConnectorCapabilitiesPanel } from '@/features/connectors/components/ConnectorCapabilitiesPanel';
 import { ConnectorHealthDashboard } from '@/features/connectors/components/ConnectorHealthDashboard';
@@ -932,7 +932,7 @@ export function useConnectorsSettingsAdapter({
         ) : null}
         {detail.connected ? (
           <>
-            <ConnectorAccountSelector connectorId={connectorId} connectorName={detail.name} />
+            <ConnectorAccountSummary connectorId={connectorId} />
             <ConnectorCapabilitiesPanel connectorRef={connectorId} connected />
             <McpResourceList connectorId={connectorId} />
             {connectorId === 'github' && githubInstallations.length > 0 ? (
