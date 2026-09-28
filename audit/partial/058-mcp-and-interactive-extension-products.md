@@ -50,27 +50,25 @@ nothing is left.
 
 - Done when: The user can test the connection to an MCP server and see whether it succeeded.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | The server is probed only when it is added; there is no on-demand test afterwards. | ui |
-| vscode | partial | VS Code only shows whether local MCP loaded when a chat starts; there is no per-server test. | ui |
 
-Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:908-908`, `apps/mobile/src/features/settings/cloud-connectors/AddCustomConnectorModal.tsx:108-108`, `apps/mobile/services/connectors.ts:102-107`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:2803-2809`
+Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:908-908`, `apps/mobile/src/features/settings/cloud-connectors/AddCustomConnectorModal.tsx:108-108`, `apps/mobile/services/connectors.ts:102-107`
 
 ## S58.08: Tool discovery.
 
 - Done when: Connecting an MCP server discovers its tools and the user can see them.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Server tools are discovered and offered in chat, but mobile shows no tool list per server (only tools with a saved permission). | ui |
-| vscode | partial | The CLI runtime discovers tools, but VS Code lists no tools per server. | ui |
 
-Code: `apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx:85-85`, `apps/web/lib/user-connector-tools.ts:2218-2228`, `apps/extension-vscode/src/features/chat-participant/chatParticipant.ts:391-391`
+Code: `apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx:85-85`, `apps/web/lib/user-connector-tools.ts:2218-2228`
 
 ## S58.09: Resource discovery.
 

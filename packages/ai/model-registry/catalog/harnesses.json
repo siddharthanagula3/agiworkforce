@@ -31,6 +31,7 @@
       "provider": "openai",
       "apiFamily": "responses",
       "adapter": "@agiworkforce/providers-openai",
+      "requestParameters": ["top_p", "user"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {
         "webSearch": {
@@ -87,6 +88,15 @@
       "provider": "openai",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-openai",
+      "requestParameters": [
+        "top_p",
+        "stop",
+        "seed",
+        "frequency_penalty",
+        "presence_penalty",
+        "logit_bias",
+        "user"
+      ],
       "trustModes": ["managed_cloud", "byok"],
       "features": {}
     },
@@ -101,6 +111,7 @@
       "provider": "anthropic",
       "apiFamily": "messages",
       "adapter": "@agiworkforce/providers-anthropic",
+      "requestParameters": ["top_p", "stop", "user"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {
         "webSearch": {
@@ -117,6 +128,7 @@
       "provider": "google",
       "apiFamily": "generate_content",
       "adapter": "@agiworkforce/providers-google",
+      "requestParameters": ["top_p", "stop"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {
         "webSearch": {
@@ -161,6 +173,14 @@
       "provider": "xai",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-xai",
+      "requestParameters": [
+        "top_p",
+        "stop",
+        "seed",
+        "frequency_penalty",
+        "presence_penalty",
+        "user"
+      ],
       "trustModes": ["managed_cloud", "byok"],
       "features": {}
     },
@@ -168,6 +188,7 @@
       "provider": "deepseek",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-deepseek",
+      "requestParameters": ["top_p", "stop"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {}
     },
@@ -175,6 +196,7 @@
       "provider": "minimax",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-minimax",
+      "requestParameters": ["top_p"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {}
     },
@@ -182,6 +204,7 @@
       "provider": "qwen",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-qwen",
+      "requestParameters": ["top_p", "stop", "seed", "presence_penalty"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {
         "webSearch": {
@@ -198,6 +221,7 @@
       "provider": "moonshot",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-moonshot",
+      "requestParameters": ["stop"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {}
     },
@@ -205,6 +229,7 @@
       "provider": "mistral",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-mistral",
+      "requestParameters": ["top_p", "stop", "frequency_penalty", "presence_penalty"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {}
     },
@@ -212,6 +237,7 @@
       "provider": "zhipu",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-zhipu",
+      "requestParameters": ["top_p", "stop"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {}
     },
@@ -219,6 +245,7 @@
       "provider": "perplexity",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-perplexity",
+      "requestParameters": ["top_p", "stop"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {
         "webSearch": {
@@ -231,6 +258,7 @@
       "provider": "groq",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-groq",
+      "requestParameters": ["top_p", "stop", "seed", "user"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {}
     },
@@ -238,6 +266,15 @@
       "provider": "open_router",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-openrouter",
+      "requestParameters": [
+        "top_p",
+        "stop",
+        "seed",
+        "frequency_penalty",
+        "presence_penalty",
+        "logit_bias",
+        "user"
+      ],
       "trustModes": ["byok"],
       "features": {
         "zeroDataRetentionOnRequest": {
@@ -250,6 +287,15 @@
       "provider": "open_router",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-openrouter",
+      "requestParameters": [
+        "top_p",
+        "stop",
+        "seed",
+        "frequency_penalty",
+        "presence_penalty",
+        "logit_bias",
+        "user"
+      ],
       "trustModes": ["managed_cloud", "byok"],
       "features": {
         "zeroDataRetentionOnRequest": {
@@ -269,6 +315,7 @@
       "provider": "vercel_gateway",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-vercel-gateway",
+      "requestParameters": ["top_p", "stop", "frequency_penalty", "presence_penalty"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {
         "zeroDataRetentionOnRequest": {
@@ -281,6 +328,7 @@
       "provider": "nvidia_nim",
       "apiFamily": "chat_completions",
       "adapter": "desktop-direct-api",
+      "requestParameters": ["top_p", "stop", "frequency_penalty", "presence_penalty"],
       "trustModes": ["byok"],
       "features": {}
     },
@@ -295,6 +343,7 @@
       "provider": "cheaperinference",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-openai",
+      "requestParameters": ["top_p", "stop"],
       "trustModes": ["managed_cloud"],
       "features": {},
       "protocol": "openai_chat",
@@ -305,6 +354,7 @@
       "provider": "cheaperinference_anthropic",
       "apiFamily": "messages",
       "adapter": "@agiworkforce/providers-anthropic",
+      "requestParameters": ["top_p", "stop"],
       "trustModes": ["managed_cloud"],
       "features": {},
       "protocol": "anthropic_messages",
@@ -315,6 +365,7 @@
       "provider": "deepseek_anthropic",
       "apiFamily": "messages",
       "adapter": "@agiworkforce/providers-anthropic",
+      "requestParameters": ["top_p", "stop", "user"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {},
       "protocol": "anthropic_messages",
@@ -326,6 +377,7 @@
       "provider": "moonshot_anthropic",
       "apiFamily": "messages",
       "adapter": "@agiworkforce/providers-anthropic",
+      "requestParameters": ["stop", "user"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {},
       "protocol": "anthropic_messages",
@@ -348,6 +400,7 @@
       "provider": "deepinfra",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-openai",
+      "requestParameters": ["top_p", "stop", "frequency_penalty", "presence_penalty"],
       "trustModes": ["managed_cloud"],
       "features": {},
       "protocol": "openai_chat",
@@ -358,6 +411,14 @@
       "provider": "together",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-openai",
+      "requestParameters": [
+        "top_p",
+        "stop",
+        "seed",
+        "frequency_penalty",
+        "presence_penalty",
+        "logit_bias"
+      ],
       "trustModes": ["managed_cloud"],
       "features": {},
       "protocol": "openai_chat",
@@ -368,6 +429,14 @@
       "provider": "novita",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-openai",
+      "requestParameters": [
+        "top_p",
+        "stop",
+        "seed",
+        "frequency_penalty",
+        "presence_penalty",
+        "logit_bias"
+      ],
       "trustModes": ["managed_cloud"],
       "features": {},
       "protocol": "openai_chat",
@@ -378,6 +447,7 @@
       "provider": "experientiallabs",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-openai",
+      "requestParameters": ["top_p"],
       "trustModes": ["managed_cloud"],
       "features": {},
       "protocol": "openai_chat",
@@ -388,6 +458,7 @@
       "provider": "experientiallabs_anthropic",
       "apiFamily": "messages",
       "adapter": "@agiworkforce/providers-anthropic",
+      "requestParameters": ["top_p"],
       "trustModes": ["managed_cloud"],
       "features": {},
       "protocol": "anthropic_messages",
