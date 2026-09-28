@@ -35,6 +35,7 @@ import {
 import {
   agiWorkPlanSentence,
   isAgiWorkGoalEntry,
+  isAgiWorkPlanOverviewEntry,
   isAgiWorkPlanEntry,
 } from '../lib/agi-work-progress';
 import { ConnectorConnectCard } from './ConnectorConnectCard';
@@ -129,6 +130,7 @@ function lastStepFailed(activity: Pick<AgentActivityState, 'entries'>): boolean 
     if (!entry) continue;
     if (entry.kind === 'error') return true;
     if (entry.kind !== 'tool' && entry.kind !== 'progress') continue;
+    if (isAgiWorkPlanOverviewEntry(entry)) continue;
     if (entry.status === 'pending' || entry.status === 'running') continue;
     return entry.status === 'failed';
   }
@@ -922,7 +924,10 @@ export function AgentActivityTimeline({
   // echo it back.
   const planLineEntryIndex = planSentence ? activity.entries.findIndex(isAgiWorkPlanEntry) : -1;
   const rowEntries = activity.entries.filter(
-    (entry, index) => index !== planLineEntryIndex && !isAgiWorkGoalEntry(entry),
+    (entry, index) =>
+      index !== planLineEntryIndex &&
+      !isAgiWorkGoalEntry(entry) &&
+      !isAgiWorkPlanOverviewEntry(entry),
   );
   const visibleEntryCount =
     entryVisibility.turnId === activity.turnId ? entryVisibility.count : ACTIVITY_PAGE_SIZE;

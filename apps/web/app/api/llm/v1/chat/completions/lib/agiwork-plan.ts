@@ -292,5 +292,5 @@ export function agiWorkPlanProgressEvents(steps: AgiWorkPlanStep[]): AgentEvent[
         ]
       : [];
   });
-  return [...started, overview];
+  return [overview, ...started];
 }

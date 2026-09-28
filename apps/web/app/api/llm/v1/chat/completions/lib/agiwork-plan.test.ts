@@ -127,13 +127,13 @@ describe('durable journal events', () => {
     expect(events).toHaveLength(2);
     expect(events[0]).toMatchObject({
       type: 'progress-update',
-      progressId: `${AGIWORK_PLAN_PROGRESS_ID_PREFIX}agiwork-plan-1`,
-      status: 'running',
+      progressId: AGIWORK_PLAN_OVERVIEW_PROGRESS_ID,
+      detail: '1. a\n2. b',
     });
     expect(events[1]).toMatchObject({
       type: 'progress-update',
-      progressId: AGIWORK_PLAN_OVERVIEW_PROGRESS_ID,
-      detail: '1. a\n2. b',
+      progressId: `${AGIWORK_PLAN_PROGRESS_ID_PREFIX}agiwork-plan-1`,
+      status: 'running',
     });
   });
 });
