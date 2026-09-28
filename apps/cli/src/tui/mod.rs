@@ -13,6 +13,7 @@ pub(crate) mod terminal_palette;
 pub(crate) mod transcript_cell;
 
 mod markdown_renderer;
+mod prompt_history;
 mod tui_app;
 pub mod widgets;
 pub use tui_app::run;

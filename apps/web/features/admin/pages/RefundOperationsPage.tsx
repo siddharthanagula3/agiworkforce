@@ -325,7 +325,7 @@ export default function RefundOperationsPage() {
     <div className="min-h-screen bg-background text-foreground">
       <main className="mx-auto flex max-w-5xl flex-col gap-8 px-6 py-12">
         <header>
-          <h1 className="text-2xl font-medium text-foreground">Refunds and disputes</h1>
+          <h1 className="text-h1 text-foreground">Refunds and disputes</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
             Refund a payment in full or in part through Stripe, and decide the refund requests
             customers filed. Every refund and decline is written to the security audit log. The plan
@@ -347,7 +347,7 @@ export default function RefundOperationsPage() {
         ) : null}
 
         <section className="flex flex-col gap-3" aria-labelledby="refund-queue-title">
-          <h2 id="refund-queue-title" className="text-sm font-medium">
+          <h2 id="refund-queue-title" className="text-h5">
             Requests waiting for a decision
           </h2>
           <div className={CARD_CLASS}>
@@ -378,7 +378,7 @@ export default function RefundOperationsPage() {
 
         {declining ? (
           <section className={CARD_CLASS} aria-labelledby="refund-decline-title">
-            <h2 id="refund-decline-title" className="text-sm font-medium">
+            <h2 id="refund-decline-title" className="text-h5">
               Decline the request for {declining.chargeId}
             </h2>
             <label className="mt-3 flex flex-col gap-1 text-xs text-muted-foreground">
@@ -403,7 +403,7 @@ export default function RefundOperationsPage() {
         ) : null}
 
         <section className="flex flex-col gap-3" aria-labelledby="refund-lookup-title">
-          <h2 id="refund-lookup-title" className="text-sm font-medium">
+          <h2 id="refund-lookup-title" className="text-h5">
             Find an account
           </h2>
           <div className={CARD_CLASS}>
@@ -538,7 +538,7 @@ export default function RefundOperationsPage() {
 
         {target ? (
           <section className={CARD_CLASS} aria-labelledby="refund-form-title">
-            <h2 id="refund-form-title" className="text-sm font-medium">
+            <h2 id="refund-form-title" className="text-h5">
               Refund {target.charge.id}
             </h2>
             <p className="mt-1 text-xs text-muted-foreground">

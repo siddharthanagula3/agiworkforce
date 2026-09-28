@@ -152,7 +152,7 @@ function ActiveSessionsSection() {
   return (
     <div className="flex flex-col gap-3" data-testid="cloud-active-sessions">
       <div>
-        <h3 className="text-sm font-medium text-foreground">Active sessions</h3>
+        <h3 className="text-h5 text-foreground">Active sessions</h3>
         <p className="mt-1 text-xs leading-5 text-muted-foreground">
           Browser and mobile sessions signed in to this AGI Cloud account.{' '}
           {currentSessionKnown ? (
@@ -330,7 +330,7 @@ function ApiKeysSection() {
   return (
     <div className="flex flex-col gap-3" data-testid="cloud-api-keys">
       <div>
-        <h3 className="text-sm font-medium text-foreground">API keys</h3>
+        <h3 className="text-h5 text-foreground">API keys</h3>
         <p className="mt-1 text-xs leading-5 text-muted-foreground">
           Keys for the OpenAI-compatible API. They authorize your Cloud account only, never this
           device&apos;s Local workspace, files, or model keys.
@@ -460,7 +460,7 @@ function DangerZone() {
       className="rounded-lg border border-destructive/40 bg-destructive/5 p-5"
       data-testid="cloud-delete-account"
     >
-      <h3 className="text-sm font-medium text-foreground">Delete Cloud account</h3>
+      <h3 className="text-h5 text-foreground">Delete Cloud account</h3>
       <p className="mt-1 text-xs leading-5 text-muted-foreground">
         Permanently removes your AGI Cloud account and its conversations, artifacts, memories, and
         settings. Local Mode chats, files, and model keys stay on this device and are not part of

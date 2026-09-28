@@ -50,6 +50,7 @@ export interface ToolCall {
   searchResults?: ToolSearchResult[];
   requiresApproval?: boolean;
   approvalDecision?: 'approved' | 'rejected';
+  approvalRiskLevel?: RiskLevel;
   toolCallId?: string;
 }
 

@@ -20,6 +20,7 @@
     "apps/web/app/api/releases/cli/latest/route.ts": "published release metadata is the same for every caller",
     "apps/web/app/api/releases/desktop-cloud/latest/route.ts": "published release metadata is the same for every caller",
     "apps/web/app/api/releases/latest/[platform]/route.ts": "published release metadata is the same for every caller",
+    "apps/web/app/api/status/notices/route.ts": "incident and planned maintenance notices are the same for every caller",
     "apps/web/app/api/support/handoff/availability/route.ts": "reports whether live support is staffed right now",
     "apps/web/app/api/trial/cancel/route.ts": "the signed link in a trial reminder email is the only principal, and it can cancel only the one trial it names before that trial ends",
     "apps/web/app/api/v1/providers/[providerId]/stream/route.ts": "a retired managed-execution endpoint that answers every caller the same way",
@@ -91,6 +92,7 @@
     "apps/web/app/api/auth/set-token/route.ts": "exchanges a verified provider token for the session cookie every gated route then reads",
     "apps/web/app/api/auth/device/token/route.ts": "exchanges an approved device code for a token that every later request is gated on",
     "apps/web/app/api/auth/device/refresh/route.ts": "rotates a device refresh token; the token it mints is gated on every use",
-    "apps/web/app/api/device/poll/route.ts": "the device code is the credential here, and the token it returns is gated on every use"
+    "apps/web/app/api/device/poll/route.ts": "the device code is the credential here, and the token it returns is gated on every use",
+    "apps/web/app/api/support/appeal/route.ts": "a suspended account reads and answers only its own suspension appeal; getSuspendedAccountUser refuses every other status"
   }
 }

@@ -226,6 +226,9 @@
     "shareConversation": "Share conversation",
     "temporaryChat": "Temporary chat",
     "temporaryChatRetentionNote": "Won't be saved to your history and skips memory for this turn.",
+    "temporaryChatPersonalized": "Personalized",
+    "temporaryChatUnpersonalized": "Unpersonalized",
+    "temporaryChatPersonalizationHint": "Personalized uses your profile, instructions and response style. Unpersonalized leaves them out.",
     "toggleArtifacts": "Toggle artifacts panel",
     "toggleArtifactsCount": "Toggle artifacts panel ({{count}})",
     "toggleStats": "Stats"

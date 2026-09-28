@@ -26,7 +26,14 @@ import {
   SheetTitle,
   Skeleton,
 } from '@agiworkforce/ui';
-import { CalendarClock, Loader2, MessageSquarePlus, Plus, RotateCcw } from 'lucide-react';
+import {
+  CalendarClock,
+  LayoutTemplate,
+  Loader2,
+  MessageSquarePlus,
+  Plus,
+  RotateCcw,
+} from 'lucide-react';
 import { ScheduleCard, scheduleCardElementId, type ScheduleOperation } from './ScheduleCard';
 import { ScheduleForm } from './ScheduleForm';
 import { SCHEDULE_TEMPLATES, type ScheduleTemplate } from '../lib/schedule-templates';
@@ -147,6 +154,32 @@ function defaultIdempotencyKey(): string {
   return globalThis.crypto.randomUUID();
 }
 
+function ScheduleTemplateGrid({
+  className,
+  onPick,
+}: {
+  className?: string;
+  onPick: (template: ScheduleTemplate) => void;
+}) {
+  return (
+    <ul className={`grid gap-3 sm:grid-cols-2 lg:grid-cols-3 ${className ?? ''}`}>
+      {SCHEDULE_TEMPLATES.map((template) => (
+        <li key={template.id}>
+          <button
+            type="button"
+            onClick={() => onPick(template)}
+            className="flex h-full w-full flex-col gap-1 rounded-xl border border-border bg-background p-4 text-left transition-colors hover:border-foreground/30 hover:bg-muted/40"
+          >
+            <span className="text-sm font-medium text-foreground">{template.name}</span>
+            <span className="text-xs text-muted-foreground">{template.description}</span>
+            <span className="mt-1 text-caption text-muted-foreground">{template.cadenceLabel}</span>
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function SchedulesPage({
   api = scheduleApi,
   now = () => new Date(),
@@ -165,6 +198,7 @@ export function SchedulesPage({
   const [loadingMoreSchedules, setLoadingMoreSchedules] = useState(false);
 
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [galleryOpen, setGalleryOpen] = useState(false);
   const [editing, setEditing] = useState<ScheduleTask | null>(null);
   const [draft, setDraft] = useState<ScheduleDraft>(() => createInitialScheduleDraft());
   const initialDraftRef = useRef('');
@@ -728,10 +762,24 @@ export function SchedulesPage({
             </div>
           )}
           {canCreateSchedules ? (
-            <Button type="button" onClick={openCreate} className="shrink-0">
-              <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
-              {scope ? 'New task in this project' : 'Create Schedule'}
-            </Button>
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              {listStatus === 'success' && sortedSchedules.length > 0 ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  aria-expanded={galleryOpen}
+                  aria-controls="schedule-template-gallery"
+                  onClick={() => setGalleryOpen((open) => !open)}
+                >
+                  <LayoutTemplate className="mr-2 h-4 w-4" aria-hidden="true" />
+                  Templates
+                </Button>
+              ) : null}
+              <Button type="button" onClick={openCreate}>
+                <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
+                {scope ? 'New task in this project' : 'Create Schedule'}
+              </Button>
+            </div>
           ) : (
             <Button
               type="button"
@@ -814,29 +862,42 @@ export function SchedulesPage({
                 <h3 className="text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   Or start from one of these
                 </h3>
-                <ul className="mx-auto mt-4 grid max-w-3xl gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {SCHEDULE_TEMPLATES.map((template) => (
-                    <li key={template.id}>
-                      <button
-                        type="button"
-                        onClick={() => openCreateFromTemplate(template)}
-                        className="flex h-full w-full flex-col gap-1 rounded-xl border border-border bg-background p-4 text-left transition-colors hover:border-foreground/30 hover:bg-muted/40"
-                      >
-                        <span className="text-sm font-medium text-foreground">{template.name}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {template.description}
-                        </span>
-                        <span className="mt-1 text-caption text-muted-foreground">
-                          {template.cadenceLabel}
-                        </span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
+                <ScheduleTemplateGrid
+                  className="mx-auto mt-4 max-w-3xl"
+                  onPick={openCreateFromTemplate}
+                />
               </div>
             )}
           </section>
         )}
+
+        {galleryOpen &&
+          canCreateSchedules &&
+          listStatus === 'success' &&
+          sortedSchedules.length > 0 && (
+            <section
+              id="schedule-template-gallery"
+              aria-labelledby="schedule-template-gallery-heading"
+              className="rounded-2xl border border-border bg-muted/20 p-5"
+            >
+              <h2
+                id="schedule-template-gallery-heading"
+                className="text-sm font-medium text-foreground"
+              >
+                Start from a template
+              </h2>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Each template opens the create form filled in, for you to review before saving.
+              </p>
+              <ScheduleTemplateGrid
+                className="mt-4"
+                onPick={(template) => {
+                  setGalleryOpen(false);
+                  openCreateFromTemplate(template);
+                }}
+              />
+            </section>
+          )}
 
         {listStatus === 'success' && sortedSchedules.length > 0 && (
           <div

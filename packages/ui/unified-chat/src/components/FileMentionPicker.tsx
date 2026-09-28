@@ -186,7 +186,7 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
       ref={listRef}
       className={cn(
         'absolute bottom-full left-0 z-[var(--z-dropdown)] mb-2 w-80 max-h-72 overflow-y-auto',
-        'rounded-xl border border-border bg-popover shadow-2xl backdrop-blur-xl',
+        'rounded-xl border border-border bg-popover shadow-e4 backdrop-blur-xl',
       )}
       role="listbox"
       aria-label="File mentions"

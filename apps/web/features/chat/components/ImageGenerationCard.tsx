@@ -297,10 +297,10 @@ export function ShareModal({ imageUrl, prompt, onClose, mediaKind = 'image' }: S
       aria-modal="true"
       aria-label={`Share ${mediaKind}`}
     >
-      <div className="relative w-full max-w-sm rounded-2xl border border-border/40 bg-card/95 p-6 shadow-2xl backdrop-blur-xl">
+      <div className="relative w-full max-w-sm rounded-2xl border border-border/40 bg-card/95 p-6 shadow-e4 backdrop-blur-xl">
         {/* Header */}
         <div className="mb-4 flex items-start justify-between gap-2">
-          <h2 className="text-sm font-semibold text-foreground leading-snug">{title}</h2>
+          <h2 className="text-h5 text-foreground">{title}</h2>
           <button
             type="button"
             onClick={onClose}
@@ -582,7 +582,7 @@ function EditPanel({
             >
               <X className="h-4 w-4" />
             </button>
-            <h2 className="truncate text-sm font-semibold text-foreground">{titleText} image</h2>
+            <h2 className="truncate text-h5 text-foreground">{titleText} image</h2>
           </div>
 
           {/* Right-side controls */}
@@ -611,7 +611,7 @@ function EditPanel({
                   ref={aspectMenuRef}
                   role="menu"
                   aria-label="Aspect ratio"
-                  className="absolute right-0 top-full z-[var(--z-dropdown)] mt-1 w-44 rounded-xl border border-border/60 bg-popover/95 p-1 shadow-xl backdrop-blur-xl"
+                  className="absolute right-0 top-full z-[var(--z-dropdown)] mt-1 w-44 rounded-xl border border-border/60 bg-popover/95 p-1 shadow-e4 backdrop-blur-xl"
                 >
                   {aspectOptions.map((opt) => (
                     <button
@@ -959,7 +959,7 @@ function ResultCard({ imageUrl, prompt, modelId, onEdit, onShare, onKeep }: Resu
               ref={morePanelRef}
               role="menu"
               aria-label="More actions"
-              className="absolute bottom-full left-0 z-[var(--z-dropdown)] mb-1 w-40 rounded-xl border border-border/60 bg-popover/95 p-1 shadow-xl backdrop-blur-xl"
+              className="absolute bottom-full left-0 z-[var(--z-dropdown)] mb-1 w-40 rounded-xl border border-border/60 bg-popover/95 p-1 shadow-e4 backdrop-blur-xl"
             >
               <button
                 type="button"

@@ -198,7 +198,7 @@ impl McpClient {
             "tools/call",
             Some(params),
             timeout,
-            Self::is_connection_error,
+            Self::is_tool_call_resendable,
         )
         .await
         .map_err(McpError::from)
@@ -893,7 +893,10 @@ impl McpClient {
         timeout: Duration,
     ) -> Result<Option<Value>> {
         match self.send_modern_once(method, params.clone(), timeout).await {
-            Err(error) if matches!(fault(&error), Some(TransportFault::StreamBroke { .. })) => {
+            Err(error)
+                if method != "tools/call"
+                    && matches!(fault(&error), Some(TransportFault::StreamBroke { .. })) =>
+            {
                 self.send_modern_once(method, params, timeout).await
             }
             outcome => outcome,
@@ -1041,6 +1044,11 @@ impl McpClient {
         ]
         .iter()
         .any(|marker| msg.contains(marker))
+    }
+
+    fn is_tool_call_resendable(error: &anyhow::Error) -> bool {
+        !matches!(fault(error), Some(TransportFault::StreamBroke { .. }))
+            && Self::is_connection_error(error)
     }
 
     fn is_connection_error(error: &anyhow::Error) -> bool {

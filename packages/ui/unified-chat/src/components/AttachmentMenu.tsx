@@ -268,12 +268,12 @@ function CameraCaptureOverlay({
     >
       <div
         className={cn(
-          'w-full max-w-md overflow-hidden rounded-xl shadow-xl',
+          'w-full max-w-md overflow-hidden rounded-xl shadow-e4',
           'border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)]',
         )}
       >
         <div className="flex items-center justify-between border-b border-[var(--chat-border)] px-4 py-3">
-          <h2 className="text-sm font-medium text-[var(--chat-text-primary)]">Take a photo</h2>
+          <h2 className="text-h5 text-[var(--chat-text-primary)]">Take a photo</h2>
           <button
             type="button"
             onClick={onClose}
@@ -446,14 +446,12 @@ function LiveVisualOverlay({
     >
       <div
         className={cn(
-          'w-full max-w-md overflow-hidden rounded-xl shadow-xl',
+          'w-full max-w-md overflow-hidden rounded-xl shadow-e4',
           'border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)]',
         )}
       >
         <div className="flex items-center justify-between border-b border-[var(--chat-border)] px-4 py-3">
-          <h2 className="text-sm font-medium text-[var(--chat-text-primary)]">
-            {LIVE_SOURCE_TITLE[source]}
-          </h2>
+          <h2 className="text-h5 text-[var(--chat-text-primary)]">{LIVE_SOURCE_TITLE[source]}</h2>
           <button
             type="button"
             onClick={onClose}

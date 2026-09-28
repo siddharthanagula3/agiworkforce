@@ -305,7 +305,7 @@ export function KeybindingsSettings() {
         <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-2">
             <Keyboard className="h-5 w-5 text-muted-foreground" />
-            <h3 className="text-lg font-semibold">Keyboard Shortcuts</h3>
+            <h3 className="text-h3">Keyboard Shortcuts</h3>
           </div>
           <div className="flex items-center gap-2">
             <Button

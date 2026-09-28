@@ -6,61 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S72.02: Linear accessible output mode.
-
-- Done when: A linear, screen-reader-friendly mode prints output line by line with no colour, spinners, rules or full-screen redraws.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | `--plain`/AGI_PLAIN only calms the line output; interactive `agi --plain` still opens the full-screen TUI unless `--no-tui` is also passed. Make plain imply the line REPL. | handler |
-
-Code: `apps/cli/src/lib.rs:432-436`, `apps/cli/src/output.rs:238-246`, `apps/cli/src/lib.rs:4609-4611`
-
-## S72.09: Exit-code contract.
-
-- Done when: Exit status distinguishes failure classes (1 generic, 65 data, 69 unavailable, 75 temporary, 76 too old, 77 not permitted, 78 configuration; 2 reserved for usage).
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | main.rs:11-19 maps every Err returned by run_main to ExitCode::FAILURE (1); the subcommand dispatch (lib.rs:3115-3118 `return match command`) returns errors straight up, so `agi resume --cloud`, `agi session fork`, `agi mcp login`, `agi login` etc. exit 1 whatever CliError class they carry. exit_with_error (lib.rs:4826-4834), the only place CliError::exit_code reaches the process status, is called solely from the exec/one-shot prompt paths (3368, 5238, 5277, 5299, 5343). The class table (errors.rs:242-252, 707-746) is real but only partially wired; 2 is reserved by clap as claimed. |  |
-
-Code: `apps/cli/src/errors.rs:254-263`, `apps/cli/src/errors.rs:240-253`, `apps/cli/src/lib.rs:4826-4835`
-
-## S72.17: Context command.
-
-- Done when: A context command shows how much of the model context window the current conversation occupies.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | /context divides the running sum of every turn's billed input+output tokens by the window, so it overstates use after a few turns and never shows the real occupancy /compact measures; report the actual context size. | handler |
-
-Code: `apps/cli/src/tui/tui_app.rs:3422-3429`, `apps/cli/src/tui/tui_app.rs:1290-1297`
-
-## S72.24: Prompt history.
-
-- Done when: Previous prompts can be recalled (Up arrow / history search) and persist across runs.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Only the `--no-tui` REPL keeps prompt history (rustyline history.txt); in the default TUI Up/Down move the cursor or scroll, so add prompt recall to the TUI composer. | ui |
-
-Code: `apps/cli/src/repl/mod.rs:214-231`, `apps/cli/src/tui/tui_app.rs:2555-2562`
-
-## S72.28: No-color mode.
-
-- Done when: Setting NO_COLOR (or --plain) removes colour from all terminal output, including the TUI.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | TUI code highlighting now honours NO_COLOR and the shimmer already did, but --plain is not passed to the `colored` styles; route them through the no-colour check. | handler |
-
-Code: `apps/cli/src/output.rs:64-71`, `apps/cli/src/tui/terminal_palette.rs:306-341`, `apps/cli/src/tui/markdown_renderer.rs:368-371`
-
 ## S72.30: Remote-session attachment.
 
 - Done when: The terminal can attach to a session that lives elsewhere (another device, the cloud or a running remote agent) and continue it.
@@ -68,42 +13,9 @@ Code: `apps/cli/src/output.rs:64-71`, `apps/cli/src/tui/terminal_palette.rs:306-
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | `agi resume --cloud <id>` copies an account conversation into a local session; there is no way to attach to a session still running on another device or a cloud agent (remote control is deliberately not exposed). | handler |
+| cli | partial | Attaching to a session still running elsewhere needs a server-side session relay (Claude Code Remote Control / --teleport equivalent); the CLI deliberately exposes no remote-control command without a real transport. | handler |
 
-Code: `apps/cli/src/lib.rs:830-836`, `apps/cli/src/lib.rs:1646-1667`
-
-## S72.31: Background-task management.
-
-- Done when: The user can list, inspect and stop background tasks (sub-agents or long-running commands) from the terminal.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Only the `--no-tui` REPL lists background sub-agent tasks (/tasks list); the TUI has no task view and no command shows a task's output or stops it. | ui, handler |
-
-Code: `apps/cli/src/repl/slash_commands.rs:214-229`, `apps/cli/src/subagent.rs:476-490`
-
-## S72.32: Export transcript.
-
-- Done when: The user can export the conversation transcript (Markdown/JSON) to a file or clipboard.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | /export renders Markdown or JSON into the transcript (or REPL stdout) but never writes a file; add `/export <path>` or an `agi session export` command. | handler |
-
-Code: `apps/cli/src/tui/tui_app.rs:3581-3589`, `apps/cli/src/repl/registry.rs:368-389`
-
-## S72.34: Environment-variable support.
-
-- Done when: Environment variables override configuration (model, provider, max tokens, API base, plain mode) and the override is shown.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Model, provider and max-tokens env overrides apply and show on the /config Env line; AGI_PLAIN and AGIWORKFORCE_API_BASE are honoured but never shown as overrides. | ui |
-
-Code: `apps/cli/src/config.rs:861-867`, `apps/cli/src/config.rs:1102-1133`
+Code: `apps/cli/src/claude_parity.rs:1831-1831`
 
 ## S72.35: Installer and updater.
 

@@ -56,6 +56,8 @@ fn map_engine_error(e: agiworkforce_mcp::McpError) -> McpError {
     let msg = format!("{:#}", e.as_anyhow());
     if e.is_unsupported_protocol_version() {
         McpError::UnsupportedProtocolVersion(msg)
+    } else if e.is_authorization_required() {
+        McpError::ConnectionError(format!("{msg}. Reconnect this connector to sign in again."))
     } else if e.rpc_error().is_some() {
         McpError::RmcpError(msg)
     } else {
@@ -77,7 +79,7 @@ fn client_metadata_document_url() -> Option<String> {
     )
 }
 
-fn engine_hooks(server_name: &str, interactive: bool) -> agiworkforce_mcp::ClientHooks {
+fn engine_hooks(server_name: &str, interactive: Arc<AtomicBool>) -> agiworkforce_mcp::ClientHooks {
     agiworkforce_mcp::ClientHooks {
         token_store: Arc::new(DesktopTokenStore),
         elicitation: Arc::new(agiworkforce_mcp::AutoDeclineHandler),
@@ -543,7 +545,7 @@ impl StdioTransport {
             &server_name,
             engine_config,
             agiworkforce_mcp::McpTimeouts::default(),
-            engine_hooks(&server_name, false),
+            engine_hooks(&server_name, Arc::new(AtomicBool::new(false))),
         )
         .await
         .map_err(map_engine_error)?;
@@ -815,14 +817,16 @@ impl HttpSseTransport {
             config.url
         );
         let (engine_config, timeouts) = remote_engine_config(&server_name, &config)?;
+        let browser_gate = Arc::new(AtomicBool::new(interactive));
         let mut client = agiworkforce_mcp::McpClient::connect(
             &server_name,
             engine_config,
             timeouts,
-            engine_hooks(&server_name, interactive),
+            engine_hooks(&server_name, Arc::clone(&browser_gate)),
         )
         .await
         .map_err(map_engine_error)?;
+        browser_gate.store(false, Ordering::SeqCst);
         let negotiated = client.server().clone();
         let notifications = parking_lot::Mutex::new(client.notifications());
 

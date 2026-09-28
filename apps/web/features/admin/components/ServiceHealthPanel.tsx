@@ -50,7 +50,7 @@ function Section({
 }) {
   return (
     <section className={CARD_CLASS} aria-labelledby={id}>
-      <h3 id={id} className="text-sm font-medium">
+      <h3 id={id} className="text-h5">
         {title}
       </h3>
       <p className="mt-1 text-xs text-muted-foreground">{description}</p>
@@ -79,7 +79,7 @@ export default function ServiceHealthPanel() {
   return (
     <section className="flex flex-col gap-4" aria-labelledby="service-health-title">
       <div>
-        <h2 id="service-health-title" className="text-sm font-medium">
+        <h2 id="service-health-title" className="text-h5">
           Service health
         </h2>
         <p className="mt-1 text-xs text-muted-foreground">

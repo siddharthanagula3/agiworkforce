@@ -98,9 +98,7 @@ export function KeyboardShortcutsDialog({ isOpen, onClose }: KeyboardShortcutsDi
             <div className="flex items-center justify-between px-5 py-4 border-b border-border">
               <div className="flex items-center gap-2">
                 <Keyboard className="h-5 w-5 text-primary" />
-                <h2 className="text-lg font-semibold text-foreground">
-                  Keyboard Shortcuts
-                </h2>
+                <h2 className="text-h3 text-foreground">Keyboard Shortcuts</h2>
               </div>
               <button
                 type="button"
@@ -125,9 +123,7 @@ export function KeyboardShortcutsDialog({ isOpen, onClose }: KeyboardShortcutsDi
                         key={shortcut.description}
                         className="flex items-center justify-between py-1.5"
                       >
-                        <span className="text-sm text-foreground">
-                          {shortcut.description}
-                        </span>
+                        <span className="text-sm text-foreground">{shortcut.description}</span>
                         <div className="flex items-center gap-1">
                           {shortcut.keys.map((key, idx) => (
                             <span key={idx}>
@@ -143,9 +139,7 @@ export function KeyboardShortcutsDialog({ isOpen, onClose }: KeyboardShortcutsDi
                                 {key}
                               </kbd>
                               {idx < shortcut.keys.length - 1 && (
-                                <span className="mx-0.5 text-muted-foreground">
-                                  +
-                                </span>
+                                <span className="mx-0.5 text-muted-foreground">+</span>
                               )}
                             </span>
                           ))}

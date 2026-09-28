@@ -215,6 +215,46 @@
       "file": "apps/web/lib/services/schedule-service.ts",
       "migration": 308,
       "reason": "Reads and writes the approval checkpoint columns 0308 adds to scheduled_task_runs so a scheduled run can pause for approval and resume. The deploy applies 0308 before this code reaches production."
+    },
+    {
+      "file": "apps/web/app/api/projects/[id]/duplicate/route.ts",
+      "migration": 310,
+      "reason": "Reads and writes the uses_account_instructions and uses_account_style columns 0310 adds to user_projects. The deploy applies 0310 before this code reaches production."
+    },
+    {
+      "file": "apps/web/app/api/projects/[id]/route.ts",
+      "migration": 310,
+      "reason": "Reads and writes the uses_account_instructions and uses_account_style columns 0310 adds to user_projects. The deploy applies 0310 before this code reaches production."
+    },
+    {
+      "file": "apps/web/app/api/projects/route.ts",
+      "migration": 310,
+      "reason": "Reads and writes the uses_account_instructions and uses_account_style columns 0310 adds to user_projects. The deploy applies 0310 before this code reaches production."
+    },
+    {
+      "file": "apps/web/lib/server/user-identity.ts",
+      "migration": 310,
+      "reason": "Reads and writes the uses_account_instructions and uses_account_style columns 0310 adds to user_projects. The deploy applies 0310 before this code reaches production."
+    },
+    {
+      "file": "apps/web/lib/server/copyright-notices.ts",
+      "migration": 312,
+      "reason": "Writes and reads the notice_type column 0312 adds to copyright_notices. The deploy applies 0312 before this code reaches production."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "migration": 313,
+      "reason": "Reads the custom connector OAuth client and sign-in columns 0313 adds to user_custom_connectors. The deploy applies 0313 before this code reaches production; GET /api/connectors fails without it."
+    },
+    {
+      "file": "apps/web/lib/connectors/mcp-custom-connections.ts",
+      "migration": 313,
+      "reason": "Reads the custom connector OAuth client and sign-in columns 0313 adds to user_custom_connectors. The deploy applies 0313 before this code reaches production; GET /api/connectors fails without it."
+    },
+    {
+      "file": "apps/web/lib/user-connector-tools.ts",
+      "migration": 313,
+      "reason": "Reads the custom connector OAuth client and sign-in columns 0313 adds to user_custom_connectors. The deploy applies 0313 before this code reaches production; GET /api/connectors fails without it."
     }
   ]
 }

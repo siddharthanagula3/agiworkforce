@@ -83,3 +83,5 @@ build it, and the audit cell is recorded as not applicable by this decision.
 - **In-app display language, text size and reduced motion on mobile (S84.01,
   S84.05, S84.07).** The mobile apps follow the device settings, as ChatGPT and
   Claude do (D-2026-09-15-03).
+- **Approval history view on web, desktop and mobile (S59.24).** Neither ChatGPT
+  nor Claude lists past tool approvals; each decision shows in its own chat.

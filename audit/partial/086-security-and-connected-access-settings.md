@@ -10,17 +10,16 @@ nothing is left.
 
 - Done when: The user can see every way they can sign in (password, passkeys, social/SSO identities) and add or remove methods.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Passkeys, password and the authenticator are managed in Security, but linked social/SSO sign-in identities cannot be seen, added or unlinked: /api/settings/identities has no screen. | ui |
-| desktop | partial | Same as web (hosted Security page): no screen for linked sign-in identities. | ui |
-| mobile | partial | Account Security shows the authenticator status and can change the password; passkeys and linked identities are not shown ("not exposed"), and everything else opens the web page. | ui |
+| mobile | partial | Mobile Account Security still does not list passkeys or linked sign-in identities; left for after the Codex mobile release | ui |
 | cli | partial | agi auth-status and agi logout list and remove the CLI's own stored credentials (device-code sign-in, provider keys); the account's sign-in methods are not visible. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/settings/components/WebSettingsModal.tsx:186-211`, `apps/web/features/settings/sections/SecuritySection.tsx:103-112`, `apps/web/app/api/settings/identities/route.ts:23-45`, `apps/mobile/src/features/settings/account-security/index.tsx:313-350`
+Code: `apps/web/app/api/settings/identities/route.ts:42-42`, `apps/cli/src/lib.rs:3957-3975`, `apps/cli/src/auth.rs:518-535`
 
 ## S86.03: Passkeys.
 

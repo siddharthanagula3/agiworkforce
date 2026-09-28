@@ -14,101 +14,82 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Build a plan comparison in the app; mobile shows only the current plan, and the native product list (name, interval, price, no features) is gated off by MOBILE_IAP_ENABLED. | ui, flag-off |
+| mobile | partial | Comparison built and reached from the paywall; the Billing screen row is in post-codex/no-yearly-s83-mobile-billing.patch (cloud-billing/index.tsx is Codex-held); in-app purchase needs FEATURES.billing and MOBILE_IAP_ENABLED. | flag-off |
 
-Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:416-430`, `apps/web/lib/server/mobile-iap-catalog.ts:25-28`
-
-## S83.02: Monthly/annual toggle.
-
-- Done when: A monthly/annual toggle changes displayed prices and the cadence charged.
-- Wave: 2
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | The toggle exists only on the Team card now; individual plans are monthly only (D-2026-09-27-01). It changes prices and cadence, but the upgrade-waitlist gate (hasBillingWaitlistAccess, a beta_redemptions row) still blocks first purchases while the owner keeps it on. | flag-off |
-| desktop | partial | The toggle exists only on the Team card now; individual plans are monthly only (D-2026-09-27-01). It changes prices and cadence, but the upgrade-waitlist gate (hasBillingWaitlistAccess, a beta_redemptions row) still blocks first purchases while the owner keeps it on. | flag-off |
-
-Code: `apps/web/app/pricing/page.tsx:917-941`, `apps/web/features/chat/components/dialogs/UpgradePlanDialog.tsx:146-154`, `apps/web/lib/validations/checkout.ts:11-29`, `apps/web/app/api/checkout/route.ts:208-221`
+Code: `apps/mobile/src/features/settings/plans/index.tsx:59-59`, `apps/mobile/src/features/settings/plans/index.tsx:70-70`, `apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx:129-129`
 
 ## S83.03: Upgrade checkout.
 
 - Done when: A signed-in user can start and complete a paid upgrade checkout.
 - Wave: 2
+- Already works on: web, desktop, api
 - Needs a founder decision: true
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Open paid checkout to everyone: a first purchase needs an upgrade-waitlist redemption (beta_redemptions) or the route answers 403 waitlist_access_required; existing paid subscribers upgrade in place via /api/upgrade. | flag-off |
-| desktop | partial | Same gate as web; Stripe Checkout also opens in the system browser (windowPolicy), not the app window. Also the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | flag-off |
 | mobile | partial | Native store purchase code exists but is gated off (MOBILE_IAP_ENABLED unset; FEATURES.billing false), so no upgrade can be bought in the app. Even with the flag on, the catalog returns no products to users without an upgrade-waitlist redemption (beta_redemptions). | flag-off |
-| api | partial | POST /checkout is documented and works with a session bearer token, but first purchases hit the same waitlist gate (403). Also the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | flag-off |
 
-Code: `apps/web/app/pricing/page.tsx:657-668`, `apps/web/features/billing/components/UpgradeWaitlistDialog.tsx:59-74`, `apps/web/app/api/checkout/route.ts:208-221`, `apps/web/lib/server/billing-waitlist-access.ts:23-34`
+Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:416-430`, `apps/web/lib/server/mobile-iap-catalog.ts:25-28`, `apps/mobile/lib/v1FeatureFlags.ts:6-6`, `apps/web/app/api/mobile/iap/catalog/route.ts:83-86`
 
 ## S83.05: Proration explanation.
 
 - Done when: Upgrades explain proration: credit for unused time, the charge today and when the next renewal happens.
 - Wave: 2
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Make every explanation match the charge: the itemized Stripe preview is accurate, but /upgrade says 'you only pay the difference for the rest of this billing period' and the fallback dialog says the renewal date stays the same, while tier upgrades restart the cycle. Also the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | ui, flag-off |
-| desktop | partial | Same as web (hosted web app). Also the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | ui, flag-off |
 | mobile | partial | Mobile's proration note says the renewal date stays the same (wrong for tier upgrades), and upgrades cannot be bought in the app. | ui, flag-off |
 
-Code: `apps/web/features/billing/components/UpgradeConfirmDialog.tsx:186-199`, `apps/web/app/api/upgrade/preview/route.ts:74-86`, `apps/web/app/upgrade/UpgradeChooser.tsx:106-111`, `apps/web/features/billing/components/UpgradeConfirmDialog.tsx:178-182`
+Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:385-390`, `apps/mobile/lib/v1FeatureFlags.ts:6-6`
 
 ## S83.06: Tax and total-price display.
 
 - Done when: Before paying, the user sees tax and the total price.
 - Wave: 2
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Open paid checkout to all eligible users: tax and total show on the in-place upgrade preview and on Stripe Checkout, but the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers, so a first purchase never reaches them. | flag-off |
-| desktop | partial | Open paid checkout to all eligible users: tax and total show on the in-place upgrade preview and on Stripe Checkout, but the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers, so a first purchase never reaches them. | flag-off |
 | mobile | partial | Mobile relies on the store sheet to show tax and total, but native purchase is gated off (MOBILE_IAP_ENABLED unset). Even with the flag on, the catalog returns no products to users without an upgrade-waitlist redemption (beta_redemptions). | flag-off |
 
-Code: `apps/web/features/billing/components/UpgradeOrderPanel.tsx:241-268`, `apps/web/lib/billing/tax-policy.ts:94-108`, `apps/web/app/api/checkout/route.ts:384-389`, `apps/web/app/api/checkout/route.ts:208-221`
+Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:407-411`, `apps/web/lib/server/mobile-iap-catalog.ts:25-28`, `apps/web/app/api/mobile/iap/catalog/route.ts:83-86`
 
 ## S83.07: Coupon entry.
 
 - Done when: Users can enter a coupon/promotion code when buying.
 - Wave: 2
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Gate only (owner keeps the upgrade waitlist on): first purchases still need a beta_redemptions row (hasBillingWaitlistAccess); flips when checkout opens. Coupons now apply on Checkout and on in-place upgrades (/api/upgrade validates promotion codes with Stripe). | flag-off |
-| desktop | partial | Gate only (owner keeps the upgrade waitlist on): first purchases still need a beta_redemptions row (hasBillingWaitlistAccess); flips when checkout opens. Coupons now apply on Checkout and on in-place upgrades (/api/upgrade validates promotion codes with Stripe). | flag-off |
 | mobile | partial | Mobile has no coupon entry: its invite-code modal is never mounted and its redeem is a local stub, and store offer codes are not wired. | mount, handler |
 
-Code: `apps/web/app/pricing/page.tsx:670-682`, `apps/web/app/api/checkout/route.ts:371-389`, `apps/web/app/api/checkout/route.ts:208-221`, `apps/mobile/src/features/waitlist/service.ts:85-95`
+Code: `apps/mobile/src/features/waitlist/service.ts:85-95`
 
 ## S83.08: Trial terms.
 
 - Done when: When a plan starts as a trial, the user sees the trial terms: length, end date, what is charged after and how to cancel.
-- Wave: 2
+- Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Gate only (owner keeps the upgrade waitlist on): first purchases still need a beta_redemptions row (hasBillingWaitlistAccess); flips when checkout opens. Checkout states the referral trial's price and conversion date and a trial_will_end reminder is sent; code-granted trials show their real end date. | ui, handler, flag-off |
-| desktop | partial | Gate only (owner keeps the upgrade waitlist on): first purchases still need a beta_redemptions row (hasBillingWaitlistAccess); flips when checkout opens. Checkout states the referral trial's price and conversion date and a trial_will_end reminder is sent; code-granted trials show their real end date. | ui, handler, flag-off |
-| mobile | partial | Mobile shows a trialing plan as 'Renews <date>' with no trial terms. | ui |
+| mobile | partial | Trial copy (Free trial ends <date>, then renews unless you cancel) is in post-codex/no-yearly-s83-mobile-billing.patch; cloud-billing/index.tsx is Codex-held. Apply after Codex lands. | ui |
 
-Code: `apps/web/features/settings/sections/BillingSection.tsx:157-160`, `apps/web/features/settings/sections/BillingSection.tsx:757-770`, `apps/web/app/api/checkout/route.ts:83-106`, `apps/web/app/api/checkout/route.ts:208-221`
+Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:318-318`
 
 ## S83.09: Payment-method entry.
 
 - Done when: Users can add a payment method.
 - Wave: 2
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Open paid checkout to all eligible users: cards are added on Stripe Checkout or the billing portal, and the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers on both (/api/checkout and /api/portal answer 403). | flag-off |
-| desktop | partial | Open paid checkout to all eligible users: cards are added on Stripe Checkout or the billing portal, and the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers on both (/api/checkout and /api/portal answer 403). | flag-off |
 | mobile | partial | Mobile cannot add a card: the portal action is behind FEATURES.billing and Stripe-billed users are sent to web billing; store payment methods live with Apple/Google. | flag-off, surface-only |
 
-Code: `apps/web/features/settings/sections/BillingSection.tsx:923-946`, `apps/web/features/billing/services/stripe-payments.ts:112-136`, `apps/web/app/api/portal/route.ts:351-365`, `apps/web/app/api/checkout/route.ts:208-221`
+Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:367-380`, `apps/mobile/lib/v1FeatureFlags.ts:6-6`
 
 ## S83.10: Payment-method management.
 
@@ -126,53 +107,49 @@ Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:367-380`, `apps
 
 - Done when: Users can enter and update a billing address.
 - Wave: 2
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Open paid checkout to all eligible users: the address is collected on Stripe Checkout and edited in the portal, and the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers on both. | flag-off |
-| desktop | partial | Open paid checkout to all eligible users: the address is collected on Stripe Checkout and edited in the portal, and the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers on both. | flag-off |
 | mobile | partial | Mobile cannot collect or edit an address; Stripe-billed users are sent to web billing and the portal action is flag-gated. | flag-off, surface-only |
 
-Code: `apps/web/features/settings/sections/BillingSection.tsx:809-824`, `apps/web/lib/billing/tax-policy.ts:94-108`, `apps/web/app/api/checkout/route.ts:384-389`, `apps/web/app/api/checkout/route.ts:208-221`
+Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:367-380`, `apps/mobile/lib/v1FeatureFlags.ts:6-6`
 
 ## S83.12: Tax identifier.
 
 - Done when: Business buyers can enter a tax identifier (VAT/GST) that is applied to their invoices.
 - Wave: 2
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Open paid checkout to all eligible users: tax IDs are collected only on Stripe Checkout, and the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | flag-off |
-| desktop | partial | Open paid checkout to all eligible users: tax IDs are collected only on Stripe Checkout, and the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | flag-off |
 | mobile | partial | Mobile has no tax-ID entry; store purchases handle tax themselves and are gated off. | flag-off, surface-only |
 
-Code: `apps/web/app/pricing/page.tsx:670-682`, `apps/web/lib/billing/tax-policy.ts:94-108`, `apps/web/app/api/checkout/route.ts:384-389`, `apps/web/app/api/checkout/route.ts:208-221`
+Code: `apps/web/lib/server/mobile-iap-catalog.ts:25-28`
 
 ## S83.13: Purchase confirmation.
 
 - Done when: After paying, the user sees a confirmation of what was bought and that it is active.
 - Wave: 2
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Open paid checkout to all eligible users: the verified confirmation works, but the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers, so most users never reach a purchase to confirm. | flag-off |
-| desktop | partial | Stripe Checkout and its success page (/billing?success=true) open in the system browser, so the desktop window shows no purchase confirmation. Also the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | surface-only, flag-off |
 | mobile | partial | Native purchases show 'Purchase verified' after server verification, but native purchase is gated off. Even with the flag on, the catalog returns no products to users without an upgrade-waitlist redemption (beta_redemptions). | flag-off |
 
-Code: `apps/web/app/billing/UpgradeWelcome.tsx:34-59`, `apps/web/app/billing/page.tsx:21-46`, `apps/web/app/api/checkout/route.ts:365-391`, `apps/web/app/api/checkout/route.ts:208-221`
+Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:506-514`, `apps/web/lib/server/mobile-iap-catalog.ts:25-28`, `apps/web/app/api/mobile/iap/catalog/route.ts:83-86`
 
 ## S83.15: Retry payment.
 
 - Done when: After a failed payment the user can retry it (pay the open invoice or update the card) from the product.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Give past-due users a working retry: the alert links to /payment-failure, whose 'Try again' opens /pricing (checkout then refuses because Stripe already bills the subscription); paying the open invoice or updating the card is only reachable via Manage billing or an invoice's View link. | ui, states |
-| desktop | partial | Same as web (hosted web app). | ui, states |
 | mobile | partial | Mobile only links a past-due Stripe user to web billing. | surface-only |
 
-Code: `apps/web/features/settings/sections/BillingSection.tsx:734-754`, `apps/web/app/payment-failure/page.tsx:44-46`, `apps/web/app/api/checkout/route.ts:332-346`, `apps/web/features/settings/sections/BillingSection.tsx:1350-1366`
+Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:367-380`
 
 ## S83.21: Cancel subscription.
 
@@ -194,9 +171,9 @@ Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:165-182`, `apps
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile shows only 'Cancels <date>'. | ui |
+| mobile | partial | End-of-term copy (Access ends <date>, you keep the plan until then) is in post-codex/no-yearly-s83-mobile-billing.patch; Codex-held file. | ui |
 
-Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:318-321`
+Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:318-318`
 
 ## S83.25: Mobile purchase restoration.
 
@@ -213,14 +190,14 @@ Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:485-496`, `apps
 
 - Done when: A team owner can buy seats (choose a seat count at purchase and add seats later).
 - Wave: 2
+- Already works on: web
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Open paid checkout to all eligible users: seat count is chosen at checkout and increased in place, but the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers, so a first Team purchase is blocked. | flag-off |
 | desktop | partial | Open paid checkout to all eligible users: seat count is chosen at checkout and increased in place, but the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers, so a first Team purchase is blocked. | flag-off |
 | api | partial | POST /checkout accepts a seat count, but a first Team purchase hits the upgrade-waitlist gate (403); seat increases are app-only (/api/upgrade). Also the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | flag-off |
 
-Code: `apps/web/app/pricing/page.tsx:1078-1093`, `apps/web/lib/validations/checkout.ts:52-58`, `apps/web/lib/server/stripe-plan-change.ts:91-99`, `apps/web/app/api/checkout/route.ts:208-221`
+Code: `apps/web/app/pricing/page.tsx:1078-1093`, `apps/web/lib/validations/checkout.ts:52-58`, `apps/web/app/api/checkout/route.ts:208-221`, `apps/web/lib/server/billing-waitlist-access.ts:23-34`
 
 ## S83.29: Seat assignment.
 

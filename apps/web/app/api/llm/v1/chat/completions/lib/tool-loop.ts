@@ -318,6 +318,7 @@ import { listEnabledPluginIds } from '@/lib/services/plugin-installation-service
 import { findUserSkillByName } from '@/lib/services/user-skill-service';
 import { findInstalledDirectorySkill } from '@/features/plugins/server/directory/installed-skills';
 import { functionToolName } from './tool-loop-routing';
+import { invalidToolArgumentsMessage, toolArgumentProblem } from './tool-argument-validation';
 import {
   generateManagedOfficeFile,
   isManagedOfficeFileTool,
@@ -2831,6 +2832,19 @@ export async function executeOfferedToolCall(
     };
   }
 
+  const argumentProblem = toolArgumentProblem(
+    call,
+    input.mcpTools?.find((tool) => tool.qualifiedName === toolName)?.inputSchema,
+  );
+  if (argumentProblem) {
+    await audit('failed');
+    return {
+      content: invalidToolArgumentsMessage(toolName, argumentProblem),
+      isError: true,
+      untrustedContent: false,
+    };
+  }
+
   const sessionScope = conversationId
     ? managedCloudE2BSessionScope(userId, conversationId)
     : undefined;
@@ -3062,6 +3076,9 @@ export async function* runToolLoop(
     ...mcpTools.map((tool) => tool.qualifiedName),
     ...(processed.llmRequest.tools ?? []).map(functionToolName).filter(Boolean),
   ]);
+  const externalToolSchemas = new Map<string, unknown>(
+    mcpTools.map((tool) => [tool.qualifiedName, tool.inputSchema]),
+  );
   // The CLI runs its own loop, so every tool it declares is its own even when
   // a platform tool shares the name: its write_file is not the sandbox's. Any
   // other caller keeps the hosted tools it names and owns only the rest.
@@ -4157,6 +4174,13 @@ export async function* runToolLoop(
       }
       if (tc.qualifiedName === TOOL_DIRECTORY_TOOL_NAME) {
         return Promise.resolve(loadDeferredToolSchemas(tc.args));
+      }
+      const argumentProblem = toolArgumentProblem(tc, externalToolSchemas.get(tc.qualifiedName));
+      if (argumentProblem) {
+        return Promise.resolve({
+          content: invalidToolArgumentsMessage(tc.qualifiedName, argumentProblem),
+          isError: true,
+        });
       }
       if (isWebSearchTool(tc.qualifiedName)) {
         searchObserved = true;

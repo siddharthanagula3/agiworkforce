@@ -318,26 +318,7 @@ export async function resolveEffectiveWorkspaceControls(
   const scopedOrganizationId = organizationId;
 
   try {
-    const layered = await withAccountControlRetry(() =>
-      readLayeredOrganizationPolicy(db, scopedOrganizationId),
-    );
-    if (!layered) return null;
-    const overrides = layered.hasOverrides
-      ? await withAccountControlRetry(() =>
-          readApplicablePolicyOverrides(db, scopedOrganizationId, userId),
-        )
-      : [];
-    const revision = layered.policy.revision ?? 0;
-    return {
-      organizationId: scopedOrganizationId,
-      revision,
-      controls: resolveWorkspaceControls(layered.policy.controls, overrides, revision),
-      code: resolveWorkspaceCodeControls(
-        readWorkspaceCodeControls(layered.policy.metadata),
-        overrides,
-        revision,
-      ),
-    };
+    return (await readMemberControls(db, scopedOrganizationId, userId))?.effective ?? null;
   } catch (error) {
     logger.error(
       { error, userId, organizationId: scopedOrganizationId },
@@ -345,6 +326,57 @@ export async function resolveEffectiveWorkspaceControls(
     );
     throw accountControlUnavailable();
   }
+}
+
+async function readMemberControls(
+  db: DatabaseAdapter,
+  organizationId: string,
+  userId: string,
+): Promise<{ policy: AdminPolicy; effective: EffectiveWorkspaceControls } | null> {
+  const layered = await withAccountControlRetry(() =>
+    readLayeredOrganizationPolicy(db, organizationId),
+  );
+  if (!layered) return null;
+  const overrides = layered.hasOverrides
+    ? await withAccountControlRetry(() => readApplicablePolicyOverrides(db, organizationId, userId))
+    : [];
+  const revision = layered.policy.revision ?? 0;
+  const controls = resolveWorkspaceControls(layered.policy.controls, overrides, revision);
+  return {
+    policy: { ...layered.policy, controls },
+    effective: {
+      organizationId,
+      revision,
+      controls,
+      code: resolveWorkspaceCodeControls(
+        readWorkspaceCodeControls(layered.policy.metadata),
+        overrides,
+        revision,
+      ),
+    },
+  };
+}
+
+export interface MemberPolicyDiagnosis {
+  effective: EffectiveWorkspaceControls | null;
+  decision: PolicyDecision | null;
+}
+
+export async function diagnoseMemberPolicy(
+  db: DatabaseAdapter,
+  organizationId: string,
+  memberUserId: string,
+  ask: PolicyAsk | null,
+): Promise<MemberPolicyDiagnosis> {
+  const member = await readMemberControls(db, organizationId, memberUserId);
+  if (!member) {
+    return { effective: null, decision: ask ? UNSCOPED_POLICY_DECISION : null };
+  }
+  const collectionState = await readOrganizationCollectionState(db, organizationId);
+  return {
+    effective: member.effective,
+    decision: ask ? evaluateOrganizationPolicy(member.policy, ask, collectionState) : null,
+  };
 }
 
 export interface SecretHandlingPolicyResult {

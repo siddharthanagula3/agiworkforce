@@ -48,11 +48,11 @@ function renderSheet(
 describe('PaywallBottomSheet tier labels', () => {
   beforeEach(() => mockPush.mockClear());
 
-  it('names Max 15x when the server gates a feature to it', () => {
+  it('names the top Max tier when the server gates a feature to it', () => {
     const { getByText } = renderSheet('max_15x');
 
-    expect(getByText('Upgrade to Max 15x')).toBeTruthy();
-    expect(getByText('Video generation requires the Max 15x plan.')).toBeTruthy();
+    expect(getByText('Upgrade to Max 20x')).toBeTruthy();
+    expect(getByText('Video generation requires the Max 20x plan.')).toBeTruthy();
   });
 
   it('uses the plan name checkout sells for max', () => {

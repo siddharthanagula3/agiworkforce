@@ -184,7 +184,7 @@ export function WorkspacePostureOverview() {
   if (isError) {
     return (
       <div style={cardStyle} className="p-6">
-        <h2 className="text-base font-semibold" style={{ color: 'var(--text-1)' }}>
+        <h2 className="text-h4" style={{ color: 'var(--text-1)' }}>
           We could not load your workspace posture
         </h2>
         <p className="mt-2 text-sm" style={{ color: 'var(--text-3)' }}>
@@ -205,7 +205,7 @@ export function WorkspacePostureOverview() {
   if (data === null) {
     return (
       <div style={cardStyle} className="p-6">
-        <h2 className="text-base font-semibold" style={{ color: 'var(--text-1)' }}>
+        <h2 className="text-h4" style={{ color: 'var(--text-1)' }}>
           You do not administer this workspace
         </h2>
         <p className="mt-2 text-sm leading-relaxed" style={{ color: 'var(--text-3)' }}>
@@ -224,7 +224,7 @@ export function WorkspacePostureOverview() {
   return (
     <div className="flex flex-col gap-6">
       <header>
-        <h1 className="text-xl font-semibold" style={{ color: 'var(--text-1)' }}>
+        <h1 className="text-h2" style={{ color: 'var(--text-1)' }}>
           {posture.organizationName ?? 'Workspace'}
         </h1>
         <p className="mt-1 text-sm" style={{ color: 'var(--text-3)' }}>
@@ -239,11 +239,7 @@ export function WorkspacePostureOverview() {
       {posture.recommendations.length > 0 ? (
         <section style={cardStyle} aria-labelledby="recommendations-heading">
           <div className="border-b px-5 py-3.5" style={{ borderColor: 'var(--settings-border)' }}>
-            <h2
-              id="recommendations-heading"
-              className="text-sm font-semibold"
-              style={{ color: 'var(--text-1)' }}
-            >
+            <h2 id="recommendations-heading" className="text-h5" style={{ color: 'var(--text-1)' }}>
               Recommended
             </h2>
           </div>
@@ -278,11 +274,7 @@ export function WorkspacePostureOverview() {
       {posture.groups.map((group) => (
         <section key={group.id} style={cardStyle} aria-labelledby={`${group.id}-heading`}>
           <div className="border-b px-5 py-3.5" style={{ borderColor: 'var(--settings-border)' }}>
-            <h2
-              id={`${group.id}-heading`}
-              className="text-sm font-semibold"
-              style={{ color: 'var(--text-1)' }}
-            >
+            <h2 id={`${group.id}-heading`} className="text-h5" style={{ color: 'var(--text-1)' }}>
               {group.title}
             </h2>
           </div>

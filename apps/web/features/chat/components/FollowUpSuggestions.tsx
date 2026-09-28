@@ -330,27 +330,24 @@ export function FollowUpSuggestions({
   searchUnavailable = false,
   className,
 }: FollowUpSuggestionsProps) {
-  const followUps = useMemo(
-    () => {
-      const candidates =
-        suggestions && suggestions.length > 0
-          ? suggestions.slice(0, 3).map((text, index) => ({
-              id: `followup-generated-${index}`,
+  const followUps = useMemo(() => {
+    const candidates =
+      suggestions && suggestions.length > 0
+        ? suggestions.slice(0, 3).map((text, index) => ({
+            id: `followup-generated-${index}`,
+            text,
+            type: 'deeper' as FollowUpType,
+          }))
+        : deriveFollowUps(lastAssistantContent, messageCount, lastUserContent);
+    return searchUnavailable
+      ? candidates.filter(
+          ({ text }) =>
+            !/\b(?:search|browse)\b.{0,24}\b(?:web|online)\b|\b(?:web|online)\b.{0,24}\b(?:search|browse)\b/i.test(
               text,
-              type: 'deeper' as FollowUpType,
-            }))
-          : deriveFollowUps(lastAssistantContent, messageCount, lastUserContent);
-      return searchUnavailable
-        ? candidates.filter(
-            ({ text }) =>
-              !/\b(?:search|browse)\b.{0,24}\b(?:web|online)\b|\b(?:web|online)\b.{0,24}\b(?:search|browse)\b/i.test(
-                text,
-              ),
-          )
-        : candidates;
-    },
-    [suggestions, lastAssistantContent, messageCount, lastUserContent, searchUnavailable],
-  );
+            ),
+        )
+      : candidates;
+  }, [suggestions, lastAssistantContent, messageCount, lastUserContent, searchUnavailable]);
   const [dismissed, setDismissed] = useState(false);
 
   if (isGenerating || followUps.length === 0 || dismissed) {
@@ -387,7 +384,7 @@ export function FollowUpSuggestions({
                 'border border-border/40 bg-card/50 backdrop-blur-sm',
                 'text-xs font-medium text-muted-foreground',
                 'transition-all duration-quick',
-                'hover:border-primary/30 hover:bg-primary/5 hover:text-foreground hover:shadow-sm',
+                'hover:border-primary/30 hover:bg-primary/5 hover:text-foreground hover:shadow-e1',
                 'active:scale-[0.97]',
               )}
             >

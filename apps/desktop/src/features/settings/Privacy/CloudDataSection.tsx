@@ -68,7 +68,7 @@ export function CloudDataSection() {
   return (
     <div className="space-y-4">
       <div>
-        <h3 className="text-lg font-semibold mb-1">Cloud account data</h3>
+        <h3 className="text-h3 mb-1">Cloud account data</h3>
         <p className="text-sm text-muted-foreground">
           These controls use your authenticated AGI Cloud account. They never export or delete Local
           chats, device files, or provider keys.

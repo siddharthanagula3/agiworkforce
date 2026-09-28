@@ -225,7 +225,7 @@ export function CalculationCard({ content }: CalculationCardProps) {
             <Calculator className="h-5 w-5 text-blue-700 dark:text-blue-400" aria-hidden="true" />
           </div>
           <div>
-            <h3 className="text-lg font-semibold leading-tight">{calc.title}</h3>
+            <h3 className="text-h3">{calc.title}</h3>
             {calc.description && (
               <p className="mt-0.5 text-sm text-muted-foreground line-clamp-2">
                 {calc.description}

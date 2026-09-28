@@ -203,11 +203,7 @@ export function WorkspaceApiKeys() {
     <section style={cardStyle} aria-labelledby="workspace-api-keys-heading">
       {dialog}
       <div className="border-b px-5 py-3.5" style={{ borderColor: 'var(--settings-border)' }}>
-        <h2
-          id="workspace-api-keys-heading"
-          className="text-sm font-semibold"
-          style={{ color: 'var(--text-1)' }}
-        >
+        <h2 id="workspace-api-keys-heading" className="text-h5" style={{ color: 'var(--text-1)' }}>
           Workspace API keys
         </h2>
         <p className="mt-1 text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>

@@ -199,16 +199,14 @@ export function KeyboardShortcutsOverlay({
               'fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50',
               'w-full max-w-2xl max-h-[85vh]',
               'bg-[hsl(var(--card))] border border-[hsl(var(--border))]',
-              'rounded-2xl shadow-2xl flex flex-col overflow-hidden',
+              'rounded-2xl shadow-e4 flex flex-col overflow-hidden',
             )}
           >
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-[hsl(var(--border))] shrink-0">
               <div className="flex items-center gap-2">
                 <Keyboard className="h-5 w-5 text-[hsl(var(--muted-foreground))]" />
-                <h2 className="text-base font-semibold text-[hsl(var(--foreground))]">
-                  Keyboard Shortcuts
-                </h2>
+                <h2 className="text-h4 text-[hsl(var(--foreground))]">Keyboard Shortcuts</h2>
               </div>
               <Button
                 variant="ghost"

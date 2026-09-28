@@ -442,9 +442,9 @@ const MarkdownTableHeader = ({
 const markdownComponents: Components = {
   code: CodeBlock as Components['code'],
   img: MarkdownImage as Components['img'],
-  h1: ({ children }) => <h1 className="mb-4 mt-6 text-xl font-bold">{children}</h1>,
-  h2: ({ children }) => <h2 className="mb-3 mt-5 text-lg font-semibold">{children}</h2>,
-  h3: ({ children }) => <h3 className="mb-2 mt-4 text-base font-semibold">{children}</h3>,
+  h1: ({ children }) => <h1 className="mb-4 mt-6 text-h2">{children}</h1>,
+  h2: ({ children }) => <h2 className="mb-3 mt-5 text-h3">{children}</h2>,
+  h3: ({ children }) => <h3 className="mb-2 mt-4 text-h4">{children}</h3>,
   p: MarkdownParagraph as Components['p'],
   ul: MarkdownUnorderedList as Components['ul'],
   ol: MarkdownOrderedList as Components['ol'],

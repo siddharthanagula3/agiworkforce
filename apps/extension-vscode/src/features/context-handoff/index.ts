@@ -120,27 +120,82 @@ interface GitRepositoryApi {
   state: {
     workingTreeChanges: Array<{ uri: vscode.Uri }>;
     indexChanges: Array<{ uri: vscode.Uri }>;
+    remotes: Array<{ name: string; fetchUrl?: string }>;
+    HEAD?: { name?: string; upstream?: { remote: string; name: string }; ahead?: number };
   };
   fetch: () => Promise<void>;
   checkout: (branch: string) => Promise<void>;
+}
+
+async function workspaceGitRepository(): Promise<GitRepositoryApi | null> {
+  const folder = vscode.workspace.workspaceFolders?.[0];
+  if (folder === undefined) return null;
+  const extension = vscode.extensions.getExtension('vscode.git');
+  if (extension === undefined) return null;
+  if (!extension.isActive) await extension.activate();
+  const api = (
+    extension.exports as { getAPI: (version: number) => { repositories: GitRepositoryApi[] } }
+  ).getAPI(1);
+  return (
+    api.repositories.find((candidate) => candidate.rootUri.fsPath === folder.uri.fsPath) ??
+    api.repositories[0] ??
+    null
+  );
+}
+
+const GITHUB_REMOTE_RE = /github\.com[:/]([^/\s]+)\/([^/\s]+?)(?:\.git)?\/?$/i;
+
+export function githubRepositoryName(remoteUrl: string): string | null {
+  const match = GITHUB_REMOTE_RE.exec(remoteUrl.trim());
+  return match ? `${match[1]}/${match[2]}`.toLowerCase() : null;
+}
+
+export async function workspaceGitHubRepositories(): Promise<string[]> {
+  const repository = await workspaceGitRepository().catch(() => null);
+  if (repository === null) return [];
+  return repository.state.remotes
+    .map((remote) => (remote.fetchUrl ? githubRepositoryName(remote.fetchUrl) : null))
+    .filter((name): name is string => name !== null);
+}
+
+export interface WorkspaceCloudSource {
+  repository: string;
+  repositoryUrl: string;
+  branch: string | null;
+  upstream: string | null;
+  unpushedCommits: number;
+  dirtyPaths: string[];
+}
+
+export async function readWorkspaceCloudSource(): Promise<WorkspaceCloudSource | null> {
+  const repository = await workspaceGitRepository();
+  if (repository === null) return null;
+  const head = repository.state.HEAD;
+  const remotes = repository.state.remotes;
+  const preferred =
+    remotes.find((remote) => remote.name === head?.upstream?.remote) ??
+    remotes.find((remote) => remote.name === 'origin') ??
+    remotes[0];
+  const name = preferred?.fetchUrl ? githubRepositoryName(preferred.fetchUrl) : null;
+  if (name === null) return null;
+  return {
+    repository: name,
+    repositoryUrl: `https://github.com/${name}`,
+    branch: head?.name ?? null,
+    upstream: head?.upstream ? `${head.upstream.remote}/${head.upstream.name}` : null,
+    unpushedCommits: head?.ahead ?? 0,
+    dirtyPaths: [...repository.state.workingTreeChanges, ...repository.state.indexChanges].map(
+      (change) => vscode.workspace.asRelativePath(change.uri),
+    ),
+  };
 }
 
 /** The workspace's own git repository, through the editor's git extension. */
 export async function resolveGitCheckoutHost(): Promise<CloudResultPullHost> {
   return {
     findRepository: async () => {
-      const folder = vscode.workspace.workspaceFolders?.[0];
-      if (folder === undefined) return null;
-      const extension = vscode.extensions.getExtension('vscode.git');
-      if (extension === undefined) return null;
-      if (!extension.isActive) await extension.activate();
-      const api = (
-        extension.exports as { getAPI: (version: number) => { repositories: GitRepositoryApi[] } }
-      ).getAPI(1);
-      const repository =
-        api.repositories.find((candidate) => candidate.rootUri.fsPath === folder.uri.fsPath) ??
-        api.repositories[0];
-      if (repository === undefined) return null;
+      const repository = await workspaceGitRepository();
+      if (repository === null) return null;
       return {
         rootPath: repository.rootUri.fsPath,
         dirtyPaths: [...repository.state.workingTreeChanges, ...repository.state.indexChanges].map(
@@ -217,7 +272,22 @@ export async function handleCloudTaskHandoffUri(
     );
     return false;
   }
-  target.prefillComposer(buildCloudTaskHandoffDraft(handoff));
+  await continueCloudWorkHere(
+    buildCloudTaskHandoffDraft(handoff),
+    handoff,
+    target,
+    resolvePullHost,
+  );
+  return true;
+}
+
+export async function continueCloudWorkHere(
+  draft: string,
+  handoff: CloudTaskHandoff,
+  target: ContextHandoffTarget,
+  resolvePullHost?: () => Promise<CloudResultPullHost>,
+): Promise<void> {
+  target.prefillComposer(draft);
   await target.reveal();
   // Opening a link must never move the checkout on its own. The branch comes
   // in only when the reader asks, and the dirty-tree guard still runs after.
@@ -230,7 +300,6 @@ export async function handleCloudTaskHandoffUri(
       await pullCloudResultIntoCheckout(handoff, await resolvePullHost());
     }
   }
-  return true;
 }
 
 export function registerContextHandoffUriHandler(

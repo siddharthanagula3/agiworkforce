@@ -62,10 +62,7 @@ export function LockdownModePanel() {
 
   return (
     <section className="space-y-3" aria-labelledby="lockdown-heading">
-      <h3
-        id="lockdown-heading"
-        className="text-sm font-medium uppercase tracking-wider text-muted-foreground"
-      >
+      <h3 id="lockdown-heading" className="text-h5 uppercase tracking-wider text-muted-foreground">
         Lockdown mode
       </h3>
 

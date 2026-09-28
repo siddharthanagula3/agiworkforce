@@ -576,7 +576,7 @@ export function BrowserViewer({ className, tabId }: BrowserViewerProps) {
                     height: scaledBounds.height,
                   }}
                 >
-                  <div className="absolute -top-6 left-0 bg-warning-fill text-warning-on-fill text-[10px] font-bold px-1.5 py-0.5 rounded shadow-sm whitespace-nowrap">
+                  <div className="absolute -top-6 left-0 bg-warning-fill text-warning-on-fill text-[10px] font-bold px-1.5 py-0.5 rounded shadow-e1 whitespace-nowrap">
                     Target Element
                   </div>
                 </div>

@@ -25,7 +25,7 @@ export function AccountTab({ scope = 'local' }: { scope?: 'local' | 'cloud' }) {
     return (
       <div className="space-y-6">
         <div>
-          <h3 className="text-lg font-semibold mb-1">Local workspace</h3>
+          <h3 className="text-h3 mb-1">Local workspace</h3>
           <p className="text-sm text-muted-foreground">
             Local Mode keeps chats and settings on this device. {DESKTOP_CLOUD_TAGLINE}
           </p>

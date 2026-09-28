@@ -365,7 +365,7 @@ export default function RouteEconomicsPanel() {
   return (
     <section className="flex flex-col gap-4" aria-labelledby="route-economics-title">
       <div>
-        <h2 id="route-economics-title" className="text-sm font-medium">
+        <h2 id="route-economics-title" className="text-h5">
           Routes
         </h2>
         <p className="mt-1 text-xs text-muted-foreground">

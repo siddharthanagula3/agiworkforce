@@ -177,7 +177,7 @@ export const ResourceMonitor: React.FC<ResourceMonitorProps> = ({
   return (
     <div className={`bg-card rounded-lg border border-border ${className}`}>
       <div className="p-4 border-b border-border">
-        <h3 className="text-sm font-semibold text-foreground flex items-center space-x-2">
+        <h3 className="text-h5 text-foreground flex items-center space-x-2">
           <Activity className="w-4 h-4" />
           <span>System Resources</span>
         </h3>

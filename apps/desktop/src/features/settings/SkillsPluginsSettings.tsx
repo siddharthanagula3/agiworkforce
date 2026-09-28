@@ -731,7 +731,7 @@ export function SkillsPluginsSettings() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-semibold mb-1">Skills &amp; Plugins</h3>
+          <h3 className="text-h3 mb-1">Skills &amp; Plugins</h3>
           <p className="text-sm text-muted-foreground">
             Installed plugins can provide agents, skills, and tools. AGI also reads existing
             compatibility-backed project resources from the current workspace.
