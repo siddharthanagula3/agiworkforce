@@ -22,6 +22,8 @@ export * from './tool-events';
 
 export * from './tool-status';
 
+export * from './account-eligibility';
+
 export * from './agent-status';
 
 export * from './auth';

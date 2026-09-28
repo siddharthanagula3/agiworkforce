@@ -86,6 +86,7 @@ export const JOB_KINDS = {
   'notifications.schedule-completed': 'notifications',
   'email.schedule-completed': 'email',
   'webhooks.audit-stream-delivery': 'webhooks',
+  'webhooks.developer-delivery': 'webhooks',
   'data-deletion.scheduled-account-erasure': 'data-deletion',
   'file-processing.purge-upload-object': 'file-processing',
   'research.settle-report-cost': 'research',
