@@ -1412,7 +1412,7 @@ async function driveDeviceSteps(
     });
   }
 
-  const hostContext = await readChatHostContext();
+  const hostContext = await readChatHostContext(ctx.conversationId);
   const headers = await addCsrfHeaders({
     'Content-Type': 'application/json',
     Authorization: `Bearer ${await ctx.getAuthToken()}`,
@@ -3703,7 +3703,7 @@ export function useChatStream(
             }
           }
 
-          const hostContext = await readChatHostContext();
+          const hostContext = await readChatHostContext(conversationId);
           const headers = await addCsrfHeaders({
             'Content-Type': 'application/json',
             Authorization: `Bearer ${await getAuthToken()}`,
@@ -4533,7 +4533,7 @@ export function useResolveToolApproval(
 
       try {
         const resumeOperationId = crypto.randomUUID();
-        const hostContext = await readChatHostContext();
+        const hostContext = await readChatHostContext(turn.conversationId);
         const headers = await addCsrfHeaders({
           'Content-Type': 'application/json',
           Authorization: `Bearer ${authToken}`,
@@ -4784,7 +4784,7 @@ function useResolveToolInput(
       setError(null, turn.conversationId);
 
       try {
-        const hostContext = await readChatHostContext();
+        const hostContext = await readChatHostContext(turn.conversationId);
         const headers = await addCsrfHeaders({
           'Content-Type': 'application/json',
           Authorization: `Bearer ${authToken}`,
