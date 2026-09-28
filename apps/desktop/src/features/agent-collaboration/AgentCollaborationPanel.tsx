@@ -482,7 +482,7 @@ export function AgentCollaborationPanel({ className }: AgentCollaborationPanelPr
       <div className="flex items-center justify-between border-b border-border/50 px-4 py-3">
         <div className="flex items-center gap-2">
           <Users className="h-5 w-5 text-purple-500" />
-          <h2 className="text-sm font-semibold">Agent Collaboration</h2>
+          <h2 className="text-h5">Agent Collaboration</h2>
           {agents.length > 0 && (
             <span className="rounded-full bg-purple-500/10 px-2 py-0.5 text-xs text-purple-500">
               {agents.filter((a) => a.status === 'running').length}/{agents.length} active

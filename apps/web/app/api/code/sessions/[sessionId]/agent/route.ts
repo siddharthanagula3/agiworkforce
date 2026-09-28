@@ -2,6 +2,7 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import {
+  CLOUD_CODE_LIMITS,
   getBillingPlanPricing,
   getMinimumRequiredTier,
   getModelMetadataById,
@@ -56,7 +57,7 @@ export const runtime = 'nodejs';
  */
 export const maxDuration = 300;
 
-const MAX_GOAL_LENGTH = 8000;
+const MAX_GOAL_LENGTH = CLOUD_CODE_LIMITS.task;
 
 type RouteContext = { params: Promise<{ sessionId: string }> };
 

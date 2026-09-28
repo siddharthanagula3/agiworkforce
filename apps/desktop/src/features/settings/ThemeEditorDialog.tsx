@@ -274,11 +274,11 @@ export function ThemeEditorDialog({ onClose, onSaved }: ThemeEditorDialogProps) 
     >
       <div
         ref={panelRef}
-        className="flex h-[90vh] w-[720px] max-w-[95vw] flex-col overflow-hidden rounded-xl border border-border bg-card shadow-2xl"
+        className="flex h-[90vh] w-[720px] max-w-[95vw] flex-col overflow-hidden rounded-xl border border-border bg-card shadow-e4"
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
-          <h2 className="text-base font-semibold text-foreground">Create Custom Theme</h2>
+          <h2 className="text-h4 text-foreground">Create Custom Theme</h2>
           <button
             type="button"
             onClick={onClose}

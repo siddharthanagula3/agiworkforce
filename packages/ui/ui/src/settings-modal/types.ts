@@ -70,6 +70,8 @@ export interface CustomConnectorInput {
   name: string;
   url: string;
   authToken?: string;
+  oauthClientId?: string;
+  oauthClientSecret?: string;
 }
 
 export const CUSTOM_MCP_AUTH_TYPE = 'custom_mcp';
@@ -100,6 +102,8 @@ export interface SettingsDataAdapter {
   disconnectConnector?: (id: string) => Promise<void> | void;
   addCustomConnector?: (input: CustomConnectorInput) => Promise<void> | void;
   customConnectorAuthTokenSupported?: boolean;
+  customConnectorOAuthClientSupported?: boolean;
+  customConnectorOAuthRedirectUri?: string;
   openHref?: (href: string) => Promise<void> | void;
 
   skills?: SettingsSkill[];

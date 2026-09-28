@@ -153,7 +153,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="relative mx-4 max-h-[calc(100vh-48px)] w-full max-w-4xl overflow-y-auto rounded-2xl border border-border bg-background shadow-2xl">
+      <div className="relative mx-4 max-h-[calc(100vh-48px)] w-full max-w-4xl overflow-y-auto rounded-2xl border border-border bg-background shadow-e4">
         {/* Dismiss button */}
         <button
           type="button"
@@ -169,13 +169,13 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
           <div className="text-center space-y-2 mb-6">
             <div className="flex justify-center">
               <div
-                className="w-14 h-14 rounded-2xl bg-foreground text-background flex items-center justify-center shadow-lg"
+                className="w-14 h-14 rounded-2xl bg-foreground text-background flex items-center justify-center shadow-e3"
                 aria-label="AGI"
               >
                 <span className="text-sm font-semibold">AGI</span>
               </div>
             </div>
-            <h2 className="text-2xl font-bold text-foreground">How do you want to use AGI?</h2>
+            <h2 className="text-h1 text-foreground">How do you want to use AGI?</h2>
             <p className="mx-auto max-w-2xl text-sm text-muted-foreground">
               Pick the trust boundary first. You can change this later, but AGI will never move a
               Local chat into BYOK or Cloud without an explicit handoff.

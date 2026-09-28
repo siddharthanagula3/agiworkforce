@@ -77,7 +77,7 @@ export const AgentStatusMonitor: React.FC<AgentStatusMonitorProps> = ({
         return (
           <div
             key={agent.id}
-            className={`border border-gray-200 dark:border-gray-700 rounded-lg ${config.bgColor} overflow-hidden transition-all hover:shadow-md`}
+            className={`border border-gray-200 dark:border-gray-700 rounded-lg ${config.bgColor} overflow-hidden transition-all hover:shadow-e2`}
           >
             {}
             <div className="px-4 py-3 flex items-start justify-between">

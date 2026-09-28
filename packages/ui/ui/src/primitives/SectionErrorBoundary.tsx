@@ -138,7 +138,7 @@ export class SectionErrorBoundary extends Component<SectionErrorBoundaryProps, S
             <AlertCircle className="h-6 w-6 text-danger" aria-hidden="true" />
           </div>
 
-          <h3 className="mb-2 text-lg font-semibold text-foreground">
+          <h3 className="mb-2 text-h3 text-foreground">
             {sectionName ? `${sectionName} Error` : 'Something went wrong'}
           </h3>
 

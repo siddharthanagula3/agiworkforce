@@ -83,7 +83,7 @@ function MiniDialog({ open, title, onClose, children }: MiniDialogProps) {
     >
       <div
         ref={panelRef}
-        className="relative w-full max-w-md rounded-lg border border-border bg-card p-6 shadow-xl"
+        className="relative w-full max-w-md rounded-lg border border-border bg-card p-6 shadow-e4"
       >
         <p className="mb-4 text-lg font-semibold">{title}</p>
         {children}
@@ -296,7 +296,7 @@ export function CheckpointManager({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <GitBranch className="h-5 w-5 text-primary" />
-          <h3 className="text-lg font-semibold">Checkpoints</h3>
+          <h3 className="text-h3">Checkpoints</h3>
         </div>
         <button
           type="button"

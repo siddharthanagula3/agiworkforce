@@ -2,11 +2,14 @@ import {
   HOST_SHORTCUT_CHOICES,
   HOST_SHORTCUT_KEYS,
   HOST_SHORTCUT_PREFERENCE_KEYS,
+  DEFAULT_SESSION_COMPLETION_ALERTS,
   NO_HOST_SHORTCUT,
+  SESSION_COMPLETION_ALERTS,
   defaultHostShortcut,
   describeAccelerator,
   type HostPreferences,
   type HostShortcutKey,
+  type SessionCompletionAlerts,
 } from '@agiworkforce/local-runtime-contract';
 
 /**
@@ -289,6 +292,8 @@ export interface GarnishPreferences {
   launchAtLogin: boolean;
   showInMenuBar: boolean;
   cliPath: string;
+  sessionCompletionAlerts: SessionCompletionAlerts;
+  sessionApprovalAlerts: boolean;
   /**
    * Chromium's zoom level, not a percentage: each step is a factor of 1.2, and
    * 0 is actual size. Held here so the window opens at the size the user last
@@ -315,6 +320,8 @@ export const DEFAULT_PREFERENCES: GarnishPreferences = {
   launchAtLogin: false,
   showInMenuBar: true,
   cliPath: '',
+  sessionCompletionAlerts: DEFAULT_SESSION_COMPLETION_ALERTS,
+  sessionApprovalAlerts: true,
   zoomLevel: 0,
   appearance: 'system',
   windowFrame: null,
@@ -327,6 +334,10 @@ export const MAX_ZOOM_LEVEL = 6;
 export function clampZoomLevel(level: number): number {
   if (!Number.isFinite(level)) return DEFAULT_PREFERENCES.zoomLevel;
   return Math.min(MAX_ZOOM_LEVEL, Math.max(MIN_ZOOM_LEVEL, level));
+}
+
+export function isSessionCompletionAlerts(value: unknown): value is SessionCompletionAlerts {
+  return (SESSION_COMPLETION_ALERTS as readonly unknown[]).includes(value);
 }
 
 export function normalizePreferences(raw: unknown): GarnishPreferences {
@@ -345,6 +356,13 @@ export function normalizePreferences(raw: unknown): GarnishPreferences {
       typeof source['cliPath'] === 'string'
         ? source['cliPath'].trim()
         : DEFAULT_PREFERENCES.cliPath,
+    sessionCompletionAlerts: isSessionCompletionAlerts(source['sessionCompletionAlerts'])
+      ? source['sessionCompletionAlerts']
+      : DEFAULT_PREFERENCES.sessionCompletionAlerts,
+    sessionApprovalAlerts:
+      typeof source['sessionApprovalAlerts'] === 'boolean'
+        ? source['sessionApprovalAlerts']
+        : DEFAULT_PREFERENCES.sessionApprovalAlerts,
     zoomLevel:
       typeof source['zoomLevel'] === 'number'
         ? clampZoomLevel(source['zoomLevel'])

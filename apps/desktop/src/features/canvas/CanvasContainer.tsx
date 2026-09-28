@@ -24,7 +24,7 @@ export function CanvasContainer({ onClose, onFixBug }: CanvasContainerProps) {
   const showPanel = isPanelOpen && activeArtifact != null;
 
   return (
-    <div className="fixed inset-y-0 right-0 z-30 flex h-full border-l border-white/10 bg-[#0b0c14] shadow-2xl">
+    <div className="fixed inset-y-0 right-0 z-30 flex h-full border-l border-white/10 bg-[#0b0c14] shadow-e4">
       {/* Artifact List sidebar, always shown */}
       <div
         className="flex flex-col border-r border-white/10"
@@ -34,7 +34,7 @@ export function CanvasContainer({ onClose, onFixBug }: CanvasContainerProps) {
         <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
           <div className="flex items-center gap-2">
             <Code2 className="h-4 w-4 text-teal-400" />
-            <h2 className="text-sm font-semibold text-white">Canvas</h2>
+            <h2 className="text-h5 text-white">Canvas</h2>
           </div>
           <button
             type="button"

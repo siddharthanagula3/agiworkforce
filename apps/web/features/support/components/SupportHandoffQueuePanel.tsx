@@ -60,7 +60,7 @@ function AgentThread({ session }: { session: ClaimedSession }) {
 
   return (
     <section className={CARD_CLASS} aria-label={`Conversation ${session.referenceId}`}>
-      <h3 className="text-sm font-medium">Reference {session.referenceId}</h3>
+      <h3 className="text-h5">Reference {session.referenceId}</h3>
       <p className="mt-1 text-xs text-muted-foreground">{session.summary}</p>
       {session.contactEmail ? (
         <p className="mt-1 text-xs text-muted-foreground">Reply-to {session.contactEmail}</p>
@@ -186,7 +186,7 @@ function PresenceControl() {
 
   return (
     <section className={CARD_CLASS} aria-label="Your availability">
-      <h3 className="text-sm font-medium">Your availability</h3>
+      <h3 className="text-h5">Your availability</h3>
       <p className="mt-1 text-xs text-muted-foreground">
         Visitors are offered live chat only while someone is online, so nothing reaches the queue
         below until you are.
@@ -303,7 +303,7 @@ export function SupportHandoffQueuePanel() {
       <PresenceControl />
 
       <section className={CARD_CLASS} aria-label="Visitors waiting">
-        <h3 className="text-sm font-medium">Visitors waiting</h3>
+        <h3 className="text-h5">Visitors waiting</h3>
 
         {queue === null && !queueError ? (
           <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground" role="status">

@@ -122,7 +122,7 @@ export default function ReleaseDashboardPage() {
     <div className="min-h-screen bg-background text-foreground">
       <main className="mx-auto flex max-w-5xl flex-col gap-8 px-6 py-12">
         <header>
-          <h1 className="text-2xl font-medium text-foreground">Releases</h1>
+          <h1 className="text-h1 text-foreground">Releases</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
             What production is serving, what the migration ledger recorded for it, and every
             promotion, rollback and rollback drill the audit trail holds. Each claim on this page is
@@ -157,7 +157,7 @@ export default function ReleaseDashboardPage() {
         {data ? (
           <>
             <section className="rounded-md border border-border bg-card p-5">
-              <h2 className="text-base font-medium text-foreground">Serving now</h2>
+              <h2 className="text-h4 text-foreground">Serving now</h2>
               <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <Claim label="Commit" value={shortSha(data.serving.commit)} />
                 <Claim label="Environment" value={data.serving.environment ?? 'unknown'} />
@@ -187,7 +187,7 @@ export default function ReleaseDashboardPage() {
             </section>
 
             <section className="rounded-md border border-border bg-card p-5">
-              <h2 className="text-base font-medium text-foreground">Rollback readiness</h2>
+              <h2 className="text-h4 text-foreground">Rollback readiness</h2>
               <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <Claim
                   label="Last rollback"
@@ -215,7 +215,7 @@ export default function ReleaseDashboardPage() {
             </section>
 
             <section className="rounded-md border border-border bg-card p-5">
-              <h2 className="text-base font-medium text-foreground">Migration ledger</h2>
+              <h2 className="text-h4 text-foreground">Migration ledger</h2>
               {data.ledger.length === 0 ? (
                 <p className="mt-2 text-sm text-muted-foreground">
                   {data.unreadable.includes('ledger')
@@ -244,7 +244,7 @@ export default function ReleaseDashboardPage() {
             </section>
 
             <section className="rounded-md border border-border bg-card p-5">
-              <h2 className="text-base font-medium text-foreground">Release audit trail</h2>
+              <h2 className="text-h4 text-foreground">Release audit trail</h2>
               {data.events.length === 0 ? (
                 <p className="mt-2 text-sm text-muted-foreground">
                   {data.unreadable.includes('events')

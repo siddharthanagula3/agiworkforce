@@ -491,7 +491,7 @@ export function ArtifactsPanel() {
         <div className="@container flex items-center justify-between border-b border-border/30 px-4 py-3">
           <div className="flex min-w-0 items-center gap-2 overflow-hidden">
             <PanelRightOpen className="h-4 w-4 shrink-0 text-muted-foreground" />
-            <h2 className="shrink-0 text-sm font-semibold text-foreground">Artifacts</h2>
+            <h2 className="shrink-0 text-h5 text-foreground">Artifacts</h2>
             {artifacts.length > 0 && (
               <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-caption font-medium text-primary">
                 {artifacts.length}
@@ -674,7 +674,7 @@ export function ArtifactsToggleButton({ onToggle }: { onToggle?: () => void } = 
         'relative flex h-9 w-9 items-center justify-center rounded-lg transition-colors',
         panelOpen
           ? 'bg-primary/15 text-primary'
-          : 'bg-card/60 text-muted-foreground shadow-sm backdrop-blur-sm hover:bg-muted/60 hover:text-foreground',
+          : 'bg-card/60 text-muted-foreground shadow-e1 backdrop-blur-sm hover:bg-muted/60 hover:text-foreground',
       )}
       aria-label={panelOpen ? 'Close artifacts panel' : 'Open artifacts panel'}
       title="Artifacts"

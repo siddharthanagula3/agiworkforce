@@ -125,7 +125,7 @@ export function AgiWorkProjects({
         data-testid="agi-work-projects"
         className="h-full overflow-y-auto scrollbar-thin scrollbar-thumb-[var(--chat-border-strong)]"
       >
-        <div className="mx-auto max-w-3xl space-y-6 px-6 py-8">
+        <div className="mx-auto max-w-3xl space-y-6 px-gutter-compact py-8 sm:px-gutter-regular">
           <button
             type="button"
             onClick={() => setActiveProject(null)}
@@ -146,7 +146,7 @@ export function AgiWorkProjects({
                     (slugs, repo names). Without a break rule the heading held its
                     intrinsic width and painted over the Settings and New chat
                     buttons to its right. */}
-                <h1 className="text-xl font-semibold text-[var(--chat-text-primary)] [overflow-wrap:anywhere]">
+                <h1 className="text-h2 text-[var(--chat-text-primary)] [overflow-wrap:anywhere]">
                   {activeProject.name}
                 </h1>
                 {activeProject.description && (
@@ -188,9 +188,7 @@ export function AgiWorkProjects({
 
           <section>
             <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-[var(--chat-text-primary)]">
-                Project chats
-              </h2>
+              <h2 className="text-h5 text-[var(--chat-text-primary)]">Project chats</h2>
               <span className="text-xs text-[var(--chat-text-muted)]">
                 {projectConversations.length} {isManagedCloud ? 'synced' : 'local'}
               </span>
@@ -259,10 +257,10 @@ export function AgiWorkProjects({
         data-testid="agi-work-projects"
         className="h-full overflow-y-auto scrollbar-thin scrollbar-thumb-[var(--chat-border-strong)]"
       >
-        <div className="mx-auto max-w-3xl space-y-6 px-6 py-8">
+        <div className="mx-auto max-w-3xl space-y-6 px-gutter-compact py-8 sm:px-gutter-regular">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h1 className="font-serif text-xl font-medium text-[var(--chat-text-primary)]">
+              <h1 className="font-serif text-h2 text-[var(--chat-text-primary)]">
                 {t('agiWork.projects.title')}
               </h1>
               <p className="mt-1 text-sm text-[var(--chat-text-muted)]">

@@ -176,6 +176,15 @@ export function accumulateToolCallDelta(acc: ToolCallAccumulator, delta: StreamD
     changed = true;
   }
 
+  const agentEvent = delta.x_agent_event?.event;
+  if (agentEvent?.type === 'approval-requested' && agentEvent.riskLevel) {
+    const key = acc.idToKey.get(agentEvent.toolCallId) ?? `id:${agentEvent.toolCallId}`;
+    acc.idToKey.set(agentEvent.toolCallId, key);
+    const t = ensure(acc, key, { name: agentEvent.name });
+    t.approvalRiskLevel = agentEvent.riskLevel;
+    changed = true;
+  }
+
   return changed;
 }
 

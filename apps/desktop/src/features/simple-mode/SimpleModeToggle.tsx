@@ -76,7 +76,7 @@ export const SimpleModeToggle: React.FC<SimpleModeToggleProps> = ({
             exit={{ opacity: 0, y: 10 }}
             className="absolute bottom-full left-0 mb-2 z-[var(--z-dropdown)]"
           >
-            <div className="bg-blue-600 text-white text-xs rounded-lg px-3 py-2 shadow-lg max-w-[200px]">
+            <div className="bg-blue-600 text-white text-xs rounded-lg px-3 py-2 shadow-e3 max-w-[200px]">
               <div className="flex items-start justify-between gap-2">
                 <p>Click here to switch between simple and advanced modes!</p>
                 <button type="button" onClick={dismissModeSwitcherHint} className="shrink-0">
@@ -98,7 +98,7 @@ export const SimpleModeToggle: React.FC<SimpleModeToggleProps> = ({
             exit={{ opacity: 0, y: -10 }}
             className="absolute bottom-full left-0 mb-2 z-[var(--z-dropdown)]"
           >
-            <div className="bg-white dark:bg-charcoal-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl p-4 max-w-[280px]">
+            <div className="bg-white dark:bg-charcoal-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-e4 p-4 max-w-[280px]">
               <div className="flex items-center justify-between mb-3">
                 <h4 className="font-semibold text-sm text-gray-900 dark:text-gray-100">
                   What's the difference?

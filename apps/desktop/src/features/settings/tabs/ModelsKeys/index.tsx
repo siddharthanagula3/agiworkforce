@@ -137,7 +137,7 @@ function BYOKApiKeysSection() {
 
   return (
     <div>
-      <h3 className="text-lg font-semibold mb-1">API Keys (BYOK)</h3>
+      <h3 className="text-h3 mb-1">API Keys (BYOK)</h3>
       <p className="text-sm text-muted-foreground mb-4">
         Enter your own API keys for each AI provider. Keys are encrypted and stored locally.
       </p>
@@ -292,7 +292,7 @@ export function ModelsKeysTab({
       <BYOKApiKeysSection />
 
       <div className="pt-6 border-t border-border">
-        <h3 className="text-lg font-semibold mb-4">Local Models</h3>
+        <h3 className="text-h3 mb-4">Local Models</h3>
         <div className="space-y-6">
           <div className="flex flex-col gap-2">
             <label htmlFor="ollama-base-url" className="text-sm font-medium">
@@ -314,7 +314,7 @@ export function ModelsKeysTab({
               aria-invalid={ollamaUrlError ? 'true' : undefined}
               aria-describedby={ollamaUrlError ? 'ollama-base-url-error' : undefined}
               placeholder="http://localhost:11434"
-              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-e1 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             />
             {ollamaUrlError ? (
               <p id="ollama-base-url-error" role="alert" className="text-xs text-destructive">
@@ -485,7 +485,7 @@ export function ModelsKeysTab({
       </Suspense>
 
       <div className="pt-6 border-t border-border">
-        <h3 className="text-lg font-semibold mb-4">Settings Management</h3>
+        <h3 className="text-h3 mb-4">Settings Management</h3>
         <p className="text-sm text-muted-foreground mb-4">
           Export or import your settings configuration
         </p>

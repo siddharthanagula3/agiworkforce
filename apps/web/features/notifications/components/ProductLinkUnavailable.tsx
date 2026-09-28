@@ -66,7 +66,7 @@ export function ProductLinkUnavailable({
       data-state={state}
       className="mx-auto flex min-h-full w-full max-w-[30rem] flex-col items-center justify-center gap-3 px-4 py-16 text-center"
     >
-      <h1 className="text-xl font-medium text-[var(--chat-text-primary)]">{title}</h1>
+      <h1 className="text-h2 text-[var(--chat-text-primary)]">{title}</h1>
       <p className="text-sm leading-relaxed text-[var(--chat-text-secondary)]">{body}</p>
       <Link
         href={back.href}

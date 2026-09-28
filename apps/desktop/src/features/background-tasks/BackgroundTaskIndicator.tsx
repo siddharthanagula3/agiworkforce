@@ -87,7 +87,7 @@ export function BackgroundTaskIndicator({
       <PopoverContent
         side={popoverSide}
         align={popoverAlign}
-        className="w-80 p-0 border-0 shadow-xl"
+        className="w-80 p-0 border-0 shadow-e4"
         sideOffset={8}
       >
         <BackgroundTasksPanel onClose={handleClose} maxHeight={panelMaxHeight} />

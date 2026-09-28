@@ -737,7 +737,7 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
       <Dialog open={open} onOpenChange={handleDialogOpenChange}>
         <DialogContent
           disableAnimation
-          className="w-[min(1040px,calc(100vw-2rem))] max-w-none overflow-hidden border-border/70 bg-background p-0 shadow-2xl sm:rounded-xl"
+          className="w-[min(1040px,calc(100vw-2rem))] max-w-none overflow-hidden border-border/70 bg-background p-0 shadow-e4 sm:rounded-xl"
         >
           <div className="flex h-[min(760px,calc(100vh-2rem))] min-h-0 flex-col md:flex-row">
             <nav
@@ -871,7 +871,7 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
               <div
                 ref={settingsContentRef}
                 aria-busy={isBusy || undefined}
-                className={`flex-1 overflow-y-auto overscroll-contain px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-7 ${
+                className={`flex-1 overflow-y-auto overscroll-contain px-gutter-compact py-5 sm:px-gutter-regular sm:py-6 lg:px-gutter-wide lg:py-7 ${
                   isBusy ? 'pointer-events-none opacity-80' : ''
                 }`}
               >
@@ -919,7 +919,7 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
                 </div>
               </div>
 
-              <div className="flex shrink-0 flex-wrap justify-end gap-3 border-t border-border bg-background/95 px-4 py-3 sm:px-6 lg:px-8 lg:py-4">
+              <div className="flex shrink-0 flex-wrap justify-end gap-3 border-t border-border bg-background/95 px-gutter-compact py-3 sm:px-gutter-regular lg:px-gutter-wide lg:py-4">
                 {requiresDeferredSave ? (
                   <>
                     {saveError && (

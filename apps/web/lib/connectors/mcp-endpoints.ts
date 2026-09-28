@@ -20,9 +20,27 @@ export const MCP_ENDPOINTS: Readonly<Record<string, McpEndpointRecord>> = {
     transport: 'streamable-http',
     clientRegistration: 'cimd',
   },
+  cloudflare: {
+    connectorId: 'cloudflare',
+    url: 'https://mcp.cloudflare.com/mcp',
+    transport: 'streamable-http',
+    clientRegistration: 'cimd',
+  },
+  confluence: {
+    connectorId: 'confluence',
+    url: 'https://mcp.atlassian.com/v2/mcp',
+    transport: 'streamable-http',
+    clientRegistration: 'cimd',
+  },
   huggingface: {
     connectorId: 'huggingface',
     url: 'https://huggingface.co/mcp',
+    transport: 'streamable-http',
+    clientRegistration: 'cimd',
+  },
+  jira: {
+    connectorId: 'jira',
+    url: 'https://mcp.atlassian.com/v2/mcp',
     transport: 'streamable-http',
     clientRegistration: 'cimd',
   },
@@ -63,12 +81,6 @@ export const MCP_ENDPOINTS: Readonly<Record<string, McpEndpointRecord>> = {
     transport: 'streamable-http',
     clientRegistration: 'dynamic',
   },
-  cloudflare: {
-    connectorId: 'cloudflare',
-    url: 'https://bindings.mcp.cloudflare.com/mcp',
-    transport: 'streamable-http',
-    clientRegistration: 'dynamic',
-  },
   datadog: {
     connectorId: 'datadog',
     url: 'https://mcp.datadoghq.com/api/unstable/mcp-server/mcp',
@@ -102,20 +114,14 @@ export const MCP_ENDPOINTS: Readonly<Record<string, McpEndpointRecord>> = {
 
   asana: {
     connectorId: 'asana',
-    url: 'https://mcp.asana.com/sse',
-    transport: 'sse',
+    url: 'https://mcp.asana.com/v2/mcp',
+    transport: 'streamable-http',
     clientRegistration: 'preregistered',
   },
   box: {
     connectorId: 'box',
     url: 'https://mcp.box.com/',
     transport: 'streamable-http',
-    clientRegistration: 'preregistered',
-  },
-  confluence: {
-    connectorId: 'confluence',
-    url: 'https://mcp.atlassian.com/v1/sse',
-    transport: 'sse',
     clientRegistration: 'preregistered',
   },
   dropbox: {
@@ -132,7 +138,7 @@ export const MCP_ENDPOINTS: Readonly<Record<string, McpEndpointRecord>> = {
   },
   hubspot: {
     connectorId: 'hubspot',
-    url: 'https://mcp.hubspot.com/anthropic',
+    url: 'https://mcp.hubspot.com',
     transport: 'streamable-http',
     clientRegistration: 'preregistered',
   },
@@ -140,12 +146,6 @@ export const MCP_ENDPOINTS: Readonly<Record<string, McpEndpointRecord>> = {
     connectorId: 'intercom',
     url: 'https://mcp.intercom.com/mcp',
     transport: 'streamable-http',
-    clientRegistration: 'preregistered',
-  },
-  jira: {
-    connectorId: 'jira',
-    url: 'https://mcp.atlassian.com/v1/sse',
-    transport: 'sse',
     clientRegistration: 'preregistered',
   },
   pagerduty: {

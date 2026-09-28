@@ -100,7 +100,7 @@ export function UpdateSettings() {
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-semibold mb-4">Software Update</h3>
+        <h3 className="text-h3 mb-4">Software Update</h3>
         <p className="text-sm text-muted-foreground mb-6">
           {isManualInstallerUpdate
             ? 'Check for signed AGI Cloud installers. Downloads open in your browser; installation stays under your control.'

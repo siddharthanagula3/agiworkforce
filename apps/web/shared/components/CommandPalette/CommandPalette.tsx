@@ -410,7 +410,7 @@ export function CommandPalette({ open, onOpenChange }: Props) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="p-0 overflow-hidden bg-popover text-popover-foreground border border-border shadow-2xl max-w-xl [&>button]:hidden"
+        className="p-0 overflow-hidden bg-popover text-popover-foreground border border-border shadow-e4 max-w-xl [&>button]:hidden"
         onOpenAutoFocus={(event) => {
           // React applies `autoFocus` during commit, before DialogContent reads
           // what to restore on close, so the field autofocused itself and the

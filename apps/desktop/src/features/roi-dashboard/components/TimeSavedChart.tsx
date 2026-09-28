@@ -31,7 +31,7 @@ function CustomTooltip({ active, payload, label }: CustomTooltipProps<number, st
   const formattedLabel = typeof label === 'string' ? format(parseISO(label), 'MMM dd, yyyy') : '';
 
   return (
-    <div className="bg-popover text-popover-foreground p-3 rounded-lg shadow-lg border border-border">
+    <div className="bg-popover text-popover-foreground p-3 rounded-lg shadow-e3 border border-border">
       <p className="text-sm font-medium mb-1">{formattedLabel}</p>
       <p className="text-sm text-primary font-semibold">{payload[0]?.value?.toFixed(1)}h saved</p>
     </div>

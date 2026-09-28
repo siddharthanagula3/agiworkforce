@@ -243,7 +243,7 @@ export function LeafletMapCanvas({
           onClick={() => changeZoom(1)}
           disabled={zoomBounds.atMax}
           aria-label="Zoom in"
-          className="grid size-8 place-items-center rounded-md border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] text-[color:var(--chat-text-primary)] shadow-sm transition-colors hover:bg-[var(--chat-surface-hover)] disabled:cursor-not-allowed disabled:opacity-40"
+          className="grid size-8 place-items-center rounded-md border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] text-[color:var(--chat-text-primary)] shadow-e1 transition-colors hover:bg-[var(--chat-surface-hover)] disabled:cursor-not-allowed disabled:opacity-40"
         >
           <Plus className="size-4" aria-hidden="true" />
         </button>
@@ -252,7 +252,7 @@ export function LeafletMapCanvas({
           onClick={() => changeZoom(-1)}
           disabled={zoomBounds.atMin}
           aria-label="Zoom out"
-          className="grid size-8 place-items-center rounded-md border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] text-[color:var(--chat-text-primary)] shadow-sm transition-colors hover:bg-[var(--chat-surface-hover)] disabled:cursor-not-allowed disabled:opacity-40"
+          className="grid size-8 place-items-center rounded-md border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] text-[color:var(--chat-text-primary)] shadow-e1 transition-colors hover:bg-[var(--chat-surface-hover)] disabled:cursor-not-allowed disabled:opacity-40"
         >
           <Minus className="size-4" aria-hidden="true" />
         </button>

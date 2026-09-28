@@ -1887,7 +1887,7 @@ if (__AgiApp) {
     <div
       ref={containerRef}
       className={cn(
-        'mt-3 overflow-hidden rounded-xl border border-border bg-card shadow-lg',
+        'mt-3 overflow-hidden rounded-xl border border-border bg-card shadow-e3',
         // AUDIT-FIX ART-13: `z-modal` compiled to nothing (no such Tailwind v4
         // utility here), leaving the fullscreen card at z-index:auto under the
         // chrome. Matches ui/src/primitives/Dialog.tsx.

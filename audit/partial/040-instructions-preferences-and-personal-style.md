@@ -224,17 +224,16 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2234-22
 
 - Done when: For one conversation the user can override their standing style/instructions without changing their defaults.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The composer's style and length picker overrides Settings for the next messages, but it is one global choice kept across every chat, not saved per conversation. | persistence |
-| desktop | partial | The composer's style and length picker overrides Settings for the next messages, but it is one global choice kept across every chat, not saved per conversation. | persistence |
 | mobile | partial | The chat Style sheet changes style for the next messages, but it is one global setting, not saved per conversation. | persistence |
 | cli | partial | /output-style switches the current session, but it is also written as the project's default, so it is not a one-conversation override. | persistence |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/Composer/StyleSelector.tsx:253-253`, `apps/web/features/chat/components/Composer/ComposerFooter.tsx:1274-1277`, `apps/web/features/chat/stores/style-store.ts:150-166`, `apps/web/lib/hooks/useChatStream.ts:3444-3446`
+Code: `apps/mobile/app/(app)/chat/[id].tsx:771-775`, `apps/mobile/stores/chat/chatExecutionStore.ts:388-393`, `apps/cli/src/tui/tui_app.rs:3334-3356`, `apps/cli/src/tui/tui_app.rs:4137-4141`
 
 ## S40.20: Writing-style examples.
 
@@ -277,17 +276,13 @@ Code: `apps/cli/src/models/streaming.rs:226-235`, `apps/web/lib/server/user-iden
 
 - Done when: The user can choose a learning-oriented style (teaching, quizzing, step by step), and replies actually follow it.
 - Wave: 3
-- Already works on: cli
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Study mode starts a session and opens a normal chat, but its teaching instruction is only displayed on the Study page: composeStudyPrompt has no caller and the chat route never reads study sessions. | handler |
-| desktop | partial | Study mode starts a session and opens a normal chat, but its teaching instruction is only displayed on the Study page: composeStudyPrompt has no caller and the chat route never reads study sessions. | handler |
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/chat/study/page.tsx:12-17`, `apps/web/features/study/components/StudyPage.tsx:181-184`, `apps/web/features/study/components/StudyPage.tsx:82-91`, `apps/web/features/study/lib/study-session.ts:112-118`
 
 ## S40.26: Concise output style.
 
@@ -355,11 +350,11 @@ Code: `apps/cli/src/repl/registry.rs:1460-1476`, `apps/cli/src/tui/tui_app.rs:37
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | A project can opt out of account memory, but there is no choice over which account instructions or style preferences a project uses; they always apply. | ui, handler |
-| desktop | partial | A project can opt out of account memory, but there is no choice over which account instructions or style preferences a project uses; they always apply. | ui, handler |
+| web | partial | Project switches (migration 0310) and the preamble builder are done; request-processor.ts must pass the conversation's projectId to buildCustomInstructionsPreamble (spec sent to p-chat-gates). | handler |
+| desktop | partial | Project switches (migration 0310) and the preamble builder are done; request-processor.ts must pass the conversation's projectId to buildCustomInstructionsPreamble (spec sent to p-chat-gates). | handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/projects/components/ProjectSettingsDialog.tsx:255-264`, `apps/web/lib/server/user-identity.ts:205-227`
+Code: `apps/web/features/projects/components/ProjectSettingsDialog.tsx:263-263`, `apps/web/lib/server/user-identity.ts:259-259`

@@ -21,6 +21,7 @@ import {
   formatTokenCount,
   scheduleModelLabel,
   scheduleResultText,
+  scheduleRunTiming,
   scheduleRunUsage,
 } from '../types';
 
@@ -85,6 +86,7 @@ function RunRow({
   const resultText = scheduleResultText(run);
   const pendingApproval = run.status === 'awaiting_approval' ? run.pendingApproval : null;
   const usage = scheduleRunUsage(run);
+  const timing = scheduleRunTiming(run, timezone);
   return (
     <li className="rounded-xl border border-border/70 bg-background/70 p-3">
       <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
@@ -92,7 +94,7 @@ function RunRow({
         <Badge
           variant={run.status === 'failed' || run.status === 'timeout' ? 'destructive' : 'outline'}
         >
-          {runStatusLabel(run.status)}
+          {timing?.skipped ? 'skipped' : runStatusLabel(run.status)}
         </Badge>
         <span>{formatDateTime(run.startedAt, timezone)}</span>
         <span aria-hidden="true">·</span>
@@ -159,7 +161,12 @@ function RunRow({
           )}
         </ApprovalCard>
       ) : null}
-      {run.error && (
+      {timing ? (
+        <p className="mt-2 break-words rounded-lg bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+          {timing.note}
+        </p>
+      ) : null}
+      {run.error && !timing?.skipped && (
         <p className="mt-2 break-words rounded-lg bg-destructive/10 px-3 py-2 text-xs text-danger">
           {scheduleErrorMessage(run.error)}
         </p>

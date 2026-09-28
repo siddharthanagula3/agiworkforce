@@ -176,7 +176,7 @@ function CloudHelpLinks() {
   return (
     <section className="flex flex-col gap-3">
       <div>
-        <h3 className="text-sm font-semibold">Help</h3>
+        <h3 className="text-h5">Help</h3>
         <p className="mt-0.5 text-xs text-muted-foreground">
           Documentation, support, and service status.
         </p>
@@ -292,7 +292,7 @@ function DesktopBillingSection({ onOpenPlans }: { onOpenPlans: () => void }) {
   if (!hasCloudAccountSession) {
     return (
       <div className="flex flex-col gap-2">
-        <h2 className="text-base font-semibold text-foreground">Billing</h2>
+        <h2 className="text-h4 text-foreground">Billing</h2>
         <p className="text-sm text-muted-foreground">
           Connect this Desktop to AGI Cloud to see your plan and manage your subscription.
         </p>
@@ -303,7 +303,7 @@ function DesktopBillingSection({ onOpenPlans }: { onOpenPlans: () => void }) {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h2 className="text-base font-semibold text-foreground">Billing</h2>
+        <h2 className="text-h4 text-foreground">Billing</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           Review your plan, billing owner, and available actions.
         </p>
@@ -464,7 +464,7 @@ function DesktopUsageSection() {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h2 className="text-base font-semibold text-foreground">Usage</h2>
+        <h2 className="text-h4 text-foreground">Usage</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           Managed Cloud allowance and rolling safety windows. Exact private ledger operands stay
           server-side.
@@ -610,7 +610,7 @@ function DesktopCapabilitiesSection() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h2 className="text-base font-semibold text-foreground">Capabilities</h2>
+        <h2 className="text-h4 text-foreground">Capabilities</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           Capabilities authorized for this AGI Cloud account and deployment.
         </p>
@@ -644,7 +644,7 @@ function DesktopCapabilitiesSection() {
       </div>
 
       <div>
-        <h3 className="text-sm font-medium text-foreground">Current plan limits</h3>
+        <h3 className="text-h5 text-foreground">Current plan limits</h3>
         <p className="mt-1 text-xs leading-5 text-muted-foreground">
           These limits are enforced by AGI Cloud across Desktop, Web, and Mobile.
         </p>

@@ -225,7 +225,7 @@ export const SafetyPolicies: React.FC<SafetyPoliciesProps> = ({ className }) => 
         <div className="flex items-start gap-3">
           <ShieldAlert size={18} className="mt-0.5 shrink-0 text-amber-400" />
           <div className="min-w-0">
-            <h3 className="text-sm font-semibold">Tool policies unavailable</h3>
+            <h3 className="text-h5">Tool policies unavailable</h3>
             <p className="mt-1 text-xs leading-5 text-amber-100/70">{loadError}</p>
             {isTauri ? (
               <Button
@@ -250,7 +250,7 @@ export const SafetyPolicies: React.FC<SafetyPoliciesProps> = ({ className }) => 
       <div className="rounded-xl border border-gray-800 bg-[#0c0e18] p-4 space-y-4">
         <div className="flex items-center gap-2">
           <Shield size={16} className="text-blue-400" />
-          <h3 className="text-sm font-semibold text-gray-200">Global Settings</h3>
+          <h3 className="text-h5 text-gray-200">Global Settings</h3>
         </div>
 
         {/* Auto-approve toggle */}
@@ -305,7 +305,7 @@ export const SafetyPolicies: React.FC<SafetyPoliciesProps> = ({ className }) => 
       {/* Per-tool policies */}
       <div className="rounded-xl border border-gray-800 bg-[#0c0e18] overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
-          <h3 className="text-sm font-semibold text-gray-200">Per-Tool Approval Policies</h3>
+          <h3 className="text-h5 text-gray-200">Per-Tool Approval Policies</h3>
           <Button
             size="xs"
             variant="ghost"

@@ -89,7 +89,7 @@ export interface SettingsShellProps {
 function SectionPlaceholder({ title, body }: { title: string; body: string }) {
   return (
     <div className="flex h-full flex-col gap-3 p-6">
-      <h3 className="text-base font-semibold text-[var(--chat-text-primary)]">{title}</h3>
+      <h3 className="text-h4 text-[var(--chat-text-primary)]">{title}</h3>
       <p className="max-w-prose text-sm text-[var(--chat-text-secondary)]">{body}</p>
       <p className="text-xs italic text-[var(--chat-text-muted)]">
         This section is the shared shell. Host apps can supply concrete content via the

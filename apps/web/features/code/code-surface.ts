@@ -1,5 +1,6 @@
 import {
   buildVsCodeCloudTaskHandoffUri,
+  CLOUD_CODE_LIMITS,
   CLOUD_CODE_SESSION_STATUS_FILTERS,
   CLOUD_CODE_SESSION_COPY,
   cloudCodeRepositoryLabel,
@@ -33,12 +34,12 @@ export function codeSessionPath(sessionId: string): string {
 }
 
 export const CODE_LIMITS = {
-  title: 120,
+  title: CLOUD_CODE_LIMITS.title,
   repositoryUrl: 500,
   repositoryBranch: 255,
   commitMessage: 500,
   command: 2000,
-  task: 8000,
+  task: CLOUD_CODE_LIMITS.task,
   extraHosts: 200,
 } as const;
 

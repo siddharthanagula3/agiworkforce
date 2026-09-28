@@ -234,7 +234,7 @@ export function WorkspaceDelegation() {
         <div>
           <h3
             id="workspace-delegation-heading"
-            className="text-sm font-medium"
+            className="text-h5"
             style={{ color: 'var(--text-1)' }}
           >
             Admin delegation

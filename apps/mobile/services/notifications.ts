@@ -343,6 +343,11 @@ function handleNotificationResponse(response: Notifications.NotificationResponse
     return;
   }
 
+  if (readIdentifier(data, 'threadId') && readIdentifier(data, 'rootId')) {
+    safeNavigate(approvalRoute(data) as Parameters<typeof router.push>[0]);
+    return;
+  }
+
   const productLink = readProductLink(data);
   if (productLink) {
     const nativeRoute = nativeRouteForProductLink(productLink);

@@ -46,17 +46,13 @@ nothing is left.
 
 - Done when: Where offered, the user can choose whether a temporary chat may read saved memory, and the choice is honoured.
 - Wave: 3
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Temporary chats never read memory, but the plus-menu Memory switch still shows on and toggles in a temporary chat while the server ignores it; there is no real choice. | ui |
-| desktop | partial | Temporary chats never read memory, but the plus-menu Memory switch still shows on and toggles in a temporary chat while the server ignores it; there is no real choice. | ui |
-| mobile | partial | Temporary mode always skips memory reads; there is no choice to allow them. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:4529-4535`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2754-2755`, `apps/mobile/src/features/chat/components/TemporaryChatToggle.tsx:28-34`, `apps/mobile/stores/chat/chatExecutionStore.ts:1368-1370`
 
 ## S41.05: Memory-write exclusion.
 
@@ -77,14 +73,14 @@ Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:4529-4535`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Custom instructions always apply in temporary chats; the only switch is the global one in Settings. | ui |
-| desktop | partial | Custom instructions always apply in temporary chats; the only switch is the global one in Settings. | ui |
-| mobile | partial | Personalization always applies in temporary mode; there is no per-chat choice. | ui |
+| web | partial | Header switch and server option done; useChatStream must send personalized:false (spec to p-mcp-web) and request-processor must accept and pass it (spec to p-chat-gates). | handler |
+| desktop | partial | Header switch and server option done; useChatStream must send personalized:false (spec to p-mcp-web) and request-processor must accept and pass it (spec to p-chat-gates). | handler |
+| mobile | partial | Patch parked at scratchpad/post-codex/privacy-s41.06.patch (settingsStore, TemporaryChatBanner switch, streaming.ts, chatExecutionStore held by Codex). | handler, ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/settings/sections/GeneralSection.tsx:728-745`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4460-4476`, `apps/mobile/stores/chat/chatExecutionStore.ts:1380-1388`
+Code: `apps/web/features/chat/pages/WebChatPage.tsx:5594-5594`, `apps/web/lib/server/user-identity.ts:250-250`, `apps/mobile/stores/chat/chatExecutionStore.ts:1424-1424`
 
 ## S41.07: Plugin availability in temporary mode.
 
@@ -103,64 +99,52 @@ Code: `apps/web/features/settings/sections/GeneralSection.tsx:728-745`, `apps/we
 
 - Done when: The product explains what happens to files attached in a temporary chat and for how long they are kept.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Say what happens to attached files; the explainer only says the chat 'may be retained briefly for safety'. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/TemporaryChatBanner.tsx:40-42`, `apps/mobile/app/(app)/chat/[id].tsx:1428-1428`
 
 ## S41.09: Generated-output saving choice.
 
 - Done when: In a temporary chat the user can choose to keep a generated output (image, file) even though the chat is not saved.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Generated media in a temporary chat is kept out of the Library and purged after 30 days; there is no in-product choice to keep one output. | ui |
-| desktop | partial | Generated media in a temporary chat is kept out of the Library and purged after 30 days; there is no in-product choice to keep one output. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/pages/WebChatPage.tsx:3086-3088`, `apps/web/app/api/cron/purge-temporary-chats/route.ts:43-47`
 
 ## S41.10: Save temporary conversation explicitly.
 
 - Done when: The user can explicitly save a temporary conversation, and everything in it is then kept.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Turning temporary off only flips the conversation flag; turns sent while temporary were never written, so the kept chat loses them on reload, although the share refusal tells users to 'turn off temporary chat to keep it'. | handler |
-| desktop | partial | Turning temporary off only flips the conversation flag; turns sent while temporary were never written, so the kept chat loses them on reload, although the share refusal tells users to 'turn off temporary chat to keep it'. | handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:1411-1433`, `apps/web/features/chat/pages/WebChatPage.tsx:3855-3859`, `apps/web/lib/temporary-chat-policy.ts:3-4`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2709-2711`
 
 ## S41.11: Temporary-to-normal conversion review.
 
 - Done when: Before a temporary chat becomes a normal one, the user sees what will be kept and confirms.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Add a review step; converting is an immediate flag flip with no summary of what will be kept (and earlier turns are not kept). | ui, handler |
-| desktop | partial | Add a review step; converting is an immediate flag flip with no summary of what will be kept (and earlier turns are not kept). | ui, handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:1411-1433`, `apps/web/features/chat/pages/WebChatPage.tsx:3855-3859`
 
 ## S41.14: Local-only conversation.
 
@@ -222,17 +206,15 @@ Code: `apps/mobile/src/features/memory/services/ragIndex.ts:118-125`
 
 - Done when: History, model training and data retention each have their own clearly separate control or statement.
 - Wave: 3
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Add a retention (auto-delete) control; history (delete all, temporary by default) is controllable and training is stated as never used, but there is no user retention setting. | ui |
-| desktop | partial | Add a retention (auto-delete) control; history (delete all, temporary by default) is controllable and training is stated as never used, but there is no user retention setting. | ui |
-| mobile | partial | Training and retention are statements only (retention copy covers account deletion); there is no retention control. | ui |
 | cli | partial | /privacy-settings lists privacy mode, sync and telemetry, but says nothing about training or retention. | ui |
 | vscode | partial | Settings say local history stays local, but there is no training or retention statement or control. | ui |
 | chrome | partial | Mirroring (history) has a switch, but training and retention are not stated or controllable. | ui |
 
-Code: `apps/web/features/settings/sections/PrivacySection.tsx:736-744`, `apps/web/features/settings/sections/PrivacySection.tsx:438-441`, `apps/web/features/settings/sections/PrivacySection.tsx:670-677`, `apps/web/features/settings/components/WebSettingsModal.tsx:199-199`
+Code: `apps/cli/src/claude_parity.rs:146-146`, `apps/cli/src/claude_parity.rs:325-345`, `apps/extension-vscode/src/features/settings/settingsWebviewContent.ts:1271-1271`, `apps/extension/src/features/options/data-handling-section.ts:147-157`
 
 ## S41.19: Privacy-setting education.
 
@@ -250,13 +232,10 @@ Code: `apps/extension-vscode/src/features/settings/settingsWebviewContent.ts:127
 
 - Done when: For each feature the product says where the data is processed (on device, AGI cloud, a named provider).
 - Wave: 3
-- Already works on: cli, chrome
+- Already works on: web, desktop, mobile, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Privacy explains Managed Cloud vs BYOK routing globally, not per feature (voice, research, browser, connectors). | ui |
-| desktop | partial | Privacy explains Managed Cloud vs BYOK routing globally, not per feature. | ui |
-| mobile | partial | Local vs Cloud and China-HQ provider consent are explained, but not per feature. | ui |
 | vscode | partial | Only states that local history stays local; no per-feature processing disclosure. | ui |
 
-Code: `apps/web/features/settings/sections/PrivacySection.tsx:428-442`, `apps/web/features/settings/components/WebSettingsModal.tsx:199-199`, `apps/mobile/src/features/settings/cloud-privacy/index.tsx:38-42`, `apps/mobile/src/features/settings/cloud-privacy/ChineseHqProviderConsentGroup.tsx:18-18`
+Code: `apps/extension-vscode/src/features/settings/settingsWebviewContent.ts:1271-1271`

@@ -1,6 +1,7 @@
 import {
   MANAGED_CLOUD_SCHEDULE_DEFAULT_SOURCES,
   MANAGED_CLOUD_SCHEDULE_MAX_CREDIT_CAP,
+  type ManagedCloudScheduleShareSnapshot,
 } from '@agiworkforce/cloud-contracts';
 import {
   assertDeliverableCadence,
@@ -250,6 +251,36 @@ export function scheduleToDraft(task: ScheduleTask): ScheduleDraft {
     sources: { ...(task.sources ?? MANAGED_CLOUD_SCHEDULE_DEFAULT_SOURCES) },
     connectors: task.connectors ? [...task.connectors] : null,
   };
+}
+
+export function scheduleShareTask(
+  snapshot: ManagedCloudScheduleShareSnapshot,
+  timezone: string,
+): ScheduleTask {
+  return {
+    ...snapshot,
+    id: '',
+    userId: '',
+    executeAt: null,
+    timezone,
+    isEnabled: true,
+    expiresAt: null,
+    maxExecutions: null,
+    executionCount: 0,
+    actionType: 'agent',
+    actionConfig: null,
+    status: 'active',
+    lastExecutedAt: null,
+    nextExecutionAt: null,
+    lastError: null,
+    createdAt: '',
+    updatedAt: '',
+  };
+}
+
+export function scheduleShareToDraft(snapshot: ManagedCloudScheduleShareSnapshot): ScheduleDraft {
+  const { timezone } = createInitialScheduleDraft();
+  return { ...scheduleToDraft(scheduleShareTask(snapshot, timezone)), projectId: null };
 }
 
 const DERIVED_NAME_MAX_LENGTH = 60;

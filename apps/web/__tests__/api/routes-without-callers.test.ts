@@ -75,7 +75,6 @@ const CALLERLESS: ReadonlyArray<{ url: string; why: string }> = [
     url: '/api/download-beta',
     why: 'subscriber beta installer, reached by a link sent outside the product',
   },
-  { url: '/api/llm/v1/chat/completions/resume-input', why: 'a tool approval resumes a run here' },
 
   // Platform-admin procedures are deliberately API-only. They are used during
   // incidents and maintenance, not exposed as ordinary product controls.
@@ -121,10 +120,6 @@ const CALLERLESS: ReadonlyArray<{ url: string; why: string }> = [
   {
     url: '/api/media/image/retry',
     why: 'cross-surface durable image-job protocol retries the existing billed reservation',
-  },
-  {
-    url: '/api/memory/commands',
-    why: 'cross-surface explicit remember and confirmed-forget command protocol',
   },
   {
     url: '/api/completion',

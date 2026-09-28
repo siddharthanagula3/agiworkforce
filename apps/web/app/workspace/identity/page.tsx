@@ -10,6 +10,7 @@ export const metadata: Metadata = {
 export default function WorkspaceIdentityPage() {
   return (
     <ConsolePage
+      help={{ docId: 'workspace-administration', label: 'How directory provisioning works' }}
       title="Identity"
       description="How people authenticate into this workspace, and how your directory keeps membership current."
     >
