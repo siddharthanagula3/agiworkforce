@@ -118,6 +118,8 @@ vi.mock('@/features/desktop-host', () => ({
   interruptDeveloperTurn: vi.fn(async () => true),
   listDeveloperModels: (...args: unknown[]) => listDeveloperModels(...(args as [])),
   listDeveloperSessions: () => listDeveloperSessions(),
+  listLocalBranches: vi.fn(async () => null),
+  switchLocalBranch: vi.fn(async (_rootId: string, branch: string) => branch),
   onDeveloperSessionEvent: () => () => undefined,
   openWorkspaceInEditor: vi.fn(async () => true),
   pickWorkspaceRoot: () => pickWorkspaceRoot(),
