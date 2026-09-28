@@ -386,8 +386,14 @@ vi.mock('@/lib/hooks/useManagedUsageSummary', () => ({
 }));
 
 vi.mock('@shared/stores/web-chat-store', () => ({
-  useChatStore: (selector: (state: { updateConversation: () => void }) => unknown) =>
-    selector({ updateConversation: vi.fn() }),
+  AGI_WORK_MODE: 'agiwork',
+  useChatStore: (selector: (state: Record<string, unknown>) => unknown) =>
+    selector({
+      updateConversation: vi.fn(),
+      loadingConversationIds: [],
+      streamingConversationIds: [],
+      workModeByConversation: {},
+    }),
 }));
 
 vi.mock('@shared/stores/authentication-store', () => ({
