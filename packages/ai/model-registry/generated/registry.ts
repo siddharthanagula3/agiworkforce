@@ -116,9 +116,12 @@ export function getRoutePricingForModel(modelKey: string): RoutePriceSheet[] {
 
 export type CacheTokenBillingClass = 'additional_to_input' | 'included_in_input' | 'unknown';
 
+export type ProviderTrainingPolicy = 'never' | 'opt_in' | 'opt_out' | 'varies_by_route' | 'unknown';
+
 interface ProviderGovernanceRecord {
   cacheTokenBillingClass?: CacheTokenBillingClass;
   reasoningTokenBillingClass?: ReasoningTokenBillingClass;
+  trainsOnInputs?: ProviderTrainingPolicy;
 }
 
 const governanceRecords = registry.governance as unknown as Readonly<
@@ -127,6 +130,15 @@ const governanceRecords = registry.governance as unknown as Readonly<
 
 export function getProviderCacheTokenBillingClass(providerId: string): CacheTokenBillingClass {
   return governanceRecords[providerId]?.cacheTokenBillingClass ?? 'unknown';
+}
+
+export function getProviderTrainingPolicy(providerId: string): ProviderTrainingPolicy {
+  return governanceRecords[providerId]?.trainsOnInputs ?? 'unknown';
+}
+
+export function providerKeepsInputsOutOfTraining(providerId: string): boolean {
+  const policy = getProviderTrainingPolicy(providerId);
+  return policy === 'never' || policy === 'opt_in';
 }
 
 export type ReasoningTokenBillingClass = 'included_in_output' | 'additional_to_output';
