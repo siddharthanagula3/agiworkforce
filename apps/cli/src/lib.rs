@@ -791,7 +791,7 @@ enum Command {
         #[command(subcommand)]
         action: Option<HooksSubcommand>,
     },
-    /// Run as MCP server (stdio). Exposes no tools yet, see `agi app-server`.
+    /// Run as MCP server (stdio), exposing the CLI's file, shell, git and LSP tools.
     ///
     /// The handler speaks the protocol and answers initialize/tools/list, but
     /// advertises an empty tool list on purpose: one-shot agent exec over stdio
