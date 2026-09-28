@@ -48,6 +48,7 @@ import { VoiceSection } from '../sections/VoiceSection';
 import { ReflectSection } from '../sections/ReflectSection';
 import { TimeFocusSection } from '../sections/TimeFocusSection';
 import { HelpSection } from '../sections/HelpSection';
+import { SlackSection } from '../sections/SlackSection';
 import { SettingsSectionNavigationProvider } from './SettingsSectionLink';
 import { loadOnboardingSeed } from '@/features/onboarding/lib/onboarding-preferences';
 import {
@@ -217,6 +218,7 @@ export function WebSettingsModal({
     voice: <VoiceSection />,
     reflect: <ReflectSection />,
     'time-focus': <TimeFocusSection />,
+    slack: <SlackSection />,
     help: <HelpSection />,
     // connectors / skills / plugins fall through to adapter-driven built-in panels
   };
