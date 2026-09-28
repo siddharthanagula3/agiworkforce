@@ -7,19 +7,14 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import { Paperclip, Globe, ChevronRight, ChevronDown, ExternalLink } from 'lucide-react-native';
+import type { AgentEventSource } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/src/ui/theme';
 import { isValidExternalHttpUrl } from '@/src/features/chat/utils/externalUrls';
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
 
-interface Source {
-  url: string;
-  title?: string;
-  snippet?: string;
-}
-
 interface CollapsibleSourcesProps {
-  sources: Source[];
+  sources: AgentEventSource[];
 }
 
 function getDomain(url: string): string {
@@ -117,7 +112,7 @@ export function CollapsibleSources({ sources }: CollapsibleSourcesProps) {
             <Pressable
               key={`source-${index}`}
               onPress={() => handleSourcePress(source.url)}
-              accessibilityLabel={`Source ${index + 1}: ${source.title ?? getDomain(source.url)}`}
+              accessibilityLabel={`Source ${index + 1}: ${source.title || getDomain(source.url)}`}
               accessibilityRole="link"
               accessibilityHint="Opens in the in-app browser"
             >
