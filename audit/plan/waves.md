@@ -34,14 +34,13 @@ Nothing left in this wave.
 
 ## Wave 2: switch on and wire up what is already built (flag off or not mounted)
 
-214 open items.
+213 open items.
 
 | Section | Items | File |
 | --- | ---: | --- |
 | 3. Authentication and onboarding screens | 3 | [partial/003-authentication-and-onboarding-screens.md](../partial/003-authentication-and-onboarding-screens.md) |
 | 4. Signed-in application destinations | 3 | [partial/004-signed-in-application-destinations.md](../partial/004-signed-in-application-destinations.md) |
 | 5. Application shell and navigation components | 1 | [partial/005-application-shell-and-navigation-components.md](../partial/005-application-shell-and-navigation-components.md) |
-| 7. Layout systems | 1 | [partial/007-layout-systems.md](../partial/007-layout-systems.md) |
 | 9. Compound interface components | 2 | [partial/009-compound-interface-components.md](../partial/009-compound-interface-components.md) |
 | 10. Modal and dialog inventory | 6 | [partial/010-modal-and-dialog-inventory.md](../partial/010-modal-and-dialog-inventory.md) |
 | 11. Accessibility and localization components | 4 | [partial/011-accessibility-and-localization-components.md](../partial/011-accessibility-and-localization-components.md) |
@@ -90,7 +89,7 @@ Nothing left in this wave.
 
 ## Wave 3: finish half-built features
 
-1691 open items.
+1692 open items.
 
 | Section | Items | File |
 | --- | ---: | --- |
@@ -99,7 +98,7 @@ Nothing left in this wave.
 | 4. Signed-in application destinations | 37 | [partial/004-signed-in-application-destinations.md](../partial/004-signed-in-application-destinations.md) |
 | 5. Application shell and navigation components | 23 | [partial/005-application-shell-and-navigation-components.md](../partial/005-application-shell-and-navigation-components.md) |
 | 6. Visual foundations and spacing conventions | 11 | [partial/006-visual-foundations-and-spacing-conventions.md](../partial/006-visual-foundations-and-spacing-conventions.md) |
-| 7. Layout systems | 17 | [partial/007-layout-systems.md](../partial/007-layout-systems.md) |
+| 7. Layout systems | 18 | [partial/007-layout-systems.md](../partial/007-layout-systems.md) |
 | 8. Basic interactive elements | 27 | [partial/008-basic-interactive-elements.md](../partial/008-basic-interactive-elements.md) |
 | 9. Compound interface components | 28 | [partial/009-compound-interface-components.md](../partial/009-compound-interface-components.md) |
 | 10. Modal and dialog inventory | 34 | [partial/010-modal-and-dialog-inventory.md](../partial/010-modal-and-dialog-inventory.md) |

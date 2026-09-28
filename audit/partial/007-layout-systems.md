@@ -211,14 +211,11 @@ Code: `apps/extension/src/features/side-panel/computerUsePanel.ts:1008-1016`, `a
 ## S7.19: Compact companion mode.
 
 - Done when: A compact companion mode shows a reduced chat UI (no sidebar or side panels) sized for quick questions.
-- Wave: 2
+- Wave: 3
 - Already works on: desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The compact chat exists at /quick-ask, but no web nav entry, link or command opens it; reachable only by direct URL (it is meant for the desktop panel). | mount |
-
-Code: `apps/web/app/quick-ask/page.tsx:4-4`, `apps/web/features/chat/pages/WebChatPage.tsx:5332-5332`, `apps/web/features/chat/pages/WebChatPage.tsx:891-891`
 
 ## S7.24: Sticky table headers.
 
