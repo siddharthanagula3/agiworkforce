@@ -195,17 +195,14 @@ Code: `apps/cli/src/skills.rs:191-204`, `apps/cli/src/app_server/surfaces.rs:132
 
 - Done when: A project shows who can access it (owner and members) and a member can see a project is shared with them.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The owner (with sharing.manage) sees every member by name with their access in the project's Share dialog; members without that permission still see no member list, because member names are returned only to sharing managers. | ui |
-| desktop | partial | The owner (with sharing.manage) sees every member by name with their access in the project's Share dialog; members without that permission still see no member list, because member names are returned only to sharing managers. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/projects/components/ProjectShareDialog.tsx:120-120`, `apps/web/features/settings/sections/OrganizationSharingSection.tsx:315-318`
 
 ## S23.22: Member roles.
 

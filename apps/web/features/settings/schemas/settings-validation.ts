@@ -41,6 +41,17 @@ export const securitySettingsSchema = z.object({
 
 export type SecuritySettingsFormData = z.infer<typeof securitySettingsSchema>;
 
+export const API_KEY_EXPIRY_CHOICES = ['never', '30', '90', '365'] as const;
+
+export const API_KEY_EXPIRY_LABELS: Readonly<
+  Record<(typeof API_KEY_EXPIRY_CHOICES)[number], string>
+> = {
+  never: 'Never',
+  '30': '30 days',
+  '90': '90 days',
+  '365': '1 year',
+};
+
 export const createApiKeySchema = z.object({
   name: z
     .string()
@@ -52,6 +63,7 @@ export const createApiKeySchema = z.object({
     .min(1, 'Select at least one scope')
     .max(API_KEY_SCOPE_VALUES.length)
     .refine((scopes) => new Set(scopes).size === scopes.length, 'Scopes must be unique'),
+  expiresInDays: z.enum(API_KEY_EXPIRY_CHOICES).optional(),
 });
 
 export type CreateApiKeyFormData = z.infer<typeof createApiKeySchema>;

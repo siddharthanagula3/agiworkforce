@@ -226,6 +226,7 @@ import { useTurnErrorNotice } from '../hooks/use-turn-error-notice';
 import { turnNeedsTwoFactor } from '../lib/turn-error-notice';
 import { TranscriptNotice } from '../components/messages/TranscriptNotice';
 import { ApprovalInbox } from '../components/approvals/ApprovalInbox';
+import { hasPendingApproval } from '../lib/pending-approval';
 import {
   WorkSessionPanel,
   WorkSessionToggleButton,
@@ -5448,6 +5449,13 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     () => new Set([...loadingConversationIds, ...streamingConversationIds]),
     [loadingConversationIds, streamingConversationIds],
   );
+  const awaitingYouConversationId = useMemo(
+    () =>
+      displayedConversationId && hasPendingApproval(displayedMessages)
+        ? displayedConversationId
+        : null,
+    [displayedConversationId, displayedMessages],
+  );
   const sidebarSessions = useMemo<SidebarSession[]>(
     () =>
       toSidebarSessions(conversations, {
@@ -5457,9 +5465,16 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             ? { agiWork: true }
             : {}),
           ...(runningConversationIds.has(c.id) ? { runState: 'running' as const } : {}),
+          ...(c.needsYou || awaitingYouConversationId === c.id ? { needsYou: true } : {}),
         }),
       }),
-    [conversations, isUnread, runningConversationIds, workModeByConversation],
+    [
+      conversations,
+      isUnread,
+      awaitingYouConversationId,
+      runningConversationIds,
+      workModeByConversation,
+    ],
   );
 
   // Top-level destinations stay visible in the production sidebar. The rail body

@@ -25,6 +25,9 @@ const LOCALIZED_SOURCES = [
   'src/features/side-panel/planComparison.ts',
   'src/features/side-panel/voice.ts',
   'src/features/side-panel/chat-state.ts',
+  'src/features/side-panel/bubbles.ts',
+  'src/features/side-panel/sources.ts',
+  'src/features/side-panel/generatedFiles.ts',
 ] as const;
 
 const PLURAL_SUFFIX = /_(zero|one|two|few|many|other)$/;

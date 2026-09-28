@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { Search, Sparkles } from '@agiworkforce/icons';
 import {
   Dialog,
@@ -26,11 +26,13 @@ import {
   type ModelAccess,
   type ModelCollection,
 } from '../lib/model-filters';
+import { COMPARE_ANSWER_MINIMUM, answerableEntries } from '../lib/compare-answers';
 import { ModelCard } from './ModelCard';
 import { ModelCompareTable } from './ModelCompareTable';
 
 const COMPARE_LIMIT = 3;
 const COMPARE_MINIMUM = 2;
+const COMPARE_ANSWERS_BLOCKED_REASON = 'Pick two models your plan includes to compare answers.';
 
 const CHIP_CLASS =
   'rounded-full border px-2.5 py-1 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)] pointer-coarse:min-h-11';
@@ -55,6 +57,7 @@ export interface ModelCatalogueBrowserProps {
   onRetry: () => void;
   onToggleFavourite: (modelId: string) => void;
   onTry: (modelId: string) => void;
+  onCompareAnswers: (modelIds: readonly string[]) => void;
 }
 
 export function ModelCatalogueBrowser({
@@ -68,6 +71,7 @@ export function ModelCatalogueBrowser({
   onRetry,
   onToggleFavourite,
   onTry,
+  onCompareAnswers,
 }: ModelCatalogueBrowserProps) {
   const [query, setQuery] = useState('');
   const [developer, setDeveloper] = useState<string | null>(null);
@@ -102,6 +106,9 @@ export function ModelCatalogueBrowser({
     const entry = entries.find((candidate) => candidate.id === id);
     return entry ? [entry] : [];
   });
+  const answerableComparedIds = answerableEntries(comparedEntries).map((entry) => entry.id);
+  const canCompareAnswers = answerableComparedIds.length >= COMPARE_ANSWER_MINIMUM;
+  const compareAnswersReasonId = useId();
 
   const toggleCapability = (capability: ModelPickerFilterCapability) => {
     setCapabilities((previous) => {
@@ -291,6 +298,26 @@ export function ModelCatalogueBrowser({
           >
             Compare
           </button>
+          <button
+            type="button"
+            disabled={!canCompareAnswers}
+            title={canCompareAnswers ? undefined : COMPARE_ANSWERS_BLOCKED_REASON}
+            aria-describedby={canCompareAnswers ? undefined : compareAnswersReasonId}
+            onClick={() => onCompareAnswers(answerableComparedIds)}
+            className={[
+              'inline-flex h-9 items-center rounded-md border px-3 text-sm font-medium transition-colors pointer-coarse:min-h-11',
+              canCompareAnswers
+                ? 'border-[var(--chat-border)] text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]'
+                : 'cursor-not-allowed border-transparent bg-muted text-muted-foreground',
+            ].join(' ')}
+          >
+            Compare answers
+          </button>
+          {canCompareAnswers ? null : (
+            <span id={compareAnswersReasonId} className="sr-only">
+              {COMPARE_ANSWERS_BLOCKED_REASON}
+            </span>
+          )}
           <button
             type="button"
             onClick={() => setComparedIds([])}

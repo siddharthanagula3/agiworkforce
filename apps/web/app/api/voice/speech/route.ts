@@ -41,25 +41,9 @@ import {
   evaluateManagedComputeSubscriptionAccess,
 } from '@/lib/services/managed-compute-access';
 import { sideCallProviderAllowed } from '@/lib/server/side-call-training-policy';
-
-const SPEECH_VOICES = [
-  'alloy',
-  'ash',
-  'ballad',
-  'coral',
-  'echo',
-  'fable',
-  'nova',
-  'onyx',
-  'sage',
-  'shimmer',
-  'verse',
-  'marin',
-  'cedar',
-] as const;
+import { DEFAULT_SPEECH_VOICE, SPEECH_VOICES } from '@/lib/voice/speech-voices';
 
 const SPEECH_MAX_CHARACTERS = 4_000;
-const DEFAULT_SPEECH_VOICE = 'marin';
 const CHARACTERS_PER_INPUT_TOKEN = 4;
 const AUDIO_OUTPUT_TOKENS_PER_CHARACTER = 1.5;
 const MICROUSD_PER_USD = 1_000_000;

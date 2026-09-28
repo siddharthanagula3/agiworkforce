@@ -95,17 +95,14 @@ Code: `apps/extension/src/features/side-panel/projectsDrawer.ts:239-245`, `apps/
 
 - Done when: A project members view shows who has access to a project and lets the owner add or remove people.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Project organisation-sharing only: a project can be shared with the whole organisation (Workspace > Sharing); there is no per-project member list or per-person invite. | ui |
-| desktop | partial | Project organisation-sharing only: a project can be shared with the whole organisation (Workspace > Sharing); there is no per-project member list or per-person invite. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/workspace/sharing/page.tsx:16-16`, `apps/web/features/settings/sections/OrganizationSharingSection.tsx:208-218`, `apps/web/app/api/settings/organization/shared/projects/[projectId]/route.ts:71-71`
 
 ## S4.12: Project Memory.
 
@@ -412,16 +409,14 @@ Code: `apps/extension-vscode/src/features/surfaces/capabilityManagement.ts:124-1
 ## S4.38: Model catalog.
 
 - Done when: A model catalog lists the models the user can reach with capabilities/context/price and lets them pick one or set a default.
-- Wave: 2
-- Already works on: mobile, cli, api
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The /models catalog page has no navigation entry; paid users reach the catalog via the composer "All models" row, but Free users (row hidden) can only type the URL. | mount |
-| desktop | partial | Same as web: /models has no navigation entry and the composer "All models" row is hidden on Free. | mount |
 | chrome | partial | Only the side-panel model dropdown (Auto, primary, more); no catalog view with capabilities, context size or pricing. | ui |
 
-Code: `apps/web/app/models/page.tsx:12-18`, `apps/web/features/models/components/ModelsPage.tsx:12-27`, `apps/web/features/chat/lib/use-model-catalogue.ts:1-10`, `apps/web/features/chat/components/Composer/ComposerFooter.tsx:1494-1504`
+Code: `apps/extension/src/side_panel.ts:6168-6178`, `apps/extension/src/features/cloud-bridge/managedModelPicker.ts:47-50`
 
 ## S4.39: Usage dashboard.
 

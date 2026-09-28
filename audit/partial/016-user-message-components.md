@@ -24,14 +24,13 @@ Code: `apps/web/features/chat/components/messages/MessageBubble.tsx:1784-1795`, 
 
 - Done when: Files and images sent with a user turn are listed on that message (thumbnail or named chip) after sending.
 - Wave: 3
-- Already works on: web, desktop, mobile, vscode
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Show the images/files a turn carried on the transcript message; staged image chips are cleared at send and only typed @paths remain visible. | ui |
 | chrome | partial | Keep attachment names on the user message; the side panel sends them with the turn but the bubble stores and shows only the text. | ui |
 
-Code: `apps/cli/src/tui/tui_app.rs:4957-4960`, `apps/cli/src/tui/tui_app.rs:4926-4929`, `apps/extension/src/side_panel.ts:4957-4957`, `apps/extension/src/features/side-panel/bubbles.ts:235-235`
+Code: `apps/extension/src/side_panel.ts:4957-4957`, `apps/extension/src/features/side-panel/bubbles.ts:235-235`
 
 ## S16.04: Source and context chips.
 

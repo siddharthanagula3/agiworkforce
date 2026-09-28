@@ -10,6 +10,8 @@ import {
   cloudRunDeviceWaitLabel,
   cloudRunLatestError,
   cloudRunOriginLabel,
+  cloudRunOutcomeSummary,
+  cloudRunResultText,
   cloudRunQuietLabel,
   cloudRunStateLabel,
   cloudRunStepIcon,
@@ -30,7 +32,8 @@ export type CloudRunDetailClient = Pick<
   'getRun' | 'resumeRun' | 'cancelRun'
 >;
 
-export type CloudRunAction = 'approve' | 'reject' | 'cancel' | 'open-web' | 'open-artifact';
+export type CloudRunAction =
+  'approve' | 'reject' | 'cancel' | 'open-web' | 'open-artifact' | 'copy-result';
 
 export interface CloudRunDetailItem extends vscode.QuickPickItem {
   action?: CloudRunAction;
@@ -73,6 +76,24 @@ export function buildCloudRunDetailItems(
         ...(step.detail === undefined ? {} : { detail: step.detail }),
       });
     }
+  }
+
+  const outcome = cloudRunOutcomeSummary(run, steps);
+  if (outcome !== undefined) {
+    items.push({ label: 'Outcome', kind: vscode.QuickPickItemKind.Separator });
+    items.push({ label: `$(pie-chart) ${outcome}` });
+  }
+
+  const result = cloudRunResultText(events);
+  if (result !== '') {
+    const [firstLine = '', ...rest] = result.split('\n');
+    items.push({ label: 'Result', kind: vscode.QuickPickItemKind.Separator });
+    items.push({
+      label: `$(output) ${firstLine}`,
+      ...(rest.length === 0 ? {} : { detail: rest.join(' ').trim() }),
+      description: 'Select to copy the full result',
+      action: 'copy-result',
+    });
   }
 
   const failure = cloudRunLatestError(events);
@@ -187,6 +208,12 @@ export async function showCloudRunDetail(
 
   if (picked.action === 'open-web') {
     await vscode.env.openExternal(vscode.Uri.parse(cloudRunWebUrl(run, host.webOrigin)));
+    return;
+  }
+
+  if (picked.action === 'copy-result') {
+    await vscode.env.clipboard.writeText(cloudRunResultText(snapshot.events));
+    void vscode.window.showInformationMessage('AGI Workforce: copied the task result.');
     return;
   }
 

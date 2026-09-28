@@ -33,6 +33,7 @@ import { logger } from '@/lib/logger';
 import { stagedAttachmentPaths, type TurnAttachment } from '@/lib/e2b/attachment-staging';
 import { EXECUTE_CODE_TOOL, resolveTurnCodeExecutionTools } from '@/lib/e2b/execution-tools';
 import { e2bProvisioningReady } from '@/lib/e2b/gate';
+import { e2bChatTemplate } from '@/lib/e2b/chat-template';
 import { hostedCodeExecutionReserveMicrousd } from '@/lib/e2b/hosted-code-execution';
 import {
   DEVICE_HOST_HEADER,
@@ -4572,6 +4573,7 @@ export async function processRequest(
     provider: providerLower,
     stream: chatRequest.stream,
     e2bEnabled: e2bProvisioningReady(),
+    officeRendering: e2bChatTemplate() !== null,
     toolsCapable: resolvedModelCaps?.tools ?? true,
     codeExecutionCapable:
       resolvedModelCaps?.codeExecution === true && nativeToolPermitted(EXECUTE_CODE_TOOL),

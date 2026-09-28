@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { Check, Monitor, Sun, Moon } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAppTheme as useTheme } from '@shared/hooks/useAppTheme';
@@ -15,7 +16,11 @@ import { useModelStore } from '@shared/stores/model-store';
 import { useThinkingStore, type EffortLevel } from '@shared/stores/thinking-store';
 import { APP_NAV_DESTINATIONS } from '@shared/components/layout/app-nav-items';
 import { useTranslation } from 'react-i18next';
-import { getModelReasoning, splitEffortsByEntitlement } from '@shared/config/llm';
+import {
+  getModelReasoning,
+  isModelAllowedForTier,
+  splitEffortsByEntitlement,
+} from '@shared/config/llm';
 import {
   ACCENT_COLORS,
   useSettingsStore,
@@ -36,6 +41,8 @@ import {
   EFFORT_LABEL,
   IMAGE_ATTACHMENT_MIME_TYPES,
   MAX_AVATAR_BYTES,
+  PLAN_LABEL,
+  getMinimumRequiredTier,
   isFreeBillingPlanTier,
 } from '@agiworkforce/types';
 import { toUserMessage } from '@/lib/user-error-message';
@@ -1012,24 +1019,61 @@ function DefaultModelRow() {
   const selectedModelId = useModelStore((state) => state.selectedModelId);
   const setSelectedModel = useModelStore((state) => state.setSelectedModel);
   const availableModels = useModelStore((state) => state.availableModels);
+  const tier = useBillingStore((state) => state.subscription?.tier ?? null);
+  const billingReady = useBillingStore((state) => state.initialized && state.error === null);
+  const [lockedChoice, setLockedChoice] = useState<{
+    name: string;
+    plan: 'basic' | 'pro' | 'max';
+  } | null>(null);
 
   const selectable = availableModels.filter((model) => model.availability !== 'coming_soon');
   if (selectable.length === 0) return null;
 
+  const unlockingPlan = (modelId: string): 'basic' | 'pro' | 'max' | null => {
+    if (!billingReady || isModelAllowedForTier(modelId, tier ?? 'free')) return null;
+    const minimum = getMinimumRequiredTier(modelId);
+    return minimum && minimum !== 'free' ? minimum : null;
+  };
+
   return (
     <Row label="Default model">
-      <select
-        value={selectedModelId}
-        onChange={(event) => setSelectedModel(event.target.value)}
-        aria-label="Default model"
-        className={`${SELECT_CLASS} max-w-[220px]`}
-      >
-        {selectable.map((model) => (
-          <option key={model.id} value={model.id}>
-            {model.name}
-          </option>
-        ))}
-      </select>
+      <div className="flex flex-col items-end gap-1">
+        <select
+          value={selectedModelId}
+          onChange={(event) => {
+            const chosen = selectable.find((model) => model.id === event.target.value);
+            const plan = unlockingPlan(event.target.value);
+            if (plan && chosen) {
+              setLockedChoice({ name: chosen.name, plan });
+              return;
+            }
+            setLockedChoice(null);
+            setSelectedModel(event.target.value);
+          }}
+          aria-label="Default model"
+          className={`${SELECT_CLASS} max-w-[220px]`}
+        >
+          {selectable.map((model) => {
+            const plan = unlockingPlan(model.id);
+            return (
+              <option key={model.id} value={model.id}>
+                {plan ? `${model.name} · Upgrade to use (${PLAN_LABEL[plan]})` : model.name}
+              </option>
+            );
+          })}
+        </select>
+        {lockedChoice ? (
+          <p role="status" className="text-xs text-muted-foreground">
+            {`${lockedChoice.name} needs ${PLAN_LABEL[lockedChoice.plan]}. `}
+            <Link
+              href={`/upgrade/${lockedChoice.plan}`}
+              className="font-medium text-foreground underline"
+            >
+              Upgrade to use
+            </Link>
+          </p>
+        ) : null}
+      </div>
     </Row>
   );
 }

@@ -139,16 +139,12 @@ Code: `apps/web/features/connectors/hooks/use-connectors-settings-adapter.tsx:83
 
 - Done when: The user can create, see (masked) and revoke their API keys.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | The CLI stores and removes provider keys for BYOK (agi login --provider, auth-status, logout) but cannot create, list or revoke AGI account API keys. | ui, handler |
-| vscode | partial | VS Code can store and clear an existing AGI API key in SecretStorage, but cannot create, list or revoke keys (and its placeholder says "sk-agi-" while keys are issued as sk_live_). | ui, handler |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:3957-3975`, `apps/extension-vscode/src/core/commandSetup.ts:1055-1095`
 
 ## S86.16: Local folders.
 

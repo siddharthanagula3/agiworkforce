@@ -67,12 +67,18 @@ const chromeMock = vi.hoisted(() => {
     permissions: { contains: vi.fn(async () => true) },
     action: { onClicked: event() },
     sidePanel: { setPanelBehavior: vi.fn(async () => undefined) },
-    i18n: { getMessage: vi.fn((key: string) => key) },
+    i18n: {
+      getMessage: vi.fn((key: string, substitutions: string[] = []) =>
+        catalogMessage(key, substitutions),
+      ),
+      getUILanguage: vi.fn(() => 'en'),
+    },
   };
   (globalThis as Record<string, unknown>).chrome = mock;
   return mock;
 });
 
+import catalog from '../_locales/en/messages.json';
 import {
   createMultimodalUserContent,
   MANAGED_CHAT_MAX_ATTACHMENTS,
@@ -80,6 +86,22 @@ import {
   MANAGED_CHAT_MAX_ATTACHMENT_FILE_BYTES,
 } from '../src/features/cloud-bridge/freeTrialClient';
 import '../src/side_panel';
+
+function catalogMessage(key: string, substitutions: string[]): string {
+  const entry = (
+    catalog as Record<
+      string,
+      { message: string; placeholders?: Record<string, { content: string }> }
+    >
+  )[key];
+  if (!entry) return '';
+  return entry.message.replace(/\$([A-Za-z0-9_]+)\$/g, (_match, name: string) =>
+    (entry.placeholders?.[name.toLowerCase()]?.content ?? '').replace(
+      /\$(\d)/g,
+      (_digit, index: string) => substitutions[Number(index) - 1] ?? '',
+    ),
+  );
+}
 
 function attachmentBar(): HTMLElement {
   const bar = document.getElementById('sp-attachment-bar');
@@ -176,7 +198,7 @@ describe('side panel composer attachment caps', () => {
   it('shows file-read progress while send is gated', async () => {
     pickFiles([imageFile(16, 'image/png', 'reading.png')]);
 
-    expect(attachmentBar().textContent).toContain('spAttachmentAdding');
+    expect(attachmentBar().textContent).toContain(catalog.spAttachmentAdding.message);
     await expectPendingCount(1);
     expect(noticeText()).toBe('');
   });
@@ -256,7 +278,7 @@ describe('side panel composer attachment caps', () => {
     dropFiles([imageFile(MANAGED_CHAT_MAX_ATTACHMENT_FILE_BYTES + 1, 'image/png', 'over-cap.png')]);
 
     await vi.waitFor(() => {
-      expect(noticeText()).toContain('Each image must be under');
+      expect(noticeText()).toContain('over-cap.png is too large');
     });
     expect(pendingDataUrls()).toHaveLength(0);
   });
@@ -265,8 +287,9 @@ describe('side panel composer attachment caps', () => {
     dropFiles([imageFile(16, 'image/svg+xml', 'vector.svg')]);
 
     await vi.waitFor(() => {
-      expect(noticeText()).toContain('PNG');
+      expect(noticeText()).toContain('vector.svg cannot be attached');
     });
+    expect(noticeText()).toContain('PNG');
     expect(pendingDataUrls()).toHaveLength(0);
   });
 

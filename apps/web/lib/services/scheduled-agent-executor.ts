@@ -61,6 +61,7 @@ import {
 } from '@/app/api/llm/v1/chat/completions/lib/tool-loop-routing';
 import { EXECUTE_CODE_TOOL, resolveTurnCodeExecutionTools } from '@/lib/e2b/execution-tools';
 import { e2bProvisioningReady } from '@/lib/e2b/gate';
+import { e2bChatTemplate } from '@/lib/e2b/chat-template';
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
 import {
   formatProjectSystemPrompt,
@@ -279,6 +280,7 @@ async function buildScheduledToolPlan(input: {
     provider,
     stream: true,
     e2bEnabled: e2bProvisioningReady(),
+    officeRendering: e2bChatTemplate() !== null,
     toolsCapable: true,
     codeExecutionCapable: capabilities.codeExecution === true,
   });
