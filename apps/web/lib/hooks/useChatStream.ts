@@ -137,7 +137,11 @@ import type {
   ResearchDeliverableSpec,
   ResearchStep,
 } from '@agiworkforce/types';
-import { parseResearchPlanEvent, rendersResearchPlan } from '@/features/chat/utils/research-plan';
+import {
+  parseResearchPlanEvent,
+  parseResearchRunConfig,
+  rendersResearchPlan,
+} from '@/features/chat/utils/research-plan';
 import { deriveAgentActivityLabel, extractToolActivityArgument } from './agentActivityLabel';
 import {
   linearTail,
@@ -235,6 +239,7 @@ interface SendMessageOptions {
     approvedSteps?: ResearchStep[];
     /** What that approved run was asked to produce. */
     deliverable?: ResearchDeliverableSpec;
+    guidance?: string;
   };
   workMode?: CloudWorkMode;
   agiWorkGoal?: AgiWorkGoalInput;
@@ -2770,6 +2775,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
               phase === 'awaiting_approval' ||
               phase === 'searching' ||
               phase === 'synthesizing' ||
+              phase === 'paused' ||
               phase === 'complete' ||
               phase === 'error'
             ) {
@@ -2809,6 +2815,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
                     : undefined,
                 steps: currentResearch?.steps,
                 sourcesForRetry: currentResearch?.sourcesForRetry,
+                runConfig: currentResearch?.runConfig,
               };
               setResearchState(assistantMessageId, { ...currentResearch }, conversationId);
             }
@@ -2817,6 +2824,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           const researchPlan = parsed.choices?.[0]?.delta?.x_research_plan;
           if (researchPlan) {
             const planSteps = parseResearchPlanEvent(researchPlan);
+            const runConfig = parseResearchRunConfig(researchPlan);
             if (planSteps) {
               if (!currentResearch) {
                 applyLocalAgentEvent({
@@ -2832,6 +2840,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
                   startedAt: new Date().toISOString(),
                 }),
                 steps: planSteps,
+                ...(runConfig ? { runConfig } : {}),
               };
               setResearchState(assistantMessageId, { ...currentResearch }, conversationId);
             }
@@ -3737,6 +3746,9 @@ export function useChatStream(): UseChatStreamReturn {
                         : {}),
                       ...(options.researchResume.deliverable
                         ? { deliverable: options.researchResume.deliverable }
+                        : {}),
+                      ...(options.researchResume.guidance
+                        ? { guidance: options.researchResume.guidance }
                         : {}),
                     }
                   : undefined,
