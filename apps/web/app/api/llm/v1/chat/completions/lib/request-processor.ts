@@ -73,6 +73,12 @@ import {
   type RequiredExecutionEnforcement,
 } from '@/lib/code-execution/required-execution';
 import { placesBackendConfigured, placesSearchToolDef } from '@/lib/places/places-tool';
+import {
+  ITINERARY_CARD_KIND,
+  asksForItinerary,
+  isItineraryTool,
+  itineraryToolDefinition,
+} from '@/lib/places/itinerary-tool';
 import { placesSearchMicrousdPerCall } from '@/lib/places/places-config';
 import {
   PLACES_UNAVAILABLE_SYSTEM_NOTICE,
@@ -937,6 +943,39 @@ export function applyMapSearchCardCapability(
       function: { name: MAP_SEARCH_TOOL_NAME },
     };
   }
+}
+
+const ITINERARY_CARD_SURFACES: ReadonlySet<CloudChatSurface> = new Set<CloudChatSurface>([
+  'web',
+  'desktop',
+  'mobile',
+  'chrome',
+]);
+
+export function applyItineraryToolCapability(
+  request: ChatCompletionRequest,
+  params: {
+    surface: CloudChatSurface;
+    toolsCapable: boolean;
+    userMessage: string;
+    placesAvailable: boolean;
+  },
+): boolean {
+  if (
+    !ITINERARY_CARD_SURFACES.has(params.surface) ||
+    !params.toolsCapable ||
+    !request.stream ||
+    !params.placesAvailable ||
+    !asksForItinerary(params.userMessage) ||
+    !request.x_interactive_cards?.supported.includes(ITINERARY_CARD_KIND)
+  ) {
+    return false;
+  }
+  request.tools = [
+    ...(request.tools ?? []).filter((tool) => !isItineraryTool(tool.function.name)),
+    itineraryToolDefinition(),
+  ];
+  return true;
 }
 
 export function validationRefusalMessage(error: z.ZodError): string {
@@ -4247,20 +4286,28 @@ export async function processRequest(
     };
   }
 
+  const placesAvailable =
+    placesBackendConfigured() &&
+    (!freeTrialEnabled || fitsFreeTrialWindow(placesSearchMicrousdPerCall()));
   const placesRequirement = resolvePlacesRequirement({
     userMessage: lastUserText,
     toolsCapable: resolvedModelCaps?.tools ?? true,
     stream: chatRequest.stream,
-    backendConfigured:
-      placesBackendConfigured() &&
-      (!freeTrialEnabled || fitsFreeTrialWindow(placesSearchMicrousdPerCall())),
+    backendConfigured: placesAvailable,
+  });
+
+  const itineraryOffered = applyItineraryToolCapability(chatRequest, {
+    surface: chatSurface,
+    toolsCapable: resolvedModelCaps?.tools ?? true,
+    userMessage: lastUserText,
+    placesAvailable,
   });
 
   applyMapSearchCardCapability(chatRequest, {
     surface: chatSurface,
     toolsCapable: resolvedModelCaps?.tools ?? true,
     userMessage: lastUserText,
-    placesSearchOffered: placesRequirement.offered,
+    placesSearchOffered: placesRequirement.offered || itineraryOffered,
   });
 
   const ambientToolsAllowed =
@@ -4919,7 +4966,7 @@ export async function processRequest(
     }
   }
   const placesEnforcement = resolveRequiredPlacesEnforcement({
-    required: placesRequirement.required,
+    required: placesRequirement.required && !itineraryOffered,
     requestedToolChoice: chatRequest.tool_choice,
     model: chatRequest.model,
     tools: resolvedTools,
