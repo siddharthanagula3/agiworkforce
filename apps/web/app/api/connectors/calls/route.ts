@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import type { ConnectorCallLogResponse } from '@agiworkforce/cloud-contracts';
 
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -27,7 +28,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     limit: Number.isFinite(limit) ? limit : DEFAULT_LIMIT,
   });
 
-  return NextResponse.json({ calls });
+  return NextResponse.json({ calls } satisfies ConnectorCallLogResponse);
 }
 
 export const GET = withErrorHandler(handleGet);

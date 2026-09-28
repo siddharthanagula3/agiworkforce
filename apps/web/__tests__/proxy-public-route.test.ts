@@ -335,14 +335,14 @@ describe('web proxy', () => {
     const { proxy } = await import('../proxy');
 
     const response = await proxy(
-      new NextRequest('http://localhost/chat?panel=artifacts'),
+      new NextRequest('http://localhost/chat/session-1?panel=artifacts'),
       {} as never,
     );
 
     expect(clerkState.clerkPaths).toEqual([]);
     expect(response?.status).toBe(307);
     expect(response?.headers.get('Location')).toBe(
-      'http://localhost/login?redirectTo=%2Fchat%3Fpanel%3Dartifacts',
+      'http://localhost/login?redirectTo=%2Fchat%2Fsession-1%3Fpanel%3Dartifacts',
     );
     expect(response?.headers.get('Content-Security-Policy')).toContain("default-src 'self'");
   });

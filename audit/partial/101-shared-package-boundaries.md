@@ -13,9 +13,9 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | check:route-shared-contracts now requires every client-called route to import a shared contract, with 251 predating routes baselined (including the usage, support and connectors families the cell names); each family still has to move its body shapes into cloud-contracts and leave the baseline | surface-only |
+| platform | partial | partials/mcp-web df03cba4d: the connectors family is done. All fifteen /api/connectors routes type their bodies with cloud-contracts schemas (connections, connect and conflict bodies, custom connectors, accounts, capability catalog, credentials, MCP operations, call log, call health, tool permissions, Drive picker, OAuth start and callback outcomes, directory list, entry, query and icon), the MCP, permissions, credentials and directory routes parse input with them, and the web callers parse with them; the family left the baseline (247 to 232 before merge). Still owed for the cell: the other baselined families, and the desktop connectors client (apps/desktop/src/api/cloudConnectors.ts) and client-runtime connector parsers still read these bodies by hand. | surface-only |
 
-Code: `scripts/check-route-shared-contracts.mjs:30-30`, `scripts/lib/route-shared-contracts.mjs:100-100`, `scripts/lib/route-shared-contracts.mjs:109-109`, `package.json:129-129`
+Code: `packages/contracts/cloud-contracts/src/connectors.ts:89-89`, `packages/contracts/cloud-contracts/src/connectors.ts:125-125`, `packages/contracts/cloud-contracts/src/connectors.ts:270-270`, `packages/contracts/cloud-contracts/src/connectors.ts:436-436`
 
 ## S101.02: Shared event schemas.
 
@@ -233,9 +233,9 @@ Code: `packages/contracts/cloud-contracts/src/tool-events.ts:18-24`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | partials/platform 2ae3661b81 with p-mcp-web b17126b7f5: the connector input request model is shared from client-runtime and the resume-input path is a shared constant. Remaining: the Chrome side panel answering input requests through them (recipe sent to the lead for p-chrome) and the /api/connectors routes importing the shared contract (p-mcp-web's connectors family) | surface-only |
+| platform | partial | partials/mcp-web df03cba4d and b17126b7f: the /api/connectors routes now import cloud-contracts for connection, health and policy bodies, and the connector input-request form model is shared from client-runtime for Chrome. Still two connector contracts: client-runtime keeps its own connector types and hand parsers (parse.ts) for mobile and desktop instead of the cloud-contracts schemas. | surface-only |
 
-Code: `packages/contracts/cloud-contracts/src/managed-cloud-agent-runs-client.ts:34-34`, `packages/client/client-runtime/src/connectors/index.ts:66-66`
+Code: `packages/contracts/cloud-contracts/src/connectors.ts:89-89`, `apps/web/app/api/connectors/route.ts:376-376`, `packages/client/client-runtime/src/connectors/index.ts:66-66`
 
 ## S101.23: Shared Skill/Plugin manifests.
 

@@ -15,9 +15,9 @@ export interface ArtifactChanges {
 }
 
 const MAX_EDIT_DISTANCE = 1_000;
-const WORD_TOKEN = /\s+|[\p{L}\p{N}_]+|[^\s\p{L}\p{N}_]/gu;
-const COUNTED_WORD = /[\p{L}\p{N}]/u;
-const WHITESPACE_ONLY = /^\s+$/u;
+const WORD_TOKEN = /\s+|[^\s!-/:-@[-`{-~]+|[!-/:-@[-`{-~]/g;
+const COUNTED_WORD = /[^\s!-/:-@[-`{-~]/;
+const WHITESPACE_ONLY = /^\s+$/;
 
 function tokenize(text: string, unit: ArtifactChangeUnit): string[] {
   if (unit === 'line') return text.length === 0 ? [] : text.split('\n');

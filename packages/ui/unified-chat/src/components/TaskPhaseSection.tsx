@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Loader2, CheckCircle2, XCircle, ChevronRight, ChevronDown, Wrench } from 'lucide-react';
+import { translateUiPlural } from '@agiworkforce/ui';
 import { cn } from '../lib/utils';
 import type { ToolLabelEntry } from '@agiworkforce/types';
 
@@ -117,7 +118,10 @@ export function TaskPhaseSection({ phase, defaultExpanded }: TaskPhaseSectionPro
         <span className="font-semibold text-foreground truncate flex-1 min-w-0">{phase.name}</span>
 
         <span className="text-caption px-1.5 py-0.5 rounded-full bg-muted/50 text-muted-foreground shrink-0">
-          {toolCount} {toolCount === 1 ? 'tool' : 'tools'}
+          {translateUiPlural('chat', 'counts.tools', toolCount, {
+            one: '{{count}} tool',
+            other: '{{count}} tools',
+          })}
         </span>
 
         {duration != null && duration > 0 && (

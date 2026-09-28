@@ -83,5 +83,9 @@
     "thinkingState": "사고: {{state}}",
     "unavailable": "사용 불가",
     "visionCapability": "비전"
+  },
+  "counts": {
+    "concurrentAnswers_one": "요금제에서는 답변을 한 번에 {{count}}개까지 실행하므로, 나머지는 하나가 끝날 때마다 시작됩니다.",
+    "concurrentAnswers_other": "요금제에서는 답변을 한 번에 {{count}}개까지 실행하므로, 나머지는 하나가 끝날 때마다 시작됩니다."
   }
 }

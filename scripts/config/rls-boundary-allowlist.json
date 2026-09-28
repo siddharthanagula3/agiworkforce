@@ -218,6 +218,10 @@
       "reason": "a customer files and reads their own refund requests on the caller connection; only the decision on a request and the operator console reach the owner connection, and every statement there is keyed by the request id, the Stripe customer or the account the operator looked up"
     },
     {
+      "path": "apps/web/lib/services/cloud-code-github-task.ts",
+      "reason": "runs from the HMAC-verified GitHub webhook with no user session: the task's owner is the user_id of the verified github_installations row for the signed installation id, and every read and write after that lookup runs on createClaimedUserScopedDb bound to that owner, apart from the workspace-access gate and entitlement read keyed to the same owner id"
+    },
+    {
       "path": "apps/web/lib/services/cogs-ledger-service.ts",
       "reason": "operator cost reconciliation, deliberately cross-account: it reads settled managed_usage_requests rows for every account in a time window to compare them with provider cost events, so there is no single owner to bind a policy role to"
     },

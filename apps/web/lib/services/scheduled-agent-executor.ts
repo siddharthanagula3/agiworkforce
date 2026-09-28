@@ -4,6 +4,7 @@ import { createPostgresContextManifestStore, resolveContext } from '@agiworkforc
 import {
   classifyTaskLocally,
   detectIndicScript,
+  modelsPastDeprecationDate,
   resolveAutoRoute,
   type AutoRoutingRequest,
 } from '@agiworkforce/routing';
@@ -13,6 +14,7 @@ import {
 } from '@/lib/server/side-call-training-policy';
 import { modelKeepsInputsOutOfTraining } from '@/lib/server/provider-training-opt-out';
 import { openAIWireRequestToChatRequest } from '@agiworkforce/provider-protocol';
+import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import {
   DomainErrorCode,
   getModelMetadataById,
@@ -542,6 +544,8 @@ export async function runScheduledToolLoop(input: {
   signal: AbortSignal;
   usage: ObservedProviderUsage;
   resume?: ScheduledRunResume;
+  onEnvelope?: (envelope: AgentEventEnvelope) => Promise<void>;
+  isCancellationRequested?: () => Promise<boolean>;
 }): Promise<ScheduledCompletion> {
   const usage = input.usage;
   const toolsUsed: string[] = [];
@@ -561,6 +565,9 @@ export async function runScheduledToolLoop(input: {
     ...(input.plan.connectorExecutor ? { connectorExecutor: input.plan.connectorExecutor } : {}),
     usage,
     signal: input.signal,
+    ...(input.isCancellationRequested
+      ? { isCancellationRequested: input.isCancellationRequested }
+      : {}),
     ...(resume
       ? {
           resume: {
@@ -586,6 +593,7 @@ export async function runScheduledToolLoop(input: {
     for (const envelope of extractManagedAgentEventEnvelopes(chunk)) {
       if (envelope.event.type === 'tool-execution-start') toolsUsed.push(envelope.event.name);
       if (envelope.event.type === 'error' && !reportedError) reportedError = envelope.event.message;
+      await input.onEnvelope?.(envelope);
     }
   }
 
@@ -663,6 +671,7 @@ async function selectScheduledRoute(
     subscriptionTier,
     trustMode: 'managed_cloud',
     runtimeProfileId: 'web/cloud-chat',
+    retiredModelKeys: modelsPastDeprecationDate(),
   };
   const routing = await sideCallRoutingRequest(scope.db, scope.userId, baseRouting);
   if (!routing) throw new Error(NO_TRAINING_MODEL_MESSAGE);

@@ -11,7 +11,7 @@ import {
   X,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { Button, useUiTranslation } from '@agiworkforce/ui';
+import { Button, translateUiPlural, useUiTranslation } from '@agiworkforce/ui';
 import { ActionBar } from './ActionBar';
 import { ThinkingBlock } from './ThinkingBlock';
 import { LegacyWebSearchCard } from './WebSearchCard';
@@ -879,11 +879,20 @@ export function MessageBubble({
           data-testid="message-metadata-trimmed"
           className="mt-2 text-xs text-[var(--chat-text-muted)]"
         >
-          {`This reply was saved, but ${trimmedMetadataFields
-            .map((field) => TRIMMED_FIELD_LABELS[field] ?? field)
-            .join(
-              ', ',
-            )} ${trimmedMetadataFields.length === 1 ? 'was' : 'were'} too large to store with it.`}
+          {translateUiPlural(
+            'chat',
+            'counts.trimmedReplyFields',
+            trimmedMetadataFields.length,
+            {
+              one: 'This reply was saved, but {{fields}} was too large to store with it.',
+              other: 'This reply was saved, but {{fields}} were too large to store with it.',
+            },
+            {
+              fields: trimmedMetadataFields
+                .map((field) => TRIMMED_FIELD_LABELS[field] ?? field)
+                .join(', '),
+            },
+          )}
         </p>
       )}
 
