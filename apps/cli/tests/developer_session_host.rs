@@ -75,6 +75,7 @@ async fn cli_and_vscode_share_one_persisted_thread_store() {
             ThreadForkParams {
                 thread_id: started.id,
                 title: Some("Try another approach".to_string()),
+                through_message_index: None,
             },
             AppServerClientInfo {
                 name: "agi_vscode".to_string(),
@@ -217,6 +218,7 @@ async fn a_workspace_scoped_host_cannot_fork_or_archive_another_workspace_thread
             ThreadForkParams {
                 thread_id: thread.id.clone(),
                 title: None,
+                through_message_index: None,
             },
             client,
         )

@@ -49,11 +49,26 @@ export function connectorDescription(connector: ConnectorConnection): string {
   return parts.join(' · ');
 }
 
+const READ_SCOPE = /(?:^|[._:/-])(?:read|readonly|view|list|get|search)(?:$|[._:/-])/iu;
+const WRITE_SCOPE =
+  /(?:^|[._:/-])(?:write|send|compose|modify|create|delete|manage|edit|admin|full|insert|update)(?:$|[._:/-])/iu;
+
+export function describeConnectorScopes(scopes: readonly string[]): string[] {
+  const writes = scopes.filter((scope) => WRITE_SCOPE.test(scope));
+  const reads = scopes.filter((scope) => !WRITE_SCOPE.test(scope) && READ_SCOPE.test(scope));
+  const other = scopes.filter((scope) => !writes.includes(scope) && !reads.includes(scope));
+  const lines: string[] = [];
+  if (writes.length > 0) lines.push(`Can make changes: ${writes.join(', ')}`);
+  if (reads.length > 0) lines.push(`Can read only: ${reads.join(', ')}`);
+  if (other.length > 0) lines.push(`Other access: ${other.join(', ')}`);
+  return lines;
+}
+
 export function connectorTooltipLines(connector: ConnectorConnection): string[] {
   const lines = [connectorTitle(connector), connectorDescription(connector)];
   lines.push(`Authenticates with ${connector.authType}`);
   if (connector.scopes !== undefined && connector.scopes.length > 0) {
-    lines.push(`Scopes: ${connector.scopes.join(', ')}`);
+    lines.push(...describeConnectorScopes(connector.scopes));
   }
   lines.push('Connecting and disconnecting happen in the browser, not in VS Code.');
   return lines;

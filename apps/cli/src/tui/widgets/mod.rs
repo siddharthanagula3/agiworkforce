@@ -1,5 +1,6 @@
 pub mod agent_picker;
 pub mod approval_overlay;
+pub mod checkpoint_picker;
 pub mod command_popup;
 pub mod diff_review;
 pub mod effort_picker;
@@ -9,6 +10,7 @@ pub mod list_selection_view;
 pub mod memories_settings;
 pub mod mention_popup;
 pub mod model_picker;
+pub mod question_overlay;
 pub mod screen_renderers;
 pub mod session_picker;
 pub mod skills_toggle;

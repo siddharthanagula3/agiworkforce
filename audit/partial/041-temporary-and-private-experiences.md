@@ -205,36 +205,11 @@ Code: `apps/mobile/src/features/memory/services/ragIndex.ts:118-125`
 
 - Done when: History, model training and data retention each have their own clearly separate control or statement.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | /privacy-settings lists privacy mode, sync and telemetry, but says nothing about training or retention. | ui |
-| vscode | partial | Settings say local history stays local, but there is no training or retention statement or control. | ui |
 | chrome | partial | Mirroring (history) has a switch, but training and retention are not stated or controllable. | ui |
 
-Code: `apps/cli/src/claude_parity.rs:146-146`, `apps/cli/src/claude_parity.rs:325-345`, `apps/extension-vscode/src/features/settings/settingsWebviewContent.ts:1271-1271`, `apps/extension/src/features/options/data-handling-section.ts:147-157`
-
-## S41.19: Privacy-setting education.
-
-- Done when: The product explains, in context, what each privacy setting does.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Only a one-line note that local history stays local; no explanation of what each privacy-relevant setting does. | ui |
-
-Code: `apps/extension-vscode/src/features/settings/settingsWebviewContent.ts:1271-1271`
-
-## S41.20: Per-feature processing-location disclosure.
-
-- Done when: For each feature the product says where the data is processed (on device, AGI cloud, a named provider).
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Only states that local history stays local; no per-feature processing disclosure. | ui |
-
-Code: `apps/extension-vscode/src/features/settings/settingsWebviewContent.ts:1271-1271`
+Code: `apps/cli/src/claude_parity.rs:146-146`, `apps/cli/src/claude_parity.rs:325-345`, `apps/extension/src/features/options/data-handling-section.ts:147-157`

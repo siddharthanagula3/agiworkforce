@@ -163,10 +163,10 @@ describe('Chrome side-panel demo surface', () => {
     expect(source).toContain("t('spTaskEnabled', [task.name])");
   });
 
-  it('gates sends on attachment intake and states the history limitation', () => {
+  it('gates sends on attachment intake and names each refused file', () => {
     expect(source).toContain('composerAttachmentIntakeCount === 0');
     expect(source).toContain("t('spAttachmentAdding')");
-    expect(source).toContain("t('spAttachmentHistoryLimitation')");
+    expect(source).toContain("t('spAttachmentUnsupported', [file.name])");
     expect(source).toContain("t('spAttachmentCaptureFailed')");
   });
 

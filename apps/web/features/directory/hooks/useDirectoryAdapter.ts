@@ -905,7 +905,11 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
     async (section: DirectorySectionKey, id: string): Promise<DirectoryDetail | null> => {
       if (section === 'skills') {
         await ensureSkillCatalog();
-        return fetchSkillDetail(id, skillCache.current, installedSkills.current);
+        return fetchSkillDetail(id, skillCache.current, installedSkills.current, {
+          connected: connectedIds(),
+          connectorName: (connectorId) =>
+            curatedRef.current.find((connector) => connector.id === connectorId)?.name,
+        });
       }
       if (section === 'connectors') {
         const extras = {

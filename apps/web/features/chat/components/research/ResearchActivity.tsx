@@ -4,12 +4,17 @@ import { useEffect, useState } from 'react';
 import {
   Telescope,
   CircleAlert,
+  CirclePause,
   CircleStop,
   CircleCheck,
   CircleDashed,
   CircleSlash,
   ListChecks,
   LoaderCircle,
+  MessageSquare,
+  MessageSquarePlus,
+  Pause,
+  Play,
   Plus,
   RotateCw,
   Search,
@@ -24,6 +29,7 @@ import {
   researchSourceKey,
   researchSourceRequest,
   runStatusLabel,
+  RESEARCH_GUIDANCE_MAX_CHARS,
   type ResearchDeliverableSpec,
   type ResearchSource,
   type ResearchSourceRequest,
@@ -33,8 +39,10 @@ import { cn } from '@shared/lib/utils';
 import { useModelStore } from '@shared/stores/model-store';
 import { estimateResearchCredits } from '@/lib/billing/credit-estimates';
 import { ResearchPlan } from './ResearchPlan';
+import { useResearchRunAction } from './research-run-controls';
 import type { MessageResearchState } from '@shared/stores/web-chat-store';
 import { useUiTranslation } from '@agiworkforce/ui';
+import { isResearchGuidanceStep } from '../../utils/research-plan';
 
 function formatElapsed(ms: number): string {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
@@ -48,10 +56,13 @@ const PHASE_FALLBACK_LABELS: Record<MessageResearchState['phase'], string> = {
   awaiting_approval: 'Review the plan to start searching',
   searching: 'Searching the web',
   synthesizing: 'Writing report',
+  paused: 'Research paused',
   complete: 'Research complete',
   error: 'Research failed',
   interrupted: 'Research stopped',
 };
+
+const GUIDANCE_STEP_LABEL = 'Your guidance';
 
 const DROPPED_STEP_LABEL = 'Not run';
 
@@ -64,6 +75,22 @@ const STEP_STATUS_LABELS: Record<ResearchStep['status'], string> = {
 };
 
 function PlanStepRow({ step }: { step: ResearchStep }) {
+  if (isResearchGuidanceStep(step)) {
+    return (
+      <li
+        className="flex items-start gap-2 py-1"
+        data-testid="research-plan-step"
+        data-status={step.status}
+        data-kind="guidance"
+      >
+        <MessageSquare className="mt-[2px] h-3 w-3 shrink-0 text-primary" aria-hidden="true" />
+        <span className="min-w-0 flex-1 leading-snug text-foreground">{step.description}</span>
+        <span className="shrink-0 text-caption uppercase tracking-wide text-muted-foreground">
+          {GUIDANCE_STEP_LABEL}
+        </span>
+      </li>
+    );
+  }
   const Icon =
     step.status === 'completed'
       ? CircleCheck
@@ -154,6 +181,7 @@ const ADD_KIND_LABELS: Record<AddableKind, string> = {
 
 interface ResearchActivityProps {
   research: MessageResearchState;
+  messageId?: string;
   isStreaming: boolean;
   onRetry?: () => void;
   isRetrying?: boolean;
@@ -166,8 +194,18 @@ interface ResearchActivityProps {
   connectorOptions?: readonly ResearchConnectorOption[];
 }
 
+const CONTROL_BUTTON_CLASS = cn(
+  'inline-flex items-center gap-1 min-h-6 rounded-md border border-border/40 px-2 py-0.5 pointer-coarse:min-h-11',
+  'text-caption font-medium text-foreground transition-colors',
+  'hover:border-border hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-60',
+);
+
+const CONTROL_INPUT_CLASS =
+  'min-h-7 min-w-0 flex-1 rounded-md border border-border/40 bg-background px-2 py-1 text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:min-h-11';
+
 export function ResearchActivity({
   research,
+  messageId,
   isStreaming,
   onRetry,
   isRetrying = false,
@@ -212,7 +250,48 @@ export function ResearchActivity({
   const label = research.label || PHASE_FALLBACK_LABELS[research.phase];
   const failed = research.phase === 'error';
   const interrupted = research.phase === 'interrupted';
+  const paused = research.phase === 'paused';
   const complete = research.phase === 'complete';
+
+  const runAction = useResearchRunAction();
+  const controllable = Boolean(runAction && messageId);
+  const steerable =
+    controllable &&
+    isStreaming &&
+    (research.phase === 'planning' || research.phase === 'searching');
+  const [pauseRequested, setPauseRequested] = useState(false);
+  const [steerOpen, setSteerOpen] = useState(false);
+  const [steerDraft, setSteerDraft] = useState('');
+  const [steerQueued, setSteerQueued] = useState(false);
+  const [resumeGuidance, setResumeGuidance] = useState('');
+
+  const requestPause = async () => {
+    if (!runAction || !messageId) return;
+    setPauseRequested(true);
+    if (!(await runAction(messageId, { kind: 'pause' }))) setPauseRequested(false);
+  };
+
+  const submitSteer = async () => {
+    const guidance = steerDraft.trim();
+    if (!guidance || !runAction || !messageId) return;
+    setSteerQueued(true);
+    setSteerOpen(false);
+    if (await runAction(messageId, { kind: 'steer', guidance })) {
+      setSteerDraft('');
+      return;
+    }
+    setSteerQueued(false);
+    setSteerOpen(true);
+  };
+
+  const resume = () => {
+    if (!runAction || !messageId) {
+      onRetry?.();
+      return;
+    }
+    const guidance = resumeGuidance.trim();
+    void runAction(messageId, guidance ? { kind: 'resume', guidance } : { kind: 'resume' });
+  };
 
   const counts: string[] = [];
   if (typeof research.searches === 'number' && research.searches > 0) {
@@ -301,15 +380,20 @@ export function ResearchActivity({
 
   const steps = research.steps ?? [];
   const awaitingApproval = research.phase === 'awaiting_approval';
-  const canRetry = Boolean(onRetry) && (failed || interrupted);
+  const canRetry = Boolean(onRetry) && failed;
+  const canResume = (Boolean(onRetry) || controllable) && (interrupted || paused) && !isStreaming;
   const canDecide = Boolean(onPlanDecision) && awaitingApproval && !isStreaming;
+  const showSteerInput = steerable && steerOpen;
+  const showSteerQueued = steerable && steerQueued;
+  const showResumeGuidance = canResume && controllable;
+  const controlRows = showSteerInput || showSteerQueued || showResumeGuidance;
 
   return (
     <div className="mb-3">
       <div
         className={cn(
           'flex items-center gap-2 rounded-lg border px-3 py-2 text-xs',
-          steps.length > 0 && 'rounded-b-none border-b-0',
+          (steps.length > 0 || controlRows) && 'rounded-b-none border-b-0',
           failed
             ? 'border-destructive/30 bg-destructive/5 text-danger'
             : 'border-border/30 bg-muted/20 text-muted-foreground',
@@ -322,6 +406,8 @@ export function ResearchActivity({
           <CircleAlert className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
         ) : interrupted ? (
           <CircleStop className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+        ) : paused ? (
+          <CirclePause className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
         ) : complete ? (
           <CircleCheck className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
         ) : awaitingApproval ? (
@@ -340,16 +426,55 @@ export function ResearchActivity({
         <span className="ml-auto flex shrink-0 items-center gap-2 tabular-nums">
           {counts.length > 0 && <span>{counts.join(' · ')}</span>}
           {liveElapsed > 0 && <span>{formatElapsed(liveElapsed)}</span>}
+          {steerable && (
+            <>
+              <button
+                type="button"
+                onClick={() => setSteerOpen((open) => !open)}
+                disabled={pauseRequested}
+                className={CONTROL_BUTTON_CLASS}
+                aria-expanded={steerOpen}
+                data-testid="research-steer"
+              >
+                <MessageSquarePlus className="h-3 w-3" aria-hidden="true" />
+                Steer
+              </button>
+              <button
+                type="button"
+                onClick={() => void requestPause()}
+                disabled={pauseRequested || steerQueued}
+                className={CONTROL_BUTTON_CLASS}
+                data-testid="research-pause"
+                aria-label={
+                  pauseRequested
+                    ? 'Pausing after the current step'
+                    : 'Pause this research after the current step'
+                }
+              >
+                <Pause className="h-3 w-3" aria-hidden="true" />
+                {pauseRequested ? 'Pausing…' : 'Pause'}
+              </button>
+            </>
+          )}
+          {canResume && !showResumeGuidance && (
+            <button
+              type="button"
+              onClick={resume}
+              disabled={isRetrying}
+              className={CONTROL_BUTTON_CLASS}
+              data-testid="research-resume"
+              aria-label="Resume this research from where it stopped"
+            >
+              <Play className="h-3 w-3" aria-hidden="true" />
+              {isRetrying ? 'Resuming…' : 'Resume'}
+            </button>
+          )}
           {canRetry && (
             <button
               type="button"
               onClick={onRetry}
               disabled={isRetrying}
-              className={cn(
-                'inline-flex items-center gap-1 min-h-6 rounded-md border border-border/40 px-2 py-0.5',
-                'text-caption font-medium text-foreground transition-colors',
-                'hover:border-border hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-60',
-              )}
+              className={CONTROL_BUTTON_CLASS}
               data-testid="research-retry"
               aria-label="Retry this research run"
             >
@@ -362,6 +487,88 @@ export function ResearchActivity({
           )}
         </span>
       </div>
+
+      {showSteerInput && (
+        <form
+          className={cn(
+            'flex flex-col gap-2 border border-t-0 border-border/30 bg-muted/10 px-3 py-2 text-xs sm:flex-row sm:items-center',
+            steps.length === 0 && !showSteerQueued && 'rounded-b-lg',
+          )}
+          onSubmit={(event) => {
+            event.preventDefault();
+            void submitSteer();
+          }}
+          data-testid="research-steer-form"
+        >
+          <input
+            type="text"
+            value={steerDraft}
+            onChange={(event) => setSteerDraft(event.target.value)}
+            maxLength={RESEARCH_GUIDANCE_MAX_CHARS}
+            placeholder="Add a focus, a question or a source to cover"
+            className={CONTROL_INPUT_CLASS}
+            aria-label="Guidance for the rest of this research"
+            data-testid="research-steer-input"
+          />
+          <button
+            type="submit"
+            disabled={steerDraft.trim().length === 0}
+            className={CONTROL_BUTTON_CLASS}
+            data-testid="research-steer-send"
+          >
+            Send
+          </button>
+        </form>
+      )}
+
+      {showSteerQueued && (
+        <p
+          className={cn(
+            'border border-t-0 border-border/30 bg-muted/10 px-3 py-2 text-xs text-muted-foreground',
+            steps.length === 0 && 'rounded-b-lg',
+          )}
+          aria-live="polite"
+          data-testid="research-steer-queued"
+        >
+          Your guidance is applied when the current step finishes, and the plan updates to follow
+          it.
+        </p>
+      )}
+
+      {showResumeGuidance && (
+        <form
+          className={cn(
+            'flex flex-col gap-2 border border-t-0 border-border/30 bg-muted/10 px-3 py-2 text-xs sm:flex-row sm:items-center',
+            steps.length === 0 && 'rounded-b-lg',
+          )}
+          onSubmit={(event) => {
+            event.preventDefault();
+            resume();
+          }}
+          data-testid="research-resume-form"
+        >
+          <input
+            type="text"
+            value={resumeGuidance}
+            onChange={(event) => setResumeGuidance(event.target.value)}
+            maxLength={RESEARCH_GUIDANCE_MAX_CHARS}
+            placeholder="Add guidance for the rest of the research (optional)"
+            className={CONTROL_INPUT_CLASS}
+            aria-label="Guidance for the rest of this research, optional"
+            data-testid="research-resume-guidance"
+          />
+          <button
+            type="submit"
+            disabled={isRetrying}
+            className={CONTROL_BUTTON_CLASS}
+            data-testid="research-resume"
+            aria-label="Resume this research from where it stopped"
+          >
+            <Play className="h-3 w-3" aria-hidden="true" />
+            {isRetrying ? 'Resuming…' : 'Resume'}
+          </button>
+        </form>
+      )}
 
       {canDecide && (
         <div

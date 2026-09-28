@@ -1,3 +1,4 @@
+import { addCsrfHeaders } from '@/lib/client/csrf';
 import type { StudyLevel, StudyMode, StudySession } from '../lib/study-session';
 
 export interface StudyApi {
@@ -42,7 +43,7 @@ export const studyApi: StudyApi = {
     const response = await fetch(ENDPOINT, {
       method: 'POST',
       credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
+      headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(input),
     });
     return (await readJson<{ session: StudySession }>(response)).session;
@@ -51,7 +52,7 @@ export const studyApi: StudyApi = {
     const response = await fetch(ENDPOINT, {
       method: 'DELETE',
       credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
+      headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ conversationId }),
     });
     return (await readJson<{ session: StudySession }>(response)).session;

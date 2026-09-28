@@ -14,6 +14,7 @@ import {
   evaluateModelEnvironment,
   PROVIDER_DISPLAY,
   type ModelAvailability,
+  type DeveloperReasoningEffort,
   type ModelSpeed,
   type ProviderId,
   type EnvironmentAvailability,
@@ -321,6 +322,32 @@ export function describeModelSwitchLosses(fromModelId: string, toModelId: string
     );
   }
   return losses;
+}
+
+const DEVELOPER_EFFORTS: readonly DeveloperReasoningEffort[] = ['low', 'medium', 'high', 'max'];
+
+export function registryEffortLevels(modelId: string): DeveloperReasoningEffort[] | null {
+  const reasoning = getModelMetadataById(modelId)?.reasoning;
+  if (reasoning === undefined) return null;
+  if (!reasoning.capable) return [];
+  const supported = reasoning.supportedEfforts;
+  if (supported === undefined) return null;
+  return DEVELOPER_EFFORTS.filter((effort) => supported.includes(effort));
+}
+
+export function supportedEffort(
+  modelId: string,
+  effort: DeveloperReasoningEffort,
+): DeveloperReasoningEffort {
+  const levels = registryEffortLevels(modelId);
+  if (levels === null || levels.length === 0 || levels.includes(effort)) return effort;
+  const wanted = DEVELOPER_EFFORTS.indexOf(effort);
+  return levels.reduce((best, level) =>
+    Math.abs(DEVELOPER_EFFORTS.indexOf(level) - wanted) <
+    Math.abs(DEVELOPER_EFFORTS.indexOf(best) - wanted)
+      ? level
+      : best,
+  );
 }
 
 export interface ModelProviderInfo {

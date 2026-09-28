@@ -107,6 +107,9 @@ pub struct DefaultConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reasoning_effort: Option<String>,
 
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub keep_history: Option<bool>,
+
     /// Permission posture applied when no flag or client names one:
     /// `default`, `plan`, `acceptEdits` or `dontAsk`.
     ///
@@ -186,6 +189,7 @@ impl DefaultConfig {
             fallback_chain: Vec::new(),
             fast_model: None,
             reasoning_effort: None,
+            keep_history: None,
             permission_mode: None,
             sandbox_mode: None,
             review_model: None,
@@ -679,6 +683,9 @@ impl CliConfig {
         if other.default.reasoning_effort.is_some() {
             self.default.reasoning_effort = other.default.reasoning_effort.clone();
         }
+        if other.default.keep_history.is_some() {
+            self.default.keep_history = other.default.keep_history;
+        }
         if other.default.permission_mode.is_some() {
             self.default.permission_mode = other.default.permission_mode.clone();
         }
@@ -911,6 +918,9 @@ impl CliConfig {
                 self.default.fallback_chain.join(" -> ")
             ));
         }
+        if let Some(keep) = self.default.keep_history {
+            out.push_str(&format!("Keep session history: {}\n", keep));
+        }
         if let Some(ref fast) = self.default.fast_model {
             out.push_str(&format!("Fast model: {}\n", fast));
         }
@@ -1030,6 +1040,7 @@ impl CliConfig {
                 }
             }
             "fast-model" => self.default.fast_model.clone(),
+            "history" | "keep-history" => self.default.keep_history.map(|keep| keep.to_string()),
             "output-style" | "ui.output-style" | "ui.output_style" => self.ui.output_style.clone(),
             "privacy-mode" | "ui.privacy-mode" | "ui.privacy_mode" => self.ui.privacy_mode.clone(),
             "edit-mode" | "ui.edit-mode" | "ui.edit_mode" => self.ui.edit_mode.clone(),
@@ -1090,6 +1101,14 @@ impl CliConfig {
                     .map(|s| s.trim().to_string())
                     .filter(|s| !s.is_empty())
                     .collect();
+            }
+            "history" | "keep-history" => {
+                self.default.keep_history = Some(
+                    value
+                        .trim()
+                        .parse::<bool>()
+                        .context("history must be true or false")?,
+                );
             }
             "fast-model" => {
                 self.default.fast_model = if value.is_empty() {

@@ -39,18 +39,18 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1756`, `apps/mobile/sr
 ## S31.03: Presentation to PDF conversion.
 
 - Done when: The user can turn a slide deck into a PDF with one page per slide.
-- Wave: 3
+- Wave: 2
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | By prompt, code execution (python-pptx, reportlab) can write one PDF page per slide with its text and pictures, but no sandbox renders slide layout (no LibreOffice), so a faithful page-per-slide conversion needs a rendering service. | handler |
-| desktop | partial | By prompt, code execution (python-pptx, reportlab) can write one PDF page per slide with its text and pictures, but no sandbox renders slide layout (no LibreOffice), so a faithful page-per-slide conversion needs a rendering service. | handler |
+| web | partial | renders slides to PDF in the E2B sandbox with LibreOffice once AGI_E2B_EXECUTION is on; the public code-interpreter-v1 template has no LibreOffice, so the owner builds agi-office-interpreter with apps/web/scripts/build-e2b-office-template.mjs and sets AGI_E2B_CHAT_TEMPLATE=agi-office-interpreter | flag-off |
+| desktop | partial | renders slides to PDF in the E2B sandbox with LibreOffice once AGI_E2B_EXECUTION is on; the public code-interpreter-v1 template has no LibreOffice, so the owner builds agi-office-interpreter with apps/web/scripts/build-e2b-office-template.mjs and sets AGI_E2B_CHAT_TEMPLATE=agi-office-interpreter | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/server/container-files.ts:196-196`
+Code: `apps/web/scripts/build-e2b-office-template.mjs:21-21`, `apps/web/lib/e2b/chat-template.ts:3-3`, `apps/web/lib/e2b/runtime.ts:801-801`, `apps/web/lib/e2b/execution-tools.ts:30-30`
 
 ## S31.04: PDF summarization.
 

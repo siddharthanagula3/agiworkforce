@@ -90,9 +90,8 @@ Code: `apps/mobile/app/(app)/chat/[id].tsx:1186-1192`, `apps/mobile/app/(app)/ch
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Publish, copy link and share link work, but mobile has no way to unpublish an artifact or choose who can open it (workspace vs anyone). | ui |
-| vscode | partial | VS Code can only open an already-published artifact's link; it cannot publish, copy the link, change the audience or unpublish. | ui |
 
-Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:405-418`, `apps/mobile/src/features/chat/services/artifactPublishing.ts:13-25`, `apps/extension-vscode/package.json:597-600`, `apps/extension-vscode/src/features/artifacts/artifactActions.ts:151-155`
+Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:405-418`, `apps/mobile/src/features/chat/services/artifactPublishing.ts:13-25`
 
 ## S10.11: Publish generated application.
 
@@ -253,13 +252,13 @@ Code: `apps/web/app/api/plugins/updates/route.ts:26-64`, `apps/web/lib/services/
 
 - Done when: An import dialog takes a skill file or package and adds a usable skill.
 - Wave: 2
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Upload skill and Import a SKILL.md create a personal skill, which fails unless AGI_USER_SKILL_AUTHORING=1 (default 0) though the Upload button is always shown; uploading a plugin zip works as the unflagged route. | flag-off |
 | desktop | partial | Upload skill and Import a SKILL.md create a personal skill, which fails unless AGI_USER_SKILL_AUTHORING=1 (default 0) though the Upload button is always shown; uploading a plugin zip works as the unflagged route. | flag-off |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | No import command: skills are added by copying files into a skills folder; only the Claude migration imports skills. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
@@ -285,30 +284,26 @@ Code: `apps/web/features/skills/components/SkillEditorDialog.tsx:185-200`, `apps
 
 - Done when: Switching to a model that cannot handle the conversation (images, tools, context) warns and asks before switching.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | Warn what a new model cannot do (images, tools, context); today the only switch check refuses a model outside the chat's trust boundary. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/extension-vscode/src/core/commandSetup.ts:1129-1132`
 
 ## S10.27: Context-limit warning.
 
 - Done when: As a conversation nears or passes the model's context limit, the user gets a clear warning with what to do (trim, compact, new chat).
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Only the on-device Apple Intelligence path explains an over-long chat, after it fails; warn before sending, for every model. | states |
-| vscode | partial | Near the limit the token counter only changes colour (75% / 90%); add a text warning that is also announced. | states |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:584-584`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:3329-3329`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:3312-3312`
+Code: `apps/mobile/stores/chat/chatExecutionStore.ts:584-584`
 
 ## S10.29: Credit-purchase dialog.
 

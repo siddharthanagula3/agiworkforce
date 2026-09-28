@@ -459,6 +459,7 @@ function DirectorySectionPanel({
               {...(adapter.trySkillInChat
                 ? { onTryInChat: () => adapter.trySkillInChat?.(detail.id) }
                 : {})}
+              {...(adapter.openConnector ? { onOpenConnector: adapter.openConnector } : {})}
               busy={busy}
             />
           </>

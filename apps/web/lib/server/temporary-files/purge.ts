@@ -3,6 +3,7 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { deleteStoredMediaObjects } from '@/lib/server/media-storage';
 import { countHeldRows, legalHoldExclusion } from '@/lib/services/legal-hold-gate';
+import { purgeDerivedRecords } from '@/lib/resources/purge-soft-deleted';
 import { TEMPORARY_FILE_PURGE_BATCH, temporaryFileCutoff } from './retention';
 
 const PG_UNDEFINED_TABLE = '42P01';
@@ -78,14 +79,19 @@ export async function purgeTemporaryChatFiles(
         alias: 'target',
         nextParamIndex: 2,
       });
-      const rows = await db.query<{ id: string }>(
+      const rows = await db.query<{ id: string; user_id: string }>(
         `delete from public.media_assets target
           where target.id = any($1::uuid[]) and target.temporary_chat
             and ${purgeExclusion.sql}
-          returning target.id`,
+          returning target.id, target.user_id`,
         [purgeableIds, ...purgeExclusion.params],
       );
       purged = rows.length;
+      await purgeDerivedRecords(
+        db,
+        'media_assets',
+        rows.map((row) => ({ owner: row.user_id, key: String(row.id) })),
+      );
     }
 
     return {

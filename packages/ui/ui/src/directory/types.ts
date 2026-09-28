@@ -152,6 +152,11 @@ export interface DirectorySkillDetail {
   publisher?: string;
   description: string;
   license?: string;
+  provenance?: string;
+  addedAt?: string;
+  version?: string;
+  requiredTools?: readonly string[];
+  requiredConnectors?: readonly DirectoryPluginConnectorSetting[];
   files: readonly DirectoryDetailFile[];
   readFile?: (path: string) => Promise<string>;
   editable?: boolean;

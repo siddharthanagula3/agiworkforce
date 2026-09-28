@@ -226,23 +226,23 @@ describe('ComposerFooter · plan claims wait for billing readiness', () => {
     expect(premiumRowLabel()).toBe('Premium Model');
   });
 
-  it('shows only the expanded Free section for a signed-out visitor', () => {
+  it('expands the Free section and marks paid models Upgrade to use for a signed-out visitor', () => {
     billingState.unauthenticated = true;
 
     render(<ComposerFooter />);
 
-    expect(premiumRowLabel()).toBe('');
     expect(screen.getByRole('button', { name: 'Free' })).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByRole('button', { name: /Free Router/i })).toBeVisible();
+    expect(premiumRowLabel()).toBe('Premium Model - Upgrade to use, Pro');
   });
 
-  it('shows only the expanded Free section once the free plan is confirmed', () => {
+  it('expands the Free section and marks paid models Upgrade to use on the free plan', () => {
     billingState.subscription = { tier: 'free' };
 
     render(<ComposerFooter />);
 
-    expect(premiumRowLabel()).toBe('');
     expect(screen.getByRole('button', { name: 'Free' })).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByRole('button', { name: /Free Router/i })).toBeVisible();
+    expect(premiumRowLabel()).toBe('Premium Model - Upgrade to use, Pro');
   });
 });

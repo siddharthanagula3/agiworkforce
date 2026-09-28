@@ -22,17 +22,6 @@ nothing is left.
 
 Code: `apps/web/features/chat/components/Composer/ModelCatalogue.tsx:64-64`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:3611-3623`, `apps/mobile/src/features/model-picker/components/ModelRow.tsx:166-170`, `apps/mobile/services/streaming.ts:167-167`
 
-## S76.05: High-resolution image inspection.
-
-- Done when: The registry records which models support high-detail image inspection and the product requests high detail where supported.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| api | partial | detailValues (low/high/original) is recorded for three models but nothing reads it; images are always sent without a detail level, so high-resolution inspection is never requested. | handler, ui |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration.ts:440-445`
-
 ## S76.06: Native PDF/document input.
 
 - Done when: The registry records native PDF input per model and PDFs go natively to models that accept them.
@@ -192,18 +181,6 @@ Code: `apps/web/features/chat/components/Voice/VoiceModeSurface.tsx:82-85`, `app
 | api | partial | json_object is enforced by a system directive for every model; the registry structuredOutput flag only sets a task-family quality floor and is never used to pick native JSON mode. | handler |
 
 Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:386-389`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:3628-3630`, `packages/ai/model-registry/catalog/routing-policies.json:358-359`
-
-## S76.26: Reasoning-effort controls.
-
-- Done when: The registry records per-model reasoning-effort levels and each surface offers and sends only those levels.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | The effort picker is shown per provider (PROVIDER_DISPLAY.supportsEffort), not from each model's registry effort levels. | ui |
-
-Code: `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:678-686`
 
 ## S76.28: Context-window limit.
 
