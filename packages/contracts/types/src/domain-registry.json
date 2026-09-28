@@ -436,6 +436,7 @@
       "concepts": ["artifact"],
       "tables": [
         "organization_shared_artifacts",
+        "published_artifact_storage",
         "published_artifact_versions",
         "published_artifacts",
         "web_artifact_index",
