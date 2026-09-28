@@ -11,6 +11,7 @@ import {
   DialogTitle,
   Spinner,
   cn,
+  translateUiPlural,
 } from '@agiworkforce/ui';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
@@ -231,17 +232,25 @@ export function ImportMemoryDialog({ open, onOpenChange, onImported }: ImportMem
 
   const doneSummary = useMemo(() => {
     if (!commitResult) return '';
-    const count = commitResult.insertedCount;
-    const noun = count === 1 ? 'memory' : 'memories';
-    return `Imported ${count} ${noun} from ${commitResult.sourceName}.`;
+    return translateUiPlural(
+      'settings',
+      'counts.importedMemories',
+      commitResult.insertedCount,
+      {
+        one: 'Imported {{count}} memory from {{source}}.',
+        other: 'Imported {{count}} memories from {{source}}.',
+      },
+      { source: commitResult.sourceName },
+    );
   }, [commitResult]);
 
   const excludedSummary = useMemo(() => {
     const count = commitResult?.excludedCount ?? 0;
     if (count === 0) return null;
-    const noun = count === 1 ? 'memory' : 'memories';
-    const verb = count === 1 ? 'was' : 'were';
-    return `${count} ${noun} matched a term on your never remember list and ${verb} not saved.`;
+    return translateUiPlural('settings', 'counts.excludedMemories', count, {
+      one: '{{count}} memory matched a term on your never remember list and was not saved.',
+      other: '{{count}} memories matched a term on your never remember list and were not saved.',
+    });
   }, [commitResult]);
 
   return (

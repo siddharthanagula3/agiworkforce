@@ -1,4 +1,4 @@
-
+import { translateUi, translateUiPlural } from '@agiworkforce/ui';
 import type { ThinkingStep } from './types';
 
 function bucketStep(type: ThinkingStep['type']): string {
@@ -28,25 +28,52 @@ function bucketStep(type: ThinkingStep['type']): string {
 }
 
 function phraseFor(bucket: string, count: number): string {
-  const n = count === 1;
   switch (bucket) {
     case 'command':
-      return n ? 'ran a command' : `ran ${count} commands`;
+      return translateUiPlural('chat', 'counts.toolSummaryCommands', count, {
+        one: 'ran a command',
+        other: 'ran {{count}} commands',
+      });
     case 'file write':
-      return n ? 'created a file' : `created ${count} files`;
+      return translateUiPlural('chat', 'counts.toolSummaryCreatedFiles', count, {
+        one: 'created a file',
+        other: 'created {{count}} files',
+      });
     case 'file read':
-      return n ? 'read a file' : `read ${count} files`;
+      return translateUiPlural('chat', 'counts.toolSummaryReadFiles', count, {
+        one: 'read a file',
+        other: 'read {{count}} files',
+      });
     case 'search':
-      return n ? 'searched' : `searched ${count} times`;
+      return translateUiPlural('chat', 'counts.stepSearches', count, {
+        one: 'searched',
+        other: 'searched {{count}} times',
+      });
     case 'web request':
-      return n ? 'fetched a URL' : `fetched ${count} URLs`;
+      return translateUiPlural('chat', 'counts.stepFetchedUrls', count, {
+        one: 'fetched a URL',
+        other: 'fetched {{count}} URLs',
+      });
     case 'thinking':
-      return n ? 'reasoned' : `reasoned ${count} times`;
+      return translateUiPlural('chat', 'counts.stepReasoned', count, {
+        one: 'reasoned',
+        other: 'reasoned {{count}} times',
+      });
     case 'tool':
-      return n ? 'used a tool' : `used ${count} tools`;
+      return translateUiPlural('chat', 'counts.stepUsedTools', count, {
+        one: 'used a tool',
+        other: 'used {{count}} tools',
+      });
     default:
-      return n ? `1 step` : `${count} steps`;
+      return stepCount(count);
   }
+}
+
+function stepCount(count: number): string {
+  return translateUiPlural('chat', 'counts.steps', count, {
+    one: '{{count}} step',
+    other: '{{count}} steps',
+  });
 }
 
 /**
@@ -72,15 +99,29 @@ export function buildCompactSummary(steps: ThinkingStep[]): string {
 
   if (order.length === 0) {
     const workCount = steps.filter((s) => s.type !== 'done' && s.type !== 'complete').length;
-    return workCount > 0 ? `${workCount} step${workCount !== 1 ? 's' : ''}` : 'Thinking';
+    return workCount > 0
+      ? stepCount(workCount)
+      : translateUi('chat', 'toolSummary.thinking', 'Thinking');
   }
 
   const phrases = order.map((b) => phraseFor(b, counts[b]!));
 
   if (phrases.length === 1) return capitalise(phrases[0]!);
-  if (phrases.length === 2) return capitalise(`${phrases[0]} and ${phrases[1]}`);
+  if (phrases.length === 2) {
+    return capitalise(
+      translateUi('chat', 'toolSummary.pair', '{{first}} and {{second}}', {
+        first: phrases[0],
+        second: phrases[1],
+      }),
+    );
+  }
   const last = phrases.pop()!;
-  return capitalise(`${phrases.join(', ')}, and ${last}`);
+  return capitalise(
+    translateUi('chat', 'toolSummary.list', '{{items}}, and {{last}}', {
+      items: phrases.join(', '),
+      last,
+    }),
+  );
 }
 
 function capitalise(s: string): string {

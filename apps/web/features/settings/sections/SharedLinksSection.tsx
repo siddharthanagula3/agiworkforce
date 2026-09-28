@@ -17,6 +17,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  translateUiPlural,
 } from '@agiworkforce/ui';
 import { toUserMessage } from '@/lib/user-error-message';
 import { HelpArticleLink } from '@/features/support/components/HelpArticleLink';
@@ -207,7 +208,11 @@ export function SharedLinksSection() {
                   <div
                     style={{ marginTop: 'var(--space-1)', color: 'var(--text-3)', fontSize: 12 }}
                   >
-                    {share.messageCount} {share.messageCount === 1 ? 'message' : 'messages'} ·{' '}
+                    {translateUiPlural('common', 'counts.messages', share.messageCount, {
+                      one: '{{count}} message',
+                      other: '{{count}} messages',
+                    })}{' '}
+                    ·{' '}
                     {share.visibility === 'organization'
                       ? 'Workspace only'
                       : 'Anyone with the link'}{' '}

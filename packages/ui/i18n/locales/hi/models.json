@@ -83,5 +83,9 @@
     "thinkingState": "थिंकिंग: {{state}}",
     "unavailable": "अनुपलब्ध",
     "visionCapability": "विज़न"
+  },
+  "counts": {
+    "concurrentAnswers_one": "आपका प्लान एक साथ {{count}} जवाब चलाता है, इसलिए बाकी तभी शुरू होते हैं जब कोई एक पूरा होता है।",
+    "concurrentAnswers_other": "आपका प्लान एक साथ {{count}} जवाब चलाता है, इसलिए बाकी तभी शुरू होते हैं जब कोई एक पूरा होता है।"
   }
 }

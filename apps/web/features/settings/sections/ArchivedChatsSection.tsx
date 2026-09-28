@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useConfirm, useUiTranslation } from '@agiworkforce/ui';
+import { useConfirm, useUiTranslation, translateUiPlural } from '@agiworkforce/ui';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { toWebConversation } from '@/lib/hooks/useConversations';
 import {
@@ -177,9 +177,10 @@ export function ArchivedChatsSection() {
       setConversations([]);
       setHasMore(false);
       setNotice(
-        affectedCount === 1
-          ? 'Deleted 1 archived chat.'
-          : `Deleted ${affectedCount} archived chats.`,
+        translateUiPlural('settings', 'counts.deletedArchivedChats', affectedCount, {
+          one: 'Deleted {{count}} archived chat.',
+          other: 'Deleted {{count}} archived chats.',
+        }),
       );
     } catch (caught) {
       setError(toUserMessage(caught, 'Failed to delete archived chats'));

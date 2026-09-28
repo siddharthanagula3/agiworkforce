@@ -27,7 +27,7 @@ import { artifactDownloadFile } from '../lib/artifact-download';
 import { SCRIPTS_BLOCKED_NOTICE } from '../lib/artifact-preview-capability';
 import { toUserMessage } from '../lib/network-error';
 import { useSameDocumentScriptSupport } from '../hooks/useSameDocumentScriptSupport';
-import { Button, useConfirmAction, useMenuKeyboard } from '@agiworkforce/ui';
+import { Button, translateUiPlural, useConfirmAction, useMenuKeyboard } from '@agiworkforce/ui';
 import type { Artifact } from '../lib/types';
 import { ChartArtifact } from './artifact-components/ChartArtifact';
 import { ReactPreview } from './artifact-components/ReactPreview';
@@ -211,8 +211,13 @@ function CodeView({ content }: { content: string }) {
         {hiddenLineCount > 0 && (
           <div className="flex items-center gap-3 border-t border-[var(--chat-border)] px-4 py-2">
             <span className="text-caption text-[var(--chat-text-muted)]">
-              {hiddenLineCount.toLocaleString()} more {hiddenLineCount === 1 ? 'line' : 'lines'} not
-              shown
+              {translateUiPlural(
+                'chat',
+                'counts.hiddenLines',
+                hiddenLineCount,
+                { one: '{{lines}} more line not shown', other: '{{lines}} more lines not shown' },
+                { lines: hiddenLineCount.toLocaleString() },
+              )}
             </span>
             <button
               type="button"

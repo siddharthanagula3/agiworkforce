@@ -19,6 +19,7 @@ import {
   Checkbox,
   Input,
   Spinner,
+  translateUiPlural,
 } from '@agiworkforce/ui';
 import {
   Form,
@@ -54,8 +55,13 @@ const DEFAULT_PROJECT_LABEL = 'Default project';
 
 function keyUsageLabel(usage: DeveloperUsageFigures | undefined): string {
   if (!usage || usage.requests + usage.unsettledRequests === 0) return 'No requests this month';
-  const requests =
-    usage.requests === 1 ? '1 request' : `${usage.requests.toLocaleString()} requests`;
+  const requests = translateUiPlural(
+    'settings',
+    'counts.usageRequests',
+    usage.requests,
+    { one: '{{value}} request', other: '{{value}} requests' },
+    { value: usage.requests.toLocaleString() },
+  );
   return `This month: ${requests}, ${formatCredits(usage.credits, { maximumFractionDigits: 2 })}`;
 }
 
