@@ -86,7 +86,7 @@ async function handlePull(request: NextRequest) {
     const [conversations, messages, artifacts] = await Promise.all([
       db.query<ConversationDelta>(
         `
-        select id, title, model, project_id, pinned,
+        select id, title, model, project_id, pinned, starred, archived,
                active_leaf_message_id::text as active_leaf_message_id,
                created_at, updated_at, deleted_at, server_version
         from web_conversations
@@ -594,6 +594,7 @@ async function handlePush(request: NextRequest) {
                    case when current.id is null then null else jsonb_build_object(
                      'id', current.id::text, 'title', current.title, 'model', current.model,
                      'project_id', current.project_id, 'pinned', current.pinned,
+                     'starred', current.starred, 'archived', current.archived,
                      'active_leaf_message_id', current.active_leaf_message_id::text,
                      'created_at', current.created_at, 'updated_at', current.updated_at,
                      'deleted_at', current.deleted_at,
