@@ -14,6 +14,7 @@ import {
   isVoiceSessionActive,
   VOICE_SESSION_EVENT,
   VOICE_SESSION_STATUS,
+  type VoiceOrbLevelSource,
   type VoiceSessionState,
 } from '@agiworkforce/unified-chat';
 import {
@@ -25,6 +26,7 @@ import {
   type LiveSessionClosed,
   type LiveTranscriptTurn,
   type LiveVoiceToolActivity,
+  type LiveVoiceToolOutcome,
 } from '@features/chat/lib/live-voice-session';
 
 const MESSAGE = {
@@ -66,6 +68,8 @@ export interface VoiceSessionController {
   backendBusy: boolean;
   toolActivity: readonly LiveVoiceToolActivity[];
   toolApprovals: readonly LiveVoicePendingApproval[];
+  toolOutcomes: readonly LiveVoiceToolOutcome[];
+  audioLevel: VoiceOrbLevelSource;
   decideToolApproval: (callId: string, decision: LiveVoiceToolDecision) => void;
   cancelBackendWork: () => void;
   reconnecting: boolean;
@@ -97,6 +101,12 @@ const UNRECOVERABLE_START_CODES = new Set([
   'microphone_unavailable',
   'unsupported',
 ]);
+
+const voiceLevel: VoiceOrbLevelSource = {
+  get current() {
+    return controller.session?.level ?? 0;
+  },
+};
 
 const controller = {
   session: null as LiveVoiceSession | null,
@@ -379,7 +389,9 @@ function startLiveVoiceSession(settings: LiveVoiceStartSettings): Promise<LiveVo
           onSpeaking: (speaking) =>
             store.dispatch({ type: VOICE_SESSION_EVENT.assistantSpeech, active: speaking }),
           onBackendBusy: store.setBackendBusy,
+          onToolActivity: store.setToolActivity,
           onToolApprovals: store.setToolApprovals,
+          onToolResult: store.addToolOutcome,
           onTranscript: deliverTranscript,
           onUsage: () => undefined,
           onClosed: (closed) => {
@@ -468,6 +480,7 @@ export function useVoiceSession({
   const pace = useVoiceSessionStore((store) => store.pace);
   const backendBusy = useVoiceSessionStore((store) => store.backendBusy);
   const toolActivity = useVoiceSessionStore((store) => store.toolActivity);
+  const toolOutcomes = useVoiceSessionStore((store) => store.toolOutcomes);
   const toolApprovals = useVoiceSessionStore((store) => store.toolApprovals);
   const dispatch = useVoiceSessionStore((store) => store.dispatch);
   const reducedMotion = usePrefersReducedMotion();
@@ -603,6 +616,8 @@ export function useVoiceSession({
     deviceName,
     backendBusy,
     toolActivity,
+    toolOutcomes,
+    audioLevel: voiceLevel,
     toolApprovals,
     decideToolApproval,
     cancelBackendWork,

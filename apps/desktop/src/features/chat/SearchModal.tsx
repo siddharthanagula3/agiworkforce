@@ -19,6 +19,7 @@ import {
 } from '../../services/managedCloudRequestContext';
 import { selectHasCloudAccountSession, useAuthStore } from '../../stores/auth';
 import { isTauri } from '../../lib/runtimeEnvironment';
+import { useUiTranslation } from '@agiworkforce/ui';
 
 type ResultType = 'chat' | 'project' | 'library' | 'artifact';
 type FilterTab = 'all' | 'chats' | 'projects' | 'files';
@@ -75,6 +76,7 @@ function ResultIcon({ type, selected }: { type: ResultType; selected: boolean })
 }
 
 export function SearchModal() {
+  const { plural } = useUiTranslation('common');
   const isOpen = useSearchModal((s) => s.isOpen);
   const close = useSearchModal((s) => s.close);
 
@@ -656,7 +658,10 @@ export function SearchModal() {
               </div>
             </div>
             <span>
-              {results.length} result{results.length !== 1 ? 's' : ''}
+              {plural('counts.results', results.length, {
+                one: '{{count}} result',
+                other: '{{count}} results',
+              })}
             </span>
           </div>
         </motion.div>

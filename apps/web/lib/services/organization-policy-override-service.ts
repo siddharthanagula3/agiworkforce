@@ -71,6 +71,10 @@ export async function readApplicablePolicyOverrides(
         where su.organization_id = $1
           and su.linked_user_id = $2
           and su.active
+       union
+       select wm.group_id
+         from public.organization_group_members wm
+        where wm.organization_id = $1 and wm.user_id = $2
      ), member_roles as (
        select r.id
          from public.organization_members m

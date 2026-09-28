@@ -31,6 +31,11 @@ vi.mock('../../hooks/use-workspace-roles', () => ({
   useSetMemberRoles: () => mutation(mocks.setMemberRoles),
   useSetGroupRoles: () => mutation(vi.fn()),
   useSetGroupManagers: () => mutation(vi.fn()),
+  useCreateWorkspaceGroup: () => mutation(vi.fn()),
+  useRenameWorkspaceGroup: () => mutation(vi.fn()),
+  useDeleteWorkspaceGroup: () => mutation(vi.fn()),
+  useSetWorkspaceGroupMembers: () => mutation(vi.fn()),
+  useWorkspaceGroupMembers: () => ({ data: { userIds: [] }, isPending: false, error: null }),
 }));
 
 vi.mock('@/features/settings/hooks/use-settings-queries', () => ({

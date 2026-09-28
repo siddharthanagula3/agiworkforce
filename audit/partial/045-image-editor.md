@@ -44,29 +44,23 @@ nothing is left.
 
 - Done when: User selects a region of the image in the product and only that region is edited.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | No in-app region selector: the user must make a black-and-white mask image elsewhere and attach it; add a select or paint tool that produces the mask. | ui |
-| desktop | partial | No in-app region selector: the user must make a black-and-white mask image elsewhere and attach it; add a select or paint tool that produces the mask. | ui |
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:4767-4771`, `apps/web/features/chat/components/ImageGenerationCard.tsx:697-715`, `apps/web/app/api/media/image/generate/route.ts:594-598`
 
 ## S45.10: Clear selection.
 
 - Done when: User clears the current selection or mask in one action.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Clears only an uploaded mask file ("Remove mask"); there is no in-app selection to clear because no selector exists. | ui |
-| desktop | partial | Clears only an uploaded mask file ("Remove mask"); there is no in-app selection to clear because no selector exists. | ui |
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/ImageGenerationCard.tsx:719-725`, `apps/web/features/chat/components/ImageGenerationCard.tsx:424-429`
 
 ## S45.15: Background removal.
 
@@ -114,16 +108,15 @@ Code: `apps/web/features/chat/components/ImageGenerationCard.tsx:577-580`, `apps
 
 - Done when: User supplies a reference image and the result is composed from it (subject, layout or style carried over).
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | One reference image per request, and only on edit-capable models; no reference slots or reference-strength control. | ui |
-| desktop | partial | One reference image per request, and only on edit-capable models; no reference slots or reference-strength control. | ui |
 | mobile | partial | Exactly one attached photo, only with an edit-capable model; no reference slots. | ui |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:191-195`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:2868-2877`, `packages/contracts/cloud-contracts/src/managed-media.ts:97-99`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:376-381`
+Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:376-381`, `apps/mobile/src/features/chat/actions/resolveMobileImageGenerationRequest.ts:235-243`, `apps/mobile/src/features/chat/actions/runImageGenerationTurn.ts:146-154`
 
 ## S45.31: Preserve-original action.
 

@@ -39,6 +39,11 @@ export interface MemoryCommandReply {
   memories: MemoryCommandMatch[];
 }
 
+export interface MemoryCommandTurnReport {
+  kind: MemoryCommandKind;
+  status: MemoryCommandStatus | 'failed';
+}
+
 export interface MemoryCommandInput {
   executionMode: 'local' | 'cloud';
   message: string;
@@ -166,7 +171,7 @@ function confirmForget(memories: MemoryCommandMatch[], onForget: () => void, onK
 export async function answerMemoryCommand(
   input: MemoryCommandInput,
   report: (step: StatusStep) => void,
-): Promise<void> {
+): Promise<MemoryCommandTurnReport | null> {
   let reply: MemoryCommandReply | null;
   try {
     reply = await runMemoryCommand(input);
@@ -177,9 +182,10 @@ export async function answerMemoryCommand(
         true,
       ),
     );
-    return;
+    const command = parseExplicitMemoryCommand(input.message);
+    return command ? { kind: command.kind, status: 'failed' } : null;
   }
-  if (!reply) return;
+  if (!reply) return null;
 
   if (reply.status === 'confirmation_required') {
     confirmForget(
@@ -187,11 +193,12 @@ export async function answerMemoryCommand(
       () => void answerMemoryCommand({ ...input, confirmed: true }, report),
       () => report(memoryStep(NOTHING_FORGOTTEN_MESSAGE, false)),
     );
-    return;
+    return { kind: reply.kind, status: reply.status };
   }
 
   report(memoryStep(reply.message, reply.status === 'refused'));
   if (input.executionMode === 'cloud' && CHANGED_STATUSES.has(reply.status)) {
     void syncNow().catch(() => undefined);
   }
+  return { kind: reply.kind, status: reply.status };
 }

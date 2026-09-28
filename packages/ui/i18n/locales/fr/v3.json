@@ -166,8 +166,8 @@
     "provenance": "Provenance is preserved",
     "provenanceDesc": "Recipients see which model generated this, no spoofing.",
     "htmlPreview": "HTML preview",
-    "fileCount_one": "{{count}} file",
-    "fileCount_other": "{{count}} files",
+    "fileCount_one": "{{count}} fichier",
+    "fileCount_other": "{{count}} fichiers",
     "mcpManage": "Manage",
     "mcpConnected": "Connected:"
   },
@@ -410,6 +410,8 @@
     "weeksAgo": "{{count}} weeks ago"
   },
   "canvas": {
-    "sessionOnlyNotice": "Les croquis ne durent que le temps de la session, fermer l'application efface le tableau."
+    "sessionOnlyNotice": "Les croquis ne durent que le temps de la session, fermer l'application efface le tableau.",
+    "elementCount_one": "{{count}} élément",
+    "elementCount_other": "{{count}} éléments"
   }
 }

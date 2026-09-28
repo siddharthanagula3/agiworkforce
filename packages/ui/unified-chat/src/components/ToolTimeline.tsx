@@ -7,6 +7,7 @@ import type { ToolCallStatus } from './ToolCallCard';
 import { TaskPhaseTimeline } from './TaskPhaseTimeline';
 import type { ToolLabelEntryWithPhase } from './TaskPhaseTimeline';
 import { cn } from '../lib/utils';
+import { translateUiPlural, useUiTranslation } from '@agiworkforce/ui';
 
 function toToolCallStatus(status: ToolLabelEntry['status']): ToolCallStatus {
   switch (status) {
@@ -40,13 +41,23 @@ interface EntryGroup {
 function formatRunningSummary(entries: ToolLabelEntry[]): string {
   const runningEntries = entries.filter((entry) => entry.status === 'running');
   const latestRunning = runningEntries[runningEntries.length - 1];
-  const toolWord = entries.length === 1 ? 'tool' : 'tools';
-
   if (!latestRunning) {
-    return `Running ${entries.length} ${toolWord}`;
+    return translateUiPlural('chat', 'counts.runningTools', entries.length, {
+      one: 'Running {{count}} tool',
+      other: 'Running {{count}} tools',
+    });
   }
 
-  return `Running ${runningEntries.length}/${entries.length} ${toolWord}: ${latestRunning.displayName}`;
+  return translateUiPlural(
+    'chat',
+    'counts.runningToolsOf',
+    entries.length,
+    {
+      one: 'Running {{running}}/{{count}} tool: {{name}}',
+      other: 'Running {{running}}/{{count}} tools: {{name}}',
+    },
+    { running: runningEntries.length, name: latestRunning.displayName },
+  );
 }
 
 export function ToolTimeline({
@@ -54,6 +65,7 @@ export function ToolTimeline({
   className,
   enablePhaseGrouping = false,
 }: ToolTimelineProps) {
+  const { plural } = useUiTranslation('chat');
   const [isExpanded, setIsExpanded] = useState(false);
   const [userForcedClosed, setUserForcedClosed] = useState(false);
   const hasRunning = entries.some((e) => e.status === 'running');
@@ -145,7 +157,10 @@ export function ToolTimeline({
             </span>
           ) : (
             <>
-              Used {entries.length} tool{entries.length !== 1 ? 's' : ''}
+              {plural('counts.usedTools', entries.length, {
+                one: 'Used {{count}} tool',
+                other: 'Used {{count}} tools',
+              })}
               {errorCount > 0 && (
                 <span className="text-danger-text ml-1">({errorCount} failed)</span>
               )}

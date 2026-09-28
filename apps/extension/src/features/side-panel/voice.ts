@@ -1,6 +1,7 @@
 import { setChild } from '../../dom-helpers';
 import { el } from './dom';
 import { Mic, renderIcon } from '../../assets/icons';
+import { t } from '../../i18n';
 import {
   DICTATION_LANGUAGE_KEY,
   activeDictationLanguage,
@@ -19,32 +20,29 @@ type SpeechRecognitionCtor = new () => {
   stop(): void;
 };
 
-const MICROPHONE_BLOCKED_MESSAGE =
-  'Microphone access is blocked. Allow the microphone for AGI in Chrome site settings, then try again.';
-
 const MICROPHONE_NOTICE_ACK_KEY = 'agi.notice.microphone';
 
-const MICROPHONE_NOTICE_TEXT =
-  'Dictation uses your microphone only while it is listening, from when you press the microphone until you press it again. Chrome turns your speech into text with its speech service, and AGI receives only that text, which stays in this chat like anything you type. Chrome asks for microphone access next. If you block it, allow the microphone for AGI in Chrome site settings.';
-
-const VOICE_ERROR_MESSAGES: Record<string, string> = {
-  'not-allowed': MICROPHONE_BLOCKED_MESSAGE,
-  'service-not-allowed': 'Voice recognition is not available in this browser profile.',
-  'audio-capture': 'No microphone was found.',
-  'no-speech': 'No speech was heard. Try again and speak after the button starts pulsing.',
-  network: 'Voice recognition needs a network connection.',
-  aborted: '',
-};
-
 export function describeVoiceError(code: string | undefined): string {
-  if (code === undefined) return 'Voice input failed. Try again.';
-  const known = VOICE_ERROR_MESSAGES[code];
-  if (known !== undefined) return known;
-  return 'Voice input failed. Try again.';
+  switch (code) {
+    case 'aborted':
+      return '';
+    case 'not-allowed':
+      return t('spVoiceMicBlocked');
+    case 'service-not-allowed':
+      return t('spVoiceErrorServiceNotAllowed');
+    case 'audio-capture':
+      return t('spVoiceErrorAudioCapture');
+    case 'no-speech':
+      return t('spVoiceErrorNoSpeech');
+    case 'network':
+      return t('spVoiceErrorNetwork');
+    default:
+      return t('spVoiceErrorGeneric');
+  }
 }
 
 export function micTooltip(language: string | null): string {
-  return language ? `Voice input · ${languageLabel(language)}` : 'Voice input';
+  return language ? t('spVoiceTooltipLanguage', [languageLabel(language)]) : t('spVoiceTooltip');
 }
 
 type MicrophonePermission = PermissionState | 'unknown';
@@ -77,18 +75,18 @@ export function buildMicrophoneNotice(): MicrophoneNotice {
     id: 'sp-mic-notice',
     class: 'sp-composer-notice',
     role: 'note',
-    'aria-label': 'Before you dictate',
+    'aria-label': t('spVoiceNoticeAria'),
   });
-  element.appendChild(el('span', {}, MICROPHONE_NOTICE_TEXT));
+  element.appendChild(el('span', {}, t('spVoiceNotice')));
   const declineBtn = el(
     'button',
     { class: 'sp-composer-notice-action', type: 'button' },
-    'Not now',
+    t('spVoiceNoticeDecline'),
   );
   const continueBtn = el(
     'button',
     { class: 'sp-composer-notice-action', type: 'button' },
-    'Continue',
+    t('spVoiceNoticeContinue'),
   );
   element.appendChild(declineBtn);
   element.appendChild(continueBtn);
@@ -140,7 +138,7 @@ export function setupVoiceInput(
     (w['webkitSpeechRecognition'] as SpeechRecognitionCtor | undefined);
 
   if (!SpeechRecognitionCtor) {
-    micBtn.title = 'Voice input is not supported in this browser';
+    micBtn.title = t('spVoiceUnsupported');
     micBtn.disabled = true;
     micBtn.setAttribute('aria-disabled', 'true');
     return;
@@ -171,7 +169,7 @@ export function setupVoiceInput(
       listening = true;
       micBtn.classList.add('active');
       setChild(micBtn, { tag: 'span', className: 'sp-mic-pulse' });
-      micBtn.title = 'Listening… click to stop';
+      micBtn.title = t('spVoiceListening');
     };
 
     recognition.onresult = (event: { results: Array<Array<{ transcript: string }>> }) => {
@@ -209,7 +207,7 @@ export function setupVoiceInput(
     void (async () => {
       const permission = await microphonePermission();
       if (permission === 'denied') {
-        onError(MICROPHONE_BLOCKED_MESSAGE);
+        onError(t('spVoiceMicBlocked'));
         return;
       }
       if (permission === 'granted' || (await microphoneNoticeAcknowledged())) {

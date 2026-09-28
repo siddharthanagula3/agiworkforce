@@ -10,13 +10,16 @@ import {
   isCloudAccountEpochCurrent,
 } from '@/src/features/auth/services/cloudAccountSession';
 import {
+  applyCloudRunPlanEvent,
   cloudRunFilterStates,
   cloudRunTextDelta,
+  isCloudRunPlanOverview,
   mergeCloudRuns,
   summarizeCloudRunEvent,
   DEFAULT_CLOUD_RUN_FILTER,
   type CloudRunActivityLine,
   type CloudRunFilterKey,
+  type CloudRunPlanStep,
 } from './runPresentation';
 import {
   cancelCloudRun,
@@ -45,6 +48,7 @@ export interface CloudRunDetail {
   run: CloudAgentRun | null;
   transcript: string;
   activity: CloudRunActivityLine[];
+  plan: CloudRunPlanStep[];
   status: CloudRunDetailStatus;
   error: string | null;
   pendingAction: CloudRunPendingAction | null;
@@ -92,8 +96,11 @@ function applySnapshot(
 ): CloudRunDetail {
   let transcript = detail.transcript;
   const activity = [...detail.activity];
+  let plan = detail.plan;
   for (const envelope of snapshot.events) {
     transcript += cloudRunTextDelta(envelope);
+    plan = applyCloudRunPlanEvent(plan, envelope);
+    if (isCloudRunPlanOverview(envelope)) continue;
     const line = summarizeCloudRunEvent(envelope);
     if (line) activity.push(line);
   }
@@ -103,6 +110,7 @@ function applySnapshot(
     run: snapshot.run,
     transcript: trimTranscript(transcript),
     activity: activity.slice(-MAX_ACTIVITY_LINES),
+    plan,
     status: isCloudAgentRunFollowBoundary(snapshot.run.state) ? 'settled' : 'live',
     error: null,
   };
@@ -182,6 +190,7 @@ export const useCloudTaskStore = create<CloudTaskState>()((set, get) => ({
         run: null,
         transcript: '',
         activity: [],
+        plan: [],
         status: 'loading',
         error: null,
         pendingAction: null,

@@ -37,6 +37,7 @@ export const MEMBERSHIP_TABLES = [
   'organization_member_roles',
   'organization_group_roles',
   'organization_group_managers',
+  'organization_group_members',
   'organization_admin_delegations',
   'organization_project_access',
   'scim_group_members',

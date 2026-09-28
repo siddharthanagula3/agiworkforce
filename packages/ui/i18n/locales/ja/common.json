@@ -122,5 +122,40 @@
   "previous": "前へ",
   "previousSlide": "前のスライド",
   "rowsPerPage": "1ページあたりの行数",
-  "rowsSelected": "{{total}} 件中 {{selected}} 件選択中。"
+  "rowsSelected": "{{total}} 件中 {{selected}} 件選択中。",
+  "support": {
+    "waitRemaining_one": "あと {{count}} 秒待ってから、代わりにメールで送信します。",
+    "waitRemaining_other": "あと {{count}} 秒待ってから、代わりにメールで送信します。"
+  },
+  "counts": {
+    "results_one": "{{count}} 件の結果",
+    "results_other": "{{count}} 件の結果",
+    "messages_one": "{{count}} 件のメッセージ",
+    "messages_other": "{{count}} 件のメッセージ",
+    "agentsConfigured_one": "{{count}} 個のエージェントを設定済み",
+    "agentsConfigured_other": "{{count}} 個のエージェントを設定済み",
+    "skills_one": "{{count}} 個のスキル",
+    "skills_other": "{{count}} 個のスキル",
+    "agents_one": "{{count}} 個のエージェント",
+    "agents_other": "{{count}} 個のエージェント"
+  },
+  "relative": {
+    "minutesAgo_one": "{{count}} 分前",
+    "minutesAgo_other": "{{count}} 分前",
+    "hoursAgo_one": "{{count}} 時間前",
+    "hoursAgo_other": "{{count}} 時間前",
+    "daysAgo_one": "{{count}} 日前",
+    "daysAgo_other": "{{count}} 日前"
+  },
+  "unsavedChanges": {
+    "title": "保存されていない変更を破棄しますか？",
+    "description": "変更は保存されていません。今移動すると失われます。",
+    "discard": "破棄",
+    "keepEditing": "編集を続ける"
+  },
+  "chipInput": {
+    "full": "このリストの上限は {{count}} 件です。",
+    "rejected": "{{value}} は追加されませんでした。{{reason}}",
+    "remove": "{{value}} を削除"
+  }
 }

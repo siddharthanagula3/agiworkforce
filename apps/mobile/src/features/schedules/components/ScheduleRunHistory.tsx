@@ -194,6 +194,16 @@ function RunRow({ run }: RunRowProps) {
           {duration ? <Text className="text-[11px] text-white/30">{duration}</Text> : null}
         </View>
         {isAwaitingApproval ? <PendingApproval run={run} /> : null}
+        {run.result ? (
+          <Text
+            selectable
+            className="text-[12px] mt-1 leading-[18px]"
+            style={{ color: colors.textSecondary }}
+            numberOfLines={6}
+          >
+            {run.result}
+          </Text>
+        ) : null}
         {run.error ? (
           <Text className="text-[11px] text-red-400/70 mt-0.5 leading-4" numberOfLines={2}>
             {run.error}

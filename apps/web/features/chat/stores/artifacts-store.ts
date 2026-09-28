@@ -685,7 +685,11 @@ const actions = {
     const current = _sharedArtifactStore.getState().artifacts.find((a) => a.id === id);
     if (!current || current.content === target.content) return false;
 
-    _sharedArtifactStore.getState().upsertArtifact({ ...current, content: target.content });
+    _sharedArtifactStore.getState().upsertArtifact({
+      ...current,
+      content: target.content,
+      updatedAt: new Date().toISOString(),
+    });
     return true;
   },
 

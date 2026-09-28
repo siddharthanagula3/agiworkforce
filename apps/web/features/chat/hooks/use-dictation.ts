@@ -107,40 +107,48 @@ export function useDictation({ onInsert, onSend }: UseDictationOptions): Dictati
     });
   }, []);
 
+  const lastIntentRef = useRef<DictationIntent>(DICTATION_INTENT.insert);
+
+  const deliver = useCallback(
+    (runId: number, intent: DictationIntent) => {
+      if (runIdRef.current !== runId) return;
+      if (!useSettingsStore.getState().dictationEnabled) return;
+      const store = useVoiceInputStore.getState();
+      const { transcript, error, mode } = store;
+      store.clearTranscript();
+      if (mode === 'error') {
+        dispatch({
+          type: DICTATION_EVENT.fail,
+          message: error ?? FALLBACK_TRANSCRIBE_ERROR,
+        });
+        return;
+      }
+      const text = transcript.trim();
+      if (!text) {
+        dispatch({ type: DICTATION_EVENT.fail, message: EMPTY_TRANSCRIPT_ERROR });
+        return;
+      }
+      dispatch({ type: DICTATION_EVENT.resolve });
+      setAnnouncement(ANNOUNCEMENT.transcribed);
+      if (intent === DICTATION_INTENT.send) onSend(text);
+      else onInsert(text);
+    },
+    [onInsert, onSend],
+  );
+
   const finish = useCallback(
     (intent: DictationIntent) => {
       if (!useSettingsStore.getState().dictationEnabled) return;
       const runId = runIdRef.current;
+      lastIntentRef.current = intent;
       dispatch({ type: DICTATION_EVENT.stop, intent });
       setAnnouncement(ANNOUNCEMENT.stopped);
       void useVoiceInputStore
         .getState()
         .stopListening()
-        .then(() => {
-          if (runIdRef.current !== runId) return;
-          if (!useSettingsStore.getState().dictationEnabled) return;
-          const store = useVoiceInputStore.getState();
-          const { transcript, error, mode } = store;
-          store.clearTranscript();
-          if (mode === 'error') {
-            dispatch({
-              type: DICTATION_EVENT.fail,
-              message: error ?? FALLBACK_TRANSCRIBE_ERROR,
-            });
-            return;
-          }
-          const text = transcript.trim();
-          if (!text) {
-            dispatch({ type: DICTATION_EVENT.fail, message: EMPTY_TRANSCRIPT_ERROR });
-            return;
-          }
-          dispatch({ type: DICTATION_EVENT.resolve });
-          setAnnouncement(ANNOUNCEMENT.transcribed);
-          if (intent === DICTATION_INTENT.send) onSend(text);
-          else onInsert(text);
-        });
+        .then(() => deliver(runId, intent));
     },
-    [onInsert, onSend],
+    [deliver],
   );
 
   const stop = useCallback(() => finish(DICTATION_INTENT.insert), [finish]);
@@ -155,7 +163,20 @@ export function useDictation({ onInsert, onSend }: UseDictationOptions): Dictati
     setAnnouncement(ANNOUNCEMENT.cancelled);
   }, []);
 
-  const retry = start;
+  const retry = useCallback(() => {
+    const store = useVoiceInputStore.getState();
+    if (!store.canRetryTranscription) {
+      start();
+      return;
+    }
+    const runId = runIdRef.current + 1;
+    runIdRef.current = runId;
+    const intent = lastIntentRef.current;
+    dispatch({ type: DICTATION_EVENT.start });
+    dispatch({ type: DICTATION_EVENT.stop, intent });
+    setAnnouncement(ANNOUNCEMENT.stopped);
+    void store.retryTranscription().then(() => deliver(runId, intent));
+  }, [deliver, start]);
 
   useEffect(() => {
     if (!dictationEnabled && isDictationActive(machine.status)) cancel();

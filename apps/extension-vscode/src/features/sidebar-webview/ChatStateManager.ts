@@ -57,6 +57,7 @@ import {
 } from '../../integrations/tierResolver';
 import { type ChatTurn } from '../chat/retry';
 import { getActiveWorkspaceFolder } from '../../platform/workspaceFolders';
+import { EXTENSION_ID } from '../../platform/version';
 import { getContextPanelProvider } from '../trees/contextPanelProvider';
 import { classifyDeveloperTurn, isAutoRoutingModel } from '../../integrations/routingTask';
 import {
@@ -221,7 +222,8 @@ export type WebviewToExtMessage =
           | 'sign-in-account'
           | 'upgrade-plan'
           | 'open-settings'
-          | 'switch-model';
+          | 'switch-model'
+          | 'update-extension';
         provider?: string;
       };
     }
@@ -1039,6 +1041,10 @@ export class ChatStateManager {
         }
         if (msg.payload.kind === 'switch-model') {
           await vscode.commands.executeCommand('agi-workforce.selectModel');
+          break;
+        }
+        if (msg.payload.kind === 'update-extension') {
+          await vscode.commands.executeCommand('extension.open', EXTENSION_ID);
           break;
         }
         await vscode.commands.executeCommand('agi-workforce.openSettings', 'configuration');
