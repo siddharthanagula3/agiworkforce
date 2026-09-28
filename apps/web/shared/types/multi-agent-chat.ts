@@ -1,4 +1,4 @@
-
+import type { LifecycleStatus } from '@agiworkforce/types';
 
 export type ConversationType = 'single' | 'multi_agent' | 'collaborative' | 'mission_control';
 export type ConversationStatus = 'active' | 'paused' | 'completed' | 'archived' | 'failed';
@@ -9,18 +9,11 @@ export type ParticipantRole = 'lead' | 'collaborator' | 'advisor' | 'reviewer' |
 export type ParticipantStatus = 'active' | 'idle' | 'working' | 'completed' | 'removed';
 
 export type SessionType =
-  | 'task_based'
-  | 'brainstorming'
-  | 'review'
-  | 'problem_solving'
-  | 'research';
+  'task_based' | 'brainstorming' | 'review' | 'problem_solving' | 'research';
 export type TaskStatus =
-  | 'pending'
+  | Extract<LifecycleStatus, 'pending' | 'completed' | 'failed' | 'cancelled'>
   | 'in_progress'
-  | 'reviewing'
-  | 'completed'
-  | 'failed'
-  | 'cancelled';
+  | 'reviewing';
 
 export type ReactionType = 'like' | 'helpful' | 'unhelpful' | 'insightful' | 'flag' | 'bookmark';
 
