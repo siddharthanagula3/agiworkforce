@@ -174,7 +174,10 @@ import {
   planDeviceStep,
   type DesktopHostDeclaration,
 } from '@agiworkforce/local-runtime-contract';
-import { DEVICE_SCREENSHOT_MESSAGE_PREFIX } from '@agiworkforce/cloud-contracts';
+import {
+  DEVICE_SCREENSHOT_MESSAGE_PREFIX,
+  cloudAgentRunSteerProgressId,
+} from '@agiworkforce/cloud-contracts';
 import { getE2BExecutor, pauseE2BSession } from '@/lib/e2b/runtime';
 import type { E2BUnavailableCause } from '@/lib/e2b/unavailability';
 import { nativeSearchToolName } from '@/lib/web-search/required-search';
@@ -715,6 +718,7 @@ export interface ToolLoopOptions {
   /** Read at each step boundary; honoured only when `onPauseCheckpoint` can store the pause. */
   isPauseRequested?: () => Promise<boolean>;
   onPauseCheckpoint?: (checkpoint: ToolLoopPauseCheckpoint) => Promise<void>;
+  takeSteerMessages?: () => Promise<readonly ToolLoopSteerMessage[]>;
   /** This continuation starts a run the user paused, with any guidance they gave on resuming. */
   resumedFromPause?: ResumeFromPause;
   signal?: AbortSignal;
@@ -722,6 +726,13 @@ export interface ToolLoopOptions {
   toolApprovalPolicy?: ToolApprovalPolicy;
   failover?: ToolLoopFailoverPlan;
 }
+
+export interface ToolLoopSteerMessage {
+  id: string;
+  text: string;
+}
+
+const STEER_RECEIVED_SUMMARY = 'Read your message';
 
 export interface ToolLoopFailoverPlan {
   next: (
@@ -4357,6 +4368,23 @@ export async function* runToolLoop(
     yield encoder.encode(sseDone());
   }
 
+  async function* applySteerMessages(
+    steers: readonly ToolLoopSteerMessage[],
+  ): AsyncGenerator<Uint8Array> {
+    for (const steer of steers) {
+      messages.push({ role: 'user', content: steer.text });
+      yield encoder.encode(
+        eventStream.emit({
+          type: 'progress-update',
+          progressId: cloudAgentRunSteerProgressId(steer.id),
+          summary: STEER_RECEIVED_SUMMARY,
+          detail: steer.text,
+          status: 'completed',
+        }),
+      );
+    }
+  }
+
   async function* failRequiredTool(
     code: 'web_search_not_performed' | 'web_search_no_sources' | 'code_execution_not_performed',
     message: string,
@@ -5427,6 +5455,9 @@ export async function* runToolLoop(
         yield encoder.encode(sseDone());
         return;
       }
+      if (options.takeSteerMessages) {
+        yield* applySteerMessages(await options.takeSteerMessages());
+      }
       if (maxDurationMs !== undefined && now() - startedAt >= maxDurationMs) {
         logger.warn(
           { maxDurationMs, maxSteps, completedSteps: step, provider: processed.provider },
@@ -6007,6 +6038,25 @@ export async function* runToolLoop(
           );
           yield* flushTerminal('error');
           return;
+        }
+        const lateSteers =
+          options.takeSteerMessages &&
+          agiWorkTurn &&
+          step < maxSteps &&
+          !isBlockedFinishReason(finishReason) &&
+          !isCancelledFinishReason(finishReason)
+            ? await options.takeSteerMessages()
+            : [];
+        if (lateSteers.length > 0) {
+          const answerThinking = providerStep.thinkingBlocks.filter((block) => block.signature);
+          const answerMessage: (typeof messages)[number] = {
+            role: 'assistant',
+            content: answerThinking.length > 0 ? providerStep.canonicalText : textContent,
+          };
+          if (answerThinking.length > 0) answerMessage.__canonicalThinking = answerThinking;
+          messages.push(answerMessage);
+          yield* applySteerMessages(lateSteers);
+          continue;
         }
         yield* flushTerminal(canonicalStopReason(finishReason));
         return;
