@@ -626,6 +626,16 @@ export function getWebviewContent(
       color: var(--text-primary);
     }
     .message-action[aria-pressed='true'] { color: var(--text-primary); }
+    .message-sources {
+      margin-top: var(--message-actions-gap);
+      color: var(--text-secondary);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
+    .message-sources summary { cursor: pointer; }
+    .message-sources__list { margin: 4px 0 0; padding-left: 20px; }
+    .message-sources__list li { margin: 2px 0; }
+    .message-sources__host { margin-left: 6px; }
     .message-action--regenerate { display: none; }
     .message.assistant.message--latest .message-action--regenerate { display: inline-flex; }
     .message-meta {
@@ -3429,6 +3439,7 @@ export function getWebviewContent(
     let activePlanCard = null;
     let currentAssistantEl = null;
     let accumulatedContent = '';
+    let turnSources = [];
     let pendingAttachmentCount = 0;
     let browseWebEnabled = false;
     let followUpBehavior = '${followUpBehaviorLiteral}';
@@ -3790,6 +3801,55 @@ export function getWebviewContent(
         row.appendChild(button);
       });
       paintAnswerRating(row, rating || null);
+    }
+
+    function sourceLink(url) {
+      try {
+        var parsed = new URL(url);
+        return parsed.protocol === 'https:' || parsed.protocol === 'http:' ? parsed : null;
+      } catch (error) {
+        return null;
+      }
+    }
+
+    function collectSources(sources) {
+      for (var i = 0; i < sources.length; i++) {
+        var source = sources[i];
+        if (!source || !source.url) continue;
+        var known = turnSources.some(function (entry) { return entry.url === source.url; });
+        if (!known) turnSources.push({ url: source.url, title: source.title || '' });
+      }
+    }
+
+    function appendSources(messageEl, sources) {
+      var details = document.createElement('details');
+      details.className = 'message-sources';
+      var summary = document.createElement('summary');
+      summary.textContent = pluralText(L10N.sources, sources.length);
+      details.appendChild(summary);
+      var list = document.createElement('ol');
+      list.className = 'message-sources__list';
+      for (var i = 0; i < sources.length; i++) {
+        var item = document.createElement('li');
+        var parsed = sourceLink(sources[i].url);
+        var label = sources[i].title || sources[i].url;
+        if (parsed) {
+          var link = document.createElement('a');
+          link.href = parsed.href;
+          link.textContent = label;
+          link.title = parsed.href;
+          item.appendChild(link);
+          var host = document.createElement('span');
+          host.className = 'message-sources__host';
+          host.textContent = parsed.hostname;
+          item.appendChild(host);
+        } else {
+          item.textContent = label;
+        }
+        list.appendChild(item);
+      }
+      details.appendChild(list);
+      messageEl.insertBefore(details, messageEl.querySelector('.message-actions'));
     }
 
     function appendMessageActions(messageEl, sourceText, meta, rating) {
@@ -5311,6 +5371,20 @@ export function getWebviewContent(
 
       var actions = document.createElement('div');
       actions.className = 'approval-card__actions';
+      if (payload.reviewable) {
+        var review = document.createElement('button');
+        review.type = 'button';
+        review.className = 'approval-card__action';
+        review.textContent = 'Review change';
+        review.title = 'Open the proposed file in a diff. Edit it or revert parts, then approve to write your version.';
+        review.addEventListener('click', function () {
+          vscode.postMessage({
+            type: 'reviewApprovalChange',
+            payload: { requestId: payload.requestId },
+          });
+        });
+        actions.appendChild(review);
+      }
       for (var i = 0; i < APPROVAL_ACTIONS.length; i++) {
         (function (action) {
           var button = document.createElement('button');
@@ -5750,7 +5824,9 @@ export function getWebviewContent(
           );
           bindCodeBlockActions(currentAssistantEl);
           appendMessageActions(currentAssistantEl, accumulatedContent, answerMeta(msg.payload));
+          if (turnSources.length > 0) appendSources(currentAssistantEl, turnSources);
         }
+        turnSources = [];
         finalizeToolCallStack();
         if (msg.payload && msg.payload.providerLabel) {
           updateProviderBadge(msg.payload.providerLabel, msg.payload.brandColor || 'var(--border)');
@@ -5766,6 +5842,10 @@ export function getWebviewContent(
 
       else if (msg.type === 'contextUsage') {
         renderContextUsage(msg.payload.usedTokens, msg.payload.contextWindow);
+      }
+
+      else if (msg.type === 'sourceList') {
+        collectSources((msg.payload && msg.payload.sources) || []);
       }
 
       else if (msg.type === 'answerRating') {
@@ -6012,6 +6092,7 @@ export function getWebviewContent(
             addMessage('user', historyMessage.text || '');
           }
         }
+        if (msg.payload.plan) upsertPlanCard(msg.payload.plan);
         if (messagesEl.childElementCount === 0) {
           // A session the CLI created can resume with nothing to replay. An
           // empty panel says nothing; the empty state at least names the view.
@@ -6039,6 +6120,7 @@ export function getWebviewContent(
 
       else if (msg.type === 'conversationCleared') {
         lastSendPayload = null;
+        turnSources = [];
         clearContextUsage();
         resetAuthoritativeSessionBoundary();
         invalidateAttachmentBatches();

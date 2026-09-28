@@ -53,6 +53,12 @@ const SCOPE_DESCRIPTIONS: Readonly<Record<string, ScopeDescription>> = {
     access: READ,
   },
 
+  'contacts.readonly': { sentence: 'Reads your Google contacts.', access: READ },
+  'directory.readonly': {
+    sentence: "Reads people's profiles in your organization's directory.",
+    access: READ,
+  },
+
   'spreadsheets.readonly': { sentence: 'Reads the contents of your spreadsheets.', access: READ },
   spreadsheets: { sentence: 'Reads and edits your spreadsheets.', access: WRITE },
 
@@ -295,6 +301,15 @@ const SCOPE_DESCRIPTIONS: Readonly<Record<string, ScopeDescription>> = {
   },
   'patient/DocumentReference.read': {
     sentence: "Reads references to the patient's clinical documents.",
+    access: READ,
+  },
+  'patient/*.read': {
+    sentence: 'Reads your own health records, without changing them.',
+    access: READ,
+  },
+  transactions: {
+    sentence:
+      'Reads the balances and transactions of the bank accounts you link, without moving money.',
     access: READ,
   },
 };

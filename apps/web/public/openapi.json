@@ -785,7 +785,12 @@
                   "properties": {
                     "url": { "type": "string", "format": "uri", "maxLength": 2000 },
                     "title": { "type": "string", "maxLength": 500 },
-                    "snippet": { "type": "string", "maxLength": 2000 }
+                    "snippet": { "type": "string", "maxLength": 2000 },
+                    "retrieved_at": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "When the run first retrieved this source, so the resumed run keeps that date instead of the time it resumed."
+                    }
                   }
                 }
               },

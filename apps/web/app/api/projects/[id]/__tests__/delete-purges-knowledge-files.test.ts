@@ -93,7 +93,7 @@ describe('DELETE /api/projects/[id] · knowledge-file retention', () => {
     expect(sql).toContain('update project_knowledge_files');
     expect(sql).toContain('deleted_at = now()');
     expect(sql).toContain('deleted_at is null');
-    expect(params).toEqual([PROJECT_ID]);
+    expect(params).toEqual([PROJECT_ID, 'user-abc', null]);
   });
 
   it('deletes every stored knowledge object so the bytes do not outlive the project', async () => {
