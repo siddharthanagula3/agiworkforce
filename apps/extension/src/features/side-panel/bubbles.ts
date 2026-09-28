@@ -14,6 +14,7 @@ import {
   interactiveCardRendersBeforeProse,
   resolveInteractiveCardRenderer,
   toolApprovalStakes,
+  type AgentEventSource,
   type InteractiveCard,
   type InteractiveCardRegistry,
   type InteractiveCardRenderContext,
@@ -746,10 +747,7 @@ function boundedJson(value: unknown): string {
   return formatted.length > 8_000 ? `${formatted.slice(0, 8_000)}\n…` : formatted;
 }
 
-function appendActivitySources(
-  parent: HTMLElement,
-  sources: Array<{ url: string; title?: string }>,
-): void {
+function appendActivitySources(parent: HTMLElement, sources: readonly AgentEventSource[]): void {
   if (sources.length === 0) return;
   const list = el('div', { class: 'sp-agent-step__sources' });
   for (const source of sources.slice(0, 20)) {
@@ -930,7 +928,7 @@ function buildAgentActivityStep(
 ): HTMLElement {
   const status = activityEntryStatus(entry);
   const detailParts: string[] = [];
-  let sources: Array<{ url: string; title?: string }> = [];
+  let sources: readonly AgentEventSource[] = [];
 
   if (entry.kind === 'progress' && entry.detail) detailParts.push(entry.detail);
   if (entry.kind === 'tool') {
