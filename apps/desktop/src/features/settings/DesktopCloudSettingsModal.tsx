@@ -714,6 +714,8 @@ function toDisplayConnectorId(connector: CloudConnectorEntry): string {
 }
 
 const CUSTOM_CONNECTOR_SIGN_IN_COPY = 'Sign-in required';
+const CONNECTOR_REAUTHORIZATION_COPY =
+  'Needs to be reconnected. Reconnecting signs in again and keeps its settings and tool permissions.';
 const CUSTOM_CONNECTOR_OAUTH_CLIENT_HINT =
   'If the server gave you an OAuth client, add it again with its Client ID and Secret under Advanced settings.';
 
@@ -824,7 +826,13 @@ export function DesktopCloudSettingsModal({
         connectedAt: c.connectedAt || undefined,
         ...(customSignInPending(c)
           ? { status: 'warning' as const, warningLabel: CUSTOM_CONNECTOR_SIGN_IN_COPY }
-          : { status: 'connected' as const }),
+          : c.needsReauthorization === true
+            ? {
+                status: 'warning' as const,
+                warningLabel: CONNECTOR_REAUTHORIZATION_COPY,
+                needsReauthorization: true,
+              }
+            : { status: 'connected' as const }),
       })),
     [cloudConnectors],
   );

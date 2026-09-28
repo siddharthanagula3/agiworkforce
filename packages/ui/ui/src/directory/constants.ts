@@ -86,6 +86,7 @@ export const UNINSTALL_LABEL = 'Uninstall';
 export const INSTALLED_LABEL = 'Installed';
 export const CONNECT_LABEL = 'Connect';
 export const CONNECTED_LABEL = 'Connected';
+export const RECONNECT_LABEL = 'Reconnect';
 export const COPY_LINK_LABEL = 'Copy link';
 
 export const SKILL_DESCRIPTION_LABEL = 'Description';
@@ -210,6 +211,10 @@ export function connectorNotConnectedCopy(name: string): string {
 
 export function connectorAuthorizationPendingCopy(name: string): string {
   return `You started connecting to ${name} but didn't finish.`;
+}
+
+export function connectorReconnectCopy(name: string): string {
+  return `${name} needs to be reconnected. Its sign-in expired or was revoked, so its tools stop working until you reconnect. Reconnecting signs in again and keeps its settings and tool permissions.`;
 }
 
 export const CONNECTOR_REQUIRED_BY_PLUGINS_COPY =
