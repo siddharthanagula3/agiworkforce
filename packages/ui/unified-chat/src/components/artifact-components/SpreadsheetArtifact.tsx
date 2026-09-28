@@ -1,5 +1,6 @@
 import { ArrowDown, ArrowUp, FileSpreadsheet } from 'lucide-react';
 import React, { useCallback, useMemo, useState } from 'react';
+import { translateUiPlural } from '@agiworkforce/ui';
 import { cn } from '../../lib/utils';
 import { numericValue, parseTabular } from '../../lib/tabular';
 import type { Artifact } from '../../lib/types';
@@ -155,8 +156,15 @@ export function SpreadsheetArtifact({ artifact, className }: SpreadsheetArtifact
             <span>Sheet</span>
           </div>
           <span className="text-xs text-muted-foreground">
-            {data.rows.length} {data.rows.length === 1 ? 'row' : 'rows'} · {data.columns.length}{' '}
-            {data.columns.length === 1 ? 'column' : 'columns'}
+            {translateUiPlural('chat', 'counts.tableRows', data.rows.length, {
+              one: '{{count}} row',
+              other: '{{count}} rows',
+            })}{' '}
+            ·{' '}
+            {translateUiPlural('chat', 'counts.tableColumns', data.columns.length, {
+              one: '{{count}} column',
+              other: '{{count}} columns',
+            })}
           </span>
         </div>
         <span className="text-caption text-muted-foreground pr-1" aria-live="polite">

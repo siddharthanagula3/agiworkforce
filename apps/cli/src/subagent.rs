@@ -124,7 +124,7 @@ pub struct SubagentUsage {
 }
 
 impl SubagentUsage {
-    fn from_turn(model: &str, turn: &crate::agent::TurnResult) -> Self {
+    pub(crate) fn from_turn(model: &str, turn: &crate::agent::TurnResult) -> Self {
         Self {
             model: model.to_string(),
             input_tokens: turn.input_tokens,
@@ -178,6 +178,8 @@ impl std::fmt::Debug for SubagentEntry {
 /// Default maximum number of concurrent subagents.
 const DEFAULT_MAX_CONCURRENT: usize = 7;
 
+pub const SUBAGENT_MAX_TURNS: usize = 15;
+
 /// How long `wait_all` sleeps between checking whether subagent threads have
 /// finished. Bounds how long an interrupt waits before the turn task yields.
 const SUBAGENT_JOIN_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(25);
@@ -225,6 +227,7 @@ pub struct SubagentManager {
     /// The owning session's spend cap and spend so far. Each child is capped at
     /// its even share of what is left, so a fan-out cannot outspend the parent.
     cost_budget: Option<CostBudget>,
+    approval: Option<crate::agent::ToolApprovalSink>,
 }
 
 struct SubagentRunConfig {
@@ -240,6 +243,8 @@ struct SubagentRunConfig {
     allowed_tools: Option<Vec<String>>,
     disallowed_tools: Vec<String>,
     named_agent: Option<crate::agents::AgentDefinition>,
+    approval: Option<crate::agent::ToolApprovalSink>,
+    label: String,
 }
 
 impl SubagentManager {
@@ -268,7 +273,12 @@ impl SubagentManager {
             allowed_tools,
             disallowed_tools,
             cost_budget: None,
+            approval: None,
         }
+    }
+
+    pub fn set_approval(&mut self, approval: Option<crate::agent::ToolApprovalSink>) {
+        self.approval = approval;
     }
 
     /// Set the owning session's spend cap and spend so far. Without one a child
@@ -375,6 +385,9 @@ impl SubagentManager {
 
         // Clone values for the spawned thread
         let task_id = id.clone();
+        let agent_name = named_agent
+            .as_ref()
+            .map(|definition| definition.name.clone());
         let task_prompt = prompt.to_string();
         let task_run_config = SubagentRunConfig {
             config: self.config.clone(),
@@ -387,6 +400,8 @@ impl SubagentManager {
             allowed_tools: self.allowed_tools.clone(),
             disallowed_tools: self.disallowed_tools.clone(),
             named_agent,
+            approval: self.approval.clone(),
+            label: description.to_string(),
         };
         let task_status = Arc::clone(&status);
         let task_result = Arc::clone(&result);
@@ -396,12 +411,14 @@ impl SubagentManager {
         let prompt_chars = prompt.chars().count();
         let process_owner = crate::process_tree::current_owner();
 
-        eprintln!(
-            "  {} Spawning subagent {}, {}",
-            ts::accent_header("[task]"),
-            task_id.bold(),
-            task_description.dimmed()
-        );
+        if !crate::tui::tui_active() {
+            eprintln!(
+                "  {} Spawning subagent {}, {}",
+                ts::accent_header("[task]"),
+                task_id.bold(),
+                task_description.dimmed()
+            );
+        }
 
         // Spawn on a dedicated OS thread with its own tokio runtime.
         // This avoids the `Send` requirement of `tokio::spawn`.
@@ -418,6 +435,7 @@ impl SubagentManager {
                         crate::subagent_audit::record_subagent(
                             &crate::subagent_audit::SubagentAuditRecord {
                                 subagent_id: &task_id,
+                                agent: agent_name.as_deref(),
                                 description: &task_description,
                                 depth: task_depth,
                                 prompt_chars,
@@ -462,11 +480,13 @@ impl SubagentManager {
                             *task_result.write().await = Some(subagent_result);
                             *task_status.write().await = SubagentStatus::Completed;
 
-                            eprintln!(
-                                "  {} Subagent {} completed",
-                                ts::success_header("[task]"),
-                                task_id.bold()
-                            );
+                            if !crate::tui::tui_active() {
+                                eprintln!(
+                                    "  {} Subagent {} completed",
+                                    ts::success_header("[task]"),
+                                    task_id.bold()
+                                );
+                            }
                         }
                         Err(e) => {
                             let err_msg = format!("{:#}", e);
@@ -474,12 +494,14 @@ impl SubagentManager {
                             audit(&failed, None);
                             *task_status.write().await = failed;
 
-                            eprintln!(
-                                "  {} Subagent {} failed: {}",
-                                ts::danger_header("[task]"),
-                                task_id.bold(),
-                                err_msg.dimmed()
-                            );
+                            if !crate::tui::tui_active() {
+                                eprintln!(
+                                    "  {} Subagent {} failed: {}",
+                                    ts::danger_header("[task]"),
+                                    task_id.bold(),
+                                    err_msg.dimmed()
+                                );
+                            }
                         }
                     }
                 };
@@ -699,7 +721,11 @@ async fn run_subagent(
         .disallowed_tools
         .clone_from(&run_config.disallowed_tools);
     // Subagents get a reasonable max turns to avoid runaway loops
-    session.max_turns = Some(15);
+    session.max_turns = Some(SUBAGENT_MAX_TURNS);
+    session.on_tool_approval = run_config
+        .approval
+        .clone()
+        .map(|sink| crate::teams::named_approval(sink, &run_config.label));
     if let Some(definition) = run_config.named_agent.as_ref() {
         definition.apply_to_subagent_session(&mut session);
     }

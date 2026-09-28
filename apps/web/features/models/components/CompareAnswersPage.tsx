@@ -16,7 +16,7 @@ import {
 import { toast } from 'sonner';
 import { Check, ChevronLeft, CircleAlert, Copy, Plus, X } from '@agiworkforce/icons';
 import { getPlanMaxConcurrentTurns } from '@agiworkforce/types';
-import { Spinner } from '@agiworkforce/ui';
+import { Spinner, translateUiPlural } from '@agiworkforce/ui';
 import { useChatModelStore } from '@agiworkforce/unified-chat';
 import { ProviderLogo } from '@features/chat/components/Composer/ProviderLogo';
 import { SendButton } from '@features/chat/components/Composer/SendButton';
@@ -98,7 +98,10 @@ function timingLabel(answer: CompareAnswer): string | null {
 }
 
 function concurrencyNote(limit: number): string {
-  return `Your plan runs ${limit} answer${limit === 1 ? '' : 's'} at a time, so the rest start as each one finishes.`;
+  return translateUiPlural('models', 'counts.concurrentAnswers', limit, {
+    one: 'Your plan runs {{count}} answer at a time, so the rest start as each one finishes.',
+    other: 'Your plan runs {{count}} answers at a time, so the rest start as each one finishes.',
+  });
 }
 
 export interface CompareAnswersPageProps {

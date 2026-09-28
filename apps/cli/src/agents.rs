@@ -16,6 +16,10 @@
 use anyhow::{bail, Context, Result};
 use std::path::{Path, PathBuf};
 
+pub const AGENT_COLORS: [&str; 8] = [
+    "red", "blue", "green", "yellow", "purple", "orange", "pink", "cyan",
+];
+
 /// A loaded agent definition.
 #[derive(Debug, Clone)]
 pub struct AgentDefinition {
@@ -33,6 +37,9 @@ pub struct AgentDefinition {
     pub max_turns: Option<usize>,
     /// Permission mode override (default, accept-edits, plan, bypass-permissions).
     pub permission_mode: Option<String>,
+    pub color: Option<String>,
+    pub skills: Option<Vec<String>>,
+    pub max_budget_usd: Option<f64>,
     /// The markdown body after frontmatter, used as the system prompt.
     pub system_prompt: String,
     /// Source file path.
@@ -40,6 +47,40 @@ pub struct AgentDefinition {
 }
 
 impl AgentDefinition {
+    pub fn color_name(&self) -> Option<&str> {
+        self.color
+            .as_deref()
+            .filter(|color| AGENT_COLORS.contains(color))
+    }
+
+    fn cap_spend(&self, session: &mut crate::agent::AgentSession) {
+        if let Some(cap) = self.max_budget_usd {
+            session.max_budget_usd = Some(
+                session
+                    .max_budget_usd
+                    .map_or(cap, |current| current.min(cap)),
+            );
+        }
+    }
+
+    fn preload_skills(&self, session: &mut crate::agent::AgentSession) {
+        let Some(names) = self.skills.as_ref().filter(|names| !names.is_empty()) else {
+            return;
+        };
+        let installed = crate::skills::discover_skills();
+        for name in names {
+            if let Some(skill) = installed
+                .iter()
+                .find(|skill| skill.name.eq_ignore_ascii_case(name))
+            {
+                session.messages.push(crate::models::Message::text(
+                    "system",
+                    crate::skills::skill_result_block(skill),
+                ));
+            }
+        }
+    }
+
     /// Apply this agent definition's overrides to an `AgentSession`.
     ///
     /// The following fields are applied when set:
@@ -94,6 +135,7 @@ impl AgentDefinition {
                 session.permission_mode = m;
             }
         }
+        self.cap_spend(session);
         if !self.system_prompt.trim().is_empty() {
             use crate::models::Message;
             session.messages.push(Message::text(
@@ -105,6 +147,7 @@ impl AgentDefinition {
                 ),
             ));
         }
+        self.preload_skills(session);
     }
 
     /// Apply a named agent to a model-spawned subagent without allowing the
@@ -138,6 +181,7 @@ impl AgentDefinition {
                     .map_or(max_turns, |parent_limit| parent_limit.min(max_turns)),
             );
         }
+        self.cap_spend(session);
         if !self.system_prompt.trim().is_empty() {
             use crate::models::Message;
             session.messages.push(Message::text(
@@ -149,6 +193,7 @@ impl AgentDefinition {
                 ),
             ));
         }
+        self.preload_skills(session);
     }
 }
 
@@ -304,6 +349,9 @@ fn load_agent(path: &Path) -> Result<AgentDefinition> {
         disallowed_tools: fm.disallowed_tools,
         max_turns: fm.max_turns,
         permission_mode: fm.permission_mode,
+        color: fm.color,
+        skills: fm.skills,
+        max_budget_usd: fm.max_budget_usd,
         system_prompt: fm.body,
         path: path.to_path_buf(),
     })
@@ -434,6 +482,7 @@ pub fn render_agents_command(arg: &str) -> String {
             }
         }
         "validate" | "doctor" | "check" => format_agent_validation(&discover_agents()),
+        "history" | "activity" | "log" => format_agent_history(first_non_flag(&tokens[1..])),
         "delete" | "remove" | "rm" => match first_non_flag(&tokens[1..]) {
             Some(name) => delete_agent(name, tokens.contains(&"--yes")),
             None => "Usage: /agents delete <name> --yes".to_string(),
@@ -481,7 +530,8 @@ fn render_agents_help() -> String {
         "  /agents create <name>    create .agiworkforce/agents/<name>.md",
         "  /agents create <name> --global",
         "  /agents validate         report duplicate or incomplete agents",
-        "  /agents set <name> <field> <value>   change description, model, tools, prompt...",
+        "  /agents history [name]   show what agents did: runs, outcome, files, spend",
+        "  /agents set <name> <field> <value>   change description, model, tools, color, skills...",
         "  /agents rename <name> <new-name>",
         "  /agents delete <name> --yes",
     ]
@@ -503,8 +553,8 @@ fn format_agents_overview(agents: &[AgentDefinition]) -> String {
 
     let mut lines = vec![format!("Agents ({})", agents.len())];
     lines.push(format!(
-        "  {:<24} {:<9} {:<18} {}",
-        "name", "scope", "model", "description"
+        "  {:<24} {:<8} {:<9} {:<18} {}",
+        "name", "color", "scope", "model", "description"
     ));
     for agent in agents {
         let model = agent.model.as_deref().unwrap_or("default model");
@@ -514,8 +564,9 @@ fn format_agents_overview(agents: &[AgentDefinition]) -> String {
             agent.description.trim()
         };
         lines.push(format!(
-            "  {:<24} {:<9} {:<18} {}",
+            "  {:<24} {:<8} {:<9} {:<18} {}",
             agent.name,
+            agent.color_name().unwrap_or("none"),
             agent_source(agent),
             model,
             description
@@ -538,12 +589,20 @@ fn format_agent_detail(agent: &AgentDefinition) -> String {
         "  model: {}",
         agent.model.as_deref().unwrap_or("default model")
     ));
+    lines.push(format!("  color: {}", agent.color_name().unwrap_or("none")));
     if let Some(max_turns) = agent.max_turns {
         lines.push(format!("  max_turns: {max_turns}"));
+    }
+    if let Some(cap) = agent.max_budget_usd {
+        lines.push(format!(
+            "  spend cap per run: {}",
+            crate::cost_ledger::format_usd_as_credits(cap)
+        ));
     }
     if let Some(permission_mode) = agent.permission_mode.as_deref() {
         lines.push(format!("  permission_mode: {permission_mode}"));
     }
+    lines.push(format!("  skills: {}", describe_agent_skills(agent)));
     if let Some(tools) = agent.tools.as_ref().filter(|tools| !tools.is_empty()) {
         lines.push(format!("  tools: {}", tools.join(", ")));
     }
@@ -592,6 +651,23 @@ fn format_agent_validation(agents: &[AgentDefinition]) -> String {
                     permission_mode
                 ));
             }
+        }
+        if let Some(color) = agent.color.as_deref() {
+            if agent.color_name().is_none() {
+                issues.push(format!(
+                    "{}: unknown color `{color}`, use one of {}",
+                    agent.path.display(),
+                    AGENT_COLORS.join(", ")
+                ));
+            }
+        }
+        let missing = missing_agent_skills(agent);
+        if !missing.is_empty() {
+            issues.push(format!(
+                "{}: skills not installed: {}",
+                agent.path.display(),
+                missing.join(", ")
+            ));
         }
     }
 
@@ -664,7 +740,7 @@ fn create_agent_template_in_dir(name: &str, dir: &Path) -> Result<PathBuf> {
 
     let display_name = name.trim();
     let content = format!(
-        "---\nname: {slug}\ndescription: \"{display_name} specialist\"\nmodel:\ntools: []\ndisallowedTools: []\nmaxTurns: 20\npermissionMode: default\n---\n\nYou are {display_name}. Define the exact responsibilities, workflows, and constraints for this agent before using it in production.\n"
+        "---\nname: {slug}\ndescription: \"{display_name} specialist\"\nmodel:\ncolor:\ntools: []\ndisallowedTools: []\nskills: []\nmaxTurns: 20\npermissionMode: default\n---\n\nYou are {display_name}. Define the exact responsibilities, workflows, and constraints for this agent before using it in production.\n"
     );
     std::fs::write(&path, content)
         .with_context(|| format!("Failed to write agent template {}", path.display()))?;
@@ -695,12 +771,15 @@ fn project_agents_dir() -> Result<PathBuf> {
         .join("agents"))
 }
 
-const EDITABLE_AGENT_FIELDS: [&str; 7] = [
+const EDITABLE_AGENT_FIELDS: [&str; 10] = [
     "description",
     "model",
+    "color",
     "tools",
     "disallowedTools",
+    "skills",
     "maxTurns",
+    "maxBudgetUsd",
     "permissionMode",
     "prompt",
 ];
@@ -781,7 +860,28 @@ fn set_agent_field(name: &str, field: &str, value: &str) -> Result<String> {
             let (frontmatter, _) = split_agent_frontmatter(&content)?;
             format!("{frontmatter}\n\n{}\n", value.trim())
         }
-        "tools" | "disallowedTools" => {
+        "color" => {
+            let color = value.trim().to_ascii_lowercase();
+            if !color.is_empty() && !AGENT_COLORS.contains(&color.as_str()) {
+                bail!(
+                    "Unknown color `{value}`. Colors: {}",
+                    AGENT_COLORS.join(", ")
+                );
+            }
+            replace_frontmatter_field(&content, field, &color)?
+        }
+        "maxBudgetUsd" => {
+            let cap = value.trim();
+            if !cap.is_empty()
+                && !cap
+                    .parse::<f64>()
+                    .is_ok_and(|cap| cap.is_finite() && cap > 0.0)
+            {
+                bail!("maxBudgetUsd takes a positive amount in US dollars, such as 0.50.");
+            }
+            replace_frontmatter_field(&content, field, cap)?
+        }
+        "tools" | "disallowedTools" | "skills" => {
             let items: Vec<String> = value
                 .split(',')
                 .map(str::trim)
@@ -871,6 +971,81 @@ pub fn agent_scope_label(agent: &AgentDefinition) -> &'static str {
     "project"
 }
 
+fn missing_agent_skills(agent: &AgentDefinition) -> Vec<String> {
+    let Some(names) = agent.skills.as_ref().filter(|names| !names.is_empty()) else {
+        return Vec::new();
+    };
+    let installed = crate::skills::discover_skills();
+    names
+        .iter()
+        .filter(|name| {
+            !installed
+                .iter()
+                .any(|skill| skill.name.eq_ignore_ascii_case(name))
+        })
+        .cloned()
+        .collect()
+}
+
+fn describe_agent_skills(agent: &AgentDefinition) -> String {
+    match agent.skills.as_ref().filter(|names| !names.is_empty()) {
+        None => format!(
+            "uses your installed skills when it needs them ({} installed)",
+            crate::skills::discover_skills().len()
+        ),
+        Some(names) => {
+            let missing = missing_agent_skills(agent);
+            let mut text = format!("preloads {}", names.join(", "));
+            if !missing.is_empty() {
+                text.push_str(&format!(" (not installed: {})", missing.join(", ")));
+            }
+            text
+        }
+    }
+}
+
+fn format_agent_history(name: Option<&str>) -> String {
+    let runs = match crate::subagent_audit::recent_agent_runs(name, 20) {
+        Ok(runs) => runs,
+        Err(error) => return format!("Could not read agent activity: {error:#}"),
+    };
+    if runs.is_empty() {
+        return match name {
+            Some(name) => format!("No recorded runs for agent `{name}` yet."),
+            None => "No recorded agent runs yet.".to_string(),
+        };
+    }
+    let mut lines = vec![match name {
+        Some(name) => format!("Activity for `{name}`, newest first"),
+        None => "Agent activity, newest first".to_string(),
+    }];
+    for run in runs {
+        let when = chrono::DateTime::parse_from_rfc3339(&run.timestamp)
+            .map(|at| {
+                at.with_timezone(&chrono::Local)
+                    .format("%Y-%m-%d %H:%M")
+                    .to_string()
+            })
+            .unwrap_or_else(|_| run.timestamp.clone());
+        let spend = run
+            .usage
+            .as_ref()
+            .map(|usage| crate::cost_ledger::format_usd_as_credits(usage.cost_usd))
+            .unwrap_or_else(|| "no usage recorded".to_string());
+        let mut line = format!(
+            "  {when}  {:<20} {:<9} {} file(s) changed  {spend}",
+            run.agent.as_deref().unwrap_or_default(),
+            run.outcome.label(),
+            run.files_modified
+        );
+        if let Some(error) = &run.error {
+            line.push_str(&format!("  {error}"));
+        }
+        lines.push(line);
+    }
+    lines.join("\n")
+}
+
 fn empty_as<'a>(value: &'a str, fallback: &'a str) -> &'a str {
     if value.is_empty() {
         fallback
@@ -900,6 +1075,9 @@ struct AgentFrontmatter {
     disallowed_tools: Option<Vec<String>>,
     max_turns: Option<usize>,
     permission_mode: Option<String>,
+    color: Option<String>,
+    skills: Option<Vec<String>>,
+    max_budget_usd: Option<f64>,
     body: String,
 }
 
@@ -918,6 +1096,9 @@ fn parse_agent_frontmatter(content: &str) -> Result<AgentFrontmatter> {
             disallowed_tools: None,
             max_turns: None,
             permission_mode: None,
+            color: None,
+            skills: None,
+            max_budget_usd: None,
             body: content.to_string(),
         });
     }
@@ -936,6 +1117,9 @@ fn parse_agent_frontmatter(content: &str) -> Result<AgentFrontmatter> {
         let mut disallowed_tools: Option<Vec<String>> = None;
         let mut max_turns: Option<usize> = None;
         let mut permission_mode: Option<String> = None;
+        let mut color: Option<String> = None;
+        let mut skills: Option<Vec<String>> = None;
+        let mut max_budget_usd: Option<f64> = None;
 
         for line in frontmatter_str.lines() {
             let line = line.trim();
@@ -971,6 +1155,21 @@ fn parse_agent_frontmatter(content: &str) -> Result<AgentFrontmatter> {
                 if !v.is_empty() {
                     permission_mode = Some(v);
                 }
+            } else if let Some(val) = line.strip_prefix("color:") {
+                let v = strip_yaml_quotes(val).to_ascii_lowercase();
+                if !v.is_empty() {
+                    color = Some(v);
+                }
+            } else if let Some(val) = line.strip_prefix("skills:") {
+                skills = Some(parse_yaml_list(val));
+            } else if let Some(val) = line
+                .strip_prefix("maxBudgetUsd:")
+                .or_else(|| line.strip_prefix("max_budget_usd:"))
+            {
+                max_budget_usd = strip_yaml_quotes(val)
+                    .parse::<f64>()
+                    .ok()
+                    .filter(|cap| cap.is_finite() && *cap > 0.0);
             }
         }
 
@@ -987,6 +1186,9 @@ fn parse_agent_frontmatter(content: &str) -> Result<AgentFrontmatter> {
             disallowed_tools,
             max_turns,
             permission_mode,
+            color,
+            skills,
+            max_budget_usd,
             body: body.to_string(),
         })
     } else {
@@ -999,6 +1201,9 @@ fn parse_agent_frontmatter(content: &str) -> Result<AgentFrontmatter> {
             disallowed_tools: None,
             max_turns: None,
             permission_mode: None,
+            color: None,
+            skills: None,
+            max_budget_usd: None,
             body: content.to_string(),
         })
     }
@@ -1156,6 +1361,9 @@ mod tests {
                 disallowed_tools: None,
                 max_turns: Some(20),
                 permission_mode: Some("plan".to_string()),
+                color: None,
+                skills: None,
+                max_budget_usd: None,
                 system_prompt: "You research.".to_string(),
                 path: std::path::PathBuf::from(".agiworkforce/agents/researcher.md"),
             },
@@ -1167,6 +1375,9 @@ mod tests {
                 disallowed_tools: None,
                 max_turns: None,
                 permission_mode: None,
+                color: None,
+                skills: None,
+                max_budget_usd: None,
                 system_prompt: String::new(),
                 path: std::path::PathBuf::from(".agiworkforce/agents/minimal.md"),
             },
@@ -1311,6 +1522,9 @@ You are a research specialist. Your job is to analyze topics deeply."#;
             disallowed_tools: None,
             max_turns: Some(20),
             permission_mode: None,
+            color: None,
+            skills: None,
+            max_budget_usd: None,
             system_prompt: "You are a researcher.".to_string(),
             path: PathBuf::from("/tmp/.agiworkforce/agents/researcher.md"),
         }];
@@ -1367,6 +1581,9 @@ You are a research specialist. Your job is to analyze topics deeply."#;
             disallowed_tools: Some(vec!["run_command".to_string()]),
             max_turns: Some(12),
             permission_mode: Some("plan".to_string()),
+            color: None,
+            skills: None,
+            max_budget_usd: None,
             system_prompt: "You review code.".to_string(),
             path: PathBuf::from("/tmp/project/.agiworkforce/agents/reviewer.md"),
         };
@@ -1391,6 +1608,9 @@ You are a research specialist. Your job is to analyze topics deeply."#;
                 disallowed_tools: None,
                 max_turns: None,
                 permission_mode: Some("wild".to_string()),
+                color: None,
+                skills: None,
+                max_budget_usd: None,
                 system_prompt: String::new(),
                 path: PathBuf::from("/tmp/a.md"),
             },
@@ -1402,6 +1622,9 @@ You are a research specialist. Your job is to analyze topics deeply."#;
                 disallowed_tools: None,
                 max_turns: None,
                 permission_mode: None,
+                color: None,
+                skills: None,
+                max_budget_usd: None,
                 system_prompt: "Body".to_string(),
                 path: PathBuf::from("/tmp/b.md"),
             },
@@ -1429,6 +1652,9 @@ You are a research specialist. Your job is to analyze topics deeply."#;
             disallowed_tools: None,
             max_turns: None,
             permission_mode: None,
+            color: None,
+            skills: None,
+            max_budget_usd: None,
             system_prompt: "Body".to_string(),
             path: PathBuf::from(path),
         };
@@ -1487,6 +1713,9 @@ You are a research specialist. Your job is to analyze topics deeply."#;
             disallowed_tools: None,
             max_turns: None,
             permission_mode: None,
+            color: None,
+            skills: None,
+            max_budget_usd: None,
             system_prompt: String::new(),
             path: PathBuf::from("/some/project/.agiworkforce/agents/test.md"),
         };
@@ -1523,6 +1752,9 @@ You are a research specialist. Your job is to analyze topics deeply."#;
             disallowed_tools: Some(vec!["run_command".to_string()]),
             max_turns: Some(5),
             permission_mode: Some("plan".to_string()),
+            color: None,
+            skills: None,
+            max_budget_usd: None,
             system_prompt: "You are a test agent.".to_string(),
             path: PathBuf::from("/tmp/test-agent.md"),
         };
@@ -1578,6 +1810,9 @@ You are a research specialist. Your job is to analyze topics deeply."#;
             disallowed_tools: None,
             max_turns: None,
             permission_mode: None,
+            color: None,
+            skills: None,
+            max_budget_usd: None,
             system_prompt: String::new(),
             path: PathBuf::from("/tmp/model-override.md"),
         };
@@ -1605,6 +1840,9 @@ You are a research specialist. Your job is to analyze topics deeply."#;
             disallowed_tools: Some(vec!["write_file".to_string()]),
             max_turns: Some(20),
             permission_mode: Some("bypassPermissions".to_string()),
+            color: None,
+            skills: None,
+            max_budget_usd: None,
             system_prompt: "Review the requested change.".to_string(),
             path: PathBuf::from("/tmp/reviewer.md"),
         };

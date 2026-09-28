@@ -1,12 +1,10 @@
 'use client';
 
 import { FileText, Layers } from 'lucide-react';
+import type { ConnectorCapabilityCatalog } from '@agiworkforce/cloud-contracts';
 import { Spinner } from '@agiworkforce/ui';
 
-import {
-  useConnectorCapabilities,
-  type ConnectorCapabilityCatalog,
-} from '@/features/connectors/hooks/use-connector-capabilities';
+import { useConnectorCapabilities } from '@/features/connectors/hooks/use-connector-capabilities';
 
 /**
  * What a connected MCP server offers to READ, as opposed to what it offers to

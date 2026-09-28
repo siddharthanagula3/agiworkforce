@@ -222,6 +222,7 @@ pub struct AgentSession {
     /// `task` spawning via `SubagentManager`.
     pub(crate) subagent_depth: usize,
     pub(crate) team_manager: Option<teams::TeamManager>,
+    pub(crate) team_identity: Option<String>,
     /// Post-turn memory consolidation work owned by this session.
     ///
     /// The app-server drains these handles during interrupt/shutdown so an old
@@ -702,6 +703,7 @@ impl AgentSession {
             subagent_manager: None,
             subagent_depth: 0,
             team_manager: None,
+            team_identity: None,
             memory_consolidation_tasks: Vec::new(),
             memory_extracted_through: 0,
             memory_extracted_at: std::time::Instant::now(),
@@ -820,8 +822,38 @@ impl AgentSession {
                 })
             });
         }
+        if self.team_identity.is_some() {
+            tool_definitions.retain(|tool_definition| tool_definition.name != "spawn_teammate");
+        }
 
         tool_definitions
+    }
+
+    pub(crate) fn callable_tool_definitions(
+        &self,
+        offered: &[ToolDefinition],
+    ) -> Vec<ToolDefinition> {
+        let mcp_tool_definitions = self
+            .mcp_manager
+            .as_ref()
+            .map(|mcp_manager| mcp_manager.tool_definitions(self.privacy_mode));
+        let planning_locked = self.plan_mode && !self.plan_approved;
+        let mut callable = offered.to_vec();
+        callable.extend(
+            crate::runtime::tool_catalog::deferred_executable_tool_definitions(
+                planning_locked,
+                self.allowed_tools.as_deref(),
+                mcp_tool_definitions.as_deref(),
+            )
+            .into_iter()
+            .filter(|definition| !offered.iter().any(|tool| tool.name == definition.name))
+            .filter(|definition| {
+                !self.disallowed_tools.iter().any(|spec| {
+                    crate::tool_filters::spec_blocks_entire_tool_for_schema(spec, &definition.name)
+                })
+            }),
+        );
+        callable
     }
 
     /// Ask the desktop shell, once per session, whether a browser is paired.
@@ -1668,31 +1700,137 @@ impl AgentSession {
     /// check on save keeps both writers' turns.
     pub(crate) fn claim_writer_lease(&self) {
         use crate::runtime::writer_lease::{self, LeaseClaim};
+        static LAST_WARNED_HOLDER: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
         if !self.session_persistence {
             return;
         }
         let Some(path) = self.managed_session_path.as_deref() else {
             return;
         };
-        let warning = match writer_lease::claim(path, writer_lease::process_writer("AGI CLI")) {
-            Ok(LeaseClaim::HeldBy(holder)) => format!(
-                "{} is also writing this session. Both copies of the conversation are kept, but neither sees the other's turns until the session is resumed again.",
-                holder.holder_label
-            ),
-            Ok(LeaseClaim::StaleTakeover { previous, .. }) => format!(
-                "{} stopped writing this session without handing it over; this process has taken it over.",
-                previous.holder_label
-            ),
-            Ok(_) => return,
-            Err(error) => {
-                tracing::warn!(%error, "session writer lease unavailable");
+        let (holder_id, warning) =
+            match writer_lease::claim(path, writer_lease::process_writer("AGI CLI")) {
+                Ok(LeaseClaim::HeldBy(holder)) => (
+                    holder.holder_id.clone(),
+                    format!(
+                        "{} is also writing this session. Both copies of the conversation are kept, but neither sees the other's turns until the session is resumed again. /control take makes this terminal the writer.",
+                        holder.holder_label
+                    ),
+                ),
+                Ok(LeaseClaim::StaleTakeover { previous, .. }) => (
+                    previous.holder_id.clone(),
+                    format!(
+                        "{} stopped writing this session without handing it over; this process has taken it over.",
+                        previous.holder_label
+                    ),
+                ),
+                Ok(_) => {
+                    if let Ok(mut last) = LAST_WARNED_HOLDER.lock() {
+                        *last = None;
+                    }
+                    return;
+                }
+                Err(error) => {
+                    tracing::warn!(%error, "session writer lease unavailable");
+                    return;
+                }
+            };
+        if let Ok(mut last) = LAST_WARNED_HOLDER.lock() {
+            if last.as_deref() == Some(holder_id.as_str()) {
                 return;
             }
-        };
+            *last = Some(holder_id);
+        }
         if self.quiet {
             tracing::warn!("{warning}");
         } else {
             crate::output::print_warn(&warning);
+        }
+    }
+
+    pub(crate) fn session_status_lines(&self) -> Vec<String> {
+        use crate::runtime::writer_lease;
+        let Some(managed) = self
+            .managed_session
+            .as_ref()
+            .filter(|_| self.session_persistence)
+        else {
+            return vec!["Session: not saved, so no other client can open it".to_string()];
+        };
+        let mut lines = vec![format!("Session: {}", managed.session_id)];
+        if let Some(path) = self.managed_session_path.as_deref() {
+            lines.push(format!(
+                "Writing: {}",
+                writer_lease::holder_summary(
+                    writer_lease::read(path).as_ref(),
+                    writer_lease::process_writer("AGI CLI"),
+                    chrono::Utc::now(),
+                )
+            ));
+        }
+        if let Some(branch) = managed.git_branch.as_deref() {
+            lines.push(format!("Branch: {branch}"));
+        }
+        if let Some(root) = managed
+            .worktree_root
+            .as_ref()
+            .or(managed.workspace_root.as_ref())
+        {
+            let here = std::env::current_dir().ok();
+            if here.as_deref() == Some(root.as_path()) {
+                lines.push(format!("Worktree: {}", root.display()));
+            } else {
+                lines.push(format!(
+                    "Worktree: {} (this terminal is in {}, so tools run there instead)",
+                    root.display(),
+                    here.map(|path| path.display().to_string())
+                        .unwrap_or_else(|| "an unknown directory".to_string())
+                ));
+            }
+        }
+        lines
+    }
+
+    pub(crate) fn session_control(&self, arg: &str) -> String {
+        use crate::runtime::writer_lease::{self, LeaseClaim};
+        let (Some(managed), Some(path)) = (
+            self.managed_session
+                .as_ref()
+                .filter(|_| self.session_persistence),
+            self.managed_session_path.as_deref(),
+        ) else {
+            return "This conversation is not saved as a session, so there is nothing to hand to another client.".to_string();
+        };
+        let id = managed.session_id.as_str();
+        let own = writer_lease::process_writer("AGI CLI");
+        let holder = || {
+            writer_lease::holder_summary(writer_lease::read(path).as_ref(), own, chrono::Utc::now())
+        };
+        match arg.trim() {
+            "" | "status" => format!(
+                "Session {id} is being written by {}.\n/control release hands it to another client; /control take takes it from whoever is writing it.",
+                holder()
+            ),
+            "release" | "handoff" | "hand-off" => match writer_lease::release(path, own) {
+                Ok(Some(_)) => format!(
+                    "This terminal stopped writing session {id}. Continue it in the desktop app or VS Code, or with `agi resume {id}` in another terminal. Sending a message here takes it back."
+                ),
+                Ok(None) => format!(
+                    "This terminal was not writing session {id}; it is being written by {}.",
+                    holder()
+                ),
+                Err(error) => format!("Could not release session {id}: {error:#}"),
+            },
+            "take" | "takeover" | "take-over" => match writer_lease::take_over(path, own) {
+                Ok(LeaseClaim::TakenOver { previous, .. }) => format!(
+                    "This terminal now writes session {id}. {} stopped writing it and will say so on its next turn.",
+                    previous.holder_label
+                ),
+                Ok(_) => format!("This terminal now writes session {id}."),
+                Err(error) => format!("Could not take session {id}: {error:#}"),
+            },
+            other => format!(
+                "Unknown /control option `{other}`. Use /control, /control release or /control take."
+            ),
         }
     }
 
@@ -2242,7 +2380,7 @@ mod tests {
     #[test]
     fn test_build_team_tool_definitions_count() {
         let defs = build_team_tool_definitions();
-        assert_eq!(defs.len(), 4);
+        assert_eq!(defs.len(), 5);
     }
 
     #[test]

@@ -8,11 +8,34 @@ import {
 } from './constants';
 import { rawFileUrl } from './inspection';
 import type { DirectoryFetch } from './official-marketplace';
-import type { InstalledDirectorySkill, PluginSourceLocation } from './types';
+import type {
+  InstalledDirectorySkill,
+  PluginRuntimeComponents,
+  PluginSourceLocation,
+} from './types';
 
 const SKILL_FILE_SUFFIX = '/SKILL.md';
+const COMMANDS_SEGMENT = 'commands';
+const MARKDOWN_SUFFIX = '.md';
+const COMMAND_NAME_SEPARATOR = ':';
+
+export function pluginContentPaths(components: PluginRuntimeComponents): string[] {
+  return [...components.skillPaths, ...(components.commandPaths ?? [])];
+}
+
+function commandNameFromPath(path: string): string | null {
+  if (!path.endsWith(MARKDOWN_SUFFIX)) return null;
+  const segments = path.slice(0, -MARKDOWN_SUFFIX.length).split('/');
+  const commands = segments.lastIndexOf(COMMANDS_SEGMENT);
+  if (commands === -1 || commands === segments.length - 1) return null;
+  return segments.slice(commands + 1).join(COMMAND_NAME_SEPARATOR);
+}
 
 function skillNameFromPath(path: string): string {
+  if (!path.endsWith(SKILL_FILE_SUFFIX)) {
+    const command = commandNameFromPath(path);
+    if (command) return command;
+  }
   const withoutFile = path.endsWith(SKILL_FILE_SUFFIX)
     ? path.slice(0, -SKILL_FILE_SUFFIX.length)
     : path;
