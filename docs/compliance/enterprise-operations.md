@@ -267,7 +267,8 @@ other key loses its server decision.
 Connector policy is separate from workspace policy and lives at
 `/api/settings/organization/connector-policy`. It holds an allowlist and a
 blocklist of catalog connectors, a switch for custom connectors, an allowlist
-and a blocklist of plugins, and an allowlist of MCP hosts. Any member may read
+and a blocklist of plugins, an allowlist of MCP hosts, and an allowlist and a
+blocklist of websites for web search and page fetching. Any member may read
 it, so a member can see why an integration is missing; only a role with the
 policy permission may change it, and every change is audited with the lists it
 touched.
@@ -282,6 +283,14 @@ How it decides (`apps/web/lib/services/__tests__/connector-policy-evaluator.test
   one in the allowlist does not escape the switch.
 - An MCP host list, when not empty, refuses unlisted hosts and any URL that
   cannot be parsed; `*.example.com` matches subdomains only.
+- A website entry covers the domain and its subdomains. The lists are applied
+  server-side to every member's web search and url_fetch in chat, Deep Research,
+  scheduled tasks, Slack and voice: search results outside them are dropped, a
+  fetch is refused before it starts and at every redirect, and provider-hosted
+  search and fetch are swapped for the product's own tools, which can apply
+  them. Voice has no such tool, so hosted search is off in voice while a site
+  rule is set. Sites a member picks for Deep Research narrow the workspace
+  list; picking only sites it excludes is refused.
 - A personal account is never governed by a workspace's connector policy.
 
 The refusal happens before any credential exchange, so a blocked connector

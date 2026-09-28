@@ -508,6 +508,39 @@ const hi = {
   'mcpDetails.expired':
     'ये विवरण अब सहेजे नहीं हैं। {name} को फिर से जाँचने के लिए AGI Workforce: Show MCP Servers चलाएँ और सर्वर का विवरण चुनें।',
   'mcpDetails.field': '{label}: {value}',
+  'chatNotice.webSearchDenied':
+    'इस सत्र में वेब खोज उपलब्ध नहीं है। {reason} इसके बिना भेजने के लिए Browse the web बंद करें।',
+  'webSearchSetup.title': 'वेब खोज सेट अप करें',
+  'webSearchSetup.placeholder': 'वह खोज सेवा चुनें जिसकी API कुंजी आपके पास है',
+  'webSearchSetup.detail':
+    'टर्मिनल में उसकी API कुंजी डालें। आपकी कुंजी वाले और लोकल सत्र इससे खोजते हैं; प्रबंधित सत्रों को इसकी ज़रूरत नहीं है।',
+  'webSearchSetup.unavailable':
+    'AGI Workforce: यह AGI CLI नहीं बताता कि वह कौन-सी खोज कुंजियाँ सहेज सकता है। VS Code से वेब खोज सेट अप करने के लिए AGI CLI अपडेट करें।',
+  'pluginUpdate.action': 'अपडेट करें',
+  'pluginUpdate.progress': 'AGI Workforce: {name} अपडेट हो रहा है',
+  'pluginUpdate.upToDate': 'AGI Workforce: {name} पहले से अप टू डेट है।',
+  'pluginUpdate.updated': 'AGI Workforce: {name} अपडेट हो गया।',
+  'pluginUpdate.updatedTo': 'AGI Workforce: {name} {to} पर अपडेट हो गया।',
+  'pluginUpdate.updatedFromTo': 'AGI Workforce: {name} {from} से {to} पर अपडेट हो गया।',
+  'chatError.usageLimitResetsAt':
+    'आपने अपने खाते की उपयोग सीमा पूरी कर ली है। यह {time} को रीसेट होगी।',
+  'chatError.continueWith': '{model} के साथ जारी रखें',
+  'chatError.addCredits': 'क्रेडिट जोड़ें',
+  'chatError.comparePlans': 'प्लान की तुलना करें',
+  'chatError.seeUsage': 'अपना उपयोग देखें',
+  'chatError.seeOptions': 'अपने विकल्प देखें',
+  'webview.mcpAuthRequired':
+    '{server} चाहता है कि आप फिर से साइन इन करें। AGI इस चरण में इसका उपयोग नहीं कर सका।',
+  'webview.mcpReconnect': 'साइन इन करें और जारी रखें',
+  'webview.mcpReconnecting': 'साइन इन हो रहा है…',
+  'webview.mcpReconnected': '{server} में साइन इन हो गया। AGI जारी है।',
+  'mcpReconnect.progress': 'AGI Workforce: {server} में साइन इन हो रहा है',
+  'mcpReconnect.notFinished':
+    'AGI Workforce: {server} में साइन इन पूरा नहीं हुआ, इसलिए AGI ने जारी नहीं रखा। तैयार होने पर फिर से कोशिश करें।',
+  'mcpReconnect.failed': 'AGI Workforce: {server} में साइन इन नहीं हो सका: {reason}',
+  'mcpReconnect.noSession':
+    'AGI Workforce: {server} में साइन इन के बाद जारी रखने के लिए यहाँ कोई सत्र नहीं है।',
+  'mcpReconnect.continue': 'जारी रखो',
 };
 
 export default hi;

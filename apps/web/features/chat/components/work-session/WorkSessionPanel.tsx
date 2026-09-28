@@ -45,6 +45,11 @@ import { downloadAllArtifacts, downloadGeneratedFile } from '../../utils/downloa
 import { toast } from 'sonner';
 import { toUserMessage } from '@/lib/user-error-message';
 import {
+  PanelWindowButton,
+  useDetachedWindowTitle,
+} from '@/features/desktop-host/components/PanelWindow';
+import type { PanelWindowControls } from '@/features/desktop-host/lib/panel-windows';
+import {
   AGI_WORK_LABEL,
   CHAT_DOCK_FALLBACK_TITLE,
   CHAT_DOCK_FILES_EMPTY,
@@ -106,6 +111,7 @@ interface WorkSessionPanelProps {
   open: boolean;
   onClose: () => void;
   agiWork?: boolean;
+  windowControls?: PanelWindowControls;
 }
 
 interface WorkSessionToggleButtonProps {
@@ -446,7 +452,9 @@ export function WorkSessionPanel({
   open,
   onClose,
   agiWork = false,
+  windowControls,
 }: WorkSessionPanelProps) {
+  const detached = windowControls?.detached === true;
   const summary = useTaskDockSummary(messages);
   const selectArtifact = useArtifactsStore((state) => state.selectArtifact);
   const setArtifactPanelOpen = useArtifactsStore((state) => state.setPanelOpen);
@@ -474,13 +482,13 @@ export function WorkSessionPanel({
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLElement>(null);
   const layout = useOverlayLayout(SHEET_OVERLAY_QUERY);
-  const isModalOverlay = layout === 'mobile' && open;
+  const isModalOverlay = !detached && layout === 'mobile' && open;
 
   useOverlayDialog(panelRef, isModalOverlay, onClose);
   const panelWidth = useSidePanelWidth();
 
   useEffect(() => {
-    if (!open || isModalOverlay) return;
+    if (!open || isModalOverlay || detached) return;
     const previousFocus =
       document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -492,7 +500,7 @@ export function WorkSessionPanel({
       window.removeEventListener('keydown', onKeyDown);
       previousFocus?.focus();
     };
-  }, [isModalOverlay, onClose, open]);
+  }, [detached, isModalOverlay, onClose, open]);
 
   const showArtifacts = useCallback(() => {
     const first = conversationArtifacts[0];
@@ -535,12 +543,14 @@ export function WorkSessionPanel({
     }
   }, []);
 
-  if (!open) return null;
-
-  const sourceCount = summary.sources.reduce((total, group) => total + group.sources.length, 0);
   const dockTitle = agiWork
     ? (summary.title ?? TASK_DOCK_FALLBACK_TITLE)
     : activeConversationTitle?.trim() || CHAT_DOCK_FALLBACK_TITLE;
+  useDetachedWindowTitle(panelRef, dockTitle, detached);
+
+  if (!open) return null;
+
+  const sourceCount = summary.sources.reduce((total, group) => total + group.sources.length, 0);
   const panelLabel = agiWork ? TASK_DOCK_PANEL_LABEL : CHAT_DOCK_PANEL_LABEL;
   const detailRows = [
     { label: CHAT_DETAILS_CREATED_LABEL, value: formatDetailDate(conversationCreatedAt) },
@@ -689,26 +699,34 @@ export function WorkSessionPanel({
 
   return (
     <>
-      <div
-        className="fixed inset-0 z-[var(--z-panel-backdrop)] bg-black/50 backdrop-blur-sm md:hidden"
-        onClick={onClose}
-        aria-hidden="true"
-      />
+      {detached ? null : (
+        <div
+          className="fixed inset-0 z-[var(--z-panel-backdrop)] bg-black/50 backdrop-blur-sm md:hidden"
+          onClick={onClose}
+          aria-hidden="true"
+        />
+      )}
       <aside
         ref={panelRef}
         role={isModalOverlay ? 'dialog' : undefined}
         aria-modal={isModalOverlay ? true : undefined}
         tabIndex={isModalOverlay ? -1 : undefined}
-        className={cn(
-          'fixed inset-x-0 bottom-0 z-[var(--z-panel)] flex max-h-[85vh] w-full flex-col rounded-t-2xl border-t border-border/30 bg-card/95 outline-none backdrop-blur-xl',
-          'animate-in slide-in-from-bottom duration-moved motion-reduce:animate-none',
-          'md:relative md:inset-auto md:z-auto md:max-h-none md:w-[380px] md:min-w-[280px] md:shrink md:rounded-none md:border-s md:border-t-0',
-          'md:animate-in md:slide-in-from-right',
-        )}
-        style={layout === 'desktop' ? { width: panelWidth } : undefined}
+        className={
+          detached
+            ? 'flex min-h-0 flex-1 flex-col bg-card outline-none'
+            : cn(
+                'fixed inset-x-0 bottom-0 z-[var(--z-panel)] flex max-h-[85vh] w-full flex-col rounded-t-2xl border-t border-border/30 bg-card/95 outline-none backdrop-blur-xl',
+                'animate-in slide-in-from-bottom duration-moved motion-reduce:animate-none',
+                'md:relative md:inset-auto md:z-auto md:max-h-none md:w-[380px] md:min-w-[280px] md:shrink md:rounded-none md:border-s md:border-t-0',
+                'md:animate-in md:slide-in-from-right',
+              )
+        }
+        style={!detached && layout === 'desktop' ? { width: panelWidth } : undefined}
         aria-label={panelLabel}
       >
-        {layout === 'desktop' && <SidePanelResizeHandle label={`Resize ${panelLabel}`} />}
+        {!detached && layout === 'desktop' && (
+          <SidePanelResizeHandle label={`Resize ${panelLabel}`} />
+        )}
         <div className="flex items-center gap-2 border-b border-border/30 px-4 py-3">
           <PanelRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <div className="min-w-0 flex-1">
@@ -717,6 +735,13 @@ export function WorkSessionPanel({
             </h2>
             {agiWork && <p className="text-caption text-muted-foreground">{AGI_WORK_LABEL}</p>}
           </div>
+          {windowControls ? (
+            <PanelWindowButton
+              controls={windowControls}
+              panelLabel={panelLabel}
+              className="h-8 w-8 shrink-0 p-0"
+            />
+          ) : null}
           <Button
             ref={closeButtonRef}
             variant="ghost"

@@ -26,12 +26,19 @@ import { ResearchReportsGallery } from './ResearchReportsGallery';
 import { toUserMessage } from '@/lib/user-error-message';
 import { useOverlayDialog, useOverlayLayout } from '../../hooks/use-overlay-dialog';
 import { SidePanelResizeHandle, useSidePanelWidth } from '../SidePanelResizeHandle';
+import {
+  PanelWindowButton,
+  useDetachedWindowTitle,
+} from '@/features/desktop-host/components/PanelWindow';
+import type { PanelWindowControls } from '@/features/desktop-host/lib/panel-windows';
 
 // ============================================================================
 // Source row
 // ============================================================================
 
 const TITLE_FALLBACK_MAX_LENGTH = 60;
+const RESEARCH_WINDOW_TITLE = 'Research';
+const RESEARCH_PANEL_LABEL = 'research panel';
 
 function pathTrimmedUrl(url: string): string {
   try {
@@ -293,9 +300,17 @@ interface ResearchPanelProps {
   onAskFollowUp?: (prompt: string) => void;
   /** Start a new Deep Research run on a report's question, when a turn can start. */
   onRunAgain?: (query: string) => void;
+  onClose?: () => void;
+  windowControls?: PanelWindowControls;
 }
 
-export function ResearchPanel({ onAskFollowUp, onRunAgain }: ResearchPanelProps) {
+export function ResearchPanel({
+  onAskFollowUp,
+  onRunAgain,
+  onClose,
+  windowControls,
+}: ResearchPanelProps) {
+  const detached = windowControls?.detached === true;
   const panelOpen = useResearchPanelStore((s) => s.panelOpen);
   const closePanel = useResearchPanelStore((s) => s.closePanel);
   const sourcesFor = useResearchPanelStore((s) => s.sourcesFor);
@@ -306,55 +321,65 @@ export function ResearchPanel({ onAskFollowUp, onRunAgain }: ResearchPanelProps)
 
   // The follow-up lands in the transcript behind this panel, so the panel gets
   // out of the way to show it arriving.
+  const close = onClose ?? closePanel;
   const askFollowUpAndClose = onAskFollowUp
     ? (prompt: string) => {
         onAskFollowUp(prompt);
-        closePanel();
+        if (!detached) closePanel();
       }
     : undefined;
   const runAgainAndClose = onRunAgain
     ? (query: string) => {
         onRunAgain(query);
-        closePanel();
+        if (!detached) closePanel();
       }
     : undefined;
 
   const panelRef = useRef<HTMLDivElement>(null);
   const layout = useOverlayLayout();
-  const isModalOverlay = layout === 'mobile' && panelOpen;
-  useOverlayDialog(panelRef, isModalOverlay, closePanel);
+  const isModalOverlay = !detached && layout === 'mobile' && panelOpen;
+  useOverlayDialog(panelRef, isModalOverlay, close);
   const panelWidth = useSidePanelWidth();
+  useDetachedWindowTitle(panelRef, RESEARCH_WINDOW_TITLE, detached);
 
-  if (!panelOpen) return null;
+  if (!panelOpen && !detached) return null;
 
   return (
     <>
       {/* Mobile backdrop */}
-      <div
-        className="fixed inset-0 z-[var(--z-panel-backdrop)] bg-black/50 backdrop-blur-sm sm:hidden"
-        onClick={closePanel}
-        aria-hidden="true"
-      />
+      {detached ? null : (
+        <div
+          className="fixed inset-0 z-[var(--z-panel-backdrop)] bg-black/50 backdrop-blur-sm sm:hidden"
+          onClick={close}
+          aria-hidden="true"
+        />
+      )}
 
       {/* Panel */}
       <div
         ref={panelRef}
-        className={cn(
-          'flex flex-col border-s border-border/30',
-          'bg-card/95 backdrop-blur-xl',
-          // Mobile: full-screen overlay
-          'fixed inset-y-0 end-0 z-[var(--z-panel)] w-full',
-          'sm:relative sm:inset-auto sm:z-auto sm:w-[360px] sm:min-w-[280px] sm:shrink',
-          // Slide-in animation
-          'animate-in slide-in-from-right duration-moved',
-        )}
-        style={layout === 'desktop' ? { width: panelWidth } : undefined}
+        className={
+          detached
+            ? 'flex min-h-0 flex-1 flex-col bg-card'
+            : cn(
+                'flex flex-col border-s border-border/30',
+                'bg-card/95 backdrop-blur-xl',
+                // Mobile: full-screen overlay
+                'fixed inset-y-0 end-0 z-[var(--z-panel)] w-full',
+                'sm:relative sm:inset-auto sm:z-auto sm:w-[360px] sm:min-w-[280px] sm:shrink',
+                // Slide-in animation
+                'animate-in slide-in-from-right duration-moved',
+              )
+        }
+        style={!detached && layout === 'desktop' ? { width: panelWidth } : undefined}
         aria-label="Research panel"
         // Only the covering form is a dialog. Beside the conversation this is an
         // ordinary region and must not trap focus or swallow Escape.
         {...(isModalOverlay ? { role: 'dialog' as const, 'aria-modal': true, tabIndex: -1 } : {})}
       >
-        {layout === 'desktop' && <SidePanelResizeHandle label="Resize research panel" />}
+        {!detached && layout === 'desktop' && (
+          <SidePanelResizeHandle label="Resize research panel" />
+        )}
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border/30 px-4 py-3">
           <div className="flex items-center gap-2">
@@ -409,15 +434,24 @@ export function ResearchPanel({ onAskFollowUp, onRunAgain }: ResearchPanelProps)
               </span>
             )}
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={closePanel}
-            className="h-7 w-7 p-0"
-            aria-label="Close sources panel"
-          >
-            <X className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center gap-1">
+            {windowControls ? (
+              <PanelWindowButton
+                controls={windowControls}
+                panelLabel={RESEARCH_PANEL_LABEL}
+                className="h-7 w-7 p-0"
+              />
+            ) : null}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={close}
+              className="h-7 w-7 p-0"
+              aria-label="Close sources panel"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
 
         {tab === 'library' ? (

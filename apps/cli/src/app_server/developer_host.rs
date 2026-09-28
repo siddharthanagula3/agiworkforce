@@ -130,6 +130,7 @@ fn account_response(snapshot: account::AccountSnapshot) -> AccountStatusResponse
 struct PreparedInput {
     text: String,
     images: Vec<ContentBlock>,
+    search: bool,
 }
 
 struct TurnSetupSnapshot {
@@ -938,11 +939,15 @@ impl CliDeveloperSessionHost {
             }
         }
 
+        let mut search = false;
         if let Some(index) = typed_parts
             .into_iter()
             .find(|index| text_parts[*index].trim_start().starts_with('/'))
         {
-            if let Some(expanded) = surfaces::expand_prompt_command(&text_parts[index])? {
+            if let Some(question) = surfaces::search_command(&text_parts[index])? {
+                search = true;
+                text_parts[index] = question;
+            } else if let Some(expanded) = surfaces::expand_prompt_command(&text_parts[index])? {
                 text_parts[index] = expanded;
             }
         }
@@ -952,7 +957,11 @@ impl CliDeveloperSessionHost {
                 "turn input must contain text, an image, a skill, or a mention",
             ));
         }
-        Ok(PreparedInput { text, images })
+        Ok(PreparedInput {
+            text,
+            images,
+            search,
+        })
     }
 
     fn content_block_from_local_image(
@@ -1179,6 +1188,23 @@ impl CliDeveloperSessionHost {
         previous: Option<&ManagedSessionAutoRouting>,
         account_tier: &str,
     ) -> Result<ResolvedThreadModel, DeveloperSessionHostError> {
+        self.resolve_auto_thread_model_with_speed(
+            requested,
+            task_type,
+            previous,
+            account_tier,
+            previous.is_some_and(|state| state.speed_first),
+        )
+    }
+
+    fn resolve_auto_thread_model_with_speed(
+        &self,
+        requested: &str,
+        task_type: DeveloperRoutingTaskType,
+        previous: Option<&ManagedSessionAutoRouting>,
+        account_tier: &str,
+        speed_first: bool,
+    ) -> Result<ResolvedThreadModel, DeveloperSessionHostError> {
         let trust_mode = if let Some(previous) = previous {
             previous.trust_mode
         } else {
@@ -1186,13 +1212,14 @@ impl CliDeveloperSessionHost {
         };
         let tier = auto_routing_tier(trust_mode, account_tier);
         let routing_task_type = registry_task_type(task_type);
-        let selection = crate::model_catalog::resolve_auto_model_with_context(
+        let selection = crate::model_catalog::resolve_auto_model_with_speed(
             requested,
             routing_task_type,
             tier,
             trust_mode,
             previous.map(|state| state.model_key.as_str()),
             previous.map(|state| registry_task_type(state.task_type)),
+            speed_first,
         )
         .map_err(DeveloperSessionHostError::invalid_request)?;
 
@@ -1213,6 +1240,7 @@ impl CliDeveloperSessionHost {
                 model_key: selection.model_key,
                 task_type,
                 trust_mode,
+                speed_first,
             }),
             fallback_model_ids,
         })
@@ -2323,11 +2351,21 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                         .routing_task_type
                         .or_else(|| previous_auto.as_ref().map(|state| state.task_type))
                         .unwrap_or(DeveloperRoutingTaskType::Coding);
-                    let resolved = self.resolve_auto_thread_model(
+                    let speed_first = match params.routing_profile {
+                        Some(profile) => matches!(profile, DeveloperRoutingProfile::Speed),
+                        None => {
+                            params.model.is_none()
+                                && previous_auto
+                                    .as_ref()
+                                    .is_some_and(|state| state.speed_first)
+                        }
+                    };
+                    let resolved = self.resolve_auto_thread_model_with_speed(
                         &selection,
                         task_type,
                         previous_auto.as_ref(),
                         account_tier,
+                        speed_first,
                     )?;
                     Self::apply_auto_thread_model(&mut agent, resolved)?;
                 } else if let Some(model) = params.model.as_deref() {
@@ -2507,6 +2545,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             while let Some(input) = next_input {
                 let mut agent = task_session.lock().await;
                 agent.pending_image_blocks = input.images;
+                agent.search_next_turn = input.search;
                 agent.quiet = true;
                 agent.on_tool_approval = Some(ToolApprovalSink(approval_callback(
                     task_thread_id.clone(),
@@ -2546,12 +2585,26 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                     ),
                 );
                 let turn_config = turn_config_pinned_to_session_route(&task_config, &agent);
-                let result = crate::mcp::collect_sign_in_required(agent.send(
-                    &turn_config,
-                    &input.text,
-                    on_chunk,
-                ))
-                .await;
+                let (result, reconnects) =
+                    crate::cloud::connectors::collecting(crate::mcp::collect_sign_in_required(
+                        agent.send(&turn_config, &input.text, on_chunk),
+                    ))
+                    .await;
+                for reconnect in reconnects {
+                    if let Ok(notification) = AppServerNotification::new(
+                        agiworkforce_protocol::developer_session::method::MCP_AUTH_REQUIRED,
+                        McpAuthRequiredNotification {
+                            thread_id: task_thread_id.clone(),
+                            turn_id: task_turn_id.clone(),
+                            tool_call_id: reconnect.tool_call_id,
+                            server: reconnect.connector_name,
+                            scope: None,
+                            connect_url: reconnect.connect_url,
+                        },
+                    ) {
+                        let _ = task_notifications.send(notification);
+                    }
+                }
                 agent.on_tool_approval = None;
                 agent.on_tool_event = None;
                 agent.on_continuation_chunk = None;
@@ -4058,6 +4111,7 @@ fn mcp_sign_in_tracking(
                     tool_call_id: call_id.clone(),
                     server: required.server,
                     scope: required.scope,
+                    connect_url: None,
                 }
             }),
             _ => None,
@@ -6101,6 +6155,7 @@ mod tests {
             model_key: previous_route.model_key,
             task_type: DeveloperRoutingTaskType::SimpleChat,
             trust_mode: agiworkforce_model_registry::TrustMode::Byok,
+            speed_first: false,
         };
 
         let resolved = host

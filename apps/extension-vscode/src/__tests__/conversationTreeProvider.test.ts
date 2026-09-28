@@ -150,7 +150,7 @@ describe('ConversationTreeProvider', () => {
     await provider.getThreads();
 
     await expect(provider.forkThread('one', 'A copy')).resolves.toBe('one-fork');
-    expect(runtime.forkThread).toHaveBeenCalledWith('one', 'A copy');
+    expect(runtime.forkThread).toHaveBeenCalledWith('one', 'A copy', undefined);
     expect(changed).toHaveBeenCalledOnce();
 
     await provider.readThread('one-fork');

@@ -74,7 +74,10 @@
     "runtimeConsent": "Diese App möchte KI mit deinem Konto nutzen. Jede Anfrage zählt zur Nutzung deines Tarifs.",
     "runtimeConsentConnectors": "Diese App möchte KI mit deinem Konto nutzen und Daten in {{apps}} lesen oder ändern. Sie sieht, was diese Apps zurückgeben, und jede Anfrage zählt zur Nutzung deines Tarifs.",
     "runtimeAllow": "Zulassen",
-    "runtimeDecline": "Nicht zulassen"
+    "runtimeDecline": "Nicht zulassen",
+    "saveCopy": "Eine Kopie in meinen Chats speichern",
+    "saveCopyBusy": "Wird kopiert…",
+    "saveCopyFailed": "Dieses Artefakt konnte nicht kopiert werden."
   },
   "sidebar": {
     "activeConversation": "Aktive Unterhaltung",
