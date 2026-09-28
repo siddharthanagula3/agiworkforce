@@ -6,7 +6,11 @@ import {
   MAX_FILE_TEXT_CHARS,
 } from '@agiworkforce/types';
 import { matchDenylistedUpload } from '@/lib/moderation';
-import { scanUploadBytes, type UploadScanFinding } from '@/lib/security/upload-scan';
+import {
+  scanUploadBytes,
+  uploadRefusalMessage,
+  type UploadScanFinding,
+} from '@/lib/security/upload-scan';
 import { objectKeyFromStorageUri, StoredObjectTooLargeError } from './object-storage';
 import {
   extractOfficeDocumentText,
@@ -329,7 +333,7 @@ export async function extractProjectKnowledgeFile(
   if (!scan.ok) {
     throw new ProjectKnowledgeExtractionError(
       'content_rejected',
-      KNOWLEDGE_FILE_REJECTION_MESSAGE,
+      uploadRefusalMessage(scan.findings, KNOWLEDGE_FILE_REJECTION_MESSAGE),
       { sha256: hashMatch.sha256, findings: scan.findings },
     );
   }

@@ -1,10 +1,14 @@
 import 'server-only';
 
 import {
+  ManagedMediaVideoAspectRatioSchema,
+  ManagedMediaVideoDurationSecsSchema,
+  ManagedMediaVideoResolutionSchema,
   supportsManagedMediaImageEdit,
   type ManagedMediaModelAdmission,
   type ManagedMediaModelAdmissionState,
   type ManagedMediaModelAvailabilityResponse,
+  type ManagedMediaVideoOutputSize,
 } from '@agiworkforce/cloud-contracts';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
@@ -15,6 +19,10 @@ import {
   type ModelMetadata,
 } from '@agiworkforce/types';
 import { getOptionalEnv } from '@shared/utils/env';
+import {
+  IMAGE_ASPECT_RATIOS_BY_API,
+  maxImagesPerRequest,
+} from '@/app/api/media/image/lib/image-generation-provider';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getNeonDb } from '@/lib/server/neon-db';
@@ -101,6 +109,60 @@ function admissionState(input: {
   return 'enabled';
 }
 
+type AdmissionShape = Pick<
+  ManagedMediaModelAdmission,
+  'supports_edit' | 'aspect_ratios' | 'max_images' | 'output_sizes' | 'supports_audio'
+>;
+
+function imageShape(model: ModelMetadata): AdmissionShape {
+  return {
+    supports_edit: supportsManagedMediaImageEdit(model.imageApi),
+    ...(model.imageApi
+      ? {
+          aspect_ratios: [...IMAGE_ASPECT_RATIOS_BY_API[model.imageApi]],
+          max_images: maxImagesPerRequest(model.imageApi),
+        }
+      : {}),
+  };
+}
+
+function requestableVideoOutputSizes(model: ModelMetadata): ManagedMediaVideoOutputSize[] {
+  const video = model.videoGeneration;
+  if (!video) return [];
+  const pricesByResolution = video.pricing ? undefined : model.videoPerSecondCostByResolution;
+  const sizes: ManagedMediaVideoOutputSize[] = [];
+  for (const size of video.outputSizes) {
+    const resolution = ManagedMediaVideoResolutionSchema.safeParse(size.resolution);
+    const aspectRatio = ManagedMediaVideoAspectRatioSchema.safeParse(size.aspectRatio);
+    if (!resolution.success || !aspectRatio.success) continue;
+    if (pricesByResolution && pricesByResolution[resolution.data] === undefined) continue;
+    const durations = video.durationSecs.filter(
+      (seconds) =>
+        (!size.durationSecs || size.durationSecs.includes(seconds)) &&
+        ManagedMediaVideoDurationSecsSchema.safeParse(seconds).success,
+    );
+    if (durations.length === 0) continue;
+    sizes.push({
+      resolution: resolution.data,
+      aspect_ratio: aspectRatio.data,
+      width: size.width,
+      height: size.height,
+      duration_secs: durations,
+    });
+  }
+  return sizes;
+}
+
+function videoShape(model: ModelMetadata): AdmissionShape {
+  if (!model.videoGeneration) return {};
+  const outputSizes = requestableVideoOutputSizes(model);
+  return {
+    aspect_ratios: [...new Set(outputSizes.map((size) => size.aspect_ratio))],
+    output_sizes: outputSizes,
+    supports_audio: model.videoGeneration.supportsAudio,
+  };
+}
+
 export function resolveMediaModelAvailability(
   evidence: MediaModelAvailabilityEvidence = {},
 ): ManagedMediaModelAvailabilityResponse {
@@ -127,9 +189,7 @@ export function resolveMediaModelAvailability(
         kind,
         provider: provider ?? model.provider,
         state: admissionState({ provider, storageConfigured, schemaConfigured, getEnv }),
-        ...(kind === 'image'
-          ? { supports_edit: supportsManagedMediaImageEdit(model.imageApi) }
-          : {}),
+        ...(kind === 'image' ? imageShape(model) : videoShape(model)),
       });
     }
   }

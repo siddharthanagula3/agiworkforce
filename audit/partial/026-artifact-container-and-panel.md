@@ -206,18 +206,6 @@ Code: `apps/cli/src/lib.rs:1024-1027`, `apps/cli/src/cloud/artifacts.rs:306-316`
 
 Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:421-435`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:228-252`, `apps/cli/src/lib.rs:1034-1041`, `apps/cli/src/lib.rs:1944-1948`
 
-## S26.30: Copy content.
-
-- Done when: A copy control puts the artifact's own content on the clipboard and confirms it.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | Copying only the artifact needs its block derived from the message (deriveArtifacts in @agiworkforce/artifacts), which is not an extension dependency yet; adding it changes the lockfile, so it waits on the lead. | handler |
-
-Code: `apps/extension/src/features/side-panel/artifactsDrawer.ts:210-210`
-
 ## S26.31: Share controls.
 
 - Done when: The user can publish an artifact to a link, copy/share the link, choose who can open it, and take it down.

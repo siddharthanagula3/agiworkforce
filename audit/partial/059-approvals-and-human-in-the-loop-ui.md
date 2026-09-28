@@ -105,15 +105,3 @@ Code: `apps/cli/src/app_server/developer_host.rs:68-68`
 | cli | partial | A CLI session's approvals can be answered from the phone companion, but the CLI cannot answer approvals raised by cloud runs on other devices. | ui |
 
 Code: `apps/cli/src/platform/runtime/session_handoff.rs:107-110`
-
-## S59.29: User takeover.
-
-- Done when: While the agent controls a screen or browser, the user can take over control and later hand it back.
-- Wave: 3
-- Already works on: chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| desktop | partial | Take Over and Hand Back exist as app-menu items, but Hand Back only clears the flag; the model is never told control returned, so the paused run does not resume. | handler |
-
-Code: `apps/desktop/electron/appMenu.ts:115-116`, `apps/desktop/electron/runtime/computerUseService.ts:183-193`, `apps/desktop/electron/runtime/computerUseService.ts:190-195`

@@ -131,9 +131,9 @@ Code: `apps/cli/src/tui/tui_app.rs:1590-1590`, `apps/cli/src/tui/tui_app.rs:1530
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Selection is per block: every paragraph, list item, table cell and code block is a separate selectable Text, so one selection cannot span blocks. | ui |
+| mobile | partial | A Select Text action opens the whole message as one selectable text, as ChatGPT's iOS app does (help.openai.com 6825453, iOS text selection), in post-codex/chat-gates-s16.09-s17.38-s17.39-s20.26-mobile-bubble.patch. | ui |
 
-Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:660-660`, `apps/mobile/src/features/chat/components/MessageContentRenderer.tsx:219-219`
+Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:528-528`
 
 ## S20.27: Find-in-answer highlighting.
 
