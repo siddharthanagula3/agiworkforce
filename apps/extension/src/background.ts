@@ -173,6 +173,7 @@ import {
 } from './features/cloud-bridge/freeTrialClient';
 import {
   abortConversationSyncForOwnerChange,
+  ensureCloudConversation,
   queueCloudConversationDeletion,
   scheduleConversationSync,
   sweepConversationSync,
@@ -4044,6 +4045,27 @@ async function handleMessageAsync(
       // alarm is what brings the mirror back around.
       armMaintenanceAlarm();
       return { success: true } as ExtensionResponse;
+    }
+
+    case 'ENSURE_CLOUD_CONVERSATION': {
+      const ensureMsg = message as import('./types').EnsureCloudConversationMessage;
+      const ensureOwner = normalizeManagedCloudOwner(ensureMsg.owner);
+      if (!ensureOwner || isRetiredManagedCloudOwner(ensureOwner)) {
+        return { success: false, error: 'Invalid Managed Cloud owner' } as ExtensionResponse;
+      }
+      if (typeof ensureMsg.conversationId !== 'string' || ensureMsg.conversationId.length === 0) {
+        return { success: false, error: 'conversationId is required' } as ExtensionResponse;
+      }
+      const cloudConversationId = await ensureCloudConversation(
+        ensureOwner,
+        ensureMsg.conversationId,
+      );
+      return cloudConversationId
+        ? ({ success: true, cloudConversationId } as ExtensionResponse)
+        : ({
+            success: false,
+            error: 'This chat is not saved to your account yet.',
+          } as ExtensionResponse);
     }
 
     case 'DELETE_CLOUD_CONVERSATION' as ExtensionMessage['type']: {

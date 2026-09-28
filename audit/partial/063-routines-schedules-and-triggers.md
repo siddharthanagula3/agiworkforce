@@ -177,18 +177,6 @@ Code: `apps/mobile/src/features/schedules/service.ts:174-174`
 | --- | --- | --- | --- |
 | chrome | missing | Not built on this surface. |  |
 
-## S63.23: Per-run results.
-
-- Done when: Opening a run shows what that run produced (its output text), not just its status.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Migration 0284 is now applied in production (2026-09-27). Still open: The runs quick pick shows status, trigger, duration and error, never the output; runs also fail until pending migration 0284 ships. | ui |
-
-Code: `apps/extension-vscode/src/features/schedules/schedulePresentation.ts:126-126`, `apps/extension-vscode/src/core/commandSetup.ts:2235-2235`
-
 ## S63.26: Edit schedule.
 
 - Done when: An existing routine's timing and settings can be edited and saved.

@@ -74,7 +74,10 @@
     "runtimeConsent": "このアプリがあなたのアカウントで AI を使おうとしています。各リクエストはプランの使用量に含まれます。",
     "runtimeConsentConnectors": "このアプリがあなたのアカウントで AI を使い、{{apps}} のデータを読み取ったり変更したりしようとしています。アプリはそれらのアプリが返す内容を見ることができ、各リクエストはプランの使用量に含まれます。",
     "runtimeAllow": "許可",
-    "runtimeDecline": "許可しない"
+    "runtimeDecline": "許可しない",
+    "saveCopy": "コピーを自分のチャットに保存",
+    "saveCopyBusy": "コピー中…",
+    "saveCopyFailed": "このアーティファクトをコピーできませんでした。"
   },
   "sidebar": {
     "activeConversation": "アクティブな会話",
