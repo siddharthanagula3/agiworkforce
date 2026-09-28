@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useSession } from '@/lib/identity/client';
 import { X, Code, Layers, Plus } from 'lucide-react';
@@ -904,6 +905,7 @@ function ArtifactDrawer({ artifact, onClose }: ArtifactDrawerProps) {
 
   if (!artifact) return null;
 
+  const sourceConversationId = 'conversationId' in artifact ? artifact.conversationId : undefined;
   const previewArtifact = {
     id: artifact.id,
     type: artifact.type,
@@ -984,6 +986,23 @@ function ArtifactDrawer({ artifact, onClose }: ArtifactDrawerProps) {
           >
             {languageLabel(artifact.language)}
           </span>
+          {sourceConversationId ? (
+            <Link
+              href={`/chat/${sourceConversationId}`}
+              style={{
+                fontSize: 'var(--agi-text-xs)',
+                fontWeight: 500,
+                color: 'var(--agi-ink-2)',
+                border: '1px solid var(--agi-rule)',
+                borderRadius: 'var(--corner-control)',
+                padding: 'var(--space-1) var(--space-2)',
+                textDecoration: 'none',
+                flexShrink: 0,
+              }}
+            >
+              Open chat
+            </Link>
+          ) : null}
           <button
             type="button"
             onClick={onClose}
