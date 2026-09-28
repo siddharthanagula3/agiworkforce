@@ -460,6 +460,8 @@ pub async fn add_memory(
                 source: Some(MEMORY_SOURCE.to_string()),
                 pinned: false,
                 updated_at: chrono::Utc::now().to_rfc3339(),
+                source_conversation_id: None,
+                source_conversation_title: None,
             },
         );
         if let Err(error) = save_memory_cache(&session.config_dir, &cache) {
@@ -688,6 +690,8 @@ mod tests {
             source: None,
             pinned: false,
             updated_at: "2026-09-13T00:00:00Z".to_string(),
+            source_conversation_id: None,
+            source_conversation_title: None,
         });
         save_memory_cache(dir.path(), &cache).expect("save");
 

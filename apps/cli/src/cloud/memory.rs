@@ -52,6 +52,10 @@ pub struct MemoryDelta {
     pub is_deleted: bool,
     pub updated_at: String,
     pub server_version: String,
+    #[serde(default)]
+    pub source_conversation_id: Option<String>,
+    #[serde(default)]
+    pub source_conversation_title: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -113,6 +117,10 @@ pub struct CachedMemory {
     #[serde(default)]
     pub pinned: bool,
     pub updated_at: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_conversation_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_conversation_title: Option<String>,
 }
 
 impl MemoryCache {
@@ -129,6 +137,8 @@ impl MemoryCache {
                 source: delta.source.clone(),
                 pinned: delta.pinned,
                 updated_at: delta.updated_at.clone(),
+                source_conversation_id: delta.source_conversation_id.clone(),
+                source_conversation_title: delta.source_conversation_title.clone(),
             });
         }
         self.entries.sort_by(|a, b| {
@@ -326,6 +336,8 @@ mod tests {
             is_deleted: deleted,
             updated_at: format!("2026-09-13T00:00:{version:0>2}Z"),
             server_version: version.to_string(),
+            source_conversation_id: None,
+            source_conversation_title: None,
         }
     }
 
@@ -349,6 +361,8 @@ mod tests {
             source: None,
             pinned: false,
             updated_at: "2026-09-13T00:00:00Z".to_string(),
+            source_conversation_id: None,
+            source_conversation_title: None,
         };
         let push = delete_memory(&entry, &state, "cli");
         assert!(push.is_deleted);
