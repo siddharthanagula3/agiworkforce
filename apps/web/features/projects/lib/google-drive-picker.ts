@@ -1,5 +1,11 @@
 'use client';
 
+import {
+  GOOGLE_DRIVE_PICKER_PATH,
+  GoogleDrivePickerResponseSchema,
+  type GoogleDrivePickerResponse,
+} from '@agiworkforce/cloud-contracts';
+
 const GOOGLE_API_SCRIPT = 'https://apis.google.com/js/api.js';
 
 interface PickerDocument {
@@ -33,16 +39,16 @@ interface GoogleApiWindow extends Window {
   google?: { picker?: GooglePickerNamespace };
 }
 
-export type GoogleDrivePickerConfig =
-  | { status: 'ready'; accessToken: string; developerKey: string; appId: string }
-  | { status: 'not-configured' | 'not-connected' | 'reconnect-required' };
+const PICKER_UNREACHABLE_COPY = 'Google Drive could not be reached. Try again.';
 
-export async function fetchGoogleDrivePickerConfig(): Promise<GoogleDrivePickerConfig> {
-  const response = await fetch('/api/connectors/google-drive/picker', {
+export async function fetchGoogleDrivePickerConfig(): Promise<GoogleDrivePickerResponse> {
+  const response = await fetch(GOOGLE_DRIVE_PICKER_PATH, {
     credentials: 'same-origin',
   });
-  if (!response.ok) throw new Error('Google Drive could not be reached. Try again.');
-  return (await response.json()) as GoogleDrivePickerConfig;
+  if (!response.ok) throw new Error(PICKER_UNREACHABLE_COPY);
+  const parsed = GoogleDrivePickerResponseSchema.safeParse(await response.json());
+  if (!parsed.success) throw new Error(PICKER_UNREACHABLE_COPY);
+  return parsed.data;
 }
 
 let pickerLoad: Promise<GooglePickerNamespace> | null = null;
@@ -80,7 +86,7 @@ function loadGooglePicker(): Promise<GooglePickerNamespace> {
 }
 
 export async function pickGoogleDriveFiles(
-  config: Extract<GoogleDrivePickerConfig, { status: 'ready' }>,
+  config: Extract<GoogleDrivePickerResponse, { status: 'ready' }>,
 ): Promise<string[]> {
   const picker = await loadGooglePicker();
   return new Promise<string[]>((resolve) => {

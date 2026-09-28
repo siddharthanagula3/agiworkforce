@@ -149,6 +149,13 @@ const capabilitiesSchema = z.object({
   mcpTools: z.boolean().optional(),
   approvalNotes: z.boolean().optional(),
   approvalEdits: z.boolean().optional(),
+  threadUnarchive: z.boolean().optional(),
+  threadSearch: z.boolean().optional(),
+  forkAtMessage: z.boolean().optional(),
+  promptCommands: z.boolean().optional(),
+  maxTurns: z.boolean().optional(),
+  memory: z.boolean().optional(),
+  plan: z.boolean().optional(),
 });
 
 const initializeResponseSchema = z.object({
@@ -269,6 +276,7 @@ const threadReadResponseSchema = z.object({
       z.object({
         role: z.string().min(1).max(40),
         text: z.string().max(1_000_000),
+        index: z.number().int().nonnegative().optional(),
       }),
     )
     .max(10_000),
@@ -322,6 +330,29 @@ const threadCheckpointsResponseSchema = z.object({
 });
 
 export type ThreadCheckpointList = z.infer<typeof threadCheckpointsResponseSchema>;
+
+const threadSearchResponseSchema = z.object({
+  hits: z
+    .array(
+      z.object({
+        thread: threadSummarySchema,
+        titleMatched: z.boolean(),
+        matches: z
+          .array(
+            z.object({
+              messageIndex: z.number().int().nonnegative(),
+              role: z.string().max(40),
+              snippet: z.string().max(4_000),
+            }),
+          )
+          .max(200)
+          .default([]),
+      }),
+    )
+    .max(1_000),
+});
+
+export type ThreadSearchResults = z.infer<typeof threadSearchResponseSchema>;
 
 const threadReconnectResponseSchema = z.object({
   activeTurn: z
@@ -388,6 +419,18 @@ const localModelListResponseSchema = z.object({
     }),
   ),
   hostModels: z.array(hostModelSummarySchema).optional(),
+  localServers: z
+    .array(
+      z.object({
+        provider: z.enum(['ollama', 'lmstudio']),
+        health: z.enum(['running', 'not_running', 'unhealthy', 'blocked']),
+        modelCount: z.number().int().nonnegative(),
+        message: z.string().max(2_000).optional(),
+      }),
+    )
+    .max(20)
+    .optional()
+    .catch(undefined),
 });
 const turnSummarySchema = z.object({
   id: z.string().min(1),
@@ -1139,13 +1182,45 @@ export class LocalRuntimeClient {
     ) as ThreadReadResponse;
   }
 
-  async forkThread(threadId: string, title?: string): Promise<ThreadSummary> {
+  async forkThread(
+    threadId: string,
+    title?: string,
+    throughMessageIndex?: number,
+  ): Promise<ThreadSummary> {
     const connection = await this.readyConnection();
+    if (throughMessageIndex !== undefined && !(await this.offers('forkAtMessage'))) {
+      throw new Error(
+        'The installed AGI CLI can only fork a whole session. Update the AGI CLI to branch from a message.',
+      );
+    }
     const result = await connection.request('thread/fork', {
       threadId,
       ...(title !== undefined ? { title } : {}),
+      ...(throughMessageIndex === undefined ? {} : { throughMessageIndex }),
     });
     return threadStartResponseSchema.parse(result).thread as ThreadSummary;
+  }
+
+  async searchThreads(query: string, includeArchived = false): Promise<ThreadSearchResults> {
+    const connection = await this.readyConnection();
+    if (!(await this.offers('threadSearch'))) {
+      throw new Error(
+        'The installed AGI CLI cannot search session transcripts. Update the AGI CLI to search them.',
+      );
+    }
+    return threadSearchResponseSchema.parse(
+      await connection.request('thread/search', { query, includeArchived }),
+    );
+  }
+
+  async unarchiveThread(threadId: string): Promise<void> {
+    const connection = await this.readyConnection();
+    if (!(await this.offers('threadUnarchive'))) {
+      throw new Error(
+        'The installed AGI CLI cannot restore archived sessions. Update the AGI CLI to restore them.',
+      );
+    }
+    await connection.request('thread/unarchive', { threadId });
   }
 
   async handOffThread(

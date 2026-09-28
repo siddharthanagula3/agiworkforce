@@ -51,6 +51,7 @@ export interface AccountUsageAllowances {
   units: AccountUsageAllowanceUnit[];
   images: { images: number; requests: number; credits: number };
   responses: { active: number; limit: number } | null;
+  storage: { usedBytes: number | null; limitBytes: number | null } | null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -122,6 +123,7 @@ export function parseAccountUsageAllowances(value: unknown): AccountUsageAllowan
   const images = value['images'];
   if (typeof value['resetAt'] !== 'string' || !isFiniteNumber(images['images'])) return null;
   const responses = value['responses'];
+  const storage = value['storage'];
   return {
     resetAt: value['resetAt'],
     units: value['units'].flatMap((unit) =>
@@ -146,5 +148,11 @@ export function parseAccountUsageAllowances(value: unknown): AccountUsageAllowan
       isFiniteNumber(responses['limit'])
         ? { active: responses['active'], limit: responses['limit'] }
         : null,
+    storage: isRecord(storage)
+      ? {
+          usedBytes: isFiniteNumber(storage['usedBytes']) ? storage['usedBytes'] : null,
+          limitBytes: isFiniteNumber(storage['limitBytes']) ? storage['limitBytes'] : null,
+        }
+      : null,
   };
 }

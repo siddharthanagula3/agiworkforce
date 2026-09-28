@@ -23,8 +23,9 @@ import {
   previewSlackLinkRequest,
 } from '@/lib/slack/slack-links';
 import { linkedMessage } from '@/lib/slack/slack-messages';
+import { resolveOrganizationMembershipId } from '@/lib/services/active-workspace-service';
 import {
-  readWorkspaceName,
+  listSlackLinkWorkspaces,
   slackPlanAllowed,
   slackRequiredPlans,
 } from '@/lib/slack/slack-settings';
@@ -33,7 +34,9 @@ const ENDPOINT = '/api/slack/link';
 const EXPIRED_LINK =
   'This link has expired or was already used. Send AGI Workforce a message in Slack to get a new one.';
 
-const ConfirmSchema = z.object({ token: z.string() }).strict();
+const ConfirmSchema = z
+  .object({ token: z.string(), organizationId: z.string().uuid().nullable() })
+  .strict();
 
 async function handlePreview(request: NextRequest): Promise<NextResponse> {
   const { db, userId, organizationId } = await getUserScopedDb(request, {
@@ -50,18 +53,21 @@ async function handlePreview(request: NextRequest): Promise<NextResponse> {
   const pending = await previewSlackLinkRequest(getNeonDb(), token);
   if (!pending) throw createError.notFound(EXPIRED_LINK);
 
+  const workspaces = await listSlackLinkWorkspaces(db, userId);
   const preview: SlackLinkPreview = {
     teamName: pending.teamName,
     expiresAt: pending.expiresAt,
-    workspaceName: await readWorkspaceName(db, userId, organizationId),
-    planAllowed: await slackPlanAllowed(db, userId, organizationId),
+    workspaces,
+    selectedWorkspaceId: workspaces.some((workspace) => workspace.id === organizationId)
+      ? organizationId
+      : null,
     requiredPlans: slackRequiredPlans(),
   };
   return NextResponse.json(preview);
 }
 
 async function handleConfirm(request: NextRequest): Promise<NextResponse> {
-  const { db, userId, organizationId } = await getUserScopedDb(request, {
+  const { db: requestDb, userId } = await getUserScopedDb(request, {
     resolveOrganization: true,
   });
   const csrfError = await requireCsrfToken(request, userId);
@@ -77,6 +83,14 @@ async function handleConfirm(request: NextRequest): Promise<NextResponse> {
   if (!parsed.success || !isSlackLinkToken(parsed.data.token)) {
     throw createError.validation('This link is not valid');
   }
+  const organizationId = parsed.data.organizationId;
+  if (
+    organizationId !== null &&
+    !(await resolveOrganizationMembershipId(requestDb, userId, organizationId))
+  ) {
+    throw createError.forbidden('You are not a member of that workspace');
+  }
+  const db = requestDb.withOrg(organizationId);
   if (!(await slackPlanAllowed(db, userId, organizationId))) {
     throw createError.forbidden(
       `AGI Workforce in Slack is available on ${slackRequiredPlans()} plans.`,

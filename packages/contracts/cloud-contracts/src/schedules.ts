@@ -221,6 +221,7 @@ export const ManagedCloudScheduleRunSchema = z.object({
   completedAt: z.string().nullable(),
   durationMs: z.number().int().nonnegative().nullable(),
   result: NullableRecordSchema,
+  output: z.string().nullable().optional(),
   error: z.string().nullable(),
   idempotencyKey: z.string(),
   leaseExpiresAt: z.string().nullable(),

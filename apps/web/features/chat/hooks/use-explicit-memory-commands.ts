@@ -3,6 +3,12 @@
 import { useCallback, type ReactElement } from 'react';
 import { toast } from 'sonner';
 import { useConfirmAction } from '@agiworkforce/ui';
+import {
+  parseManagedMemoryCommandResponse,
+  type ManagedMemoryCommandRequest,
+  type ManagedMemoryCommandResponse,
+  type ManagedMemoryCommandStatus,
+} from '@agiworkforce/types';
 import { useMemoryStore } from '@agiworkforce/unified-chat';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
@@ -18,47 +24,31 @@ const SETTLED_STATUSES = new Set(['stored', 'already_known', 'forgotten']);
 
 type MemoryCommandKind = 'remember' | 'forget';
 
-export type MemoryCommandStatus =
-  | 'stored'
-  | 'already_known'
-  | 'refused'
-  | 'confirmation_required'
-  | 'nothing_to_forget'
-  | 'forgotten'
-  | 'failed';
+export type MemoryCommandStatus = ManagedMemoryCommandStatus | 'failed';
 
 export interface MemoryCommandReport {
   kind: MemoryCommandKind;
   status: MemoryCommandStatus;
 }
 
-interface MemoryCommandResponse {
-  command: { kind: MemoryCommandKind; subject: string } | null;
-  status?: MemoryCommandStatus;
-  message?: string;
-  requiresConfirmation?: boolean;
-  memories?: Array<{ id: string; content: string }>;
-}
-
-interface MemoryCommandRequest {
-  message: string;
-  conversationId: string | null;
-  projectId: string | null;
-  confirmed?: boolean;
-}
-
-async function postMemoryCommand(body: MemoryCommandRequest): Promise<MemoryCommandResponse> {
+async function postMemoryCommand(
+  body: ManagedMemoryCommandRequest,
+): Promise<ManagedMemoryCommandResponse> {
   const response = await fetch(MEMORY_COMMANDS_PATH, {
     method: 'POST',
     headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(body),
   });
-  const data = (await response.json().catch(() => null)) as
-    (MemoryCommandResponse & { error?: { message?: string } }) | null;
-  if (!response.ok || data === null) {
-    throw new Error(data?.error?.message || MEMORY_UNAVAILABLE_MESSAGE);
+  const data: unknown = await response.json().catch(() => null);
+  const parsed = response.ok ? parseManagedMemoryCommandResponse(data) : null;
+  if (!parsed) {
+    const message =
+      data && typeof data === 'object'
+        ? (data as { error?: { message?: unknown } }).error?.message
+        : undefined;
+    throw new Error(typeof message === 'string' && message ? message : MEMORY_UNAVAILABLE_MESSAGE);
   }
-  return data;
+  return parsed;
 }
 
 export function useExplicitMemoryCommands(): {
@@ -72,7 +62,7 @@ export function useExplicitMemoryCommands(): {
   const hydrateMemories = useMemoryStore((s) => s.hydrateFromServer);
 
   const announce = useCallback(
-    (result: MemoryCommandResponse) => {
+    (result: ManagedMemoryCommandResponse) => {
       if (!result.message) return;
       if (result.status && SETTLED_STATUSES.has(result.status)) {
         toast.success(result.message);
@@ -90,8 +80,8 @@ export function useExplicitMemoryCommands(): {
       scope: { conversationId: string | null; projectId: string | null },
     ): Promise<MemoryCommandReport | null> => {
       if (!MEMORY_COMMAND_HINT.test(message)) return null;
-      const request: MemoryCommandRequest = { message, ...scope };
-      let result: MemoryCommandResponse;
+      const request: ManagedMemoryCommandRequest = { message, ...scope };
+      let result: ManagedMemoryCommandResponse;
       try {
         result = await postMemoryCommand(request);
       } catch (error) {

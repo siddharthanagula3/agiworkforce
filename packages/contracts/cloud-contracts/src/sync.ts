@@ -291,10 +291,17 @@ export const MemorySyncConflictSchema = z.object({
   current: MemoryWireDeltaSchema.nullable(),
 });
 
+export const MemorySyncRejectionSchema = z.object({
+  id: z.string(),
+  term: z.string().nullable().optional(),
+});
+export type MemorySyncRejection = z.infer<typeof MemorySyncRejectionSchema>;
+
 export const MemorySyncPushResponseSchema = z.object({
   protocolVersion: SyncProtocolVersionSchema,
   applied: z.array(AppliedRowSchema),
   conflicts: z.array(MemorySyncConflictSchema),
+  rejected: z.array(MemorySyncRejectionSchema).optional(),
   cursor: ServerVersionSchema,
 });
 export type MemorySyncPushResponse = z.infer<typeof MemorySyncPushResponseSchema>;

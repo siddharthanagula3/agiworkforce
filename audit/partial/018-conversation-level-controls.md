@@ -33,14 +33,11 @@ nothing is left.
 
 - Done when: A conversation can be archived (hidden, kept) and later restored.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| vscode | partial | Sessions can be archived (the tree's delete action archives), but there is no way to restore an archived session. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/extension-vscode/src/core/commandSetup.ts:1168-1181`, `apps/extension-vscode/src/features/trees/conversationTreeProvider.ts:179-186`
 
 ## S18.06: Duplicate.
 

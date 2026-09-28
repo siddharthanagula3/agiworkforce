@@ -1,5 +1,13 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import {
+  MANAGED_MEMORY_MAX_PAGE_SIZE,
+  parseManagedMemoryItemResponse,
+  parseManagedMemoryListResponse,
+  parseManagedMemoryWriteResponse,
+  type ManagedMemoryRecord,
+  type ManagedMemoryWriteResponse,
+} from '@agiworkforce/types';
 
 export interface MemoryFact {
   id: string;
@@ -82,29 +90,8 @@ function canSyncToServer(): boolean {
   );
 }
 
-interface ServerMemoryRow {
-  id: string;
-  content: string;
-  category: string | null;
-  source: string;
-  projectId?: string | null;
-  projectName?: string | null;
-  sourceConversationId?: string | null;
-  sourceConversationTitle?: string | null;
-  pinned?: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface CreatedServerMemory {
-  memory: ServerMemoryRow;
-  merged: boolean;
-  supersededIds: string[];
-  supersededBy: string | null;
-}
-
 const MEMORY_API_BASE = '/api/memory';
-const MEMORY_PAGE_SIZE = 100;
+const MEMORY_PAGE_SIZE = MANAGED_MEMORY_MAX_PAGE_SIZE;
 const MEMORY_MAX_OFFSET = 10_000;
 const MEMORY_REQUEST_FAILED = 'Could not reach your memory. Nothing changed.';
 
@@ -135,78 +122,95 @@ async function withCsrfHeaders(
   return token ? { ...headers, 'x-csrf-token': token } : headers;
 }
 
-async function memoryRequest<T>(path: string, init: RequestInit): Promise<T> {
+async function memoryRequest(path: string, init: RequestInit): Promise<unknown> {
   let res: Response;
   try {
     res = await fetch(path, init);
   } catch {
     throw new Error(MEMORY_REQUEST_FAILED);
   }
-  const body = (await res.json().catch(() => null)) as
-    (T & { error?: { message?: string } }) | null;
+  const body: unknown = await res.json().catch(() => null);
   if (!res.ok || body === null) {
-    throw new Error(body?.error?.message || MEMORY_REQUEST_FAILED);
+    const message =
+      body && typeof body === 'object'
+        ? (body as { error?: { message?: unknown } }).error?.message
+        : undefined;
+    throw new Error(typeof message === 'string' && message ? message : MEMORY_REQUEST_FAILED);
   }
   return body;
 }
 
-async function fetchServerMemories(): Promise<ServerMemoryRow[]> {
-  const rows: ServerMemoryRow[] = [];
+function contractOrFail<T>(parsed: T | null): T {
+  if (parsed === null) throw new Error(MEMORY_REQUEST_FAILED);
+  return parsed;
+}
+
+async function fetchServerMemories(): Promise<ManagedMemoryRecord[]> {
+  const rows: ManagedMemoryRecord[] = [];
   for (let offset = 0; offset <= MEMORY_MAX_OFFSET; offset += MEMORY_PAGE_SIZE) {
-    const page = await memoryRequest<{ memories?: ServerMemoryRow[]; hasMore?: boolean }>(
-      `${MEMORY_API_BASE}?limit=${MEMORY_PAGE_SIZE}&offset=${offset}`,
-      { method: 'GET' },
+    const page = contractOrFail(
+      parseManagedMemoryListResponse(
+        await memoryRequest(`${MEMORY_API_BASE}?limit=${MEMORY_PAGE_SIZE}&offset=${offset}`, {
+          method: 'GET',
+        }),
+      ),
     );
-    const memories = page.memories ?? [];
-    rows.push(...memories);
-    if (page.hasMore !== true || memories.length === 0) break;
+    rows.push(...page.memories);
+    if (!page.hasMore || page.memories.length === 0) break;
   }
   return rows;
 }
 
-async function createServerMemory(text: string, projectId?: string): Promise<CreatedServerMemory> {
-  return memoryRequest<CreatedServerMemory>(MEMORY_API_BASE, {
-    method: 'POST',
-    headers: await withCsrfHeaders({ 'Content-Type': 'application/json' }),
-    body: JSON.stringify({ content: text, source: 'web', ...(projectId ? { projectId } : {}) }),
-  });
+async function createServerMemory(
+  text: string,
+  projectId?: string,
+): Promise<ManagedMemoryWriteResponse> {
+  return contractOrFail(
+    parseManagedMemoryWriteResponse(
+      await memoryRequest(MEMORY_API_BASE, {
+        method: 'POST',
+        headers: await withCsrfHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ content: text, source: 'web', ...(projectId ? { projectId } : {}) }),
+      }),
+    ),
+  );
 }
 
 async function updateServerMemory(
   serverId: string,
   patch: { content?: string; pinned?: boolean },
-): Promise<ServerMemoryRow> {
-  const body = await memoryRequest<{ memory: ServerMemoryRow }>(
-    `${MEMORY_API_BASE}/${encodeURIComponent(serverId)}`,
-    {
-      method: 'PUT',
-      headers: await withCsrfHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify(patch),
-    },
-  );
-  return body.memory;
+): Promise<ManagedMemoryRecord> {
+  return contractOrFail(
+    parseManagedMemoryItemResponse(
+      await memoryRequest(`${MEMORY_API_BASE}/${encodeURIComponent(serverId)}`, {
+        method: 'PUT',
+        headers: await withCsrfHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(patch),
+      }),
+    ),
+  ).memory;
 }
 
 async function deleteServerMemory(serverId: string): Promise<void> {
-  await memoryRequest<{ success: boolean }>(`${MEMORY_API_BASE}/${encodeURIComponent(serverId)}`, {
+  await memoryRequest(`${MEMORY_API_BASE}/${encodeURIComponent(serverId)}`, {
     method: 'DELETE',
     headers: await withCsrfHeaders(),
   });
 }
 
 async function deleteAllServerMemories(): Promise<void> {
-  await memoryRequest<{ deleted: number }>(MEMORY_API_BASE, {
+  await memoryRequest(MEMORY_API_BASE, {
     method: 'DELETE',
     headers: await withCsrfHeaders(),
   });
 }
 
-function factFromServer(row: ServerMemoryRow, id: string = randomId()): MemoryFact {
+function factFromServer(row: ManagedMemoryRecord, id: string = randomId()): MemoryFact {
   return {
     id,
     serverId: row.id,
     text: row.content,
-    source: row.source,
+    source: row.source ?? undefined,
     category: row.category,
     projectId: row.projectId ?? null,
     projectName: row.projectName ?? null,
@@ -218,7 +222,7 @@ function factFromServer(row: ServerMemoryRow, id: string = randomId()): MemoryFa
   };
 }
 
-function withServerRow(fact: MemoryFact, row: ServerMemoryRow): MemoryFact {
+function withServerRow(fact: MemoryFact, row: ManagedMemoryRecord): MemoryFact {
   const saved = factFromServer(row, fact.id);
   return { ...saved, projectName: saved.projectName ?? fact.projectName ?? null, pending: false };
 }
@@ -251,7 +255,7 @@ export const useMemoryStore = create<MemoryState>()(
         set((state) => ({ facts: [fact, ...state.facts] }));
         if (!canSyncToServer()) return fact;
 
-        let created: CreatedServerMemory;
+        let created: ManagedMemoryWriteResponse;
         try {
           created = await createServerMemory(trimmed, project?.id);
         } catch (error) {
@@ -354,7 +358,7 @@ export const useMemoryStore = create<MemoryState>()(
           return;
         }
         set({ syncStatus: 'syncing' });
-        let rows: ServerMemoryRow[];
+        let rows: ManagedMemoryRecord[];
         try {
           rows = await fetchServerMemories();
         } catch {

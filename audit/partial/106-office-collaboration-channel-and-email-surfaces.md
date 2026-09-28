@@ -143,10 +143,10 @@ Code: `apps/web/app/api/webhooks/slack/route.ts:84-84`, `apps/web/app/api/webhoo
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Migration 0284 is now applied in production (2026-09-27). Still open: A Slack trigger starts a saved routine for channel events (with ownership verification), but the result is not posted back to the channel unless the routine uses the user's Slack connector. The product Slack app has no in-product install path (only SLACK_SIGNING_SECRET); every triggered run fails at production schema until pending migration 0284 ships. | handler |
-| desktop | partial | Migration 0284 is now applied in production (2026-09-27). Still open: Same as web (hosted web). The product Slack app has no in-product install path (only SLACK_SIGNING_SECRET); every triggered run fails at production schema until pending migration 0284 ships. | handler |
+| web | partial | Owner: create the product Slack app and set SLACK_APP_CLIENT_ID, SLACK_APP_CLIENT_SECRET and SLACK_SIGNING_SECRET (docs/runbooks/connector-oauth-apps.md), with Event Subscriptions for app_mention and message.im; apply pending migration 0333 before deploying partials/slack 02eb570e8d. | owner |
+| desktop | partial | Owner: create the product Slack app and set SLACK_APP_CLIENT_ID, SLACK_APP_CLIENT_SECRET and SLACK_SIGNING_SECRET (docs/runbooks/connector-oauth-apps.md), with Event Subscriptions for app_mention and message.im; apply pending migration 0333 before deploying partials/slack 02eb570e8d. | owner |
 
-Code: `apps/web/features/schedules/components/ScheduleTriggersPanel.tsx:43-50`, `apps/web/features/schedules/components/ScheduleCard.tsx:430-436`, `apps/web/app/api/webhooks/slack/route.ts:82-100`, `apps/web/lib/triggers/trigger-fire.ts:126-141`
+Code: `apps/web/app/api/webhooks/slack/route.ts:84-84`, `apps/web/app/api/webhooks/slack/route.ts:89-89`, `apps/web/lib/slack/slack-events.ts:68-68`, `apps/web/lib/slack/slack-config.ts:14-14`
 
 ## S106.15: Teams assistant.
 
@@ -168,10 +168,10 @@ Code: `apps/extension/src/content.ts:114-118`, `apps/extension/src/inPagePanel/s
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Migration 0284 is now applied in production (2026-09-27). Still open: A Slack trigger on app_mention (or any event type) starts one fixed saved routine with the message as data; the mention text does not create its own task and nothing replies. Teams mentions are not received. The product Slack app has no in-product install path (only SLACK_SIGNING_SECRET); every triggered run fails at production schema until pending migration 0284 ships. | handler |
-| desktop | partial | Migration 0284 is now applied in production (2026-09-27). Still open: Same as web (hosted web). The product Slack app has no in-product install path (only SLACK_SIGNING_SECRET); every triggered run fails at production schema until pending migration 0284 ships. | handler |
+| web | partial | Owner: create the product Slack app and set SLACK_APP_CLIENT_ID, SLACK_APP_CLIENT_SECRET and SLACK_SIGNING_SECRET (docs/runbooks/connector-oauth-apps.md), with Event Subscriptions for app_mention and message.im; apply pending migration 0333 before deploying partials/slack 02eb570e8d. | owner |
+| desktop | partial | Owner: create the product Slack app and set SLACK_APP_CLIENT_ID, SLACK_APP_CLIENT_SECRET and SLACK_SIGNING_SECRET (docs/runbooks/connector-oauth-apps.md), with Event Subscriptions for app_mention and message.im; apply pending migration 0333 before deploying partials/slack 02eb570e8d. | owner |
 
-Code: `apps/web/features/schedules/components/ScheduleTriggersPanel.tsx:43-50`, `apps/web/features/schedules/components/ScheduleCard.tsx:430-436`, `apps/web/app/api/webhooks/slack/route.ts:82-100`, `apps/web/lib/triggers/trigger-fire.ts:126-141`
+Code: `apps/web/lib/slack/slack-assistant.ts:340-340`, `apps/web/lib/slack/slack-assistant.ts:379-379`, `apps/web/lib/slack/slack-assistant.ts:380-380`, `apps/web/lib/slack/slack-assistant.ts:146-146`
 
 ## S106.21: Agent identity distinct from a human account.
 

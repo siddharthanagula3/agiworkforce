@@ -3,6 +3,7 @@ import 'server-only';
 import { createHash, randomBytes } from 'node:crypto';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { z } from 'zod';
 
 import {
   UNATTENDED_RUN_DENIED_STATUSES,
@@ -14,6 +15,7 @@ import {
 } from '@/lib/server/workspace-scope';
 
 import { SLACK_LINK_TTL_SECONDS } from './slack-config';
+import { stopParkedSlackTasks } from './slack-runs';
 
 const LINK_TOKEN_RE = /^[A-Za-z0-9_-]{43}$/;
 
@@ -262,30 +264,39 @@ export async function unlinkSlackAccount(
   scopedDb: DatabaseAdapter,
   input: { userId: string; linkId: string },
 ): Promise<{ teamId: string; slackUserId: string } | null> {
-  const [row] = await scopedDb.query<{ team_id: string; slack_user_id: string }>(
+  const [row] = await scopedDb.query<{
+    team_id: string;
+    slack_user_id: string;
+    parked_task_ids: unknown;
+  }>(
     `with removed as (
        delete from slack_account_links
         where id = $1 and user_id = $2
         returning installation_id, slack_user_id
      ),
-     dropped as (
-       update slack_assistant_runs as run
-          set status = 'expired',
-              approval_checkpoint = null,
-              approval_request = null,
-              approval_expires_at = null,
-              completed_at = now()
-         from removed
+     forgotten as (
+       delete from slack_assistant_runs as run
+        using removed
         where run.user_id = $2
           and run.installation_id = removed.installation_id
           and run.slack_user_id = removed.slack_user_id
-          and run.status = 'awaiting_approval'
-        returning run.id
+        returning run.status, run.agent_run_id
      )
-     select installation.team_id, removed.slack_user_id
+     select installation.team_id, removed.slack_user_id,
+            (select coalesce(json_agg(forgotten.agent_run_id), '[]'::json)
+               from forgotten
+              where forgotten.status = 'awaiting_approval'
+                and forgotten.agent_run_id is not null) as parked_task_ids
        from removed
        join slack_installations as installation on installation.id = removed.installation_id`,
     [input.linkId, input.userId],
   );
-  return row ? { teamId: row.team_id, slackUserId: row.slack_user_id } : null;
+  if (!row) return null;
+  const parked = z.array(z.string()).safeParse(row.parked_task_ids);
+  await stopParkedSlackTasks(
+    scopedDb,
+    (parked.success ? parked.data : []).map((agentRunId) => ({ userId: input.userId, agentRunId })),
+    'cancelled',
+  );
+  return { teamId: row.team_id, slackUserId: row.slack_user_id };
 }

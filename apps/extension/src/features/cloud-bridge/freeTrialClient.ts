@@ -7,12 +7,16 @@ import {
   readManagedCloudAgentRunHandle,
   reconcileManagedCloudPublicText,
   TOOL_APPROVAL_RESUME_PATH,
+  TOOL_INPUT_RESUME_PATH,
   ToolApprovalResumeErrorResponseSchema,
   ToolApprovalResumeRequestSchema,
+  ToolInputResumeRequestSchema,
   type ManagedCloudAgentRunReference,
   type GeneratedFileWire,
   type ToolApprovalDecisionWire,
   type ToolApprovalResumeRequest,
+  type ToolInputResponseWire,
+  type ToolInputResumeRequest,
 } from '@agiworkforce/cloud-contracts';
 import {
   classifyManagedQuotaErrorCode,
@@ -59,6 +63,7 @@ const MANAGED_CHAT_MAX_ERROR_BODY_CHARS = 65_536;
 export const FREE_TRIAL_GATEWAY: string = configuredAgiWebOrigin() ?? DEFAULT_AGI_WEB_ORIGIN;
 export const FREE_TRIAL_ENDPOINT = `${FREE_TRIAL_GATEWAY}/api/llm/v1/chat/completions`;
 export const MANAGED_APPROVAL_ENDPOINT = `${FREE_TRIAL_GATEWAY}${TOOL_APPROVAL_RESUME_PATH}`;
+export const MANAGED_INPUT_RESUME_ENDPOINT = `${FREE_TRIAL_GATEWAY}${TOOL_INPUT_RESUME_PATH}`;
 export const MANAGED_MODELS_ENDPOINT = `${FREE_TRIAL_GATEWAY}/api/llm/v1/models`;
 export const MANAGED_USAGE_ENDPOINT = `${FREE_TRIAL_GATEWAY}/api/usage`;
 export const MANAGED_USAGE_HISTORY_ENDPOINT = `${FREE_TRIAL_GATEWAY}/api/usage/history`;
@@ -627,6 +632,7 @@ export interface ManagedChatStreamOptions {
   webSearch?: boolean;
   webFetch?: boolean;
   approvalResume?: ToolApprovalResumeRequest;
+  inputResume?: ToolInputResumeRequest;
   idempotencyKey?: string;
   conversationId?: string;
   assistantMessageId?: string;
@@ -1100,7 +1106,19 @@ export async function* streamFreeChat(
   }
   let cappedMessages: FreeTrialMessage[] = [];
   let approvalResume: ToolApprovalResumeRequest | undefined;
-  if (options.approvalResume) {
+  let inputResume: ToolInputResumeRequest | undefined;
+  if (options.inputResume) {
+    const parsed = ToolInputResumeRequestSchema.safeParse(options.inputResume);
+    if (!parsed.success) {
+      yield {
+        type: 'error',
+        message: 'The connector input answer is invalid.',
+        code: 'protocol_error',
+      };
+      return;
+    }
+    inputResume = parsed.data;
+  } else if (options.approvalResume) {
     const parsed = ToolApprovalResumeRequestSchema.safeParse(options.approvalResume);
     if (!parsed.success) {
       yield {
@@ -1132,6 +1150,12 @@ export async function* streamFreeChat(
     }
   }
 
+  const resumeBody = inputResume ?? approvalResume;
+  const resumeEndpoint = inputResume
+    ? MANAGED_INPUT_RESUME_ENDPOINT
+    : approvalResume
+      ? MANAGED_APPROVAL_ENDPOINT
+      : undefined;
   const controller = new AbortController();
   let abortKind: 'cancelled' | 'timeout' | null = null;
   const abortFromCaller = (): void => {
@@ -1171,7 +1195,7 @@ export async function* streamFreeChat(
 
     let response: Response;
     try {
-      response = await fetch(approvalResume ? MANAGED_APPROVAL_ENDPOINT : FREE_TRIAL_ENDPOINT, {
+      response = await fetch(resumeEndpoint ?? FREE_TRIAL_ENDPOINT, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1181,7 +1205,7 @@ export async function* streamFreeChat(
           ...platformRequestHeaders(),
         },
         body: JSON.stringify(
-          approvalResume ?? {
+          resumeBody ?? {
             model,
             messages: cappedMessages,
             stream: true,
@@ -1589,6 +1613,21 @@ export async function* streamFreeChat(
     if (timeoutHandle) clearTimeout(timeoutHandle);
     options.signal?.removeEventListener('abort', abortFromCaller);
   }
+}
+
+export function streamManagedChatToolInput(
+  runId: string,
+  toolInputs: ToolInputResponseWire[],
+  token: string,
+  options: Omit<
+    ManagedChatStreamOptions,
+    'approvalResume' | 'inputResume' | 'model' | 'workMode'
+  > = {},
+): AsyncGenerator<FreeTrialChunk> {
+  return streamFreeChat([], token, {
+    ...options,
+    inputResume: { run_id: runId, tool_inputs: toolInputs },
+  });
 }
 
 export function streamManagedChatApproval(

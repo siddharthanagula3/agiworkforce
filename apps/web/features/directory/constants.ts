@@ -257,9 +257,6 @@ export const CONNECTOR_NOT_RESPONDING_COPY = 'Not responding to recent requests.
 export const CSRF_HEADER = 'x-csrf-token';
 export const JSON_CONTENT_TYPE = 'application/json';
 
-export const CONNECTOR_ICON_PATH = '/api/connectors/directory/icon';
-export const CONNECTOR_DIRECTORY_PATH = '/api/connectors/directory';
-export const CONNECTORS_PATH = '/api/connectors';
 export const DIRECTORY_QUERY_SEARCH = 'search';
 export const DIRECTORY_QUERY_CATEGORY = 'category';
 export const DIRECTORY_QUERY_BADGE = 'badge';
@@ -280,8 +277,8 @@ export const PLUGIN_MARKETPLACES_PATH = PLUGIN_MARKETPLACES_API_PATH;
 export const PLUGIN_SOURCE_KIND_REPOSITORY = 'repository';
 export const PLUGIN_SOURCE_KIND_AUTHORED = 'authored';
 export const PLUGIN_UPLOADS_PATH = `${PLUGINS_API_PATH}/uploads`;
-export const PLUGIN_AUTHORED_PATH = `${PLUGINS_API_PATH}/authored`;
-export const PLUGIN_CUSTOMIZE_PATH = `${PLUGINS_API_PATH}/customize`;
+export const PLUGIN_AUTHORED_PATH = '/api/plugins/authored';
+export const PLUGIN_CUSTOMIZE_PATH = '/api/plugins/customize';
 export const PLUGIN_EDIT_LOAD_FAILED_COPY = 'That plugin could not be opened for editing.';
 export const PLUGIN_EDIT_FAILED_COPY = 'That plugin could not be saved.';
 export const PLUGIN_CUSTOMIZE_FAILED_COPY = 'A copy of that plugin could not be made.';
@@ -313,6 +310,29 @@ const DEPENDENCY_NAMES = new Intl.ListFormat('en', { style: 'long', type: 'conju
 
 export function uploadDependenciesInstalledLine(dependencyNames: readonly string[]): string {
   return `Also installed the ${dependencyNames.length === 1 ? 'plugin' : 'plugins'} it depends on: ${DEPENDENCY_NAMES.format(dependencyNames)}.`;
+}
+
+export function pluginConnectorsLines(
+  connectors: {
+    added: ReadonlyArray<{ name: string; signInRequired: boolean }>;
+    failed: ReadonlyArray<{ name: string; reason: string }>;
+  } | null,
+): string[] {
+  if (!connectors) return [];
+  const lines: string[] = [];
+  if (connectors.added.length > 0) {
+    const names = connectors.added.map((connector) => connector.name);
+    lines.push(
+      `Added its ${names.length === 1 ? 'MCP server' : 'MCP servers'} as ${names.length === 1 ? 'a connector' : 'connectors'}: ${DEPENDENCY_NAMES.format(names)}.`,
+    );
+    if (connectors.added.some((connector) => connector.signInRequired)) {
+      lines.push('Sign in to them under Connectors before they can be used.');
+    }
+  }
+  for (const failure of connectors.failed) {
+    lines.push(`${failure.name} was not added as a connector: ${failure.reason}`);
+  }
+  return lines;
 }
 
 export function pluginDependenciesInstalledLine(

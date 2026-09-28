@@ -6,6 +6,12 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import type { UserMemoryRow } from '@/lib/server/neon-types';
+import {
+  MANAGED_MEMORY_MAX_CONTENT_CHARS,
+  type ManagedMemoryDeleteResponse,
+  type ManagedMemoryItemResponse,
+  type ManagedMemoryRecord,
+} from '@agiworkforce/types';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { assertMemoryWriteAllowed } from '@/lib/services/memory-write-service';
 import {
@@ -26,7 +32,7 @@ type MemoryRow = UserMemoryRow & {
 const MEMORY_COLUMNS =
   'id, content, category, source, pinned, expires_at, superseded_by, created_at, updated_at';
 
-function serializeMemory(row: MemoryRow) {
+function serializeMemory(row: MemoryRow): ManagedMemoryRecord {
   return {
     id: row.id,
     content: row.content,
@@ -60,7 +66,7 @@ async function handleGetMemory(request: NextRequest, context: RouteContext) {
     throw createError.notFound('Memory not found');
   }
 
-  return NextResponse.json({ memory: serializeMemory(data) });
+  return NextResponse.json({ memory: serializeMemory(data) } satisfies ManagedMemoryItemResponse);
 }
 
 async function handleUpdateMemory(request: NextRequest, context: RouteContext) {
@@ -100,8 +106,10 @@ async function handleUpdateMemory(request: NextRequest, context: RouteContext) {
     if (!body.content || typeof body.content !== 'string' || body.content.trim().length === 0) {
       throw createError.validation('Content is required');
     }
-    if (body.content.length > 10_000) {
-      throw createError.validation('Content must be 10,000 characters or less');
+    if (body.content.length > MANAGED_MEMORY_MAX_CONTENT_CHARS) {
+      throw createError.validation(
+        `Content must be ${MANAGED_MEMORY_MAX_CONTENT_CHARS.toLocaleString('en-US')} characters or less`,
+      );
     }
     const content = body.content.trim();
     await assertMemoryWriteAllowed(db, { userId, content });
@@ -142,7 +150,7 @@ async function handleUpdateMemory(request: NextRequest, context: RouteContext) {
     throw createError.notFound('Memory not found');
   }
 
-  return NextResponse.json({ memory: serializeMemory(data) });
+  return NextResponse.json({ memory: serializeMemory(data) } satisfies ManagedMemoryItemResponse);
 }
 
 async function handleDeleteMemory(request: NextRequest, context: RouteContext) {
@@ -168,7 +176,7 @@ async function handleDeleteMemory(request: NextRequest, context: RouteContext) {
     throw createError.internal('Failed to delete memory');
   }
 
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ success: true } satisfies ManagedMemoryDeleteResponse);
 }
 
 export const GET = withCorsRoute(withErrorHandler(handleGetMemory));
