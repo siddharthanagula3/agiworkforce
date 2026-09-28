@@ -102,12 +102,13 @@ function makeProcessed(withHost: boolean): ProcessedRequest {
   } as unknown as ProcessedRequest;
 }
 
-function deviceCallStream(args: Record<string, unknown>): ReadableStream {
+function deviceCallStream(
+  args: Record<string, unknown>,
+  name = 'device_read_file',
+): ReadableStream {
   return sseStreamFrom([
     chunk({
-      tool_calls: [
-        { index: 0, id: 'call_1', function: { name: 'device_read_file', arguments: '' } },
-      ],
+      tool_calls: [{ index: 0, id: 'call_1', function: { name, arguments: '' } }],
     }),
     chunk({ tool_calls: [{ index: 0, function: { arguments: JSON.stringify(args) } }] }),
     chunk({}, 'tool_calls'),
@@ -231,6 +232,37 @@ describe('runToolLoop, device step boundary', () => {
     const types = agentEvents(output).map((envelope) => envelope.event.type);
     expect(types).toContain('device-step-requested');
     expect(types.at(-1)).toBe('lifecycle');
+  });
+
+  it('words the review itself for a browser step once untrusted content is in the turn', async () => {
+    mockBuildToolLoopStream.mockResolvedValueOnce(
+      deviceCallStream(
+        { url: 'https://collector.example/?d=notes', review: 'Open the docs' },
+        'device_browser_navigate',
+      ),
+    );
+    const processed = makeProcessed(true);
+    const withBrowser = {
+      ...processed,
+      untrustedContextPresent: true,
+      deviceHost: { ...DECLARATION, capabilities: ['filesystem.read', 'browser.site'] },
+    } as unknown as ProcessedRequest;
+
+    const output = await drain(
+      runToolLoop(withBrowser, {
+        onDeviceCheckpoint: vi.fn(async () => undefined),
+        toolExecutor: vi.fn(),
+        eventSessionId: 'session-1',
+        eventTurnId: 'turn-1',
+      }),
+    );
+
+    const requested = agentEvents(output).find(
+      (envelope) => envelope.event.type === 'device-step-requested',
+    );
+    expect(requested?.event).toMatchObject({
+      input: { review: 'Open https://collector.example/?d=notes in Chrome' },
+    });
   });
 
   it('refuses a folder the declaration never granted, without pausing', async () => {
