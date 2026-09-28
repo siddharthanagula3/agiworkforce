@@ -371,10 +371,24 @@ const HEALTHEX_TOOL_METADATA: Readonly<Record<string, ToolMetadata>> = Object.fr
   },
 });
 
+const BANK_ACCOUNT_READ: ToolMetadata = Object.freeze({
+  actionClass: 'read',
+  reversible: true,
+  acceptsUntrustedContent: true,
+  createsEgressPath: false,
+  declared: true,
+});
+
+const BANK_ACCOUNTS_TOOL_METADATA: Readonly<Record<string, ToolMetadata>> = Object.freeze({
+  get_account_balances: BANK_ACCOUNT_READ,
+  get_transactions: BANK_ACCOUNT_READ,
+});
+
 const CONNECTOR_TOOL_METADATA: Readonly<Record<string, Readonly<Record<string, ToolMetadata>>>> =
   Object.freeze({
     'google-contacts': GOOGLE_CONTACTS_TOOL_METADATA,
     healthex: HEALTHEX_TOOL_METADATA,
+    'bank-accounts': BANK_ACCOUNTS_TOOL_METADATA,
     github: GITHUB_TOOL_METADATA,
     gmail: GMAIL_TOOL_METADATA,
   });

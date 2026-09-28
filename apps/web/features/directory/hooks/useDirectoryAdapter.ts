@@ -36,6 +36,10 @@ import {
 
 import { ConnectorApiKeyForm } from '@/features/connectors/components/ConnectorApiKeyForm';
 import {
+  connectBankAccountsWithPlaid,
+  plaidLinkRoutesOf,
+} from '@/features/connectors/lib/plaid-link';
+import {
   currentConnectorReturnPath,
   withConnectorReturnPath,
 } from '@features/connectors/hooks/use-connectors';
@@ -972,6 +976,18 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       const body = (await response.json().catch(() => ({}))) as ConnectStartBody;
       if (response.status === CREDENTIALS_STATUS && body.credentialsPath) {
         setCredentialFormId(id);
+        return;
+      }
+      const plaidRoutes = response.status === CREDENTIALS_STATUS ? plaidLinkRoutesOf(body) : null;
+      if (plaidRoutes && typeof window !== 'undefined') {
+        try {
+          await connectBankAccountsWithPlaid(plaidRoutes);
+          delete connectorErrors.current[id];
+        } catch (caught) {
+          connectorErrors.current[id] =
+            caught instanceof Error ? caught.message : CONNECT_FAILED_COPY;
+        }
+        await loadConnectors();
         return;
       }
       const start = body.oauthStartPath

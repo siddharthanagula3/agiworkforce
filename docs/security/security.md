@@ -532,6 +532,11 @@ Connector ids not in this table have no reviewed ceiling and are not filtered.
 That includes every `api-key`, `pat`, `connection-string`, and `device-local`
 entry in the catalog, none of which use an OAuth scope parameter at all.
 
+`bank-accounts` authorizes through Plaid Link rather than OAuth, so it has no
+scope ceiling here. Its Link token requests only the `transactions` product for
+United States institutions, its two tools are reads, and no Plaid product that
+moves money, such as Transfer or Payment Initiation, is requested.
+
 ### Desktop native scopes
 
 `apps/desktop` requests real, hardcoded OAuth scopes directly against Google

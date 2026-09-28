@@ -1017,13 +1017,26 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'plaid',
-    name: 'Plaid',
-    capabilitySummary: 'bank account linking and financial data access',
+    name: 'Plaid Dashboard',
+    capabilitySummary:
+      "a Plaid customer's developer dashboard data, such as Link analytics and item debugging",
     category: 'Finance',
     authType: 'oauth',
     phase: 7,
     iconBg: 'from-indigo-500 to-blue-700',
     iconText: 'PL',
+    iconEmoji: '🏦',
+  },
+  {
+    id: 'bank-accounts',
+    name: 'Bank accounts',
+    capabilitySummary:
+      'read-only balances and transactions from your own bank accounts, connected with Plaid, in the United States',
+    category: 'Finance',
+    authType: 'oauth',
+    phase: 1,
+    iconBg: 'from-emerald-500 to-green-700',
+    iconText: 'BA',
     iconEmoji: '🏦',
   },
 

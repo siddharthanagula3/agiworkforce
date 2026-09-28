@@ -417,6 +417,42 @@ registration, PKCE with S256, public or confidential clients, scopes
 - Variables: `CONNECTOR_OAUTH_HEALTHEX_CLIENT_ID`, and
   `CONNECTOR_OAUTH_HEALTHEX_CLIENT_SECRET` only for a confidential client.
 
+### Bank accounts (`bank-accounts`, Plaid, owner-gated)
+
+Connects a member's own bank accounts read-only, the way ChatGPT's personal
+finance experience does through Plaid (D-2026-09-28-08). There is no MCP
+server: the web app opens Plaid Link, exchanges the public token server-side
+(`/api/connectors/bank-accounts/link` and `/exchange`) and answers two tools
+itself from `apps/web/lib/connectors/bank-accounts.ts`, following Plaid's API
+reference (https://plaid.com/docs/api/, https://plaid.com/docs/link/web/, read
+2026-09-28).
+
+- Stays unavailable until the owner configures it, deliberately. Before setting
+  the variables in production, sign Plaid's agreement, request production
+  access for the `transactions` product, complete the application and company
+  details in the Plaid Dashboard compliance center that OAuth banks require
+  (https://plaid.com/docs/link/oauth/), and have a lawyer confirm whether the
+  GLBA Safeguards Rule applies. `PLAID_ENV=sandbox` works with Plaid's test
+  institutions and costs nothing.
+- No redirect URI is registered, so an OAuth bank opens in a pop-up, which
+  Plaid supports on desktop and mobile web. An in-app browser that blocks
+  pop-ups cannot reach those banks.
+- `get_account_balances` calls `/accounts/balance/get`, which fetches a live
+  balance from the bank and is billed per call by Plaid. `get_transactions`
+  calls `/transactions/get`, at most 500 per call. Neither can move money, and
+  the Link token requests the `transactions` product for United States
+  institutions only.
+- What the product enforces: a member can link an account only from the United
+  States; results are fenced as untrusted data; `save_memory` is refused for
+  the rest of any turn in which a bank tool returned data, and nothing is used
+  for training. Disconnecting, or erasing the account, calls `/item/remove`,
+  which ends Plaid's access and its billing for the item, and erases the stored
+  access token. Linking again replaces the previous item and removes it.
+- The Content Security Policy admits Plaid Link's script, frame and API origin
+  only while `PLAID_ENV` is set.
+- Variables: `PLAID_CLIENT_ID`, `PLAID_SECRET`, `PLAID_ENV` (`sandbox` or
+  `production`). Set all three or none; a partial set fails production boot.
+
 ### Vendors whose official server needs a pre-registered client
 
 These ids are marked `preregistered` in `apps/web/lib/connectors/mcp-endpoints.ts`

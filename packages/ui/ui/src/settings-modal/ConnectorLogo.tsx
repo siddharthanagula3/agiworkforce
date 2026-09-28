@@ -195,6 +195,7 @@ const CONNECTOR_LOGO_URLS: Record<string, string> = {
   monday: 'https://upload.wikimedia.org/wikipedia/commons/c/c6/Monday_logo.svg',
 
   plaid: 'https://www.google.com/s2/favicons?domain=plaid.com&sz=64',
+  'bank-accounts': 'https://www.google.com/s2/favicons?domain=plaid.com&sz=64',
 
   'google-contacts': 'https://www.google.com/s2/favicons?domain=contacts.google.com&sz=64',
 

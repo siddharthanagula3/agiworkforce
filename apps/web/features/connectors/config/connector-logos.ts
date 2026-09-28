@@ -364,6 +364,11 @@ export const CONNECTOR_LOGOS: Record<
     width: 32,
     height: 32,
   },
+  'bank-accounts': {
+    url: 'https://www.google.com/s2/favicons?domain=plaid.com&sz=64',
+    width: 32,
+    height: 32,
+  },
 
   dropbox: {
     url: 'https://www.google.com/s2/favicons?domain=dropbox.com&sz=64',
