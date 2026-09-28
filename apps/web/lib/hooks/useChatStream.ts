@@ -3296,7 +3296,10 @@ export function webSearchFailureSentence(code: string): string {
   return WEB_SEARCH_FAILURE_SENTENCES[code] ?? 'Web search is unavailable right now.';
 }
 
-export function useChatStream(): UseChatStreamReturn {
+export function useChatStream(
+  options: { followActiveConversation?: boolean } = {},
+): UseChatStreamReturn {
+  const followActiveConversation = options.followActiveConversation !== false;
   const { getToken } = useSession();
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
   const activeRunsRef = useRef<
@@ -3352,6 +3355,7 @@ export function useChatStream(): UseChatStreamReturn {
 
   const activeConversationId = useChatStore((state) => state.activeConversationId);
   useEffect(() => {
+    if (!followActiveConversation) return undefined;
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
     let stopped = false;
@@ -3401,7 +3405,7 @@ export function useChatStream(): UseChatStreamReturn {
       controller.abort();
       if (timer) clearTimeout(timer);
     };
-  }, [activeConversationId]);
+  }, [activeConversationId, followActiveConversation]);
 
   const resolveToolApproval = useResolveToolApproval(abortControllersRef);
   const resolveToolInput = useResolveToolInput(abortControllersRef, resolveToolApproval);

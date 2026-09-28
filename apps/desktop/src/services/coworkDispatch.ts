@@ -18,7 +18,7 @@ import {
   MOBILE_COMPANION_SESSION_ENDED_EVENT,
   sendCompanionControl,
 } from '../stores/connectionStore';
-import { createControlReceiptLedger } from './controlReceipts';
+import { createControlReceiptLedger } from '@agiworkforce/utils/control-receipts';
 
 const MAX_REQUEST_ID_LENGTH = 128;
 const MAX_PROMPT_LENGTH = 20_000;

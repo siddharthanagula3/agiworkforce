@@ -102,7 +102,7 @@ and this matrix holds more, so there is no declared maturity to show for the res
 | Updater | not in the feature registry | Absent | Present | Unverified | Present | Absent | Absent | Present |
 | Scheduled tasks | general_availability | Present | Present | Present | Present | Present | Present | Present |
 | Hooks | beta | Absent | Present | Absent | Present | Unverified | Absent | Absent |
-| Remote control | experimental | Present | Present | Present | Absent | Absent | Absent | Present |
+| Remote control | experimental | Present | Present | Present | Absent | Present | Absent | Present |
 | Event triggers | beta | Present | Present | Absent | Unverified | Absent | Absent | Present |
 
 ## Enterprise
@@ -540,10 +540,10 @@ this document.
 ### Remote control
 
 - **web**: present. `apps/web/features/desktop-host/components/RemoteControlSection.tsx`, reached by `apps/web/features/desktop-host/index.ts` (import).
-- **desktop**: present. `apps/desktop/electron/remote/remoteControlHost.ts`, reached by `apps/desktop/electron/runtime/dispatcher.ts` (import).
+- **desktop**: present. `apps/desktop/electron/remote/remoteControlService.ts`, reached by `apps/desktop/electron/runtime/dispatcher.ts` (import).
 - **mobile**: present. `apps/mobile/app/(app)/companion/index.tsx`, reached by `apps/mobile/app/(app)/_layout.tsx` (route).
 - **cli**: absent. Nothing under apps/cli/src is a remote-control host or client.
-- **vscode**: absent. Nothing under apps/extension-vscode/src is a remote-control host or client.
+- **vscode**: present. `apps/extension-vscode/src/features/remote-control/remoteControlService.ts`, reached by `apps/extension-vscode/src/features/remote-control/index.ts` (import).
 - **chrome**: absent. Nothing under apps/extension/src is a remote-control host or client.
 - **api**: present. `apps/web/app/api/devices/heartbeat/route.ts`, reached by `apps/web/app/layout.tsx` (route).
 

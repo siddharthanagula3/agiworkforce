@@ -7,6 +7,8 @@ import type {
 
 export type { SignalingRole, SignalingEvent, SignalingClientOptions, SignalKind };
 
+const WEBSOCKET_OPEN = 1;
+
 const PAIRING_ENDED_ERRORS: ReadonlySet<string> = new Set([
   'device_revoked',
   'pairing_not_found',
@@ -110,7 +112,7 @@ export class SignalingClient {
       clearInterval(this.heartbeatTimer);
       this.heartbeatTimer = undefined;
     }
-    if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+    if (this.socket && this.socket.readyState === WEBSOCKET_OPEN) {
       try {
         this.socket.close();
       } catch {
@@ -170,7 +172,7 @@ export class SignalingClient {
     if (!this.socket) {
       return false;
     }
-    if (this.socket.readyState !== WebSocket.OPEN) {
+    if (this.socket.readyState !== WEBSOCKET_OPEN) {
       return false;
     }
     try {

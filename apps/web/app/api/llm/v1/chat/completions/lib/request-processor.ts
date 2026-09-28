@@ -820,6 +820,11 @@ export async function applyImplicitManagedSkillOffer(
   return relevant.map((skill) => skill.name);
 }
 
+const AMBIENT_TOOL_SURFACES: ReadonlySet<CloudChatSurface> = new Set<CloudChatSurface>([
+  ...MEMORY_COMMAND_CLIENT_SURFACES,
+  'chrome',
+]);
+
 export function applyMemoryToolCapability(
   request: ChatCompletionRequest,
   params: {
@@ -839,7 +844,7 @@ export function applyMemoryToolCapability(
     request.memory_enabled === false ||
     request.personalization === false ||
     request.memory_command !== undefined ||
-    !MEMORY_COMMAND_CLIENT_SURFACES.has(params.surface)
+    !AMBIENT_TOOL_SURFACES.has(params.surface)
   ) {
     return;
   }
@@ -865,7 +870,7 @@ export function applyFileSearchToolCapability(
     !params.projectHasKnowledgeFiles ||
     !request.stream ||
     params.isTemporary ||
-    !MEMORY_COMMAND_CLIENT_SURFACES.has(params.surface)
+    !AMBIENT_TOOL_SURFACES.has(params.surface)
   ) {
     return;
   }
@@ -891,7 +896,7 @@ export function applyScheduleToolCapability(
     !params.schedulesAllowed ||
     !request.stream ||
     params.isTemporary ||
-    !MEMORY_COMMAND_CLIENT_SURFACES.has(params.surface)
+    !AMBIENT_TOOL_SURFACES.has(params.surface)
   ) {
     return;
   }
