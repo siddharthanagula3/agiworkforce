@@ -28,7 +28,11 @@ import {
   getVideoAspectOptionsForModel,
   getVideoQualityOptionsForModel,
 } from '@agiworkforce/types';
-import { supportsManagedMediaImageEdit } from '@agiworkforce/cloud-contracts';
+import {
+  CHAT_OUTPUT_FORMATS,
+  CHAT_OUTPUT_FORMAT_LABEL,
+  supportsManagedMediaImageEdit,
+} from '@agiworkforce/cloud-contracts';
 import { Text } from '@/components/ui/text';
 import { Switch } from '@/components/ui/switch';
 import { useChatStore } from '@/stores/chatStore';
@@ -55,6 +59,7 @@ import { collectSearchableMobileFiles } from '@/src/features/search/mobileGlobal
 import { fetchLibraryPage } from '@/src/features/library/libraryClient';
 import { useCapability } from '@/src/lib/capabilities';
 import { useMobileSkillSelectionStore } from '@/src/features/skills/selectionStore';
+import { useOutputFormatStore } from '@/src/features/chat/store/outputFormatStore';
 import type { Attachment } from './AttachmentPreview';
 
 interface AddToChatSheetProps {
@@ -67,6 +72,7 @@ interface AddToChatSheetProps {
   onOpenProjectPicker: () => void;
   onAttachFromLibrary: (attachment: Attachment) => void;
   onOpenSkills?: () => void;
+  offersOutputFormat?: boolean;
 }
 
 const SNAP_POINTS = ['75%'];
@@ -101,6 +107,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     onOpenProjectPicker,
     onAttachFromLibrary,
     onOpenSkills,
+    offersOutputFormat = false,
   },
   ref,
 ) {
@@ -179,6 +186,17 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     grantedCapabilities.includes('canUseImages') &&
     canUseBillingPlanCapability(tier, 'video_generation');
   const canUseConnectors = grantedCapabilities.includes('canUseConnectors');
+  const codeExecutionAvailable = useTierStore((s) => s.codeExecutionAvailable);
+  const outputFormat = useOutputFormatStore((s) => s.format);
+  const setOutputFormat = useOutputFormatStore((s) => s.setFormat);
+  const showOutputSection =
+    offersOutputFormat &&
+    appMode === 'cloud' &&
+    mediaMode === 'text' &&
+    FEATURES.codeExecution &&
+    selectedModelMetadata?.capabilities?.tools === true &&
+    codeExecutionAvailable &&
+    grantedCapabilities.includes('canUseCloudExecution');
   const selectedSkillName = useMobileSkillSelectionStore((s) => s.selection?.name ?? null);
 
   const localActiveProjectId = useProjectStore((s) => s.activeProjectId);
@@ -853,6 +871,39 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
             </View>
 
             {/* Divider */}
+            <View style={{ height: 1, backgroundColor: dividerColor, marginHorizontal: 20 }} />
+          </>
+        ) : null}
+
+        {showOutputSection ? (
+          <>
+            <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
+              <Text
+                style={{
+                  fontSize: 11,
+                  fontWeight: '600',
+                  color: themeColors.textMuted,
+                  textTransform: 'uppercase',
+                  marginBottom: 4,
+                }}
+              >
+                Output
+              </Text>
+              {CHAT_OUTPUT_FORMATS.map((format) => (
+                <MediaOptionRow
+                  key={format}
+                  label={CHAT_OUTPUT_FORMAT_LABEL[format]}
+                  selected={outputFormat === format}
+                  onPress={() => {
+                    haptic();
+                    setOutputFormat(outputFormat === format ? null : format);
+                  }}
+                  textColor={themeColors.textPrimary}
+                  mutedColor={themeColors.textMuted}
+                  activeColor={themeColors.teal}
+                />
+              ))}
+            </View>
             <View style={{ height: 1, backgroundColor: dividerColor, marginHorizontal: 20 }} />
           </>
         ) : null}
