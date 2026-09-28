@@ -62,6 +62,9 @@ pub mod method {
     pub const THREAD_ARCHIVE: &str = "thread/archive";
     pub const THREAD_UNARCHIVE: &str = "thread/unarchive";
     pub const THREAD_SEARCH: &str = "thread/search";
+    pub const THREAD_CHECKPOINTS: &str = "thread/checkpoints";
+    pub const THREAD_REWIND: &str = "thread/rewind";
+    pub const THREAD_PLAN: &str = "thread/plan";
     pub const THREAD_DELETE: &str = "thread/delete";
     pub const THREAD_RECONNECT: &str = "thread/reconnect";
     pub const THREAD_WRITER_RELEASE: &str = "thread/writer/release";
@@ -347,6 +350,8 @@ pub struct AppServerCapabilities {
     pub max_turns: bool,
     #[serde(default, skip_serializing_if = "is_false")]
     pub memory: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub plan: bool,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -557,6 +562,123 @@ pub struct ThreadReadResponse {
     /// `kind` is `created` is a file the thread generated.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub file_changes: Vec<DeveloperSessionFileChange>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub plan: Vec<DeveloperPlanStep>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub todos: Vec<DeveloperTodo>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum DeveloperStepStatus {
+    Pending,
+    InProgress,
+    Done,
+    Blocked,
+    Skipped,
+    Superseded,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct DeveloperPlanStep {
+    pub description: String,
+    pub status: DeveloperStepStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub notes: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct DeveloperTodo {
+    pub content: String,
+    pub status: DeveloperStepStatus,
+    pub priority: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ThreadPlanNotification {
+    pub thread_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub plan: Option<Vec<DeveloperPlanStep>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub todos: Option<Vec<DeveloperTodo>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ThreadCheckpoint {
+    pub checkpoint_index: u32,
+    pub created_at: String,
+    pub prompt: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub message_index: Option<u32>,
+    pub tracked_files: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ThreadCheckpointsResponse {
+    pub checkpoints: Vec<ThreadCheckpoint>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum ThreadRewindRestore {
+    Both,
+    Conversation,
+    Code,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ThreadRewindParams {
+    pub thread_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub checkpoint_index: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub message_index: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub restore: Option<ThreadRewindRestore>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct RewindSkippedFile {
+    pub path: String,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ThreadRewindResponse {
+    pub thread: ThreadSummary,
+    pub prompt: String,
+    pub conversation_restored: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub restored_files: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub removed_files: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub skipped_files: Vec<RewindSkippedFile>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]

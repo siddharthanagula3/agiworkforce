@@ -171,6 +171,8 @@ fn thread_read_reports_when_only_a_bounded_transcript_window_is_returned() {
         transcript_truncated: true,
         approvals: Vec::new(),
         file_changes: Vec::new(),
+        plan: Vec::new(),
+        todos: Vec::new(),
     };
 
     let value = serde_json::to_value(response).expect("serialize thread read response");

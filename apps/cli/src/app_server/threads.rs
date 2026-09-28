@@ -1,6 +1,9 @@
-use agiworkforce_protocol::developer_session::ThreadSearchMatch;
+use agiworkforce_protocol::developer_session::{
+    DeveloperPlanStep, DeveloperStepStatus, DeveloperTodo, ThreadSearchMatch,
+};
 
 use crate::models::Message;
+use crate::plan_mode::{Plan, StepStatus, TodoList};
 
 const MAX_MATCHES_PER_THREAD: usize = 3;
 const SNIPPET_LEAD_CHARS: usize = 60;
@@ -91,4 +94,37 @@ fn snippet(text: &str, start: usize, end: usize) -> String {
         if lead_start > 0 { "…" } else { "" },
         if trail_end < text.len() { "…" } else { "" }
     )
+}
+
+fn step_status(status: StepStatus) -> DeveloperStepStatus {
+    match status {
+        StepStatus::Pending => DeveloperStepStatus::Pending,
+        StepStatus::InProgress => DeveloperStepStatus::InProgress,
+        StepStatus::Done => DeveloperStepStatus::Done,
+        StepStatus::Blocked => DeveloperStepStatus::Blocked,
+        StepStatus::Skipped => DeveloperStepStatus::Skipped,
+        StepStatus::Superseded => DeveloperStepStatus::Superseded,
+    }
+}
+
+pub(super) fn plan_steps(plan: &Plan) -> Vec<DeveloperPlanStep> {
+    plan.steps
+        .iter()
+        .map(|step| DeveloperPlanStep {
+            description: step.description.clone(),
+            status: step_status(step.status),
+            notes: step.notes.clone().filter(|notes| !notes.trim().is_empty()),
+        })
+        .collect()
+}
+
+pub(super) fn todo_items(list: &TodoList) -> Vec<DeveloperTodo> {
+    list.items
+        .iter()
+        .map(|item| DeveloperTodo {
+            content: item.content.clone(),
+            status: step_status(item.status),
+            priority: item.priority.clone(),
+        })
+        .collect()
 }

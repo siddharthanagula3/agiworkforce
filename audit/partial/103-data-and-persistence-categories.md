@@ -16,14 +16,3 @@ nothing is left.
 | platform | partial | External references are kept ad hoc (a repository URL on coding sessions, source URLs inside message metadata, MCP resource URLs on grants); there is no canonical reference record with identity, version and access. | persistence |
 
 Code: `apps/web/db/neon/0075_cloud_code_sessions.sql:13-15`, `apps/web/app/api/chat/conversations/[id]/messages/lib/resolve-source-urls.ts:5-9`
-
-## S103.18: Artifacts and revisions.
-
-- Done when: Artifacts and their revision history are durably stored and classified.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | The current artifact is synced, but nothing writes web_artifact_versions, so cloud artifact revision history is never stored (only published artifacts keep versions). | handler |
-
-Code: `apps/web/app/api/chat/sync/route.ts:691-695`, `apps/web/db/neon/0039_artifact_cloud_sync.sql:40-43`, `apps/web/lib/services/deletion-manifest.ts:77-77`, `apps/web/db/neon/0039_artifact_cloud_sync.sql:58-66`

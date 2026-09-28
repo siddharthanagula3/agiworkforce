@@ -37,6 +37,8 @@ import {
   type DeviceKeyModifier,
   type DeviceMouseButton,
   type DeviceStepRegion,
+  type DeveloperAgentMode,
+  normalizeDeveloperAgentMode,
 } from '@agiworkforce/local-runtime-contract';
 import { isBrowserCommand } from '@agiworkforce/types';
 import {
@@ -118,16 +120,28 @@ import {
   statPath,
   writeTextFile,
 } from './filesystemService';
-import { readWorkspaceGit } from './gitService';
+import {
+  discardWorkingTreeChanges,
+  listLocalBranches,
+  pushLocalBranch,
+  readWorkingTreeChanges,
+  readWorkspaceGit,
+  switchLocalBranch,
+} from './gitService';
 import {
   DeveloperRuntimeUnavailableError,
   answerDeveloperApproval,
   interruptDeveloperTurn,
+  listDeveloperPlugins,
   listDeveloperSessions,
+  listDeveloperSkills,
   readDeveloperModels,
   readDeveloperRuntimeStatus,
   readDeveloperSession,
   resumeDeveloperSession,
+  setDeveloperPluginEnabled,
+  setDeveloperSkillConsent,
+  setDeveloperSkillEnabled,
   startDeveloperSession,
   startDeveloperTurn,
   stopDeveloperRuntime,
@@ -195,6 +209,36 @@ function optionalString(args: Args, key: string, fallback: string): string {
     throw new InvalidArguments(`"${key}" must be a string.`);
   }
   return value;
+}
+
+const MAX_DISCARD_PATHS = 500;
+
+function requirePathList(args: Args, key: string): string[] {
+  const value = args[key];
+  if (
+    !Array.isArray(value) ||
+    value.length === 0 ||
+    value.length > MAX_DISCARD_PATHS ||
+    value.some((entry) => typeof entry !== 'string' || entry.length === 0 || entry.includes('\0'))
+  ) {
+    throw new InvalidArguments(`"${key}" must list between 1 and ${MAX_DISCARD_PATHS} paths.`);
+  }
+  return value as string[];
+}
+
+function requireBoolean(args: Args, key: string): boolean {
+  const value = args[key];
+  if (typeof value !== 'boolean') throw new InvalidArguments(`"${key}" must be true or false.`);
+  return value;
+}
+
+function rendererAgentMode(raw: string): DeveloperAgentMode | null {
+  if (raw === '') return null;
+  const mode = normalizeDeveloperAgentMode(raw);
+  if (mode === null || mode === 'bypass') {
+    throw new InvalidArguments('"agentMode" must be plan, ask or auto.');
+  }
+  return mode;
 }
 
 function requireNumber(args: Args, key: string): number {
@@ -460,6 +504,48 @@ const CAPABILITY_BY_COMMAND: Record<string, { capability: DesktopCapability; rea
     capability: 'shell.execute',
     reason:
       'A coding session runs the AGI CLI agent in this folder. It can read and change files here and run programs with your account.',
+  },
+  developer_session_changes: {
+    capability: 'git.read',
+    reason: 'Showing what a coding session changed reads the changed files in this folder.',
+  },
+  developer_session_discard: {
+    capability: 'git.destructive',
+    reason: 'Discarding a change puts files in this folder back to their last committed version.',
+  },
+  developer_branches_list: {
+    capability: 'git.read',
+    reason: "Listing branches reads this folder's git repository.",
+  },
+  developer_branch_switch: {
+    capability: 'git.write',
+    reason: 'Switching branches changes the files in this folder to that branch.',
+  },
+  developer_branch_push: {
+    capability: 'git.write',
+    reason: "Opening a pull request pushes this folder's current branch to its GitHub remote.",
+  },
+  developer_skills_list: {
+    capability: 'filesystem.read',
+    reason: 'Listing skills reads the skill files this folder and your account provide.',
+  },
+  developer_plugins_list: {
+    capability: 'filesystem.read',
+    reason: 'Listing plugins reads the plugin files this folder and your account provide.',
+  },
+  developer_skill_set_enabled: {
+    capability: 'shell.execute',
+    reason:
+      'Turning a skill on lets coding sessions here follow its instructions and run its scripts.',
+  },
+  developer_skill_consent: {
+    capability: 'shell.execute',
+    reason:
+      "Trusting this folder's skills lets coding sessions here follow them and run their scripts with your account.",
+  },
+  developer_plugin_set_enabled: {
+    capability: 'shell.execute',
+    reason: 'Turning a plugin on lets coding sessions here use its commands, skills and servers.',
   },
 };
 
@@ -999,11 +1085,13 @@ async function execute(
     }
     case 'developer_turn_start': {
       const model = optionalString(args, 'model', '');
+      const agentMode = rendererAgentMode(optionalString(args, 'agentMode', ''));
       return startDeveloperTurn({
         rootId: requireString(args, 'rootId'),
         threadId: requireString(args, 'threadId'),
         text: requireString(args, 'text'),
         ...(model === '' ? {} : { model }),
+        ...(agentMode ? { agentMode } : {}),
       });
     }
     case 'developer_turn_interrupt':
@@ -1020,6 +1108,37 @@ async function execute(
         requestId: requireString(args, 'requestId'),
         approved: args['approved'] === true,
       });
+    case 'developer_branches_list':
+      return listLocalBranches(resolveRoot(args).path);
+    case 'developer_branch_switch':
+      return switchLocalBranch(resolveRoot(args).path, requireString(args, 'branch'));
+    case 'developer_branch_push':
+      return pushLocalBranch(resolveRoot(args).path);
+    case 'developer_skills_list':
+      return listDeveloperSkills(requireString(args, 'rootId'));
+    case 'developer_skill_set_enabled':
+      return setDeveloperSkillEnabled(
+        requireString(args, 'rootId'),
+        requireString(args, 'name'),
+        requireBoolean(args, 'enabled'),
+      );
+    case 'developer_skill_consent':
+      return setDeveloperSkillConsent(
+        requireString(args, 'rootId'),
+        requireBoolean(args, 'granted'),
+      );
+    case 'developer_plugins_list':
+      return listDeveloperPlugins(requireString(args, 'rootId'));
+    case 'developer_plugin_set_enabled':
+      return setDeveloperPluginEnabled(
+        requireString(args, 'rootId'),
+        requireString(args, 'id'),
+        requireBoolean(args, 'enabled'),
+      );
+    case 'developer_session_changes':
+      return readWorkingTreeChanges(resolveRoot(args).path);
+    case 'developer_session_discard':
+      return discardWorkingTreeChanges(resolveRoot(args).path, requirePathList(args, 'paths'));
     case 'developer_account_report': {
       reportShellIdentity({
         signedIn: args['signedIn'] === true,

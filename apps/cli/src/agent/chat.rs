@@ -616,7 +616,7 @@ impl AgentSession {
         }));
     }
 
-    fn emit_turn_notice(&self, notice: String) {
+    pub(super) fn emit_turn_notice(&self, notice: String) {
         if crate::tui::tui_active() {
             crate::tui::push_tui_notice(notice);
         } else if !self.quiet {

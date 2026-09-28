@@ -4,7 +4,10 @@ import { useRouter } from 'next/navigation';
 import { createElement, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
-import type { ManagedSkillSummary } from '@agiworkforce/cloud-contracts';
+import {
+  PLUGIN_UPLOAD_ACKNOWLEDGED_SCAN_FIELD,
+  type ManagedSkillSummary,
+} from '@agiworkforce/cloud-contracts';
 import type { DirectoryRecord } from '@/lib/connectors/directory/types';
 import type {
   PluginDirectoryEntry,
@@ -76,6 +79,7 @@ import {
   UPLOAD_FILE_FIELD,
   UPLOAD_PLUGIN_DONE_TITLE,
   UPLOAD_SKILL_DONE_TITLE,
+  uploadOmittedFilesLine,
   uploadSkillCountLine,
   PLUGIN_SOURCE_BUILTIN,
   PLUGIN_SOURCE_MARKETPLACE,
@@ -85,7 +89,11 @@ import {
   SKILL_DELETE_FAILED_COPY,
   SKILL_UNINSTALL_FAILED_COPY,
 } from '../constants';
-import { DirectoryRequestError, describeActionFailure } from '../services/request-error';
+import {
+  DirectoryRequestError,
+  describeActionFailure,
+  scanCautionFrom,
+} from '../services/request-error';
 import {
   DEFAULT_DIRECTORY_QUERY,
   connectedConnectorIds,
@@ -1172,20 +1180,33 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
     [refreshUserMarketplaces],
   );
 
-  const postFile = useCallback(async (path: string, file: File): Promise<Response> => {
-    const csrfToken = await getCsrfToken();
-    const form = new FormData();
-    form.set(UPLOAD_FILE_FIELD, file);
-    return fetch(path, { method: 'POST', headers: { [CSRF_HEADER]: csrfToken }, body: form });
-  }, []);
+  const postFile = useCallback(
+    async (
+      path: string,
+      file: File,
+      acknowledgedScans: readonly string[] = [],
+    ): Promise<Response> => {
+      const csrfToken = await getCsrfToken();
+      const form = new FormData();
+      form.set(UPLOAD_FILE_FIELD, file);
+      for (const scan of acknowledgedScans)
+        form.append(PLUGIN_UPLOAD_ACKNOWLEDGED_SCAN_FIELD, scan);
+      return fetch(path, { method: 'POST', headers: { [CSRF_HEADER]: csrfToken }, body: form });
+    },
+    [],
+  );
 
   const readInstallResponse = useCallback(
     async (response: Response, failureCopy: string, title: string) => {
       const body = (await response.json().catch(() => ({}))) as {
         plugins?: ReadonlyArray<{ name: string; skills: readonly string[] }>;
+        omittedFiles?: readonly string[];
         error?: { message?: string };
       };
-      if (!response.ok) throw new Error(body.error?.message ?? failureCopy);
+      if (!response.ok) {
+        const message = body.error?.message ?? failureCopy;
+        throw scanCautionFrom(body, message) ?? new Error(message);
+      }
       const skillCount = (body.plugins ?? []).reduce(
         (total, plugin) => total + plugin.skills.length,
         0,
@@ -1195,6 +1216,7 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
         lines: [
           ...(body.plugins ?? []).map((plugin) => plugin.name),
           uploadSkillCountLine(skillCount),
+          ...(body.omittedFiles?.length ? [uploadOmittedFilesLine(body.omittedFiles)] : []),
         ],
       };
     },
@@ -1202,8 +1224,8 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
   );
 
   const uploadPluginArchive = useCallback(
-    async (file: File): Promise<DirectoryUploadResult> => {
-      const response = await postFile(PLUGIN_UPLOADS_PATH, file);
+    async (file: File, acknowledgedScans?: readonly string[]): Promise<DirectoryUploadResult> => {
+      const response = await postFile(PLUGIN_UPLOADS_PATH, file, acknowledgedScans);
       const result = await readInstallResponse(
         response,
         PLUGIN_UPLOAD_FAILED_COPY,
@@ -1232,17 +1254,25 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
   );
 
   const uploadSkillFile = useCallback(
-    async (file: File): Promise<DirectoryUploadResult> => {
-      const response = await postFile(SKILLS_PATH, file);
+    async (file: File, acknowledgedScans?: readonly string[]): Promise<DirectoryUploadResult> => {
+      const response = await postFile(SKILLS_PATH, file, acknowledgedScans);
       const body = (await response.json().catch(() => ({}))) as {
         skill?: { name: string };
+        omittedFiles?: readonly string[];
         error?: { message?: string };
       };
       if (!response.ok || !body.skill) {
-        throw new Error(body.error?.message ?? SKILL_UPLOAD_FAILED_COPY);
+        const message = body.error?.message ?? SKILL_UPLOAD_FAILED_COPY;
+        throw scanCautionFrom(body, message) ?? new Error(message);
       }
       await loadSection('skills');
-      return { title: UPLOAD_SKILL_DONE_TITLE, lines: [`/${body.skill.name}`] };
+      return {
+        title: UPLOAD_SKILL_DONE_TITLE,
+        lines: [
+          `/${body.skill.name}`,
+          ...(body.omittedFiles?.length ? [uploadOmittedFilesLine(body.omittedFiles)] : []),
+        ],
+      };
     },
     [loadSection, postFile],
   );
@@ -1406,8 +1436,7 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       addMarketplace,
       removeMarketplace,
       refreshMarketplace,
-      uploadPluginArchive,
-      ...(onCreateSkill ? { createPlugin, uploadSkillFile } : {}),
+      ...(onCreateSkill ? { uploadPluginArchive, createPlugin, uploadSkillFile } : {}),
       ...(pluginSettings ? { pluginSettings } : {}),
       setPluginEnabled,
       setPluginSkillEnabled,

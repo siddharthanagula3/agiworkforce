@@ -7,7 +7,6 @@ import type {
 } from '@agiworkforce/unified-chat/composer-editor';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { useBillingStore, type SubscriptionPlan } from '@shared/stores/web-auth-store';
-import { parkPendingDraft } from '@features/chat/lib/pending-composer-draft';
 import { hasPendingDraftClear } from '@features/chat/lib/pending-draft-clear';
 import {
   __resetComposerDraftStorageForTests,
@@ -294,10 +293,9 @@ describe('a draft survives an interruption the user did not choose', () => {
 });
 
 /**
- * Every new chat shares the unsaved surface's one draft slot, so the reload
- * has to be told apart from the next new chat the user opens. These two run in
- * this order on purpose: the claim is spent for the document, exactly as it is
- * in a browser.
+ * Every new chat shares the unsaved surface's one draft slot, so whatever was
+ * typed there and not sent is what the next arrival finds, whether the user
+ * comes back by reload, by the sidebar, or by Back.
  */
 describe('the unsaved surface', () => {
   it('restores what was being typed when the document went down', () => {
@@ -314,17 +312,20 @@ describe('the unsaved surface', () => {
     expect(textarea().value).toBe('');
   });
 
-  it('does not hand that draft to the next new chat opened in the same document', () => {
+  it('gives the unsent draft back to every later arrival in the same document', () => {
     writePersistedDraft(null, DRAFT);
+
+    const first = render(<ChatComposerNew onSend={vi.fn()} conversationId={null} emptyState />);
+    expect(textarea().value).toBe(DRAFT);
+    first.unmount();
 
     render(<ChatComposerNew onSend={vi.fn()} conversationId={null} emptyState />);
 
-    expect(textarea().value).toBe('');
+    expect(textarea().value).toBe(DRAFT);
   });
 
-  it('restores a draft after browser Back during the development double-mount', () => {
-    parkPendingDraft(DRAFT);
-    window.dispatchEvent(new PopStateEvent('popstate'));
+  it('restores the draft on a return during the development double-mount', () => {
+    writePersistedDraft(null, DRAFT);
 
     render(<ChatComposerNew onSend={vi.fn()} conversationId={null} emptyState />, {
       wrapper: StrictMode,

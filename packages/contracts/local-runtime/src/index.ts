@@ -51,7 +51,9 @@ export {
   DEVELOPER_SESSION_ORIGIN_LABELS,
   DEVELOPER_SESSION_TRUST_LABELS,
   DEVELOPER_TURN_OUTCOMES,
+  WORKING_TREE_CHANGE_STATES,
   isDeveloperSessionCommand,
+  parseWorkingTreeStatus,
 } from './developer-sessions';
 export type {
   DeveloperApprovalAnswer,
@@ -71,6 +73,11 @@ export type {
   DeveloperTurnFailure,
   DeveloperTurnOutcome,
   DeveloperTurnRequest,
+  LocalBranchPush,
+  LocalBranches,
+  WorkingTreeChange,
+  WorkingTreeChangeState,
+  WorkingTreeChanges,
 } from './developer-sessions';
 
 export {

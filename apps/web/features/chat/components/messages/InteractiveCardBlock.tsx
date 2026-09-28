@@ -25,6 +25,7 @@ import { cn } from '@shared/lib/utils';
 import { ClarifyCard, type ClarifyCardContext } from './cards/ClarifyCard';
 import { ItineraryCardLazy, MapSearchCardLazy, PlacesMapCardLazy } from './cards/lazyMapCards';
 import { McpAppCard } from './cards/McpAppCard';
+import { ProductComparisonCard } from './cards/ProductComparisonCard';
 
 type WebCardRegistry = {
   readonly [K in WebInteractiveCardKind]: NonNullable<InteractiveCardRegistry<React.ReactNode>[K]>;
@@ -40,6 +41,7 @@ const WEB_CARD_REGISTRY: WebCardRegistry = {
   'places.v1': ({ body, ctx }) => (
     <PlacesMapCardLazy body={body} assistantText={(ctx as WebCardContext).assistantText} />
   ),
+  'product-comparison.v1': ({ body }) => <ProductComparisonCard body={body} />,
 };
 
 function openMapSearchProviderUrl(value: string): void {

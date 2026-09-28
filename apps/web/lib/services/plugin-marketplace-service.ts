@@ -24,12 +24,14 @@ import {
   PLUGIN_MARKETPLACE_MAX_MANIFEST_BYTES,
   PLUGIN_MARKETPLACE_MAX_PLUGINS,
   PLUGIN_MARKETPLACE_STANDARD_MANIFEST_PATH,
+  PLUGIN_SCAN_REVIEW_REFUSAL,
   PluginMarketplaceManifestSchema,
   type PluginMarketplaceEntry,
   type PluginMarketplaceManifest,
   type PluginMarketplaceManifestPlugin,
   type PluginMarketplaceSourceKind,
   type PluginMarketplaceSourceSummary,
+  type PluginPackageRefusalDetails,
 } from '@agiworkforce/cloud-contracts';
 
 import {
@@ -45,6 +47,7 @@ import {
   type PluginIntegrityClaim,
   type PluginIntegrityVerdict,
   type PluginScanFile,
+  type PluginScanFinding,
   type PluginScanResult,
 } from '@agiworkforce/client-runtime/plugins';
 
@@ -256,12 +259,34 @@ export async function scanAndRecordPluginPackage(
   return result;
 }
 
+interface PluginScanRefusal {
+  findings: readonly PluginScanFinding[];
+  acknowledgements?: readonly string[];
+}
+
+function refusalDetails(
+  refusal: string,
+  scan: PluginScanRefusal | undefined,
+): PluginPackageRefusalDetails {
+  if (!scan) return { refusal };
+  return {
+    refusal,
+    findings: scan.findings.map(({ path, line, message, severity }) => ({
+      path,
+      line,
+      message,
+      severity,
+    })),
+    ...(scan.acknowledgements?.length ? { acknowledgements: [...scan.acknowledgements] } : {}),
+  };
+}
+
 /** An `AppError`, so the route boundary answers 409 rather than an opaque 500. */
 export class PluginPackageRefusedError extends AppError {
   readonly refusal: string;
 
-  constructor(refusal: string, message: string) {
-    super(ErrorCode.CONFLICT, message, 409);
+  constructor(refusal: string, message: string, scan?: PluginScanRefusal) {
+    super(ErrorCode.CONFLICT, message, 409, refusalDetails(refusal, scan));
     Object.setPrototypeOf(this, PluginPackageRefusedError.prototype);
     this.name = 'PluginPackageRefusedError';
     this.refusal = refusal;
@@ -292,7 +317,7 @@ export async function assertPluginPackageInstallable(
   }
   if (scan.verdict !== 'pass') {
     throw new PluginPackageRefusedError(
-      scan.verdict === 'block' ? 'scan_blocked' : 'scan_review_required',
+      scan.verdict === 'block' ? 'scan_blocked' : PLUGIN_SCAN_REVIEW_REFUSAL,
       describePluginScan({
         verdict: scan.verdict,
         findings: scan.findings,
@@ -300,6 +325,7 @@ export async function assertPluginPackageInstallable(
         scannedFiles: 0,
         scannedBytes: 0,
       }),
+      { findings: scan.findings },
     );
   }
 }
@@ -759,7 +785,7 @@ export async function assertMarketplaceEntryInstallable(
   }
   if (scan.verdict === 'pass') return;
   throw new PluginPackageRefusedError(
-    scan.verdict === 'block' ? 'scan_blocked' : 'scan_review_required',
+    scan.verdict === 'block' ? 'scan_blocked' : PLUGIN_SCAN_REVIEW_REFUSAL,
     describePluginScan({
       verdict: scan.verdict,
       findings: scan.findings,
@@ -767,6 +793,7 @@ export async function assertMarketplaceEntryInstallable(
       scannedFiles: 0,
       scannedBytes: 0,
     }),
+    { findings: scan.findings },
   );
 }
 

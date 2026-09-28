@@ -340,8 +340,14 @@ export interface DirectoryAdapter {
   removeMarketplace?: (id: string) => Promise<void>;
   refreshMarketplace?: (id: string) => Promise<void>;
   browseMarketplaceSources?: () => Promise<void> | void;
-  uploadPluginArchive?: (file: File) => Promise<DirectoryUploadResult>;
-  uploadSkillFile?: (file: File) => Promise<DirectoryUploadResult>;
+  uploadPluginArchive?: (
+    file: File,
+    acknowledgedScans?: readonly string[],
+  ) => Promise<DirectoryUploadResult>;
+  uploadSkillFile?: (
+    file: File,
+    acknowledgedScans?: readonly string[],
+  ) => Promise<DirectoryUploadResult>;
   createPlugin?: (draft: DirectoryPluginDraft) => Promise<DirectoryUploadResult>;
   pluginSettings?: DirectoryPluginSettings;
   setPluginEnabled?: (id: string, enabled: boolean) => Promise<void> | void;
