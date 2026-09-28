@@ -4,6 +4,7 @@ export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { LIVE_VOICE_CLIENT_HANDOFFS } from '@agiworkforce/cloud-contracts';
 import { requireEnv } from '@shared/utils/env';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -106,6 +107,10 @@ const CreateLiveSessionSchema = z.object({
   language: z.string().min(2).max(32).nullable().optional(),
   pace: z.number().min(VOICE_PACE_MIN).max(VOICE_PACE_MAX).optional(),
   surface: z.enum(['web', 'mobile', 'desktop']).optional(),
+  clientHandoffs: z
+    .array(z.enum(LIVE_VOICE_CLIENT_HANDOFFS))
+    .max(LIVE_VOICE_CLIENT_HANDOFFS.length)
+    .optional(),
 });
 
 function upstreamErrorCode(body: string): string {
@@ -367,6 +372,7 @@ async function handleCreateLiveSession(request: NextRequest) {
     organizationId: scoped.organizationId,
     planTier,
     backendModel,
+    clientHandoffs: body.clientHandoffs ?? [],
   }).catch((error: unknown): LiveVoiceFunctionTools => {
     logger.error(
       { event: 'live_voice_function_tools_failed', error, userId },
