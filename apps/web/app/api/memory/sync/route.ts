@@ -73,7 +73,13 @@ async function handlePull(request: NextRequest, url: URL) {
 
     const saturated = memories.length >= MAX_MEMORIES_PULL;
     const cursor = computeMemoryPullCursor(since, memories);
-    return NextResponse.json({ memories, cursor, hasMore: saturated });
+    const policies = await loadMemoryWritePolicies(db, { userId, organizationId });
+    return NextResponse.json({
+      memories,
+      cursor,
+      hasMore: saturated,
+      memoryEnabled: policies.organization.allowMemory && policies.user.enabled,
+    });
   } catch (error) {
     logger.error({ error, userId }, 'Memory sync pull failed');
     throw createError.internal('Failed to pull memory changes');
