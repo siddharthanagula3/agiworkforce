@@ -34,7 +34,7 @@ Nothing left in this wave.
 
 ## Wave 2: switch on and wire up what is already built (flag off or not mounted)
 
-203 open items.
+204 open items.
 
 | Section | Items | File |
 | --- | ---: | --- |
@@ -86,11 +86,11 @@ Nothing left in this wave.
 | 104. Named technology options-not claims about competitor internals | 2 | [partial/104-named-technology-options-not-claims-about-competitor-interna.md](../partial/104-named-technology-options-not-claims-about-competitor-interna.md) |
 | 105. Developer platform and console | 1 | [partial/105-developer-platform-and-console.md](../partial/105-developer-platform-and-console.md) |
 | 108. Specialist workspaces | 2 | [partial/108-specialist-workspaces.md](../partial/108-specialist-workspaces.md) |
-| 110. Cross-product experiences to include in the product map | 8 | [partial/110-cross-product-experiences-to-include-in-the-product-map.md](../partial/110-cross-product-experiences-to-include-in-the-product-map.md) |
+| 110. Cross-product experiences to include in the product map | 9 | [partial/110-cross-product-experiences-to-include-in-the-product-map.md](../partial/110-cross-product-experiences-to-include-in-the-product-map.md) |
 
 ## Wave 3: finish half-built features
 
-1587 open items.
+1586 open items.
 
 | Section | Items | File |
 | --- | ---: | --- |
@@ -196,7 +196,7 @@ Nothing left in this wave.
 | 107. Discovery, social, and public-content products | 8 | [partial/107-discovery-social-and-public-content-products.md](../partial/107-discovery-social-and-public-content-products.md) |
 | 108. Specialist workspaces | 16 | [partial/108-specialist-workspaces.md](../partial/108-specialist-workspaces.md) |
 | 109. Optional native and ambient extensions | 15 | [partial/109-optional-native-and-ambient-extensions.md](../partial/109-optional-native-and-ambient-extensions.md) |
-| 110. Cross-product experiences to include in the product map | 13 | [partial/110-cross-product-experiences-to-include-in-the-product-map.md](../partial/110-cross-product-experiences-to-include-in-the-product-map.md) |
+| 110. Cross-product experiences to include in the product map | 12 | [partial/110-cross-product-experiences-to-include-in-the-product-map.md](../partial/110-cross-product-experiences-to-include-in-the-product-map.md) |
 
 ## Wave 4: build missing core product features (chat, files, research, media, tools, agents)
 
