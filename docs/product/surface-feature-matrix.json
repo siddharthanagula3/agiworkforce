@@ -1773,7 +1773,7 @@
         "desktop": {
           "state": "present",
           "via": "import",
-          "entry": "apps/desktop/electron/remote/remoteControlHost.ts",
+          "entry": "apps/desktop/electron/remote/remoteControlService.ts",
           "mount": "apps/desktop/electron/runtime/dispatcher.ts"
         },
         "mobile": {

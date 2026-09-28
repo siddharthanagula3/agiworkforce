@@ -540,7 +540,7 @@ this document.
 ### Remote control
 
 - **web**: present. `apps/web/features/desktop-host/components/RemoteControlSection.tsx`, reached by `apps/web/features/desktop-host/index.ts` (import).
-- **desktop**: present. `apps/desktop/electron/remote/remoteControlHost.ts`, reached by `apps/desktop/electron/runtime/dispatcher.ts` (import).
+- **desktop**: present. `apps/desktop/electron/remote/remoteControlService.ts`, reached by `apps/desktop/electron/runtime/dispatcher.ts` (import).
 - **mobile**: present. `apps/mobile/app/(app)/companion/index.tsx`, reached by `apps/mobile/app/(app)/_layout.tsx` (route).
 - **cli**: absent. Nothing under apps/cli/src is a remote-control host or client.
 - **vscode**: absent. Nothing under apps/extension-vscode/src is a remote-control host or client.

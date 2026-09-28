@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Desktop and mobile surface maintainers
-Last updated: 2026-09-17
+Last updated: 2026-09-28
 
 How a phone drives a coding session on the desktop the user is signed in on.
 This is the map of the path and its trust boundaries. The rules that govern
@@ -22,16 +22,17 @@ peers and enforces size and action limits on what passes.
 
 ## The pieces
 
-| Piece                                                | Lives in                                                     |
-| ---------------------------------------------------- | ------------------------------------------------------------ |
-| The command and state contract                       | `packages/contracts/local-runtime/src/remote-control.ts`     |
-| Host: pairing, relay socket, session fan-out         | `apps/desktop/electron/remote/remoteControlHost.ts`          |
-| Host: coding session control                         | `apps/desktop/electron/remote/codeRemoteController.ts`       |
-| Host: envelope signing and verification              | `apps/desktop/electron/remote/dispatchEnvelope.ts`           |
-| Companion: session list, attach, steer               | `apps/mobile/src/features/companion/remote-code`             |
-| Pairing issuance                                     | `apps/web/app/api/pair/initiate/route.ts`                    |
-| Relay                                                | `services/signaling-server`                                  |
-| Web control panel                                    | `apps/web/features/desktop-host/components/RemoteControlSection.tsx` |
+| Piece                                        | Lives in                                                             |
+| -------------------------------------------- | -------------------------------------------------------------------- |
+| The command and state contract               | `packages/contracts/local-runtime/src/remote-control.ts`             |
+| Host: pairing, relay socket, session fan-out | `packages/platform/utils/src/remoteControl/remoteControlHost.ts`     |
+| Host: coding session control                 | `packages/platform/utils/src/remoteControl/codeRemoteController.ts`  |
+| Host: envelope signing and verification      | `packages/platform/utils/src/remoteControl/dispatchEnvelope.ts`      |
+| Desktop wiring of the host                   | `apps/desktop/electron/remote/remoteControlService.ts`               |
+| Companion: session list, attach, steer       | `apps/mobile/src/features/companion/remote-code`                     |
+| Pairing issuance                             | `apps/web/app/api/pair/initiate/route.ts`                            |
+| Relay                                        | `services/signaling-server`                                          |
+| Web control panel                            | `apps/web/features/desktop-host/components/RemoteControlSection.tsx` |
 
 ## The pairing handshake
 
@@ -92,7 +93,7 @@ request, the companion can answer it, and the answer is only ever a response to 
 prompt the host decided to raise.
 
 Every control action leaves a receipt through
-`apps/desktop/src/services/controlReceipts.ts`, so what a paired phone did is
+`packages/platform/utils/src/remoteControl/controlReceipts.ts`, so what a paired phone did is
 answerable afterwards.
 
 ## Failure and revocation

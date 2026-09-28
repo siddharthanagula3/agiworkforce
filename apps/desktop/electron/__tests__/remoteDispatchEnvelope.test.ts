@@ -7,7 +7,7 @@ import {
   generatePairingSecret,
   signDispatchEnvelope,
   verifyDispatchEnvelope,
-} from '../remote/dispatchEnvelope';
+} from '@agiworkforce/utils/remote-control';
 
 const PAIRING_SECRET = '9f'.repeat(32);
 
