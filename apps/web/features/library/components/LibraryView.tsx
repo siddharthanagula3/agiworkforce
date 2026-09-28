@@ -80,6 +80,7 @@ interface ProjectListRow {
   name?: unknown;
   updatedAt?: unknown;
   conversationCount?: unknown;
+  isArchived?: unknown;
 }
 
 function foldersFromProjectList(body: unknown): LibraryFolder[] {
@@ -88,7 +89,7 @@ function foldersFromProjectList(body: unknown): LibraryFolder[] {
   return rows.flatMap((row: ProjectListRow) => {
     const id = typeof row.id === 'string' ? row.id : '';
     const name = typeof row.name === 'string' ? row.name.trim() : '';
-    if (!id || !name) return [];
+    if (!id || !name || row.isArchived === true) return [];
     return [
       {
         id,
@@ -153,9 +154,21 @@ export function LibraryView() {
       inlinePreviewUri: (uri) => uri,
       textPreviewUri: (uri) => `${uri}/text`,
       listFolders: async () => {
-        const response = await fetch(PROJECT_LIST_ENDPOINT, { credentials: 'same-origin' });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        return foldersFromProjectList(await response.json());
+        const folders: LibraryFolder[] = [];
+        let cursor: string | null = null;
+        do {
+          const query = new URLSearchParams({ limit: '100' });
+          if (cursor) query.set('cursor', cursor);
+          const response = await fetch(`${PROJECT_LIST_ENDPOINT}?${query.toString()}`, {
+            credentials: 'same-origin',
+          });
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const body = (await response.json()) as { hasMore?: unknown; nextCursor?: unknown };
+          folders.push(...foldersFromProjectList(body));
+          cursor =
+            body.hasMore === true && typeof body.nextCursor === 'string' ? body.nextCursor : null;
+        } while (cursor);
+        return folders;
       },
       openFolder,
       createFolder,

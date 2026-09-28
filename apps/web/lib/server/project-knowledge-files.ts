@@ -196,29 +196,28 @@ export async function checkProjectKnowledgeCapacity(
   if (!attachmentValidation.ok) {
     throw createError.validation(attachmentValidation.message);
   }
-  const [owned] = await db.query<{ id: string }>(
-    `select id
+  const [owned] = await db.query<{ id: string; is_archived: boolean }>(
+    `select id, is_archived
        from user_projects
       where id = $1
         and user_id = $2
         and organization_id is not distinct from $3::uuid
-        and is_archived = false
         and deleted_at is null
       limit 1`,
     [projectId, userId, organizationId],
   );
 
+  let archived = owned?.is_archived === true;
   if (!owned) {
     const writeAccess = await resolveProjectWriteAccess(db, { projectId, userId, organizationId });
     if (writeAccess !== 'editor') {
       throw createError.notFound('Project not found');
     }
-    const [shared] = await db.query<{ id: string }>(
-      `select id
+    const [shared] = await db.query<{ id: string; is_archived: boolean }>(
+      `select id, is_archived
          from user_projects
         where id = $1
           and organization_id is not distinct from $2::uuid
-          and is_archived = false
           and deleted_at is null
         limit 1`,
       [projectId, organizationId],
@@ -226,6 +225,10 @@ export async function checkProjectKnowledgeCapacity(
     if (!shared) {
       throw createError.notFound('Project not found');
     }
+    archived = shared.is_archived === true;
+  }
+  if (archived) {
+    throw createError.conflict('This project is archived. Unarchive it to add sources.');
   }
 
   let activeCount = 0;
