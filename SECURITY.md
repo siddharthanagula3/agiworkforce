@@ -22,8 +22,8 @@ reasonable window to ship a fix before disclosing.
 
 The six shipping surfaces (`apps/web`, `apps/desktop`, `apps/mobile`,
 `apps/cli`, `apps/extension`, `apps/extension-vscode`), the shared packages and
-crates they depend on, `services/signaling-server`, and the release and
-deployment tooling under `scripts/` and `.github/workflows/`.
+crates they depend on, `services/signaling-server`, `services/upload-scanner`,
+and the release and deployment tooling under `scripts/` and `.github/workflows/`.
 
 Out of scope: findings that require a compromised developer machine, results
 from automated scanners without a demonstrated impact, and third-party provider

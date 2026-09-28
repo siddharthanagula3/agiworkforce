@@ -63,6 +63,7 @@
       "@agiworkforce/types",
       "@agiworkforce/ui",
       "@agiworkforce/unified-chat",
+      "@agiworkforce/upload-scanner",
       "@agiworkforce/utils",
       "@agiworkforce/web",
       "agi-workforce"
@@ -689,6 +690,18 @@
         "to": "@agiworkforce/utils"
       },
       {
+        "from": "@agiworkforce/upload-scanner",
+        "to": "@agiworkforce/cloud-contracts"
+      },
+      {
+        "from": "@agiworkforce/upload-scanner",
+        "to": "@agiworkforce/types"
+      },
+      {
+        "from": "@agiworkforce/utils",
+        "to": "@agiworkforce/local-runtime-contract"
+      },
+      {
         "from": "@agiworkforce/utils",
         "to": "@agiworkforce/types"
       },
@@ -847,6 +860,10 @@
       {
         "from": "agi-workforce",
         "to": "@agiworkforce/ide-runtime"
+      },
+      {
+        "from": "agi-workforce",
+        "to": "@agiworkforce/local-runtime-contract"
       },
       {
         "from": "agi-workforce",
