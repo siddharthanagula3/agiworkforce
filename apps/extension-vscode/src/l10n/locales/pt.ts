@@ -517,6 +517,26 @@ const pt = {
   'remote.attached_one': '{count} sessão aberta no telefone.',
   'remote.attached_many': '{count} de sessões abertas no telefone.',
   'remote.attached_other': '{count} sessões abertas no telefone.',
+  'sessionSearch.title': 'Histórico de sessões',
+  'sessionSearch.placeholder': 'Pesquise sessões pelo título ou pelo texto das mensagens',
+  'sessionSearch.folderFailed':
+    'AGI Workforce: a CLI do AGI não conseguiu ler as sessões em {folder}. {reason}',
+  'archived.title': 'Sessões arquivadas',
+  'archived.placeholder': 'Selecione uma sessão para restaurá-la e abri-la',
+  'archived.none': 'AGI Workforce: não há sessões arquivadas neste espaço de trabalho.',
+  'archived.restore': 'Restaurar',
+  'archived.delete': 'Excluir permanentemente',
+  'archived.deleteTitle': 'Excluir permanentemente "{title}"?',
+  'archived.deleteDetail':
+    'A transcrição e as aprovações e alterações de arquivos registradas com ela são removidas desta máquina para todas as superfícies do AGI. Isso não pode ser desfeito.',
+  'archived.restored': 'AGI Workforce: "{title}" voltou para suas sessões.',
+  'archived.open': 'Abrir',
+  'archived.deleted': 'AGI Workforce: "{title}" foi excluída.',
+  'archived.notFound': 'AGI Workforce: essa sessão não está mais neste espaço de trabalho.',
+  'archived.actionFailed': 'AGI Workforce: {reason}',
+  'webview.searchingSessions': 'Pesquisando sessões…',
+  'webview.noMatchingSessions': 'Nenhuma sessão corresponde a "{query}"',
+  'webview.archivedSessions': 'Sessões arquivadas',
 };
 
 export default pt;

@@ -349,6 +349,26 @@ const ko = {
   'remote.statusError': '원격 제어: 중지됨',
   'remote.statusTooltip': '원격 제어 표시',
   'remote.attached_other': '휴대폰에서 세션 {count}개가 열려 있습니다.',
+  'sessionSearch.title': '세션 기록',
+  'sessionSearch.placeholder': '제목이나 메시지 내용으로 세션 검색',
+  'sessionSearch.folderFailed':
+    'AGI Workforce: AGI CLI가 {folder}의 세션을 읽지 못했습니다. {reason}',
+  'archived.title': '보관된 세션',
+  'archived.placeholder': '세션을 선택하면 복원하고 엽니다',
+  'archived.none': 'AGI Workforce: 이 작업 영역에 보관된 세션이 없습니다.',
+  'archived.restore': '복원',
+  'archived.delete': '영구 삭제',
+  'archived.deleteTitle': '"{title}" 세션을 영구 삭제할까요?',
+  'archived.deleteDetail':
+    '이 세션의 기록과 함께 저장된 승인 및 파일 변경 내용이 모든 AGI 화면에서 이 컴퓨터에서 제거됩니다. 이 작업은 되돌릴 수 없습니다.',
+  'archived.restored': 'AGI Workforce: "{title}" 세션을 다시 세션 목록으로 복원했습니다.',
+  'archived.open': '열기',
+  'archived.deleted': 'AGI Workforce: "{title}" 세션을 삭제했습니다.',
+  'archived.notFound': 'AGI Workforce: 해당 세션이 더 이상 이 작업 영역에 없습니다.',
+  'archived.actionFailed': 'AGI Workforce: {reason}',
+  'webview.searchingSessions': '세션을 검색하는 중…',
+  'webview.noMatchingSessions': '"{query}"에 맞는 세션이 없습니다',
+  'webview.archivedSessions': '보관된 세션',
 };
 
 export default ko;

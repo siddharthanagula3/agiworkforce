@@ -454,6 +454,26 @@ const de = {
   'remote.statusTooltip': 'Fernsteuerung anzeigen',
   'remote.attached_one': '{count} Sitzung ist auf dem Telefon geöffnet.',
   'remote.attached_other': '{count} Sitzungen sind auf dem Telefon geöffnet.',
+  'sessionSearch.title': 'Sitzungsverlauf',
+  'sessionSearch.placeholder': 'Sitzungen nach Titel oder Nachrichtentext durchsuchen',
+  'sessionSearch.folderFailed':
+    'AGI Workforce: Die AGI CLI konnte die Sitzungen in {folder} nicht lesen. {reason}',
+  'archived.title': 'Archivierte Sitzungen',
+  'archived.placeholder': 'Wählen Sie eine Sitzung aus, um sie wiederherzustellen und zu öffnen',
+  'archived.none': 'AGI Workforce: In diesem Arbeitsbereich gibt es keine archivierten Sitzungen.',
+  'archived.restore': 'Wiederherstellen',
+  'archived.delete': 'Endgültig löschen',
+  'archived.deleteTitle': '„{title}“ endgültig löschen?',
+  'archived.deleteDetail':
+    'Ihr Verlauf sowie die damit erfassten Genehmigungen und Dateiänderungen werden auf diesem Computer für alle AGI-Oberflächen entfernt. Dies kann nicht rückgängig gemacht werden.',
+  'archived.restored': 'AGI Workforce: „{title}“ ist wieder bei Ihren Sitzungen.',
+  'archived.open': 'Öffnen',
+  'archived.deleted': 'AGI Workforce: „{title}“ wurde gelöscht.',
+  'archived.notFound': 'AGI Workforce: Diese Sitzung ist nicht mehr in diesem Arbeitsbereich.',
+  'archived.actionFailed': 'AGI Workforce: {reason}',
+  'webview.searchingSessions': 'Sitzungen werden durchsucht…',
+  'webview.noMatchingSessions': 'Keine Sitzung passt zu „{query}“',
+  'webview.archivedSessions': 'Archivierte Sitzungen',
 };
 
 export default de;
