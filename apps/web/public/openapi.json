@@ -767,6 +767,12 @@
             },
             "description": "Connector ids whose tools are not offered for this turn."
           },
+          "skill_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "Runs this turn with one of the skills your account can use, named as it appears in Settings > Skills (for example `document-creation`). The model loads the skill before it answers. Answers 422 with `skill_not_found` when the skill is not installed for your account, `skill_model_unsupported` when the chosen model cannot use tools, and `skill_requirements_unmet` when the skill needs a tool or connector that is off for this turn."
+          },
           "routing_profile": {
             "type": "string",
             "enum": ["auto", "speed", "quality", "cost"],
