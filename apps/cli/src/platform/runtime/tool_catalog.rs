@@ -356,6 +356,7 @@ fn tool_owner(name: &str) -> &'static str {
         "search_files" | "grep_files" | "glob" | "list_directory" => "cli-navigation",
         "web_search" | "web_fetch" | "tool_search" => "cli-research",
         "skill" => "cli-skills",
+        "memory" => "cli-memory",
         "task" | "agent" => "cli-subagents",
         "team_create" | "team_delete" => "cli-team-registry",
         "cron_create" | "cron_delete" | "cron_list" => "cli-scheduler",

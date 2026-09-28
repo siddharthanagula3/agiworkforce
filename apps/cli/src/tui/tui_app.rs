@@ -768,6 +768,30 @@ impl TuiApp {
         loading_verb_for(self.session.turn_count)
     }
 
+    fn model_reasons(&self) -> bool {
+        crate::model_catalog::catalog()
+            .find(&self.session.model)
+            .is_none_or(|model| model.supports_reasoning)
+    }
+
+    fn visible_effort_label(&self) -> &'static str {
+        if self.model_reasons() {
+            self.effort.label()
+        } else {
+            ""
+        }
+    }
+
+    fn command_applies_here(&self, name: &str) -> bool {
+        let managed = self.session.privacy_mode == crate::agent::PrivacyMode::Managed;
+        match name {
+            "effort" => self.model_reasons(),
+            "image" | "imagine" | "artifacts" | "personalize" | "route" => managed,
+            "team" | "teams" => self.session.team_manager.is_some(),
+            _ => true,
+        }
+    }
+
     fn context_percent(&self) -> u8 {
         let usage = self
             .session
@@ -1567,7 +1591,7 @@ impl<'a> FrameCtx<'a> {
             access_mode: provider_access_mode(&app.session.provider),
             privacy_mode: app.session.privacy_mode,
             mode: app.mode,
-            effort_label: app.effort.label(),
+            effort_label: app.visible_effort_label(),
             cost_str: crate::output::format_session_credits(app.session.cost_ledger.total_usd),
             notice: app.live_notice(),
         }
@@ -2279,15 +2303,17 @@ fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
             ctx_indicator(tier),
             Style::default().fg(ctx_color),
         ));
-        spans.push(Span::raw(gap));
-        spans.push(Span::styled(
-            match tier {
-                0 => format!("effort:{}", ctx.effort_label),
-                1 => format!("eff:{}", ctx.effort_label),
-                _ => format!("e:{}", clip_cols(ctx.effort_label, 1)),
-            },
-            Style::default().fg(ui_muted()),
-        ));
+        if !ctx.effort_label.is_empty() {
+            spans.push(Span::raw(gap));
+            spans.push(Span::styled(
+                match tier {
+                    0 => format!("effort:{}", ctx.effort_label),
+                    1 => format!("eff:{}", ctx.effort_label),
+                    _ => format!("e:{}", clip_cols(ctx.effort_label, 1)),
+                },
+                Style::default().fg(ui_muted()),
+            ));
+        }
         spans
     };
 
@@ -3166,6 +3192,7 @@ fn open_command_popup(app: &mut TuiApp) {
         }
     }
 
+    cmds.retain(|command| app.command_applies_here(&command.name));
     app.open_overlay(Box::new(CommandPopup::new(cmds)));
 }
 
@@ -3507,7 +3534,10 @@ fn handle_model_picker_key(app: &mut TuiApp, key: KeyEvent) -> InputAction {
             };
             let text = match switched {
                 Ok(()) => banner,
-                Err(err) => format!("Model switch failed: {err}"),
+                Err(err) => format!(
+                    "Model switch failed: {}",
+                    crate::errors::terminal_text(&err)
+                ),
             };
             app.sync_stats();
             app.chat_messages.push(ChatMessage {
@@ -5983,6 +6013,7 @@ async fn send_message_with_prompt(
     // them while the rest of `FrameCtx` is built from disjoint `app` fields.
     let turn_access_mode = provider_access_mode(&app.session.provider);
     let turn_privacy_mode = app.session.privacy_mode;
+    let turn_effort_label = app.visible_effort_label();
     let turn_count = app.session.turn_count;
     let turn_input_tokens = app.session.total_input_tokens;
     let turn_output_tokens = app.session.total_output_tokens;
@@ -6039,7 +6070,7 @@ async fn send_message_with_prompt(
                             access_mode: turn_access_mode,
                             privacy_mode: turn_privacy_mode,
                             mode: app.mode,
-                            effort_label: app.effort.label(),
+                            effort_label: turn_effort_label,
                             cost_str: turn_cost_str.clone(),
                             notice: turn_notice.as_deref(),
                         };
@@ -6176,7 +6207,7 @@ async fn send_message_with_prompt(
                         access_mode: turn_access_mode,
                         privacy_mode: turn_privacy_mode,
                         mode: app.mode,
-                        effort_label: app.effort.label(),
+                        effort_label: turn_effort_label,
                         cost_str: turn_cost_str.clone(),
                         notice: turn_notice.as_deref(),
                     };
@@ -7836,6 +7867,8 @@ mod tests {
             "context",
             "tasks",
             "task",
+            "team",
+            "teams",
             "personalize",
             "tools",
             "budget",
