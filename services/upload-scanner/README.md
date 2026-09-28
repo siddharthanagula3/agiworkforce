@@ -51,25 +51,28 @@ warns), and 503 `unavailable` while clamd does not answer or does not detect
 the test string. Without the bearer token the body is only `{ "status": … }`;
 with it, the body adds clamd's engine version and the signatures' version,
 publication time and age. Fly stops routing to a machine that fails this
-check, so stale signatures never fail it, but Fly does not restart the machine
-for a failing check. `GET /health/signatures` answers the same way but fails
-with 503 once the signatures are stale; Fly runs it as a monitoring check that
-does not affect routing.
+check, so stale signatures never fail it. Fly does not restart a machine for a
+failing check, so the service watches the same probe itself (below).
+`GET /health/signatures` answers the same way but fails with 503 once the
+signatures are stale; Fly runs it as a monitoring check that does not affect
+routing.
 
 ## How it runs
 
 One container. Node 24 runs `src/index.ts` directly, so nothing is built or
 installed at runtime. At start it refreshes the signatures with freshclam, then
 supervises clamd and the freshclam daemon. If clamd exits, the service exits
-and Fly restarts the machine. If freshclam exits, which it does by design when
-the ClamAV CDN refuses it, clamd keeps scanning with the signatures it has and
-freshclam starts again an hour later. clamd listens only on `127.0.0.1:3310`
-(`clamav/clamd.conf`, pinned to `LOCAL_CLAMD` in `src/clamd.ts` by
-`__tests__/clamd-config.test.ts`) and spools each
-stream in `/dev/shm`, so upload bytes stay in memory and are gone when the scan
-ends. The image carries the signatures from the build that created its
-signature layer, which a builder may reuse from cache; freshclam brings them up
-to date at start and every two hours after.
+and Fly restarts the machine (`[[restart]]` in `fly.toml`). It also exits when
+clamd has not detected the EICAR probe for five minutes, counted from clamd's
+start, so a clamd that answers but no longer scans is restarted the same way.
+If freshclam exits, which it does by design when the ClamAV CDN refuses it,
+clamd keeps scanning with the signatures it has and freshclam starts again an
+hour later. clamd listens only on `127.0.0.1:3310` (`clamav/clamd.conf`,
+pinned to `LOCAL_CLAMD` in `src/clamd.ts` by `__tests__/clamd-config.test.ts`)
+and spools each stream in `/dev/shm`, so upload bytes stay in memory and are
+gone when the scan ends. The image carries the signatures from the build that
+created its signature layer, which a builder may reuse from cache; freshclam
+brings them up to date at start and every two hours after.
 
 ## Local run
 
