@@ -16,6 +16,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { logger } from '@/lib/logger';
 import { persistFreeOfferingUser } from '@/lib/server/persist-free-offering-user';
+import { resolveFreeOfferingPersonalContext } from '@/lib/services/turn-context-service';
 import { moderateGeneratedMedia, moderateManagedPrompt } from '@/lib/moderation';
 import { enforceManagedContentSafetyPreference } from '@/lib/services/managed-content-safety-service';
 import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
@@ -464,8 +465,13 @@ async function handlePost(request: NextRequest): Promise<Response> {
   const store = context.store;
   if (!store) return refuse('unavailable', copy);
 
-  const [conversation] = await scoped.db.query<{ id: string; data_region: string | null }>(
-    'select c.id, o.data_region from web_conversations c left join organizations o on o.id = c.organization_id where c.id = $1 and c.user_id = $2 and c.organization_id is not distinct from $3 and c.deleted_at is null',
+  const [conversation] = await scoped.db.query<{
+    id: string;
+    data_region: string | null;
+    project_id: string | null;
+    is_temporary: boolean | null;
+  }>(
+    'select c.id, o.data_region, c.project_id, c.is_temporary from web_conversations c left join organizations o on o.id = c.organization_id where c.id = $1 and c.user_id = $2 and c.organization_id is not distinct from $3 and c.deleted_at is null',
     [body.conversation_id, scoped.userId, scoped.organizationId],
   );
   if (!conversation) return policyRefusal('Conversation not found.', 'conversation_not_found', 404);
@@ -581,6 +587,25 @@ async function handlePost(request: NextRequest): Promise<Response> {
       );
     }
   }
+  const turnId = createHash('sha256')
+    .update(`${body.assistant_message_id}\n${request.headers.get('Idempotency-Key') ?? 'send'}`)
+    .digest('hex')
+    .slice(0, TURN_ID_LENGTH);
+  if (offering.quotaProbeProtocol === 'chat') {
+    const personalContext = await resolveFreeOfferingPersonalContext(scoped.db, {
+      turnId,
+      userId: scoped.userId,
+      organizationId: scoped.organizationId,
+      projectId: conversation.project_id,
+      conversationId: body.conversation_id,
+      temporaryChat: conversation.is_temporary === true,
+      memoryEnabled: body.memory_enabled,
+      personalization: body.personalization,
+      query: latestUserPrompt ? freeOfferingContentText(latestUserPrompt.content) : '',
+    });
+    messages.unshift(...personalContext.map((content) => ({ role: 'system' as const, content })));
+  }
+
   const egress = await buildProviderEgressGateResponse({
     mode: 'managed',
     surface: 'web',
@@ -601,10 +626,6 @@ async function handlePost(request: NextRequest): Promise<Response> {
   });
   if (userPersistence) return userPersistence;
 
-  const turnId = createHash('sha256')
-    .update(`${body.assistant_message_id}\n${request.headers.get('Idempotency-Key') ?? 'send'}`)
-    .digest('hex')
-    .slice(0, TURN_ID_LENGTH);
   const nowMs = Date.now();
   const claimed = await claimFreeQuotaTurn(store, {
     userId: scoped.userId,

@@ -186,11 +186,12 @@ describe('retrievePastChatContext', () => {
 
 describe('semantic recall', () => {
   function semanticDb(hits: unknown[]) {
-    const query = vi
-      .fn()
-      .mockResolvedValueOnce([{ present: true }])
-      .mockResolvedValueOnce(hits)
-      .mockResolvedValueOnce([row()]);
+    const query = vi.fn(async (sql: string) => {
+      if (sql.includes('embedding is not null')) return [{ present: true }];
+      if (sql.includes('as lexical_rank')) return hits;
+      if (sql.includes('from web_messages m')) return [row()];
+      return [];
+    });
     return {
       query,
       transaction: vi.fn(),
@@ -224,7 +225,10 @@ describe('semantic recall', () => {
 
     expect(result.mode).toBe('semantic');
     expect(result.citations[0]?.messageId).toBe('message-1');
-    const hydrateSql = (db.query.mock.calls[2] as [string, unknown[]])[0];
+    const hydrateSql =
+      (db.query.mock.calls as unknown as [string][])
+        .map(([sql]) => sql)
+        .find((sql) => sql.includes('from web_messages m')) ?? '';
     expect(hydrateSql).toContain('c.user_id = $1');
     expect(hydrateSql).toContain('coalesce(c.is_temporary, false) = false');
     expect(hydrateSql).toContain('m.id = any($4::uuid[])');

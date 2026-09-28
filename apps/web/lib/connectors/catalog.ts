@@ -153,6 +153,7 @@ export const CONNECTOR_CAPABILITIES: Readonly<Record<string, ConnectorCapability
   gmail: mcpConnector('gmail', 'oauth2', 'read-write'),
   'google-calendar': mcpConnector('google-calendar', 'oauth2', 'read-write'),
   'google-drive': mcpConnector('google-drive', 'oauth2', 'read-write'),
+  'google-contacts': mcpConnector('google-contacts', 'oauth2', 'read-only'),
   notion: mcpConnector('notion', 'oauth2', 'read-write'),
   slack: mcpConnector('slack', 'oauth2', 'read-write'),
   github: firstPartyConnector('github', 'github-app', 'read-write', [
@@ -230,6 +231,10 @@ export const CONNECTOR_CAPABILITIES: Readonly<Record<string, ConnectorCapability
   paypal: mcpConnector('paypal', 'oauth2', 'high-impact'),
   square: mcpConnector('square', 'oauth2', 'high-impact'),
   plaid: mcpConnector('plaid', 'oauth2', 'high-impact'),
+  'bank-accounts': firstPartyConnector('bank-accounts', 'oauth2', 'high-impact', [
+    'get_account_balances',
+    'get_transactions',
+  ]),
   dropbox: mcpConnector('dropbox', 'oauth2', 'read-write'),
   box: mcpConnector('box', 'oauth2', 'read-write'),
   sharepoint: mcpConnector('sharepoint', 'oauth2', 'read-write'),
@@ -245,6 +250,7 @@ export const CONNECTOR_CAPABILITIES: Readonly<Record<string, ConnectorCapability
   replicate: mcpConnector('replicate', 'api-key', 'read-write'),
   'epic-fhir': mcpConnector('epic-fhir', 'oauth2', 'high-impact'),
   cerner: mcpConnector('cerner', 'oauth2', 'high-impact'),
+  healthex: mcpConnector('healthex', 'oauth2', 'high-impact'),
 };
 
 export function getConnectorCapability(connectorId: string): ConnectorCapabilityRecord | null {

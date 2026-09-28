@@ -1,18 +1,36 @@
 import * as vscode from 'vscode';
 import type {
+  HookListResponse,
   McpServerListResponse,
+  McpServerToolsResponse,
   PluginListResponse,
   SkillListResponse,
 } from '@agiworkforce/types/protocol';
+import type { McpServerProbe } from '../../integrations/localRuntimeClient';
 import { createSkill } from './skillAuthoring';
+import { tPlural } from '../../l10n';
 import {
   CLI_CAPABILITY_REQUIREMENT,
   type CliCapabilityAdapter,
   type CliCapabilityResult,
 } from './cliCapabilities';
 
+type ManagedRun = () => Promise<CliCapabilityResult<unknown> | undefined>;
+
+interface ManagedFollowUp {
+  run: ManagedRun;
+  reopen: boolean;
+}
+
+interface ManagedAction {
+  button: vscode.QuickInputButton;
+  followUp: ManagedFollowUp;
+}
+
 interface ManagedItem extends vscode.QuickPickItem {
-  run?: () => Promise<CliCapabilityResult<unknown>>;
+  run?: ManagedRun;
+  followUp?: ManagedFollowUp;
+  actions?: ManagedAction[];
 }
 
 interface ManagedSurface {
@@ -28,16 +46,25 @@ const MCP_STATUS_LABELS: Record<McpServerListResponse['servers'][number]['status
   needs_auth: 'Needs sign-in',
 };
 
+const REMOVE = 'Remove';
+
 function unavailableLabel(reason: string, noun: string): string {
   return reason === CLI_CAPABILITY_REQUIREMENT ? `${reason} to manage ${noun}` : reason;
 }
 
-async function showManagedSurface(surface: ManagedSurface, noun: string): Promise<void> {
+function reportFailure(outcome: CliCapabilityResult<unknown> | undefined): void {
+  if (outcome !== undefined && outcome.status !== 'ok') {
+    void vscode.window.showErrorMessage(`AGI Workforce: ${outcome.reason}`);
+  }
+}
+
+function pickOnce(surface: ManagedSurface, noun: string): Promise<ManagedFollowUp | undefined> {
   const pick = vscode.window.createQuickPick<ManagedItem>();
   pick.title = surface.title;
   pick.placeholder = surface.placeholder;
   pick.matchOnDescription = true;
   pick.matchOnDetail = true;
+  let followUp: ManagedFollowUp | undefined;
 
   const render = async (): Promise<void> => {
     pick.busy = true;
@@ -48,34 +75,102 @@ async function showManagedSurface(surface: ManagedSurface, noun: string): Promis
       return;
     }
     pick.items =
-      result.value.length === 0 ? [{ label: surface.empty, alwaysShow: true }] : result.value;
+      result.value.length === 0
+        ? [{ label: surface.empty, alwaysShow: true }]
+        : result.value.map((item) =>
+            item.actions === undefined
+              ? item
+              : { ...item, buttons: item.actions.map((action) => action.button) },
+          );
   };
 
-  await new Promise<void>((resolve) => {
+  const close = (next: ManagedFollowUp): void => {
+    followUp = next;
+    pick.hide();
+  };
+
+  return new Promise<ManagedFollowUp | undefined>((resolve) => {
     pick.onDidAccept(async () => {
       const item = pick.selectedItems[0];
+      if (item?.followUp !== undefined) {
+        close(item.followUp);
+        return;
+      }
       if (item?.run === undefined) return;
       pick.busy = true;
-      const outcome = await item.run();
-      if (outcome.status !== 'ok') {
-        void vscode.window.showErrorMessage(`AGI Workforce: ${outcome.reason}`);
-      }
+      reportFailure(await item.run());
       await render();
+    });
+    pick.onDidTriggerItemButton((event) => {
+      const action = event.item.actions?.find((candidate) => candidate.button === event.button);
+      if (action !== undefined) close(action.followUp);
     });
     pick.onDidHide(() => {
       pick.dispose();
-      resolve();
+      resolve(followUp);
     });
     pick.show();
     void render();
   });
 }
 
+async function showManagedSurface(surface: ManagedSurface, noun: string): Promise<void> {
+  for (;;) {
+    const followUp = await pickOnce(surface, noun);
+    if (followUp === undefined) return;
+    reportFailure(await followUp.run());
+    if (!followUp.reopen) return;
+  }
+}
+
+async function confirmInstall(
+  question: string,
+  consequence: string,
+  action: string,
+): Promise<boolean> {
+  const choice = await vscode.window.showWarningMessage(
+    question,
+    { modal: true, detail: consequence },
+    action,
+  );
+  return choice === action;
+}
+
+async function confirmRemoval(question: string, consequence: string): Promise<boolean> {
+  const choice = await vscode.window.showWarningMessage(
+    question,
+    { modal: true, detail: consequence },
+    REMOVE,
+  );
+  return choice === REMOVE;
+}
+
+function removeAction(run: ManagedRun): ManagedAction {
+  return {
+    button: { iconPath: new vscode.ThemeIcon('trash'), tooltip: REMOVE },
+    followUp: { run, reopen: true },
+  };
+}
+
 function toggleLabel(name: string, enabled: boolean): string {
   return `$(${enabled ? 'pass-filled' : 'circle-large-outline'}) ${name}`;
 }
 
-export function manageSkills(adapter: CliCapabilityAdapter): Promise<void> {
+async function installSkillFromFolder(adapter: CliCapabilityAdapter): ReturnType<ManagedRun> {
+  const folder = await vscode.window.showOpenDialog({
+    title: 'AGI Workforce, Install a skill',
+    openLabel: 'Install skill',
+    canSelectFiles: false,
+    canSelectFolders: true,
+    canSelectMany: false,
+  });
+  const source = folder?.[0]?.fsPath;
+  if (source === undefined) return undefined;
+  return adapter.call('skillsInstall', source);
+}
+
+export async function manageSkills(adapter: CliCapabilityAdapter): Promise<void> {
+  const installs = await adapter.offers('installs');
   return showManagedSurface(
     {
       title: 'AGI Workforce, Skills',
@@ -88,12 +183,22 @@ export function manageSkills(adapter: CliCapabilityAdapter): Promise<void> {
           {
             label: '$(add) Create a skill',
             detail: 'Write a new personal or project skill and open it to edit',
-            run: async () => {
-              await createSkill();
-              return { status: 'ok', value: undefined };
+            followUp: {
+              run: async () => {
+                await createSkill();
+                return undefined;
+              },
+              reopen: false,
             },
           },
         ];
+        if (installs) {
+          items.push({
+            label: '$(cloud-download) Install a skill',
+            detail: 'Copy a skill folder, the one that holds SKILL.md, into your skills',
+            followUp: { run: () => installSkillFromFolder(adapter), reopen: true },
+          });
+        }
         if (result.value.skills.some((skill) => !skill.consented)) {
           items.push({
             label: '$(shield) Allow this folder’s project skills',
@@ -107,6 +212,20 @@ export function manageSkills(adapter: CliCapabilityAdapter): Promise<void> {
             description: `${skill.scope}${skill.consented ? '' : ', not allowed yet'}`,
             detail: skill.description,
             run: () => adapter.call('skillsSetEnabled', skill.name, !skill.enabled),
+            ...(installs && skill.scope === 'user'
+              ? {
+                  actions: [
+                    removeAction(async () =>
+                      (await confirmRemoval(
+                        `Remove the skill “${skill.name}”?`,
+                        'Its folder is deleted from your skills, and it stops loading in every workspace. This cannot be undone.',
+                      ))
+                        ? adapter.call('skillsRemove', skill.name)
+                        : undefined,
+                    ),
+                  ],
+                }
+              : {}),
           });
         }
         return { status: 'ok', value: items };
@@ -116,12 +235,47 @@ export function manageSkills(adapter: CliCapabilityAdapter): Promise<void> {
   );
 }
 
-export function managePlugins(adapter: CliCapabilityAdapter): Promise<void> {
+async function installPlugin(adapter: CliCapabilityAdapter): ReturnType<ManagedRun> {
+  const source = await vscode.window.showInputBox({
+    title: 'AGI Workforce, Install a plugin',
+    prompt: 'A Git URL or a plugin folder on this computer',
+    ignoreFocusOut: true,
+    validateInput: (value) =>
+      value.trim() === '' ? 'Enter where the plugin comes from.' : undefined,
+  });
+  if (source === undefined) return undefined;
+  const integrity = await vscode.window.showInputBox({
+    title: 'AGI Workforce, Install a plugin',
+    prompt:
+      'Its sha256 pin, as sha256:<hex>. Leave empty to require the publisher’s signature instead.',
+    ignoreFocusOut: true,
+    validateInput: (value) =>
+      value.trim() === '' || value.trim().startsWith('sha256:')
+        ? undefined
+        : 'A pin starts with sha256:',
+  });
+  if (integrity === undefined) return undefined;
+  const confirmed = await confirmInstall(
+    `Install the plugin from ${source.trim()}?`,
+    'Its skills, commands, hooks and MCP servers run on this computer with your permissions. Install plugins only from publishers you trust.',
+    'Install',
+  );
+  if (!confirmed) return undefined;
+  return adapter.call('pluginsInstall', {
+    source: source.trim(),
+    ...(integrity.trim() === '' ? {} : { integrity: integrity.trim() }),
+  });
+}
+
+export async function managePlugins(adapter: CliCapabilityAdapter): Promise<void> {
+  const installs = await adapter.offers('installs');
   return showManagedSurface(
     {
       title: 'AGI Workforce, Plugins',
       placeholder: 'Pick a plugin to turn it on or off',
-      empty: 'No plugins are installed. Install one with agi plugin install.',
+      empty: installs
+        ? 'No plugins are installed yet'
+        : 'No plugins are installed. Install one with agi plugin install.',
       load: async () => {
         const [result, skills] = await Promise.all([
           adapter.call<PluginListResponse>('plugins'),
@@ -133,9 +287,17 @@ export function managePlugins(adapter: CliCapabilityAdapter): Promise<void> {
           pluginSkills
             .filter((skill) => skill.scope === 'plugin' && skill.path.startsWith(pluginPath))
             .map((skill) => skill.name);
-        return {
-          status: 'ok',
-          value: result.value.plugins.map((plugin) => ({
+        const items: ManagedItem[] = installs
+          ? [
+              {
+                label: '$(cloud-download) Install a plugin',
+                detail: 'From a Git URL or a folder, signed by its publisher or pinned by sha256',
+                followUp: { run: () => installPlugin(adapter), reopen: true },
+              },
+            ]
+          : [];
+        for (const plugin of result.value.plugins) {
+          items.push({
             label: toggleLabel(plugin.name, plugin.enabled),
             description: [plugin.version, plugin.source].filter(Boolean).join(', '),
             detail:
@@ -143,36 +305,371 @@ export function managePlugins(adapter: CliCapabilityAdapter): Promise<void> {
                 ? plugin.path
                 : `Skills: ${includedSkills(plugin.path).join(', ')}`,
             run: () => adapter.call('pluginsSetEnabled', plugin.id, !plugin.enabled),
-          })),
-        };
+            ...(installs && plugin.source === 'user'
+              ? {
+                  actions: [
+                    removeAction(async () =>
+                      (await confirmRemoval(
+                        `Remove the plugin “${plugin.name}”?`,
+                        'It is deleted from this computer with the skills, commands, hooks and servers it adds. Installing it again needs its source.',
+                      ))
+                        ? adapter.call('pluginsRemove', plugin.id)
+                        : undefined,
+                    ),
+                  ],
+                }
+              : {}),
+          });
+        }
+        return { status: 'ok', value: items };
       },
     },
     'plugins',
   );
 }
 
-export function manageMcpServers(adapter: CliCapabilityAdapter): Promise<void> {
+function splitCommandLine(line: string): string[] {
+  return [...line.matchAll(/"([^"]*)"|'([^']*)'|(\S+)/gu)].map(
+    (match) => match[1] ?? match[2] ?? match[3] ?? '',
+  );
+}
+
+async function askNamedValues(
+  title: string,
+  noun: string,
+): Promise<Record<string, string> | undefined> {
+  const values: Record<string, string> = {};
+  for (;;) {
+    const name = await vscode.window.showInputBox({
+      title,
+      prompt: `Add ${noun} by name, or leave empty to finish`,
+      ignoreFocusOut: true,
+    });
+    if (name === undefined) return undefined;
+    if (name.trim() === '') return values;
+    const value = await vscode.window.showInputBox({
+      title,
+      prompt: `Value of ${name.trim()}`,
+      password: true,
+      ignoreFocusOut: true,
+    });
+    if (value === undefined) return undefined;
+    values[name.trim()] = value;
+  }
+}
+
+async function addMcpServer(
+  adapter: CliCapabilityAdapter,
+  existing: readonly string[],
+): ReturnType<ManagedRun> {
+  const title = 'AGI Workforce, Add an MCP server';
+  const name = await vscode.window.showInputBox({
+    title,
+    prompt: 'A name for the server',
+    ignoreFocusOut: true,
+    validateInput: (value) => (value.trim() === '' ? 'The server needs a name.' : undefined),
+  });
+  if (name === undefined) return undefined;
+  const overwrite = existing.includes(name.trim());
+  if (overwrite) {
+    const replace = await vscode.window.showWarningMessage(
+      `Replace the MCP server “${name.trim()}”?`,
+      {
+        modal: true,
+        detail:
+          'Its command or address, environment variables and headers are replaced with the ones you enter next.',
+      },
+      'Replace',
+    );
+    if (replace !== 'Replace') return undefined;
+  }
+  const kind = await vscode.window.showQuickPick(
+    [
+      {
+        label: 'Local command',
+        detail: 'Starts on this computer and talks over stdio',
+        value: 'stdio' as const,
+      },
+      { label: 'Remote server over HTTP', detail: 'Reached at a URL', value: 'http' as const },
+      {
+        label: 'Remote server over SSE',
+        detail: 'Reached at a URL with server-sent events',
+        value: 'sse' as const,
+      },
+    ],
+    { title, placeHolder: 'How the server runs', ignoreFocusOut: true },
+  );
+  if (kind === undefined) return undefined;
+  if (kind.value === 'stdio') {
+    const line = await vscode.window.showInputBox({
+      title,
+      prompt: 'The command that starts the server, with its arguments',
+      ignoreFocusOut: true,
+      validateInput: (value) =>
+        splitCommandLine(value).length === 0 ? 'Enter a command.' : undefined,
+    });
+    if (line === undefined) return undefined;
+    const env = await askNamedValues(title, 'an environment variable');
+    if (env === undefined) return undefined;
+    const confirmed = await confirmInstall(
+      `Add the MCP server “${name.trim()}”?`,
+      `AGI starts ${line.trim()} on this computer, with your permissions, whenever a chat needs its tools.`,
+      'Add',
+    );
+    if (!confirmed) return undefined;
+    const [command, ...args] = splitCommandLine(line);
+    return adapter.call('mcpAdd', {
+      name: name.trim(),
+      command,
+      args,
+      env,
+      headers: {},
+      overwrite,
+    });
+  }
+  const url = await vscode.window.showInputBox({
+    title,
+    prompt: 'The server’s URL',
+    ignoreFocusOut: true,
+    validateInput: (value) => {
+      try {
+        const protocol = new URL(value.trim()).protocol;
+        return protocol === 'https:' || protocol === 'http:'
+          ? undefined
+          : 'Enter an http or https URL.';
+      } catch {
+        return 'Enter an http or https URL.';
+      }
+    },
+  });
+  if (url === undefined) return undefined;
+  const headers = await askNamedValues(title, 'a request header');
+  if (headers === undefined) return undefined;
+  const confirmed = await confirmInstall(
+    `Add the MCP server “${name.trim()}”?`,
+    `Chats send tool calls, and the data in them, to ${url.trim()}.`,
+    'Add',
+  );
+  if (!confirmed) return undefined;
+  return adapter.call('mcpAdd', {
+    name: name.trim(),
+    url: url.trim(),
+    transport: kind.value,
+    args: [],
+    env: {},
+    headers,
+    overwrite,
+  });
+}
+
+async function showMcpServerTools(
+  adapter: CliCapabilityAdapter,
+  name: string,
+): ReturnType<ManagedRun> {
+  const result = await vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Notification, title: `AGI Workforce: starting ${name}` },
+    () => adapter.call<McpServerToolsResponse>('mcpTools', name),
+  );
+  if (result.status !== 'ok') return result;
+  const { tools, prompts = [], resources = [], warnings = [] } = result.value;
+  const items: vscode.QuickPickItem[] = [
+    { label: 'Tools', kind: vscode.QuickPickItemKind.Separator },
+    ...tools.map((tool) => ({ label: `$(tools) ${tool.name}`, detail: tool.description })),
+    ...(prompts.length === 0
+      ? []
+      : [
+          { label: 'Prompts', kind: vscode.QuickPickItemKind.Separator },
+          ...prompts.map((prompt) => ({
+            label: `$(comment) ${prompt.name}`,
+            detail: prompt.description,
+            ...((prompt.arguments ?? []).length === 0
+              ? {}
+              : {
+                  description: (prompt.arguments ?? []).map((argument) => argument.name).join(', '),
+                }),
+          })),
+        ]),
+    ...(resources.length === 0
+      ? []
+      : [
+          { label: 'Resources', kind: vscode.QuickPickItemKind.Separator },
+          ...resources.map((resource) => ({
+            label: `$(file) ${resource.name}`,
+            description: resource.uri,
+            ...(resource.description === undefined ? {} : { detail: resource.description }),
+          })),
+        ]),
+    ...warnings.map((warning) => ({ label: `$(warning) ${warning}`, alwaysShow: true })),
+  ];
+  await vscode.window.showQuickPick(items, {
+    title: `AGI Workforce, ${name}`,
+    placeHolder:
+      tools.length === 0 ? 'This server offers no tools' : 'What this server offers the agent',
+    matchOnDetail: true,
+  });
+  return undefined;
+}
+
+async function testMcpServer(adapter: CliCapabilityAdapter, name: string): ReturnType<ManagedRun> {
+  const result = await vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Notification, title: `AGI Workforce: testing ${name}` },
+    () => adapter.call<McpServerProbe>('mcpTest', name),
+  );
+  if (result.status !== 'ok') return result;
+  const probe = result.value;
+  if (probe.connected) {
+    void vscode.window.showInformationMessage(
+      tPlural('mcp.connected', probe.toolCount, { name, ms: probe.elapsedMs }),
+    );
+    return undefined;
+  }
+  return {
+    status: 'failed',
+    reason: `${name} did not connect${probe.error === undefined ? '' : `: ${probe.error}`}`,
+  };
+}
+
+export async function manageMcpServers(adapter: CliCapabilityAdapter): Promise<void> {
+  const [installs, toolLists] = await Promise.all([
+    adapter.offers('installs'),
+    adapter.offers('mcpTools'),
+  ]);
   return showManagedSurface(
     {
       title: 'AGI Workforce, MCP servers',
       placeholder: 'Pick a server that needs sign-in to sign in',
-      empty: 'No MCP servers are configured. Add one with agi mcp add.',
+      empty: installs
+        ? 'No MCP servers are configured yet'
+        : 'No MCP servers are configured. Add one with agi mcp add.',
       load: async () => {
         const result = await adapter.call<McpServerListResponse>('mcpServers');
         if (result.status !== 'ok') return result;
-        return {
-          status: 'ok',
-          value: result.value.servers.map((server) => ({
+        const names = result.value.servers.map((server) => server.name);
+        const items: ManagedItem[] = installs
+          ? [
+              {
+                label: '$(add) Add an MCP server',
+                detail: 'A local command or a remote URL, saved in your AGI CLI settings',
+                followUp: { run: () => addMcpServer(adapter, names), reopen: true },
+              },
+            ]
+          : [];
+        for (const server of result.value.servers) {
+          const actions: ManagedAction[] = toolLists
+            ? [
+                {
+                  button: { iconPath: new vscode.ThemeIcon('list-tree'), tooltip: 'Show tools' },
+                  followUp: { run: () => showMcpServerTools(adapter, server.name), reopen: true },
+                },
+                {
+                  button: {
+                    iconPath: new vscode.ThemeIcon('debug-start'),
+                    tooltip: 'Test connection',
+                  },
+                  followUp: { run: () => testMcpServer(adapter, server.name), reopen: true },
+                },
+              ]
+            : [];
+          if (installs && server.scope === 'user') {
+            actions.push(
+              removeAction(async () =>
+                (await confirmRemoval(
+                  `Remove the MCP server “${server.name}”?`,
+                  'Its entry is deleted from your AGI CLI settings with any environment variables and headers saved for it, and chats stop using its tools.',
+                ))
+                  ? adapter.call('mcpRemove', server.name)
+                  : undefined,
+              ),
+            );
+          }
+          items.push({
             label: `$(${server.status === 'needs_auth' ? 'key' : 'plug'}) ${server.name}`,
             description: `${MCP_STATUS_LABELS[server.status]}, ${server.transport}, ${server.scope}`,
             ...(server.url === undefined ? {} : { detail: server.url }),
             ...(server.status === 'needs_auth'
               ? { run: () => adapter.call('mcpLogin', server.name) }
               : {}),
-          })),
-        };
+            ...(actions.length === 0 ? {} : { actions }),
+          });
+        }
+        return { status: 'ok', value: items };
       },
     },
     'MCP servers',
+  );
+}
+
+async function addHook(adapter: CliCapabilityAdapter): ReturnType<ManagedRun> {
+  const title = 'AGI Workforce, Add a hook';
+  const event = await vscode.window.showInputBox({
+    title,
+    prompt:
+      'The event the hook runs on. If the AGI CLI does not know it, it lists the ones it does.',
+    ignoreFocusOut: true,
+    validateInput: (value) =>
+      value.trim() === '' || /\s/u.test(value.trim()) ? 'Enter one event name.' : undefined,
+  });
+  if (event === undefined) return undefined;
+  const command = await vscode.window.showInputBox({
+    title,
+    prompt: `The command to run on ${event.trim()}`,
+    ignoreFocusOut: true,
+    validateInput: (value) => (value.trim() === '' ? 'Enter a command.' : undefined),
+  });
+  if (command === undefined) return undefined;
+  const confirmed = await confirmInstall(
+    `Add this ${event.trim()} hook?`,
+    `${command.trim()} runs on this computer, with your permissions, every time ${event.trim()} happens.`,
+    'Add',
+  );
+  if (!confirmed) return undefined;
+  return adapter.call('hooksAdd', { event: event.trim(), command: command.trim() });
+}
+
+export async function manageHooks(adapter: CliCapabilityAdapter): Promise<void> {
+  const installs = await adapter.offers('installs');
+  return showManagedSurface(
+    {
+      title: 'AGI Workforce, Hooks',
+      placeholder: 'Commands the AGI CLI runs on agent events',
+      empty: 'No hooks are configured',
+      load: async () => {
+        const result = await adapter.call<HookListResponse>('hooks');
+        if (result.status !== 'ok') return result;
+        const items: ManagedItem[] = installs
+          ? [
+              {
+                label: '$(add) Add a hook',
+                detail: 'Run a command on an agent event, saved in your hooks file',
+                followUp: { run: () => addHook(adapter), reopen: true },
+              },
+            ]
+          : [];
+        for (const hook of result.value.hooks) {
+          const position = hook.position;
+          items.push({
+            label: `$(symbol-event) ${hook.event}`,
+            description: `${hook.scope}${hook.trusted ? '' : ', does not run'}`,
+            detail: hook.command,
+            ...(installs && hook.scope === 'user' && position !== undefined
+              ? {
+                  actions: [
+                    removeAction(async () =>
+                      (await confirmRemoval(
+                        `Remove this ${hook.event} hook?`,
+                        `“${hook.command}” stops running and is deleted from your hooks file.`,
+                      ))
+                        ? adapter.call('hooksRemove', { event: hook.event, position })
+                        : undefined,
+                    ),
+                  ],
+                }
+              : {}),
+          });
+        }
+        return { status: 'ok', value: items };
+      },
+    },
+    'hooks',
   );
 }

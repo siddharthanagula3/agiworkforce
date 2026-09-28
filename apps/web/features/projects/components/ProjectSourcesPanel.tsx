@@ -1,7 +1,7 @@
 'use client';
 
 import { FolderOpen, X } from 'lucide-react';
-import { Button } from '@agiworkforce/ui';
+import { Button, Sheet, SheetContent, SheetDescription, SheetTitle } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 import { useOverlayLayout } from '@features/chat/hooks/use-overlay-dialog';
 import {
@@ -25,7 +25,36 @@ export function ProjectSourcesPanel({
 }: ProjectSourcesPanelProps) {
   const layout = useOverlayLayout();
   const panelWidth = useSidePanelWidth();
-  const isModalOverlay = layout === 'mobile';
+
+  if (layout === 'mobile') {
+    return (
+      <Sheet
+        open
+        onOpenChange={(open) => {
+          if (!open) onClose();
+        }}
+      >
+        <SheetContent
+          side="right"
+          className="flex w-full flex-col gap-0 p-0 sm:max-w-none"
+          data-testid="project-sources-panel"
+        >
+          <div className="flex min-w-0 items-center gap-2 border-b border-border/30 py-3 pl-4 pr-12">
+            <FolderOpen className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <SheetTitle className="truncate text-sm font-semibold">
+              {projectName} sources
+            </SheetTitle>
+          </div>
+          <SheetDescription className="sr-only">
+            The files this project’s chats can read.
+          </SheetDescription>
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+            <SourcesPanel projectId={projectId} readOnly={readOnly} />
+          </div>
+        </SheetContent>
+      </Sheet>
+    );
+  }
 
   return (
     <>
@@ -44,7 +73,6 @@ export function ProjectSourcesPanel({
         style={layout === 'desktop' ? { width: panelWidth } : undefined}
         aria-label={`${projectName} sources`}
         data-testid="project-sources-panel"
-        {...(isModalOverlay ? { role: 'dialog' as const, 'aria-modal': true, tabIndex: -1 } : {})}
       >
         {layout === 'desktop' && <SidePanelResizeHandle label="Resize project sources panel" />}
         <div className="flex items-center justify-between border-b border-border/30 px-4 py-3">

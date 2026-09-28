@@ -6,6 +6,10 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { getCsrfToken } from '@/lib/client/csrf';
 import { CONNECTORS } from '@/features/connectors/data/connectors';
+import {
+  connectBankAccountsWithPlaid,
+  plaidLinkRoutesOf,
+} from '@/features/connectors/lib/plaid-link';
 import { toUserMessage } from '@/lib/user-error-message';
 
 export type ConnectorSource = 'user' | 'github-app' | 'custom' | 'oauth';
@@ -122,6 +126,7 @@ async function readErrorMessage(res: Response, fallback: string): Promise<string
 
 const BROKER_OUTCOME_PARAMS = ['connector', 'status'] as const;
 const DIRECTORY_ENTRY_PATH = '/api/connectors/directory';
+const BANK_CONNECT_FAILED = 'Could not connect your bank account. Try again.';
 const FALLBACK_CONNECTOR_NAME = 'This connector';
 const DOCUMENTATION_ACTION_LABEL = 'Open documentation';
 const DIRECTORY_ID_MARKERS = ['.', '/'] as const;
@@ -429,6 +434,18 @@ export function useConnectors(): ConnectorStatus {
             });
           }
           const body = (await res.json().catch(() => ({}))) as ConnectStartBody;
+          const plaidRoutes = res.status === 409 ? plaidLinkRoutesOf(body) : null;
+          if (plaidRoutes && typeof window !== 'undefined') {
+            try {
+              if (await connectBankAccountsWithPlaid(plaidRoutes)) {
+                setConnectedIds((prev) => new Set([...prev, id]));
+                invalidateConnectorsCache();
+              }
+            } catch (caught) {
+              toast.error(caught instanceof Error ? caught.message : BANK_CONNECT_FAILED);
+            }
+            return;
+          }
           if (res.status === 409 && typeof window !== 'undefined') {
             if (body.oauthStartPath) {
               const target = withConnectorReturnPath(

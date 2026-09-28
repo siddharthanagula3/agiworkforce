@@ -555,6 +555,7 @@ export const ChatCompletionRequestSchema = z
               url: z.string().trim().url().max(2000),
               title: z.string().max(500).optional(),
               snippet: z.string().max(2000).optional(),
+              retrieved_at: z.string().datetime({ offset: true }).optional(),
             }),
           )
           .max(100)
@@ -1269,7 +1270,7 @@ export type ProcessedRequest = {
   isFlagshipRequest: boolean;
   researchMode?: boolean;
   researchResume?: {
-    sources: Array<{ url: string; title?: string; snippet?: string }>;
+    sources: Array<{ url: string; title?: string; snippet?: string; retrieved_at?: string }>;
     steps: ResearchStep[];
     /** The plan the user pressed Start on after the approval pause. */
     approvedSteps: ResearchStep[];
