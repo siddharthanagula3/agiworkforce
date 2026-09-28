@@ -44,6 +44,7 @@ function session(overrides: Record<string, unknown> = {}) {
     toolApprovals: [],
     toolActivity: [],
     toolOutcomes: [],
+    audioLevel: { current: 0 },
     decideToolApproval: vi.fn(),
     reconnecting: false,
     reconnectAttempt: 0,
