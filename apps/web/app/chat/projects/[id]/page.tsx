@@ -12,7 +12,7 @@ import {
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { MoreHorizontal, Settings2, Pin, PinOff, X } from 'lucide-react';
+import { MoreHorizontal, Settings2, Share2, Pin, PinOff, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { ProjectHeader, useChatProjectStore as useProjectStore } from '@agiworkforce/unified-chat';
 import {
@@ -30,6 +30,7 @@ import { SourcesPanel } from '@/features/projects/components/SourcesPanel';
 import { ProjectArtifactsPanel } from '@/features/projects/components/ProjectArtifactsPanel';
 import { ProjectWorkPanel } from '@/features/projects/components/ProjectWorkPanel';
 import { ProjectSettingsDialog } from '@/features/projects/components/ProjectSettingsDialog';
+import { ProjectShareDialog } from '@/features/projects/components/ProjectShareDialog';
 import { useManagedCloudProjects } from '@/features/projects';
 import { webManagedCloudProjects } from '@/features/projects/services/managed-cloud-projects';
 import { saveProjectChatHandoff } from '@/features/projects/lib/project-chat-handoff';
@@ -168,6 +169,7 @@ export default function ProjectDetailPage() {
   });
 
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
 
   const [appearancePickerOpen, setAppearancePickerOpen] = useState(false);
   const appearanceRef = useRef<HTMLDivElement>(null);
@@ -619,6 +621,41 @@ export default function ProjectDetailPage() {
                       zIndex: 'var(--z-popover)',
                     }}
                   >
+                    <button
+                      type="button"
+                      role="menuitem"
+                      data-testid="project-detail-menu-share"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        setShareOpen(true);
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 'var(--space-3)',
+                        width: '100%',
+                        padding: 'var(--space-3) var(--space-4)',
+                        background: 'transparent',
+                        border: 0,
+                        textAlign: 'start',
+                        fontSize: 13,
+                        color: 'hsl(var(--foreground))',
+                        cursor: 'pointer',
+                      }}
+                      onMouseEnter={(e) => {
+                        (e.currentTarget as HTMLButtonElement).style.background = 'var(--agi-bg-3)';
+                      }}
+                      onMouseLeave={(e) => {
+                        (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+                      }}
+                    >
+                      <Share2
+                        style={{ width: 15, height: 15, color: 'var(--agi-ink-2)' }}
+                        aria-hidden="true"
+                      />
+                      Share
+                    </button>
+
                     {canEditProject ? (
                       <button
                         type="button"
@@ -1270,6 +1307,16 @@ export default function ProjectDetailPage() {
             )}
           </div>
         </div>
+
+        {shareOpen && project ? (
+          <ProjectShareDialog
+            open={shareOpen}
+            onOpenChange={setShareOpen}
+            projectId={project.id}
+            projectName={project.name}
+            isOwner={!isSharedProject}
+          />
+        ) : null}
 
         {/* Project Settings Modal */}
         {settingsOpen && (
