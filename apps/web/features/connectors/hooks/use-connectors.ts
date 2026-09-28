@@ -442,7 +442,7 @@ export function useConnectors(): ConnectorStatus {
                 invalidateConnectorsCache();
               }
             } catch (caught) {
-              toast.error(caught instanceof Error ? caught.message : BANK_CONNECT_FAILED);
+              toast.error(toUserMessage(caught, BANK_CONNECT_FAILED));
             }
             return;
           }
