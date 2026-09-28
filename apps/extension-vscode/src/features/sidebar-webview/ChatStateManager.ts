@@ -21,6 +21,7 @@ import {
   formatUsageRemaining,
   formatUsageResetIn,
   managedUsageBucketLabel,
+  modelDisplayNameById,
   type AgentEventApprovalRiskLevel,
   type AgentEventToolCategory,
   type AgentMode,
@@ -55,7 +56,7 @@ import {
   recordAccountIdentityTier,
   resolveTier,
 } from '../../integrations/tierResolver';
-import { type ChatTurn } from '../chat/retry';
+import { RETRY_LAST_MESSAGE_COMMAND, type ChatTurn } from '../chat/retry';
 import { getActiveWorkspaceFolder } from '../../platform/workspaceFolders';
 import { EXTENSION_ID } from '../../platform/version';
 import { getContextPanelProvider } from '../trees/contextPanelProvider';
@@ -246,13 +247,22 @@ export type WebviewToExtMessage =
   | { type: 'openSessionRow'; payload: { id: string; source: SessionSource } }
   | { type: 'requestSlashCommands' }
   | { type: 'continueInCloud' }
+  | { type: 'regenerate' }
   | { type: 'runSlashCommand'; payload: { name: string } };
 
 export type ExtToWebviewMessage =
   | { type: 'token'; payload: { text: string } }
   | {
       type: 'done';
-      payload?: { model?: string; providerLabel?: string; brandColor?: string; stopped?: true };
+      payload?: {
+        model?: string;
+        modelLabel?: string;
+        inputTokens?: number;
+        outputTokens?: number;
+        providerLabel?: string;
+        brandColor?: string;
+        stopped?: true;
+      };
     }
   | { type: 'error'; payload: ChatErrorPresentation }
   | { type: 'sessionNotice'; payload: { message: string } }
@@ -992,6 +1002,11 @@ export class ChatStateManager {
 
       case 'requestSlashCommands': {
         await this._pushSlashCommands();
+        break;
+      }
+
+      case 'regenerate': {
+        await vscode.commands.executeCommand(RETRY_LAST_MESSAGE_COMMAND);
         break;
       }
 
@@ -3008,7 +3023,14 @@ export class ChatStateManager {
             };
       this._post({
         type: 'done',
-        payload: { model: resolvedModel, providerLabel, brandColor },
+        payload: {
+          model: resolvedModel,
+          modelLabel: modelDisplayNameById(resolvedModel) ?? resolvedModel,
+          inputTokens: event.inputTokens,
+          outputTokens: event.outputTokens,
+          providerLabel,
+          brandColor,
+        },
       });
       const contextWindow = catalogContextWindow(resolvedModel);
       this._post({
