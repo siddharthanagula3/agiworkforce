@@ -3,7 +3,9 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { hashSkillContent, type Skill } from '@agiworkforce/skills';
 import { validateSkillDraft, type SkillDraft } from '@agiworkforce/skills/validation';
+import type { ManagedSkillOrigin } from '@agiworkforce/cloud-contracts';
 import { createError } from '@/lib/errors';
+import { isoTimestamp } from './skill-origin-service';
 import { requireUserSkillAuthoring, userSkillAuthoringEnabled } from './user-skill-authoring';
 
 const PG_UNIQUE_VIOLATION = '23505';
@@ -24,6 +26,7 @@ export interface UserSkillSummary {
   lifecycle: 'included';
   downloadable: false;
   editable: true;
+  origin: ManagedSkillOrigin;
 }
 
 interface UserSkillRow {
@@ -38,6 +41,12 @@ interface UserSkillRow {
 interface UserSkillSummaryRow {
   name: string;
   description: string;
+  created_at: string | Date | null;
+}
+
+function personalOrigin(createdAt: string | Date | null): ManagedSkillOrigin {
+  const addedAt = isoTimestamp(createdAt);
+  return { kind: 'personal', ...(addedAt ? { addedAt } : {}) };
 }
 
 function toRecord(row: UserSkillRow): UserSkillRecord {
@@ -103,6 +112,7 @@ export function toUserSkillSummary(record: UserSkillRecord): UserSkillSummary {
     lifecycle: 'included',
     downloadable: false,
     editable: true,
+    origin: personalOrigin(record.createdAt),
   };
 }
 
@@ -112,7 +122,7 @@ export async function listUserSkills(
 ): Promise<UserSkillSummary[]> {
   if (!userSkillAuthoringEnabled()) return [];
   const rows = await db.query<UserSkillSummaryRow>(
-    `select name, description
+    `select name, description, created_at
        from user_skills
       where user_id = $1
       order by name asc`,
@@ -125,6 +135,7 @@ export async function listUserSkills(
     lifecycle: 'included',
     downloadable: false,
     editable: true,
+    origin: personalOrigin(row.created_at),
   }));
 }
 
