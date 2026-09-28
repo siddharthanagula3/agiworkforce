@@ -195,6 +195,8 @@ impl ToolTiming {
     }
 }
 
+const CONTEXT_WARNING_PERCENT: u8 = 85;
+
 static EXPAND_TOOL_OUTPUT: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
 const EXPANDED_TOOL_OUTPUT_LINES: usize = 200;
@@ -579,11 +581,18 @@ impl TuiApp {
         }
         let attachment = crate::load_image_attachment(&resolved.to_string_lossy())
             .map_err(|error| format!("{error:#}"))?;
-        let label = resolved
+        let path_label = resolved
             .strip_prefix(&root)
             .unwrap_or(resolved.as_path())
             .to_string_lossy()
             .into_owned();
+        let size = std::fs::metadata(&resolved)
+            .map(|meta| meta.len())
+            .unwrap_or(0);
+        let label = format!("{path_label} ({})", crate::tools::format_size(size));
+        if self.staged_images.contains(&label) {
+            return Err(format!("{path_label} is already attached"));
+        }
         self.session
             .pending_image_blocks
             .push(attachment.into_image_block());
@@ -2707,6 +2716,10 @@ fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
             app.cursor = line_start;
             InputAction::None
         }
+        KeyCode::End if app.input.is_empty() || key.modifiers.contains(KeyModifiers::CONTROL) => {
+            app.scroll_offset = 0;
+            InputAction::None
+        }
         KeyCode::End => {
             // Move to end of current line (not end of whole buffer).
             let cursor = floor_char_boundary(&app.input, app.cursor);
@@ -2845,35 +2858,43 @@ fn register_mcp_prompt_commands(registry: &mut CommandRegistry, prompts: &[crate
 /// Open the session picker over the chat area. `/history` and a bare `/resume`
 /// both land here: the listing is a panel Esc can close, not a stderr dump that
 /// leaves Esc falling through to the global quit.
-fn open_session_picker(app: &mut TuiApp) {
+fn open_session_picker(app: &mut TuiApp, filter: &str) {
     use crate::tui::widgets::session_picker::{SessionEntry, SessionPickerView};
 
-    let entries = match crate::platform::runtime::session_control::list_active_managed_sessions() {
-        Ok(summaries) => summaries
-            .iter()
-            .map(|summary| SessionEntry {
-                id: summary.session_id.clone(),
-                label: format!(
-                    "{}  {}  {}{}",
-                    &summary.session_id[..summary.session_id.len().min(8)],
-                    summary.updated_at.format("%Y-%m-%d %H:%M"),
-                    crate::output::format_message_count(summary.message_count as i64),
-                    summary
-                        .title
-                        .as_deref()
-                        .map(|title| format!("  {title}"))
-                        .unwrap_or_default(),
-                ),
-            })
-            .collect(),
-        Err(error) => {
-            app.chat_messages.push(ChatMessage {
-                role: ChatRole::System,
-                text: format!("Could not list sessions: {error:#}"),
-            });
-            return;
-        }
-    };
+    let entries: Vec<SessionEntry> =
+        match crate::platform::runtime::session_control::list_active_managed_sessions() {
+            Ok(summaries) => summaries
+                .iter()
+                .map(|summary| SessionEntry {
+                    id: summary.session_id.clone(),
+                    label: format!(
+                        "{}  {}  {}{}",
+                        &summary.session_id[..summary.session_id.len().min(8)],
+                        summary.updated_at.format("%Y-%m-%d %H:%M"),
+                        crate::output::format_message_count(summary.message_count as i64),
+                        summary
+                            .title
+                            .as_deref()
+                            .map(|title| format!("  {title}"))
+                            .unwrap_or_default(),
+                    ),
+                })
+                .filter(|entry: &SessionEntry| {
+                    filter.is_empty() || entry.label.to_lowercase().contains(&filter.to_lowercase())
+                })
+                .collect(),
+            Err(error) => {
+                app.chat_messages.push(ChatMessage {
+                    role: ChatRole::System,
+                    text: format!("Could not list sessions: {error:#}"),
+                });
+                return;
+            }
+        };
+    if entries.is_empty() && !filter.is_empty() {
+        app.status_notice = Some((format!("no session matches '{filter}'"), Instant::now()));
+        return;
+    }
 
     app.open_overlay(Box::new(SessionPickerView::new(entries)));
 }
@@ -3307,9 +3328,14 @@ fn handle_effort_picker_key(app: &mut TuiApp, key: KeyEvent) -> InputAction {
             app.effort = effort;
             app.input.clear();
             app.cursor = 0;
+            let saved = app
+                .config
+                .persist_effort_project(&effort.label().to_ascii_lowercase())
+                .map(|_| " and saved as this project's default")
+                .unwrap_or("");
             app.chat_messages.push(ChatMessage {
                 role: ChatRole::System,
-                text: format!("Effort set to {}", effort.label()),
+                text: format!("Effort set to {}{saved}", effort.label()),
             });
             InputAction::None
         }
@@ -3511,6 +3537,7 @@ enum SlashResult {
     /// Read the account's artifact index, or open one of its artifacts.
     RunArtifacts(String),
     RunTasks(String),
+    RunWorktree(String),
     RunPersonalize(String),
     RunBtw(String),
 }
@@ -3611,6 +3638,52 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         "/artifacts" => SlashResult::RunArtifacts(arg.to_string()),
         "/tasks" | "/task" => SlashResult::RunTasks(arg.to_string()),
         "/personalize" => SlashResult::RunPersonalize(arg.to_string()),
+
+        "/plan" if matches!(arg, "accept" | "approve") => SlashResult::SystemMessage(
+            if !matches!(
+                app.session.permission_mode,
+                crate::cli_options::PermissionMode::Plan
+            ) {
+                "/plan accept: not in plan mode. Use /plan to enter it first.".to_string()
+            } else if app.session.current_plan.is_none() {
+                "/plan accept: no plan to approve yet. Ask the model to call update_plan first."
+                    .to_string()
+            } else {
+                app.session.plan_approved = true;
+                "Plan approved. Mutating tools enabled for this session.".to_string()
+            },
+        ),
+
+        "/plan" if arg.starts_with("reject") => {
+            let feedback = arg.strip_prefix("reject").unwrap_or("").trim().to_string();
+            SlashResult::SystemMessage(if feedback.is_empty() {
+                "/plan reject: needs a reason. Usage: /plan reject <feedback>".to_string()
+            } else {
+                app.session.plan_rejection_feedback = Some(feedback);
+                app.session.current_plan = None;
+                app.session.current_plan_path = None;
+                app.session.plan_approved = false;
+                "Plan rejected. Feedback queued for the model on the next turn.".to_string()
+            })
+        }
+
+        "/plan" if matches!(arg, "show" | "view") => SlashResult::SystemMessage(
+            match (&app.session.current_plan, &app.session.current_plan_path) {
+                (Some(plan), path) => {
+                    let (remaining, total) = plan.outstanding();
+                    let heading = match path {
+                        Some(path) => format!("Plan ({})", path.display()),
+                        None => "Plan".to_string(),
+                    };
+                    sanitize_terminal_text(&format!(
+                        "{heading}\n\n{}\n{remaining} of {total} steps outstanding",
+                        plan.render_markdown()
+                    ))
+                    .into_owned()
+                }
+                _ => "No plan yet. Ask the model to call update_plan.".to_string(),
+            },
+        ),
 
         "/plan" => {
             let new_mode = if app.mode == InteractionMode::Plan {
@@ -3788,9 +3861,20 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
             ))
         }
 
-        "/config" => {
-            SlashResult::SystemMessage(app.config.display())
-        }
+        "/config" => SlashResult::SystemMessage(
+            crate::repl::config_for_display(arg, &mut app.config).plain_message(),
+        ),
+
+        "/trust" | "/untrust" => SlashResult::SystemMessage(
+            crate::repl::trust_for_display(if cmd == "/untrust" && arg.is_empty() {
+                "revoke"
+            } else {
+                arg
+            })
+            .plain_message(),
+        ),
+
+        "/worktree" | "/wt" => SlashResult::RunWorktree(arg.to_string()),
 
         "/diff" => SlashResult::SystemMessage(crate::runtime::git::diff_summary_for_command(arg)),
 
@@ -3848,13 +3932,13 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         "/compact" => SlashResult::RunCompact(arg.to_string()),
 
         "/history" | "/sessions" => {
-            open_session_picker(app);
+            open_session_picker(app, arg.strip_prefix("search").unwrap_or(arg).trim());
             SlashResult::SystemMessage(String::new())
         }
 
         "/resume" => {
             if arg.is_empty() {
-                open_session_picker(app);
+                open_session_picker(app, "");
             } else {
                 resume_session(arg, app);
             }
@@ -3932,24 +4016,9 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
             SlashResult::SystemMessage(render_mcp_list(&scopes))
         }
 
-        "/permissions" | "/perms" | "/approvals" => {
-            // The TUI previously opened a FAKE hardcoded "Approve action?" overlay
-            // with no real pending tool call, and its choice was dropped, a dead
-            // interface. Real allow/deny/session rule management lives in the REPL
-            // (repl::registry::handle_permissions). Point the user at the working
-            // commands instead of showing a fake prompt. (Inline TUI rule editing
-            // is tracked as CLI-TUI-OVERLAY-SUBMIT-DROP.)
-            SlashResult::SystemMessage(
-                "Manage tool permissions with these commands (run in the REPL, `agi --no-tui`):\n  \
-                 /permissions                      show current allow/deny/session rules\n  \
-                 /permissions allow <prefix>       always allow a command prefix\n  \
-                 /permissions deny <prefix>        always deny a command prefix\n  \
-                 /permissions session <prefix>     allow for this session only\n  \
-                 /permissions remove <allow|deny|session> <prefix>\n  \
-                 /permissions reset                clear all rules"
-                    .into(),
-            )
-        }
+        "/permissions" | "/perms" | "/approvals" => SlashResult::SystemMessage(
+            crate::repl::permissions_for_display(arg).plain_message(),
+        ),
 
         "/agents" => {
             // No arg → open interactive picker; simple name → quick-invoke;
@@ -4181,7 +4250,12 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 match new_effort {
                     Some(e) => {
                         app.effort = e;
-                        SlashResult::SystemMessage(format!("Effort set to {}", e.label()))
+                        let saved = app
+                            .config
+                            .persist_effort_project(&e.label().to_ascii_lowercase())
+                            .map(|_| " and saved as this project's default")
+                            .unwrap_or("");
+                        SlashResult::SystemMessage(format!("Effort set to {}{saved}", e.label()))
                     }
                     None => SlashResult::SystemMessage(format!(
                         "Unknown effort level '{arg}'. Use: low | medium | high | max"
@@ -4923,6 +4997,32 @@ async fn run_event_loop(
                     }
                 }
 
+                InputAction::SendMessage(text) if text.starts_with('!') => {
+                    app.prompt_history.record(&text);
+                    let command = text.trim_start_matches('!').trim().to_string();
+                    let message = if command.is_empty() {
+                        "Type a shell command after !".to_string()
+                    } else if !app.workspace_is_trusted() {
+                        "This folder is not trusted, so shell commands stay off. Trust it with /trust grant first.".to_string()
+                    } else {
+                        match crate::repl::run_user_shell_command(&command, &mut app.session, false)
+                            .await
+                        {
+                            Ok((output, success)) => format!(
+                                "$ {}\n{}\n({})",
+                                sanitize_terminal_text(&command),
+                                sanitize_terminal_text(output.trim_end()),
+                                if success { "exit 0" } else { "failed" }
+                            ),
+                            Err(error) => format!("Could not run {command}: {error:#}"),
+                        }
+                    };
+                    app.chat_messages.push(ChatMessage {
+                        role: ChatRole::System,
+                        text: message,
+                    });
+                }
+
                 InputAction::SendMessage(text) => {
                     app.prompt_history.record(&text);
                     // Detect natural language mode switches.
@@ -5138,6 +5238,13 @@ async fn run_event_loop(
                                 app.chat_messages.push(ChatMessage {
                                     role: ChatRole::System,
                                     text,
+                                });
+                            }
+                            SlashResult::RunWorktree(argument) => {
+                                let text = crate::repl::handle_worktree(&argument).await;
+                                app.chat_messages.push(ChatMessage {
+                                    role: ChatRole::System,
+                                    text: sanitize_terminal_text(&text).into_owned(),
                                 });
                             }
                             SlashResult::RunTasks(argument) => {
@@ -5708,6 +5815,18 @@ async fn send_message_with_prompt(
             });
 
             app.sync_stats();
+
+            let context_percent = app.context_percent();
+            if context_percent >= CONTEXT_WARNING_PERCENT
+                && turn_context_percent < CONTEXT_WARNING_PERCENT
+            {
+                app.chat_messages.push(ChatMessage {
+                    role: ChatRole::System,
+                    text: format!(
+                        "Context is {context_percent}% full. /compact summarizes earlier turns to make room before the window runs out."
+                    ),
+                });
+            }
 
             if !turn.managed_request_ids.is_empty() {
                 let request_ids = turn.managed_request_ids.clone();
