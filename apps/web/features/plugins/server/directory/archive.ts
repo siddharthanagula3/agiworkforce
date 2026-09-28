@@ -28,6 +28,7 @@ import {
   uploadUnusableNameMessage,
   CLAUDE_MARKETPLACE_MANIFEST_PATH,
   CLAUDE_PLUGIN_COMMANDS_DIRECTORY,
+  CLAUDE_PLUGIN_MCP_PATH,
   CLAUDE_PLUGIN_METADATA_PATH,
   CLAUDE_PLUGIN_SKILLS_DIRECTORY,
   CLAUDE_SKILL_FILE_NAME,
@@ -44,9 +45,10 @@ import {
 } from '@/lib/services/plugin-dependencies';
 
 import { displayVersion, lastSegment, neutralizeCopy } from './entries';
-import { parsePluginMetadata } from './inspection';
+import { parseMcpServers, parsePluginMetadata } from './inspection';
 import { parseClaudeMarketplaceManifest } from './official-marketplace';
 import { parseSkillFile } from './skill-files';
+import type { PluginMcpServerSummary } from './types';
 import { buildSkillMarkdown } from '@agiworkforce/skills';
 
 const PATH_SEPARATOR = '/';
@@ -84,6 +86,7 @@ export interface UploadedPlugin {
   skills: UploadedSkill[];
   omittedFiles: string[];
   dependencies: PluginDependencyRef[];
+  mcpServers: PluginMcpServerSummary[];
 }
 
 export interface UploadedPluginArchive {
@@ -478,6 +481,30 @@ async function readCommands(
   return commands;
 }
 
+async function readMcpServers(
+  members: Map<string, ArchiveMember>,
+  directory: string,
+  ...declared: unknown[]
+): Promise<PluginMcpServerSummary[]> {
+  const base = pluginBase(directory);
+  const byName = new Map<string, PluginMcpServerSummary>();
+  const sources = [await readJson(members.get(`${base}${CLAUDE_PLUGIN_MCP_PATH}`)), ...declared];
+  for (const source of sources) {
+    const path =
+      typeof source === 'string'
+        ? `${base}${source.trim().replace(RELATIVE_SOURCE_PREFIX, '')}`
+        : '';
+    const json =
+      typeof source === 'string'
+        ? unsafeArchivePath(path)
+          ? null
+          : await readJson(members.get(path))
+        : source;
+    for (const server of parseMcpServers(json)) byName.set(server.name, server);
+  }
+  return [...byName.values()];
+}
+
 function withinSkillLimit(pluginName: string, skills: readonly UploadedSkill[]): UploadedSkill[] {
   if (skills.length > PLUGIN_DIRECTORY_MAX_SKILLS_PER_INSTALL) {
     throw new PluginArchiveError([
@@ -535,6 +562,7 @@ async function singlePlugin(
     skills,
     omittedFiles,
     dependencies,
+    mcpServers: await readMcpServers(members, '', manifestField(metadataJson, 'mcpServers')),
   };
 }
 
@@ -584,6 +612,12 @@ async function marketplacePlugins(
         name,
         parsePluginDependencies(declared['dependencies']),
         parsePluginDependencies(declaredDependencies(pluginJson)),
+      ),
+      mcpServers: await readMcpServers(
+        members,
+        directory,
+        manifestField(pluginJson, 'mcpServers'),
+        declared['mcpServers'],
       ),
     });
   }
@@ -664,6 +698,7 @@ export async function readSkillArchiveAsPlugin(
         ],
         omittedFiles: single.omittedFiles,
         dependencies: [],
+        mcpServers: [],
       },
     ],
   };

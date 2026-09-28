@@ -44,6 +44,7 @@ const MARKDOWN_SUFFIX = '.md';
 const RELATIVE_PREFIX = /^\.\//;
 const TRAILING_SLASH = /\/+$/;
 const MCP_TRANSPORT_SSE = 'sse';
+const HTTPS_PREFIX = 'https://';
 const MCP_TRANSPORT_HTTP = 'http';
 const MCP_TRANSPORT_STDIO = 'stdio';
 const TRUNCATED_TREE_REASON = 'repository tree truncated before any skill was seen';
@@ -248,7 +249,12 @@ export function parseMcpServers(json: unknown): PluginMcpServerSummary[] {
   const out: PluginMcpServerSummary[] = [];
   for (const [name, server] of Object.entries(servers as Record<string, unknown>)) {
     if (!server || typeof server !== 'object' || Array.isArray(server)) continue;
-    out.push({ name, transport: mcpTransport(server as Record<string, unknown>) });
+    const record = server as Record<string, unknown>;
+    const transport = mcpTransport(record);
+    const url = typeof record['url'] === 'string' ? record['url'].trim() : '';
+    const remote =
+      transport !== MCP_TRANSPORT_STDIO && url.startsWith(HTTPS_PREFIX) && !url.includes('${');
+    out.push({ name, transport, ...(remote ? { url } : {}) });
   }
   return out;
 }
