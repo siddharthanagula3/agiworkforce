@@ -27,7 +27,7 @@ describe('VS Code onboarding host contract', () => {
     },
   );
 
-  it('contributes the replay command and five-step VS Code walkthrough with real media', () => {
+  it('contributes the replay command and six-step VS Code walkthrough with real media', () => {
     const extensionRoot = resolve(__dirname, '../..');
     const packageJson = JSON.parse(
       readFileSync(resolve(extensionRoot, 'package.json'), 'utf8'),
@@ -51,7 +51,7 @@ describe('VS Code onboarding host contract', () => {
 
     expect(commandIds).toContain('agi-workforce.showOnboarding');
     expect(commandIds).toContain('agi-workforce.showCloudTasks');
-    expect(walkthrough?.steps).toHaveLength(5);
+    expect(walkthrough?.steps).toHaveLength(6);
     for (const step of walkthrough?.steps ?? []) {
       expect(step.completionEvents.length).toBeGreaterThan(0);
       expect(existsSync(resolve(extensionRoot, step.media.markdown))).toBe(true);
