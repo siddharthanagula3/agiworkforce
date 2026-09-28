@@ -56,3 +56,23 @@ export type {
   ConnectorRuntime,
   ConnectorRuntimeOptions,
 } from './runtime';
+
+export {
+  acceptConnectorInput,
+  connectorInputFieldError,
+  dismissConnectorInput,
+  initialConnectorInputDraft,
+  readConnectorInputLink,
+  readConnectorInputPrompts,
+} from './input-request';
+export type {
+  ConnectorInputDraft,
+  ConnectorInputDraftValue,
+  ConnectorInputField,
+  ConnectorInputLink,
+  ConnectorInputOption,
+  ConnectorInputPrompt,
+  ConnectorInputResponse,
+  ConnectorInputStringFormat,
+  ConnectorInputValue,
+} from './input-request';

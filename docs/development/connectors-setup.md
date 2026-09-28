@@ -309,6 +309,58 @@ through `https://mcp.svc.cloud.microsoft/enterprise`, not mail or files
 - Variables: `CONNECTOR_OAUTH_MICROSOFT_365_CLIENT_ID`,
   `CONNECTOR_OAUTH_MICROSOFT_365_CLIENT_SECRET`.
 
+### Outlook, OneDrive, SharePoint and Teams (built-in Microsoft Graph adapter)
+
+Microsoft hosts no MCP server for mail, files or chat, so these four connectors
+call Microsoft Graph v1.0 directly through the adapter in
+`apps/web/lib/connectors/microsoft-graph.ts` (S98.07). They stay unavailable
+until the owner registers an Entra app and adds the descriptors.
+
+- Console: https://entra.microsoft.com, App registrations, New registration,
+  "Accounts in any organizational directory and personal Microsoft accounts",
+  Web redirect URI `<origin>/api/connectors/oauth/callback`, then a client
+  secret. One app can serve all four descriptors; the variable names stay
+  separate.
+- Descriptor for each connector id: `authorizationUrl`
+  `https://login.microsoftonline.com/common/oauth2/v2.0/authorize`, `tokenUrl`
+  `https://login.microsoftonline.com/common/oauth2/v2.0/token`, `mcpUrl`
+  `https://graph.microsoft.com/v1.0` (the API base the adapter calls; no MCP
+  connection is made to it), `resourceIndicator` `false` (Entra v2 refuses the
+  `resource` parameter), and `scopes` of `openid`, `profile`, `email`,
+  `offline_access` plus these delegated Graph permissions, each prefixed
+  `https://graph.microsoft.com/`:
+  - `outlook`: `User.Read`, `Mail.Read`, `Mail.Send`, `Calendars.ReadWrite`.
+    Tools `search_mail`, `read_mail`, `list_events`, `send_mail`,
+    `create_event`.
+  - `onedrive`: `User.Read`, `Files.Read`. Tools `search_files`, `read_file`.
+  - `sharepoint`: `User.Read`, `Sites.Read.All`, which most tenants require an
+    administrator to consent to. Tools `search_sites`, `search_files`,
+    `read_file`.
+  - `teams`: `User.Read`, `Chat.Read`, `Team.ReadBasic.All`,
+    `Channel.ReadBasic.All`, work or school accounts only. Tools `list_chats`,
+    `read_chat_messages`, `list_teams`, `list_channels`.
+- Approvals: every read is declared a read of content other people can write,
+  and results are fenced as untrusted data. `send_mail` and `create_event` are
+  declared external sends, because Outlook mails an invitation to every
+  attendee, so both ask under every approval policy. The message is written in
+  the conversation and shown in that approval; saving a draft to Outlook needs
+  `Mail.ReadWrite`, which also lets an app change and delete mail, so the
+  ceiling leaves it out as it leaves out Gmail's `gmail.modify`, and admitting
+  it is an owner decision. Teams channel messages need
+  `ChannelMessage.Read.All`, which the ceiling does not admit, so the adapter
+  lists channels and reads chats.
+- Files: `read_file` reads the item's `@microsoft.graph.downloadUrl`, a
+  pre-authenticated link that takes no token
+  (https://learn.microsoft.com/en-us/graph/api/driveitem-get-content), so the
+  token never reaches the download host. It refuses folders and files over
+  10 MB and reads PDF, Word, Excel, PowerPoint and plain text.
+- Variables: `CONNECTOR_OAUTH_OUTLOOK_CLIENT_ID`,
+  `CONNECTOR_OAUTH_OUTLOOK_CLIENT_SECRET`, `CONNECTOR_OAUTH_ONEDRIVE_CLIENT_ID`,
+  `CONNECTOR_OAUTH_ONEDRIVE_CLIENT_SECRET`,
+  `CONNECTOR_OAUTH_SHAREPOINT_CLIENT_ID`,
+  `CONNECTOR_OAUTH_SHAREPOINT_CLIENT_SECRET`, `CONNECTOR_OAUTH_TEAMS_CLIENT_ID`,
+  `CONNECTOR_OAUTH_TEAMS_CLIENT_SECRET`.
+
 ### BigQuery
 
 Google hosts a BigQuery MCP server at `https://bigquery.googleapis.com/mcp`

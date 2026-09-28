@@ -469,6 +469,53 @@ const it = {
     'Impossibile prendere il controllo di questa sessione. Invia di nuovo per riprovare.',
   'sessionSync.stopBeforeTerminal':
     'Interrompi la risposta in corso prima di continuare questa sessione nel terminale.',
+  'remote.title': 'Controllo remoto',
+  'remote.intro':
+    'Abbina il telefono per seguire le sessioni AGI nelle cartelle di questa finestra: approva i passaggi, leggi diff, risultati dei test e nuovi file, e guida il turno successivo.',
+  'remote.howToPair':
+    "Apri l'app AGI Workforce sul telefono, scegli «Pair with Desktop» e scansiona questo codice. Il codice funziona una sola volta e scade dopo pochi minuti.",
+  'remote.qrLabel': 'Codice QR di abbinamento',
+  'remote.pairingCode': 'Codice di abbinamento',
+  'remote.copyLink': 'Copia link di abbinamento',
+  'remote.linkCopied':
+    "AGI Workforce: link di abbinamento copiato. Incollalo nell'app AGI Workforce sul telefono.",
+  'remote.noPairing':
+    'AGI Workforce: nessun abbinamento in attesa. Avvia il controllo remoto per ottenere un nuovo codice.',
+  'remote.connected': 'Connesso: {phone}.',
+  'remote.yourPhone': 'il tuo telefono',
+  'remote.reconnecting':
+    'Connessione persa. Riconnessione in corso perché il telefono riprenda da dove si era fermato.',
+  'remote.pair': 'Abbina un telefono',
+  'remote.pairAgain': 'Abbina di nuovo',
+  'remote.cancelPairing': 'Annulla abbinamento',
+  'remote.disconnect': 'Disconnetti telefono',
+  'remote.stop': 'Interrompi controllo remoto',
+  'remote.disconnectTitle': 'Disconnettere {phone}?',
+  'remote.disconnectConsequence':
+    'Il telefono viene disconnesso da questa finestra e non può più seguire né guidare le sue sessioni. Per ricollegarlo, abbinalo con un nuovo codice.',
+  'remote.starting': 'Avvio del controllo remoto',
+  'remote.startFailed': 'AGI Workforce: impossibile avviare il controllo remoto. {reason}',
+  'remote.pairFailed': "Impossibile avviare l'abbinamento.",
+  'remote.signInFirst':
+    'AGI Workforce: accedi prima. Il controllo remoto abbina il telefono tramite il tuo account.',
+  'remote.trustFirst':
+    'AGI Workforce: considera attendibile questa area di lavoro prima che un telefono possa eseguirvi sessioni.',
+  'remote.openFolderFirst':
+    'AGI Workforce: apri prima una cartella. Il controllo remoto esegue le sessioni nelle cartelle di questa finestra.',
+  'remote.folderClosed': 'Quella cartella non è più aperta in questa finestra.',
+  'remote.runtimeUnavailable':
+    'La CLI di AGI non è riuscita a elencare le sessioni di questa cartella.',
+  'remote.runtimeHint':
+    "Verifica che la CLI di AGI sia installata e con l'accesso effettuato, poi aggiorna l'elenco sul telefono.",
+  'remote.deviceName': '{host} (VS Code)',
+  'remote.statusWaiting': 'Controllo remoto: in attesa del telefono',
+  'remote.statusConnected': 'Controllo remoto: {phone}',
+  'remote.statusReconnecting': 'Controllo remoto: riconnessione',
+  'remote.statusError': 'Controllo remoto: interrotto',
+  'remote.statusTooltip': 'Mostra controllo remoto',
+  'remote.attached_one': '{count} sessione aperta sul telefono.',
+  'remote.attached_many': '{count} di sessioni aperte sul telefono.',
+  'remote.attached_other': '{count} sessioni aperte sul telefono.',
 };
 
 export default it;

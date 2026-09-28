@@ -88,6 +88,11 @@ export const BUILT_IN_SLASH_COMMANDS: readonly SlashCommandItem[] = [
   { name: '/mcp', description: 'MCP servers', command: 'agi-workforce.showMcpServers' },
   { name: '/hooks', description: 'Hooks the CLI runs', command: 'agi-workforce.showHooks' },
   {
+    name: '/remote-control',
+    description: "Continue this window's sessions from your phone",
+    command: 'agi-workforce.remoteControl',
+  },
+  {
     name: '/settings',
     description: 'Extension and runtime settings',
     command: 'agi-workforce.openSettings',

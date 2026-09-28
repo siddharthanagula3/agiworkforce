@@ -648,6 +648,7 @@ function connectorConnectLabel(id: string): { connectLabel?: string } {
 export interface ConnectorDetailExtras {
   pending?: ReadonlySet<string>;
   requiredBy?: Readonly<Record<string, readonly string[]>>;
+  reauthorization?: ReadonlySet<string>;
 }
 
 function connectorDetailExtras(
@@ -659,6 +660,9 @@ function connectorDetailExtras(
   return {
     ...(!connectedIds.has(id) ? connectorConnectLabel(id) : {}),
     ...(!connectedIds.has(id) && extras.pending?.has(id) ? { authorizationPending: true } : {}),
+    ...(connectedIds.has(id) && extras.reauthorization?.has(id)
+      ? { needsReauthorization: true }
+      : {}),
     ...(requiredBy.length > 0 ? { requiredByPlugins: requiredBy } : {}),
   };
 }

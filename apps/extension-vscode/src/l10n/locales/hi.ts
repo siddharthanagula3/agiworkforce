@@ -370,6 +370,51 @@ const hi = {
     'इस सत्र का नियंत्रण नहीं लिया जा सका। दोबारा कोशिश करने के लिए फिर से भेजें।',
   'sessionSync.stopBeforeTerminal':
     'इस सत्र को टर्मिनल में जारी रखने से पहले चल रही प्रतिक्रिया रोकें।',
+  'remote.title': 'रिमोट कंट्रोल',
+  'remote.intro':
+    'इस विंडो के फ़ोल्डरों में AGI सत्रों पर नज़र रखने के लिए अपना फ़ोन पेयर करें: चरणों को मंज़ूरी दें, diff, टेस्ट के नतीजे और नई फ़ाइलें पढ़ें, और अगले टर्न को दिशा दें।',
+  'remote.howToPair':
+    'अपने फ़ोन पर AGI Workforce ऐप खोलें, "Pair with Desktop" चुनें और यह कोड स्कैन करें। यह कोड एक ही बार काम करता है और कुछ मिनटों में समाप्त हो जाता है।',
+  'remote.qrLabel': 'पेयरिंग QR कोड',
+  'remote.pairingCode': 'पेयरिंग कोड',
+  'remote.copyLink': 'पेयरिंग लिंक कॉपी करें',
+  'remote.linkCopied':
+    'AGI Workforce: पेयरिंग लिंक कॉपी हो गया। इसे अपने फ़ोन के AGI Workforce ऐप में पेस्ट करें।',
+  'remote.noPairing':
+    'AGI Workforce: कोई पेयरिंग प्रतीक्षा में नहीं है। नया कोड पाने के लिए रिमोट कंट्रोल शुरू करें।',
+  'remote.connected': '{phone} से कनेक्ट है।',
+  'remote.yourPhone': 'फ़ोन',
+  'remote.reconnecting':
+    'कनेक्शन टूट गया। दोबारा कनेक्ट किया जा रहा है ताकि आपका फ़ोन वहीं से आगे बढ़ सके जहाँ रुका था।',
+  'remote.pair': 'फ़ोन पेयर करें',
+  'remote.pairAgain': 'फिर से पेयर करें',
+  'remote.cancelPairing': 'पेयरिंग रद्द करें',
+  'remote.disconnect': 'फ़ोन डिस्कनेक्ट करें',
+  'remote.stop': 'रिमोट कंट्रोल बंद करें',
+  'remote.disconnectTitle': '{phone} को डिस्कनेक्ट करें?',
+  'remote.disconnectConsequence':
+    'फ़ोन इस विंडो से डिस्कनेक्ट हो जाता है और इसके सत्रों पर नज़र नहीं रख सकता या उन्हें दिशा नहीं दे सकता। इसे फिर से कनेक्ट करने के लिए, नए कोड से पेयर करें।',
+  'remote.starting': 'रिमोट कंट्रोल शुरू हो रहा है',
+  'remote.startFailed': 'AGI Workforce: रिमोट कंट्रोल शुरू नहीं हो सका। {reason}',
+  'remote.pairFailed': 'पेयरिंग शुरू नहीं हो सकी।',
+  'remote.signInFirst':
+    'AGI Workforce: पहले साइन इन करें। रिमोट कंट्रोल आपके खाते के ज़रिए आपका फ़ोन पेयर करता है।',
+  'remote.trustFirst':
+    'AGI Workforce: किसी फ़ोन के इसमें सत्र चलाने से पहले इस वर्कस्पेस पर भरोसा करें।',
+  'remote.openFolderFirst':
+    'AGI Workforce: पहले कोई फ़ोल्डर खोलें। रिमोट कंट्रोल इस विंडो के फ़ोल्डरों में सत्र चलाता है।',
+  'remote.folderClosed': 'वह फ़ोल्डर अब इस विंडो में खुला नहीं है।',
+  'remote.runtimeUnavailable': 'AGI CLI इस फ़ोल्डर के सत्रों की सूची नहीं दिखा सका।',
+  'remote.runtimeHint':
+    'जाँचें कि AGI CLI इंस्टॉल है और उसमें साइन इन है, फिर अपने फ़ोन पर सूची रीफ़्रेश करें।',
+  'remote.deviceName': '{host} (VS Code)',
+  'remote.statusWaiting': 'रिमोट कंट्रोल: फ़ोन की प्रतीक्षा',
+  'remote.statusConnected': 'रिमोट कंट्रोल: {phone}',
+  'remote.statusReconnecting': 'रिमोट कंट्रोल: दोबारा कनेक्ट हो रहा है',
+  'remote.statusError': 'रिमोट कंट्रोल: बंद',
+  'remote.statusTooltip': 'रिमोट कंट्रोल दिखाएँ',
+  'remote.attached_one': 'फ़ोन पर {count} सत्र खुला है।',
+  'remote.attached_other': 'फ़ोन पर {count} सत्र खुले हैं।',
 };
 
 export default hi;

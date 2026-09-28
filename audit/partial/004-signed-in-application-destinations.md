@@ -292,17 +292,16 @@ Code: `apps/web/features/images/components/ImageStudio.tsx:73-73`
 
 - Done when: A media job history lists image/video generation jobs with their status (queued, running, failed, done) and links to results.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Finished generations are browsable in Library, but queued/running/failed generation jobs are held only in the open tab (media-store.ts:29-41); add a persistent job history with status. | ui |
-| desktop | partial | Finished generations are browsable in Library, but queued/running/failed generation jobs are held only in the open tab (media-store.ts:29-41); add a persistent job history with status. | ui |
-| mobile | partial | Finished images/videos appear in Library, but generation jobs show only as in-chat progress cards; there is no job history with status. | ui |
+| mobile | partial | GET /api/media/jobs serves mobile too, but the mobile Library has no Generations section yet; the mobile app is in the Codex release. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/shared/stores/media-store.ts:29-41`, `packages/ui/unified-chat/src/components/library/LibraryView.tsx:82-87`, `apps/mobile/src/features/library/index.tsx:95-104`, `apps/mobile/src/features/video/services/videogen.ts:45-75`
+Code: `apps/web/app/api/media/jobs/route.ts:20-20`
 
 ## S4.31: Notebook workspace.
 

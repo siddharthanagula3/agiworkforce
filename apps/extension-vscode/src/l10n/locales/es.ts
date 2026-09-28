@@ -472,6 +472,52 @@ const es = {
     'No se pudo tomar el control de esta sesión. Envíe de nuevo para reintentarlo.',
   'sessionSync.stopBeforeTerminal':
     'Detenga la respuesta en curso antes de continuar esta sesión en la terminal.',
+  'remote.title': 'Control remoto',
+  'remote.intro':
+    'Empareje su teléfono para seguir las sesiones de AGI en las carpetas de esta ventana: apruebe pasos, lea diffs, resultados de pruebas y archivos nuevos, y dirija el siguiente turno.',
+  'remote.howToPair':
+    'Abra la aplicación AGI Workforce en su teléfono, elija «Pair with Desktop» y escanee este código. El código funciona una sola vez y caduca en unos minutos.',
+  'remote.qrLabel': 'Código QR de emparejamiento',
+  'remote.pairingCode': 'Código de emparejamiento',
+  'remote.copyLink': 'Copiar enlace de emparejamiento',
+  'remote.linkCopied':
+    'AGI Workforce: enlace de emparejamiento copiado. Péguelo en la aplicación AGI Workforce de su teléfono.',
+  'remote.noPairing':
+    'AGI Workforce: no hay ningún emparejamiento en espera. Inicie Control remoto para obtener un código nuevo.',
+  'remote.connected': 'Conectado a {phone}.',
+  'remote.yourPhone': 'su teléfono',
+  'remote.reconnecting':
+    'Se perdió la conexión. Reconectando para que su teléfono continúe donde lo dejó.',
+  'remote.pair': 'Emparejar un teléfono',
+  'remote.pairAgain': 'Emparejar de nuevo',
+  'remote.cancelPairing': 'Cancelar emparejamiento',
+  'remote.disconnect': 'Desconectar teléfono',
+  'remote.stop': 'Detener Control remoto',
+  'remote.disconnectTitle': '¿Desconectar {phone}?',
+  'remote.disconnectConsequence':
+    'El teléfono se desconecta de esta ventana y ya no puede seguir ni dirigir sus sesiones. Para volver a conectarlo, emparéjelo con un código nuevo.',
+  'remote.starting': 'Iniciando Control remoto',
+  'remote.startFailed': 'AGI Workforce: no se pudo iniciar Control remoto. {reason}',
+  'remote.pairFailed': 'No se pudo iniciar el emparejamiento.',
+  'remote.signInFirst':
+    'AGI Workforce: inicie sesión primero. Control remoto empareja su teléfono a través de su cuenta.',
+  'remote.trustFirst':
+    'AGI Workforce: confíe en este espacio de trabajo antes de que un teléfono pueda ejecutar sesiones en él.',
+  'remote.openFolderFirst':
+    'AGI Workforce: abra primero una carpeta. Control remoto ejecuta sesiones en las carpetas de esta ventana.',
+  'remote.folderClosed': 'Esa carpeta ya no está abierta en esta ventana.',
+  'remote.runtimeUnavailable': 'La CLI de AGI no pudo mostrar las sesiones de esta carpeta.',
+  'remote.runtimeHint':
+    'Compruebe que la CLI de AGI esté instalada y con la sesión iniciada; luego actualice la lista en su teléfono.',
+  'remote.deviceName': '{host} (VS Code)',
+  'remote.statusWaiting': 'Control remoto: esperando su teléfono',
+  'remote.statusConnected': 'Control remoto: {phone}',
+  'remote.statusReconnecting': 'Control remoto: reconectando',
+  'remote.statusError': 'Control remoto: detenido',
+  'remote.statusTooltip': 'Mostrar Control remoto',
+  'remote.attached_one': '{count} sesión abierta en el teléfono.',
+  'remote.attached_many': '{count} de sesiones abiertas en el teléfono.',
+  'remote.attached_other': '{count} sesiones abiertas en el teléfono.',
 };
 
 export default es;

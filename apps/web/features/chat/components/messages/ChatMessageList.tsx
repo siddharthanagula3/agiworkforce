@@ -25,6 +25,7 @@ import { hasUnavailableWebSearch, type AgentActivityState } from '@agiworkforce/
 import { formatUsageResetIn, isFreeBillingPlanTier } from '@agiworkforce/types';
 import { isAccountWideUsageBlock } from '@features/chat/stores/account-usage-block';
 import type { MessageMetadata, MessageToolEntry } from '@shared/stores/web-chat-store';
+import { useSettingsStore } from '@shared/stores/web-settings-store';
 import type { VariantInfo, VariantInfoByMessageId } from '@/features/chat/lib/messageThread';
 import type { WebChatMessageMetadata } from '../../types/message-metadata';
 import type { ImageRevisionRequest } from '@features/chat/lib/imageGenerationOptions';
@@ -207,6 +208,7 @@ export interface ChatMessageListProps {
   ) => void;
   onPaywallDismiss?: (messageId: string) => void;
   enableFollowUpSuggestions?: boolean;
+  temporaryChat?: boolean;
   onRegenerateWithModel?: (messageId: string, modelId: string) => void;
   regenerateModelOptions?: ReadonlyArray<RegenerateModelOption>;
   /**
@@ -1161,6 +1163,7 @@ const ChatMessageListComponent = ({
   onPaywallUpgrade,
   onPaywallDismiss,
   enableFollowUpSuggestions = FOLLOW_UP_SUGGESTIONS_ENABLED_DEFAULT,
+  temporaryChat = false,
   onRegenerateWithModel,
   regenerateModelOptions,
   turnErrorActive = false,
@@ -1368,7 +1371,9 @@ const ChatMessageListComponent = ({
     return collectMessageResearchSources(lastMessage.metadata).searchSources.length > 0;
   }, [lastMessage]);
 
+  const followUpSuggestionsEnabled = useSettingsStore((state) => state.followUpSuggestionsEnabled);
   const showFollowUps = Boolean(
+    followUpSuggestionsEnabled &&
     (enableFollowUpSuggestions || lastTurnSearched) &&
     onSendMessage &&
     !isLoading &&
@@ -1385,10 +1390,10 @@ const ChatMessageListComponent = ({
       : undefined;
   }, [lastMessage]);
 
-  const generatedFollowUps = useGeneratedFollowUps({
+  const { suggestions: generatedFollowUps, pending: followUpsPending } = useGeneratedFollowUps({
     conversationId,
     messageId: lastMessage?.id,
-    enabled: showFollowUps && lastTurnSearched,
+    enabled: showFollowUps && !temporaryChat,
     cached: cachedFollowUps,
   });
   const searchUnavailable = useMemo(() => {
@@ -1912,7 +1917,7 @@ const ChatMessageListComponent = ({
           )}
         </AnimatePresence>
 
-        {showFollowUps && lastMessage && (
+        {showFollowUps && lastMessage && !followUpsPending && (
           <div
             className="mx-auto w-full max-w-3xl px-gutter-compact"
             data-testid="follow-up-suggestions-shell"
@@ -1948,6 +1953,7 @@ const ChatMessageListComponent = ({
       isUserTyping,
       messages.length,
       generatedFollowUps,
+      followUpsPending,
       searchUnavailable,
     ],
   );

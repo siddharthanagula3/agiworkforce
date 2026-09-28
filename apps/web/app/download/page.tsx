@@ -197,7 +197,7 @@ export default function DownloadPage() {
                 },
                 {
                   label: 'Updates',
-                  value: `The desktop app checks ${UPDATER_ENDPOINT} every day, downloads a signed update in the background and installs it when you choose Restart to update`,
+                  value: `The desktop app checks ${UPDATER_ENDPOINT} every day, downloads a signed update in the background and installs it when you choose Restart to update or the next time the app starts`,
                 },
                 {
                   label: 'Asset hosts',

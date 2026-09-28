@@ -74,14 +74,13 @@ Code: `apps/cli/src/voice.rs:254-254`, `apps/cli/src/voice.rs:320-320`, `apps/cl
 
 - Done when: A waveform or amplitude visual follows the live microphone or reply audio level during voice.
 - Wave: 2
-- Already works on: web, mobile
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| desktop | partial | Same as web: the voice-mode orb is state-driven, not amplitude-driven. | ui |
 | cli | partial | Code done; cell stays flag-off until the lead enables the `voice` cargo feature for release builds (apps/cli/Cargo.toml:118), per decisions.md. | flag-off |
 
-Code: `packages/ui/unified-chat/src/components/VoiceOrb.tsx:119-119`, `apps/cli/src/voice.rs:684-684`, `apps/cli/src/voice.rs:764-764`, `apps/cli/src/voice.rs:320-320`
+Code: `apps/cli/src/voice.rs:684-684`, `apps/cli/src/voice.rs:764-764`, `apps/cli/src/voice.rs:320-320`, `apps/cli/src/voice.rs:882-882`
 
 ## S48.10: End conversation.
 
@@ -99,14 +98,13 @@ Code: `apps/cli/src/voice.rs:178-178`, `apps/cli/src/voice.rs:320-320`, `apps/cl
 
 - Done when: The user can pause the whole voice conversation (mic and assistant) and resume it later without ending it.
 - Wave: 3
-- Already works on: web
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| desktop | partial | Same as web: mute only, no pause of the session. | ui |
 | mobile | partial | Mute (live bar and companion) only stops listening; there is no pause that holds a spoken reply and resumes it. | ui |
 
-Code: `apps/web/features/chat/components/Voice/VoiceComposer.tsx:124-124`, `apps/mobile/src/features/voice/components/LiveVoiceBar.tsx:226-226`, `apps/mobile/src/features/voice/hooks/useVoiceConversation.ts:256-256`
+Code: `apps/mobile/src/features/voice/components/LiveVoiceBar.tsx:226-226`, `apps/mobile/src/features/voice/hooks/useVoiceConversation.ts:256-256`
 
 ## S48.12: Push-to-talk.
 
@@ -234,15 +232,14 @@ Code: `apps/cli/src/tui/tui_app.rs:4766-4766`, `apps/cli/src/voice.rs:320-320`, 
 
 - Done when: Tool activity and results from a voice turn are viewable during the conversation.
 - Wave: 2
-- Already works on: web
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| desktop | partial | Voice shows only a generic busy state: the per-tool labels the session computes are never wired (onToolActivity unset) and tool results are folded into speech; the Activity panel only covers typed turns. | ui, handler |
 | mobile | partial | Only "Working on your request" is shown while a delegated tool runs; no tool name or result. | ui |
 | cli | partial | Code done; cell stays flag-off until the lead enables the `voice` cargo feature for release builds (apps/cli/Cargo.toml:118), per decisions.md. | flag-off |
 
-Code: `apps/web/features/chat/hooks/use-voice-session.ts:272-272`, `apps/mobile/src/features/voice/components/LiveVoiceBar.tsx:193-193`, `apps/cli/src/voice.rs:254-254`, `apps/cli/src/voice.rs:320-320`
+Code: `apps/mobile/src/features/voice/components/LiveVoiceBar.tsx:193-193`, `apps/cli/src/voice.rs:254-254`, `apps/cli/src/voice.rs:320-320`, `apps/cli/src/voice.rs:882-882`
 
 ## S48.27: Approve an action during Voice.
 
@@ -260,15 +257,14 @@ Code: `apps/cli/src/voice.rs:254-254`, `apps/cli/src/voice.rs:320-320`, `apps/cl
 
 - Done when: A document generated during voice can be opened from the voice view.
 - Wave: 2
-- Already works on: web
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| desktop | partial | Same as web. | handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | Code done; cell stays flag-off until the lead enables the `voice` cargo feature for release builds (apps/cli/Cargo.toml:118), per decisions.md. | flag-off |
 
-Code: `apps/web/features/chat/components/Voice/VoiceChatDock.tsx:78-78`, `apps/cli/src/voice.rs:254-254`, `apps/cli/src/voice.rs:320-320`, `apps/cli/src/voice.rs:882-882`
+Code: `apps/cli/src/voice.rs:254-254`, `apps/cli/src/voice.rs:320-320`, `apps/cli/src/voice.rs:882-882`
 
 ## S48.29: Attach image during Voice.
 
@@ -320,15 +316,3 @@ Code: `apps/cli/src/voice.rs:254-254`, `apps/cli/src/voice.rs:320-320`, `apps/cl
 | cli | partial | Voice drives the local session only; steering a session on another device needs the same remote-session relay S72.30 lacks. | handler, flag-off |
 
 Code: `apps/web/features/code/components/CodeComposer.tsx:1201-1201`, `apps/cli/src/voice.rs:75-75`
-
-## S48.41: Separate spoken-response cancellation from task cancellation.
-
-- Done when: The user can stop the spoken reply without cancelling the underlying task, and cancel the task separately.
-- Wave: 3
-- Already works on: web, mobile
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| desktop | partial | The session can cancel a delegated tool turn (cancelBackendWork) but no control calls it; the only stop is leaving voice, which ends both. | ui |
-
-Code: `apps/web/features/chat/hooks/use-voice-session.ts:459-459`
