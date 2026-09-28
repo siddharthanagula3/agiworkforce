@@ -446,7 +446,7 @@ export function SlackSection() {
                         confirm({
                           title: `Disconnect your Slack account in ${link.teamName}?`,
                           description:
-                            'AGI Workforce stops answering this Slack account, and any answer waiting for your approval from it is dropped. Answers already posted stay in Slack. You can link it again by messaging the app.',
+                            'AGI Workforce stops answering this Slack account, and the record of its Slack answers is deleted, including any answer still waiting for your approval. Answers already posted stay in Slack, and tasks it started stay in your tasks. You can link it again by messaging the app.',
                           confirmLabel: 'Disconnect',
                           destructive: true,
                           onConfirm: () => unlink(link.id, link.teamName),
