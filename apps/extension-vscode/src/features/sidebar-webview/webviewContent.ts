@@ -602,6 +602,7 @@ export function getWebviewContent(
       opacity: 0;
       transition: opacity var(--duration-quick) var(--curve-standard);
     }
+    .message.user .message-actions--queued { opacity: 1; justify-content: flex-end; }
     .message.assistant:hover .message-actions,
     .message.assistant.message--latest .message-actions,
     .message-actions:focus-within {
@@ -4259,6 +4260,45 @@ export function getWebviewContent(
       return entries;
     }
 
+    function appendQueuedControls(messageEl, clientMessageId, text) {
+      var row = document.createElement('div');
+      row.className = 'message-actions message-actions--queued';
+      var edit = document.createElement('button');
+      edit.type = 'button';
+      edit.className = 'message-action';
+      edit.title = 'Edit';
+      edit.setAttribute('aria-label', 'Edit this queued message');
+      var editIcon = document.createElement('span');
+      editIcon.className = 'codicon codicon-edit';
+      editIcon.setAttribute('aria-hidden', 'true');
+      edit.appendChild(editIcon);
+      var cancel = document.createElement('button');
+      cancel.type = 'button';
+      cancel.className = 'message-action';
+      cancel.title = 'Cancel';
+      cancel.setAttribute('aria-label', 'Cancel this queued message');
+      var cancelIcon = document.createElement('span');
+      cancelIcon.className = 'codicon codicon-close';
+      cancelIcon.setAttribute('aria-hidden', 'true');
+      cancel.appendChild(cancelIcon);
+      edit.addEventListener('click', function () {
+        vscode.postMessage({ type: 'cancelQueuedMessage', payload: { clientMessageId: clientMessageId } });
+        prefillComposer(text);
+      });
+      cancel.addEventListener('click', function () {
+        vscode.postMessage({ type: 'cancelQueuedMessage', payload: { clientMessageId: clientMessageId } });
+      });
+      row.appendChild(edit);
+      row.appendChild(cancel);
+      messageEl.appendChild(row);
+    }
+
+    function removeQueuedControls(clientMessageId) {
+      var message = userMessageById(clientMessageId);
+      var row = message && message.querySelector('.message-actions--queued');
+      if (row) row.remove();
+    }
+
     function appendSentContext(messageEl) {
       var entries = sentContextEntries();
       if (entries.length === 0) return;
@@ -4300,6 +4340,7 @@ export function getWebviewContent(
       appendSentContext(userMessageEl);
       if (isFollowUp) {
         userMessageEl.setAttribute('data-delivery-state', 'queued');
+        appendQueuedControls(userMessageEl, clientMessageId, text);
       } else {
         userMessageEl.setAttribute('data-delivery-state', 'sending');
         sendingClientMessageId = clientMessageId;
@@ -5563,6 +5604,7 @@ export function getWebviewContent(
           restoredQueuedUser.setAttribute('data-client-message-id', activeQueuedClientMessageId);
         }
         setUserMessageState(activeQueuedClientMessageId, 'running');
+        removeQueuedControls(activeQueuedClientMessageId);
         showFollowUpStatus(
           msg.payload.queueRemaining > 0
             ? 'Starting queued follow-up · ' + msg.payload.queueRemaining + ' waiting'
@@ -5700,6 +5742,9 @@ export function getWebviewContent(
 
       else if (msg.type === 'followUpStatus') {
         markAttachmentsQueued(msg.payload.attachmentIds || []);
+        if (msg.payload.kind !== 'queued' && msg.payload.kind !== 'queue-fallback') {
+          removeQueuedControls(msg.payload.clientMessageId);
+        }
         if (msg.payload.kind === 'steered') {
           setUserMessageState(msg.payload.clientMessageId, 'steered');
         } else if (msg.payload.kind === 'cancelled') {

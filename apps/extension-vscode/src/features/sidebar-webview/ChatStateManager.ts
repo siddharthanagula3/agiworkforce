@@ -258,6 +258,7 @@ export type WebviewToExtMessage =
   | { type: 'requestSlashCommands' }
   | { type: 'continueInCloud' }
   | { type: 'regenerate' }
+  | { type: 'cancelQueuedMessage'; payload: { clientMessageId: string } }
   | { type: 'openSuggestedProject'; payload: { projectId: string } }
   | { type: 'runSlashCommand'; payload: { name: string } };
 
@@ -1034,6 +1035,16 @@ export class ChatStateManager {
 
       case 'openSuggestedProject': {
         await vscode.commands.executeCommand(OPEN_PROJECT_COMMAND, msg.payload.projectId);
+        break;
+      }
+
+      case 'cancelQueuedMessage': {
+        const index = this._queuedSends.findIndex(
+          (request) => request.clientMessageId === msg.payload.clientMessageId,
+        );
+        if (index === -1) break;
+        const [request] = this._queuedSends.splice(index, 1);
+        if (request !== undefined) this._dropSend(request, 'Queued follow-up cancelled.');
         break;
       }
 
