@@ -6,19 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S5.01: Application header.
-
-- Done when: A persistent top header shows where the user is (brand/conversation title) and the primary actions for the current view.
-- Wave: 3
-- Already works on: mobile, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | The /chat header row is a div, not a <header> landmark, and the page has no h1 once a conversation has messages (WEB-092), so assistive tech cannot find it. | ui |
-| desktop | partial | Same as web: header is a plain div with no landmark or h1. | ui |
-
-Code: `apps/web/features/chat/pages/WebChatPage.tsx:5386-5400`, `apps/web/features/chat/pages/WebChatPage.tsx:5448-5460`, `apps/web/features/chat/pages/WebChatPage.tsx:5448-5465`
-
 ## S5.04: Workspace switcher.
 
 - Done when: From the shell, the user can see the active workspace and switch between personal and team workspaces.
@@ -100,19 +87,6 @@ Code: `apps/extension/src/side_panel.ts:6726-6755`, `apps/extension/src/side_pan
 
 Code: `packages/ui/ui/src/sidebar/SessionItem.tsx:140-172`, `packages/ui/ui/src/sidebar/Sidebar.tsx:1208-1210`, `apps/mobile/src/features/chat/ChatsListScreen.tsx:362-378`, `apps/mobile/src/features/chat/ChatsListScreen.tsx:337-337`
 
-## S5.17: Running-task indicator.
-
-- Done when: Navigation marks items whose task or response is still running, visually and for screen readers.
-- Wave: 3
-- Already works on: mobile, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | The running dot (with sr-only "Running") appears only in the /chat sidebar; other pages' sidebar (WebAppShell) never sets runState, so running chats look idle there. | ui |
-| desktop | partial | Same as web: running dot only in the /chat sidebar. | ui |
-
-Code: `packages/ui/ui/src/sidebar/SessionItem.tsx:143-151`, `apps/web/features/chat/pages/WebChatPage.tsx:5110-5118`
-
 ## S5.18: Needs-input indicator.
 
 - Done when: Navigation marks items that are blocked waiting for the user (approval or input).
@@ -130,17 +104,16 @@ Code: `packages/ui/unified-chat/src/components/tasks/TasksPage.tsx:726-735`, `pa
 
 - Done when: Items with new results the user has not seen are marked unread (visually and for assistive tech) and clear when opened.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Unread rows are only bolded; the state is not announced to screen readers (row accessible name omits it). | ui |
-| desktop | partial | Same as web: bold-only unread marker, not announced. | ui |
 | mobile | partial | The Chats screen can filter to Unread, but rows carry no unread marker in the list or drawer. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `packages/ui/ui/src/sidebar/SessionItem.tsx:160-166`, `packages/ui/ui/src/sidebar/SessionItem.tsx:340-349`, `apps/web/shared/components/layout/WebAppShell.tsx:76-76`, `apps/mobile/src/features/chat/ChatsListScreen.tsx:174-178`
+Code: `apps/mobile/src/features/chat/ChatsListScreen.tsx:174-178`
 
 ## S5.20: Item overflow menu.
 
