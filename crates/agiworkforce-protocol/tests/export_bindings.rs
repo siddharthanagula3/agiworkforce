@@ -178,6 +178,14 @@ fn export_typescript_bindings() {
         .expect("export developer-session plugin remove params graph");
     agiworkforce_protocol::developer_session::McpAddParams::export_all_to(dir)
         .expect("export developer-session mcp add params graph");
+    agiworkforce_protocol::developer_session::WorktreeCreateParams::export_all_to(dir)
+        .expect("export developer-session worktree create params graph");
+    agiworkforce_protocol::developer_session::WorktreeSummary::export_all_to(dir)
+        .expect("export developer-session worktree summary graph");
+    agiworkforce_protocol::developer_session::WorktreeListResponse::export_all_to(dir)
+        .expect("export developer-session worktree list graph");
+    agiworkforce_protocol::developer_session::WorktreeRemoveParams::export_all_to(dir)
+        .expect("export developer-session worktree remove params graph");
 
     // One versioned agent event envelope (W5 discipline-wave item 4), not
     // reachable from any root above (a new, independent top-level type), so

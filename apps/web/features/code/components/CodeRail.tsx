@@ -9,7 +9,6 @@ import {
   ChevronRight,
   Code,
   Code2,
-  Download,
   LibraryBig,
   MessageSquare,
   PanelLeft,
@@ -49,6 +48,7 @@ import {
   type CodeSortOption,
   type CodeStatusFilter,
 } from '../code-surface';
+import { ContinueOnDesktop } from '@/features/desktop-host';
 import styles from '../CloudCodePage.module.css';
 
 const RAIL_GLYPH_SIZE = 16;
@@ -70,7 +70,6 @@ const PRIMARY_LINKS: readonly RailLink[] = [
 const MORE_LINKS: readonly RailLink[] = [
   { href: CODE_ROUTES.routines, label: CODE_COPY.routines, glyph: CalendarClock },
   { href: CODE_ROUTES.editorExtension, label: CODE_COPY.editorExtension, glyph: Code2 },
-  { href: CODE_ROUTES.desktop, label: CODE_COPY.desktop, glyph: Download },
 ];
 
 function FilterMenu({
@@ -266,6 +265,14 @@ export function CodeRail({
               <span className={styles['railRowLabel']}>{label}</span>
             </Link>
           ))}
+          <ContinueOnDesktop
+            label={CODE_COPY.desktop}
+            fallbackHref={CODE_ROUTES.desktop}
+            glyphSize={SECTION_GLYPH_SIZE}
+            className={`${styles['railRow']} ${styles['railSubRow']}`}
+            glyphClassName={styles['railRowGlyph']}
+            labelClassName={styles['railRowLabel']}
+          />
         </div>
       )}
 

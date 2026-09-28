@@ -106,6 +106,9 @@ pub mod method {
     pub const COMMANDS_LIST: &str = "commands/list";
     pub const COMMANDS_RUN: &str = "commands/run";
     pub const MEMORY_ADD: &str = "memory/add";
+    pub const WORKTREE_CREATE: &str = "worktree/create";
+    pub const WORKTREE_LIST: &str = "worktree/list";
+    pub const WORKTREE_REMOVE: &str = "worktree/remove";
 }
 
 /// Build a canonical, ordered agent-activity notification for developer-session
@@ -2287,6 +2290,41 @@ pub struct MemoryAddParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub scope: Option<MemoryScope>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct WorktreeCreateParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub name: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct WorktreeSummary {
+    pub name: String,
+    pub path: String,
+    pub branch: String,
+    pub has_work: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct WorktreeListResponse {
+    pub worktrees: Vec<WorktreeSummary>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct WorktreeRemoveParams {
+    pub name: String,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub force: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]

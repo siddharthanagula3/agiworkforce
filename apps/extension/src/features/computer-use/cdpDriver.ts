@@ -361,11 +361,16 @@ export async function screenshot(tabId: number, signal?: AbortSignal): Promise<s
   );
 }
 
+export interface ActionPoint {
+  x: number;
+  y: number;
+}
+
 export async function click(
   tabId: number,
   target: string | { x: number; y: number } | { index: number },
   signal?: AbortSignal,
-): Promise<void> {
+): Promise<ActionPoint> {
   return withDebugger(
     tabId,
     async () => {
@@ -388,6 +393,7 @@ export async function click(
         y = target.y;
       }
       await dispatchMouseClick(tabId, x, y, signal);
+      return { x, y };
     },
     signal,
   );
@@ -435,19 +441,21 @@ export async function type(
   text: string,
   targetIndex?: number,
   signal?: AbortSignal,
-): Promise<void> {
+): Promise<ActionPoint | null> {
   return withDebugger(
     tabId,
     async () => {
+      let point: ActionPoint | null = null;
       if (targetIndex !== undefined) {
         const indexed = resolveIndexedElement(tabId, targetIndex);
         if (!indexed) {
           throw new Error(staleIndexMessage('type', targetIndex));
         }
-        const coords = await selectorToCoords(tabId, indexed.selector, signal, indexed.signature);
-        await dispatchMouseClick(tabId, coords.x, coords.y, signal);
+        point = await selectorToCoords(tabId, indexed.selector, signal, indexed.signature);
+        await dispatchMouseClick(tabId, point.x, point.y, signal);
       }
       await sendCommand(tabId, 'Input.insertText', { text }, signal);
+      return point;
     },
     signal,
   );
