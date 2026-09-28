@@ -7,3 +7,4 @@
 
 pub mod classify;
 pub mod fallback;
+pub mod profile;

@@ -12,6 +12,7 @@ const {
   getMarketplaceInstallationSettingsMock,
   updateMarketplaceInstallationSettingsMock,
   installDirectoryPluginMock,
+  installMarketplaceEntryPluginMock,
   uninstallDirectoryInstallationMock,
   recordWorkspaceAuditEventMock,
   pluginPolicyMock,
@@ -30,6 +31,7 @@ const {
   getMarketplaceInstallationSettingsMock: vi.fn(),
   updateMarketplaceInstallationSettingsMock: vi.fn(),
   installDirectoryPluginMock: vi.fn(),
+  installMarketplaceEntryPluginMock: vi.fn(),
   uninstallDirectoryInstallationMock: vi.fn(),
   recordWorkspaceAuditEventMock: vi.fn(),
 }));
@@ -51,6 +53,7 @@ vi.mock('@/lib/workspace-audit', () => ({
 }));
 vi.mock('@/lib/services/plugin-marketplace-installation-service', () => ({
   installMarketplaceEntry: installMarketplaceEntryMock,
+  installMarketplaceEntries: vi.fn(async () => new Map<string, string>()),
   listMarketplaceInstallations: listMarketplaceInstallationsMock,
   setMarketplaceInstallationEnabled: setMarketplaceInstallationEnabledMock,
   getMarketplaceInstallationSettings: getMarketplaceInstallationSettingsMock,
@@ -61,6 +64,7 @@ vi.mock('@/lib/services/plugin-marketplace-service', () => ({
   isMissingPluginMarketplaceSchema: (error: unknown) =>
     (error as { code?: string } | null)?.code === '42P01',
   getMarketplaceEntryForUser: marketplaceEntryMock,
+  getMarketplaceSourceEntry: vi.fn(async () => null),
   assertMarketplaceEntryInstallable: vi.fn(async () => undefined),
   approveMarketplaceInstallationPermissions: vi.fn(async () => []),
 }));
@@ -70,6 +74,7 @@ vi.mock('@/lib/services/connector-policy-gate', () => ({
 }));
 vi.mock('@/features/plugins/server/directory/install', () => ({
   installDirectoryPlugin: installDirectoryPluginMock,
+  installMarketplaceEntryPlugin: installMarketplaceEntryPluginMock,
   uninstallDirectoryInstallation: uninstallDirectoryInstallationMock,
 }));
 
@@ -211,12 +216,23 @@ describe('POST /api/plugins/marketplace-installations (install)', () => {
   });
 
   it('installs a registered marketplace entry and returns 201', async () => {
-    installMarketplaceEntryMock.mockResolvedValue(INSTALLATION);
+    installMarketplaceEntryPluginMock.mockResolvedValue({
+      status: 'installed',
+      installation: INSTALLATION,
+      skills: ['code-review'],
+      dependencies: [],
+    });
     const response = await POST(
       post('/api/plugins/marketplace-installations', { entryId: ENTRY_ID }),
     );
     expect(response.status).toBe(201);
     expect((await response.json()).installation).toEqual(INSTALLATION);
+    expect(installMarketplaceEntryPluginMock).toHaveBeenCalledWith(
+      expect.anything(),
+      'user-1',
+      ENTRY_ID,
+      expect.anything(),
+    );
     expect(installDirectoryPluginMock).not.toHaveBeenCalled();
     expect(recordWorkspaceAuditEventMock).toHaveBeenCalledWith(
       expect.anything(),
@@ -313,7 +329,11 @@ describe('POST /api/plugins/marketplace-installations (install)', () => {
   });
 
   it('409s when the entry is not installable', async () => {
-    installMarketplaceEntryMock.mockResolvedValue(null);
+    installMarketplaceEntryPluginMock.mockResolvedValue({
+      status: 'blocked',
+      message: 'This plugin is no longer in its marketplace.',
+      installCommand: null,
+    });
     const response = await POST(
       post('/api/plugins/marketplace-installations', { entryId: ENTRY_ID }),
     );

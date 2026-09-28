@@ -1,5 +1,5 @@
 -- =============================================================================
--- Migration 0330: one-time grants that carry a browser sign-in to the desktop app
+-- Migration 0334: one-time grants that carry a browser sign-in to the desktop app
 --
 -- Why    : the desktop app signs in through the system browser, as the Claude
 --          and ChatGPT desktop apps do, so any identity provider works,
@@ -16,14 +16,14 @@
 --          base64url SHA-256 of the app's verifier. A redemption sets
 --          consumed_at and must match the challenge before expires_at.
 --
--- Depends: 0037_rls_user_isolation (current_app_user_id, app_rls role)
+-- Depends: 0037_rls_user_isolation (profiles, current_app_user_id, app_rls role)
 -- =============================================================================
 
 begin;
 
 create table if not exists public.desktop_sign_in_grants (
   id uuid primary key default gen_random_uuid(),
-  user_id text not null,
+  user_id text not null references public.profiles(id) on delete cascade,
   code_hash text not null check (code_hash ~ '^[0-9a-f]{64}$'),
   code_challenge text not null check (code_challenge ~ '^[A-Za-z0-9_-]{43}$'),
   created_at timestamptz not null default now(),
