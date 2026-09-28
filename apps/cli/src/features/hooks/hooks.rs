@@ -1224,20 +1224,21 @@ pub async fn run_hooks(
     input: &HookInput,
 ) -> Vec<HookResult> {
     let event_name = event.to_string();
-    let hooks = match config.hooks.get(&event_name) {
-        Some(h) => h,
+    let hooks: Vec<&Hook> = match config.hooks.get(&event_name) {
+        Some(h) => h
+            .iter()
+            .filter(|hook| hook_matches(hook, &event_name, input))
+            .collect(),
         None => return Vec::new(),
     };
+    if hooks.is_empty() || !crate::cloud::workspace_policy::hooks_allowed() {
+        return Vec::new();
+    }
 
     let input_json = serde_json::to_string(input).unwrap_or_default();
     let mut results = Vec::new();
 
     for hook in hooks {
-        // Check matcher before executing
-        if !hook_matches(hook, &event_name, input) {
-            continue;
-        }
-
         let result = run_single_hook(hook, &input_json).await;
         let is_blocking = hook.blocking;
         results.push(result);
@@ -1546,6 +1547,9 @@ pub fn format_hooks_list(config: &HooksConfig) -> String {
         }
     }
     out.push_str(&format!("\n{} events configured.", config.hooks.len()));
+    if !crate::cloud::workspace_policy::feature_enabled("hooks") {
+        out.push_str("\nYour workspace administrator has turned hooks off, so none of these run.");
+    }
     out
 }
 

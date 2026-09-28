@@ -1214,6 +1214,7 @@ const TIER_POLICIES_DEFINITION: Record<ProductTier, TierPolicy> = {
     imageQuotaPerMonth: null,
     imageSyntheticTokenCost: 50_000,
     allowToolUse: 'unlimited',
+    allowDeepResearch: true,
     allowMCP: 'unlimited',
     tokenCapPerMonth: 40_000_000,
     flagshipDailyTokenCap: 50_000,

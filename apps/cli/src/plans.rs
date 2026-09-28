@@ -77,6 +77,12 @@ fn capability_label(capability: &str) -> &str {
         .unwrap_or(capability)
 }
 
+pub(crate) fn cached_plan_allows(capability: &str) -> bool {
+    tier_cache::read_tier_cache().is_some_and(|cached| {
+        plan_capabilities(&tier_cache::tier_slug(&cached.tier)).contains(&capability)
+    })
+}
+
 fn plan_capabilities(plan: &str) -> Vec<&'static str> {
     PLAN_CAPABILITY_TIERS
         .iter()

@@ -1,4 +1,10 @@
-import { ErrorCode, type ErrorCodeValue } from '@agiworkforce/types';
+import {
+  ErrorCode,
+  HTTP_STATUS_TO_ERROR_CODE,
+  errorCodeHttpStatus,
+  isRetryableErrorCode,
+  type ErrorCodeValue,
+} from '@agiworkforce/types';
 import {
   RetryStoppedError,
   classifyRetryError,
@@ -29,24 +35,48 @@ export class TimeoutError extends Error {
   }
 }
 
+const KNOWN_ERROR_CODES: ReadonlySet<string> = new Set(Object.values(ErrorCode));
+
+function errorField(error: unknown, key: string): unknown {
+  return typeof error === 'object' && error !== null
+    ? (error as Record<string, unknown>)[key]
+    : undefined;
+}
+
+function carriedStatus(error: unknown): number | null {
+  for (const key of ['status', 'statusCode']) {
+    const value = errorField(error, key);
+    if (typeof value === 'number' && Number.isInteger(value) && value >= 400 && value < 600) {
+      return value;
+    }
+  }
+  return null;
+}
+
+function errorCodeOf(error: unknown): ErrorCodeValue | null {
+  const code = errorField(error, 'code');
+  if (typeof code === 'string' && KNOWN_ERROR_CODES.has(code)) return code as ErrorCodeValue;
+  const status = carriedStatus(error);
+  if (status !== null) return HTTP_STATUS_TO_ERROR_CODE[status] ?? null;
+  if (error instanceof TimeoutError) return ErrorCode.TIMEOUT;
+  const transport = classifyRetryError(error).reason;
+  if (transport === 'connection_never_established' || transport === 'connection_lost_in_flight') {
+    return ErrorCode.NETWORK_ERROR;
+  }
+  return null;
+}
+
+function carriedRetryable(error: unknown): boolean | null {
+  const retryable = errorField(error, 'retryable');
+  return typeof retryable === 'boolean' ? retryable : null;
+}
+
 export function isRetryableError(error: unknown): boolean {
   if (error instanceof AppError) return error.retryable;
-
-  if (error instanceof Error) {
-    const message = error.message.toLowerCase();
-    return (
-      message.includes('network') ||
-      message.includes('timeout') ||
-      message.includes('rate limit') ||
-      message.includes('503') ||
-      message.includes('429') ||
-      message.includes('500') ||
-      message.includes('failed to fetch') ||
-      message.includes('econnreset') ||
-      message.includes('enotfound')
-    );
-  }
-  return false;
+  const retryable = carriedRetryable(error);
+  if (retryable !== null) return retryable;
+  const code = errorCodeOf(error);
+  return code === null ? false : isRetryableErrorCode(code);
 }
 
 export function getErrorMessage(error: unknown): string {
@@ -117,44 +147,14 @@ export function toAppError(
     return error;
   }
 
-  const message = getTechnicalErrorMessage(error);
-  const messageLower = message.toLowerCase();
-
-  let code: ErrorCodeValue = defaultCode;
-  let statusCode = 500;
-  let retryable = false;
-
-  if (messageLower.includes('network') || messageLower.includes('failed to fetch')) {
-    code = ErrorCode.NETWORK_ERROR;
-    statusCode = 0;
-    retryable = true;
-  } else if (messageLower.includes('timeout')) {
-    code = ErrorCode.TIMEOUT;
-    statusCode = 408;
-    retryable = true;
-  } else if (messageLower.includes('rate limit') || messageLower.includes('429')) {
-    code = ErrorCode.RATE_LIMIT_EXCEEDED;
-    statusCode = 429;
-    retryable = true;
-  } else if (messageLower.includes('unauthorized') || messageLower.includes('401')) {
-    code = ErrorCode.UNAUTHORIZED;
-    statusCode = 401;
-    retryable = false;
-  } else if (messageLower.includes('forbidden') || messageLower.includes('403')) {
-    code = ErrorCode.FORBIDDEN;
-    statusCode = 403;
-    retryable = false;
-  } else if (messageLower.includes('503')) {
-    code = ErrorCode.SERVICE_UNAVAILABLE;
-    statusCode = 503;
-    retryable = true;
-  } else if (messageLower.includes('500') || messageLower.includes('server error')) {
-    code = ErrorCode.INTERNAL_ERROR;
-    statusCode = 500;
-    retryable = true;
-  }
-
-  return new AppError(message, code, statusCode, retryable, getErrorMessage(error));
+  const code = errorCodeOf(error) ?? defaultCode;
+  return new AppError(
+    getTechnicalErrorMessage(error),
+    code,
+    carriedStatus(error) ?? errorCodeHttpStatus(code),
+    carriedRetryable(error) ?? isRetryableErrorCode(code),
+    getErrorMessage(error),
+  );
 }
 
 export const TimeoutPresets = {
