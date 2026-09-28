@@ -14,6 +14,7 @@ export const DYNAMIC_PAGE_ROUTES = [
   '/release-notes/[slug]',
   '/settings/[section]',
   '/share/[token]',
+  '/share/schedules/[token]',
   '/shared-artifact/[token]',
   '/upgrade/[plan]',
   '/use-cases/[slug]',
@@ -31,6 +32,7 @@ export const STATIC_SEGMENTS_BESIDE_PARAMS: Readonly<Record<string, readonly str
     'schedules',
     'study',
   ],
+  '/share': ['schedules'],
   '/settings': [
     'account',
     'archived',
