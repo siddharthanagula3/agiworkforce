@@ -735,6 +735,7 @@ export function applyClarifyCardCapability(
       hasAttachment: params.hasAttachment,
       webSearch: request.web_search === true,
       research: request.research === true,
+      agiWork: request.work_mode === 'agiwork',
     })
   ) {
     return;
