@@ -263,6 +263,11 @@ import { mountInviteCodeModal } from './features/cloud-bridge/InviteCodeModal';
 import { createExtensionCloudChatClient } from './features/cloud-bridge/conversationSyncClient';
 import { managedModelImageLimit } from './features/cloud-bridge/managedModelLimits';
 import {
+  capabilityAllowed,
+  fetchCapabilityDocument,
+  type CapabilityDocument,
+} from './features/cloud-bridge/capabilityDocument';
+import {
   CONTEXT_HANDOFF_CLI_DESTINATION,
   CONTEXT_HANDOFF_STORAGE_KEY,
   CONTEXT_HANDOFF_VSCODE_DESTINATION,
@@ -344,6 +349,9 @@ const extensionSendQueue = getExtensionSendQueue();
 
 const SP_IN_PAGE_PANEL_ENABLED_KEY = 'in_page_panel_enabled';
 const SP_SITE_ALLOWLIST_KEY = 'agi_site_allowlist';
+
+let capabilityDocument: CapabilityDocument | null = null;
+let applyCapabilityGates: () => void = () => undefined;
 
 let refreshCloudAccountUI: (forceAuthRefresh?: boolean) => Promise<void> = async () => {
   /* no-op until buildUI() initialises the real implementation */
@@ -3509,6 +3517,8 @@ function injectStyles(): void {
       box-shadow: var(--agi-ext-elevation-2);
     }
     #sp-attach-menu.open { display: block; }
+    .sp-attach-menu-item[hidden],
+    .sp-tool-btn[hidden] { display: none; }
     .sp-attach-menu-item {
       display: flex;
       align-items: center;
@@ -7171,6 +7181,7 @@ function postTurn(
       modelSelection: _ctx.selectedModel,
       quickMode: quickMode || undefined,
       ...(_ctx.workMode === 'agiwork' ? { workMode: 'agiwork' } : {}),
+      ...(capabilityAllowed(capabilityDocument, 'canUseWebSearch') ? {} : { webSearch: false }),
       ...(memoryCommand ? { memoryCommand } : {}),
       ...managedOutboundRoutingPayload(quickMode),
       ...managedTurnPersistencePayload(streamId),
@@ -7736,6 +7747,11 @@ function takeComposerDocuments(): ComposerFile[] {
 
 function acceptIncomingComposerFiles(files: File[] | FileList): void {
   composerAttachmentNotices = [];
+  if (!capabilityAllowed(capabilityDocument, 'canUploadFiles')) {
+    composerAttachmentNotices.push(t('spAttachmentUploadsOff'));
+    updateAttachmentPreview();
+    return;
+  }
   const incoming: File[] = [];
   for (const file of Array.from(files)) {
     if (!COMPOSER_ATTACHMENT_MIME_TYPES.has(file.type.toLowerCase())) {
@@ -11536,6 +11552,8 @@ function buildUI(): void {
     if (refreshGeneration !== cloudAccountRefreshGeneration) return;
     const token = authContext?.token ?? null;
     if (!token) {
+      capabilityDocument = null;
+      applyCapabilityGates();
       managedModelAccess = null;
       _ctx.selectedModel = reconcileManagedModelSelection(_ctx.selectedModel, null);
       _ctx.currentModelKey = undefined;
@@ -11565,6 +11583,7 @@ function buildUI(): void {
       return;
     }
 
+    const capabilityDocumentPromise = fetchCapabilityDocument(token).catch(() => null);
     const accountProfile = await withTimeout(accountProfilePromise, 8_000).catch(() => null);
     if (refreshGeneration !== cloudAccountRefreshGeneration) return;
     const currentAccountProfile =
@@ -11615,6 +11634,10 @@ function buildUI(): void {
     }
     if (refreshGeneration !== cloudAccountRefreshGeneration) return;
 
+    const document = await capabilityDocumentPromise;
+    if (refreshGeneration !== cloudAccountRefreshGeneration) return;
+    capabilityDocument = document;
+    applyCapabilityGates();
     managedModelAccess = access;
     signInAwaitingCompletion = false;
     if (!canUseBillingPlanCapability(access.subscriptionTier, 'agi_work')) _ctx.workMode = 'chat';
@@ -13799,6 +13822,12 @@ function buildUI(): void {
     temporaryItem,
   ];
   for (const item of attachMenuItems) attachMenu.appendChild(item);
+  applyCapabilityGates = () => {
+    micBtn.hidden = !capabilityAllowed(capabilityDocument, 'canUseVoice');
+    fileItem.hidden = !capabilityAllowed(capabilityDocument, 'canUploadFiles');
+    connectorsItem.hidden = !capabilityAllowed(capabilityDocument, 'canUseConnectors');
+  };
+  applyCapabilityGates();
   attachWrapper.appendChild(attachMenu);
   attachWrapper.appendChild(attachBtn);
   attachWrapper.appendChild(fileInput);
