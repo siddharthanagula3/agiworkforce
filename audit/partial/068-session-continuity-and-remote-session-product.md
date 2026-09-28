@@ -179,15 +179,14 @@ Code: `crates/agiworkforce-protocol/src/developer_session.rs:438-448`
 
 - Done when: The user hands control of a session from one client to another explicitly.
 - Wave: 3
-- Already works on: web, vscode
+- Already works on: web, desktop, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| desktop | partial | Only desktop-to-phone (Remote Control); no handoff to or from VS Code/CLI. | surface-only |
 | mobile | partial | Takes over steering of a desktop session; cannot hand work back or to other clients. | surface-only |
 | cli | partial | agi resume --cloud <id> explicitly pulls an account conversation from web or mobile into the CLI, but no CLI command hands a running local thread to another client. | ui |
 
-Code: `apps/desktop/electron/runtime/dispatcher.ts:874-875`, `apps/web/features/desktop-host/components/RemoteControlSection.tsx:74-77`, `apps/mobile/src/features/companion/remote-code/service.ts:41-50`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:230-230`
+Code: `apps/mobile/src/features/companion/remote-code/service.ts:41-50`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:230-230`, `apps/cli/src/lib.rs:829-835`, `apps/cli/src/app_server/developer_host.rs:1203-1206`
 
 ## S68.15: Continue cloud execution from desktop.
 
@@ -212,9 +211,9 @@ Code: `apps/web/features/code/components/CodeRail.tsx:292-292`, `apps/web/lib/e2
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | /continue-with-cloud moves the CONVERSATION to the managed cloud model with a reviewed payload; tools still run locally, and the app-server's cloud handoff record has no client that issues or accepts it. | handler |
-| vscode | partial | Continue in the Cloud reviews what moves, creates an AGI Code session on the pushed branch within CLOUD_CODE_LIMITS and runs the first turn (835ae2a5d, 23c3054ad). Session creation needs AGI_E2B_EXECUTION on in production. | flag-off |
+| vscode | partial | Continue in the Cloud now also sits in the Sessions sheet header on the Cloud tab (044fdca03). Session creation needs AGI_E2B_EXECUTION on in production. | flag-off |
 
-Code: `apps/cli/src/claude_parity.rs:169-179`, `apps/cli/src/claude_parity.rs:399-411`, `apps/extension-vscode/src/extension.ts:198-198`, `apps/extension-vscode/src/features/cloud-tasks/continueInCloud.ts:129-129`
+Code: `apps/cli/src/claude_parity.rs:169-179`, `apps/cli/src/claude_parity.rs:399-411`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:4431-4431`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:996-996`
 
 ## S68.17: Bring cloud results back to local workspace.
 

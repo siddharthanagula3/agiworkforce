@@ -298,13 +298,12 @@ Code: `apps/extension/src/side_panel.ts:10628-10628`, `apps/extension/src/featur
 
 - Done when: When a scheduled occurrence is missed or skipped, the run history says so and why.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Migration 0284 is now applied in production (2026-09-27). Still open: Skip reasons show as the run error; late-run notes never appear and runs fail until pending migration 0284 ships. | states |
 | cli | partial | Migration 0284 is now applied in production (2026-09-27). Still open: `agi schedules runs` prints skip reasons as the error; late-run notes are dropped and runs fail until pending migration 0284 ships. | states |
-| vscode | partial | patch /private/tmp/claude-501/-Users-siddhartha-Desktop-agiworkforce/8f9d3a7a-39dd-4667-8b02-4d9e6e44cf4c/scratchpad/outside-set/p-routines-voice-S63.33-vscode.patch (p-sessions owns apps/extension-vscode) | states |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/schedules/components/ScheduleRunHistory.tsx:108-108`, `apps/cli/src/schedules.rs:371-371`, `apps/cli/src/lib.rs:2209-2209`, `apps/extension-vscode/src/features/schedules/schedulePresentation.ts:134-134`
+Code: `apps/mobile/src/features/schedules/components/ScheduleRunHistory.tsx:108-108`, `apps/cli/src/schedules.rs:371-371`, `apps/cli/src/lib.rs:2209-2209`
