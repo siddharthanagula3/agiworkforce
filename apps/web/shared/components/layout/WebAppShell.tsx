@@ -74,6 +74,7 @@ import { isBillingPolicyReady } from '@shared/stores/billing-policy';
 import { useIsWorkspaceAdmin } from '@shared/hooks/use-workspace-admin';
 import { useDisabledWorkspaceFeatures } from '@shared/hooks/use-workspace-policy';
 import { useUnreadConversations } from '@shared/hooks/use-unread-conversations';
+import { AGI_WORK_MODE, useChatStore } from '@shared/stores/web-chat-store';
 import {
   getBillingPlanPricing,
   hasSelfServeUpgradePath,
@@ -255,10 +256,26 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
   const setStoreProjects = useProjectStore((s) => s.setProjects);
 
   const { isUnread, toggleUnread } = useUnreadConversations();
+  const loadingConversationIds = useChatStore((state) => state.loadingConversationIds);
+  const streamingConversationIds = useChatStore((state) => state.streamingConversationIds);
+  const workModeByConversation = useChatStore((state) => state.workModeByConversation);
+  const runningConversationIds = useMemo(
+    () => new Set([...loadingConversationIds, ...streamingConversationIds]),
+    [loadingConversationIds, streamingConversationIds],
+  );
 
   const sidebarSessions = useMemo<SidebarSession[]>(
-    () => toSidebarSessions(conversations, { isUnread }),
-    [conversations, isUnread],
+    () =>
+      toSidebarSessions(conversations, {
+        isUnread,
+        decorate: (c) => ({
+          ...(c.workMode === AGI_WORK_MODE || workModeByConversation[c.id] === AGI_WORK_MODE
+            ? { agiWork: true }
+            : {}),
+          ...(runningConversationIds.has(c.id) ? { runState: 'running' as const } : {}),
+        }),
+      }),
+    [conversations, isUnread, runningConversationIds, workModeByConversation],
   );
 
   const sidebarProjects = useMemo<SidebarProject[]>(
