@@ -80,6 +80,19 @@ async function handleImport(request: NextRequest, context: RouteContext): Promis
     );
   }
 
+  const [shared] = await db.query<{ project_id: string }>(
+    `select project_id
+       from public.organization_shared_projects
+      where project_id = $1
+      limit 1`,
+    [projectId],
+  );
+  if (shared) {
+    throw createError.conflict(
+      'Google Drive files can be added only to a project that is not shared, so each person reads Drive with their own access.',
+    );
+  }
+
   if (!isPrivateObjectStorageConfigured()) {
     throw createError.capabilityUnavailable('Project sources need cloud file storage.');
   }
