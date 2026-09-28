@@ -7,11 +7,7 @@ export type DirectoryBadgeKind = 'first-party' | 'official' | 'verified' | 'comm
 export type DirectorySortKey = 'popular' | 'installs' | 'updated' | 'name';
 
 export type DirectoryConnectableMode =
-  | 'connect'
-  | 'api-key-form'
-  | 'desktop-and-cli'
-  | 'needs-setup'
-  | 'unavailable';
+  'connect' | 'api-key-form' | 'desktop-and-cli' | 'needs-setup' | 'unavailable';
 
 export interface DirectoryToggle {
   id: string;
@@ -268,9 +264,7 @@ export interface DirectoryPluginDetail {
 }
 
 export type DirectoryDetail =
-  | DirectorySkillDetail
-  | DirectoryConnectorDetail
-  | DirectoryPluginDetail;
+  DirectorySkillDetail | DirectoryConnectorDetail | DirectoryPluginDetail;
 
 export interface DirectoryMarketplaceInput {
   repositoryUrl: string;
@@ -321,7 +315,7 @@ export interface DirectoryAdapter {
   queryEntries?: (section: DirectorySectionKey, query: DirectoryQuery) => Promise<void> | void;
   loadMore?: (section: DirectorySectionKey) => Promise<void> | void;
   loadDetail?: (section: DirectorySectionKey, id: string) => Promise<DirectoryDetail | null>;
-  install?: (section: DirectorySectionKey, id: string) => Promise<void> | void;
+  install?: (section: DirectorySectionKey, id: string) => Promise<string | void> | void;
   uninstall?: (section: DirectorySectionKey, id: string) => Promise<void> | void;
   deleteEntry?: (section: DirectorySectionKey, id: string) => Promise<void> | void;
   openSettings?: (section: DirectorySectionKey, id: string) => Promise<void> | void;

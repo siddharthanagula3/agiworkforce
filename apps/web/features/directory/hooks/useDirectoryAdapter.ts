@@ -62,6 +62,7 @@ import {
   MARKETPLACE_REMOVE_UNSENT_COPY,
   PLUGINS_FAILED_COPY,
   PLUGIN_INSTALL_FAILED_COPY,
+  pluginDependenciesInstalledLine,
   PLUGIN_UNINSTALL_FAILED_COPY,
   PLUGIN_ENABLE_FAILED_COPY,
   CREATE_PLUGIN_DONE_TITLE,
@@ -994,14 +995,15 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
   );
 
   const installPlugin = useCallback(
-    async (id: string) => {
+    async (id: string): Promise<string | undefined> => {
       const record = findPluginRecord(id);
+      const userEntry = record ? undefined : findUserEntry(id);
       const target: PluginInstallTarget = record
         ? {
             kind: record.sourceFacet === PLUGIN_SOURCE_BUILTIN ? 'builtin' : 'directory',
             pluginId: id,
           }
-        : findUserEntry(id)
+        : userEntry
           ? { kind: 'user', entryId: id }
           : { kind: 'directory', pluginId: id };
       let outcome: PluginInstallOutcome;
@@ -1022,6 +1024,11 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       invalidateSkillsCatalog();
       announceSkillCatalogChanged();
       await refreshPluginInstalls();
+      if (outcome.dependencies.length === 0) return undefined;
+      return pluginDependenciesInstalledLine(
+        record?.name ?? userEntry?.name ?? id,
+        outcome.dependencies.map((dependency) => dependency.name),
+      );
     },
     [findPluginRecord, findUserEntry, patchPluginRecord, refreshPluginInstalls],
   );
