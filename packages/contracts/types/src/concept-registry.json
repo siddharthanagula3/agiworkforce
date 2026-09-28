@@ -569,7 +569,7 @@
         {
           "id": "organization-connector-policies",
           "subject": "organization",
-          "claim": "an organization allows and blocks connectors, plugins and MCP hosts",
+          "claim": "an organization allows and blocks connectors, plugins, MCP hosts and websites",
           "kind": "table",
           "source": {
             "table": "organization_connector_policies",

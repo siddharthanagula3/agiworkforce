@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { normalizeWebDomain } from '@agiworkforce/cloud-contracts';
 import type { SearchHit, SearchSourceKind } from '@agiworkforce/data-layer/search';
 
 /**
@@ -23,27 +24,12 @@ export interface ResearchDomainPolicy {
   readonly deny: readonly string[];
 }
 
-const DOMAIN_PATTERN = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/;
-
 /**
  * A rule the policy can compare against a hostname. Accepts what a person
  * types: a bare domain, a leading dot, a `*.` wildcard, or a whole URL. Returns
  * null for anything that is not a domain, so a typo narrows nothing silently.
  */
-export function normalizeResearchDomain(raw: string): string | null {
-  let value = raw.trim().toLowerCase();
-  if (!value) return null;
-  if (value.includes('://')) {
-    try {
-      value = new URL(value).hostname;
-    } catch {
-      return null;
-    }
-  }
-  value = value.replace(/^\*\./, '').replace(/^\./, '').replace(/\/.*$/, '').replace(/:\d+$/, '');
-  if (value.startsWith('www.')) value = value.slice(4);
-  return DOMAIN_PATTERN.test(value) ? value : null;
-}
+export const normalizeResearchDomain = normalizeWebDomain;
 
 export function createResearchDomainPolicy(input: {
   allow?: readonly string[] | undefined;
@@ -88,6 +74,32 @@ export function researchDomainAllowed(
   if (policy.deny.some((rule) => matchesRule(hostname, rule))) return false;
   if (policy.allow.length === 0) return true;
   return policy.allow.some((rule) => matchesRule(hostname, rule));
+}
+
+export type NarrowedResearchDomainPolicy =
+  { ok: true; policy: ResearchDomainPolicy | null } | { ok: false; allowed: readonly string[] };
+
+export function narrowResearchDomainPolicy(
+  ceiling: ResearchDomainPolicy | null,
+  requested: ResearchDomainPolicy | null,
+): NarrowedResearchDomainPolicy {
+  if (!ceiling) return { ok: true, policy: requested };
+  if (!requested) return { ok: true, policy: ceiling };
+  const deny = Array.from(new Set([...ceiling.deny, ...requested.deny]));
+  if (ceiling.allow.length === 0 || requested.allow.length === 0) {
+    return {
+      ok: true,
+      policy: { allow: ceiling.allow.length > 0 ? ceiling.allow : requested.allow, deny },
+    };
+  }
+  const within = (rules: readonly string[], outer: readonly string[]) =>
+    rules.filter((rule) => outer.some((bound) => matchesRule(rule, bound)));
+  const allow = Array.from(
+    new Set([...within(requested.allow, ceiling.allow), ...within(ceiling.allow, requested.allow)]),
+  );
+  return allow.length > 0
+    ? { ok: true, policy: { allow, deny } }
+    : { ok: false, allowed: ceiling.allow };
 }
 
 /** The sentence the gathering directive adds so the model stops wasting searches. */

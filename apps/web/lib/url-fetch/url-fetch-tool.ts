@@ -1,4 +1,8 @@
 import { fenceUntrustedContent } from '@agiworkforce/utils/fence';
+import {
+  researchDomainAllowed,
+  type ResearchDomainPolicy,
+} from '@/app/api/llm/v1/chat/completions/lib/research-sources';
 import { resolvePromptText } from '@/lib/prompts/prompt-registry';
 import {
   createDeadline,
@@ -466,6 +470,7 @@ export interface UrlFetchOverrides {
   maxContentChars?: number;
   maxRedirects?: number;
   signal?: AbortSignal;
+  domainPolicy?: ResearchDomainPolicy | null;
 }
 
 const CANCELLED_MESSAGE = 'The request was cancelled.';
@@ -530,6 +535,10 @@ export async function executeUrlFetch(
   } catch {
     return err('invalid_tool_input', `Malformed URL: ${rawUrl}`);
   }
+  const domainPolicy = overrides.domainPolicy ?? null;
+  if (!researchDomainAllowed(domainPolicy, target.href)) {
+    return err('url_not_allowed', `${target.hostname} is outside the sites this chat may read.`);
+  }
 
   const deadline = createDeadline(timeoutMs, callerSignal);
   try {
@@ -542,6 +551,9 @@ export async function executeUrlFetch(
         'User-Agent': 'AGIWorkforce-URLFetch/1.0 (+https://agiworkforce.com)',
       },
       ...(overrides.fetchImpl ? { fetchImpl: overrides.fetchImpl } : {}),
+      ...(domainPolicy
+        ? { followRedirect: (next: URL) => researchDomainAllowed(domainPolicy, next.href) }
+        : {}),
     });
 
     if (!hop.ok) {
@@ -552,7 +564,12 @@ export async function executeUrlFetch(
       return err(REFUSAL_CODES[hop.refusal], hop.detail);
     }
     if (hop.kind !== 'response') {
-      return err('url_not_accessible', `Redirect was not followed to a page: ${hop.url.href}`);
+      return researchDomainAllowed(domainPolicy, hop.url.href)
+        ? err('url_not_accessible', `Redirect was not followed to a page: ${hop.url.href}`)
+        : err(
+            'url_not_allowed',
+            `The page redirected to ${hop.url.hostname}, which is outside the sites this chat may read.`,
+          );
     }
 
     const { response, url: current } = hop;
