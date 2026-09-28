@@ -8,7 +8,6 @@ const TOOL_APPROVAL_REQUEST_EVENT: &str = "x_tool_approval_request";
 const AGENT_EVENT: &str = "x_agent_event";
 const APPROVAL_REQUESTED: &str = "approval-requested";
 const CONNECTOR_HOST: &str = "AGI Workforce";
-const MAX_ARGUMENT_PREVIEW_CHARS: usize = 4_000;
 
 tokio::task_local! {
     static MANAGED_TOOL_APPROVAL: ManagedToolApproval;
@@ -137,7 +136,7 @@ async fn ask(callback: Option<&ApprovalCallback>, call: &PendingCall) -> bool {
             tool_name: call.name.clone(),
         },
         title.clone(),
-        vec![argument_preview(&call.args)],
+        crate::approval_details::approval_detail(&call.args),
     );
     if let Some(decision) = tools::request_approval(callback, request).await {
         return tools::approval_allows(decision);
@@ -150,17 +149,6 @@ async fn ask(callback: Option<&ApprovalCallback>, call: &PendingCall) -> bool {
         .default(false)
         .interact()
         .unwrap_or(false)
-}
-
-fn argument_preview(args: &Value) -> String {
-    let preview = serde_json::to_string_pretty(args)
-        .unwrap_or_else(|_| "<arguments unavailable>".to_string());
-    if preview.chars().count() <= MAX_ARGUMENT_PREVIEW_CHARS {
-        return preview;
-    }
-    let mut truncated: String = preview.chars().take(MAX_ARGUMENT_PREVIEW_CHARS).collect();
-    truncated.push_str("\n… truncated");
-    truncated
 }
 
 fn text_field<'a>(value: &'a Value, key: &str) -> Option<&'a str> {

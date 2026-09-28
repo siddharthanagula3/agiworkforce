@@ -12,6 +12,7 @@ import {
   formatUsageResetIn,
   getBillingPlanPricing,
   getModelMetadataById,
+  MONTHLY_METERED_UNIT_COPY,
   isBillingPlanTier,
   isContractPricedPlan,
   isFreeBillingPlanTier,
@@ -101,12 +102,6 @@ const GRANULARITY_CAPTION: Record<Granularity, string> = {
   day: 'By day',
   week: 'By week',
   month: 'By month',
-};
-
-const UNIT_COPY: Record<LimitUnit['unit'], { label: string; one: string; many: string }> = {
-  voice_minutes: { label: 'Voice', one: 'minute', many: 'minutes' },
-  video_seconds: { label: 'Video', one: 'second', many: 'seconds' },
-  computer_use_requests: { label: 'Computer use', one: 'request', many: 'requests' },
 };
 
 function formatAbsolute(value: string): string {
@@ -456,7 +451,7 @@ function CreditBalancesCard({ credits }: { credits: AccountCredits }) {
 }
 
 function AllowanceRow({ unit }: { unit: LimitUnit }) {
-  const copy = UNIT_COPY[unit.unit];
+  const copy = MONTHLY_METERED_UNIT_COPY[unit.unit];
   const limit = unit.hardLimit;
   const used = formatCount(unit.consumed, copy.one, copy.many);
   if (limit === null) {

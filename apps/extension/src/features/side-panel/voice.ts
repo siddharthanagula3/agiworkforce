@@ -7,6 +7,7 @@ import {
   activeDictationLanguage,
   languageLabel,
 } from './dictation-language';
+import { appendComposerText } from './composerText';
 
 type SpeechRecognitionCtor = new () => {
   lang: string;
@@ -175,9 +176,8 @@ export function setupVoiceInput(
     recognition.onresult = (event: { results: Array<Array<{ transcript: string }>> }) => {
       const transcript = (event.results[0]?.[0]?.transcript ?? '') as string;
       if (transcript) {
-        inputEl.value = inputEl.value ? `${inputEl.value} ${transcript}` : transcript;
+        appendComposerText(inputEl, transcript);
         autoResize(inputEl);
-        inputEl.dispatchEvent(new Event('input', { bubbles: true }));
       }
     };
 

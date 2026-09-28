@@ -61,6 +61,7 @@ export interface CloudCodeRuntime {
    * so a session needs the caller's own key or a different harness.
    */
   needsUserCredential?: boolean;
+  runsOwnAgent?: boolean;
 }
 
 export interface CloudCodeSession {
@@ -96,6 +97,38 @@ export interface CloudCodeSession {
   createdAt: string;
   updatedAt: string;
   closedAt: string | null;
+  shareVisibility?: CloudCodeShareVisibility;
+  shareAudience?: CloudCodeSharedVisibility;
+  shareToken?: string | null;
+}
+
+export const CLOUD_CODE_SHARE_VISIBILITIES = ['private', 'team', 'public'] as const;
+export type CloudCodeShareVisibility = (typeof CLOUD_CODE_SHARE_VISIBILITIES)[number];
+export type CloudCodeSharedVisibility = Exclude<CloudCodeShareVisibility, 'private'>;
+export const CLOUD_CODE_SHARE_TOKEN_PATTERN = /^[A-Za-z0-9_-]{24}$/;
+
+export function isCloudCodeShareVisibility(value: unknown): value is CloudCodeShareVisibility {
+  return (CLOUD_CODE_SHARE_VISIBILITIES as readonly unknown[]).includes(value);
+}
+
+export function cloudCodeShareVisibilityFor(
+  organizationId: string | null,
+): CloudCodeSharedVisibility {
+  return organizationId === null ? 'public' : 'team';
+}
+
+export interface CloudCodeSharedSession {
+  visibility: CloudCodeSharedVisibility;
+  title: string;
+  repositoryUrl: string | null;
+  workingBranch: string | null;
+  baseBranch: string | null;
+  pullRequestUrl: string | null;
+  pullRequestNumber: number | null;
+  createdAt: string;
+  updatedAt: string;
+  terminalEntries: CloudCodeTerminalEntry[];
+  turns: CloudCodeAgentTurnRecord[];
 }
 
 export function cloudCodeSessionIsBusy(session: Pick<CloudCodeSession, 'state'>): boolean {
@@ -236,6 +269,29 @@ export interface CloudCodeAgentTurnRecord {
   createdAt: string;
   steps: CloudCodeAgentStep[];
 }
+
+export const CLOUD_CODE_TURN_STEP_BOUNDS = [12, 24, 48] as const;
+export type CloudCodeTurnStepBound = (typeof CLOUD_CODE_TURN_STEP_BOUNDS)[number];
+export const CLOUD_CODE_DEFAULT_TURN_STEPS: CloudCodeTurnStepBound = 24;
+
+export function isCloudCodeTurnStepBound(value: unknown): value is CloudCodeTurnStepBound {
+  return (CLOUD_CODE_TURN_STEP_BOUNDS as readonly unknown[]).includes(value);
+}
+
+export const CLOUD_CODE_PAGE_ROUTE = '/code';
+
+export function cloudCodeSessionPagePath(sessionId: string): string {
+  return `${CLOUD_CODE_PAGE_ROUTE}/${encodeURIComponent(sessionId)}`;
+}
+
+export const CLOUD_CODE_SHARED_PAGE_ROUTE = `${CLOUD_CODE_PAGE_ROUTE}/shared`;
+
+export function cloudCodeSharedSessionPagePath(token: string): string {
+  return `${CLOUD_CODE_SHARED_PAGE_ROUTE}/${encodeURIComponent(token)}`;
+}
+
+export const CLOUD_CODE_GOAL_COMMANDS = ['/review', '/security-review'] as const;
+export type CloudCodeGoalCommand = (typeof CLOUD_CODE_GOAL_COMMANDS)[number];
 
 export const CLOUD_CODE_CHANGE_STATES = [
   'added',

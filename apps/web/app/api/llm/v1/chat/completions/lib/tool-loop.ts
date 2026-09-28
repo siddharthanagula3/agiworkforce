@@ -81,6 +81,7 @@ import {
   getModelMetadataById,
   isAutoModeModelId,
   isBrowserCommand,
+  isImageChatToolName,
   resolveMaxOutputTokens,
 } from '@agiworkforce/types';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
@@ -279,11 +280,7 @@ import {
   isRequiredExecutionToolChoice,
   resolveCodeExecutionRequirement,
 } from '@/lib/code-execution/required-execution';
-import {
-  extractTextContent,
-  toManagedSkillFromUserSkill,
-  type ProcessedRequest,
-} from './request-processor';
+import { extractTextContent, type ProcessedRequest } from './request-processor';
 import {
   addToolSpend,
   createObservedProviderUsage,
@@ -297,7 +294,12 @@ import {
   createThinkingTextDeltaProjector,
   toAgentEventJson,
 } from './agent-event-stream';
-import { executeSkillTool, SKILL_TOOL_NAME } from '@agiworkforce/skills';
+import {
+  executeSkillToolWithFiles,
+  SKILL_TOOL_NAME,
+  type SkillToolResult,
+  type SkillWithFileAccess,
+} from '@agiworkforce/skills';
 import {
   isParallelSafeTool,
   PLATFORM_TOOL_METADATA,
@@ -323,11 +325,18 @@ import {
 import {
   executeManagedSkillTool,
   executeManagedSkillToolForPlugins,
+  findManagedSkillWithFiles,
 } from '@/lib/services/skill-catalog-service';
 import { getSkillInstallOverrides } from '@/lib/services/skill-install-service';
 import { listEnabledPluginIds } from '@/lib/services/plugin-installation-service';
-import { findUserSkillByName } from '@/lib/services/user-skill-service';
-import { findInstalledDirectorySkill } from '@/features/plugins/server/directory/installed-skills';
+import { findUserSkillWithFiles } from '@/lib/services/user-skill-service';
+import { findInstalledDirectorySkillWithFiles } from '@/features/plugins/server/directory/installed-skills';
+import {
+  stageSkillScripts,
+  writeSandboxSeedFiles,
+  type SandboxSeedFile,
+  type SandboxSeedQueue,
+} from '@/lib/e2b/skill-staging';
 import { functionToolName } from './tool-loop-routing';
 import { invalidToolArgumentsMessage, toolArgumentProblem } from './tool-argument-validation';
 import {
@@ -347,7 +356,14 @@ import {
   isPlacesSearchTool,
 } from '@/lib/places/places-tool';
 import { isRequiredPlacesToolChoice } from '@/lib/places/required-places';
+import { executeItineraryTool, isItineraryTool } from '@/lib/places/itinerary-tool';
+import type { PlacesSearchBilling } from '@/lib/places/places-cost';
 import { executeClarifyTool, isClarifyTool } from '@/lib/services/clarify-tool-service';
+import {
+  executeProductComparisonTool,
+  isProductComparisonTool,
+} from '@/lib/services/product-comparison-tool-service';
+import { executeImageChatTool, latestTurnImage } from '@/app/api/media/image/lib/image-chat-tools';
 import { bindMcpTask, saveMcpAppPayload } from '@/lib/connectors/mcp-state-store';
 import {
   applyFreeTrialProviderBudget,
@@ -756,6 +772,8 @@ export function resolveToolRetrySafety(toolName: string): CloudAgentToolRetrySaf
   return isUrlFetchTool(toolName) ||
     isMapSearchTool(toolName) ||
     isPlacesSearchTool(toolName) ||
+    isItineraryTool(toolName) ||
+    isProductComparisonTool(toolName) ||
     isClarifyTool(toolName) ||
     toolName === SKILL_TOOL_NAME
     ? 'safe'
@@ -821,6 +839,8 @@ function canonicalToolCategory(
   if (isManagedOfficeFileTool(toolName)) return 'artifact';
   if (isMapSearchTool(toolName)) return 'web-search';
   if (isPlacesSearchTool(toolName)) return 'web-search';
+  if (isItineraryTool(toolName)) return 'other';
+  if (isProductComparisonTool(toolName)) return 'other';
   if (isClarifyTool(toolName)) return 'other';
   if (isMemoryTool(toolName)) return 'memory';
   if (isFileSearchTool(toolName)) return 'filesystem';
@@ -1842,14 +1862,28 @@ function toolErrorContent(err: unknown): string {
 }
 
 const SKILL_LOAD_ACTION = 'load';
+const SKILL_READ_ACTION = 'read';
 const EMPTY_SKILL_INSTALL_OVERRIDES: ReadonlyMap<string, boolean> = new Map();
 
-function skillLoadRequestedName(args: Record<string, unknown>): string | null {
-  return args['action'] === SKILL_LOAD_ACTION &&
+function skillRequestedName(args: Record<string, unknown>): string | null {
+  return (args['action'] === SKILL_LOAD_ACTION || args['action'] === SKILL_READ_ACTION) &&
     typeof args['name'] === 'string' &&
     args['name'].length > 0
     ? args['name']
     : null;
+}
+
+async function withSkillSandboxNote(
+  result: SkillToolResult,
+  loaded: SkillWithFileAccess | null,
+  availableTools: ReadonlySet<string>,
+  queueSandboxFiles: SandboxSeedQueue | undefined,
+): Promise<ToolLoopToolResult> {
+  const note =
+    loaded && result.code === 'skill_loaded'
+      ? await stageSkillScripts(loaded, availableTools.has(EXECUTE_CODE_TOOL), queueSandboxFiles)
+      : null;
+  return { content: note ? `${result.content}\n${note}` : result.content, isError: result.isError };
 }
 
 function readSkillInstallOverrides(userId: string): Promise<ReadonlyMap<string, boolean>> {
@@ -1867,6 +1901,36 @@ function callerScopedDb(
     userId,
     organizationId: executionContext?.organizationId ?? null,
   });
+}
+
+function placesSearchBilling(
+  executionContext:
+    | {
+        userId?: string;
+        organizationId: string | null;
+        requestId?: string;
+        planTier?: string | null;
+        turnRef?: string;
+        surface?: string | null;
+        usageAttribution?: UsageAttribution;
+        freeTrialSpend?: FreeTrialToolSpend;
+      }
+    | undefined,
+): PlacesSearchBilling | undefined {
+  const userId = executionContext?.userId;
+  const requestId = executionContext?.requestId;
+  if (!userId || !requestId) return undefined;
+  return {
+    userId,
+    organizationId: executionContext.organizationId ?? null,
+    planTier: executionContext.planTier ?? null,
+    requestId,
+    turnRef: executionContext.turnRef ?? requestId,
+    surface: executionContext.surface ?? null,
+    attribution: executionContext.usageAttribution,
+    db: callerScopedDb(executionContext, userId),
+    ...(executionContext.freeTrialSpend ? { freeTrial: executionContext.freeTrialSpend } : {}),
+  };
 }
 
 async function runMcpTool(
@@ -1888,6 +1952,7 @@ async function runMcpTool(
     onWebSearchSpend?: (spend: WebSearchSpend) => void;
     freeTrialSpend?: FreeTrialToolSpend;
     sourcePositionFor?: (url: string) => number | undefined;
+    isRetrievedSource?: (url: string) => boolean;
     clientTimeZone?: string;
     signal?: AbortSignal;
     allowInputRequired?: boolean;
@@ -1895,6 +1960,9 @@ async function runMcpTool(
     requestState?: string;
     loadSkillInstallOverrides?: () => Promise<ReadonlyMap<string, boolean>>;
     temporaryChat?: boolean;
+    queueSandboxFiles?: SandboxSeedQueue;
+    conversationId?: string | null;
+    latestAttachedImage?: () => string | null;
   },
 ): Promise<ToolLoopToolResult> {
   if (toolCall.qualifiedName === SKILL_TOOL_NAME) {
@@ -1902,33 +1970,57 @@ async function runMcpTool(
       return { content: `Unknown tool: ${SKILL_TOOL_NAME}`, isError: true };
     }
     const userId = executionContext?.userId;
-    const installOverrides = userId
-      ? await executionContext?.loadSkillInstallOverrides?.()
-      : undefined;
-    const result = userId
-      ? await executeManagedSkillToolForPlugins(
-          await listEnabledPluginIds(callerScopedDb(executionContext, userId), userId),
-          toolCall.args,
-          { availableTools, installOverrides },
-        )
-      : await executeManagedSkillTool(toolCall.args, { availableTools });
-    if (result.code === 'skill_not_found' && userId) {
-      const requestedSkillName = skillLoadRequestedName(toolCall.args);
-      const directorySkill = requestedSkillName
-        ? await findInstalledDirectorySkill(getNeonDb(), userId, requestedSkillName)
-        : null;
-      if (directorySkill) {
-        const fallback = executeSkillTool([directorySkill], toolCall.args, { availableTools });
-        return { content: fallback.content, isError: fallback.isError };
-      }
-      const userSkill = requestedSkillName
-        ? await findUserSkillByName(getNeonDb(), userId, requestedSkillName)
-        : null;
-      if (userSkill) {
-        const fallback = executeSkillTool([toManagedSkillFromUserSkill(userSkill)], toolCall.args, {
+    const queueSandboxFiles = executionContext?.queueSandboxFiles;
+    const requestedSkillName = skillRequestedName(toolCall.args);
+    const enabledPluginIds = userId
+      ? await listEnabledPluginIds(callerScopedDb(executionContext, userId), userId)
+      : null;
+    const result = enabledPluginIds
+      ? await executeManagedSkillToolForPlugins(enabledPluginIds, toolCall.args, {
           availableTools,
-        });
-        return { content: fallback.content, isError: fallback.isError };
+          installOverrides: await executionContext?.loadSkillInstallOverrides?.(),
+        })
+      : await executeManagedSkillTool(toolCall.args, { availableTools });
+    if (result.code === 'skill_loaded' && requestedSkillName) {
+      return withSkillSandboxNote(
+        result,
+        await findManagedSkillWithFiles(requestedSkillName, enabledPluginIds),
+        availableTools,
+        queueSandboxFiles,
+      );
+    }
+    if (result.code === 'skill_not_found' && userId && requestedSkillName) {
+      const directorySkill = await findInstalledDirectorySkillWithFiles(
+        getNeonDb(),
+        userId,
+        requestedSkillName,
+      );
+      if (directorySkill) {
+        return withSkillSandboxNote(
+          await executeSkillToolWithFiles(
+            [directorySkill.skill],
+            toolCall.args,
+            { availableTools },
+            directorySkill.access,
+          ),
+          directorySkill,
+          availableTools,
+          queueSandboxFiles,
+        );
+      }
+      const userSkill = await findUserSkillWithFiles(getNeonDb(), userId, requestedSkillName);
+      if (userSkill) {
+        return withSkillSandboxNote(
+          await executeSkillToolWithFiles(
+            [userSkill.skill],
+            toolCall.args,
+            { availableTools },
+            userSkill.access,
+          ),
+          userSkill,
+          availableTools,
+          queueSandboxFiles,
+        );
       }
     }
     return { content: result.content, isError: result.isError };
@@ -2034,29 +2126,12 @@ async function runMcpTool(
     if (!availableTools.has(toolCall.qualifiedName)) {
       return { content: `Unknown tool: ${toolCall.qualifiedName}`, isError: true };
     }
-    const billingUserId = executionContext?.userId;
-    const billingRequestId = executionContext?.requestId;
+    const billing = placesSearchBilling(executionContext);
     const outcome = await executePlacesSearch(toolCall.args, {
       toolCallId: toolCall.id,
       timeZone: executionContext?.clientTimeZone,
       signal: executionContext?.signal,
-      ...(billingUserId && billingRequestId
-        ? {
-            billing: {
-              userId: billingUserId,
-              organizationId: executionContext?.organizationId ?? null,
-              planTier: executionContext?.planTier ?? null,
-              requestId: billingRequestId,
-              turnRef: executionContext?.turnRef ?? billingRequestId,
-              surface: executionContext?.surface ?? null,
-              attribution: executionContext?.usageAttribution,
-              db: callerScopedDb(executionContext, billingUserId),
-              ...(executionContext?.freeTrialSpend
-                ? { freeTrial: executionContext.freeTrialSpend }
-                : {}),
-            },
-          }
-        : {}),
+      ...(billing ? { billing } : {}),
     });
     const content = formatPlacesResultForModel(outcome);
     if (!outcome.ok) {
@@ -2068,6 +2143,67 @@ async function runMcpTool(
     }
     const card = buildPlacesCard(outcome.payload, { toolCallId: toolCall.id });
     return card ? { content, isError: false, interactiveCard: card } : { content, isError: false };
+  }
+
+  if (isItineraryTool(toolCall.qualifiedName)) {
+    if (!availableTools.has(toolCall.qualifiedName)) {
+      return { content: `Unknown tool: ${toolCall.qualifiedName}`, isError: true };
+    }
+    const billing = placesSearchBilling(executionContext);
+    const outcome = await executeItineraryTool(toolCall.args, {
+      toolCallId: toolCall.id,
+      timeZone: executionContext?.clientTimeZone,
+      signal: executionContext?.signal,
+      ...(billing ? { billing } : {}),
+    });
+    return outcome.ok
+      ? { content: outcome.content, isError: false, interactiveCard: outcome.card }
+      : {
+          content: outcome.content,
+          isError: true,
+          ...(outcome.unaffordable ? { unavailable: true } : {}),
+        };
+  }
+
+  if (isProductComparisonTool(toolCall.qualifiedName)) {
+    if (!availableTools.has(toolCall.qualifiedName)) {
+      return { content: `Unknown tool: ${toolCall.qualifiedName}`, isError: true };
+    }
+    const outcome = executeProductComparisonTool(toolCall.args, {
+      toolCallId: toolCall.id,
+      isRetrievedSource: executionContext?.isRetrievedSource ?? (() => false),
+    });
+    return outcome.ok
+      ? { content: outcome.content, isError: false, interactiveCard: outcome.card }
+      : { content: outcome.content, isError: true };
+  }
+
+  if (isImageChatToolName(toolCall.qualifiedName)) {
+    if (!availableTools.has(toolCall.qualifiedName)) {
+      return { content: `Unknown tool: ${toolCall.qualifiedName}`, isError: true };
+    }
+    const userId = executionContext?.userId;
+    const requestId = executionContext?.requestId;
+    if (!userId || !requestId) {
+      return { content: 'Images cannot be made in this chat.', isError: true, unavailable: true };
+    }
+    const outcome = await executeImageChatTool(toolCall.qualifiedName, toolCall.args, {
+      toolCallId: toolCall.id,
+      requestId,
+      userId,
+      organizationId: executionContext.organizationId ?? null,
+      db: callerScopedDb(executionContext, userId),
+      surface: executionContext.surface ?? null,
+      conversationId: executionContext.conversationId ?? null,
+      latestAttachedImage: executionContext.latestAttachedImage ?? (() => null),
+    });
+    return outcome.ok
+      ? { content: outcome.content, isError: false, interactiveCard: outcome.card }
+      : {
+          content: outcome.content,
+          isError: true,
+          ...(outcome.unavailable ? { unavailable: true } : {}),
+        };
   }
 
   if (isClarifyTool(toolCall.qualifiedName)) {
@@ -2410,6 +2546,8 @@ export function isToolOffered(
     isWebSearchTool(qualifiedName) ||
     isMapSearchTool(qualifiedName) ||
     isPlacesSearchTool(qualifiedName) ||
+    isItineraryTool(qualifiedName) ||
+    isProductComparisonTool(qualifiedName) ||
     isClarifyTool(qualifiedName)
   ) {
     return availableTools.has(qualifiedName);
@@ -2986,6 +3124,10 @@ export async function executeOfferedToolCall(
             planTier: input.planTier,
             surface: input.surface,
             loadSkillInstallOverrides: () => readSkillInstallOverrides(userId),
+            queueSandboxFiles: async (files) => {
+              const { executor } = await resolveExecutor();
+              if (executor) await writeSandboxSeedFiles(executor, files, { conversationId });
+            },
             ...(input.signal ? { signal: input.signal } : {}),
           },
         );
@@ -3622,6 +3764,7 @@ export async function* runToolLoop(
   // Whether answer text has reached the reader, which decides whether a later
   // transport failure is an interruption or a model that was never reached.
   let publicTextEmitted = false;
+  const nativeSourceKeys = new Set<string>();
 
   async function* emitProviderLine(entry: CollectedProviderLine): AsyncGenerator<Uint8Array> {
     yield encoder.encode(await enrichServerSearchResultsLine(entry.line));
@@ -3648,6 +3791,7 @@ export async function* runToolLoop(
       );
     }
     for (const result of entry.serverToolResults ?? []) {
+      for (const source of result.sources) nativeSourceKeys.add(normalizeSourceUrlKey(source.url));
       const enrichedTitleSources = await enrichWebSearchResultTitles(result.sources);
       yield encoder.encode(
         eventStream.emit({
@@ -3708,6 +3852,10 @@ export async function* runToolLoop(
     sourcePositionFor(url);
     deliveredSourceKeys.add(normalizeSourceUrlKey(url));
   }
+  const isRetrievedSource = (url: string): boolean => {
+    const key = normalizeSourceUrlKey(url);
+    return deliveredSourceKeys.has(key) || nativeSourceKeys.has(key);
+  };
   const toolGovernor = createToolTurnGovernor(resolveTurnToolCallCap(agiWorkTurn));
   // Provider-native grounding is the model's own decision, so it is counted per
   // step from what the stream reports rather than from a tool call we made.
@@ -3809,6 +3957,17 @@ export async function* runToolLoop(
       );
     }
   }
+  const pendingSandboxFiles: SandboxSeedFile[] = [];
+  async function flushSandboxSeedFiles(executor: E2BExecutor): Promise<void> {
+    const files = pendingSandboxFiles.splice(0);
+    if (files.length > 0) await writeSandboxSeedFiles(executor, files, { conversationId });
+  }
+  async function queueSandboxFiles(files: readonly SandboxSeedFile[]): Promise<void> {
+    pendingSandboxFiles.push(...files);
+    if (!e2bResolution) return;
+    const { executor } = await e2bResolution;
+    if (executor) await flushSandboxSeedFiles(executor);
+  }
   async function resolveE2BExecutor(): Promise<E2BExecutorResolution> {
     executionToolRan = true;
     if (!e2bResolution) {
@@ -3818,6 +3977,7 @@ export async function* runToolLoop(
         });
         if (e2bExecutor) {
           await stageTurnAttachmentsForSandbox(e2bExecutor);
+          await flushSandboxSeedFiles(e2bExecutor);
           // After staging, never before: the baseline is what tells a generated
           // file from one that was already there, so a baseline taken first
           // would hand the user their own upload back as a new download.
@@ -4386,12 +4546,20 @@ export async function* runToolLoop(
               webSearchDomainPolicy: processed.webSearchDomainPolicy ?? null,
               surface: processed.chatSurface,
               temporaryChat: processed.conversationIsTemporary === true,
+              conversationId: processed.conversationId ?? null,
+              latestAttachedImage: () =>
+                latestTurnImage({
+                  turnAttachments: processed.turnAttachments,
+                  messages: processed.chatRequest.messages,
+                }),
               onWebSearchSpend: (spend) => {
                 searchSpend = spend;
               },
               ...(callSpend ? { freeTrialSpend: callSpend } : {}),
               sourcePositionFor,
+              isRetrievedSource,
               loadSkillInstallOverrides,
+              queueSandboxFiles,
               ...(processed.chatRequest?.client_timezone
                 ? { clientTimeZone: processed.chatRequest.client_timezone }
                 : {}),

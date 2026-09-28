@@ -10,6 +10,15 @@ const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1_000;
 
 export function DesktopUpdateNotice({ host }: { host: HostBridge }) {
   const [update, setUpdate] = useState<HostUpdateAvailability | null>(null);
+  const [readyVersion, setReadyVersion] = useState<string | null>(null);
+
+  useEffect(
+    () =>
+      host.onRuntimeEvent((event) => {
+        if (event.kind === 'update-ready') setReadyVersion(event.version);
+      }),
+    [host],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -19,9 +28,12 @@ export function DesktopUpdateNotice({ host }: { host: HostBridge }) {
       setItem(LAST_CHECK_KEY, Date.now());
       try {
         const result = await host.checkForUpdate();
-        if (
-          !cancelled &&
+        if (cancelled) return;
+        if (result.readyToInstall) {
+          setReadyVersion(result.version);
+        } else if (
           result.available &&
+          !result.installsAutomatically &&
           getItem<string | null>(DISMISSED_VERSION_KEY, null) !== result.version
         ) {
           setUpdate(result);
@@ -44,13 +56,44 @@ export function DesktopUpdateNotice({ host }: { host: HostBridge }) {
     };
   }, [host]);
 
+  if (readyVersion) {
+    return (
+      <aside
+        role="status"
+        aria-live="polite"
+        className="pointer-events-auto flex items-center gap-3 rounded-xl border border-border bg-background px-4 py-3 text-foreground shadow-lg"
+      >
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium">AGI Cloud {readyVersion} is ready</p>
+          <p className="text-xs text-muted-foreground">
+            Restart to finish updating. Your chats are saved in your account.
+          </p>
+        </div>
+        <button
+          type="button"
+          className="shrink-0 rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted"
+          onClick={() => void host.openUpdateInstaller()}
+        >
+          Restart to update
+        </button>
+        <button
+          type="button"
+          className="shrink-0 rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+          onClick={() => setReadyVersion(null)}
+        >
+          Later
+        </button>
+      </aside>
+    );
+  }
+
   if (!update) return null;
 
   return (
     <aside
       role="status"
       aria-live="polite"
-      className="fixed left-1/2 top-3 z-[var(--z-popover)] flex w-[min(92vw,560px)] -translate-x-1/2 items-center gap-3 rounded-xl border border-border bg-background px-4 py-3 text-foreground shadow-lg"
+      className="pointer-events-auto flex items-center gap-3 rounded-xl border border-border bg-background px-4 py-3 text-foreground shadow-lg"
     >
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium">AGI Cloud {update.version} is available</p>

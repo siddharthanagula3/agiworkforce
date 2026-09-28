@@ -1,7 +1,17 @@
-import { PLACES_SEARCH_TOOL_NAME } from '@agiworkforce/types';
+import {
+  EDIT_IMAGE_TOOL_NAME,
+  GENERATE_IMAGE_TOOL_NAME,
+  ITINERARY_TOOL_NAME,
+  PLACES_SEARCH_TOOL_NAME,
+  PRODUCT_COMPARISON_TOOL_NAME,
+} from '@agiworkforce/types';
 
 const TOOL_STATUS_PHRASES: [pattern: RegExp, phrase: string][] = [
   [new RegExp(`\\b${PLACES_SEARCH_TOOL_NAME}\\b`, 'i'), 'Searching for places'],
+  [new RegExp(`\\b${ITINERARY_TOOL_NAME}\\b`, 'i'), 'Planning the itinerary'],
+  [new RegExp(`\\b${PRODUCT_COMPARISON_TOOL_NAME}\\b`, 'i'), 'Comparing products'],
+  [new RegExp(`\\b${GENERATE_IMAGE_TOOL_NAME}\\b`, 'i'), 'Creating image'],
+  [new RegExp(`\\b${EDIT_IMAGE_TOOL_NAME}\\b`, 'i'), 'Editing image'],
   [/\bweb_search|search_web|browser_search|perplexity/i, 'Searching the web'],
   [/\bweb_fetch|url_fetch|fetch_url|http_request/i, 'Fetching page'],
   [/\bcode_execut|execute_code|run_code|jupyter/i, 'Running code'],

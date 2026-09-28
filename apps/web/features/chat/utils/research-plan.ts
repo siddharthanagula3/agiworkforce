@@ -1,4 +1,11 @@
-import { isResearchStep, type ResearchStep } from '@agiworkforce/types';
+import {
+  isResearchStep,
+  normalizeResearchDeliverable,
+  type ResearchRunConfig,
+  type ResearchStep,
+} from '@agiworkforce/types';
+import type { Message } from '@shared/stores/web-chat-store';
+import type { WebSearchResults } from '../types/message-metadata';
 
 export function parseResearchPlanEvent(payload: unknown): ResearchStep[] | null {
   if (!payload || typeof payload !== 'object') return null;
@@ -44,8 +51,77 @@ export function parseResearchPlanEvent(payload: unknown): ResearchStep[] | null 
   return steps.length > 0 ? steps : null;
 }
 
+const MAX_RUN_CONFIG_ENTRIES = 32;
+
+function stringList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
+    .slice(0, MAX_RUN_CONFIG_ENTRIES);
+}
+
+export function parseResearchRunConfig(payload: unknown): ResearchRunConfig | null {
+  if (!payload || typeof payload !== 'object') return null;
+  const run = (payload as { run?: unknown }).run;
+  if (!run || typeof run !== 'object') return null;
+  const wire = run as Record<string, unknown>;
+  return {
+    sources: {
+      files: wire['files'] === true,
+      allowDomains: stringList(wire['allow_domains']),
+      denyDomains: stringList(wire['deny_domains']),
+      connectors: stringList(wire['connectors']),
+    },
+    deliverable: normalizeResearchDeliverable(wire['deliverable']),
+  };
+}
+
 export function completedResearchSteps(steps: ResearchStep[] | undefined): ResearchStep[] {
-  return (steps ?? []).filter((step) => step.status === 'completed' && step.type === 'search');
+  return (steps ?? []).filter(
+    (step) => step.status === 'completed' && (step.type === 'search' || step.type === 'analyze'),
+  );
+}
+
+export function isResearchGuidanceStep(step: ResearchStep): boolean {
+  return step.type === 'analyze';
+}
+
+const MAX_CONTEXT_SOURCES = 100;
+
+function searchResultList(
+  searchResults: WebSearchResults | undefined,
+): Array<{ url: string; title?: string }> {
+  return Array.isArray(searchResults) ? searchResults : (searchResults?.results ?? []);
+}
+
+export function researchTurnHistoryContent(
+  message: Pick<Message, 'role' | 'content' | 'metadata'>,
+): string | null {
+  const research = message.metadata?.research;
+  if (message.role !== 'assistant' || !research || !message.content.trim()) return null;
+  const sources = (research.sourcesForRetry ?? searchResultList(message.metadata?.searchResults))
+    .filter((source) => source.url)
+    .slice(0, MAX_CONTEXT_SOURCES);
+  if (sources.length === 0) return null;
+  return `${message.content}\n\nSources for the numbered citations above:\n${sources
+    .map((source, index) => `[${index + 1}] ${source.title || source.url}, ${source.url}`)
+    .join('\n')}`;
+}
+
+function isAbsoluteWebUrl(url: string): boolean {
+  return /^https?:\/\//i.test(url);
+}
+
+export function researchResumeSources(
+  sourcesForRetry: Array<{ url: string; title?: string; snippet?: string }> | undefined,
+  searchResults: WebSearchResults | undefined,
+): Array<{ url: string; title?: string; snippet?: string }> {
+  const gathered =
+    sourcesForRetry ??
+    (Array.isArray(searchResults) ? searchResults : (searchResults?.results ?? [])).map(
+      (result) => ({ url: result.url, title: result.title, snippet: result.snippet }),
+    );
+  return gathered.filter((source) => isAbsoluteWebUrl(source.url));
 }
 
 /** The plan steps a paused run is offering: what pressing Start commits to. */

@@ -670,9 +670,9 @@
       "ledger": "POSTURE",
       "label": "Authentication and CSRF",
       "owner": "Security",
-      "reviewedOn": "2026-09-21",
-      "asOf": "2026-09-21",
-      "digest": "786c49188e254120",
+      "reviewedOn": "2026-09-27",
+      "asOf": "2026-09-27",
+      "digest": "ae251689205cb1a4",
       "implementation": ["apps/web/proxy.ts", "apps/web/lib/csrf.ts"],
       "proof": [
         {

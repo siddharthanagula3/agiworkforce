@@ -438,6 +438,16 @@ const userSkillExportSchema = z.object({
   updated_at: timestampSchema,
 });
 
+const userSkillFileExportSchema = z.object({
+  id: z.string(),
+  skill_id: z.string(),
+  path: z.string(),
+  content: z.string(),
+  byte_size: z.number().int().nonnegative(),
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+
 const userShortcutExportSchema = z.object({
   id: z.string(),
   title: z.string(),
@@ -623,10 +633,20 @@ const apiKeyExportSchema = z.object({
   name: z.string(),
   key_prefix: z.string(),
   scopes: z.array(z.string()),
+  project_id: z.string().nullable(),
   last_used_at: nullableTimestampSchema,
   expires_at: nullableTimestampSchema,
   revoked_at: nullableTimestampSchema,
   created_at: timestampSchema,
+});
+
+const developerProjectExportSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  monthly_credit_limit: nullableNumericSchema,
+  archived_at: nullableTimestampSchema,
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
 });
 
 const securityAuditLogExportSchema = z.object({
@@ -2336,6 +2356,19 @@ async function collectUserData(
     ledger,
   });
 
+  exportData['user_skill_files'] = await queryExportRows({
+    db,
+    sql: `select id, skill_id, path, content, byte_size, created_at, updated_at
+          from user_skill_files
+          where user_id = $1
+          order by skill_id asc, path asc`,
+    values: [user.id],
+    schema: userSkillFileExportSchema,
+    section: 'user_skill_files',
+    userId: user.id,
+    ledger,
+  });
+
   exportData['user_shortcuts'] = await queryExportRows({
     db,
     sql: `select id, title, content, sort_order, created_at, updated_at
@@ -2513,7 +2546,7 @@ async function collectUserData(
   // key itself was only ever shown once, at creation.
   exportData['api_keys'] = await queryExportRows({
     db,
-    sql: `select id, name, key_prefix, scopes, last_used_at, expires_at,
+    sql: `select id, name, key_prefix, scopes, project_id, last_used_at, expires_at,
                  revoked_at, created_at
           from api_keys
           where user_id = $1
@@ -2521,6 +2554,19 @@ async function collectUserData(
     values: [user.id],
     schema: apiKeyExportSchema,
     section: 'api_keys',
+    userId: user.id,
+    ledger,
+  });
+
+  exportData['developer_projects'] = await queryExportRows({
+    db,
+    sql: `select id, name, monthly_credit_limit, archived_at, created_at, updated_at
+          from developer_projects
+          where user_id = $1
+          order by created_at asc`,
+    values: [user.id],
+    schema: developerProjectExportSchema,
+    section: 'developer_projects',
     userId: user.id,
     ledger,
   });

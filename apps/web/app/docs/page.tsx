@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
@@ -12,6 +13,7 @@ import {
   describePlatforms,
   describeSegments,
 } from '@/lib/support/doc-metadata';
+import { readTopicParam, resolveDocTopic } from '@/lib/support/doc-topics';
 import { documentationIndex, type DocIndexEntry } from './doc-index';
 
 export const metadata = buildMetadata({
@@ -116,7 +118,14 @@ function guideRows(guides: typeof SURFACE_GUIDES | typeof REFERENCE_GUIDES) {
   }));
 }
 
-export default function DocsPage() {
+export default async function DocsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ topic?: string | string[] }>;
+}) {
+  const topic = readTopicParam((await searchParams).topic);
+  const topicPath = topic ? resolveDocTopic(topic) : null;
+  if (topicPath) redirect(topicPath);
   const { groups, documentCount, newestUpdate } = documentationIndex();
 
   return (
@@ -134,6 +143,26 @@ export default function DocsPage() {
             { href: '/api-docs', label: 'API reference', variant: 'secondary' },
           ]}
         />
+
+        {topic ? (
+          <Section id="topic" labelledBy="agi-docs-topic-title" rule>
+            <Stack gap="tight">
+              <h2 className="agi-ds-h3" id="agi-docs-topic-title">
+                {`No guide covers “${topic.replace(/-/g, ' ')}” yet.`}
+              </h2>
+              <Prose>
+                Every guide we have is listed below.{' '}
+                <Link
+                  href={`/help?q=${encodeURIComponent(topic.replace(/-/g, ' '))}`}
+                  className="agi-ds-link"
+                >
+                  Search the help centre for it
+                </Link>{' '}
+                to find the closest answer.
+              </Prose>
+            </Stack>
+          </Section>
+        ) : null}
 
         <Section id="surfaces" labelledBy="agi-docs-surfaces-title" rule>
           <Stack gap="loose">

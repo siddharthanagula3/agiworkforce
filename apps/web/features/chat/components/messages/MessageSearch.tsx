@@ -4,6 +4,7 @@ import { useRef, useEffect, useCallback, memo } from 'react';
 import { motion } from 'framer-motion';
 import { ChevronDown, ChevronUp, Search, X } from '@agiworkforce/icons';
 import { cn } from '@shared/lib/utils';
+import { FIND_MATCH_HIGHLIGHT, useTextMatchHighlight } from '../../hooks/use-text-match-highlight';
 
 export interface MessageSearchProps {
   query: string;
@@ -27,6 +28,7 @@ const MessageSearchComponent = ({
   className,
 }: MessageSearchProps) => {
   const inputRef = useRef<HTMLInputElement>(null);
+  useTextMatchHighlight(FIND_MATCH_HIGHLIGHT, query);
 
   useEffect(() => {
     const timer = setTimeout(() => {

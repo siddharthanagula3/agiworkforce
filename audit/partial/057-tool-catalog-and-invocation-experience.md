@@ -142,45 +142,38 @@ Code: `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:84-87`, `apps/w
 
 - Done when: The assistant can call a tool that edits part of an existing file (targeted replace or patch) rather than rewriting it.
 - Wave: 2
-- Already works on: cli, vscode
+- Already works on: desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | The chat sandbox edit_file tool runs only when AGI_E2B_EXECUTION=1 (default 0) with an E2B key and compute price set; until then the loop answers "not available". | flag-off |
-| desktop | partial | Device steps can only replace a whole file (device_write_file); there is no targeted edit or patch step on the Mac. | handler |
 | mobile | partial | The chat sandbox edit_file tool runs only when AGI_E2B_EXECUTION=1 (default 0) with an E2B key and compute price set; until then the loop answers "not available". | flag-off |
 | chrome | partial | The chat sandbox edit_file tool runs only when AGI_E2B_EXECUTION=1 (default 0) with an E2B key and compute price set; until then the loop answers "not available". | flag-off |
 | api | partial | Documented; edit_file still runs only when AGI_E2B_EXECUTION=1. | flag-off |
 
-Code: `apps/web/lib/e2b/execution-tools.ts:18-18`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:2009-2015`, `apps/web/lib/e2b/gate.ts:16-18`, `packages/contracts/local-runtime/src/device-steps.ts:85-90`
+Code: `apps/web/lib/e2b/execution-tools.ts:18-18`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:2009-2015`, `apps/web/lib/e2b/gate.ts:16-18`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:588-594`
 
 ## S57.13: Browser-navigation tool.
 
 - Done when: The assistant can call a tool that opens a URL in a real browser tab it controls.
 - Wave: 3
-- Already works on: cli, vscode, chrome
+- Already works on: desktop, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
-| desktop | partial | Only a manual "Use the browser" dialog in the desktop composer drives the paired Chrome; the model in desktop chat cannot call browser tools (browser_* calls are handed back only to callers that declare them, like the CLI). | handler |
 | mobile | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/desktop-host/components/BrowserToolsDialog.tsx:58-58`, `apps/desktop/electron/browser/commandGate.ts:106-112`
 
 ## S57.14: Browser-action tool.
 
 - Done when: The assistant can call tools that click, type or read in a real browser page it controls.
 - Wave: 3
-- Already works on: cli, vscode, chrome
+- Already works on: desktop, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
-| desktop | partial | Only a manual "Use the browser" dialog in the desktop composer drives the paired Chrome; the model in desktop chat cannot call browser tools (browser_* calls are handed back only to callers that declare them, like the CLI). | handler |
 | mobile | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/desktop-host/components/BrowserToolsDialog.tsx:56-56`, `apps/desktop/electron/browser/commandGate.ts:88-94`
 
 ## S57.15: Computer-action tool.
 
@@ -198,35 +191,33 @@ Code: `apps/web/features/desktop-host/components/BrowserToolsDialog.tsx:56-56`, 
 
 - Done when: The assistant can call an image-generation tool during a turn and the generated image appears in the transcript.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Images are generated when the user's message is classified as an image request or Image mode is chosen; the model cannot call image generation as a tool mid-turn or inside AGI Work. | handler |
-| desktop | partial | Images are generated when the user's message is classified as an image request or Image mode is chosen; the model cannot call image generation as a tool mid-turn or inside AGI Work. | handler |
-| mobile | partial | Images are generated when the user's message is classified as an image request or Image mode is chosen; the model cannot call image generation as a tool mid-turn or inside AGI Work. | handler |
-| cli | partial | Expose cloud::image::generate as an agent tool for Managed sessions. | handler |
+| mobile | partial | The server offers the tools to mobile, but the mobile client does not yet declare image.v1 (apps/mobile/stores/chat/chatExecutionStore.ts:1812, held by Codex) and has no image.v1 renderer. That needs a post-codex patch. | handler |
+| cli | partial | Not in this lane: exposing cloud::image::generate as an agent tool for Managed CLI sessions belongs to p-desktop-cli. | handler |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 | api | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/pages/WebChatPage.tsx:3409-3422`, `apps/web/lib/hooks/useMediaGeneration.ts:253-253`, `apps/mobile/app/(app)/chat/[id].tsx:113-113`, `apps/cli/src/cloud/image.rs:556-556`
+Code: `apps/web/app/api/media/image/lib/image-chat-tools.ts:45-45`, `apps/cli/src/cloud/image.rs:556-556`
 
 ## S57.17: Image-editing tool.
 
 - Done when: The assistant can call a tool that edits a supplied image (edit, inpaint, variation) and shows the result.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Editing (edit, mask edit) runs only from the user's own image controls; the model cannot call an image-edit tool. | handler |
-| desktop | partial | Editing (edit, mask edit) runs only from the user's own image controls; the model cannot call an image-edit tool. | handler |
-| mobile | partial | Editing (edit, mask edit) runs only from the user's own image controls; the model cannot call an image-edit tool. | handler |
+| mobile | partial | Same as S57.16 mobile: declare and render image.v1 in the mobile client after Codex releases chatExecutionStore.ts. | handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 | api | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:194-194`, `apps/web/app/api/media/image/generate/route.ts:588-596`, `apps/mobile/src/features/chat/actions/resolveMobileImageGenerationRequest.ts:239-241`
+Code: `apps/web/app/api/media/image/lib/image-chat-tools.ts:45-45`
 
 ## S57.18: Video-generation tool.
 

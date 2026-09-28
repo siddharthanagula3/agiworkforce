@@ -7,6 +7,7 @@ export type ResearchPhase =
   | 'awaiting_approval'
   | 'searching'
   | 'synthesizing'
+  | 'paused'
   | 'complete'
   | 'error'
   | 'interrupted';
@@ -16,6 +17,7 @@ export const RESEARCH_PHASES: readonly ResearchPhase[] = [
   'awaiting_approval',
   'searching',
   'synthesizing',
+  'paused',
   'complete',
   'error',
   'interrupted',
@@ -41,6 +43,7 @@ export const RESEARCH_PHASE_LABELS: Record<ResearchPhase, string> = {
   awaiting_approval: 'Review the plan to start searching',
   searching: 'Searching the web',
   synthesizing: 'Writing report',
+  paused: 'Research paused',
   complete: 'Research complete',
   error: 'Research failed',
   interrupted: 'Research stopped',
@@ -189,7 +192,12 @@ export function settleResearchRun(
   error?: string,
 ): ResearchRunState | null {
   if (!prev) return null;
-  if (prev.phase === 'complete' || prev.phase === 'interrupted' || prev.phase === 'error') {
+  if (
+    prev.phase === 'complete' ||
+    prev.phase === 'paused' ||
+    prev.phase === 'interrupted' ||
+    prev.phase === 'error'
+  ) {
     return null;
   }
   const next: ResearchRunState = { ...prev, phase, label: RESEARCH_PHASE_LABELS[phase] };
@@ -205,7 +213,9 @@ export function readResearchRunState(value: unknown): ResearchRunState | undefin
 }
 
 export function completedResearchSteps(steps: ResearchStep[] | undefined): ResearchStep[] {
-  return (steps ?? []).filter((step) => step.status === 'completed' && step.type === 'search');
+  return (steps ?? []).filter(
+    (step) => step.status === 'completed' && (step.type === 'search' || step.type === 'analyze'),
+  );
 }
 
 export function approvedResearchSteps(steps: ResearchStep[] | undefined): ResearchStep[] {
@@ -222,7 +232,9 @@ export function isResearchRunActive(research: ResearchRunState | undefined): boo
 }
 
 export function isResearchRunResumable(research: ResearchRunState | undefined): boolean {
-  return research?.phase === 'error' || research?.phase === 'interrupted';
+  return (
+    research?.phase === 'error' || research?.phase === 'interrupted' || research?.phase === 'paused'
+  );
 }
 
 export function researchResumePayload(research: ResearchRunState): {
