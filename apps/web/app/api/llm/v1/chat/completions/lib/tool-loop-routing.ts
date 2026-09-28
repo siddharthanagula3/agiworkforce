@@ -10,6 +10,7 @@ import {
   ITINERARY_TOOL_NAME,
   PLACES_SEARCH_TOOL_NAME,
   PRODUCT_COMPARISON_TOOL_NAME,
+  isImageChatToolName,
 } from '@agiworkforce/types';
 import {
   DEFAULT_TOOL_APPROVAL_POLICY,
@@ -29,6 +30,7 @@ export interface ToolLoopInputClassification {
   hasMapSearchTools: boolean;
   hasPlaceTools: boolean;
   hasProductComparisonTools: boolean;
+  hasImageTools: boolean;
   hasDeviceStepTools: boolean;
   shouldRun: boolean;
   approvalMode: ToolLoopApprovalMode;
@@ -78,6 +80,7 @@ export function classifyToolLoopInputs(
     (name) => name === PLACES_SEARCH_TOOL_NAME || name === ITINERARY_TOOL_NAME,
   );
   const hasProductComparisonTools = names.includes(PRODUCT_COMPARISON_TOOL_NAME);
+  const hasImageTools = names.some(isImageChatToolName);
   // A device step is carried out by the user's own machine while the loop is
   // suspended. Without the loop there is nothing to suspend, and the raw tool
   // call would reach the client as a call nobody runs.
@@ -93,6 +96,7 @@ export function classifyToolLoopInputs(
     hasMapSearchTools,
     hasPlaceTools,
     hasProductComparisonTools,
+    hasImageTools,
     hasDeviceStepTools,
     shouldRun:
       hasMcpTools ||
@@ -104,6 +108,7 @@ export function classifyToolLoopInputs(
       hasMapSearchTools ||
       hasPlaceTools ||
       hasProductComparisonTools ||
+      hasImageTools ||
       hasDeviceStepTools,
     approvalMode:
       hasMcpTools ||

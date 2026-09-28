@@ -219,9 +219,13 @@ describe('Chrome side-panel demo surface', () => {
 
 describe('Chrome side-panel slash commands', () => {
   it('drives the menu and the expander from one command list', () => {
-    expect(source).toContain('const SLASH_COMMANDS: Record<string, SlashCommandMeta>');
-    expect(source).toContain('const exact = SLASH_COMMANDS[trimmed]');
-    expect(source).toContain('for (const [cmd, meta] of Object.entries(SLASH_COMMANDS))');
+    const commands = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), '../src/features/side-panel/pageCommands.ts'),
+      'utf8',
+    );
+    expect(commands).toContain('export const SLASH_COMMANDS: Record<string, SlashCommandMeta>');
+    expect(commands).toContain('const exact = SLASH_COMMANDS[trimmed]');
+    expect(commands).toContain('for (const [cmd, meta] of Object.entries(SLASH_COMMANDS))');
   });
 
   it('renders an autocomplete menu that reacts to typing', () => {
@@ -256,7 +260,15 @@ describe('Chrome side-panel composer input state', () => {
       join(dirname(fileURLToPath(import.meta.url)), '../src/features/side-panel/voice.ts'),
       'utf8',
     );
-    expect(voiceSource).toContain("inputEl.dispatchEvent(new Event('input', { bubbles: true }))");
+    const composerTextSource = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), '../src/features/side-panel/composerText.ts'),
+      'utf8',
+    );
+    expect(voiceSource).toContain('appendComposerText(inputEl, transcript)');
+    expect(composerTextSource).toContain("document.execCommand('insertText', false, text)");
+    expect(composerTextSource).toContain(
+      "input.dispatchEvent(new Event('input', { bubbles: true }))",
+    );
   });
 });
 

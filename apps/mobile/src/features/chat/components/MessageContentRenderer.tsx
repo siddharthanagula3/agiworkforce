@@ -2,6 +2,8 @@ import { View, Linking, ScrollView, Alert } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { CodeBlockCopyButton } from './CodeBlockCopyButton';
 import { MathBlock } from './MathBlock';
+import { ReportChart } from './ReportChart';
+import { parseMermaidChart } from '@/src/features/chat/utils/mermaidChart';
 import { colors as defaultColors, type ColorScheme } from '@/src/ui/theme';
 import {
   classifyExternalLink,
@@ -490,6 +492,14 @@ export function renderMarkdownContent(
     } else if (match[4] !== undefined) {
       const codeContent = match[4].trim();
       const fenceLanguage = match[3]?.trim().split(/\s+/)[0];
+      const chart = fenceLanguage === 'mermaid' ? parseMermaidChart(codeContent) : null;
+      if (chart) {
+        elements.push(
+          <ReportChart key={`chart-${keyCounter++}`} chart={chart} colors={renderColors} />,
+        );
+        lastIndex = match.index + match[0].length;
+        continue;
+      }
       const languageLabel =
         fenceLanguage && fenceLanguage.length > 0 ? fenceLanguage : 'Plain text';
       const codeTokens: SyntaxToken[] = highlightCode
