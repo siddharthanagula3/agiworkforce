@@ -345,7 +345,11 @@
     "runningTools_one": "Executando {{count}} ferramenta",
     "runningTools_other": "Executando {{count}} ferramentas",
     "runningToolsOf_one": "Executando {{running}}/{{count}} ferramenta: {{name}}",
-    "runningToolsOf_other": "Executando {{running}}/{{count}} ferramentas: {{name}}"
+    "runningToolsOf_other": "Executando {{running}}/{{count}} ferramentas: {{name}}",
+    "guestDailyLimit_one": "Sem uma conta, você pode enviar {{count}} mensagem por dia.",
+    "guestDailyLimit_other": "Sem uma conta, você pode enviar {{count}} mensagens por dia.",
+    "guestMessagesLeft_one": "Resta {{count}} mensagem hoje sem uma conta.",
+    "guestMessagesLeft_other": "Restam {{count}} mensagens hoje sem uma conta."
   },
   "markdownTable": {
     "label": "Tabela",

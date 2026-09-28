@@ -371,7 +371,15 @@
     "runningToolsOf_one": "Выполняется {{running}}/{{count}}: {{name}}",
     "runningToolsOf_few": "Выполняется {{running}}/{{count}}: {{name}}",
     "runningToolsOf_many": "Выполняется {{running}}/{{count}}: {{name}}",
-    "runningToolsOf_other": "Выполняется {{running}}/{{count}}: {{name}}"
+    "runningToolsOf_other": "Выполняется {{running}}/{{count}}: {{name}}",
+    "guestDailyLimit_one": "Без аккаунта можно отправлять {{count}} сообщение в день.",
+    "guestDailyLimit_few": "Без аккаунта можно отправлять {{count}} сообщения в день.",
+    "guestDailyLimit_many": "Без аккаунта можно отправлять {{count}} сообщений в день.",
+    "guestDailyLimit_other": "Без аккаунта можно отправлять {{count}} сообщения в день.",
+    "guestMessagesLeft_one": "Без аккаунта сегодня осталось {{count}} сообщение.",
+    "guestMessagesLeft_few": "Без аккаунта сегодня осталось {{count}} сообщения.",
+    "guestMessagesLeft_many": "Без аккаунта сегодня осталось {{count}} сообщений.",
+    "guestMessagesLeft_other": "Без аккаунта сегодня осталось {{count}} сообщения."
   },
   "markdownTable": {
     "label": "Таблица",

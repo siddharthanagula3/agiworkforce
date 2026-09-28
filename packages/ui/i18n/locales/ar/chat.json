@@ -397,7 +397,19 @@
     "runningToolsOf_two": "جارٍ التشغيل {{running}}/{{count}}: {{name}}",
     "runningToolsOf_few": "جارٍ التشغيل {{running}}/{{count}}: {{name}}",
     "runningToolsOf_many": "جارٍ التشغيل {{running}}/{{count}}: {{name}}",
-    "runningToolsOf_other": "جارٍ التشغيل {{running}}/{{count}}: {{name}}"
+    "runningToolsOf_other": "جارٍ التشغيل {{running}}/{{count}}: {{name}}",
+    "guestDailyLimit_zero": "بدون حساب لا يمكنك إرسال رسائل.",
+    "guestDailyLimit_one": "بدون حساب يمكنك إرسال رسالة واحدة في اليوم.",
+    "guestDailyLimit_two": "بدون حساب يمكنك إرسال رسالتين في اليوم.",
+    "guestDailyLimit_few": "بدون حساب يمكنك إرسال {{count}} رسائل في اليوم.",
+    "guestDailyLimit_many": "بدون حساب يمكنك إرسال {{count}} رسالة في اليوم.",
+    "guestDailyLimit_other": "بدون حساب يمكنك إرسال {{count}} رسالة في اليوم.",
+    "guestMessagesLeft_zero": "لم تتبق لك رسائل اليوم بدون حساب.",
+    "guestMessagesLeft_one": "تبقت لك رسالة واحدة اليوم بدون حساب.",
+    "guestMessagesLeft_two": "تبقت لك رسالتان اليوم بدون حساب.",
+    "guestMessagesLeft_few": "تبقت لك {{count}} رسائل اليوم بدون حساب.",
+    "guestMessagesLeft_many": "تبقت لك {{count}} رسالة اليوم بدون حساب.",
+    "guestMessagesLeft_other": "تبقت لك {{count}} رسالة اليوم بدون حساب."
   },
   "markdownTable": {
     "label": "جدول",

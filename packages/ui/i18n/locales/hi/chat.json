@@ -345,7 +345,11 @@
     "runningTools_one": "{{count}} टूल चल रहा है",
     "runningTools_other": "{{count}} टूल चल रहे हैं",
     "runningToolsOf_one": "{{running}}/{{count}} टूल चल रहा है: {{name}}",
-    "runningToolsOf_other": "{{running}}/{{count}} टूल चल रहे हैं: {{name}}"
+    "runningToolsOf_other": "{{running}}/{{count}} टूल चल रहे हैं: {{name}}",
+    "guestDailyLimit_one": "खाते के बिना आप दिन में {{count}} संदेश भेज सकते हैं।",
+    "guestDailyLimit_other": "खाते के बिना आप दिन में {{count}} संदेश भेज सकते हैं।",
+    "guestMessagesLeft_one": "खाते के बिना आज {{count}} संदेश बाकी है।",
+    "guestMessagesLeft_other": "खाते के बिना आज {{count}} संदेश बाकी हैं।"
   },
   "markdownTable": {
     "label": "तालिका",
