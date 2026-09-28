@@ -47,6 +47,8 @@ const cloudModules = [
   'local-code-session-activity',
   'device-steps',
   'connectors',
+  'connector-capabilities',
+  'connector-directory',
   'capability-handshake',
   'schedules',
   'live-voice-tools',

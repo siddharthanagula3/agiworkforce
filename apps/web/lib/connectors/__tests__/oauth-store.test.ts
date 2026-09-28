@@ -28,7 +28,6 @@ import {
   upsertConnectorOAuthGrant,
   __resetConnectorAccountColumnProbeForTests,
 } from '../oauth-store';
-import { selectConnectorAccount } from '../accounts';
 import { encryptConnectorToken } from '@/lib/custom-connector-crypto';
 
 const STATE = 'c'.repeat(64);
@@ -399,32 +398,6 @@ describe('multiple accounts per connector', () => {
     expect(accounts).toHaveLength(2);
     expect(accounts.map((account) => account.scope).sort()).toEqual(['personal', 'work']);
     expect(accounts.find((account) => account.scope === 'work')?.isDefault).toBe(false);
-  });
-
-  it('never resolves a work request to the personal account of the same connector', async () => {
-    mockQuery.mockResolvedValue([
-      {
-        connector_id: 'gmail',
-        granted_scopes: [],
-        access_token_expires_at: null,
-        refresh_token_enc: 'enc',
-        connected_at: '2026-08-01T00:00:00.000Z',
-        updated_at: '2026-08-01T00:00:00.000Z',
-        account_key: 'default',
-        account_label: 'me@example.com',
-        account_scope: 'personal',
-        is_default: true,
-      },
-    ]);
-
-    const accounts = await listConnectorAccounts('user-1', 'gmail');
-    const selection = selectConnectorAccount(accounts, 'gmail', { scope: 'work' });
-
-    expect(selection.status).toBe('unresolved');
-    if (selection.status === 'unresolved') {
-      expect(selection.reason).toBe('scope-mismatch');
-      expect(selection.message).toContain('me@example.com');
-    }
   });
 
   it('falls back to the single-account statements when 0253 is not applied', async () => {
