@@ -12,7 +12,9 @@ import {
   type CloudCodeNetworkAccess,
   type CloudCodeSession,
   type CloudCodeSessionStatusFilter,
+  type CloudCodeTurnStepBound,
 } from '@agiworkforce/types';
+import { CLOUD_CODE_AGENT_TURN_BUDGET_MS } from '@/lib/services/cloud-code-turn-budget';
 
 export const CODE_ROUTES = {
   root: CLOUD_CODE_PAGE_ROUTE,
@@ -176,6 +178,10 @@ export const CODE_COPY = {
   runningSession: 'Running',
 
   modeMenu: 'Mode',
+  turnStepsMenu: 'Steps per task',
+  turnStepsUnit: 'steps',
+  turnBudgetPrefix: 'A task also stops after',
+  turnBudgetUnit: 'minutes.',
   attachMenu: 'Add to this session',
   addConnectors: 'Add connectors',
   microphoneMenu: 'Microphone',
@@ -296,6 +302,19 @@ export const CODE_GOAL_COMMAND_DESCRIPTIONS: Record<CloudCodeGoalCommand, string
   '/review': 'Review the changes in this session for bugs',
   '/security-review': 'Check the changes in this session for security problems',
 };
+
+export const CODE_TURN_STEP_HINTS: Record<CloudCodeTurnStepBound, string> = {
+  12: 'Quick fixes and questions',
+  24: 'Most tasks',
+  48: 'Larger changes. Uses more of your plan.',
+};
+
+export function turnBudgetNote(): string {
+  const minutes = Math.round(
+    CLOUD_CODE_AGENT_TURN_BUDGET_MS / (CODE_TIMING.msPerSecond * CODE_TIMING.secondsPerMinute),
+  );
+  return `${CODE_COPY.turnBudgetPrefix} ${minutes} ${CODE_COPY.turnBudgetUnit}`;
+}
 
 export const CODE_NETWORK_OPTIONS: ReadonlyArray<{
   id: CloudCodeNetworkAccess;

@@ -61,6 +61,7 @@ export interface CloudCodeRuntime {
    * so a session needs the caller's own key or a different harness.
    */
   needsUserCredential?: boolean;
+  runsOwnAgent?: boolean;
 }
 
 export interface CloudCodeSession {
@@ -235,6 +236,14 @@ export interface CloudCodeAgentTurnRecord {
   errorMessage: string | null;
   createdAt: string;
   steps: CloudCodeAgentStep[];
+}
+
+export const CLOUD_CODE_TURN_STEP_BOUNDS = [12, 24, 48] as const;
+export type CloudCodeTurnStepBound = (typeof CLOUD_CODE_TURN_STEP_BOUNDS)[number];
+export const CLOUD_CODE_DEFAULT_TURN_STEPS: CloudCodeTurnStepBound = 24;
+
+export function isCloudCodeTurnStepBound(value: unknown): value is CloudCodeTurnStepBound {
+  return (CLOUD_CODE_TURN_STEP_BOUNDS as readonly unknown[]).includes(value);
 }
 
 export const CLOUD_CODE_PAGE_ROUTE = '/code';

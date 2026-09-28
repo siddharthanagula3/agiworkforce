@@ -41,10 +41,13 @@ import {
 } from '@agiworkforce/ui';
 import {
   CLOUD_CODE_GOAL_COMMANDS,
+  CLOUD_CODE_TURN_STEP_BOUNDS,
   cloudCodeRepositoryLabel,
+  isCloudCodeTurnStepBound,
   type CloudCodeNetworkAccess,
   type CloudCodeRepositoryReference,
   type CloudCodeRuntime,
+  type CloudCodeTurnStepBound,
 } from '@agiworkforce/types';
 import Link from 'next/link';
 import { SlashCommandMenu, type CommandSuggestion } from '@agiworkforce/unified-chat';
@@ -75,6 +78,7 @@ import {
   CODE_LIMITS,
   CODE_NETWORK_OPTIONS,
   CODE_ROUTES,
+  CODE_TURN_STEP_HINTS,
   DEFAULT_CODE_ENVIRONMENT,
   DEFAULT_NETWORK_ACCESS,
   DEFAULT_RUNTIME_ID,
@@ -82,6 +86,7 @@ import {
   contextWindowLabel,
   environmentChipLabel,
   formatResetIn,
+  turnBudgetNote,
   type CodeEnvironment,
 } from '../code-surface';
 import {
@@ -1050,7 +1055,13 @@ function RepositoryChips({
   );
 }
 
-function ApprovalModeControl() {
+function ApprovalModeControl({
+  turnSteps,
+  onTurnStepsChange,
+}: {
+  turnSteps: CloudCodeTurnStepBound | null;
+  onTurnStepsChange: (value: CloudCodeTurnStepBound) => void;
+}) {
   const [policy, setPolicy] = useState<ToolApprovalPolicy | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -1122,6 +1133,31 @@ function ApprovalModeControl() {
             </DropdownMenuRadioItem>
           ))}
         </DropdownMenuRadioGroup>
+        {turnSteps !== null && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>{CODE_COPY.turnStepsMenu}</DropdownMenuLabel>
+            <DropdownMenuRadioGroup
+              value={String(turnSteps)}
+              onValueChange={(value) => {
+                const bound = Number(value);
+                if (isCloudCodeTurnStepBound(bound)) onTurnStepsChange(bound);
+              }}
+            >
+              {CLOUD_CODE_TURN_STEP_BOUNDS.map((bound) => (
+                <DropdownMenuRadioItem key={bound} value={String(bound)}>
+                  <span className={styles['menuRowLabel']}>
+                    <span className={styles['optionLabel']}>
+                      {bound} {CODE_COPY.turnStepsUnit}
+                    </span>
+                    <span className={styles['optionHint']}>{CODE_TURN_STEP_HINTS[bound]}</span>
+                  </span>
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+            <p className={styles['menuNote']}>{turnBudgetNote()}</p>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -1289,6 +1325,9 @@ export interface CodeComposerProps {
   onStop: () => void;
   contextTokens: number | null;
   contextWindow: number | null;
+  turnControls: boolean;
+  turnSteps: CloudCodeTurnStepBound;
+  onTurnStepsChange: (value: CloudCodeTurnStepBound) => void;
 }
 
 export function CodeComposer({
@@ -1311,6 +1350,9 @@ export function CodeComposer({
   onStop,
   contextTokens,
   contextWindow,
+  turnControls,
+  turnSteps,
+  onTurnStepsChange,
 }: CodeComposerProps) {
   const [focused, setFocused] = useState(false);
   const folder = local.folders.find((choice) => choice.rootId === draft.localRootId) ?? null;
@@ -1494,7 +1536,12 @@ export function CodeComposer({
               />
             ) : (
               <>
-                <ApprovalModeControl />
+                {turnControls && (
+                  <ApprovalModeControl
+                    turnSteps={cloudTurn ? turnSteps : null}
+                    onTurnStepsChange={onTurnStepsChange}
+                  />
+                )}
                 <AttachMenu />
                 <button
                   type="button"

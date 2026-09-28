@@ -29,6 +29,7 @@ import { NOTEBOOK_TEMPLATE_ID, type CloudCodeRuntime } from '@agiworkforce/types
 import { logger } from '@/lib/logger';
 import { hasServerProviderKey } from '@/lib/services/provider-adapter-service';
 import { E2B_API_KEY_ENV, e2bExecutionEnabled } from './gate';
+import { selectHarnessRunner } from './harnesses';
 
 const E2B_DOMAIN_ENV = 'E2B_DOMAIN';
 const E2B_API_URL_ENV = 'E2B_API_URL';
@@ -353,8 +354,11 @@ async function fetchTemplates(apiKey: string): Promise<CloudCodeRuntime[]> {
 function merge(teamTemplates: readonly CloudCodeRuntime[]): CloudCodeRuntime[] {
   const claimed = new Set(teamTemplates.map((runtime) => runtime.id));
   return [...CODING_HARNESSES.filter((harness) => !claimed.has(harness.id)), ...teamTemplates].map(
-    (runtime) =>
-      harnessNeedsUserCredential(runtime.id) ? { ...runtime, needsUserCredential: true } : runtime,
+    (runtime) => ({
+      ...runtime,
+      ...(harnessNeedsUserCredential(runtime.id) ? { needsUserCredential: true } : {}),
+      ...(selectHarnessRunner(runtime.id) ? { runsOwnAgent: true } : {}),
+    }),
   );
 }
 
