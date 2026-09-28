@@ -99,7 +99,7 @@ async function handleKeepTemporaryChat(request: NextRequest, context: RouteConte
 
       let parentId: string | null = null;
       for (const message of messages) {
-        const [row] = await tx.query<ChatMessageRow>(INSERT_MESSAGE_SQL, [
+        const [row]: ChatMessageRow[] = await tx.query<ChatMessageRow>(INSERT_MESSAGE_SQL, [
           message.id ?? null,
           conversationId,
           message.role,

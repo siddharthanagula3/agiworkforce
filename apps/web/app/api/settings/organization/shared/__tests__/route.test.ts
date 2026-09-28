@@ -128,7 +128,7 @@ describe('GET /api/settings/organization/shared', () => {
     const body = (await response.json()) as {
       organizationId: string;
       canManageSharing: boolean;
-      members: { userId: string }[];
+      members: { userId: string; displayName: string | null; email: string | null }[];
       sharedProjects: { projectId: string; memberGrants: { userId: string; access: string }[] }[];
       sharedConnectors: { orgShortId: string }[];
     };
