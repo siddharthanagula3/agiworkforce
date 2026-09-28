@@ -46,6 +46,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  translateUiPlural,
 } from '@agiworkforce/ui';
 import { MarkdownContent, useChatProjectStore } from '@agiworkforce/unified-chat';
 import { uploadProjectKnowledgeFile } from '@features/projects/services/project-knowledge-upload';
@@ -494,7 +495,10 @@ export function ResearchReportView({
               {report.title || 'Research report'}
             </h2>
             <p className="mt-0.5 text-caption text-muted-foreground">
-              {report.sourcesConsulted} {report.sourcesConsulted === 1 ? 'source' : 'sources'}
+              {translateUiPlural('chat', 'counts.sources', report.sourcesConsulted, {
+                one: '{{count}} source',
+                other: '{{count}} sources',
+              })}
               {typeof report.totalDurationMs === 'number' &&
                 ` · ${Math.round(report.totalDurationMs / 1000)}s`}
               {typeof report.settledCostMicrousd === 'number' &&
@@ -794,9 +798,11 @@ export function ResearchReportView({
                 className="text-xs text-muted-foreground"
                 data-testid="research-report-uncaptured-sources"
               >
-                {`This report refers to ${uncapturedSources.length} numbered ${
-                  uncapturedSources.length === 1 ? 'source' : 'sources'
-                }, but the run recorded no links for them. The references in the text above are the report's own and cannot be opened from here.`}
+                {translateUiPlural('chat', 'counts.uncapturedSources', uncapturedSources.length, {
+                  one: "This report refers to {{count}} numbered source, but the run recorded no links for them. The references in the text above are the report's own and cannot be opened from here.",
+                  other:
+                    "This report refers to {{count}} numbered sources, but the run recorded no links for them. The references in the text above are the report's own and cannot be opened from here.",
+                })}
               </p>
             </section>
           ) : null}

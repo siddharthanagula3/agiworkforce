@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { stripComments } from './lib/module-graph.mjs';
@@ -12,6 +13,7 @@ export const MIGRATIONS_DIR = 'apps/web/db/neon';
 export const SCAN_ROOT = 'apps/web';
 export const ALLOWLIST_PATH = 'scripts/config/migration-dependency-allowlist.json';
 export const APPLIED_STATE_PATH = 'scripts/config/production-migrations-applied.json';
+export const APPLIED_CHECKSUMS_PATH = 'scripts/config/applied-migration-checksums.json';
 
 const MIGRATION_FILENAME_PATTERN = /^(\d{4})_.+\.sql$/;
 
@@ -85,6 +87,27 @@ export function loadAppliedThrough({ repoRoot = REPO_ROOT } = {}) {
     throw new Error(`${APPLIED_STATE_PATH} must carry an integer appliedThrough`);
   }
   return appliedThrough;
+}
+
+export function migrationChecksum(text) {
+  return createHash('sha256').update(text, 'utf8').digest('hex');
+}
+
+export function findEditedAppliedMigrations({ repoRoot = REPO_ROOT, appliedThrough } = {}) {
+  const highWaterMark = appliedThrough ?? loadAppliedThrough({ repoRoot });
+  const recorded = JSON.parse(readFileSync(path.join(repoRoot, APPLIED_CHECKSUMS_PATH), 'utf8'));
+  const dirAbs = path.join(repoRoot, MIGRATIONS_DIR);
+  const problems = [];
+  for (const fileName of readdirSync(dirAbs).sort()) {
+    const match = MIGRATION_FILENAME_PATTERN.exec(fileName);
+    if (!match || Number(match[1]) > highWaterMark) continue;
+    const checksum = migrationChecksum(readFileSync(path.join(dirAbs, fileName), 'utf8'));
+    if (recorded[fileName] === undefined)
+      problems.push(`${fileName} is applied but has no recorded checksum`);
+    else if (recorded[fileName] !== checksum)
+      problems.push(`${fileName} changed after it was applied`);
+  }
+  return problems;
 }
 
 export function loadDraftMigrations({ repoRoot = REPO_ROOT, appliedThrough } = {}) {
@@ -262,7 +285,14 @@ function main() {
     console.error('Remove them so the allowlist stays a true picture of the repo.');
   }
 
-  if (violations.length > 0 || stale.length > 0) process.exit(1);
+  const edited = findEditedAppliedMigrations({ appliedThrough });
+  if (edited.length > 0) {
+    console.error('\nApplied migrations must never change; production already ran them:');
+    for (const problem of edited) console.error(`  ${problem}`);
+    console.error('Restore the applied text and put the change in a new migration.');
+  }
+
+  if (violations.length > 0 || stale.length > 0 || edited.length > 0) process.exit(1);
 
   console.log(
     `check-migration-dependencies: OK (applied through ${appliedThrough}, ` +

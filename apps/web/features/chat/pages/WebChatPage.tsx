@@ -23,11 +23,13 @@ import { interactiveCardNeedsResume } from '@/app/api/interactive-cards/response
 import { useChatStreamRuntime } from '../components/ChatStreamRuntimeProvider';
 import { useConversations } from '@/lib/hooks/useConversations';
 import {
+  ManagedCloudAgentRunHttpError,
   createManagedCloudAgentRunClient,
   managedCloudConversationPath,
   managedCloudMessagePath,
   type ManagedCloudChatAttachmentUploadStatus,
 } from '@agiworkforce/cloud-contracts';
+import { takeConversationSend } from '@/features/chat/lib/conversation-send-handoff';
 // GOV-19: remaining managed quota, shared with Settings > Usage.
 import {
   getWorstUsagePercent,
@@ -128,7 +130,14 @@ import {
   ChevronUp,
   EyeOff,
 } from '@agiworkforce/icons';
-import { Button, Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@agiworkforce/ui';
+import {
+  Button,
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+  TooltipProvider,
+  translateUiPlural,
+} from '@agiworkforce/ui';
 import { ShareConversationDialog } from '../components/share/ShareConversationDialog';
 import { useArtifactCloudSync } from '../hooks/use-artifact-cloud-sync';
 import { useBrowserReplyReadyPreference } from '../hooks/use-browser-reply-ready-preference';
@@ -798,7 +807,10 @@ async function keepTemporaryChat(params: {
 }
 
 function describeKeptMessages(count: number): string {
-  return count === 1 ? 'The message in this chat' : `All ${count} messages in this chat`;
+  return translateUiPlural('chat', 'counts.messagesInChat', count, {
+    one: 'The message in this chat',
+    other: 'All {{count}} messages in this chat',
+  });
 }
 
 const subscribeToMessageVariantsMode = () => () => {};
@@ -4671,10 +4683,10 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         if (discarded > 0) {
           confirmDestructive({
             title: 'Replace this message?',
-            description:
-              discarded === 1
-                ? 'The reply below it is deleted and cannot be recovered.'
-                : `The ${discarded} messages below it are deleted and cannot be recovered.`,
+            description: translateUiPlural('chat', 'counts.discardedReplies', discarded, {
+              one: 'The reply below it is deleted and cannot be recovered.',
+              other: 'The {{count}} messages below it are deleted and cannot be recovered.',
+            }),
             confirmLabel: 'Replace',
             onConfirm: () => runSubmitEdit(id, next, planned, conversationId),
           });
@@ -4851,10 +4863,10 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       if (discarded > 0) {
         confirmDestructive({
           title: 'Retry this message?',
-          description:
-            discarded === 1
-              ? 'The reply below it is deleted and cannot be recovered.'
-              : `The ${discarded} messages below it are deleted and cannot be recovered.`,
+          description: translateUiPlural('chat', 'counts.discardedReplies', discarded, {
+            one: 'The reply below it is deleted and cannot be recovered.',
+            other: 'The {{count}} messages below it are deleted and cannot be recovered.',
+          }),
           confirmLabel: 'Retry',
           onConfirm: () => void replaceTurn(),
         });
@@ -5029,6 +5041,8 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     [displayedMessages, getToken],
   );
 
+  const researchSteerIdsRef = useRef(new Map<string, string[]>());
+
   const steerResearchRun = useCallback(
     async (id: string, guidance: string): Promise<boolean> => {
       const runId = displayedMessages.find((m) => m.id === id)?.metadata?.cloudAgentRun?.runId;
@@ -5037,10 +5051,14 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         return false;
       }
       try {
-        await createManagedCloudAgentRunClient({
+        const { steer } = await createManagedCloudAgentRunClient({
           getAuthToken: getToken,
           decorateMutationHeaders: addCsrfHeaders,
         }).steerRun(runId, guidance);
+        researchSteerIdsRef.current.set(id, [
+          ...(researchSteerIdsRef.current.get(id) ?? []),
+          steer.id,
+        ]);
         return true;
       } catch (error) {
         toast.error(
@@ -5052,14 +5070,43 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     [displayedMessages, getToken],
   );
 
+  const sendResearchGuidanceAsMessage = useCallback(
+    async (id: string, guidance: string): Promise<boolean> => {
+      const runId = displayedMessages.find((m) => m.id === id)?.metadata?.cloudAgentRun?.runId;
+      const steerIds = researchSteerIdsRef.current.get(id) ?? [];
+      if (runId && steerIds.length > 0) {
+        const client = createManagedCloudAgentRunClient({
+          getAuthToken: getToken,
+          decorateMutationHeaders: addCsrfHeaders,
+        });
+        try {
+          for (const steerId of steerIds) {
+            await client.withdrawSteer(runId, steerId).catch((error: unknown) => {
+              if (error instanceof ManagedCloudAgentRunHttpError && error.status === 404) return;
+              throw error;
+            });
+          }
+        } catch (error) {
+          toast.error(toUserMessage(error, 'Your guidance was not sent. Try again.'));
+          return false;
+        }
+        researchSteerIdsRef.current.delete(id);
+      }
+      const outcome = handleSend(guidance);
+      return outcome !== false && outcome !== SEND_GUARD_BLOCKED;
+    },
+    [displayedMessages, getToken, handleSend],
+  );
+
   const handleResearchRunAction = useCallback<ResearchRunActionHandler>(
     async (id, action) => {
       if (action.kind === 'pause') return pauseResearchRun(id);
       if (action.kind === 'steer') return steerResearchRun(id, action.guidance);
+      if (action.kind === 'sendAsNew') return sendResearchGuidanceAsMessage(id, action.guidance);
       await handleRetryResearch(id, action.guidance);
       return true;
     },
-    [handleRetryResearch, pauseResearchRun, steerResearchRun],
+    [handleRetryResearch, pauseResearchRun, sendResearchGuidanceAsMessage, steerResearchRun],
   );
 
   const {
@@ -5479,6 +5526,22 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   const isEmptyChat =
     !displayedConversationId ||
     (chatMessages.length === 0 && !isLoading && !isConversationTranscriptPending);
+
+  useEffect(() => {
+    if (!urlConversationId || activeConversationId !== urlConversationId) return;
+    if (isConversationTranscriptPending || isLoading || isStreaming) return;
+    const handedOff = takeConversationSend(urlConversationId);
+    if (!handedOff) return;
+    const outcome = handleSend(handedOff);
+    if (outcome === false || outcome === SEND_GUARD_BLOCKED) setComposerPrefill(handedOff);
+  }, [
+    activeConversationId,
+    handleSend,
+    isConversationTranscriptPending,
+    isLoading,
+    isStreaming,
+    urlConversationId,
+  ]);
 
   const voiceModeActive = useVoiceModeActive();
   useEffect(() => () => releaseVoiceSessionOnPageExit(), []);

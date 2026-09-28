@@ -80,9 +80,10 @@ describe('hydrateChatAttachments', () => {
 
     await hydrateChatAttachments(messages, 'user-1');
 
-    expect(messages[0]?.content[1]).toEqual({
+    expect(messages[0]?.content[1]).toMatchObject({
       type: 'text',
       text: '[attached file: brief.pdf (application/pdf)]',
+      x_native_document: { filename: 'brief.pdf', mediaType: 'application/pdf' },
     });
     const filePart = partsOf(messages[0])[2];
     expect(filePart?.file?.filename).toBe('brief.pdf');

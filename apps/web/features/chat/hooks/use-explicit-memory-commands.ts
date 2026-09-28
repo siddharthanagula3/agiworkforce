@@ -2,7 +2,7 @@
 
 import { useCallback, type ReactElement } from 'react';
 import { toast } from 'sonner';
-import { useConfirmAction } from '@agiworkforce/ui';
+import { translateUiPlural, useConfirmAction } from '@agiworkforce/ui';
 import {
   parseManagedMemoryCommandResponse,
   type ManagedMemoryCommandRequest,
@@ -100,10 +100,20 @@ export function useExplicitMemoryCommands(): {
         return report;
       }
       confirm({
-        title: matches.length === 1 ? 'Forget this memory?' : `Forget ${matches.length} memories?`,
-        description: `${matches.map((memory) => `“${memory.content}”`).join(' ')} Chats stop using ${
-          matches.length === 1 ? 'it' : 'them'
-        }, and ${matches.length === 1 ? 'it' : 'they'} cannot be restored.`,
+        title: translateUiPlural('chat', 'counts.forgetMemoriesTitle', matches.length, {
+          one: 'Forget this memory?',
+          other: 'Forget {{count}} memories?',
+        }),
+        description: translateUiPlural(
+          'chat',
+          'counts.forgetMemoriesBody',
+          matches.length,
+          {
+            one: '{{memories}} Chats stop using it, and it cannot be restored.',
+            other: '{{memories}} Chats stop using them, and they cannot be restored.',
+          },
+          { memories: matches.map((memory) => `“${memory.content}”`).join(' ') },
+        ),
         confirmLabel: 'Forget',
         onConfirm: async () => {
           try {

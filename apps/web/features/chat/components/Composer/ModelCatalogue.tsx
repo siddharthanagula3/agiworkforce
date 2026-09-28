@@ -1,6 +1,7 @@
 'use client';
 
 import { useId, useMemo, useState } from 'react';
+import { translateUiPlural } from '@agiworkforce/ui';
 import { Check, ChevronLeft, CircleHelp, Lock, Star } from '@agiworkforce/icons';
 import {
   MODEL_PICKER_RELEASE_STAGE_LABEL,
@@ -192,7 +193,13 @@ function formatMessageCredits(credits: number): string {
   const amount = credits.toLocaleString(undefined, {
     maximumFractionDigits: credits < 10 ? 2 : 0,
   });
-  return `~${amount} ${credits === 1 ? 'credit' : 'credits'}`;
+  return translateUiPlural(
+    'chat',
+    'counts.approxCredits',
+    credits,
+    { one: '~{{amount}} credit', other: '~{{amount}} credits' },
+    { amount },
+  );
 }
 
 function messageCostLabel(entry: ModelCatalogueEntry, credits: number | null): string | null {

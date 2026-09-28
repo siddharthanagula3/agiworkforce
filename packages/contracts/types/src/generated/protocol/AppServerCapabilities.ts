@@ -46,4 +46,6 @@ export type AppServerCapabilities = {
   approvalEdits?: boolean;
   mcpTools?: boolean;
   installs?: boolean;
+  savedPermissions?: boolean;
+  mcpInspect?: boolean;
 };

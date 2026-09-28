@@ -1,3 +1,4 @@
+import { CONNECTOR_OAUTH_START_PATH } from '@agiworkforce/cloud-contracts';
 import { WEB_APP_URL } from '../api/config';
 import { OWNED_CLOUD_WINDOW_LABELS, waitForOwnedWebviewWindow } from './ownedWebviewWindow';
 import { recordOwnedWindowPresentation, resolveContentProtection } from './ownedWindowPresentation';
@@ -7,7 +8,7 @@ const CONNECTOR_POLL_INTERVAL_MS = 1_500;
 const CONNECTOR_INSTALL_TIMEOUT_MS = 10 * 60 * 1_000;
 const TRUSTED_CONNECTOR_START_PATHS = new Set([
   '/api/github/install/start',
-  '/api/connectors/oauth/start',
+  CONNECTOR_OAUTH_START_PATH,
 ]);
 const DEFAULT_CONNECTOR_WINDOW_TITLE = 'Connect GitHub to AGI';
 

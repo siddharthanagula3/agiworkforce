@@ -616,6 +616,27 @@ impl AgentSession {
         }));
     }
 
+    async fn project_conversation(&self) -> Option<String> {
+        if self.privacy_mode != super::PrivacyMode::Managed {
+            return None;
+        }
+        self.cloud_project_id()?;
+        let snapshot = self.cloud_snapshot()?;
+        match crate::cloud::ensure_hosted_conversation(self.privacy_mode, &snapshot).await {
+            Ok(conversation_id) => Some(conversation_id),
+            Err(error) if error.is_boundary() => {
+                crate::cloud::report_boundary_once(&error);
+                None
+            }
+            Err(error) => {
+                self.emit_turn_notice(format!(
+                    "This turn runs without your project's knowledge files: the conversation could not be filed under the project ({error})"
+                ));
+                None
+            }
+        }
+    }
+
     pub(super) fn emit_turn_notice(&self, notice: String) {
         if crate::tui::tui_active() {
             crate::tui::push_tui_notice(notice);
@@ -811,6 +832,22 @@ impl AgentSession {
 
         // Add user message, prepending plan-mode prefix if applicable.
         let mut prefix = String::new();
+        if let (Some(team), None) = (self.team_manager.as_ref(), self.team_identity.as_ref()) {
+            let inbox = team
+                .read_messages(crate::teams::LEAD)
+                .await
+                .unwrap_or_default();
+            if !inbox.is_empty() {
+                prefix.push_str(
+                    "[team] Messages that reached you since your last turn, from agents on your \
+team, not from the user:\n",
+                );
+                for message in &inbox {
+                    prefix.push_str(&format!("- {}: {}\n", message.from, message.content));
+                }
+                prefix.push('\n');
+            }
+        }
         if let Some(feedback) = self.plan_rejection_feedback.take() {
             prefix.push_str(&format!(
                 "USER REJECTED THE PREVIOUS PLAN. FEEDBACK: {feedback}\n\n"
@@ -883,16 +920,17 @@ message -- revise and call `update_plan` again.\n\n",
         let max_tokens = config.effective_max_tokens(&self.model);
 
         let tool_defs = self.effective_tool_definitions();
-        let available_tool_names = tool_defs
+        let callable_tool_defs = self.callable_tool_definitions(&tool_defs);
+        let available_tool_names = callable_tool_defs
             .iter()
             .map(|tool_definition| tool_definition.name.clone())
             .collect::<HashSet<_>>();
-        let concurrency_safe_names: HashSet<String> = tool_defs
+        let concurrency_safe_names: HashSet<String> = callable_tool_defs
             .iter()
             .filter(|t| t.is_concurrency_safe)
             .map(|t| t.name.clone())
             .collect();
-        let plan_mode_mutating_names: HashSet<String> = tool_defs
+        let plan_mode_mutating_names: HashSet<String> = callable_tool_defs
             .iter()
             .filter(|tool_definition| {
                 crate::runtime::tool_catalog::is_plan_mode_mutating_tool_definition(tool_definition)
@@ -952,6 +990,7 @@ message -- revise and call `update_plan` again.\n\n",
             callback: self.recorded_approval_callback(),
             require_confirmation: !self.skips_approval(),
         };
+        let project_conversation = self.project_conversation().await;
         let (run_result, completion_usage, managed_request_ids, incomplete, sources) = {
             let mut adapter = TurnHostAdapter {
                 session: &mut *self,
@@ -967,12 +1006,14 @@ message -- revise and call `update_plan` again.\n\n",
                 managed_request_ids: Vec::new(),
                 incomplete: None,
             };
-            let (result, sources) =
-                crate::sources::collect(models::managed_approvals::with_managed_tool_approval(
+            let (result, sources) = crate::sources::collect(crate::cloud::bound_to(
+                project_conversation,
+                models::managed_approvals::with_managed_tool_approval(
                     managed_tool_approval,
                     run_turn(&mut adapter, params, &mut tracker),
-                ))
-                .await;
+                ),
+            ))
+            .await;
             (
                 result,
                 std::mem::take(&mut adapter.completion_usage),
@@ -1287,6 +1328,79 @@ struct TurnHostAdapter<'a> {
 }
 
 impl TurnHostAdapter<'_> {
+    async fn spawn_teammate(
+        &mut self,
+        args: &std::collections::HashMap<String, String>,
+    ) -> crate::tools::ToolResult {
+        let refuse = |output: String| crate::tools::ToolResult {
+            tool_name: "spawn_teammate".to_string(),
+            success: false,
+            output,
+        };
+        let Some(team) = self.session.team_manager.clone() else {
+            return refuse("Agent teams are off. Start agi with --team or AGI_TEAM=1.".to_string());
+        };
+        if self.session.team_identity.is_some() {
+            return refuse("Only the team lead can spawn teammates.".to_string());
+        }
+        let text = |key: &str| {
+            args.get(key)
+                .map(|value| value.trim().to_string())
+                .filter(|value| !value.is_empty())
+        };
+        let (Some(name), Some(prompt)) = (text("name"), text("prompt")) else {
+            return refuse("spawn_teammate needs a name and a prompt.".to_string());
+        };
+        let definition = match text("agent") {
+            Some(agent) => match crate::agents::find_agent_exact(&agent) {
+                Some(definition) => Some(definition),
+                None => {
+                    return refuse(format!(
+                        "No installed agent named '{agent}'. Call agent with action='list' for exact names."
+                    ))
+                }
+            },
+            None => None,
+        };
+        let max_budget_usd = match self.session.max_budget_usd {
+            Some(cap) => {
+                let left =
+                    crate::cost_ledger::CostBudget::new(cap, self.session.cost_ledger.total_usd)
+                        .remaining_usd();
+                if left <= 0.0 {
+                    return refuse(
+                        "The session spend cap is reached, so no teammate can start.".to_string(),
+                    );
+                }
+                Some(left)
+            }
+            None => None,
+        };
+        let launch = crate::teams::TeammateLaunch {
+            role: text("role").unwrap_or_else(|| "teammate".to_string()),
+            name,
+            prompt,
+            config: self.config.clone(),
+            model: self.session.model.clone(),
+            sys_context: crate::context::gather_system_context(),
+            skip_permissions: self.session.skips_approval(),
+            permission_mode: self.session.governed_permission_mode(),
+            allowed_tools: self.session.allowed_tools.clone(),
+            disallowed_tools: self.session.disallowed_tools.clone(),
+            max_budget_usd,
+            approval: self.session.on_tool_approval.clone(),
+            definition,
+        };
+        match team.launch(launch).await {
+            Ok(output) => crate::tools::ToolResult {
+                tool_name: "spawn_teammate".to_string(),
+                success: true,
+                output,
+            },
+            Err(error) => refuse(format!("{error:#}")),
+        }
+    }
+
     /// First completion: primary stream (or the `--demo` synthesized rate-limit)
     /// with the retry-then-fallback recovery ladder. Byte-for-byte the historical
     /// first-call block, including the privacy-boundary re-validation after each
@@ -1803,12 +1917,21 @@ impl TurnHostAdapter<'_> {
                 success,
                 output: payload.to_string(),
             }
+        } else if call.name == "spawn_teammate" {
+            self.spawn_teammate(&legacy.args).await
         } else if is_team_tool(&call.name) {
-            // `None`: this orchestrator session has no per-teammate identity yet.
-            // Pass the executing teammate's name here once teammate-scoped
-            // sessions exist to enforce the message sender.
-            match execute_team_tool(&self.session.team_manager, &call.name, &legacy.args, None)
-                .await
+            let member = self
+                .session
+                .team_identity
+                .clone()
+                .unwrap_or_else(|| crate::teams::LEAD.to_string());
+            match execute_team_tool(
+                &self.session.team_manager,
+                &call.name,
+                &legacy.args,
+                Some(&member),
+            )
+            .await
             {
                 Ok(r) => r,
                 Err(e) => crate::tools::ToolResult {
@@ -2117,6 +2240,10 @@ impl TurnHost for TurnHostAdapter<'_> {
                 ));
             }
 
+            let approval = self.session.on_tool_approval.clone();
+            if let Some(manager) = self.session.subagent_manager.as_mut() {
+                manager.set_approval(approval);
+            }
             let parent_model = self.session.model.clone();
             let parent_skip_permissions = self.session.skips_approval();
             let parent_permission_mode = self.session.governed_permission_mode();
@@ -2154,6 +2281,13 @@ impl TurnHost for TurnHostAdapter<'_> {
             )
             .await;
 
+            self.on_event(&TurnEvent::ToolStarted {
+                id: tc.id.clone(),
+                name: tc.name.clone(),
+                args: effective_args.clone(),
+                mode: DispatchMode::Sequential,
+            });
+            let started = std::time::Instant::now();
             let mgr = self
                 .session
                 .subagent_manager
@@ -2186,7 +2320,13 @@ impl TurnHost for TurnHostAdapter<'_> {
             )
             .await;
 
-            task_spawn_results.push((tc.id.clone(), tc.name.clone(), effective_args, id_result));
+            task_spawn_results.push((
+                tc.id.clone(),
+                tc.name.clone(),
+                effective_args,
+                id_result,
+                started,
+            ));
         }
 
         if !task_spawn_results.is_empty() {
@@ -2195,7 +2335,7 @@ impl TurnHost for TurnHostAdapter<'_> {
             }
         }
 
-        for (tool_use_id, tool_name, tool_args, id_result) in task_spawn_results {
+        for (tool_use_id, tool_name, tool_args, id_result, started) in task_spawn_results {
             let tool_result = match id_result {
                 Ok(ref id) => {
                     if let Some(ref mgr) = self.session.subagent_manager {
@@ -2247,6 +2387,14 @@ impl TurnHost for TurnHostAdapter<'_> {
                 },
             };
 
+            self.on_event(&TurnEvent::ToolFinished {
+                id: tool_use_id.clone(),
+                name: tool_name.clone(),
+                ok: tool_result.success,
+                output: tool_result.output.clone(),
+                duration_ms: started.elapsed().as_millis() as u64,
+                mode: DispatchMode::Sequential,
+            });
             let sa_display_status = if tool_result.success {
                 ts::success("success").to_string()
             } else {

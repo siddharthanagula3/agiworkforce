@@ -43,6 +43,7 @@ vi.mock('./cloud-agent-workflow-stream', () => ({
   projectCloudAgentWorkflowChunk: mocks.projectChunk,
 }));
 vi.mock('@/lib/services/cloud-agent-run-service', () => ({
+  APPROVAL_CHECKPOINT_TTL_HOURS: 24,
   appendCloudAgentEvent: mocks.appendEvent,
   appendCloudAgentEvents: vi.fn(),
   getCloudAgentRun: mocks.getRun,
@@ -181,7 +182,12 @@ describe('a durable turn whose reader has gone', () => {
 
     await failCloudAgentWorkflow(makeInput(), new Error('the model took too long'));
 
-    expect(mocks.settle).toHaveBeenCalledWith(expect.anything(), 'failed');
+    expect(mocks.settle).toHaveBeenCalledWith(
+      expect.anything(),
+      'failed',
+      undefined,
+      expect.any(String),
+    );
   });
 
   it('journals every event even though the stream took none of them', async () => {
