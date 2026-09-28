@@ -1,3 +1,4 @@
+import { SSE_DONE_DATA, readServerSentEvents } from '@agiworkforce/client-runtime';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import {
   GUEST_CHAT_ERROR_CODES,
@@ -52,14 +53,6 @@ async function refusalFrom(response: Response): Promise<GuestChatRefusal> {
   return new GuestChatRefusal(GUEST_SEND_FAILED, null);
 }
 
-function frameData(frame: string): string {
-  return frame
-    .split('\n')
-    .filter((line) => line.startsWith('data:'))
-    .map((line) => line.slice(5).trimStart())
-    .join('\n');
-}
-
 function readChunk(data: string): { text: string; failure: string | null } {
   try {
     const chunk = JSON.parse(data) as {
@@ -96,26 +89,15 @@ export async function sendGuestTurn(
   });
   if (!response.ok || !response.body) throw await refusalFrom(response);
 
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
   let raw = '';
   let failure: string | null = null;
-  for (;;) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const frames = buffer.split('\n\n');
-    buffer = frames.pop() ?? '';
-    for (const frame of frames) {
-      const data = frameData(frame);
-      if (!data || data === '[DONE]') continue;
-      const chunk = readChunk(data);
-      if (chunk.failure) failure = chunk.failure;
-      if (chunk.text) {
-        raw += chunk.text;
-        onText(visibleText(raw));
-      }
+  for await (const event of readServerSentEvents(response.body)) {
+    if (event.data === SSE_DONE_DATA) continue;
+    const chunk = readChunk(event.data);
+    if (chunk.failure) failure = chunk.failure;
+    if (chunk.text) {
+      raw += chunk.text;
+      onText(visibleText(raw));
     }
   }
   return { content: visibleText(raw), failure, remaining: remainingFrom(response.headers) };

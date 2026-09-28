@@ -68,10 +68,14 @@ import {
   deleteConversation,
   persistConversationSeed,
   upsertConversation,
+  updateConversationEntry,
   startNewConversation,
   BROWSER_STORE_KEY,
   type ConversationEntry,
+  type ConversationEntryChanges,
 } from './features/background/conversation-history';
+import { wirePopupMenu } from './features/side-panel/menu';
+import { createChromeShareLink } from './features/cloud-bridge/shareClient';
 import {
   assignConversationOwner,
   claimConversationOwner,
@@ -195,6 +199,7 @@ import {
   Check,
   Plug,
   CircleHelp,
+  Ellipsis,
   renderIcon,
 } from './assets/icons';
 import {
@@ -227,6 +232,11 @@ import {
   type ArtifactsDrawerAPI,
 } from './features/side-panel/artifactsDrawer';
 import {
+  buildCommandPalette,
+  COMMAND_PALETTE_CSS,
+  type PaletteCommand,
+} from './features/side-panel/commandPalette';
+import {
   beginPairing,
   loadPairingState,
   storeBridgeSecret,
@@ -239,6 +249,7 @@ import {
   fetchAccountMemoryConflicts,
   fetchActiveMemoryWorkspace,
   fetchMemoryExclusions,
+  fetchMemoryPreferences,
   isAccountMemory,
   MEMORY_COMMAND_HINT,
   MEMORY_EXCLUSION_MAX_CHARS,
@@ -248,8 +259,10 @@ import {
   restoreAccountMemory,
   runAccountMemoryCommand,
   saveMemoryExclusions,
+  saveMemoryPreferences,
   type AccountMemory,
   type AccountMemoryConflict,
+  type MemoryPreferences,
   type MemoryCommandKind,
   type MemoryCommandRequest,
   type MemoryCommandResult,
@@ -257,6 +270,12 @@ import {
 import { mountInviteCodeModal } from './features/cloud-bridge/InviteCodeModal';
 import { createExtensionCloudChatClient } from './features/cloud-bridge/conversationSyncClient';
 import { managedModelImageLimit } from './features/cloud-bridge/managedModelLimits';
+import {
+  capabilityAllowed,
+  fetchCapabilityDocument,
+  saveAccountDisplayName,
+  type CapabilityDocument,
+} from './features/cloud-bridge/capabilityDocument';
 import {
   CONTEXT_HANDOFF_CLI_DESTINATION,
   CONTEXT_HANDOFF_STORAGE_KEY,
@@ -324,6 +343,7 @@ import {
 } from './features/cloud-bridge/managedModelPicker';
 import {
   isManagedCloudBroadcastOwnedBy,
+  managedCloudOwnerKey,
   normalizeManagedCloudOwner,
   sameManagedCloudOwner,
   type ManagedCloudOwner,
@@ -339,6 +359,10 @@ const extensionSendQueue = getExtensionSendQueue();
 
 const SP_IN_PAGE_PANEL_ENABLED_KEY = 'in_page_panel_enabled';
 const SP_SITE_ALLOWLIST_KEY = 'agi_site_allowlist';
+
+let refreshOnboardingAccount: () => void = () => undefined;
+let capabilityDocument: CapabilityDocument | null = null;
+let applyCapabilityGates: () => void = () => undefined;
 
 let refreshCloudAccountUI: (forceAuthRefresh?: boolean) => Promise<void> = async () => {
   /* no-op until buildUI() initialises the real implementation */
@@ -1144,7 +1168,7 @@ function saveMessages(): void {
     });
 }
 
-function requestCloudConversationSync(): void {
+function requestCloudConversationSync(conversationId = _ctx.conversationId): void {
   const owner = _ctx.managedCloudOwner;
   if (!owner) return;
   try {
@@ -1152,8 +1176,8 @@ function requestCloudConversationSync(): void {
       {
         type: 'SYNC_CONVERSATION',
         owner,
-        conversationId: _ctx.conversationId,
-        streaming: _ctx.isStreaming,
+        conversationId,
+        streaming: conversationId === _ctx.conversationId && _ctx.isStreaming,
       },
       () => {
         void chrome.runtime.lastError;
@@ -1940,6 +1964,45 @@ function injectStyles(): void {
     .sp-msg-context__item > .agi-icon { color: var(--agi-ext-text-muted); }
     .sp-msg-context__item--thumb { padding: 0; overflow: hidden; }
     .sp-msg-context__thumb { display: block; width: 64px; height: 64px; object-fit: cover; }
+    .sp-msg-context__open,
+    .sp-answer-image__open { display: block; max-width: 100%; padding: 0; border: 0; background: none; cursor: zoom-in; }
+    .sp-media-viewer {
+      position: fixed;
+      inset: 0;
+      z-index: var(--z-modal);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 52px 16px 16px;
+      background: var(--agi-ext-scrim);
+    }
+    .sp-media-viewer__image {
+      display: block;
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      border-radius: var(--corner-control);
+      box-shadow: var(--agi-ext-elevation-4);
+    }
+    .sp-media-viewer__close {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: var(--control-lg);
+      height: var(--control-lg);
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-pill);
+      background: var(--agi-ext-surface);
+      color: var(--agi-ext-text);
+      cursor: pointer;
+    }
+    .sp-media-viewer__close:hover { background: var(--agi-ext-hover); }
+    @media (pointer: coarse) {
+      .sp-media-viewer__close { width: 44px; height: 44px; }
+    }
     .sp-msg-context__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     a.sp-msg-context__page:hover { background: var(--agi-ext-hover); }
     a.sp-msg-context__page:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
@@ -3465,6 +3528,8 @@ function injectStyles(): void {
       box-shadow: var(--agi-ext-elevation-2);
     }
     #sp-attach-menu.open { display: block; }
+    .sp-attach-menu-item[hidden],
+    .sp-tool-btn[hidden] { display: none; }
     .sp-attach-menu-item {
       display: flex;
       align-items: center;
@@ -4141,6 +4206,25 @@ function injectStyles(): void {
     .sp-drawer-launcher-icon { flex-shrink: 0; display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: var(--corner-control); background: var(--agi-ext-hover); }
     .sp-drawer-launcher-label { flex: 1; }
     .sp-drawer-launcher-desc { font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--agi-ext-text-muted); margin-top: 1px; font-weight: 400; }
+    .sp-help-shortcuts {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 6px 12px;
+      margin: 0 0 10px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
+    .sp-help-shortcuts dt { color: var(--agi-ext-text); }
+    .sp-help-shortcuts dd { margin: 0; color: var(--agi-ext-text-muted); }
+    .sp-help-shortcuts kbd {
+      padding: 1px 6px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-compact);
+      background: var(--agi-ext-surface);
+      font-family: var(--type-code-family);
+      font-size: var(--type-caption-size);
+      white-space: nowrap;
+    }
     .sp-drawer-launcher-chevron { font-size: var(--type-caption-size); color: var(--agi-ext-text-muted); flex-shrink: 0; }
     /* Tools row */
     .sp-drawer-tools-row {
@@ -4242,19 +4326,114 @@ function injectStyles(): void {
       white-space: nowrap;
     }
     .sp-drawer-history-date { font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--agi-ext-text-muted); margin-top: 1px; }
-    .sp-drawer-history-delete {
-      background: none;
+    .sp-drawer-history-item { position: relative; flex-wrap: wrap; }
+    .sp-drawer-history-open[hidden] { display: none; }
+    .sp-drawer-history-more-wrap { position: relative; flex-shrink: 0; margin-right: 4px; }
+    .sp-drawer-history-more-wrap[hidden] { display: none; }
+    .sp-drawer-history-more {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: var(--control-sm);
+      height: var(--control-sm);
       border: none;
+      border-radius: var(--corner-control);
+      background: none;
+      color: var(--agi-ext-text-muted);
+      cursor: pointer;
+    }
+    .sp-drawer-history-more:hover,
+    .sp-drawer-history-more[aria-expanded='true'] { background: var(--agi-ext-hover); color: var(--agi-ext-text); }
+    .sp-history-menu {
+      position: absolute;
+      top: calc(100% + 4px);
+      right: 0;
+      z-index: var(--z-dropdown);
+      display: flex;
+      flex-direction: column;
+      min-width: 168px;
+      padding: 4px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-menu);
+      background: var(--agi-ext-surface);
+      box-shadow: var(--agi-ext-elevation-3);
+    }
+    .sp-history-menu[hidden] { display: none; }
+    .sp-history-menu-item {
+      min-height: var(--control-md);
+      padding: 6px 10px;
+      border: none;
+      border-radius: var(--corner-control);
+      background: none;
+      color: var(--agi-ext-text);
+      cursor: pointer;
+      font: inherit;
+      font-size: var(--type-body-size);
+      line-height: var(--type-body-height);
+      text-align: left;
+    }
+    .sp-history-menu-item:hover,
+    .sp-history-menu-item:focus-visible { background: var(--agi-ext-hover); }
+    .sp-history-menu-item.is-danger { color: var(--agi-ext-danger-text); }
+    .sp-drawer-history-edit { display: flex; flex: 1 1 100%; align-items: center; gap: 6px; padding: 6px 8px; }
+    .sp-drawer-history-edit-input {
+      flex: 1;
+      min-width: 0;
+      min-height: var(--control-md);
+      padding: 4px 8px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-control);
+      background: var(--agi-ext-bg);
+      color: var(--agi-ext-text);
+      font: inherit;
+      font-size: var(--type-body-size);
+    }
+    .sp-drawer-history-edit-input:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 1px; }
+    .sp-drawer-history-edit-btn {
+      flex-shrink: 0;
+      min-height: var(--control-md);
+      padding: 4px 10px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-control);
+      background: transparent;
+      color: var(--agi-ext-text);
+      cursor: pointer;
+      font: inherit;
+      font-size: var(--type-label-size);
+      line-height: var(--type-label-height);
+    }
+    .sp-drawer-history-edit-btn.is-primary { border-color: var(--agi-ext-accent); background: var(--agi-ext-accent); color: var(--agi-ext-on-accent); }
+    .sp-drawer-history-edit-btn.is-danger { border-color: var(--agi-ext-danger); background: var(--agi-ext-danger); color: var(--agi-ext-on-danger); }
+    .sp-drawer-history-edit-btn:disabled { cursor: wait; opacity: 0.55; }
+    .sp-drawer-history-confirm { flex: 1 1 100%; padding: 0 8px 4px; }
+    .sp-drawer-history-share-text {
+      margin: 0;
+      padding: 6px 0 0;
+      color: var(--agi-ext-text);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
+    .sp-drawer-history-confirm-text {
+      margin: 0;
+      padding: 6px 0 0;
       color: var(--agi-ext-danger-text);
       font-size: var(--type-caption-size);
-      cursor: pointer;
-      padding: 2px 4px;
-      margin-right: 4px;
-      border-radius: var(--corner-compact);
-      line-height: 1;
-      flex-shrink: 0;
+      line-height: var(--type-caption-height);
     }
-    .sp-drawer-history-delete:hover { background: var(--agi-ext-danger-bg); }
+    #sp-recents-archived {
+      min-height: var(--control-md);
+      padding: 4px 10px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-field);
+      background: transparent;
+      color: var(--agi-ext-text-muted);
+      cursor: pointer;
+      font: inherit;
+      font-size: var(--type-label-size);
+      line-height: var(--type-label-height);
+    }
+    #sp-recents-archived[hidden] { display: none; }
+    #sp-recents-archived[aria-pressed='true'] { border-color: var(--agi-ext-accent); color: var(--agi-ext-text); }
     /* Connection / pairing */
     .sp-drawer-pairing-row {
       display: flex;
@@ -4447,7 +4626,6 @@ function injectStyles(): void {
     }
     .sp-drawer-memory-item-delete-btn:hover { color: var(--agi-ext-danger-text); border-color: var(--agi-ext-danger-border); background: var(--agi-ext-danger-bg); }
     .sp-drawer-memory-item-delete-btn.is-confirm { color: var(--agi-ext-on-danger); background: var(--agi-ext-danger); border-color: var(--agi-ext-danger); }
-    .sp-drawer-history-delete.is-confirm { color: var(--agi-ext-danger-text); border-color: var(--agi-ext-danger); background: color-mix(in srgb, var(--agi-ext-danger) 12%, transparent); }
     .sp-drawer-memory-item-textarea {
       background: var(--agi-ext-bg);
       border: 1px solid var(--agi-ext-border);
@@ -5095,6 +5273,72 @@ function injectStyles(): void {
       max-width: 300px;
       flex-shrink: 0;
     }
+    .sp-ob-body:empty { display: none; }
+    .sp-drawer-memory-preferences { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 8px; }
+    .sp-drawer-memory-preferences[hidden] { display: none; }
+    .sp-drawer-memory-preference {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--agi-ext-text);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
+    .sp-drawer-memory-preference input { flex-shrink: 0; margin: 0; accent-color: var(--agi-ext-accent); }
+    .sp-drawer-memory-preference input:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
+    .sp-ob-action {
+      min-height: var(--control-lg);
+      padding: 6px 16px;
+      border: none;
+      border-radius: var(--corner-field);
+      background: var(--agi-ext-accent);
+      color: var(--agi-ext-on-accent);
+      cursor: pointer;
+      font: inherit;
+      font-size: var(--type-caption-size);
+      font-weight: 600;
+    }
+    .sp-ob-action[hidden],
+    .sp-ob-field[hidden] { display: none; }
+    .sp-ob-field { display: flex; flex-direction: column; gap: 6px; width: min(300px, 100%); }
+    .sp-ob-label { color: var(--agi-ext-text); font-size: var(--type-caption-size); font-weight: 600; line-height: var(--type-caption-height); }
+    .sp-ob-input {
+      box-sizing: border-box;
+      width: 100%;
+      min-height: var(--control-lg);
+      padding: 6px 10px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-field);
+      background: var(--agi-ext-bg);
+      color: var(--agi-ext-text);
+      font: inherit;
+      font-size: var(--type-body-size);
+    }
+    .sp-ob-input:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 1px; }
+    .sp-ob-choices { display: flex; flex-direction: column; gap: 6px; width: min(300px, 100%); max-height: 220px; overflow-y: auto; }
+    .sp-ob-check {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: min(300px, 100%);
+      color: var(--agi-ext-text);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      text-align: left;
+    }
+    .sp-ob-check input { flex-shrink: 0; margin: 0; accent-color: var(--agi-ext-accent); }
+    .sp-ob-check input:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
+    .sp-ob-error {
+      margin: 0 0 8px;
+      color: var(--agi-ext-danger-text);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      text-align: center;
+    }
+    .sp-ob-error[hidden] { display: none; }
+    @media (pointer: coarse) {
+      .sp-ob-check { min-height: 44px; }
+    }
 
     /* footer: step dots + nav buttons */
     #sp-onboarding-footer {
@@ -5677,6 +5921,7 @@ function injectStyles(): void {
       gap: 8px;
       padding: 10px 2px 12px;
     }
+    #sp-recents-header > #sp-recents-title { flex: 1; min-width: 0; }
     #sp-recents-title {
       color: var(--agi-ext-text);
       font-size: var(--type-h1-size);
@@ -5820,7 +6065,9 @@ function injectStyles(): void {
         '\n' +
         PROJECTS_DRAWER_CSS +
         '\n' +
-        ARTIFACTS_DRAWER_CSS,
+        ARTIFACTS_DRAWER_CSS +
+        '\n' +
+        COMMAND_PALETTE_CSS,
     );
     document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
   } else {
@@ -7106,6 +7353,7 @@ function postTurn(
       modelSelection: _ctx.selectedModel,
       quickMode: quickMode || undefined,
       ...(_ctx.workMode === 'agiwork' ? { workMode: 'agiwork' } : {}),
+      ...(capabilityAllowed(capabilityDocument, 'canUseWebSearch') ? {} : { webSearch: false }),
       ...(memoryCommand ? { memoryCommand } : {}),
       ...managedOutboundRoutingPayload(quickMode),
       ...managedTurnPersistencePayload(streamId),
@@ -7671,6 +7919,11 @@ function takeComposerDocuments(): ComposerFile[] {
 
 function acceptIncomingComposerFiles(files: File[] | FileList): void {
   composerAttachmentNotices = [];
+  if (!capabilityAllowed(capabilityDocument, 'canUploadFiles')) {
+    composerAttachmentNotices.push(t('spAttachmentUploadsOff'));
+    updateAttachmentPreview();
+    return;
+  }
   const incoming: File[] = [];
   for (const file of Array.from(files)) {
     if (!COMPOSER_ATTACHMENT_MIME_TYPES.has(file.type.toLowerCase())) {
@@ -7988,7 +8241,7 @@ function refreshPageHostname(): void {
 }
 
 function buildOnboardingOverlay(onComplete: () => void): void {
-  const TOTAL_STEPS = 5;
+  const TOTAL_STEPS = 6;
   let currentStep = 0;
 
   const flaskSvg = `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -8008,20 +8261,6 @@ function buildOnboardingOverlay(onComplete: () => void): void {
     <circle cx="12" cy="17" r="0.75" fill="currentColor"/>
   </svg>`;
 
-  const browserStackSvg = `<svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-    <rect x="6" y="18" width="56" height="42" rx="6" stroke="var(--agi-ext-border-strong)" stroke-width="1.5" fill="var(--agi-ext-surface)"/>
-    <rect x="12" y="12" width="56" height="42" rx="6" stroke="var(--agi-ext-border-strong)" stroke-width="1.5" fill="var(--agi-ext-surface)"/>
-    <rect x="18" y="8" width="56" height="42" rx="6" fill="var(--agi-ext-overlay)" stroke="var(--agi-ext-border-strong)" stroke-width="1.5"/>
-    <line x1="18" y1="19" x2="74" y2="19" stroke="var(--agi-ext-border)" stroke-width="1"/>
-    <circle cx="25" cy="14" r="2.5" fill="var(--agi-ext-accent)"/>
-    <line x1="30" y1="26" x2="50" y2="26" stroke="var(--agi-ext-text-muted)" stroke-width="1.5" stroke-linecap="round"/>
-    <line x1="30" y1="33" x2="60" y2="33" stroke="var(--agi-ext-text-muted)" stroke-width="1.5" stroke-linecap="round"/>
-    <line x1="30" y1="40" x2="54" y2="40" stroke="var(--agi-ext-text-muted)" stroke-width="1.5" stroke-linecap="round"/>
-    <polyline points="24,25 27,28 31,22" stroke="var(--agi-ext-accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-    <polyline points="24,32 27,35 31,29" stroke="var(--agi-ext-accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-    <polyline points="24,39 27,42 31,36" stroke="var(--agi-ext-accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-  </svg>`;
-
   const tabGroupSvg = `<svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
     <rect x="8" y="28" width="64" height="42" rx="6" fill="var(--agi-ext-overlay)" stroke="var(--agi-ext-border-strong)" stroke-width="1.5"/>
     <rect x="10" y="14" width="22" height="16" rx="4" fill="var(--agi-ext-accent)" opacity="0.85"/>
@@ -8031,17 +8270,6 @@ function buildOnboardingOverlay(onComplete: () => void): void {
     <line x1="16" y1="44" x2="64" y2="44" stroke="var(--agi-ext-border)" stroke-width="1"/>
     <rect x="14" y="50" width="52" height="8" rx="2" fill="var(--agi-ext-surface)"/>
     <rect x="14" y="62" width="40" height="4" rx="2" fill="var(--agi-ext-surface)"/>
-  </svg>`;
-
-  const shortcutMenuSvg = `<svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-    <rect x="10" y="16" width="60" height="48" rx="8" fill="var(--agi-ext-overlay)" stroke="var(--agi-ext-border-strong)" stroke-width="1.5"/>
-    <text x="16" y="27" font-size="7" fill="var(--agi-ext-text-muted)" font-family="-apple-system,sans-serif" font-weight="600">WORKFLOWS</text>
-    <rect x="14" y="32" width="52" height="13" rx="4" fill="var(--agi-ext-hover)"/>
-    <circle cx="21" cy="38.5" r="3" fill="var(--agi-ext-accent)" opacity="0.22"/>
-    <path d="M21.7 34.8 18.8 39h2l-.5 3.2 3-4.5h-2.1l.5-2.9z" fill="var(--agi-ext-accent)"/>
-    <text x="27" y="41" font-size="7" fill="var(--agi-ext-text)" font-family="-apple-system,sans-serif">Saved shortcuts</text>
-    <rect x="14" y="50" width="52" height="9" rx="4" fill="var(--agi-ext-surface)" stroke="var(--agi-ext-accent)" stroke-width="1"/>
-    <text x="40" y="56.5" font-size="6.5" text-anchor="middle" fill="var(--agi-ext-accent)" font-family="-apple-system,sans-serif">+ Create shortcut</text>
   </svg>`;
 
   const pinHintSvg = `<svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -8080,7 +8308,7 @@ function buildOnboardingOverlay(onComplete: () => void): void {
     class: 'sp-ob-step active',
     'data-step': '0',
     role: 'group',
-    'aria-label': 'Step 1 of 5',
+    'aria-label': t('spOnboardingStepLabel', ['1', String(TOTAL_STEPS)]),
     'aria-hidden': 'false',
   });
   step0.appendChild(el('div', { class: 'sp-ob-title' }, 'This is a beta feature'));
@@ -8153,31 +8381,214 @@ function buildOnboardingOverlay(onComplete: () => void): void {
   step0.appendChild(rows0);
   body.appendChild(step0);
 
-  const step1 = el('div', {
+  const setupName = el('input', {
+    class: 'sp-ob-input',
+    id: 'sp-ob-name',
+    type: 'text',
+    autocomplete: 'name',
+  }) as HTMLInputElement;
+  const setupAccountStatus = el('p', { class: 'sp-ob-body', role: 'status' });
+  const setupSignIn = el(
+    'button',
+    { class: 'sp-ob-action', type: 'button' },
+    t('spSetupAccountSignIn'),
+  );
+  const setupNameField = el(
+    'div',
+    { class: 'sp-ob-field' },
+    el('label', { class: 'sp-ob-label', for: 'sp-ob-name' }, t('spSetupNameLabel')),
+    setupName,
+  );
+  const stepAccount = el('div', {
     class: 'sp-ob-step',
     'data-step': '1',
     role: 'group',
-    'aria-label': 'Step 2 of 5',
+    'aria-label': t('spOnboardingStepLabel', ['2', String(TOTAL_STEPS)]),
     'aria-hidden': 'true',
   });
-  const step1Hero = el('div', { class: 'sp-ob-hero' });
-  appendSvgString(step1Hero, browserStackSvg);
-  step1.appendChild(step1Hero);
-  step1.appendChild(el('div', { class: 'sp-ob-title' }, 'Automate your repetitive tasks'));
-  step1.appendChild(
-    el(
-      'div',
-      { class: 'sp-ob-body' },
-      'AGI can take on multi-step work like QA testing, researching sales leads, and data entry across multiple sites. You can focus elsewhere knowing AGI is working in the background.',
-    ),
-  );
-  body.appendChild(step1);
+  stepAccount.appendChild(el('div', { class: 'sp-ob-title' }, t('spSetupAccountTitle')));
+  stepAccount.appendChild(setupAccountStatus);
+  stepAccount.appendChild(setupSignIn);
+  stepAccount.appendChild(setupNameField);
+  body.appendChild(stepAccount);
+  setupSignIn.addEventListener('click', () => {
+    setupSignIn.disabled = true;
+    void openClerkSignIn()
+      .catch((error: unknown) => {
+        setupAccountStatus.textContent =
+          error instanceof Error ? error.message : t('spSetupAccountSignedOut');
+      })
+      .finally(() => {
+        setupSignIn.disabled = false;
+      });
+  });
 
-  const step2 = el('div', {
+  const setupModels = el('div', {
+    class: 'sp-ob-choices',
+    role: 'radiogroup',
+    'aria-labelledby': 'sp-ob-model-title',
+  });
+  const setupModelNote = el('p', { class: 'sp-ob-body' });
+  const stepModel = el('div', {
     class: 'sp-ob-step',
     'data-step': '2',
     role: 'group',
-    'aria-label': 'Step 3 of 5',
+    'aria-label': t('spOnboardingStepLabel', ['3', String(TOTAL_STEPS)]),
+    'aria-hidden': 'true',
+  });
+  stepModel.appendChild(
+    el('div', { class: 'sp-ob-title', id: 'sp-ob-model-title' }, t('spSetupModelTitle')),
+  );
+  stepModel.appendChild(setupModelNote);
+  stepModel.appendChild(setupModels);
+  body.appendChild(stepModel);
+
+  const setupRemember = el('input', {
+    type: 'checkbox',
+    id: 'sp-ob-memory-remember',
+  }) as HTMLInputElement;
+  const setupSearchPast = el('input', {
+    type: 'checkbox',
+    id: 'sp-ob-memory-search',
+  }) as HTMLInputElement;
+  const setupMemoryNote = el('p', { class: 'sp-ob-body', role: 'status' });
+  const stepMemory = el('div', {
+    class: 'sp-ob-step',
+    'data-step': '3',
+    role: 'group',
+    'aria-label': t('spOnboardingStepLabel', ['4', String(TOTAL_STEPS)]),
+    'aria-hidden': 'true',
+  });
+  stepMemory.appendChild(el('div', { class: 'sp-ob-title' }, t('spSetupMemoryTitle')));
+  stepMemory.appendChild(el('p', { class: 'sp-ob-body' }, t('spSetupMemoryBody')));
+  stepMemory.appendChild(
+    el(
+      'div',
+      { class: 'sp-ob-check' },
+      setupRemember,
+      el('label', { for: 'sp-ob-memory-remember' }, t('spSetupMemoryRemember')),
+    ),
+  );
+  stepMemory.appendChild(
+    el(
+      'div',
+      { class: 'sp-ob-check' },
+      setupSearchPast,
+      el('label', { for: 'sp-ob-memory-search' }, t('spSetupMemorySearch')),
+    ),
+  );
+  stepMemory.appendChild(setupMemoryNote);
+  body.appendChild(stepMemory);
+
+  const setupState: {
+    ownerKey: string | null;
+    loadedName: string;
+    memory: MemoryPreferences | null;
+    model: string;
+  } = { ownerKey: null, loadedName: '', memory: null, model: _ctx.selectedModel };
+
+  function renderSetupModels(signedIn: boolean): void {
+    const options = signedIn ? regenerateModelOptions() : [];
+    const choices =
+      options.length > 0 ? options : [{ value: 'auto', label: t('spSetupModelAuto') }];
+    if (!choices.some((choice) => choice.value === setupState.model)) setupState.model = 'auto';
+    setupModelNote.textContent = signedIn ? t('spSetupModelBody') : t('spSetupModelSignedOut');
+    setupModels.replaceChildren();
+    for (const choice of choices) {
+      const id = `sp-ob-model-${choice.value.replace(/[^A-Za-z0-9_-]/g, '-')}`;
+      const radio = el('input', {
+        type: 'radio',
+        name: 'sp-ob-model',
+        id,
+        value: choice.value,
+      }) as HTMLInputElement;
+      radio.checked = choice.value === setupState.model;
+      radio.addEventListener('change', () => {
+        if (radio.checked) setupState.model = choice.value;
+      });
+      setupModels.appendChild(
+        el('div', { class: 'sp-ob-check' }, radio, el('label', { for: id }, choice.label)),
+      );
+    }
+  }
+
+  function renderSetupMemory(signedIn: boolean): void {
+    const memory = setupState.memory;
+    const usable = signedIn && memory !== null && memory.organizationAllows;
+    setupRemember.disabled = !usable;
+    setupSearchPast.disabled = !usable;
+    setupMemoryNote.textContent = !signedIn
+      ? t('spSetupMemorySignedOut')
+      : memory && !memory.organizationAllows
+        ? t('spSetupMemoryOrgOff')
+        : '';
+  }
+
+  refreshOnboardingAccount = () => {
+    const owner = _ctx.managedCloudOwner;
+    const signedIn = owner !== null && managedModelAccess !== null;
+    const ownerKey = owner ? managedCloudOwnerKey(owner) : null;
+    setupSignIn.hidden = signedIn;
+    setupNameField.hidden = !signedIn;
+    setupAccountStatus.textContent = signedIn
+      ? t('spSetupAccountSignedIn', [setupState.loadedName || t('spCloudAccountFallbackName')])
+      : t('spSetupAccountSignedOut');
+    renderSetupModels(signedIn);
+    renderSetupMemory(signedIn);
+    if (!signedIn || ownerKey === setupState.ownerKey) return;
+    setupState.ownerKey = ownerKey;
+    void getClerkAccountProfile()
+      .then((profile) => {
+        if (setupState.ownerKey !== ownerKey) return;
+        setupState.loadedName = profile?.displayName ?? '';
+        if (!setupName.value) setupName.value = setupState.loadedName;
+        setupAccountStatus.textContent = t('spSetupAccountSignedIn', [
+          profile?.displayName ?? profile?.email ?? t('spCloudAccountFallbackName'),
+        ]);
+      })
+      .catch(() => undefined);
+    void getManagedCloudAuthContext()
+      .then(async (auth) => {
+        if (!auth || setupState.ownerKey !== ownerKey) return;
+        const preferences = await fetchMemoryPreferences(auth.token);
+        if (setupState.ownerKey !== ownerKey) return;
+        setupState.memory = preferences;
+        setupRemember.checked = preferences.memory;
+        setupSearchPast.checked = preferences.searchPastChats;
+        renderSetupMemory(true);
+      })
+      .catch(() => {
+        setupMemoryNote.textContent = t('spSetupMemoryUnavailable');
+      });
+  };
+
+  async function saveSetupChoices(): Promise<void> {
+    if (setupState.model !== _ctx.selectedModel) applyModelSelection(setupState.model);
+    const auth = await getManagedCloudAuthContext();
+    if (!auth) return;
+    const name = setupName.value.trim();
+    if (!setupNameField.hidden && name && name !== setupState.loadedName) {
+      await saveAccountDisplayName(auth.token, name);
+    }
+    const memory = setupState.memory;
+    if (
+      memory &&
+      memory.organizationAllows &&
+      (memory.memory !== setupRemember.checked ||
+        memory.searchPastChats !== setupSearchPast.checked)
+    ) {
+      await saveMemoryPreferences(auth.token, {
+        memory: setupRemember.checked,
+        searchPastChats: setupSearchPast.checked,
+      });
+    }
+  }
+
+  const step2 = el('div', {
+    class: 'sp-ob-step',
+    'data-step': '4',
+    role: 'group',
+    'aria-label': t('spOnboardingStepLabel', ['5', String(TOTAL_STEPS)]),
     'aria-hidden': 'true',
   });
   const step2Hero = el('div', { class: 'sp-ob-hero' });
@@ -8193,31 +8604,11 @@ function buildOnboardingOverlay(onComplete: () => void): void {
   );
   body.appendChild(step2);
 
-  const step3 = el('div', {
-    class: 'sp-ob-step',
-    'data-step': '3',
-    role: 'group',
-    'aria-label': 'Step 4 of 5',
-    'aria-hidden': 'true',
-  });
-  const step3Hero = el('div', { class: 'sp-ob-hero' });
-  appendSvgString(step3Hero, shortcutMenuSvg);
-  step3.appendChild(step3Hero);
-  step3.appendChild(el('div', { class: 'sp-ob-title' }, 'Use Workflows to save time'));
-  step3.appendChild(
-    el(
-      'div',
-      { class: 'sp-ob-body' },
-      'Shortcuts make repeated instructions one click away. Open Workflows from the AGI menu to create, run, and manage them.',
-    ),
-  );
-  body.appendChild(step3);
-
   const step4 = el('div', {
     class: 'sp-ob-step',
-    'data-step': '4',
+    'data-step': '5',
     role: 'group',
-    'aria-label': 'Step 5 of 5',
+    'aria-label': t('spOnboardingStepLabel', ['6', String(TOTAL_STEPS)]),
     'aria-hidden': 'true',
   });
   const step4Hero = el('div', { class: 'sp-ob-hero' });
@@ -8244,7 +8635,7 @@ function buildOnboardingOverlay(onComplete: () => void): void {
     'aria-valuemin': '1',
     'aria-valuemax': String(TOTAL_STEPS),
     'aria-valuenow': '1',
-    'aria-valuetext': `Step 1 of ${TOTAL_STEPS}`,
+    'aria-valuetext': t('spOnboardingStepLabel', ['1', String(TOTAL_STEPS)]),
   });
   const dots: HTMLElement[] = [];
   for (let i = 0; i < TOTAL_STEPS; i++) {
@@ -8265,7 +8656,10 @@ function buildOnboardingOverlay(onComplete: () => void): void {
   );
   const nextBtn = el(
     'button',
-    { class: 'sp-ob-btn-next', 'aria-label': 'Continue, step 1 of 5' },
+    {
+      class: 'sp-ob-btn-next',
+      'aria-label': t('spOnboardingContinueAria', ['1', String(TOTAL_STEPS)]),
+    },
     'I understand',
   );
   navRow.appendChild(backBtn);
@@ -8277,6 +8671,7 @@ function buildOnboardingOverlay(onComplete: () => void): void {
     t('spOnboardingUnderstand'),
     t('spNext'),
     t('spNext'),
+    t('spNext'),
     t('spOnboardingLetsGo'),
     t('spOnboardingDone'),
   ];
@@ -8286,6 +8681,7 @@ function buildOnboardingOverlay(onComplete: () => void): void {
     t('spOnboardingContinueAria', ['2', total]),
     t('spOnboardingContinueAria', ['3', total]),
     t('spOnboardingContinueAria', ['4', total]),
+    t('spOnboardingContinueAria', ['5', total]),
     t('spOnboardingDismissAria'),
   ];
 
@@ -8301,6 +8697,7 @@ function buildOnboardingOverlay(onComplete: () => void): void {
   }
 
   function goToStep(step: number): void {
+    refreshOnboardingAccount();
     const steps = body.querySelectorAll<HTMLElement>('.sp-ob-step');
     steps.forEach((s, i) => {
       s.classList.toggle('active', i === step);
@@ -8311,7 +8708,10 @@ function buildOnboardingOverlay(onComplete: () => void): void {
     });
     currentStep = step;
     dotsRow.setAttribute('aria-valuenow', String(step + 1));
-    dotsRow.setAttribute('aria-valuetext', `Step ${step + 1} of ${TOTAL_STEPS}`);
+    dotsRow.setAttribute(
+      'aria-valuetext',
+      t('spOnboardingStepLabel', [String(step + 1), String(TOTAL_STEPS)]),
+    );
     if (step === 0) {
       backBtn.setAttribute('hidden', '');
     } else {
@@ -8322,12 +8722,29 @@ function buildOnboardingOverlay(onComplete: () => void): void {
     nextBtn.focus();
   }
 
+  const setupError = el('p', { class: 'sp-ob-error', role: 'alert', hidden: '' });
+  footer.insertBefore(setupError, navRow);
+
   nextBtn.addEventListener('click', () => {
     if (currentStep < TOTAL_STEPS - 1) {
       goToStep(currentStep + 1);
-    } else {
-      dismiss();
+      return;
     }
+    nextBtn.disabled = true;
+    setupError.hidden = true;
+    nextBtn.textContent = t('spSetupSaving');
+    void saveSetupChoices()
+      .then(() => dismiss())
+      .catch((error: unknown) => {
+        setupError.textContent = t('spSetupSaveFailed', [
+          error instanceof Error ? error.message : t('spSetupSaveFailedGeneric'),
+        ]);
+        setupError.hidden = false;
+        nextBtn.textContent = stepLabels[currentStep] ?? t('spOnboardingDone');
+      })
+      .finally(() => {
+        nextBtn.disabled = false;
+      });
   });
 
   backBtn.addEventListener('click', () => {
@@ -9334,13 +9751,395 @@ function buildUI(): void {
   });
   let drawerHistoryEntries: ConversationEntry[] = [];
 
+  let showingArchived = false;
+
+  function showHistoryStatus(text: string): void {
+    drawerHistoryError.textContent = text;
+    drawerHistoryError.removeAttribute('hidden');
+  }
+
+  async function changeHistoryEntry(
+    entry: ConversationEntry,
+    changes: ConversationEntryChanges,
+    done: string,
+  ): Promise<void> {
+    const owner = _ctx.managedCloudOwner;
+    if (!owner) return;
+    const cloudConversationId = entry.cloudSync?.conversationId;
+    const cloudFlags = {
+      ...(changes.pinned !== undefined ? { pinned: changes.pinned } : {}),
+      ...(changes.archived !== undefined ? { archived: changes.archived } : {}),
+    };
+    try {
+      if (cloudConversationId && Object.keys(cloudFlags).length > 0) {
+        await createExtensionCloudChatClient(owner).updateConversation(
+          cloudConversationId,
+          cloudFlags,
+          { organizationId: entry.cloudSync?.organizationId ?? null },
+        );
+      }
+      await updateConversationEntry(owner, entry.id, changes);
+    } catch (error) {
+      console.warn('[SidePanel] history change failed:', error);
+      showHistoryStatus(t('spHistoryChangeFailed'));
+      return;
+    }
+    if (changes.customTitle !== undefined || changes.projectId !== undefined) {
+      requestCloudConversationSync(entry.id);
+    }
+    if (changes.projectId !== undefined && entry.id === _ctx.conversationId) {
+      adoptChatProject(changes.projectId ?? undefined);
+    }
+    if (changes.archived === true && entry.id === _ctx.conversationId) {
+      cancelCurrentManagedStream(false);
+      resetConversationView();
+    }
+    await refreshDrawerHistory();
+    showHistoryStatus(done);
+  }
+
+  function buildHistoryEditor(
+    item: HTMLElement,
+    openButton: HTMLButtonElement,
+    control: HTMLInputElement | HTMLSelectElement,
+    save: () => void,
+  ): void {
+    const editor = el('div', { class: 'sp-drawer-history-edit' });
+    const saveBtn = el(
+      'button',
+      { type: 'button', class: 'sp-drawer-history-edit-btn is-primary' },
+      t('spHistorySave'),
+    );
+    const cancelBtn = el(
+      'button',
+      { type: 'button', class: 'sp-drawer-history-edit-btn' },
+      t('spHistoryCancel'),
+    );
+    const more = item.querySelector<HTMLElement>('.sp-drawer-history-more-wrap');
+    const close = (): void => {
+      editor.remove();
+      openButton.hidden = false;
+      if (more) more.hidden = false;
+      openButton.focus();
+    };
+    saveBtn.addEventListener('click', save);
+    cancelBtn.addEventListener('click', close);
+    control.addEventListener('keydown', (event: Event) => {
+      const key = (event as KeyboardEvent).key;
+      if (key === 'Enter') {
+        event.preventDefault();
+        save();
+      } else if (key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        close();
+      }
+    });
+    editor.appendChild(control);
+    editor.appendChild(saveBtn);
+    editor.appendChild(cancelBtn);
+    openButton.hidden = true;
+    if (more) more.hidden = true;
+    item.insertBefore(editor, openButton);
+    control.focus();
+  }
+
+  function startHistoryRename(
+    entry: ConversationEntry,
+    item: HTMLElement,
+    openButton: HTMLButtonElement,
+  ): void {
+    const input = el('input', {
+      class: 'sp-drawer-history-edit-input',
+      type: 'text',
+      maxlength: '200',
+      'aria-label': t('spHistoryRenameLabel'),
+    }) as HTMLInputElement;
+    input.value = entry.title;
+    buildHistoryEditor(item, openButton, input, () => {
+      const title = input.value.trim();
+      void changeHistoryEntry(entry, { customTitle: title ? title : null }, t('spHistoryRenamed'));
+    });
+    input.select();
+  }
+
+  function startHistoryMove(
+    entry: ConversationEntry,
+    item: HTMLElement,
+    openButton: HTMLButtonElement,
+  ): void {
+    const select = el('select', {
+      class: 'sp-drawer-history-edit-input',
+      'aria-label': t('spHistoryMoveLabel'),
+    }) as HTMLSelectElement;
+    select.appendChild(el('option', { value: '' }, t('spHistoryNoProject')));
+    select.disabled = true;
+    buildHistoryEditor(item, openButton, select, () => {
+      if (select.disabled) return;
+      const projectId = select.value || null;
+      const projectName = select.selectedOptions[0]?.textContent ?? '';
+      void changeHistoryEntry(
+        entry,
+        { projectId },
+        projectId ? t('spHistoryMoved', [projectName]) : t('spHistoryMovedOut'),
+      );
+    });
+    void listChromeProjects().then((result) => {
+      if (result.status === 'error') {
+        showHistoryStatus(result.message);
+        return;
+      }
+      for (const project of result.projects) {
+        select.appendChild(el('option', { value: project.id }, project.name));
+      }
+      select.value = entry.projectId ?? '';
+      select.disabled = false;
+      select.focus();
+    });
+  }
+
+  function confirmHistoryDelete(
+    entry: ConversationEntry,
+    item: HTMLElement,
+    trigger: HTMLButtonElement,
+  ): void {
+    item.querySelector('.sp-drawer-history-confirm')?.remove();
+    const confirmRow = el('div', { class: 'sp-drawer-history-confirm', role: 'alertdialog' });
+    const question = el(
+      'p',
+      { class: 'sp-drawer-history-confirm-text', id: `sp-history-confirm-${entry.id}` },
+      entry.cloudSync?.conversationId
+        ? t('spHistoryDeleteConfirmAccount')
+        : t('spHistoryDeleteConfirmDevice'),
+    );
+    confirmRow.setAttribute('aria-labelledby', question.id);
+    const deleteBtn = el(
+      'button',
+      { type: 'button', class: 'sp-drawer-history-edit-btn is-danger' },
+      t('spHistoryDelete'),
+    ) as HTMLButtonElement;
+    const cancelBtn = el(
+      'button',
+      { type: 'button', class: 'sp-drawer-history-edit-btn' },
+      t('spHistoryCancel'),
+    );
+    cancelBtn.addEventListener('click', () => {
+      confirmRow.remove();
+      trigger.focus();
+    });
+    confirmRow.addEventListener('keydown', (event: Event) => {
+      if ((event as KeyboardEvent).key !== 'Escape') return;
+      event.preventDefault();
+      event.stopPropagation();
+      confirmRow.remove();
+      trigger.focus();
+    });
+    deleteBtn.addEventListener('click', () => deleteHistoryEntry(entry, deleteBtn));
+    confirmRow.appendChild(question);
+    const actions = el('div', { class: 'sp-drawer-history-edit' });
+    actions.appendChild(deleteBtn);
+    actions.appendChild(cancelBtn);
+    confirmRow.appendChild(actions);
+    item.appendChild(confirmRow);
+    deleteBtn.focus();
+  }
+
+  function confirmHistoryShare(
+    entry: ConversationEntry,
+    item: HTMLElement,
+    trigger: HTMLButtonElement,
+  ): void {
+    item.querySelector('.sp-drawer-history-confirm')?.remove();
+    const confirmRow = el('div', { class: 'sp-drawer-history-confirm', role: 'alertdialog' });
+    const question = el(
+      'p',
+      { class: 'sp-drawer-history-share-text', id: `sp-history-share-${entry.id}` },
+      t('spHistoryShareConfirm'),
+    );
+    confirmRow.setAttribute('aria-labelledby', question.id);
+    const createBtn = el(
+      'button',
+      { type: 'button', class: 'sp-drawer-history-edit-btn is-primary' },
+      t('spHistoryShareCreate'),
+    ) as HTMLButtonElement;
+    const cancelBtn = el(
+      'button',
+      { type: 'button', class: 'sp-drawer-history-edit-btn' },
+      t('spHistoryCancel'),
+    );
+    const close = (): void => {
+      confirmRow.remove();
+      trigger.focus();
+    };
+    cancelBtn.addEventListener('click', close);
+    confirmRow.addEventListener('keydown', (event: Event) => {
+      if ((event as KeyboardEvent).key !== 'Escape') return;
+      event.preventDefault();
+      event.stopPropagation();
+      close();
+    });
+    createBtn.addEventListener('click', () => {
+      createBtn.disabled = true;
+      void (async () => {
+        const auth = await getManagedCloudAuthContext();
+        if (!auth) throw new Error(t('spHistoryShareSignIn'));
+        const link = await createChromeShareLink(auth.token, {
+          title: entry.title,
+          messages: entry.messages.filter((message) => message.content.trim().length > 0),
+          ...(entry.cloudSync?.conversationId
+            ? { conversationId: entry.cloudSync.conversationId }
+            : {}),
+        });
+        await navigator.clipboard.writeText(link.url);
+        confirmRow.remove();
+        const expires = link.expiresAt ? new Date(link.expiresAt) : null;
+        showHistoryStatus(
+          expires && !Number.isNaN(expires.getTime())
+            ? t('spHistoryShareCopiedUntil', [expires.toLocaleDateString()])
+            : t('spHistoryShareCopied'),
+        );
+        trigger.focus();
+      })()
+        .catch((error: unknown) => {
+          showHistoryStatus(error instanceof Error ? error.message : t('spHistoryShareFailed'));
+        })
+        .finally(() => {
+          createBtn.disabled = false;
+        });
+    });
+    confirmRow.appendChild(question);
+    const actions = el('div', { class: 'sp-drawer-history-edit' });
+    actions.appendChild(createBtn);
+    actions.appendChild(cancelBtn);
+    confirmRow.appendChild(actions);
+    item.appendChild(confirmRow);
+    createBtn.focus();
+  }
+
+  function deleteHistoryEntry(entry: ConversationEntry, deleteBtn: HTMLButtonElement): void {
+    const deletingCurrentConversation = entry.id === _ctx.conversationId;
+    const deletionGeneration = _ctx.conversationGeneration;
+    if (deletingCurrentConversation) cancelCurrentManagedStream(false);
+    const owner = _ctx.managedCloudOwner;
+    if (!owner) return;
+    deleteBtn.disabled = true;
+    showHistoryStatus(t('spHistoryDeleting'));
+    void (async () => {
+      const cloudConversationId = entry.cloudSync?.conversationId;
+      if (cloudConversationId) {
+        const organizationId = entry.cloudSync?.organizationId;
+        if (organizationId === undefined) {
+          throw new Error('Could not prove the account workspace for this chat deletion');
+        }
+        const response = (await chrome.runtime.sendMessage({
+          type: 'DELETE_CLOUD_CONVERSATION',
+          owner,
+          cloudConversationId,
+          organizationId,
+        })) as { success?: boolean; error?: string } | undefined;
+        if (response?.success !== true) {
+          throw new Error(response?.error ?? 'Could not queue account chat deletion');
+        }
+      }
+      await deleteConversation(owner, entry.id);
+      if (
+        deletingCurrentConversation &&
+        _ctx.conversationId === entry.id &&
+        _ctx.conversationGeneration === deletionGeneration
+      ) {
+        resetConversationView();
+      }
+      await refreshDrawerHistory();
+      showHistoryStatus(t('spHistoryDeleted'));
+    })()
+      .catch((err) => {
+        console.warn('[SidePanel] history delete failed:', err);
+        showHistoryStatus(t('spHistoryDeleteFailed'));
+      })
+      .finally(() => {
+        deleteBtn.disabled = false;
+      });
+  }
+
+  function buildHistoryMenu(
+    entry: ConversationEntry,
+    item: HTMLElement,
+    openButton: HTMLButtonElement,
+  ): HTMLElement {
+    const wrapper = el('div', { class: 'sp-drawer-history-more-wrap' });
+    const moreBtn = el('button', {
+      class: 'sp-drawer-history-more',
+      type: 'button',
+      title: t('spHistoryMore'),
+      'aria-label': t('spHistoryMoreNamed', [entry.title]),
+    }) as HTMLButtonElement;
+    moreBtn.appendChild(renderIcon(Ellipsis, 14));
+    const menu = el('div', {
+      class: 'sp-history-menu',
+      role: 'menu',
+      'aria-label': t('spHistoryMoreNamed', [entry.title]),
+    });
+    const handle = wirePopupMenu(moreBtn, menu);
+    const addItem = (label: string, run: () => void, danger = false): void => {
+      const menuItem = el(
+        'button',
+        {
+          type: 'button',
+          role: 'menuitem',
+          class: danger ? 'sp-history-menu-item is-danger' : 'sp-history-menu-item',
+        },
+        label,
+      );
+      menuItem.addEventListener('click', () => {
+        handle.close();
+        run();
+      });
+      menu.appendChild(menuItem);
+    };
+    addItem(t('spHistoryShare'), () => confirmHistoryShare(entry, item, moreBtn));
+    addItem(t('spHistoryRename'), () => startHistoryRename(entry, item, openButton));
+    if (!entry.archived) {
+      addItem(entry.pinned ? t('spHistoryUnpin') : t('spHistoryPin'), () => {
+        void changeHistoryEntry(
+          entry,
+          { pinned: !entry.pinned },
+          entry.pinned ? t('spHistoryUnpinned') : t('spHistoryPinned'),
+        );
+      });
+      addItem(t('spHistoryMove'), () => startHistoryMove(entry, item, openButton));
+    }
+    if (entry.cloudSync?.conversationId) {
+      addItem(entry.archived ? t('spHistoryUnarchive') : t('spHistoryArchive'), () => {
+        void changeHistoryEntry(
+          entry,
+          { archived: !entry.archived },
+          entry.archived ? t('spHistoryUnarchived') : t('spHistoryArchivedDone'),
+        );
+      });
+    }
+    addItem(t('spHistoryDelete'), () => confirmHistoryDelete(entry, item, moreBtn), true);
+    wrapper.appendChild(moreBtn);
+    wrapper.appendChild(menu);
+    return wrapper;
+  }
+
   function renderDrawerHistory(entries: ConversationEntry[]): void {
     clearChildren(drawerHistoryList);
     drawerHistorySearch.hidden = entries.length <= RECENTS_SEARCH_THRESHOLD;
-    const filteredEntries = filterConversations(entries, drawerHistorySearch.value);
+    archivedToggle.hidden = !entries.some((entry) => entry.archived) && !showingArchived;
+    archivedToggle.setAttribute('aria-pressed', String(showingArchived));
+    const listed = entries.filter((entry) => Boolean(entry.archived) === showingArchived);
+    const ordered = [
+      ...listed.filter((entry) => entry.pinned),
+      ...listed.filter((entry) => !entry.pinned),
+    ];
+    const filteredEntries = filterConversations(ordered, drawerHistorySearch.value);
     if (filteredEntries.length === 0) {
-      const emptyLabel =
-        entries.length === 0 ? 'No saved conversations' : 'No matching conversations';
+      const emptyLabel = showingArchived
+        ? t('spHistoryArchivedEmpty')
+        : entries.length === 0
+          ? 'No saved conversations'
+          : 'No matching conversations';
       const empty = el('div', { class: 'sp-drawer-history-empty' }, emptyLabel);
       drawerHistoryList.appendChild(empty);
       return;
@@ -9372,87 +10171,19 @@ function buildUI(): void {
       openButton.appendChild(el('span', { class: 'sp-drawer-history-bullet' }));
       const textCol = el('div', { class: 'sp-drawer-history-text' });
       const title = el('div', { class: 'sp-drawer-history-title' }, entry.title);
-      const date = el('div', { class: 'sp-drawer-history-date' }, formatHistoryDate(entry.savedAt));
+      const date = el(
+        'div',
+        { class: 'sp-drawer-history-date' },
+        entry.pinned
+          ? `${t('spHistoryPinnedMarker')} · ${formatHistoryDate(entry.savedAt)}`
+          : formatHistoryDate(entry.savedAt),
+      );
       textCol.appendChild(title);
       textCol.appendChild(date);
       openButton.appendChild(textCol);
       item.appendChild(openButton);
 
-      const delBtn = iconButton(
-        { class: 'sp-drawer-history-delete', title: t('spHistoryDelete') },
-        Trash2,
-      ) as HTMLButtonElement;
-      let deleteConfirmTimer: ReturnType<typeof setTimeout> | null = null;
-      delBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (!delBtn.classList.contains('is-confirm')) {
-          delBtn.classList.add('is-confirm');
-          delBtn.title = t('spHistoryDeleteConfirm');
-          delBtn.setAttribute('aria-label', t('spHistoryDeleteConfirm'));
-          drawerHistoryError.textContent = entry.cloudSync?.conversationId
-            ? t('spHistoryDeleteConfirmAccount')
-            : t('spHistoryDeleteConfirmDevice');
-          drawerHistoryError.removeAttribute('hidden');
-          deleteConfirmTimer = setTimeout(() => {
-            delBtn.classList.remove('is-confirm');
-            delBtn.title = t('spHistoryDelete');
-            delBtn.removeAttribute('aria-label');
-            drawerHistoryError.setAttribute('hidden', '');
-            deleteConfirmTimer = null;
-          }, DRAWER_DELETE_CONFIRM_MS);
-          return;
-        }
-        if (deleteConfirmTimer !== null) {
-          clearTimeout(deleteConfirmTimer);
-          deleteConfirmTimer = null;
-        }
-        const deletingCurrentConversation = entry.id === _ctx.conversationId;
-        const deletionGeneration = _ctx.conversationGeneration;
-        if (deletingCurrentConversation) cancelCurrentManagedStream(false);
-        const owner = _ctx.managedCloudOwner;
-        if (!owner) return;
-        delBtn.disabled = true;
-        drawerHistoryError.textContent = t('spHistoryDeleting');
-        drawerHistoryError.removeAttribute('hidden');
-        void (async () => {
-          const cloudConversationId = entry.cloudSync?.conversationId;
-          if (cloudConversationId) {
-            const organizationId = entry.cloudSync?.organizationId;
-            if (organizationId === undefined) {
-              throw new Error('Could not prove the account workspace for this chat deletion');
-            }
-            const response = (await chrome.runtime.sendMessage({
-              type: 'DELETE_CLOUD_CONVERSATION',
-              owner,
-              cloudConversationId,
-              organizationId,
-            })) as { success?: boolean; error?: string } | undefined;
-            if (response?.success !== true) {
-              throw new Error(response?.error ?? 'Could not queue account chat deletion');
-            }
-          }
-          await deleteConversation(owner, entry.id);
-          if (
-            deletingCurrentConversation &&
-            _ctx.conversationId === entry.id &&
-            _ctx.conversationGeneration === deletionGeneration
-          ) {
-            resetConversationView();
-          }
-          await refreshDrawerHistory();
-          drawerHistoryError.textContent = t('spHistoryDeleted');
-          drawerHistoryError.removeAttribute('hidden');
-        })()
-          .catch((err) => {
-            console.warn('[SidePanel] history delete failed:', err);
-            drawerHistoryError.textContent = t('spHistoryDeleteFailed');
-            drawerHistoryError.removeAttribute('hidden');
-          })
-          .finally(() => {
-            delBtn.disabled = false;
-          });
-      });
-      item.appendChild(delBtn);
+      item.appendChild(buildHistoryMenu(entry, item, openButton));
 
       openButton.addEventListener('click', () => {
         drawerHistoryError.textContent = t('spHistoryOpening');
@@ -9511,6 +10242,16 @@ function buildUI(): void {
   recentsSheet.setAttribute('aria-label', t('spRecentsTitle'));
   const recentsHeader = el('div', { id: 'sp-recents-header' });
   recentsHeader.appendChild(el('h2', { id: 'sp-recents-title' }, t('spRecentsTitle')));
+  const archivedToggle = el(
+    'button',
+    { id: 'sp-recents-archived', type: 'button', 'aria-pressed': 'false', hidden: '' },
+    t('spHistoryShowArchived'),
+  );
+  archivedToggle.addEventListener('click', () => {
+    showingArchived = !showingArchived;
+    renderDrawerHistory(drawerHistoryEntries);
+  });
+  recentsHeader.appendChild(archivedToggle);
   const recentsClose = el('button', { id: 'sp-recents-close', type: 'button' });
   recentsClose.setAttribute('aria-label', t('spRecentsClose'));
   recentsClose.appendChild(renderIcon(X, 14));
@@ -10325,6 +11066,79 @@ function buildUI(): void {
   const memoryScope = el('p', { class: 'sp-drawer-memory-help', hidden: '' });
   memorySection.appendChild(memoryScope);
 
+  const memoryRememberToggle = el('input', {
+    type: 'checkbox',
+    id: 'sp-drawer-memory-remember',
+  }) as HTMLInputElement;
+  const memorySearchToggle = el('input', {
+    type: 'checkbox',
+    id: 'sp-drawer-memory-search',
+  }) as HTMLInputElement;
+  const memoryPreferenceStatus = el('p', {
+    class: 'sp-drawer-memory-help',
+    role: 'status',
+    hidden: '',
+  });
+  const memoryPreferencesBlock = el(
+    'div',
+    { class: 'sp-drawer-memory-preferences', hidden: '' },
+    el(
+      'div',
+      { class: 'sp-drawer-memory-preference' },
+      memoryRememberToggle,
+      el('label', { for: 'sp-drawer-memory-remember' }, t('spSetupMemoryRemember')),
+    ),
+    el(
+      'div',
+      { class: 'sp-drawer-memory-preference' },
+      memorySearchToggle,
+      el('label', { for: 'sp-drawer-memory-search' }, t('spSetupMemorySearch')),
+    ),
+    memoryPreferenceStatus,
+  );
+  memorySection.appendChild(memoryPreferencesBlock);
+  let memoryPreferenceSnapshot: MemoryPreferences | null = null;
+
+  function setMemoryPreferenceStatus(text: string): void {
+    memoryPreferenceStatus.textContent = text;
+    memoryPreferenceStatus.hidden = !text;
+  }
+
+  function renderMemoryPreferences(preferences: MemoryPreferences): void {
+    memoryPreferenceSnapshot = preferences;
+    memoryRememberToggle.checked = preferences.memory;
+    memorySearchToggle.checked = preferences.searchPastChats;
+    memoryRememberToggle.disabled = !preferences.organizationAllows;
+    memorySearchToggle.disabled = !preferences.organizationAllows;
+    setMemoryPreferenceStatus(preferences.organizationAllows ? '' : t('spSetupMemoryOrgOff'));
+    memoryPreferencesBlock.hidden = false;
+  }
+
+  function saveDrawerMemoryPreference(): void {
+    const previous = memoryPreferenceSnapshot;
+    if (!previous) return;
+    const next = {
+      memory: memoryRememberToggle.checked,
+      searchPastChats: memorySearchToggle.checked,
+    };
+    memoryRememberToggle.disabled = true;
+    memorySearchToggle.disabled = true;
+    void (async () => {
+      const auth = await getManagedCloudAuthContext();
+      if (!auth) throw new Error(t('spSetupMemorySignedOut'));
+      await saveMemoryPreferences(auth.token, next);
+      renderMemoryPreferences({ ...previous, ...next });
+      setMemoryPreferenceStatus(t('spMemoryPreferenceSaved'));
+    })().catch((error: unknown) => {
+      renderMemoryPreferences(previous);
+      setMemoryPreferenceStatus(
+        error instanceof Error ? error.message : t('spMemoryPreferenceSaveFailed'),
+      );
+    });
+  }
+  memoryRememberToggle.addEventListener('change', saveDrawerMemoryPreference);
+  memorySearchToggle.addEventListener('change', saveDrawerMemoryPreference);
+
   const memoryAddBtn = el(
     'button',
     {
@@ -10630,6 +11444,7 @@ function buildUI(): void {
 
   function setDrawerMemoryExtrasHidden(hidden: boolean): void {
     memoryScope.hidden = hidden;
+    if (hidden) memoryPreferencesBlock.hidden = true;
     exclusionsBlock.hidden = hidden;
     conflictsBlock.hidden = hidden;
   }
@@ -10849,6 +11664,14 @@ function buildUI(): void {
     }
     setDrawerMemoryExtrasHidden(false);
     await Promise.all([
+      fetchMemoryPreferences(auth.token)
+        .then(renderMemoryPreferences)
+        .catch(() => {
+          memoryPreferencesBlock.hidden = false;
+          memoryRememberToggle.disabled = true;
+          memorySearchToggle.disabled = true;
+          setMemoryPreferenceStatus(t('spSetupMemoryUnavailable'));
+        }),
       fetchActiveMemoryWorkspace(auth.token)
         .then((workspace) => {
           memoryScope.textContent =
@@ -11174,6 +11997,91 @@ function buildUI(): void {
   inviteCodeSection.appendChild(drawerCloudBtn);
   settingsGroupBody.appendChild(inviteCodeSection);
 
+  const helpGroupBody = drawerGroupBody(t('spMenuHelp'), () => void renderHelpShortcuts());
+  const helpLinksSection = el('div', { class: 'sp-drawer-section' });
+  const helpLinks: ReadonlyArray<{ label: string; detail: string; path: string; icon: string }> = [
+    { label: t('spHelpCenter'), detail: t('spHelpCenterDetail'), path: '/help', icon: CircleHelp },
+    { label: t('spHelpDocs'), detail: t('spHelpDocsDetail'), path: '/docs', icon: FileText },
+    {
+      label: t('spHelpContact'),
+      detail: t('spHelpContactDetail'),
+      path: '/support',
+      icon: MessageSquare,
+    },
+    {
+      label: t('spHelpReportBug'),
+      detail: t('spHelpReportBugDetail'),
+      path: '/support#bugs',
+      icon: Shield,
+    },
+    { label: t('spHelpStatus'), detail: t('spHelpStatusDetail'), path: '/status', icon: Globe },
+    {
+      label: t('spHelpReleaseNotes'),
+      detail: t('spHelpReleaseNotesDetail'),
+      path: '/changelog',
+      icon: Zap,
+    },
+  ];
+  for (const link of helpLinks) {
+    const button = el('button', { class: 'sp-drawer-launcher-btn', type: 'button' });
+    const icon = el('div', { class: 'sp-drawer-launcher-icon' });
+    icon.appendChild(renderIcon(link.icon, 14));
+    const text = el('div', { class: 'sp-drawer-launcher-label' });
+    text.appendChild(el('div', {}, link.label));
+    text.appendChild(el('div', { class: 'sp-drawer-launcher-desc' }, link.detail));
+    button.appendChild(icon);
+    button.appendChild(text);
+    button.addEventListener('click', () => {
+      const url = new URL(link.path, FREE_TRIAL_GATEWAY);
+      url.searchParams.set('from', 'chrome-extension');
+      void chrome.tabs.create({ url: url.toString() });
+    });
+    helpLinksSection.appendChild(button);
+  }
+  helpGroupBody.appendChild(helpLinksSection);
+
+  const helpShortcutsSection = el('div', { class: 'sp-drawer-section' });
+  helpShortcutsSection.appendChild(
+    el('h3', { class: 'sp-drawer-section-title' }, t('spHelpShortcutsTitle')),
+  );
+  const helpShortcutList = el('dl', { class: 'sp-help-shortcuts' });
+  helpShortcutsSection.appendChild(helpShortcutList);
+  const helpShortcutsChangeBtn = el(
+    'button',
+    { type: 'button', class: 'sp-drawer-memory-add-btn' },
+    t('spHelpShortcutsChange'),
+  );
+  helpShortcutsChangeBtn.addEventListener('click', () => {
+    void chrome.tabs.create({ url: 'chrome://extensions/shortcuts' });
+  });
+  helpShortcutsSection.appendChild(helpShortcutsChangeBtn);
+  helpGroupBody.appendChild(helpShortcutsSection);
+
+  async function renderHelpShortcuts(): Promise<void> {
+    const mac = /mac/i.test(navigator.platform);
+    const modifier = mac ? '⌘' : t('spHelpKeyCtrl');
+    const commands = await chrome.commands.getAll().catch(() => []);
+    const commandKey = (name: string): string | null =>
+      commands.find((command) => command.name === name)?.shortcut || null;
+    const rows: Array<[string, string]> = [
+      [`${modifier} K`, t('spHelpShortcutPalette')],
+      [t('spHelpKeyEnter'), t('spHelpShortcutSend')],
+      [`${t('spHelpKeyShift')} ${t('spHelpKeyEnter')}`, t('spHelpShortcutNewLine')],
+      ['/', t('spHelpShortcutSlash')],
+      ['@', t('spHelpShortcutMention')],
+      [t('spHelpKeyEscape'), t('spHelpShortcutEscape')],
+    ];
+    const openPanel = commandKey('_execute_action');
+    if (openPanel) rows.push([openPanel, t('spHelpShortcutOpenPanel')]);
+    const capture = commandKey('capture_page');
+    if (capture) rows.push([capture, t('spHelpShortcutCapture')]);
+    helpShortcutList.replaceChildren();
+    for (const [keys, action] of rows) {
+      helpShortcutList.appendChild(el('dt', {}, el('kbd', {}, keys)));
+      helpShortcutList.appendChild(el('dd', {}, action));
+    }
+  }
+
   for (const group of drawerGroups) {
     const row = el('button', { class: 'sp-drawer-row', type: 'button', role: 'menuitem' });
     row.appendChild(el('span', { class: 'sp-drawer-row-label' }, group.label));
@@ -11386,6 +12294,9 @@ function buildUI(): void {
     if (refreshGeneration !== cloudAccountRefreshGeneration) return;
     const token = authContext?.token ?? null;
     if (!token) {
+      capabilityDocument = null;
+      applyCapabilityGates();
+      refreshOnboardingAccount();
       managedModelAccess = null;
       _ctx.selectedModel = reconcileManagedModelSelection(_ctx.selectedModel, null);
       _ctx.currentModelKey = undefined;
@@ -11415,6 +12326,7 @@ function buildUI(): void {
       return;
     }
 
+    const capabilityDocumentPromise = fetchCapabilityDocument(token).catch(() => null);
     const accountProfile = await withTimeout(accountProfilePromise, 8_000).catch(() => null);
     if (refreshGeneration !== cloudAccountRefreshGeneration) return;
     const currentAccountProfile =
@@ -11465,7 +12377,12 @@ function buildUI(): void {
     }
     if (refreshGeneration !== cloudAccountRefreshGeneration) return;
 
+    const document = await capabilityDocumentPromise;
+    if (refreshGeneration !== cloudAccountRefreshGeneration) return;
+    capabilityDocument = document;
+    applyCapabilityGates();
     managedModelAccess = access;
+    refreshOnboardingAccount();
     signInAwaitingCompletion = false;
     if (!canUseBillingPlanCapability(access.subscriptionTier, 'agi_work')) _ctx.workMode = 'chat';
     const reconciledSelection = reconcileManagedModelSelection(_ctx.selectedModel, access);
@@ -11822,6 +12739,67 @@ function buildUI(): void {
     const nextTab = viewTabs[nextIndex]!;
     switchTab(nextTab.dataset['tab'] as SidePanelTab);
     nextTab.focus();
+  });
+
+  const commandPalette = buildCommandPalette(async () => {
+    const destinations: PaletteCommand[] = [
+      {
+        id: 'new-chat',
+        section: 'go',
+        label: t('spPaletteNewChat'),
+        run: () => newChatBtn.click(),
+      },
+      {
+        id: 'search-chats',
+        section: 'go',
+        label: t('spPaletteSearchChats'),
+        run: openRecents,
+      },
+      ...viewTabs.map((tab): PaletteCommand => ({
+        id: `view-${tab.dataset['tab'] ?? ''}`,
+        section: 'go',
+        label: tab.textContent ?? '',
+        detail: t('spPaletteViewDetail'),
+        run: () => {
+          switchTab(tab.dataset['tab'] as SidePanelTab);
+          tab.focus();
+        },
+      })),
+      ...drawerGroups.map((group, index): PaletteCommand => ({
+        id: `menu-${index}`,
+        section: 'go',
+        label: group.label,
+        detail: t('spPaletteMenuDetail'),
+        run: () => {
+          openDrawer(menuBtn);
+          openDrawerGroup(group);
+        },
+      })),
+    ];
+    const owner = _ctx.managedCloudOwner;
+    const chats = owner ? await listConversations(owner).catch(() => []) : [];
+    return [
+      ...destinations,
+      ...chats.map((entry): PaletteCommand => ({
+        id: `chat-${entry.id}`,
+        section: 'chats',
+        label: entry.title,
+        detail: formatHistoryDate(entry.savedAt),
+        run: () => {
+          switchTab('chat');
+          void openStoredConversation(entry.id);
+        },
+      })),
+    ];
+  });
+  document.addEventListener('keydown', (event: KeyboardEvent) => {
+    if (event.key.toLowerCase() !== 'k' || event.altKey || event.shiftKey) return;
+    if (!(event.metaKey || event.ctrlKey)) return;
+    if (document.getElementById('sp-onboarding-overlay')?.classList.contains('visible')) return;
+    event.preventDefault();
+    commandPalette.open(
+      document.activeElement instanceof HTMLElement ? document.activeElement : null,
+    );
   });
 
   const chatPanel = el('div', {
@@ -13588,6 +14566,12 @@ function buildUI(): void {
     temporaryItem,
   ];
   for (const item of attachMenuItems) attachMenu.appendChild(item);
+  applyCapabilityGates = () => {
+    micBtn.hidden = !capabilityAllowed(capabilityDocument, 'canUseVoice');
+    fileItem.hidden = !capabilityAllowed(capabilityDocument, 'canUploadFiles');
+    connectorsItem.hidden = !capabilityAllowed(capabilityDocument, 'canUseConnectors');
+  };
+  applyCapabilityGates();
   attachWrapper.appendChild(attachMenu);
   attachWrapper.appendChild(attachBtn);
   attachWrapper.appendChild(fileInput);

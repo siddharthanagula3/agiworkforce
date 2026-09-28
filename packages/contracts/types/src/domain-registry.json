@@ -52,7 +52,12 @@
       "owner": "apps/web/app/api/auth/device/token/route.ts",
       "capabilities": [],
       "concepts": [],
-      "tables": ["account_sessions", "device_authorization_codes", "device_refresh_tokens"]
+      "tables": [
+        "account_sessions",
+        "desktop_sign_in_grants",
+        "device_authorization_codes",
+        "device_refresh_tokens"
+      ]
     },
     {
       "name": "devices",

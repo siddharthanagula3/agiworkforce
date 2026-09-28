@@ -1,4 +1,4 @@
-import type { InteractiveCard, ToolStatus } from '@agiworkforce/types';
+import type { AgentEventSource, InteractiveCard, ToolStatus } from '@agiworkforce/types';
 import type {
   ArtifactManifest,
   ChatMessage as CanonicalChatMessage,
@@ -32,10 +32,7 @@ export interface Artifact {
   metadata?: Record<string, unknown>;
 }
 
-export interface ToolSearchResult {
-  url: string;
-  title: string;
-  snippet?: string;
+export interface ToolSearchResult extends AgentEventSource {
   publishedDate?: string;
 }
 
@@ -115,7 +112,7 @@ export interface ChatMessage extends Omit<CanonicalChatMessage, 'attachments'> {
   videoTaskId?: string;
   videoGenCancelRequested?: boolean;
   videoGenCancelError?: string;
-  citations?: Array<{ url: string; title?: string; snippet?: string }>;
+  citations?: AgentEventSource[];
   interactiveCards?: InteractiveCard[];
   isQueued?: boolean;
   offlineQueueId?: string;

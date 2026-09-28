@@ -1,6 +1,10 @@
 import {
+  MANAGED_MEMORY_CITATIONS_HEADER,
+  parseManagedMemoryCitations,
   parseProjectFileCitations,
   PROJECT_FILE_CITATIONS_HEADER,
+  type ManagedMemoryCitation,
+  type ManagedMemoryCitations,
   type ProjectFileCitation,
 } from '@agiworkforce/types';
 import type { PastChatCitation } from '@/lib/past-chat-citation';
@@ -40,12 +44,28 @@ export function addProjectSourcesHeader(
   source: {
     projectSources?: readonly ProjectFileCitation[] | undefined;
     pastChatSources?: readonly PastChatCitation[] | undefined;
+    memoryCitations?: readonly ManagedMemoryCitation[] | undefined;
   },
 ): void {
   const value = toProjectSourcesHeaderValue(source.projectSources);
   if (value) headers[PROJECT_FILE_CITATIONS_HEADER] = value;
   const pastChats = toPastChatSourcesHeaderValue(source.pastChatSources);
   if (pastChats) headers[PAST_CHAT_CITATIONS_HEADER] = pastChats;
+  const memories = toMemoryCitationsHeaderValue(source.memoryCitations);
+  if (memories) headers[MANAGED_MEMORY_CITATIONS_HEADER] = memories;
+}
+
+export function toMemoryCitationsHeaderValue(
+  citations: readonly ManagedMemoryCitation[] | undefined,
+): string | null {
+  if (!citations?.length) return null;
+  const memories = [...citations];
+  while (memories.length > 0) {
+    const encoded = encodeHeaderValue({ count: citations.length, memories });
+    if (encoded && encoded.length <= MAX_PROJECT_SOURCES_HEADER_CHARS) return encoded;
+    memories.pop();
+  }
+  return encodeHeaderValue({ count: citations.length, memories: [] });
 }
 
 export const PAST_CHAT_CITATIONS_HEADER = 'x-agi-past-chat-citations';
@@ -95,5 +115,18 @@ export function readProjectSourcesHeaderValue(value: string | null): ProjectFile
     );
   } catch {
     return [];
+  }
+}
+
+export function readMemoryCitationsHeaderValue(
+  value: string | null,
+): ManagedMemoryCitations | null {
+  if (!value) return null;
+  try {
+    return parseManagedMemoryCitations(
+      JSON.parse(new TextDecoder().decode(decodeHeaderBytes(value))),
+    );
+  } catch {
+    return null;
   }
 }

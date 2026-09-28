@@ -2,6 +2,7 @@ import 'server-only';
 
 import { createHash } from 'node:crypto';
 import {
+  MANAGED_MEDIA_MAX_IMAGES,
   type ManagedMediaImageAspectRatio,
   type ManagedMediaImageOperation,
   type ManagedMediaImageProvider,
@@ -220,6 +221,10 @@ export const IMAGE_ASPECT_RATIOS_BY_API: Record<
   openai: new Set(['1:1', '2:3', '3:2']),
   stability: new Set(['1:1', '2:3', '3:2', '4:5', '5:4', '9:16', '16:9', '21:9', '9:21']),
 };
+
+export function maxImagesPerRequest(imageApi: ImageApi): number {
+  return imageApi === 'gemini' ? 1 : MANAGED_MEDIA_MAX_IMAGES;
+}
 
 function legacyAspectRatioForSize(size: string, imageApi: ImageApi): ManagedMediaImageAspectRatio {
   const [width = 1024, height = 1024] = size.split('x').map(Number);

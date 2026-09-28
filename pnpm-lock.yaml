@@ -526,6 +526,9 @@ importers:
 
   apps/extension:
     dependencies:
+      '@agiworkforce/artifacts':
+        specifier: workspace:*
+        version: link:../../packages/platform/artifacts
       '@agiworkforce/browser-tool':
         specifier: workspace:*
         version: link:../../packages/tools/browser-tool
@@ -1953,6 +1956,9 @@ importers:
 
   packages/client/client-runtime:
     dependencies:
+      '@agiworkforce/cloud-contracts':
+        specifier: workspace:*
+        version: link:../../contracts/cloud-contracts
       '@agiworkforce/local-runtime-contract':
         specifier: workspace:*
         version: link:../../contracts/local-runtime

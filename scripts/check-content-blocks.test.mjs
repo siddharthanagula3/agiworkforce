@@ -40,11 +40,14 @@ it('degrades every declared kind', () => {
 });
 `;
 
+const LIBRARY = "export const LIBRARY_ITEM_KINDS = ['image', 'text', 'artifact'] as const;\n";
+
 function baseTree() {
   return {
     'packages/contracts/types/src/conversation.ts': VOCABULARY,
     'packages/contracts/types/src/client-capability-manifest.ts': COMPATIBILITY,
     'packages/ui/unified-chat/src/lib/__tests__/contentBlockDegradation.test.ts': DEGRADATION_TEST,
+    'packages/contracts/cloud-contracts/src/library.ts': LIBRARY,
   };
 }
 
@@ -90,6 +93,32 @@ test('a second copy of the vocabulary fails', () => {
   assert.match(result.stderr, /restates the block vocabulary/);
 });
 
+test('a client outside the shared packages that copies the vocabulary fails', () => {
+  const files = baseTree();
+  files['apps/mobile/src/features/chat/blockKinds.ts'] =
+    "export const MOBILE_BLOCKS = ['text', 'image', 'tool_call'];\n";
+  const result = runOn(files);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /apps\/mobile\/src\/features\/chat\/blockKinds\.ts: restates/);
+});
+
+test('a copy inside a test file is not a shipped vocabulary', () => {
+  const files = baseTree();
+  files['apps/extension/src/features/blocks.test.ts'] =
+    "const FIXTURE = ['text', 'image', 'tool_call'];\n";
+  const result = runOn(files);
+  assert.equal(result.status, 0, `${result.stderr}${result.stdout}`);
+});
+
+test('a separate vocabulary that stops sharing block kinds fails until its entry goes', () => {
+  const files = baseTree();
+  files['packages/contracts/cloud-contracts/src/library.ts'] =
+    "export const LIBRARY_ITEM_KINDS = ['image', 'document'] as const;\n";
+  const result = runOn(files);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /no longer shares block kinds with MESSAGE_KINDS/);
+});
+
 test('a degradation test that names kinds by hand fails', () => {
   const files = baseTree();
   files['packages/ui/unified-chat/src/lib/__tests__/contentBlockDegradation.test.ts'] =
@@ -124,4 +153,96 @@ test('a vocabulary with no MESSAGE_KINDS is reported rather than passed', () => 
   const result = runOn(files);
   assert.equal(result.status, 2);
   assert.match(result.stderr, /declares no MESSAGE_KINDS/);
+});
+
+const AGENT_EVENT_UNION = `export type AgentEvent =
+  | ({ type: 'text-delta' } & A)
+  | ({ type: 'source-list' } & B)
+  | ({ type: 'artifact-produced' } & C)
+  | ({ type: 'stop' } & D);
+`;
+
+const KIND_MAPPING = `export const AGENT_EVENT_MESSAGE_KINDS = Object.freeze({
+  'text-delta': 'text',
+  'source-list': 'citation',
+  'artifact-produced': 'artifact',
+  stop: null,
+});
+export function messageKindForAgentEvent(type) { return AGENT_EVENT_MESSAGE_KINDS[type] ?? null; }
+`;
+
+const PRIVATE_CLASSIFIER = `export function section(event) {
+  switch (event.type) {
+    case 'text-delta': return 'body';
+    case 'source-list': return 'sources';
+    case 'artifact-produced': return 'files';
+  }
+}
+`;
+
+function eventTree(extra = {}) {
+  const dir = mkdtempSync(path.join(tmpdir(), 'check-content-blocks-'));
+  sandboxes.push(dir);
+  const files = {
+    ...baseTree(),
+    'packages/contracts/types/src/generated/protocol/AgentEvent.ts': AGENT_EVENT_UNION,
+    'packages/contracts/types/src/message-block-kinds.ts': KIND_MAPPING,
+    ...extra,
+  };
+  for (const [relative, contents] of Object.entries(files)) {
+    if (contents === null) continue;
+    const absolute = path.join(dir, relative);
+    mkdirSync(path.dirname(absolute), { recursive: true });
+    writeFileSync(absolute, contents, 'utf8');
+  }
+  return dir;
+}
+
+test('a client that decides blocks from event types without the mapping fails', async () => {
+  const { runContentBlocksGuard } = await import('./check-content-blocks.mjs');
+  const dir = eventTree({ 'apps/extension/src/features/blocks.ts': PRIVATE_CLASSIFIER });
+  const { findings } = runContentBlocksGuard(dir, { pending: {} });
+  assert.ok(
+    findings.some((finding) => /blocks\.ts: decides blocks from agent event types/.test(finding)),
+    findings.join('\n'),
+  );
+});
+
+test('a client that reads the kind through the mapping passes', async () => {
+  const { runContentBlocksGuard } = await import('./check-content-blocks.mjs');
+  const dir = eventTree({
+    'apps/extension/src/features/blocks.ts': `import { messageKindForAgentEvent } from '@agiworkforce/types';\n${PRIVATE_CLASSIFIER}`,
+  });
+  assert.deepEqual(runContentBlocksGuard(dir, { pending: {} }).findings, []);
+});
+
+test('a pending client that adopts the mapping fails until its entry goes', async () => {
+  const { runContentBlocksGuard } = await import('./check-content-blocks.mjs');
+  const file = 'apps/mobile/src/features/blocks.ts';
+  const pending = { [file]: 'mobile, post-codex patch: read kinds through the mapping' };
+  const before = eventTree({ [file]: PRIVATE_CLASSIFIER });
+  assert.deepEqual(runContentBlocksGuard(before, { pending }).findings, []);
+  const after = eventTree({
+    [file]: `import { messageKindForAgentEvent } from '@agiworkforce/types';\n${PRIVATE_CLASSIFIER}`,
+  });
+  assert.ok(
+    runContentBlocksGuard(after, { pending }).findings.some((finding) =>
+      /Delete its pending entry/.test(finding),
+    ),
+  );
+});
+
+test('a mapping that leaves an event type out fails', async () => {
+  const { runContentBlocksGuard } = await import('./check-content-blocks.mjs');
+  const dir = eventTree({
+    'packages/contracts/types/src/message-block-kinds.ts': KIND_MAPPING.replace(
+      "  'source-list': 'citation',\n",
+      '',
+    ),
+  });
+  assert.ok(
+    runContentBlocksGuard(dir, { pending: {} }).findings.some((finding) =>
+      /maps no block kind for the event type 'source-list'/.test(finding),
+    ),
+  );
 });
