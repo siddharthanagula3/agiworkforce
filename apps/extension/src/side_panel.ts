@@ -253,6 +253,7 @@ import {
   type MemoryCommandResult,
 } from './features/cloud-bridge/memoryClient';
 import { mountInviteCodeModal } from './features/cloud-bridge/InviteCodeModal';
+import { createExtensionCloudChatClient } from './features/cloud-bridge/conversationSyncClient';
 import {
   CONTEXT_HANDOFF_CLI_DESTINATION,
   CONTEXT_HANDOFF_STORAGE_KEY,
@@ -757,6 +758,8 @@ export interface SharedSidePanelContext {
   reasoningEffort?: Effort;
   activeProject: ActiveProjectSelection | null;
   pendingProjectBinding?: string | null;
+  temporaryChat: boolean;
+  temporaryConversationId: string | null;
 }
 
 function createSharedSidePanelContext(): SharedSidePanelContext {
@@ -779,6 +782,8 @@ function createSharedSidePanelContext(): SharedSidePanelContext {
     managedCloudOwner: null,
     selectedModel: 'auto',
     activeProject: null,
+    temporaryChat: false,
+    temporaryConversationId: null,
   };
 }
 
@@ -922,6 +927,12 @@ function managedTurnPersistencePayload(streamId: string): {
   assistantMessageId?: string;
   conversationId?: string;
 } {
+  if (_ctx.temporaryChat) {
+    const temporaryId = _ctx.temporaryConversationId;
+    return temporaryId && OUTBOUND_UUID_PATTERN.test(temporaryId)
+      ? { conversationId: temporaryId }
+      : {};
+  }
   const assistantMessageId = assistantCloudIdByStreamId.get(streamId);
   const cloudConversationId = activePersistenceEntry?.cloudSync?.conversationId;
   return {
@@ -1090,7 +1101,7 @@ function serializeMessagesForHistory() {
 
 function persistMessages(): Promise<void> {
   const owner = _ctx.managedCloudOwner;
-  if (!owner) return Promise.resolve();
+  if (!owner || _ctx.temporaryChat) return Promise.resolve();
   const conversationId = _ctx.conversationId;
   persistCurrentConversationOwner();
   const projectBinding = _ctx.pendingProjectBinding;
@@ -1120,6 +1131,7 @@ function persistMessages(): Promise<void> {
 }
 
 function saveMessages(): void {
+  if (_ctx.temporaryChat) return;
   void persistMessages()
     .then(() => {
       requestCloudConversationSync();
@@ -1267,6 +1279,7 @@ function clearStoredMessages(): void {
   historyRestoreToken += 1;
   _ctx.conversationGeneration += 1;
   _ctx.conversationId = createBrowserConversationId();
+  leaveTemporaryChat();
   _ctx.pendingProjectBinding = _ctx.activeProject?.id ?? null;
   clearActivePersistenceState();
   persistCurrentConversationOwner();
@@ -5495,6 +5508,8 @@ function injectStyles(): void {
       line-height: var(--type-body-height);
     }
     .sp-attach-menu-label { flex: 1; min-width: 0; }
+    .sp-attach-menu-label > span { display: block; }
+    .sp-attach-menu-hint { color: var(--agi-ext-text-muted); font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
     .sp-attach-menu-check {
       display: inline-flex;
       align-items: center;
@@ -6125,6 +6140,7 @@ function renderMessages(): void {
     }
   }
   _ctx.lastRenderedCount = _ctx.messages.length;
+  renderTemporaryChatState();
 
   scrollToBottom();
 }
@@ -6687,6 +6703,65 @@ function sendMessage(text: string, displayText?: string): void {
   dispatchTurn(userMsg, payload, _ctx.quickMode);
 }
 
+let temporaryEndPending = false;
+
+function renderTemporaryChatState(): void {
+  const notice = document.getElementById('sp-temporary-notice');
+  const text = document.getElementById('sp-temporary-notice-text');
+  const end = document.getElementById('sp-temporary-notice-end');
+  const keep = document.getElementById('sp-temporary-notice-keep');
+  const item = document.getElementById('sp-temporary-item');
+  if (notice && text && end && keep) {
+    notice.classList.toggle('visible', _ctx.temporaryChat);
+    const started = _ctx.messages.length > 0;
+    text.textContent = temporaryEndPending
+      ? t('spTemporaryChatEndPrompt')
+      : t('spTemporaryChatActive');
+    end.textContent = temporaryEndPending
+      ? t('spTemporaryChatEndConfirm')
+      : started
+        ? t('spTemporaryChatEnd')
+        : t('spTemporaryChatTurnOff');
+    keep.hidden = !temporaryEndPending;
+  }
+  if (item) {
+    item.setAttribute('aria-checked', String(_ctx.temporaryChat));
+    item.hidden = !_ctx.temporaryChat && _ctx.messages.length > 0;
+    const check = item.querySelector('.sp-attach-menu-check');
+    if (check) {
+      clearChildren(check);
+      if (_ctx.temporaryChat) check.appendChild(renderIcon(Check, 14));
+    }
+  }
+}
+
+function leaveTemporaryChat(): void {
+  _ctx.temporaryChat = false;
+  _ctx.temporaryConversationId = null;
+  temporaryEndPending = false;
+  renderTemporaryChatState();
+}
+
+function startTemporaryChat(): void {
+  if (_ctx.messages.length > 0 || _ctx.isStreaming) return;
+  _ctx.temporaryChat = true;
+  _ctx.temporaryConversationId = null;
+  temporaryEndPending = false;
+  renderTemporaryChatState();
+}
+
+function endTemporaryChat(): void {
+  const owner = _ctx.managedCloudOwner;
+  const conversationId = _ctx.temporaryConversationId;
+  if (owner && conversationId) {
+    void createExtensionCloudChatClient(owner)
+      .deleteConversation(conversationId)
+      .catch(() => undefined);
+  }
+  cancelCurrentManagedStream(false);
+  resetConversationView();
+}
+
 function renderMemoryNotice(
   notice: { text: string; confirmForget?: () => Promise<void> } | null,
 ): void {
@@ -6763,10 +6838,33 @@ async function runChatMemoryCommand(
   return { kind: result.kind, status: result.status };
 }
 
+async function ensureTemporaryConversation(owner: ManagedCloudOwner): Promise<string | null> {
+  if (_ctx.temporaryConversationId) return _ctx.temporaryConversationId;
+  const conversation = await createExtensionCloudChatClient(owner).createConversation({
+    isTemporary: true,
+  });
+  if (!_ctx.temporaryChat) return null;
+  _ctx.temporaryConversationId = conversation.id;
+  return conversation.id;
+}
+
 function dispatchTurn(userMsg: ChatMessage, payload: TurnPayload, quickMode: boolean): void {
   const owner = _ctx.managedCloudOwner!;
   const streamId = beginManagedStream(quickMode);
   renderMemoryNotice(null);
+  if (_ctx.temporaryChat) {
+    void ensureTemporaryConversation(owner)
+      .catch(() => null)
+      .then((conversationId) => {
+        if (_ctx.currentStreamId !== streamId) return;
+        if (!conversationId) {
+          handleStreamError(streamId, t('spTemporaryChatUnavailable'));
+          return;
+        }
+        continueTurn(userMsg, payload, streamId, owner, quickMode);
+      });
+    return;
+  }
   if (!MEMORY_COMMAND_HINT.test(payload.prompt)) {
     continueTurn(userMsg, payload, streamId, owner, quickMode);
     return;
@@ -7353,6 +7451,7 @@ async function uploadComposerDocument(entry: ComposerDocument): Promise<void> {
   try {
     const [attachment] = await client.upload([entry.file], {
       signal,
+      ...(_ctx.temporaryChat ? { temporary: true } : {}),
       onStatus: (status) => {
         if (signal.aborted || status.phase === 'failed' || status.phase === 'complete') return;
         entry.phase = status.phase;
@@ -8852,6 +8951,7 @@ function buildUI(): void {
       clearPendingPageContext();
       _ctx.conversationGeneration += 1;
       _ctx.conversationId = conversationOwner.conversationId;
+      leaveTemporaryChat();
       adoptChatProject(entry.projectId);
       if (conversationOwner.forked) _ctx.pendingProjectBinding = entry.projectId ?? null;
       activePersistenceEntry = conversationOwner.forked ? undefined : entry;
@@ -13274,7 +13374,45 @@ function buildUI(): void {
       });
   });
 
-  const attachMenuItems = [fileItem, screenshotItem, contextBtn, linkItem, connectorsItem];
+  const temporaryItem = el('button', {
+    class: 'sp-attach-menu-item',
+    id: 'sp-temporary-item',
+    type: 'button',
+    role: 'menuitemcheckbox',
+    'aria-checked': 'false',
+    title: t('spTemporaryChatRetention'),
+  }) as HTMLButtonElement;
+  temporaryItem.appendChild(renderIcon(Clock, 16));
+  const temporaryItemText = el('span', { class: 'sp-attach-menu-label' });
+  temporaryItemText.appendChild(el('span', {}, t('spTemporaryChatLabel')));
+  temporaryItemText.appendChild(
+    el('span', { class: 'sp-attach-menu-hint' }, t('spTemporaryChatExplanation')),
+  );
+  temporaryItem.appendChild(temporaryItemText);
+  temporaryItem.appendChild(el('span', { class: 'sp-attach-menu-check' }));
+  temporaryItem.addEventListener('click', () => {
+    attachMenu.classList.remove('open');
+    attachBtn.setAttribute('aria-expanded', 'false');
+    if (_ctx.temporaryChat) {
+      if (_ctx.messages.length === 0) leaveTemporaryChat();
+      else {
+        temporaryEndPending = true;
+        renderTemporaryChatState();
+      }
+      return;
+    }
+    startTemporaryChat();
+    inputEl.focus();
+  });
+
+  const attachMenuItems = [
+    fileItem,
+    screenshotItem,
+    contextBtn,
+    linkItem,
+    connectorsItem,
+    temporaryItem,
+  ];
   for (const item of attachMenuItems) attachMenu.appendChild(item);
   attachWrapper.appendChild(attachMenu);
   attachWrapper.appendChild(attachBtn);
@@ -13287,7 +13425,7 @@ function buildUI(): void {
     if (isOpen) fileItem.focus();
   });
   attachMenu.addEventListener('keydown', (event: KeyboardEvent) => {
-    const items = attachMenuItems;
+    const items = attachMenuItems.filter((item) => !item.hidden && !item.disabled);
     if (event.key === 'Escape') {
       event.preventDefault();
       attachMenu.classList.remove('open');
@@ -13620,8 +13758,49 @@ function buildUI(): void {
   memoryNoticeDismiss.addEventListener('click', () => renderMemoryNotice(null));
   memoryNotice.appendChild(memoryNoticeDismiss);
 
+  const temporaryNotice = el('div', {
+    id: 'sp-temporary-notice',
+    class: 'sp-composer-notice',
+    role: 'status',
+    'aria-live': 'polite',
+  });
+  temporaryNotice.appendChild(el('span', { id: 'sp-temporary-notice-text' }));
+  const temporaryEnd = el('button', {
+    id: 'sp-temporary-notice-end',
+    class: 'sp-composer-notice-action',
+    type: 'button',
+  });
+  temporaryEnd.addEventListener('click', () => {
+    if (_ctx.messages.length === 0) {
+      leaveTemporaryChat();
+      return;
+    }
+    if (!temporaryEndPending) {
+      temporaryEndPending = true;
+      renderTemporaryChatState();
+      return;
+    }
+    endTemporaryChat();
+  });
+  const temporaryKeep = el(
+    'button',
+    {
+      id: 'sp-temporary-notice-keep',
+      class: 'sp-composer-notice-action',
+      type: 'button',
+      hidden: '',
+    },
+    t('spTemporaryChatKeep'),
+  );
+  temporaryKeep.addEventListener('click', () => {
+    temporaryEndPending = false;
+    renderTemporaryChatState();
+  });
+  temporaryNotice.append(temporaryEnd, temporaryKeep);
+
   inputArea.appendChild(usageWarningBanner);
   inputArea.appendChild(modelNotice);
+  inputArea.appendChild(temporaryNotice);
   inputArea.appendChild(memoryNotice);
   inputArea.appendChild(cloudGate);
   inputArea.appendChild(bridgeNotice);
