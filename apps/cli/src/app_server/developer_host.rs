@@ -22,18 +22,19 @@ use agiworkforce_protocol::developer_session::{
     McpServerInspectResponse, McpServerListResponse, McpServerParams, McpServerTestResponse,
     McpServerToolsResponse, MemoryAddParams, MemoryAddResponse, ModelListParams,
     PendingApprovalSnapshot, PermissionsListResponse, PermissionsRemoveParams, PluginInstallParams,
-    PluginListResponse, PluginRemoveParams, PluginSetEnabledParams, RewindSkippedFile,
-    SettingsReadResponse, SettingsWriteParams, SkillConsentParams, SkillConsentResponse,
-    SkillInstallParams, SkillListResponse, SkillRemoveParams, SkillSetEnabledParams,
-    SlashCommandListResponse, SlashCommandRunParams, SlashCommandRunResponse, ThreadCheckpoint,
-    ThreadCheckpointsResponse, ThreadForkParams, ThreadHandoffAcceptParams, ThreadHandoffParams,
-    ThreadIdParams, ThreadListParams, ThreadListResponse, ThreadPlanNotification,
-    ThreadReadResponse, ThreadReconnectResponse, ThreadRewindParams, ThreadRewindResponse,
-    ThreadRewindRestore, ThreadSearchHit, ThreadSearchParams, ThreadSearchResponse,
-    ThreadStartParams, ThreadStatus, ThreadSummary, ThreadWriterChangedNotification,
-    ThreadWriterConflictData, TurnEndedNotification, TurnFailure, TurnFailureCode,
-    TurnInterruptParams, TurnModelNotification, TurnStartParams, TurnStatus, TurnSteerParams,
-    TurnSummary, WorktreeCreateParams, WorktreeListResponse, WorktreeRemoveParams, WorktreeSummary,
+    PluginListResponse, PluginRemoveParams, PluginSetEnabledParams, PluginUpdateResponse,
+    RewindSkippedFile, SettingsReadResponse, SettingsWriteParams, SkillConsentParams,
+    SkillConsentResponse, SkillInstallParams, SkillListResponse, SkillRemoveParams,
+    SkillSetEnabledParams, SlashCommandListResponse, SlashCommandRunParams,
+    SlashCommandRunResponse, ThreadCheckpoint, ThreadCheckpointsResponse, ThreadForkParams,
+    ThreadHandoffAcceptParams, ThreadHandoffParams, ThreadIdParams, ThreadListParams,
+    ThreadListResponse, ThreadPlanNotification, ThreadReadResponse, ThreadReconnectResponse,
+    ThreadRewindParams, ThreadRewindResponse, ThreadRewindRestore, ThreadSearchHit,
+    ThreadSearchParams, ThreadSearchResponse, ThreadStartParams, ThreadStatus, ThreadSummary,
+    ThreadWriterChangedNotification, ThreadWriterConflictData, TurnEndedNotification, TurnFailure,
+    TurnFailureCode, TurnInterruptParams, TurnModelNotification, TurnStartParams, TurnStatus,
+    TurnSteerParams, TurnSummary, WorktreeCreateParams, WorktreeListResponse, WorktreeRemoveParams,
+    WorktreeSummary,
 };
 use agiworkforce_protocol::protocol::{NetworkPolicyRuleAction, ReviewDecision};
 use agiworkforce_protocol::task_state::AgentTaskState;
@@ -436,6 +437,7 @@ impl CliDeveloperSessionHost {
             installs: true,
             saved_permissions: true,
             mcp_inspect: self.load_integrations,
+            plugin_updates: true,
         }
     }
 
@@ -3283,6 +3285,23 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         self.emit("plugins/changed", serde_json::json!({}));
         self.reload_integrations().await;
         Ok(changed)
+    }
+
+    async fn update_plugin(
+        &self,
+        params: PluginRemoveParams,
+    ) -> Result<PluginUpdateResponse, DeveloperSessionHostError> {
+        let _guard = self.admit_request().await?;
+        let workspace_root = self.workspace_root.clone();
+        let updated =
+            tokio::task::spawn_blocking(move || surfaces::update_plugin(&workspace_root, params))
+                .await
+                .map_err(internal_error)??;
+        if updated.updated {
+            self.emit("plugins/changed", serde_json::json!({}));
+            self.reload_integrations().await;
+        }
+        Ok(updated)
     }
 
     async fn add_mcp_server(

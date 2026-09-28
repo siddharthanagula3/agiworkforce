@@ -271,6 +271,7 @@ export * from './PluginRemoveParams';
 export * from './PluginScope';
 export * from './PluginSetEnabledParams';
 export * from './PluginSummary';
+export * from './PluginUpdateResponse';
 export * from './ProtocolVersionUnsupportedData';
 export * from './RateLimitReachedType';
 export * from './RateLimitSnapshot';

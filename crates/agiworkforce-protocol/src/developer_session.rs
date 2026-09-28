@@ -92,6 +92,7 @@ pub mod method {
     pub const PLUGINS_SET_ENABLED: &str = "plugins/setEnabled";
     pub const PLUGINS_INSTALL: &str = "plugins/install";
     pub const PLUGINS_REMOVE: &str = "plugins/remove";
+    pub const PLUGINS_UPDATE: &str = "plugins/update";
     pub const MCP_LIST: &str = "mcp/list";
     pub const MCP_LOGIN: &str = "mcp/login";
     pub const MCP_TEST: &str = "mcp/test";
@@ -380,6 +381,8 @@ pub struct AppServerCapabilities {
     pub saved_permissions: bool,
     #[serde(default, skip_serializing_if = "is_false")]
     pub mcp_inspect: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub plugin_updates: bool,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -2167,6 +2170,23 @@ pub struct PluginInstallParams {
 #[ts(rename_all = "camelCase")]
 pub struct PluginRemoveParams {
     pub id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct PluginUpdateResponse {
+    pub id: String,
+    pub updated: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub previous_version: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub version: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub changed_files: Vec<String>,
+    pub plugins: Vec<PluginSummary>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]

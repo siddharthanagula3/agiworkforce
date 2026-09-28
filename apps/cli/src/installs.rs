@@ -129,6 +129,75 @@ pub(crate) fn remove_plugin(name: &str) -> Result<PathBuf> {
     Ok(target)
 }
 
+pub(crate) struct UpdatedPlugin {
+    pub previous_version: Option<String>,
+    pub update: crate::marketplace::PluginCheckoutUpdate,
+}
+
+pub(crate) fn update_plugin(name: &str) -> Result<UpdatedPlugin> {
+    plugins::validate_plugin_name(name).map_err(anyhow::Error::msg)?;
+    let manager = plugins::PluginsManager::new();
+    let mut registry = crate::marketplace::InstalledPlugins::load(manager.global_dir());
+    let recorded = registry.plugins.get(name).cloned();
+    let install_path = recorded
+        .as_ref()
+        .map(|entry| PathBuf::from(&entry.install_path))
+        .unwrap_or_else(|| manager.global_dir().join(name));
+    anyhow::ensure!(
+        install_path.is_dir(),
+        "no plugin named '{name}' is installed"
+    );
+    anyhow::ensure!(
+        crate::marketplace::is_git_checkout(&install_path),
+        "'{name}' was installed from a folder, so there is nothing to update it from; install it again from its source"
+    );
+    let previous_version = recorded
+        .as_ref()
+        .map(|entry| entry.version.clone())
+        .or_else(|| {
+            plugins::load_manifest_for(&install_path).and_then(|(manifest, _)| manifest.version)
+        });
+    let policy = plugins::PluginSignaturePolicy::configured(false).map_err(anyhow::Error::msg)?;
+    let update = crate::marketplace::update_plugin_checkout(&install_path, &policy)
+        .map_err(anyhow::Error::msg)?;
+    if let (
+        Some(entry),
+        crate::marketplace::PluginCheckoutUpdate::Updated {
+            version, signature, ..
+        },
+    ) = (registry.plugins.get_mut(name), &update)
+    {
+        entry.version = version.clone();
+        entry.signature = Some(signature.clone());
+        registry.save(manager.global_dir())?;
+    }
+    Ok(UpdatedPlugin {
+        previous_version,
+        update,
+    })
+}
+
+pub(crate) fn describe_update(name: &str, updated: &UpdatedPlugin) -> String {
+    match &updated.update {
+        crate::marketplace::PluginCheckoutUpdate::UpToDate => {
+            format!("Plugin '{name}' is already up to date.")
+        }
+        crate::marketplace::PluginCheckoutUpdate::Updated {
+            version,
+            changed_files,
+            ..
+        } => format!(
+            "{}\nRestart agi to load the new version.",
+            crate::marketplace::describe_plugin_update(
+                name,
+                updated.previous_version.as_deref().unwrap_or("0.0.0"),
+                version,
+                changed_files,
+            )
+        ),
+    }
+}
+
 pub(crate) fn remove_skill(project_root: &Path, name: &str) -> Result<PathBuf> {
     let entry = crate::skills::skill_catalog(project_root)
         .into_iter()
@@ -183,6 +252,15 @@ pub(crate) fn set_plugin_enabled(name: &str, enabled: bool) -> Result<String> {
     ))
 }
 
+pub(crate) fn is_plugin_action(args: &str) -> bool {
+    let mut words = args.split_whitespace();
+    match words.next() {
+        Some("enable" | "disable" | "remove" | "uninstall") => true,
+        Some("update" | "upgrade") => words.next().is_some(),
+        _ => false,
+    }
+}
+
 pub(crate) fn plugin_command(args: &str) -> Option<String> {
     let (action, name) = args.trim().split_once(char::is_whitespace)?;
     let name = name.trim();
@@ -191,6 +269,7 @@ pub(crate) fn plugin_command(args: &str) -> Option<String> {
         "disable" => set_plugin_enabled(name, false),
         "remove" | "uninstall" => remove_plugin(name)
             .map(|path| format!("Removed plugin '{name}' from {}.", path.display())),
+        "update" | "upgrade" => update_plugin(name).map(|updated| describe_update(name, &updated)),
         _ => return None,
     };
     Some(outcome.unwrap_or_else(|error| format!("{error:#}")))
