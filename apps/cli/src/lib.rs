@@ -2902,6 +2902,19 @@ async fn handle_memory_command(action: &MemorySubcommand) -> Result<()> {
                         "    {}",
                         terminal_text::sanitize_terminal_text(&entry.content)
                     );
+                    if let Some(conversation) = entry.source_conversation_id.as_deref() {
+                        let title = entry
+                            .source_conversation_title
+                            .as_deref()
+                            .map(|title| {
+                                format!("'{}'", terminal_text::sanitize_terminal_text(title))
+                            })
+                            .unwrap_or_else(|| "a chat".to_string());
+                        println!(
+                            "    learned in {title}; agi resume --cloud {} opens it",
+                            terminal_text::sanitize_terminal_text(conversation)
+                        );
+                    }
                 }
             }
             Ok(())
