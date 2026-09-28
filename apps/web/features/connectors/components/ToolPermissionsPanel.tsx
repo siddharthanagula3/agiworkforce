@@ -49,6 +49,12 @@ const RESET_LABEL = 'Reset all to default';
 const RESET_CONFIRM_TITLE = 'Reset every tool permission?';
 const RESET_CONFIRM_LABEL = 'Reset permissions';
 const SAVING_LABEL = 'Saving this permission';
+const READ_ONLY_HINT =
+  'Tools the server marks as read-only stay as they are. The mark is the server’s own claim.';
+
+function readOnlyLabel(count: number): string {
+  return `Block the ${count} ${count === 1 ? 'tool' : 'tools'} that can change data`;
+}
 
 function resetConfirmDescription(connectorName: string): string {
   return `Every allow and deny you set for ${connectorName} is removed. Its tools that AGI does not recognise go back to asking before every call, and tools it knows only read data follow your Tool approvals default. This cannot be undone.`;
@@ -156,6 +162,7 @@ function PermissionLegend() {
 
 export function ToolPermissionsPanel({ connector, open, onOpenChange }: ToolPermissionsPanelProps) {
   const resetConnectorPermissions = useToolPermissionsStore((s) => s.resetConnectorPermissions);
+  const setToolPermission = useToolPermissionsStore((s) => s.setToolPermission);
   const { confirm, dialog } = useConfirmAction();
   const { catalog, loading, error, retry } = useConnectorCapabilities(
     connector?.id ?? null,
@@ -168,6 +175,9 @@ export function ToolPermissionsPanel({ connector, open, onOpenChange }: ToolPerm
 
   const tools: readonly string[] =
     catalog?.tools.map((tool) => tool.name) ?? getDeclaredConnectorActions(connector.id);
+  const writeTools = (catalog?.tools ?? [])
+    .filter((tool) => !tool.readOnly)
+    .map((tool) => tool.name);
   const discovering = loading && tools.length === 0;
   const discoveryFailed = error !== null && tools.length === 0;
 
@@ -247,11 +257,29 @@ export function ToolPermissionsPanel({ connector, open, onOpenChange }: ToolPerm
               <ConnectorCallLog connectorId={permissionConnectorId} />
             </div>
 
-            <div className="flex justify-end border-t border-border pt-2">
+            <div className="flex flex-wrap items-center gap-2 border-t border-border pt-2">
+              {writeTools.length > 0 ? (
+                <div className="flex flex-col gap-0.5">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
+                    onClick={() => {
+                      for (const toolName of writeTools) {
+                        setToolPermission(permissionConnectorId, toolName, 'deny');
+                      }
+                    }}
+                  >
+                    <Ban className="h-3 w-3" aria-hidden="true" />
+                    {readOnlyLabel(writeTools.length)}
+                  </Button>
+                  <span className="px-2 text-caption text-muted-foreground">{READ_ONLY_HINT}</span>
+                </div>
+              ) : null}
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
+                className="ml-auto h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
                 onClick={() =>
                   confirm({
                     title: RESET_CONFIRM_TITLE,

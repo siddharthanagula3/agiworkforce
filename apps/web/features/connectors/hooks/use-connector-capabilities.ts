@@ -44,6 +44,7 @@ const ConnectorCapabilityCatalogSchema = z.object({
           }),
         )
         .default([]),
+      readOnly: z.boolean().default(false),
       visibility: z.enum(['model', 'app', 'both']),
       hasApp: z.boolean(),
     }),
