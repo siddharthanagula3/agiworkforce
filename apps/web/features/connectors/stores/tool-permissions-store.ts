@@ -1,6 +1,10 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { getCsrfToken } from '@/lib/client/csrf';
+import {
+  connectorCategoryToolName,
+  type ConnectorToolCategory,
+} from '@shared/types/connectorToolCategories';
 import { logger } from '@shared/lib/logger';
 import { queryClient, queryKeys } from '@shared/stores/query-client';
 
@@ -39,6 +43,7 @@ interface ToolPermissionsActions {
     connectorId: string,
     toolNames: readonly string[],
     level: PermissionLevel,
+    category?: ConnectorToolCategory,
   ) => void;
   getToolPermission: (connectorId: string, toolName: string) => PermissionLevel;
   getConnectorPermissions: (connectorId: string) => Record<string, PermissionLevel>;
@@ -65,21 +70,22 @@ async function writePermissionToServer(
   connectorId: string,
   toolNames: readonly string[],
   level: PermissionLevel,
+  category?: ConnectorToolCategory,
 ): Promise<void> {
   const csrf = await getCsrfToken();
-  for (let start = 0; start < toolNames.length; start += MAX_TOOLS_PER_WRITE) {
-    const chunk = toolNames.slice(start, start + MAX_TOOLS_PER_WRITE);
+  const put = async (body: Record<string, unknown>) => {
     const response = await fetch(PERMISSIONS_PATH, {
       method: 'PUT',
       credentials: SAME_ORIGIN,
       headers: { 'Content-Type': JSON_CONTENT_TYPE, [CSRF_HEADER]: csrf },
-      body: JSON.stringify(
-        chunk.length === 1
-          ? { connectorId, toolName: chunk[0], level }
-          : { connectorId, toolNames: chunk, level },
-      ),
+      body: JSON.stringify({ connectorId, level, ...body }),
     });
     if (!response.ok) throw new PermissionWriteError(response.status);
+  };
+  if (category) await put({ category });
+  for (let start = 0; start < toolNames.length; start += MAX_TOOLS_PER_WRITE) {
+    const chunk = toolNames.slice(start, start + MAX_TOOLS_PER_WRITE);
+    await put(chunk.length === 1 ? { toolName: chunk[0] } : { toolNames: chunk });
   }
   await queryClient.invalidateQueries({ queryKey: queryKeys.connectors.permissions() });
 }
@@ -162,7 +168,10 @@ export const useToolPermissionsStore = create<Store>()(
         get().setToolsPermission(connectorId, [toolName], level);
       },
 
-      setToolsPermission: (connectorId, toolNames, level) => {
+      setToolsPermission: (connectorId, listedToolNames, level, category) => {
+        const toolNames = category
+          ? [...listedToolNames, connectorCategoryToolName(category)]
+          : listedToolNames;
         if (toolNames.length === 0) return;
         const previous = get().permissions[connectorId] ?? {};
         set((state) => ({
@@ -183,7 +192,7 @@ export const useToolPermissionsStore = create<Store>()(
         const unmarkAll = (saving: Record<string, readonly string[]>) =>
           toolNames.reduce((next, name) => unmarkSaving(next, connectorId, name), saving);
 
-        void writePermissionToServer(connectorId, toolNames, level)
+        void writePermissionToServer(connectorId, listedToolNames, level, category)
           .then(() => {
             set((state) => ({ saving: unmarkAll(state.saving) }));
           })

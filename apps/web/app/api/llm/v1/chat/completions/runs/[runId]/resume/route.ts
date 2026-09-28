@@ -17,7 +17,7 @@ import {
   buildOrganizationPolicyGateResponse,
   buildSpendLimitGateResponse,
 } from '@/lib/managed-compute-gate';
-import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
+import { resolveAuthenticatedSurface } from '../../../lib/request-surface';
 import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { runAuthGate, type AuthGateSuccess } from '../../../lib/auth-gate';
@@ -166,7 +166,7 @@ async function handlePausedRunResume(
   const policyGateResponse = await buildOrganizationPolicyGateResponse(
     userId,
     request,
-    { ...gateContext, surface: resolveCloudChatSurface(request) },
+    { ...gateContext, surface: resolveAuthenticatedSurface(request, authResult) },
     getSecurityHeaders(),
   );
   if (policyGateResponse) return policyGateResponse;
