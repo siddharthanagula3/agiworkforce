@@ -270,6 +270,7 @@ export const MemorySyncPullResponseSchema = z.object({
   memories: z.array(MemoryWireDeltaSchema),
   cursor: ServerVersionSchema,
   hasMore: z.boolean(),
+  memoryEnabled: z.boolean().optional(),
 });
 export type MemorySyncPullResponse = z.infer<typeof MemorySyncPullResponseSchema>;
 
@@ -300,6 +301,8 @@ export const MemorySyncConflictSchema = z.object({
 export const MemorySyncRejectionSchema = z.object({
   id: z.string(),
   term: z.string().nullable().optional(),
+  reason: z.string().optional(),
+  message: z.string().optional(),
 });
 export type MemorySyncRejection = z.infer<typeof MemorySyncRejectionSchema>;
 
