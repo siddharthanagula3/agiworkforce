@@ -145,6 +145,7 @@ import {
   TOOL_DIRECTORY_TOOL_NAME,
 } from './tool-schema-loader';
 import { stageTurnAttachments } from '@/lib/e2b/attachment-staging';
+import type { ResearchDomainPolicy } from './research-sources';
 import {
   STORED_RESULT_NOTICE_MARKER,
   TOOL_RESULT_READER_TOOL_NAME,
@@ -1873,6 +1874,7 @@ async function runMcpTool(
     planTier?: string | null;
     usageAttribution?: UsageAttribution;
     webSearchMaxResults?: number;
+    webSearchDomainPolicy?: ResearchDomainPolicy | null;
     surface?: string | null;
     onWebSearchSpend?: (spend: WebSearchSpend) => void;
     freeTrialSpend?: FreeTrialToolSpend;
@@ -2051,6 +2053,7 @@ async function runMcpTool(
     }
     const outcome = await executeWebSearch(toolCall.args, {
       maxResults: executionContext?.webSearchMaxResults,
+      domainPolicy: executionContext?.webSearchDomainPolicy ?? null,
       ...(executionContext?.signal ? { signal: executionContext.signal } : {}),
     });
     executionContext?.onWebSearchSpend?.({
@@ -4302,6 +4305,7 @@ export async function* runToolLoop(
               planTier: processed.subscriptionTier ?? null,
               usageAttribution: processed.managedUsage?.attribution,
               webSearchMaxResults: processed.freeTrial ? WEB_SEARCH_FREE_MAX_RESULTS : undefined,
+              webSearchDomainPolicy: processed.webSearchDomainPolicy ?? null,
               surface: processed.chatSurface,
               onWebSearchSpend: (spend) => {
                 searchSpend = spend;

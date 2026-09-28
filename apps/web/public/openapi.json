@@ -617,11 +617,34 @@
           },
           "response_format": {
             "type": "object",
-            "description": "`text` and `json_object` are honoured. `json_schema` is refused rather than ignored.",
+            "description": "`text`, `json_object` and `json_schema` are honoured. `json_object` and `json_schema` need `stream: false`, because the reply is validated before it is returned. With `json_schema` the reply is checked against the schema, and a reply that does not satisfy it answers 502 `json_schema_not_satisfied` rather than returning unvalidated output. It works with image input on any model the registry marks for both vision and structured output; a model without structured output answers 400 `model_no_structured_output`.",
             "properties": {
               "type": {
                 "type": "string",
-                "enum": ["text", "json_object"]
+                "enum": ["text", "json_object", "json_schema"]
+              },
+              "json_schema": {
+                "type": "object",
+                "required": ["name", "schema"],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "maxLength": 64,
+                    "pattern": "^[A-Za-z0-9_-]+$"
+                  },
+                  "description": {
+                    "type": "string",
+                    "maxLength": 1000
+                  },
+                  "schema": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "description": "A JSON Schema whose root has type `object`. Supported keywords: type, properties, required, additionalProperties, items, enum, const, anyOf, $defs and local $ref, minimum, maximum, minLength, maxLength, minItems, maxItems, pattern, format, description, title and default. Any other keyword is refused with 400."
+                  },
+                  "strict": {
+                    "type": "boolean"
+                  }
+                }
               }
             }
           },
@@ -639,7 +662,7 @@
           },
           "research_sources": {
             "type": "object",
-            "description": "What a Deep Research run may read. Applies only when `research` is true.",
+            "description": "What a Deep Research run may read when `research` is true. `allow_domains` and `deny_domains` also apply to ordinary `web_search`: they are passed to the search backend as its domain filter and every result is checked against them before the model sees it, so a page outside the allowed sites or on a denied one is never returned. `files` applies only to Deep Research.",
             "properties": {
               "files": {
                 "type": "boolean",
