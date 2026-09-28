@@ -60,6 +60,7 @@ import {
   buildItineraryCard,
   buildProductComparisonCard,
 } from './interactiveCards';
+import { buildConnectorInputForm, type ConnectorInputBinding } from './connectorInputForm';
 
 type ChatMessage = SidePanelChatMessage;
 export type ManagedApprovalDecision = 'approved' | 'rejected';
@@ -81,6 +82,7 @@ export interface BubbleInteractionOptions {
   onResolveApproval?: (toolCallId: string, decision: ManagedApprovalDecision) => void;
   onApproveForChat?: (toolCallId: string, toolName: string) => void;
   onApprovalGuidanceChange?: (toolCallId: string, guidance: string) => void;
+  connectorInput?: ConnectorInputBinding;
   onRetry?: (messageId: string) => void;
   onSwitchModel?: () => void;
   quotaRecovery?: QuotaRecoveryControl;
@@ -927,7 +929,6 @@ function buildAgentActivityStep(
     if (entry.deviceStep) {
       detailParts.push(t('spActivityStepWaitingForDevice', [entry.deviceStep.deviceName]));
     }
-    if (entry.inputRequest) detailParts.push(t('spActivityStepNeedsInput'));
     if (entry.input !== undefined) {
       detailParts.push(`${t('spActivityRequestHeading')}\n${boundedJson(entry.input)}`);
     }
@@ -952,7 +953,7 @@ function buildAgentActivityStep(
     detailParts.length > 0 ||
     sources.length > 0 ||
     entry.kind === 'artifact' ||
-    (entry.kind === 'tool' && Boolean(entry.approval));
+    (entry.kind === 'tool' && Boolean(entry.approval || entry.inputRequest));
   const step = document.createElement(hasDetails ? 'details' : 'div');
   step.className = `sp-agent-step sp-agent-step--${status}`;
   if (
@@ -994,7 +995,10 @@ function buildAgentActivityStep(
     appendActivitySources(detail, sources);
     if (entry.kind === 'artifact') appendArtifactAction(detail, entry);
     if (entry.kind === 'tool') appendApprovalActions(detail, entry, options);
-    step.appendChild(detail);
+    if (detail.hasChildNodes()) step.appendChild(detail);
+    const inputForm =
+      entry.kind === 'tool' ? buildConnectorInputForm(entry, options.connectorInput) : null;
+    if (inputForm) step.appendChild(inputForm);
   }
   return step;
 }
