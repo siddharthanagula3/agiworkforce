@@ -355,6 +355,8 @@ const hi = {
     'AGI Workforce: {count} फ़ाइलें पुनर्स्थापित नहीं की जा सकीं: {files}',
   'checkpoints.filesRestored_one': 'AGI Workforce: {count} फ़ाइल चेकपॉइंट पर वापस लाई गई।',
   'checkpoints.filesRestored_other': 'AGI Workforce: {count} फ़ाइलें चेकपॉइंट पर वापस लाई गईं।',
+  'webview.sources_one': '{count} स्रोत',
+  'webview.sources_other': '{count} स्रोत',
 };
 
 export default hi;

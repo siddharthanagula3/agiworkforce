@@ -512,6 +512,10 @@ const ru = {
   'checkpoints.filesRestored_few': 'AGI Workforce: {count} файла возвращены к контрольной точке.',
   'checkpoints.filesRestored_many': 'AGI Workforce: {count} файлов возвращено к контрольной точке.',
   'checkpoints.filesRestored_other': 'AGI Workforce: {count} файла возвращено к контрольной точке.',
+  'webview.sources_one': '{count} источник',
+  'webview.sources_few': '{count} источника',
+  'webview.sources_many': '{count} источников',
+  'webview.sources_other': '{count} источника',
 };
 
 export default ru;

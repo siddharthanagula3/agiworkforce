@@ -291,6 +291,7 @@ const ko = {
   'checkpoints.skippedFiles_other': 'AGI Workforce: 파일 {count}개를 복원하지 못했습니다: {files}',
   'checkpoints.filesRestored_other':
     'AGI Workforce: 파일 {count}개를 체크포인트 시점으로 되돌렸습니다.',
+  'webview.sources_other': '출처 {count}개',
 };
 
 export default ko;

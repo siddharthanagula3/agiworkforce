@@ -393,6 +393,8 @@ const de = {
     'AGI Workforce: {count} Datei wurde auf den Prüfpunkt zurückgesetzt.',
   'checkpoints.filesRestored_other':
     'AGI Workforce: {count} Dateien wurden auf den Prüfpunkt zurückgesetzt.',
+  'webview.sources_one': '{count} Quelle',
+  'webview.sources_other': '{count} Quellen',
 };
 
 export default de;

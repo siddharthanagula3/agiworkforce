@@ -455,6 +455,9 @@ const es = {
     'AGI Workforce: {count} de archivos volvieron al punto de control.',
   'checkpoints.filesRestored_other':
     'AGI Workforce: {count} archivos volvieron al punto de control.',
+  'webview.sources_one': '{count} fuente',
+  'webview.sources_many': '{count} de fuentes',
+  'webview.sources_other': '{count} fuentes',
 };
 
 export default es;
