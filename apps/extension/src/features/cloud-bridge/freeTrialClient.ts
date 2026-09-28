@@ -1130,8 +1130,8 @@ export async function* streamFreeChat(
             messages: cappedMessages,
             stream: true,
             [INTERACTIVE_CARD_REQUEST_KEY]: {
-              supported: ['map-search.v1'],
-              canRespond: false,
+              supported: ['clarify.v1', 'itinerary.v1', 'map-search.v1', 'product-comparison.v1'],
+              canRespond: true,
             },
             ...(options.workMode ? { work_mode: options.workMode } : {}),
             ...(options.webSearch ? { web_search: true } : {}),

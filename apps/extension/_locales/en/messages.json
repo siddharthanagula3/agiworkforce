@@ -2484,5 +2484,185 @@
         "example": "send_email"
       }
     }
+  },
+  "spOpensInNewTab": {
+    "message": "(opens in a new tab)",
+    "description": "Screen reader hint after a link that opens a new tab"
+  },
+  "spItineraryDirectionsWalking": {
+    "message": "Walking directions in Google Maps",
+    "description": "Label above the route links of a walking itinerary"
+  },
+  "spItineraryDirectionsDriving": {
+    "message": "Driving directions in Google Maps",
+    "description": "Label above the route links of a driving itinerary"
+  },
+  "spItineraryDirectionsTransit": {
+    "message": "Transit directions in Google Maps",
+    "description": "Label above the route links of a transit itinerary"
+  },
+  "spItineraryDirectionsCycling": {
+    "message": "Cycling directions in Google Maps",
+    "description": "Label above the route links of a cycling itinerary"
+  },
+  "spItineraryRouteMissingOne": {
+    "message": "No route, because one place is missing from the map.",
+    "description": "Itinerary route notice when one stop could not be placed"
+  },
+  "spItineraryRouteMissingMany": {
+    "message": "No route, because $COUNT$ places are missing from the map.",
+    "description": "Itinerary route notice when several stops could not be placed",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "3"
+      }
+    }
+  },
+  "spItineraryRouteUnavailable": {
+    "message": "No route is available for this plan.",
+    "description": "Itinerary route notice when no route could be built"
+  },
+  "spItineraryPlaceNotFound": {
+    "message": "Not found on the map",
+    "description": "Itinerary stop whose place could not be found"
+  },
+  "spItineraryPlaceLookupFailed": {
+    "message": "Could not be looked up",
+    "description": "Itinerary stop whose place lookup failed"
+  },
+  "spItineraryMapLabel": {
+    "message": "Map of $TITLE$",
+    "description": "Accessible name of the itinerary map",
+    "placeholders": {
+      "title": {
+        "content": "$1",
+        "example": "A day in Lisbon"
+      }
+    }
+  },
+  "spItineraryMapUnavailable": {
+    "message": "The map could not be loaded. The stops are listed below.",
+    "description": "Shown in place of the itinerary map when tiles cannot load"
+  },
+  "spItineraryStopsLabel": {
+    "message": "Stops",
+    "description": "Accessible name of the itinerary stop list"
+  },
+  "spItineraryTerms": {
+    "message": "Terms",
+    "description": "Link to the place data provider's terms"
+  },
+  "spComparisonPricesChecked": {
+    "message": "Prices checked $DATE$",
+    "description": "When the prices in a product comparison were checked",
+    "placeholders": {
+      "date": {
+        "content": "$1",
+        "example": "Sep 28, 2026"
+      }
+    }
+  },
+  "spComparisonPriceNotFound": {
+    "message": "Price not found",
+    "description": "Product comparison tile with no price"
+  },
+  "spComparisonPriceAt": {
+    "message": "at $STORE$",
+    "description": "Store after a product price",
+    "placeholders": {
+      "store": {
+        "content": "$1",
+        "example": "Best Buy"
+      }
+    }
+  },
+  "spComparisonBuyAt": {
+    "message": "Buy at $STORE$",
+    "description": "Link to buy a product at a named store",
+    "placeholders": {
+      "store": {
+        "content": "$1",
+        "example": "Best Buy"
+      }
+    }
+  },
+  "spComparisonViewProduct": {
+    "message": "View product",
+    "description": "Link to a product page when no store is named"
+  },
+  "spComparisonSpecsLabel": {
+    "message": "Specs for $TITLE$",
+    "description": "Accessible name of the scrollable specs table",
+    "placeholders": {
+      "title": {
+        "content": "$1",
+        "example": "Noise-cancelling headphones"
+      }
+    }
+  },
+  "spComparisonSpecHeading": {
+    "message": "Spec",
+    "description": "Heading of the spec name column"
+  },
+  "spComparisonSpecNotListed": {
+    "message": "Not listed",
+    "description": "Spec cell with no value for a product"
+  },
+  "spComparisonSourceHidden": {
+    "message": ": $TITLE$ (opens in a new tab)",
+    "description": "Screen reader text after a numbered source link",
+    "placeholders": {
+      "title": {
+        "content": "$1",
+        "example": "Sony WH-1000XM6 review"
+      }
+    }
+  },
+  "spClarifySend": {
+    "message": "Send answers",
+    "description": "Button that sends the answers to clarifying questions"
+  },
+  "spClarifyDismiss": {
+    "message": "I'll just type it",
+    "description": "Button that closes clarifying questions so the user can type instead"
+  },
+  "spClarifyDismissed": {
+    "message": "You answered in your own words instead.",
+    "description": "Clarifying questions the user closed"
+  },
+  "spClarifyOtherPlaceholder": {
+    "message": "Something else…",
+    "description": "Placeholder of the free-text answer to a clarifying question"
+  },
+  "spClarifyOtherLabel": {
+    "message": "Other answer for $HEADER$",
+    "description": "Accessible name of the free-text answer to a clarifying question",
+    "placeholders": {
+      "header": {
+        "content": "$1",
+        "example": "Budget"
+      }
+    }
+  },
+  "spClarifySkipped": {
+    "message": "Skipped",
+    "description": "A clarifying question the user did not answer"
+  },
+  "spClarifyNoAnswer": {
+    "message": "No answer",
+    "description": "A clarifying question with no recorded answer"
+  },
+  "spClarifyExpiredEnded": {
+    "message": "These questions are no longer answerable: the turn that asked them has ended.",
+    "description": "Clarifying questions whose turn ended"
+  },
+  "spClarifyExpiredFailed": {
+    "message": "These questions are no longer answerable: that turn failed.",
+    "description": "Clarifying questions whose turn failed"
+  },
+  "spClarifyExpiredSuperseded": {
+    "message": "These questions are no longer answerable: they were superseded by a newer message.",
+    "description": "Clarifying questions replaced by a newer message"
   }
 }
