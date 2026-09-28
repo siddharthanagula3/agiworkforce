@@ -228,7 +228,20 @@ describe('size cap', () => {
 });
 
 describe('content-type allowlist', () => {
-  it.each(['image/png', 'application/pdf', 'application/octet-stream', 'video/mp4', ''])(
+  it('reports a document it cannot read instead of calling it unsupported', async () => {
+    resolvePublic();
+    const fetchImpl = fetchReturning(
+      new Response(new TextEncoder().encode('binarydata'), {
+        status: 200,
+        headers: { 'content-type': 'application/pdf' },
+      }),
+    );
+    const outcome = await executeUrlFetch({ url: 'https://example.com/file' }, { fetchImpl });
+    expect(outcome.ok).toBe(false);
+    if (!outcome.ok) expect(outcome.errorCode).toBe('unreadable_document');
+  });
+
+  it.each(['image/png', 'application/octet-stream', 'video/mp4', ''])(
     'rejects unsupported content type %s honestly',
     async (contentType) => {
       resolvePublic();
