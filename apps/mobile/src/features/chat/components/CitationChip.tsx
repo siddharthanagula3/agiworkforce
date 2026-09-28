@@ -16,6 +16,35 @@ function previewSnippet(snippet: string | undefined): string {
     : text;
 }
 
+export interface CitationSource {
+  title?: string;
+  url?: string;
+  snippet?: string;
+  publishedDate?: string;
+}
+
+export function canPreviewCitation(source: CitationSource): boolean {
+  return Boolean(source.url && isValidExternalHttpUrl(source.url));
+}
+
+export function previewCitation(source: CitationSource): void {
+  const url = source.url;
+  if (!url || !isValidExternalHttpUrl(url)) return;
+  const published = formatSourcePublishedDate(source.publishedDate);
+  const site = published ? `${hostnameOf(url)} · Published ${published}` : hostnameOf(url);
+  const preview = previewSnippet(source.snippet);
+  const openSource = async () => {
+    const opened = await openUntrustedUrlInAppBrowser(url);
+    if (!opened) {
+      Alert.alert('Could not open citation', 'Check your connection and try again.');
+    }
+  };
+  Alert.alert(source.title || hostnameOf(url), preview ? `${site}\n\n${preview}` : site, [
+    { text: 'Cancel', style: 'cancel' },
+    { text: 'Open page', onPress: () => void openSource() },
+  ]);
+}
+
 interface CitationChipProps {
   index: number;
   title: string;
@@ -26,23 +55,15 @@ interface CitationChipProps {
 
 export function CitationChip({ index, title, url, snippet, publishedDate }: CitationChipProps) {
   const colors = useThemeColors();
-  const canOpen = Boolean(url && isValidExternalHttpUrl(url));
+  const canOpen = canPreviewCitation(url ? { url } : {});
   const published = formatSourcePublishedDate(publishedDate);
-  const openSource = async () => {
-    if (!canOpen || !url) return;
-    const opened = await openUntrustedUrlInAppBrowser(url);
-    if (!opened) {
-      Alert.alert('Could not open citation', 'Check your connection and try again.');
-    }
-  };
   const handlePress = () => {
-    if (!canOpen || !url) return;
-    const site = published ? `${hostnameOf(url)} · Published ${published}` : hostnameOf(url);
-    const preview = previewSnippet(snippet);
-    Alert.alert(title, preview ? `${site}\n\n${preview}` : site, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Open page', onPress: () => void openSource() },
-    ]);
+    previewCitation({
+      title,
+      ...(url ? { url } : {}),
+      ...(snippet ? { snippet } : {}),
+      ...(publishedDate ? { publishedDate } : {}),
+    });
   };
 
   return (

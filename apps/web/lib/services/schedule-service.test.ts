@@ -26,6 +26,7 @@ import {
   deleteSchedule,
   finalizeScheduleRun,
   getSchedule,
+  listRecentScheduleRuns,
   listSchedules,
   listScheduleRuns,
   processClaimedScheduleRun,
@@ -663,6 +664,44 @@ describe('schedule service persistence', () => {
     expect(sql).toMatch(/task_id/i);
     expect(sql).not.toMatch(/schedule_runs|schedule_id/i);
     expect(params).toEqual(['task-1', 'user-1', 100, 0]);
+  });
+
+  it('pages recent runs across schedules by started time and id, not by offset', async () => {
+    const rows = ['run-3', 'run-2', 'run-1'].map((id, index) => ({
+      ...runRow('success'),
+      id,
+      task_name: 'Morning briefing',
+      page_sort_key: `2026-07-15T12:00:0${3 - index}.000000Z`,
+    }));
+    const query = vi.fn().mockResolvedValue(rows);
+
+    const first = await listRecentScheduleRuns(database(query), 'user-1', {
+      limit: 2,
+      cursor: null,
+    });
+
+    const [sql, params] = query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toMatch(/where task\.user_id = \$1/);
+    expect(sql).toMatch(/order by page_sort_key desc, id desc/);
+    expect(sql).not.toMatch(/offset/i);
+    expect(params).toEqual(['user-1', 3]);
+    expect(first.runs.map((run) => [run.id, run.taskName])).toEqual([
+      ['run-3', 'Morning briefing'],
+      ['run-2', 'Morning briefing'],
+    ]);
+    expect(first.nextCursor).toEqual(expect.any(String));
+
+    query.mockResolvedValueOnce([rows[2]]);
+    const second = await listRecentScheduleRuns(database(query), 'user-1', {
+      limit: 2,
+      cursor: { sortValue: '2026-07-15T12:00:02.000000Z', id: 'run-2' },
+    });
+
+    const [nextSql, nextParams] = query.mock.calls[1] as [string, unknown[]];
+    expect(nextSql).toMatch(/where \(page_sort_key, id\) < \(\$3, \$4\)/);
+    expect(nextParams).toEqual(['user-1', 3, '2026-07-15T12:00:02.000000Z', 'run-2']);
+    expect(second.runs.map((run) => run.id)).toEqual(['run-1']);
+    expect(second.nextCursor).toBeNull();
   });
 
   it('refuses a manual run for another user or a deleted task', async () => {

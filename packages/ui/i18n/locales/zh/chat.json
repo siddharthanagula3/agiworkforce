@@ -74,7 +74,10 @@
     "runtimeConsent": "此应用想使用您的账户调用 AI。每次请求都会计入您的套餐用量。",
     "runtimeConsentConnectors": "此应用想使用您的账户调用 AI，并读取或更改 {{apps}} 中的数据。它能看到这些应用返回的内容，每次请求都会计入您的套餐用量。",
     "runtimeAllow": "允许",
-    "runtimeDecline": "不允许"
+    "runtimeDecline": "不允许",
+    "saveCopy": "将副本保存到我的聊天",
+    "saveCopyBusy": "正在复制…",
+    "saveCopyFailed": "无法复制此工件。"
   },
   "sidebar": {
     "activeConversation": "当前对话",

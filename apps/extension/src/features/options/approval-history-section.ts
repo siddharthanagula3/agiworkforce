@@ -89,6 +89,13 @@ export function createApprovalHistorySection(
   hint.className = 'opt-row-hint';
   hint.textContent = 'Tool requests you allowed or denied in chats on every device, newest first.';
 
+  const help = document.createElement('a');
+  help.className = 'opt-link';
+  help.href = `${deps.gateway}/help/tool-approvals?from=chrome-extension`;
+  help.target = '_blank';
+  help.rel = 'noopener noreferrer';
+  help.textContent = 'How approvals work';
+
   const status = document.createElement('div');
   status.className = 'opt-row-hint';
   status.setAttribute('role', 'status');
@@ -118,7 +125,7 @@ export function createApprovalHistorySection(
   retry.textContent = 'Try again';
   retry.hidden = true;
 
-  element.append(label, hint, status, list, pager, retry);
+  element.append(label, hint, help, status, list, pager, retry);
 
   const pageCursors: Array<string | null> = [null];
   let page = 0;

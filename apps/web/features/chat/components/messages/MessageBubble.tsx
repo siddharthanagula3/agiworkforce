@@ -391,6 +391,8 @@ function isGeneratedTextArtifact(file: GeneratedFileMetadataEntry): boolean {
 const LOCAL_BOUNDARY_LABEL = 'Local';
 const LOCAL_BOUNDARY_TITLE =
   'Answered by a model running on this device. Nothing you wrote in this chat was sent to AGI Cloud or a provider, and it used none of your plan.';
+const SHARED_ATTACHMENTS_NOT_COPIED =
+  'Attached in the shared chat and kept private to the person who shared it:';
 const LOCAL_PERSONAL_CONTEXT_MISSING =
   'Answered without your instructions and memory: they could not be loaded onto this device.';
 
@@ -460,6 +462,7 @@ interface Message {
     privacyMode?: StoreMessageMetadata['privacyMode'];
     providerMode?: StoreMessageMetadata['providerMode'];
     localPersonalContextMissing?: StoreMessageMetadata['localPersonalContextMissing'];
+    sharedAttachments?: StoreMessageMetadata['sharedAttachments'];
     finishReason?: StoreMessageMetadata['finishReason'];
     streamError?: StoreMessageMetadata['streamError'];
     /** The run a Task feedback report is filed against. */
@@ -2414,6 +2417,18 @@ const MessageBubbleComponent = function MessageBubble({
                 Writing {streamingBlock.language === 'text' ? 'artifact' : streamingBlock.language}…
               </span>
             </button>
+          )}
+
+          {(message.metadata?.sharedAttachments?.length ?? 0) > 0 && (
+            <p
+              data-testid="message-shared-attachments"
+              className="mt-2 text-xs text-muted-foreground"
+            >
+              {SHARED_ATTACHMENTS_NOT_COPIED}{' '}
+              {(message.metadata?.sharedAttachments ?? [])
+                .map((attachment) => attachment.name)
+                .join(', ')}
+            </p>
           )}
 
           {/* Attachments (Fix 43) · image thumbnails or file-type icons.

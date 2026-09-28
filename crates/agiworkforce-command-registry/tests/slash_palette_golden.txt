@@ -50,6 +50,7 @@
 /btw
 /voice [v]
 /image [imagine]
+/search
 /theme
 /login
 /logout
