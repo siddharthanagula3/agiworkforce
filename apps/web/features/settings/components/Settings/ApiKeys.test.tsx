@@ -15,6 +15,14 @@ vi.mock('@features/settings/hooks/use-settings-queries', () => ({
   useDeleteAPIKey: () => ({ mutate: deleteMutate, isPending: false }),
 }));
 
+vi.mock('@/features/developers/hooks/use-developer-projects', () => ({
+  useDeveloperProjects: () => ({ data: [], isLoading: false, isError: false }),
+}));
+
+vi.mock('@/features/developers/hooks/use-developer-usage', () => ({
+  useDeveloperUsage: () => ({ data: undefined, isLoading: false, isError: false }),
+}));
+
 describe('ApiKeysManager', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -58,7 +66,7 @@ describe('ApiKeysManager', () => {
 
     await waitFor(() =>
       expect(createMutate).toHaveBeenCalledWith(
-        { name: 'VS Code', scopes: ['inference:write'], expiresInDays: 'never' },
+        { name: 'VS Code', scopes: ['inference:write'], expiresInDays: 'never', projectId: null },
         expect.objectContaining({ onSuccess: expect.any(Function) }),
       ),
     );
