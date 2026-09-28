@@ -11,11 +11,13 @@ import {
 import {
   agentTaskStateLabel,
   getModelMetadataById,
+  interactiveCardRendersBeforeProse,
   resolveInteractiveCardRenderer,
   toolApprovalStakes,
   type InteractiveCard,
   type InteractiveCardRegistry,
   type InteractiveCardRenderContext,
+  type InteractiveCardResponsePayload,
   type MapSearchCardBody,
 } from '@agiworkforce/types';
 import {
@@ -52,6 +54,11 @@ import { answerFiles, buildAnswerFiles, type AnswerFileAccess } from './generate
 import { wirePopupMenu } from './menu';
 import { buildSourcesFooter, decorateCitations, sourceHost } from './sources';
 import { buildMapPreview } from './mapPreview';
+import {
+  buildClarifyCard,
+  buildItineraryCard,
+  buildProductComparisonCard,
+} from './interactiveCards';
 
 type ChatMessage = SidePanelChatMessage;
 export type ManagedApprovalDecision = 'approved' | 'rejected';
@@ -80,6 +87,7 @@ export interface BubbleInteractionOptions {
   regenerateModels?: readonly RegenerateModelOption[];
   imagePreviews?: readonly string[];
   fileAccess?: AnswerFileAccess;
+  onRespondToCard?: (cardId: string, payload: InteractiveCardResponsePayload) => void;
 }
 
 export function openInteractiveCardUrl(value: string): void {
@@ -167,34 +175,53 @@ function interactiveCardRegistry(
   access: AnswerFileAccess | undefined,
 ): InteractiveCardRegistry<HTMLElement> {
   return {
+    'clarify.v1': ({ card, body, ctx }) => buildClarifyCard(card, body, ctx),
+    'itinerary.v1': ({ body }) => buildItineraryCard(body, access),
     'map-search.v1': ({ body, ctx }) => buildMapSearchCard(body, ctx, access),
+    'product-comparison.v1': ({ body }) => buildProductComparisonCard(body),
   };
 }
 
 export function buildInteractiveCardEl(
   card: InteractiveCard,
   access?: AnswerFileAccess,
+  onRespond?: (payload: InteractiveCardResponsePayload) => void,
 ): HTMLElement {
   const renderer = resolveInteractiveCardRenderer(interactiveCardRegistry(access), card);
   if (!renderer || !card.recognized) return buildInteractiveCardFallback(card);
   return renderer({
     card,
     body: card.body,
-    ctx: { canRespond: false, onOpenUrl: openInteractiveCardUrl },
+    ctx: {
+      canRespond: onRespond !== undefined,
+      ...(onRespond ? { onRespond } : {}),
+      onOpenUrl: openInteractiveCardUrl,
+    },
   });
 }
 
-function appendInteractiveCards(
-  parent: HTMLElement,
+function buildInteractiveCardStack(
   message: ChatMessage,
-  access: AnswerFileAccess | undefined,
-): void {
-  if (message.role !== 'assistant' || !message.interactiveCards?.length) return;
+  options: BubbleInteractionOptions,
+  leading: boolean,
+): HTMLElement | null {
+  if (message.role !== 'assistant') return null;
+  const selected = (message.interactiveCards ?? []).filter(
+    (card) => interactiveCardRendersBeforeProse(card.kind) === leading,
+  );
+  if (selected.length === 0) return null;
+  const respond = options.onRespondToCard;
   const cards = el('div', { class: 'sp-interactive-card-stack' });
-  for (const card of message.interactiveCards) {
-    cards.appendChild(buildInteractiveCardEl(card, access));
+  for (const card of selected) {
+    cards.appendChild(
+      buildInteractiveCardEl(
+        card,
+        options.fileAccess,
+        respond ? (payload) => respond(card.cardId, payload) : undefined,
+      ),
+    );
   }
-  parent.appendChild(cards);
+  return cards;
 }
 
 function buildRetryButton(msg: ChatMessage, onRetry: (messageId: string) => void): HTMLElement {
@@ -481,7 +508,8 @@ function appendAnswerExtras(
     options.fileAccess,
   );
   if (files) wrapper.appendChild(files);
-  appendInteractiveCards(wrapper, msg, options.fileAccess);
+  const cards = buildInteractiveCardStack(msg, options, false);
+  if (cards) wrapper.appendChild(cards);
   if (!msg.streaming) {
     const footer = buildSourcesFooter(sources);
     if (footer) wrapper.appendChild(footer);
@@ -508,6 +536,8 @@ function buildBubble(msg: ChatMessage, options: BubbleInteractionOptions = {}): 
   } else {
     fillAnswerBubble(bubble, msg.content, markers);
   }
+  const leadingCards = buildInteractiveCardStack(msg, options, true);
+  if (leadingCards) wrapper.appendChild(leadingCards);
   wrapper.appendChild(bubble);
 
   const errorFooter = buildErrorFooter(
@@ -1014,6 +1044,8 @@ export function buildBubbleWithTools(
   }
 
   if (msg.agentActivity) wrapper.appendChild(buildAgentActivityEl(msg.agentActivity, options));
+  const leadingCards = buildInteractiveCardStack(msg, options, true);
+  if (leadingCards) wrapper.appendChild(leadingCards);
   const { markers, all } = answerSourceLists(msg);
 
   if (

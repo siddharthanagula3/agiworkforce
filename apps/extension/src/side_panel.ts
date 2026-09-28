@@ -40,8 +40,10 @@ import {
   resolveModelEffort,
   USAGE_CRITICAL_REMAINING_PERCENT,
   USAGE_WARNING_REMAINING_PERCENT,
+  type ClarifyState,
   type Effort,
   type InteractiveCard,
+  type InteractiveCardResponsePayload,
   type ManagedUsageWarning,
   type ModelSpeed,
   type RoutingTaskType,
@@ -100,6 +102,10 @@ import {
   resolveManagedArtifactUrl,
   type RegenerateModelOption,
 } from './features/side-panel/bubbles';
+import {
+  clarifyAnswerMessage,
+  clarifyAnswersFromResponse,
+} from './features/side-panel/interactiveCards';
 import type { AnswerFileAccess } from './features/side-panel/generatedFiles';
 import {
   answerSourceLists,
@@ -2249,6 +2255,192 @@ function injectStyles(): void {
       font-size: var(--type-caption-size);
       line-height: var(--type-caption-height);
     }
+    .sp-interactive-card__meta {
+      margin-top: 4px;
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      overflow-wrap: anywhere;
+    }
+    .sp-interactive-card__link { color: var(--agi-ext-accent-text); text-decoration: underline; text-underline-offset: 2px; }
+    .sp-itinerary__stops {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin: 10px 0 0;
+      padding: 0;
+      list-style: none;
+    }
+    .sp-itinerary__stop { display: flex; gap: 9px; }
+    .sp-itinerary__pin {
+      display: grid;
+      flex: 0 0 22px;
+      height: 22px;
+      place-items: center;
+      border: 1px solid var(--agi-ext-border-strong);
+      border-radius: var(--corner-pill);
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+    .sp-itinerary__detail { min-width: 0; flex: 1; }
+    .sp-itinerary__time,
+    .sp-itinerary__address,
+    .sp-itinerary__missing {
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
+    .sp-itinerary__time { font-variant-numeric: tabular-nums; }
+    .sp-itinerary__address { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sp-itinerary__missing { display: flex; align-items: center; gap: 4px; }
+    .sp-itinerary__place { font-weight: 600; overflow-wrap: anywhere; }
+    .sp-itinerary__note { margin-top: 3px; font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
+    .sp-itinerary__route { margin-top: 10px; }
+    .sp-itinerary__legs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+    .sp-itinerary__leg,
+    .sp-comparison__buy {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      min-height: 28px;
+      padding: 0 10px;
+      border-radius: var(--corner-pill);
+      font-size: var(--type-caption-size);
+      font-weight: 600;
+      text-decoration: none;
+    }
+    .sp-itinerary__leg {
+      border: 1px solid var(--agi-ext-border-strong);
+      color: var(--agi-ext-text);
+    }
+    .sp-itinerary__leg:hover { background: var(--agi-ext-hover); }
+    .sp-comparison__products {
+      display: grid;
+      gap: 8px;
+      margin: 10px 0 0;
+      padding: 0;
+      list-style: none;
+    }
+    .sp-comparison__product {
+      display: flex;
+      min-width: 0;
+      flex-direction: column;
+      gap: 5px;
+      padding: 10px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-control);
+    }
+    .sp-comparison__name { font-weight: 600; overflow-wrap: anywhere; }
+    .sp-comparison__best-for,
+    .sp-comparison__merchant,
+    .sp-comparison__unlisted { color: var(--agi-ext-text-muted); font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
+    .sp-comparison__price { font-size: var(--type-body-large-size); font-weight: 650; font-variant-numeric: tabular-nums; }
+    .sp-comparison__merchant { margin-left: 6px; font-weight: 400; }
+    .sp-comparison__buy {
+      width: fit-content;
+      background: var(--agi-ext-accent);
+      color: var(--agi-ext-on-accent);
+    }
+    .sp-comparison__buy:hover { background: var(--agi-ext-accent-hover); }
+    .sp-comparison__sources {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 3px 10px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
+    .sp-comparison__source { display: inline-flex; min-height: 24px; align-items: center; gap: 4px; color: var(--agi-ext-text-muted); text-decoration: none; }
+    .sp-comparison__source:hover { color: var(--agi-ext-text); text-decoration: underline; }
+    .sp-comparison__source-number { font-variant-numeric: tabular-nums; }
+    .sp-comparison__specs {
+      margin: 10px -12px -12px;
+      overflow-x: auto;
+      border-top: 1px solid var(--agi-ext-border);
+    }
+    .sp-comparison__table { width: 100%; border-collapse: collapse; font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
+    .sp-comparison__table th,
+    .sp-comparison__table td { min-width: 96px; padding: 6px 12px; border-bottom: 1px solid var(--agi-ext-border); text-align: left; vertical-align: top; }
+    .sp-comparison__table tr:last-child th,
+    .sp-comparison__table tr:last-child td { border-bottom: 0; }
+    .sp-comparison__table th { color: var(--agi-ext-text-muted); font-weight: 600; }
+    .sp-clarify__question { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+    .sp-clarify__label { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; font-size: var(--type-body-size); line-height: var(--type-body-height); }
+    .sp-clarify__header {
+      padding: 0 6px;
+      border-radius: var(--corner-compact);
+      background: var(--agi-ext-hover);
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .sp-clarify__options { display: flex; flex-wrap: wrap; gap: 6px; }
+    .sp-clarify__option {
+      min-height: 28px;
+      padding: 0 11px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-pill);
+      background: transparent;
+      color: var(--agi-ext-text-muted);
+      cursor: pointer;
+      font: inherit;
+      font-size: var(--type-caption-size);
+    }
+    .sp-clarify__option:hover:not(:disabled) { color: var(--agi-ext-text); }
+    .sp-clarify__option[aria-pressed='true'] { border-color: var(--agi-ext-accent); color: var(--agi-ext-text); font-weight: 600; }
+    .sp-clarify__option:disabled { cursor: default; }
+    .sp-clarify__other {
+      box-sizing: border-box;
+      width: 100%;
+      padding: 5px 9px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-control);
+      background: var(--agi-ext-bg);
+      color: var(--agi-ext-text);
+      font: inherit;
+      font-size: var(--type-caption-size);
+    }
+    .sp-clarify__other::placeholder { color: var(--agi-ext-text-placeholder); }
+    .sp-clarify__answer { color: var(--agi-ext-text-muted); font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
+    .sp-clarify__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
+    .sp-clarify__send {
+      min-height: 28px;
+      padding: 0 12px;
+      border: 0;
+      border-radius: var(--corner-control);
+      background: var(--agi-ext-accent);
+      color: var(--agi-ext-on-accent);
+      cursor: pointer;
+      font: inherit;
+      font-size: var(--type-caption-size);
+      font-weight: 600;
+    }
+    .sp-clarify__send:disabled { cursor: default; opacity: 0.5; }
+    .sp-clarify__dismiss {
+      min-height: 28px;
+      padding: 0 8px;
+      border: 0;
+      background: transparent;
+      color: var(--agi-ext-text-muted);
+      cursor: pointer;
+      font: inherit;
+      font-size: var(--type-caption-size);
+    }
+    .sp-clarify__dismiss:hover { color: var(--agi-ext-text); }
+    .sp-itinerary__leg:focus-visible,
+    .sp-comparison__buy:focus-visible,
+    .sp-comparison__source:focus-visible,
+    .sp-clarify__option:focus-visible,
+    .sp-clarify__send:focus-visible,
+    .sp-clarify__dismiss:focus-visible,
+    .sp-clarify__other:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
+    .sp-comparison__specs:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
     .sp-interactive-card__places {
       display: flex;
       flex-direction: column;
@@ -2312,10 +2504,13 @@ function injectStyles(): void {
     .sp-map-preview__marker {
       position: absolute;
       display: grid;
-      width: 22px;
+      box-sizing: border-box;
+      min-width: 22px;
       height: 22px;
-      margin: -11px 0 0 -11px;
+      padding: 0 5px;
+      transform: translate(-50%, -50%);
       place-items: center;
+      white-space: nowrap;
       border: 2px solid var(--agi-ext-surface);
       border-radius: var(--corner-pill);
       background: var(--agi-ext-accent);
@@ -5577,6 +5772,72 @@ function resolveManagedToolApproval(
   );
 }
 
+function sendCardAnswer(text: string): void {
+  if (!canAdmitComposerMessage(text)) return;
+  _ctx.conversationGeneration += 1;
+  renderModelNotice(null);
+  const payload: TurnPayload = {
+    prompt: text,
+    pageText: null,
+    capturePage: false,
+    images: [],
+    files: [],
+  };
+  const userMsg: ChatMessage = {
+    id: `u-${Date.now()}`,
+    role: 'user',
+    content: text,
+    timestamp: Date.now(),
+    runtime: 'managed-cloud',
+  };
+  _ctx.messages.push(userMsg);
+  turnPayloadByMessageId.set(userMsg.id, payload);
+  trimLiveMessages();
+  _ctx.needsMessageRebuild = true;
+  saveMessages();
+  renderMessages();
+  dispatchTurn(userMsg, payload, _ctx.quickMode);
+}
+
+function respondToInteractiveCard(
+  messageId: string,
+  cardId: string,
+  payload: InteractiveCardResponsePayload,
+): void {
+  const message = _ctx.messages.find(
+    (candidate) => candidate.id === messageId && candidate.role === 'assistant',
+  );
+  const card = message?.interactiveCards?.find((candidate) => candidate.cardId === cardId);
+  if (
+    !message ||
+    !card?.recognized ||
+    card.kind !== 'clarify.v1' ||
+    card.body.state.status !== 'pending' ||
+    _ctx.isStreaming
+  ) {
+    return;
+  }
+  const settledAt = new Date().toISOString();
+  const settle = (state: ClarifyState): void => {
+    message.interactiveCards = (message.interactiveCards ?? []).map((candidate) =>
+      candidate.cardId === cardId ? { ...card, body: { ...card.body, state } } : candidate,
+    );
+    _ctx.needsMessageRebuild = true;
+    saveMessages();
+    renderMessages();
+  };
+  if (payload.kind === 'dismiss') {
+    settle({ status: 'dismissed', dismissedAt: settledAt });
+    document.getElementById('sp-input')?.focus();
+    return;
+  }
+  const answers = clarifyAnswersFromResponse(card.body, payload);
+  const text = clarifyAnswerMessage(card.body, answers);
+  if (!text || !canAdmitComposerMessage(text)) return;
+  settle({ status: 'answered', answeredAt: settledAt, answers });
+  sendCardAnswer(text);
+}
+
 function iconButton(attrs: Record<string, string>, icon: string): HTMLElement {
   const button = el('button', attrs);
   button.appendChild(renderIcon(icon, 12));
@@ -5719,6 +5980,12 @@ function renderMessages(): void {
                   turnPayloadByMessageId.get(msg.id)?.images.map((image) => image.dataUrl) ?? [],
               }
             : { fileAccess: answerFileAccess }),
+          ...(msg.role === 'assistant' && i === _ctx.messages.length - 1 && !_ctx.isStreaming
+            ? {
+                onRespondToCard: (cardId: string, payload: InteractiveCardResponsePayload) =>
+                  respondToInteractiveCard(msg.id, cardId, payload),
+              }
+            : {}),
         }),
       );
     }
