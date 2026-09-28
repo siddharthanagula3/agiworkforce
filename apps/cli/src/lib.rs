@@ -1115,6 +1115,45 @@ enum MemorySubcommand {
         /// Memory id or its exact text.
         memory: String,
     },
+    /// Replace a memory's text, keeping its id, category and pin.
+    Edit {
+        /// Memory id or its exact text.
+        memory: String,
+        /// The new text.
+        text: Vec<String>,
+    },
+    /// Keep a memory at the top so it is always used.
+    Pin {
+        /// Memory id or its exact text.
+        memory: String,
+    },
+    /// Stop prioritising a pinned memory.
+    Unpin {
+        /// Memory id or its exact text.
+        memory: String,
+    },
+    /// Write the account's memories as JSON to a file, or to stdout.
+    Export {
+        #[arg(long)]
+        out: Option<std::path::PathBuf>,
+    },
+    /// Show or change the terms no memory may mention; the account refuses such memories everywhere.
+    Never {
+        /// Term to add. Repeatable.
+        #[arg(long)]
+        add: Vec<String>,
+        /// Term to remove. Repeatable.
+        #[arg(long)]
+        remove: Vec<String>,
+    },
+    /// Import memories from a text or markdown file, such as another assistant's export.
+    /// Duplicates of what the account already holds are skipped.
+    Import {
+        file: std::path::PathBuf,
+        /// Where the memories came from, shown as their origin.
+        #[arg(long, default_value = "Other")]
+        source: String,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -2193,11 +2232,132 @@ async fn handle_memory_command(action: &MemorySubcommand) -> Result<()> {
                 println!("Add one with `agi memory add <text>`.");
                 return Ok(());
             }
-            for entry in &cache.entries {
-                let pin = if entry.pinned { "*" } else { " " };
-                let origin = entry.source.as_deref().unwrap_or("web");
-                println!("{pin} {}  [{origin}]", entry.id);
-                println!("    {}", entry.content);
+            let mut topics: Vec<&str> = cache
+                .entries
+                .iter()
+                .map(|entry| entry.category.as_deref().unwrap_or("General"))
+                .collect();
+            topics.sort_unstable();
+            topics.dedup();
+            println!(
+                "{} memories in your account (* pinned, used first):",
+                cache.entries.len()
+            );
+            for topic in topics {
+                println!("\n{topic}");
+                for entry in cache
+                    .entries
+                    .iter()
+                    .filter(|entry| entry.category.as_deref().unwrap_or("General") == topic)
+                {
+                    let pin = if entry.pinned { "*" } else { " " };
+                    let origin = entry.source.as_deref().unwrap_or("web");
+                    let updated = entry.updated_at.get(..10).unwrap_or(&entry.updated_at);
+                    println!("{pin} {}  [{origin}, updated {updated}]", entry.id);
+                    println!(
+                        "    {}",
+                        terminal_text::sanitize_terminal_text(&entry.content)
+                    );
+                }
+            }
+            Ok(())
+        }
+        MemorySubcommand::Edit { memory, text } => {
+            let content = text.join(" ");
+            if content.trim().is_empty() {
+                anyhow::bail!("Usage: agi memory edit <id|text> <new text>");
+            }
+            cloud::refresh_memory(privacy)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            match cloud::revise_memory(privacy, memory, Some(&content), None)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?
+            {
+                None => anyhow::bail!("No memory '{memory}' in your AGI Workforce account"),
+                Some(refusals) if refusals.is_empty() => {
+                    println!("Updated in your account, on every client.");
+                    Ok(())
+                }
+                Some(refusals) => {
+                    for refusal in &refusals {
+                        println!("Not updated: {refusal}");
+                    }
+                    anyhow::bail!("Your account did not store this change")
+                }
+            }
+        }
+        MemorySubcommand::Pin { memory } | MemorySubcommand::Unpin { memory } => {
+            let pinned = matches!(action, MemorySubcommand::Pin { .. });
+            cloud::refresh_memory(privacy)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            match cloud::revise_memory(privacy, memory, None, Some(pinned))
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?
+            {
+                None => anyhow::bail!("No memory '{memory}' in your AGI Workforce account"),
+                Some(refusals) if refusals.is_empty() => {
+                    println!(
+                        "{}",
+                        if pinned {
+                            "Pinned: this memory is used first."
+                        } else {
+                            "Unpinned."
+                        }
+                    );
+                    Ok(())
+                }
+                Some(_) => anyhow::bail!("Your account did not store this change"),
+            }
+        }
+        MemorySubcommand::Never { add, remove } => {
+            let text = cloud::personalization::never_remember(add, remove)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            println!("{text}");
+            Ok(())
+        }
+        MemorySubcommand::Export { out } => {
+            let cache = cloud::refresh_memory(privacy)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            let json = serde_json::to_string_pretty(&cache.entries)?;
+            match out {
+                Some(path) => {
+                    std::fs::OpenOptions::new()
+                        .write(true)
+                        .create_new(true)
+                        .open(path)
+                        .and_then(|mut file| std::io::Write::write_all(&mut file, json.as_bytes()))
+                        .with_context(|| {
+                            format!("Could not write {} (it must not exist yet)", path.display())
+                        })?;
+                    println!(
+                        "Exported {} memories to {}.",
+                        cache.entries.len(),
+                        path.display()
+                    );
+                }
+                None => println!("{json}"),
+            }
+            Ok(())
+        }
+        MemorySubcommand::Import { file, source } => {
+            let text = std::fs::read_to_string(file)
+                .with_context(|| format!("Could not read {}", file.display()))?;
+            match cloud::import_memories(privacy, &text, source)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?
+            {
+                None => println!("Nothing new to import: every memory in that file is already in your account."),
+                Some(result) => println!(
+                    "Imported {} memories. Skipped {} duplicates; {} were refused by your memory policy and {} matched never-remember terms.",
+                    result.inserted_count,
+                    result.skipped_duplicate_count,
+                    result.blocked_count,
+                    result.excluded_count
+                ),
             }
             Ok(())
         }

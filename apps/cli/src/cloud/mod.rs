@@ -374,6 +374,131 @@ pub async fn add_memory(
     Ok(refusals)
 }
 
+pub async fn revise_memory(
+    privacy: PrivacyMode,
+    id_or_content: &str,
+    content: Option<&str>,
+    pinned: Option<bool>,
+) -> Result<Option<Vec<String>>, CloudError> {
+    let mut session = CloudSession::open(privacy)?;
+    let mut cache = load_memory_cache(&session.config_dir);
+    let Some(entry) = cache
+        .entries
+        .iter()
+        .find(|entry| entry.id == id_or_content)
+        .or_else(|| {
+            cache
+                .entries
+                .iter()
+                .find(|entry| entry.content.trim() == id_or_content.trim())
+        })
+        .cloned()
+    else {
+        return Ok(None);
+    };
+    let request = memory::MemoryPushRequest {
+        protocol_version: memory::SYNC_PROTOCOL_VERSION,
+        memories: vec![memory::revise_memory(
+            &entry,
+            &session.state,
+            MEMORY_SOURCE,
+            content,
+            pinned,
+        )],
+    };
+    let sync = memory::MemorySync::new(&session.client);
+    let response = sync.push(&request).await?;
+    memory::apply_push_response(&response, &mut session.state);
+    session.persist();
+    let refusals = memory::refusals(&request, &response);
+    if refusals.is_empty() {
+        if let Some(cached) = cache
+            .entries
+            .iter_mut()
+            .find(|cached| cached.id == entry.id)
+        {
+            cached.content = request.memories[0].content.clone();
+            if let Some(pinned) = pinned {
+                cached.pinned = pinned;
+            }
+            cached.updated_at = chrono::Utc::now().to_rfc3339();
+        }
+        if let Err(error) = save_memory_cache(&session.config_dir, &cache) {
+            crate::output::print_warn(&format!("could not cache the account memory: {error}"));
+        }
+    }
+    Ok(Some(refusals))
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct ImportPreview {
+    #[serde(default)]
+    items: Vec<ImportPreviewItem>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct ImportPreviewItem {
+    content: String,
+    #[serde(default)]
+    duplicate: bool,
+}
+
+#[derive(Debug, Default, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportResult {
+    #[serde(default)]
+    pub inserted_count: u64,
+    #[serde(default)]
+    pub skipped_duplicate_count: u64,
+    #[serde(default)]
+    pub blocked_count: u64,
+    #[serde(default)]
+    pub excluded_count: u64,
+}
+
+pub const MEMORY_IMPORT_PATH: &str = "/api/memory/import";
+
+pub async fn import_memories(
+    privacy: PrivacyMode,
+    text: &str,
+    source_name: &str,
+) -> Result<Option<ImportResult>, CloudError> {
+    let session = CloudSession::open(privacy)?;
+    let preview: ImportPreview = session
+        .client
+        .post(
+            MEMORY_IMPORT_PATH,
+            &serde_json::json!({ "mode": "dry-run", "text": text, "sourceName": source_name }),
+        )
+        .await?;
+    let items: Vec<String> = preview
+        .items
+        .into_iter()
+        .filter(|item| !item.duplicate)
+        .map(|item| item.content)
+        .collect();
+    if items.is_empty() {
+        return Ok(None);
+    }
+    let mut total = ImportResult::default();
+    for chunk in items.chunks(MEMORY_IMPORT_BATCH) {
+        let result: ImportResult = session
+            .client
+            .post(
+                MEMORY_IMPORT_PATH,
+                &serde_json::json!({ "mode": "commit", "items": chunk, "sourceName": source_name }),
+            )
+            .await?;
+        total.inserted_count += result.inserted_count;
+        total.skipped_duplicate_count += result.skipped_duplicate_count;
+        total.blocked_count += result.blocked_count;
+        total.excluded_count += result.excluded_count;
+    }
+    Ok(Some(total))
+}
+
+const MEMORY_IMPORT_BATCH: usize = 500;
+
 /// Remove a memory from the account.
 pub async fn forget_memory(privacy: PrivacyMode, id_or_content: &str) -> Result<bool, CloudError> {
     let mut session = CloudSession::open(privacy)?;
