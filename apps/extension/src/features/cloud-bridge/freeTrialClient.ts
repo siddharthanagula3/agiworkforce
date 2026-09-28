@@ -27,6 +27,7 @@ import {
   normalizeBillingPlanTier,
   parseManagedUsageSummaryResponse,
   WEB_SEARCH_CITATION_DELTA_KEY,
+  type AgentEventSource,
   type Effort,
   type InteractiveCard,
   type ManagedQuotaBlockPresentation,
@@ -561,9 +562,7 @@ function capRequestMessages(messages: readonly FreeTrialMessage[]): FreeTrialMes
   return reversed.reverse();
 }
 
-export interface ManagedChatSourceWire {
-  url: string;
-  title: string;
+export interface ManagedChatSourceWire extends AgentEventSource {
   publishedDate?: string;
 }
 
@@ -629,6 +628,8 @@ export interface ManagedChatStreamOptions {
   effort?: Effort;
   extendedThinking?: boolean;
   workMode?: 'chat' | 'agiwork';
+  agiWorkGoal?: string;
+  agiWorkPlan?: readonly string[];
   webSearch?: boolean;
   webFetch?: boolean;
   approvalResume?: ToolApprovalResumeRequest;
@@ -1214,6 +1215,14 @@ export async function* streamFreeChat(
               canRespond: true,
             },
             ...(options.workMode ? { work_mode: options.workMode } : {}),
+            ...(options.workMode === 'agiwork' && options.agiWorkGoal
+              ? {
+                  agi_work_goal: { goal: options.agiWorkGoal },
+                  ...(options.agiWorkPlan?.length
+                    ? { agi_work_plan: { steps: [...options.agiWorkPlan] } }
+                    : { agi_work_plan_approval: true }),
+                }
+              : {}),
             ...(options.memoryCommand ? { memory_command: options.memoryCommand } : {}),
             ...(options.webSearch ? { web_search: true } : {}),
             ...(options.webFetch ? { web_fetch: true } : {}),

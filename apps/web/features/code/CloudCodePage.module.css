@@ -617,6 +617,12 @@ svg + .menuRowLabel {
   font-size: 14px;
 }
 
+.taskMode {
+  align-self: flex-end;
+  color: var(--chat-text-muted);
+  font-size: 13px;
+}
+
 .activityRowFailed {
   color: var(--chat-destructive-text);
 }

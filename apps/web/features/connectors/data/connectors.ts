@@ -1033,6 +1033,17 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
     iconEmoji: '📦',
   },
   {
+    id: 'docusign',
+    name: 'Docusign',
+    capabilitySummary: 'sending envelopes for signature, agreement search, and workflows',
+    category: 'Productivity',
+    authType: 'oauth',
+    phase: 4,
+    iconBg: 'from-yellow-400 to-amber-500',
+    iconText: 'DS',
+    iconEmoji: '✍️',
+  },
+  {
     id: 'sharepoint',
     name: 'SharePoint',
     capabilitySummary: 'site and document search and reading documents as text',

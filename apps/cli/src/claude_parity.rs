@@ -1470,12 +1470,26 @@ pub fn render_release_notes() -> String {
     // This used to read CHANGELOG.md from the current working directory and
     // present it as AGI's release notes, so in any project that has one the
     // user was shown their own changelog under our heading.
-    format!(
-        "Release notes\n  You are running {} v{}.\n  Notes for each release: {}/releases",
-        env!("CARGO_PKG_NAME"),
-        env!("CARGO_PKG_VERSION"),
-        env!("CARGO_PKG_REPOSITORY"),
-    )
+    let mut lines = vec![
+        "Release notes".to_string(),
+        format!(
+            "  You are running {} v{}.",
+            env!("CARGO_PKG_NAME"),
+            env!("CARGO_PKG_VERSION")
+        ),
+    ];
+    match crate::update_check::latest_known_release() {
+        Some(release) if release.release_notes.is_some() => lines.extend(
+            crate::update_check::release_notes_lines(release)
+                .into_iter()
+                .map(|line| format!("  {line}")),
+        ),
+        _ => lines.push(format!(
+            "  Notes for each release: {}/releases",
+            env!("CARGO_PKG_REPOSITORY")
+        )),
+    }
+    lines.join("\n")
 }
 
 pub fn render_keybindings() -> String {

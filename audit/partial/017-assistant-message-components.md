@@ -141,11 +141,11 @@ Code: `apps/web/features/chat/components/messages/ChatMessageList.tsx:1046-1046`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | A 'Switch model' link appears only on failed answers and just opens the model picker; add 'try again with model X' on any answer. | ui |
+| mobile | partial | 'Retry with Another Model' on an answer opens the model picker and reruns the question with the chosen model (retryMessage takes a model override; threaded Cloud chats keep the old answer as a sibling), in post-codex/chat-gates-s17.22-mobile-retry-with-model.patch. ChatGPT's iOS app runs a message on a chosen model (help.openai.com 6825453, 2026-06-08). | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:1082-1096`, `apps/mobile/app/(app)/chat/[id].tsx:1441-1441`
+Code: `apps/mobile/stores/chat/chatExecutionStore.ts:2987-2987`
 
 ## S17.23: Shorten answer.
 
@@ -207,7 +207,6 @@ Code: `apps/mobile/src/features/chat/components/MessageList.tsx:91-91`, `apps/mo
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Blind re-search: the store already implements forkConversation(sourceConversationId, { forkPointMessageId }) which copies history up to a chosen message into a new conversation, but no answer control calls it. That is "some links exist" (miss ui/mount), the same reading aud-shell gave the same store for S4.10 mobile (partial). remaining: wire a "Branch from here" action on answers to forkConversation. |  |
 | vscode | partial | 'Fork Conversation' copies a whole session from the command palette/tree; add branching from a chosen answer. | ui |
 | chrome | missing | Not built on this surface. |  |
 
@@ -221,12 +220,12 @@ Code: `apps/extension-vscode/src/core/commandSetup.ts:1210-1229`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Regenerating a cloud answer keeps the old one as a sibling, but there is no pager to switch back to it. | ui |
+| mobile | partial | Same pager as S16.11, in post-codex/chat-gates-s16.11-s17.28-mobile-version-pager.patch. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:2939-2944`, `apps/mobile/app/(app)/chat/[id].tsx:235-241`
+Code: `packages/contracts/cloud-contracts/src/message-thread.ts:253-253`
 
 ## S17.29: Positive feedback.
 
@@ -305,10 +304,10 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:2939-2944`, `apps/mobile/ap
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The answering model is shown per answer; token/cost usage is shown only as tokens-per-second for on-device models, not for cloud answers. | ui |
+| mobile | partial | An answer shows its tokens and time under the model line from the usage the server persists (tokensUsed, inputTokens, outputTokens, totalDurationMs), in post-codex/chat-gates-s17.36-mobile-answer-usage.patch. Cost is not shown, as users see credits. | ui |
 | cli | partial | The cited /usage and /cost print session-wide totals (total_input_tokens, cost_ledger.total_usd, turn_count) and the session model; nothing is stored or shown per answer (ChatMessage is role+text). The criterion is per-answer model and usage. Partial, miss ui; remaining: record and show per-turn model/tokens/cost (e.g. a trailing line after each answer or /usage --last). |  |
 
-Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:1101-1104`, `apps/mobile/src/features/chat/components/MessageBubble.tsx:1113-1124`, `apps/mobile/src/features/chat/components/MessageList.tsx:92-92`, `apps/cli/src/tui/tui_app.rs:3897-3910`
+Code: `packages/contracts/cloud-contracts/src/message-metadata-projection.ts:60-60`, `apps/cli/src/tui/tui_app.rs:3897-3910`, `apps/cli/src/tui/tui_app.rs:3324-3331`
 
 ## S17.38: Refusal state.
 
@@ -318,10 +317,10 @@ Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:1101-1104`, `a
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | A provider refusal (finish_reason content_filter/refusal) is stored but rendered as an ordinary answer; only on-device Apple Intelligence refusals get their own message. Show a refusal notice for cloud answers. | states |
+| mobile | partial | A refused answer (finishReason refusal or content_filter, already stored) gets the web's refusal notice with a next step in post-codex/chat-gates-s16.09-s17.38-s17.39-s20.26-mobile-bubble.patch; applies once Codex releases MessageBubble. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1994-1994`, `apps/mobile/stores/chat/chatExecutionStore.ts:587-587`
+Code: `apps/mobile/stores/chat/chatExecutionStore.ts:2050-2050`
 
 ## S17.39: Interrupted state.
 
@@ -331,6 +330,6 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1994-1994`, `apps/mobile/st
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Stopping settles agent/research turns as 'Cancelled after …', but a plain answer stopped mid-stream shows no stopped marker and looks complete. | states |
+| mobile | partial | Stop now stamps finishReason 'stopped' (the web's marker, so it syncs) and the answer keeps what arrived with 'Response stopped.' and Try again, in post-codex/chat-gates-s16.09-s17.38-s17.39-s20.26-mobile-bubble.patch (chatExecutionStore and MessageBubble are held). | ui |
 
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:2840-2850`, `apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx:92-92`
+Code: `apps/mobile/stores/chat/chatExecutionStore.ts:2876-2876`

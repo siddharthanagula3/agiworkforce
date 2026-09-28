@@ -40,26 +40,13 @@ Code: `apps/cli/src/features/exec/tools/task_registry/mod.rs:136-136`, `apps/cli
 
 - Done when: A routine has a user-set name and an optional description, both editable.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Name only; add a description field (the server already stores one). | ui |
-| chrome | partial | Local tasks take a name only, with no description and no rename; side-panel cloud schedules are read-only for this. | ui |
 
-Code: `apps/mobile/src/features/schedules/components/ScheduleForm.tsx:173-173`, `apps/mobile/app/(app)/schedules/create.tsx:83-83`, `apps/extension/src/side_panel.ts:9214-9214`, `apps/extension/src/features/background/tasks.ts:173-173`
-
-## S63.05: Prompt editor.
-
-- Done when: A multi-line editor to write and later edit the routine's instructions.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | A one-line prompt input at creation only; an existing local task's prompt cannot be edited. | ui |
-
-Code: `apps/extension/src/side_panel.ts:9224-9224`, `apps/extension/src/side_panel.ts:9307-9307`, `apps/extension/src/features/background/tasks.ts:173-173`
+Code: `apps/mobile/src/features/schedules/components/ScheduleForm.tsx:173-173`, `apps/mobile/app/(app)/schedules/create.tsx:83-83`
 
 ## S63.06: Source selection.
 
@@ -180,18 +167,6 @@ Code: `apps/cli/src/features/hooks/hooks.rs:476-476`, `apps/cli/src/daemon.rs:67
 
 Code: `apps/mobile/src/features/schedules/service.ts:174-174`
 
-## S63.21: Last-run display.
-
-- Done when: Each routine shows when it last ran and whether that run failed.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | The cited lines show only the last-run time. The criterion also needs 'whether that run failed': the row never renders lastError, and the status badge cannot carry it because finalizeScheduleRun sets last_error but leaves an active task's status 'active' (nextStatus is only completed/expired), so badgeTone's 'failed' branch is unreachable for a failed run. miss ui; remaining: show lastError or a failed marker on the cloud schedule row. |  |
-
-Code: `apps/extension/src/features/side-panel/schedulesSection.ts:225-225`, `apps/extension/src/side_panel.ts:8589-8589`, `apps/extension/src/features/side-panel/schedulesSection.ts:305-305`
-
 ## S63.22: Run-history list.
 
 - Done when: A list of a routine's past runs with status and time.
@@ -206,14 +181,13 @@ Code: `apps/extension/src/features/side-panel/schedulesSection.ts:225-225`, `app
 
 - Done when: Opening a run shows what that run produced (its output text), not just its status.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli
+- Already works on: web, desktop, mobile, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | vscode | partial | Migration 0284 is now applied in production (2026-09-27). Still open: The runs quick pick shows status, trigger, duration and error, never the output; runs also fail until pending migration 0284 ships. | ui |
-| chrome | partial | Local tasks open only their latest result conversation; cloud schedules in the side panel show no results. | ui |
 
-Code: `apps/extension-vscode/src/features/schedules/schedulePresentation.ts:126-126`, `apps/extension-vscode/src/core/commandSetup.ts:2235-2235`, `apps/extension/src/side_panel.ts:10451-10451`, `apps/extension/src/side_panel.ts:10457-10457`
+Code: `apps/extension-vscode/src/features/schedules/schedulePresentation.ts:126-126`, `apps/extension-vscode/src/core/commandSetup.ts:2235-2235`
 
 ## S63.26: Edit schedule.
 
@@ -225,18 +199,6 @@ Code: `apps/extension-vscode/src/features/schedules/schedulePresentation.ts:126-
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-## S63.27: Delete routine.
-
-- Done when: A routine can be deleted, after a confirmation, and stops running.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | Local tasks delete on one click with no confirmation; cloud schedules cannot be deleted from the side panel. | states |
-
-Code: `apps/extension/src/side_panel.ts:10628-10628`, `apps/extension/src/features/background/tasks.ts:306-306`
 
 ## S63.29: Share routine template.
 
