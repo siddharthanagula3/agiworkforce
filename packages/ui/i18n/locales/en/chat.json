@@ -439,7 +439,11 @@
     "discardedReplies_one": "The reply below it is deleted and cannot be recovered.",
     "discardedReplies_other": "The {{count}} messages below it are deleted and cannot be recovered.",
     "citationSources_one": "Source {{indices}}: {{sites}}",
-    "citationSources_other": "Sources {{indices}}: {{sites}}"
+    "citationSources_other": "Sources {{indices}}: {{sites}}",
+    "savedMemoriesUsed_one": "Used {{count}} saved memory",
+    "savedMemoriesUsed_other": "Used {{count}} saved memories",
+    "moreSavedMemories_one": "And {{count}} more",
+    "moreSavedMemories_other": "And {{count}} more"
   },
   "markdownTable": {
     "label": "Table",

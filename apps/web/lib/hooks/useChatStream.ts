@@ -58,7 +58,8 @@ import { trackProductEvent } from '@shared/lib/product-analytics';
 import {
   getModelMetadataById,
   getModelReasoning,
-  managedMemoryLocalContextBlocks,
+  MANAGED_MEMORY_CITATIONS_HEADER,
+  managedMemoryLocalTurnContext,
   resolveModelEffort,
   WEB_SEARCH_CITATION_DELTA_KEY,
   WEB_SEARCH_CITATION_KIND,
@@ -128,6 +129,7 @@ import {
 import {
   PAST_CHAT_CITATIONS_HEADER,
   PROJECT_FILE_CITATIONS_HEADER,
+  readMemoryCitationsHeaderValue,
   readPastChatSourcesHeaderValue,
   readProjectSourcesHeaderValue,
 } from '@/lib/chat-project-sources';
@@ -1526,6 +1528,14 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   } else if (!isTurnContinuation) {
     store.setPastChatSources(assistantMessageId, undefined, conversationId);
   }
+  const streamMemoryCitations = readMemoryCitationsHeaderValue(
+    response.headers.get(MANAGED_MEMORY_CITATIONS_HEADER),
+  );
+  if (streamMemoryCitations) {
+    store.setMemoryCitations(assistantMessageId, streamMemoryCitations, conversationId);
+  } else if (!isTurnContinuation) {
+    store.setMemoryCitations(assistantMessageId, undefined, conversationId);
+  }
   const streamSecretRedactionCount = response.headers.get(SECRET_REDACTION_COUNT_HEADER);
   if (streamSecretRedactionCount) {
     updateMessage(
@@ -2157,6 +2167,18 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
       : findConversationMessage(conversationId, assistantMessageId)?.metadata?.projectSources;
     if (projectSources?.length) {
       metadata.projectSources = projectSources;
+    }
+    const pastChatSources = streamPastChatSources.length
+      ? streamPastChatSources
+      : findConversationMessage(conversationId, assistantMessageId)?.metadata?.pastChatSources;
+    if (pastChatSources?.length) {
+      metadata.pastChatSources = pastChatSources;
+    }
+    const memoryCitations =
+      streamMemoryCitations ??
+      findConversationMessage(conversationId, assistantMessageId)?.metadata?.memoryCitations;
+    if (memoryCitations) {
+      metadata.memoryCitations = memoryCitations;
     }
     // A provider that gave us character positions has already had its markers
     // renumbered onto the DELIVERED source order by withProviderCitationMarkers,
@@ -3675,14 +3697,15 @@ export function useChatStream(
             (options.styleMode && options.styleMode !== 'normal'
               ? STYLE_SYSTEM_INSTRUCTIONS[options.styleMode]
               : undefined);
+          const localContext = personalContext
+            ? managedMemoryLocalTurnContext(personalContext, {
+                temporary: isTemporaryConversation,
+                memoryEnabled: options.memoryEnabled !== false,
+                personalization,
+              })
+            : null;
           const systemBlocks = [
-            ...(personalContext
-              ? managedMemoryLocalContextBlocks(personalContext, {
-                  temporary: isTemporaryConversation,
-                  memoryEnabled: options.memoryEnabled !== false,
-                  personalization,
-                })
-              : []),
+            ...(localContext?.blocks ?? []),
             styleInstruction,
             options.artifactInstruction,
           ].filter((block): block is string => Boolean(block));
@@ -3699,6 +3722,7 @@ export function useChatStream(
               ...localMessages,
             ],
             personalContextMissing: personalization && personalContext === null,
+            memoryCitations: localContext?.memoryCitations ?? null,
             signal: abortController.signal,
           });
           if (outcome.error) setError(outcome.error, conversationId);

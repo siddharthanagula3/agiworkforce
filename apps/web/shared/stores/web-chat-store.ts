@@ -38,7 +38,7 @@ import type {
 } from '@agiworkforce/types';
 import type { PastChatCitation } from '@/lib/past-chat-citation';
 import type { ChatOutputFormat } from '@/lib/chat-output-format';
-import type { CloudWorkMode } from '@agiworkforce/types';
+import type { CloudWorkMode, ManagedMemoryCitations } from '@agiworkforce/types';
 import type { ManagedMediaImageAspectRatio } from '@agiworkforce/cloud-contracts';
 import type {
   PaywallSlot,
@@ -302,6 +302,7 @@ export interface MessageMetadata {
    * client only carries it.
    */
   pastChatSources?: PastChatCitation[];
+  memoryCitations?: ManagedMemoryCitations;
   /**
    * The client's post-stream metadata save failed and was not retried, so what
    * is on screen is richer than what a reload will show.
@@ -857,6 +858,11 @@ interface ChatState {
   setPastChatSources: (
     id: string,
     sources: PastChatCitation[] | undefined,
+    conversationId?: string,
+  ) => void;
+  setMemoryCitations: (
+    id: string,
+    citations: ManagedMemoryCitations | undefined,
     conversationId?: string,
   ) => void;
   setSearchResults: (
@@ -1550,6 +1556,14 @@ export const useChatStore = create<ChatState>()(
               patchMessageMetadata(state, conversationId, id, { pastChatSources: sources }),
             undefined,
             'chat/setPastChatSources',
+          ),
+
+        setMemoryCitations: (id, citations, conversationId) =>
+          set(
+            (state) =>
+              patchMessageMetadata(state, conversationId, id, { memoryCitations: citations }),
+            undefined,
+            'chat/setMemoryCitations',
           ),
 
         setSearchResults: (id, results, conversationId) =>

@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { ManagedCloudMessageMetadataSchema } from '@agiworkforce/cloud-contracts';
 import type {
+  ManagedMemoryCitation,
   ResearchDeliverableSpec,
   ResearchStep,
   ResolvedWorkspaceControls,
@@ -1169,6 +1170,7 @@ export type ProcessedRequest = {
   projectSources?: readonly ProjectFileCitation[];
   /** The earlier conversations this turn's recall quoted, shown beside the answer. */
   pastChatSources?: readonly PastChatCitation[];
+  memoryCitations?: readonly ManagedMemoryCitation[];
   assistantMessageId?: string | undefined;
   assistantParentId?: string | undefined;
   userMessageId?: string | undefined;
@@ -3314,6 +3316,7 @@ export async function processRequest(
   }
 
   const loadedManagedMemories: readonly ManagedMemoryContextItem[] = turnContext?.memories ?? [];
+  const memoryCitations = turnContext?.memoryCitations ?? [];
   if (turnContext?.memoryPrompt) {
     applyManagedMemoryContext(chatRequest, turnContext.memoryPrompt);
     dynamicSystemMessageRefs.set(chatRequest.messages[0] as object, 'memory');
@@ -5402,6 +5405,7 @@ export async function processRequest(
       ? { projectSources: ownership.projectSources }
       : {}),
     ...(pastChatSources.length ? { pastChatSources } : {}),
+    ...(memoryCitations.length ? { memoryCitations } : {}),
     assistantMessageId: chatRequest.assistant_message_id,
     assistantParentId: chatRequest.assistant_parent_id,
     ...(chatRequest.user_message ? { userMessageId: chatRequest.user_message.id } : {}),

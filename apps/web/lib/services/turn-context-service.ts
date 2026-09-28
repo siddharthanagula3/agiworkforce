@@ -11,7 +11,11 @@ import {
 } from '@agiworkforce/context-engine';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import type { ManagedMemoryLocalContextResponse } from '@agiworkforce/types';
+import {
+  managedMemoryCitationExcerpt,
+  type ManagedMemoryCitation,
+  type ManagedMemoryLocalContextResponse,
+} from '@agiworkforce/types';
 
 import type { CloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { logger } from '@/lib/logger';
@@ -47,6 +51,7 @@ export interface InteractiveTurnContext {
   readonly pastChatSources: readonly PastChatCitation[];
   readonly memoryPrompt: string | null;
   readonly memories: readonly ManagedMemoryContextItem[];
+  readonly memoryCitations: readonly ManagedMemoryCitation[];
   readonly manifest: ContextManifest | null;
 }
 
@@ -97,6 +102,7 @@ export async function resolveInteractiveTurnContext(
       pastChatSources: [],
       memoryPrompt: null,
       memories: [],
+      memoryCitations: [],
       manifest: null,
     };
   }
@@ -161,12 +167,16 @@ export async function resolveInteractiveTurnContext(
       });
   }
 
-  const memories = memoryLoader
+  const memoryItems = memoryLoader
     ? resolution.itemsOf('account_memory').flatMap((item) => {
         const memory = memoryLoader.itemFor(item.source.id);
-        return memory ? [memory] : [];
+        return memory ? [{ memory, recordId: item.source.provenance.recordId }] : [];
       })
     : [];
+  const memories = memoryItems.map(({ memory }) => memory);
+  const memoryCitations = memoryItems.flatMap(({ memory, recordId }) =>
+    recordId ? [{ id: recordId, excerpt: managedMemoryCitationExcerpt(memory.content) }] : [],
+  );
   const excerpts = pastChatLoader
     ? resolution.itemsOf('past_chat').flatMap((item) => {
         const excerpt = pastChatLoader.excerptFor(item.source.id);
@@ -183,6 +193,7 @@ export async function resolveInteractiveTurnContext(
     pastChatSources: recallDegraded ? [] : excerpts.map(pastChatCitation),
     memoryPrompt: formatManagedMemorySystemPrompt(memories),
     memories,
+    memoryCitations,
     manifest: resolution.manifest,
   };
 }
@@ -191,6 +202,12 @@ interface PersonalContextParts {
   readonly instructions: string | null;
   readonly memory: string | null;
   readonly pastChats: string | null;
+  readonly memoryCitations: readonly ManagedMemoryCitation[];
+}
+
+export interface FreeOfferingPersonalContext {
+  readonly blocks: readonly string[];
+  readonly memoryCitations: readonly ManagedMemoryCitation[];
 }
 
 async function resolvePersonalContextParts(
@@ -255,6 +272,7 @@ async function resolvePersonalContextParts(
     instructions: preamble || null,
     memory: context?.memoryPrompt || null,
     pastChats: context?.pastChatPrompt || null,
+    memoryCitations: context?.memoryPrompt ? context.memoryCitations : [],
   };
 }
 
@@ -271,12 +289,15 @@ export async function resolveFreeOfferingPersonalContext(
     personalization: boolean | undefined;
     query: string;
   },
-): Promise<string[]> {
-  if (input.personalization === false) return [];
+): Promise<FreeOfferingPersonalContext> {
+  if (input.personalization === false) return { blocks: [], memoryCitations: [] };
   const parts = await resolvePersonalContextParts(db, input);
-  return [parts.instructions, parts.memory, parts.pastChats].filter(
-    (block): block is string => block !== null,
-  );
+  return {
+    blocks: [parts.instructions, parts.memory, parts.pastChats].filter(
+      (block): block is string => block !== null,
+    ),
+    memoryCitations: parts.memoryCitations,
+  };
 }
 
 export async function resolveLocalTurnPersonalContext(
@@ -292,5 +313,9 @@ export async function resolveLocalTurnPersonalContext(
     query: '',
     recordManifest: false,
   });
-  return { instructions: parts.instructions, memory: parts.memory };
+  return {
+    instructions: parts.instructions,
+    memory: parts.memory,
+    memoryCitations: [...parts.memoryCitations],
+  };
 }

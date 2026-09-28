@@ -439,7 +439,11 @@
     "videoModeAttachments_one": "视频生成仅使用您的提示词。附加的文件不会发送给视频模型。如果您想将此文件发送给聊天模型，请先退出视频模式。",
     "videoModeAttachments_other": "视频生成仅使用您的提示词。附加的文件不会发送给视频模型。如果您想将此文件发送给聊天模型，请先退出视频模式。",
     "viewSources_one": "查看 {{count}} 个来源",
-    "viewSources_other": "查看 {{count}} 个来源"
+    "viewSources_other": "查看 {{count}} 个来源",
+    "savedMemoriesUsed_one": "使用了 {{count}} 条已保存的记忆",
+    "savedMemoriesUsed_other": "使用了 {{count}} 条已保存的记忆",
+    "moreSavedMemories_one": "还有 {{count}} 条",
+    "moreSavedMemories_other": "还有 {{count}} 条"
   },
   "markdownTable": {
     "label": "表格",
