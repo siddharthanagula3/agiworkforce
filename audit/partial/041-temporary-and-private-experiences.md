@@ -70,17 +70,16 @@ nothing is left.
 
 - Done when: The user can choose whether custom instructions apply in a temporary chat.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Header switch and server option done; useChatStream must send personalized:false (spec to p-mcp-web) and request-processor must accept and pass it (spec to p-chat-gates). | handler |
-| desktop | partial | Header switch and server option done; useChatStream must send personalized:false (spec to p-mcp-web) and request-processor must accept and pass it (spec to p-chat-gates). | handler |
 | mobile | partial | Patch parked at scratchpad/post-codex/privacy-s41.06.patch (settingsStore, TemporaryChatBanner switch, streaming.ts, chatExecutionStore held by Codex). | handler, ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/pages/WebChatPage.tsx:5594-5594`, `apps/web/lib/server/user-identity.ts:250-250`, `apps/mobile/stores/chat/chatExecutionStore.ts:1424-1424`
+Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1424-1424`
 
 ## S41.07: Plugin availability in temporary mode.
 
