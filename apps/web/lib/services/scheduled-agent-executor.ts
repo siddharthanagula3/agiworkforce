@@ -131,7 +131,7 @@ import type {
 
 const MAX_PROMPT_LENGTH = 50_000;
 const MAX_OUTPUT_CHARS = 100_000;
-const MAX_OUTPUT_TOKENS = 4_096;
+export const MAX_OUTPUT_TOKENS = 4_096;
 const MAX_APPROVAL_INPUT_CHARS = 4_000;
 
 const SCHEDULED_TASK_DIRECTIVE =
@@ -170,7 +170,7 @@ function validateAgentTask(task: ScheduleTask): string {
   return prompt;
 }
 
-interface ScheduledToolPlan {
+export interface ScheduledToolPlan {
   tools: unknown[];
   mcpTools: WebMcpToolDef[];
   connectorPermissions: ConnectorToolPermissions;
@@ -222,7 +222,7 @@ function runsWithoutAsking(
   );
 }
 
-async function buildScheduledToolPlan(input: {
+export async function buildScheduledToolPlan(input: {
   db: Parameters<typeof loadConnectorToolPermissions>[0];
   userId: string;
   organizationId?: string | null;
@@ -329,7 +329,7 @@ async function buildScheduledToolPlan(input: {
   };
 }
 
-function withheldToolsDirective(plan: ScheduledToolPlan): string | null {
+export function withheldToolsDirective(plan: ScheduledToolPlan): string | null {
   if (plan.withheldTools.length === 0) return null;
   const { label } = toolApprovalPolicyOption(plan.toolApprovalPolicy);
   return (
@@ -462,7 +462,7 @@ async function resolveScheduledContext(input: {
   };
 }
 
-interface ScheduledCompletion {
+export interface ScheduledCompletion {
   text: string;
   promptTokens: number;
   completionTokens: number;
@@ -472,7 +472,7 @@ interface ScheduledCompletion {
   approval?: ToolLoopApprovalCheckpoint;
 }
 
-type ScheduledMessages = ProcessedRequest['llmRequest']['messages'];
+export type ScheduledMessages = ProcessedRequest['llmRequest']['messages'];
 
 function buildScheduledProcessedRequest(input: {
   task: ScheduleTask;
@@ -534,7 +534,7 @@ function buildScheduledProcessedRequest(input: {
   };
 }
 
-async function runScheduledToolLoop(input: {
+export async function runScheduledToolLoop(input: {
   processed: ProcessedRequest;
   plan: ScheduledToolPlan;
   approvalMode: ToolLoopApprovalMode;
@@ -607,7 +607,7 @@ async function runScheduledToolLoop(input: {
   };
 }
 
-async function runScheduledCompletion(input: {
+export async function runScheduledCompletion(input: {
   messages: ScheduledMessages;
   route: ScheduledRunRoute;
   signal: AbortSignal;
@@ -692,7 +692,7 @@ function resumedRoute(route: ScheduledRunRoute): ScheduledRunRoute {
   return route;
 }
 
-function approvalToolCalls(
+export function approvalToolCalls(
   checkpoint: ToolLoopApprovalCheckpoint,
 ): ManagedCloudScheduleRunApprovalToolCall[] {
   return checkpoint.pendingToolCalls.map((call) => {

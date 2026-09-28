@@ -741,7 +741,10 @@ pub struct McpConnection {
     client: McpClient,
     timeouts: McpTimeouts,
     notifications: Option<tokio::sync::mpsc::Receiver<agiworkforce_mcp::McpNotification>>,
+    recent_logs: std::sync::Mutex<std::collections::VecDeque<String>>,
 }
+
+const RECENT_LOG_LINES: usize = 200;
 
 #[derive(Default)]
 struct ListChanges {
@@ -774,7 +777,27 @@ impl McpConnection {
             client,
             timeouts,
             notifications,
+            recent_logs: std::sync::Mutex::new(std::collections::VecDeque::new()),
         })
+    }
+
+    pub fn negotiated(&self) -> &agiworkforce_mcp::NegotiatedServer {
+        self.client.server()
+    }
+
+    pub fn recent_logs(&self) -> Vec<String> {
+        let mut kept = self
+            .recent_logs
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        kept.extend(self.client.drain_stderr());
+        let excess = kept.len().saturating_sub(RECENT_LOG_LINES);
+        kept.drain(..excess);
+        kept.iter().cloned().collect()
+    }
+
+    pub async fn responding(&mut self) -> bool {
+        self.client.is_alive().await
     }
 
     fn take_list_changes(&mut self) -> ListChanges {
@@ -898,8 +921,9 @@ impl McpConnection {
         tool_name: &str,
         arguments: serde_json::Value,
     ) -> Result<String> {
-        let result = self.client.call_tool_value(tool_name, arguments).await?;
-        let result = result.unwrap_or(serde_json::Value::Null);
+        let result = self.client.call_tool_value(tool_name, arguments).await;
+        self.recent_logs();
+        let result = result?.unwrap_or(serde_json::Value::Null);
 
         // Extract text content from the response.
         if let Some(content) = result.get("content").and_then(|c| c.as_array()) {
@@ -1377,6 +1401,10 @@ impl McpManager {
 
     pub fn prompts(&self) -> &[McpPrompt] {
         &self.prompts
+    }
+
+    pub fn connection_mut(&mut self, server_name: &str) -> Option<&mut McpConnection> {
+        self.connections.get_mut(server_name)
     }
 
     fn server_allowed(&self, server_name: &str, privacy_mode: crate::agent::PrivacyMode) -> bool {

@@ -95,6 +95,7 @@ vi.mock('@/lib/services/free-trial-service', () => ({
 }));
 
 vi.mock('@/lib/services/cloud-agent-run-service', () => ({
+  APPROVAL_CHECKPOINT_TTL_HOURS: 24,
   appendCloudAgentEvents: (db: unknown, input: unknown) =>
     appendCloudAgentEvents(db, input as { envelopes: readonly { event: { state?: string } }[] }),
   transitionCloudAgentRun: (db: unknown, input: unknown) =>
@@ -425,6 +426,7 @@ describe('managed agent stream', () => {
         requestId: 'free-request',
       },
       outcome: 'completed',
+      attempt: { outcome: 'completed' },
       provider: 'anthropic',
       model: 'claude-test',
       cost: {
@@ -468,6 +470,7 @@ describe('managed agent stream', () => {
     expect(settleFreeTrialRequest).toHaveBeenCalledWith({
       reservation: freeProcessed.freeTrial,
       outcome: 'failed',
+      attempt: { outcome: 'failed' },
       provider: 'anthropic',
       model: 'claude-test',
       cost: { tokenMicrousd: 0, toolMicrousd: 0 },

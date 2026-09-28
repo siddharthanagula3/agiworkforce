@@ -1,5 +1,5 @@
 export interface DataHandlingDisclosure {
-  id: 'page-injection' | 'debugger' | 'cookies' | 'cloud-mirroring';
+  id: 'page-injection' | 'debugger' | 'cookies' | 'cloud-mirroring' | 'training' | 'retention';
   label: string;
   body: string;
 }
@@ -24,6 +24,16 @@ export const DATA_HANDLING_DISCLOSURES: DataHandlingDisclosure[] = [
     id: 'cloud-mirroring',
     label: 'Managed Cloud chats are mirrored to your account',
     body: 'Chats you run on AGI Managed Cloud are copied to your AGI account so they appear on the web and mobile apps. Turn the mirror off to keep those chats in this browser only; nothing already stored locally is sent while it is off.',
+  },
+  {
+    id: 'training',
+    label: 'Model training',
+    body: 'We do not sell your data, and we do not train AGI-owned models on your prompts, responses or files. There is no training opt-in, because that data path does not exist. Each request goes to the hosted provider serving the model you selected, under that provider’s terms. On the Free plan, requests are served by providers’ free models, and those providers’ terms may allow them to train on what you send, unless you turn on Only use models that do not train on your chats in your account’s privacy settings.',
+  },
+  {
+    id: 'retention',
+    label: 'How long chats are kept',
+    body: 'A chat saved to your account stays in your history until you delete it, and a deleted chat stays in Recently deleted for 30 days, then is deleted for good. A temporary chat is never saved. This browser keeps your 100 most recent chats until you delete them or remove the extension. When you delete your account, erasure starts 24 hours after you confirm, and you can cancel until then.',
   },
 ];
 

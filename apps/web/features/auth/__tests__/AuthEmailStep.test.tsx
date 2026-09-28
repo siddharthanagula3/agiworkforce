@@ -2,6 +2,11 @@ import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
+import {
+  ACCOUNT_AGE_CONFIRMATION_LABEL,
+  ACCOUNT_AGE_REQUIREMENT_NOTICE,
+} from '@agiworkforce/types';
+
 import { AuthEmailStep } from '../AuthEmailStep';
 import type { AuthProvider } from '../authContract';
 
@@ -51,11 +56,13 @@ describe('AuthEmailStep', () => {
     expect(props.onSubmit).toHaveBeenCalledWith('person@example.com');
   });
 
-  it('states on sign up that continuing is the agreement, with no checkbox to tick', () => {
+  it('states on sign up that continuing is the agreement, with no terms box to tick', () => {
     renderStep({ mode: 'signup' });
 
     expect(screen.getByRole('heading', { name: 'Create an account' })).toBeInTheDocument();
-    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('checkbox')).toEqual([
+      screen.getByRole('checkbox', { name: ACCOUNT_AGE_CONFIRMATION_LABEL }),
+    ]);
     expect(screen.getByTestId('auth-legal-footer')).toHaveTextContent(
       'By signing up, you agree to the Terms of Use and acknowledge the Privacy Policy.',
     );
@@ -64,6 +71,35 @@ describe('AuthEmailStep', () => {
       'href',
       '/privacy',
     );
+  });
+
+  it('asks for 18 or older before any sign-up method starts, as Claude does', async () => {
+    const props = renderStep({ mode: 'signup' });
+
+    expect(screen.getByRole('button', { name: 'Continue with Google' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled();
+    expect(screen.getByText(ACCOUNT_AGE_REQUIREMENT_NOTICE, { exact: false })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Terms of Use, section 2' })).toHaveAttribute(
+      'href',
+      '/terms#s-02',
+    );
+
+    await userEvent.type(screen.getByLabelText('Email address'), 'person@example.com{Enter}');
+    expect(props.onSubmit).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole('checkbox', { name: ACCOUNT_AGE_CONFIRMATION_LABEL }));
+
+    expect(screen.getByRole('button', { name: 'Continue with Google' })).toBeEnabled();
+    expect(screen.queryByText(ACCOUNT_AGE_REQUIREMENT_NOTICE, { exact: false })).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(props.onSubmit).toHaveBeenCalledWith('person@example.com');
+  });
+
+  it('asks nothing about age when signing in', () => {
+    renderStep();
+
+    expect(screen.getByRole('button', { name: 'Continue with Google' })).toBeEnabled();
+    expect(screen.queryByText(ACCOUNT_AGE_REQUIREMENT_NOTICE, { exact: false })).toBeNull();
   });
 
   it('shows a sign up failure inline rather than as a banner', () => {

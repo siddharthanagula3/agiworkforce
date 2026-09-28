@@ -1039,6 +1039,7 @@ fn approval_overlay_for(
             .map(|line| sanitize_terminal_text(line).into_owned())
             .collect(),
     );
+    overlay.always_allow_unavailable = !request.saves_always_allow;
     overlay
 }
 

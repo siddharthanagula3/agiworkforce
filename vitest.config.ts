@@ -13,6 +13,7 @@ export default defineConfig({
           'apps/extension-vscode',
           'apps/web',
           'services/signaling-server',
+          'services/upload-scanner',
           'packages/ai/provider-runtime',
           'packages/ai/routing',
           'packages/ai/search',
