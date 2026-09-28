@@ -102,31 +102,9 @@ Code: `apps/cli/src/features/exec/tools/web/mod.rs:286-294`, `apps/extension-vsc
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only Deep Research runs can be limited to sites ("Only this site" in the plan); ordinary web search in chat cannot be restricted to chosen websites. | ui |
-| desktop | partial | Same as web (hosted): Only Deep Research runs can be limited to sites ("Only this site" in the plan); ordinary web search in chat cannot be restricted to chosen websites. | ui |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
 | api | partial | research_sources.allow_domains works on the chat endpoint but only for research runs and is not in the published OpenAPI spec. | api |
 
-Code: `apps/web/features/chat/components/research/ResearchActivity.tsx:146-149`, `apps/web/features/chat/pages/WebChatPage.tsx:4750-4753`, `apps/web/app/api/llm/v1/chat/completions/lib/research-loop.ts:637-642`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:410-417`
-
-## S34.09: Search by source type.
-
-- Done when: The user can choose which kinds of sources a search covers (e.g. web, news, academic, files, chats) and get results only of those kinds.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | History search has no source-type filter although /api/search accepts kind; web search cannot be limited to a type (news, academic, video); only Library tabs (images, videos, documents, artifacts) and Deep Research "My files" choose a type, and connected apps are never offered there. | ui |
-| desktop | partial | Same as web (hosted): History search has no source-type filter although /api/search accepts kind; web search cannot be limited to a type (news, academic, video); only Library tabs (images, videos, documents, artifacts) and Deep Research "My files" choose a type, and connected apps are never offered there. | ui |
-| mobile | partial | Global search only groups results by type (chats, projects, files, library, artifacts) and the Library has type chips; no source-type choice for web search or chat history. | ui |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/api/search/route.ts:327-327`, `apps/web/features/chat/services/global-search-service.ts:168-176`, `packages/ui/unified-chat/src/components/library/LibraryView.tsx:96-103`, `apps/web/features/chat/components/research/ResearchActivity.tsx:392-392`
+Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:410-417`
 
 ## S34.15: Date-range filters.
 
@@ -148,15 +126,9 @@ Code: `apps/web/app/api/search/route.ts:327-327`, `apps/web/features/chat/servic
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only Deep Research runs take "Only this site" / "Never this site"; ordinary web search in chat cannot include or exclude domains. | ui |
-| desktop | partial | Same as web (hosted): Only Deep Research runs take "Only this site" / "Never this site"; ordinary web search in chat cannot include or exclude domains. | ui |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
 | api | partial | research_sources.allow_domains/deny_domains work on the chat endpoint only for research runs and are not in the published OpenAPI spec. | api |
 
-Code: `apps/web/features/chat/components/research/ResearchActivity.tsx:145-149`, `apps/web/features/chat/pages/WebChatPage.tsx:4750-4753`, `apps/web/app/api/llm/v1/chat/completions/lib/research-loop.ts:637-642`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:410-417`
+Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:410-417`
 
 ## S34.19: User-selected source collections.
 
@@ -282,55 +254,6 @@ Code: `apps/extension/src/features/side-panel/bubbles.ts:406-432`
 | vscode | partial | URLs in answers render as links (markdown-it linkify), but there are no citations or source cards to open from. | ui |
 
 Code: `apps/cli/src/markdown.rs:434-440`, `apps/cli/src/features/exec/tools/web/mod.rs:286-286`, `apps/extension-vscode/src/webview/render.ts:5-7`
-
-## S34.28: Add source to answer.
-
-- Done when: The user can add a specific source to an answer so it is used/cited.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Sources can be added only to a Deep Research plan before it starts; a finished answer cannot take a new source and be re-answered. | ui |
-| desktop | partial | Same as web (hosted): Sources can be added only to a Deep Research plan before it starts; a finished answer cannot take a new source and be re-answered. | ui |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-| api | partial | Only research_sources (domains/files) can be set when a research run starts; there is no call to add a source to an existing answer, and the field is undocumented. | api |
-
-Code: `apps/web/features/chat/components/research/ResearchActivity.tsx:239-251`, `apps/web/features/chat/pages/WebChatPage.tsx:4695-4695`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:413-420`
-
-## S34.29: Remove source from answer.
-
-- Done when: The user can remove/exclude a source from an answer and have it regenerated without it.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Sources can be removed only from a Deep Research plan before it starts; a source cannot be removed from a finished answer. | ui |
-| desktop | partial | Same as web (hosted): Sources can be removed only from a Deep Research plan before it starts; a source cannot be removed from a finished answer. | ui |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/research/ResearchActivity.tsx:365-370`, `apps/web/features/chat/pages/WebChatPage.tsx:4695-4695`
-
-## S34.30: Save source to Project or notebook.
-
-- Done when: The user can save a cited source into a Project or notebook for later use.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Only a whole Deep Research report can be saved to a project or the library; a single cited source cannot be saved. | ui |
-| desktop | partial | Same as web (hosted): Only a whole Deep Research report can be saved to a project or the library; a single cited source cannot be saved. | ui |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/research/ResearchReportView.tsx:496-499`, `apps/web/features/chat/components/research/ResearchReportView.tsx:279-281`
 
 ## S34.31: Search-result freshness information.
 

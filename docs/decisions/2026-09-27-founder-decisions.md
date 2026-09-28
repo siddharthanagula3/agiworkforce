@@ -83,3 +83,12 @@ build it, and the audit cell is recorded as not applicable by this decision.
 - **In-app display language, text size and reduced motion on mobile (S84.01,
   S84.05, S84.07).** The mobile apps follow the device settings, as ChatGPT and
   Claude do (D-2026-09-15-03).
+- **Periodic usage recap (S42.20).** Neither delivers one; Reflect builds a recap
+  on demand.
+- **Search domain, source-type and per-answer source controls (S34.08, S34.09,
+  S34.18, S34.28, S34.29, S34.30).** Claude's and ChatGPT's consumer search
+  offer none. Domain filters stay available on the API, as in both APIs.
+- **Image and video edit controls** (S43.10, S43.15-16, S44.08-10, S45.12-14,
+  S45.20-21, S45.25-27, S46.10-13, S47.11). ChatGPT and Gemini edit and generate
+  by prompt; Claude has no image generation. The select-an-area edit tool is
+  built, because ChatGPT has one.
