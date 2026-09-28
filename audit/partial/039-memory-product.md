@@ -55,14 +55,11 @@ Code: `apps/extension/src/side_panel.ts:7870-7915`, `apps/extension/src/features
 
 - Done when: Saved memories are grouped by topic (e.g. preferences, work, background) when the user reviews them.
 - Wave: 3
-- Already works on: web, desktop, mobile, vscode
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Show topic-grouped memory: consolidation groups learned facts by topic only inside ~/.agiworkforce/memories/raw_memories.md (Managed mode), no command displays it, and agi memory list is flat. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/memory_pipeline.rs:350-358`, `apps/cli/src/lib.rs:2058-2076`
 
 ## S39.07: Profile summary.
 
@@ -116,18 +113,6 @@ Code: `apps/extension/src/side_panel.ts:7928-7938`
 
 Code: `apps/cli/src/app_server/developer_host.rs:1691-1691`
 
-## S39.13: Edit Memory.
-
-- Done when: The user can change the text of a saved memory and the corrected text is what later chats use.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Add an edit command for account memories (agi memory has list/add/forget only); /memory edit opens a CLAUDE.md file in $EDITOR and only in the --no-tui REPL, the TUI refuses. | ui |
-
-Code: `apps/cli/src/repl/registry.rs:1507-1527`
-
 ## S39.15: Delete all Memory.
 
 - Done when: One action deletes every saved memory, after a confirmation, and afterwards none remain.
@@ -143,15 +128,12 @@ Code: `apps/cli/src/repl/registry.rs:1507-1527`
 
 - Done when: The user can mark a memory as important (pin) so it is kept and preferred over others.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Add a pin/prioritise command; agi memory list only marks pinned memories with *. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:2069-2074`
 
 ## S39.17: Memory source/provenance.
 
@@ -165,18 +147,6 @@ Code: `apps/cli/src/lib.rs:2069-2074`
 | chrome | partial | Show where each memory came from; drawer rows show only text and a relative time although GET /api/memory returns a source label. | ui |
 
 Code: `apps/cli/src/lib.rs:2070-2074`, `apps/extension/src/side_panel.ts:7768-7775`, `apps/web/app/api/memory/route.ts:62-68`
-
-## S39.18: Last-updated information.
-
-- Done when: Each saved memory shows when it was last added or changed.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Print when each memory was last changed; agi memory list shows id, origin and text although the cache holds updated_at. | ui |
-
-Code: `apps/cli/src/lib.rs:2070-2074`, `apps/cli/src/cloud/memory.rs:104-114`
 
 ## S39.19: Correction of stale information.
 
@@ -207,29 +177,23 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:1278-12
 
 - Done when: The user can bring memories from a file or another assistant into their memory, preview them, and later chats use them.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Import into account memory or from a file; agi migrate only copies Claude Code's ~/.claude/CLAUDE.md to the local global memory file, and only when none exists. | handler |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:3849-3856`, `apps/cli/src/ecosystem.rs:567-571`
 
 ## S39.22: Memory export.
 
 - Done when: The user can download their saved memories in a readable file.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Add a memory export (file or JSON); agi memory list only prints account memories as plain text and ignores --output. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:2060-2074`
 
 ## S39.23: Memory-capacity display where relevant.
 
@@ -307,15 +271,14 @@ Code: `apps/web/features/chat/components/messages/MessageBubble.tsx:2730-2733`, 
 
 - Done when: The user can stop sensitive information from being remembered (e.g. never-remember terms or categories), and sensitive facts such as credentials are refused automatically.
 - Wave: 3
-- Already works on: web, desktop, vscode
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Add sensitive-memory controls on mobile; the never-remember list can only be edited on web, and on-device learning (Local mode) has no credential or special-category filter at all. | ui, handler |
-| cli | partial | Add a way to set never-remember terms from the CLI; account writes are refused server-side (and the refusal is printed), but local learned memory (raw_memories.md) has no sensitive-content filter. | ui, handler |
 | chrome | partial | Migration 0285 is now applied in production (2026-09-27). Still open: Add never-remember controls in the side panel; its adds go through POST /api/memory, which enforces the web list but whose writer needs pending migration 0285. | ui |
 
-Code: `packages/ai/agent-core/src/memory.ts:78-104`, `apps/mobile/src/features/memory/services/consolidation.ts:146-160`, `apps/web/app/api/memory/sync/route.ts:159-169`, `apps/cli/src/lib.rs:2083-2093`
+Code: `packages/ai/agent-core/src/memory.ts:78-104`, `apps/mobile/src/features/memory/services/consolidation.ts:146-160`, `apps/web/app/api/memory/sync/route.ts:159-169`, `apps/extension/src/background.ts:3853-3859`
 
 ## S39.30: Memory reset independent from chat deletion.
 

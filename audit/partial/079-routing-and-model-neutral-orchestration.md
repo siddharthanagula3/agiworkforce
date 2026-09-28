@@ -26,51 +26,44 @@ Code: `apps/web/app/api/projects/[id]/route.ts:200-200`, `apps/web/app/api/llm/v
 
 - Done when: A speed-first routing profile can be applied that prefers the fastest eligible route.
 - Wave: 3
+- Already works on: web, desktop, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | A latency-weighted "instant" profile exists and is applied internally by task family, but no user can choose a speed-first mode. | ui |
-| desktop | partial | A latency-weighted "instant" profile exists and is applied internally by task family, but no user can choose a speed-first mode. | ui |
-| mobile | partial | A latency-weighted "instant" profile exists and is applied internally by task family, but no user can choose a speed-first mode. | ui |
+| mobile | partial | Picker rows and the on-device selection mapping are in post-codex/chat-gates-s79-routing-profile-mobile.patch (ModelPickerSheet.tsx and chatExecutionStore.ts are Codex-held). | ui |
 | cli | partial | /fast swaps to a configured cheaper model; it does not select a speed-first routing profile. | ui |
 | vscode | partial | A latency-weighted "instant" profile exists and is applied internally by task family, but no user can choose a speed-first mode. | ui |
 | chrome | partial | Quick mode routes to the economy (cheapest) alias, not a latency-optimised profile. | ui |
-| api | partial | A latency-weighted "instant" profile exists and is applied internally by task family, but no user can choose a speed-first mode. | ui |
 
-Code: `apps/web/features/chat/components/Composer/ComposerFooter.tsx:278-281`, `packages/ai/routing/src/profiles/index.ts:37-37`, `packages/ai/routing/src/auto.ts:32-32`, `apps/mobile/src/features/model-picker/components/ModelRow.tsx:166-170`
+Code: `packages/contracts/types/src/routing-profile-choice.ts:48-48`, `crates/agiworkforce-command-registry/src/lib.rs:178-178`, `apps/extension-vscode/src/features/model-picker/modelConstants.ts:239-249`, `apps/extension-vscode/src/utils/api.ts:581-586`
 
 ## S79.06: Quality-first profile.
 
 - Done when: A quality-first routing profile can be applied that prefers the most capable eligible route.
 - Wave: 3
+- Already works on: web, desktop, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The premium ("Best") profile is applied automatically by task and plan; a user can choose it only in voice mode's Intelligence setting. | ui |
-| desktop | partial | The premium ("Best") profile is applied automatically by task and plan; a user can choose it only in voice mode's Intelligence setting. | ui |
-| mobile | partial | The premium profile is applied automatically for coding/reasoning on higher plans; this surface offers no quality-first choice. | ui |
+| mobile | partial | Same post-codex patch as S79.05. | ui |
 | cli | partial | The premium profile is applied automatically for coding/reasoning on higher plans; this surface offers no quality-first choice. | ui |
 | vscode | partial | The premium profile is applied automatically for coding/reasoning on higher plans; this surface offers no quality-first choice. | ui |
 | chrome | partial | The premium profile is applied automatically for coding/reasoning on higher plans; this surface offers no quality-first choice. | ui |
-| api | partial | The premium ("Best") profile is applied automatically by task and plan; a user can choose it only in voice mode's Intelligence setting. | ui |
 
-Code: `apps/web/features/chat/components/Voice/VoiceSettingsModal.tsx:192-196`, `packages/ai/routing/src/auto.ts:32-32`, `apps/mobile/src/features/model-picker/components/ModelRow.tsx:166-170`, `apps/mobile/services/streaming.ts:167-167`
+Code: `packages/contracts/types/src/routing-profile-choice.ts:48-48`, `apps/cli/src/provider.rs:260-267`, `apps/cli/src/models/streaming.rs:234-234`, `packages/ai/routing/src/auto.ts:32-32`
 
 ## S79.07: Cost-first profile.
 
 - Done when: A cost-first routing profile can be applied that prefers the cheapest eligible route.
 - Wave: 3
-- Already works on: cli, chrome
+- Already works on: web, desktop, cli, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The economy profile can be chosen only in voice mode's Intelligence setting; the chat picker offers only Auto. | ui |
-| desktop | partial | The economy profile can be chosen only in voice mode's Intelligence setting; the chat picker offers only Auto. | ui |
-| mobile | partial | Mobile offers only Auto; the economy profile is applied by plan (Free/Basic), not chosen. | ui |
+| mobile | partial | Same post-codex patch as S79.05. | ui |
 | vscode | partial | VS Code offers only Auto; the economy profile is applied by plan, not chosen. | ui |
-| api | partial | auto-economy is accepted but /v1/models advertises only the default Auto alias in allowed_auto_modes. | api |
 
-Code: `apps/web/features/chat/components/Voice/VoiceSettingsModal.tsx:192-196`, `packages/ai/routing/src/auto.ts:32-32`, `apps/mobile/src/features/model-picker/components/ModelRow.tsx:166-170`, `apps/mobile/services/streaming.ts:167-167`
+Code: `packages/contracts/types/src/routing-profile-choice.ts:48-48`, `apps/extension-vscode/src/features/model-picker/modelConstants.ts:239-249`, `apps/extension-vscode/src/utils/api.ts:581-586`, `packages/ai/routing/src/auto.ts:32-32`
 
 ## S79.08: Privacy-first profile.
 
