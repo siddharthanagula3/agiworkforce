@@ -1,11 +1,5 @@
-import {
-  useState,
-  useRef,
-  useCallback,
-  useMemo,
-  useEffect,
-  type KeyboardEvent as ReactKeyboardEvent,
-} from 'react';
+import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import {
   Tabs,
   TabsContent,
@@ -15,6 +9,7 @@ import {
   ScrollArea,
   Alert,
   AlertDescription,
+  Spinner,
   translateUiPlural,
 } from '@agiworkforce/ui';
 import {
@@ -278,6 +273,24 @@ function MarkdownDocumentPreview({
     </div>
   );
 }
+
+function EditorLoading() {
+  return (
+    <div className="flex h-full w-full items-center justify-center">
+      <Spinner size="sm" aria-label="Opening the editor" />
+    </div>
+  );
+}
+
+const ArtifactCodeEditor = dynamic(
+  () => import('./ArtifactCodeEditor').then((module) => module.ArtifactCodeEditor),
+  { ssr: false, loading: EditorLoading },
+);
+
+const ArtifactDocumentEditor = dynamic(
+  () => import('./ArtifactDocumentEditor').then((module) => module.ArtifactDocumentEditor),
+  { ssr: false, loading: EditorLoading },
+);
 
 const MARKDOWN_SHORTCUTS: Readonly<
   Record<string, { before: string; after: string; placeholder: string }>
@@ -708,23 +721,6 @@ export function ArtifactPreview({
     }, ARTIFACT_DRAFT_AUTOSAVE_MS);
     return () => clearTimeout(timer);
   }, [draftStorageKey, sourceDraft]);
-
-  const handleMarkdownShortcut = useCallback((event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
-    if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return;
-    const wrap = MARKDOWN_SHORTCUTS[event.key.toLowerCase()];
-    if (!wrap) return;
-    event.preventDefault();
-    const field = event.currentTarget;
-    const { selectionStart, selectionEnd, value } = field;
-    const selected = value.slice(selectionStart, selectionEnd) || wrap.placeholder;
-    const replacement = `${wrap.before}${selected}${wrap.after}`;
-    const next = value.slice(0, selectionStart) + replacement + value.slice(selectionEnd);
-    setSourceDraft(next);
-    const cursor = selectionStart + wrap.before.length;
-    requestAnimationFrame(() => {
-      field.setSelectionRange(cursor, cursor + selected.length);
-    });
-  }, []);
 
   const endSourceEdit = useCallback(() => {
     removeStoredDraft(draftStorageKey);
@@ -1196,6 +1192,7 @@ if (__AgiApp) {
 
   const handleOpenInNewTab = () => {
     const page = sandboxedPreviewPage(artifact.title || 'Artifact', getPreviewHTML());
+
     const blob = new Blob([page], { type: 'text/html;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     window.open(url, '_blank', 'noopener,noreferrer');
@@ -1640,7 +1637,7 @@ if (__AgiApp) {
             {/* Edit / Save · Cancel, only over the source view, and only for a
                 text artifact on its latest version (see canEditSource). */}
             {canEditSource &&
-              !showPreview &&
+              (!showPreview || isMarkdownDoc) &&
               !showChanges &&
               (sourceDraft === null ? (
                 <Button
@@ -2198,7 +2195,17 @@ if (__AgiApp) {
           {showPreview && isSharedRendered && renderSharedPreview('h-full w-full')}
 
           {/* Preview: rendered Markdown document */}
-          {showPreview && isMarkdownDoc && renderMarkdownPreview('h-full w-full')}
+          {showPreview &&
+            isMarkdownDoc &&
+            (sourceDraft !== null && draftOrigin === 'editor' ? (
+              <ArtifactDocumentEditor
+                value={sourceDraft}
+                onChange={setSourceDraft}
+                wraps={MARKDOWN_SHORTCUTS}
+              />
+            ) : (
+              renderMarkdownPreview('h-full w-full')
+            ))}
 
           {/* Preview: PDF */}
           {showPreview && isPdf && renderPdfPreview('h-full w-full')}
@@ -2233,15 +2240,12 @@ if (__AgiApp) {
           {!showPreview &&
             !showChanges &&
             (sourceDraft !== null ? (
-              <textarea
+              <ArtifactCodeEditor
                 value={sourceDraft}
-                onChange={(event) => setSourceDraft(event.target.value)}
-                onKeyDown={artifact.type === 'document' ? handleMarkdownShortcut : undefined}
-                spellCheck={false}
-                autoComplete="off"
-                className="h-full w-full resize-none border-0 bg-gray-900 p-4 font-mono text-sm text-gray-100 outline-none focus:ring-0"
-                aria-label="Artifact source"
-                data-testid="artifact-source-editor"
+                onChange={setSourceDraft}
+                language={isMarkdownDoc ? 'markdown' : (artifact.language ?? artifact.type)}
+                wraps={artifact.type === 'document' ? MARKDOWN_SHORTCUTS : undefined}
+                ariaLabel="Artifact source"
               />
             ) : (
               <ScrollArea className="h-full w-full bg-gray-900">
