@@ -118,17 +118,22 @@ test('a gap that closes fails until it is recorded as a reader', () => {
 });
 
 test('a recorded exception that is fixed fails until it is deleted', () => {
-  const root = fixture({
-    edits: {
-      'apps/mobile/src/lib/capabilities.tsx': (source) =>
-        source
-          .replace('getPlatformCapabilities,\n', '')
-          .replace('isCapabilityEnabled as matrixIsCapabilityEnabled,\n', ''),
+  const file = 'apps/web/features/example/Legacy.tsx';
+  const exceptions = {
+    ...RECORDED_EXCEPTIONS,
+    [file]: { rule: 'matrix', why: 'reads the matrix today', fix: 'read the document' },
+  };
+  const broken = fixture({
+    added: {
+      [file]:
+        "import { getPlatformCapabilities } from '@agiworkforce/types';\nexport const row = getPlatformCapabilities('web');\n",
     },
   });
+  assert.deepEqual(checkCapabilityConsumption(broken, { exceptions }), []);
+  const fixed = fixture({ added: { [file]: 'export const row = null;\n' } });
   assert.ok(
-    checkCapabilityConsumption(root).some((entry) =>
-      /mobile\/src\/lib\/capabilities\.tsx no longer breaks the matrix rule/.test(entry),
+    checkCapabilityConsumption(fixed, { exceptions }).some((entry) =>
+      /Legacy\.tsx no longer breaks the matrix rule/.test(entry),
     ),
   );
 });
