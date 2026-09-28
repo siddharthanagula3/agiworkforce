@@ -240,9 +240,8 @@ Code: `apps/web/features/workspace-console/components/WorkspaceConnectorPolicy.t
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | partials/auth 82ade1df1: Enterprise administrators request or cancel a region move from the console and platform admins record the cutover; only the home region is provisioned, so the EU region needs the owner to stand up its database, bucket, log sink and KMS and set the AGI_DATA_REGION_EU_* settings | infra |
-| desktop | partial | partials/auth 82ade1df1: Enterprise administrators request or cancel a region move from the console and platform admins record the cutover; only the home region is provisioned, so the EU region needs the owner to stand up its database, bucket, log sink and KMS and set the AGI_DATA_REGION_EU_* settings | infra |
-| cli | missing | Not built on this surface. |  |
+| web | partial | Owner: the region move is built (partials/auth 82ade1df1); only the home region is provisioned, so the EU region needs its database, bucket, log sink and KMS stood up and the AGI_DATA_REGION_EU_* settings set | infra |
+| desktop | partial | Owner: the region move is built (partials/auth 82ade1df1); only the home region is provisioned, so the EU region needs its database, bucket, log sink and KMS stood up and the AGI_DATA_REGION_EU_* settings set | infra |
 
 Code: `apps/web/app/workspace/data/page.tsx:24-24`, `apps/web/features/workspace-console/components/WorkspaceDataRegion.tsx:196-196`, `apps/web/app/api/settings/organization/data-region/route.ts:117-117`, `apps/web/app/api/settings/organization/data-region/route.ts:148-148`
 
