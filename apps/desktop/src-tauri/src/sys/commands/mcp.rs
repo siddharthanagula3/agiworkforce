@@ -120,6 +120,9 @@ fn restore_redacted_env_values(
             if incoming_http.bearer_token.as_deref() == Some(redacted_sentinel) {
                 incoming_http.bearer_token = existing_http.bearer_token.clone();
             }
+            if incoming_http.oauth_client_secret.as_deref() == Some(redacted_sentinel) {
+                incoming_http.oauth_client_secret = existing_http.oauth_client_secret.clone();
+            }
             for (header_key, header_value) in incoming_http.headers.iter_mut() {
                 if header_value == redacted_sentinel {
                     if let Some(existing_value) = existing_http.headers.get(header_key) {
@@ -1106,6 +1109,9 @@ pub async fn mcp_get_config(state: State<'_, McpState>) -> Result<Value, String>
             }
             if http_config.bearer_token.is_some() {
                 http_config.bearer_token = Some("<redacted>".to_string());
+            }
+            if http_config.oauth_client_secret.is_some() {
+                http_config.oauth_client_secret = Some("<redacted>".to_string());
             }
             for header_value in http_config.headers.values_mut() {
                 *header_value = "<redacted>".to_string();
