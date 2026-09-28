@@ -43,7 +43,8 @@ export function AccountRecoveryForm({ initialLoss }: { initialLoss: RecoveryLoss
       <p role="status" className={`${AUTH_HINT_CLASS} mt-8`}>
         If that address belongs to an account, your request is recorded and a receipt is on its way
         to the address you gave for replies. A person checks that the account is yours before
-        restoring access, and the account owner is told a recovery was requested.
+        restoring access, and the account owner is told a recovery was requested. An account with
+        Advanced Account Security recovers only with a recovery key.
       </p>
     );
   }

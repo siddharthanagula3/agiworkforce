@@ -3477,7 +3477,7 @@
       "doc": "account-security",
       "section": "Advanced Account Security",
       "kind": "prose",
-      "sentence": "We also email the address that got the code a link that turns it off, signs everyone out and resets your password, without a passkey, for 48 hours after it was turned on, in case it was not you.",
+      "sentence": "We also email the address that got the code a link that turns it off without a passkey, for 48 hours after it was turned on, in case it was not you.",
       "implementation": [
         "apps/web/lib/server/account-security/undo.ts",
         "apps/web/lib/server/account-security/store.ts"
@@ -3487,11 +3487,6 @@
           "kind": "copy",
           "file": "packages/contracts/cloud-contracts/src/account-security.ts",
           "text": "undoHours: 48"
-        },
-        {
-          "kind": "copy",
-          "file": "apps/web/lib/server/account-security/undo.ts",
-          "text": "await identity.setPassword(open.userId, newUnusablePassword());"
         }
       ]
     },
@@ -3559,11 +3554,11 @@
       ]
     },
     {
-      "id": "advanced-security-sign-ins-emailed-and-sessions-shorter",
+      "id": "advanced-security-sign-ins-emailed-and-weekly-check",
       "doc": "account-security",
       "section": "Advanced Account Security",
       "kind": "prose",
-      "sentence": "Every new sign-in is emailed to you, and sessions end sooner, so you confirm with your passkey or security key more often.",
+      "sentence": "Every new sign-in is emailed to you, and each session has to be confirmed with your passkey or security key again every 7 days.",
       "implementation": [
         "apps/web/lib/services/account-activity-notifications.ts",
         "apps/web/lib/server/account-security/gate.ts"
@@ -3584,15 +3579,43 @@
     {
       "id": "advanced-security-support-cannot-remove",
       "doc": "account-security",
-      "section": "Advanced Account Security",
+      "section": "What support can do with Advanced Account Security on",
       "kind": "prose",
-      "sentence": "AGI support cannot turn this off or add a sign-in method for you.",
-      "implementation": ["apps/web/lib/server/account-security/service.ts"],
+      "sentence": "AGI support cannot turn Advanced Account Security off, add a sign-in method, change the email address or restore access for you.",
+      "implementation": [
+        "apps/web/lib/support/tickets/recovery.ts",
+        "apps/web/lib/server/account-security/service.ts"
+      ],
       "proof": [
         {
           "kind": "copy",
+          "file": "apps/web/lib/support/tickets/recovery.ts",
+          "text": "Support cannot restore access to it; the owner recovers with a recovery key."
+        },
+        {
+          "kind": "copy",
           "file": "apps/web/features/account-security/components/AdvancedAccountSecurityPanel.tsx",
-          "text": "AGI support cannot turn this off or add a sign-in method for you."
+          "text": "AGI support cannot turn this off, add a sign-in method or restore access for you."
+        }
+      ]
+    },
+    {
+      "id": "advanced-security-support-recovery-not-acted-on",
+      "doc": "account-security",
+      "section": "What support can do with Advanced Account Security on",
+      "kind": "prose",
+      "sentence": "A recovery request sent to support for such an account is not acted on; you are told that it was made, and a recovery key is the only way back in.",
+      "implementation": ["apps/web/lib/support/tickets/recovery.ts"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/lib/support/tickets/recovery.ts",
+          "text": "if ((await readEnrolledAt(getNeonDb(), ticket.userId)) !== null) {"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/lib/support/tickets/recovery.ts",
+          "text": "if ((await readEnrolledAt(getNeonDb(), profile.id)) !== null) {"
         }
       ]
     },
@@ -3855,6 +3878,72 @@
           "name": "fn test_auth_status_api_key"
         }
       ]
+    },
+    {
+      "id": "account-recovery-request-at-recover",
+      "doc": "account-security",
+      "section": "If you cannot sign in",
+      "kind": "prose",
+      "sentence": "**Lost the authenticator and every backup code, or the email address.** Ask for account recovery at /recover.",
+      "implementation": [
+        "apps/web/app/recover/page.tsx",
+        "apps/web/lib/support/tickets/recovery.ts"
+      ],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/app/recover/page.tsx",
+          "text": "heading=\"Recover your account\""
+        }
+      ]
+    },
+    {
+      "id": "account-recovery-person-checks",
+      "doc": "account-security",
+      "section": "If you cannot sign in",
+      "kind": "prose",
+      "sentence": "A person checks that the account is yours before removing the second factor or changing the sign-in email, the account owner is told a recovery was requested, and every other session is signed out when access is restored.",
+      "implementation": ["apps/web/lib/support/tickets/recovery.ts"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/lib/support/tickets/recovery.ts",
+          "text": "await identity.removeSecondFactor(ticket.userId);"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/lib/support/tickets/recovery.ts",
+          "text": "event: 'recovery_requested',"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/lib/support/tickets/recovery.ts",
+          "text": "const sweep = await revokeEveryOtherSession(identity, ticket.userId, null);"
+        }
+      ]
+    },
+    {
+      "id": "advanced-security-lost-everything-support-cannot",
+      "doc": "account-security",
+      "section": "If you cannot sign in",
+      "kind": "prose",
+      "sentence": "Support cannot do this for you, and the link that turns the setting off works only for 48 hours after it was turned on; after that a passkey, a security key or a recovery key is the only way in.",
+      "implementation": [
+        "apps/web/lib/support/tickets/recovery.ts",
+        "apps/web/lib/server/account-security/undo.ts"
+      ],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/lib/server/account-security/undo.ts",
+          "text": "sign in with a passkey, a security key or a recovery key."
+        },
+        {
+          "kind": "copy",
+          "file": "packages/contracts/cloud-contracts/src/account-security.ts",
+          "text": "undoHours: 48"
+        }
+      ]
     }
   ],
   "unproven": [
@@ -3893,15 +3982,6 @@
       "sentence": "The number of custom MCP connections available depends on your plan.",
       "implementation": ["packages/contracts/types/src/billing-catalog.ts"],
       "reason": "The plan catalogue is founder-frozen for this program, so no assertion is added against it; the limit is read from the catalogue at runtime and the pricing page is its published source."
-    },
-    {
-      "id": "account-lost-every-factor-has-no-screen",
-      "doc": "account-security",
-      "section": "If you cannot sign in",
-      "kind": "prose",
-      "sentence": "**Lost the authenticator and every backup code.** There is no self-serve way back in, and there is no screen from which support can remove a second factor.",
-      "implementation": ["apps/web/app/api/settings/2fa/route.ts"],
-      "reason": "No operator or support route touches user_two_factor: its writers are the holder's own routes under apps/web/app/api/settings/2fa, the registration of an earlier enrollment in apps/web/lib/server/step-up/second-factor.ts and account erasure. Nothing in the repository asserts that absence, so it stays unproven until a guard enumerates every writer of that table."
     }
   ],
   "narrative": [

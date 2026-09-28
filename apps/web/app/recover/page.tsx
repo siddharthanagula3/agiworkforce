@@ -28,7 +28,8 @@ export default async function RecoverPage({
         detail={
           <p className="text-center">
             Try Forgot password or a backup code first. If neither works, tell us what you lost and
-            a person will verify the account is yours before restoring access.
+            a person will verify the account is yours before restoring access. An account with
+            Advanced Account Security recovers only with a recovery key.
           </p>
         }
         footer={<AuthLegalFooter />}
