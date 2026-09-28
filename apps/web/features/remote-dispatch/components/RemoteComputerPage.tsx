@@ -48,6 +48,7 @@ const TASK_PLACEHOLDER = 'Describe what AGI should do on your computer';
 const SEND_LABEL = 'Send to computer';
 const SEND_FAILED = 'The task did not reach your computer. Check the connection and try again.';
 const CANCEL_LABEL = 'Cancel';
+const SEND_AGAIN_LABEL = 'Send again';
 const CONNECT_FAILED = 'This browser could not connect to your computer.';
 
 const PRESENCE_COPY: Readonly<Record<DevicePresence, string>> = {
@@ -399,7 +400,17 @@ export function RemoteComputerPage() {
                 {task.result ? <p className="whitespace-pre-wrap text-sm">{task.result}</p> : null}
                 {task.error ? <p className="text-sm text-danger-text">{task.error}</p> : null}
                 {OPEN_STATUSES.has(task.status) && phase === 'connected' ? (
-                  <div>
+                  <div className="flex gap-2">
+                    {task.unconfirmed ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => void connection.current?.resendTask(task.requestId)}
+                      >
+                        {SEND_AGAIN_LABEL}
+                      </Button>
+                    ) : null}
                     <Button
                       type="button"
                       variant="ghost"
