@@ -3454,7 +3454,7 @@
       "doc": "account-security",
       "section": "Advanced Account Security",
       "kind": "prose",
-      "sentence": "It cannot be turned on within 7 days of a change to the email address on your account.",
+      "sentence": "It cannot be turned on within 7 days of the email address on your account being set or changed.",
       "implementation": [
         "apps/web/lib/server/account-security/service.ts",
         "apps/web/lib/server/account-security/store.ts"
@@ -3467,8 +3467,8 @@
         },
         {
           "kind": "copy",
-          "file": "apps/web/lib/server/account-security/store.ts",
-          "text": "and event_key = 'email_changed'"
+          "file": "apps/web/lib/server/account-security/service.ts",
+          "text": "coalesce(email_changed_at > now() - make_interval(days => $2::integer), false)"
         }
       ]
     },

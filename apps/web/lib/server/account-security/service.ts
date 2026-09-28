@@ -215,6 +215,22 @@ async function recordedEmail(db: DatabaseAdapter, userId: string): Promise<strin
   return row?.email?.trim() || null;
 }
 
+async function recordedAddress(
+  db: DatabaseAdapter,
+  userId: string,
+  cooldownDays: number,
+): Promise<{ email: string | null; changedRecently: boolean }> {
+  const [row] = await db.query<{ email: string | null; changed_recently: boolean | null }>(
+    `select email,
+            coalesce(email_changed_at > now() - make_interval(days => $2::integer), false)
+              as changed_recently
+       from public.profiles
+      where id = $1`,
+    [userId, cooldownDays],
+  );
+  return { email: row?.email?.trim() || null, changedRecently: row?.changed_recently === true };
+}
+
 async function accountHandle(db: DatabaseAdapter, userId: string): Promise<string> {
   return (await recordedEmail(db, userId)) ?? userId;
 }
@@ -398,9 +414,13 @@ async function verifiedPrimaryAddress(userId: string): Promise<string | null> {
 
 async function requireSettledAddress(caller: AccountSecurityCaller): Promise<string> {
   const days = ACCOUNT_SECURITY_POLICY.emailChangeCooldownDays;
-  if (await signInAddressChangedSince(caller.db, caller.userId, days)) {
+  const recorded = await recordedAddress(caller.db, caller.userId, days);
+  if (
+    recorded.changedRecently ||
+    (await signInAddressChangedSince(caller.db, caller.userId, days))
+  ) {
     throw createError.conflict(
-      `The email address on your account changed in the last ${days} days. For your security, Advanced Account Security can be turned on ${days} days after that change.`,
+      `The email address on your account was set or changed in the last ${days} days. For your security, Advanced Account Security can be turned on ${days} days after that.`,
     );
   }
   const primary = await verifiedPrimaryAddress(caller.userId);
@@ -409,8 +429,7 @@ async function requireSettledAddress(caller: AccountSecurityCaller): Promise<str
       'Verify the email address on your account before you turn on Advanced Account Security.',
     );
   }
-  const recorded = await recordedEmail(caller.db, caller.userId);
-  if (recorded?.toLowerCase() !== primary.toLowerCase()) {
+  if (recorded.email?.toLowerCase() !== primary.toLowerCase()) {
     throw createError.conflict(
       `The email address you sign in with does not match the one on record here, which happens when it was changed outside Settings, Account. Change it in Settings, Account, then turn on Advanced Account Security ${days} days later.`,
     );
