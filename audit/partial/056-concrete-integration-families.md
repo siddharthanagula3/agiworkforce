@@ -86,22 +86,6 @@ Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `pa
 
 Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `packages/ui/ui/src/settings-modal/SettingsModal.tsx:1967-1969`, `apps/web/app/api/llm/v1/chat/completions/route.ts:735-741`, `apps/web/lib/user-connector-tools.ts:2269-2289`
 
-## S56.06: Email labels and folders.
-
-- Done when: The assistant can list the mailbox labels/folders and file or relabel messages.
-- Wave: 2
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Labels can be listed, but label_message/label_thread need gmail.modify, which the scope ceiling refuses (gmail.readonly and gmail.send only); also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Gmail. | handler, flag-off |
-| desktop | partial | Labels can be listed, but label_message/label_thread need gmail.modify, which the scope ceiling refuses (gmail.readonly and gmail.send only); also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Gmail. | handler, flag-off |
-| mobile | partial | Labels can be listed, but label_message/label_thread need gmail.modify, which the scope ceiling refuses (gmail.readonly and gmail.send only); also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Gmail. | handler, flag-off |
-| cli | missing | Not built on this surface. |  |
-| vscode | partial | Ruling 2 (lead): VS Code sidebar chat drives the local CLI runtime (turn/start), whose managed-cloud provider posts the account JWT to /api/llm/v1/chat/completions; the route loads the signed-in user's connector tools for every caller (connector_tools_enabled defaults true, no platform gate) and merges them into the turn, so a connector the user connected on web is offered to the model on this surface. In manual mode the loop suspends on x_tool_approval_request, which neither the CLI nor VS Code consumes (q: 0 hits), so only tools pre-set to Always allow on web run. partial, miss [ui, states], remaining: "only connector tools pre-set to Always allow on web run; approval requests are not shown in this client"; notes: needs-local-cli: VS Code chat drives the local CLI runtime, whose managed-cloud provider carries the turn. |  |
-| chrome | partial | Labels can be listed, but label_message/label_thread need gmail.modify, which the scope ceiling refuses (gmail.readonly and gmail.send only); also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Gmail. | handler, flag-off |
-
-Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `packages/ui/ui/src/settings-modal/SettingsModal.tsx:1967-1969`, `apps/web/app/api/llm/v1/chat/completions/route.ts:735-741`, `apps/web/lib/user-connector-tools.ts:2269-2289`
-
 ## S56.07: Calendar search.
 
 - Done when: The assistant can search the connected calendar for events by text or date range.

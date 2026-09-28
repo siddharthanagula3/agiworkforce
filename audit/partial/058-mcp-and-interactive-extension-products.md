@@ -26,21 +26,6 @@ nothing is left.
 | --- | --- | --- | --- |
 | vscode | missing | Not built on this surface. |  |
 
-## S58.04: Server configuration editor.
-
-- Done when: The user can view and edit an existing MCP server's configuration (URL, transport, arguments).
-- Wave: 3
-- Already works on: cli
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | A pasted JSON config only prefills the add form; an existing server cannot be edited (the route has no PATCH), so it must be removed and re-added. | ui, api |
-| desktop | partial | A pasted JSON config only prefills the add form; an existing server cannot be edited (the route has no PATCH), so it must be removed and re-added. | ui, api |
-| mobile | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-
-Code: `packages/ui/ui/src/settings-modal/SettingsModal.tsx:565-565`, `apps/web/app/api/connectors/custom/route.ts:227-227`
-
 ## S58.05: Environment-variable configuration.
 
 - Done when: The user can set environment variables for an MCP server from the product.
