@@ -76,6 +76,7 @@ export const MESSAGE_POLICY: Record<string, MessageTypePolicy> = {
   GET_CLOUD_AUTH_TOKEN: { senderClass: 'extension-page-only', allowsCrossTab: true },
 
   SYNC_CONVERSATION: { senderClass: 'extension-page-only', allowsCrossTab: true },
+  ENSURE_CLOUD_CONVERSATION: { senderClass: 'extension-page-only', allowsCrossTab: true },
   DELETE_CLOUD_CONVERSATION: { senderClass: 'extension-page-only', allowsCrossTab: true },
 
   LIST_MEMORIES: { senderClass: 'extension-page-only', allowsCrossTab: true },

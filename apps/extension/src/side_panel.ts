@@ -7257,10 +7257,41 @@ async function ensureTemporaryConversation(owner: ManagedCloudOwner): Promise<st
   return conversation.id;
 }
 
+function projectChatAwaitsAccountCopy(): boolean {
+  const projectId = activePersistenceEntry?.projectId ?? _ctx.pendingProjectBinding;
+  return Boolean(projectId) && activePersistenceEntry?.cloudSync?.createAcknowledged !== true;
+}
+
+async function ensureProjectChatInAccount(owner: ManagedCloudOwner): Promise<boolean> {
+  const conversationId = _ctx.conversationId;
+  await persistMessages();
+  const response = (await chrome.runtime.sendMessage({
+    type: 'ENSURE_CLOUD_CONVERSATION',
+    owner,
+    conversationId,
+  })) as { success?: boolean } | undefined;
+  const entry = await getConversation(owner, conversationId);
+  if (entry && conversationId === _ctx.conversationId) activePersistenceEntry = entry;
+  return response?.success === true;
+}
+
 function dispatchTurn(userMsg: ChatMessage, payload: TurnPayload, quickMode: boolean): void {
   const owner = _ctx.managedCloudOwner!;
   const streamId = beginManagedStream(quickMode);
   renderMemoryNotice(null);
+  if (!_ctx.temporaryChat && projectChatAwaitsAccountCopy()) {
+    void ensureProjectChatInAccount(owner)
+      .catch(() => false)
+      .then((saved) => {
+        if (_ctx.currentStreamId !== streamId) return;
+        if (!saved) {
+          composerContextNotice = t('spProjectChatNotSaved');
+          updateAttachmentPreview();
+        }
+        continueTurnWithMemory(userMsg, payload, streamId, owner, quickMode);
+      });
+    return;
+  }
   if (_ctx.temporaryChat) {
     void ensureTemporaryConversation(owner)
       .catch(() => null)
@@ -7274,6 +7305,16 @@ function dispatchTurn(userMsg: ChatMessage, payload: TurnPayload, quickMode: boo
       });
     return;
   }
+  continueTurnWithMemory(userMsg, payload, streamId, owner, quickMode);
+}
+
+function continueTurnWithMemory(
+  userMsg: ChatMessage,
+  payload: TurnPayload,
+  streamId: string,
+  owner: ManagedCloudOwner,
+  quickMode: boolean,
+): void {
   if (!MEMORY_COMMAND_HINT.test(payload.prompt)) {
     continueTurn(userMsg, payload, streamId, owner, quickMode);
     return;

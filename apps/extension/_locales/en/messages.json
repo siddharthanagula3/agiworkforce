@@ -3948,5 +3948,9 @@
   "spHelpLinkRuns": {
     "message": "How AGI Work runs a task",
     "description": "Link from the cloud runs list to the help article about AGI Work"
+  },
+  "spProjectChatNotSaved": {
+    "message": "This reply goes without the project's files and instructions, because the chat could not be saved to your account first.",
+    "description": "Composer notice when a project chat's first message is sent before the chat exists in the account"
   }
 }
