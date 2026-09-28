@@ -2336,6 +2336,12 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 }
                 apply_agent_controls(&mut agent, params.agent_mode, params.reasoning_effort);
                 agent.max_turns = max_turns;
+                agent.cloud_project = params
+                    .cloud_project_id
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|project| !project.is_empty())
+                    .map(str::to_string);
                 if let Some(trust_mode) = agent.managed_auto_routing().map(|state| state.trust_mode)
                 {
                     agent.auto_routing_tier =
@@ -5066,6 +5072,7 @@ mod tests {
                 client_turn_id: None,
                 max_turns: None,
                 routing_profile: None,
+                cloud_project_id: None,
             })
             .await
             .expect_err("unknown authority must not start a turn");
@@ -6117,6 +6124,7 @@ mod tests {
                 client_turn_id: None,
                 max_turns: None,
                 routing_profile: None,
+                cloud_project_id: None,
             })
             .await
             .expect("next Auto turn");
@@ -6284,6 +6292,7 @@ mod tests {
                 client_turn_id: None,
                 max_turns: None,
                 routing_profile: None,
+                cloud_project_id: None,
             })
             .await;
         if result.is_ok() {
@@ -7271,6 +7280,7 @@ mod tests {
                 client_turn_id: None,
                 max_turns: None,
                 routing_profile: None,
+                cloud_project_id: None,
             })
             .await
             .expect_err("a saturated host must refuse another turn");
@@ -7502,6 +7512,7 @@ mod tests {
                 client_turn_id: None,
                 max_turns: None,
                 routing_profile: None,
+                cloud_project_id: None,
             })
             .await
             .expect_err("a live writer elsewhere must refuse the turn");
@@ -7618,6 +7629,7 @@ mod tests {
             client_turn_id: client_turn_id.map(str::to_string),
             max_turns: None,
             routing_profile: None,
+            cloud_project_id: None,
         };
 
         let replayed = host

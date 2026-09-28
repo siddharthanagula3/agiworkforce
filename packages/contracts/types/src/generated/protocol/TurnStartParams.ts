@@ -27,4 +27,5 @@ export type TurnStartParams = {
   clientTurnId?: string;
   maxTurns?: number;
   routingProfile?: DeveloperRoutingProfile;
+  cloudProjectId?: string;
 };
