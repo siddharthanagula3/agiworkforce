@@ -31,6 +31,7 @@
       "provider": "openai",
       "apiFamily": "responses",
       "adapter": "@agiworkforce/providers-openai",
+      "responseFormats": ["json_object", "json_schema"],
       "mediaInput": { "maxImagesPerRequest": 1500, "documentMediaTypes": ["application/pdf"] },
       "requestParameters": ["top_p", "user"],
       "trustModes": ["managed_cloud", "byok"],
@@ -93,6 +94,7 @@
       "provider": "openai",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-openai",
+      "responseFormats": ["json_object", "json_schema"],
       "mediaInput": { "maxImagesPerRequest": 1500, "documentMediaTypes": ["application/pdf"] },
       "requestParameters": [
         "top_p",
@@ -122,6 +124,7 @@
       "provider": "anthropic",
       "apiFamily": "messages",
       "adapter": "@agiworkforce/providers-anthropic",
+      "responseFormats": ["json_schema"],
       "mediaInput": {
         "maxImagesPerRequest": 600,
         "documentMediaTypes": ["application/pdf"],
@@ -148,6 +151,7 @@
       "provider": "google",
       "apiFamily": "generate_content",
       "adapter": "@agiworkforce/providers-google",
+      "responseFormats": ["json_object", "json_schema"],
       "mediaInput": {
         "maxImagesPerRequest": 3600,
         "documentMediaTypes": ["application/pdf"],
@@ -202,6 +206,7 @@
       "provider": "xai",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-xai",
+      "responseFormats": ["json_object", "json_schema"],
       "requestParameters": [
         "top_p",
         "stop",
@@ -222,6 +227,7 @@
       "provider": "deepseek",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-deepseek",
+      "responseFormats": ["json_object"],
       "requestParameters": ["top_p", "stop"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {}

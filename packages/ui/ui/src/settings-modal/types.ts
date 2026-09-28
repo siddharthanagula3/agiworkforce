@@ -23,6 +23,7 @@ export interface ConnectedConnector {
   connectedAt?: string;
   status?: 'connected' | 'warning';
   warningLabel?: string;
+  needsReauthorization?: boolean;
 }
 
 export interface SettingsSkill {

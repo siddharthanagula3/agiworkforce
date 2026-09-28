@@ -570,6 +570,13 @@
             "$ref": "#/definitions/requestParameter"
           }
         },
+        "responseFormats": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": ["json_object", "json_schema"]
+          }
+        },
         "mediaInput": {
           "type": "object",
           "additionalProperties": false,

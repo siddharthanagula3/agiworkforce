@@ -181,14 +181,13 @@ Code: `apps/extension/src/side_panel.ts:9843-9867`, `apps/extension/src/side_pan
 
 - Done when: An expired connection offers a reconnect dialog that re-runs authorization and keeps its settings.
 - Wave: 3
-- Already works on: mobile, cli
+- Already works on: desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Same as S55.20: detail offers Connect on an expired connection; browser verification against a real expired grant is still owed. | states |
-| desktop | partial | Settings marks an expired connector "Needs to be reconnected" but offers only Disconnect (which deletes its saved tool permissions); Reconnect exists only as the in-chat card after a tool call fails. | ui |
+| web | partial | partials/mcp-web 7eb7ec7c1: an expired connection's detail now offers Reconnect beside Disconnect, with a note that reconnecting signs in again and keeps its settings and tool permissions; a connector that is only not responding is not offered it. Still owed: a browser pass against a real expired grant. | states |
 
-Code: `packages/ui/ui/src/settings-modal/SettingsModal.tsx:281-281`, `apps/web/features/connectors/hooks/use-connectors-settings-adapter.tsx:513-518`, `packages/ui/ui/src/directory/ConnectorDetailView.tsx:295-298`, `apps/web/features/chat/components/messages/ToolTimeline.tsx:466-470`
+Code: `packages/ui/ui/src/directory/ConnectorDetailView.tsx:251-251`, `apps/web/features/directory/services/connectors-directory.ts:664-664`, `apps/web/features/directory/hooks/useDirectoryAdapter.ts:1101-1101`
 
 ## S10.21: Install Plugin.
 
@@ -206,33 +205,26 @@ Code: `packages/ui/ui/src/settings-modal/SettingsModal.tsx:281-281`, `apps/web/f
 
 - Done when: Before installing or updating, a dialog lists the permissions the plugin requires and asks the user to accept them.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Migration 0289 is now applied in production (2026-09-27). Still open: Permission sets are stored and a changed set must be acknowledged before an update applies, but no screen shows a plugin's permissions; the update path reads pending migration 0289 columns. | ui |
-| desktop | partial | Migration 0289 is now applied in production (2026-09-27). Still open: Permission sets are stored and a changed set must be acknowledged before an update applies, but no screen shows a plugin's permissions; the update path reads pending migration 0289 columns. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/services/plugin-installation-service.ts:213-230`, `apps/web/app/api/plugins/updates/route.ts:26-64`, `apps/web/lib/services/plugin-lifecycle.ts:100-102`
-
 ## S10.23: Update Plugin.
 
 - Done when: An update dialog offers a newer plugin version, shows what changes, and applies it.
 - Wave: 3
-- Already works on: cli
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Migration 0289 is now applied in production (2026-09-27). Still open: An update-offer API exists but nothing in the product calls it, and it reads signature columns from pending migration 0289. | ui |
-| desktop | partial | Migration 0289 is now applied in production (2026-09-27). Still open: An update-offer API exists but nothing in the product calls it, and it reads signature columns from pending migration 0289. | ui |
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/api/plugins/updates/route.ts:26-64`, `apps/web/lib/services/plugin-lifecycle.ts:100-102`
 
 ## S10.24: Skill import.
 
@@ -367,7 +359,7 @@ Code: `apps/extension-vscode/src/core/outboundContentGuard.ts:10-10`, `apps/exte
 
 - Done when: A pairing dialog links a phone or another device to this machine by code or QR, bound to the signed-in account.
 - Wave: 3
-- Already works on: desktop
+- Already works on: desktop, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |

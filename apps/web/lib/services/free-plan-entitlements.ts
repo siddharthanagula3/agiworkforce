@@ -14,7 +14,7 @@ export function getCustomRemoteMcpLimit(planTier: string | null | undefined): nu
   return toEnforceableBillingPlanLimit(getBillingPlanProductLimits(planTier)?.customMcpServers);
 }
 
-export function getKnowledgeStorageLimitBytes(planTier: string | null | undefined): number | null {
+export function getFileStorageLimitBytes(planTier: string | null | undefined): number | null {
   return toEnforceableBillingPlanLimit(
     getBillingPlanProductLimits(planTier)?.knowledgeStorageBytes,
   );
@@ -33,15 +33,15 @@ function formatBytes(bytes: number): string {
   return `${bytes} bytes`;
 }
 
-export function getKnowledgeStorageLimitErrorMessage(
+export function getFileStorageLimitErrorMessage(
   planTier: string | null | undefined,
   limitBytes: number,
 ): string {
   const label = planTier ? SAFE_PLAN_LABELS[planTier.toLowerCase()] : undefined;
   if (!label) {
-    return 'Your current subscription does not include project knowledge storage. Choose an eligible plan and try again.';
+    return 'Your current subscription does not include file storage. Choose an eligible plan and try again.';
   }
-  return `${label} accounts include ${formatBytes(limitBytes)} of project knowledge storage. Remove a file or upgrade to add another.`;
+  return `${label} accounts include ${formatBytes(limitBytes)} of file storage, shared by your Library and project sources. Delete a file or upgrade to add another.`;
 }
 
 const SAFE_PLAN_LABELS: Readonly<Record<string, string>> = Object.freeze({

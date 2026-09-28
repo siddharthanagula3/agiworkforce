@@ -67,7 +67,13 @@
     "sharedFrom": "تمت المشاركة من AGI",
     "sharedWithWorkspace": "تمت المشاركة مع مساحة عملك",
     "renderFailed": "تعذّر عرض هذا العنصر: {{error}}",
-    "svgUnavailable": "لا يحتوي ملف SVG هذا على أي محتوى يمكن عرضه بأمان."
+    "svgUnavailable": "لا يحتوي ملف SVG هذا على أي محتوى يمكن عرضه بأمان.",
+    "runtimeSignIn": "سجّل الدخول لاستخدام الذكاء الاصطناعي والبيانات المحفوظة في هذا التطبيق.",
+    "runtimeSignInAction": "تسجيل الدخول",
+    "runtimeConsentLabel": "إذن الذكاء الاصطناعي",
+    "runtimeConsent": "يريد هذا التطبيق استخدام الذكاء الاصطناعي بحسابك. يُحتسب كل طلب ضمن استخدام خطتك.",
+    "runtimeAllow": "السماح",
+    "runtimeDecline": "عدم السماح"
   },
   "sidebar": {
     "activeConversation": "المحادثة النشطة",

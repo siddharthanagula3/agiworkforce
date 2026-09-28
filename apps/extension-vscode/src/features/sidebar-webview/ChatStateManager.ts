@@ -126,6 +126,11 @@ import {
   rememberedAnswerRating,
 } from '../feedback/answerRating';
 import type { AnswerRating } from '../feedback/submitFeedback';
+import {
+  approvalAnsweredInEditor,
+  onApprovalAnsweredOnPhone,
+  type ApprovalAnswer,
+} from '../remote-control/approvalAnswers';
 import { t, tPlural } from '../../l10n';
 import { openPathReference, openWorkspaceFileDiff, type PathReferenceTarget } from '../path-links';
 import { buildCustomInstructionInput } from '../instructions';
@@ -778,6 +783,7 @@ export class ChatStateManager {
       vscode.window.onDidChangeActiveTextEditor(() => this.pushEditorContext()),
       vscode.window.onDidChangeTextEditorSelection(() => this.pushEditorContext()),
       vscode.languages.onDidChangeDiagnostics(() => this.pushEditorContext()),
+      onApprovalAnsweredOnPhone((answer) => this._approvalAnsweredOnPhone(answer)),
     );
     if (this._workspaceState !== undefined) {
       this._meterCollapsed = this._workspaceState.get<boolean>(
@@ -2128,6 +2134,16 @@ export class ChatStateManager {
         ...(note === undefined ? {} : { note }),
         ...(editedContent === undefined ? {} : { editedContent }),
       });
+      const thread = this._thread;
+      if (thread?.id === pending.threadId && thread.runtime === pending.runtime) {
+        approvalAnsweredInEditor({
+          cwd: thread.cwd,
+          threadId: pending.threadId,
+          turnId: pending.turnId,
+          requestId,
+          approved: decision !== 'deny',
+        });
+      }
     } catch (error) {
       const current = this._activeTurn;
       if (
@@ -2158,6 +2174,17 @@ export class ChatStateManager {
         : t('billing.turnBilledSoFar', { credits, unsettled: formatUnsettledRequests(open) }),
       10_000,
     );
+  }
+
+  private _approvalAnsweredOnPhone(answer: ApprovalAnswer): void {
+    const pending = this._pendingApprovals.get(answer.requestId);
+    if (pending === undefined || pending.threadId !== answer.threadId) return;
+    this._pendingApprovals.delete(answer.requestId);
+    if (pending.proposed !== undefined) void discardProposedChange(answer.requestId);
+    this._post({
+      type: 'approvalResolved',
+      payload: { requestId: answer.requestId, outcome: answer.approved ? 'once' : 'deny' },
+    });
   }
 
   private _clearPendingApprovals(): void {

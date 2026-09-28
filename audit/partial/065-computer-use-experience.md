@@ -252,11 +252,10 @@ Code: `apps/mobile/src/features/companion/components/StatusBanners.tsx:38-45`
 
 - Done when: From another device the user directs work on their own permitted computer.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The registry tracks each computer's remote-work switch and durable runs can hand steps to it, but a web chat never offers device tools; only runs started on the desktop reach it. | handler |
-| desktop | partial | Remote Control relays only code sessions; screen control and phone Dispatch tasks (dispatch.task.create) have no Electron handler. | handler |
 | mobile | partial | The phone steers desktop code sessions, but its Dispatch tasks go unanswered by the Electron app and it cannot use the screen. | handler |
 
-Code: `apps/web/lib/device-steps/device-registry.ts:307-330`, `apps/web/lib/device-steps/host-headers.ts:27-31`, `apps/desktop/electron/remote/remoteControlService.ts:32-51`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
+Code: `apps/mobile/src/features/companion/remote-code/service.ts:49-49`, `apps/mobile/services/companion.ts:134-140`
