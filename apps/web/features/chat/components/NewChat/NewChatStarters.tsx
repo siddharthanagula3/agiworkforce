@@ -41,9 +41,9 @@ const PANEL_CLASS = 'w-full rounded-xl border border-[var(--chat-border)] p-1';
 const PANEL_HEADING_CLASS =
   'flex items-center gap-2 px-3 pb-1 pt-2 text-xs font-medium text-muted-foreground';
 const PROMPT_ROW_CLASS =
-  'flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)] pointer-coarse:min-h-11';
+  'flex w-full items-center rounded-lg px-3 py-2 text-start text-sm text-foreground transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)] pointer-coarse:min-h-11';
 const CLOSE_BUTTON_CLASS =
-  'ml-auto flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)] pointer-coarse:h-11 pointer-coarse:w-11';
+  'ms-auto flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)] pointer-coarse:h-11 pointer-coarse:w-11';
 
 export interface NewChatStartersProps {
   workMode: CloudWorkMode;

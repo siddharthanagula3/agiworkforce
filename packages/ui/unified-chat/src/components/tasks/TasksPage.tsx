@@ -581,7 +581,7 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
         >
           <p className="text-sm text-muted-foreground">{error}</p>
           <Button variant="outline" size="sm" onClick={() => void load(filter, null)}>
-            <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Retry
+            <RotateCcw className="me-1.5 h-3.5 w-3.5" /> Retry
           </Button>
         </div>
       ) : runs.length === 0 ? (
@@ -714,7 +714,7 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
                       type="button"
                       aria-label={`View details for ${title}, ${taskStateLabel(workState)}`}
                       aria-pressed={selected}
-                      className="min-w-0 flex-1 basis-full text-left sm:basis-auto"
+                      className="min-w-0 flex-1 basis-full text-start sm:basis-auto"
                       onClick={() => setSelectedRunId(run.id)}
                     >
                       <span className="flex min-w-0 items-center gap-2">
@@ -760,7 +760,7 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
                           className="h-7 px-2 text-xs text-muted-foreground"
                           onClick={() => openConversation(run)}
                         >
-                          <MessageSquare className="mr-1 h-3 w-3" />
+                          <MessageSquare className="me-1 h-3 w-3" />
                           Open chat
                         </Button>
                       ) : null}
@@ -778,11 +778,11 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
                             <Spinner size="sm" aria-label="Updating task" />
                           ) : pauseRequested ? (
                             <>
-                              <Play className="mr-1 h-3.5 w-3.5" /> Keep working
+                              <Play className="me-1 h-3.5 w-3.5" /> Keep working
                             </>
                           ) : (
                             <>
-                              <Pause className="mr-1 h-3.5 w-3.5" /> Pause
+                              <Pause className="me-1 h-3.5 w-3.5" /> Pause
                             </>
                           )}
                         </Button>
@@ -799,7 +799,7 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
                             <Spinner size="sm" aria-label="Resuming task" />
                           ) : (
                             <>
-                              <Play className="mr-1 h-3.5 w-3.5" /> Resume
+                              <Play className="me-1 h-3.5 w-3.5" /> Resume
                             </>
                           )}
                         </Button>
@@ -816,7 +816,7 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
                           ) : (
                             <>
-                              <X className="mr-1 h-3.5 w-3.5" /> Stop
+                              <X className="me-1 h-3.5 w-3.5" /> Stop
                             </>
                           )}
                         </Button>
@@ -833,7 +833,7 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
                           ) : (
                             <>
-                              <ArchiveRestore className="mr-1 h-3.5 w-3.5" /> Restore
+                              <ArchiveRestore className="me-1 h-3.5 w-3.5" /> Restore
                             </>
                           )}
                         </Button>
@@ -850,7 +850,7 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
                           ) : (
                             <>
-                              <Archive className="mr-1 h-3.5 w-3.5" /> Archive
+                              <Archive className="me-1 h-3.5 w-3.5" /> Archive
                             </>
                           )}
                         </Button>
@@ -929,7 +929,7 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
                   disabled={loadingMore}
                   onClick={() => void load(filter, nextCursor)}
                 >
-                  {loadingMore ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
+                  {loadingMore ? <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" /> : null}
                   Show more
                 </Button>
               </div>

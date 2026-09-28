@@ -1,4 +1,4 @@
-import { View, Linking, ScrollView, Alert } from 'react-native';
+import { View, Linking, ScrollView, Alert, type LayoutChangeEvent } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { CodeBlockCopyButton } from './CodeBlockCopyButton';
 import { MathBlock } from './MathBlock';
@@ -17,6 +17,8 @@ import {
 } from '@/src/features/chat/utils/syntaxHighlight';
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
 import { normalizeMarkdownSource } from '@agiworkforce/utils/markdown-source';
+import { canPreviewCitation, previewCitation, type CitationSource } from './CitationChip';
+import { createReportSectionIds } from '@/src/features/research/reportSections';
 
 const MIN_TABLE_COLUMN_WIDTH = 120;
 const MAX_TABLE_COLUMN_WIDTH = 260;
@@ -116,10 +118,12 @@ export function renderInlineMarkdown(
   source: string,
   keyBase = 'inline',
   renderColors: ColorScheme = defaultColors,
+  citations: readonly CitationSource[] = [],
 ): React.ReactNode[] {
   const text = protectEscapes(source);
   const parts: React.ReactNode[] = [];
-  const inlineRegex = /(\*\*(.+?)\*\*|\*(.+?)\*|~~(.+?)~~|`([^`]+)`|\[([^\]]+)\]\(([^)]+)\))/g;
+  const inlineRegex =
+    /(\*\*(.+?)\*\*|\*(.+?)\*|~~(.+?)~~|`([^`]+)`|\[([^\]]+)\]\(([^)]+)\)|\[(\d{1,3})\](?!\())/g;
   let lastIdx = 0;
   let inlineMatch: RegExpExecArray | null;
   let inlineKey = 0;
@@ -188,6 +192,24 @@ export function renderInlineMarkdown(
           {linkText}
         </Text>,
       );
+    } else if (inlineMatch[8]) {
+      const marker = Number(inlineMatch[8]);
+      const citation = citations[marker - 1];
+      if (citation && canPreviewCitation(citation)) {
+        parts.push(
+          <Text
+            key={`cite-${keyBase}-${inlineKey++}`}
+            style={{ color: renderColors.teal, fontWeight: '600' }}
+            onPress={() => previewCitation(citation)}
+            accessibilityRole="link"
+            accessibilityLabel={`Citation ${marker}: ${citation.title || citation.url}`}
+          >
+            {`[${marker}]`}
+          </Text>,
+        );
+      } else {
+        parts.push(inlineMatch[0]);
+      }
     }
 
     lastIdx = inlineMatch.index + inlineMatch[0].length;
@@ -239,11 +261,19 @@ function collectListItems(
   return { items, next: idx };
 }
 
+interface SegmentContext {
+  citations: readonly CitationSource[];
+  sectionId?: (heading: string, level: number) => string | null;
+  onHeadingLayout?: (id: string, y: number) => void;
+}
+
 function renderTextSegment(
   text: string,
   keyBase: string,
   renderColors: ColorScheme,
+  context: SegmentContext = { citations: [] },
 ): React.ReactNode[] {
+  const { citations } = context;
   const nodes: React.ReactNode[] = [];
   const lines = protectEscapes(text).split('\n');
   let idx = 0;
@@ -255,6 +285,8 @@ function renderTextSegment(
     if (headerMatch) {
       const level = headerMatch[1]!.length;
       const headerText = headerMatch[2]!;
+      const sectionId = context.sectionId?.(headerText.replace(/\s+#+\s*$/, ''), level) ?? null;
+      const onHeadingLayout = context.onHeadingLayout;
       const fontSizes: Record<number, number> = { 1: 22, 2: 19, 3: 17, 4: 15 };
       nodes.push(
         <Text
@@ -268,8 +300,19 @@ function renderTextSegment(
             lineHeight: (fontSizes[level] ?? 15) * 1.35,
           }}
           selectable
+          {...(sectionId && onHeadingLayout
+            ? {
+                onLayout: (event: LayoutChangeEvent) =>
+                  onHeadingLayout(sectionId, event.nativeEvent.layout.y),
+              }
+            : {})}
         >
-          {renderInlineMarkdown(headerText, `${keyBase}-h${level}il-${idx}`, renderColors)}
+          {renderInlineMarkdown(
+            headerText,
+            `${keyBase}-h${level}il-${idx}`,
+            renderColors,
+            citations,
+          )}
         </Text>,
       );
       idx++;
@@ -307,7 +350,12 @@ function renderTextSegment(
             }}
             selectable
           >
-            {renderInlineMarkdown(quoteLines.join('\n'), `${keyBase}-bqil-${idx}`, renderColors)}
+            {renderInlineMarkdown(
+              quoteLines.join('\n'),
+              `${keyBase}-bqil-${idx}`,
+              renderColors,
+              citations,
+            )}
           </Text>
         </View>,
       );
@@ -345,7 +393,12 @@ function renderTextSegment(
                 }}
                 selectable
               >
-                {renderInlineMarkdown(item.text, `${keyBase}-liil-${idx}-${i}`, renderColors)}
+                {renderInlineMarkdown(
+                  item.text,
+                  `${keyBase}-liil-${idx}-${i}`,
+                  renderColors,
+                  citations,
+                )}
               </Text>
             </View>
           ))}
@@ -456,6 +509,7 @@ function renderTextSegment(
                             row[colIdx] || '',
                             `${keyBase}-tdil-${idx}-${rowIdx}-${colIdx}`,
                             renderColors,
+                            citations,
                           )}
                         </Text>
                       </View>
@@ -492,7 +546,7 @@ function renderTextSegment(
           style={{ color: renderColors.textPrimary, fontSize: 15, lineHeight: 23 }}
           selectable
         >
-          {renderInlineMarkdown(line, `${keyBase}-pil-${idx}`, renderColors)}
+          {renderInlineMarkdown(line, `${keyBase}-pil-${idx}`, renderColors, citations)}
         </Text>,
       );
     } else if (idx > 0 && idx < lines.length - 1) {
@@ -594,6 +648,8 @@ export interface MarkdownRenderOptions {
    * once the turn ends.
    */
   highlightCode?: boolean;
+  citations?: readonly CitationSource[];
+  onHeadingLayout?: (sectionId: string, y: number) => void;
 }
 
 export function renderMarkdownContent(
@@ -603,6 +659,12 @@ export function renderMarkdownContent(
 ): React.ReactNode[] {
   if (!content) return [];
   const highlightCode = options.highlightCode !== false;
+  const context: SegmentContext = {
+    citations: options.citations ?? [],
+    ...(options.onHeadingLayout
+      ? { sectionId: createReportSectionIds(), onHeadingLayout: options.onHeadingLayout }
+      : {}),
+  };
 
   const source = normalizeMarkdownSource(content);
   const elements: React.ReactNode[] = [];
@@ -615,7 +677,7 @@ export function renderMarkdownContent(
   while ((match = blockRegex.exec(source)) !== null) {
     if (match.index > lastIndex) {
       const textBefore = source.slice(lastIndex, match.index);
-      elements.push(...renderTextSegment(textBefore, `seg-${keyCounter++}`, renderColors));
+      elements.push(...renderTextSegment(textBefore, `seg-${keyCounter++}`, renderColors, context));
     }
 
     if (match[2] !== undefined) {
@@ -658,11 +720,13 @@ export function renderMarkdownContent(
 
   if (lastIndex < source.length) {
     const remaining = source.slice(lastIndex);
-    elements.push(...renderTextSegment(remaining, `seg-tail-${keyCounter++}`, renderColors));
+    elements.push(
+      ...renderTextSegment(remaining, `seg-tail-${keyCounter++}`, renderColors, context),
+    );
   }
 
   if (elements.length === 0 && source.length > 0) {
-    elements.push(...renderTextSegment(source, 'seg-0', renderColors));
+    elements.push(...renderTextSegment(source, 'seg-0', renderColors, context));
   }
 
   return elements;

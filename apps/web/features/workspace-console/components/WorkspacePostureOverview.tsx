@@ -141,7 +141,7 @@ function SignalRow({ signal }: { signal: PostureSignal }) {
   );
 
   const rowClass =
-    'flex w-full items-start gap-3 px-5 py-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring';
+    'flex w-full items-start gap-3 px-5 py-4 text-start transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring';
 
   if (!signal.href) {
     return <div className={rowClass}>{body}</div>;

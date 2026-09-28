@@ -10,14 +10,13 @@ nothing is left.
 
 - Done when: Screens that need explaining link straight to the matching help or docs article for that feature.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | partial | /docs and /help now honour ?topic= (permissions opens the tool approvals guide; ids, section headings and tags resolve). No help article covers CLI configuration (config.toml) or local custom instructions yet, so those two VS Code links land on the index with a notice; the CLI lane would write and claim-index those two guides. | content |
-| chrome | partial | Only the prompt-injection onboarding has a contextual "Learn more" (to /security); every other help entry is the generic help centre link. | ui |
 
 Code: `apps/web/lib/support/doc-topics.ts:7-7`, `apps/web/lib/support/doc-topics.ts:25-25`, `apps/web/app/docs/page.tsx:128-128`, `apps/web/app/docs/page.tsx:151-151`
 
@@ -134,16 +133,13 @@ Code: `apps/cli/src/diagnostics_bundle.rs:52-67`
 
 - Done when: After an update, users learn what changed (what's new, release notes) from inside the product.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Same as S2.28: the feed has the notes summary and link; the CLI prints them once p-desktop-cli reads releaseNotes. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/lib/releases/github-cli-releases.ts:157-157`
 
 ## S88.14: Model-retirement notice.
 

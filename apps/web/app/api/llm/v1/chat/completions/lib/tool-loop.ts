@@ -153,10 +153,12 @@ import {
   STORED_RESULT_NOTICE_MARKER,
   TOOL_RESULT_READER_TOOL_NAME,
   keepTrimmedToolResult,
+  listConversationToolResults,
   readStoredToolResult,
   referenceOversizedToolResult,
   toolResultReaderToolDef,
   trimmedToolResultNotice,
+  type ToolResultOwner,
 } from './tool-result-store';
 import {
   EXECUTE_CODE_TOOL,
@@ -1458,7 +1460,7 @@ export function trimToolResultHistory(
 
 export async function trimToolResultHistoryKeepingReferences(
   messages: Array<{ role: string; content?: unknown; tool_call_id?: string }>,
-  userId: string | undefined,
+  owner: ToolResultOwner,
   maxChars: number = MAX_TOOL_RESULT_HISTORY_CHARS,
   keepRecent: number = KEEP_RECENT_TOOL_RESULTS,
 ): Promise<number> {
@@ -1475,7 +1477,7 @@ export async function trimToolResultHistoryKeepingReferences(
         notice !== TRUNCATED_TOOL_RESULT_MARKER &&
         message.tool_call_id !== undefined &&
         (await keepTrimmedToolResult({
-          userId,
+          ...owner,
           toolCallId: message.tool_call_id,
           content: String(message.content),
         }));
@@ -2313,10 +2315,10 @@ async function runMcpTool(
     if (!availableTools.has(toolCall.qualifiedName)) {
       return { content: `Unknown tool: ${toolCall.qualifiedName}`, isError: true };
     }
-    const outcome = await executeUrlFetch(
-      toolCall.args,
-      executionContext?.signal ? { signal: executionContext.signal } : {},
-    );
+    const outcome = await executeUrlFetch(toolCall.args, {
+      domainPolicy: executionContext?.webSearchDomainPolicy ?? null,
+      ...(executionContext?.signal ? { signal: executionContext.signal } : {}),
+    });
     if (!outcome.ok) {
       return { content: `Fetch failed (${outcome.errorCode}): ${outcome.error}`, isError: true };
     }
@@ -2420,6 +2422,7 @@ async function runMcpTool(
       result.ok && result.overflow
         ? await referenceOversizedToolResult({
             userId: executionContext?.userId,
+            conversationId: executionContext?.conversationId,
             toolCallId: toolCall.id,
             toolName: toolCall.qualifiedName,
             content: result.overflow.kept,
@@ -2473,6 +2476,7 @@ async function runMcpTool(
             ? capOutput(connectorResult.content)
             : ((await referenceOversizedToolResult({
                 userId: executionContext?.userId,
+                conversationId: executionContext?.conversationId,
                 toolCallId: toolCall.id,
                 toolName: toolCall.qualifiedName,
                 content: connectorResult.content,
@@ -2564,6 +2568,7 @@ async function runMcpTool(
           ? null
           : await referenceOversizedToolResult({
               userId: executionContext?.userId,
+              conversationId: executionContext?.conversationId,
               toolCallId: toolCall.id,
               toolName: toolCall.qualifiedName,
               content: output,
@@ -3382,19 +3387,26 @@ export async function* runToolLoop(
   });
   const loadedToolNames = new Set(toolSchemaSelection.tools.map((tool) => tool.qualifiedName));
   let deferredToolSchemas = toolSchemaSelection.deferred;
+  const toolResultOwner: ToolResultOwner = {
+    userId: options.userId,
+    conversationId: processed.conversationId,
+  };
+  const earlierStoredResults = await listConversationToolResults(toolResultOwner);
   const offeredMcpToolDefs = (): WebMcpToolDef[] => {
     const loaded = mcpTools.filter((tool) => loadedToolNames.has(tool.qualifiedName));
     const directory = toolDirectoryToolDef(deferredToolSchemas);
-    const storedResults = messages.some(
-      (message) =>
-        message.role === 'tool' &&
-        typeof message.content === 'string' &&
-        message.content.includes(STORED_RESULT_NOTICE_MARKER),
-    );
+    const storedResults =
+      earlierStoredResults.length > 0 ||
+      messages.some(
+        (message) =>
+          message.role === 'tool' &&
+          typeof message.content === 'string' &&
+          message.content.includes(STORED_RESULT_NOTICE_MARKER),
+      );
     return [
       ...loaded,
       ...(directory ? [directory] : []),
-      ...(storedResults ? [toolResultReaderToolDef()] : []),
+      ...(storedResults ? [toolResultReaderToolDef(earlierStoredResults)] : []),
     ];
   };
   const loadDeferredToolSchemas = (args: Record<string, unknown>): ToolLoopToolResult => {
@@ -5584,7 +5596,10 @@ export async function* runToolLoop(
       }
       step++;
 
-      const trimmedResults = await trimToolResultHistoryKeepingReferences(messages, options.userId);
+      const trimmedResults = await trimToolResultHistoryKeepingReferences(
+        messages,
+        toolResultOwner,
+      );
       if (trimmedResults > 0) {
         logger.info(
           { trimmedResults, step, provider: processed.provider },

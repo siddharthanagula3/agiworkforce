@@ -1,11 +1,9 @@
 'use client';
 
+import type { AgentEventSource } from '@agiworkforce/types';
 import { create } from 'zustand';
 
-export interface ResearchSource {
-  url: string;
-  title: string;
-  snippet?: string;
+export interface ResearchSource extends AgentEventSource {
   favicon?: string;
   /** When the page was published, when the search backend reported it. */
   publishedDate?: string;

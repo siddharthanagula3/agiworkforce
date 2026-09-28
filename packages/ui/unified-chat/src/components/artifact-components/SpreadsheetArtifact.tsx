@@ -167,7 +167,7 @@ export function SpreadsheetArtifact({ artifact, className }: SpreadsheetArtifact
             })}
           </span>
         </div>
-        <span className="text-caption text-muted-foreground pr-1" aria-live="polite">
+        <span className="text-caption text-muted-foreground pe-1" aria-live="polite">
           {copiedCell ? 'Cell copied' : selected ? 'Ctrl/⌘+C to copy cell' : ''}
         </span>
       </div>
@@ -189,7 +189,7 @@ export function SpreadsheetArtifact({ artifact, className }: SpreadsheetArtifact
             <tr role="row">
               <th
                 role="columnheader"
-                className="w-10 border-r border-b border-border bg-muted p-1 text-center text-caption text-muted-foreground font-medium select-none"
+                className="w-10 border-e border-b border-border bg-muted p-1 text-center text-caption text-muted-foreground font-medium select-none"
               >
                 #
               </th>
@@ -204,7 +204,7 @@ export function SpreadsheetArtifact({ artifact, className }: SpreadsheetArtifact
                       isSorted ? (sort!.direction === 'asc' ? 'ascending' : 'descending') : 'none'
                     }
                     className={cn(
-                      'min-w-[120px] border-r border-b border-border bg-muted/80 p-0 font-semibold text-xs text-foreground select-none whitespace-nowrap',
+                      'min-w-[120px] border-e border-b border-border bg-muted/80 p-0 font-semibold text-xs text-foreground select-none whitespace-nowrap',
                     )}
                   >
                     <button
@@ -212,7 +212,7 @@ export function SpreadsheetArtifact({ artifact, className }: SpreadsheetArtifact
                       onClick={() => cycleSort(colIdx)}
                       className={cn(
                         'flex w-full items-center gap-1 px-2 py-2 hover:bg-accent/60 transition-colors',
-                        numeric ? 'justify-end text-right' : 'justify-start text-left',
+                        numeric ? 'justify-end text-end' : 'justify-start text-start',
                       )}
                       title={`Sort by ${col}`}
                     >
@@ -244,7 +244,7 @@ export function SpreadsheetArtifact({ artifact, className }: SpreadsheetArtifact
                 <tr key={rowIndex} role="row" className="group">
                   <td
                     role="rowheader"
-                    className="border-r border-b border-border bg-muted/30 p-1 text-center text-caption text-muted-foreground font-mono select-none group-hover:bg-accent/50 transition-colors"
+                    className="border-e border-b border-border bg-muted/30 p-1 text-center text-caption text-muted-foreground font-mono select-none group-hover:bg-accent/50 transition-colors"
                   >
                     {rowIndex + 1}
                   </td>
@@ -258,7 +258,7 @@ export function SpreadsheetArtifact({ artifact, className }: SpreadsheetArtifact
                         onClick={() => setSelected(isSelected ? null : { r: rowIndex, c: colIdx })}
                         aria-selected={isSelected || undefined}
                         className={cn(
-                          'border-r border-b border-border p-0 min-w-[120px] cursor-default transition-colors',
+                          'border-e border-b border-border p-0 min-w-[120px] cursor-default transition-colors',
                           'hover:bg-accent/40',
                           isSelected &&
                             'ring-2 ring-inset ring-primary bg-primary/10 dark:bg-primary/20',
@@ -267,7 +267,7 @@ export function SpreadsheetArtifact({ artifact, className }: SpreadsheetArtifact
                         <div
                           className={cn(
                             'px-2 py-1.5 text-foreground text-xs whitespace-pre-wrap break-words',
-                            numeric && 'text-right tabular-nums',
+                            numeric && 'text-end tabular-nums',
                           )}
                         >
                           {value}

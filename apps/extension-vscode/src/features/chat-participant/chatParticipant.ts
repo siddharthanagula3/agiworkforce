@@ -15,6 +15,7 @@ import { classifyDeveloperTurn, isAutoRoutingModel } from '../../integrations/ro
 import { buildMemoryContextInput } from '../../memory/memoryStore';
 import { getAccountMemoryStore } from '../../memory/accountMemoryStore';
 import { buildCustomInstructionInput } from '../instructions';
+import { getActiveCloudProject } from '../projects/activeProject';
 import { buildPromptReferenceInputs } from './promptReferences';
 import { rateParticipantAnswer } from '../feedback/answerRating';
 import { parsePlanVisualization, renderPlanMarkdown } from '../../integrations/planVisualization';
@@ -330,10 +331,8 @@ export function createChatHandler(
     }
     const { model, provider } = requestedModel;
     const userMessage = buildRuntimeTurnInput(request, editorCtx);
-    const customInstructionInput =
-      globalState === undefined || workspaceState === undefined
-        ? undefined
-        : buildCustomInstructionInput({ globalState, workspaceState });
+    const activeProject =
+      workspaceState === undefined ? undefined : getActiveCloudProject(workspaceState);
     const memoryInput =
       workspaceState === undefined
         ? undefined
@@ -534,6 +533,16 @@ export function createChatHandler(
           metadata: threadResultMetadata(request.command ?? 'chat', threadAuthority),
         };
       }
+      const customInstructionInput =
+        globalState === undefined || workspaceState === undefined
+          ? undefined
+          : buildCustomInstructionInput(
+              { globalState, workspaceState },
+              {
+                projectAppliedByServer:
+                  activeProject !== undefined && threadAuthority?.trustMode === 'managed',
+              },
+            );
       const turn = await runtime.startTurn({
         threadId,
         cwd,
@@ -546,6 +555,7 @@ export function createChatHandler(
         agentMode: planOnly ? 'plan' : Config.agentMode() === 'plan' ? 'auto' : Config.agentMode(),
         reasoningEffort: Config.agentEffort(),
         ...contextFilesParam(cwd),
+        ...(activeProject === undefined ? {} : { cloudProjectId: activeProject.id }),
         ...(isAutoRoutingModel(model)
           ? { model, routingTaskType: classifyDeveloperTurn(userMessage, promptReferenceInputs) }
           : { model }),

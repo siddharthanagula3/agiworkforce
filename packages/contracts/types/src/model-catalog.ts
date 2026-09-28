@@ -94,6 +94,7 @@ export function getRegistryRoute(routeId: string): RegistryRoute | null {
   return routes[routeId] ?? null;
 }
 import { normalizeBillingPlanTier } from './billing-catalog';
+import { CENTS_PER_USD, MICROUSD_PER_USD } from './credits';
 import type { Provider } from './provider';
 import type { ModelInfo } from './provider-adapter';
 import type { SubscriptionTier } from './user';
@@ -1031,8 +1032,6 @@ export interface TierPolicy {
   computerUseSoftCap?: number;
   computerUseHardCap?: number;
 
-  allowDeepResearch?: boolean;
-
   allowVoice?: boolean;
   voiceMinutesPerMonth?: number | null;
 }
@@ -1173,7 +1172,6 @@ const TIER_POLICIES_DEFINITION: Record<ProductTier, TierPolicy> = {
     allowVideoGeneration: false,
     allowToolUse: true,
     allowMCP: 'one_custom_remote',
-    allowDeepResearch: false,
     allowVoice: true,
     voiceMinutesPerMonth: 30,
     tokenCapPerMonth: null,
@@ -1214,7 +1212,6 @@ const TIER_POLICIES_DEFINITION: Record<ProductTier, TierPolicy> = {
     imageQuotaPerMonth: null,
     imageSyntheticTokenCost: 50_000,
     allowToolUse: 'unlimited',
-    allowDeepResearch: true,
     allowMCP: 'unlimited',
     tokenCapPerMonth: 40_000_000,
     flagshipDailyTokenCap: 50_000,
@@ -1267,7 +1264,6 @@ const TIER_POLICIES_DEFINITION: Record<ProductTier, TierPolicy> = {
     videoSecondsPerMonth: 300,
     computerUseSoftCap: 1_000,
     computerUseHardCap: 2_500,
-    allowDeepResearch: true,
     allowToolUse: 'unlimited',
     allowMCP: 'unlimited',
     tokenCapPerMonth: 100_000_000,
@@ -1316,7 +1312,6 @@ const TIER_POLICIES_DEFINITION: Record<ProductTier, TierPolicy> = {
     imageSyntheticTokenCost: 50_000,
     allowVoice: true,
     voiceMinutesPerMonth: null,
-    allowDeepResearch: true,
     allowToolUse: 'unlimited',
     allowMCP: 'unlimited',
     tokenCapPerMonth: null,
@@ -2468,6 +2463,28 @@ export function calculateCatalogVideoCostCents(input: {
     (output.width * output.height * input.durationSecs * formula.framesPerSecond) /
     formula.pixelsPerToken;
   return Math.ceil(Number((videoTokens * usdPerToken * 100).toFixed(8)));
+}
+
+const MICROUSD_PER_CATALOG_CENT = MICROUSD_PER_USD / CENTS_PER_USD;
+
+export function videoGenerationCostMicrousd(input: {
+  model: ModelMetadata;
+  resolution: string;
+  aspectRatio: string;
+  durationSecs: number;
+  generateAudio: boolean;
+}): number | null {
+  const { model, resolution, durationSecs } = input;
+  if (model.videoGeneration?.pricing) {
+    const cents = calculateCatalogVideoCostCents(input);
+    return cents === null ? null : cents * MICROUSD_PER_CATALOG_CENT;
+  }
+  const byResolution = model.videoPerSecondCostByResolution;
+  const perSecond = byResolution
+    ? byResolution[resolution as keyof typeof byResolution]
+    : model.videoPerSecondCost;
+  if (perSecond === undefined || !Number.isFinite(perSecond)) return null;
+  return Math.ceil(Number((perSecond * durationSecs * 100).toFixed(8))) * MICROUSD_PER_CATALOG_CENT;
 }
 
 export function getModelReasoning(modelId: string | null | undefined): ModelReasoning {

@@ -144,13 +144,13 @@ export function ConversationTitleMenu({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-52">
             <DropdownMenuItem onSelect={() => startRename()}>
-              <Pencil className="mr-2 h-4 w-4" />
+              <Pencil className="me-2 h-4 w-4" />
               Rename
             </DropdownMenuItem>
             {onMoveToProject && projects.length > 0 && (
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger>
-                  <FolderInput className="mr-2 h-4 w-4" />
+                  <FolderInput className="me-2 h-4 w-4" />
                   Move to project
                 </DropdownMenuSubTrigger>
                 <DropdownMenuSubContent className="max-h-64 overflow-y-auto">
@@ -169,25 +169,25 @@ export function ConversationTitleMenu({
             */}
             {onShare && (
               <DropdownMenuItem onSelect={() => onShare()}>
-                <Share2 className="mr-2 h-4 w-4" />
+                <Share2 className="me-2 h-4 w-4" />
                 Share…
               </DropdownMenuItem>
             )}
             {onPrint && (
               <DropdownMenuItem onSelect={() => onPrint()}>
-                <Printer className="mr-2 h-4 w-4" />
+                <Printer className="me-2 h-4 w-4" />
                 Print
               </DropdownMenuItem>
             )}
             {onExport && (
               <DropdownMenuItem onSelect={() => onExport()}>
-                <Download className="mr-2 h-4 w-4" />
+                <Download className="me-2 h-4 w-4" />
                 Export…
               </DropdownMenuItem>
             )}
             {onFork && (
               <DropdownMenuItem onSelect={() => onFork()}>
-                <GitFork className="mr-2 h-4 w-4" />
+                <GitFork className="me-2 h-4 w-4" />
                 Duplicate as branch
               </DropdownMenuItem>
             )}
@@ -198,16 +198,16 @@ export function ConversationTitleMenu({
             {onArchiveToggle && (
               <DropdownMenuItem onSelect={() => onArchiveToggle()}>
                 {archived ? (
-                  <ArchiveRestore className="mr-2 h-4 w-4" />
+                  <ArchiveRestore className="me-2 h-4 w-4" />
                 ) : (
-                  <Archive className="mr-2 h-4 w-4" />
+                  <Archive className="me-2 h-4 w-4" />
                 )}
                 {archived ? 'Unarchive' : 'Archive'}
               </DropdownMenuItem>
             )}
             <DropdownMenuSeparator />
             <DropdownMenuItem className="text-danger focus:text-danger" onSelect={() => onDelete()}>
-              <Trash2 className="mr-2 h-4 w-4" />
+              <Trash2 className="me-2 h-4 w-4" />
               Delete
             </DropdownMenuItem>
           </DropdownMenuContent>

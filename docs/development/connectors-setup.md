@@ -530,6 +530,7 @@ documentation; the console is where the pair is issued.
 | `slack`      | https://api.slack.com/apps                        | `channels:read`, `channels:history`, `groups:read`, `chat:write`, `users:read`, `users:read.email`, `team:read`, `files:read`, `search:read.public`, `search:read.private`, `search:read.im`, `search:read.mpim` | `CONNECTOR_OAUTH_SLACK_CLIENT_ID`, `CONNECTOR_OAUTH_SLACK_CLIENT_SECRET`         |
 | `asana`      | https://app.asana.com/0/my-apps, an MCP app       | `openid`, `profile`, `email`, `tasks:read`, `tasks:write`, `projects:read`, `sections:read`, `stories:read`, `stories:write`, `teams:read`, `users:read`, `workspaces:read`                                      | `CONNECTOR_OAUTH_ASANA_CLIENT_ID`, `CONNECTOR_OAUTH_ASANA_CLIENT_SECRET`         |
 | `box`        | https://app.box.com/developers/console            | `root_readonly`, `item_preview`, `item_download`, `item_upload`                                                                                                                                                  | `CONNECTOR_OAUTH_BOX_CLIENT_ID`, `CONNECTOR_OAUTH_BOX_CLIENT_SECRET`             |
+| `docusign`   | https://admin.docusign.com/apps-and-keys          | `signature`, `adm_store_unified_repo_read`, `aow_manage`                                                                                                                                                         | `CONNECTOR_OAUTH_DOCUSIGN_CLIENT_ID`, `CONNECTOR_OAUTH_DOCUSIGN_CLIENT_SECRET`   |
 | `dropbox`    | https://www.dropbox.com/developers/apps           | `account_info.read`, `files.metadata.read`, `files.content.read`, `files.content.write`                                                                                                                          | `CONNECTOR_OAUTH_DROPBOX_CLIENT_ID`, `CONNECTOR_OAUTH_DROPBOX_CLIENT_SECRET`     |
 | `figma`      | https://www.figma.com/developers/apps             | `current_user:read`, `files:read`, `projects:read`, `file_comments:write`, `file_dev_resources:read`                                                                                                             | `CONNECTOR_OAUTH_FIGMA_CLIENT_ID`, `CONNECTOR_OAUTH_FIGMA_CLIENT_SECRET`         |
 | `hubspot`    | HubSpot developer account, Apps                   | `oauth`, `crm.objects.contacts.read`, `crm.objects.contacts.write`, `crm.objects.companies.read`, `crm.objects.deals.read`, `crm.objects.deals.write`                                                            | `CONNECTOR_OAUTH_HUBSPOT_CLIENT_ID`, `CONNECTOR_OAUTH_HUBSPOT_CLIENT_SECRET`     |
@@ -544,6 +545,21 @@ documentation; the console is where the pair is issued.
 tools need `root_readwrite`, which reads and writes every file in the account
 (https://developer.box.com/guides/api-calls/permissions-and-errors/scopes/), so
 it stays out like the full-Drive scope; admitting it is an owner decision.
+
+`docusign` uses Docusign's production server `https://mcp.docusign.com/mcp`,
+the endpoint Claude's Docusign connector lists (https://claude.com/connectors/docusign);
+the demo environment is `https://mcp-d.docusign.com/mcp`
+(https://developers.docusign.com/platform/mcp-server/). Its authorization server
+publishes no registration endpoint and accepts only the confidential
+authorization code grant, so the pair is an app's integration key and secret
+from Apps and Keys, with our redirect URL added there. The descriptor takes
+`authorizationUrl` `https://account.docusign.com/oauth/auth`, `tokenUrl`
+`https://account.docusign.com/oauth/token`, `issuer`
+`https://account.docusign.com` and `tokenAuthMethod` `client_secret_basic`.
+Docusign refuses the whole grant when the account lacks one requested product,
+so request only the scopes the accounts are entitled to, `signature` alone for
+eSignature. The CLM `spring_read` and `spring_write` scopes the server also lists
+stay out of the ceiling because no Docusign MCP tool uses them.
 
 `asana` uses `https://mcp.asana.com/v2/mcp`; Asana shut the v1 SSE server down on
 2026-08-05 and its v2 server takes no dynamic registration

@@ -74,7 +74,10 @@
     "runtimeConsent": "This app wants to use AI with your account. Each request counts toward your plan's usage.",
     "runtimeConsentConnectors": "This app wants to use AI with your account and read or change data in {{apps}}. It sees what those apps return, and each request counts toward your plan's usage.",
     "runtimeAllow": "Allow",
-    "runtimeDecline": "Don't allow"
+    "runtimeDecline": "Don't allow",
+    "saveCopy": "Save a copy to my chats",
+    "saveCopyBusy": "Copying…",
+    "saveCopyFailed": "This artifact could not be copied."
   },
   "sidebar": {
     "activeConversation": "Active conversation",
@@ -441,6 +444,8 @@
     "discardedReplies_other": "The {{count}} messages below it are deleted and cannot be recovered.",
     "citationSources_one": "Source {{indices}}: {{sites}}",
     "citationSources_other": "Sources {{indices}}: {{sites}}",
+    "folderFilesLeftOut_one": "{{count}} file in {{folder}} was not attached. Attach it from a local folder.",
+    "folderFilesLeftOut_other": "{{count}} files in {{folder}} were not attached. Attach them from a local folder.",
     "savedMemoriesUsed_one": "Used {{count}} saved memory",
     "savedMemoriesUsed_other": "Used {{count}} saved memories",
     "moreSavedMemories_one": "And {{count}} more",
@@ -466,7 +471,9 @@
     "expand": "Expand code",
     "close": "Close expanded code",
     "codeTitle": "{{language}} code",
-    "codeBlockLabel": "{{language}} code block"
+    "codeBlockLabel": "{{language}} code block",
+    "edit": "Edit",
+    "editLabel": "Edit this code beside the chat"
   },
   "streaming": {
     "reconnecting": "Reconnecting…",

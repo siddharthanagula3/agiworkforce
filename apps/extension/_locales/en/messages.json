@@ -3734,5 +3734,365 @@
   "spMemoryPreferenceSaveFailed": {
     "message": "The memory setting could not be saved. Try again.",
     "description": "Saving a memory switch failed"
+  },
+  "spSchedulesDescriptionLabel": {
+    "message": "Description (optional)",
+    "description": "Label of the optional schedule description field"
+  },
+  "spSchedulesEdit": {
+    "message": "Edit",
+    "description": "Button that opens a schedule's name, description and instructions for editing"
+  },
+  "spSchedulesEditAria": {
+    "message": "Edit $NAME$",
+    "description": "Accessible name of a schedule's edit button and of the edit form",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Morning briefing"
+      }
+    }
+  },
+  "spSchedulesSave": {
+    "message": "Save changes",
+    "description": "Submit button of the schedule form while editing an existing schedule"
+  },
+  "spSchedulesUpdated": {
+    "message": "Saved $NAME$.",
+    "description": "Status after a schedule's details are saved",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Morning briefing"
+      }
+    }
+  },
+  "spSchedulesDelete": {
+    "message": "Delete",
+    "description": "Button that deletes a schedule, and the confirm button that finishes it"
+  },
+  "spSchedulesDeleteAria": {
+    "message": "Delete $NAME$",
+    "description": "Accessible name of a schedule's delete button",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Morning briefing"
+      }
+    }
+  },
+  "spSchedulesDeleteConfirm": {
+    "message": "Delete $NAME$ and its run history? This cannot be undone.",
+    "description": "Confirmation question shown before a schedule is deleted",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Morning briefing"
+      }
+    }
+  },
+  "spSchedulesDeleting": {
+    "message": "Deleting…",
+    "description": "Confirm button label while a schedule is being deleted"
+  },
+  "spSchedulesDeleted": {
+    "message": "Deleted $NAME$.",
+    "description": "Status after a schedule is deleted",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Morning briefing"
+      }
+    }
+  },
+  "spSchedulesLastRunError": {
+    "message": "Last run: $ERROR$",
+    "description": "Why a schedule's most recent run did not finish, shown on its row",
+    "placeholders": {
+      "error": {
+        "content": "$1",
+        "example": "The model took too long to answer."
+      }
+    }
+  },
+  "spTaskDescriptionLabel": {
+    "message": "Description (optional)",
+    "description": "Label of the optional description field on the scheduled-task form"
+  },
+  "spTaskDescriptionPlaceholder": {
+    "message": "What this task is for",
+    "description": "Placeholder of the scheduled-task description field"
+  },
+  "spTaskSaveChanges": {
+    "message": "Save changes",
+    "description": "Scheduled-task form submit button while editing an existing task"
+  },
+  "spTaskSaving": {
+    "message": "Saving…",
+    "description": "Scheduled-task form submit button while an edit is being saved"
+  },
+  "spTaskSaveFailed": {
+    "message": "The scheduled task could not be saved.",
+    "description": "Scheduled-task form error when saving an edit fails and the background gives no reason"
+  },
+  "spTaskUpdated": {
+    "message": "$NAME$ updated.",
+    "description": "Workflows status after a scheduled task is edited",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Daily brief"
+      }
+    }
+  },
+  "spTaskEdit": {
+    "message": "Edit $NAME$",
+    "description": "Accessible name of the edit button on a scheduled task",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Daily brief"
+      }
+    }
+  },
+  "spTaskDeleteConfirm": {
+    "message": "Select delete again to remove $NAME$. It stops running and cannot be recovered.",
+    "description": "Confirmation shown after the first press of delete on a scheduled task",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Daily brief"
+      }
+    }
+  },
+  "spPlanReviewHeading": {
+    "message": "Plan",
+    "description": "Heading of the AGI Work plan a person reviews before the work starts"
+  },
+  "spPlanReviewHelp": {
+    "message": "Edit any step before the work starts. The agent follows the plan you start here.",
+    "description": "Explanation under the AGI Work plan review heading"
+  },
+  "spPlanReviewStep": {
+    "message": "Step $NUMBER$",
+    "description": "Accessible name of one editable step in the AGI Work plan review",
+    "placeholders": {
+      "number": {
+        "content": "$1",
+        "example": "2"
+      }
+    }
+  },
+  "spPlanReviewRemoveStep": {
+    "message": "Remove step $NUMBER$",
+    "description": "Accessible name of the button that removes one step from the AGI Work plan",
+    "placeholders": {
+      "number": {
+        "content": "$1",
+        "example": "2"
+      }
+    }
+  },
+  "spPlanReviewAddStep": {
+    "message": "Add a step",
+    "description": "Button that adds an empty step to the AGI Work plan review"
+  },
+  "spPlanReviewStart": {
+    "message": "Start work",
+    "description": "Button that approves the reviewed AGI Work plan and starts the work"
+  },
+  "spPlanReviewCancel": {
+    "message": "Cancel",
+    "description": "Button that rejects the proposed AGI Work plan"
+  },
+  "spPlanReviewEmpty": {
+    "message": "Add at least one step, or cancel.",
+    "description": "Hint shown when every step of the AGI Work plan review is empty"
+  },
+  "spPlanReviewDeclined": {
+    "message": "You cancelled this plan. Nothing was run.",
+    "description": "Note left on an AGI Work turn whose plan the person cancelled"
+  },
+  "spHelpLinkMemory": {
+    "message": "How memory works",
+    "description": "Link from the memory settings to the help article about memory"
+  },
+  "spHelpLinkTemporary": {
+    "message": "How temporary chats work",
+    "description": "Link from the temporary chat notice to the help article about temporary chats"
+  },
+  "spHelpLinkSharing": {
+    "message": "How sharing works",
+    "description": "Link from the share confirmation to the help article about shared links"
+  },
+  "spHelpLinkShortcuts": {
+    "message": "All keyboard shortcuts",
+    "description": "Link from the Help shortcuts list to the full keyboard shortcuts article"
+  },
+  "spHelpLinkUsage": {
+    "message": "How usage and credits work",
+    "description": "Link from the usage meter to the help article about usage limits and credits"
+  },
+  "spHelpLinkArtifacts": {
+    "message": "How artifacts work",
+    "description": "Link from the artifacts list to the help article about artifacts"
+  },
+  "spHelpLinkProjects": {
+    "message": "How projects work",
+    "description": "Link from the projects list to the help article about projects"
+  },
+  "spHelpLinkSchedules": {
+    "message": "How schedules work",
+    "description": "Link from the schedules section to the help article about schedules"
+  },
+  "spHelpLinkRuns": {
+    "message": "How AGI Work runs a task",
+    "description": "Link from the cloud runs list to the help article about AGI Work"
+  },
+  "spProjectChatNotSaved": {
+    "message": "This reply goes without the project's files and instructions, because the chat could not be saved to your account first.",
+    "description": "Composer notice when a project chat's first message is sent before the chat exists in the account"
+  },
+  "spAnswerMoved": {
+    "message": "Moved to $MODEL$",
+    "description": "Receipt under an answer when Auto served it with a different model than the chat's previous answer",
+    "placeholders": {
+      "model": {
+        "content": "$1",
+        "example": "the faster model"
+      }
+    }
+  },
+  "spAnswerMovedBecause": {
+    "message": "Moved to $MODEL$: $REASON$",
+    "description": "Receipt under an answer when Auto moved to another model, with the reason in plain words",
+    "placeholders": {
+      "model": {
+        "content": "$1",
+        "example": "the faster model"
+      },
+      "reason": {
+        "content": "$2",
+        "example": "the model Auto would normally use was having trouble"
+      }
+    }
+  },
+  "spAnswerAutoChose": {
+    "message": "Auto chose this model: $REASON$",
+    "description": "Tooltip on an answer's model label explaining why Auto picked that model",
+    "placeholders": {
+      "reason": {
+        "content": "$1",
+        "example": "the best fit for this kind of request"
+      }
+    }
+  },
+  "spRunLatestOutput": {
+    "message": "Latest output",
+    "description": "Heading of a live cloud run's most recent answer text in the runs panel"
+  },
+  "spRunResult": {
+    "message": "Result",
+    "description": "Heading of a finished cloud run's final answer in the runs panel"
+  },
+  "spRunReport": {
+    "message": "Report",
+    "description": "Heading of a finished research run's report in the runs panel"
+  },
+  "spInstructionsLabel": {
+    "message": "Custom instructions",
+    "description": "Label of the account custom instructions field in the side panel settings"
+  },
+  "spInstructionsPlaceholder": {
+    "message": "What should AGI keep in mind when it answers? For example: answer in British English.",
+    "description": "Placeholder of the custom instructions field"
+  },
+  "spInstructionsEnabled": {
+    "message": "Use these instructions in new chats",
+    "description": "Checkbox that turns the account custom instructions on or off"
+  },
+  "spInstructionsSave": {
+    "message": "Save instructions",
+    "description": "Button that saves the custom instructions to the account"
+  },
+  "spResponseStyleLabel": {
+    "message": "Response style",
+    "description": "Label of the account response style choice"
+  },
+  "spResponseStyleDefault": {
+    "message": "Default",
+    "description": "Response style option that adds no style guidance"
+  },
+  "spResponseStyleConcise": {
+    "message": "Concise",
+    "description": "Response style option for short, direct answers"
+  },
+  "spResponseStyleExplanatory": {
+    "message": "Explanatory",
+    "description": "Response style option for answers that explain their reasoning"
+  },
+  "spResponseStyleFormal": {
+    "message": "Formal",
+    "description": "Response style option for a formal register"
+  },
+  "spResponseLengthLabel": {
+    "message": "Response length",
+    "description": "Label of the account response length choice"
+  },
+  "spResponseLengthDefault": {
+    "message": "Default",
+    "description": "Response length option that adds no length guidance"
+  },
+  "spResponseLengthShorter": {
+    "message": "Shorter",
+    "description": "Response length option for shorter answers"
+  },
+  "spResponseLengthLonger": {
+    "message": "Longer",
+    "description": "Response length option for fuller answers"
+  },
+  "spPersonalizationSaving": {
+    "message": "Saving…",
+    "description": "Status while personalization settings are being saved"
+  },
+  "spPersonalizationSaved": {
+    "message": "Saved to your account. New chats use it on every device.",
+    "description": "Status after personalization settings are saved"
+  },
+  "spPersonalizationSaveFailed": {
+    "message": "Your personalization could not be saved. Try again.",
+    "description": "Status when saving personalization fails without a reason"
+  },
+  "spPersonalizationUnavailable": {
+    "message": "Your personalization could not be loaded.",
+    "description": "Status when the account personalization cannot be read"
+  },
+  "spAccountNameEdit": {
+    "message": "Edit name",
+    "description": "Button in the account area that opens the display name editor"
+  },
+  "spAccountNameLabel": {
+    "message": "Your name",
+    "description": "Accessible name of the display name field"
+  },
+  "spAccountNameSave": {
+    "message": "Save",
+    "description": "Button that saves the edited display name to the account"
+  },
+  "spAccountNameCancel": {
+    "message": "Cancel",
+    "description": "Button that closes the display name editor without saving"
+  },
+  "spAccountNameRequired": {
+    "message": "Enter a name.",
+    "description": "Status when the display name is saved empty"
+  },
+  "spAccountNameSaved": {
+    "message": "Name saved to your account.",
+    "description": "Status after the display name is saved"
+  },
+  "spAccountNameSaveFailed": {
+    "message": "Your name could not be saved. Try again.",
+    "description": "Status when saving the display name fails without a reason"
   }
 }

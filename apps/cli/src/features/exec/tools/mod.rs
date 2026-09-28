@@ -2797,7 +2797,12 @@ decision = "deny"
             .collect();
         assert_eq!(
             read_only_browser_tools,
-            vec!["browser_read_page", "browser_screenshot"]
+            vec![
+                "browser_read_page",
+                "browser_screenshot",
+                "browser_console",
+                "browser_network"
+            ]
         );
         for tool in &read_only_browser_tools {
             assert!(reads_a_private_surface(tool), "{tool} must still ask");

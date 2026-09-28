@@ -55,7 +55,7 @@ export function FileTextPreview({ preview }: { preview: FileTextPreviewData }) {
       className="flex max-h-full w-full max-w-4xl flex-col gap-2 self-start overflow-auto rounded-lg bg-[var(--chat-surface-base)] p-4 text-sm text-[var(--chat-text-primary)]"
     >
       {table ? (
-        <table className="w-full border-collapse text-left text-xs">
+        <table className="w-full border-collapse text-start text-xs">
           <thead>
             <tr>
               {table.columns.map((header, index) => (

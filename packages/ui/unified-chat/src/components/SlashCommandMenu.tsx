@@ -60,7 +60,7 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -8 }}
           transition={{ duration: 0.15 }}
-          className="absolute bottom-full left-0 right-0 mb-2 rounded-xl bg-popover border border-border shadow-e3 overflow-hidden z-[var(--z-dropdown)]"
+          className="absolute bottom-full start-0 end-0 mb-2 rounded-xl bg-popover border border-border shadow-e3 overflow-hidden z-[var(--z-dropdown)]"
           role="listbox"
           aria-label="Slash command suggestions"
         >
@@ -79,7 +79,7 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
                   aria-selected={index === selectedIndex}
                   data-active={index === selectedIndex || undefined}
                   className={cn(
-                    'w-full text-left px-4 py-3 transition-colors border-b border-border/50 last:border-b-0',
+                    'w-full text-start px-4 py-3 transition-colors border-b border-border/50 last:border-b-0',
                     index === selectedIndex ? 'bg-primary/10' : 'hover:bg-accent',
                   )}
                 >
@@ -111,7 +111,7 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
                       )}
                     </div>
                     {suggestion.isSkill && (
-                      <span className="ml-auto shrink-0 rounded-full bg-warning-fill/10 px-1.5 py-0.5 text-caption font-medium text-warning-text">
+                      <span className="ms-auto shrink-0 rounded-full bg-warning-fill/10 px-1.5 py-0.5 text-caption font-medium text-warning-text">
                         skill
                       </span>
                     )}

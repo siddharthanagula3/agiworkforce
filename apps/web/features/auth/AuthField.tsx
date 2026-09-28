@@ -53,7 +53,7 @@ export function AuthField({
           {...input}
           ref={inputRef}
           id={fieldId}
-          className={`${AUTH_INPUT_CLASS}${trailing ? ' pr-14' : ''}`}
+          className={`${AUTH_INPUT_CLASS}${trailing ? ' pe-14' : ''}`}
           aria-invalid={error ? true : undefined}
           aria-describedby={described || undefined}
         />

@@ -262,7 +262,7 @@ function MarkdownDocumentPreview({
                         .getElementById(`artifact-${heading.id}`)
                         ?.scrollIntoView?.({ block: 'start' })
                     }
-                    className="block w-full truncate text-left text-xs text-muted-foreground transition-colors hover:text-primary"
+                    className="block w-full truncate text-start text-xs text-muted-foreground transition-colors hover:text-primary"
                   >
                     {heading.text}
                   </button>
@@ -1407,13 +1407,13 @@ if (__AgiApp) {
           <div className="flex items-center gap-2">
             {pdfError && (
               <Button variant="ghost" size="sm" onClick={handleRefresh}>
-                <RefreshCw className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
+                <RefreshCw className="me-1 h-3.5 w-3.5" aria-hidden="true" />
                 Retry
               </Button>
             )}
             {pdfDownload && (
               <Button variant="outline" size="sm" onClick={pdfDownload}>
-                <Download className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
+                <Download className="me-1 h-3.5 w-3.5" aria-hidden="true" />
                 Download
               </Button>
             )}
@@ -1561,7 +1561,7 @@ if (__AgiApp) {
                 Navigation remains disabled until real edit history exists. */}
             {versionCount > 0 && (
               <div
-                className="ml-0.5 flex shrink-0 items-center gap-0.5 rounded-md border border-border/40 bg-muted/40 px-0.5"
+                className="ms-0.5 flex shrink-0 items-center gap-0.5 rounded-md border border-border/40 bg-muted/40 px-0.5"
                 data-testid="artifact-version-chip"
               >
                 <button
@@ -1656,7 +1656,7 @@ if (__AgiApp) {
                   data-testid="artifact-edit-source"
                 >
                   <Pencil className="h-3.5 w-3.5" />
-                  <span className="ml-1 hidden text-xs @[30rem]:inline">Edit</span>
+                  <span className="ms-1 hidden text-xs @[30rem]:inline">Edit</span>
                 </Button>
               ) : (
                 <>
@@ -1670,7 +1670,7 @@ if (__AgiApp) {
                     data-testid="artifact-save-source"
                   >
                     <Check className="h-3.5 w-3.5" />
-                    <span className="ml-1 hidden text-xs @[30rem]:inline">Save</span>
+                    <span className="ms-1 hidden text-xs @[30rem]:inline">Save</span>
                   </Button>
                   {draftStatus ? (
                     <span className="text-xs text-muted-foreground" role="status">
@@ -1687,7 +1687,7 @@ if (__AgiApp) {
                     data-testid="artifact-cancel-source-edit"
                   >
                     <X className="h-3.5 w-3.5" />
-                    <span className="ml-1 hidden text-xs @[30rem]:inline">Cancel</span>
+                    <span className="ms-1 hidden text-xs @[30rem]:inline">Cancel</span>
                   </Button>
                 </>
               ))}
@@ -1704,7 +1704,7 @@ if (__AgiApp) {
                 data-testid="artifact-show-changes"
               >
                 <FileDiff className="h-3.5 w-3.5" aria-hidden="true" />
-                <span className="ml-1 hidden text-xs @[30rem]:inline">Show changes</span>
+                <span className="ms-1 hidden text-xs @[30rem]:inline">Show changes</span>
               </Button>
             )}
 
@@ -1721,12 +1721,12 @@ if (__AgiApp) {
                 {copied ? (
                   <>
                     <Check className="h-3.5 w-3.5 text-success-text" />
-                    <span className="ml-1 hidden text-xs @[30rem]:inline">Copied</span>
+                    <span className="ms-1 hidden text-xs @[30rem]:inline">Copied</span>
                   </>
                 ) : (
                   <>
                     <Copy className="h-3.5 w-3.5" />
-                    <span className="ml-1 hidden text-xs @[30rem]:inline">Copy</span>
+                    <span className="ms-1 hidden text-xs @[30rem]:inline">Copy</span>
                   </>
                 )}
               </Button>
@@ -1827,7 +1827,7 @@ if (__AgiApp) {
                 data-testid="artifact-fork"
               >
                 <GitFork className="h-3.5 w-3.5" aria-hidden="true" />
-                <span className="ml-1 hidden text-xs @[30rem]:inline">Duplicate</span>
+                <span className="ms-1 hidden text-xs @[30rem]:inline">Duplicate</span>
               </Button>
             )}
 
@@ -1852,7 +1852,7 @@ if (__AgiApp) {
                 data-testid="artifact-start-work"
               >
                 <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
-                <span className="ml-1 hidden text-xs @[30rem]:inline">Start Work</span>
+                <span className="ms-1 hidden text-xs @[30rem]:inline">Start Work</span>
               </Button>
             )}
 
@@ -1873,7 +1873,7 @@ if (__AgiApp) {
                     data-testid="artifact-save-to-project"
                   >
                     <FolderPlus className="h-3.5 w-3.5" aria-hidden="true" />
-                    <span className="ml-1 hidden text-xs @[30rem]:inline">
+                    <span className="ms-1 hidden text-xs @[30rem]:inline">
                       {savingProjectId ? 'Saving…' : 'Save to project'}
                     </span>
                   </Button>
@@ -1903,7 +1903,7 @@ if (__AgiApp) {
                 data-testid="artifact-save-to-library"
               >
                 <Library className="h-3.5 w-3.5" aria-hidden="true" />
-                <span className="ml-1 hidden text-xs @[30rem]:inline">
+                <span className="ms-1 hidden text-xs @[30rem]:inline">
                   {savingToLibrary ? 'Saving…' : 'Save to Library'}
                 </span>
               </Button>
@@ -1924,7 +1924,7 @@ if (__AgiApp) {
                 title="Publish"
               >
                 <Globe className="h-3.5 w-3.5" aria-hidden="true" />
-                <span className="ml-1 hidden text-xs @[30rem]:inline">
+                <span className="ms-1 hidden text-xs @[30rem]:inline">
                   {isPublishing ? 'Publishing…' : 'Publish'}
                 </span>
               </Button>
@@ -2160,11 +2160,11 @@ if (__AgiApp) {
                 </div>
                 <div className="flex items-center gap-2">
                   <Button variant="outline" size="sm" onClick={() => setActiveTab('code')}>
-                    <Code className="mr-1 h-3.5 w-3.5" />
+                    <Code className="me-1 h-3.5 w-3.5" />
                     View source
                   </Button>
                   <Button variant="ghost" size="sm" onClick={handleRefresh}>
-                    <RefreshCw className="mr-1 h-3.5 w-3.5" />
+                    <RefreshCw className="me-1 h-3.5 w-3.5" />
                     Retry
                   </Button>
                 </div>
@@ -2324,12 +2324,12 @@ if (__AgiApp) {
               {copied ? (
                 <>
                   <Check className="h-3.5 w-3.5 text-success-text" />
-                  <span className="ml-1 hidden text-xs @[30rem]:inline">Copied</span>
+                  <span className="ms-1 hidden text-xs @[30rem]:inline">Copied</span>
                 </>
               ) : (
                 <>
                   <Copy className="h-3.5 w-3.5" />
-                  <span className="ml-1 hidden text-xs @[30rem]:inline">Copy</span>
+                  <span className="ms-1 hidden text-xs @[30rem]:inline">Copy</span>
                 </>
               )}
             </Button>
@@ -2519,11 +2519,11 @@ if (__AgiApp) {
                   </div>
                   <div className="flex items-center gap-2">
                     <Button variant="outline" size="sm" onClick={() => setActiveTab('code')}>
-                      <Code className="mr-1 h-3.5 w-3.5" />
+                      <Code className="me-1 h-3.5 w-3.5" />
                       View source
                     </Button>
                     <Button variant="ghost" size="sm" onClick={handleRefresh}>
-                      <RefreshCw className="mr-1 h-3.5 w-3.5" />
+                      <RefreshCw className="me-1 h-3.5 w-3.5" />
                       Retry
                     </Button>
                   </div>
