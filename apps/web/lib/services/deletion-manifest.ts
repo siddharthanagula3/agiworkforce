@@ -291,6 +291,19 @@ const NON_TABLE_STORES: readonly RetentionEntry[] = [
     retainedReason: null,
   },
   {
+    store: 'data export archive objects',
+    kind: 'object_store',
+    dataClass: 'customer_content',
+    erasedWithSubject: true,
+    erasedWithTenant: false,
+    cascadesFrom: null,
+    maximumAgeDays: null,
+    deletionPath:
+      'lib/server/account-erasure.ts eraseUserAccountData export sweep, and ' +
+      'lib/server/data-export-archive.ts expireDataExportArchive 24 hours after the export is ready',
+    retainedReason: null,
+  },
+  {
     store: 'avatar objects',
     kind: 'object_store',
     dataClass: 'customer_content',
@@ -558,6 +571,7 @@ export function accountErasureProgress(
       report.mediaObjectsFailed +
       report.backupObjectsFailed +
       report.knowledgeObjectsFailed +
+      report.exportObjectsFailed +
       report.avatarObjectsFailed +
       report.cacheKeysFailed,
   };
