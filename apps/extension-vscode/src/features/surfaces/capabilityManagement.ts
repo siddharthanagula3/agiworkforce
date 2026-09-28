@@ -123,14 +123,25 @@ export function managePlugins(adapter: CliCapabilityAdapter): Promise<void> {
       placeholder: 'Pick a plugin to turn it on or off',
       empty: 'No plugins are installed. Install one with agi plugin install.',
       load: async () => {
-        const result = await adapter.call<PluginListResponse>('plugins');
+        const [result, skills] = await Promise.all([
+          adapter.call<PluginListResponse>('plugins'),
+          adapter.call<SkillListResponse>('skills'),
+        ]);
         if (result.status !== 'ok') return result;
+        const pluginSkills = skills.status === 'ok' ? skills.value.skills : [];
+        const includedSkills = (pluginPath: string): string[] =>
+          pluginSkills
+            .filter((skill) => skill.scope === 'plugin' && skill.path.startsWith(pluginPath))
+            .map((skill) => skill.name);
         return {
           status: 'ok',
           value: result.value.plugins.map((plugin) => ({
             label: toggleLabel(plugin.name, plugin.enabled),
             description: [plugin.version, plugin.source].filter(Boolean).join(', '),
-            detail: plugin.path,
+            detail:
+              includedSkills(plugin.path).length === 0
+                ? plugin.path
+                : `Skills: ${includedSkills(plugin.path).join(', ')}`,
             run: () => adapter.call('pluginsSetEnabled', plugin.id, !plugin.enabled),
           })),
         };

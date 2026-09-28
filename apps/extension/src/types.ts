@@ -7,6 +7,7 @@ import type {
 } from '@agiworkforce/cloud-contracts';
 import type { ManagedCloudOwner } from './features/cloud-bridge/managedCloudAuthority';
 import type {
+  ManagedChatSourcesDelta,
   ManagedQuotaBlock,
   ManagedQuotaWarningSignal,
 } from './features/cloud-bridge/freeTrialClient';
@@ -558,6 +559,7 @@ export interface ChatChunkMessage {
   routing?: ChromeManagedRoutingMetadata;
   generatedFiles?: GeneratedFileWire[];
   interactiveCard?: InteractiveCard;
+  sources?: ManagedChatSourcesDelta;
 }
 
 export interface ChatMessageResponse {

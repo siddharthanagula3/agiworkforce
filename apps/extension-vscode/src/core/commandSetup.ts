@@ -1114,7 +1114,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         title: 'AGI Workforce, Set API Key',
         prompt:
           'Enter your AGI Workforce API key. It will be stored in VS Code SecretStorage (encrypted).',
-        placeHolder: placeholder !== '' ? placeholder : 'sk-agi-…',
+        placeHolder: placeholder !== '' ? placeholder : 'sk_live_…',
         password: true,
         ignoreFocusOut: true,
         validateInput: (value) => {
@@ -2131,7 +2131,8 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         | 'connectors'
         | 'teams'
         | 'permission-docs'
-        | 'privacy-settings';
+        | 'privacy-settings'
+        | 'edit-profile';
       type AccountItem = vscode.QuickPickItem & { action?: AccountAction };
       const items: AccountItem[] = buildAccountIdentityItems(
         accountToken !== undefined,
@@ -2258,6 +2259,11 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
             : 'Browser-approved device session',
         });
         items.push({
+          label: '$(person) Edit your profile on Web',
+          description: 'Name, photo and email',
+          action: 'edit-profile',
+        });
+        items.push({
           label: '$(sign-out) Sign out of AGI Cloud',
           description: 'Remove this editor session',
           action: 'sign-out',
@@ -2364,6 +2370,10 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       } else if (pick?.action === 'permission-docs') {
         await vscode.env.openExternal(
           vscode.Uri.parse('https://agiworkforce.com/docs?topic=permissions&from=vscode-extension'),
+        );
+      } else if (pick?.action === 'edit-profile') {
+        await vscode.env.openExternal(
+          vscode.Uri.parse(`${getCloudWebOrigin()}/settings/profile?from=vscode-extension`),
         );
       } else if (pick?.action === 'privacy-settings') {
         await vscode.env.openExternal(

@@ -18,7 +18,7 @@ export function tokenCeilingLabel(tokens: number | null): string {
 export function accessLabel(entry: ModelCatalogueEntry, planLabel: string): string {
   if (entry.eventAccess) return 'Free during event';
   if (entry.admitted) return planLabel ? `Included in ${planLabel}` : 'Included in your plan';
-  return entry.minimumPlanLabel ? `${entry.minimumPlanLabel} and above` : 'Not available';
+  return entry.minimumPlanLabel ? `Upgrade to use · ${entry.minimumPlanLabel}` : 'Not available';
 }
 
 function environmentLock(entry: ModelCatalogueEntry): { selectable: boolean; reason?: string } {
@@ -50,6 +50,12 @@ export function retirementLabel(entry: ModelCatalogueEntry, now: Date = new Date
     timeZone: 'UTC',
   });
   return date.getTime() <= now.getTime() ? `Retired ${formatted}` : `Retiring ${formatted}`;
+}
+
+export function upgradePlanFor(entry: ModelCatalogueEntry): string | null {
+  if (entry.admitted || !entry.minimumPlan) return null;
+  if (entry.temporarilyUnavailable || entry.availability !== 'live') return null;
+  return environmentLock(entry).selectable ? entry.minimumPlan : null;
 }
 
 export function isSelectable(entry: ModelCatalogueEntry): boolean {

@@ -19,7 +19,7 @@ describe('the chat header title', () => {
         onDelete={vi.fn()}
       />,
     );
-    const text = screen.getByText(LONG_TITLE);
+    const text = screen.getByText(LONG_TITLE, { selector: 'span' });
     const trigger = text.closest('button');
     const slot = trigger?.parentElement ?? null;
 
