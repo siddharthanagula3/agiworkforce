@@ -1,4 +1,5 @@
 import type {
+  DeveloperAgentMode,
   DeveloperMessage,
   DeveloperSessionSource,
   DeveloperSessionTrustMode,
@@ -146,6 +147,7 @@ export interface DeveloperRuntimeModels {
   models: DeveloperModelOption[];
   hostModels: DeveloperHostModel[];
   defaultModelId: string | null;
+  defaultAgentMode: DeveloperAgentMode | null;
   managedSignedIn: boolean;
 }
 
@@ -255,6 +257,7 @@ export interface DeveloperTurnRequest {
   threadId: string;
   text: string;
   model?: string;
+  agentMode?: DeveloperAgentMode;
 }
 
 export interface DeveloperApprovalAnswer {

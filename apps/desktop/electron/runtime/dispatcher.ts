@@ -32,6 +32,8 @@ import {
   type DeviceKeyModifier,
   type DeviceMouseButton,
   type DeviceStepRegion,
+  type DeveloperAgentMode,
+  normalizeDeveloperAgentMode,
 } from '@agiworkforce/local-runtime-contract';
 import { isBrowserCommand } from '@agiworkforce/types';
 import {
@@ -176,6 +178,15 @@ function optionalString(args: Args, key: string, fallback: string): string {
     throw new InvalidArguments(`"${key}" must be a string.`);
   }
   return value;
+}
+
+function rendererAgentMode(raw: string): DeveloperAgentMode | null {
+  if (raw === '') return null;
+  const mode = normalizeDeveloperAgentMode(raw);
+  if (mode === null || mode === 'bypass') {
+    throw new InvalidArguments('"agentMode" must be plan, ask or auto.');
+  }
+  return mode;
 }
 
 function requireNumber(args: Args, key: string): number {
@@ -897,11 +908,13 @@ async function execute(
     }
     case 'developer_turn_start': {
       const model = optionalString(args, 'model', '');
+      const agentMode = rendererAgentMode(optionalString(args, 'agentMode', ''));
       return startDeveloperTurn({
         rootId: requireString(args, 'rootId'),
         threadId: requireString(args, 'threadId'),
         text: requireString(args, 'text'),
         ...(model === '' ? {} : { model }),
+        ...(agentMode ? { agentMode } : {}),
       });
     }
     case 'developer_turn_interrupt':

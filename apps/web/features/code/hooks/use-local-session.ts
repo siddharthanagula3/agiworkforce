@@ -1,7 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { LocalDeveloperSession } from '@agiworkforce/local-runtime-contract';
+import type {
+  DeveloperAgentMode,
+  LocalDeveloperSession,
+} from '@agiworkforce/local-runtime-contract';
 import type { DeveloperMessage } from '@agiworkforce/types/protocol';
 import {
   answerDeveloperApproval,
@@ -34,7 +37,7 @@ export interface LocalSessionState {
   sending: boolean;
   stopping: boolean;
   error: string | null;
-  send: (text: string, model?: string) => Promise<void>;
+  send: (text: string, model?: string, agentMode?: DeveloperAgentMode) => Promise<void>;
   stop: () => Promise<void>;
   decideApproval: (approved: boolean) => Promise<void>;
 }
@@ -221,7 +224,7 @@ export function useLocalSession(session: LocalDeveloperSession | null): LocalSes
   }, [rootId, threadId, load]);
 
   const send = useCallback(
-    async (text: string, model?: string) => {
+    async (text: string, model?: string, agentMode?: DeveloperAgentMode) => {
       if (!rootId || !threadId || text.trim() === '') return;
       setSending(true);
       setError(null);
@@ -232,6 +235,7 @@ export function useLocalSession(session: LocalDeveloperSession | null): LocalSes
           threadId,
           text,
           ...(model ? { model } : {}),
+          ...(agentMode ? { agentMode } : {}),
         });
         setTurn((current) => ({ ...current, turnId }));
       } catch (cause: unknown) {

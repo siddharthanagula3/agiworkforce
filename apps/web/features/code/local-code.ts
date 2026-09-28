@@ -2,6 +2,7 @@ import {
   DEVELOPER_FILE_CHANGE_LABELS,
   DEVELOPER_SESSION_ORIGIN_LABELS,
   DEVELOPER_SESSION_TRUST_LABELS,
+  type DeveloperAgentMode,
   type DeveloperFileChange,
   type DeveloperRuntimeModels,
   type DeveloperSessionGroup,
@@ -9,7 +10,7 @@ import {
   type DeveloperTurnOutcome,
   type LocalDeveloperSession,
 } from '@agiworkforce/local-runtime-contract';
-import type { DeveloperMessage } from '@agiworkforce/types/protocol';
+import type { DeveloperMessage, ThreadStatus } from '@agiworkforce/types/protocol';
 import {
   providerLabels,
   type CloudCodeAgentStep,
@@ -58,7 +59,36 @@ export const LOCAL_CODE_COPY = {
     `${model} cannot run on this machine yet: ${provider} needs a sign-in first.`,
   readFailed: 'That session could not be opened.',
   turnFailed: 'That message could not be sent.',
+  modeMenu: 'Permissions',
+  modeControl: 'Permission mode',
+  sessionRunning: 'Running',
 } as const;
+
+const LOCAL_SESSION_STATUS_LABELS: Partial<Record<ThreadStatus, string>> = {
+  awaiting_approval: 'Needs approval',
+  failed: 'Failed',
+};
+
+export function localSessionStatusLabel(status: ThreadStatus): string | null {
+  return LOCAL_SESSION_STATUS_LABELS[status] ?? null;
+}
+
+export const LOCAL_AGENT_MODES = [
+  'plan',
+  'ask',
+  'auto',
+] as const satisfies readonly DeveloperAgentMode[];
+export type LocalAgentMode = (typeof LOCAL_AGENT_MODES)[number];
+
+export const LOCAL_AGENT_MODE_HINTS: Record<LocalAgentMode, string> = {
+  plan: 'Reads the code and proposes a plan. Changes nothing.',
+  ask: 'Asks before every edit and command.',
+  auto: 'Edits files and runs safe commands on its own. Other commands still ask.',
+};
+
+export function localAgentMode(mode: DeveloperAgentMode | null | undefined): LocalAgentMode {
+  return mode === 'plan' || mode === 'auto' ? mode : 'ask';
+}
 
 /**
  * A model as the catalog names it. A model the catalog does not carry, which is
