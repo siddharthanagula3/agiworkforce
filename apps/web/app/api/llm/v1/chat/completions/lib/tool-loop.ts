@@ -925,12 +925,16 @@ function egressApprovalSummary(
 ): string {
   if (isUrlFetchTool(toolName)) {
     const host = urlHostOf(args);
-    return `Could send data from this chat to ${host ?? 'a website'}`;
+    return `Could send private data from this chat to ${host ?? 'a website'}`;
   }
-  if (isWebSearchTool(toolName)) return 'Could send data from this chat in a web search';
-  if (toolName === EXECUTE_CODE_TOOL) return 'Could send data from this chat out of the sandbox';
+  if (isWebSearchTool(toolName)) {
+    return 'Could send private data from this chat to a search engine';
+  }
+  if (toolName === EXECUTE_CODE_TOOL) {
+    return 'Could send private data from this chat out of the sandbox';
+  }
   const server = serverLabel ?? mcpServerLabel(toolName);
-  return `Could send data from this chat to ${server ?? 'an outside service'}`;
+  return `Could send private data from this chat to ${server ?? 'an outside service'}`;
 }
 
 function offeredServerLabel(toolName: string, offeredTools: WebMcpToolDef[]): string | undefined {
