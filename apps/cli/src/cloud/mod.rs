@@ -424,6 +424,7 @@ pub async fn refresh_memory(privacy: PrivacyMode) -> Result<memory::MemoryCache,
     let response = sync.pull_all(&session.state.memories.cursor).await?;
     let mut cache = load_memory_cache(&session.config_dir);
     cache.apply(&response.memories);
+    cache.account_memory_off = response.memory_enabled == Some(false);
     memory::apply_pull_response(&response, &mut session.state);
     if let Err(error) = save_memory_cache(&session.config_dir, &cache) {
         crate::output::print_warn(&format!("could not cache the account memory: {error}"));
@@ -644,7 +645,11 @@ pub fn account_memory_context(privacy: PrivacyMode, config_dir: &Path) -> String
     if privacy != PrivacyMode::Managed {
         return String::new();
     }
-    load_memory_cache(config_dir).context_prompt()
+    let cache = load_memory_cache(config_dir);
+    if cache.account_memory_off {
+        return String::new();
+    }
+    cache.context_prompt()
 }
 
 pub fn project_instructions_context(
