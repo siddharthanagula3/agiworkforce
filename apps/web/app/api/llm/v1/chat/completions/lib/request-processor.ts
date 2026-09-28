@@ -4176,10 +4176,16 @@ export async function processRequest(
   const researchPlanRefusal = getResearchPlanRefusal(chatRequest.research, subscription.plan_tier);
   if (researchPlanRefusal) return researchPlanRefusal;
   let cloudExecutionSwitchedOff = false;
+  let imagesSwitchedOff = false;
+  const webSearchAsked = chatRequest.web_search === true || chatRequest.web_fetch === true;
+  const imageCardsAsked =
+    chatRequest.x_interactive_cards?.supported.includes(IMAGE_CARD_KIND) === true;
   if (
     chatRequest.research === true ||
     chatRequest.work_mode === 'agiwork' ||
-    chatRequest.code_execution === true
+    chatRequest.code_execution === true ||
+    webSearchAsked ||
+    imageCardsAsked
   ) {
     const { organizationId: gatedWorkspaceId } = await scopedDbPromise;
     const gatedSubject = buildFlagSubject(request, {
@@ -4195,15 +4201,21 @@ export async function processRequest(
     if (chatRequest.research === true) {
       await assertCapabilityAvailable(gatedSubject, 'canUseDeepResearch', 'Deep Research');
     }
-    if (chatRequest.code_execution === true) {
-      const gate = await readKillSwitchGate(gatedSubject).catch((gateError: unknown) => {
-        logger.error(
-          { error: gateError, userId },
-          'Kill-switch gate unreadable; code execution is offered as shipped',
-        );
-        return null;
-      });
-      cloudExecutionSwitchedOff = gate?.capabilityAllowed('canUseCloudExecution') === false;
+    if (webSearchRequestedByCaller && chatRequest.work_mode !== 'agiwork') {
+      await assertCapabilityAvailable(gatedSubject, 'canUseWebSearch', 'Web search');
+    }
+    const gate = await readKillSwitchGate(gatedSubject).catch((gateError: unknown) => {
+      logger.error(
+        { error: gateError, userId },
+        'Kill-switch gate unreadable; turn tools are offered as shipped',
+      );
+      return null;
+    });
+    cloudExecutionSwitchedOff = gate?.capabilityAllowed('canUseCloudExecution') === false;
+    imagesSwitchedOff = gate?.capabilityAllowed('canUseImages') === false;
+    if (webSearchAsked && gate?.capabilityAllowed('canUseWebSearch') === false) {
+      chatRequest.web_search = false;
+      chatRequest.web_fetch = false;
     }
   }
   const researchMode = researchModeAllowed(
@@ -5178,11 +5190,13 @@ export async function processRequest(
     resolvedTools = [...(resolvedTools ?? []), productComparisonToolDefinition()];
   }
 
-  const imageTools = imageToolsForTurn(chatRequest, {
-    surface: chatSurface,
-    toolsCapable: resolvedModelCaps?.tools ?? true,
-    planTier: subscription.plan_tier,
-  });
+  const imageTools = imagesSwitchedOff
+    ? []
+    : imageToolsForTurn(chatRequest, {
+        surface: chatSurface,
+        toolsCapable: resolvedModelCaps?.tools ?? true,
+        planTier: subscription.plan_tier,
+      });
   if (imageTools.length > 0) {
     resolvedTools = [...(resolvedTools ?? []), ...imageTools];
   }
