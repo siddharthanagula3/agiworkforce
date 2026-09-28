@@ -99,16 +99,15 @@ Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:773-781`, `cr
 
 - Done when: From the new-chat screen the user can explicitly start a web search for the next message.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | The Search the web chip now sends search_requested with web_search, the flag the web's /search sends, so the next message requests a search; in post-codex/chat-gates-s12.10-mobile-requested-search.patch (TaskChips and the store are held). | ui |
-| cli | partial | No explicit search entry (for example /search): web_search is only a tool the model may choose, and it works only when the user sets their own SEARCH_API_KEY (or BRAVE_SEARCH_API_KEY) environment variable. | ui |
-| vscode | partial | partials/desktop-cli baeaa70f5a: account/status reports webSearchKey and webSearchLogins; VS Code offers Set up web search from them (p-sessions). | ui |
+| vscode | partial | The app-server lists /search as a prompt command and runs it from turn text (e9fd089e09); VS Code has to offer it and Set up web search from webSearchKey (p-sessions) | handler |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:531-531`, `apps/cli/src/features/exec/tools/web/mod.rs:284-292`, `apps/cli/src/features/exec/tools/mod.rs:565-567`, `apps/cli/src/app_server/developer_host.rs:120-120`
+Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:531-531`, `apps/cli/src/app_server/surfaces.rs:510-510`, `apps/cli/src/app_server/developer_host.rs:2548-2548`
 
 ## S12.11: Research entry.
 
