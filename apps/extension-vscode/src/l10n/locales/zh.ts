@@ -412,6 +412,16 @@ const zh = {
   'chatError.comparePlans': '比较方案',
   'chatError.seeUsage': '查看用量',
   'chatError.seeOptions': '查看选项',
+  'webview.mcpAuthRequired': '{server} 需要你重新登录。AGI 在这一步无法使用它。',
+  'webview.mcpReconnect': '登录并继续',
+  'webview.mcpReconnecting': '正在登录…',
+  'webview.mcpReconnected': '已登录 {server}，AGI 正在继续。',
+  'mcpReconnect.progress': 'AGI Workforce：正在登录 {server}',
+  'mcpReconnect.notFinished':
+    'AGI Workforce：{server} 登录未完成，因此 AGI 没有继续。准备好后请再试一次。',
+  'mcpReconnect.failed': 'AGI Workforce：登录 {server} 失败：{reason}',
+  'mcpReconnect.noSession': 'AGI Workforce：登录 {server} 后，这里没有可继续的会话。',
+  'mcpReconnect.continue': '继续',
 };
 
 export default zh;

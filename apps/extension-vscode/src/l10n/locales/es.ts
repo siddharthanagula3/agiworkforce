@@ -635,6 +635,18 @@ const es = {
   'chatError.comparePlans': 'Comparar planes',
   'chatError.seeUsage': 'Ver su uso',
   'chatError.seeOptions': 'Ver sus opciones',
+  'webview.mcpAuthRequired':
+    '{server} necesita que vuelva a iniciar sesión. AGI no pudo usarlo en este paso.',
+  'webview.mcpReconnect': 'Iniciar sesión y continuar',
+  'webview.mcpReconnecting': 'Iniciando sesión…',
+  'webview.mcpReconnected': 'Sesión iniciada en {server}. AGI continúa.',
+  'mcpReconnect.progress': 'AGI Workforce: iniciando sesión en {server}',
+  'mcpReconnect.notFinished':
+    'AGI Workforce: el inicio de sesión en {server} no terminó, así que AGI no ha continuado. Vuelva a intentarlo cuando quiera.',
+  'mcpReconnect.failed': 'AGI Workforce: no se pudo iniciar sesión en {server}: {reason}',
+  'mcpReconnect.noSession':
+    'AGI Workforce: aquí no hay ninguna sesión que continuar después de iniciar sesión en {server}.',
+  'mcpReconnect.continue': 'continúa',
 };
 
 export default es;

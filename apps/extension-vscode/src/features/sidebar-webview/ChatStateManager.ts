@@ -53,6 +53,7 @@ import {
   cliAcquisitionHint,
   CLI_NOT_FOUND_MARKER,
   LocalRuntimeProtocolError,
+  readMcpAuthRequired,
   writerConflictHolder,
   type LocalRuntimeClient,
   type LocalRuntimeEvent,
@@ -246,6 +247,7 @@ export type WebviewToExtMessage =
   | { type: 'ready' }
   | { type: 'viewFocused' }
   | { type: 'setUpWebSearch' }
+  | { type: 'reconnectMcpServer'; payload: { server: string } }
   | { type: 'getModel' }
   | { type: 'openSettings' }
   | { type: 'openWorkspace' }
@@ -371,6 +373,8 @@ export type ExtToWebviewMessage =
   | { type: 'activeProject'; payload: { name: string | null } }
   | { type: 'startSuggestions'; payload: StartSuggestions }
   | { type: 'webSearchSetup'; payload: { needsKey: boolean } }
+  | { type: 'mcpAuthRequired'; payload: { server: string } }
+  | { type: 'mcpReconnected'; payload: { server: string; ok: boolean } }
   | {
       type: 'webSearchGate';
       payload: { denied: false } | { denied: true; title: string; message: string };
@@ -974,6 +978,11 @@ export class ChatStateManager {
 
       case 'setUpWebSearch': {
         await this._setUpWebSearch();
+        break;
+      }
+
+      case 'reconnectMcpServer': {
+        await this._reconnectMcpServer(msg.payload.server);
         break;
       }
 
@@ -1812,6 +1821,41 @@ export class ChatStateManager {
     const active =
       this._workspaceState === undefined ? undefined : getActiveCloudProject(this._workspaceState);
     this._post({ type: 'activeProject', payload: { name: active?.name ?? null } });
+  }
+
+  private async _reconnectMcpServer(server: string): Promise<void> {
+    const runtime = this._thread?.runtime;
+    if (runtime === undefined) {
+      this._post({ type: 'mcpReconnected', payload: { server, ok: false } });
+      void vscode.window.showWarningMessage(t('mcpReconnect.noSession', { server }));
+      return;
+    }
+    let authorized = false;
+    try {
+      const login = await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: t('mcpReconnect.progress', { server }),
+        },
+        () => runtime.loginMcpServer(server),
+      );
+      authorized = login.status === 'authorized';
+      if (!authorized) {
+        void vscode.window.showWarningMessage(t('mcpReconnect.notFinished', { server }));
+      }
+    } catch (error) {
+      void vscode.window.showErrorMessage(
+        t('mcpReconnect.failed', {
+          server,
+          reason: error instanceof Error ? error.message : String(error),
+        }),
+      );
+    }
+    this._post({ type: 'mcpReconnected', payload: { server, ok: authorized } });
+    if (!authorized) return;
+    const text = t('mcpReconnect.continue');
+    this._post({ type: 'addUserMessage', payload: { text } });
+    await this._handleSendMessage(text);
   }
 
   public async pushWebSearchSetup(): Promise<void> {
@@ -3273,7 +3317,14 @@ export class ChatStateManager {
         });
       };
       let reloadedFromDisk = false;
-      const reloadSubscription = runtime.onNotification((notification) => {
+      const notificationSubscription = runtime.onNotification((notification) => {
+        if (notification.method === 'mcp/authRequired') {
+          const required = readMcpAuthRequired(notification.params);
+          if (required?.threadId === thread.id) {
+            this._post({ type: 'mcpAuthRequired', payload: { server: required.server } });
+          }
+          return;
+        }
         if (notification.method !== 'thread/reloaded') return;
         const params = notification.params as { threadId?: unknown } | undefined;
         if (params?.threadId === thread.id) reloadedFromDisk = true;
@@ -3432,7 +3483,7 @@ export class ChatStateManager {
           await this._refreshLoadedConversation(runtime, thread.id, reloadedFromDisk, request.text);
         }
       } finally {
-        reloadSubscription.dispose();
+        notificationSubscription.dispose();
         eventSubscription.dispose();
         if (this._activeTurn?.turnId === activeTurnId) delete this._activeTurn;
       }

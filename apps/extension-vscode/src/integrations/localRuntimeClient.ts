@@ -546,6 +546,21 @@ const pluginListResponseSchema = z.object({
     )
     .max(2_000),
 });
+const mcpAuthRequiredSchema = z.object({
+  threadId: z.string().min(1).max(200),
+  turnId: z.string().min(1).max(200),
+  toolCallId: z.string().min(1).max(200),
+  server: z.string().min(1).max(200),
+  scope: z.string().max(2_000).optional(),
+});
+
+export type McpAuthRequired = z.infer<typeof mcpAuthRequiredSchema>;
+
+export function readMcpAuthRequired(params: unknown): McpAuthRequired | undefined {
+  const parsed = mcpAuthRequiredSchema.safeParse(params);
+  return parsed.success ? parsed.data : undefined;
+}
+
 const pluginUpdateResponseSchema = pluginListResponseSchema.extend({
   id: z.string().min(1).max(200),
   updated: z.boolean(),

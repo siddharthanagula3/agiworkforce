@@ -520,6 +520,18 @@ const en = {
   'chatError.comparePlans': 'Compare plans',
   'chatError.seeUsage': 'See your usage',
   'chatError.seeOptions': 'See your options',
+  'webview.mcpAuthRequired':
+    '{server} needs you to sign in again. AGI could not use it for this step.',
+  'webview.mcpReconnect': 'Sign in and continue',
+  'webview.mcpReconnecting': 'Signing in…',
+  'webview.mcpReconnected': 'Signed in to {server}. AGI is continuing.',
+  'mcpReconnect.progress': 'AGI Workforce: signing in to {server}',
+  'mcpReconnect.notFinished':
+    'AGI Workforce: signing in to {server} did not finish, so AGI has not continued. Try again when you are ready.',
+  'mcpReconnect.failed': 'AGI Workforce: signing in to {server} failed: {reason}',
+  'mcpReconnect.noSession':
+    'AGI Workforce: there is no session here to continue after signing in to {server}.',
+  'mcpReconnect.continue': 'continue',
 };
 
 export default en;

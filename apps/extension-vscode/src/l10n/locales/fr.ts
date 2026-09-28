@@ -648,6 +648,18 @@ const fr = {
   'chatError.comparePlans': 'Comparer les forfaits',
   'chatError.seeUsage': 'Voir votre utilisation',
   'chatError.seeOptions': 'Voir vos options',
+  'webview.mcpAuthRequired':
+    "{server} vous demande de vous reconnecter. AGI n'a pas pu l'utiliser pour cette étape.",
+  'webview.mcpReconnect': 'Se reconnecter et continuer',
+  'webview.mcpReconnecting': 'Connexion…',
+  'webview.mcpReconnected': 'Connecté à {server}. AGI continue.',
+  'mcpReconnect.progress': 'AGI Workforce : connexion à {server}',
+  'mcpReconnect.notFinished':
+    "AGI Workforce : la connexion à {server} n'a pas abouti, AGI n'a donc pas continué. Réessayez quand vous êtes prêt.",
+  'mcpReconnect.failed': 'AGI Workforce : la connexion à {server} a échoué : {reason}',
+  'mcpReconnect.noSession':
+    'AGI Workforce : aucune session ici à poursuivre après la connexion à {server}.',
+  'mcpReconnect.continue': 'continue',
 };
 
 export default fr;

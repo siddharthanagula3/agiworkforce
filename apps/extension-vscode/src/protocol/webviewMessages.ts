@@ -39,6 +39,10 @@ const sendMessage = z.object({
 const ready = z.object({ type: z.literal('ready') });
 const viewFocused = z.object({ type: z.literal('viewFocused') });
 const setUpWebSearch = z.object({ type: z.literal('setUpWebSearch') });
+const reconnectMcpServer = z.object({
+  type: z.literal('reconnectMcpServer'),
+  payload: z.object({ server: z.string().min(1).max(200) }),
+});
 const getModel = z.object({ type: z.literal('getModel') });
 const openSettings = z.object({ type: z.literal('openSettings') });
 const openWorkspace = z.object({ type: z.literal('openWorkspace') });
@@ -273,6 +277,7 @@ export const WebviewToExtSchema = z.discriminatedUnion('type', [
   ready,
   viewFocused,
   setUpWebSearch,
+  reconnectMcpServer,
   getModel,
   openSettings,
   openWorkspace,
