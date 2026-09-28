@@ -8,7 +8,8 @@
   "types": "./generated/registry.ts",
   "exports": {
     ".": "./generated/registry.ts",
-    "./registry.json": "./generated/registry.json"
+    "./registry.json": "./generated/registry.json",
+    "./routing-policies.json": "./catalog/routing-policies.json"
   },
   "scripts": {
     "generate": "node scripts/compile.mjs",

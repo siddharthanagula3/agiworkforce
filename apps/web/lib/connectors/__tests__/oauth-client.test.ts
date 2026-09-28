@@ -25,7 +25,6 @@ const PROVIDER: ConnectorOAuthProvider = {
   mcpUrl: 'https://mcp.example.com/mcp',
   transport: 'streamable-http',
   scopes: ['read'],
-  usePkce: true,
   tokenAuthMethod: 'client_secret_post',
   authorizationParams: {},
   enabled: true,
@@ -81,6 +80,7 @@ describe('exchangeAuthorizationCode', () => {
       codeVerifier: 'verifier-value',
       redirectUri: 'https://app.example.com/api/connectors/oauth/callback',
       requestedScopes: ['read'],
+      resource: 'https://mcp.example.com/mcp',
     });
 
     expect(mockAssertResolvedPublicHostname).toHaveBeenCalledWith('https://auth.example.com/token');
@@ -107,6 +107,7 @@ describe('exchangeAuthorizationCode', () => {
       codeVerifier: null,
       redirectUri: 'https://app.example.com/api/connectors/oauth/callback',
       requestedScopes: [],
+      resource: 'https://mcp.example.com/mcp',
     });
 
     expect(submittedForm().get('client_secret')).toBeNull();
@@ -127,6 +128,7 @@ describe('exchangeAuthorizationCode', () => {
       codeVerifier: 'v',
       redirectUri: 'https://app.example.com/api/connectors/oauth/callback',
       requestedScopes: [],
+      resource: 'https://mcp.example.com/mcp',
     });
 
     expect(submittedForm().get('client_secret')).toBeNull();
@@ -142,6 +144,7 @@ describe('exchangeAuthorizationCode', () => {
       codeVerifier: 'v',
       redirectUri: 'https://app.example.com/api/connectors/oauth/callback',
       requestedScopes: ['read'],
+      resource: 'https://mcp.example.com/mcp',
     });
 
     expect(result.grantedScopes).toEqual(['read']);
@@ -163,6 +166,7 @@ describe('exchangeAuthorizationCode', () => {
       codeVerifier: 'v',
       redirectUri: 'https://app.example.com/api/connectors/oauth/callback',
       requestedScopes: [],
+      resource: 'https://mcp.example.com/mcp',
     }).catch((e: unknown) => e);
 
     expect(error).toBeInstanceOf(ConnectorOAuthTokenError);
@@ -182,6 +186,7 @@ describe('exchangeAuthorizationCode', () => {
         codeVerifier: 'v',
         redirectUri: 'https://app.example.com/api/connectors/oauth/callback',
         requestedScopes: [],
+        resource: 'https://mcp.example.com/mcp',
       }),
     ).rejects.toThrow(/unexpected shape/i);
   });
@@ -196,6 +201,7 @@ describe('refreshAccessToken', () => {
       refreshToken: 'refresh-value',
       tokenEndpoint: 'https://auth.example.com/token',
       grantedScopes: ['read'],
+      resource: 'https://mcp.example.com/mcp',
     });
 
     expect(submittedForm().get('grant_type')).toBe('refresh_token');
@@ -208,6 +214,7 @@ describe('refreshAccessToken', () => {
       refreshToken: 'refresh-value',
       tokenEndpoint: 'https://old.example.com/token',
       grantedScopes: [],
+      resource: 'https://mcp.example.com/mcp',
     }).catch((e: unknown) => e as ConnectorOAuthTokenError);
 
     expect((error as ConnectorOAuthTokenError).isInvalidGrant).toBe(true);

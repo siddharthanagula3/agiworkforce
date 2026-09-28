@@ -76,6 +76,12 @@ import {
   type ConnectorAuthorizationReason,
 } from '@/lib/connectors/connect-required';
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
+import {
+  GMAIL_CONNECTOR_ID,
+  executeGmailAction,
+  gmailActionToolDefs,
+  isGmailActionTool,
+} from '@/lib/connectors/gmail-actions';
 import { resolveToolMetadata } from '@/app/api/llm/v1/chat/completions/lib/tool-metadata';
 import { getBillingPlanProductLimits, getPlanMaxConnectorTools } from '@agiworkforce/types';
 
@@ -1244,6 +1250,7 @@ interface ConnectorMcpTarget {
   transport: 'streamable-http' | 'sse';
   displayName?: string | undefined;
   discovered: boolean;
+  optionHeaders?: Readonly<Record<string, string>> | undefined;
 }
 
 function resolveConnectorMcpTarget(connectorId: string): ConnectorMcpTarget | null {
@@ -1256,6 +1263,7 @@ function resolveConnectorMcpTarget(connectorId: string): ConnectorMcpTarget | nu
       transport: provider.transport,
       displayName: provider.displayName,
       discovered: false,
+      optionHeaders: provider.mcpHeaders,
     };
   }
   const endpoint = getMcpEndpoint(connectorId);
@@ -1304,7 +1312,10 @@ function oauthConnectorMcpConfig(
   return {
     url: target.mcpUrl,
     transport: target.transport,
-    headers: { Authorization: `${tokenType || 'Bearer'} ${accessToken}` },
+    headers: {
+      ...target.optionHeaders,
+      Authorization: `${tokenType || 'Bearer'} ${accessToken}`,
+    },
     connectionTimeoutMs: CONNECTOR_CONNECTION_TIMEOUT_MS,
   };
 }
@@ -2358,9 +2369,11 @@ export async function loadUserConnectorToolCatalog(
           const access = await resolveConnectorAccessToken(userId, connectorId);
           if (access.status !== 'ready') return [];
           const catalog = await buildOAuthConnectorCatalog(userId, target, access);
-          return catalog
-            ? catalogToConnectorToolDefs(catalog, target.displayName ?? connectorId)
-            : [];
+          if (!catalog) return [];
+          const label = target.displayName ?? connectorId;
+          return connectorId === GMAIL_CONNECTOR_ID
+            ? [...catalogToConnectorToolDefs(catalog, label), ...gmailActionToolDefs(label)]
+            : catalogToConnectorToolDefs(catalog, label);
         },
       });
     }
@@ -2587,6 +2600,13 @@ export function makeUserConnectorExecutor(
 
     if (serverId === GITHUB_SERVER_ID) {
       return guarded((safeArgs) => executeGithubTool(userId, toolName, safeArgs));
+    }
+
+    if (isGmailActionTool(serverId, toolName)) {
+      return guarded(async (safeArgs) => ({
+        handled: true,
+        ...(await executeGmailAction(userId, toolName, safeArgs)),
+      }));
     }
 
     const customShortId = customShortIdFromServerId(serverId);

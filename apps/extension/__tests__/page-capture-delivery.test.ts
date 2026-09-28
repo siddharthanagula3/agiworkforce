@@ -115,8 +115,8 @@ describe('page context is never silently missing', () => {
   });
 
   it('refuses a page-scoped command whose capture came from a different page than the one it was issued on', () => {
-    const start = sidePanel.indexOf('if (slashCmd?.captureContext)');
-    const end = sidePanel.indexOf('const history = selectModelHistory', start);
+    const start = sidePanel.indexOf('function dispatchTurn(');
+    const end = sidePanel.indexOf('function postTurn(', start);
     const slashSend = sidePanel.slice(start, end);
     expect(slashSend).toContain('const pageAtAdmission = activePageSource');
     expect(slashSend).toMatch(
@@ -127,10 +127,10 @@ describe('page context is never silently missing', () => {
 
   it('refuses a context-requiring slash command rather than answering about nothing', () => {
     const slashSend = sidePanel.slice(
-      sidePanel.indexOf('capturePageContext()\n      .then((capture)'),
-      sidePanel.indexOf('const history = selectModelHistory'),
+      sidePanel.indexOf('capturePageContext()\n    .then((capture)'),
+      sidePanel.indexOf('function postTurn('),
     );
-    expect(slashSend).toContain('if (!pageCtx)');
+    expect(slashSend).toContain('if (!pageText)');
     expect(slashSend).toContain(
       'handleStreamError(streamId, capture.ok ? PAGE_CONTEXT_EMPTY_REASON : capture.reason)',
     );

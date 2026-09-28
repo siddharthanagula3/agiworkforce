@@ -204,15 +204,14 @@ Code: `apps/mobile/src/features/settings/personalization/index.tsx:269-281`
 
 - Done when: During setup the user is told about memory and chooses whether and how it is used, with the choice changeable later.
 - Wave: 3
+- Already works on: cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Add memory to mobile first run: memory screens exist only under Settings. | ui |
-| cli | partial | The first-run wizard never mentions memory; memory is reached only through the /memory slash command. | ui |
-| vscode | partial | The walkthrough never mentions memory; it is toggled only by the agi-workforce.memory commands and the agiWorkforce.memory.enabled setting. | ui |
 | chrome | partial | The side-panel first-run overlay never mentions memory; memories are only listed and deleted in the panel menu. | ui |
 
-Code: `apps/mobile/app/(app)/settings/memory-import.tsx:130-135`, `apps/cli/src/tui/tui_app.rs:3792-3794`, `apps/extension-vscode/package.json:1040-1044`, `apps/extension/src/side_panel.ts:7799-7806`
+Code: `apps/mobile/app/(app)/settings/memory-import.tsx:130-135`, `apps/extension/src/side_panel.ts:7799-7806`
 
 ## S3.27: Recommended-app connection flow.
 
@@ -250,18 +249,6 @@ Code: `apps/web/features/desktop-host/components/LocalFolderAttachDialog.tsx:75-
 | mobile | partial | partials/auth 34de0ffbe fixed /pair; the phone's own checklist is in Codex-held ConnectionStateViews.tsx, patch saved as post-codex/p-auth-S3.31.patch | ui |
 
 Code: `apps/web/app/pair/pair-body.tsx:27-27`
-
-## S3.32: Optional notification setup.
-
-- Done when: The user is offered an optional, declinable way to turn on notifications (primer or setup step), and can change it later.
-- Wave: 3
-- Already works on: web, desktop, mobile, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Offer a notification setting: completion alerts are possible only by hand-writing a Notification hook in the hooks config; nothing prompts or explains it. | ui |
-
-Code: `apps/cli/src/features/hooks/hooks.rs:237-240`
 
 ## S3.36: Resumable onboarding checklist.
 

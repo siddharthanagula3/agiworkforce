@@ -121,9 +121,11 @@ describe('organization shared surface · cross-org isolation', () => {
     );
     expect(response.status).toBe(200);
 
-    const roster = calls().find(({ sql }) => /select user_id, role, joined_at/i.test(sql));
+    const roster = mockNeonQuery.mock.calls
+      .map(([sql, params]) => ({ sql: String(sql), params: params as unknown[] }))
+      .find(({ sql }) => /from public\.organization_members om/i.test(sql));
     expect(roster).toBeDefined();
-    expect(roster!.sql).toMatch(/where organization_id = \$1/i);
+    expect(roster!.sql).toMatch(/where om\.organization_id = \$1/i);
     expect(roster!.params).toEqual([ORG_A]);
   });
 

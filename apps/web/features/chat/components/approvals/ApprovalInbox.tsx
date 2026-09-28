@@ -8,6 +8,7 @@ import { TOOL_APPROVAL_ACTION_LABELS } from '@agiworkforce/types';
 import type { Message } from '@shared/stores/web-chat-store';
 import { isApprovalTurnLive, type ToolApprovalDecision } from '@/lib/hooks/useChatStream';
 import { humanizeToolName } from '../messages/ToolTimeline';
+import { isAwaitingToolApproval } from '../../lib/pending-approval';
 
 export interface PendingApprovalItem {
   assistantMessageId: string;
@@ -83,14 +84,7 @@ export function collectPendingApprovals(messages: Message[]): PendingApprovalIte
     }
 
     for (const tool of message.metadata?.tools ?? []) {
-      if (
-        tool.status !== 'awaiting_approval' ||
-        tool.requiresApproval !== true ||
-        !tool.toolCallId ||
-        tool.approved !== undefined
-      ) {
-        continue;
-      }
+      if (!isAwaitingToolApproval(tool) || !tool.toolCallId) continue;
       const key = `${message.id}:${tool.toolCallId}`;
       if (seen.has(key)) continue;
       seen.add(key);

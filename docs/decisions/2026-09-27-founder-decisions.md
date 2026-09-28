@@ -99,6 +99,16 @@ build it, and the audit cell is recorded as not applicable by this decision.
 - **VS Code extras (S4.09, S4.13, S4.17, S4.23, S4.37, S4.38, S4.40).** Claude Code
   in VS Code has no projects, library, AGI Work, schedule creation, account
   connection, model catalog or billing; it hands those to the web.
+- **Research, notebook and IDE extras (S36.24, S37.16, S37.17, S37.35, S54.18 outside
+  Claude Code, S66.08, S66.12, S66.16, S66.29, S66.38 in VS Code, S98.26).** No
+  curated per-answer evidence set, saved answers, notes or notebook export (as
+  S23.27, S23.10, S23.31), no plugin hooks where no user shell runs, no second
+  file tree, editor, terminal, task or test panel inside VS Code, and publisher
+  identity checked in the owner's review of each submission, as ChatGPT's app
+  review does.
+- **VS Code artifacts (S26.14, S26.29, S26.31 in VS Code).** Neither Claude Code
+  nor Codex in VS Code previews, exports or publishes artifacts; VS Code lists
+  them and opens a published artifact's link.
 - **Dedicated artifact editors (S27.34, S27.39-41, S28.02, S28.09, S28.28, S28.30,
   S29.01-04, S29.10-11, S30.01, S30.03, S30.18-19, S30.23, S30.26, S32.06,
   S32.26-28, S32.30, S33.02, S33.05, S33.08-09, S33.13, S33.19).** ChatGPT
@@ -125,3 +135,73 @@ build it, and the audit cell is recorded as not applicable by this decision.
   built, because ChatGPT has one. Per-image cost and remaining image counts
   (S44.14, S44.15), negative prompts (S44.13), a generation queue view (S44.16,
   S46.25), external image sharing (S44.31) and adding videos to projects (S46.34) are declined too.
+- **Connector reach (S55.10, S55.13-14 for non-OIDC providers, S55.25, S56.18-20
+  for Google Docs, Sheets, Slides and Office files, S57.18, S58.13).** ChatGPT
+  and Claude read Drive and Office files without editing them, generate no
+  video from a chat turn, pick no folders in-product, authorize no service
+  accounts, show the connected account only where sign-in returns it, and
+  remove and re-add a server rather than disable it
+  (support.claude.com/en/articles/11175166, checked 2026-09-28).
+
+## D-2026-09-28-01 Authenticator app and backup codes are temporarily unavailable
+
+The Clerk plan that provides authenticator apps and backup codes is not bought
+yet. The enrolment controls stay visible and say "Temporarily unavailable", and
+a workspace cannot require two-factor sign-in while members cannot enrol.
+
+## D-2026-09-28-02 Mobile keeps Local and Cloud memory separate
+
+Local mode keeps its memory on the device and Cloud mode uses the account's
+memory; one is never copied into the other (S39.31, S39.32 mobile).
+
+## D-2026-09-28-03 Session and email extras follow ChatGPT and Claude
+
+Neither offers a read-only attach to another client's session (S68.10), a
+summary-only or fork-style hand-off (S68.28, S68.29), or an address to forward
+email to an agent (S110.10), so none is built.
+
+## D-2026-09-28-04 Voice runs on OpenAI's Live API
+
+Live voice stays on OpenAI's Live API, not the legacy Realtime API, and uses
+OpenAI's voices, including for voice previews. What the Live API does not
+offer is not built: typed text or camera frames during a call (S48.24, S48.30,
+S97.26) and client-set speech or turn detection (S97.21, S97.22).
+
+## D-2026-09-28-05 Temporary chats keep no safety copy
+
+Temporary chats keep no 30-day copy for safety review.
+
+## D-2026-09-28-06 Deployment order
+
+Migrations are applied as soon as they are merged (0295 to 0315 were applied on
+2026-09-28 after a Neon snapshot branch). The signaling server is deployed to
+Fly.io next. The website is deployed once every partial item is complete, and
+the CLI and desktop builds after the website.
+
+## D-2026-09-28-07 Routing extras follow ChatGPT and Claude
+
+Customers choose a model, never a supplier, so there is no provider or route
+lock on web, desktop, the API or the CLI's managed routes (S79.17, S79.18).
+Neither leader offers an advisor model consulted mid-task (S79.22), specialist
+worker models on web (S79.23), confidence-based abstention (S79.25), a
+classification adapter (S79.29), a routing evaluation screen (S79.31), video
+input (S76.12), a capability inspector (S78.27) or a user control for image
+detail (S76.05 outside the API).
+
+## D-2026-09-28-08 Connectors the leaders ship are built, including health and money
+
+Where ChatGPT or Claude ships a connector capability, it is built. The model
+can create and edit images in an ordinary chat turn, as ChatGPT Images does
+(help.openai.com/en/articles/11084440, checked 2026-09-28). Gmail can send,
+reply and forward with attachments after an approval every time, as Claude's
+Gmail connector does. Google Contacts can be searched, as in ChatGPT since
+August 2025. Health records connect as in ChatGPT Health (b.well) and Claude
+(HealthEx), and bank accounts connect read-only as in ChatGPT's personal
+finance experience (Plaid, June 2026). Health and bank connections are opt-in,
+read-only, United States only, never written to memory or used for training,
+and removed with their stored tokens on disconnect. They stay unavailable until
+the owner signs the vendor agreement and configures it, and a lawyer confirms
+whether the FTC Health Breach Notification Rule or the GLBA Safeguards Rule
+applies before either is switched on. The BigQuery server Google hosts is not
+pinned, because it requires the full BigQuery scope and the Google ceiling stays
+read-only; Snowflake and Databricks are added by account URL.

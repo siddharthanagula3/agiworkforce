@@ -20,6 +20,7 @@ import {
   CloudCodeCommitResultSchema,
   CloudCodeDiscardResultSchema,
   CloudCodePullRequestSchema,
+  CloudCodePullRequestStatusSchema,
   CloudCodeRepositoryListSchema,
   CloudCodeSessionDeletedSchema,
   CloudCodeSessionDetailSchema,
@@ -35,6 +36,7 @@ import {
   type CloudCodeDiscardResult,
   type CommitCloudCodeSessionRequest,
   type CloudCodePullRequest,
+  type CloudCodePullRequestStatus,
   type CloudCodeRepositoryList,
   type CloudCodeTurnCancellation,
   type DecideCloudCodeApprovalRequest,
@@ -97,6 +99,7 @@ export interface CloudCodeApi {
   ): Promise<RunCloudCodeCommandResponse>;
   changes(sessionId: string, signal?: AbortSignal): Promise<CloudCodeChanges>;
   createPullRequest(sessionId: string, signal?: AbortSignal): Promise<CloudCodePullRequest>;
+  pullRequestStatus(sessionId: string, signal?: AbortSignal): Promise<CloudCodePullRequestStatus>;
   close(sessionId: string, signal?: AbortSignal): Promise<CloudCodeSession>;
   rename(sessionId: string, title: string, signal?: AbortSignal): Promise<CloudCodeSession>;
   setArchived(
@@ -273,6 +276,13 @@ export function createManagedCloudCodeApi(config: ManagedCloudCodeApiConfig): Cl
         `${cloudCodeSessionPath(sessionId)}/pull-request`,
         { method: 'POST', headers: await mutationHeaders(), signal },
         CloudCodePullRequestSchema,
+      );
+    },
+    pullRequestStatus(sessionId, signal) {
+      return request(
+        `${cloudCodeSessionPath(sessionId)}/pull-request/status`,
+        { signal },
+        CloudCodePullRequestStatusSchema,
       );
     },
     async close(sessionId, signal) {

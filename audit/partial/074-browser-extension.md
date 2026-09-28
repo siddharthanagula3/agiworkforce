@@ -50,18 +50,6 @@ Code: `apps/extension/src/side_panel.ts:9490-9502`, `apps/extension/src/content.
 
 Code: `apps/extension/src/features/side-panel/computerUsePanel.ts:662-666`, `apps/extension/src/features/side-panel/computerUsePanel.ts:770-780`
 
-## S74.19: Native-host connection status.
-
-- Done when: The extension shows whether its desktop native host is connected and lets the user reconnect.
-- Wave: 3
-- Already works on: desktop, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | /chrome renders the live bridge state, but the criterion also needs reconnect: the session resolves browser availability once (agent/mod.rs:772-776 returns early when already set) and nothing resets it, so a desktop paired mid-session keeps the browser tools absent until a new session; there is no reconnect command. Remaining: let /chrome (or a paired-state change) re-resolve browser_available. |  |
-
-Code: `apps/cli/src/claude_parity.rs:189-189`, `apps/cli/src/claude_parity.rs:1021-1030`
-
 ## S74.20: Account/workspace switching.
 
 - Done when: The user switches account or workspace inside the extension.

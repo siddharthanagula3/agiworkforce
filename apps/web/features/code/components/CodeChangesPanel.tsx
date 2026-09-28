@@ -29,7 +29,7 @@ import {
   type CloudCodeSession,
   type CloudCodeTerminalEntry,
 } from '@agiworkforce/types';
-import type { CloudCodeChanges } from '@agiworkforce/cloud-contracts';
+import type { CloudCodeChanges, CloudCodePullRequestStatus } from '@agiworkforce/cloud-contracts';
 import { CODE_COPY, CODE_LIMITS, changeStateLabel, continueInVsCodeHref } from '../code-surface';
 import { diffByPath, diffLineKind } from '../code-diff';
 import styles from '../CloudCodePage.module.css';
@@ -146,7 +146,103 @@ export interface CodeChangesPanelProps {
   onRunCommand: (command: string) => void;
   onRefreshChanges: () => void;
   onCreatePullRequest: () => void;
+  onLoadPullRequestStatus: (sessionId: string) => Promise<CloudCodePullRequestStatus>;
   onClose: () => void;
+}
+
+const CHECKS_POLL_MS = 30_000;
+
+const CHECKS_LABEL: Record<CloudCodePullRequestStatus['checksState'], string> = {
+  passing: CODE_COPY.checksPassing,
+  failing: CODE_COPY.checksFailing,
+  pending: CODE_COPY.checksPending,
+  none: CODE_COPY.checksNone,
+};
+
+function pullRequestOutcome(status: CloudCodePullRequestStatus): string | null {
+  if (status.merged) return CODE_COPY.pullRequestMerged;
+  if (status.state === 'closed') return CODE_COPY.pullRequestClosed;
+  if (status.reviewState === 'approved') return CODE_COPY.reviewApproved;
+  if (status.reviewState === 'changes_requested') return CODE_COPY.reviewChangesRequested;
+  return null;
+}
+
+function PullRequestChecks({
+  sessionId,
+  load,
+}: {
+  sessionId: string;
+  load: (sessionId: string) => Promise<CloudCodePullRequestStatus>;
+}) {
+  const [status, setStatus] = useState<CloudCodePullRequestStatus | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    load(sessionId)
+      .then((next) => {
+        if (cancelled) return;
+        setStatus(next);
+        setFailed(false);
+      })
+      .catch(() => {
+        if (!cancelled) setFailed(true);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [attempt, load, sessionId]);
+
+  useEffect(() => {
+    if (status?.checksState !== 'pending' || status.merged || status.state === 'closed') return;
+    const timer = window.setTimeout(() => setAttempt((value) => value + 1), CHECKS_POLL_MS);
+    return () => window.clearTimeout(timer);
+  }, [status]);
+
+  const outcome = status ? pullRequestOutcome(status) : null;
+  return (
+    <div className={styles['chipRow']} aria-live="polite">
+      {loading && !status ? (
+        <span className={styles['formHelp']}>
+          <Spinner size="sm" aria-label={CODE_COPY.checksLoading} />
+        </span>
+      ) : failed && !status ? (
+        <span className={styles['formHelp']}>{CODE_COPY.checksUnavailable}</span>
+      ) : status ? (
+        <>
+          <span
+            className={`${styles['chip']} ${styles['chipStatic']} ${
+              status.checksState === 'failing' ? styles['chipWarning'] : ''
+            }`}
+          >
+            {CHECKS_LABEL[status.checksState]}
+          </span>
+          {outcome && (
+            <span className={`${styles['chip']} ${styles['chipStatic']}`}>{outcome}</span>
+          )}
+          {status.failedChecks.length > 0 && (
+            <span className={styles['formHelp']}>{status.failedChecks.join(', ')}</span>
+          )}
+        </>
+      ) : null}
+      <button
+        type="button"
+        className={`${styles['chip']} ${styles['chipCompact']}`}
+        onClick={() => setAttempt((value) => value + 1)}
+        disabled={loading}
+        aria-label={CODE_COPY.checksRefresh}
+        title={CODE_COPY.checksRefresh}
+      >
+        <RefreshCw size={GLYPH_SIZE} aria-hidden="true" />
+      </button>
+    </div>
+  );
 }
 
 export function CodeChangesPanel({
@@ -166,6 +262,7 @@ export function CodeChangesPanel({
   onRunCommand,
   onRefreshChanges,
   onCreatePullRequest,
+  onLoadPullRequestStatus,
   onClose,
 }: CodeChangesPanelProps) {
   const [commitMessage, setCommitMessage] = useState('');
@@ -398,6 +495,9 @@ export function CodeChangesPanel({
                 <ExternalLink size={GLYPH_SIZE} aria-hidden="true" />
                 <span>{cloudCodePullRequestLabel(session)}</span>
               </a>
+            ) : null}
+            {session.pullRequestUrl ? (
+              <PullRequestChecks sessionId={session.id} load={onLoadPullRequestStatus} />
             ) : (
               <>
                 <button

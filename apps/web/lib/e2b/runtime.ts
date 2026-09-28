@@ -43,6 +43,7 @@ import {
   type SandboxFileEntry,
 } from './types';
 import { e2bExecutionEnabled } from './gate';
+import { e2bChatTemplate } from './chat-template';
 import { tracedCodeAction } from '@/lib/observability/code-action-span';
 import { activeSpan } from '@/lib/observability/span';
 
@@ -808,7 +809,7 @@ export const getE2BExecutor = tracedCodeAction(
     if (conversationId) metadata['conversationId'] = conversationId;
     if (codeSessionId) metadata['codeSessionId'] = codeSessionId;
     if (scope?.userId) metadata['userId'] = scope.userId;
-    const template = scope?.templateId?.trim() || null;
+    const template = scope?.templateId?.trim() || e2bChatTemplate();
     if (
       scope &&
       egressNeedsProxy(
