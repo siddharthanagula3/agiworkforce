@@ -32,6 +32,7 @@ import {
 } from './managed-usage-request-service';
 import { selectHarnessRunner } from '@/lib/e2b/harnesses';
 import { createCloudCodeToolRunner } from './cloud-code-agent-runner';
+import { cloudCodeGoalPrompt } from './cloud-code-commands';
 import { mirrorCloudCodeStopOntoDurableRun } from './cloud-code-durable-run';
 import { createHarnessStepProjector, runCloudCodeHarnessTurn } from './cloud-code-harness-turn';
 import { readCloudCodeProjectInstructions } from './cloud-code-project-instructions';
@@ -60,6 +61,7 @@ import {
   CloudCodeValidationError,
   agentStepLabel,
   claimCloudCodeSessionForRun,
+  cloudCodeSessionBaseBranch,
   getCloudCodeSession,
   parseGitPorcelainStatus,
   releaseCloudCodeSessionAfterRun,
@@ -661,6 +663,13 @@ async function runClaimedAgentTurn(
     input;
   const isFlagship = isFlagshipModel(model);
   const initialStepIndex = input.initialStepIndex ?? 0;
+  const task =
+    (input.preApproved ?? input.priorMessages)
+      ? goal
+      : cloudCodeGoalPrompt(
+          goal,
+          cloudCodeSessionBaseBranch(await getCloudCodeSession(db, owner, sessionId)),
+        );
 
   let reservation: ManagedUsageRequestReservation;
   try {
@@ -775,7 +784,7 @@ async function runClaimedAgentTurn(
       result = await runCloudCodeHarnessTurn({
         runner: harness,
         executor,
-        goal,
+        goal: task,
         workspacePath: session.workspacePath,
         provider,
         model,
@@ -794,7 +803,7 @@ async function runClaimedAgentTurn(
       result = await runCloudCodeAgentTurn({
         adapter: buildServerProviderAdapter(provider),
         model,
-        goal,
+        goal: task,
         runner: createCloudCodeToolRunner(executor, session.workspacePath),
         // The composed signal, not the raw request signal: the turn must abort on
         // its own budget as well as on a client disconnect, so the unwind below

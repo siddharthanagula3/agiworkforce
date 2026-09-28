@@ -6,6 +6,7 @@ import { logger } from '@/lib/logger';
 import { withSpan } from '@/lib/observability/span';
 import { CLOUD_CODE_RUN_COMMAND_TOOL } from './cloud-code-agent-tools';
 import { truncateToolOutput } from './cloud-code-agent-loop';
+import { cloudCodeGoalPrompt } from './cloud-code-commands';
 import {
   executePersistedAgentTurn,
   type CloudCodeAgentTurnOutcome,
@@ -15,6 +16,7 @@ import {
   CloudCodeConflictError,
   CloudCodeNotFoundError,
   CloudCodeUnavailableError,
+  cloudCodeSessionBaseBranch,
   getCloudCodeSession,
   validateCloudCodeSessionId,
   type CloudCodeOwner,
@@ -279,7 +281,10 @@ async function resolveCloudCodeAgentApproval(
     [turnId],
   );
   const initialStepIndex = stepRows.reduce((max, step) => Math.max(max, step.step_index), 0);
-  const messages = rebuildTurnMessages(turn.goal, stepRows);
+  const messages = rebuildTurnMessages(
+    cloudCodeGoalPrompt(turn.goal, cloudCodeSessionBaseBranch(session)),
+    stepRows,
+  );
 
   const approvalToolUseId = `approval-${stepIndex}`;
   messages.push({
