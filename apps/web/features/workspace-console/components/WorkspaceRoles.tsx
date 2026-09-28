@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Spinner, useConfirmAction } from '@agiworkforce/ui';
+import { Spinner, useConfirmAction, translateUiPlural } from '@agiworkforce/ui';
 import {
   canonicalOrganizationPermission,
   expandOrganizationPermissions,
@@ -264,9 +264,15 @@ function RoleList({ data }: { data: WorkspaceRolesResult }) {
               </p>
               {!role.builtIn && data.canManageRoles && isHeld(role) ? (
                 <p className="mt-1 text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>
-                  Held by {role.memberCount} member{role.memberCount === 1 ? '' : 's'} and{' '}
-                  {role.groupCount} directory group{role.groupCount === 1 ? '' : 's'}. Take it off
-                  them before deleting it, so nobody loses access without a decision.
+                  {translateUiPlural('settings', 'counts.roleHeldByMembers', role.memberCount, {
+                    one: 'Held by {{count}} member',
+                    other: 'Held by {{count}} members',
+                  })}{' '}
+                  {translateUiPlural('settings', 'counts.roleHeldByGroups', role.groupCount, {
+                    one: 'and {{count}} directory group.',
+                    other: 'and {{count}} directory groups.',
+                  })}{' '}
+                  Take it off them before deleting it, so nobody loses access without a decision.
                 </p>
               ) : null}
             </div>
@@ -578,7 +584,10 @@ function GroupRow({
       <p className="text-sm" style={{ color: 'var(--text-1)' }}>
         {group.displayName}
         <span className="ml-2 text-xs" style={{ color: 'var(--text-3)' }}>
-          {group.memberCount} member{group.memberCount === 1 ? '' : 's'}
+          {translateUiPlural('settings', 'counts.members', group.memberCount, {
+            one: '{{count}} member',
+            other: '{{count}} members',
+          })}
         </span>
       </p>
       {workspaceGroup ? (

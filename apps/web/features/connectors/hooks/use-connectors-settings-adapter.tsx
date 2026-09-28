@@ -1,5 +1,6 @@
 'use client';
 
+import { translateUiPlural } from '@agiworkforce/ui';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { z } from 'zod';
 import {
@@ -877,10 +878,15 @@ export function useConnectorsSettingsAdapter({
         ? {
             connectors: {
               count: expiredConnectorIds.length,
-              description:
-                expiredConnectorIds.length === 1
-                  ? '1 connector needs to be reconnected'
-                  : `${expiredConnectorIds.length} connectors need to be reconnected`,
+              description: translateUiPlural(
+                'settings',
+                'counts.connectorsNeedReconnect',
+                expiredConnectorIds.length,
+                {
+                  one: '{{count}} connector needs to be reconnected',
+                  other: '{{count}} connectors need to be reconnected',
+                },
+              ),
             },
           }
         : undefined,

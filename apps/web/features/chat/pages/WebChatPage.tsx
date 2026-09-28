@@ -130,7 +130,14 @@ import {
   ChevronUp,
   EyeOff,
 } from '@agiworkforce/icons';
-import { Button, Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@agiworkforce/ui';
+import {
+  Button,
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+  TooltipProvider,
+  translateUiPlural,
+} from '@agiworkforce/ui';
 import { ShareConversationDialog } from '../components/share/ShareConversationDialog';
 import { useArtifactCloudSync } from '../hooks/use-artifact-cloud-sync';
 import { useBrowserReplyReadyPreference } from '../hooks/use-browser-reply-ready-preference';
@@ -800,7 +807,10 @@ async function keepTemporaryChat(params: {
 }
 
 function describeKeptMessages(count: number): string {
-  return count === 1 ? 'The message in this chat' : `All ${count} messages in this chat`;
+  return translateUiPlural('chat', 'counts.messagesInChat', count, {
+    one: 'The message in this chat',
+    other: 'All {{count}} messages in this chat',
+  });
 }
 
 const subscribeToMessageVariantsMode = () => () => {};
@@ -4673,10 +4683,10 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         if (discarded > 0) {
           confirmDestructive({
             title: 'Replace this message?',
-            description:
-              discarded === 1
-                ? 'The reply below it is deleted and cannot be recovered.'
-                : `The ${discarded} messages below it are deleted and cannot be recovered.`,
+            description: translateUiPlural('chat', 'counts.discardedReplies', discarded, {
+              one: 'The reply below it is deleted and cannot be recovered.',
+              other: 'The {{count}} messages below it are deleted and cannot be recovered.',
+            }),
             confirmLabel: 'Replace',
             onConfirm: () => runSubmitEdit(id, next, planned, conversationId),
           });
@@ -4853,10 +4863,10 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       if (discarded > 0) {
         confirmDestructive({
           title: 'Retry this message?',
-          description:
-            discarded === 1
-              ? 'The reply below it is deleted and cannot be recovered.'
-              : `The ${discarded} messages below it are deleted and cannot be recovered.`,
+          description: translateUiPlural('chat', 'counts.discardedReplies', discarded, {
+            one: 'The reply below it is deleted and cannot be recovered.',
+            other: 'The {{count}} messages below it are deleted and cannot be recovered.',
+          }),
           confirmLabel: 'Retry',
           onConfirm: () => void replaceTurn(),
         });

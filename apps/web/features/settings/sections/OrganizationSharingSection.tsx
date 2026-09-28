@@ -8,7 +8,7 @@ import {
   CUSTOM_CONNECTORS_PATH,
   CustomConnectorSummarySchema,
 } from '@agiworkforce/cloud-contracts';
-import { useConfirmAction } from '@agiworkforce/ui';
+import { translateUiPlural, useConfirmAction } from '@agiworkforce/ui';
 import { toUserMessage } from '@agiworkforce/unified-chat/network-error';
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import {
@@ -110,7 +110,10 @@ function SectionCard({
 }
 
 function everyoneHere(total: number): string {
-  return `Everyone in this organization (${total} ${total === 1 ? 'member' : 'members'})`;
+  return translateUiPlural('settings', 'counts.everyoneInOrganization', total, {
+    one: 'Everyone in this organization ({{count}} member)',
+    other: 'Everyone in this organization ({{count}} members)',
+  });
 }
 
 function Empty({ children }: { children: React.ReactNode }) {
@@ -372,7 +375,7 @@ function SharedArtifacts({ overview }: { overview: OrgSharedOverview }) {
                   <div style={{ fontSize: 12, color: 'var(--text-3)' }}>
                     {artifact.kind} ·{' '}
                     {artifact.visibility === 'organization'
-                      ? `Workspace only · ${overview.members.length} ${overview.members.length === 1 ? 'member' : 'members'}`
+                      ? `Workspace only · ${translateUiPlural('settings', 'counts.members', overview.members.length, { one: '{{count}} member', other: '{{count}} members' })}`
                       : 'Also reachable by public link'}
                   </div>
                 </div>
@@ -456,10 +459,13 @@ function SharedConversations({ overview }: { overview: OrgSharedOverview }) {
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: 13, color: 'var(--text-1)' }}>{name}</div>
                   <div style={{ fontSize: 12, color: 'var(--text-3)' }}>
-                    {conversation.messageCount}{' '}
-                    {conversation.messageCount === 1 ? 'message' : 'messages'} ·{' '}
+                    {translateUiPlural('common', 'counts.messages', conversation.messageCount, {
+                      one: '{{count}} message',
+                      other: '{{count}} messages',
+                    })}{' '}
+                    ·{' '}
                     {conversation.visibility === 'organization'
-                      ? `Workspace only · ${overview.members.length} ${overview.members.length === 1 ? 'member' : 'members'}`
+                      ? `Workspace only · ${translateUiPlural('settings', 'counts.members', overview.members.length, { one: '{{count}} member', other: '{{count}} members' })}`
                       : 'Also reachable by public link'}{' '}
                     · {expired ? 'Expired' : `Expires ${formatExpiry(conversation.expiresAt)}`}
                   </div>
@@ -685,8 +691,11 @@ export function OrganizationSharingSection() {
         }
       >
         <Empty>
-          {overview.members.length} {overview.members.length === 1 ? 'member' : 'members'} · you are
-          a {overview.currentUserRole}
+          {translateUiPlural('settings', 'counts.members', overview.members.length, {
+            one: '{{count}} member',
+            other: '{{count}} members',
+          })}{' '}
+          · you are a {overview.currentUserRole}
         </Empty>
       </SectionCard>
 

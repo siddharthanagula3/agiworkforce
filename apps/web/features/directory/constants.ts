@@ -1,3 +1,4 @@
+import { translateUiPlural } from '@agiworkforce/ui';
 import {
   PLUGINS_API_PATH,
   PLUGIN_INSTALLATIONS_API_PATH,
@@ -296,20 +297,45 @@ const OMITTED_FILES_SHOWN = 3;
 export function uploadOmittedFilesLine(paths: readonly string[]): string {
   const shown = paths.slice(0, OMITTED_FILES_SHOWN).join(', ');
   const more =
-    paths.length > OMITTED_FILES_SHOWN ? ` and ${paths.length - OMITTED_FILES_SHOWN} more` : '';
-  return `Left out ${paths.length === 1 ? 'a file that is' : `${paths.length} files that are`} not text: ${shown}${more}. Skills can bundle text files such as references and scripts.`;
+    paths.length > OMITTED_FILES_SHOWN
+      ? ` ${translateUiPlural('common', 'counts.andMore', paths.length - OMITTED_FILES_SHOWN, {
+          one: 'and {{count}} more',
+          other: 'and {{count}} more',
+        })}`
+      : '';
+  return translateUiPlural(
+    'common',
+    'counts.omittedFiles',
+    paths.length,
+    {
+      one: 'Left out a file that is not text: {{files}}. Skills can bundle text files such as references and scripts.',
+      other:
+        'Left out {{count}} files that are not text: {{files}}. Skills can bundle text files such as references and scripts.',
+    },
+    { files: `${shown}${more}` },
+  );
 }
 
 export function uploadSkillCountLine(count: number): string {
-  return count === 1
-    ? '1 skill is now available in chat.'
-    : `${count} skills are now available in chat.`;
+  return translateUiPlural('common', 'counts.skillsAvailable', count, {
+    one: '{{count}} skill is now available in chat.',
+    other: '{{count}} skills are now available in chat.',
+  });
 }
 
 const DEPENDENCY_NAMES = new Intl.ListFormat('en', { style: 'long', type: 'conjunction' });
 
 export function uploadDependenciesInstalledLine(dependencyNames: readonly string[]): string {
-  return `Also installed the ${dependencyNames.length === 1 ? 'plugin' : 'plugins'} it depends on: ${DEPENDENCY_NAMES.format(dependencyNames)}.`;
+  return translateUiPlural(
+    'common',
+    'counts.dependenciesInstalled',
+    dependencyNames.length,
+    {
+      one: 'Also installed the plugin it depends on: {{names}}.',
+      other: 'Also installed the plugins it depends on: {{names}}.',
+    },
+    { names: DEPENDENCY_NAMES.format(dependencyNames) },
+  );
 }
 
 export function pluginConnectorsLines(
@@ -339,7 +365,16 @@ export function pluginDependenciesInstalledLine(
   pluginName: string,
   dependencyNames: readonly string[],
 ): string {
-  return `Installed ${pluginName} and the ${dependencyNames.length === 1 ? 'plugin' : 'plugins'} it depends on: ${DEPENDENCY_NAMES.format(dependencyNames)}.`;
+  return translateUiPlural(
+    'common',
+    'counts.pluginDependenciesInstalled',
+    dependencyNames.length,
+    {
+      one: 'Installed {{plugin}} and the plugin it depends on: {{names}}.',
+      other: 'Installed {{plugin}} and the plugins it depends on: {{names}}.',
+    },
+    { plugin: pluginName, names: DEPENDENCY_NAMES.format(dependencyNames) },
+  );
 }
 export const PLUGIN_MARKETPLACE_ENTRIES_PATH = `${PLUGIN_MARKETPLACES_API_PATH}/entries`;
 export const PLUGIN_MARKETPLACE_INSTALLATIONS_PATH = PLUGIN_MARKETPLACE_INSTALLATIONS_API_PATH;

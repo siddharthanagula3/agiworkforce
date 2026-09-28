@@ -7,7 +7,7 @@ import {
   type ConnectorCallHealth,
   type ConnectorCallHealthState,
 } from '@agiworkforce/cloud-contracts';
-import { Spinner } from '@agiworkforce/ui';
+import { Spinner, translateUiPlural } from '@agiworkforce/ui';
 
 import { cn } from '@shared/lib/utils';
 import { toUserMessage } from '@/lib/user-error-message';
@@ -174,8 +174,11 @@ export function ConnectorHealthDashboard({ className }: { className?: string }) 
                   </span>
                 </div>
                 <p className="mt-1 text-xs tabular-nums text-muted-foreground">
-                  {entry.meteredCalls} call{entry.meteredCalls === 1 ? '' : 's'} metered ·{' '}
-                  {entry.failures} failed · median {formatLatency(entry.p50LatencyMs)} · 95th{' '}
+                  {translateUiPlural('settings', 'counts.meteredCalls', entry.meteredCalls, {
+                    one: '{{count}} call metered',
+                    other: '{{count}} calls metered',
+                  })}{' '}
+                  · {entry.failures} failed · median {formatLatency(entry.p50LatencyMs)} · 95th{' '}
                   {formatLatency(entry.p95LatencyMs)}
                   {entry.blocked > 0 ? ` · ${entry.blocked} blocked here` : ''}
                 </p>
