@@ -89,15 +89,12 @@ Code: `packages/ui/unified-chat/src/components/markdown/MarkdownContent.tsx:98-9
 
 - Done when: Diffs render with diff formatting (+/- lines coloured, hunks readable).
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| vscode | partial | The cited chain (Apply -> showDiff) formats a diff only when applying code to a file; the criterion is that diffs render with diff formatting, and renderCodeBlock escapes a diff fence into an unstyled <pre><code class="language-diff"> with no highlighter (the auditor scored S21.02 vscode missing for the same reason). |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/extension-vscode/src/webview/render.ts:18-18`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:1350-1350`
 
 ## S21.12: Run-code action.
 
@@ -175,18 +172,6 @@ Code: `apps/mobile/src/features/chat/components/ToolCallTimeline.tsx:415-415`, `
 
 Code: `apps/mobile/src/features/chat/components/ToolCallTimeline.tsx:40-40`, `apps/mobile/src/features/chat/utils/toolCallAccumulator.ts:121-121`, `apps/cli/src/tui/tui_app.rs:176-176`, `apps/cli/src/tui/tui_app.rs:1530-1530`
 
-## S21.19: Generated-file output.
-
-- Done when: Files produced by execution are listed and can be opened or downloaded.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | Generated files are received and stored on the message but the side panel never renders them, so the user cannot see or open them. | ui |
-
-Code: `apps/extension/src/side_panel.ts:10795-10795`, `apps/extension/src/features/side-panel/bubbles.ts:225-225`
-
 ## S21.20: Plot output.
 
 - Done when: Plots/images produced by execution render inline.
@@ -249,6 +234,7 @@ Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:2662-2662`
 
 - Done when: A code block offers an Explain action that asks for an explanation of that code.
 - Wave: 3
+- Already works on: vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -256,10 +242,7 @@ Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:2662-2662`
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | Explain works on editor code (Explain Selection command, code lens and quick fix), but a code block inside a chat answer has no Explain action. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/extension-vscode/src/providers/codeActionProvider.ts:53-53`, `apps/extension-vscode/src/core/commandSetup.ts:965-965`
 
 ## S21.25: Edit in Canvas.
 

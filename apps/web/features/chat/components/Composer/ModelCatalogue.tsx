@@ -250,7 +250,7 @@ function ModelCard({ entry, onBack }: { entry: ModelCatalogueEntry; onBack: () =
       )}
 
       {!entry.admitted && entry.minimumPlanLabel && (
-        <p className="mt-3 text-xs text-primary">{`${entry.minimumPlanLabel} and above`}</p>
+        <p className="mt-3 text-xs text-primary">{`Upgrade to use · ${entry.minimumPlanLabel}`}</p>
       )}
     </div>
   );
@@ -518,7 +518,7 @@ export function ModelCatalogue({
                               : notOffered
                                 ? `${entry.displayName} - ${NOT_OFFERED_TEXT}`
                                 : planLocked && entry.minimumPlanLabel
-                                  ? `${entry.displayName} - ${entry.minimumPlanLabel} and above`
+                                  ? `${entry.displayName} - Upgrade to use, ${entry.minimumPlanLabel}`
                                   : costLabel
                                     ? `${entry.displayName}, ${costLabel}`
                                     : entry.displayName
@@ -620,7 +620,7 @@ export function ModelCatalogue({
                               className="mr-0.5 inline h-4 w-4 align-[-0.1em]"
                               aria-hidden="true"
                             />
-                            {`${entry.minimumPlanLabel} and above`}
+                            {`Upgrade to use · ${entry.minimumPlanLabel}`}
                           </span>
                         )}
                         {isSelected && !locked && (

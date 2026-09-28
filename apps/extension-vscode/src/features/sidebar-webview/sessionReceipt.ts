@@ -1,15 +1,24 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { buildVsCodeDeveloperSessionHandoffUri } from '@agiworkforce/types';
 import type {
   DeveloperSessionApproval,
   DeveloperSessionFileChange,
 } from '@agiworkforce/types/protocol';
+import { modelDisplayLabel } from '../model-picker/modelConstants';
 
 export const SHOW_SESSION_ACTIVITY_COMMAND = 'agi-workforce.showSessionActivity';
 
 export interface SessionReceipt {
+  id: string;
   title: string;
   cwd: string;
+  model: string;
+  trustMode: string;
+  branch?: string;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
   approvals: readonly Pick<
     DeveloperSessionApproval,
     'kind' | 'summary' | 'outcome' | 'decidedAt'
@@ -31,6 +40,7 @@ const OUTCOME_LABELS: Record<DeveloperSessionApproval['outcome'], string> = {
 
 interface ReceiptItem extends vscode.QuickPickItem {
   file?: string;
+  copyLink?: string;
 }
 
 function when(iso: string): string {
@@ -39,7 +49,33 @@ function when(iso: string): string {
 }
 
 export function buildSessionReceiptItems(receipt: SessionReceipt): ReceiptItem[] {
+  let link: string | undefined;
+  try {
+    link = buildVsCodeDeveloperSessionHandoffUri({ threadId: receipt.id, cwd: receipt.cwd });
+  } catch {
+    link = undefined;
+  }
   const items: ReceiptItem[] = [
+    { label: 'Details', kind: vscode.QuickPickItemKind.Separator },
+    { label: `$(symbol-namespace) ${modelDisplayLabel(receipt.model)}`, description: 'Model' },
+    { label: `$(folder) ${receipt.cwd}`, description: 'Folder' },
+    ...(receipt.branch === undefined
+      ? []
+      : [{ label: `$(git-branch) ${receipt.branch}`, description: 'Branch' }]),
+    { label: `$(shield) ${receipt.trustMode}`, description: 'Trust mode' },
+    {
+      label: `$(calendar) ${when(receipt.createdAt)}`,
+      description: `Started from ${receipt.createdBy}, last active ${when(receipt.updatedAt)}`,
+    },
+    ...(link === undefined
+      ? []
+      : [
+          {
+            label: '$(link) Copy a link to this session',
+            description: 'Opens it in VS Code on this machine',
+            copyLink: link,
+          },
+        ]),
     { label: 'Files changed', kind: vscode.QuickPickItemKind.Separator },
   ];
   if (receipt.fileChanges.length === 0) {
@@ -74,11 +110,16 @@ export async function showSessionReceipt(receipt: SessionReceipt | undefined): P
     return;
   }
   const picked = await vscode.window.showQuickPick(buildSessionReceiptItems(receipt), {
-    title: `AGI Workforce, Session activity: ${receipt.title}`,
-    placeHolder: 'Every file this session wrote and every approval it asked for',
+    title: `AGI Workforce, Session: ${receipt.title}`,
+    placeHolder: 'Details, every file this session wrote and every approval it asked for',
     matchOnDescription: true,
     matchOnDetail: true,
   });
+  if (picked?.copyLink !== undefined) {
+    await vscode.env.clipboard.writeText(picked.copyLink);
+    void vscode.window.showInformationMessage('AGI Workforce: copied a link to this session.');
+    return;
+  }
   if (picked?.file !== undefined) {
     await vscode.window.showTextDocument(vscode.Uri.file(picked.file));
   }

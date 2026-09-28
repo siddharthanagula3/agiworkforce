@@ -8,6 +8,7 @@ import type {
   DirectoryEntry,
   DirectoryFilterGroup,
   DirectoryManageRow,
+  DirectoryPluginConnectorSetting,
   DirectorySection,
   DirectorySkillDetail,
   DirectorySourceChip,
@@ -25,8 +26,13 @@ import {
   SKILL_LIFECYCLE_GROUP_ID,
   SKILL_LIFECYCLE_GROUP_LABEL,
   SKILL_LIFECYCLE_INCLUDED_LABEL,
+  SKILL_ORIGIN_BUNDLED,
+  SKILL_ORIGIN_MANAGED,
+  SKILL_ORIGIN_PERSONAL,
+  SKILL_ORIGIN_UNKNOWN_PLUGIN,
   SKILL_PUBLISHER_AGI,
   SKILL_PUBLISHER_MANAGED,
+  SKILL_PUBLISHER_PLUGIN,
   SKILL_LICENSE_PREFIX,
   SKILL_PUBLISHER_YOU,
   SKILL_STATUS_GROUP_ID,
@@ -35,6 +41,11 @@ import {
   SKILL_STATUS_INSTALLED_LABEL,
   SKILL_STATUS_NOT_INSTALLED,
   SKILL_STATUS_NOT_INSTALLED_LABEL,
+  skillAuthoredPluginOrigin,
+  skillCatalogPluginOrigin,
+  skillPluginPublisher,
+  skillRepositoryPluginOrigin,
+  skillUploadedPluginOrigin,
 } from '../constants';
 import { DirectoryRequestError } from './request-error';
 
@@ -61,8 +72,47 @@ const LICENSE_PREFIX = 'license';
 
 export function skillPublisher(source: string): string {
   if (OWNED_SOURCES.has(source)) return SKILL_PUBLISHER_YOU;
-  if (source === 'managed-local') return SKILL_PUBLISHER_MANAGED;
+  if (source === MANAGED_LOCAL_SOURCE) return SKILL_PUBLISHER_MANAGED;
+  if (source === PLUGIN_SOURCE) return SKILL_PUBLISHER_PLUGIN;
   return SKILL_PUBLISHER_AGI;
+}
+
+export function skillPublisherFor(skill: ManagedSkillSummary): string {
+  const origin = skill.origin;
+  if (skill.source === PLUGIN_SOURCE && origin) {
+    if (origin.kind === 'upload' || origin.kind === 'authored') return SKILL_PUBLISHER_YOU;
+    if (origin.pluginName) return skillPluginPublisher(origin.pluginName);
+  }
+  return skillPublisher(skill.source);
+}
+
+function pluginOrigin(skill: ManagedSkillSummary): string | null {
+  const origin = skill.origin;
+  const pluginName = origin?.pluginName;
+  if (!origin || !pluginName) return null;
+  switch (origin.kind) {
+    case 'catalog':
+      return skillCatalogPluginOrigin(pluginName);
+    case 'repository':
+      return skillRepositoryPluginOrigin(pluginName, origin.marketplace);
+    case 'upload':
+      return skillUploadedPluginOrigin(pluginName);
+    case 'authored':
+      return skillAuthoredPluginOrigin(pluginName);
+    default:
+      return null;
+  }
+}
+
+export function skillProvenance(skill: ManagedSkillSummary): string {
+  const fromPlugin = pluginOrigin(skill);
+  if (fromPlugin) return fromPlugin;
+  if (skill.origin?.kind === 'personal' || OWNED_SOURCES.has(skill.source)) {
+    return SKILL_ORIGIN_PERSONAL;
+  }
+  if (skill.source === PLUGIN_SOURCE) return SKILL_ORIGIN_UNKNOWN_PLUGIN;
+  if (skill.source === MANAGED_LOCAL_SOURCE) return SKILL_ORIGIN_MANAGED;
+  return SKILL_ORIGIN_BUNDLED;
 }
 
 function skillSourceId(source: string): string {
@@ -89,7 +139,7 @@ export function toSkillEntry(
     id: skill.name,
     name: skill.name,
     slashName: true,
-    publisher: skillPublisher(skill.source),
+    publisher: skillPublisherFor(skill),
     description: skill.description,
     sourceId: skillSourceId(skill.source),
     installed: isInstalled,
@@ -262,10 +312,28 @@ async function fetchSkillBody(name: string): Promise<string> {
   return body.body ?? '';
 }
 
+export interface SkillConnectorLookup {
+  connected: ReadonlySet<string>;
+  connectorName?: (connectorId: string) => string | undefined;
+}
+
+function requiredConnectorSettings(
+  skill: ManagedSkillSummary,
+  lookup: SkillConnectorLookup | undefined,
+): DirectoryPluginConnectorSetting[] {
+  const connected = new Set([...(lookup?.connected ?? [])].map((id) => id.toLowerCase()));
+  return (skill.requiredConnectors ?? []).map((id) => ({
+    id,
+    name: lookup?.connectorName?.(id) ?? id,
+    connected: connected.has(id.toLowerCase()),
+  }));
+}
+
 export async function fetchSkillDetail(
   id: string,
   skills: readonly ManagedSkillSummary[],
   installed: ReadonlySet<string>,
+  connectors?: SkillConnectorLookup,
 ): Promise<DirectorySkillDetail | null> {
   const summary = skills.find((skill) => skill.name === id);
   if (!summary) return null;
@@ -277,12 +345,19 @@ export async function fetchSkillDetail(
 
   const licenseFile = files.find((file) => file.path.toLowerCase().startsWith(LICENSE_PREFIX));
 
+  const requiredConnectors = requiredConnectorSettings(summary, connectors);
+
   return {
     kind: 'skill',
     id: summary.name,
     name: summary.name,
-    publisher: skillPublisher(summary.source),
+    publisher: skillPublisherFor(summary),
     description: summary.description,
+    provenance: skillProvenance(summary),
+    ...(summary.origin?.addedAt ? { addedAt: summary.origin.addedAt } : {}),
+    ...(summary.version ? { version: summary.version } : {}),
+    ...(summary.requiredTools?.length ? { requiredTools: summary.requiredTools } : {}),
+    ...(requiredConnectors.length > 0 ? { requiredConnectors } : {}),
     ...(licenseFile ? { license: `${SKILL_LICENSE_PREFIX} ${licenseFile.path}` } : {}),
     files,
     readFile: (path: string) => fetchSkillFileContent(id, path),

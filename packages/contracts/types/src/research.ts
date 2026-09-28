@@ -421,6 +421,9 @@ export interface ResearchReport {
 
   queryId: string;
 
+  /** The question the run was asked, when the report was stored with it. */
+  query?: string;
+
   title: string;
 
   summary: string;

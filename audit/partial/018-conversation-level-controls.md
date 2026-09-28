@@ -187,14 +187,13 @@ Code: `apps/mobile/app/(app)/chat/[id].tsx:1186-1192`, `apps/mobile/app/(app)/ch
 
 - Done when: A conversation details view shows its metadata (created/updated, model, message count, id, project).
 - Wave: 3
-- Already works on: cli
+- Already works on: cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | The 'Chat details' dock appears only for AGI Work or agent turns and lists files, sources and context, not conversation metadata (created, model, message count); add a details view for every chat. | ui |
 | desktop | partial | The 'Chat details' dock appears only for AGI Work or agent turns and lists files, sources and context, not conversation metadata (created, model, message count); add a details view for every chat. | ui |
 | mobile | missing | Not built on this surface. |  |
-| vscode | partial | L2: ConversationTreeItem exposes part of the metadata (model, cwd, gitBranch in the tooltip; updatedAt as the description) so some links exist; the rest of the criterion is absent. Thin, so partial rather than done. |  |
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/web/features/chat/components/work-session/WorkSessionPanel.tsx:463-467`, `apps/web/features/chat/pages/WebChatPage.tsx:4906-4906`, `apps/web/features/chat/pages/WebChatPage.tsx:5816-5822`
@@ -203,14 +202,13 @@ Code: `apps/web/features/chat/components/work-session/WorkSessionPanel.tsx:463-4
 
 - Done when: The user can inspect what context and sources the conversation is using (files, instructions, memory, token budget).
 - Wave: 3
-- Already works on: vscode
+- Already works on: cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | The 'Chat details' dock shows Sources and Context (and files) only for AGI Work or agent turns; plain chats have no context/source inspector. | ui |
 | desktop | partial | The 'Chat details' dock shows Sources and Context (and files) only for AGI Work or agent turns; plain chats have no context/source inspector. | ui |
 | mobile | partial | Only a warning chip appears when the thread nears the model's context limit; add a view of what is in context. | ui |
-| cli | partial | /context (/ctx) reports only the percentage of the window used; add a list of what is in context (files, instructions, memory). | ui |
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/web/features/chat/components/work-session/WorkSessionPanel.tsx:577-585`, `apps/web/features/chat/components/work-session/WorkSessionPanel.tsx:468-474`, `apps/web/features/chat/pages/WebChatPage.tsx:4906-4906`, `apps/mobile/app/(app)/chat/[id].tsx:1458-1464`
@@ -252,10 +250,9 @@ Code: `apps/web/features/chat/components/work-session/WorkSessionPanel.tsx:577-5
 | --- | --- | --- | --- |
 | mobile | partial | Task chips pick a tool mode for the next message only; add per-conversation tool toggles. | ui |
 | cli | partial | L2/R-k: --allowedTools/--disallowedTools (lib.rs:392-402) are passed into the session for every turn (4626-4630, and the TUI branch below it), which is per-conversation tool enablement that persists across the session's turns; there is no mid-session control, so partial. |  |
-| vscode | partial | 'Browse web' is a composer toggle and agent mode is global; there are no per-conversation tool settings. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/chat/components/TaskChips.tsx:34-36`, `apps/mobile/src/features/chat/components/Composer/Composer.tsx:81-81`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2399-2402`, `apps/extension-vscode/src/core/commandSetup.ts:1684-1690`
+Code: `apps/mobile/src/features/chat/components/TaskChips.tsx:34-36`, `apps/mobile/src/features/chat/components/Composer/Composer.tsx:81-81`
 
 ## S18.26: Conversation-level connected accounts.
 

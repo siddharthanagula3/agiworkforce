@@ -6,30 +6,15 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S14.01: Device file picker.
-
-- Done when: The composer opens the device file chooser and the chosen file is attached to the next message.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | Let the Chrome picker attach documents (PDF, text); today "Add an image" accepts PNG, JPEG, WebP and GIF only. | handler |
-
-Code: `apps/extension/src/side_panel.ts:9843-9867`, `apps/extension/src/side_panel.ts:5258-5298`
-
 ## S14.02: Drag-and-drop intake.
 
 - Done when: Dropping files onto the chat attaches them to the next message.
 - Wave: 3
-- Already works on: web, desktop, vscode
+- Already works on: web, desktop, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| chrome | partial | Same images-only intake that the auditor rated partial for the Chrome picker (S14.01) is rated done for drag-and-drop; both go through acceptIncomingComposerFiles. Treated consistently, drop is partial too. |  |
-
-Code: `apps/extension/src/side_panel.ts:10163-10168`, `apps/extension/src/side_panel.ts:5258-5298`
 
 ## S14.03: Paste-image intake.
 
@@ -78,7 +63,6 @@ Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:857-857`,
 | web | partial | Offer window capture in the browser; getDisplayMedia would let the user choose a window, but the screenshot row is hidden on web (canTakeScreenshot false). | mount |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Capture another app window; today the screenshot action captures only the visible browser tab. | handler |
 
 Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:857-857`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:4461-4465`, `packages/contracts/types/src/capabilities.ts:57-57`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:1827-1872`
 
@@ -86,14 +70,13 @@ Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:857-857`,
 
 - Done when: The user can attach a web page by its URL so its content is used as context for the message.
 - Wave: 3
+- Already works on: cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Add a control that attaches a link as a context chip; today a link pasted into the message is read only if the model chooses to call url_fetch. | ui |
 | desktop | partial | Add a control that attaches a link as a context chip; today a link pasted into the message is read only if the model chooses to call url_fetch. | ui |
 | mobile | partial | Attach a shared or pasted link as a page; today a link shared into the app becomes draft text and is read only if the cloud model calls url_fetch. | ui |
-| cli | partial | Add a way to attach a URL as context; today a link in the prompt is fetched only if the agent calls its web_fetch tool. | ui |
-| vscode | partial | Add a way to attach a URL as context; today a link in the prompt is fetched only if the CLI agent calls web_fetch. | ui |
 | chrome | partial | The item is attaching a page by its URL. The cited control captures the text of the tab currently open; there is no URL input, and the auditor's own note concedes the user must navigate first. Page-context capture is a partial answer, not done. |  |
 
 Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:1501-1508`, `apps/web/lib/url-fetch/url-fetch-tool.ts:10-10`, `apps/web/features/chat/pages/WebChatPage.tsx:5668-5668`, `apps/mobile/src/features/share-preview/index.tsx:81-81`
@@ -156,14 +139,13 @@ Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:858-858`,
 
 - Done when: One pick action can select several files, and all of them are attached.
 - Wave: 3
-- Already works on: web, desktop, cli, vscode
+- Already works on: web, desktop, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Let the File picker select several documents at once; today Photos allows up to 5 but File picks one document per trip. | ui |
-| chrome | partial | Allow picking several images in one go; the "Add an image" input has no multiple attribute (drag-and-drop of several images works). | ui |
 
-Code: `apps/mobile/app/(app)/(tabs)/chat.tsx:613-618`, `apps/mobile/app/(app)/(tabs)/chat.tsx:635-638`, `apps/extension/src/side_panel.ts:9843-9867`, `apps/extension/src/side_panel.ts:5258-5298`
+Code: `apps/mobile/app/(app)/(tabs)/chat.tsx:613-618`, `apps/mobile/app/(app)/(tabs)/chat.tsx:635-638`
 
 ## S14.17: File-type icon.
 
@@ -217,18 +199,6 @@ Code: `apps/web/features/chat/components/Composer/AttachmentPreview.tsx:250-259`
 
 Code: `apps/web/lib/server/office-document-text.ts:88-95`, `apps/web/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration.ts:489-509`, `apps/mobile/services/attachmentContext.ts:15-29`
 
-## S14.24: Unsupported-file notice.
-
-- Done when: Adding a file type the chat cannot read shows a notice naming the file and why.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | The criterion is a notice naming the file and why. The cited line sets a fixed sentence with no file name, and the auditor's own S14.32 chrome partial says 'Name the file in each error'; the two cells cannot both stand. |  |
-
-Code: `apps/extension/src/side_panel.ts:5262-5265`, `apps/extension/src/side_panel.ts:5301-5339`
-
 ## S14.25: Password-protected-file notice.
 
 - Done when: A password-protected file produces a notice that says it is locked and how to fix it.
@@ -270,18 +240,6 @@ Code: `packages/contracts/cloud-contracts/src/managed-cloud-chat-attachments-cli
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/web/app/api/uploads/chat-attachment/complete/route.ts:221-241`, `apps/web/features/chat/hooks/use-attachments.ts:148-188`, `apps/mobile/src/features/chat/components/ChatInput.tsx:247-257`
-
-## S14.32: Per-file error display.
-
-- Done when: When a file fails, the error is shown against that file (name and reason), not as one generic message.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | Name the file in each error and keep one per file; today a single notice line is overwritten by the last problem ("Each image must be under …"). | ui |
-
-Code: `apps/extension/src/side_panel.ts:5263-5269`, `apps/extension/src/side_panel.ts:5301-5339`
 
 ## S14.33: Batch-upload summary.
 

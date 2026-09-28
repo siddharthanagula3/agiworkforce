@@ -32,14 +32,11 @@ nothing is left.
 
 - Done when: The user can create bulleted, numbered and checklist items in a document.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Lists and task lists render and are created by prompt or Markdown; ticking a checkbox in the preview is not wired, because each tick would record a new artifact version. | ui |
-| desktop | partial | Lists and task lists render and are created by prompt or Markdown; ticking a checkbox in the preview is not wired, because each tick would record a new artifact version. | ui |
 | mobile | missing | Not built on this surface. |  |
-
-Code: `packages/ui/unified-chat/src/components/markdown/remarkPlugins.ts:27-27`
 
 ## S27.08: Tables.
 
