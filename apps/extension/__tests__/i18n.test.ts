@@ -23,7 +23,14 @@ const LOCALIZED_SOURCES = [
   'src/features/side-panel/artifactsDrawer.ts',
   'src/features/side-panel/schedulesSection.ts',
   'src/features/side-panel/planComparison.ts',
+  'src/features/side-panel/voice.ts',
+  'src/features/side-panel/chat-state.ts',
+  'src/features/side-panel/bubbles.ts',
+  'src/features/side-panel/sources.ts',
+  'src/features/side-panel/generatedFiles.ts',
 ] as const;
+
+const PLURAL_SUFFIX = /_(zero|one|two|few|many|other)$/;
 
 function read(relativePath: string): string {
   return readFileSync(join(APP_ROOT, relativePath), 'utf8');
@@ -112,11 +119,15 @@ describe('extension message catalog', () => {
 
   it('resolves every key the localized sources ask for', () => {
     for (const file of LOCALIZED_SOURCES) {
-      const keys = [...read(file).matchAll(/\bt\(\s*'([A-Za-z0-9_]+)'/g)].map(
+      const source = read(file);
+      const keys = [...source.matchAll(/\bt\(\s*'([A-Za-z0-9_]+)'/g)].map(
         (match) => match[1] as string,
       );
-      expect(keys.length).toBeGreaterThan(0);
-      for (const key of keys) {
+      const pluralKeys = [...source.matchAll(/\btPlural\(\s*'([A-Za-z0-9_]+)'/g)].map(
+        (match) => `${match[1] as string}_other`,
+      );
+      expect(keys.length + pluralKeys.length).toBeGreaterThan(0);
+      for (const key of [...keys, ...pluralKeys]) {
         expect(Object.keys(catalog), `${file} asks for ${key}`).toContain(key);
       }
     }
@@ -129,7 +140,13 @@ describe('extension message catalog', () => {
     ].join('\n');
 
     const unused = Object.keys(catalog).filter(
-      (key) => !consumers.includes(`t('${key}'`) && !consumers.includes(`__MSG_${key}__`),
+      (key) =>
+        !consumers.includes(`t('${key}'`) &&
+        !consumers.includes(`__MSG_${key}__`) &&
+        !(
+          PLURAL_SUFFIX.test(key) &&
+          consumers.includes(`tPlural('${key.replace(PLURAL_SUFFIX, '')}'`)
+        ),
     );
     expect(unused).toEqual([]);
   });

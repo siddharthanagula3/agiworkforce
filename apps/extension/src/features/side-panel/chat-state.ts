@@ -5,7 +5,30 @@ import type {
 } from '@agiworkforce/cloud-contracts';
 import type { InteractiveCard } from '@agiworkforce/types';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
+import { normalizeSourceUrlKey } from '@agiworkforce/utils/source-url';
 import type { ManagedQuotaRecovery } from '../cloud-bridge/freeTrialClient';
+import { t, tPlural } from '../../i18n';
+
+export interface SidePanelMessageAttachment {
+  kind: 'image' | 'file';
+  name: string;
+  mimeType: string;
+  assetId?: string;
+}
+
+export interface SidePanelPageReference {
+  url: string;
+  title: string;
+}
+
+export interface SidePanelSource {
+  url: string;
+  title: string;
+  snippet?: string;
+  publishedDate?: string;
+}
+
+export const MAX_MESSAGE_SOURCES = 40;
 
 export interface SidePanelChatMessage {
   id: string;
@@ -21,6 +44,8 @@ export interface SidePanelChatMessage {
    * cursor that will never move again.
    */
   interrupted?: boolean;
+  stopping?: boolean;
+  reconnecting?: boolean;
   error?: boolean;
   agentActivity?: AgentActivityState;
   agentEvents?: AgentEventEnvelope[];
@@ -32,6 +57,11 @@ export interface SidePanelChatMessage {
   provider?: string;
   generatedFiles?: GeneratedFileWire[];
   interactiveCards?: InteractiveCard[];
+  attachments?: SidePanelMessageAttachment[];
+  pages?: SidePanelPageReference[];
+  sources?: SidePanelSource[];
+  citations?: SidePanelSource[];
+  durationMs?: number;
   runtime?: 'managed-cloud' | 'local';
   errorText?: string;
   errorAction?: 'switch-model';
@@ -60,6 +90,11 @@ export interface StoredSidePanelChatMessage {
   provider?: string;
   generatedFiles?: GeneratedFileWire[];
   interactiveCards?: InteractiveCard[];
+  attachments?: SidePanelMessageAttachment[];
+  pages?: SidePanelPageReference[];
+  sources?: SidePanelSource[];
+  citations?: SidePanelSource[];
+  durationMs?: number;
   runtime?: 'managed-cloud' | 'local';
   error?: boolean;
   cloudMessageId?: string;
@@ -146,11 +181,88 @@ export function hydrateStoredChatMessage(
     ...(message.interactiveCards
       ? { interactiveCards: message.interactiveCards.map((card) => ({ ...card })) }
       : {}),
+    ...(message.attachments
+      ? { attachments: message.attachments.map((attachment) => ({ ...attachment })) }
+      : {}),
+    ...(message.pages ? { pages: message.pages.map((page) => ({ ...page })) } : {}),
+    ...(message.sources ? { sources: message.sources.map((source) => ({ ...source })) } : {}),
+    ...(message.citations
+      ? { citations: message.citations.map((citation) => ({ ...citation })) }
+      : {}),
+    ...(message.durationMs !== undefined ? { durationMs: message.durationMs } : {}),
     ...(message.runtime ? { runtime: message.runtime } : {}),
     ...(message.error ? { error: true } : {}),
     ...(message.streaming ? { interrupted: true } : {}),
     ...(message.cloudMessageId ? { cloudMessageId: message.cloudMessageId } : {}),
   };
+}
+
+function isWebSourceUrl(url: string): boolean {
+  try {
+    const { protocol } = new URL(url);
+    return protocol === 'https:' || protocol === 'http:';
+  } catch {
+    return false;
+  }
+}
+
+export function mergeMessageSources(
+  existing: readonly SidePanelSource[] | undefined,
+  incoming: readonly SidePanelSource[],
+): SidePanelSource[] {
+  const merged = (existing ?? []).map((source) => ({ ...source }));
+  const byKey = new Map(merged.map((source) => [normalizeSourceUrlKey(source.url), source]));
+  for (const source of incoming) {
+    if (!isWebSourceUrl(source.url)) continue;
+    const key = normalizeSourceUrlKey(source.url);
+    const known = byKey.get(key);
+    if (known) {
+      if (!known.title && source.title) known.title = source.title;
+      if (!known.snippet && source.snippet) known.snippet = source.snippet;
+      if (!known.publishedDate && source.publishedDate) known.publishedDate = source.publishedDate;
+      continue;
+    }
+    if (merged.length >= MAX_MESSAGE_SOURCES) break;
+    const copy = { ...source };
+    merged.push(copy);
+    byKey.set(key, copy);
+  }
+  return merged;
+}
+
+export function answerSourceLists(message: SidePanelChatMessage): {
+  markers: SidePanelSource[];
+  all: SidePanelSource[];
+} {
+  const activitySources: SidePanelSource[] = (message.agentActivity?.entries ?? []).flatMap(
+    (entry) =>
+      entry.kind === 'sources' || entry.kind === 'tool'
+        ? (entry.sources ?? []).map((source) => ({
+            url: source.url,
+            title: source.title,
+            ...(source.snippet ? { snippet: source.snippet } : {}),
+          }))
+        : [],
+  );
+  const searched = mergeMessageSources(message.sources, activitySources);
+  const markers = message.citations?.length
+    ? mergeMessageSources(undefined, message.citations)
+    : searched;
+  return { markers, all: mergeMessageSources(markers, searched) };
+}
+
+export function isEmptyAssistantTurn(message: SidePanelChatMessage): boolean {
+  if (message.role !== 'assistant' || message.error || message.interrupted) return false;
+  if (message.content.trim().length > 0) return false;
+  if (message.generatedFiles?.length || message.interactiveCards?.length) return false;
+  const activity = message.agentActivity;
+  if (activity?.status === 'cancelled' || activity?.status === 'paused') return false;
+  return !activity?.entries.some(
+    (entry) =>
+      entry.kind === 'artifact' ||
+      (entry.kind === 'tool' &&
+        (entry.status === 'awaiting-approval' || Boolean(entry.inputRequest))),
+  );
 }
 
 export function applyCanonicalAgentEvent(
@@ -181,13 +293,17 @@ export function applyCanonicalAgentEvent(
   return assistant;
 }
 
-export function resolveComposerPrompt(text: string, attachmentCount: number): string | null {
+export function resolveComposerPrompt(
+  text: string,
+  attachmentCount: number,
+  attachmentKind: 'image' | 'file' = 'image',
+): string | null {
   const trimmed = text.trim();
   if (trimmed) return trimmed;
   if (attachmentCount <= 0) return null;
   return attachmentCount === 1
-    ? 'Please analyze the attached image.'
-    : 'Please analyze the attached images.';
+    ? `Please analyze the attached ${attachmentKind}.`
+    : `Please analyze the attached ${attachmentKind}s.`;
 }
 
 export function trimChatMessages(messages: SidePanelChatMessage[], maximum: number): number {
@@ -203,19 +319,15 @@ export function trimChatMessages(messages: SidePanelChatMessage[], maximum: numb
  */
 const MAX_STATED_RETRY_AFTER_SECONDS = 86_400;
 
-function counted(value: number, unit: string): string {
-  return `${value} ${unit}${value === 1 ? '' : 's'}`;
-}
-
 export function statedWait(retryAfterSeconds: unknown): string | undefined {
   if (typeof retryAfterSeconds !== 'number' || !Number.isFinite(retryAfterSeconds))
     return undefined;
   const seconds = Math.round(retryAfterSeconds);
   if (seconds < 1 || seconds > MAX_STATED_RETRY_AFTER_SECONDS) return undefined;
-  if (seconds < 90) return `about ${counted(seconds, 'second')}`;
+  if (seconds < 90) return tPlural('spWaitSeconds', seconds);
   const minutes = Math.round(seconds / 60);
-  if (minutes < 90) return `about ${counted(minutes, 'minute')}`;
-  return `about ${counted(Math.round(seconds / 3600), 'hour')}`;
+  if (minutes < 90) return tPlural('spWaitMinutes', minutes);
+  return tPlural('spWaitHours', Math.round(seconds / 3600));
 }
 
 export interface StreamFailureDetail {
@@ -235,9 +347,10 @@ export interface StreamFailureDetail {
  */
 export function streamFailureText(errorText: string, detail: StreamFailureDetail = {}): string {
   const wait = statedWait(detail.retryAfterSeconds);
-  const withWait = wait && !/\d/.test(errorText) ? `${errorText} Try again in ${wait}.` : errorText;
+  const withWait =
+    wait && !/\d/.test(errorText) ? t('spStreamTryAgainIn', [errorText, wait]) : errorText;
   const withReset = detail.resetLabel ? `${withWait} ${detail.resetLabel}.` : withWait;
-  return detail.requestId ? `${withReset} Reference: ${detail.requestId}` : withReset;
+  return detail.requestId ? t('spStreamReference', [withReset, detail.requestId]) : withReset;
 }
 
 export function applyStreamFailure(
@@ -310,6 +423,7 @@ export function shouldRenderTextBubble(input: {
 export interface PageContextSource {
   tabId: number;
   url: string;
+  title?: string;
 }
 
 /**

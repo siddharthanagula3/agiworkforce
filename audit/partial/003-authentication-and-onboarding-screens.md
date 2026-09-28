@@ -119,31 +119,15 @@ Code: `apps/web/features/auth/identityAuthAdapter.tsx:267-269`, `apps/desktop/el
 
 Code: `apps/mobile/app/(auth)/login.tsx:207-209`, `apps/mobile/src/features/settings/account-security/service.ts:70-80`
 
-## S3.16: Account-recovery flow.
-
-- Done when: A user who has lost their password, email or second factor can start and complete an account-recovery flow that restores access.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Migration 0277 is now applied in production (2026-09-27). Still open: Build a recovery flow beyond the emailed password reset: nothing starts a recovery for a lost email or factor, the recovery_requested security event is defined but never emitted, and the recovery_pending account state needs pending migration 0277. | handler |
-| desktop | partial | Migration 0277 is now applied in production (2026-09-27). Still open: Same as web (hosted page): only the emailed password reset exists; recovery_pending needs pending migration 0277. | handler |
-| mobile | partial | Mobile recovery only opens the web page for a password reset; there is no recovery for a lost email or second factor. | handler |
-
-Code: `apps/web/features/auth/AuthPasswordStep.tsx:84-92`, `apps/web/features/auth/identityAuthAdapter.tsx:414-422`, `apps/web/lib/auth/account-status.ts:72-88`, `apps/web/lib/services/identity-events/catalogue.ts:197-205`
-
 ## S3.17: Account-linking flow.
 
 - Done when: A signed-in user can link another sign-in method (e.g. Google, GitHub) to the same account and see or unlink linked methods.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Add a sign-in methods screen: /api/settings/identities can list and unlink methods but no page calls it, and nothing lets a signed-in user link a new provider. | ui |
-| desktop | partial | Same as web (hosted app): the list/unlink route has no screen and there is no link flow. | ui |
 | mobile | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/api/settings/identities/route.ts:23-45`
 
 ## S3.18: Conflicting-account resolution.
 
@@ -192,18 +176,6 @@ Code: `apps/mobile/app/(public)/onboarding.tsx:270-285`, `apps/mobile/app/(auth)
 
 Code: `apps/mobile/src/features/settings/personalization/index.tsx:269-281`, `apps/mobile/app/(public)/onboarding.tsx:232-240`
 
-## S3.22: Language and timezone setup.
-
-- Done when: During setup the user can choose or confirm their language and time zone (or they are detected and shown for change).
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Add language and time zone to onboarding: display language is only in Settings > General and the time zone is read silently from the browser; /welcome asks for neither. | ui |
-| desktop | partial | Same as web (hosted app): language only in Settings, time zone taken from the system without confirmation. | ui |
-
-Code: `apps/web/features/settings/components/LanguageSelector.tsx:10-41`, `apps/web/features/settings/sections/TimeFocusSection.tsx:35-42`
-
 ## S3.23: Role or use-case selection.
 
 - Done when: Onboarding asks the user their role or intended use and uses the answer (e.g. to tailor replies or suggestions).
@@ -232,33 +204,27 @@ Code: `apps/mobile/src/features/settings/personalization/index.tsx:269-281`
 
 - Done when: During setup the user is told about memory and chooses whether and how it is used, with the choice changeable later.
 - Wave: 3
+- Already works on: cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Add a memory step to onboarding: memory controls (persistent memory, generate from past chats, search past chats) exist only in Settings > Memory and /welcome never mentions memory. | ui |
-| desktop | partial | Same as web (hosted app): memory is configured only in Settings > Memory. | ui |
 | mobile | partial | Add memory to mobile first run: memory screens exist only under Settings. | ui |
-| cli | partial | The first-run wizard never mentions memory; memory is reached only through the /memory slash command. | ui |
-| vscode | partial | The walkthrough never mentions memory; it is toggled only by the agi-workforce.memory commands and the agiWorkforce.memory.enabled setting. | ui |
 | chrome | partial | The side-panel first-run overlay never mentions memory; memories are only listed and deleted in the panel menu. | ui |
 
-Code: `apps/web/features/settings/sections/MemorySection.tsx:185-192`, `apps/mobile/app/(app)/settings/memory-import.tsx:130-135`, `apps/cli/src/tui/tui_app.rs:3792-3794`, `apps/extension-vscode/package.json:1040-1044`
+Code: `apps/mobile/app/(app)/settings/memory-import.tsx:130-135`, `apps/extension/src/side_panel.ts:7799-7806`
 
 ## S3.27: Recommended-app connection flow.
 
 - Done when: New users are shown a few recommended apps/connectors (e.g. based on their role) and can connect them in a guided flow.
-- Wave: 2
+- Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Pass the saved work description to the settings modal: the "Suggested for <role>" connector list exists in the shared SettingsModal but WebSettingsModal never passes workRole, so no suggestion ever shows. | mount |
-| desktop | partial | Same as web (hosted app): role-based connector suggestions are never wired, so none appear. | mount |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `packages/ui/ui/src/settings-modal/SettingsModal.tsx:834-845`, `apps/web/features/settings/components/WebSettingsModal.tsx:218-230`
 
 ## S3.29: Desktop permission setup.
 
@@ -280,49 +246,9 @@ Code: `apps/web/features/desktop-host/components/LocalFolderAttachDialog.tsx:75-
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Fix the pairing instructions: the phone says to open Desktop "Settings and select Connections" and /pair says "Mobile companion", but the code is generated in Desktop Settings > Capabilities (Connections opens Connectors). | ui |
+| mobile | partial | partials/auth 34de0ffbe fixed /pair; the phone's own checklist is in Codex-held ConnectionStateViews.tsx, patch saved as post-codex/p-auth-S3.31.patch | ui |
 
-Code: `apps/mobile/src/features/companion/components/ConnectionStateViews.tsx:98-112`, `apps/mobile/services/manualPairing.ts:152-170`
-
-## S3.32: Optional notification setup.
-
-- Done when: The user is offered an optional, declinable way to turn on notifications (primer or setup step), and can change it later.
-- Wave: 3
-- Already works on: web, desktop, mobile, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Offer a notification setting: completion alerts are possible only by hand-writing a Notification hook in the hooks config; nothing prompts or explains it. | ui |
-
-Code: `apps/cli/src/features/hooks/hooks.rs:237-240`
-
-## S3.33: Plan selection.
-
-- Done when: A user can compare plans and select one, reaching a real purchase for the chosen plan.
-- Wave: 2
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Open paid checkout to all eligible users: plans can be compared and chosen, but checkout refuses anyone without a waitlist or invite grant (hasBillingWaitlistAccess). | flag-off |
-| desktop | partial | Same as web (hosted app): plan choice works, checkout is gated to waitlist/invite holders. | flag-off |
-| mobile | partial | Turn on mobile purchase: FEATURES.billing is false and native purchases need MOBILE_IAP_ENABLED plus the same waitlist gate. | flag-off |
-| api | partial | POST /checkout is a documented public operation, but it returns 403 unless the account holds a waitlist or invite grant. | flag-off |
-
-Code: `apps/web/app/pricing/page.tsx:917-941`, `apps/web/app/api/checkout/route.ts:208-221`, `apps/mobile/lib/v1FeatureFlags.ts:6-6`, `apps/web/app/api/mobile/iap/catalog/route.ts:83-86`
-
-## S3.34: Trial activation.
-
-- Done when: A user can start a trial of a paid plan, sees it marked as a trial, and the trial ends (reverts or bills) on schedule.
-- Wave: 2
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | No plan defines trial days, so checkout never offers a trial; the invite-code trial route (/api/claim-offer) has no web caller, and code-granted trials never expire. | ui, handler |
-| desktop | partial | Same as web (hosted app): no checkout trial and no web path to the invite-code trial. | ui, handler |
-| mobile | partial | Mobile invite-code modal is unmounted and its redeem is a local stub that accepts only a built-in alpha code, so no trial can start. | mount, handler |
-| chrome | partial | Chrome can redeem an invite code into a trialing plan via /api/claim-offer, but nothing ever ends that trial. | handler |
-
-Code: `apps/web/app/api/checkout/route.ts:83-106`, `apps/web/app/api/claim-offer/route.ts:81-87`, `apps/mobile/src/features/waitlist/service.ts:85-95`, `apps/extension/src/side_panel.ts:8149-8168`
+Code: `apps/web/app/pair/pair-body.tsx:27-27`
 
 ## S3.36: Resumable onboarding checklist.
 

@@ -11,7 +11,7 @@ import {
   type ShellPolicy,
   type WorkspaceRoot,
 } from '@agiworkforce/local-runtime-contract';
-import { Spinner, useConfirmAction } from '@agiworkforce/ui';
+import { Spinner, useConfirmAction, useUiTranslation } from '@agiworkforce/ui';
 import { useDesktopHost, useLocalModeHost } from '../lib/host';
 import {
   listWorkspaceRoots,
@@ -77,6 +77,7 @@ function messageFor(error: unknown, fallback: string): string | null {
 }
 
 function LocalModelsPanel() {
+  const { plural } = useUiTranslation('settings');
   const localHost = useLocalModeHost();
   const models = useLocalModels(true);
   const [settings, setSettings] = useState<LocalModelSettings | null>(null);
@@ -148,7 +149,10 @@ function LocalModelsPanel() {
                 <p className="text-sm font-medium text-foreground">{server?.label ?? serverId}</p>
                 <p className="text-xs text-muted-foreground">
                   {server?.reachable
-                    ? `${MODELS_RUNNING} · ${server.modelCount} model${server.modelCount === 1 ? '' : 's'}`
+                    ? `${MODELS_RUNNING} · ${plural('counts.models', server.modelCount, {
+                        one: '{{count}} model',
+                        other: '{{count}} models',
+                      })}`
                     : MODELS_NOT_RUNNING}
                 </p>
               </div>

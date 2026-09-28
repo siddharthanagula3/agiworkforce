@@ -61,7 +61,7 @@ describe('rights-holder entry point on the public viewers', () => {
       }) as Promise<React.ReactElement>,
     );
 
-    const link = screen.getByRole('link', { name: /report copyright infringement/i });
+    const link = screen.getByRole('link', { name: /report infringement or impersonation/i });
     expect(link).toHaveAttribute('href', reportHref(`/share/${SHARE_TOKEN}`));
   });
 
@@ -72,7 +72,7 @@ describe('rights-holder entry point on the public viewers', () => {
       }) as Promise<React.ReactElement>,
     );
 
-    const link = screen.getByRole('link', { name: /report copyright infringement/i });
+    const link = screen.getByRole('link', { name: /report infringement or impersonation/i });
     expect(link).toHaveAttribute('href', reportHref(`/shared-artifact/${ARTIFACT_TOKEN}`));
   });
 

@@ -49,7 +49,7 @@ function OverrideDot({ show }: OverrideDotProps) {
           <Tooltip.Content
             side="top"
             className={cn(
-              'z-[var(--z-dropdown)] rounded-md px-2 py-1 text-caption shadow-md',
+              'z-[var(--z-dropdown)] rounded-md px-2 py-1 text-caption shadow-e2',
               'bg-[var(--chat-surface-elevated)] border border-[var(--chat-border)]',
               'text-[var(--chat-text-secondary)]',
             )}
@@ -114,7 +114,7 @@ function ModeChip({ conversationId, projectId }: ModeChipProps) {
             align="start"
             sideOffset={6}
             className={cn(
-              'z-[var(--z-dropdown)] w-64 overflow-hidden rounded-xl shadow-lg',
+              'z-[var(--z-dropdown)] w-64 overflow-hidden rounded-xl shadow-e3',
               'border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)]',
               'animate-in fade-in-0 zoom-in-95',
               'data-[side=top]:slide-in-from-bottom-2',
@@ -227,7 +227,7 @@ function EffortChip({ conversationId, projectId, modelId, effortOptions }: Effor
           align="start"
           sideOffset={6}
           className={cn(
-            'z-[var(--z-dropdown)] w-64 overflow-hidden rounded-xl shadow-lg',
+            'z-[var(--z-dropdown)] w-64 overflow-hidden rounded-xl shadow-e3',
             'border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)]',
             'animate-in fade-in-0 zoom-in-95',
             'data-[side=top]:slide-in-from-bottom-2',

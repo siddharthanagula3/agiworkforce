@@ -1,4 +1,5 @@
 import { CLOUD_API_BASE_URL } from './cloudApi';
+import { WEB_APP_URL } from './config';
 import { createManagedCloudRequestContext } from '../services/managedCloudRequestContext';
 
 export interface CloudConnectorEntry {
@@ -10,6 +11,7 @@ export interface CloudConnectorEntry {
   source: 'user' | 'github-app' | 'custom';
   name?: string;
   toolConnectorId?: string;
+  needsReauthorization?: boolean;
 }
 
 export interface ListConnectorsResult {
@@ -28,7 +30,17 @@ export interface CreateCustomConnectorInput {
   name: string;
   url: string;
   authToken?: string;
+  oauthClientId?: string;
+  oauthClientSecret?: string;
 }
+
+export interface CreatedCustomConnector {
+  id: string | null;
+  shortId: string | null;
+  signInRequired: boolean;
+}
+
+const CUSTOM_CONNECTOR_ID_PREFIX = 'custom-';
 
 function readApiError(body: unknown, fallback: string): string {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return fallback;
@@ -69,7 +81,35 @@ function parseConnectorEntry(value: unknown): CloudConnectorEntry | null {
     ...(typeof record['toolConnectorId'] === 'string'
       ? { toolConnectorId: record['toolConnectorId'] }
       : {}),
+    ...(record['needsReauthorization'] === true ? { needsReauthorization: true } : {}),
   };
+}
+
+export function customConnectorShortId(entry: CloudConnectorEntry): string | null {
+  const toolId = entry.toolConnectorId;
+  return toolId?.startsWith(CUSTOM_CONNECTOR_ID_PREFIX)
+    ? toolId.slice(CUSTOM_CONNECTOR_ID_PREFIX.length)
+    : null;
+}
+
+export function customConnectorSignInUrl(shortId: string): string {
+  const connectorId = `${CUSTOM_CONNECTOR_ID_PREFIX}${shortId}`;
+  return `${WEB_APP_URL}/api/connectors/oauth/start?connectorId=${encodeURIComponent(connectorId)}`;
+}
+
+export async function getCustomConnectorOAuthRedirectUri(): Promise<string | null> {
+  const request = createManagedCloudRequestContext('Custom Cloud connector settings');
+  const headers = await request.getHeaders();
+  const res = await request.fetch(`${CLOUD_API_BASE_URL}/api/connectors/custom`, {
+    method: 'GET',
+    headers,
+  });
+  if (!res.ok) return null;
+  const data: unknown = await res.json().catch(() => null);
+  request.assertBoundary();
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
+  const uri = (data as Record<string, unknown>)['oauthRedirectUri'];
+  return typeof uri === 'string' && uri.length > 0 ? uri : null;
 }
 
 export async function listConnectors(): Promise<ListConnectorsResult> {
@@ -179,10 +219,14 @@ export async function disconnectConnector(connectorId: string): Promise<void> {
   request.assertBoundary();
 }
 
-export async function createCustomConnector(input: CreateCustomConnectorInput): Promise<void> {
+export async function createCustomConnector(
+  input: CreateCustomConnectorInput,
+): Promise<CreatedCustomConnector> {
   const request = createManagedCloudRequestContext('Custom Cloud connector creation');
   const headers = await request.getHeaders();
   const authToken = input.authToken?.trim();
+  const oauthClientId = input.oauthClientId?.trim();
+  const oauthClientSecret = input.oauthClientSecret?.trim();
   const res = await request.fetch(`${CLOUD_API_BASE_URL}/api/connectors/custom`, {
     method: 'POST',
     headers,
@@ -190,6 +234,8 @@ export async function createCustomConnector(input: CreateCustomConnectorInput): 
       name: input.name,
       url: input.url,
       ...(authToken ? { authToken } : {}),
+      ...(oauthClientId ? { oauthClientId } : {}),
+      ...(oauthClientId && oauthClientSecret ? { oauthClientSecret } : {}),
     }),
   });
   if (!res.ok) {
@@ -197,7 +243,21 @@ export async function createCustomConnector(input: CreateCustomConnectorInput): 
     request.assertBoundary();
     throw new Error(readApiError(body, `Failed to add connector: HTTP ${res.status}`));
   }
+  const payload: unknown = await res.json().catch(() => null);
   request.assertBoundary();
+  const record =
+    payload && typeof payload === 'object' && !Array.isArray(payload)
+      ? (payload as Record<string, unknown>)
+      : {};
+  const connector =
+    record['connector'] && typeof record['connector'] === 'object'
+      ? (record['connector'] as Record<string, unknown>)
+      : {};
+  return {
+    id: typeof connector['id'] === 'string' ? connector['id'] : null,
+    shortId: typeof connector['shortId'] === 'string' ? connector['shortId'] : null,
+    signInRequired: record['signInRequired'] === true,
+  };
 }
 
 export async function deleteCustomConnector(id: string): Promise<void> {

@@ -79,6 +79,8 @@ import {
   OPEN_ARTIFACT_ON_WEB_COMMAND,
   REFRESH_ARTIFACTS_COMMAND,
   SAVE_ARTIFACT_COMMAND,
+  COPY_ARTIFACT_COMMAND,
+  copyArtifactContent,
   artifactsWebUrl,
   describeArtifactFailure,
   openArtifactReadOnly,
@@ -98,15 +100,22 @@ import { getAccountMemoryStore } from '../memory/accountMemoryStore';
 import { ChatEditorPanel } from '../providers/chatEditorPanel';
 import { type LocalRuntimePool } from '../integrations/localRuntimePool';
 import { installCli } from '../integrations/cliInstaller';
+import { submitFeedback, type FeedbackKind } from '../features/feedback/submitFeedback';
+import { managePersonalization } from '../features/personalization/personalization';
+import { manageMemoryExclusions } from '../memory/memoryExclusions';
 import {
   admitDeveloperSessionHandoff,
   describeHandoffRefusal,
+  describeHandoffReview,
 } from '../integrations/developerSessionHandoff';
 import { DEVELOPER_SESSION_PROTOCOL_VERSION } from '@agiworkforce/types';
 import {
   CliCapabilityAdapter,
   openArtifactsSurface,
   openCapabilitySurface,
+  manageMcpServers,
+  managePlugins,
+  manageSkills,
   openCloudTasksSurface,
   openConnectorsSurface,
   openContextSurface,
@@ -158,6 +167,7 @@ import { isEntitledSubscriptionStatus } from '@agiworkforce/types';
 import {
   normalizeConfiguredModelId,
   buildGroupedQuickPickItems,
+  describeModelSwitchLosses,
   modelDisplayLabel,
   modelLockHeading,
   modelLockReason,
@@ -183,14 +193,7 @@ import { exportVsCodeDiagnostics } from '../features/diagnostics';
 const execFileAsync = promisify(execFile);
 
 const UPGRADE_URL = 'https://agiworkforce.com/pricing';
-
-function requireWorkspaceMemoryScope(): boolean {
-  if ((vscode.workspace.workspaceFolders?.length ?? 0) > 0) return true;
-  void vscode.window.showWarningMessage(
-    'AGI Workforce: Open a workspace folder before managing workspace memory.',
-  );
-  return false;
-}
+const SWITCH_MODEL_ANYWAY = 'Switch anyway';
 
 const MEMORY_TURN_ON_ACTION = 'Turn memory on';
 
@@ -449,9 +452,12 @@ async function continueThisSessionInTheTerminal(sidebarProvider: SidebarProvider
   );
 }
 
+const CONTINUE_HANDOFF_HERE = 'Continue here';
+
 async function continueCliSessionHere(
   localRuntimes: LocalRuntimePool,
   accepted: Set<string>,
+  threadId?: string,
 ): Promise<void> {
   const folder = getActiveWorkspaceFolderSync();
   if (folder === undefined) {
@@ -471,12 +477,15 @@ async function continueCliSessionHere(
     );
     return;
   }
-  const newest = [...threads.threads].sort((left, right) =>
-    right.updatedAt.localeCompare(left.updatedAt),
-  )[0];
+  const newest =
+    threadId === undefined
+      ? [...threads.threads].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0]
+      : threads.threads.find((thread) => thread.id === threadId);
   if (newest === undefined) {
     await vscode.window.showInformationMessage(
-      'AGI Workforce: the AGI CLI has no session in this folder to continue.',
+      threadId === undefined
+        ? 'AGI Workforce: the AGI CLI has no session in this folder to continue.'
+        : 'AGI Workforce: that session is not in this folder. Open the folder it works in and send it again.',
     );
     return;
   }
@@ -494,6 +503,13 @@ async function continueCliSessionHere(
     );
     return;
   }
+  const review = describeHandoffReview(handoff, outcome.admission);
+  const choice = await vscode.window.showInformationMessage(
+    review.message,
+    { modal: true, detail: review.detail },
+    CONTINUE_HANDOFF_HERE,
+  );
+  if (choice !== CONTINUE_HANDOFF_HERE) return;
   accepted.add(outcome.receipt);
   await runtime.acceptHandoff(handoff);
   await vscode.commands.executeCommand('agi-workforce.chat');
@@ -1099,7 +1115,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         title: 'AGI Workforce, Set API Key',
         prompt:
           'Enter your AGI Workforce API key. It will be stored in VS Code SecretStorage (encrypted).',
-        placeHolder: placeholder !== '' ? placeholder : 'sk-agi-…',
+        placeHolder: placeholder !== '' ? placeholder : 'sk_live_…',
         password: true,
         ignoreFocusOut: true,
         validateInput: (value) => {
@@ -1190,6 +1206,19 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         return;
       }
 
+      const losses = describeModelSwitchLosses(currentModel, picked.modelId);
+      if (losses.length > 0) {
+        const choice = await vscode.window.showWarningMessage(
+          `Switch to ${modelDisplayLabel(picked.modelId)}?`,
+          {
+            modal: true,
+            detail: `Unlike ${modelDisplayLabel(currentModel)}, it ${losses.join('; it ')}.`,
+          },
+          SWITCH_MODEL_ANYWAY,
+        );
+        if (choice !== SWITCH_MODEL_ANYWAY) return;
+      }
+
       await vscode.workspace
         .getConfiguration('agiWorkforce')
         .update('model', picked.modelId, vscode.ConfigurationTarget.Global);
@@ -1271,8 +1300,12 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       conversationTreeProvider.refresh();
     }),
 
-    register('agi-workforce.continueCliSession', async () => {
-      await continueCliSessionHere(localRuntimes, acceptedHandoffs);
+    register('agi-workforce.continueCliSession', async (argument: unknown) => {
+      await continueCliSessionHere(
+        localRuntimes,
+        acceptedHandoffs,
+        typeof argument === 'string' && argument !== '' ? argument : undefined,
+      );
     }),
 
     register('agi-workforce.continueInTerminal', async () => {
@@ -1385,22 +1418,35 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
 
       if (feedbackText === undefined) return;
 
-      const feedbackType = picked.label.includes('Bug')
+      const feedbackType: FeedbackKind = picked.label.includes('Bug')
         ? 'bug'
         : picked.label.includes('Feature')
           ? 'feature'
           : 'general';
 
-      const encoded = encodeURIComponent(
-        `**Type**: ${feedbackType}\n**VS Code**: ${vscode.version}\n**Extension**: ${getExtensionVersion()}\n**Platform**: ${process.platform}\n\n${feedbackText.trim()}`,
+      const outcome = await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: 'AGI Workforce: sending feedback',
+        },
+        () => submitFeedback(context.secrets, feedbackType, feedbackText),
       );
-      void vscode.env.openExternal(
-        vscode.Uri.parse(
-          `https://github.com/agiworkforce/agiworkforce/issues/new?title=${encodeURIComponent(`[VS Code Extension] ${feedbackType}: ${feedbackText.trim().slice(0, 60)}`)}&body=${encoded}`,
-        ),
-      );
-      vscode.window.showInformationMessage(
-        'AGI Workforce: Opening GitHub to submit your feedback. Thank you!',
+      if (outcome.status === 'sent') {
+        void vscode.window.showInformationMessage(
+          'AGI Workforce: thanks, your feedback reached the team.',
+        );
+        return;
+      }
+      if (outcome.status === 'signed-out') {
+        const choice = await vscode.window.showWarningMessage(
+          'AGI Workforce: sign in to AGI Cloud to send feedback from VS Code.',
+          'Sign in',
+        );
+        if (choice === 'Sign in') await vscode.commands.executeCommand('agi-workforce.signIn');
+        return;
+      }
+      void vscode.window.showErrorMessage(
+        `AGI Workforce: your feedback was not sent, ${outcome.reason}. Try again in a moment.`,
       );
     }),
 
@@ -1725,30 +1771,39 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       function capMode(s: string): string {
         return s.charAt(0).toUpperCase() + s.slice(1);
       }
-      const modeItems: vscode.QuickPickItem[] = [
+      type ModeItem = vscode.QuickPickItem & { mode: 'ask' | 'auto' | 'plan' | 'bypass' };
+      const modeItems: ModeItem[] = [
         {
           label: '$(comment-discussion) Ask before edits',
           description: 'AGI will ask for approval before making each edit',
-          detail: 'ask',
+          detail:
+            'Example: “add a test for parseDate” shows each edit and command for you to approve.',
+          mode: 'ask',
           picked: currentMode === 'ask',
         },
         {
           label: '$(symbol-misc) Auto safe operations',
           description: 'Safe reads run automatically; writes and commands require approval',
-          detail: 'auto',
+          detail:
+            'Example: reading files and searching run on their own; npm install still asks first.',
+          mode: 'auto',
           picked: currentMode === 'auto',
         },
         {
           label: '$(checklist) Plan mode',
           description: 'AGI will explore the code and present a plan before editing',
-          detail: 'plan',
+          detail:
+            'Example: “move to the new API” returns a step-by-step plan and edits nothing until you approve it.',
+          mode: 'plan',
           picked: currentMode === 'plan',
         },
         {
           label: '$(warning) Bypass permissions',
           description:
             'AGI will not ask for approval before running potentially dangerous commands',
-          detail: 'bypass',
+          detail:
+            'Example: a throwaway container or VM where every edit and command may run without asking.',
+          mode: 'bypass',
           picked: currentMode === 'bypass',
         },
       ];
@@ -1757,8 +1812,8 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         placeHolder: `Current: ${capMode(currentMode)} · choose the authority for future actions`,
         matchOnDescription: true,
       });
-      if (modePick?.detail !== undefined) {
-        const selectedMode = modePick.detail as 'ask' | 'auto' | 'plan' | 'bypass';
+      if (modePick !== undefined) {
+        const selectedMode = modePick.mode;
         if (await setAgentModeWithConsent(context, selectedMode)) {
           vscode.window.showInformationMessage(
             `AGI Workforce agent mode set to: ${capMode(selectedMode)}`,
@@ -1814,7 +1869,6 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     }),
 
     register('agi-workforce.memory', async () => {
-      if (!requireWorkspaceMemoryScope()) return;
       const enabled = Config.memoryEnabled();
       const action = await vscode.window.showQuickPick(
         [
@@ -1824,6 +1878,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
           },
           { label: '$(add) Add a memory fact', detail: 'add' },
           { label: '$(list-unordered) List & remove facts', detail: 'list' },
+          { label: '$(eye-closed) Never remember…', detail: 'exclusions' },
           { label: '$(trash) Forget everything', detail: 'clear' },
         ],
         {
@@ -1851,6 +1906,11 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         return;
       }
 
+      if (action.detail === 'exclusions') {
+        await manageMemoryExclusions(context.secrets);
+        return;
+      }
+
       if (action.detail === 'clear') {
         const store = getAccountMemoryStore();
         if (store === undefined) {
@@ -1863,7 +1923,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
           );
           return;
         }
-        const facts = store.cachedFacts();
+        const facts = (await store.refresh()).facts;
         if (facts.length === 0) {
           vscode.window.showInformationMessage('No memory facts to forget.');
           return;
@@ -1899,13 +1959,19 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       await memoryTreeProvider.refresh();
     }),
 
-    register('agi-workforce.memory.create', async () => {
-      if (!requireWorkspaceMemoryScope()) return;
+    register('agi-workforce.memory.rememberSelection', async () => {
+      const editor = vscode.window.activeTextEditor;
+      const selected = editor?.document.getText(editor.selection).trim() ?? '';
+      await vscode.commands.executeCommand('agi-workforce.memory.create', selected);
+    }),
+
+    register('agi-workforce.memory.create', async (prefill?: unknown) => {
       if (!(await requireMemoryEnabledForCapture(context))) return;
       const text = await vscode.window.showInputBox({
         title: 'AGI Workforce, Add Memory Fact',
+        value: typeof prefill === 'string' ? prefill : '',
         prompt:
-          'A short fact included with future developer turns. Stored locally; sent only to the model/provider you choose for that turn.',
+          'A short fact saved to your AGI Cloud account. Every AGI client uses it, and it is sent with turns only while memory is on.',
         placeHolder: 'Example: I prefer Python over JavaScript for data work.',
         ignoreFocusOut: true,
         validateInput: (value) => {
@@ -1941,12 +2007,10 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     }),
 
     register('agi-workforce.memory.edit', async (item: MemoryFactItem) => {
-      if (!requireWorkspaceMemoryScope()) return;
       const newText = await vscode.window.showInputBox({
         title: 'AGI Workforce, Edit Memory Fact',
         value: item.fact.text,
-        prompt:
-          'Update this locally stored fact. It is included only with turns sent to your selected model/provider.',
+        prompt: 'Update this fact in your AGI Cloud account. The change reaches every AGI client.',
         ignoreFocusOut: true,
         validateInput: (value) => {
           const trimmed = value.trim();
@@ -1972,7 +2036,6 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     }),
 
     register('agi-workforce.memory.delete', async (item: MemoryFactItem) => {
-      if (!requireWorkspaceMemoryScope()) return;
       const confirm = await vscode.window.showWarningMessage(
         `Delete this memory from your AGI Cloud account? It disappears from the web app, the CLI and mobile too, and cannot be recovered.\n\n"${item.fact.text.slice(0, 80)}${item.fact.text.length > 80 ? '…' : ''}"`,
         { modal: true },
@@ -2082,7 +2145,8 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         | 'connectors'
         | 'teams'
         | 'permission-docs'
-        | 'privacy-settings';
+        | 'privacy-settings'
+        | 'edit-profile';
       type AccountItem = vscode.QuickPickItem & { action?: AccountAction };
       const items: AccountItem[] = buildAccountIdentityItems(
         accountToken !== undefined,
@@ -2209,6 +2273,11 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
             : 'Browser-approved device session',
         });
         items.push({
+          label: '$(person) Edit your profile on Web',
+          description: 'Name, photo and email',
+          action: 'edit-profile',
+        });
+        items.push({
           label: '$(sign-out) Sign out of AGI Cloud',
           description: 'Remove this editor session',
           action: 'sign-out',
@@ -2315,6 +2384,10 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       } else if (pick?.action === 'permission-docs') {
         await vscode.env.openExternal(
           vscode.Uri.parse('https://agiworkforce.com/docs?topic=permissions&from=vscode-extension'),
+        );
+      } else if (pick?.action === 'edit-profile') {
+        await vscode.env.openExternal(
+          vscode.Uri.parse(`${getCloudWebOrigin()}/settings/profile?from=vscode-extension`),
         );
       } else if (pick?.action === 'privacy-settings') {
         await vscode.env.openExternal(
@@ -2440,6 +2513,11 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       if (artifact === undefined) return;
       await withArtifactsWorkspace((workspace) => saveArtifactToWorkspace(workspace, artifact));
     }),
+    register(COPY_ARTIFACT_COMMAND, async (item: unknown) => {
+      const artifact = readArtifactCommandArgument(item);
+      if (artifact === undefined) return;
+      await withArtifactsWorkspace((workspace) => copyArtifactContent(workspace, artifact));
+    }),
     register(OPEN_ARTIFACT_ON_WEB_COMMAND, async (item: unknown) => {
       const published = (item as { published?: unknown } | null)?.published;
       if (published === null || typeof published !== 'object') return;
@@ -2447,11 +2525,10 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     }),
     register('agi-workforce.showConnectors', () => openConnectorsSurface(connectorsTreeProvider)),
     register('agi-workforce.showContextFiles', () => openContextSurface(contextPanelProvider)),
-    register('agi-workforce.showSkills', () => openCapabilitySurface(cliCapabilities, 'skills')),
-    register('agi-workforce.showPlugins', () => openCapabilitySurface(cliCapabilities, 'plugins')),
-    register('agi-workforce.showMcpServers', () =>
-      openCapabilitySurface(cliCapabilities, 'mcpServers'),
-    ),
+    register('agi-workforce.personalize', () => managePersonalization(context.secrets)),
+    register('agi-workforce.showSkills', () => manageSkills(cliCapabilities)),
+    register('agi-workforce.showPlugins', () => managePlugins(cliCapabilities)),
+    register('agi-workforce.showMcpServers', () => manageMcpServers(cliCapabilities)),
     register('agi-workforce.showHooks', () => openCapabilitySurface(cliCapabilities, 'hooks')),
     register('agi-workforce.showInstructions', () =>
       openCapabilitySurface(cliCapabilities, 'instructions'),

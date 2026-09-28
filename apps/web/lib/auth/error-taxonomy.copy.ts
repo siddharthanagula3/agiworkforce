@@ -42,8 +42,9 @@ export const AUTH_ERROR_SOURCE_COPY: Readonly<Record<AuthErrorKind, AuthErrorCop
   },
   account_suspended: {
     title: 'This account is suspended',
-    message: 'Sign-in is blocked while the account is suspended. Support can tell you why.',
-    action: 'Contact support',
+    message:
+      'Sign-in is blocked while the account is suspended. You can appeal, and a person reviews every appeal.',
+    action: 'Back to sign-in',
   },
   account_locked: {
     title: 'This account is locked',
@@ -132,8 +133,8 @@ export const AUTH_ERROR_LOCALIZED_COPY: Readonly<
     account_suspended: {
       title: 'Esta cuenta está suspendida',
       message:
-        'El acceso está bloqueado mientras la cuenta esté suspendida. Soporte puede explicarte por qué.',
-      action: 'Contactar con soporte',
+        'El acceso está bloqueado mientras la cuenta esté suspendida. Puedes apelar y una persona revisa cada apelación.',
+      action: 'Volver a iniciar sesión',
     },
     account_locked: {
       title: 'Esta cuenta está bloqueada',

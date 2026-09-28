@@ -95,6 +95,7 @@
   "navLogOut": "Abmelden",
   "navProjects": "Projekte",
   "navLibrary": "Bibliothek",
+  "navImages": "Bilder",
   "navModels": "Modelle",
   "navSchedules": "Zeitpläne",
   "navAdmin": "Verwaltung",
@@ -122,5 +123,40 @@
   "previous": "Zurück",
   "previousSlide": "Vorherige Folie",
   "rowsPerPage": "Zeilen pro Seite",
-  "rowsSelected": "{{selected}} von {{total}} Zeile(n) ausgewählt."
+  "rowsSelected": "{{selected}} von {{total}} Zeile(n) ausgewählt.",
+  "support": {
+    "waitRemaining_one": "Ich warte noch {{count}} Sekunde und sende das dann per E-Mail.",
+    "waitRemaining_other": "Ich warte noch {{count}} Sekunden und sende das dann per E-Mail."
+  },
+  "counts": {
+    "results_one": "{{count}} Ergebnis",
+    "results_other": "{{count}} Ergebnisse",
+    "messages_one": "{{count}} Nachricht",
+    "messages_other": "{{count}} Nachrichten",
+    "agentsConfigured_one": "{{count}} Agent konfiguriert",
+    "agentsConfigured_other": "{{count}} Agenten konfiguriert",
+    "skills_one": "{{count}} Skill",
+    "skills_other": "{{count}} Skills",
+    "agents_one": "{{count}} Agent",
+    "agents_other": "{{count}} Agenten"
+  },
+  "relative": {
+    "minutesAgo_one": "vor {{count}} Minute",
+    "minutesAgo_other": "vor {{count}} Minuten",
+    "hoursAgo_one": "vor {{count}} Stunde",
+    "hoursAgo_other": "vor {{count}} Stunden",
+    "daysAgo_one": "vor {{count}} Tag",
+    "daysAgo_other": "vor {{count}} Tagen"
+  },
+  "unsavedChanges": {
+    "title": "Ungespeicherte Änderungen verwerfen?",
+    "description": "Deine Änderungen wurden nicht gespeichert. Wenn du jetzt gehst, gehen sie verloren.",
+    "discard": "Verwerfen",
+    "keepEditing": "Weiter bearbeiten"
+  },
+  "chipInput": {
+    "full": "Diese Liste enthält höchstens {{count}} Einträge.",
+    "rejected": "{{value}} wurde nicht hinzugefügt. {{reason}}",
+    "remove": "{{value}} entfernen"
+  }
 }

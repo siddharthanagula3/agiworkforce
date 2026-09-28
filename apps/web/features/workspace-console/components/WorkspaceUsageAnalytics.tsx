@@ -112,7 +112,7 @@ function BreakdownTable({
   return (
     <section style={cardStyle} aria-labelledby={headingId}>
       <div className="border-b px-5 py-3.5" style={{ borderColor: 'var(--settings-border)' }}>
-        <h2 id={headingId} className="text-sm font-semibold" style={{ color: 'var(--text-1)' }}>
+        <h2 id={headingId} className="text-h5" style={{ color: 'var(--text-1)' }}>
           {title}
         </h2>
         <p className="mt-1 text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>
@@ -264,11 +264,7 @@ export function WorkspaceUsageAnalytics() {
 
       <section style={cardStyle} aria-labelledby="totals-heading">
         <div className="border-b px-5 py-3.5" style={{ borderColor: 'var(--settings-border)' }}>
-          <h2
-            id="totals-heading"
-            className="text-sm font-semibold"
-            style={{ color: 'var(--text-1)' }}
-          >
+          <h2 id="totals-heading" className="text-h5" style={{ color: 'var(--text-1)' }}>
             Managed cloud usage
           </h2>
           <p className="mt-1 text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>

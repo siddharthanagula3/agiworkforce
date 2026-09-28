@@ -34,7 +34,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     throw createError.badRequest('Invalid research report query', parsed.error.flatten());
   }
 
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
 
   if (parsed.data.requestId) {
     const report = await getResearchReportByRequestId(db, {
@@ -47,6 +47,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
 
   const reports = await listResearchReports(db, {
     userId,
+    organizationId,
     conversationId: parsed.data.conversationId ?? null,
     ...(parsed.data.limit !== undefined ? { limit: parsed.data.limit } : {}),
   });

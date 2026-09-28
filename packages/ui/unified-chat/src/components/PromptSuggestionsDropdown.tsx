@@ -1,4 +1,3 @@
-
 import React, { memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronRight } from 'lucide-react';
@@ -42,7 +41,7 @@ const PromptSuggestionsDropdownComponent: React.FC<PromptSuggestionsDropdownProp
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.15 }}
-            className="absolute bottom-full left-0 right-0 mb-2 rounded-xl bg-popover border border-border shadow-lg overflow-hidden z-[var(--z-dropdown)]"
+            className="absolute bottom-full left-0 right-0 mb-2 rounded-xl bg-popover border border-border shadow-e3 overflow-hidden z-[var(--z-dropdown)]"
             role="listbox"
             aria-label="Prompt suggestions"
             aria-expanded={isVisible}
@@ -86,9 +85,7 @@ const PromptSuggestionsDropdownComponent: React.FC<PromptSuggestionsDropdownProp
                         {suggestion.text}
                       </span>
                     </div>
-                    <div className="text-xs text-muted-foreground">
-                      {suggestion.description}
-                    </div>
+                    <div className="text-xs text-muted-foreground">{suggestion.description}</div>
                   </div>
 
                   {/* Type Badge */}
@@ -96,8 +93,7 @@ const PromptSuggestionsDropdownComponent: React.FC<PromptSuggestionsDropdownProp
                     <span
                       className={cn(
                         'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium',
-                        TYPE_CLASS[suggestion.type] ??
-                          'bg-muted text-muted-foreground',
+                        TYPE_CLASS[suggestion.type] ?? 'bg-muted text-muted-foreground',
                       )}
                     >
                       {suggestion.type}

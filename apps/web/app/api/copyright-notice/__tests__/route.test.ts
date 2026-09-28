@@ -37,6 +37,7 @@ vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => db.current }));
 
 const recordCopyrightNotice = vi.fn(async () => ({ reference: 'REF' }));
 vi.mock('@/lib/server/copyright-notices', () => ({
+  CONTENT_NOTICE_TYPES: ['copyright', 'trademark', 'impersonation'],
   recordCopyrightNotice: (...args: Parameters<typeof recordCopyrightNotice>) =>
     recordCopyrightNotice(...args),
 }));

@@ -714,19 +714,20 @@
       ]
     },
     {
-      "id": "library-other-items-are-not-purged-yet",
+      "id": "library-other-items-purge-after-30-days",
       "doc": "library",
       "section": "Deleting and restoring",
       "kind": "prose",
-      "sentence": "Other items stay in **Recently deleted** until you restore them or delete them yourself.",
+      "sentence": "Other items stay in **Recently deleted** for 30 days and are then deleted for good.",
       "implementation": [
-        "apps/web/app/api/cron/purge-soft-deleted-resources/route.ts#purgeEnabled"
+        "apps/web/lib/resources/deletion-policies.ts#RESOURCE_RECOVERY_WINDOW_DAYS",
+        "apps/web/lib/resources/purge-soft-deleted.ts#purgeSoftDeletedResources"
       ],
       "proof": [
         {
           "kind": "test",
-          "file": "apps/web/app/api/cron/purge-soft-deleted-resources/route.test.ts",
-          "name": "destroys nothing until an operator turns the purge on"
+          "file": "apps/web/lib/resources/__tests__/purge-soft-deleted.test.ts",
+          "name": "bounds each statement and only takes rows past the window"
         }
       ]
     },
@@ -811,19 +812,20 @@
       ]
     },
     {
-      "id": "chat-deleted-chat-is-not-purged",
+      "id": "chat-deleted-chat-purges-after-30-days",
       "doc": "chat-basics",
       "section": "Rename, archive and delete",
       "kind": "prose",
-      "sentence": "A deleted chat stays there until you restore it; the product does not currently offer permanent chat deletion separately from deleting your account.",
+      "sentence": "A deleted chat stays there for 30 days, so you can restore it, and is then deleted for good.",
       "implementation": [
-        "apps/web/app/api/cron/purge-soft-deleted-resources/route.ts#purgeEnabled"
+        "apps/web/lib/resources/deletion-policies.ts#RESOURCE_RECOVERY_WINDOW_DAYS",
+        "apps/web/lib/resources/purge-soft-deleted.ts#purgeSoftDeletedResources"
       ],
       "proof": [
         {
           "kind": "test",
-          "file": "apps/web/app/api/cron/purge-soft-deleted-resources/route.test.ts",
-          "name": "destroys nothing until an operator turns the purge on"
+          "file": "apps/web/lib/resources/__tests__/purge-soft-deleted.test.ts",
+          "name": "bounds each statement and only takes rows past the window"
         }
       ]
     },

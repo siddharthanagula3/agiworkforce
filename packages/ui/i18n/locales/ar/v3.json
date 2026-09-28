@@ -100,7 +100,10 @@
     "noArchived": "لا توجد محادثات مؤرشفة",
     "noConversations": "لا توجد محادثات بعد",
     "showActive": "العودة إلى المحادثات النشطة",
-    "showArchived": "عرض المحادثات المؤرشفة ({{count}})"
+    "showArchived": "عرض المحادثات المؤرشفة ({{count}})",
+    "archivedToast": "تمت أرشفة المحادثة",
+    "archivedUndo": "تراجع",
+    "archivedView": "عرض المؤرشفة"
   },
   "emptyChat": {
     "neutralHeadline": "كيف يمكنني مساعدتك اليوم؟",
@@ -163,8 +166,12 @@
     "provenance": "Provenance is preserved",
     "provenanceDesc": "Recipients see which model generated this, no spoofing.",
     "htmlPreview": "HTML preview",
-    "fileCount_one": "{{count}} file",
-    "fileCount_other": "{{count}} files",
+    "fileCount_zero": "لا ملفات",
+    "fileCount_one": "ملف واحد",
+    "fileCount_two": "ملفان",
+    "fileCount_few": "{{count}} ملفات",
+    "fileCount_many": "{{count}} ملفاً",
+    "fileCount_other": "{{count}} ملف",
     "mcpManage": "Manage",
     "mcpConnected": "Connected:"
   },
@@ -381,6 +388,9 @@
       "constraintsPlaceholder": "الحدود، ما يجب تجنّبه، المصادر المفضّلة…",
       "deliverableLabel": "المُخرَج",
       "deliverablePlaceholder": "الناتج الملموس الذي تتوقعه (ملف، جدول، ملخّص…)",
+      "toolsLabel": "الأدوات التي يمكن لهذه المهمة استخدامها",
+      "toolWebSearch": "البحث على الويب والتصفح",
+      "toolCodeExecution": "تنفيذ التعليمات البرمجية",
       "palette": {
         "label": "أدوات AGI Work",
         "searchPlaceholder": "ابحث في الإضافات والمجلدات والمهارات",
@@ -404,6 +414,12 @@
     "weeksAgo": "{{count}} weeks ago"
   },
   "canvas": {
-    "sessionOnlyNotice": "الرسومات مؤقتة لهذه الجلسة فقط, إغلاق التطبيق يمسح اللوحة."
+    "sessionOnlyNotice": "الرسومات مؤقتة لهذه الجلسة فقط, إغلاق التطبيق يمسح اللوحة.",
+    "elementCount_zero": "لا عناصر",
+    "elementCount_one": "عنصر واحد",
+    "elementCount_two": "عنصران",
+    "elementCount_few": "{{count}} عناصر",
+    "elementCount_many": "{{count}} عنصراً",
+    "elementCount_other": "{{count}} عنصر"
   }
 }

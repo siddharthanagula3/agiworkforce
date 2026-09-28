@@ -10,71 +10,52 @@ nothing is left.
 
 - Done when: A project has a name and an optional description that the user can set at creation and edit later.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | The CLI sets a name and --description only when creating; there is no rename or description edit command. | ui |
-| vscode | partial | VS Code asks for a name at creation but never a description, and renaming or describing a project is left to the web app. | ui |
 | chrome | partial | The side panel names a project at creation only; it cannot rename it, set a description, or edit either afterwards. | ui |
 
-Code: `apps/cli/src/lib.rs:983-993`, `apps/extension-vscode/src/features/projects/projectActions.ts:235-239`, `apps/extension-vscode/src/features/projects/projectActions.ts:114-117`, `apps/extension/src/features/side-panel/projectsDrawer.ts:531-533`
+Code: `apps/extension/src/features/side-panel/projectsDrawer.ts:531-533`
 
 ## S23.03: Project icon and color.
 
 - Done when: The user can choose a project's icon and colour, and the choice is shown wherever the project appears.
 - Wave: 2
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The project page's picker saves registry icons and colours that the sidebar and header show, but the Projects page create form offers emoji (📁 💻 📝 …) that no view can render, so the chosen emoji is silently replaced by a folder; the project cards also show a fixed folder icon. | ui |
-| desktop | partial | The project page's picker saves registry icons and colours that the sidebar and header show, but the Projects page create form offers emoji (📁 💻 📝 …) that no view can render, so the chosen emoji is silently replaced by a folder; the project cards also show a fixed folder icon. | ui |
 | mobile | partial | Mobile has no icon or colour picker, and the only view that renders a project's emoji and accent is the fetched header, which v1 hides behind the off crossDeviceSync flag. | ui, flag-off |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/app/chat/projects/[id]/page.tsx:759-765`, `apps/web/app/chat/projects/[id]/page.tsx:908-908`, `apps/web/app/chat/projects/[id]/page.tsx:181-181`, `packages/ui/ui/src/sidebar/project-icons.ts:80-90`
-
-## S23.04: Project cover or identity treatment.
-
-- Done when: A project carries a visual identity (cover image or tinted icon badge) that distinguishes it in lists and on its page.
-- Wave: 2
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Identity is only a tinted icon badge on the project page and an accent-coloured sidebar icon; there is no cover image, and the Projects page cards ignore the identity and show a fixed folder icon. | ui |
-| desktop | partial | Same as web: tinted badge on the project page and sidebar only; no cover image; Projects page cards show a fixed folder icon. | ui |
-| mobile | partial | No cover image; the accent-tinted header that shows a project's emoji is reachable only through the crossDeviceSync fetch path, which is off in v1, so cloud projects show a plain name card. | ui, flag-off |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/chat/projects/[id]/page.tsx:731-740`, `packages/ui/ui/src/sidebar/Sidebar.tsx:1102-1107`, `apps/web/app/chat/projects/[id]/page.tsx:181-181`, `apps/mobile/src/features/projects/components/ProjectHeader.tsx:190-190`
+Code: `apps/mobile/src/features/projects/components/ProjectHeader.tsx:190-220`, `apps/mobile/app/(app)/projects/[id].tsx:172-175`
 
 ## S23.05: Project overview.
 
 - Done when: Opening a project shows an overview: its name, description, counts and its main sections (chats, files, instructions).
 - Wave: 2
-- Already works on: web, desktop, vscode
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | A cloud project's page shows only its name and 'Cloud project · synced across your devices'; the full header (description, counts) is fetched only when crossDeviceSync is on, and that v1 flag is off. | flag-off |
-| cli | partial | `agi projects list` prints each project's id, name and description, but there is no per-project view of its chats, files or instructions. | ui |
 | chrome | partial | The side panel's expanded row shows the description (or instructions) and recent chat titles, but no files, counts beyond chats, or links into the chats. | ui |
 
-Code: `apps/mobile/app/(app)/projects/[id].tsx:82-84`, `apps/mobile/app/(app)/projects/[id].tsx:172-175`, `apps/mobile/app/(app)/projects/[id].tsx:100-101`, `apps/cli/src/lib.rs:1831-1849`
+Code: `apps/mobile/app/(app)/projects/[id].tsx:82-84`, `apps/mobile/app/(app)/projects/[id].tsx:172-175`, `apps/mobile/app/(app)/projects/[id].tsx:100-101`, `apps/extension/src/features/side-panel/projectsDrawer.ts:361-368`
 
 ## S23.06: Project conversations.
 
 - Done when: A project lists its conversations, opens them, and starts new chats that are filed under the project.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Sessions run in a directory linked with `agi projects link` are filed under that project in the account, but the CLI cannot list or open a project's conversations. | ui |
-| vscode | partial | The project detail lists recent conversation titles, but they cannot be opened, and VS Code turns are not filed under the project (only its instructions are prepended). | ui |
+| vscode | partial | Project conversations now open (f6f8c2f2a). VS Code turns are still not filed under the project: the CLI app-server's thread/start takes no project id (p-desktop-cli). | handler |
 | chrome | partial | Chrome files its chats under the active project and shows recent chat titles per project, but the titles are plain text that cannot be opened. | ui |
 
-Code: `apps/cli/src/agent/mod.rs:1627-1627`, `apps/cli/src/agent/mod.rs:1924-1929`, `apps/extension-vscode/src/features/projects/projectActions.ts:92-104`, `apps/extension-vscode/src/features/projects/projectActions.ts:140-140`
+Code: `apps/extension-vscode/src/features/projects/projectActions.ts:120-120`, `apps/extension/src/side_panel.ts:6419-6425`, `apps/extension/src/features/cloud-bridge/conversationSync.ts:226-226`, `apps/extension/src/features/side-panel/projectsDrawer.ts:355-357`
 
 ## S23.07: Project files.
 
@@ -85,10 +66,7 @@ Code: `apps/cli/src/agent/mod.rs:1627-1627`, `apps/cli/src/agent/mod.rs:1924-192
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | VS Code lists a project's knowledge files read-only; uploading, previewing and removing them happen on the web. | surface-only |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/extension-vscode/src/features/projects/projectActions.ts:78-90`, `apps/extension-vscode/src/features/projects/projectsClient.ts:48-53`
 
 ## S23.08: Project sources.
 
@@ -97,60 +75,40 @@ Code: `apps/extension-vscode/src/features/projects/projectActions.ts:78-90`, `ap
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Sources are uploaded files and pasted text only: Google Drive and Slack just open connector setup and nothing is imported from them. And every source upload hits the knowledge-storage cap defect (0 bytes for never-paid Free users and Team seat members). | handler, api |
-| desktop | partial | Sources are uploaded files and pasted text only: Google Drive and Slack just open connector setup and nothing is imported from them. And every source upload hits the knowledge-storage cap defect (0 bytes for never-paid Free users and Team seat members). | handler, api |
+| web | partial | Google Drive files are picked with the Google Picker and added as project sources through the upload pipeline (partials/privacy bd63f0822, e562a9956, c07ecd0ad; Drive only for unshared projects as in Claude, support.claude.com/en/articles/10166901). Needs owner settings GOOGLE_PICKER_API_KEY and GOOGLE_PICKER_APP_ID (same Google Cloud project as the Drive connector OAuth client) and a live check of the Picker under the page CSP. Slack as a project source is declined (no leader offers it); the knowledge-storage cap now reads the entitled plan. | config |
+| desktop | partial | Google Drive files are picked with the Google Picker and added as project sources through the upload pipeline (partials/privacy bd63f0822, e562a9956, c07ecd0ad; Drive only for unshared projects as in Claude, support.claude.com/en/articles/10166901). Needs owner settings GOOGLE_PICKER_API_KEY and GOOGLE_PICKER_APP_ID (same Google Cloud project as the Drive connector OAuth client) and a live check of the Picker under the page CSP. Slack as a project source is declined (no leader offers it); the knowledge-storage cap now reads the entitled plan. | config |
 | mobile | partial | Mobile adds picked files as sources, but has no text or connected-service sources, and uploads hit the same 0-byte cap for never-paid Free users and Team seat members. | handler, ui |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | VS Code lists a project's knowledge files read-only; adding or removing sources is web-only. | surface-only |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/projects/components/SourcesPanel.tsx:590-596`, `apps/web/features/projects/components/AddSourcesModal.tsx:277-283`, `apps/web/features/projects/components/SourcesPanel.tsx:149-155`, `apps/web/app/api/projects/[id]/knowledge-files/route.ts:381-384`
+Code: `apps/web/app/api/projects/[id]/knowledge-files/google-drive/route.ts:123-123`, `apps/web/features/projects/components/AddSourcesModal.tsx:295-295`, `apps/web/features/projects/lib/google-drive-picker.ts:82-82`, `apps/mobile/src/features/projects/components/ProjectSourcesTab.tsx:199-199`
 
 ## S23.09: Project instructions.
 
 - Done when: Instructions saved on a project are applied to every chat in that project.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Workspace instruction files (AGENTS.md/CLAUDE.md) apply to every session in a directory, but a directory linked to an account project never receives that project's own instructions: the cached project has no instructions field. | handler |
-| vscode | partial | Instructions can be typed when creating a project and are prepended to VS Code turns while the project is in use, but they cannot be edited in VS Code afterwards (web only). | ui |
 | chrome | partial | Chrome can set instructions only while creating a project and shows them read-only; they apply server-side once the chat is synced under the project, and there is no way to edit them in the side panel. | ui |
 
-Code: `apps/cli/src/agent/prompt.rs:502-507`, `apps/cli/src/cloud/projects.rs:138-148`, `apps/extension-vscode/src/features/projects/projectActions.ts:252-256`, `apps/extension-vscode/src/features/projects/activeProject.ts:51-62`
-
-## S23.10: Project notes.
-
-- Done when: Users can keep written notes in a project that they can view, edit and that project chats can draw on.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | A 'Text input' source saves pasted text as a .txt knowledge file; there is no note list, editor or edit-in-place, and saving hits the same 0-byte storage cap for never-paid Free users (live QA E048 was refused). | ui, handler |
-| desktop | partial | Same as web: notes are pasted-text knowledge files with no editor, and saving fails on the 0-byte cap for never-paid Free users. | ui, handler |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/projects/components/AddSourcesModal.tsx:360-365`, `apps/web/features/projects/components/SourcesPanel.tsx:149-155`, `apps/web/app/api/projects/[id]/knowledge-files/route.ts:381-384`
+Code: `apps/extension/src/features/side-panel/projectsDrawer.ts:531-533`, `apps/extension/src/side_panel.ts:6419-6425`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2550-2555`
 
 ## S23.11: Project Memory.
 
 - Done when: A project keeps its own memories, and the user can choose whether the project also draws on account-wide memory.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Project-scoped memory works server-side (migration 0135), but the project list/read contract drops usesGlobalMemory, so the settings checkbox always opens ticked; a user who chose project-only memory sees it reverted in the UI, and saving the dialog for any other reason writes usesGlobalMemory: true back. Carry the field through the contract and toWebProject. | handler |
-| desktop | partial | Project-scoped memory works server-side (migration 0135), but the project list/read contract drops usesGlobalMemory, so the settings checkbox always opens ticked; a user who chose project-only memory sees it reverted in the UI, and saving the dialog for any other reason writes usesGlobalMemory: true back. Carry the field through the contract and toWebProject. | handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | The CLI keeps a per-workspace memory file (the project's CLAUDE.md in the memory hierarchy), but a directory linked to an account project never reads or writes that project's memories. | handler |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/projects/components/ProjectSettingsDialog.tsx:256-270`, `apps/web/lib/services/managed-memory-context-service.ts:825-829`, `packages/contracts/cloud-contracts/src/projects.ts:13-38`, `apps/web/features/projects/services/managed-cloud-projects.ts:19-47`
+Code: `apps/cli/src/memory.rs:86-97`, `apps/cli/src/memory.rs:194-208`
 
 ## S23.12: Project artifacts.
 
@@ -168,32 +126,29 @@ Code: `apps/web/features/projects/components/ProjectSettingsDialog.tsx:256-270`,
 
 - Done when: Coding sessions can belong to a project and are listed and reopened from it.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | CLI sessions in a directory linked with `agi projects link` sync to the account under that project, but the CLI cannot list or resume a project's sessions by project. | ui |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:1866-1880`, `apps/cli/src/agent/mod.rs:1627-1627`
 
 ## S23.14: Project work tasks.
 
 - Done when: Autonomous work tasks can be started in a project and the project lists their state.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The project Work tab lists runs only in the states it asks for; awaiting_approval, planning, resuming, partial and timed_out are left out of its filter, so a run waiting for approval or one that timed out vanishes from the project. Request every state. | ui |
-| desktop | partial | The project Work tab lists runs only in the states it asks for; awaiting_approval, planning, resuming, partial and timed_out are left out of its filter, so a run waiting for approval or one that timed out vanishes from the project. Request every state. | ui |
 | mobile | partial | Mobile's Start Work sheet can file a new task under a project, but a project's page has no Work tab listing its tasks. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/app/chat/projects/[id]/page.tsx:1240-1240`, `apps/web/features/projects/components/ProjectWorkPanel.tsx:65-69`, `apps/web/app/api/llm/v1/chat/completions/runs/route.ts:107-115`, `apps/web/features/projects/components/ProjectWorkPanel.tsx:16-26`
+Code: `apps/mobile/src/features/tasks/components/StartWorkSheet.tsx:165-175`, `apps/mobile/src/features/tasks/components/StartWorkSheet.tsx:63-63`
 
 ## S23.15: Project routines.
 
@@ -207,22 +162,6 @@ Code: `apps/web/app/chat/projects/[id]/page.tsx:1240-1240`, `apps/web/features/p
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-## S23.16: Default model/profile.
-
-- Done when: A project can set a default model (or profile) that new chats in it start with.
-- Wave: 2
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | The API stores a project's default model and the header can print it, but no screen lets a user pick one and project chats never use it; the composer's own model choice always wins. | ui, handler |
-| desktop | partial | The API stores a project's default model and the header can print it, but no screen lets a user pick one and project chats never use it; the composer's own model choice always wins. | ui, handler |
-| mobile | partial | Mobile can print a default-model line only on the crossDeviceSync-gated header (off in v1); it cannot set a project's default model and its chats never use one. | ui, handler, flag-off |
-| cli | missing | Not built on this surface. |  |
-| vscode | partial | The project tooltip lists 'Default model: …' when one is stored, but VS Code cannot set it and its turns do not use it. | ui, handler |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/api/projects/[id]/route.ts:200-200`, `packages/ui/unified-chat/src/components/ProjectHeader.tsx:71-71`, `apps/web/app/chat/projects/[id]/page.tsx:567-569`, `apps/mobile/src/features/projects/components/ProjectHeader.tsx:126-126`
 
 ## S23.17: Default tools and Skills.
 
@@ -240,35 +179,6 @@ Code: `apps/web/app/api/projects/[id]/route.ts:200-200`, `packages/ui/unified-ch
 
 Code: `apps/cli/src/skills.rs:191-204`, `apps/cli/src/app_server/surfaces.rs:132-136`
 
-## S23.18: Local-folder association.
-
-- Done when: A project can be associated with a local folder so work in that folder uses the project.
-- Wave: 3
-- Already works on: cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | partial | Desktop can approve local 'project folders' as workspaces through the native picker, but an approved folder is never linked to an account project. | handler |
-
-Code: `apps/desktop/electron/runtime/workspacePicker.ts:9-12`, `apps/desktop/electron/runtime/dispatcher.ts:704-707`
-
-## S23.19: Repository association.
-
-- Done when: A project can be associated with a code repository so coding work and context follow that repository.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | partial | Desktop can approve a git repository as a local workspace root, but the repository is not attached to any account project. | handler |
-| mobile | missing | Not built on this surface. |  |
-| cli | partial | `agi projects link` ties a directory path, not a repository, to a project: the repository identity is not recorded, so another checkout or a re-clone of the same repo is not linked and other clients cannot see which repo a project uses. | handler |
-| vscode | partial | The active project is remembered per VS Code workspace, not per repository, and nothing about the repository is stored on the project. | handler |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/desktop/electron/runtime/workspacePicker.ts:14-17`, `apps/desktop/electron/runtime/workspacePicker.ts:29-32`, `apps/cli/src/project_registry.rs:218-232`, `apps/cli/src/project_registry.rs:26-29`
-
 ## S23.20: Project search.
 
 - Done when: Users can search their projects by name or description.
@@ -285,17 +195,14 @@ Code: `apps/desktop/electron/runtime/workspacePicker.ts:14-17`, `apps/desktop/el
 
 - Done when: A project shows who can access it (owner and members) and a member can see a project is shared with them.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Members of a shared project are listed only for sharing managers on Workspace > Sharing, as raw user IDs instead of names or emails; the project page itself shows only a "Shared with you" badge, no member list. | ui |
-| desktop | partial | Same as web: member list only on Workspace > Sharing for sharing managers, shown as raw user IDs; no member list on the project page. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/workspace/sharing/page.tsx:16-16`, `apps/web/features/settings/sections/OrganizationSharingSection.tsx:266-269`, `apps/web/features/settings/sections/OrganizationSharingSection.tsx:290-316`, `apps/web/app/api/settings/organization/shared/route.ts:62-72`
 
 ## S23.22: Member roles.
 
@@ -314,65 +221,27 @@ Code: `apps/web/app/workspace/sharing/page.tsx:16-16`, `apps/web/features/settin
 
 - Done when: An owner or manager can add a person to a specific project and remove them from it.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Removal works per project (set a member to "No access"), but there is no per-project invite: the only way in is inviting someone to the whole workspace, after which they see every shared project. | ui, handler |
-| desktop | partial | Same as web: per-project removal via "No access"; no per-project invite, only whole-workspace invites. | ui, handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/settings/sections/OrganizationSharingSection.tsx:317-338`, `apps/web/app/api/settings/organization/shared/projects/[projectId]/route.ts:141-147`, `apps/web/features/settings/sections/TeamSection.tsx:685-707`
 
 ## S23.24: Shared Project links.
 
 - Done when: A user can get a link to a project that opens it for the people it is shared with.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | "Share" only copies the project URL; it opens for the owner and, if the project was separately shared from Workspace > Sharing, for org members. Nothing tells the user that, there is no link audience choice, and the project page itself has no share control. | ui |
-| desktop | partial | "Share" only copies the project URL; it opens for the owner and, if the project was separately shared from Workspace > Sharing, for org members. Nothing tells the user that, there is no link audience choice, and the project page itself has no share control. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `packages/ui/unified-chat/src/components/ProjectCard.tsx:211-223`, `apps/web/app/chat/projects/page.tsx:484-484`, `apps/web/app/chat/projects/page.tsx:135-143`, `apps/web/app/api/projects/[id]/route.ts:113-124`
-
-## S23.26: Move or copy conversations.
-
-- Done when: A user can move a conversation into (or out of) a project, or copy it into one.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Move works from the chat title menu and sidebar row; there is no way to copy a conversation into a project (fork/branch stays in the source chat's project). | ui |
-| desktop | partial | Move works from the chat title menu and sidebar row; there is no way to copy a conversation into a project (fork/branch stays in the source chat's project). | ui |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/ConversationTitleMenu.tsx:146-155`, `apps/web/features/chat/pages/WebChatPage.tsx:3748-3753`, `apps/web/shared/components/layout/WebAppShell.tsx:337-339`, `apps/web/app/api/chat/conversations/[id]/route.ts:302-303`
-
-## S23.27: Add an answer to Project knowledge.
-
-- Done when: From a chat, a user can add an assistant answer (or its artifact) to a project's knowledge in one action.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Only artifacts and research reports have "Save to project"; an ordinary chat answer has no such action. The save uses the project knowledge upload, whose storage cap reads only the user's own subscription row, so Free and Team-seat users are refused (live E034). | ui, handler |
-| desktop | partial | Only artifacts and research reports have "Save to project"; an ordinary chat answer has no such action. The save uses the project knowledge upload, whose storage cap reads only the user's own subscription row, so Free and Team-seat users are refused (live E034). | ui, handler |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1528-1542`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:802-808`, `apps/web/features/chat/components/artifacts/ArtifactsPanel.tsx:293-296`, `apps/web/features/chat/components/research/ResearchReportView.tsx:505-510`
 
 ## S23.29: Duplicate a Project.
 
@@ -391,77 +260,42 @@ Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1528-1542
 
 - Done when: A project can be archived out of the active list and restored later with its contents intact.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Archiving silently unfiles every conversation from the project (sets their project_id to null), so Unarchive restores an empty project; the chats survive only as loose chats. Keep membership when archiving, or warn before it. | handler |
-| desktop | partial | Archiving silently unfiles every conversation from the project (sets their project_id to null), so Unarchive restores an empty project; the chats survive only as loose chats. Keep membership when archiving, or warn before it. | handler |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | `agi projects archive [--undo]` works, but it sends the same isArchived update, so archiving unfiles every conversation from the project and --undo restores an empty project. | handler |
+| cli | partial | The hosted project PUT empties the project's conversations when isArchived is true (apps/web/app/api/projects/[id]/route.ts:233), so archive/undo loses filing on every surface; a server change is needed. | handler |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `packages/ui/unified-chat/src/components/ProjectCard.tsx:282-282`, `apps/web/app/chat/projects/page.tsx:486-487`, `apps/web/app/chat/projects/page.tsx:265-265`, `apps/web/app/chat/projects/page.tsx:95-107`
-
-## S23.31: Export.
-
-- Done when: A project owner can export a project (settings, instructions, files and conversations) as a downloadable file.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Export downloads a JSON of the project settings plus each knowledge file's extracted text; it leaves out the project's conversations and the original files, and nothing can import it back. | handler |
-| desktop | partial | Export downloads a JSON of the project settings plus each knowledge file's extracted text; it leaves out the project's conversations and the original files, and nothing can import it back. | handler |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/projects/components/ProjectSettingsDialog.tsx:326-331`, `apps/web/app/chat/projects/[id]/page.tsx:1260-1266`, `apps/web/app/api/projects/[id]/export/route.ts:65-82`, `apps/web/app/api/projects/[id]/export/route.ts:43-51`
-
-## S23.32: Delete.
-
-- Done when: A project owner can delete a project after confirming; its files are removed and its chats are kept (unfiled).
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Cloud delete goes through /api/projects/sync, which only tombstones the project row: its chats stay filed under the deleted project and its knowledge files and stored objects are not purged (web/CLI/Chrome/VS Code delete does both). | handler |
-
-Code: `apps/mobile/app/(app)/(tabs)/projects.tsx:236-248`, `apps/mobile/src/features/projects/store.ts:297-310`, `apps/web/app/api/projects/sync/route.ts:116-128`
+Code: `apps/cli/src/cloud/mod.rs:256-256`
 
 ## S23.33: Project-only context mode.
 
 - Done when: A user can switch a project to use only its own context (its memories, chats and files), excluding account-wide memory and other chats.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The server confines memory and past-chat recall to the project when the setting is off, but the project contract (ManagedCloudProjectSchema) strips usesGlobalMemory, so the checkbox always reopens ticked and any later save of the dialog writes the setting back to on. | ui |
-| desktop | partial | The server confines memory and past-chat recall to the project when the setting is off, but the project contract (ManagedCloudProjectSchema) strips usesGlobalMemory, so the checkbox always reopens ticked and any later save of the dialog writes the setting back to on. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/projects/components/ProjectSettingsDialog.tsx:256-270`, `apps/web/features/projects/components/ProjectSettingsDialog.tsx:50-50`, `packages/contracts/cloud-contracts/src/projects.ts:13-38`, `apps/web/lib/services/managed-memory-context-service.ts:825-829`
 
 ## S23.34: Shared versus personal-context explanation.
 
 - Done when: Where a project is shared, the product explains which context is shared with members (instructions, files) and which stays personal (chats, memories).
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The shared-versus-private rule ("instructions and files are shared, conversations stay private") is written only on Workspace > Sharing; a member opening a shared project sees just a "Shared with you" badge, with nothing saying their chats and memories stay personal. | ui |
-| desktop | partial | The shared-versus-private rule ("instructions and files are shared, conversations stay private") is written only on Workspace > Sharing; a member opening a shared project sees just a "Shared with you" badge, with nothing saying their chats and memories stay personal. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/workspace/sharing/page.tsx:16-16`, `apps/web/features/settings/sections/OrganizationSharingSection.tsx:178-181`, `apps/web/app/chat/projects/[id]/page.tsx:990-990`, `apps/web/features/projects/components/ProjectSettingsDialog.tsx:262-270`
 
 ## S23.36: Coordinating conversation for parallel work, where offered.
 
@@ -478,19 +312,3 @@ Code: `apps/web/app/workspace/sharing/page.tsx:16-16`, `apps/web/features/settin
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/cli/src/agent/chat.rs:1716-1716`, `apps/cli/src/agent/chat.rs:1976-1985`, `apps/cli/src/subagent.rs:355-358`
-
-## S23.38: Thread-specific steering without changing unrelated work.
-
-- Done when: A user can steer one child thread (redirect, answer, pause or stop it) without changing the other threads' work.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | No coordinating parent conversation; steering is per-run only: you can approve/deny a tool call with steering guidance in one run without touching others. | ui |
-| desktop | partial | No coordinating parent conversation; steering is per-run only: you can approve/deny a tool call with steering guidance in one run without touching others. | ui |
-| mobile | partial | No coordinating parent conversation; steering is per-run only: you can only stop (or open the chat of) one run without touching others. | ui |
-| cli | missing | Not built on this surface. |  |
-| vscode | partial | No coordinating parent conversation; steering is per-run only: you can approve/deny with guidance one run without touching others. | ui |
-| chrome | partial | No coordinating parent conversation; steering is per-run only: you can approve/deny with guidance or stop one run without touching others. | ui |
-
-Code: `apps/web/features/chat/pages/WebChatPage.tsx:5496-5496`, `apps/web/features/chat/components/approvals/ApprovalInbox.tsx:224-233`, `apps/web/features/chat/components/approvals/ApprovalInbox.tsx:124-130`, `apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx:341-349`

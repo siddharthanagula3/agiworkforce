@@ -622,6 +622,18 @@ async fn sign_in(
         bail!("MCP server '{name}' runs locally over stdio and has nothing to sign in to");
     }
     let hooks = build_client_hooks_with_browser(Arc::new(AutoDeclineHandler), browser);
+    if let TransportConfig::Http {
+        url,
+        oauth: Some(oauth),
+        ..
+    } = to_transport_config(config)
+    {
+        complete_step_up(&url, &oauth, &hooks)
+            .await
+            .with_context(|| {
+                format!("could not finish the extra sign-in MCP server '{name}' asked for")
+            })?;
+    }
     let mut client = McpClient::connect(
         name,
         to_transport_config(config),
@@ -634,12 +646,38 @@ async fn sign_in(
     Ok(())
 }
 
+async fn complete_step_up(url: &str, oauth: &OAuthConfig, hooks: &ClientHooks) -> Result<()> {
+    let store = McpServerOAuthStore::new()?;
+    let Some(scope) = store.load_step_up_scope(url)? else {
+        return Ok(());
+    };
+    let challenge = format!("Bearer error=\"insufficient_scope\", scope=\"{scope}\"");
+    let token =
+        agiworkforce_mcp::oauth::perform_full_oauth(url, oauth, Some(&challenge), hooks).await?;
+    hooks.token_store.set(url, token)?;
+    store.delete_step_up_scope(url)
+}
+
 fn needs_sign_in(error: &anyhow::Error) -> bool {
     error.chain().any(|cause| {
         cause
             .downcast_ref::<agiworkforce_mcp::McpError>()
             .is_some_and(agiworkforce_mcp::McpError::is_authorization_required)
     })
+}
+
+fn remember_step_up(error: &anyhow::Error) -> Option<String> {
+    let (url, scope) = error.chain().find_map(|cause| {
+        cause
+            .downcast_ref::<agiworkforce_mcp::McpError>()
+            .and_then(agiworkforce_mcp::McpError::step_up_scope)
+    })?;
+    if let Err(store_error) =
+        McpServerOAuthStore::new().and_then(|store| store.save_step_up_scope(url, scope))
+    {
+        eprintln!("  could not record the scope {url} asked for: {store_error:#}");
+    }
+    Some(scope.to_string())
 }
 
 /// Forget the stored OAuth token for a remote MCP server. Returns whether a
@@ -811,6 +849,21 @@ impl McpConnection {
     }
 
     /// Discover prompts from the MCP server.
+    pub fn serves_resources(&self) -> bool {
+        self.client.server().capabilities.get("resources").is_some()
+    }
+
+    pub async fn list_resources(&mut self) -> Result<Vec<agiworkforce_mcp::McpResource>> {
+        Ok(self.client.list_resources().await?)
+    }
+
+    pub async fn read_resource(
+        &mut self,
+        uri: &str,
+    ) -> Result<Vec<agiworkforce_mcp::McpResourceContents>> {
+        Ok(self.client.read_resource(uri).await?)
+    }
+
     pub async fn list_prompts(&mut self) -> Result<Vec<McpPrompt>> {
         let response = self
             .client
@@ -1454,6 +1507,58 @@ impl McpManager {
         Ok((tool.server_name.clone(), tool.original_name.clone()))
     }
 
+    /// Every resource the connected servers allowed in `privacy_mode` list,
+    /// paired with the server that owns it.
+    pub async fn list_resources(
+        &mut self,
+        privacy_mode: crate::agent::PrivacyMode,
+    ) -> Result<Vec<(String, agiworkforce_mcp::McpResource)>> {
+        let mut listed = Vec::new();
+        let names: Vec<String> = self
+            .connections
+            .keys()
+            .filter(|name| self.server_allowed(name, privacy_mode))
+            .cloned()
+            .collect();
+        for name in names {
+            let Some(conn) = self
+                .connections
+                .get_mut(&name)
+                .filter(|conn| conn.serves_resources())
+            else {
+                continue;
+            };
+            let resources = conn
+                .list_resources()
+                .await
+                .with_context(|| format!("[{name}] could not list MCP resources"))?;
+            listed.extend(
+                resources
+                    .into_iter()
+                    .map(|resource| (name.clone(), resource)),
+            );
+        }
+        Ok(listed)
+    }
+
+    pub async fn read_resource(
+        &mut self,
+        server_name: &str,
+        uri: &str,
+        privacy_mode: crate::agent::PrivacyMode,
+    ) -> Result<Vec<agiworkforce_mcp::McpResourceContents>> {
+        if !self.server_allowed(server_name, privacy_mode) {
+            bail!(
+                "MCP server '{server_name}' is remote and unavailable in Local privacy mode; create an explicit BYOK or Managed continuation before reading its resources"
+            );
+        }
+        self.connections
+            .get_mut(server_name)
+            .context(format!("[{server_name}] MCP server not connected"))?
+            .read_resource(uri)
+            .await
+    }
+
     /// Execute a namespaced MCP tool call.
     pub async fn execute_tool(
         &mut self,
@@ -1479,10 +1584,16 @@ impl McpManager {
             .await
             .map_err(|error| {
                 if needs_sign_in(&error) {
-                    anyhow::anyhow!(
-                        "{error:#}. Run `agi mcp login {}` to sign in again.",
-                        tool.server_name
-                    )
+                    match remember_step_up(&error) {
+                        Some(scope) => anyhow::anyhow!(
+                            "{error:#}. MCP server '{0}' needs the additional permission '{scope}'. Run `agi mcp login {0}` to grant it.",
+                            tool.server_name
+                        ),
+                        None => anyhow::anyhow!(
+                            "{error:#}. Run `agi mcp login {}` to sign in again.",
+                            tool.server_name
+                        ),
+                    }
                 } else {
                     error
                 }
@@ -1491,7 +1602,7 @@ impl McpManager {
         result
     }
 
-    async fn refresh_changed_servers(&mut self) {
+    pub(crate) async fn refresh_changed_servers(&mut self) {
         let mut refreshed_tools = Vec::new();
         let mut refreshed_prompts = Vec::new();
         for (name, conn) in self.connections.iter_mut() {

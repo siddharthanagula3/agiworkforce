@@ -1,9 +1,13 @@
 import * as vscode from 'vscode';
-import type {
-  ManagedCloudConversation,
-  ManagedCloudProject,
-  ManagedCloudProjectKnowledgeFile,
+import {
+  PROJECT_DESCRIPTION_MAX_LENGTH,
+  type ManagedCloudConversation,
+  type ManagedCloudProject,
+  type ManagedCloudProjectKnowledgeFile,
+  type ManagedCloudProjectUpdateRequest,
 } from '@agiworkforce/cloud-contracts';
+import { Config } from '../../platform/config';
+import { modelDisplayLabel, normalizeConfiguredModelId } from '../model-picker/modelConstants';
 import {
   describeProjectFailure,
   formatTimestamp,
@@ -28,6 +32,7 @@ export const CLEAR_ACTIVE_PROJECT_COMMAND = 'agi-workforce.clearActiveProject';
 
 const DELETE_CONFIRMATION = 'Delete project';
 const RETRY_ACTION = 'Retry';
+const SWITCH_TO_PROJECT_MODEL = 'Choose the model';
 const PROJECT_CONVERSATION_PAGE_LIMIT = 10;
 const MAX_PROJECT_NAME_CHARS = 200;
 const MAX_PROJECT_INSTRUCTION_CHARS = 10_000;
@@ -36,10 +41,23 @@ export interface ProjectActionHost {
   onChanged: () => void;
 }
 
-export type ProjectDetailAction = 'use-in-chat' | 'open-web' | 'delete';
+export type ProjectDetailAction =
+  | 'use-in-chat'
+  | 'edit-name'
+  | 'edit-description'
+  | 'edit-instructions'
+  | 'edit-default-model'
+  | 'open-web'
+  | 'open-conversation'
+  | 'delete';
 
 export interface ProjectDetailItem extends vscode.QuickPickItem {
   action?: ProjectDetailAction;
+  conversationId?: string;
+}
+
+export function projectConversationWebUrl(conversationId: string, webOrigin: string): string {
+  return `${webOrigin}/chat/${encodeURIComponent(conversationId)}?from=vscode-extension`;
 }
 
 export function projectWebUrl(projectId: string, webOrigin: string): string {
@@ -99,6 +117,8 @@ export function buildProjectDetailItems(input: {
       items.push({
         label: `$(comment-discussion) ${conversation.title.trim() || 'Untitled conversation'}`,
         description: formatTimestamp(conversation.updatedAt),
+        action: 'open-conversation',
+        conversationId: conversation.id,
       });
     }
   }
@@ -111,9 +131,34 @@ export function buildProjectDetailItems(input: {
       : 'Adds this project and its instructions to VS Code turns',
     action: 'use-in-chat',
   });
+  items.push({ label: 'Edit', kind: vscode.QuickPickItemKind.Separator });
+  items.push(
+    {
+      label: '$(edit) Rename',
+      description: projectTitle(input.project),
+      action: 'edit-name',
+    },
+    {
+      label: '$(note) Description',
+      description: input.project.description?.trim() || 'Not set',
+      action: 'edit-description',
+    },
+    {
+      label: '$(law) Instructions',
+      description: input.project.instructions?.trim() ? 'Set' : 'Not set',
+      action: 'edit-instructions',
+    },
+    {
+      label: '$(symbol-namespace) Default model',
+      description: input.project.defaultModelId
+        ? modelDisplayLabel(input.project.defaultModelId)
+        : 'Not set',
+      action: 'edit-default-model',
+    },
+  );
   items.push({
     label: '$(link-external) Open on web',
-    description: 'Knowledge files and project settings are edited there',
+    description: 'Knowledge files are added and removed there',
     action: 'open-web',
   });
   items.push({ label: '$(trash) Delete project', action: 'delete' });
@@ -191,12 +236,123 @@ export async function showProjectDetail(
     return;
   }
 
+  if (picked.action === 'open-conversation') {
+    if (picked.conversationId !== undefined) {
+      await vscode.env.openExternal(
+        vscode.Uri.parse(projectConversationWebUrl(picked.conversationId, host.webOrigin)),
+      );
+    }
+    return;
+  }
+
   if (picked.action === 'use-in-chat') {
     await applyProjectToChat(detail.project, host);
     return;
   }
 
+  if (
+    picked.action === 'edit-name' ||
+    picked.action === 'edit-description' ||
+    picked.action === 'edit-instructions' ||
+    picked.action === 'edit-default-model'
+  ) {
+    await editProject(workspace, detail.project, picked.action, host);
+    return;
+  }
+
   await deleteProjectInteractively(workspace, detail.project, host);
+}
+
+async function projectEdit(
+  project: ManagedCloudProject,
+  action: 'edit-name' | 'edit-description' | 'edit-instructions' | 'edit-default-model',
+): Promise<ManagedCloudProjectUpdateRequest | undefined> {
+  if (action === 'edit-name') {
+    const name = await vscode.window.showInputBox({
+      title: 'AGI Workforce, Rename project',
+      value: projectTitle(project),
+      ignoreFocusOut: true,
+      validateInput: (value) => {
+        const trimmed = value.trim();
+        if (trimmed === '') return 'A project needs a name.';
+        return trimmed.length > MAX_PROJECT_NAME_CHARS
+          ? `Keep the name under ${MAX_PROJECT_NAME_CHARS} characters.`
+          : undefined;
+      },
+    });
+    return name === undefined ? undefined : { name: name.trim() };
+  }
+  if (action === 'edit-description') {
+    const description = await vscode.window.showInputBox({
+      title: 'AGI Workforce, Project description',
+      prompt: 'What this project is for. Leave empty to remove it.',
+      value: project.description ?? '',
+      ignoreFocusOut: true,
+      validateInput: (value) =>
+        value.length > PROJECT_DESCRIPTION_MAX_LENGTH
+          ? `Keep the description under ${PROJECT_DESCRIPTION_MAX_LENGTH} characters.`
+          : undefined,
+    });
+    return description === undefined ? undefined : { description: description.trim() || null };
+  }
+  if (action === 'edit-instructions') {
+    const instructions = await vscode.window.showInputBox({
+      title: 'AGI Workforce, Project instructions',
+      prompt: 'Applied to every chat in this project, on every client. Leave empty to remove them.',
+      value: project.instructions ?? '',
+      ignoreFocusOut: true,
+      validateInput: (value) =>
+        value.length > MAX_PROJECT_INSTRUCTION_CHARS
+          ? `Keep instructions under ${MAX_PROJECT_INSTRUCTION_CHARS} characters.`
+          : undefined,
+    });
+    return instructions === undefined ? undefined : { instructions: instructions.trim() || null };
+  }
+  const current = normalizeConfiguredModelId(Config.model());
+  const choice = await vscode.window.showQuickPick(
+    [
+      {
+        label: `$(check) Use ${modelDisplayLabel(current)}`,
+        description: 'The model this chat uses now',
+        value: current as string | null,
+      },
+      { label: '$(close) No default model', value: null },
+    ],
+    { title: 'AGI Workforce, Project default model' },
+  );
+  return choice === undefined ? undefined : { defaultModelId: choice.value };
+}
+
+async function editProject(
+  workspace: ProjectsWorkspace,
+  project: ManagedCloudProject,
+  action: 'edit-name' | 'edit-description' | 'edit-instructions' | 'edit-default-model',
+  host: ProjectDetailHost,
+): Promise<void> {
+  const update = await projectEdit(project, action);
+  if (update === undefined) return;
+  try {
+    const updated = await vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Notification, title: 'AGI Workforce: saving project…' },
+      () => workspace.projects.updateProject(project.id, update),
+    );
+    if (getActiveCloudProject(host.workspaceState)?.id === updated.id) {
+      await setActiveCloudProject(host.workspaceState, {
+        id: updated.id,
+        name: projectTitle(updated),
+        instructions: updated.instructions ?? '',
+      });
+    }
+    void vscode.window.showInformationMessage(
+      `AGI Workforce: "${projectTitle(updated)}" was saved to your account, on every client.`,
+    );
+  } catch (error) {
+    void vscode.window.showErrorMessage(
+      `AGI Workforce: the project was not saved, ${describeProjectFailure(error)}`,
+    );
+  } finally {
+    host.onChanged();
+  }
 }
 
 export async function applyProjectToChat(
@@ -219,12 +375,23 @@ export async function applyProjectToChat(
     name: projectTitle(project),
     instructions,
   });
-  void vscode.window.showInformationMessage(
+  host.onChanged();
+  const applied =
     instructions === ''
       ? `AGI Workforce: turns in this workspace now name "${projectTitle(project)}". It has no instructions to apply.`
-      : `AGI Workforce: turns in this workspace now apply "${projectTitle(project)}" and its instructions.`,
+      : `AGI Workforce: turns in this workspace now apply "${projectTitle(project)}" and its instructions.`;
+  const defaultModel = project.defaultModelId;
+  if (!defaultModel || defaultModel === normalizeConfiguredModelId(Config.model())) {
+    void vscode.window.showInformationMessage(applied);
+    return;
+  }
+  const choice = await vscode.window.showInformationMessage(
+    `${applied} Its default model is ${modelDisplayLabel(defaultModel)}.`,
+    SWITCH_TO_PROJECT_MODEL,
   );
-  host.onChanged();
+  if (choice === SWITCH_TO_PROJECT_MODEL) {
+    await vscode.commands.executeCommand('agi-workforce.selectModel');
+  }
 }
 
 export async function createProjectInteractively(

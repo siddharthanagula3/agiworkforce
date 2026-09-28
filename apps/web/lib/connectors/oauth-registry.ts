@@ -42,6 +42,9 @@ const PROTECTED_AUTHORIZATION_PARAMS = new Set([
   'resource',
 ]);
 
+const MCP_OPTION_HEADER_RE = /^X-MCP-[A-Za-z]+(?:-[A-Za-z]+)*$/;
+const MAX_MCP_OPTION_HEADERS = 4;
+
 const httpsUrl = z
   .string()
   .url()
@@ -68,6 +71,15 @@ const providerDescriptorSchema = z.object({
     .refine(
       (params) => Object.keys(params).every((key) => !PROTECTED_AUTHORIZATION_PARAMS.has(key)),
       'authorizationParams may not override a broker-owned OAuth parameter',
+    ),
+  codeChallengeMethodsSupported: z.array(z.string().min(1).max(32)).max(8).optional(),
+  resourceIndicator: z.boolean().optional(),
+  mcpHeaders: z
+    .record(z.string().regex(MCP_OPTION_HEADER_RE), z.string().min(1).max(200))
+    .optional()
+    .refine(
+      (headers) => headers === undefined || Object.keys(headers).length <= MAX_MCP_OPTION_HEADERS,
+      `mcpHeaders may name at most ${MAX_MCP_OPTION_HEADERS} headers`,
     ),
   enabled: z.boolean().optional().default(true),
 });
@@ -278,7 +290,7 @@ export function buildAuthorizationUrl(params: {
   if (provider.scopes.length > 0) url.searchParams.set('scope', provider.scopes.join(' '));
   url.searchParams.set('code_challenge', codeChallenge);
   url.searchParams.set('code_challenge_method', 'S256');
-  url.searchParams.set('resource', resource);
+  if (provider.resourceIndicator !== false) url.searchParams.set('resource', resource);
   return url.toString();
 }
 

@@ -49,7 +49,7 @@ export function SharedSessionViewer({ session, token }: { session: SharedSession
       <div className="border-b border-border px-6 py-4">
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-4">
           <div className="min-w-0">
-            <h1 className="truncate text-lg font-semibold" title={session.title}>
+            <h1 className="truncate text-h3" title={session.title}>
               {session.title}
             </h1>
             <div className="mt-1 flex items-center gap-3 text-sm text-muted-foreground">

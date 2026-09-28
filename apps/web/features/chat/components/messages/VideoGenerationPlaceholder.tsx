@@ -130,7 +130,7 @@ export function VideoGenerationPlaceholder({
       />
 
       <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-center">
-        <span className="grid size-10 place-items-center rounded-full bg-background/80 shadow-sm backdrop-blur">
+        <span className="grid size-10 place-items-center rounded-full bg-background/80 shadow-e1 backdrop-blur">
           <Video className="size-5 text-muted-foreground" aria-hidden="true" />
         </span>
         <span className="text-[13px] font-medium text-foreground">Generating your video…</span>
@@ -149,7 +149,7 @@ export function VideoGenerationPlaceholder({
             disabled={cancelState === 'sending'}
             className={cn(
               'mt-1 inline-flex items-center gap-1 rounded-full border border-border/70 bg-background/85 px-3 py-1',
-              'text-xs font-medium text-foreground shadow-sm backdrop-blur transition-colors',
+              'text-xs font-medium text-foreground shadow-e1 backdrop-blur transition-colors',
               'hover:bg-background disabled:cursor-not-allowed disabled:opacity-60',
             )}
           >

@@ -30,6 +30,9 @@ export interface DesktopMcpHttpTransportConfig {
   headers?: Record<string, string>;
   timeout_secs?: number;
   verify_ssl?: boolean;
+  oauth_client_id?: string;
+  oauth_client_secret?: string;
+  oauth_token_url?: string;
 }
 
 export interface DesktopMcpStdioTransportConfig {
@@ -37,8 +40,7 @@ export interface DesktopMcpStdioTransportConfig {
 }
 
 export type DesktopMcpTransportConfig =
-  | DesktopMcpHttpTransportConfig
-  | DesktopMcpStdioTransportConfig;
+  DesktopMcpHttpTransportConfig | DesktopMcpStdioTransportConfig;
 
 export interface DesktopMcpServerConfig extends Omit<McpServerConfig, 'env' | 'transport'> {
   command: string;
@@ -313,12 +315,7 @@ export interface BundleInstallProgress {
 }
 
 export type BundleInstallStatus =
-  | 'pending'
-  | 'downloading'
-  | 'installing'
-  | 'configuring'
-  | 'completed'
-  | 'failed';
+  'pending' | 'downloading' | 'installing' | 'configuring' | 'completed' | 'failed';
 
 export interface McpbEventPayload {
   type: 'install_started' | 'install_progress' | 'install_completed' | 'install_failed';
@@ -330,12 +327,7 @@ export interface McpbEventPayload {
 }
 
 export type McpExtensionStatus =
-  | 'disabled'
-  | 'enabled'
-  | 'running'
-  | 'error'
-  | 'updating'
-  | 'pending_removal';
+  'disabled' | 'enabled' | 'running' | 'error' | 'updating' | 'pending_removal';
 
 export interface McpExtensionInfo {
   id: string;

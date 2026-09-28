@@ -48,6 +48,10 @@ function toFact(delta: MemoryDelta): MemoryFact {
     updatedAt: delta.updated_at,
     category: classifyMemoryCategory(delta.content),
     importance: delta.pinned ? 9 : 5,
+    ...(delta.source ? { source: delta.source } : {}),
+    ...(delta.source_conversation_title
+      ? { sourceConversationTitle: delta.source_conversation_title }
+      : {}),
   };
 }
 
@@ -174,16 +178,13 @@ export class AccountMemoryStore {
   }
 
   async clear(): Promise<AccountMemoryWriteResult> {
-    const facts = this.cachedFacts();
-    if (facts.length === 0) return { applied: true, refusals: [] };
-    const items = facts.map<MemoryPushItem>((fact) => ({
-      id: fact.id,
-      content: fact.text,
-      source: MEMORY_SOURCE,
-      baseVersion: this.baseVersion(fact.id),
-      isDeleted: true,
-    }));
-    return this.write(items, () => {});
+    try {
+      await this.client.deleteAll();
+    } catch (error) {
+      return { applied: false, refusals: [error instanceof Error ? error.message : String(error)] };
+    }
+    await this.refresh();
+    return { applied: true, refusals: [] };
   }
 
   contains(text: string): boolean {

@@ -43,6 +43,12 @@ export const CONNECTOR_SECRET_COLUMNS: readonly ConnectorSecretColumn[] = [
     purpose: 'custom-connector-auth-header',
   },
   {
+    table: 'public.user_custom_connectors',
+    column: 'oauth_client_secret_enc',
+    keyColumn: 'id',
+    purpose: 'oauth-client-secret',
+  },
+  {
     table: 'public.mcp_oauth_clients',
     column: 'client_secret_enc',
     keyColumn: 'issuer',

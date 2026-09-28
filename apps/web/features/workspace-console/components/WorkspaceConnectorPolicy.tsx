@@ -9,6 +9,7 @@ import {
   type ConnectorPolicyLists,
 } from '../hooks/use-connector-policy';
 import { toUserMessage } from '@/lib/user-error-message';
+import { ChipInput, useUnsavedChangesGuard } from '@agiworkforce/ui';
 
 const cardStyle = {
   border: '1px solid var(--settings-border)',
@@ -244,10 +245,6 @@ function McpHostPolicySection({
   canEdit: boolean;
   onChange: (next: ConnectorPolicyLists) => void;
 }) {
-  const [value, setValue] = useState('');
-  const host = value.trim().toLowerCase();
-  const valid = MCP_HOST_PATTERN.test(host);
-
   return (
     <section style={cardStyle} aria-labelledby="mcp-hosts-heading">
       <div className="border-b px-5 py-3.5" style={{ borderColor: 'var(--settings-border)' }}>
@@ -264,47 +261,27 @@ function McpHostPolicySection({
           hosts listed, any public host is allowed.
         </p>
       </div>
-      <div className="flex flex-col gap-4 px-5 py-4">
-        <form
-          className="flex flex-wrap items-center gap-2"
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (!valid || !canEdit) return;
-            onChange({ ...draft, allowedMcpHosts: withEntry(draft.allowedMcpHosts, host) });
-            setValue('');
-          }}
-        >
-          <label htmlFor="mcp-host-policy" className="sr-only">
-            MCP server host
-          </label>
-          <input
-            id="mcp-host-policy"
-            value={value}
-            disabled={!canEdit}
-            onChange={(event) => setValue(event.target.value)}
-            placeholder="mcp.example.com"
-            autoComplete="off"
-            spellCheck={false}
-            className={inputClass}
-            style={{ borderColor: 'var(--settings-border)', color: 'var(--text-1)' }}
-          />
-          <button
-            type="submit"
-            disabled={!canEdit || !valid}
-            className={smallButtonClass}
-            style={{ borderColor: 'var(--settings-border)', color: 'var(--text-1)' }}
-          >
-            <Check aria-hidden className="mr-1 inline h-3 w-3" />
-            Approve host
-          </button>
-        </form>
-        <EntryList
-          label="Approved hosts"
-          entries={draft.allowedMcpHosts}
-          empty="No host restriction."
+      <div className="flex flex-col gap-2 px-5 py-4">
+        <p className="text-xs" style={{ color: 'var(--text-3)' }}>
+          {draft.allowedMcpHosts.length === 0
+            ? 'No host restriction.'
+            : 'Connectors may only reach these hosts.'}{' '}
+          Press Enter or type a comma to add a host.
+        </p>
+        <ChipInput
+          id="mcp-host-policy"
+          values={draft.allowedMcpHosts}
+          onChange={(allowedMcpHosts) => onChange({ ...draft, allowedMcpHosts })}
+          label="MCP server host"
+          listLabel="Approved hosts"
+          removeLabel={(entry) => `Remove ${entry} from approved hosts`}
+          placeholder="mcp.example.com"
           disabled={!canEdit}
-          onRemove={(entry) =>
-            onChange({ ...draft, allowedMcpHosts: withoutEntry(draft.allowedMcpHosts, entry) })
+          normalize={(raw) => raw.trim().toLowerCase()}
+          validate={(host) =>
+            MCP_HOST_PATTERN.test(host)
+              ? null
+              : 'Enter a host name, such as mcp.example.com or *.example.com.'
           }
         />
       </div>
@@ -350,6 +327,12 @@ export function WorkspaceConnectorPolicy() {
       });
     return norm(data.policy) !== norm(draft);
   }, [data, draft]);
+
+  const { dialog: discardDialog } = useUnsavedChangesGuard({
+    dirty: dirty && !update.isPending,
+    description:
+      'Your changes to the connector policy have not been saved. If you leave now, they will be lost.',
+  });
 
   if (isPending) {
     return (
@@ -407,6 +390,7 @@ export function WorkspaceConnectorPolicy() {
 
   return (
     <div className="flex flex-col gap-6">
+      {discardDialog}
       <section style={cardStyle} aria-labelledby="custom-heading">
         <div className="border-b px-5 py-3.5" style={{ borderColor: 'var(--settings-border)' }}>
           <h2

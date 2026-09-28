@@ -142,7 +142,7 @@ export function ReminderCard({ job, onPause, onResume, onEdit, onDelete }: Remin
   return (
     <Card
       className={cn(
-        'transition-all duration-200 hover:shadow-md',
+        'transition-all duration-200 hover:shadow-e2',
         job.status !== 'active' && 'opacity-60 bg-muted/30',
       )}
     >
@@ -174,7 +174,7 @@ export function ReminderCard({ job, onPause, onResume, onEdit, onDelete }: Remin
             {/* Content */}
             <div className="min-w-0 flex-1 space-y-1">
               <div className="flex items-center gap-2">
-                <h3 className="font-medium text-sm truncate">{job.name}</h3>
+                <h3 className="text-h5 truncate">{job.name}</h3>
                 <Badge variant={getActionBadgeVariant(job.actionType)} className="shrink-0 text-xs">
                   {job.actionType.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase()}
                 </Badge>

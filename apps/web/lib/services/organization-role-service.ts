@@ -423,9 +423,7 @@ export interface DirectoryGroupRoleSummary {
   memberCount: number;
   roleIds: string[];
   managerUserIds: string[];
-  // A directory group's membership and name are replaced by the next sync, so
-  // only the role mapping below is editable in the console.
-  source: { kind: 'directory'; connectionName: string | null };
+  source: { kind: 'directory'; connectionName: string | null } | { kind: 'workspace' };
 }
 
 export async function listDirectoryGroupsWithRoles(
@@ -440,12 +438,17 @@ export async function listDirectoryGroupsWithRoles(
     role_ids: string[] | null;
     manager_user_ids: string[] | null;
     connection_name: string | null;
+    source: string;
   }>(
-    `select g.id, g.display_name,
+    `select g.id, g.display_name, g.source,
             (select c.display_name from public.directory_sync_connections c
               where c.id = g.connection_id) as connection_name,
-            (select count(*) from public.scim_group_members m
-              where m.group_id = g.id and m.organization_id = g.organization_id) as member_count,
+            case g.source
+              when 'workspace' then (select count(*) from public.organization_group_members w
+                                      where w.group_id = g.id and w.organization_id = g.organization_id)
+              else (select count(*) from public.scim_group_members m
+                     where m.group_id = g.id and m.organization_id = g.organization_id)
+            end as member_count,
             array(select gr.role_id::text from public.organization_group_roles gr
                    where gr.group_id = g.id and gr.organization_id = g.organization_id
                    order by gr.role_id) as role_ids,
@@ -468,8 +471,164 @@ export async function listDirectoryGroupsWithRoles(
     memberCount: toCount(row.member_count),
     roleIds: row.role_ids ?? [],
     managerUserIds: row.manager_user_ids ?? [],
-    source: { kind: 'directory', connectionName: row.connection_name },
+    source:
+      row.source === 'workspace'
+        ? { kind: 'workspace' }
+        : { kind: 'directory', connectionName: row.connection_name },
   }));
+}
+
+export const MAX_WORKSPACE_GROUP_NAME_CHARS = 255;
+
+function workspaceGroupName(name: string): string {
+  const trimmed = name.trim();
+  if (!trimmed || trimmed.length > MAX_WORKSPACE_GROUP_NAME_CHARS) {
+    throw createError
+      .validation(`A group name is 1 to ${MAX_WORKSPACE_GROUP_NAME_CHARS} characters.`)
+      .asUserSafe();
+  }
+  return trimmed;
+}
+
+async function requireWorkspaceGroup(
+  db: DatabaseAdapter,
+  organizationId: string,
+  groupId: string,
+): Promise<void> {
+  const rows = await db.query<{ source: string }>(
+    `select source from public.scim_groups where id = $1 and organization_id = $2 limit 1`,
+    [groupId, organizationId],
+  );
+  const row = rows[0];
+  if (!row) throw createError.notFound('Group not found in this workspace.').asUserSafe();
+  if (row.source !== 'workspace') {
+    throw createError
+      .conflict('This group comes from your identity provider. Change it there.')
+      .asUserSafe();
+  }
+}
+
+export async function createWorkspaceGroup(
+  db: DatabaseAdapter,
+  input: { organizationId: string; name: string; actorUserId: string },
+): Promise<{ id: string }> {
+  try {
+    const rows = await db.query<{ id: string }>(
+      `insert into public.scim_groups
+         (organization_id, connection_id, source, display_name, created_by_user_id)
+       values ($1, null, 'workspace', $2, $3)
+       returning id`,
+      [input.organizationId, workspaceGroupName(input.name), input.actorUserId],
+    );
+    const row = rows[0];
+    if (!row) throw new Error('workspace group insert returned no row');
+    return row;
+  } catch (error) {
+    if ((error as { code?: string } | null)?.code === '23505') {
+      throw createError.conflict('A group with that name already exists.').asUserSafe();
+    }
+    throw error;
+  }
+}
+
+export async function renameWorkspaceGroup(
+  db: DatabaseAdapter,
+  input: { organizationId: string; groupId: string; name: string },
+): Promise<void> {
+  await requireWorkspaceGroup(db, input.organizationId, input.groupId);
+  try {
+    await db.query(
+      `update public.scim_groups
+          set display_name = $3, version = version + 1, updated_at = now()
+        where id = $1 and organization_id = $2 and source = 'workspace'`,
+      [input.groupId, input.organizationId, workspaceGroupName(input.name)],
+    );
+  } catch (error) {
+    if ((error as { code?: string } | null)?.code === '23505') {
+      throw createError.conflict('A group with that name already exists.').asUserSafe();
+    }
+    throw error;
+  }
+}
+
+export async function deleteWorkspaceGroup(
+  db: DatabaseAdapter,
+  input: { organizationId: string; groupId: string },
+): Promise<void> {
+  await requireWorkspaceGroup(db, input.organizationId, input.groupId);
+  await db.query(
+    `delete from public.scim_groups
+      where id = $1 and organization_id = $2 and source = 'workspace'`,
+    [input.groupId, input.organizationId],
+  );
+}
+
+export async function readWorkspaceGroupMembers(
+  db: DatabaseAdapter,
+  organizationId: string,
+  groupId: string,
+): Promise<string[]> {
+  await requireWorkspaceGroup(db, organizationId, groupId);
+  const rows = await db.query<{ user_id: string }>(
+    `select user_id from public.organization_group_members
+      where organization_id = $1 and group_id = $2
+      order by user_id`,
+    [organizationId, groupId],
+  );
+  return rows.map((row) => row.user_id);
+}
+
+export async function setWorkspaceGroupMembers(
+  db: DatabaseAdapter,
+  input: {
+    organizationId: string;
+    groupId: string;
+    userIds: readonly string[];
+    actorUserId: string;
+  },
+): Promise<{ added: string[]; removed: string[] }> {
+  const next = [...new Set(input.userIds)];
+  return db.transaction(async (tx) => {
+    await requireWorkspaceGroup(tx, input.organizationId, input.groupId);
+    if (next.length > 0) {
+      const members = await tx.query<{ user_id: string }>(
+        `select user_id from public.organization_members
+          where organization_id = $1 and user_id = any($2::text[])`,
+        [input.organizationId, next],
+      );
+      if (members.length !== next.length) {
+        throw createError
+          .validation('Every group member must be a member of this workspace.')
+          .asUserSafe();
+      }
+    }
+    const current = (
+      await tx.query<{ user_id: string }>(
+        `select user_id from public.organization_group_members
+          where organization_id = $1 and group_id = $2`,
+        [input.organizationId, input.groupId],
+      )
+    ).map((row) => row.user_id);
+    const added = next.filter((id) => !current.includes(id));
+    const removed = current.filter((id) => !next.includes(id));
+    if (removed.length > 0) {
+      await tx.query(
+        `delete from public.organization_group_members
+          where organization_id = $1 and group_id = $2 and user_id = any($3::text[])`,
+        [input.organizationId, input.groupId, removed],
+      );
+    }
+    for (const userId of added) {
+      await tx.query(
+        `insert into public.organization_group_members
+           (organization_id, group_id, user_id, added_by_user_id)
+         values ($1, $2, $3, $4)
+         on conflict do nothing`,
+        [input.organizationId, input.groupId, userId, input.actorUserId],
+      );
+    }
+    return { added, removed };
+  });
 }
 
 export async function isDirectoryGroupManager(

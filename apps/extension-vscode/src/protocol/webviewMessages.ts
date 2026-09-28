@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { REMOTE_CODE_LIMITS } from '@agiworkforce/types';
 
 export const AgentModeSchema = z.enum(['ask', 'auto', 'plan', 'bypass']);
 export const EffortSchema = z.enum(['low', 'medium', 'high', 'max']);
@@ -69,6 +70,7 @@ export const CONTEXT_ATTACHMENT_KINDS = [
   'open-files',
   'problems',
   'git-diff',
+  'url',
 ] as const;
 export const ContextAttachmentKindSchema = z.enum(CONTEXT_ATTACHMENT_KINDS);
 export type ContextAttachmentKind = z.infer<typeof ContextAttachmentKindSchema>;
@@ -163,11 +165,21 @@ const openSessionRow = z.object({
   type: z.literal('openSessionRow'),
   payload: z.object({
     id: z.string().min(1).max(200),
-    source: z.enum(['local', 'cloud']),
+    source: z.enum(['local', 'cloud', 'cloud-code']),
   }),
 });
 
 const requestSlashCommands = z.object({ type: z.literal('requestSlashCommands') });
+const continueInCloud = z.object({ type: z.literal('continueInCloud') });
+const regenerate = z.object({ type: z.literal('regenerate') });
+const cancelQueuedMessage = z.object({
+  type: z.literal('cancelQueuedMessage'),
+  payload: z.object({ clientMessageId: z.string().min(1).max(200) }),
+});
+const openSuggestedProject = z.object({
+  type: z.literal('openSuggestedProject'),
+  payload: z.object({ projectId: z.string().min(1).max(200) }),
+});
 
 const runSlashCommand = z.object({
   type: z.literal('runSlashCommand'),
@@ -183,6 +195,7 @@ const respondToApproval = z.object({
   payload: z.object({
     requestId: z.string().min(1).max(200),
     decision: ApprovalDecisionSchema,
+    guidance: z.string().trim().min(1).max(REMOTE_CODE_LIMITS.guidanceLength).optional(),
   }),
 });
 
@@ -195,6 +208,7 @@ const resolveTurnFailure = z.object({
       'upgrade-plan',
       'open-settings',
       'switch-model',
+      'update-extension',
     ]),
     provider: z
       .string()
@@ -268,6 +282,10 @@ export const WebviewToExtSchema = z.discriminatedUnion('type', [
   openSessionRow,
   requestSlashCommands,
   runSlashCommand,
+  continueInCloud,
+  regenerate,
+  cancelQueuedMessage,
+  openSuggestedProject,
 ]);
 
 export type WebviewToExtMessage = z.infer<typeof WebviewToExtSchema>;

@@ -1,6 +1,10 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { getCsrfToken } from '@/lib/client/csrf';
+import {
+  connectorCategoryToolName,
+  type ConnectorToolCategory,
+} from '@shared/types/connectorToolCategories';
 import { logger } from '@shared/lib/logger';
 import { queryClient, queryKeys } from '@shared/stores/query-client';
 
@@ -14,6 +18,7 @@ const PERMISSIONS_PATH = '/api/connectors/permissions';
 const CSRF_HEADER = 'x-csrf-token';
 const JSON_CONTENT_TYPE = 'application/json';
 const SAME_ORIGIN: RequestCredentials = 'same-origin';
+const MAX_TOOLS_PER_WRITE = 200;
 
 export const PERMISSION_SAVE_FAILED_COPY =
   'That permission was not saved, so the assistant still follows the level shown here. Try again.';
@@ -34,6 +39,12 @@ interface ToolPermissionsState {
 
 interface ToolPermissionsActions {
   setToolPermission: (connectorId: string, toolName: string, level: PermissionLevel) => void;
+  setToolsPermission: (
+    connectorId: string,
+    toolNames: readonly string[],
+    level: PermissionLevel,
+    category?: ConnectorToolCategory,
+  ) => void;
   getToolPermission: (connectorId: string, toolName: string) => PermissionLevel;
   getConnectorPermissions: (connectorId: string) => Record<string, PermissionLevel>;
   resetConnectorPermissions: (connectorId: string) => void;
@@ -57,17 +68,25 @@ class PermissionWriteError extends Error {
 
 async function writePermissionToServer(
   connectorId: string,
-  toolName: string,
+  toolNames: readonly string[],
   level: PermissionLevel,
+  category?: ConnectorToolCategory,
 ): Promise<void> {
   const csrf = await getCsrfToken();
-  const response = await fetch(PERMISSIONS_PATH, {
-    method: 'PUT',
-    credentials: SAME_ORIGIN,
-    headers: { 'Content-Type': JSON_CONTENT_TYPE, [CSRF_HEADER]: csrf },
-    body: JSON.stringify({ connectorId, toolName, level }),
-  });
-  if (!response.ok) throw new PermissionWriteError(response.status);
+  const put = async (body: Record<string, unknown>) => {
+    const response = await fetch(PERMISSIONS_PATH, {
+      method: 'PUT',
+      credentials: SAME_ORIGIN,
+      headers: { 'Content-Type': JSON_CONTENT_TYPE, [CSRF_HEADER]: csrf },
+      body: JSON.stringify({ connectorId, level, ...body }),
+    });
+    if (!response.ok) throw new PermissionWriteError(response.status);
+  };
+  if (category) await put({ category });
+  for (let start = 0; start < toolNames.length; start += MAX_TOOLS_PER_WRITE) {
+    const chunk = toolNames.slice(start, start + MAX_TOOLS_PER_WRITE);
+    await put(chunk.length === 1 ? { toolName: chunk[0] } : { toolNames: chunk });
+  }
   await queryClient.invalidateQueries({ queryKey: queryKeys.connectors.permissions() });
 }
 
@@ -146,33 +165,53 @@ export const useToolPermissionsStore = create<Store>()(
       saveError: {},
 
       setToolPermission: (connectorId, toolName, level) => {
-        const previous = get().permissions[connectorId]?.[toolName] ?? null;
+        get().setToolsPermission(connectorId, [toolName], level);
+      },
+
+      setToolsPermission: (connectorId, listedToolNames, level, category) => {
+        const toolNames = category
+          ? [...listedToolNames, connectorCategoryToolName(category)]
+          : listedToolNames;
+        if (toolNames.length === 0) return;
+        const previous = get().permissions[connectorId] ?? {};
         set((state) => ({
           permissions: {
             ...state.permissions,
-            [connectorId]: { ...state.permissions[connectorId], [toolName]: level },
+            [connectorId]: {
+              ...state.permissions[connectorId],
+              ...Object.fromEntries(toolNames.map((name) => [name, level])),
+            },
           },
-          saving: markSaving(state.saving, connectorId, toolName),
+          saving: toolNames.reduce(
+            (saving, name) => markSaving(saving, connectorId, name),
+            state.saving,
+          ),
           saveError: withoutKey(state.saveError, connectorId),
         }));
 
-        void writePermissionToServer(connectorId, toolName, level)
+        const unmarkAll = (saving: Record<string, readonly string[]>) =>
+          toolNames.reduce((next, name) => unmarkSaving(next, connectorId, name), saving);
+
+        void writePermissionToServer(connectorId, listedToolNames, level, category)
           .then(() => {
-            set((state) => ({ saving: unmarkSaving(state.saving, connectorId, toolName) }));
+            set((state) => ({ saving: unmarkAll(state.saving) }));
           })
           .catch((err: unknown) => {
             logger.warn('[ToolPermissions] server write refused, reverting:', err);
             set((state) => {
               const connector = { ...state.permissions[connectorId] };
-              if (previous === null) delete connector[toolName];
-              else connector[toolName] = previous;
+              for (const name of toolNames) {
+                const prior = previous[name];
+                if (prior === undefined) delete connector[name];
+                else connector[name] = prior;
+              }
               const permissions =
                 Object.keys(connector).length === 0
                   ? withoutConnector(state.permissions, connectorId)
                   : { ...state.permissions, [connectorId]: connector };
               return {
                 permissions,
-                saving: unmarkSaving(state.saving, connectorId, toolName),
+                saving: unmarkAll(state.saving),
                 saveError: { ...state.saveError, [connectorId]: PERMISSION_SAVE_FAILED_COPY },
               };
             });

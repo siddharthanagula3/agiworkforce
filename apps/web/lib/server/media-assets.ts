@@ -11,6 +11,7 @@ import {
 } from '@/lib/services/legal-hold-gate';
 import { recordGeneratedArtifactBytes } from '@/lib/services/infrastructure-cost';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
+import { purgeDerivedRecords } from '@/lib/resources/purge-soft-deleted';
 
 // A temporary chat's files are media assets like any other until their window
 // is up, so callers reach their retention through this module rather than a
@@ -409,6 +410,9 @@ export interface LibraryAssetRow {
   sourceSurface: string | null;
   metadata: Record<string, unknown>;
   createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+  conversationId: string | null;
 }
 
 export interface ListLibraryAssetsOptions {
@@ -427,9 +431,10 @@ const UPLOAD_ORIGINS = ['upload', 'uploaded'] as const;
 const DELETED_ORDER_CLAUSE = 'deleted_at desc';
 
 const ORDER_CLAUSE_BY_SORT: Readonly<Record<LibrarySort, string>> = {
-  modified: 'created_at desc',
+  modified: 'updated_at desc',
   name: "coalesce(metadata->>'filename', kind) asc",
   size: 'byte_size desc nulls last',
+  type: "mime_type asc, coalesce(metadata->>'filename', kind) asc",
 };
 
 function escapeIlike(term: string): string {
@@ -448,7 +453,24 @@ function mapLibraryRow(row: Record<string, unknown>): LibraryAssetRow {
     sourceSurface: (row['source_surface'] as string | null) ?? null,
     metadata: (row['metadata'] as Record<string, unknown> | null) ?? {},
     createdAt: new Date(row['created_at'] as string).toISOString(),
+    updatedAt: new Date((row['updated_at'] ?? row['created_at']) as string).toISOString(),
+    deletedAt: row['deleted_at'] ? new Date(row['deleted_at'] as string).toISOString() : null,
+    conversationId: (row['conversation_id'] as string | null) ?? null,
   };
+}
+
+export async function sumLibraryStorageBytes(userId: string, db: DatabaseAdapter): Promise<number> {
+  const organizationId = await resolveActiveOrganizationId(db, userId);
+  const [row] = await db.query<{ total: string | number | null }>(
+    `select coalesce(sum(byte_size), 0) as total
+       from public.media_assets
+      where user_id = $1
+        and organization_id is not distinct from $2::uuid
+        and not temporary_chat
+        and deleted_at is null`,
+    [userId, organizationId],
+  );
+  return Number(row?.total ?? 0);
 }
 
 export async function listLibraryAssets(
@@ -498,7 +520,8 @@ export async function listLibraryAssets(
 
     params.push(limit, offset);
     const rows = await db.query<Record<string, unknown>>(
-      `select id, kind, mime_type, byte_size, prompt, provider, model, source_surface, metadata, created_at, deleted_at
+      `select id, kind, mime_type, byte_size, prompt, provider, model, source_surface, metadata, created_at, updated_at, deleted_at,
+              conversation_id
          from public.media_assets
         where user_id = $1
           and organization_id is not distinct from $2::uuid
@@ -768,7 +791,7 @@ export async function permanentlyDeleteMediaAsset(
   const held = legalHoldPredicate('file', { alias: 'asset', nextParamIndex: 4 });
   const exclusion = legalHoldExclusion('file', { alias: 'asset', nextParamIndex: 4 });
   try {
-    return await db.transaction(async (tx) => {
+    const removed = await db.transaction(async (tx) => {
       const organizationId = await resolveActiveOrganizationId(tx, userId);
       const scope = `asset.id = $1 and asset.user_id = $2
             and asset.organization_id is not distinct from $3::uuid
@@ -807,6 +830,8 @@ export async function permanentlyDeleteMediaAsset(
       }
       return true;
     });
+    if (removed) await purgeDerivedRecords(db, 'media_assets', [{ owner: userId, key: id }]);
+    return removed;
   } catch (error) {
     if (isSchemaNotReady(error)) return false;
     throw error;

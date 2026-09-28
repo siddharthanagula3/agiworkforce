@@ -13,14 +13,11 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The title is set only by the assistant office-file tool and written to the .pptx file properties; no deck view shows it or lets the user rename it. | ui |
-| desktop | partial | The title is set only by the assistant office-file tool and written to the .pptx file properties; no deck view shows it or lets the user rename it. | ui |
-| mobile | partial | The title is set only by the assistant office-file tool and written to the .pptx file properties; no deck view shows it or lets the user rename it. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | The title is set only by the assistant office-file tool and written to the .pptx file properties; no deck view shows it or lets the user rename it. Chrome offers the tool only when the prompt names an Office file (no toggle). | ui |
 
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:868-875`, `apps/web/features/chat/components/messages/MessageBubble.tsx:2286-2301`, `apps/web/lib/services/managed-office-file-service.ts:513-526`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:1868-1880`
+Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:577-583`, `apps/extension/src/features/side-panel/bubbles.ts:434-456`, `apps/web/lib/services/managed-office-file-service.ts:513-526`, `apps/web/lib/services/managed-office-file-service.ts:513-520`
 
 ## S30.03: Add slide.
 
@@ -29,14 +26,11 @@ Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:868-875`,
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Slides can be added only when the assistant first creates a deck; nothing adds a slide to an existing deck (no edit tool, no deck editor). | ui |
-| desktop | partial | Slides can be added only when the assistant first creates a deck; nothing adds a slide to an existing deck (no edit tool, no deck editor). | ui |
-| mobile | partial | Slides can be added only when the assistant first creates a deck; nothing adds a slide to an existing deck (no edit tool, no deck editor). | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | Slides can be added only when the assistant first creates a deck; nothing adds a slide to an existing deck (no edit tool, no deck editor). Chrome offers the tool only when the prompt names an Office file (no toggle). | ui |
 
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:868-875`, `apps/web/features/chat/components/messages/MessageBubble.tsx:2286-2301`, `apps/web/lib/services/managed-office-file-service.ts:513-526`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:1868-1880`
+Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:577-583`, `apps/extension/src/features/side-panel/bubbles.ts:434-456`, `apps/web/lib/services/managed-office-file-service.ts:513-526`, `apps/web/lib/services/managed-office-file-service.ts:59-63`
 
 ## S30.18: Slide notes.
 
@@ -45,14 +39,11 @@ Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:868-875`,
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Notes can be written only when the assistant creates the deck (speaker_notes per slide, stored in the .pptx notes pane); the product never shows or edits them. | ui |
-| desktop | partial | Notes can be written only when the assistant creates the deck (speaker_notes per slide, stored in the .pptx notes pane); the product never shows or edits them. | ui |
-| mobile | partial | Notes can be written only when the assistant creates the deck (speaker_notes per slide, stored in the .pptx notes pane); the product never shows or edits them. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | Notes can be written only when the assistant creates the deck (speaker_notes per slide, stored in the .pptx notes pane); the product never shows or edits them. Chrome offers the tool only when the prompt names an Office file (no toggle). | ui |
 
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:868-875`, `apps/web/features/chat/components/messages/MessageBubble.tsx:2286-2301`, `apps/web/lib/services/managed-office-file-service.ts:513-526`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:1868-1880`
+Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:577-583`, `apps/extension/src/features/side-panel/bubbles.ts:434-456`, `apps/web/lib/services/managed-office-file-service.ts:513-526`, `apps/web/lib/services/managed-office-file-service.ts:59-63`
 
 ## S30.19: Presenter notes.
 
@@ -61,14 +52,11 @@ Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:868-875`,
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Presenter notes exist only inside the downloaded .pptx (from the assistant tool); the product has no presenter view that shows them while presenting. | ui |
-| desktop | partial | Presenter notes exist only inside the downloaded .pptx (from the assistant tool); the product has no presenter view that shows them while presenting. | ui |
-| mobile | partial | Presenter notes exist only inside the downloaded .pptx (from the assistant tool); the product has no presenter view that shows them while presenting. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | Presenter notes exist only inside the downloaded .pptx (from the assistant tool); the product has no presenter view that shows them while presenting. Chrome offers the tool only when the prompt names an Office file (no toggle). | ui |
 
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:868-875`, `apps/web/features/chat/components/messages/MessageBubble.tsx:2286-2301`, `apps/web/lib/services/managed-office-file-service.ts:513-526`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:1868-1880`
+Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:577-583`, `apps/extension/src/features/side-panel/bubbles.ts:434-456`, `apps/web/lib/services/managed-office-file-service.ts:513-526`, `apps/web/lib/services/managed-office-file-service.ts:59-63`
 
 ## S30.23: Whole-deck restructuring.
 
@@ -77,14 +65,9 @@ Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:868-875`,
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | An attached .pptx is read as text and the assistant can produce a new restructured deck with the office-file tool; there is no restructure action and the original deck is not changed. | ui |
-| desktop | partial | An attached .pptx is read as text and the assistant can produce a new restructured deck with the office-file tool; there is no restructure action and the original deck is not changed. | ui |
-| mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:868-875`, `apps/web/features/chat/components/messages/MessageBubble.tsx:2286-2301`, `apps/web/lib/services/managed-office-file-service.ts:513-526`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:1868-1880`
 
 ## S30.26: Presentation mode.
 
@@ -93,26 +76,20 @@ Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:868-875`,
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | A fullscreen slide viewer with keyboard navigation is mounted, but web chat never creates presentation artifacts (only the internal desktop app does), and generated .pptx files cannot be opened in it. | handler |
-| desktop | partial | A fullscreen slide viewer with keyboard navigation is mounted, but web chat never creates presentation artifacts (only the internal desktop app does), and generated .pptx files cannot be opened in it. | handler |
-| mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `packages/ui/unified-chat/src/components/artifact-components/PresentationArtifact.tsx:81-93`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1043-1049`, `packages/platform/artifacts/src/artifact-derivation.ts:108-121`
 
 ## S30.28: Export to PPTX.
 
 - Done when: The user can download the deck as a .pptx file.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | A .pptx is produced only by asking the assistant (office-file tool); a deck in the product has no Export to PPTX action. | ui |
-| desktop | partial | A .pptx is produced only by asking the assistant (office-file tool); a deck in the product has no Export to PPTX action. | ui |
 | mobile | partial | A .pptx is produced only by asking the assistant (office-file tool); a deck in the product has no Export to PPTX action. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | A .pptx is produced only by asking the assistant (office-file tool); a deck in the product has no Export to PPTX action. Chrome offers the tool only when the prompt names an Office file (no toggle). | ui |
 
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:868-875`, `apps/web/features/chat/components/messages/MessageBubble.tsx:2286-2301`, `apps/web/lib/services/managed-office-file-service.ts:513-526`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:1868-1880`
+Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1756`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:195-203`, `apps/web/lib/services/managed-office-file-service.ts:513-526`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:577-583`

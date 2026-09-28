@@ -11,12 +11,17 @@ import { logger } from '@/lib/logger';
 import { MCP_EGRESS_POLICY } from '@/lib/mcp-egress-policy';
 import { getMcpStatelessRuntime } from '@/lib/connectors/mcp-runtime-cache';
 import { detectConnectorAuthChallenge } from '@/lib/connectors/oauth-challenge';
+import { isEdgeBlockedError } from '@/lib/connectors/edge-block';
 import {
   getCustomRemoteMcpLimit,
   getCustomRemoteMcpLimitErrorMessage,
   isUserResourceLimitError,
 } from '@/lib/services/free-plan-entitlements';
 import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
+import { decryptConnectorToken, encryptConnectorToken } from '@/lib/custom-connector-crypto';
+import { getNeonDb } from '@/lib/server/neon-db';
+import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
+import type { McpSuppliedOAuthClient } from '@/lib/connectors/mcp-oauth-provider';
 
 export type CustomConnectorTransport = 'sse' | 'streamable-http';
 
@@ -31,6 +36,7 @@ const PG_UNIQUE_VIOLATION = '23505';
 const SHORT_ID_CONSTRAINT_FRAGMENT = 'short_id';
 const NO_CAPABILITIES_MESSAGE = 'The server did not advertise any supported MCP capabilities';
 const CUSTOM_CONNECTORS_RESOURCE = 'custom_connectors';
+const OAUTH_CLIENT_SECRET_PURPOSE = 'oauth-client-secret';
 
 export const CUSTOM_CONNECTORS_UNAVAILABLE_MESSAGE =
   'Custom connectors are not available in this environment';
@@ -38,6 +44,7 @@ export const SHORT_ID_ALLOCATION_FAILED_MESSAGE =
   'Could not allocate a connector identifier. Try again.';
 export const DUPLICATE_URL_MESSAGE = 'You already have a custom connector for this URL.';
 export const CONNECTOR_UNREACHABLE_CODE = 'CONNECTOR_UNREACHABLE';
+export const CONNECTOR_BLOCKED_CODE = 'CONNECTOR_BLOCKED';
 
 export function customConnectorId(shortId: string): string {
   return `${CUSTOM_CONNECTOR_ID_PREFIX}${shortId}`;
@@ -135,10 +142,15 @@ export class McpProbeError extends Error {
   constructor(
     message: string,
     readonly authChallenge: boolean,
+    readonly edgeBlocked: boolean = false,
   ) {
     super(message);
     this.name = 'McpProbeError';
   }
+}
+
+export function edgeBlockedMessage(serverName: string): string {
+  return `${serverName} refused this service at its network edge. Its firewall blocks requests from cloud servers, so this is a block on the provider's side, not an outage, and it cannot be connected from here until the provider allows it.`;
 }
 
 export async function probeMcpServer(input: McpProbeInput): Promise<McpProbeResult> {
@@ -181,7 +193,11 @@ export async function probeMcpServer(input: McpProbeInput): Promise<McpProbeResu
       { serverName: input.serverName, message },
       '[mcp-custom-connections] connect-and-list failed',
     );
-    throw new McpProbeError(message, detectConnectorAuthChallenge(error) !== null);
+    throw new McpProbeError(
+      message,
+      detectConnectorAuthChallenge(error) !== null,
+      isEdgeBlockedError(error),
+    );
   } finally {
     if (handle) await Promise.resolve(handle.close()).catch(() => undefined);
   }
@@ -258,6 +274,13 @@ export interface CustomConnectorInsert {
   transport: CustomConnectorTransport;
   credentialEnc: string | null;
   connectorLimit: number | null;
+  signInRequired?: boolean;
+  oauthClient?: CustomConnectorOAuthClientInput | null;
+}
+
+export interface CustomConnectorOAuthClientInput {
+  clientId: string;
+  clientSecret: string | null;
 }
 
 export async function insertCustomConnector(
@@ -271,8 +294,9 @@ export async function insertCustomConnector(
     [saved] = await db.query<CustomConnectorRow>(
       `with inserted as materialized (
          insert into user_custom_connectors
-           (user_id, name, url, auth_header_enc, transport, short_id, created_at, updated_at)
-         values ($1, $2, $3, $4, $5, $6, $7, $7)
+           (user_id, name, url, auth_header_enc, transport, short_id, created_at, updated_at,
+            sign_in_required, oauth_client_id, oauth_client_secret_enc)
+         values ($1, $2, $3, $4, $5, $6, $7, $7, $9, $10, $11)
          returning id, short_id, name, url, transport, created_at, updated_at
        ), quota_guard as materialized (
          select public.assert_user_resource_limit('${CUSTOM_CONNECTORS_RESOURCE}', $1, $8)
@@ -288,6 +312,11 @@ export async function insertCustomConnector(
         shortId,
         now,
         input.connectorLimit,
+        input.signInRequired === true,
+        input.oauthClient?.clientId ?? null,
+        input.oauthClient?.clientSecret
+          ? encryptConnectorToken(input.oauthClient.clientSecret, OAUTH_CLIENT_SECRET_PURPOSE)
+          : null,
       ],
     );
   } catch (error) {
@@ -315,6 +344,40 @@ export async function insertCustomConnector(
     throw createError.internal('Failed to save connector');
   }
   return saved;
+}
+
+interface CustomConnectorOAuthClientRow {
+  oauth_client_id: string | null;
+  oauth_client_secret_enc: string | null;
+}
+
+export async function getCustomConnectorOAuthClient(
+  userId: string,
+  connectorId: string,
+): Promise<McpSuppliedOAuthClient | null> {
+  if (!connectorId.startsWith(CUSTOM_CONNECTOR_ID_PREFIX)) return null;
+  const shortId = connectorId.slice(CUSTOM_CONNECTOR_ID_PREFIX.length);
+  const db = createClaimedUserScopedDb(getNeonDb(), { userId, organizationId: null });
+  let rows: CustomConnectorOAuthClientRow[];
+  try {
+    rows = await db.query<CustomConnectorOAuthClientRow>(
+      `select oauth_client_id, oauth_client_secret_enc
+         from user_custom_connectors
+        where user_id = $1 and organization_id is null and short_id = $2`,
+      [userId, shortId],
+    );
+  } catch (error) {
+    if (isUndefinedTableError(error)) return null;
+    throw error;
+  }
+  const row = rows[0];
+  if (!row?.oauth_client_id) return null;
+  return {
+    clientId: row.oauth_client_id,
+    clientSecret: row.oauth_client_secret_enc
+      ? decryptConnectorToken(row.oauth_client_secret_enc, OAUTH_CLIENT_SECRET_PURPOSE)
+      : null,
+  };
 }
 
 async function currentPlanTier(

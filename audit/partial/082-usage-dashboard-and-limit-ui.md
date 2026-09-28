@@ -122,9 +122,9 @@ Code: `apps/mobile/src/features/tasks/runPresentation.ts:15-23`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The criterion includes the purchased balance; no mobile file reads credits.purchased or credit_balance_cents (0 hits), so only plan windows are shown. |  |
+| mobile | partial | Purchased balance card is in post-codex/no-yearly-s82-mobile-purchased-credits.patch; cloud-usage/index.tsx is Codex-held. | ui |
 
-Code: `apps/mobile/src/features/settings/cloud-usage/index.tsx:100-108`, `apps/mobile/services/usage.ts:45-49`
+Code: `apps/mobile/services/usage.ts:23-23`
 
 ## S82.14: Purchased versus included credits.
 
@@ -134,9 +134,9 @@ Code: `apps/mobile/src/features/settings/cloud-usage/index.tsx:100-108`, `apps/m
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Show the purchased balance on mobile; it shows only the included allowance line although /api/usage returns the purchased credits too. | ui |
+| mobile | partial | Purchased versus included shown by post-codex/no-yearly-s82-mobile-purchased-credits.patch; Codex-held file. | ui |
 
-Code: `apps/mobile/src/features/settings/cloud-usage/index.tsx:210-216`, `apps/mobile/services/usage.ts:45-49`
+Code: `apps/mobile/services/usage.ts:23-23`
 
 ## S82.15: Promotional credits.
 
@@ -198,18 +198,6 @@ Code: `apps/mobile/src/features/settings/cloud-usage/index.tsx:418-423`, `apps/m
 
 Code: `apps/web/lib/services/managed-usage-request-service.ts:106-111`, `apps/cli/src/usage_summary.rs:382-396`, `apps/cli/src/tui/tui_app.rs:3897-3911`, `apps/extension-vscode/src/core/commandSetup.ts:2044-2047`
 
-## S82.23: Actual task cost.
-
-- Done when: After a task finishes, the user sees what it actually cost.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Show the settled cost on mobile run details; the run payload already carries usage.costCents but mobile shows only calls and tokens. | ui |
-
-Code: `apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx:179-184`, `packages/contracts/cloud-contracts/src/cloud-agent-runs.ts:81-89`
-
 ## S82.24: Budget warning.
 
 - Done when: Users are warned before they hit a usage limit.
@@ -250,14 +238,13 @@ Code: `apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx:77-88`, `
 
 - Done when: Users can buy extra usage (credits) when they run out, from where they hit the limit.
 - Wave: 2
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Open paid checkout to all eligible users: buying extra usage needs an active Stripe-billed paid plan, and the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | flag-off |
-| desktop | partial | Open paid checkout to all eligible users: buying extra usage needs an active Stripe-billed paid plan, and the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | flag-off |
 | mobile | partial | Native top-up products exist but are gated off by default (MOBILE_IAP_ENABLED unset), so mobile cannot sell extra usage. Even with the flag on, the catalog returns no products to users without an upgrade-waitlist redemption (beta_redemptions). | flag-off |
 
-Code: `apps/web/features/settings/sections/BillingSection.tsx:976-990`, `apps/web/features/chat/components/InlinePaywallCard.tsx:237-241`, `apps/web/app/api/billing/top-up/route.ts:156-180`, `apps/web/app/api/billing/top-up/route.ts:128-137`
+Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:147-148`, `apps/web/lib/server/mobile-iap-catalog.ts:25-28`, `apps/web/app/api/mobile/iap/catalog/route.ts:83-86`
 
 ## S82.33: Billing discrepancy report.
 

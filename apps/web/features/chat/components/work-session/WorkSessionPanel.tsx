@@ -34,6 +34,7 @@ import {
   useOverlayDialog,
   useOverlayLayout,
 } from '../../hooks/use-overlay-dialog';
+import { SidePanelResizeHandle, useSidePanelWidth } from '../SidePanelResizeHandle';
 import { downloadAllArtifacts, downloadGeneratedFile } from '../../utils/downloadArtifacts';
 import { toast } from 'sonner';
 import { toUserMessage } from '@/lib/user-error-message';
@@ -253,7 +254,7 @@ export function WorkSessionToggleButton({
         'relative flex h-9 w-9 items-center justify-center rounded-lg transition-colors motion-reduce:transition-none',
         open
           ? 'bg-primary/15 text-primary'
-          : 'bg-card/60 text-muted-foreground shadow-sm backdrop-blur-sm hover:bg-muted/60 hover:text-foreground',
+          : 'bg-card/60 text-muted-foreground shadow-e1 backdrop-blur-sm hover:bg-muted/60 hover:text-foreground',
       )}
       aria-label={`${open ? CLOSE_ACTION_VERB : OPEN_ACTION_VERB} ${panelLabel}`}
       title={panelLabel}
@@ -401,6 +402,7 @@ export function WorkSessionPanel({
   const isModalOverlay = layout === 'mobile' && open;
 
   useOverlayDialog(panelRef, isModalOverlay, onClose);
+  const panelWidth = useSidePanelWidth();
 
   useEffect(() => {
     if (!open || isModalOverlay) return;
@@ -619,12 +621,14 @@ export function WorkSessionPanel({
           'md:relative md:inset-auto md:z-auto md:max-h-none md:w-[380px] md:min-w-[280px] md:shrink md:rounded-none md:border-l md:border-t-0',
           'md:animate-in md:slide-in-from-right',
         )}
+        style={layout === 'desktop' ? { width: panelWidth } : undefined}
         aria-label={panelLabel}
       >
+        {layout === 'desktop' && <SidePanelResizeHandle label={`Resize ${panelLabel}`} />}
         <div className="flex items-center gap-2 border-b border-border/30 px-4 py-3">
           <PanelRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <div className="min-w-0 flex-1">
-            <h2 className="truncate text-sm font-semibold text-foreground" title={dockTitle}>
+            <h2 className="truncate text-h5 text-foreground" title={dockTitle}>
               {dockTitle}
             </h2>
             {agiWork && <p className="text-caption text-muted-foreground">{AGI_WORK_LABEL}</p>}

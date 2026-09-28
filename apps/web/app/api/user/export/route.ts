@@ -423,6 +423,8 @@ const userCustomConnectorExportSchema = z.object({
   url: z.string(),
   transport: z.string(),
   short_id: z.string(),
+  sign_in_required: z.boolean(),
+  oauth_client_id: z.string().nullable(),
   created_at: timestampSchema,
   updated_at: timestampSchema,
 });
@@ -470,6 +472,15 @@ const scheduledTaskExportSchema = z.object({
   metadata: z.unknown().nullable(),
   created_at: timestampSchema,
   updated_at: timestampSchema,
+});
+
+const scheduledTaskShareExportSchema = z.object({
+  id: z.string(),
+  task_id: z.string().nullable(),
+  snapshot: z.unknown(),
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+  revoked_at: nullableTimestampSchema,
 });
 
 const supportTicketExportSchema = z.object({
@@ -2351,11 +2362,13 @@ async function collectUserData(
     ledger,
   });
 
-  // `auth_header_enc` is withheld: it is the encrypted bearer credential the
-  // connector authenticates with, not something the account needs back.
+  // `auth_header_enc` and the OAuth client secret are withheld: they are the
+  // credentials the connector authenticates with, not something the account
+  // needs back.
   exportData['user_custom_connectors'] = await queryExportRows({
     db,
-    sql: `select id, name, url, transport, short_id, created_at, updated_at
+    sql: `select id, name, url, transport, short_id, sign_in_required, oauth_client_id,
+                 created_at, updated_at
           from user_custom_connectors
           where user_id = $1
           order by created_at asc`,
@@ -2379,6 +2392,19 @@ async function collectUserData(
     values: [user.id],
     schema: scheduledTaskExportSchema,
     section: 'scheduled_tasks',
+    userId: user.id,
+    ledger,
+  });
+
+  exportData['scheduled_task_shares'] = await queryExportRows({
+    db,
+    sql: `select id, task_id, snapshot, created_at, updated_at, revoked_at
+          from scheduled_task_shares
+          where user_id = $1
+          order by created_at asc`,
+    values: [user.id],
+    schema: scheduledTaskShareExportSchema,
+    section: 'scheduled_task_shares',
     userId: user.id,
     ledger,
   });

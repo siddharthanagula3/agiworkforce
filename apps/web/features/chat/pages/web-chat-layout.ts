@@ -1,17 +1,19 @@
 import type { ShellLayout, ShellSidebarMode } from '@shared/components/layout/app-shell-layout';
 
-export type SecondaryPanel = 'work' | 'research' | 'artifacts';
+export type SecondaryPanel = 'work' | 'research' | 'artifacts' | 'sources';
 
 export interface SecondaryPanelFlags {
   work: boolean;
   research: boolean;
   artifacts: boolean;
+  sources: boolean;
 }
 
 export const CLOSED_SECONDARY_PANELS: SecondaryPanelFlags = {
   work: false,
   research: false,
   artifacts: false,
+  sources: false,
 };
 
 export function resolveSecondaryPanel(
@@ -21,10 +23,12 @@ export function resolveSecondaryPanel(
 ): SecondaryPanel | null {
   if (current.artifacts && !previous.artifacts) return 'artifacts';
   if (current.research && !previous.research) return 'research';
+  if (current.sources && !previous.sources) return 'sources';
   if (current.work && !previous.work && active === null) return 'work';
   if (active && current[active]) return active;
   if (current.artifacts) return 'artifacts';
   if (current.research) return 'research';
+  if (current.sources) return 'sources';
   if (current.work) return 'work';
   return null;
 }

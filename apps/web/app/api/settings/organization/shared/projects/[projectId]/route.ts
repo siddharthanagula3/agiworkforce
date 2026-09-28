@@ -12,7 +12,7 @@ import { getUserScopedDb } from '@/lib/server/rls-db';
 import { recordAuditEvent } from '@/lib/security-audit';
 import {
   clearProjectMemberAccess,
-  requireSharingManager,
+  requireProjectSharingRight,
   resolveOrgMembership,
   setProjectMemberAccess,
   shareProject,
@@ -23,7 +23,11 @@ export const runtime = 'nodejs';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-const ShareSchema = z.object({}).strict();
+const ShareSchema = z
+  .object({
+    audience: z.enum(['workspace', 'invited']).optional(),
+  })
+  .strict();
 
 const MemberAccessSchema = z
   .object({
@@ -61,7 +65,12 @@ async function handleShare(
   const parsedProjectId = parseProjectId(projectId);
 
   const { db, userId } = await getUserScopedDb(request);
-  const membership = await requireSharingManager(await resolveOrgMembership(db, userId), userId);
+  const membership = await requireProjectSharingRight(
+    db,
+    await resolveOrgMembership(db, userId),
+    userId,
+    parsedProjectId,
+  );
 
   const parsed = ShareSchema.safeParse(await readJson(request));
   if (!parsed.success) {
@@ -72,7 +81,7 @@ async function handleShare(
     organizationId: membership.organizationId,
     projectId: parsedProjectId,
     actorUserId: userId,
-    defaultAccess: 'read',
+    defaultAccess: parsed.data.audience === 'invited' ? 'none' : 'read',
   });
 
   await recordAuditEvent({
@@ -106,7 +115,12 @@ async function handleMemberAccess(
   const parsedProjectId = parseProjectId(projectId);
 
   const { db, userId } = await getUserScopedDb(request);
-  const membership = await requireSharingManager(await resolveOrgMembership(db, userId), userId);
+  const membership = await requireProjectSharingRight(
+    db,
+    await resolveOrgMembership(db, userId),
+    userId,
+    parsedProjectId,
+  );
 
   const parsed = MemberAccessSchema.safeParse(await readJson(request));
   if (!parsed.success) {
@@ -177,7 +191,12 @@ async function handleUnshare(
   const parsedProjectId = parseProjectId(projectId);
 
   const { db, userId } = await getUserScopedDb(request);
-  const membership = await requireSharingManager(await resolveOrgMembership(db, userId), userId);
+  const membership = await requireProjectSharingRight(
+    db,
+    await resolveOrgMembership(db, userId),
+    userId,
+    parsedProjectId,
+  );
 
   const removed = await unshareProject(db, membership.organizationId, parsedProjectId);
   if (!removed) {

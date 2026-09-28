@@ -6,45 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S32.06: Direct text editing.
-
-- Done when: The user can edit the text of a design element directly on the design.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Text can be changed only by editing the artifact source in the code view; there is no click-to-edit text on the rendered design. | ui |
-| desktop | partial | Text can be changed only by editing the artifact source in the code view; there is no click-to-edit text on the rendered design. | ui |
-| mobile | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1342-1356`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:488-496`
-
-## S32.26: Prototype navigation.
-
-- Done when: A prototype can be clicked through: interactions navigate between screens.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Generated HTML/React runs live in the sandboxed preview, so a generated click-through prototype navigates; there is no prototype mode that links frames or flows. | ui |
-| desktop | partial | Generated HTML/React runs live in the sandboxed preview, so a generated click-through prototype navigates; there is no prototype mode that links frames or flows. | ui |
-| mobile | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:510-524`, `apps/web/features/chat/components/SandboxedIframe.tsx:245-253`
-
-## S32.27: Interactive-state previews.
-
-- Done when: The user can preview interactive states (hover, pressed, disabled, empty) of the design.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | The live preview shows states only by interacting with it; there is no state switcher to preview hover, pressed, disabled or empty states. | ui |
-| desktop | partial | The live preview shows states only by interacting with it; there is no state switcher to preview hover, pressed, disabled or empty states. | ui |
-| mobile | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:510-524`, `apps/web/features/chat/components/SandboxedIframe.tsx:245-253`
-
 ## S32.28: Design-to-code handoff.
 
 - Done when: A developer can get the code/specs for a design (inspect, copy or export the implementation).
@@ -52,14 +13,10 @@ Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:510-524`,
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The design is code, so its source can be viewed, copied and downloaded; there is no inspect/spec mode (measurements, tokens, assets) for developers. | ui |
-| desktop | partial | The design is code, so its source can be viewed, copied and downloaded; there is no inspect/spec mode (measurements, tokens, assets) for developers. | ui |
-| mobile | partial | The design is code, so its source can be viewed, copied and downloaded; there is no inspect/spec mode (measurements, tokens, assets) for developers. Mobile saves the source as a text file. | ui |
 | cli | partial | The design is code, so its source can be viewed, copied and downloaded; there is no inspect/spec mode (measurements, tokens, assets) for developers. `agi artifacts show --out` writes the source into the project. | ui |
-| vscode | partial | The design is code, so its source can be viewed, copied and downloaded; there is no inspect/spec mode (measurements, tokens, assets) for developers. "Save Artifact into Workspace" writes the source into the folder. | ui |
 | chrome | partial | The design is code, so its source can be viewed, copied and downloaded; there is no inspect/spec mode (measurements, tokens, assets) for developers. The side panel can only copy the source. | surface-only |
 
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1220-1232`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1455-1457`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:745-760`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:426-436`
+Code: `apps/cli/src/lib.rs:1034-1043`, `apps/cli/src/lib.rs:1942-1948`, `apps/extension/src/features/side-panel/artifactsDrawer.ts:194-205`, `apps/extension/src/features/side-panel/artifactsDrawer.ts:200-205`
 
 ## S32.30: Figma import/export integration.
 
@@ -68,13 +25,8 @@ Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1220-1232
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The Figma connector (Figma MCP) lets the assistant read Figma files in chat; nothing imports a Figma frame into a design canvas or exports a design to Figma. | ui |
-| desktop | partial | The Figma connector (Figma MCP) lets the assistant read Figma files in chat; nothing imports a Figma frame into a design canvas or exports a design to Figma. | ui |
-| mobile | partial | The Figma connector (Figma MCP) lets the assistant read Figma files in chat; nothing imports a Figma frame into a design canvas or exports a design to Figma. | ui |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/connectors/data/connectors.ts:908-917`, `apps/web/lib/connectors/mcp-endpoints.ts:127-132`, `apps/web/lib/connectors/catalog.ts:223-223`, `apps/mobile/src/features/settings/cloud-connectors/index.tsx:226-231`
 
 ## S32.31: Export to HTML.
 
@@ -88,22 +40,6 @@ Code: `apps/web/features/connectors/data/connectors.ts:908-917`, `apps/web/lib/c
 
 Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:426-436`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:236-241`
 
-## S32.32: Export to PDF.
-
-- Done when: The user can export the design as a PDF.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Library exports document, markdown, code, mermaid and presentation artifacts to PDF as text; HTML/React/SVG designs cannot be exported to PDF and no export renders the visual design. | ui |
-| desktop | partial | Library exports document, markdown, code, mermaid and presentation artifacts to PDF as text; HTML/React/SVG designs cannot be exported to PDF and no export renders the visual design. | ui |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/library/components/LibraryView.tsx:220-228`, `packages/ui/unified-chat/src/components/ArtifactRenderer.tsx:554-556`, `packages/ui/unified-chat/src/components/ArtifactRenderer.tsx:660-676`, `apps/web/features/chat/services/document-export-service.ts:479-481`
-
 ## S32.33: Export to image or archive.
 
 - Done when: The user can export the design as an image file or as a downloadable archive.
@@ -114,9 +50,8 @@ Code: `apps/web/features/library/components/LibraryView.tsx:220-228`, `packages/
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | SVG artifacts are written as .svg files; there is no raster image of an HTML design and no archive export. | ui |
-| vscode | partial | SVG artifacts are saved into the workspace as .svg files; there is no raster image of an HTML design and no archive export. | ui |
 
-Code: `apps/cli/src/cloud/artifacts.rs:212-216`, `apps/cli/src/lib.rs:1034-1043`, `apps/extension-vscode/src/features/artifacts/artifactPresentation.ts:62-63`, `apps/extension-vscode/package.json:593-594`
+Code: `apps/cli/src/cloud/artifacts.rs:212-216`, `apps/cli/src/lib.rs:1034-1043`
 
 ## S32.34: Version comparison and restoration.
 

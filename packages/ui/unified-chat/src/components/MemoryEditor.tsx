@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Pin, PinOff, Trash2 } from 'lucide-react';
 import { MEMORY_CATEGORIES, type MemoryCategory } from '@agiworkforce/types';
-import { useConfirmAction } from '@agiworkforce/ui';
+import { useConfirmAction, useUnsavedChangesGuard } from '@agiworkforce/ui';
 import { cn } from '../lib/utils';
 import { toUserMessage } from '../lib/network-error';
 import { useMemoryStore, type MemoryFact } from '../stores/memoryStore';
@@ -185,6 +185,21 @@ export function MemoryEditor({
     setEditDraft('');
   }, []);
 
+  const editingFact = editingId ? facts.find((fact) => fact.id === editingId) : undefined;
+  const dirty =
+    draft.trim() !== '' ||
+    (editingFact !== undefined && editDraft.trim() !== editingFact.text.trim());
+  const discardEdits = useCallback(() => {
+    setDraft('');
+    setEditingId(null);
+    setEditDraft('');
+  }, []);
+  const { dialog: discardDialog } = useUnsavedChangesGuard({
+    dirty,
+    description: 'A memory you were writing has not been saved. If you leave now, it will be lost.',
+    onDiscard: discardEdits,
+  });
+
   const onClearAll = useCallback(() => {
     if (facts.length === 0) return;
     confirm({
@@ -319,9 +334,10 @@ export function MemoryEditor({
   return (
     <div className={cn('flex h-full flex-col gap-4 p-6', className)}>
       {confirmDialog}
+      {discardDialog}
       {title ? (
         <div className="flex flex-col gap-1">
-          <h3 className="text-base font-semibold text-[var(--chat-text-primary)]">{title}</h3>
+          <h3 className="text-h4 text-[var(--chat-text-primary)]">{title}</h3>
           {description ? (
             <p className="max-w-prose text-sm text-[var(--chat-text-secondary)]">{description}</p>
           ) : null}

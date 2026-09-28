@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireEnv } from '@shared/utils/env';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { withErrorHandler } from '@/lib/error-handler';
+import { withAdmittedRateLimitHeaders } from '@/lib/rate-limit-headers';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { logger } from '@/lib/logger';
@@ -18,7 +19,7 @@ import {
   buildSpendLimitGateResponse,
   buildModelPolicyGateResponse,
 } from '@/lib/managed-compute-gate';
-import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
+import { resolveAuthenticatedSurface } from '../../chat/completions/lib/request-surface';
 import {
   getModelMetadataById,
   getRoutingSlotModel,
@@ -49,6 +50,7 @@ import {
   buildManagedComputeAccessGateResponse,
   evaluateManagedComputeSubscriptionAccess,
 } from '@/lib/services/managed-compute-access';
+import { sideCallProviderAllowed } from '@/lib/server/side-call-training-policy';
 
 function isLikelyAudio(head: Uint8Array): boolean {
   if (head.length < 4) return false;
@@ -262,7 +264,8 @@ async function handleTranscriptions(request: NextRequest, admit?: TranscriptionA
   const rateLimitResponse = await withRateLimit(request, 'audio-transcription');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { userId } = await getClerkAuthUser(request, { apiKeyScope: 'inference:write' });
+  const auth = await getClerkAuthUser(request, { apiKeyScope: 'inference:write' });
+  const { userId } = auth;
   await admit?.(request, userId);
 
   const managedGateResponse = buildManagedComputeGateResponse(
@@ -286,7 +289,11 @@ async function handleTranscriptions(request: NextRequest, admit?: TranscriptionA
       provider: 'openai',
       model: 'audio-transcription',
       feature: 'audio_transcription',
-      surface: resolveCloudChatSurface(request),
+      surface: resolveAuthenticatedSurface(request, {
+        token: request.headers.get('authorization')?.replace(/^Bearer /, '') ?? '',
+        surfaceClass: auth.surfaceClass,
+        boundSurface: auth.boundSurface,
+      }),
     },
     {
       ...getCorsHeaders(request),
@@ -448,6 +455,19 @@ async function handleTranscriptions(request: NextRequest, admit?: TranscriptionA
     !isModelLive(defaultModel)
   ) {
     throw new Error('The canonical voice_transcription slot is not a live OpenAI STT model');
+  }
+  if (!(await sideCallProviderAllowed(null, userId, defaultModel.provider))) {
+    return NextResponse.json(
+      {
+        error: {
+          message:
+            'Voice transcription uses a provider that may train on what you send, and your privacy setting keeps your content away from those.',
+          type: 'invalid_request_error',
+          code: 'model_may_train',
+        },
+      },
+      { status: 403, headers: { ...getCorsHeaders(request), ...getSecurityHeaders() } },
+    );
   }
 
   const modelValue = formData.get('model');
@@ -691,7 +711,9 @@ async function handleTranscriptions(request: NextRequest, admit?: TranscriptionA
 }
 
 export function transcriptionsHandler(admit?: TranscriptionAdmission) {
-  return withErrorHandler((request: NextRequest) => handleTranscriptions(request, admit));
+  return withAdmittedRateLimitHeaders(
+    withErrorHandler((request: NextRequest) => handleTranscriptions(request, admit)),
+  );
 }
 
 export const POST = transcriptionsHandler();

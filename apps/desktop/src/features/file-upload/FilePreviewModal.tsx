@@ -1,13 +1,7 @@
 import { convertFileSrc, invoke } from '@/lib/tauri-mock';
 import { Download, Eye, FileText, Image as ImageIcon } from 'lucide-react';
 import React, { useCallback, useEffect, useState } from 'react';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/ui/Dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/ui/Dialog';
 import type { DownloadableFile } from './FileDownloadButton';
 import { PDFViewer } from './PDFViewer';
 
@@ -166,7 +160,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="flex max-h-[88vh] w-[min(780px,calc(100vw-48px))] max-w-none flex-col overflow-hidden border-border/70 bg-background p-0 shadow-2xl sm:rounded-xl">
+      <DialogContent className="flex max-h-[88vh] w-[min(780px,calc(100vw-48px))] max-w-none flex-col overflow-hidden border-border/70 bg-background p-0 shadow-e4 sm:rounded-xl">
         <DialogHeader className="border-b border-border px-6 py-5">
           <div className="flex min-w-0 items-start justify-between gap-4 pr-8">
             <div className="flex min-w-0 flex-1 items-start gap-3">

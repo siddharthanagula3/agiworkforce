@@ -8,7 +8,7 @@ import {
   type DomainRetentionPolicy,
   type RetentionDomain,
 } from '@agiworkforce/types';
-import { Spinner, useConfirmAction } from '@agiworkforce/ui';
+import { Spinner, useConfirmAction, useUnsavedChangesGuard } from '@agiworkforce/ui';
 
 import { useDomainRetention, useSaveDomainRetention } from '../hooks/use-domain-retention';
 import { toUserMessage } from '@/lib/user-error-message';
@@ -58,6 +58,10 @@ function DomainRow({
     Number.isInteger(parsed) && parsed >= RETENTION_DAYS_MIN && parsed <= RETENTION_DAYS_MAX;
   const dirty = parsed !== policy.retentionDays || enforced !== policy.enforced;
   const label = RETENTION_DOMAIN_LABELS[policy.domain];
+  const { dialog: discardDialog } = useUnsavedChangesGuard({
+    dirty: canManage && dirty && !saving,
+    description: `Your change to the ${label} retention period has not been saved. If you leave now, it will be lost.`,
+  });
 
   return (
     <li
@@ -112,6 +116,7 @@ function DomainRow({
           </button>
         ) : null}
       </div>
+      {discardDialog}
     </li>
   );
 }
@@ -188,11 +193,7 @@ export function WorkspaceDomainRetention() {
     <section style={cardStyle} aria-labelledby="domain-retention-heading">
       {dialog}
       <div className="border-b px-5 py-3.5" style={{ borderColor: 'var(--settings-border)' }}>
-        <h2
-          id="domain-retention-heading"
-          className="text-sm font-semibold"
-          style={{ color: 'var(--text-1)' }}
-        >
+        <h2 id="domain-retention-heading" className="text-h5" style={{ color: 'var(--text-1)' }}>
           Retention by data type
         </h2>
         <p className="mt-1 text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>

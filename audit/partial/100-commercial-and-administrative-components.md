@@ -6,17 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S100.14: Checkout adapter.
-
-- Done when: A checkout adapter creates a payment-provider checkout for any eligible user and returns them to a verified result.
-- Wave: 2
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Open paid checkout to all eligible users: the Stripe Checkout adapter works, but the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers (403 waitlist_access_required). | flag-off |
-
-Code: `apps/web/app/api/checkout/route.ts:365-391`, `apps/web/app/api/checkout/route.ts:208-221`, `apps/web/lib/server/billing-waitlist-access.ts:23-34`
-
 ## S100.17: Mobile receipt validation.
 
 - Done when: Receipts from Apple and Google are validated server-side and grant the matching plan or credits.
@@ -27,25 +16,3 @@ Code: `apps/web/app/api/checkout/route.ts:365-391`, `apps/web/app/api/checkout/r
 | platform | partial | Turn on native purchases: Apple/Google verification is built, but MOBILE_IAP_ENABLED is unset by default so no product resolves and every verify call is refused; the catalog also requires an upgrade-waitlist redemption (beta_redemptions). | flag-off |
 
 Code: `apps/web/app/api/mobile/iap/verify/route.ts:50-62`, `apps/web/lib/server/mobile-iap-store-verification.ts:399-411`, `apps/web/lib/server/mobile-iap-catalog.ts:62-69`, `apps/web/app/api/mobile/iap/catalog/route.ts:83-86`
-
-## S100.20: Tax calculation integration.
-
-- Done when: Tax is calculated by an integrated tax engine for every charge, including tax IDs and reverse charge.
-- Wave: 2
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Open paid checkout to all eligible users: Stripe Tax (automatic_tax, tax IDs, billing address) is applied only on Checkout sessions and top-ups, and the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | flag-off |
-
-Code: `apps/web/lib/billing/tax-policy.ts:94-108`, `apps/web/app/api/checkout/route.ts:384-389`, `apps/web/app/api/checkout/route.ts:208-221`
-
-## S100.22: Promotion service.
-
-- Done when: A promotion service creates and applies promo codes, bonus credits and invite grants to accounts.
-- Wave: 2
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Open paid checkout to all eligible users: bonus-credit grants and invite codes work, but promotion codes apply only on Stripe Checkout, where the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | flag-off |
-
-Code: `apps/web/app/api/checkout/route.ts:371-389`, `apps/web/features/admin/services/operator-metrics.ts:344-384`, `apps/web/app/api/claim-offer/route.ts:81-87`, `apps/web/app/api/checkout/route.ts:208-221`

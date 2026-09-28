@@ -2111,6 +2111,7 @@ describe('ChatComposerNew', () => {
           modelId: VIDEO_MODELS[0]!.id,
           aspectRatio: '16:9',
           resolution: '720p',
+          durationSecs: expect.any(Number),
         });
       });
       expect(onSend).not.toHaveBeenCalled();
@@ -2251,6 +2252,7 @@ describe('ChatComposerNew', () => {
           modelId: VIDEO_MODELS[0]!.id,
           aspectRatio: '16:9',
           resolution: '720p',
+          durationSecs: expect.any(Number),
         });
       });
     });
@@ -2277,6 +2279,7 @@ describe('ChatComposerNew', () => {
           modelId: VIDEO_MODELS[0]!.id,
           aspectRatio: '9:16',
           resolution: '480p',
+          durationSecs: expect.any(Number),
         });
       });
     });

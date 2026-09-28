@@ -3,7 +3,10 @@ import { persist } from 'zustand/middleware';
 
 import { useVoiceInputStore } from '@features/chat/stores/voice-input-store';
 import { isLiveVoice, LIVE_DEFAULT_VOICE } from '@features/chat/lib/live-voices';
-import type { LiveVoiceToolActivity } from '@features/chat/lib/live-voice-session';
+import type {
+  LiveVoiceToolActivity,
+  LiveVoiceToolOutcome,
+} from '@features/chat/lib/live-voice-session';
 import type { LiveVoicePendingApproval } from '@agiworkforce/cloud-contracts';
 import {
   INITIAL_VOICE_SESSION_STATE,
@@ -49,6 +52,17 @@ interface VoiceSessionStoreState {
   backendBusy: boolean;
   toolActivity: readonly LiveVoiceToolActivity[];
   toolApprovals: readonly LiveVoicePendingApproval[];
+  toolOutcomes: readonly LiveVoiceToolOutcome[];
+  paused: boolean;
+  rejoinOffer: VoiceRejoinOffer | null;
+}
+
+export interface VoiceRejoinOffer {
+  surface: string;
+  voice: string | null;
+  language: string | null;
+  pace: number | null;
+  startedAt: string;
 }
 
 interface VoiceSessionStoreActions {
@@ -58,6 +72,9 @@ interface VoiceSessionStoreActions {
   setBackendBusy: (backendBusy: boolean) => void;
   setToolActivity: (toolActivity: readonly LiveVoiceToolActivity[]) => void;
   setToolApprovals: (toolApprovals: readonly LiveVoicePendingApproval[]) => void;
+  addToolOutcome: (outcome: LiveVoiceToolOutcome) => void;
+  setPaused: (paused: boolean) => void;
+  setRejoinOffer: (offer: VoiceRejoinOffer | null) => void;
   toggleFocusMode: () => void;
   setDockOpen: (open: boolean) => void;
   setSettingsOpen: (open: boolean) => void;
@@ -66,6 +83,8 @@ interface VoiceSessionStoreActions {
   setLanguage: (language: string) => void;
   setPace: (pace: number) => void;
 }
+
+const VOICE_TOOL_OUTCOME_LIMIT = 3;
 
 const PANELS_CLOSED = {
   focusMode: false,
@@ -86,6 +105,9 @@ export const useVoiceSessionStore = create<VoiceSessionStoreState & VoiceSession
       backendBusy: false,
       toolActivity: [],
       toolApprovals: [],
+      toolOutcomes: [],
+      paused: false,
+      rejoinOffer: null,
 
       resetOnLogout: () =>
         set({
@@ -98,6 +120,9 @@ export const useVoiceSessionStore = create<VoiceSessionStoreState & VoiceSession
           backendBusy: false,
           toolActivity: [],
           toolApprovals: [],
+          toolOutcomes: [],
+          paused: false,
+          rejoinOffer: null,
         }),
 
       dispatch: (event) => {
@@ -111,6 +136,9 @@ export const useVoiceSessionStore = create<VoiceSessionStoreState & VoiceSession
                 backendBusy: false,
                 toolActivity: [],
                 toolApprovals: [],
+                toolOutcomes: [],
+                paused: false,
+                rejoinOffer: null,
                 ...PANELS_CLOSED,
               },
         );
@@ -119,6 +147,15 @@ export const useVoiceSessionStore = create<VoiceSessionStoreState & VoiceSession
       setBackendBusy: (backendBusy) => set({ backendBusy }),
       setToolActivity: (toolActivity) => set({ toolActivity }),
       setToolApprovals: (toolApprovals) => set({ toolApprovals }),
+      setPaused: (paused) => set({ paused }),
+      setRejoinOffer: (rejoinOffer) => set({ rejoinOffer }),
+      addToolOutcome: (outcome) =>
+        set((state) => ({
+          toolOutcomes: [
+            ...state.toolOutcomes.filter((existing) => existing.callId !== outcome.callId),
+            outcome,
+          ].slice(-VOICE_TOOL_OUTCOME_LIMIT),
+        })),
 
       toggleFocusMode: () => set((state) => ({ focusMode: !state.focusMode })),
       setDockOpen: (dockOpen) =>

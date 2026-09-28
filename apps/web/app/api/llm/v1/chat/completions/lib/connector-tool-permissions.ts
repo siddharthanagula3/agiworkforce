@@ -4,6 +4,8 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { logger } from '@/lib/logger';
 import { parseQualifiedToolName } from '@/lib/mcp-tool-executor';
 import { parseLockdownEnabled } from '@shared/types/lockdownMode';
+import { connectorCategoryToolName } from '@shared/types/connectorToolCategories';
+import { resolveConnectorToolMetadata } from './tool-metadata';
 
 export type ConnectorToolPermissionLevel = 'allow' | 'ask' | 'deny';
 
@@ -38,7 +40,18 @@ function buildPermissions(
   const levelForConnectorTool = (
     connectorId: string,
     toolName: string,
-  ): ConnectorToolPermissionLevel | undefined => levels.get(key(connectorId, toolName));
+  ): ConnectorToolPermissionLevel | undefined =>
+    levels.get(key(connectorId, toolName)) ??
+    levels.get(
+      key(
+        connectorId,
+        connectorCategoryToolName(
+          resolveConnectorToolMetadata(connectorId, toolName).actionClass === 'read'
+            ? 'read_only'
+            : 'write',
+        ),
+      ),
+    );
   const levelFor = (qualifiedName: string): ConnectorToolPermissionLevel | undefined => {
     const parsed = parseQualifiedToolName(qualifiedName);
     if (!parsed) return undefined;

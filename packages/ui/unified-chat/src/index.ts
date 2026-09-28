@@ -85,6 +85,13 @@ export {
 export type { ThinkingSendPolicy } from './lib/thinkingPolicy';
 export { MODEL_ESCALATION_PREFIX, resolveModelEscalation } from './lib/modelEscalation';
 export type { ModelEscalation, ModelEscalationSource } from './lib/modelEscalation';
+export {
+  artifactLineChange,
+  describeArtifactVersionChange,
+  formatArtifactVersionTime,
+  summarizeArtifactVersions,
+} from './lib/artifactVersionSummary';
+export type { ArtifactVersionSummary, VersionedContent } from './lib/artifactVersionSummary';
 export { matchMentionQuery } from './lib/mentionQuery';
 export type { MentionMatch } from './lib/mentionQuery';
 export { classifyPrompt, TASK_LABEL } from './lib/promptClassifier';
@@ -155,10 +162,12 @@ export { Tooltip } from './components/ui/Tooltip';
 export { ChatBadge } from './components/ui/ChatBadge';
 
 export { MarkdownContent, type MarkdownContentProps } from './components/markdown/MarkdownContent';
+export { toggleMarkdownTask } from './components/markdown/taskList';
 export {
   StreamingMarkdownContent,
   type StreamingMarkdownContentProps,
 } from './components/markdown/StreamingMarkdownContent';
+export { StreamAnnouncer } from './components/markdown/StreamAnnouncer';
 export { MARKDOWN_SANITIZE_SCHEMA } from './components/markdown/markdownSanitizeSchema';
 export {
   MermaidDiagram,
@@ -202,7 +211,11 @@ export type {
   ComposerVoiceState,
 } from './components/ChatInput';
 export { VoiceOrb, VoiceOrbCanvas } from './components/VoiceOrb';
-export type { VoiceOrbProps, VoiceOrbCanvasProps } from './components/VoiceOrb';
+export type {
+  VoiceOrbProps,
+  VoiceOrbCanvasProps,
+  VoiceOrbLevelSource,
+} from './components/VoiceOrb';
 export {
   advanceBargeIn,
   advanceSpeechWindow,

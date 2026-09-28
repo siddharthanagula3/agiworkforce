@@ -123,9 +123,7 @@ export function PlansModal({ open, onOpenChange }: PlansModalProps) {
           <DialogHeader className="px-6 pt-6 pb-4 border-b border-border">
             <div className="flex items-start justify-between">
               <div className="space-y-1">
-                <DialogTitle className="text-lg font-semibold text-foreground">
-                  Plans &amp; Pricing
-                </DialogTitle>
+                <DialogTitle className="text-h3 text-foreground">Plans &amp; Pricing</DialogTitle>
                 <DialogDescription className="text-sm text-muted-foreground">
                   AGI Workforce, Beyond one model. Beyond one surface.{' '}
                   <span className="font-medium">Local and BYOK are always free.</span>

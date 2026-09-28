@@ -22,6 +22,7 @@ import type { LiveTranscriptTurn } from '@/src/features/voice/services/liveVoice
 export interface LiveVoiceBarProps {
   visible: boolean;
   status: LiveVoiceStatus;
+  reconnecting: boolean;
   muted: boolean;
   assistantSpeaking: boolean;
   backendBusy: boolean;
@@ -31,6 +32,7 @@ export interface LiveVoiceBarProps {
   approvals: readonly LiveVoicePendingApproval[];
   onDecideApproval: (callId: string, decision: LiveVoiceToolDecision) => void;
   onToggleMute: () => void;
+  onStopTask: () => void;
   onSwitchToText: () => void;
   onRetry: () => void;
   onExit: () => void;
@@ -44,7 +46,9 @@ function statusLabel(
   muted: boolean,
   assistantSpeaking: boolean,
   interrupted: boolean,
+  reconnecting: boolean,
 ): string {
+  if (reconnecting) return 'Reconnecting live voice...';
   if (status === 'connecting') return 'Connecting live voice...';
   if (status === 'error') return 'Live voice stopped';
   if (muted) return 'Muted, tap the mic to talk';
@@ -56,6 +60,7 @@ function statusLabel(
 export function LiveVoiceBar({
   visible,
   status,
+  reconnecting,
   muted,
   assistantSpeaking,
   backendBusy,
@@ -65,6 +70,7 @@ export function LiveVoiceBar({
   approvals,
   onDecideApproval,
   onToggleMute,
+  onStopTask,
   onSwitchToText,
   onRetry,
   onExit,
@@ -117,7 +123,7 @@ export function LiveVoiceBar({
         testID="live-voice-status"
         style={{ color: colors.textSecondary, fontSize: 13, textAlign: 'center', marginBottom: 8 }}
       >
-        {statusLabel(status, muted, assistantSpeaking, interrupted)}
+        {statusLabel(status, muted, assistantSpeaking, interrupted, reconnecting)}
       </Text>
 
       {error ? (
@@ -295,6 +301,26 @@ export function LiveVoiceBar({
               status: 'running',
             }}
           />
+          <Pressable
+            onPress={tap(onStopTask)}
+            accessibilityRole="button"
+            accessibilityLabel="Stop the task and keep talking"
+            testID="live-voice-stop-task"
+            style={{
+              alignSelf: 'flex-start',
+              minHeight: 44,
+              justifyContent: 'center',
+              paddingHorizontal: 14,
+              marginTop: 6,
+              borderRadius: 22,
+              borderWidth: 1,
+              borderColor: colors.border,
+            }}
+          >
+            <Text style={{ color: colors.textSecondary, fontSize: 14, fontWeight: '600' }}>
+              Stop the task
+            </Text>
+          </Pressable>
         </View>
       ) : null}
 

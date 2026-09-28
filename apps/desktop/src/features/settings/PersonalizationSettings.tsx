@@ -155,7 +155,7 @@ export function PersonalizationSettings() {
       <div className="space-y-4">
         <div className="flex items-center gap-2">
           <User className="h-5 w-5 text-foreground shrink-0" />
-          <h3 className="text-lg font-semibold">About You</h3>
+          <h3 className="text-h3">About You</h3>
         </div>
         <p className="text-sm text-muted-foreground">
           Share some context so the AI can tailor its responses to you personally.
@@ -213,7 +213,7 @@ export function PersonalizationSettings() {
       <div className="space-y-4 pt-6 border-t border-border">
         <div className="flex items-center gap-2">
           <Sliders className="h-5 w-5 text-foreground shrink-0" />
-          <h3 className="text-lg font-semibold">Response Style</h3>
+          <h3 className="text-h3">Response Style</h3>
         </div>
         <p className="text-sm text-muted-foreground">
           Adjust how the AI sounds. Changes apply to all new conversations.
@@ -261,7 +261,7 @@ export function PersonalizationSettings() {
       <div className="space-y-4 pt-6 border-t border-border">
         <div className="flex items-center gap-2">
           <MessageSquare className="h-5 w-5 text-foreground shrink-0" />
-          <h3 className="text-lg font-semibold">Custom Instructions</h3>
+          <h3 className="text-h3">Custom Instructions</h3>
         </div>
         <p className="text-sm text-muted-foreground">
           Tell the AI specifically how you'd like it to respond. These are appended to every

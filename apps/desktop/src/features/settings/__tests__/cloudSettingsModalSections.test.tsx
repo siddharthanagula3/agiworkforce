@@ -35,6 +35,9 @@ vi.mock('../../../api/cloudConnectors', () => ({
   createCustomConnector: mocks.createCustomConnector,
   deleteCustomConnector: mocks.deleteCustomConnector,
   disconnectConnector: mocks.disconnectConnector,
+  customConnectorShortId: vi.fn(() => null),
+  customConnectorSignInUrl: vi.fn((shortId: string) => `https://example.test/${shortId}`),
+  getCustomConnectorOAuthRedirectUri: vi.fn(async () => null),
 }));
 
 vi.mock('../../../api/cloudSkills', () => ({

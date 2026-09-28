@@ -1537,6 +1537,20 @@ const CONFIG_KEY_DESCRIPTORS: readonly ConfigKeyDescriptor[] = [
     validate: isUrl,
     description: 'the origin a sandbox reaches the provider proxy on',
   }),
+  published('GOOGLE_PICKER_API_KEY', {
+    type: 'string',
+    owner: 'apps/web/app/api/connectors',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the browser API key the Google Picker loads with to add Drive files to a project',
+  }),
+  published('GOOGLE_PICKER_APP_ID', {
+    type: 'string',
+    owner: 'apps/web/app/api/connectors',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the Google Cloud project number the Drive connector OAuth client belongs to',
+  }),
   published('SOFT_DELETED_RESOURCE_PURGE_ENABLED', {
     type: 'boolean',
     owner: 'apps/web/app/api/cron',

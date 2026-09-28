@@ -46,6 +46,7 @@ async function listGroups(db: DatabaseAdapter, organizationId: string): Promise<
               where m.group_id = g.id and m.organization_id = g.organization_id) as member_count
        from scim_groups g
       where g.organization_id = $1
+        and g.source = 'directory'
       order by lower(g.display_name) asc`,
     [organizationId],
   );

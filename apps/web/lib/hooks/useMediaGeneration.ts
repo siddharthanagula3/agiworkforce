@@ -67,9 +67,7 @@ export interface FailedVideoGeneration {
 }
 
 export type VideoWatchResult =
-  | CompletedVideoGeneration
-  | PendingVideoGeneration
-  | FailedVideoGeneration;
+  CompletedVideoGeneration | PendingVideoGeneration | FailedVideoGeneration;
 
 /**
  * Emitted on every poll that finds the task still running. Without it the
@@ -100,7 +98,9 @@ export interface GenerateImageOptions {
   operation?: ManagedMediaImageOperation;
   sourceImageBase64?: string;
   maskImageBase64?: string;
+  referenceImagesBase64?: string[];
   transparentBackground?: boolean;
+  cancelScope?: string;
 }
 
 export interface GeneratedImageResult {
@@ -110,11 +110,7 @@ export interface GeneratedImageResult {
 }
 
 export type MediaPaywallRecoveryAction =
-  | 'upgrade'
-  | 'subscribe'
-  | 'manage_billing'
-  | 'view_usage'
-  | 'top_up';
+  'upgrade' | 'subscribe' | 'manage_billing' | 'view_usage' | 'top_up';
 
 const PAYWALL_ERROR_RECOVERY: Readonly<Record<string, MediaPaywallRecoveryAction>> = {
   insufficient_credits: 'upgrade',
@@ -127,6 +123,44 @@ const MAX_MEDIA_RETRY_AFTER_SECONDS = 5 * 60;
 const IMAGE_GENERATION_TIMEOUT_CODE = 'image_generation_timeout';
 const IMAGE_GENERATION_TIMEOUT_MESSAGE =
   'The image did not finish in time. Try again or pick another image model.';
+export const IMAGE_GENERATION_CANCELLED_CODE = 'image_generation_cancelled';
+const IMAGE_GENERATION_CANCELLED_MESSAGE = 'You stopped this image.';
+const IMAGE_CANCEL_ATTEMPTS = 5;
+const IMAGE_CANCEL_RETRY_MS = 1_000;
+
+interface ActiveImageGeneration {
+  scope: string | null;
+  controller: AbortController;
+  idempotencyKey: string;
+  cancelled: boolean;
+}
+
+const activeImageGenerations = new Map<string, ActiveImageGeneration>();
+
+async function requestImageJobCancellation(idempotencyKey: string): Promise<void> {
+  for (let attempt = 0; attempt < IMAGE_CANCEL_ATTEMPTS; attempt += 1) {
+    const authToken = await getAuthToken();
+    const response = await fetch('/api/media/image/cancel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
+      body: JSON.stringify({ idempotency_key: idempotencyKey }),
+    }).catch(() => null);
+    if (response && response.status !== 404) return;
+    await new Promise((resolve) => setTimeout(resolve, IMAGE_CANCEL_RETRY_MS));
+  }
+}
+
+export function cancelImageGenerations(scope: string): boolean {
+  let cancelled = false;
+  for (const generation of activeImageGenerations.values()) {
+    if (generation.scope !== scope || generation.cancelled) continue;
+    generation.cancelled = true;
+    generation.controller.abort();
+    void requestImageJobCancellation(generation.idempotencyKey);
+    cancelled = true;
+  }
+  return cancelled;
+}
 
 function retryAtFromStructuredSeconds(value: unknown): string | undefined {
   if (
@@ -248,6 +282,13 @@ export function useMediaGeneration() {
 
       const deadline = new AbortController();
       const deadlineTimer = setTimeout(() => deadline.abort(), IMAGE_GENERATION_FUNCTION_LIMIT_MS);
+      const active: ActiveImageGeneration = {
+        scope: options.cancelScope ?? null,
+        controller: deadline,
+        idempotencyKey,
+        cancelled: false,
+      };
+      activeImageGenerations.set(jobId, active);
 
       try {
         const response = await fetch('/api/media/image/generate', {
@@ -270,6 +311,11 @@ export function useMediaGeneration() {
               : {}),
             ...(options.maskImageBase64
               ? { mask_image: { b64_json: options.maskImageBase64 } }
+              : {}),
+            ...(options.referenceImagesBase64?.length
+              ? {
+                  reference_images: options.referenceImagesBase64.map((b64_json) => ({ b64_json })),
+                }
               : {}),
             ...(options.transparentBackground ? { transparent_background: true } : {}),
           }),
@@ -344,16 +390,21 @@ export function useMediaGeneration() {
           model: catalogModel.id,
         } satisfies GeneratedImageResult;
       } catch (err) {
-        const error = isAbortError(err)
-          ? new MediaGenerationApiError(IMAGE_GENERATION_TIMEOUT_MESSAGE, {
-              code: IMAGE_GENERATION_TIMEOUT_CODE,
+        const error = active.cancelled
+          ? new MediaGenerationApiError(IMAGE_GENERATION_CANCELLED_MESSAGE, {
+              code: IMAGE_GENERATION_CANCELLED_CODE,
             })
-          : err;
+          : isAbortError(err)
+            ? new MediaGenerationApiError(IMAGE_GENERATION_TIMEOUT_MESSAGE, {
+                code: IMAGE_GENERATION_TIMEOUT_CODE,
+              })
+            : err;
         const message = error instanceof Error ? error.message : 'Unknown error';
         updateJob(jobId, { status: 'failed', errorMessage: message });
         throw error;
       } finally {
         clearTimeout(deadlineTimer);
+        activeImageGenerations.delete(jobId);
       }
     },
     [addJob, updateJob],

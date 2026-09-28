@@ -41,6 +41,7 @@ const cloudModules = [
   'cloud-code-sessions',
   'managed-cloud-code-client',
   'cloud-code-transcript',
+  'local-code-session-activity',
   'device-steps',
   'connectors',
   'capability-handshake',

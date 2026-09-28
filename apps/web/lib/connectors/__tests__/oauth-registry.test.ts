@@ -210,6 +210,7 @@ describe('connector OAuth registry, authorization URL', () => {
         redirectUri: 'https://app.example.com/api/connectors/oauth/callback',
         state: 'a'.repeat(64),
         codeChallenge: 'challenge-value',
+        resource: 'https://mcp.example.com/mcp',
       }),
     );
 
@@ -234,6 +235,7 @@ describe('connector OAuth registry, authorization URL', () => {
         redirectUri: 'https://evil.test/callback',
         state: 'a'.repeat(64),
         codeChallenge: 'c',
+        resource: 'https://mcp.example.com/mcp',
       }),
     ).toThrow(/non-allowlisted redirect/i);
   });

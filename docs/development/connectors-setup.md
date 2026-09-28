@@ -29,6 +29,29 @@ Registry entries are keyed by their registry name (for example
 its chat tools are offered under a derived `dir-` server id, so tool names
 stay valid for every model provider.
 
+## Custom connectors added by URL
+
+A custom connector carries either a bearer token or nothing. When its server
+answers the add probe with an authorization challenge, or publishes protected
+resource metadata, the row is saved with `sign_in_required` and the browser
+starts `GET /api/connectors/oauth/start?connectorId=custom-<short_id>` at once.
+The start route authorizes it like a directory server (steps below), and the
+grant is stored in `connector_oauth_grants` under `custom-<short_id>`; a row
+without a token sends that grant's access token and refreshes it like any
+discovered grant.
+
+Under Advanced settings the user may give the OAuth Client ID and Client Secret
+of a client they registered at the server, for servers that accept neither a
+client metadata document nor dynamic registration, as Claude's custom
+connectors allow (https://support.claude.com/en/articles/11175166). That client
+is kept on the row (the secret sealed under the `oauth-client-secret` purpose)
+and is used for that row's authorization, callback and refresh instead of the
+deployment's own identity. The form shows the redirect URI to register, which
+is `<origin>/api/connectors/oauth/callback` as below. A client and a bearer
+token cannot be given together. Removing the connector disconnects its grant.
+The columns come from migration 0313, which must be applied before this code
+is deployed, because the connector list reads `sign_in_required`.
+
 ## Variables every OAuth connector shares
 
 | Name                                    | Production                                                     | Local                                                                                       |
@@ -79,9 +102,15 @@ This follows the MCP 2026-07-28 authorization specification:
 4. PKCE with `S256` is always used. A discovered server whose authorization
    server metadata omits `S256` from `code_challenge_methods_supported`, or
    publishes no metadata at all, is refused; so is a pre-registered app whose
-   server publishes metadata without it.
+   server publishes metadata without it. A descriptor may declare
+   `codeChallengeMethodsSupported` for an authorization server that supports
+   `S256` but omits the field from its metadata, as Microsoft Entra does; the
+   declaration is read only when the field is absent, never over a list that
+   leaves `S256` out.
 5. The `resource` parameter names the MCP server in the authorization, token and
-   refresh requests.
+   refresh requests. A descriptor may set `resourceIndicator` to `false` for an
+   authorization server that rejects the parameter, as Microsoft Entra's v2
+   endpoints do; the token's audience then comes from its scopes.
 6. The callback compares any `iss` it receives with the issuer recorded when the
    flow started, and rejects the response, error responses included, when they
    differ or when the server promises `iss` and omits it.
@@ -92,10 +121,15 @@ This follows the MCP 2026-07-28 authorization specification:
 Descriptor fields, validated by `apps/web/lib/connectors/oauth-registry.ts`:
 `connectorId`, `displayName`, `issuer`, `authorizationUrl`, `tokenUrl`,
 `revocationUrl`, `mcpUrl`, `transport`, `scopes`, `tokenAuthMethod`,
-`authorizationParams`, `enabled`. `issuer` names the authorization server the
-app was registered with: when the server's protected resource metadata no longer
-lists it the connector is refused rather than sending the pair to a different
-server, and the callback checks `iss` against it. Without `issuer` the issuer is
+`authorizationParams`, `codeChallengeMethodsSupported`, `resourceIndicator`,
+`mcpHeaders`, `enabled`. `mcpHeaders` names at most four `X-MCP-*` option
+headers sent with every call to the MCP server beside the grant's
+`Authorization`, which it cannot replace. `issuer` names the authorization server the app was registered with:
+when the server's protected resource metadata no longer lists it, and lists no
+authorization server whose own metadata declares it, the connector is refused
+rather than sending the pair to a different server, and the callback checks
+`iss` against it. The second clause covers Microsoft's `organizations`
+authority, whose metadata declares the `{tenantid}` template as its issuer. Without `issuer` the issuer is
 taken from the server's metadata when that metadata's token endpoint is
 `tokenUrl`. `authorizationParams` may not override `resource` or any other
 parameter the broker sets. Scopes above the ceiling in
@@ -114,7 +148,8 @@ set the named variables in production and locally.
   authorization (OAuth) during installation" so an installation can be tied to
   the signed-in account.
 - Permissions the three declared tools need: pull requests read and write,
-  issues read and write, contents read.
+  issues read and write, contents read. Add checks read so a Cloud Code
+  session can show the CI status of the pull request it opened.
 - Generate a private key and base64-encode the PEM file for
   `GITHUB_APP_PRIVATE_KEY_BASE64`.
 - Variables: `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY_BASE64`,
@@ -139,16 +174,140 @@ set the named variables in production and locally.
   `https://calendarmcp.googleapis.com/mcp/v1`.
 - Scopes the allowlist permits (each prefixed `https://www.googleapis.com/auth/`
   unless bare): `openid`, `profile`, `email`, `userinfo.email`,
-  `userinfo.profile`, then per connector Gmail `gmail.readonly`, `gmail.send`;
+  `userinfo.profile`, then per connector Gmail `gmail.readonly`, `gmail.compose`
+  (drafts), `gmail.send`;
   Drive `drive.file`, `drive.metadata.readonly`; Calendar `calendar.readonly`,
-  `calendar.events`. The full-mailbox, full-drive and full-calendar scopes are
-  forbidden and dropped.
+  `calendar.events`. AGI adds two Gmail tools beside Google's server, both
+  calling the Gmail API with the same grant: `send_draft` sends a draft the
+  user has seen (`drafts.send`, which needs `gmail.compose`) and
+  `read_attachments` reads a message's attachments as text
+  (`messages.attachments.get`, which needs `gmail.readonly`), and
+  `create_draft_with_attachments` builds a draft with up to five of the
+  account's own files attached (`drafts.create`, which needs `gmail.compose`).
+  The full-mailbox,
+  full-drive and full-calendar scopes are
+  forbidden and dropped. `gmail.modify`, which Gmail's label tools need, is left
+  out like Microsoft's `Mail.ReadWrite`; admitting it is an owner decision.
 - Variables: `CONNECTOR_OAUTH_GMAIL_CLIENT_ID`,
   `CONNECTOR_OAUTH_GMAIL_CLIENT_SECRET`, `CONNECTOR_OAUTH_GOOGLE_DRIVE_CLIENT_ID`,
   `CONNECTOR_OAUTH_GOOGLE_DRIVE_CLIENT_SECRET`,
   `CONNECTOR_OAUTH_GOOGLE_CALENDAR_CLIENT_ID`,
   `CONNECTOR_OAUTH_GOOGLE_CALENDAR_CLIENT_SECRET`. One Google client may serve
   all three descriptors; the names stay separate.
+
+### GitHub MCP server (`github-mcp`, hosted, pre-registered)
+
+GitHub's official remote server, separate from the GitHub App integration above,
+which keeps the `github` id and its three declared tools. GitHub's server needs
+a client the host registers itself
+(https://github.com/github/github-mcp-server).
+
+- Console: https://github.com/settings/apps/new, a GitHub App. Callback URL
+  `<origin>/api/connectors/oauth/callback`. Turn on "Expire user authorization
+  tokens" so the app issues refresh tokens.
+- Repository permissions for the server's default toolsets plus Actions:
+  Metadata read, Contents read and write, Issues read and write, Pull requests
+  read and write, Actions read. A GitHub App's permissions are its ceiling; it
+  ignores the `scope` parameter.
+- The remote server enables only its default toolsets unless the request names
+  others, by path (`/x/<toolset>`, one at a time) or by the `X-MCP-Toolsets`
+  header (a comma-separated list), so the descriptor's `mcpHeaders` names the
+  five default toolsets and `actions`, which reads workflow runs and job logs
+  (https://github.com/github/github-mcp-server/blob/main/docs/remote-server.md).
+  `/x/all` is not used: it would exceed the per-account connector tool cap.
+- Descriptor, from the server's own metadata (fetched 2026-09-27):
+
+  ```json
+  {
+    "connectorId": "github-mcp",
+    "displayName": "GitHub MCP",
+    "issuer": "https://github.com/login/oauth",
+    "authorizationUrl": "https://github.com/login/oauth/authorize",
+    "tokenUrl": "https://github.com/login/oauth/access_token",
+    "mcpUrl": "https://api.githubcopilot.com/mcp/",
+    "transport": "streamable-http",
+    "scopes": ["offline_access"],
+    "mcpHeaders": {
+      "X-MCP-Toolsets": "context,repos,issues,pull_requests,users,actions"
+    }
+  }
+  ```
+
+- Variables: `CONNECTOR_OAUTH_GITHUB_MCP_CLIENT_ID`,
+  `CONNECTOR_OAUTH_GITHUB_MCP_CLIENT_SECRET`.
+
+### Microsoft 365 (`microsoft-365`, Microsoft MCP Server for Enterprise)
+
+Read-only Microsoft Entra directory queries (users, groups, devices, licenses)
+through `https://mcp.svc.cloud.microsoft/enterprise`, not mail or files
+(https://learn.microsoft.com/en-us/graph/mcp-server/overview).
+
+- Console: https://entra.microsoft.com, App registrations, New registration,
+  "Accounts in any organizational directory" (multitenant), Web redirect URI
+  `<origin>/api/connectors/oauth/callback`, then a client secret.
+- API permissions: Microsoft MCP Server for Enterprise
+  (`e8c77dc2-69b3-43f4-bc51-3213c9d915b4`), delegated `MCP.User.Read.All`,
+  `MCP.Group.Read.All`, `MCP.GroupMember.Read.All`, `MCP.Device.Read.All`,
+  `MCP.Organization.Read.All`. Each customer tenant must first provision the
+  server once (`Grant-EntraBetaMCPServerPermission`) and an administrator must
+  consent to these scopes
+  (https://learn.microsoft.com/en-us/graph/mcp-server/get-started).
+- Descriptor, from the server's own metadata (fetched 2026-09-27). Entra's
+  metadata omits `code_challenge_methods_supported` and its v2 endpoints refuse
+  the `resource` parameter, hence the last two fields:
+
+  ```json
+  {
+    "connectorId": "microsoft-365",
+    "displayName": "Microsoft 365",
+    "issuer": "https://login.microsoftonline.com/{tenantid}/v2.0",
+    "authorizationUrl": "https://login.microsoftonline.com/organizations/oauth2/v2.0/authorize",
+    "tokenUrl": "https://login.microsoftonline.com/organizations/oauth2/v2.0/token",
+    "mcpUrl": "https://mcp.svc.cloud.microsoft/enterprise",
+    "transport": "streamable-http",
+    "scopes": [
+      "openid",
+      "profile",
+      "email",
+      "offline_access",
+      "api://e8c77dc2-69b3-43f4-bc51-3213c9d915b4/MCP.User.Read.All",
+      "api://e8c77dc2-69b3-43f4-bc51-3213c9d915b4/MCP.Group.Read.All",
+      "api://e8c77dc2-69b3-43f4-bc51-3213c9d915b4/MCP.GroupMember.Read.All",
+      "api://e8c77dc2-69b3-43f4-bc51-3213c9d915b4/MCP.Device.Read.All",
+      "api://e8c77dc2-69b3-43f4-bc51-3213c9d915b4/MCP.Organization.Read.All"
+    ],
+    "codeChallengeMethodsSupported": ["S256"],
+    "resourceIndicator": false
+  }
+  ```
+
+- Variables: `CONNECTOR_OAUTH_MICROSOFT_365_CLIENT_ID`,
+  `CONNECTOR_OAUTH_MICROSOFT_365_CLIENT_SECRET`.
+
+### BigQuery
+
+Google hosts a BigQuery MCP server at `https://bigquery.googleapis.com/mcp`
+(https://docs.cloud.google.com/bigquery/docs/use-bigquery-mcp). Its protected
+resource metadata, read on 2026-09-27, names `https://accounts.google.com/` as
+the authorization server and `https://www.googleapis.com/auth/bigquery` as the
+only supported scope, which views and manages all BigQuery data. The ceiling
+admits `bigquery.readonly` and `devstorage.read_only` only, so a `bigquery`
+descriptor pointing at that server cannot be granted the scope the server
+asks for. Admitting the manage scope is an owner decision, like `gmail.modify`
+and Box's `root_readwrite`.
+
+Snowflake and Databricks host MCP servers per account, so there is no single
+endpoint to pin; a user adds one by URL as a custom connector, with the OAuth
+client they registered at the vendor under Advanced settings. Neither page says
+whether the server publishes MCP authorization metadata, which the custom
+connector sign-in needs, so that part is unverified. Snowflake-managed
+servers (GA) live at
+`https://<account_url>/api/v2/databases/<db>/schemas/<schema>/mcp-servers/<name>`
+and use Snowflake OAuth
+(https://docs.snowflake.com/en/user-guide/snowflake-cortex/cortex-agents-mcp).
+Databricks managed servers (Public Preview) live on the workspace host, for
+example `https://<workspace-hostname>/api/2.0/mcp/sql`, with a scope per server
+(https://docs.databricks.com/aws/en/generative-ai/mcp/managed-mcp).
 
 ### Notion
 
@@ -174,6 +333,24 @@ set the named variables in production and locally.
 - Variables, optional: `CONNECTOR_OAUTH_LINEAR_CLIENT_ID`,
   `CONNECTOR_OAUTH_LINEAR_CLIENT_SECRET`.
 
+### Jira and Confluence (Atlassian Rovo MCP server)
+
+- Self-service: both ids use `https://mcp.atlassian.com/v2/mcp`, whose
+  authorization server accepts a client by metadata URL, so production needs
+  only the shared variables above. The v1 SSE endpoint they used before served
+  the same product and is being retired
+  (https://support.atlassian.com/atlassian-rovo-mcp-server/docs/getting-started-with-the-atlassian-remote-mcp-server/).
+- Scopes permitted: Jira `offline_access`, `read:me`,
+  `read:jira:agent-interface`, `write:jira:agent-interface`,
+  `search:jira:agent-interface`; Confluence the same with `confluence` in place
+  of `jira`.
+
+### Cloudflare
+
+- Self-service: `https://mcp.cloudflare.com/mcp`, Cloudflare's API server, which
+  covers the Workers Bindings server's scope and accepts a client by metadata URL
+  (https://developers.cloudflare.com/agents/model-context-protocol/mcp-servers-for-cloudflare/).
+
 ### Airtable
 
 - Self-service: `https://mcp.airtable.com/mcp`, same as Notion.
@@ -193,20 +370,45 @@ and stay "Needs setup" until a descriptor and its pair exist. Take
 `authorizationUrl` and `tokenUrl` from the vendor's current OAuth
 documentation; the console is where the pair is issued.
 
-| Connector id | Console                                           | Scopes permitted by the allowlist                                                                                                                                           | Variables                                                                          |
-| ------------ | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| `slack`      | https://api.slack.com/apps                        | `channels:read`, `channels:history`, `groups:read`, `chat:write`, `users:read`, `users:read.email`, `team:read`, `files:read`                                               | `CONNECTOR_OAUTH_SLACK_CLIENT_ID`, `CONNECTOR_OAUTH_SLACK_CLIENT_SECRET`           |
-| `jira`       | https://developer.atlassian.com/console/myapps/   | `offline_access`, `read:me`, `read:jira-user`, `read:jira-work`, `write:jira-work`                                                                                          | `CONNECTOR_OAUTH_JIRA_CLIENT_ID`, `CONNECTOR_OAUTH_JIRA_CLIENT_SECRET`             |
-| `confluence` | https://developer.atlassian.com/console/myapps/   | `offline_access`, `read:me`, `read:confluence-space.summary`, `read:confluence-content.all`, `write:confluence-content`                                                     | `CONNECTOR_OAUTH_CONFLUENCE_CLIENT_ID`, `CONNECTOR_OAUTH_CONFLUENCE_CLIENT_SECRET` |
-| `asana`      | https://app.asana.com/0/my-apps                   | `openid`, `profile`, `email`, `tasks:read`, `tasks:write`, `projects:read`, `sections:read`, `stories:read`, `stories:write`, `teams:read`, `users:read`, `workspaces:read` | `CONNECTOR_OAUTH_ASANA_CLIENT_ID`, `CONNECTOR_OAUTH_ASANA_CLIENT_SECRET`           |
-| `box`        | https://app.box.com/developers/console            | `root_readonly`, `item_preview`, `item_download`, `item_upload`                                                                                                             | `CONNECTOR_OAUTH_BOX_CLIENT_ID`, `CONNECTOR_OAUTH_BOX_CLIENT_SECRET`               |
-| `dropbox`    | https://www.dropbox.com/developers/apps           | `account_info.read`, `files.metadata.read`, `files.content.read`, `files.content.write`                                                                                     | `CONNECTOR_OAUTH_DROPBOX_CLIENT_ID`, `CONNECTOR_OAUTH_DROPBOX_CLIENT_SECRET`       |
-| `figma`      | https://www.figma.com/developers/apps             | `current_user:read`, `files:read`, `projects:read`, `file_comments:write`, `file_dev_resources:read`                                                                        | `CONNECTOR_OAUTH_FIGMA_CLIENT_ID`, `CONNECTOR_OAUTH_FIGMA_CLIENT_SECRET`           |
-| `hubspot`    | HubSpot developer account, Apps                   | `oauth`, `crm.objects.contacts.read`, `crm.objects.contacts.write`, `crm.objects.companies.read`, `crm.objects.deals.read`, `crm.objects.deals.write`                       | `CONNECTOR_OAUTH_HUBSPOT_CLIENT_ID`, `CONNECTOR_OAUTH_HUBSPOT_CLIENT_SECRET`       |
-| `intercom`   | Intercom app, Developer Hub                       | None; Intercom has no scope parameter                                                                                                                                       | `CONNECTOR_OAUTH_INTERCOM_CLIENT_ID`, `CONNECTOR_OAUTH_INTERCOM_CLIENT_SECRET`     |
-| `pagerduty`  | PagerDuty web app, Integrations, App Registration | No ceiling recorded; descriptor scopes pass through                                                                                                                         | `CONNECTOR_OAUTH_PAGERDUTY_CLIENT_ID`, `CONNECTOR_OAUTH_PAGERDUTY_CLIENT_SECRET`   |
-| `square`     | https://developer.squareup.com/apps               | No ceiling recorded; descriptor scopes pass through                                                                                                                         | `CONNECTOR_OAUTH_SQUARE_CLIENT_ID`, `CONNECTOR_OAUTH_SQUARE_CLIENT_SECRET`         |
-| `vercel`     | https://vercel.com/dashboard/integrations/console | No ceiling recorded; descriptor scopes pass through                                                                                                                         | `CONNECTOR_OAUTH_VERCEL_CLIENT_ID`, `CONNECTOR_OAUTH_VERCEL_CLIENT_SECRET`         |
+| Connector id | Console                                           | Scopes permitted by the allowlist                                                                                                                                                                                | Variables                                                                        |
+| ------------ | ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `slack`      | https://api.slack.com/apps                        | `channels:read`, `channels:history`, `groups:read`, `chat:write`, `users:read`, `users:read.email`, `team:read`, `files:read`, `search:read.public`, `search:read.private`, `search:read.im`, `search:read.mpim` | `CONNECTOR_OAUTH_SLACK_CLIENT_ID`, `CONNECTOR_OAUTH_SLACK_CLIENT_SECRET`         |
+| `asana`      | https://app.asana.com/0/my-apps, an MCP app       | `openid`, `profile`, `email`, `tasks:read`, `tasks:write`, `projects:read`, `sections:read`, `stories:read`, `stories:write`, `teams:read`, `users:read`, `workspaces:read`                                      | `CONNECTOR_OAUTH_ASANA_CLIENT_ID`, `CONNECTOR_OAUTH_ASANA_CLIENT_SECRET`         |
+| `box`        | https://app.box.com/developers/console            | `root_readonly`, `item_preview`, `item_download`, `item_upload`                                                                                                                                                  | `CONNECTOR_OAUTH_BOX_CLIENT_ID`, `CONNECTOR_OAUTH_BOX_CLIENT_SECRET`             |
+| `dropbox`    | https://www.dropbox.com/developers/apps           | `account_info.read`, `files.metadata.read`, `files.content.read`, `files.content.write`                                                                                                                          | `CONNECTOR_OAUTH_DROPBOX_CLIENT_ID`, `CONNECTOR_OAUTH_DROPBOX_CLIENT_SECRET`     |
+| `figma`      | https://www.figma.com/developers/apps             | `current_user:read`, `files:read`, `projects:read`, `file_comments:write`, `file_dev_resources:read`                                                                                                             | `CONNECTOR_OAUTH_FIGMA_CLIENT_ID`, `CONNECTOR_OAUTH_FIGMA_CLIENT_SECRET`         |
+| `hubspot`    | HubSpot developer account, Apps                   | `oauth`, `crm.objects.contacts.read`, `crm.objects.contacts.write`, `crm.objects.companies.read`, `crm.objects.deals.read`, `crm.objects.deals.write`                                                            | `CONNECTOR_OAUTH_HUBSPOT_CLIENT_ID`, `CONNECTOR_OAUTH_HUBSPOT_CLIENT_SECRET`     |
+| `intercom`   | Intercom app, Developer Hub                       | None; Intercom has no scope parameter                                                                                                                                                                            | `CONNECTOR_OAUTH_INTERCOM_CLIENT_ID`, `CONNECTOR_OAUTH_INTERCOM_CLIENT_SECRET`   |
+| `pagerduty`  | PagerDuty web app, Integrations, App Registration | No ceiling recorded; descriptor scopes pass through                                                                                                                                                              | `CONNECTOR_OAUTH_PAGERDUTY_CLIENT_ID`, `CONNECTOR_OAUTH_PAGERDUTY_CLIENT_SECRET` |
+| `square`     | https://developer.squareup.com/apps               | No ceiling recorded; descriptor scopes pass through                                                                                                                                                              | `CONNECTOR_OAUTH_SQUARE_CLIENT_ID`, `CONNECTOR_OAUTH_SQUARE_CLIENT_SECRET`       |
+| `vercel`     | https://vercel.com/dashboard/integrations/console | No ceiling recorded; descriptor scopes pass through                                                                                                                                                              | `CONNECTOR_OAUTH_VERCEL_CLIENT_ID`, `CONNECTOR_OAUTH_VERCEL_CLIENT_SECRET`       |
+
+`slack` admits the user-token message search scopes that Slack lists for
+`assistant.search.context` (https://docs.slack.dev/reference/methods/assistant.search.context).
+`box` admits `root_readonly` and `item_upload` only: its folder and shared-link
+tools need `root_readwrite`, which reads and writes every file in the account
+(https://developer.box.com/guides/api-calls/permissions-and-errors/scopes/), so
+it stays out like the full-Drive scope; admitting it is an owner decision.
+
+`asana` uses `https://mcp.asana.com/v2/mcp`; Asana shut the v1 SSE server down on
+2026-08-05 and its v2 server takes no dynamic registration
+(https://developers.asana.com/docs/integrating-with-asanas-mcp-server).
+
+#### Six vendors that advertise registration and refuse it
+
+The servers of `asana`, `dropbox`, `figma`, `intercom`, `square` and `vercel`
+publish a `registration_endpoint`, but a live registration attempt on
+2026-08-14 was refused by every one of them, so they stay pre-registered rather
+than being switched to dynamic registration from their metadata:
+
+| Connector id | Refusal on 2026-08-14                                                        | What the owner does                                                                                                                                                                                                          |
+| ------------ | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `asana`      | 400 `invalid_redirect_uri`                                                   | Create an MCP app in the Asana developer console with our redirect URI (https://developers.asana.com/docs/integrating-with-asanas-mcp-server)                                                                                |
+| `dropbox`    | 403 `registration_not_supported`, "Only pre-registered MCP trusted partners" | Register a Dropbox app with our redirect URI (https://www.dropbox.com/developers/apps), or ask Dropbox Support to add this client to dynamic registration (https://help.dropbox.com/integrations/connect-dropbox-mcp-server) |
+| `figma`      | 403                                                                          | Join the waitlist for new MCP clients; only clients in Figma's MCP Catalog can connect (https://developers.figma.com/docs/figma-mcp-server/)                                                                                 |
+| `intercom`   | 400 `invalid_redirect_uri`, "not in the allowlist"                           | Ask Intercom developer support to allowlist our redirect URI (https://developers.intercom.com/docs/guides/mcp); the server also accepts an Intercom access token                                                             |
+| `square`     | 400 `invalid_redirect_uri`, "domain not in allowlist"                        | Request an allowlist addition in the Square developer forum's MCP category (https://developer.squareup.com/forums/c/mcp/14)                                                                                                  |
+| `vercel`     | 400 `invalid_redirect_uri`                                                   | Ask Vercel to review and approve this client; Vercel MCP accepts only approved clients (https://vercel.com/docs/agent-resources/vercel-mcp)                                                                                  |
 
 ## Verifying a deployment
 

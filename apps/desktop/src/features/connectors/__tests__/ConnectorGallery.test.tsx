@@ -175,20 +175,20 @@ describe('ConnectorGallery', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByTestId('connector-mark-figma')).toBeInTheDocument();
+      expect(screen.getByTestId('connector-mark-notion')).toBeInTheDocument();
     });
 
-    const figmaMark = screen.getByTestId('connector-mark-figma');
-    const officialImage = figmaMark.querySelector('img');
+    const notionMark = screen.getByTestId('connector-mark-notion');
+    const officialImage = notionMark.querySelector('img');
     expect(officialImage).toBeTruthy();
 
     fireEvent.error(officialImage as HTMLImageElement);
 
     await waitFor(() => {
-      expect(figmaMark).toHaveAttribute('data-brand-source', 'brand');
+      expect(notionMark).toHaveAttribute('data-brand-source', 'brand');
     });
-    expect(within(figmaMark).getByRole('img', { name: /figma logo/i })).toBeInTheDocument();
-    expect(figmaMark).not.toHaveTextContent('\u{1F3A8}');
+    expect(within(notionMark).getByRole('img', { name: /notion logo/i })).toBeInTheDocument();
+    expect(notionMark).not.toHaveTextContent('\u{1F4DD}');
   });
 
   it('shows connected connectors from the MCP store with a real configure path', async () => {

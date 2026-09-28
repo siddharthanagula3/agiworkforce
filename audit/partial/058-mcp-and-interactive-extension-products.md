@@ -26,32 +26,15 @@ nothing is left.
 | --- | --- | --- | --- |
 | vscode | missing | Not built on this surface. |  |
 
-## S58.04: Server configuration editor.
+## S58.05: Environment-variable configuration.
 
-- Done when: The user can view and edit an existing MCP server's configuration (URL, transport, arguments).
+- Done when: The user can set environment variables for an MCP server from the product.
 - Wave: 3
 - Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | A pasted JSON config only prefills the add form; an existing server cannot be edited (the route has no PATCH), so it must be removed and re-added. | ui, api |
-| desktop | partial | A pasted JSON config only prefills the add form; an existing server cannot be edited (the route has no PATCH), so it must be removed and re-added. | ui, api |
-| mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `packages/ui/ui/src/settings-modal/SettingsModal.tsx:565-565`, `apps/web/app/api/connectors/custom/route.ts:227-227`
-
-## S58.05: Environment-variable configuration.
-
-- Done when: The user can set environment variables for an MCP server from the product.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Stdio servers honour an env map, but `agi mcp add` and `/mcp add` take no --env; variables must be hand-written into mcp.json. | ui |
-| vscode | missing | Not built on this surface. |  |
-
-Code: `crates/agiworkforce-mcp/src/config.rs:39-39`, `apps/cli/src/mcp/registry.rs:327-357`
 
 ## S58.06: Credential configuration.
 
@@ -67,29 +50,27 @@ Code: `crates/agiworkforce-mcp/src/config.rs:39-39`, `apps/cli/src/mcp/registry.
 
 - Done when: The user can test the connection to an MCP server and see whether it succeeded.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | The server is probed only when it is added; there is no on-demand test afterwards. | ui |
-| cli | partial | Only `/mcp restart` in the --no-tui REPL reconnects and reports a tool count (R-l); `agi mcp get` does not contact the server. | ui |
 | vscode | partial | VS Code only shows whether local MCP loaded when a chat starts; there is no per-server test. | ui |
 
-Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:908-908`, `apps/mobile/src/features/settings/cloud-connectors/AddCustomConnectorModal.tsx:108-108`, `apps/mobile/services/connectors.ts:102-107`, `apps/cli/src/repl/registry.rs:1244-1262`
+Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:908-908`, `apps/mobile/src/features/settings/cloud-connectors/AddCustomConnectorModal.tsx:108-108`, `apps/mobile/services/connectors.ts:102-107`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:2803-2809`
 
 ## S58.08: Tool discovery.
 
 - Done when: Connecting an MCP server discovers its tools and the user can see them.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Server tools are discovered and offered in chat, but mobile shows no tool list per server (only tools with a saved permission). | ui |
-| cli | partial | The cited TUI /mcp branch renders McpServerSummary with tool_count only (tui_app.rs:3608-3616); tool names print only from claude_parity::render_mcp, reached by bare /mcp in the --no-tui REPL. The auditor rated S55.05 cli partial on exactly this ground (R-l mode-only), so this cell is partial with miss [ui], remaining "tool names list only in the --no-tui REPL; the TUI shows a count per server". |  |
 | vscode | partial | The CLI runtime discovers tools, but VS Code lists no tools per server. | ui |
 
-Code: `apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx:85-85`, `apps/web/lib/user-connector-tools.ts:2218-2228`, `apps/cli/src/tui/tui_app.rs:3614-3614`, `apps/cli/src/mcp/mod.rs:734-744`
+Code: `apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx:85-85`, `apps/web/lib/user-connector-tools.ts:2218-2228`, `apps/extension-vscode/src/features/chat-participant/chatParticipant.ts:391-391`
 
 ## S58.09: Resource discovery.
 
@@ -123,7 +104,7 @@ Code: `apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx:85-85`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | The TUI shows only a tool count per server; no view of protocol version, capabilities, resources or prompts. | ui |
+| cli | partial | No view of a server's protocol version, capabilities, resources or prompts (needs McpManager accessors in apps/cli/src/mcp, p-mcp-rust). | ui |
 | vscode | partial | The server list shows transport, scope and auth status only; no capability view. | ui |
 
 Code: `apps/cli/src/tui/tui_app.rs:3614-3614`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:341-353`
@@ -137,7 +118,7 @@ Code: `apps/cli/src/tui/tui_app.rs:3614-3614`, `apps/extension-vscode/src/integr
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Mobile marks only expired authorization; the server's "not-responding" health is ignored, so a failing connector still shows Connected. | ui |
-| cli | partial | Logs only via --debug=mcp or the AGIWORKFORCE_MCP_DEBUG env var; no per-server health view (TUI marks every listed server Connected). | ui |
+| cli | partial | Per-server logs are still only in --debug=mcp output. | ui |
 | vscode | partial | Only auth status per server; no health history or logs. | ui |
 
 Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:430-444`, `apps/cli/src/lib.rs:342-344`, `crates/agiworkforce-mcp/src/client.rs:296-296`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:341-353`
@@ -146,16 +127,12 @@ Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:430-444`, `a
 
 - Done when: The user can disable a configured server without removing it, and re-enable it.
 - Wave: 3
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Personal servers can only be switched off per chat or removed; only workspace admins can unpublish a shared server. | ui |
-| desktop | partial | Personal servers can only be switched off per chat or removed; only workspace admins can unpublish a shared server. | ui |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | `/mcp enable\|disable` works only in the --no-tui REPL (R-l); `agi mcp` and the TUI have no toggle. | ui |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/ComposerPluginsMenu.tsx:155-155`, `apps/web/app/api/settings/organization/mcp/route.ts:254-254`, `apps/cli/src/repl/registry.rs:1230-1244`
 
 ## S58.14: Per-Project server configuration.
 

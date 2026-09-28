@@ -16,6 +16,7 @@ export interface SurfaceTitleAction {
 
 export type SurfaceTreeSource = Pick<vscode.TreeDataProvider<vscode.TreeItem>, 'getChildren'> & {
   onDidChangeTreeData?: vscode.Event<vscode.TreeItem | undefined | null | void>;
+  setAutoRefreshEnabled?: (enabled: boolean) => void;
 };
 
 export interface SurfaceQuickPickOptions {
@@ -127,7 +128,17 @@ export async function showSurfaceQuickPick(options: SurfaceQuickPickOptions): Pr
     pick.busy = true;
     try {
       const children = (await options.provider.getChildren()) ?? [];
-      pick.items = buildSurfaceRows(children, rowActions);
+      const expanded = await Promise.all(
+        children.map(async (child) =>
+          child.collapsibleState === vscode.TreeItemCollapsibleState.Expanded
+            ? [
+                surfaceSectionItem(treeItemLabel(child)),
+                ...((await options.provider.getChildren(child)) ?? []),
+              ]
+            : [child],
+        ),
+      );
+      pick.items = buildSurfaceRows(expanded.flat(), rowActions);
     } finally {
       pick.busy = false;
     }
@@ -136,9 +147,11 @@ export async function showSurfaceQuickPick(options: SurfaceQuickPickOptions): Pr
   const changeListener = options.provider.onDidChangeTreeData?.(() => {
     void load();
   });
+  options.provider.setAutoRefreshEnabled?.(true);
 
   return new Promise<void>((resolve) => {
     pick.onDidHide(() => {
+      options.provider.setAutoRefreshEnabled?.(false);
       changeListener?.dispose();
       pick.dispose();
       resolve();

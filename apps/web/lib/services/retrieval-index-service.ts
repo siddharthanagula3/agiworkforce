@@ -88,7 +88,7 @@ function clip(text: string | null | undefined, max = MAX_SOURCE_CHARS): string {
 
 export async function loadRetrievalSourceText(
   db: DatabaseAdapter,
-  document: Pick<RetrievalDocumentRow, 'source_kind' | 'source_id' | 'user_id'>,
+  document: Pick<RetrievalDocumentRow, 'source_kind' | 'source_id' | 'user_id' | 'organization_id'>,
 ): Promise<RetrievalSourceText | null> {
   switch (document.source_kind) {
     case 'project_knowledge': {
@@ -138,8 +138,9 @@ export async function loadRetrievalSourceText(
     case 'conversation': {
       const [conversation] = await db.query<{ title: string | null }>(
         `select title from web_conversations
-          where id = $1 and user_id = $2 and deleted_at is null and is_temporary = false`,
-        [document.source_id, document.user_id],
+          where id = $1 and user_id = $2 and organization_id is not distinct from $3::uuid
+            and deleted_at is null and is_temporary = false`,
+        [document.source_id, document.user_id, document.organization_id],
       );
       if (!conversation) return null;
       const messages = await db.query<{ id: string; role: string; content: string }>(
@@ -173,10 +174,12 @@ export async function loadRetrievalSourceText(
            from web_artifacts a
            join web_conversations c on c.id = a.conversation_id
           where a.id = $1
+            and c.user_id = $2
+            and c.organization_id is not distinct from $3::uuid
             and a.deleted_at is null
             and c.deleted_at is null
             and c.is_temporary = false`,
-        [document.source_id],
+        [document.source_id, document.user_id, document.organization_id],
       );
       if (!artifact) return null;
       return {
@@ -204,12 +207,19 @@ export async function loadRetrievalSourceText(
         `select r.title, r.query, r.summary, r.content, r.conversation_id
            from research_reports r
           where r.id = $1
+            and r.user_id = $2
             and r.status = 'completed'
             and not exists (
               select 1 from web_conversations c
-               where c.id = r.conversation_id and (c.is_temporary or c.deleted_at is not null)
+               where c.id = r.conversation_id
+                 and c.user_id = $2
+                 and (
+                   c.is_temporary
+                   or c.deleted_at is not null
+                   or c.organization_id is distinct from $3::uuid
+                 )
             )`,
-        [document.source_id],
+        [document.source_id, document.user_id, document.organization_id],
       );
       if (!report) return null;
       const metadata = report.conversation_id ? { conversationId: report.conversation_id } : {};

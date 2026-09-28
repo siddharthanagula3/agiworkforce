@@ -457,6 +457,8 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
     }
 
     button:not(:disabled):active,
+    #sendBtn:not(:disabled):active,
+    #stopBtn:not(:disabled):active,
     [role="menuitem"]:not([aria-disabled="true"]):active,
     [role="option"]:not([aria-disabled="true"]):active {
       background-image: linear-gradient(var(--pressed), var(--pressed));
@@ -466,7 +468,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
     #messages {
       flex: 1;
       overflow-y: auto;
-      padding: 10px 12px 16px;
+      padding: 10px max(12px, calc((100% - 768px) / 2)) 16px;
       display: flex;
       flex-direction: column;
       gap: 10px;
@@ -504,7 +506,27 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       line-height: var(--type-caption-height);
       text-align: right;
     }
+    .message.user[data-delivery-state='sending']::after { content: 'Sending'; }
     .message.user[data-delivery-state='queued']::after { content: 'Queued'; }
+    .message-attachments {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 6px;
+    }
+    .message-attachment {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      max-width: 100%;
+      padding: 1px 6px;
+      border: 1px solid var(--border);
+      border-radius: var(--corner-pill);
+      color: var(--text-secondary);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      overflow-wrap: anywhere;
+    }
     .message.user[data-delivery-state='running']::after { content: 'Running'; }
     .message.user[data-delivery-state='steered']::after { content: 'Steered'; }
     .message.user[data-delivery-state='failed'] {
@@ -531,6 +553,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       opacity: 0;
       transition: opacity var(--duration-quick) var(--curve-standard);
     }
+    .message.user .message-actions--queued { opacity: 1; justify-content: flex-end; }
     .message.assistant:hover .message-actions,
     .message.assistant.message--latest .message-actions,
     .message-actions:focus-within {
@@ -552,6 +575,15 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
     .message-action:hover {
       background: var(--hover);
       color: var(--text-primary);
+    }
+    .message-action--regenerate { display: none; }
+    .message.assistant.message--latest .message-action--regenerate { display: inline-flex; }
+    .message-meta {
+      align-self: center;
+      margin-left: 6px;
+      color: var(--text-secondary);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
     }
 
     /* A failed turn is a notice in the transcript, not an input-validation
@@ -689,6 +721,25 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       flex-wrap: wrap;
       gap: 6px;
       margin-top: 10px;
+    }
+    .approval-card__highlight {
+      margin-top: 6px;
+      color: var(--text-primary);
+      font-weight: 600;
+      overflow-wrap: anywhere;
+    }
+    .approval-card__highlight-label { color: var(--text-secondary); font-weight: 400; }
+    .approval-card__guidance {
+      width: 100%;
+      margin-top: 8px;
+      padding: 5px 8px;
+      background: var(--vscode-input-background, var(--bg-elevated));
+      border: 1px solid var(--vscode-input-border, var(--border));
+      border-radius: var(--corner-field);
+      color: var(--vscode-input-foreground, var(--text-primary));
+      font: inherit;
+      font-size: var(--type-label-size);
+      line-height: var(--type-label-height);
     }
     .approval-card__action {
       min-height: var(--control-md);
@@ -1131,11 +1182,19 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
     .message th, .message td { padding: 4px 10px; border: 1px solid var(--border); text-align: left; vertical-align: top; }
     .message th { background: var(--bg-overlay); font-weight: 600; }
     li { margin-left: 16px; list-style: disc; }
+    ol > li { list-style: decimal; }
     blockquote { border-left: 2px solid var(--accent-teal); padding-left: 8px; color: var(--text-secondary); margin: 6px 0; }
     .code-block-wrapper { position: relative; margin: 8px 0; }
     .code-block-wrapper pre { margin: 0; padding-top: 36px; }
     .code-block-actions { position: absolute; top: 5px; right: 5px; z-index: var(--z-content); display: flex; gap: 4px; }
     .code-lang { position: absolute; top: 4px; left: 8px; font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; }
+    .explain-btn { background: var(--vscode-button-secondaryBackground, var(--bg-overlay)); border: 1px solid var(--border); border-radius: var(--corner-compact); color: var(--vscode-button-secondaryForeground, var(--text-primary)); font-size: var(--type-label-size); line-height: var(--type-label-height); padding: 2px 8px; cursor: pointer; opacity: 0; transition: opacity var(--duration-quick); }
+    .code-block-wrapper:hover .explain-btn, .explain-btn:focus-visible { opacity: 1; }
+    .explain-btn:hover { background: var(--hover); color: var(--text-primary); }
+    .diff-add { display: inline-block; min-width: 100%; background: var(--vscode-diffEditor-insertedLineBackground, var(--vscode-diffEditor-insertedTextBackground)); }
+    .diff-del { display: inline-block; min-width: 100%; background: var(--vscode-diffEditor-removedLineBackground, var(--vscode-diffEditor-removedTextBackground)); }
+    .diff-hunk { color: var(--vscode-textLink-foreground); }
+    .diff-file { color: var(--text-secondary); font-weight: 600; }
     .copy-btn, .apply-btn { background: var(--vscode-button-secondaryBackground, var(--bg-overlay)); border: 1px solid var(--border); border-radius: var(--corner-compact); color: var(--vscode-button-secondaryForeground, var(--text-primary)); font-size: var(--type-label-size); line-height: var(--type-label-height); padding: 2px 8px; cursor: pointer; opacity: 0; transition: opacity var(--duration-quick); }
     .code-block-wrapper:hover .copy-btn, .code-block-wrapper:hover .apply-btn { opacity: 1; }
     .copy-btn:focus-visible, .apply-btn:focus-visible { opacity: 1; }
@@ -1902,7 +1961,21 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       border-bottom: 1px solid var(--border);
       background: var(--bg-elevated);
     }
-    .sessions-sheet-title { font-size: var(--type-body-size); line-height: var(--type-body-height); font-weight: 600; }
+    .sessions-sheet-title { margin: 0; font-size: var(--type-body-size); line-height: var(--type-body-height); font-weight: 600; }
+    .plan-card__title, .approval-card__title { margin: 0; font: inherit; }
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      margin: -1px;
+      padding: 0;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      white-space: nowrap;
+      border: 0;
+    }
+    .sessions-sheet-actions { display: flex; align-items: center; gap: 2px; }
+    .sessions-sheet-actions .icon-btn[hidden] { display: none; }
 
     .sessions-sheet-toggle {
       display: flex;
@@ -2216,6 +2289,26 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       text-overflow: ellipsis;
       flex: 1 1 auto;
     }
+    .context-limit-notice {
+      display: block;
+      flex-basis: 100%;
+      color: var(--text-secondary);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
+    .context-limit-notice[hidden] { display: none; }
+    .attachment-chip__thumb {
+      width: 16px;
+      height: 16px;
+      object-fit: cover;
+      border-radius: 3px;
+      flex-shrink: 0;
+    }
+    .attachment-chip__size {
+      color: var(--text-secondary);
+      font-size: var(--type-caption-size);
+      white-space: nowrap;
+    }
     .attachment-chip__remove {
       background: none;
       border: 0;
@@ -2339,6 +2432,14 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
             type="button"
             class="actions-menu-item"
             role="menuitem"
+            data-surface="personalization"
+          >
+            <span class="codicon codicon-person" aria-hidden="true"></span>
+            <span>Personalization</span>
+          </button><button
+            type="button"
+            class="actions-menu-item"
+            role="menuitem"
             data-surface="skills"
           >
             <span class="codicon codicon-lightbulb" aria-hidden="true"></span>
@@ -2383,6 +2484,14 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
           >
             <span class="codicon codicon-settings-gear" aria-hidden="true"></span>
             <span>Settings</span>
+          </button><button
+            type="button"
+            class="actions-menu-item"
+            role="menuitem"
+            data-surface="help"
+          >
+            <span class="codicon codicon-question" aria-hidden="true"></span>
+            <span>Help</span>
           </button>
           <div class="actions-menu-separator" role="separator"></div>
           <div class="actions-menu-account">
@@ -2404,10 +2513,22 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
 
   <section class="sessions-sheet" id="sessionsSheet" hidden aria-label="Sessions">
     <div class="sessions-sheet-head">
-      <span class="sessions-sheet-title">Sessions</span>
-      <button class="icon-btn" id="sessionsSheetClose" title="Close" aria-label="Close sessions">
-        <span class="codicon codicon-close" aria-hidden="true"></span>
-      </button>
+      <h2 class="sessions-sheet-title">Sessions</h2>
+      <div class="sessions-sheet-actions">
+        <button
+          class="icon-btn"
+          id="sessionsContinueInCloud"
+          type="button"
+          title="Continue in the cloud"
+          aria-label="Continue in the cloud"
+          hidden
+        >
+          <span class="codicon codicon-cloud-upload" aria-hidden="true"></span>
+        </button>
+        <button class="icon-btn" id="sessionsSheetClose" title="Close" aria-label="Close sessions">
+          <span class="codicon codicon-close" aria-hidden="true"></span>
+        </button>
+      </div>
     </div>
     <div class="sessions-sheet-toggle" role="tablist" aria-label="Session source">
       <button type="button" role="tab" id="sessionsTabLocal" aria-selected="true">Local</button>
@@ -2526,6 +2647,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
   </div>
 
   <!-- ── Messages ── -->
+  <h2 class="visually-hidden">Conversation</h2>
   <div id="messages" role="log" aria-live="polite" aria-relevant="additions">
     <div class="empty-state" id="emptyState">
       <div class="empty-state-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#agimark"/></svg></div>
@@ -2600,6 +2722,13 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
           <span class="plus-menu-description"></span>
         </span>
       </button>
+      <button type="button" class="plus-menu-item" data-context-kind="url" role="menuitem">
+        <span class="pm-icon codicon codicon-link" aria-hidden="true"></span>
+        <span class="plus-menu-copy">
+          <span class="plus-menu-title">Web page</span>
+          <span class="plus-menu-description"></span>
+        </span>
+      </button>
     </div>
 
     <!-- Model picker popover -->
@@ -2669,6 +2798,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
         <button class="model-pill" id="modelPill" title="Model" aria-haspopup="menu" aria-expanded="false">Auto</button>
         <button class="controls-summary" id="controlsSummary" title="Mode and reasoning effort" aria-label="Mode and reasoning effort">Edit automatically · Medium</button>
         <span class="context-usage" id="contextUsage"></span>
+        <span class="context-limit-notice" id="contextLimitNotice" role="status" aria-live="polite" hidden></span>
         <span class="follow-up-status" id="followUpStatus" role="status" aria-live="polite"></span>
         <button id="stopBtn" title="Stop response" aria-label="Stop response"></button>
         <button id="sendBtn" title="Send (Enter)" aria-label="Send"><span class="send-action-label" id="sendActionLabel"></span></button>
@@ -2705,6 +2835,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
 
     // ── DOM refs ──────────────────────────────────────────────────────────────
     const messagesEl = document.getElementById('messages');
+    const contextLimitNotice = document.getElementById('contextLimitNotice');
     const userInput = document.getElementById('userInput');
     const sendBtn = document.getElementById('sendBtn');
     const stopBtn = document.getElementById('stopBtn');
@@ -2737,6 +2868,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
     const sessionsSearch = document.getElementById('sessionsSearch');
     const sessionsTabLocal = document.getElementById('sessionsTabLocal');
     const sessionsTabCloud = document.getElementById('sessionsTabCloud');
+    const sessionsContinueInCloud = document.getElementById('sessionsContinueInCloud');
     const slashBtn = document.getElementById('slashBtn');
     const slashMenu = document.getElementById('slashMenu');
     const composerStatusBoundary = document.getElementById('composerStatusBoundary');
@@ -3482,6 +3614,25 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       contextUsageEl.textContent = '';
       contextUsageEl.className = 'context-usage';
       contextUsageEl.removeAttribute('title');
+      announceContextLimit(0);
+    }
+
+    var MOD_KEY_LABEL = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '') ? 'Cmd' : 'Ctrl';
+    var contextLimitAnnounced = false;
+
+    function announceContextLimit(pct) {
+      if (!contextLimitNotice) return;
+      if (pct < 90) {
+        contextLimitAnnounced = false;
+        contextLimitNotice.hidden = true;
+        contextLimitNotice.textContent = '';
+        return;
+      }
+      if (contextLimitAnnounced) return;
+      contextLimitAnnounced = true;
+      contextLimitNotice.hidden = false;
+      contextLimitNotice.textContent =
+        'This chat has used ' + pct + '% of the model’s context. Older messages may be dropped; start a new chat to keep full context.';
     }
 
     function renderContextUsage(usedTokens, contextWindow) {
@@ -3504,6 +3655,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
         (pct >= 90 ? ' is-critical' : pct >= 75 ? ' is-high' : '');
       contextUsageEl.title = 'Context after the last turn: ' + usedTokens.toLocaleString() +
         ' of ' + contextWindow.toLocaleString() + ' tokens (' + pct + '%)';
+      announceContextLimit(pct);
     }
 
     function addErrorMessage(presentation) {
@@ -3615,6 +3767,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
         '<div class="empty-state-copy" id="emptyStateCopy">Ask about this workspace, edit files, run commands and tests.</div>';
       messagesEl.appendChild(mounted);
       emptyStateEl = mounted;
+      syncStartSuggestions();
     }
 
     var assistantSources = new WeakMap();
@@ -3630,7 +3783,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       }, 1500);
     }
 
-    function appendMessageActions(messageEl, sourceText) {
+    function appendMessageActions(messageEl, sourceText, meta) {
       if (!messageEl || !sourceText) return;
       assistantSources.set(messageEl, sourceText);
       var previous = messagesEl.querySelectorAll('.message.assistant.message--latest');
@@ -3659,7 +3812,47 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
         );
       });
       row.appendChild(copy);
+      var regenerate = document.createElement('button');
+      regenerate.type = 'button';
+      regenerate.className = 'message-action message-action--regenerate';
+      regenerate.setAttribute('aria-label', 'Regenerate response');
+      regenerate.title = 'Regenerate';
+      var regenerateIcon = document.createElement('span');
+      regenerateIcon.className = 'codicon codicon-refresh';
+      regenerateIcon.setAttribute('aria-hidden', 'true');
+      regenerate.appendChild(regenerateIcon);
+      regenerate.addEventListener('click', function () {
+        vscode.postMessage({ type: 'regenerate' });
+      });
+      row.appendChild(regenerate);
+      if (meta && meta.label) {
+        var metaEl = document.createElement('span');
+        metaEl.className = 'message-meta';
+        metaEl.textContent = meta.label;
+        if (meta.detail) metaEl.title = meta.detail;
+        row.appendChild(metaEl);
+      }
       messageEl.appendChild(row);
+    }
+
+    function prependAuthor(messageEl, label) {
+      var author = document.createElement('span');
+      author.className = 'visually-hidden';
+      author.textContent = label + ' ';
+      messageEl.insertBefore(author, messageEl.firstChild);
+    }
+
+    function answerMeta(payload) {
+      if (!payload || !payload.modelLabel) return null;
+      var tokens = (payload.inputTokens || 0) + (payload.outputTokens || 0);
+      return {
+        label: payload.modelLabel,
+        detail: tokens > 0
+          ? payload.modelLabel + ' · ' + tokens.toLocaleString() + ' tokens (' +
+            (payload.inputTokens || 0).toLocaleString() + ' in, ' +
+            (payload.outputTokens || 0).toLocaleString() + ' out)'
+          : payload.modelLabel,
+      };
     }
 
     function addMessage(role, text) {
@@ -3725,6 +3918,11 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
 
     function setStreaming(value) {
       streaming = value;
+      if (!value && stopBtn && stopBtn.getAttribute('aria-busy') === 'true') {
+        stopBtn.removeAttribute('aria-busy');
+        stopBtn.setAttribute('aria-label', 'Stop response');
+        showFollowUpStatus('', 'queued', false);
+      }
       if (composerCard) composerCard.classList.toggle('is-streaming', value);
       sendBtn.disabled = runtimeBlock !== null;
       sendBtn.classList.toggle('follow-up', value);
@@ -3734,14 +3932,14 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       sendBtn.setAttribute(
         'title',
         value
-          ? actionLabel + ' follow-up (Enter) · ' + (followUpBehavior === 'steer' ? 'Queue' : 'Steer') + ' once (Cmd/Ctrl+Enter)'
+          ? actionLabel + ' follow-up (Enter) · ' + (followUpBehavior === 'steer' ? 'Queue' : 'Steer') + ' once (' + MOD_KEY_LABEL + '+Enter)'
           : 'Send (Enter)'
       );
       if (stopBtn) stopBtn.classList.toggle('visible', value);
       userInput.disabled = runtimeBlock !== null;
       if (composerHint) {
         composerHint.innerHTML = value
-          ? '<kbd>Enter</kbd> to ' + actionLabel.toLowerCase() + ' · <kbd>Cmd/Ctrl+Enter</kbd> to ' +
+          ? '<kbd>Enter</kbd> to ' + actionLabel.toLowerCase() + ' · <kbd>' + MOD_KEY_LABEL + '+Enter</kbd> to ' +
               (followUpBehavior === 'steer' ? 'queue' : 'steer') + ' once · <kbd>Shift+Enter</kbd> for newline'
           : '<kbd>Enter</kbd> to send · <kbd>Shift+Enter</kbd> for newline';
       }
@@ -3772,6 +3970,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       { value: 'plan', label: 'Plan mode', description: 'Generate a plan; no edits until approved' },
       { value: 'bypass', label: 'Bypass permissions', description: 'Skip all approval prompts (dangerous)' }
     ];
+    var activeEffortLevels = null;
     var EFFORT_OPTIONS = [
       { value: 'low', label: 'Low', description: 'Minimal reasoning, fastest, lowest cost' },
       { value: 'medium', label: 'Medium', description: 'Balanced reasoning, default' },
@@ -3844,7 +4043,11 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       appendControlsGroup(
         'Reasoning effort',
         activeSupportsEffort ? '' : 'This model does not take a reasoning effort.',
-        activeSupportsEffort ? EFFORT_OPTIONS : [],
+        activeSupportsEffort
+          ? EFFORT_OPTIONS.filter(function (option) {
+              return !activeEffortLevels || activeEffortLevels.indexOf(option.value) !== -1;
+            })
+          : [],
         activeEffort,
         'setEffort',
         'effort'
@@ -4070,7 +4273,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
 
     function bindCodeBlockActions(rootEl) {
       if (!rootEl) return;
-      var btns = rootEl.querySelectorAll('.copy-btn, .apply-btn');
+      var btns = rootEl.querySelectorAll('.copy-btn, .apply-btn, .explain-btn');
       for (var i = 0; i < btns.length; i++) {
         var btn = btns[i];
         if (boundCodeActionButtons.has(btn)) continue;
@@ -4080,6 +4283,16 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
           var codeEl = getCodeBlock(b);
           if (!codeEl) return;
           var text = codeEl.textContent || '';
+          if (b.classList.contains('explain-btn')) {
+            var language = getCodeLanguage(codeEl) || '';
+            prefillComposer('Explain this code:
+
+' + '\`\`\`' + language + '
+' + text + '
+' + '\`\`\`');
+            sendMessage();
+            return;
+          }
           if (b.classList.contains('apply-btn')) {
             if (pendingApplyButton && pendingApplyButton !== b) {
               settleApplyButton('Failed', 'A newer diff proposal replaced this request.');
@@ -4113,6 +4326,94 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
     }
 
     // ── Send ──────────────────────────────────────────────────────────────────
+    var sendingClientMessageId = null;
+
+    function settleSending(state) {
+      if (!sendingClientMessageId) return;
+      setUserMessageState(sendingClientMessageId, state || '');
+      sendingClientMessageId = null;
+    }
+
+    function sentContextEntries() {
+      var entries = [];
+      var strips = [attachmentStrip, editorContextStrip];
+      for (var s = 0; s < strips.length; s++) {
+        if (!strips[s]) continue;
+        var chips = strips[s].querySelectorAll('.attachment-chip:not(.failed)');
+        for (var c = 0; c < chips.length; c++) {
+          var chipName = chips[c].querySelector('.attachment-chip__name');
+          var chipIcon = chips[c].querySelector('.codicon');
+          if (!chipName || !chipName.textContent) continue;
+          entries.push({
+            label: chipName.textContent,
+            icon: chipIcon ? chipIcon.className : 'codicon codicon-file-media',
+          });
+        }
+      }
+      if (browseWebEnabled) entries.push({ label: 'Browse the web', icon: 'codicon codicon-globe' });
+      return entries;
+    }
+
+    function appendQueuedControls(messageEl, clientMessageId, text) {
+      var row = document.createElement('div');
+      row.className = 'message-actions message-actions--queued';
+      var edit = document.createElement('button');
+      edit.type = 'button';
+      edit.className = 'message-action';
+      edit.title = 'Edit';
+      edit.setAttribute('aria-label', 'Edit this queued message');
+      var editIcon = document.createElement('span');
+      editIcon.className = 'codicon codicon-edit';
+      editIcon.setAttribute('aria-hidden', 'true');
+      edit.appendChild(editIcon);
+      var cancel = document.createElement('button');
+      cancel.type = 'button';
+      cancel.className = 'message-action';
+      cancel.title = 'Cancel';
+      cancel.setAttribute('aria-label', 'Cancel this queued message');
+      var cancelIcon = document.createElement('span');
+      cancelIcon.className = 'codicon codicon-close';
+      cancelIcon.setAttribute('aria-hidden', 'true');
+      cancel.appendChild(cancelIcon);
+      edit.addEventListener('click', function () {
+        vscode.postMessage({ type: 'cancelQueuedMessage', payload: { clientMessageId: clientMessageId } });
+        prefillComposer(text);
+      });
+      cancel.addEventListener('click', function () {
+        vscode.postMessage({ type: 'cancelQueuedMessage', payload: { clientMessageId: clientMessageId } });
+      });
+      row.appendChild(edit);
+      row.appendChild(cancel);
+      messageEl.appendChild(row);
+    }
+
+    function removeQueuedControls(clientMessageId) {
+      var message = userMessageById(clientMessageId);
+      var row = message && message.querySelector('.message-actions--queued');
+      if (row) row.remove();
+    }
+
+    function appendSentContext(messageEl) {
+      var entries = sentContextEntries();
+      if (entries.length === 0) return;
+      var row = document.createElement('div');
+      row.className = 'message-attachments';
+      row.setAttribute('aria-label', 'Sent with ' + entries.map(function (e) { return e.label; }).join(', '));
+      for (var i = 0; i < entries.length; i++) {
+        var item = document.createElement('span');
+        item.className = 'message-attachment';
+        var icon = document.createElement('span');
+        icon.className = entries[i].icon;
+        icon.setAttribute('aria-hidden', 'true');
+        var label = document.createElement('span');
+        label.textContent = entries[i].label;
+        item.appendChild(icon);
+        item.appendChild(label);
+        row.appendChild(item);
+      }
+      messageEl.appendChild(row);
+    }
+
     function sendMessage(oneTurnBehavior) {
       if (runtimeBlock !== null) return;
       const isFollowUp = streaming;
@@ -4129,9 +4430,18 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       var clientMessageId = 'msg-' + Date.now() + '-' + (++clientMessageSeq);
       var userMessageEl = addMessage('user', text);
       userMessageEl.setAttribute('data-client-message-id', clientMessageId);
-      if (isFollowUp) userMessageEl.setAttribute('data-delivery-state', 'queued');
+      prependAuthor(userMessageEl, 'You said:');
+      appendSentContext(userMessageEl);
+      if (isFollowUp) {
+        userMessageEl.setAttribute('data-delivery-state', 'queued');
+        appendQueuedControls(userMessageEl, clientMessageId, text);
+      } else {
+        userMessageEl.setAttribute('data-delivery-state', 'sending');
+        sendingClientMessageId = clientMessageId;
+      }
       userInput.value = '';
       userInput.style.height = 'auto';
+      saveComposerDraft();
 
       if (!isFollowUp) {
         showTyping();
@@ -4166,11 +4476,16 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
     sendBtn.addEventListener('click', function() { sendMessage(); });
     if (stopBtn) {
       stopBtn.addEventListener('click', function() {
+        if (stopBtn.getAttribute('aria-busy') === 'true') return;
+        stopBtn.setAttribute('aria-busy', 'true');
+        stopBtn.setAttribute('aria-label', 'Stopping');
+        showFollowUpStatus('Stopping…', 'queued', true);
         vscode.postMessage({ type: 'cancel' });
       });
     }
 
     userInput.addEventListener('keydown', (e) => {
+      if (e.isComposing || e.keyCode === 229) return;
       // The slash popup owns Enter while it is open: the highlighted command
       // runs instead of the literal "/name" being sent as a chat message.
       if (slashMenuIsOpen()) {
@@ -4234,7 +4549,25 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       }
     });
 
-    userInput.addEventListener('input', function() { autoResize(); detectMention(); });
+    function saveComposerDraft() {
+      var state = vscode.getState() || {};
+      state.composerDraft = userInput.value;
+      vscode.setState(state);
+    }
+
+    userInput.addEventListener('input', function() {
+      autoResize();
+      detectMention();
+      saveComposerDraft();
+    });
+
+    (function restoreComposerDraft() {
+      var state = vscode.getState() || {};
+      if (typeof state.composerDraft === 'string' && state.composerDraft && !userInput.value) {
+        userInput.value = state.composerDraft;
+        autoResize();
+      }
+    })();
 
     function closeActionsMenu() {
       if (!actionsMenu) return;
@@ -4365,7 +4698,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
         loading.setAttribute('role', 'status');
         loading.textContent = sessionsSource === 'local'
           ? 'Loading developer sessions…'
-          : 'Loading cloud chats…';
+          : 'Loading cloud sessions…';
         sessionsSheetList.appendChild(loading);
         return;
       }
@@ -4389,7 +4722,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
         empty.className = 'sessions-sheet-empty';
         empty.textContent = sessionsSource === 'local'
           ? 'No developer sessions in this workspace yet'
-          : 'No cloud chats yet';
+          : 'No cloud chats or AGI Code sessions yet';
         sessionsSheetList.appendChild(empty);
         return;
       }
@@ -4447,6 +4780,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       if (sessionsSearch) sessionsSearch.hidden = true;
       if (sessionsTabLocal) sessionsTabLocal.setAttribute('aria-selected', String(source === 'local'));
       if (sessionsTabCloud) sessionsTabCloud.setAttribute('aria-selected', String(source === 'cloud'));
+      if (sessionsContinueInCloud) sessionsContinueInCloud.hidden = source !== 'cloud';
       renderSessionsRows();
       vscode.postMessage({ type: 'requestSessions', payload: { source: source } });
     }
@@ -4467,6 +4801,11 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
 
     if (sessionsBtn) sessionsBtn.addEventListener('click', openSessionsSheet);
     if (sessionsSheetClose) sessionsSheetClose.addEventListener('click', closeSessionsSheet);
+    if (sessionsContinueInCloud) {
+      sessionsContinueInCloud.addEventListener('click', function () {
+        vscode.postMessage({ type: 'continueInCloud' });
+      });
+    }
     if (sessionsTabLocal) {
       sessionsTabLocal.addEventListener('click', function () { requestSessions('local'); });
     }
@@ -4564,6 +4903,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
             if (userInput.value.trim().indexOf('/') === 0) {
               userInput.value = '';
               autoResize();
+              saveComposerDraft();
             }
             vscode.postMessage({ type: 'runSlashCommand', payload: { name: entry.name } });
           });
@@ -4853,6 +5193,49 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       };
     }
 
+    var APPROVAL_RECIPIENT_KEYS = ['to', 'cc', 'bcc', 'recipient', 'recipients', 'email', 'emails', 'channel', 'channel_id', 'user', 'users', 'phone', 'phone_number'];
+    var APPROVAL_AMOUNT_KEYS = ['amount', 'price', 'total', 'cost', 'value'];
+    var APPROVAL_ITEM_KEYS = ['item', 'product', 'sku', 'description', 'quantity'];
+
+    function approvalArguments(detail) {
+      if (!detail) return null;
+      try {
+        var parsed = JSON.parse(detail);
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+      } catch (error) {
+        return null;
+      }
+    }
+
+    function approvalValues(args, keys) {
+      var values = [];
+      for (var i = 0; i < keys.length; i++) {
+        var value = args[keys[i]];
+        if (value === undefined || value === null || value === '') continue;
+        var list = Array.isArray(value) ? value : [value];
+        for (var j = 0; j < list.length; j++) {
+          if (typeof list[j] === 'string' || typeof list[j] === 'number') values.push(String(list[j]));
+        }
+      }
+      return values;
+    }
+
+    function approvalHighlights(detail) {
+      var args = approvalArguments(detail);
+      if (!args) return [];
+      var lines = [];
+      var recipients = approvalValues(args, APPROVAL_RECIPIENT_KEYS);
+      if (recipients.length > 0) lines.push({ label: 'Sends to', value: recipients.join(', ') });
+      var amounts = approvalValues(args, APPROVAL_AMOUNT_KEYS);
+      if (amounts.length > 0) {
+        var currency = approvalValues(args, ['currency'])[0];
+        lines.push({ label: 'Amount', value: amounts.join(', ') + (currency ? ' ' + currency : '') });
+      }
+      var items = approvalValues(args, APPROVAL_ITEM_KEYS);
+      if (items.length > 0 && amounts.length > 0) lines.push({ label: 'For', value: items.join(', ') });
+      return lines;
+    }
+
     function renderApprovalCard(payload) {
       hideEmptyState();
       var card = document.createElement('section');
@@ -4865,7 +5248,8 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       var icon = document.createElement('span');
       icon.className = 'codicon codicon-shield';
       icon.setAttribute('aria-hidden', 'true');
-      var headText = document.createElement('span');
+      var headText = document.createElement('h3');
+      headText.className = 'approval-card__title';
       headText.textContent = 'Approval needed';
       head.appendChild(icon);
       head.appendChild(headText);
@@ -4894,6 +5278,20 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
         }
         card.appendChild(verdictEl);
         card.setAttribute('aria-label', 'Approval needed, ' + verdict.spoken + ' ' + payload.summary);
+      }
+
+      var highlights = approvalHighlights(payload.detail);
+      for (var h = 0; h < highlights.length; h++) {
+        var highlight = document.createElement('div');
+        highlight.className = 'approval-card__highlight';
+        var highlightLabel = document.createElement('span');
+        highlightLabel.className = 'approval-card__highlight-label';
+        highlightLabel.textContent = highlights[h].label + ': ';
+        var highlightValue = document.createElement('span');
+        highlightValue.textContent = highlights[h].value;
+        highlight.appendChild(highlightLabel);
+        highlight.appendChild(highlightValue);
+        card.appendChild(highlight);
       }
 
       if (payload.detail) {
@@ -4926,6 +5324,21 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
           actions.appendChild(button);
         })(APPROVAL_ACTIONS[i]);
       }
+      var guidance = document.createElement('input');
+      guidance.type = 'text';
+      guidance.className = 'approval-card__guidance';
+      guidance.maxLength = 2000;
+      guidance.placeholder = 'Or deny and tell AGI what to do instead, then press Enter';
+      guidance.setAttribute('aria-label', 'Deny and tell AGI what to do instead');
+      guidance.addEventListener('keydown', function (event) {
+        if (event.key !== 'Enter' || !guidance.value.trim()) return;
+        event.preventDefault();
+        vscode.postMessage({
+          type: 'respondToApproval',
+          payload: { requestId: payload.requestId, decision: 'deny', guidance: guidance.value.trim() },
+        });
+      });
+      actions.appendChild(guidance);
       card.appendChild(actions);
 
       approvalCards[payload.requestId] = { el: card, actions: actions };
@@ -5078,18 +5491,53 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       renderAttachmentStrip();
     }
 
-    function makeAttachmentChip(name, state) {
+    var FILE_ICON_BY_EXTENSION = {
+      png: 'file-media', jpg: 'file-media', jpeg: 'file-media', gif: 'file-media', webp: 'file-media', svg: 'file-media',
+      pdf: 'file-pdf',
+      zip: 'file-zip', gz: 'file-zip', tar: 'file-zip',
+      md: 'markdown', txt: 'file-text',
+      json: 'json', yaml: 'file-code', yml: 'file-code', toml: 'file-code', xml: 'file-code',
+      ts: 'file-code', tsx: 'file-code', js: 'file-code', jsx: 'file-code', py: 'file-code', rs: 'file-code',
+      go: 'file-code', java: 'file-code', rb: 'file-code', c: 'file-code', cpp: 'file-code', cs: 'file-code',
+      css: 'file-code', html: 'file-code', sh: 'terminal', csv: 'table',
+    };
+
+    function fileIconFor(name) {
+      var dot = name.lastIndexOf('.');
+      var extension = dot === -1 ? '' : name.slice(dot + 1).toLowerCase();
+      return FILE_ICON_BY_EXTENSION[extension] || 'file';
+    }
+
+    function formatFileSize(bytes) {
+      if (!bytes) return '';
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    function makeAttachmentChip(name, state, file) {
       var chip = document.createElement('span');
       chip.className = 'attachment-chip' + (state ? ' ' + state : '');
       chip.setAttribute('role', 'listitem');
+      chip.setAttribute('data-source-name', name);
 
-      var icon = document.createElement('span');
-      icon.className = 'codicon codicon-file';
-      icon.setAttribute('aria-hidden', 'true');
+      var icon;
+      if (file && file.type && file.type.indexOf('image/') === 0 && typeof URL.createObjectURL === 'function') {
+        icon = document.createElement('img');
+        icon.className = 'attachment-chip__thumb';
+        icon.alt = '';
+        icon.src = URL.createObjectURL(file);
+      } else {
+        icon = document.createElement('span');
+        icon.className = 'codicon codicon-' + fileIconFor(name);
+        icon.setAttribute('aria-hidden', 'true');
+      }
 
       var label = document.createElement('span');
       label.className = 'attachment-chip__name';
       label.textContent = name;
+      var size = file ? formatFileSize(file.size) : '';
+      if (size) chip.title = name + ', ' + size;
 
       var removeBtn = document.createElement('button');
       removeBtn.type = 'button';
@@ -5115,6 +5563,12 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
 
       chip.appendChild(icon);
       chip.appendChild(label);
+      if (size) {
+        var sizeEl = document.createElement('span');
+        sizeEl.className = 'attachment-chip__size';
+        sizeEl.textContent = size;
+        chip.appendChild(sizeEl);
+      }
       chip.appendChild(removeBtn);
       return chip;
     }
@@ -5144,7 +5598,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
           if (attachmentStrip) attachmentStrip.appendChild(failChip);
           continue;
         }
-        var chip = makeAttachmentChip(f.name, 'uploading');
+        var chip = makeAttachmentChip(f.name, 'uploading', f);
         if (attachmentStrip) attachmentStrip.appendChild(chip);
         pendingAttachmentChips[batchKey].push({ name: f.name, chip: chip });
       }
@@ -5249,6 +5703,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
           restoredQueuedUser.setAttribute('data-client-message-id', activeQueuedClientMessageId);
         }
         setUserMessageState(activeQueuedClientMessageId, 'running');
+        removeQueuedControls(activeQueuedClientMessageId);
         showFollowUpStatus(
           msg.payload.queueRemaining > 0
             ? 'Starting queued follow-up · ' + msg.payload.queueRemaining + ' waiting'
@@ -5260,6 +5715,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
 
       else if (msg.type === 'token') {
         removeTyping();
+        settleSending('');
         if (!currentAssistantEl) {
           currentAssistantEl = addMessage('assistant', '');
           accumulatedContent = '';
@@ -5275,12 +5731,17 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
 
       else if (msg.type === 'done') {
         removeTyping();
+        settleSending('');
         if (currentAssistantEl && accumulatedContent) {
           // Content is already rendered; re-render once to ensure the final
           // token is flushed, then bind actions on any code blocks.
           currentAssistantEl.innerHTML = renderAssistant(accumulatedContent);
+          prependAuthor(
+            currentAssistantEl,
+            msg.payload && msg.payload.modelLabel ? 'AGI (' + msg.payload.modelLabel + ') replied:' : 'AGI replied:'
+          );
           bindCodeBlockActions(currentAssistantEl);
-          appendMessageActions(currentAssistantEl, accumulatedContent);
+          appendMessageActions(currentAssistantEl, accumulatedContent, answerMeta(msg.payload));
         }
         finalizeToolCallStack();
         if (msg.payload && msg.payload.providerLabel) {
@@ -5316,6 +5777,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
 
       else if (msg.type === 'toolCallStart') {
         removeTyping();
+        settleSending('');
         createToolCallEl(
           msg.payload.toolUseId,
           msg.payload.name,
@@ -5351,6 +5813,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
           finalizeToolCallStack();
         }
         addErrorMessage(msg.payload);
+        settleSending('failed');
         setStreaming(false);
         if (activeQueuedClientMessageId) {
           setUserMessageState(activeQueuedClientMessageId, 'failed');
@@ -5382,6 +5845,9 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
 
       else if (msg.type === 'followUpStatus') {
         markAttachmentsQueued(msg.payload.attachmentIds || []);
+        if (msg.payload.kind !== 'queued' && msg.payload.kind !== 'queue-fallback') {
+          removeQueuedControls(msg.payload.clientMessageId);
+        }
         if (msg.payload.kind === 'steered') {
           setUserMessageState(msg.payload.clientMessageId, 'steered');
         } else if (msg.payload.kind === 'cancelled') {
@@ -5481,6 +5947,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
 
       else if (msg.type === 'composerDraft') {
         userInput.value = msg.payload.text || '';
+        saveComposerDraft();
         pendingFileReferences = (msg.payload.references || []).map(function(reference) {
           var range = reference.range;
           var endLine = range && range.endCharacter === 0 && range.endLine > range.startLine
@@ -5546,6 +6013,11 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
         syncRecentChats();
       }
 
+      else if (msg.type === 'startSuggestions') {
+        startSuggestions = msg.payload;
+        syncStartSuggestions();
+      }
+
       else if (msg.type === 'activeProject') {
         setActiveProject(msg.payload && msg.payload.name);
       }
@@ -5590,6 +6062,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       else if (msg.type === 'effortChanged') {
         activeEffort = msg.payload.effort;
         activeSupportsEffort = Boolean(msg.payload.supportsEffort);
+        activeEffortLevels = Array.isArray(msg.payload.efforts) ? msg.payload.efforts : null;
         renderControlsSummary();
       }
 
@@ -5662,13 +6135,13 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
         for (var a = 0; a < (ack.added || []).length; a++) {
           var addedEntry = ack.added[a] || {};
           if (!addedIdsByName[addedEntry.name]) addedIdsByName[addedEntry.name] = [];
-          addedIdsByName[addedEntry.name].push(addedEntry.id);
+          addedIdsByName[addedEntry.name].push(addedEntry);
         }
         var allChips = attachmentStrip ? attachmentStrip.querySelectorAll('.attachment-chip.uploading') : [];
         for (var c = 0; c < allChips.length; c++) {
           var chipEl = allChips[c];
           var nameEl = chipEl.querySelector('.attachment-chip__name');
-          var attachName = nameEl ? (nameEl.textContent || '') : '';
+          var attachName = chipEl.getAttribute('data-source-name') || (nameEl ? (nameEl.textContent || '') : '');
           if (skippedByName[attachName]) {
             chipEl.classList.remove('uploading');
             chipEl.classList.add('failed');
@@ -5676,7 +6149,15 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
           } else {
             chipEl.classList.remove('uploading');
             var idQueue = addedIdsByName[attachName];
-            var attachId = idQueue && idQueue.length > 0 ? idQueue.shift() : '';
+            var addedAck = idQueue && idQueue.length > 0 ? idQueue.shift() : null;
+            var attachId = addedAck ? addedAck.id : '';
+            if (addedAck && addedAck.truncatedAt && nameEl) {
+              var truncatedNote = document.createElement('span');
+              truncatedNote.className = 'attachment-chip__size';
+              truncatedNote.textContent = 'first ' + addedAck.truncatedAt.toLocaleString() + ' characters';
+              nameEl.parentNode.insertBefore(truncatedNote, nameEl.nextSibling);
+              chipEl.title = attachName + ': only the first ' + addedAck.truncatedAt.toLocaleString() + ' characters are sent';
+            }
             if (attachId && chipEl.getAttribute('data-remove-requested') === '1') {
               // The user dismissed this chip while it was still uploading:
               // honour it now that the host id exists.
@@ -5807,7 +6288,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
         var icon = document.createElement('span');
         icon.className = 'codicon codicon-checklist';
         icon.setAttribute('aria-hidden', 'true');
-        var title = document.createElement('span');
+        var title = document.createElement('h3');
         title.className = 'plan-card__title';
         title.textContent = 'Plan';
         var count = document.createElement('span');
@@ -6350,6 +6831,69 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
     }
 
     var recentChats = { conversations: [], total: 0 };
+    var startSuggestions = { projects: [], skills: [], connectors: [] };
+
+    function prefillComposer(text) {
+      userInput.value = text;
+      autoResize();
+      saveComposerDraft();
+      userInput.focus();
+      userInput.setSelectionRange(text.length, text.length);
+    }
+
+    function buildSuggestionRow(label, detail, onPick) {
+      var row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'recent-chat-row';
+      row.title = detail || label;
+      var title = document.createElement('span');
+      title.className = 'recent-chat-title';
+      title.textContent = label;
+      row.appendChild(title);
+      if (detail) {
+        var sub = document.createElement('span');
+        sub.className = 'recent-chat-age';
+        sub.textContent = detail;
+        row.appendChild(sub);
+      }
+      row.addEventListener('click', onPick);
+      return row;
+    }
+
+    function appendSuggestionGroup(block, heading, rows) {
+      if (rows.length === 0) return;
+      var title = document.createElement('div');
+      title.className = 'recent-chats-title';
+      title.textContent = heading;
+      block.appendChild(title);
+      for (var i = 0; i < rows.length; i++) block.appendChild(rows[i]);
+    }
+
+    function syncStartSuggestions() {
+      if (!emptyStateEl) return;
+      var mounted = emptyStateEl.querySelector('.start-suggestions');
+      if (mounted) mounted.parentNode.removeChild(mounted);
+      var block = document.createElement('div');
+      block.className = 'recent-chats start-suggestions';
+      appendSuggestionGroup(block, 'Projects', startSuggestions.projects.map(function (project) {
+        return buildSuggestionRow(project.name, 'Use in this chat', function () {
+          vscode.postMessage({ type: 'openSuggestedProject', payload: { projectId: project.id } });
+        });
+      }));
+      appendSuggestionGroup(block, 'Skills', startSuggestions.skills.map(function (skill) {
+        return buildSuggestionRow(skill.name, skill.description, function () {
+          prefillComposer('Use the ' + skill.name + ' skill to ');
+        });
+      }));
+      appendSuggestionGroup(block, 'Connected apps', startSuggestions.connectors.map(function (connector) {
+        return buildSuggestionRow(connector.name, 'Ask with it', function () {
+          prefillComposer('Using ' + connector.name + ', ');
+        });
+      }));
+      if (!block.firstChild) return;
+      emptyStateEl.classList.add('empty-state--has-recents');
+      emptyStateEl.appendChild(block);
+    }
 
     function buildRecentChatRow(conversation) {
       var row = document.createElement('button');
@@ -6379,7 +6923,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       if (mounted) mounted.parentNode.removeChild(mounted);
       emptyStateEl.classList.toggle(
         'empty-state--has-recents',
-        recentChats.conversations.length > 0,
+        recentChats.conversations.length > 0 || Boolean(emptyStateEl.querySelector('.start-suggestions')),
       );
       if (recentChats.conversations.length === 0) return;
       var block = document.createElement('div');
@@ -6872,6 +7416,8 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
     }
 
     button:not(:disabled):active,
+    #sendBtn:not(:disabled):active,
+    #stopBtn:not(:disabled):active,
     [role="menuitem"]:not([aria-disabled="true"]):active,
     [role="option"]:not([aria-disabled="true"]):active {
       background-image: linear-gradient(var(--pressed), var(--pressed));
@@ -6881,7 +7427,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
     #messages {
       flex: 1;
       overflow-y: auto;
-      padding: 10px 12px 16px;
+      padding: 10px max(12px, calc((100% - 768px) / 2)) 16px;
       display: flex;
       flex-direction: column;
       gap: 10px;
@@ -6919,7 +7465,27 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       line-height: var(--type-caption-height);
       text-align: right;
     }
+    .message.user[data-delivery-state='sending']::after { content: 'Sending'; }
     .message.user[data-delivery-state='queued']::after { content: 'Queued'; }
+    .message-attachments {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 6px;
+    }
+    .message-attachment {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      max-width: 100%;
+      padding: 1px 6px;
+      border: 1px solid var(--border);
+      border-radius: var(--corner-pill);
+      color: var(--text-secondary);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      overflow-wrap: anywhere;
+    }
     .message.user[data-delivery-state='running']::after { content: 'Running'; }
     .message.user[data-delivery-state='steered']::after { content: 'Steered'; }
     .message.user[data-delivery-state='failed'] {
@@ -6946,6 +7512,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       opacity: 0;
       transition: opacity var(--duration-quick) var(--curve-standard);
     }
+    .message.user .message-actions--queued { opacity: 1; justify-content: flex-end; }
     .message.assistant:hover .message-actions,
     .message.assistant.message--latest .message-actions,
     .message-actions:focus-within {
@@ -6967,6 +7534,15 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
     .message-action:hover {
       background: var(--hover);
       color: var(--text-primary);
+    }
+    .message-action--regenerate { display: none; }
+    .message.assistant.message--latest .message-action--regenerate { display: inline-flex; }
+    .message-meta {
+      align-self: center;
+      margin-left: 6px;
+      color: var(--text-secondary);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
     }
 
     /* A failed turn is a notice in the transcript, not an input-validation
@@ -7104,6 +7680,25 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       flex-wrap: wrap;
       gap: 6px;
       margin-top: 10px;
+    }
+    .approval-card__highlight {
+      margin-top: 6px;
+      color: var(--text-primary);
+      font-weight: 600;
+      overflow-wrap: anywhere;
+    }
+    .approval-card__highlight-label { color: var(--text-secondary); font-weight: 400; }
+    .approval-card__guidance {
+      width: 100%;
+      margin-top: 8px;
+      padding: 5px 8px;
+      background: var(--vscode-input-background, var(--bg-elevated));
+      border: 1px solid var(--vscode-input-border, var(--border));
+      border-radius: var(--corner-field);
+      color: var(--vscode-input-foreground, var(--text-primary));
+      font: inherit;
+      font-size: var(--type-label-size);
+      line-height: var(--type-label-height);
     }
     .approval-card__action {
       min-height: var(--control-md);
@@ -7546,11 +8141,19 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
     .message th, .message td { padding: 4px 10px; border: 1px solid var(--border); text-align: left; vertical-align: top; }
     .message th { background: var(--bg-overlay); font-weight: 600; }
     li { margin-left: 16px; list-style: disc; }
+    ol > li { list-style: decimal; }
     blockquote { border-left: 2px solid var(--accent-teal); padding-left: 8px; color: var(--text-secondary); margin: 6px 0; }
     .code-block-wrapper { position: relative; margin: 8px 0; }
     .code-block-wrapper pre { margin: 0; padding-top: 36px; }
     .code-block-actions { position: absolute; top: 5px; right: 5px; z-index: var(--z-content); display: flex; gap: 4px; }
     .code-lang { position: absolute; top: 4px; left: 8px; font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; }
+    .explain-btn { background: var(--vscode-button-secondaryBackground, var(--bg-overlay)); border: 1px solid var(--border); border-radius: var(--corner-compact); color: var(--vscode-button-secondaryForeground, var(--text-primary)); font-size: var(--type-label-size); line-height: var(--type-label-height); padding: 2px 8px; cursor: pointer; opacity: 0; transition: opacity var(--duration-quick); }
+    .code-block-wrapper:hover .explain-btn, .explain-btn:focus-visible { opacity: 1; }
+    .explain-btn:hover { background: var(--hover); color: var(--text-primary); }
+    .diff-add { display: inline-block; min-width: 100%; background: var(--vscode-diffEditor-insertedLineBackground, var(--vscode-diffEditor-insertedTextBackground)); }
+    .diff-del { display: inline-block; min-width: 100%; background: var(--vscode-diffEditor-removedLineBackground, var(--vscode-diffEditor-removedTextBackground)); }
+    .diff-hunk { color: var(--vscode-textLink-foreground); }
+    .diff-file { color: var(--text-secondary); font-weight: 600; }
     .copy-btn, .apply-btn { background: var(--vscode-button-secondaryBackground, var(--bg-overlay)); border: 1px solid var(--border); border-radius: var(--corner-compact); color: var(--vscode-button-secondaryForeground, var(--text-primary)); font-size: var(--type-label-size); line-height: var(--type-label-height); padding: 2px 8px; cursor: pointer; opacity: 0; transition: opacity var(--duration-quick); }
     .code-block-wrapper:hover .copy-btn, .code-block-wrapper:hover .apply-btn { opacity: 1; }
     .copy-btn:focus-visible, .apply-btn:focus-visible { opacity: 1; }
@@ -8317,7 +8920,21 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       border-bottom: 1px solid var(--border);
       background: var(--bg-elevated);
     }
-    .sessions-sheet-title { font-size: var(--type-body-size); line-height: var(--type-body-height); font-weight: 600; }
+    .sessions-sheet-title { margin: 0; font-size: var(--type-body-size); line-height: var(--type-body-height); font-weight: 600; }
+    .plan-card__title, .approval-card__title { margin: 0; font: inherit; }
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      margin: -1px;
+      padding: 0;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      white-space: nowrap;
+      border: 0;
+    }
+    .sessions-sheet-actions { display: flex; align-items: center; gap: 2px; }
+    .sessions-sheet-actions .icon-btn[hidden] { display: none; }
 
     .sessions-sheet-toggle {
       display: flex;
@@ -8631,6 +9248,26 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       text-overflow: ellipsis;
       flex: 1 1 auto;
     }
+    .context-limit-notice {
+      display: block;
+      flex-basis: 100%;
+      color: var(--text-secondary);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
+    .context-limit-notice[hidden] { display: none; }
+    .attachment-chip__thumb {
+      width: 16px;
+      height: 16px;
+      object-fit: cover;
+      border-radius: 3px;
+      flex-shrink: 0;
+    }
+    .attachment-chip__size {
+      color: var(--text-secondary);
+      font-size: var(--type-caption-size);
+      white-space: nowrap;
+    }
     .attachment-chip__remove {
       background: none;
       border: 0;
@@ -8754,6 +9391,14 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
             type="button"
             class="actions-menu-item"
             role="menuitem"
+            data-surface="personalization"
+          >
+            <span class="codicon codicon-person" aria-hidden="true"></span>
+            <span>Personalization</span>
+          </button><button
+            type="button"
+            class="actions-menu-item"
+            role="menuitem"
             data-surface="skills"
           >
             <span class="codicon codicon-lightbulb" aria-hidden="true"></span>
@@ -8798,6 +9443,14 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
           >
             <span class="codicon codicon-settings-gear" aria-hidden="true"></span>
             <span>Settings</span>
+          </button><button
+            type="button"
+            class="actions-menu-item"
+            role="menuitem"
+            data-surface="help"
+          >
+            <span class="codicon codicon-question" aria-hidden="true"></span>
+            <span>Help</span>
           </button>
           <div class="actions-menu-separator" role="separator"></div>
           <div class="actions-menu-account">
@@ -8819,10 +9472,22 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
 
   <section class="sessions-sheet" id="sessionsSheet" hidden aria-label="Sessions">
     <div class="sessions-sheet-head">
-      <span class="sessions-sheet-title">Sessions</span>
-      <button class="icon-btn" id="sessionsSheetClose" title="Close" aria-label="Close sessions">
-        <span class="codicon codicon-close" aria-hidden="true"></span>
-      </button>
+      <h2 class="sessions-sheet-title">Sessions</h2>
+      <div class="sessions-sheet-actions">
+        <button
+          class="icon-btn"
+          id="sessionsContinueInCloud"
+          type="button"
+          title="Continue in the cloud"
+          aria-label="Continue in the cloud"
+          hidden
+        >
+          <span class="codicon codicon-cloud-upload" aria-hidden="true"></span>
+        </button>
+        <button class="icon-btn" id="sessionsSheetClose" title="Close" aria-label="Close sessions">
+          <span class="codicon codicon-close" aria-hidden="true"></span>
+        </button>
+      </div>
     </div>
     <div class="sessions-sheet-toggle" role="tablist" aria-label="Session source">
       <button type="button" role="tab" id="sessionsTabLocal" aria-selected="true">Local</button>
@@ -8941,6 +9606,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
   </div>
 
   <!-- ── Messages ── -->
+  <h2 class="visually-hidden">Conversation</h2>
   <div id="messages" role="log" aria-live="polite" aria-relevant="additions">
     <div class="empty-state" id="emptyState">
       <div class="empty-state-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#agimark"/></svg></div>
@@ -9015,6 +9681,13 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
           <span class="plus-menu-description"></span>
         </span>
       </button>
+      <button type="button" class="plus-menu-item" data-context-kind="url" role="menuitem">
+        <span class="pm-icon codicon codicon-link" aria-hidden="true"></span>
+        <span class="plus-menu-copy">
+          <span class="plus-menu-title">Web page</span>
+          <span class="plus-menu-description"></span>
+        </span>
+      </button>
     </div>
 
     <!-- Model picker popover -->
@@ -9084,6 +9757,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
         <button class="model-pill" id="modelPill" title="Model" aria-haspopup="menu" aria-expanded="false">Auto</button>
         <button class="controls-summary" id="controlsSummary" title="Mode and reasoning effort" aria-label="Mode and reasoning effort">Edit automatically · Medium</button>
         <span class="context-usage" id="contextUsage"></span>
+        <span class="context-limit-notice" id="contextLimitNotice" role="status" aria-live="polite" hidden></span>
         <span class="follow-up-status" id="followUpStatus" role="status" aria-live="polite"></span>
         <button id="stopBtn" title="Stop response" aria-label="Stop response"></button>
         <button id="sendBtn" title="Send (Enter)" aria-label="Send"><span class="send-action-label" id="sendActionLabel"></span></button>
@@ -9120,6 +9794,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
 
     // ── DOM refs ──────────────────────────────────────────────────────────────
     const messagesEl = document.getElementById('messages');
+    const contextLimitNotice = document.getElementById('contextLimitNotice');
     const userInput = document.getElementById('userInput');
     const sendBtn = document.getElementById('sendBtn');
     const stopBtn = document.getElementById('stopBtn');
@@ -9152,6 +9827,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
     const sessionsSearch = document.getElementById('sessionsSearch');
     const sessionsTabLocal = document.getElementById('sessionsTabLocal');
     const sessionsTabCloud = document.getElementById('sessionsTabCloud');
+    const sessionsContinueInCloud = document.getElementById('sessionsContinueInCloud');
     const slashBtn = document.getElementById('slashBtn');
     const slashMenu = document.getElementById('slashMenu');
     const composerStatusBoundary = document.getElementById('composerStatusBoundary');
@@ -9897,6 +10573,25 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       contextUsageEl.textContent = '';
       contextUsageEl.className = 'context-usage';
       contextUsageEl.removeAttribute('title');
+      announceContextLimit(0);
+    }
+
+    var MOD_KEY_LABEL = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '') ? 'Cmd' : 'Ctrl';
+    var contextLimitAnnounced = false;
+
+    function announceContextLimit(pct) {
+      if (!contextLimitNotice) return;
+      if (pct < 90) {
+        contextLimitAnnounced = false;
+        contextLimitNotice.hidden = true;
+        contextLimitNotice.textContent = '';
+        return;
+      }
+      if (contextLimitAnnounced) return;
+      contextLimitAnnounced = true;
+      contextLimitNotice.hidden = false;
+      contextLimitNotice.textContent =
+        'This chat has used ' + pct + '% of the model’s context. Older messages may be dropped; start a new chat to keep full context.';
     }
 
     function renderContextUsage(usedTokens, contextWindow) {
@@ -9919,6 +10614,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
         (pct >= 90 ? ' is-critical' : pct >= 75 ? ' is-high' : '');
       contextUsageEl.title = 'Context after the last turn: ' + usedTokens.toLocaleString() +
         ' of ' + contextWindow.toLocaleString() + ' tokens (' + pct + '%)';
+      announceContextLimit(pct);
     }
 
     function addErrorMessage(presentation) {
@@ -10030,6 +10726,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
         '<div class="empty-state-copy" id="emptyStateCopy">Ask about this workspace, edit files, run commands and tests.</div>';
       messagesEl.appendChild(mounted);
       emptyStateEl = mounted;
+      syncStartSuggestions();
     }
 
     var assistantSources = new WeakMap();
@@ -10045,7 +10742,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       }, 1500);
     }
 
-    function appendMessageActions(messageEl, sourceText) {
+    function appendMessageActions(messageEl, sourceText, meta) {
       if (!messageEl || !sourceText) return;
       assistantSources.set(messageEl, sourceText);
       var previous = messagesEl.querySelectorAll('.message.assistant.message--latest');
@@ -10074,7 +10771,47 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
         );
       });
       row.appendChild(copy);
+      var regenerate = document.createElement('button');
+      regenerate.type = 'button';
+      regenerate.className = 'message-action message-action--regenerate';
+      regenerate.setAttribute('aria-label', 'Regenerate response');
+      regenerate.title = 'Regenerate';
+      var regenerateIcon = document.createElement('span');
+      regenerateIcon.className = 'codicon codicon-refresh';
+      regenerateIcon.setAttribute('aria-hidden', 'true');
+      regenerate.appendChild(regenerateIcon);
+      regenerate.addEventListener('click', function () {
+        vscode.postMessage({ type: 'regenerate' });
+      });
+      row.appendChild(regenerate);
+      if (meta && meta.label) {
+        var metaEl = document.createElement('span');
+        metaEl.className = 'message-meta';
+        metaEl.textContent = meta.label;
+        if (meta.detail) metaEl.title = meta.detail;
+        row.appendChild(metaEl);
+      }
       messageEl.appendChild(row);
+    }
+
+    function prependAuthor(messageEl, label) {
+      var author = document.createElement('span');
+      author.className = 'visually-hidden';
+      author.textContent = label + ' ';
+      messageEl.insertBefore(author, messageEl.firstChild);
+    }
+
+    function answerMeta(payload) {
+      if (!payload || !payload.modelLabel) return null;
+      var tokens = (payload.inputTokens || 0) + (payload.outputTokens || 0);
+      return {
+        label: payload.modelLabel,
+        detail: tokens > 0
+          ? payload.modelLabel + ' · ' + tokens.toLocaleString() + ' tokens (' +
+            (payload.inputTokens || 0).toLocaleString() + ' in, ' +
+            (payload.outputTokens || 0).toLocaleString() + ' out)'
+          : payload.modelLabel,
+      };
     }
 
     function addMessage(role, text) {
@@ -10140,6 +10877,11 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
 
     function setStreaming(value) {
       streaming = value;
+      if (!value && stopBtn && stopBtn.getAttribute('aria-busy') === 'true') {
+        stopBtn.removeAttribute('aria-busy');
+        stopBtn.setAttribute('aria-label', 'Stop response');
+        showFollowUpStatus('', 'queued', false);
+      }
       if (composerCard) composerCard.classList.toggle('is-streaming', value);
       sendBtn.disabled = runtimeBlock !== null;
       sendBtn.classList.toggle('follow-up', value);
@@ -10149,14 +10891,14 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       sendBtn.setAttribute(
         'title',
         value
-          ? actionLabel + ' follow-up (Enter) · ' + (followUpBehavior === 'steer' ? 'Queue' : 'Steer') + ' once (Cmd/Ctrl+Enter)'
+          ? actionLabel + ' follow-up (Enter) · ' + (followUpBehavior === 'steer' ? 'Queue' : 'Steer') + ' once (' + MOD_KEY_LABEL + '+Enter)'
           : 'Send (Enter)'
       );
       if (stopBtn) stopBtn.classList.toggle('visible', value);
       userInput.disabled = runtimeBlock !== null;
       if (composerHint) {
         composerHint.innerHTML = value
-          ? '<kbd>Enter</kbd> to ' + actionLabel.toLowerCase() + ' · <kbd>Cmd/Ctrl+Enter</kbd> to ' +
+          ? '<kbd>Enter</kbd> to ' + actionLabel.toLowerCase() + ' · <kbd>' + MOD_KEY_LABEL + '+Enter</kbd> to ' +
               (followUpBehavior === 'steer' ? 'queue' : 'steer') + ' once · <kbd>Shift+Enter</kbd> for newline'
           : '<kbd>Enter</kbd> to send · <kbd>Shift+Enter</kbd> for newline';
       }
@@ -10187,6 +10929,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       { value: 'plan', label: 'Plan mode', description: 'Generate a plan; no edits until approved' },
       { value: 'bypass', label: 'Bypass permissions', description: 'Skip all approval prompts (dangerous)' }
     ];
+    var activeEffortLevels = null;
     var EFFORT_OPTIONS = [
       { value: 'low', label: 'Low', description: 'Minimal reasoning, fastest, lowest cost' },
       { value: 'medium', label: 'Medium', description: 'Balanced reasoning, default' },
@@ -10259,7 +11002,11 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       appendControlsGroup(
         'Reasoning effort',
         activeSupportsEffort ? '' : 'This model does not take a reasoning effort.',
-        activeSupportsEffort ? EFFORT_OPTIONS : [],
+        activeSupportsEffort
+          ? EFFORT_OPTIONS.filter(function (option) {
+              return !activeEffortLevels || activeEffortLevels.indexOf(option.value) !== -1;
+            })
+          : [],
         activeEffort,
         'setEffort',
         'effort'
@@ -10485,7 +11232,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
 
     function bindCodeBlockActions(rootEl) {
       if (!rootEl) return;
-      var btns = rootEl.querySelectorAll('.copy-btn, .apply-btn');
+      var btns = rootEl.querySelectorAll('.copy-btn, .apply-btn, .explain-btn');
       for (var i = 0; i < btns.length; i++) {
         var btn = btns[i];
         if (boundCodeActionButtons.has(btn)) continue;
@@ -10495,6 +11242,16 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
           var codeEl = getCodeBlock(b);
           if (!codeEl) return;
           var text = codeEl.textContent || '';
+          if (b.classList.contains('explain-btn')) {
+            var language = getCodeLanguage(codeEl) || '';
+            prefillComposer('Explain this code:
+
+' + '\`\`\`' + language + '
+' + text + '
+' + '\`\`\`');
+            sendMessage();
+            return;
+          }
           if (b.classList.contains('apply-btn')) {
             if (pendingApplyButton && pendingApplyButton !== b) {
               settleApplyButton('Failed', 'A newer diff proposal replaced this request.');
@@ -10528,6 +11285,94 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
     }
 
     // ── Send ──────────────────────────────────────────────────────────────────
+    var sendingClientMessageId = null;
+
+    function settleSending(state) {
+      if (!sendingClientMessageId) return;
+      setUserMessageState(sendingClientMessageId, state || '');
+      sendingClientMessageId = null;
+    }
+
+    function sentContextEntries() {
+      var entries = [];
+      var strips = [attachmentStrip, editorContextStrip];
+      for (var s = 0; s < strips.length; s++) {
+        if (!strips[s]) continue;
+        var chips = strips[s].querySelectorAll('.attachment-chip:not(.failed)');
+        for (var c = 0; c < chips.length; c++) {
+          var chipName = chips[c].querySelector('.attachment-chip__name');
+          var chipIcon = chips[c].querySelector('.codicon');
+          if (!chipName || !chipName.textContent) continue;
+          entries.push({
+            label: chipName.textContent,
+            icon: chipIcon ? chipIcon.className : 'codicon codicon-file-media',
+          });
+        }
+      }
+      if (browseWebEnabled) entries.push({ label: 'Browse the web', icon: 'codicon codicon-globe' });
+      return entries;
+    }
+
+    function appendQueuedControls(messageEl, clientMessageId, text) {
+      var row = document.createElement('div');
+      row.className = 'message-actions message-actions--queued';
+      var edit = document.createElement('button');
+      edit.type = 'button';
+      edit.className = 'message-action';
+      edit.title = 'Edit';
+      edit.setAttribute('aria-label', 'Edit this queued message');
+      var editIcon = document.createElement('span');
+      editIcon.className = 'codicon codicon-edit';
+      editIcon.setAttribute('aria-hidden', 'true');
+      edit.appendChild(editIcon);
+      var cancel = document.createElement('button');
+      cancel.type = 'button';
+      cancel.className = 'message-action';
+      cancel.title = 'Cancel';
+      cancel.setAttribute('aria-label', 'Cancel this queued message');
+      var cancelIcon = document.createElement('span');
+      cancelIcon.className = 'codicon codicon-close';
+      cancelIcon.setAttribute('aria-hidden', 'true');
+      cancel.appendChild(cancelIcon);
+      edit.addEventListener('click', function () {
+        vscode.postMessage({ type: 'cancelQueuedMessage', payload: { clientMessageId: clientMessageId } });
+        prefillComposer(text);
+      });
+      cancel.addEventListener('click', function () {
+        vscode.postMessage({ type: 'cancelQueuedMessage', payload: { clientMessageId: clientMessageId } });
+      });
+      row.appendChild(edit);
+      row.appendChild(cancel);
+      messageEl.appendChild(row);
+    }
+
+    function removeQueuedControls(clientMessageId) {
+      var message = userMessageById(clientMessageId);
+      var row = message && message.querySelector('.message-actions--queued');
+      if (row) row.remove();
+    }
+
+    function appendSentContext(messageEl) {
+      var entries = sentContextEntries();
+      if (entries.length === 0) return;
+      var row = document.createElement('div');
+      row.className = 'message-attachments';
+      row.setAttribute('aria-label', 'Sent with ' + entries.map(function (e) { return e.label; }).join(', '));
+      for (var i = 0; i < entries.length; i++) {
+        var item = document.createElement('span');
+        item.className = 'message-attachment';
+        var icon = document.createElement('span');
+        icon.className = entries[i].icon;
+        icon.setAttribute('aria-hidden', 'true');
+        var label = document.createElement('span');
+        label.textContent = entries[i].label;
+        item.appendChild(icon);
+        item.appendChild(label);
+        row.appendChild(item);
+      }
+      messageEl.appendChild(row);
+    }
+
     function sendMessage(oneTurnBehavior) {
       if (runtimeBlock !== null) return;
       const isFollowUp = streaming;
@@ -10544,9 +11389,18 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       var clientMessageId = 'msg-' + Date.now() + '-' + (++clientMessageSeq);
       var userMessageEl = addMessage('user', text);
       userMessageEl.setAttribute('data-client-message-id', clientMessageId);
-      if (isFollowUp) userMessageEl.setAttribute('data-delivery-state', 'queued');
+      prependAuthor(userMessageEl, 'You said:');
+      appendSentContext(userMessageEl);
+      if (isFollowUp) {
+        userMessageEl.setAttribute('data-delivery-state', 'queued');
+        appendQueuedControls(userMessageEl, clientMessageId, text);
+      } else {
+        userMessageEl.setAttribute('data-delivery-state', 'sending');
+        sendingClientMessageId = clientMessageId;
+      }
       userInput.value = '';
       userInput.style.height = 'auto';
+      saveComposerDraft();
 
       if (!isFollowUp) {
         showTyping();
@@ -10581,11 +11435,16 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
     sendBtn.addEventListener('click', function() { sendMessage(); });
     if (stopBtn) {
       stopBtn.addEventListener('click', function() {
+        if (stopBtn.getAttribute('aria-busy') === 'true') return;
+        stopBtn.setAttribute('aria-busy', 'true');
+        stopBtn.setAttribute('aria-label', 'Stopping');
+        showFollowUpStatus('Stopping…', 'queued', true);
         vscode.postMessage({ type: 'cancel' });
       });
     }
 
     userInput.addEventListener('keydown', (e) => {
+      if (e.isComposing || e.keyCode === 229) return;
       // The slash popup owns Enter while it is open: the highlighted command
       // runs instead of the literal "/name" being sent as a chat message.
       if (slashMenuIsOpen()) {
@@ -10649,7 +11508,25 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       }
     });
 
-    userInput.addEventListener('input', function() { autoResize(); detectMention(); });
+    function saveComposerDraft() {
+      var state = vscode.getState() || {};
+      state.composerDraft = userInput.value;
+      vscode.setState(state);
+    }
+
+    userInput.addEventListener('input', function() {
+      autoResize();
+      detectMention();
+      saveComposerDraft();
+    });
+
+    (function restoreComposerDraft() {
+      var state = vscode.getState() || {};
+      if (typeof state.composerDraft === 'string' && state.composerDraft && !userInput.value) {
+        userInput.value = state.composerDraft;
+        autoResize();
+      }
+    })();
 
     function closeActionsMenu() {
       if (!actionsMenu) return;
@@ -10780,7 +11657,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
         loading.setAttribute('role', 'status');
         loading.textContent = sessionsSource === 'local'
           ? 'Loading developer sessions…'
-          : 'Loading cloud chats…';
+          : 'Loading cloud sessions…';
         sessionsSheetList.appendChild(loading);
         return;
       }
@@ -10804,7 +11681,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
         empty.className = 'sessions-sheet-empty';
         empty.textContent = sessionsSource === 'local'
           ? 'No developer sessions in this workspace yet'
-          : 'No cloud chats yet';
+          : 'No cloud chats or AGI Code sessions yet';
         sessionsSheetList.appendChild(empty);
         return;
       }
@@ -10862,6 +11739,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       if (sessionsSearch) sessionsSearch.hidden = true;
       if (sessionsTabLocal) sessionsTabLocal.setAttribute('aria-selected', String(source === 'local'));
       if (sessionsTabCloud) sessionsTabCloud.setAttribute('aria-selected', String(source === 'cloud'));
+      if (sessionsContinueInCloud) sessionsContinueInCloud.hidden = source !== 'cloud';
       renderSessionsRows();
       vscode.postMessage({ type: 'requestSessions', payload: { source: source } });
     }
@@ -10882,6 +11760,11 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
 
     if (sessionsBtn) sessionsBtn.addEventListener('click', openSessionsSheet);
     if (sessionsSheetClose) sessionsSheetClose.addEventListener('click', closeSessionsSheet);
+    if (sessionsContinueInCloud) {
+      sessionsContinueInCloud.addEventListener('click', function () {
+        vscode.postMessage({ type: 'continueInCloud' });
+      });
+    }
     if (sessionsTabLocal) {
       sessionsTabLocal.addEventListener('click', function () { requestSessions('local'); });
     }
@@ -10979,6 +11862,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
             if (userInput.value.trim().indexOf('/') === 0) {
               userInput.value = '';
               autoResize();
+              saveComposerDraft();
             }
             vscode.postMessage({ type: 'runSlashCommand', payload: { name: entry.name } });
           });
@@ -11268,6 +12152,49 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       };
     }
 
+    var APPROVAL_RECIPIENT_KEYS = ['to', 'cc', 'bcc', 'recipient', 'recipients', 'email', 'emails', 'channel', 'channel_id', 'user', 'users', 'phone', 'phone_number'];
+    var APPROVAL_AMOUNT_KEYS = ['amount', 'price', 'total', 'cost', 'value'];
+    var APPROVAL_ITEM_KEYS = ['item', 'product', 'sku', 'description', 'quantity'];
+
+    function approvalArguments(detail) {
+      if (!detail) return null;
+      try {
+        var parsed = JSON.parse(detail);
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+      } catch (error) {
+        return null;
+      }
+    }
+
+    function approvalValues(args, keys) {
+      var values = [];
+      for (var i = 0; i < keys.length; i++) {
+        var value = args[keys[i]];
+        if (value === undefined || value === null || value === '') continue;
+        var list = Array.isArray(value) ? value : [value];
+        for (var j = 0; j < list.length; j++) {
+          if (typeof list[j] === 'string' || typeof list[j] === 'number') values.push(String(list[j]));
+        }
+      }
+      return values;
+    }
+
+    function approvalHighlights(detail) {
+      var args = approvalArguments(detail);
+      if (!args) return [];
+      var lines = [];
+      var recipients = approvalValues(args, APPROVAL_RECIPIENT_KEYS);
+      if (recipients.length > 0) lines.push({ label: 'Sends to', value: recipients.join(', ') });
+      var amounts = approvalValues(args, APPROVAL_AMOUNT_KEYS);
+      if (amounts.length > 0) {
+        var currency = approvalValues(args, ['currency'])[0];
+        lines.push({ label: 'Amount', value: amounts.join(', ') + (currency ? ' ' + currency : '') });
+      }
+      var items = approvalValues(args, APPROVAL_ITEM_KEYS);
+      if (items.length > 0 && amounts.length > 0) lines.push({ label: 'For', value: items.join(', ') });
+      return lines;
+    }
+
     function renderApprovalCard(payload) {
       hideEmptyState();
       var card = document.createElement('section');
@@ -11280,7 +12207,8 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       var icon = document.createElement('span');
       icon.className = 'codicon codicon-shield';
       icon.setAttribute('aria-hidden', 'true');
-      var headText = document.createElement('span');
+      var headText = document.createElement('h3');
+      headText.className = 'approval-card__title';
       headText.textContent = 'Approval needed';
       head.appendChild(icon);
       head.appendChild(headText);
@@ -11309,6 +12237,20 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
         }
         card.appendChild(verdictEl);
         card.setAttribute('aria-label', 'Approval needed, ' + verdict.spoken + ' ' + payload.summary);
+      }
+
+      var highlights = approvalHighlights(payload.detail);
+      for (var h = 0; h < highlights.length; h++) {
+        var highlight = document.createElement('div');
+        highlight.className = 'approval-card__highlight';
+        var highlightLabel = document.createElement('span');
+        highlightLabel.className = 'approval-card__highlight-label';
+        highlightLabel.textContent = highlights[h].label + ': ';
+        var highlightValue = document.createElement('span');
+        highlightValue.textContent = highlights[h].value;
+        highlight.appendChild(highlightLabel);
+        highlight.appendChild(highlightValue);
+        card.appendChild(highlight);
       }
 
       if (payload.detail) {
@@ -11341,6 +12283,21 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
           actions.appendChild(button);
         })(APPROVAL_ACTIONS[i]);
       }
+      var guidance = document.createElement('input');
+      guidance.type = 'text';
+      guidance.className = 'approval-card__guidance';
+      guidance.maxLength = 2000;
+      guidance.placeholder = 'Or deny and tell AGI what to do instead, then press Enter';
+      guidance.setAttribute('aria-label', 'Deny and tell AGI what to do instead');
+      guidance.addEventListener('keydown', function (event) {
+        if (event.key !== 'Enter' || !guidance.value.trim()) return;
+        event.preventDefault();
+        vscode.postMessage({
+          type: 'respondToApproval',
+          payload: { requestId: payload.requestId, decision: 'deny', guidance: guidance.value.trim() },
+        });
+      });
+      actions.appendChild(guidance);
       card.appendChild(actions);
 
       approvalCards[payload.requestId] = { el: card, actions: actions };
@@ -11493,18 +12450,53 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       renderAttachmentStrip();
     }
 
-    function makeAttachmentChip(name, state) {
+    var FILE_ICON_BY_EXTENSION = {
+      png: 'file-media', jpg: 'file-media', jpeg: 'file-media', gif: 'file-media', webp: 'file-media', svg: 'file-media',
+      pdf: 'file-pdf',
+      zip: 'file-zip', gz: 'file-zip', tar: 'file-zip',
+      md: 'markdown', txt: 'file-text',
+      json: 'json', yaml: 'file-code', yml: 'file-code', toml: 'file-code', xml: 'file-code',
+      ts: 'file-code', tsx: 'file-code', js: 'file-code', jsx: 'file-code', py: 'file-code', rs: 'file-code',
+      go: 'file-code', java: 'file-code', rb: 'file-code', c: 'file-code', cpp: 'file-code', cs: 'file-code',
+      css: 'file-code', html: 'file-code', sh: 'terminal', csv: 'table',
+    };
+
+    function fileIconFor(name) {
+      var dot = name.lastIndexOf('.');
+      var extension = dot === -1 ? '' : name.slice(dot + 1).toLowerCase();
+      return FILE_ICON_BY_EXTENSION[extension] || 'file';
+    }
+
+    function formatFileSize(bytes) {
+      if (!bytes) return '';
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    function makeAttachmentChip(name, state, file) {
       var chip = document.createElement('span');
       chip.className = 'attachment-chip' + (state ? ' ' + state : '');
       chip.setAttribute('role', 'listitem');
+      chip.setAttribute('data-source-name', name);
 
-      var icon = document.createElement('span');
-      icon.className = 'codicon codicon-file';
-      icon.setAttribute('aria-hidden', 'true');
+      var icon;
+      if (file && file.type && file.type.indexOf('image/') === 0 && typeof URL.createObjectURL === 'function') {
+        icon = document.createElement('img');
+        icon.className = 'attachment-chip__thumb';
+        icon.alt = '';
+        icon.src = URL.createObjectURL(file);
+      } else {
+        icon = document.createElement('span');
+        icon.className = 'codicon codicon-' + fileIconFor(name);
+        icon.setAttribute('aria-hidden', 'true');
+      }
 
       var label = document.createElement('span');
       label.className = 'attachment-chip__name';
       label.textContent = name;
+      var size = file ? formatFileSize(file.size) : '';
+      if (size) chip.title = name + ', ' + size;
 
       var removeBtn = document.createElement('button');
       removeBtn.type = 'button';
@@ -11530,6 +12522,12 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
 
       chip.appendChild(icon);
       chip.appendChild(label);
+      if (size) {
+        var sizeEl = document.createElement('span');
+        sizeEl.className = 'attachment-chip__size';
+        sizeEl.textContent = size;
+        chip.appendChild(sizeEl);
+      }
       chip.appendChild(removeBtn);
       return chip;
     }
@@ -11559,7 +12557,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
           if (attachmentStrip) attachmentStrip.appendChild(failChip);
           continue;
         }
-        var chip = makeAttachmentChip(f.name, 'uploading');
+        var chip = makeAttachmentChip(f.name, 'uploading', f);
         if (attachmentStrip) attachmentStrip.appendChild(chip);
         pendingAttachmentChips[batchKey].push({ name: f.name, chip: chip });
       }
@@ -11664,6 +12662,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
           restoredQueuedUser.setAttribute('data-client-message-id', activeQueuedClientMessageId);
         }
         setUserMessageState(activeQueuedClientMessageId, 'running');
+        removeQueuedControls(activeQueuedClientMessageId);
         showFollowUpStatus(
           msg.payload.queueRemaining > 0
             ? 'Starting queued follow-up · ' + msg.payload.queueRemaining + ' waiting'
@@ -11675,6 +12674,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
 
       else if (msg.type === 'token') {
         removeTyping();
+        settleSending('');
         if (!currentAssistantEl) {
           currentAssistantEl = addMessage('assistant', '');
           accumulatedContent = '';
@@ -11690,12 +12690,17 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
 
       else if (msg.type === 'done') {
         removeTyping();
+        settleSending('');
         if (currentAssistantEl && accumulatedContent) {
           // Content is already rendered; re-render once to ensure the final
           // token is flushed, then bind actions on any code blocks.
           currentAssistantEl.innerHTML = renderAssistant(accumulatedContent);
+          prependAuthor(
+            currentAssistantEl,
+            msg.payload && msg.payload.modelLabel ? 'AGI (' + msg.payload.modelLabel + ') replied:' : 'AGI replied:'
+          );
           bindCodeBlockActions(currentAssistantEl);
-          appendMessageActions(currentAssistantEl, accumulatedContent);
+          appendMessageActions(currentAssistantEl, accumulatedContent, answerMeta(msg.payload));
         }
         finalizeToolCallStack();
         if (msg.payload && msg.payload.providerLabel) {
@@ -11731,6 +12736,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
 
       else if (msg.type === 'toolCallStart') {
         removeTyping();
+        settleSending('');
         createToolCallEl(
           msg.payload.toolUseId,
           msg.payload.name,
@@ -11766,6 +12772,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
           finalizeToolCallStack();
         }
         addErrorMessage(msg.payload);
+        settleSending('failed');
         setStreaming(false);
         if (activeQueuedClientMessageId) {
           setUserMessageState(activeQueuedClientMessageId, 'failed');
@@ -11797,6 +12804,9 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
 
       else if (msg.type === 'followUpStatus') {
         markAttachmentsQueued(msg.payload.attachmentIds || []);
+        if (msg.payload.kind !== 'queued' && msg.payload.kind !== 'queue-fallback') {
+          removeQueuedControls(msg.payload.clientMessageId);
+        }
         if (msg.payload.kind === 'steered') {
           setUserMessageState(msg.payload.clientMessageId, 'steered');
         } else if (msg.payload.kind === 'cancelled') {
@@ -11896,6 +12906,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
 
       else if (msg.type === 'composerDraft') {
         userInput.value = msg.payload.text || '';
+        saveComposerDraft();
         pendingFileReferences = (msg.payload.references || []).map(function(reference) {
           var range = reference.range;
           var endLine = range && range.endCharacter === 0 && range.endLine > range.startLine
@@ -11961,6 +12972,11 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
         syncRecentChats();
       }
 
+      else if (msg.type === 'startSuggestions') {
+        startSuggestions = msg.payload;
+        syncStartSuggestions();
+      }
+
       else if (msg.type === 'activeProject') {
         setActiveProject(msg.payload && msg.payload.name);
       }
@@ -12005,6 +13021,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       else if (msg.type === 'effortChanged') {
         activeEffort = msg.payload.effort;
         activeSupportsEffort = Boolean(msg.payload.supportsEffort);
+        activeEffortLevels = Array.isArray(msg.payload.efforts) ? msg.payload.efforts : null;
         renderControlsSummary();
       }
 
@@ -12077,13 +13094,13 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
         for (var a = 0; a < (ack.added || []).length; a++) {
           var addedEntry = ack.added[a] || {};
           if (!addedIdsByName[addedEntry.name]) addedIdsByName[addedEntry.name] = [];
-          addedIdsByName[addedEntry.name].push(addedEntry.id);
+          addedIdsByName[addedEntry.name].push(addedEntry);
         }
         var allChips = attachmentStrip ? attachmentStrip.querySelectorAll('.attachment-chip.uploading') : [];
         for (var c = 0; c < allChips.length; c++) {
           var chipEl = allChips[c];
           var nameEl = chipEl.querySelector('.attachment-chip__name');
-          var attachName = nameEl ? (nameEl.textContent || '') : '';
+          var attachName = chipEl.getAttribute('data-source-name') || (nameEl ? (nameEl.textContent || '') : '');
           if (skippedByName[attachName]) {
             chipEl.classList.remove('uploading');
             chipEl.classList.add('failed');
@@ -12091,7 +13108,15 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
           } else {
             chipEl.classList.remove('uploading');
             var idQueue = addedIdsByName[attachName];
-            var attachId = idQueue && idQueue.length > 0 ? idQueue.shift() : '';
+            var addedAck = idQueue && idQueue.length > 0 ? idQueue.shift() : null;
+            var attachId = addedAck ? addedAck.id : '';
+            if (addedAck && addedAck.truncatedAt && nameEl) {
+              var truncatedNote = document.createElement('span');
+              truncatedNote.className = 'attachment-chip__size';
+              truncatedNote.textContent = 'first ' + addedAck.truncatedAt.toLocaleString() + ' characters';
+              nameEl.parentNode.insertBefore(truncatedNote, nameEl.nextSibling);
+              chipEl.title = attachName + ': only the first ' + addedAck.truncatedAt.toLocaleString() + ' characters are sent';
+            }
             if (attachId && chipEl.getAttribute('data-remove-requested') === '1') {
               // The user dismissed this chip while it was still uploading:
               // honour it now that the host id exists.
@@ -12222,7 +13247,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
         var icon = document.createElement('span');
         icon.className = 'codicon codicon-checklist';
         icon.setAttribute('aria-hidden', 'true');
-        var title = document.createElement('span');
+        var title = document.createElement('h3');
         title.className = 'plan-card__title';
         title.textContent = 'Plan';
         var count = document.createElement('span');
@@ -12765,6 +13790,69 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
     }
 
     var recentChats = { conversations: [], total: 0 };
+    var startSuggestions = { projects: [], skills: [], connectors: [] };
+
+    function prefillComposer(text) {
+      userInput.value = text;
+      autoResize();
+      saveComposerDraft();
+      userInput.focus();
+      userInput.setSelectionRange(text.length, text.length);
+    }
+
+    function buildSuggestionRow(label, detail, onPick) {
+      var row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'recent-chat-row';
+      row.title = detail || label;
+      var title = document.createElement('span');
+      title.className = 'recent-chat-title';
+      title.textContent = label;
+      row.appendChild(title);
+      if (detail) {
+        var sub = document.createElement('span');
+        sub.className = 'recent-chat-age';
+        sub.textContent = detail;
+        row.appendChild(sub);
+      }
+      row.addEventListener('click', onPick);
+      return row;
+    }
+
+    function appendSuggestionGroup(block, heading, rows) {
+      if (rows.length === 0) return;
+      var title = document.createElement('div');
+      title.className = 'recent-chats-title';
+      title.textContent = heading;
+      block.appendChild(title);
+      for (var i = 0; i < rows.length; i++) block.appendChild(rows[i]);
+    }
+
+    function syncStartSuggestions() {
+      if (!emptyStateEl) return;
+      var mounted = emptyStateEl.querySelector('.start-suggestions');
+      if (mounted) mounted.parentNode.removeChild(mounted);
+      var block = document.createElement('div');
+      block.className = 'recent-chats start-suggestions';
+      appendSuggestionGroup(block, 'Projects', startSuggestions.projects.map(function (project) {
+        return buildSuggestionRow(project.name, 'Use in this chat', function () {
+          vscode.postMessage({ type: 'openSuggestedProject', payload: { projectId: project.id } });
+        });
+      }));
+      appendSuggestionGroup(block, 'Skills', startSuggestions.skills.map(function (skill) {
+        return buildSuggestionRow(skill.name, skill.description, function () {
+          prefillComposer('Use the ' + skill.name + ' skill to ');
+        });
+      }));
+      appendSuggestionGroup(block, 'Connected apps', startSuggestions.connectors.map(function (connector) {
+        return buildSuggestionRow(connector.name, 'Ask with it', function () {
+          prefillComposer('Using ' + connector.name + ', ');
+        });
+      }));
+      if (!block.firstChild) return;
+      emptyStateEl.classList.add('empty-state--has-recents');
+      emptyStateEl.appendChild(block);
+    }
 
     function buildRecentChatRow(conversation) {
       var row = document.createElement('button');
@@ -12794,7 +13882,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       if (mounted) mounted.parentNode.removeChild(mounted);
       emptyStateEl.classList.toggle(
         'empty-state--has-recents',
-        recentChats.conversations.length > 0,
+        recentChats.conversations.length > 0 || Boolean(emptyStateEl.querySelector('.start-suggestions')),
       );
       if (recentChats.conversations.length === 0) return;
       var block = document.createElement('div');
@@ -13287,6 +14375,8 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
     }
 
     button:not(:disabled):active,
+    #sendBtn:not(:disabled):active,
+    #stopBtn:not(:disabled):active,
     [role="menuitem"]:not([aria-disabled="true"]):active,
     [role="option"]:not([aria-disabled="true"]):active {
       background-image: linear-gradient(var(--pressed), var(--pressed));
@@ -13296,7 +14386,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
     #messages {
       flex: 1;
       overflow-y: auto;
-      padding: 10px 12px 16px;
+      padding: 10px max(12px, calc((100% - 768px) / 2)) 16px;
       display: flex;
       flex-direction: column;
       gap: 10px;
@@ -13334,7 +14424,27 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       line-height: var(--type-caption-height);
       text-align: right;
     }
+    .message.user[data-delivery-state='sending']::after { content: 'Sending'; }
     .message.user[data-delivery-state='queued']::after { content: 'Queued'; }
+    .message-attachments {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 6px;
+    }
+    .message-attachment {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      max-width: 100%;
+      padding: 1px 6px;
+      border: 1px solid var(--border);
+      border-radius: var(--corner-pill);
+      color: var(--text-secondary);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      overflow-wrap: anywhere;
+    }
     .message.user[data-delivery-state='running']::after { content: 'Running'; }
     .message.user[data-delivery-state='steered']::after { content: 'Steered'; }
     .message.user[data-delivery-state='failed'] {
@@ -13361,6 +14471,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       opacity: 0;
       transition: opacity var(--duration-quick) var(--curve-standard);
     }
+    .message.user .message-actions--queued { opacity: 1; justify-content: flex-end; }
     .message.assistant:hover .message-actions,
     .message.assistant.message--latest .message-actions,
     .message-actions:focus-within {
@@ -13382,6 +14493,15 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
     .message-action:hover {
       background: var(--hover);
       color: var(--text-primary);
+    }
+    .message-action--regenerate { display: none; }
+    .message.assistant.message--latest .message-action--regenerate { display: inline-flex; }
+    .message-meta {
+      align-self: center;
+      margin-left: 6px;
+      color: var(--text-secondary);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
     }
 
     /* A failed turn is a notice in the transcript, not an input-validation
@@ -13519,6 +14639,25 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       flex-wrap: wrap;
       gap: 6px;
       margin-top: 10px;
+    }
+    .approval-card__highlight {
+      margin-top: 6px;
+      color: var(--text-primary);
+      font-weight: 600;
+      overflow-wrap: anywhere;
+    }
+    .approval-card__highlight-label { color: var(--text-secondary); font-weight: 400; }
+    .approval-card__guidance {
+      width: 100%;
+      margin-top: 8px;
+      padding: 5px 8px;
+      background: var(--vscode-input-background, var(--bg-elevated));
+      border: 1px solid var(--vscode-input-border, var(--border));
+      border-radius: var(--corner-field);
+      color: var(--vscode-input-foreground, var(--text-primary));
+      font: inherit;
+      font-size: var(--type-label-size);
+      line-height: var(--type-label-height);
     }
     .approval-card__action {
       min-height: var(--control-md);
@@ -13961,11 +15100,19 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
     .message th, .message td { padding: 4px 10px; border: 1px solid var(--border); text-align: left; vertical-align: top; }
     .message th { background: var(--bg-overlay); font-weight: 600; }
     li { margin-left: 16px; list-style: disc; }
+    ol > li { list-style: decimal; }
     blockquote { border-left: 2px solid var(--accent-teal); padding-left: 8px; color: var(--text-secondary); margin: 6px 0; }
     .code-block-wrapper { position: relative; margin: 8px 0; }
     .code-block-wrapper pre { margin: 0; padding-top: 36px; }
     .code-block-actions { position: absolute; top: 5px; right: 5px; z-index: var(--z-content); display: flex; gap: 4px; }
     .code-lang { position: absolute; top: 4px; left: 8px; font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; }
+    .explain-btn { background: var(--vscode-button-secondaryBackground, var(--bg-overlay)); border: 1px solid var(--border); border-radius: var(--corner-compact); color: var(--vscode-button-secondaryForeground, var(--text-primary)); font-size: var(--type-label-size); line-height: var(--type-label-height); padding: 2px 8px; cursor: pointer; opacity: 0; transition: opacity var(--duration-quick); }
+    .code-block-wrapper:hover .explain-btn, .explain-btn:focus-visible { opacity: 1; }
+    .explain-btn:hover { background: var(--hover); color: var(--text-primary); }
+    .diff-add { display: inline-block; min-width: 100%; background: var(--vscode-diffEditor-insertedLineBackground, var(--vscode-diffEditor-insertedTextBackground)); }
+    .diff-del { display: inline-block; min-width: 100%; background: var(--vscode-diffEditor-removedLineBackground, var(--vscode-diffEditor-removedTextBackground)); }
+    .diff-hunk { color: var(--vscode-textLink-foreground); }
+    .diff-file { color: var(--text-secondary); font-weight: 600; }
     .copy-btn, .apply-btn { background: var(--vscode-button-secondaryBackground, var(--bg-overlay)); border: 1px solid var(--border); border-radius: var(--corner-compact); color: var(--vscode-button-secondaryForeground, var(--text-primary)); font-size: var(--type-label-size); line-height: var(--type-label-height); padding: 2px 8px; cursor: pointer; opacity: 0; transition: opacity var(--duration-quick); }
     .code-block-wrapper:hover .copy-btn, .code-block-wrapper:hover .apply-btn { opacity: 1; }
     .copy-btn:focus-visible, .apply-btn:focus-visible { opacity: 1; }
@@ -14732,7 +15879,21 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       border-bottom: 1px solid var(--border);
       background: var(--bg-elevated);
     }
-    .sessions-sheet-title { font-size: var(--type-body-size); line-height: var(--type-body-height); font-weight: 600; }
+    .sessions-sheet-title { margin: 0; font-size: var(--type-body-size); line-height: var(--type-body-height); font-weight: 600; }
+    .plan-card__title, .approval-card__title { margin: 0; font: inherit; }
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      margin: -1px;
+      padding: 0;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      white-space: nowrap;
+      border: 0;
+    }
+    .sessions-sheet-actions { display: flex; align-items: center; gap: 2px; }
+    .sessions-sheet-actions .icon-btn[hidden] { display: none; }
 
     .sessions-sheet-toggle {
       display: flex;
@@ -15046,6 +16207,26 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       text-overflow: ellipsis;
       flex: 1 1 auto;
     }
+    .context-limit-notice {
+      display: block;
+      flex-basis: 100%;
+      color: var(--text-secondary);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
+    .context-limit-notice[hidden] { display: none; }
+    .attachment-chip__thumb {
+      width: 16px;
+      height: 16px;
+      object-fit: cover;
+      border-radius: 3px;
+      flex-shrink: 0;
+    }
+    .attachment-chip__size {
+      color: var(--text-secondary);
+      font-size: var(--type-caption-size);
+      white-space: nowrap;
+    }
     .attachment-chip__remove {
       background: none;
       border: 0;
@@ -15169,6 +16350,14 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
             type="button"
             class="actions-menu-item"
             role="menuitem"
+            data-surface="personalization"
+          >
+            <span class="codicon codicon-person" aria-hidden="true"></span>
+            <span>Personalization</span>
+          </button><button
+            type="button"
+            class="actions-menu-item"
+            role="menuitem"
             data-surface="skills"
           >
             <span class="codicon codicon-lightbulb" aria-hidden="true"></span>
@@ -15213,6 +16402,14 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
           >
             <span class="codicon codicon-settings-gear" aria-hidden="true"></span>
             <span>Settings</span>
+          </button><button
+            type="button"
+            class="actions-menu-item"
+            role="menuitem"
+            data-surface="help"
+          >
+            <span class="codicon codicon-question" aria-hidden="true"></span>
+            <span>Help</span>
           </button>
           <div class="actions-menu-separator" role="separator"></div>
           <div class="actions-menu-account">
@@ -15234,10 +16431,22 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
 
   <section class="sessions-sheet" id="sessionsSheet" hidden aria-label="Sessions">
     <div class="sessions-sheet-head">
-      <span class="sessions-sheet-title">Sessions</span>
-      <button class="icon-btn" id="sessionsSheetClose" title="Close" aria-label="Close sessions">
-        <span class="codicon codicon-close" aria-hidden="true"></span>
-      </button>
+      <h2 class="sessions-sheet-title">Sessions</h2>
+      <div class="sessions-sheet-actions">
+        <button
+          class="icon-btn"
+          id="sessionsContinueInCloud"
+          type="button"
+          title="Continue in the cloud"
+          aria-label="Continue in the cloud"
+          hidden
+        >
+          <span class="codicon codicon-cloud-upload" aria-hidden="true"></span>
+        </button>
+        <button class="icon-btn" id="sessionsSheetClose" title="Close" aria-label="Close sessions">
+          <span class="codicon codicon-close" aria-hidden="true"></span>
+        </button>
+      </div>
     </div>
     <div class="sessions-sheet-toggle" role="tablist" aria-label="Session source">
       <button type="button" role="tab" id="sessionsTabLocal" aria-selected="true">Local</button>
@@ -15356,6 +16565,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
   </div>
 
   <!-- ── Messages ── -->
+  <h2 class="visually-hidden">Conversation</h2>
   <div id="messages" role="log" aria-live="polite" aria-relevant="additions">
     <div class="empty-state" id="emptyState">
       <div class="empty-state-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#agimark"/></svg></div>
@@ -15430,6 +16640,13 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
           <span class="plus-menu-description"></span>
         </span>
       </button>
+      <button type="button" class="plus-menu-item" data-context-kind="url" role="menuitem">
+        <span class="pm-icon codicon codicon-link" aria-hidden="true"></span>
+        <span class="plus-menu-copy">
+          <span class="plus-menu-title">Web page</span>
+          <span class="plus-menu-description"></span>
+        </span>
+      </button>
     </div>
 
     <!-- Model picker popover -->
@@ -15499,6 +16716,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
         <button class="model-pill" id="modelPill" title="Model" aria-haspopup="menu" aria-expanded="false">Auto</button>
         <button class="controls-summary" id="controlsSummary" title="Mode and reasoning effort" aria-label="Mode and reasoning effort">Edit automatically · Medium</button>
         <span class="context-usage" id="contextUsage"></span>
+        <span class="context-limit-notice" id="contextLimitNotice" role="status" aria-live="polite" hidden></span>
         <span class="follow-up-status" id="followUpStatus" role="status" aria-live="polite"></span>
         <button id="stopBtn" title="Stop response" aria-label="Stop response"></button>
         <button id="sendBtn" title="Send (Enter)" aria-label="Send"><span class="send-action-label" id="sendActionLabel"></span></button>
@@ -15535,6 +16753,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
 
     // ── DOM refs ──────────────────────────────────────────────────────────────
     const messagesEl = document.getElementById('messages');
+    const contextLimitNotice = document.getElementById('contextLimitNotice');
     const userInput = document.getElementById('userInput');
     const sendBtn = document.getElementById('sendBtn');
     const stopBtn = document.getElementById('stopBtn');
@@ -15567,6 +16786,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
     const sessionsSearch = document.getElementById('sessionsSearch');
     const sessionsTabLocal = document.getElementById('sessionsTabLocal');
     const sessionsTabCloud = document.getElementById('sessionsTabCloud');
+    const sessionsContinueInCloud = document.getElementById('sessionsContinueInCloud');
     const slashBtn = document.getElementById('slashBtn');
     const slashMenu = document.getElementById('slashMenu');
     const composerStatusBoundary = document.getElementById('composerStatusBoundary');
@@ -16312,6 +17532,25 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       contextUsageEl.textContent = '';
       contextUsageEl.className = 'context-usage';
       contextUsageEl.removeAttribute('title');
+      announceContextLimit(0);
+    }
+
+    var MOD_KEY_LABEL = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '') ? 'Cmd' : 'Ctrl';
+    var contextLimitAnnounced = false;
+
+    function announceContextLimit(pct) {
+      if (!contextLimitNotice) return;
+      if (pct < 90) {
+        contextLimitAnnounced = false;
+        contextLimitNotice.hidden = true;
+        contextLimitNotice.textContent = '';
+        return;
+      }
+      if (contextLimitAnnounced) return;
+      contextLimitAnnounced = true;
+      contextLimitNotice.hidden = false;
+      contextLimitNotice.textContent =
+        'This chat has used ' + pct + '% of the model’s context. Older messages may be dropped; start a new chat to keep full context.';
     }
 
     function renderContextUsage(usedTokens, contextWindow) {
@@ -16334,6 +17573,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
         (pct >= 90 ? ' is-critical' : pct >= 75 ? ' is-high' : '');
       contextUsageEl.title = 'Context after the last turn: ' + usedTokens.toLocaleString() +
         ' of ' + contextWindow.toLocaleString() + ' tokens (' + pct + '%)';
+      announceContextLimit(pct);
     }
 
     function addErrorMessage(presentation) {
@@ -16445,6 +17685,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
         '<div class="empty-state-copy" id="emptyStateCopy">Ask about this workspace, edit files, run commands and tests.</div>';
       messagesEl.appendChild(mounted);
       emptyStateEl = mounted;
+      syncStartSuggestions();
     }
 
     var assistantSources = new WeakMap();
@@ -16460,7 +17701,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       }, 1500);
     }
 
-    function appendMessageActions(messageEl, sourceText) {
+    function appendMessageActions(messageEl, sourceText, meta) {
       if (!messageEl || !sourceText) return;
       assistantSources.set(messageEl, sourceText);
       var previous = messagesEl.querySelectorAll('.message.assistant.message--latest');
@@ -16489,7 +17730,47 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
         );
       });
       row.appendChild(copy);
+      var regenerate = document.createElement('button');
+      regenerate.type = 'button';
+      regenerate.className = 'message-action message-action--regenerate';
+      regenerate.setAttribute('aria-label', 'Regenerate response');
+      regenerate.title = 'Regenerate';
+      var regenerateIcon = document.createElement('span');
+      regenerateIcon.className = 'codicon codicon-refresh';
+      regenerateIcon.setAttribute('aria-hidden', 'true');
+      regenerate.appendChild(regenerateIcon);
+      regenerate.addEventListener('click', function () {
+        vscode.postMessage({ type: 'regenerate' });
+      });
+      row.appendChild(regenerate);
+      if (meta && meta.label) {
+        var metaEl = document.createElement('span');
+        metaEl.className = 'message-meta';
+        metaEl.textContent = meta.label;
+        if (meta.detail) metaEl.title = meta.detail;
+        row.appendChild(metaEl);
+      }
       messageEl.appendChild(row);
+    }
+
+    function prependAuthor(messageEl, label) {
+      var author = document.createElement('span');
+      author.className = 'visually-hidden';
+      author.textContent = label + ' ';
+      messageEl.insertBefore(author, messageEl.firstChild);
+    }
+
+    function answerMeta(payload) {
+      if (!payload || !payload.modelLabel) return null;
+      var tokens = (payload.inputTokens || 0) + (payload.outputTokens || 0);
+      return {
+        label: payload.modelLabel,
+        detail: tokens > 0
+          ? payload.modelLabel + ' · ' + tokens.toLocaleString() + ' tokens (' +
+            (payload.inputTokens || 0).toLocaleString() + ' in, ' +
+            (payload.outputTokens || 0).toLocaleString() + ' out)'
+          : payload.modelLabel,
+      };
     }
 
     function addMessage(role, text) {
@@ -16555,6 +17836,11 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
 
     function setStreaming(value) {
       streaming = value;
+      if (!value && stopBtn && stopBtn.getAttribute('aria-busy') === 'true') {
+        stopBtn.removeAttribute('aria-busy');
+        stopBtn.setAttribute('aria-label', 'Stop response');
+        showFollowUpStatus('', 'queued', false);
+      }
       if (composerCard) composerCard.classList.toggle('is-streaming', value);
       sendBtn.disabled = runtimeBlock !== null;
       sendBtn.classList.toggle('follow-up', value);
@@ -16564,14 +17850,14 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       sendBtn.setAttribute(
         'title',
         value
-          ? actionLabel + ' follow-up (Enter) · ' + (followUpBehavior === 'steer' ? 'Queue' : 'Steer') + ' once (Cmd/Ctrl+Enter)'
+          ? actionLabel + ' follow-up (Enter) · ' + (followUpBehavior === 'steer' ? 'Queue' : 'Steer') + ' once (' + MOD_KEY_LABEL + '+Enter)'
           : 'Send (Enter)'
       );
       if (stopBtn) stopBtn.classList.toggle('visible', value);
       userInput.disabled = runtimeBlock !== null;
       if (composerHint) {
         composerHint.innerHTML = value
-          ? '<kbd>Enter</kbd> to ' + actionLabel.toLowerCase() + ' · <kbd>Cmd/Ctrl+Enter</kbd> to ' +
+          ? '<kbd>Enter</kbd> to ' + actionLabel.toLowerCase() + ' · <kbd>' + MOD_KEY_LABEL + '+Enter</kbd> to ' +
               (followUpBehavior === 'steer' ? 'queue' : 'steer') + ' once · <kbd>Shift+Enter</kbd> for newline'
           : '<kbd>Enter</kbd> to send · <kbd>Shift+Enter</kbd> for newline';
       }
@@ -16602,6 +17888,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       { value: 'plan', label: 'Plan mode', description: 'Generate a plan; no edits until approved' },
       { value: 'bypass', label: 'Bypass permissions', description: 'Skip all approval prompts (dangerous)' }
     ];
+    var activeEffortLevels = null;
     var EFFORT_OPTIONS = [
       { value: 'low', label: 'Low', description: 'Minimal reasoning, fastest, lowest cost' },
       { value: 'medium', label: 'Medium', description: 'Balanced reasoning, default' },
@@ -16674,7 +17961,11 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       appendControlsGroup(
         'Reasoning effort',
         activeSupportsEffort ? '' : 'This model does not take a reasoning effort.',
-        activeSupportsEffort ? EFFORT_OPTIONS : [],
+        activeSupportsEffort
+          ? EFFORT_OPTIONS.filter(function (option) {
+              return !activeEffortLevels || activeEffortLevels.indexOf(option.value) !== -1;
+            })
+          : [],
         activeEffort,
         'setEffort',
         'effort'
@@ -16900,7 +18191,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
 
     function bindCodeBlockActions(rootEl) {
       if (!rootEl) return;
-      var btns = rootEl.querySelectorAll('.copy-btn, .apply-btn');
+      var btns = rootEl.querySelectorAll('.copy-btn, .apply-btn, .explain-btn');
       for (var i = 0; i < btns.length; i++) {
         var btn = btns[i];
         if (boundCodeActionButtons.has(btn)) continue;
@@ -16910,6 +18201,16 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
           var codeEl = getCodeBlock(b);
           if (!codeEl) return;
           var text = codeEl.textContent || '';
+          if (b.classList.contains('explain-btn')) {
+            var language = getCodeLanguage(codeEl) || '';
+            prefillComposer('Explain this code:
+
+' + '\`\`\`' + language + '
+' + text + '
+' + '\`\`\`');
+            sendMessage();
+            return;
+          }
           if (b.classList.contains('apply-btn')) {
             if (pendingApplyButton && pendingApplyButton !== b) {
               settleApplyButton('Failed', 'A newer diff proposal replaced this request.');
@@ -16943,6 +18244,94 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
     }
 
     // ── Send ──────────────────────────────────────────────────────────────────
+    var sendingClientMessageId = null;
+
+    function settleSending(state) {
+      if (!sendingClientMessageId) return;
+      setUserMessageState(sendingClientMessageId, state || '');
+      sendingClientMessageId = null;
+    }
+
+    function sentContextEntries() {
+      var entries = [];
+      var strips = [attachmentStrip, editorContextStrip];
+      for (var s = 0; s < strips.length; s++) {
+        if (!strips[s]) continue;
+        var chips = strips[s].querySelectorAll('.attachment-chip:not(.failed)');
+        for (var c = 0; c < chips.length; c++) {
+          var chipName = chips[c].querySelector('.attachment-chip__name');
+          var chipIcon = chips[c].querySelector('.codicon');
+          if (!chipName || !chipName.textContent) continue;
+          entries.push({
+            label: chipName.textContent,
+            icon: chipIcon ? chipIcon.className : 'codicon codicon-file-media',
+          });
+        }
+      }
+      if (browseWebEnabled) entries.push({ label: 'Browse the web', icon: 'codicon codicon-globe' });
+      return entries;
+    }
+
+    function appendQueuedControls(messageEl, clientMessageId, text) {
+      var row = document.createElement('div');
+      row.className = 'message-actions message-actions--queued';
+      var edit = document.createElement('button');
+      edit.type = 'button';
+      edit.className = 'message-action';
+      edit.title = 'Edit';
+      edit.setAttribute('aria-label', 'Edit this queued message');
+      var editIcon = document.createElement('span');
+      editIcon.className = 'codicon codicon-edit';
+      editIcon.setAttribute('aria-hidden', 'true');
+      edit.appendChild(editIcon);
+      var cancel = document.createElement('button');
+      cancel.type = 'button';
+      cancel.className = 'message-action';
+      cancel.title = 'Cancel';
+      cancel.setAttribute('aria-label', 'Cancel this queued message');
+      var cancelIcon = document.createElement('span');
+      cancelIcon.className = 'codicon codicon-close';
+      cancelIcon.setAttribute('aria-hidden', 'true');
+      cancel.appendChild(cancelIcon);
+      edit.addEventListener('click', function () {
+        vscode.postMessage({ type: 'cancelQueuedMessage', payload: { clientMessageId: clientMessageId } });
+        prefillComposer(text);
+      });
+      cancel.addEventListener('click', function () {
+        vscode.postMessage({ type: 'cancelQueuedMessage', payload: { clientMessageId: clientMessageId } });
+      });
+      row.appendChild(edit);
+      row.appendChild(cancel);
+      messageEl.appendChild(row);
+    }
+
+    function removeQueuedControls(clientMessageId) {
+      var message = userMessageById(clientMessageId);
+      var row = message && message.querySelector('.message-actions--queued');
+      if (row) row.remove();
+    }
+
+    function appendSentContext(messageEl) {
+      var entries = sentContextEntries();
+      if (entries.length === 0) return;
+      var row = document.createElement('div');
+      row.className = 'message-attachments';
+      row.setAttribute('aria-label', 'Sent with ' + entries.map(function (e) { return e.label; }).join(', '));
+      for (var i = 0; i < entries.length; i++) {
+        var item = document.createElement('span');
+        item.className = 'message-attachment';
+        var icon = document.createElement('span');
+        icon.className = entries[i].icon;
+        icon.setAttribute('aria-hidden', 'true');
+        var label = document.createElement('span');
+        label.textContent = entries[i].label;
+        item.appendChild(icon);
+        item.appendChild(label);
+        row.appendChild(item);
+      }
+      messageEl.appendChild(row);
+    }
+
     function sendMessage(oneTurnBehavior) {
       if (runtimeBlock !== null) return;
       const isFollowUp = streaming;
@@ -16959,9 +18348,18 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       var clientMessageId = 'msg-' + Date.now() + '-' + (++clientMessageSeq);
       var userMessageEl = addMessage('user', text);
       userMessageEl.setAttribute('data-client-message-id', clientMessageId);
-      if (isFollowUp) userMessageEl.setAttribute('data-delivery-state', 'queued');
+      prependAuthor(userMessageEl, 'You said:');
+      appendSentContext(userMessageEl);
+      if (isFollowUp) {
+        userMessageEl.setAttribute('data-delivery-state', 'queued');
+        appendQueuedControls(userMessageEl, clientMessageId, text);
+      } else {
+        userMessageEl.setAttribute('data-delivery-state', 'sending');
+        sendingClientMessageId = clientMessageId;
+      }
       userInput.value = '';
       userInput.style.height = 'auto';
+      saveComposerDraft();
 
       if (!isFollowUp) {
         showTyping();
@@ -16996,11 +18394,16 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
     sendBtn.addEventListener('click', function() { sendMessage(); });
     if (stopBtn) {
       stopBtn.addEventListener('click', function() {
+        if (stopBtn.getAttribute('aria-busy') === 'true') return;
+        stopBtn.setAttribute('aria-busy', 'true');
+        stopBtn.setAttribute('aria-label', 'Stopping');
+        showFollowUpStatus('Stopping…', 'queued', true);
         vscode.postMessage({ type: 'cancel' });
       });
     }
 
     userInput.addEventListener('keydown', (e) => {
+      if (e.isComposing || e.keyCode === 229) return;
       // The slash popup owns Enter while it is open: the highlighted command
       // runs instead of the literal "/name" being sent as a chat message.
       if (slashMenuIsOpen()) {
@@ -17064,7 +18467,25 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       }
     });
 
-    userInput.addEventListener('input', function() { autoResize(); detectMention(); });
+    function saveComposerDraft() {
+      var state = vscode.getState() || {};
+      state.composerDraft = userInput.value;
+      vscode.setState(state);
+    }
+
+    userInput.addEventListener('input', function() {
+      autoResize();
+      detectMention();
+      saveComposerDraft();
+    });
+
+    (function restoreComposerDraft() {
+      var state = vscode.getState() || {};
+      if (typeof state.composerDraft === 'string' && state.composerDraft && !userInput.value) {
+        userInput.value = state.composerDraft;
+        autoResize();
+      }
+    })();
 
     function closeActionsMenu() {
       if (!actionsMenu) return;
@@ -17195,7 +18616,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
         loading.setAttribute('role', 'status');
         loading.textContent = sessionsSource === 'local'
           ? 'Loading developer sessions…'
-          : 'Loading cloud chats…';
+          : 'Loading cloud sessions…';
         sessionsSheetList.appendChild(loading);
         return;
       }
@@ -17219,7 +18640,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
         empty.className = 'sessions-sheet-empty';
         empty.textContent = sessionsSource === 'local'
           ? 'No developer sessions in this workspace yet'
-          : 'No cloud chats yet';
+          : 'No cloud chats or AGI Code sessions yet';
         sessionsSheetList.appendChild(empty);
         return;
       }
@@ -17277,6 +18698,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       if (sessionsSearch) sessionsSearch.hidden = true;
       if (sessionsTabLocal) sessionsTabLocal.setAttribute('aria-selected', String(source === 'local'));
       if (sessionsTabCloud) sessionsTabCloud.setAttribute('aria-selected', String(source === 'cloud'));
+      if (sessionsContinueInCloud) sessionsContinueInCloud.hidden = source !== 'cloud';
       renderSessionsRows();
       vscode.postMessage({ type: 'requestSessions', payload: { source: source } });
     }
@@ -17297,6 +18719,11 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
 
     if (sessionsBtn) sessionsBtn.addEventListener('click', openSessionsSheet);
     if (sessionsSheetClose) sessionsSheetClose.addEventListener('click', closeSessionsSheet);
+    if (sessionsContinueInCloud) {
+      sessionsContinueInCloud.addEventListener('click', function () {
+        vscode.postMessage({ type: 'continueInCloud' });
+      });
+    }
     if (sessionsTabLocal) {
       sessionsTabLocal.addEventListener('click', function () { requestSessions('local'); });
     }
@@ -17394,6 +18821,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
             if (userInput.value.trim().indexOf('/') === 0) {
               userInput.value = '';
               autoResize();
+              saveComposerDraft();
             }
             vscode.postMessage({ type: 'runSlashCommand', payload: { name: entry.name } });
           });
@@ -17683,6 +19111,49 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       };
     }
 
+    var APPROVAL_RECIPIENT_KEYS = ['to', 'cc', 'bcc', 'recipient', 'recipients', 'email', 'emails', 'channel', 'channel_id', 'user', 'users', 'phone', 'phone_number'];
+    var APPROVAL_AMOUNT_KEYS = ['amount', 'price', 'total', 'cost', 'value'];
+    var APPROVAL_ITEM_KEYS = ['item', 'product', 'sku', 'description', 'quantity'];
+
+    function approvalArguments(detail) {
+      if (!detail) return null;
+      try {
+        var parsed = JSON.parse(detail);
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+      } catch (error) {
+        return null;
+      }
+    }
+
+    function approvalValues(args, keys) {
+      var values = [];
+      for (var i = 0; i < keys.length; i++) {
+        var value = args[keys[i]];
+        if (value === undefined || value === null || value === '') continue;
+        var list = Array.isArray(value) ? value : [value];
+        for (var j = 0; j < list.length; j++) {
+          if (typeof list[j] === 'string' || typeof list[j] === 'number') values.push(String(list[j]));
+        }
+      }
+      return values;
+    }
+
+    function approvalHighlights(detail) {
+      var args = approvalArguments(detail);
+      if (!args) return [];
+      var lines = [];
+      var recipients = approvalValues(args, APPROVAL_RECIPIENT_KEYS);
+      if (recipients.length > 0) lines.push({ label: 'Sends to', value: recipients.join(', ') });
+      var amounts = approvalValues(args, APPROVAL_AMOUNT_KEYS);
+      if (amounts.length > 0) {
+        var currency = approvalValues(args, ['currency'])[0];
+        lines.push({ label: 'Amount', value: amounts.join(', ') + (currency ? ' ' + currency : '') });
+      }
+      var items = approvalValues(args, APPROVAL_ITEM_KEYS);
+      if (items.length > 0 && amounts.length > 0) lines.push({ label: 'For', value: items.join(', ') });
+      return lines;
+    }
+
     function renderApprovalCard(payload) {
       hideEmptyState();
       var card = document.createElement('section');
@@ -17695,7 +19166,8 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       var icon = document.createElement('span');
       icon.className = 'codicon codicon-shield';
       icon.setAttribute('aria-hidden', 'true');
-      var headText = document.createElement('span');
+      var headText = document.createElement('h3');
+      headText.className = 'approval-card__title';
       headText.textContent = 'Approval needed';
       head.appendChild(icon);
       head.appendChild(headText);
@@ -17724,6 +19196,20 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
         }
         card.appendChild(verdictEl);
         card.setAttribute('aria-label', 'Approval needed, ' + verdict.spoken + ' ' + payload.summary);
+      }
+
+      var highlights = approvalHighlights(payload.detail);
+      for (var h = 0; h < highlights.length; h++) {
+        var highlight = document.createElement('div');
+        highlight.className = 'approval-card__highlight';
+        var highlightLabel = document.createElement('span');
+        highlightLabel.className = 'approval-card__highlight-label';
+        highlightLabel.textContent = highlights[h].label + ': ';
+        var highlightValue = document.createElement('span');
+        highlightValue.textContent = highlights[h].value;
+        highlight.appendChild(highlightLabel);
+        highlight.appendChild(highlightValue);
+        card.appendChild(highlight);
       }
 
       if (payload.detail) {
@@ -17756,6 +19242,21 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
           actions.appendChild(button);
         })(APPROVAL_ACTIONS[i]);
       }
+      var guidance = document.createElement('input');
+      guidance.type = 'text';
+      guidance.className = 'approval-card__guidance';
+      guidance.maxLength = 2000;
+      guidance.placeholder = 'Or deny and tell AGI what to do instead, then press Enter';
+      guidance.setAttribute('aria-label', 'Deny and tell AGI what to do instead');
+      guidance.addEventListener('keydown', function (event) {
+        if (event.key !== 'Enter' || !guidance.value.trim()) return;
+        event.preventDefault();
+        vscode.postMessage({
+          type: 'respondToApproval',
+          payload: { requestId: payload.requestId, decision: 'deny', guidance: guidance.value.trim() },
+        });
+      });
+      actions.appendChild(guidance);
       card.appendChild(actions);
 
       approvalCards[payload.requestId] = { el: card, actions: actions };
@@ -17908,18 +19409,53 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       renderAttachmentStrip();
     }
 
-    function makeAttachmentChip(name, state) {
+    var FILE_ICON_BY_EXTENSION = {
+      png: 'file-media', jpg: 'file-media', jpeg: 'file-media', gif: 'file-media', webp: 'file-media', svg: 'file-media',
+      pdf: 'file-pdf',
+      zip: 'file-zip', gz: 'file-zip', tar: 'file-zip',
+      md: 'markdown', txt: 'file-text',
+      json: 'json', yaml: 'file-code', yml: 'file-code', toml: 'file-code', xml: 'file-code',
+      ts: 'file-code', tsx: 'file-code', js: 'file-code', jsx: 'file-code', py: 'file-code', rs: 'file-code',
+      go: 'file-code', java: 'file-code', rb: 'file-code', c: 'file-code', cpp: 'file-code', cs: 'file-code',
+      css: 'file-code', html: 'file-code', sh: 'terminal', csv: 'table',
+    };
+
+    function fileIconFor(name) {
+      var dot = name.lastIndexOf('.');
+      var extension = dot === -1 ? '' : name.slice(dot + 1).toLowerCase();
+      return FILE_ICON_BY_EXTENSION[extension] || 'file';
+    }
+
+    function formatFileSize(bytes) {
+      if (!bytes) return '';
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    function makeAttachmentChip(name, state, file) {
       var chip = document.createElement('span');
       chip.className = 'attachment-chip' + (state ? ' ' + state : '');
       chip.setAttribute('role', 'listitem');
+      chip.setAttribute('data-source-name', name);
 
-      var icon = document.createElement('span');
-      icon.className = 'codicon codicon-file';
-      icon.setAttribute('aria-hidden', 'true');
+      var icon;
+      if (file && file.type && file.type.indexOf('image/') === 0 && typeof URL.createObjectURL === 'function') {
+        icon = document.createElement('img');
+        icon.className = 'attachment-chip__thumb';
+        icon.alt = '';
+        icon.src = URL.createObjectURL(file);
+      } else {
+        icon = document.createElement('span');
+        icon.className = 'codicon codicon-' + fileIconFor(name);
+        icon.setAttribute('aria-hidden', 'true');
+      }
 
       var label = document.createElement('span');
       label.className = 'attachment-chip__name';
       label.textContent = name;
+      var size = file ? formatFileSize(file.size) : '';
+      if (size) chip.title = name + ', ' + size;
 
       var removeBtn = document.createElement('button');
       removeBtn.type = 'button';
@@ -17945,6 +19481,12 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
 
       chip.appendChild(icon);
       chip.appendChild(label);
+      if (size) {
+        var sizeEl = document.createElement('span');
+        sizeEl.className = 'attachment-chip__size';
+        sizeEl.textContent = size;
+        chip.appendChild(sizeEl);
+      }
       chip.appendChild(removeBtn);
       return chip;
     }
@@ -17974,7 +19516,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
           if (attachmentStrip) attachmentStrip.appendChild(failChip);
           continue;
         }
-        var chip = makeAttachmentChip(f.name, 'uploading');
+        var chip = makeAttachmentChip(f.name, 'uploading', f);
         if (attachmentStrip) attachmentStrip.appendChild(chip);
         pendingAttachmentChips[batchKey].push({ name: f.name, chip: chip });
       }
@@ -18079,6 +19621,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
           restoredQueuedUser.setAttribute('data-client-message-id', activeQueuedClientMessageId);
         }
         setUserMessageState(activeQueuedClientMessageId, 'running');
+        removeQueuedControls(activeQueuedClientMessageId);
         showFollowUpStatus(
           msg.payload.queueRemaining > 0
             ? 'Starting queued follow-up · ' + msg.payload.queueRemaining + ' waiting'
@@ -18090,6 +19633,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
 
       else if (msg.type === 'token') {
         removeTyping();
+        settleSending('');
         if (!currentAssistantEl) {
           currentAssistantEl = addMessage('assistant', '');
           accumulatedContent = '';
@@ -18105,12 +19649,17 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
 
       else if (msg.type === 'done') {
         removeTyping();
+        settleSending('');
         if (currentAssistantEl && accumulatedContent) {
           // Content is already rendered; re-render once to ensure the final
           // token is flushed, then bind actions on any code blocks.
           currentAssistantEl.innerHTML = renderAssistant(accumulatedContent);
+          prependAuthor(
+            currentAssistantEl,
+            msg.payload && msg.payload.modelLabel ? 'AGI (' + msg.payload.modelLabel + ') replied:' : 'AGI replied:'
+          );
           bindCodeBlockActions(currentAssistantEl);
-          appendMessageActions(currentAssistantEl, accumulatedContent);
+          appendMessageActions(currentAssistantEl, accumulatedContent, answerMeta(msg.payload));
         }
         finalizeToolCallStack();
         if (msg.payload && msg.payload.providerLabel) {
@@ -18146,6 +19695,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
 
       else if (msg.type === 'toolCallStart') {
         removeTyping();
+        settleSending('');
         createToolCallEl(
           msg.payload.toolUseId,
           msg.payload.name,
@@ -18181,6 +19731,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
           finalizeToolCallStack();
         }
         addErrorMessage(msg.payload);
+        settleSending('failed');
         setStreaming(false);
         if (activeQueuedClientMessageId) {
           setUserMessageState(activeQueuedClientMessageId, 'failed');
@@ -18212,6 +19763,9 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
 
       else if (msg.type === 'followUpStatus') {
         markAttachmentsQueued(msg.payload.attachmentIds || []);
+        if (msg.payload.kind !== 'queued' && msg.payload.kind !== 'queue-fallback') {
+          removeQueuedControls(msg.payload.clientMessageId);
+        }
         if (msg.payload.kind === 'steered') {
           setUserMessageState(msg.payload.clientMessageId, 'steered');
         } else if (msg.payload.kind === 'cancelled') {
@@ -18311,6 +19865,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
 
       else if (msg.type === 'composerDraft') {
         userInput.value = msg.payload.text || '';
+        saveComposerDraft();
         pendingFileReferences = (msg.payload.references || []).map(function(reference) {
           var range = reference.range;
           var endLine = range && range.endCharacter === 0 && range.endLine > range.startLine
@@ -18376,6 +19931,11 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
         syncRecentChats();
       }
 
+      else if (msg.type === 'startSuggestions') {
+        startSuggestions = msg.payload;
+        syncStartSuggestions();
+      }
+
       else if (msg.type === 'activeProject') {
         setActiveProject(msg.payload && msg.payload.name);
       }
@@ -18420,6 +19980,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       else if (msg.type === 'effortChanged') {
         activeEffort = msg.payload.effort;
         activeSupportsEffort = Boolean(msg.payload.supportsEffort);
+        activeEffortLevels = Array.isArray(msg.payload.efforts) ? msg.payload.efforts : null;
         renderControlsSummary();
       }
 
@@ -18492,13 +20053,13 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
         for (var a = 0; a < (ack.added || []).length; a++) {
           var addedEntry = ack.added[a] || {};
           if (!addedIdsByName[addedEntry.name]) addedIdsByName[addedEntry.name] = [];
-          addedIdsByName[addedEntry.name].push(addedEntry.id);
+          addedIdsByName[addedEntry.name].push(addedEntry);
         }
         var allChips = attachmentStrip ? attachmentStrip.querySelectorAll('.attachment-chip.uploading') : [];
         for (var c = 0; c < allChips.length; c++) {
           var chipEl = allChips[c];
           var nameEl = chipEl.querySelector('.attachment-chip__name');
-          var attachName = nameEl ? (nameEl.textContent || '') : '';
+          var attachName = chipEl.getAttribute('data-source-name') || (nameEl ? (nameEl.textContent || '') : '');
           if (skippedByName[attachName]) {
             chipEl.classList.remove('uploading');
             chipEl.classList.add('failed');
@@ -18506,7 +20067,15 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
           } else {
             chipEl.classList.remove('uploading');
             var idQueue = addedIdsByName[attachName];
-            var attachId = idQueue && idQueue.length > 0 ? idQueue.shift() : '';
+            var addedAck = idQueue && idQueue.length > 0 ? idQueue.shift() : null;
+            var attachId = addedAck ? addedAck.id : '';
+            if (addedAck && addedAck.truncatedAt && nameEl) {
+              var truncatedNote = document.createElement('span');
+              truncatedNote.className = 'attachment-chip__size';
+              truncatedNote.textContent = 'first ' + addedAck.truncatedAt.toLocaleString() + ' characters';
+              nameEl.parentNode.insertBefore(truncatedNote, nameEl.nextSibling);
+              chipEl.title = attachName + ': only the first ' + addedAck.truncatedAt.toLocaleString() + ' characters are sent';
+            }
             if (attachId && chipEl.getAttribute('data-remove-requested') === '1') {
               // The user dismissed this chip while it was still uploading:
               // honour it now that the host id exists.
@@ -18637,7 +20206,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
         var icon = document.createElement('span');
         icon.className = 'codicon codicon-checklist';
         icon.setAttribute('aria-hidden', 'true');
-        var title = document.createElement('span');
+        var title = document.createElement('h3');
         title.className = 'plan-card__title';
         title.textContent = 'Plan';
         var count = document.createElement('span');
@@ -19180,6 +20749,69 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
     }
 
     var recentChats = { conversations: [], total: 0 };
+    var startSuggestions = { projects: [], skills: [], connectors: [] };
+
+    function prefillComposer(text) {
+      userInput.value = text;
+      autoResize();
+      saveComposerDraft();
+      userInput.focus();
+      userInput.setSelectionRange(text.length, text.length);
+    }
+
+    function buildSuggestionRow(label, detail, onPick) {
+      var row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'recent-chat-row';
+      row.title = detail || label;
+      var title = document.createElement('span');
+      title.className = 'recent-chat-title';
+      title.textContent = label;
+      row.appendChild(title);
+      if (detail) {
+        var sub = document.createElement('span');
+        sub.className = 'recent-chat-age';
+        sub.textContent = detail;
+        row.appendChild(sub);
+      }
+      row.addEventListener('click', onPick);
+      return row;
+    }
+
+    function appendSuggestionGroup(block, heading, rows) {
+      if (rows.length === 0) return;
+      var title = document.createElement('div');
+      title.className = 'recent-chats-title';
+      title.textContent = heading;
+      block.appendChild(title);
+      for (var i = 0; i < rows.length; i++) block.appendChild(rows[i]);
+    }
+
+    function syncStartSuggestions() {
+      if (!emptyStateEl) return;
+      var mounted = emptyStateEl.querySelector('.start-suggestions');
+      if (mounted) mounted.parentNode.removeChild(mounted);
+      var block = document.createElement('div');
+      block.className = 'recent-chats start-suggestions';
+      appendSuggestionGroup(block, 'Projects', startSuggestions.projects.map(function (project) {
+        return buildSuggestionRow(project.name, 'Use in this chat', function () {
+          vscode.postMessage({ type: 'openSuggestedProject', payload: { projectId: project.id } });
+        });
+      }));
+      appendSuggestionGroup(block, 'Skills', startSuggestions.skills.map(function (skill) {
+        return buildSuggestionRow(skill.name, skill.description, function () {
+          prefillComposer('Use the ' + skill.name + ' skill to ');
+        });
+      }));
+      appendSuggestionGroup(block, 'Connected apps', startSuggestions.connectors.map(function (connector) {
+        return buildSuggestionRow(connector.name, 'Ask with it', function () {
+          prefillComposer('Using ' + connector.name + ', ');
+        });
+      }));
+      if (!block.firstChild) return;
+      emptyStateEl.classList.add('empty-state--has-recents');
+      emptyStateEl.appendChild(block);
+    }
 
     function buildRecentChatRow(conversation) {
       var row = document.createElement('button');
@@ -19209,7 +20841,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       if (mounted) mounted.parentNode.removeChild(mounted);
       emptyStateEl.classList.toggle(
         'empty-state--has-recents',
-        recentChats.conversations.length > 0,
+        recentChats.conversations.length > 0 || Boolean(emptyStateEl.querySelector('.start-suggestions')),
       );
       if (recentChats.conversations.length === 0) return;
       var block = document.createElement('div');

@@ -10,16 +10,14 @@ nothing is left.
 
 - Done when: The user sets up a recurring daily briefing that is generated and delivered to them.
 - Wave: 3
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only a "Daily briefing" schedule template (a fixed prompt at 8:00 on weekdays). The run is text-only with no web search, tools, files or connectors, so it has nothing about the user's day to brief on. | handler |
-| desktop | partial | Only a "Daily briefing" schedule template (a fixed prompt at 8:00 on weekdays). The run is text-only with no web search, tools, files or connectors, so it has nothing about the user's day to brief on. | handler |
-| mobile | partial | Only a "Daily focus" schedule template (a fixed planning prompt). It uses the same text-only scheduled runs, with no access to the user's data. | handler |
 | cli | partial | No briefing setup: the user can only write a cron schedule with their own prompt (agi schedules create). | ui |
 | chrome | partial | No briefing setup: the user can only create a scheduled task with their own prompt and an hourly/daily/weekly/monthly cadence. | ui |
 
-Code: `apps/web/features/schedules/lib/schedule-templates.ts:34-41`, `apps/web/features/schedules/components/SchedulesPage.tsx:321-321`, `apps/web/features/schedules/components/ScheduleForm.tsx:112-113`, `apps/mobile/src/features/schedules/templates.ts:15-22`
+Code: `apps/cli/src/lib.rs:1104-1104`, `apps/cli/src/schedules.rs:238-238`, `apps/extension/src/side_panel.ts:9307-9315`, `apps/extension/src/features/background/tasks.ts:173-173`
 
 ## S42.04: Delivery time and timezone.
 
@@ -47,46 +45,27 @@ Code: `apps/extension/src/types.ts:787-787`, `apps/extension/src/side_panel.ts:9
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-## S42.15: Pause briefings.
-
-- Done when: The user can pause and resume briefings.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | A schedule can only be created paused (--paused); there is no pause or resume command for an existing one. | ui |
-
-Code: `apps/cli/src/lib.rs:1124-1124`
-
 ## S42.16: Quiet hours.
 
 - Done when: During quiet hours the product holds proactive notifications and nudges.
 - Wave: 3
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Web quiet hours only show a "Quiet hours are active" reminder dialog when the user opens chat; scheduled-run emails and browser push are still sent (no server code reads quiet hours). | handler |
-| desktop | partial | Web quiet hours only show a "Quiet hours are active" reminder dialog when the user opens chat; scheduled-run emails and browser push are still sent (no server code reads quiet hours). | handler |
-| mobile | partial | Quiet hours silence only notifications that arrive while the app is open. The app sends the preferences with its push token, but /api/mobile/push-token's schema drops them, so background pushes still arrive during quiet hours. | handler, api |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/settings/sections/TimeFocusSection.tsx:221-221`, `apps/web/features/time-focus/TimeFocusReminder.tsx:151-151`, `apps/web/features/chat/pages/WebChatPage.tsx:5889-5889`, `apps/mobile/src/features/settings/notifications/index.tsx:190-190`
 
 ## S42.17: Work-completion notifications.
 
 - Done when: The user is notified when background work (a scheduled run or agent task) completes.
 - Wave: 3
-- Already works on: web, desktop, mobile, chrome
+- Already works on: web, desktop, mobile, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | No built-in completion notification; a user-written Stop hook can notify, and the Stop event fires only in the --no-tui REPL. | ui |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/repl/mod.rs:598-598`
 
 ## S42.19: Personal usage reflection.
 
@@ -99,22 +78,6 @@ Code: `apps/cli/src/repl/mod.rs:598-598`
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-## S42.20: Periodic recap.
-
-- Done when: The product produces a recap for a recurring period (week/month) and delivers it.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Reflect builds a recap for a chosen range only when the user opens it; nothing is delivered each week or month. The "Weekly review" template has no access to the user's activity. | handler |
-| desktop | partial | Reflect builds a recap for a chosen range only when the user opens it; nothing is delivered each week or month. The "Weekly review" template has no access to the user's activity. | handler |
-| mobile | partial | Reflect is on demand only; the "Weekly reflection" template is a prompt with no access to the user's activity. | handler |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/settings/components/WebSettingsModal.tsx:209-209`, `apps/web/features/settings/sections/ReflectSection.tsx:16-16`, `apps/web/features/schedules/lib/schedule-templates.ts:20-20`, `apps/mobile/app/(app)/settings/reflect.tsx:56-56`
 
 ## S42.21: Annual recap.
 
@@ -132,44 +95,37 @@ Code: `apps/web/features/settings/components/WebSettingsModal.tsx:209-209`, `app
 
 - Done when: The product reminds the user to take a break after a chosen amount of use.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile saves and syncs the break-reminder setting, but no mobile code ever shows a break reminder. | handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/settings/notifications/index.tsx:444-444`, `apps/mobile/stores/notificationPrefsStore.ts:128-128`
 
 ## S42.23: Time-and-focus settings.
 
 - Done when: A Time & focus settings page holds break reminders and quiet hours.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The settings save and sync, but on mobile the break reminder never fires and quiet hours do not hold background pushes (see S42.16, S42.22). | handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/settings/notifications/index.tsx:190-190`, `apps/mobile/src/features/settings/notifications/useTimeFocusSync.ts:84-84`
 
 ## S42.25: Proactive-feature history and saved editions.
 
 - Done when: Past briefings and proactive outputs are kept as a browsable history.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only a per-schedule run history showing each run's text output; there is no combined history of briefings or saved editions. | ui |
-| desktop | partial | Only a per-schedule run history showing each run's text output; there is no combined history of briefings or saved editions. | ui |
 | mobile | partial | Only a per-schedule run history. | ui |
 | cli | partial | Only a per-schedule run list (agi schedules runs). | ui |
 | vscode | partial | Only a per-schedule run list. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/schedules/components/ScheduleRunHistory.tsx:110-110`, `apps/web/features/schedules/components/ScheduleCard.tsx:288-288`, `apps/mobile/src/features/schedules/components/ScheduleRunHistory.tsx:124-124`, `apps/cli/src/lib.rs:1140-1140`
+Code: `apps/mobile/src/features/schedules/components/ScheduleRunHistory.tsx:124-124`, `apps/cli/src/lib.rs:1140-1140`, `apps/extension-vscode/src/core/commandSetup.ts:2237-2237`, `apps/extension-vscode/src/features/schedules/scheduleActions.ts:126-126`

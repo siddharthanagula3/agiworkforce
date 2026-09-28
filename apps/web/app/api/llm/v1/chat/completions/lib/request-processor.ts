@@ -17,7 +17,13 @@ import {
 } from '@agiworkforce/compliance';
 import { ToolCallResponseSchema } from '@/lib/validations/tool-calls';
 import { modelSupportsResearch } from '@/features/chat/lib/research-capability-gate';
-import { AgiWorkGoalSchema } from './agiwork-plan';
+import {
+  composeStudyInstruction,
+  isStudyLevel,
+  isStudyMode,
+  normalizeStudyTopic,
+} from '@/features/study/lib/study-session';
+import { AgiWorkGoalSchema, AgiWorkSuppliedPlanSchema } from './agiwork-plan';
 import { FREE_USAGE_LIMIT_REACHED_MESSAGE } from './upstream-error-copy';
 import { demoteLowConfidencePremiumSelection } from './route-selection';
 import { hostedToolRunsUnasked, loadToolApprovalPolicy } from './tool-approval-policy';
@@ -27,6 +33,7 @@ import { logger } from '@/lib/logger';
 import { stagedAttachmentPaths, type TurnAttachment } from '@/lib/e2b/attachment-staging';
 import { EXECUTE_CODE_TOOL, resolveTurnCodeExecutionTools } from '@/lib/e2b/execution-tools';
 import { e2bProvisioningReady } from '@/lib/e2b/gate';
+import { e2bChatTemplate } from '@/lib/e2b/chat-template';
 import { hostedCodeExecutionReserveMicrousd } from '@/lib/e2b/hosted-code-execution';
 import {
   DEVICE_HOST_HEADER,
@@ -81,8 +88,24 @@ import {
   hasExplicitWebSearchOptOut,
   webSearchNeedsGenericTool,
 } from '@agiworkforce/search';
-import { extractCandidateMemoryFacts, passiveMemoryText } from '@agiworkforce/agent-core';
-import { MEMORY_COMMAND_CLIENT_SURFACES } from '@/lib/services/memory-commands';
+import {
+  MEMORY_COMMAND_KINDS,
+  extractCandidateMemoryFacts,
+  passiveMemoryText,
+} from '@agiworkforce/agent-core';
+import {
+  MEMORY_COMMAND_CLIENT_SURFACES,
+  MEMORY_COMMAND_TURN_STATUSES,
+  memoryCommandTurnNote,
+} from '@/lib/services/memory-commands';
+import { isMemoryTool, memoryToolDefinitions } from '@/lib/server/tools/memory-tools';
+import { fileSearchToolDefinition, isFileSearchTool } from '@/lib/server/tools/file-search-tool';
+import { buildWorkspaceFeatureGateResponse } from '@/lib/managed-compute-gate';
+import {
+  asksForSchedule,
+  isScheduleTool,
+  scheduleToolDefinition,
+} from '@/lib/server/tools/schedule-tool';
 import {
   supportsOpenAIReasoningEffort,
   SYSTEM_PROMPT_CACHE_BOUNDARY,
@@ -154,8 +177,12 @@ import {
   resolveMaxOutputTokens,
   resolvePromptCachePrivacyClass,
   getDefaultModelFor,
+  getDefaultAutoRoutingProfile,
+  autoAliasForRoutingProfile,
+  ROUTING_PROFILE_CHOICES,
 } from '@agiworkforce/types';
 import type {
+  ChatResponseFormat,
   ModelCapabilities,
   ProjectFileCitation,
   PromptCacheScope,
@@ -192,7 +219,11 @@ import type {
   TaskFamilySignals,
 } from '@agiworkforce/routing';
 import { buildFailoverRoutes, type FailoverRoute } from './failover-plan';
-import { modelRegistry, getRoutePricingForModel } from '@agiworkforce/model-registry';
+import {
+  getRoutePricingForModel,
+  modelRegistry,
+  providerKeepsInputsOutOfTraining,
+} from '@agiworkforce/model-registry';
 import {
   getCredentialCooldownSnapshot,
   getRouteHealthSnapshot,
@@ -255,6 +286,25 @@ import {
   type ProjectContextBlock,
 } from '@/lib/services/project-context-service';
 import { JSON_OBJECT_DIRECTIVE, wantsJsonObject } from './json-object-mode';
+import { speedFirstSlots } from './routing-profile-selection';
+import {
+  modelKeepsInputsOutOfTraining,
+  noTrainingChatModelFor,
+  readProviderTrainingOptOut,
+} from '@/lib/server/provider-training-opt-out';
+import { createResearchDomainPolicy, type ResearchDomainPolicy } from './research-sources';
+import {
+  IMAGE_DETAIL_VALUES,
+  imageDetailRefusalMessage,
+  unsupportedImageDetail,
+} from './image-detail';
+import {
+  JsonSchemaResponseFormatSchema,
+  jsonSchemaDirective,
+  jsonSchemaFormatProblem,
+  requestedResponseFormat,
+  wantsJsonSchema,
+} from './json-schema-mode';
 import {
   applyManagedMemoryContext,
   DISABLED_MANAGED_MEMORY_POLICY,
@@ -338,7 +388,7 @@ export const ChatCompletionRequestSchema = z
                       });
                     }
                   }),
-                  detail: z.enum(['auto', 'low', 'high']).optional(),
+                  detail: z.enum(IMAGE_DETAIL_VALUES).optional(),
                 })
                 .optional(),
               file: z
@@ -406,15 +456,26 @@ export const ChatCompletionRequestSchema = z
     response_format: z
       .object({
         type: z.enum(['text', 'json_object', 'json_schema']).optional(),
-        json_schema: z.unknown().optional(),
+        json_schema: JsonSchemaResponseFormatSchema.optional(),
       })
-      .refine((value) => value.type !== 'json_schema', {
-        message:
-          "response_format type 'json_schema' is not enforced on this endpoint, and " +
-          'returning unvalidated output for a schema request would be silently wrong. ' +
-          "Use type 'json_object' for a guaranteed JSON object, or `tools` with " +
-          '`tool_choice` for a schema-shaped payload.',
-        path: ['type'],
+      .superRefine((value, ctx) => {
+        if (value.type !== 'json_schema') return;
+        if (!value.json_schema) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['json_schema'],
+            message: "response_format type 'json_schema' requires a json_schema object.",
+          });
+          return;
+        }
+        const problem = jsonSchemaFormatProblem(value.json_schema);
+        if (problem) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['json_schema', 'schema'],
+            message: `This schema cannot be enforced: ${problem}.`,
+          });
+        }
       })
       .optional(),
     seed: z.number().int().optional(),
@@ -423,6 +484,14 @@ export const ChatCompletionRequestSchema = z
     web_fetch: z.boolean().optional(),
     /** Per-chat Memory override. False skips memory injection and memory writes for this turn. */
     memory_enabled: z.boolean().optional(),
+    personalization: z.boolean().optional(),
+    routing_profile: z.enum(ROUTING_PROFILE_CHOICES).optional(),
+    memory_command: z
+      .object({
+        kind: z.enum(MEMORY_COMMAND_KINDS),
+        status: z.enum(MEMORY_COMMAND_TURN_STATUSES),
+      })
+      .optional(),
     research: z.boolean().optional(),
     /**
      * What a research run may read (§24). `files` opens the account's own
@@ -489,6 +558,8 @@ export const ChatCompletionRequestSchema = z
     connector_tools_enabled: z.boolean().optional(),
     work_mode: z.enum(CLOUD_WORK_MODES).optional(),
     agi_work_goal: AgiWorkGoalSchema.optional(),
+    agi_work_plan: AgiWorkSuppliedPlanSchema.optional(),
+    agi_work_plan_approval: z.boolean().optional(),
     thinking_mode: z.boolean().optional(),
     thinking: z
       .object({
@@ -539,12 +610,16 @@ export const ChatCompletionRequestSchema = z
         message: 'user_message requires conversation_id',
       });
     }
-    if (value.response_format?.type === 'json_object' && value.stream) {
+    if (
+      (value.response_format?.type === 'json_object' ||
+        value.response_format?.type === 'json_schema') &&
+      value.stream
+    ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['response_format', 'type'],
         message:
-          "response_format type 'json_object' requires stream: false. A streamed " +
+          `response_format type '${value.response_format.type}' requires stream: false. A streamed ` +
           'response is delivered before it can be validated as JSON, so the guarantee ' +
           'could not be kept.',
       });
@@ -694,6 +769,87 @@ export async function applyImplicitManagedSkillOffer(
   return relevant.map((skill) => skill.name);
 }
 
+export function applyMemoryToolCapability(
+  request: ChatCompletionRequest,
+  params: {
+    surface: CloudChatSurface;
+    toolsCapable: boolean;
+    memoryEnabled: boolean;
+    isTemporary: boolean;
+    ambientToolsAllowed: boolean;
+  },
+): void {
+  if (
+    !params.toolsCapable ||
+    !params.ambientToolsAllowed ||
+    !request.stream ||
+    params.isTemporary ||
+    !params.memoryEnabled ||
+    request.memory_enabled === false ||
+    request.personalization === false ||
+    request.memory_command !== undefined ||
+    !MEMORY_COMMAND_CLIENT_SURFACES.has(params.surface)
+  ) {
+    return;
+  }
+  request.tools = [
+    ...(request.tools ?? []).filter((tool) => !isMemoryTool(tool.function.name)),
+    ...memoryToolDefinitions(),
+  ];
+}
+
+export function applyFileSearchToolCapability(
+  request: ChatCompletionRequest,
+  params: {
+    surface: CloudChatSurface;
+    toolsCapable: boolean;
+    isTemporary: boolean;
+    projectHasKnowledgeFiles: boolean;
+    ambientToolsAllowed: boolean;
+  },
+): void {
+  if (
+    !params.toolsCapable ||
+    !params.ambientToolsAllowed ||
+    !params.projectHasKnowledgeFiles ||
+    !request.stream ||
+    params.isTemporary ||
+    !MEMORY_COMMAND_CLIENT_SURFACES.has(params.surface)
+  ) {
+    return;
+  }
+  request.tools = [
+    ...(request.tools ?? []).filter((tool) => !isFileSearchTool(tool.function.name)),
+    fileSearchToolDefinition(),
+  ];
+}
+
+export function applyScheduleToolCapability(
+  request: ChatCompletionRequest,
+  params: {
+    surface: CloudChatSurface;
+    toolsCapable: boolean;
+    isTemporary: boolean;
+    ambientToolsAllowed: boolean;
+    schedulesAllowed: boolean;
+  },
+): void {
+  if (
+    !params.toolsCapable ||
+    !params.ambientToolsAllowed ||
+    !params.schedulesAllowed ||
+    !request.stream ||
+    params.isTemporary ||
+    !MEMORY_COMMAND_CLIENT_SURFACES.has(params.surface)
+  ) {
+    return;
+  }
+  request.tools = [
+    ...(request.tools ?? []).filter((tool) => !isScheduleTool(tool.function.name)),
+    scheduleToolDefinition(),
+  ];
+}
+
 export function applyManagedOfficeFileCreation(request: ChatCompletionRequest): void {
   if (!request.office_creation) return;
   request.tools = [
@@ -733,8 +889,8 @@ export function applyClarifyCardCapability(
     !shouldOfferClarifyTool({
       userMessage: params.userMessage,
       hasAttachment: params.hasAttachment,
-      webSearch: request.web_search === true,
       research: request.research === true,
+      agiWork: request.work_mode === 'agiwork',
     })
   ) {
     return;
@@ -793,10 +949,11 @@ export function validationRefusalMessage(error: z.ZodError): string {
 export function applyWorkMode(chatRequest: ChatCompletionRequest): void {
   if (chatRequest.work_mode !== 'agiwork') return;
 
+  const excluded = new Set(chatRequest.agi_work_goal?.excludedTools ?? []);
   chatRequest.stream = true;
-  chatRequest.web_search = true;
-  chatRequest.web_fetch = true;
-  chatRequest.code_execution = true;
+  chatRequest.web_search = !excluded.has('web_search');
+  chatRequest.web_fetch = !excluded.has('web_search');
+  chatRequest.code_execution = !excluded.has('code_execution');
   chatRequest.messages.unshift({
     role: 'system',
     content:
@@ -980,6 +1137,7 @@ export type ProcessedRequest = {
     deliverable: ResearchDeliverableSpec;
   };
   /** §24: the sources and site restriction this research run was given. */
+  webSearchDomainPolicy?: ResearchDomainPolicy;
   researchSources?: {
     files: boolean;
     allowDomains: string[];
@@ -1014,6 +1172,7 @@ export type ProcessedRequest = {
     thinking?: { type: string; budget_tokens?: number };
     effort?: string;
     usePromptCache?: boolean;
+    responseFormat?: ChatResponseFormat;
     /**
      * Who this turn belongs to, for the prompt cache. Carried on the request
      * rather than re-derived per adapter so one turn cannot be scoped two ways,
@@ -1182,6 +1341,7 @@ export function composeManagedSystemPreamble(input: {
   capabilityPreamble: string | null;
   customInstructionsPreamble: string | null | undefined;
   projectInstruction?: string | null;
+  studyInstruction?: string | null;
   dynamicSystemAddition: string;
 }): string {
   const withDynamicAddition = prependSystemPromptAdditionAfterCacheBoundary({
@@ -1191,6 +1351,7 @@ export function composeManagedSystemPreamble(input: {
   const split = splitSystemPromptCacheBoundary(withDynamicAddition);
   const stableBlock = orderInstructionBlocks([
     { layer: 'system', text: split ? split.stablePrefix : withDynamicAddition },
+    { layer: 'developer', text: input.studyInstruction ?? '' },
     { layer: 'project', text: input.projectInstruction ?? '' },
     { layer: 'personalized', text: input.customInstructionsPreamble ?? '' },
   ])
@@ -1201,6 +1362,16 @@ export function composeManagedSystemPreamble(input: {
   return dynamicBlock
     ? `${stableBlock}${SYSTEM_PROMPT_CACHE_BOUNDARY}${dynamicBlock}`
     : stableBlock;
+}
+
+function activeStudyInstruction(row: {
+  study_topic: string | null;
+  study_mode: string | null;
+  study_level: string | null;
+}): string | null {
+  const topic = normalizeStudyTopic(row.study_topic);
+  if (!topic || !isStudyMode(row.study_mode) || !isStudyLevel(row.study_level)) return null;
+  return composeStudyInstruction({ topic, mode: row.study_mode, level: row.study_level });
 }
 
 /**
@@ -2320,6 +2491,22 @@ export function applyWorkspaceDefaultModel(
   if (isAutoModeModelId(chatRequest.model)) chatRequest.model = defaultModelId;
 }
 
+function noTrainingModelUnavailable(): ProcessFailure {
+  return {
+    ok: false,
+    response: NextResponse.json(
+      {
+        error: {
+          message: 'No model on your plan keeps your chats out of training right now.',
+          type: 'invalid_request_error',
+          code: 'no_training_model_available',
+        },
+      },
+      { status: 403 },
+    ),
+  };
+}
+
 // The free plan has no Auto. A client that still sends it is served the plan's
 // own model rather than refused, and the resolver never sees a priced route.
 export function applyFreePlanDefaultModel(
@@ -2450,6 +2637,7 @@ export async function processRequest(
   const managedRequestHash = fingerprintManagedUsageRequest(validationResult.data);
 
   const chatRequest = validationResult.data;
+  if (chatRequest.personalization === false) chatRequest.memory_enabled = false;
   const callerToolFields: Pick<ChatCompletionRequest, 'tools' | 'tool_choice'> = {
     ...(chatRequest.tools !== undefined ? { tools: chatRequest.tools } : {}),
     ...(chatRequest.tool_choice !== undefined ? { tool_choice: chatRequest.tool_choice } : {}),
@@ -2479,7 +2667,33 @@ export async function processRequest(
     options.scopedDbPromise ?? getUserScopedDb(request, { apiKeyScope: 'inference:write' });
   scopedDbPromise.catch(() => {});
 
+  const trainingOptOutPromise = scopedDbPromise
+    .then((scoped) => readProviderTrainingOptOut(scoped.db, userId))
+    .catch((error: unknown) => {
+      logger.warn(
+        { error, userId },
+        'Provider training opt-out unreadable; routing only to models that keep inputs out of training',
+      );
+      return true;
+    });
+
+  const routingProfileAlias =
+    chatRequest.model === getDefaultAutoRoutingProfile().id
+      ? autoAliasForRoutingProfile(chatRequest.routing_profile)
+      : null;
+  if (routingProfileAlias) chatRequest.model = routingProfileAlias;
+  const freeAutoSelection =
+    isFreePlanTier(subscription.plan_tier) && isAutoModeModelId(chatRequest.model);
   applyFreePlanDefaultModel(chatRequest, subscription.plan_tier);
+  if (
+    freeAutoSelection &&
+    !modelKeepsInputsOutOfTraining(chatRequest.model) &&
+    (await trainingOptOutPromise)
+  ) {
+    const noTrainingModel = noTrainingChatModelFor(subscription.plan_tier);
+    if (!noTrainingModel) return noTrainingModelUnavailable();
+    chatRequest.model = noTrainingModel;
+  }
   const requestedModel = chatRequest.model;
   const adaptiveResponseBudgetEnabled =
     isAutoModeModelId(requestedModel) || getModelRegistryFacts(requestedModel)?.isRouter === true;
@@ -2526,16 +2740,6 @@ export async function processRequest(
       ),
     };
   }
-  const customInstructionsPromise =
-    chatSurface === 'api'
-      ? null
-      : scopedDbPromise
-          .then((scoped) => buildCustomInstructionsPreamble(scoped.db, userId))
-          .catch((error: unknown) => {
-            logger.warn({ error, userId }, 'Custom instructions read failed; sending none');
-            return null;
-          });
-
   const skillInstallOverridesPromise: Promise<ReadonlyMap<string, boolean>> = scopedDbPromise
     .then((scoped) => getSkillInstallOverrides(scoped.db, userId))
     .catch((error: unknown) => {
@@ -2569,12 +2773,15 @@ export async function processRequest(
         projectId: string | null;
         projectBlocks: readonly ProjectContextBlock[];
         projectSources?: ProjectFileCitation[];
+        projectHasKnowledgeFiles: boolean;
+        studyInstruction: string | null;
       }
     | ProcessFailure
   > = chatRequest.conversation_id
     ? (async () => {
         let projectSources: ProjectFileCitation[] = [];
         let projectBlocks: readonly ProjectContextBlock[] = [];
+        let projectHasKnowledgeFiles = false;
         try {
           const scoped = await scopedDbPromise;
           if (scoped.userId !== userId) {
@@ -2598,10 +2805,16 @@ export async function processRequest(
             project_id: string | null;
             is_temporary: boolean;
             selected_route_id: string | null;
+            study_topic: string | null;
+            study_mode: string | null;
+            study_level: string | null;
           }>(
-            `select id, project_id, is_temporary, to_jsonb(web_conversations)->>'selected_route_id' as selected_route_id
-                 from web_conversations
-                where id = $1 and user_id = $2 and deleted_at is null
+            `select c.id, c.project_id, c.is_temporary, to_jsonb(c)->>'selected_route_id' as selected_route_id,
+                    s.topic as study_topic, s.mode as study_mode, s.level as study_level
+                 from web_conversations c
+                 left join study_sessions s
+                   on s.conversation_id = c.id and s.user_id = c.user_id and s.ended_at is null
+                where c.id = $1 and c.user_id = $2 and c.deleted_at is null
                 limit 1`,
             [chatRequest.conversation_id, userId],
           );
@@ -2645,6 +2858,7 @@ export async function processRequest(
                   ),
                 };
               }
+              projectHasKnowledgeFiles = projectContext.knowledgeFiles.length > 0;
               const rendered = renderProjectContextBlocks(projectContext);
               projectBlocks = fitProjectContextBlocks(rendered.blocks, MAX_PROJECT_CONTEXT_CHARS);
               projectSources = rendered.citations;
@@ -2682,6 +2896,8 @@ export async function processRequest(
             projectId: ownedRows[0].project_id,
             projectBlocks,
             ...(projectSources.length > 0 ? { projectSources } : {}),
+            projectHasKnowledgeFiles,
+            studyInstruction: activeStudyInstruction(ownedRows[0]),
           };
         } catch (error) {
           logger.error(
@@ -2709,7 +2925,23 @@ export async function processRequest(
         selectedRouteId: null,
         projectId: null,
         projectBlocks: [],
+        projectHasKnowledgeFiles: false,
+        studyInstruction: null,
       });
+
+  const customInstructionsPromise =
+    chatSurface === 'api' || chatRequest.personalization === false
+      ? null
+      : Promise.all([scopedDbPromise, ownershipLeg])
+          .then(([scoped, owned]) =>
+            buildCustomInstructionsPreamble(scoped.db, userId, {
+              projectId: owned.ok ? owned.projectId : null,
+            }),
+          )
+          .catch((error: unknown) => {
+            logger.warn({ error, userId }, 'Custom instructions read failed; sending none');
+            return null;
+          });
 
   const safetyLeg: Promise<{ ok: true } | ProcessFailure> = (async () => {
     const platform = moderateManagedPrompt({
@@ -3208,7 +3440,11 @@ export async function processRequest(
       : planResponseBudget({
           message: lastUserText,
           taskType: resolvedTaskType,
-          apiResponseFormat: wantsJsonObject(chatRequest.response_format) ? 'json_object' : null,
+          apiResponseFormat:
+            wantsJsonObject(chatRequest.response_format) ||
+            wantsJsonSchema(chatRequest.response_format)
+              ? 'json_object'
+              : null,
           requestedMaxOutputTokens,
           modelMinimumOutputTokens: getModelMetadataById(chatRequest.model)
             ?.responseBudgetFloorTokens,
@@ -3344,7 +3580,12 @@ export async function processRequest(
     return { ok: false, response: modelPolicyDenialResponse(MODEL_POLICY_UNAVAILABLE) };
   }
   const workspaceModelPolicy = workspaceModelPolicyRead.policy;
-  const availableProviderIds = listAvailableManagedProviderIds();
+  const trainingOptOut = await trainingOptOutPromise;
+  const managedProviderIds = listAvailableManagedProviderIds();
+  const availableProviderIds = trainingOptOut
+    ? new Set([...managedProviderIds].filter(providerKeepsInputsOutOfTraining))
+    : managedProviderIds;
+  if (trainingOptOut && availableProviderIds.size === 0) return noTrainingModelUnavailable();
   const { required: zeroDataRetentionOnly } = zeroDataRetentionPolicy;
   const zeroDataRetentionProviders = resolveZeroDataRetentionProviderOverrides();
   // Only a workspace pinned AWAY from the region this deployment processes in
@@ -3380,7 +3621,11 @@ export async function processRequest(
       : planResponseBudget({
           message: lastUserText,
           taskType: resolvedTaskType,
-          apiResponseFormat: wantsJsonObject(chatRequest.response_format) ? 'json_object' : null,
+          apiResponseFormat:
+            wantsJsonObject(chatRequest.response_format) ||
+            wantsJsonSchema(chatRequest.response_format)
+              ? 'json_object'
+              : null,
           requestedMaxOutputTokens,
           modelMinimumOutputTokens: getModelMetadataById(chatRequest.model)
             ?.responseBudgetFloorTokens,
@@ -3400,12 +3645,16 @@ export async function processRequest(
         subscription.plan_tier,
         resolvedTaskType,
         routeUsage,
-        undefined,
+        chatRequest.routing_profile === 'speed' ? speedFirstSlots() : undefined,
         {
           ...baseRouteHealthState,
           ...(routeAffinity ? { preferredRouteId: routeAffinity.routeId } : {}),
-          ...(routeAffinity?.modelKey ? { currentModelKey: routeAffinity.modelKey } : {}),
-          ...(routeAffinity?.taskType ? { previousTaskType: routeAffinity.taskType } : {}),
+          ...(routeAffinity?.modelKey && !routingProfileAlias
+            ? { currentModelKey: routeAffinity.modelKey }
+            : {}),
+          ...(routeAffinity?.taskType && !routingProfileAlias
+            ? { previousTaskType: routeAffinity.taskType }
+            : {}),
         },
         availableProviderIds,
         zeroDataRetentionOnly,
@@ -3711,9 +3960,49 @@ export async function processRequest(
       ),
     };
   }
+  const detailRefusal = unsupportedImageDetail(chatRequest.messages, chatRequest.model);
+  if (detailRefusal) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          error: {
+            message: imageDetailRefusalMessage(detailRefusal),
+            type: 'invalid_request_error',
+            code: 'image_detail_unsupported',
+          },
+        },
+        { status: 400 },
+      ),
+    };
+  }
 
   if (wantsJsonObject(chatRequest.response_format)) {
     applyJsonObjectMode(chatRequest, dynamicSystemMessageRefs);
+  }
+  if (wantsJsonSchema(chatRequest.response_format) && chatRequest.response_format?.json_schema) {
+    if (resolvedModelCaps?.json !== true) {
+      return {
+        ok: false,
+        response: NextResponse.json(
+          {
+            error: {
+              message:
+                'The selected model does not support structured output. Choose a model that does, or use response_format json_object.',
+              type: 'invalid_request_error',
+              code: 'model_no_structured_output',
+            },
+          },
+          { status: 400 },
+        ),
+      };
+    }
+    applyStaticSystemDirective(
+      chatRequest,
+      dynamicSystemMessageRefs,
+      jsonSchemaDirective(chatRequest.response_format.json_schema),
+      (existing, directive) => `${existing}\n\n${directive}`,
+    );
   }
 
   const researchMode = researchModeAllowed(
@@ -3724,6 +4013,12 @@ export async function processRequest(
   if (researchMode) {
     applyResearchMode(chatRequest, dynamicSystemMessageRefs, rolloutInputs.promptVariants);
   }
+  const webSearchDomainPolicy = researchMode
+    ? null
+    : createResearchDomainPolicy({
+        allow: chatRequest.research_sources?.allow_domains,
+        deny: chatRequest.research_sources?.deny_domains,
+      });
   // The user asked for Deep Research and the routed model cannot do it, so the
   // research loop will not run. Previously this was silent: the toggle stayed
   // lit, `runResearchLoop` never executed, and the user received an ordinary
@@ -3775,6 +4070,27 @@ export async function processRequest(
             type: 'invalid_request_error',
             code: 'model_not_available',
             requiredTier: requiredTierKey,
+          },
+        },
+        { status: 403 },
+      ),
+    };
+  }
+
+  if (
+    trainingOptOut &&
+    !isAutoModeModelId(requestedModel) &&
+    !modelKeepsInputsOutOfTraining(chatRequest.model)
+  ) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          error: {
+            message:
+              "This model's provider may train on what you send. Choose another model, or turn off Only use models that do not train on your chats in Settings > Privacy.",
+            type: 'invalid_request_error',
+            code: 'model_may_train',
           },
         },
         { status: 403 },
@@ -3945,6 +4261,34 @@ export async function processRequest(
     toolsCapable: resolvedModelCaps?.tools ?? true,
     userMessage: lastUserText,
     placesSearchOffered: placesRequirement.offered,
+  });
+
+  const ambientToolsAllowed =
+    getModelMetadataById(chatRequest.model)?.webSearchToolOfferPolicy !== 'required_only';
+  applyMemoryToolCapability(chatRequest, {
+    surface: chatSurface,
+    toolsCapable: resolvedModelCaps?.tools ?? true,
+    memoryEnabled: managedMemoryPolicy.enabled,
+    isTemporary: conversationIsTemporary,
+    ambientToolsAllowed,
+  });
+
+  applyFileSearchToolCapability(chatRequest, {
+    surface: chatSurface,
+    toolsCapable: resolvedModelCaps?.tools ?? true,
+    isTemporary: conversationIsTemporary,
+    projectHasKnowledgeFiles: ownership.projectHasKnowledgeFiles,
+    ambientToolsAllowed,
+  });
+
+  applyScheduleToolCapability(chatRequest, {
+    surface: chatSurface,
+    toolsCapable: resolvedModelCaps?.tools ?? true,
+    isTemporary: conversationIsTemporary,
+    ambientToolsAllowed,
+    schedulesAllowed:
+      asksForSchedule(lastUserText) &&
+      (await buildWorkspaceFeatureGateResponse(userId, request, 'schedules', chatSurface)) === null,
   });
 
   const lastUserContent = lastUserMsg?.content;
@@ -4195,7 +4539,11 @@ export async function processRequest(
       : planResponseBudget({
           message: lastUserText,
           taskType: resolvedTaskType,
-          apiResponseFormat: wantsJsonObject(chatRequest.response_format) ? 'json_object' : null,
+          apiResponseFormat:
+            wantsJsonObject(chatRequest.response_format) ||
+            wantsJsonSchema(chatRequest.response_format)
+              ? 'json_object'
+              : null,
           requestedMaxOutputTokens,
           modelMaxOutputTokens: resolveMaxOutputTokens(chatRequest.model),
           modelMinimumOutputTokens: getModelMetadataById(chatRequest.model)
@@ -4249,6 +4597,7 @@ export async function processRequest(
     provider: providerLower,
     stream: chatRequest.stream,
     e2bEnabled: e2bProvisioningReady(),
+    officeRendering: e2bChatTemplate() !== null,
     toolsCapable: resolvedModelCaps?.tools ?? true,
     codeExecutionCapable:
       resolvedModelCaps?.codeExecution === true && nativeToolPermitted(EXECUTE_CODE_TOOL),
@@ -4504,7 +4853,15 @@ export async function processRequest(
     .map((block) => block.text)
     .filter((text) => text.length > 0)
     .join('\n\n');
-  const dynamicTurnInstruction = [dynamicSkillMemoryText, responseBudget?.instruction ?? '']
+  const memoryCommandNote =
+    chatRequest.memory_command && MEMORY_COMMAND_CLIENT_SURFACES.has(chatSurface)
+      ? memoryCommandTurnNote(lastUserText, chatRequest.memory_command)
+      : null;
+  const dynamicTurnInstruction = [
+    dynamicSkillMemoryText,
+    memoryCommandNote ?? '',
+    responseBudget?.instruction ?? '',
+  ]
     .filter((text) => text.length > 0)
     .join('\n\n');
 
@@ -4653,6 +5010,7 @@ export async function processRequest(
       capabilityPreamble,
       customInstructionsPreamble,
       projectInstruction: projectInstructionBlock,
+      studyInstruction: ownership.studyInstruction,
       dynamicSystemAddition: dynamicTurnInstruction,
     });
     const preambleSplit = preamble ? splitSystemPromptCacheBoundary(preamble) : undefined;
@@ -4729,6 +5087,7 @@ export async function processRequest(
       tool_call_id: undefined,
     });
   }
+  const responseFormat = requestedResponseFormat(chatRequest.response_format);
   const llmRequest = {
     model: chatRequest.model,
     messages: internalMessages,
@@ -4744,6 +5103,7 @@ export async function processRequest(
     thinking_mode: chatRequest.thinking_mode,
     thinking: thinkingConfig,
     effort: effectiveEffort,
+    ...(responseFormat ? { responseFormat } : {}),
     ...resolveTurnPromptCache({
       requested: chatRequest.use_prompt_cache,
       temporaryChat: conversationIsTemporary,
@@ -4823,11 +5183,13 @@ export async function processRequest(
   // A free-lane dispatch keeps its plan: `routeDecision.fallbacks` is the
   // stage's ranked tail, every member already verified zero-cost, so rotation
   // cannot leave the lane. The trial path stays rotation-free as before.
-  const failoverRoutes =
-    freeTrialEnabled && !freeLanePlan ? [] : buildFailoverRoutes(routeDecision.fallbacks);
+  const failoverRoutes = (
+    freeTrialEnabled && !freeLanePlan ? [] : buildFailoverRoutes(routeDecision.fallbacks)
+  ).filter((route) => !trainingOptOut || modelKeepsInputsOutOfTraining(route.modelKey));
 
   if (
     routeDecision.shadow &&
+    !trainingOptOut &&
     turnMayBeShadowMirrored({ temporaryChat: conversationIsTemporary, zeroDataRetentionOnly })
   ) {
     scheduleShadowDispatch({
@@ -4906,6 +5268,7 @@ export async function processRequest(
     quotaWarningHeader,
     isFlagshipRequest,
     researchMode,
+    ...(!researchMode && webSearchDomainPolicy ? { webSearchDomainPolicy } : {}),
     ...(researchMode && chatRequest.research_sources
       ? {
           researchSources: {

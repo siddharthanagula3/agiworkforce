@@ -6,6 +6,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { releaseTombstonedProject } from '@/lib/server/project-deletion';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
 import {
@@ -199,6 +200,21 @@ async function handlePost(request: NextRequest) {
         conflicts.push({ id: row.id, current: row.current });
       } else {
         throw new Error('Projects sync database returned an invalid batch result');
+      }
+    }
+
+    const tombstonedIds = new Set(
+      projects.filter((project) => Boolean(project.deletedAt)).map((project) => project.id),
+    );
+    for (const { id } of applied) {
+      if (!tombstonedIds.has(id)) continue;
+      try {
+        await releaseTombstonedProject(db, { projectId: id, userId, organizationId });
+      } catch (error) {
+        logger.error(
+          { error, projectId: id, userId },
+          'Project deleted through sync, but its chats and sources were not released',
+        );
       }
     }
 

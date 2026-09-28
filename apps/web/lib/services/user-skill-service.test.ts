@@ -142,6 +142,7 @@ describe('user skill service', () => {
       lifecycle: 'included',
       downloadable: false,
       editable: true,
+      origin: { kind: 'personal', addedAt: '2026-09-01T00:00:00.000Z' },
     });
   });
 });

@@ -303,7 +303,7 @@ export function SelectedContextReview({ onAccept }: SelectedContextReviewProps) 
         role="dialog"
         aria-modal="true"
         aria-labelledby="selected-context-review-title"
-        className="w-full max-w-xl rounded-2xl border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] p-5 shadow-2xl"
+        className="w-full max-w-xl rounded-2xl border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] p-5 shadow-e4"
       >
         <div className="mb-4 flex items-start justify-between gap-4">
           <div>
@@ -315,7 +315,7 @@ export function SelectedContextReview({ onAccept }: SelectedContextReviewProps) 
                 Local Desktop only
               </span>
             </div>
-            <h2 id="selected-context-review-title" className="text-base font-semibold">
+            <h2 id="selected-context-review-title" className="text-h4">
               Review browser context
             </h2>
             <p className="mt-1 text-xs text-[var(--chat-text-muted)]">

@@ -133,7 +133,8 @@ describe('connector OAuth scope ceiling, operator descriptors cannot exceed it',
           provider: provider!,
           redirectUri: REDIRECT_URI,
           state: 'a'.repeat(64),
-          codeChallenge: null,
+          codeChallenge: 'challenge-value',
+          resource: 'https://mcp.example.com/mcp',
         }),
       ).searchParams.has('scope'),
     ).toBe(false);
@@ -148,6 +149,7 @@ describe('connector OAuth scope ceiling, operator descriptors cannot exceed it',
         redirectUri: REDIRECT_URI,
         state: 'a'.repeat(64),
         codeChallenge: 'challenge-value',
+        resource: 'https://mcp.example.com/mcp',
       }),
     );
     expect(url.searchParams.get('scope')).toBe('read write');

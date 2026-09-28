@@ -114,7 +114,7 @@ describe('StreamAnnouncer announcements', () => {
     );
     advance(STREAM_ANNOUNCE_INTERVAL_MS * 3);
 
-    expect(announcer().textContent).toBe('');
+    expect(screen.queryByTestId('stream-announcer')).toBeNull();
   });
 
   it('stops ticking once the stream ends', () => {

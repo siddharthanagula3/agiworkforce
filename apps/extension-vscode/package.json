@@ -430,6 +430,10 @@
         "icon": "$(add)"
       },
       {
+        "command": "agi-workforce.memory.rememberSelection",
+        "title": "AGI Workforce: Remember This"
+      },
+      {
         "command": "agi-workforce.memory.edit",
         "title": "AGI Workforce: Edit Memory Fact",
         "icon": "$(edit)"
@@ -497,6 +501,41 @@
         "command": "agi-workforce.pullCloudTaskIntoWorkspace",
         "title": "AGI Workforce: Pull Cloud Task Into Workspace",
         "icon": "$(cloud-download)"
+      },
+      {
+        "command": "agi-workforce.showHelp",
+        "title": "AGI Workforce: Help",
+        "icon": "$(question)"
+      },
+      {
+        "command": "agi-workforce.reviewPullRequest",
+        "title": "AGI Workforce: Review a Pull Request",
+        "icon": "$(git-pull-request)"
+      },
+      {
+        "command": "agi-workforce.securityReview",
+        "title": "AGI Workforce: Security Review of Pending Changes",
+        "icon": "$(shield)"
+      },
+      {
+        "command": "agi-workforce.showApprovalHistory",
+        "title": "AGI Workforce: Show Approval History",
+        "icon": "$(checklist)"
+      },
+      {
+        "command": "agi-workforce.showSessionActivity",
+        "title": "AGI Workforce: Show Session Activity",
+        "icon": "$(history)"
+      },
+      {
+        "command": "agi-workforce.continueInCloud",
+        "title": "AGI Workforce: Continue in the Cloud",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "agi-workforce.openCloudCodeSession",
+        "title": "AGI Workforce: Open AGI Code Session",
+        "icon": "$(cloud)"
       },
       {
         "command": "agi-workforce.showSchedules",
@@ -605,6 +644,11 @@
         "title": "AGI Workforce: Open Artifact"
       },
       {
+        "command": "agi-workforce.copyArtifact",
+        "title": "AGI Workforce: Copy Artifact Content",
+        "icon": "$(copy)"
+      },
+      {
         "command": "agi-workforce.saveArtifactToWorkspace",
         "title": "AGI Workforce: Save Artifact into Workspace",
         "icon": "$(save)"
@@ -638,6 +682,11 @@
         "command": "agi-workforce.showContextFiles",
         "title": "AGI Workforce: Show Context Files",
         "icon": "$(pin)"
+      },
+      {
+        "command": "agi-workforce.personalize",
+        "title": "AGI Workforce: Personalization",
+        "icon": "$(person)"
       },
       {
         "command": "agi-workforce.showSkills",
@@ -742,6 +791,17 @@
             },
             "completionEvents": [
               "onCommand:agi-workforce.showAccountUsage"
+            ]
+          },
+          {
+            "id": "setUpMemory",
+            "title": "Decide what AGI remembers",
+            "description": "Memory keeps short facts about you in your AGI Cloud account and sends them with your turns while it is on. [Open Memory](command:agi-workforce.memory)",
+            "media": {
+              "markdown": "media/walkthrough/05-memory.md"
+            },
+            "completionEvents": [
+              "onCommand:agi-workforce.memory"
             ]
           }
         ]
@@ -883,6 +943,11 @@
           "command": "agi-workforce.sendSelectionToNewSession",
           "when": "editorHasSelection",
           "group": "agi-workforce@10"
+        },
+        {
+          "command": "agi-workforce.memory.rememberSelection",
+          "when": "editorHasSelection",
+          "group": "agi-workforce@11"
         }
       ],
       "commandPalette": [
@@ -967,6 +1032,10 @@
           "when": "false"
         },
         {
+          "command": "agi-workforce.openCloudCodeSession",
+          "when": "false"
+        },
+        {
           "command": "agi-workforce.openSchedule",
           "when": "false"
         },
@@ -1004,6 +1073,10 @@
         },
         {
           "command": "agi-workforce.saveArtifactToWorkspace",
+          "when": "false"
+        },
+        {
+          "command": "agi-workforce.copyArtifact",
           "when": "false"
         },
         {

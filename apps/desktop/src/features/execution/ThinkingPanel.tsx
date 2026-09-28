@@ -70,7 +70,7 @@ export function ThinkingPanel({ className }: ThinkingPanelProps) {
       <div className="border-b border-border px-4 py-3">
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1">
-            <h3 className="text-sm font-semibold text-foreground">
+            <h3 className="text-h5 text-foreground">
               {activeGoal.status === 'planning' && 'Planning approach...'}
               {activeGoal.status === 'executing' && 'Executing goal'}
               {activeGoal.status === 'completed' && 'Goal completed'}
