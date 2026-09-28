@@ -303,17 +303,15 @@ Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1076-1081
 
 - Done when: From an artifact seen outside its chat (gallery, list, library), the user can jump to the conversation that produced it.
 - Wave: 3
-- Already works on: chrome
+- Already works on: web, desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The /gallery "Yours" tab opens the source chat only for artifacts this device has not loaded; one it has loaded opens a preview drawer with no link back to its conversation, and Library items have no "open chat" action. | ui |
-| desktop | partial | Same as web (hosted): only index-only gallery cards open their source chat. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | `agi artifacts open` goes to the conversation only while the artifact is unpublished; a published one opens its public page and no command always opens the source chat. | ui |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/web/app/gallery/GalleryClient.tsx:1476-1490`, `apps/web/app/gallery/GalleryClient.tsx:1136-1147`, `apps/cli/src/lib.rs:1955-1975`, `apps/cli/src/cloud/artifacts.rs:450-460`
+Code: `apps/cli/src/lib.rs:1955-1975`, `apps/cli/src/cloud/artifacts.rs:450-460`
 
 ## S26.39: Live updates from ongoing work.
 

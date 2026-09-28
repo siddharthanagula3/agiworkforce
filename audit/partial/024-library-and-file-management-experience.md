@@ -26,17 +26,16 @@ Code: `apps/web/app/chat/library/page.tsx:4-17`, `packages/ui/unified-chat/src/c
 
 - Done when: A view shows only the files the user uploaded.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | No Uploaded view: /api/library accepts origin=uploaded but no tab or control sends it, so uploads are mixed into All/Images/Documents. | ui |
-| desktop | partial | No Uploaded view: /api/library accepts origin=uploaded but no tab or control sends it, so uploads are mixed into All/Images/Documents. | ui |
 | mobile | partial | Rows carry a source label ("Upload") but no view shows uploaded files only. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `packages/ui/unified-chat/src/components/library/LibraryView.tsx:81-88`, `packages/ui/unified-chat/src/components/library/LibraryView.tsx:96-103`, `apps/web/app/api/library/route.ts:67-97`, `apps/mobile/src/features/library/index.tsx:518-522`
+Code: `apps/mobile/src/features/library/index.tsx:518-522`, `apps/mobile/src/features/library/libraryClient.ts:37-50`
 
 ## S24.03: Generated-files view.
 
@@ -69,17 +68,13 @@ Code: `apps/mobile/src/features/library/index.tsx:518-522`, `apps/mobile/src/fea
 
 - Done when: A Videos view collects the user's videos and plays them.
 - Wave: 3
-- Already works on: mobile
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Videos tab lists videos, but a row opens only if previewable; /api/library falls back to image-only when no flag is stored, so uploaded videos do nothing on click (live E099). Generated videos play. | handler |
-| desktop | partial | Videos tab lists videos, but a row opens only if previewable; /api/library falls back to image-only when no flag is stored, so uploaded videos do nothing on click (live E099). Generated videos play. | handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `packages/ui/unified-chat/src/components/library/LibraryView.tsx:81-88`, `packages/ui/unified-chat/src/components/library/LibraryView.tsx:670-687`, `apps/web/app/api/library/route.ts:40-44`, `packages/ui/unified-chat/src/components/library/LibraryView.tsx:1100-1110`
 
 ## S24.08: Recent-files view.
 
@@ -185,17 +180,14 @@ Code: `packages/ui/unified-chat/src/components/library/LibraryView.tsx:81-88`, `
 
 - Done when: Users can sort the Library by name, date, size or type.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Sort by name, size and "Modified" exists, but there is no type sort and "Modified" actually orders by creation time. | ui |
-| desktop | partial | Sort by name, size and "Modified" exists, but there is no type sort and "Modified" actually orders by creation time. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `packages/ui/unified-chat/src/components/library/LibraryView.tsx:111-115`, `apps/web/lib/server/media-assets.ts:429-433`, `packages/ui/unified-chat/src/components/library/LibraryView.tsx:1826-1860`
 
 ## S24.27: Add to Project.
 
@@ -229,17 +221,14 @@ Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:404-420`, `ap
 
 - Done when: From a Library file, users can open the conversation it came from.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | media_assets stores the conversation a file came from, but /api/library does not return it and the Library has no "Open conversation" action. | api, ui |
-| desktop | partial | media_assets stores the conversation a file came from, but /api/library does not return it and the Library has no "Open conversation" action. | api, ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/lib/server/media-assets.ts:181-185`, `apps/web/app/api/library/route.ts:46-64`
 
 ## S24.32: Version history.
 
@@ -261,17 +250,16 @@ Code: `apps/web/lib/server/generated-file-persist.ts:66-80`
 
 - Done when: The product shows how much storage the user's files consume against their allowance.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only project knowledge storage shows "used of limit" (project settings); the Library shows no storage consumption for the user's files. | ui |
-| desktop | partial | Only project knowledge storage shows "used of limit" (project settings); the Library shows no storage consumption for the user's files. | ui |
 | mobile | partial | Settings > Storage shows on-device bytes (downloaded models, cache, free space), not cloud Library usage. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/projects/components/ProjectSettingsDialog.tsx:283-283`, `apps/web/features/projects/components/KnowledgeFilesPanel.tsx:228-244`, `apps/mobile/app/(app)/settings/storage.tsx:260-300`
+Code: `apps/mobile/app/(app)/settings/storage.tsx:260-300`
 
 ## S24.34: Trash and restore.
 
