@@ -42,7 +42,7 @@ export function SubscriptionGate({ children }: { children: React.ReactNode }) {
         </div>
 
         <div className="space-y-2">
-          <h1 className="text-2xl font-bold text-white">Subscription Required</h1>
+          <h1 className="text-h1 text-white">Subscription Required</h1>
           <p className="text-zinc-400">
             {gateResult.reason || getUpgradeMessage(gateResult.currentTier)}
           </p>

@@ -10,35 +10,34 @@ nothing is left.
 
 - Done when: The author of each turn is distinguishable visually (avatar, name, alignment/bubble style or terminal marker) AND announced to assistive tech (R-n).
 - Wave: 3
-- Already works on: mobile, cli
+- Already works on: mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | User turns are told apart only by a right-aligned bubble; add a screen-reader author label (e.g. "You said" / assistant name) per message, since the log region announces no sender. | ui |
 | desktop | partial | Same as web (hosted): User turns are told apart only by a right-aligned bubble; add a screen-reader author label (e.g. "You said" / assistant name) per message, since the log region announces no sender. | ui |
-| vscode | partial | User turns differ only by a right-aligned bordered bubble; add a screen-reader sender label, since the role=log region reads text with no author. | ui |
 | chrome | partial | User turns differ only by right alignment (sp-msg-user); add a screen-reader sender label per bubble. | ui |
 
-Code: `apps/web/features/chat/components/messages/MessageBubble.tsx:1784-1795`, `apps/web/features/chat/components/messages/ChatMessageList.tsx:1914-1917`, `apps/web/features/chat/components/messages/ChatMessageList.tsx:731-731`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:491-495`
+Code: `apps/web/features/chat/components/messages/MessageBubble.tsx:1784-1795`, `apps/web/features/chat/components/messages/ChatMessageList.tsx:1914-1917`, `apps/web/features/chat/components/messages/ChatMessageList.tsx:731-731`, `apps/extension/src/features/side-panel/bubbles.ts:225-227`
 
 ## S16.03: Attachment group.
 
 - Done when: Files and images sent with a user turn are listed on that message (thumbnail or named chip) after sending.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | Show the images/files a turn carried on the transcript message; staged image chips are cleared at send and only typed @paths remain visible. | ui |
-| vscode | partial | Render the files attached to a turn on the sent user message; today chips live only in the composer strip and the bubble shows text only. | ui |
 | chrome | partial | Keep attachment names on the user message; the side panel sends them with the turn but the bubble stores and shows only the text. | ui |
 
-Code: `apps/cli/src/tui/tui_app.rs:4957-4960`, `apps/cli/src/tui/tui_app.rs:4926-4929`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:2204-2204`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:3910-3910`
+Code: `apps/cli/src/tui/tui_app.rs:4957-4960`, `apps/cli/src/tui/tui_app.rs:4926-4929`, `apps/extension/src/side_panel.ts:4957-4957`, `apps/extension/src/features/side-panel/bubbles.ts:235-235`
 
 ## S16.04: Source and context chips.
 
 - Done when: A sent user message shows chips for the non-file context it carried (quoted text, connector/MCP resources, page, editor selection, @mentions).
 - Wave: 3
+- Already works on: vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -46,7 +45,6 @@ Code: `apps/cli/src/tui/tui_app.rs:4957-4960`, `apps/cli/src/tui/tui_app.rs:4926
 | desktop | partial | Same as web (hosted): only a "pasted" badge; MCP/project context the turn carried has no chip. | ui |
 | mobile | partial | Render quoted-reply and project/style context as chips on the sent message; a quote is only inlined into the text as a "> You: ..." line. | ui |
 | cli | partial | Show context the turn carried as distinct chips; the transcript only keeps the literal @path text the user typed. | ui |
-| vscode | partial | Carry the editor-context and browse-web chips onto the sent message; they show in the composer strip and vanish on send. | ui |
 | chrome | partial | Mark the user message with the page context it sent; page text travels with the turn but the bubble shows none of it. | ui |
 
 Code: `apps/web/features/chat/components/messages/MessageBubble.tsx:1824-1828`, `apps/web/lib/hooks/useChatStream.ts:3548-3554`, `apps/mobile/app/(app)/chat/[id].tsx:354-362`, `apps/cli/src/tui/tui_app.rs:4926-4929`
@@ -178,6 +176,7 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:3181-3186`, `apps/mobile/ap
 
 - Done when: While a user message is not yet accepted by the service, the message shows a pending/sending/queued state.
 - Wave: 3
+- Already works on: vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -185,7 +184,6 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:3181-3186`, `apps/mobile/ap
 | desktop | partial | Mark the transcript message itself while it is being delivered; pending shows only on the send button ("Sending…") and as the typing indicator. | ui |
 | mobile | partial | The "queued" badge is the only pending marker and it is set solely by the offline queue (isOnline false and cloud mode). An online send appends the user row with no pending/sending state; the auditor's own note admits "online sends show only the streaming indicator", which is the case the criterion names ("not yet accepted by the service"). Partial with miss states; remaining: show a sending state on online user rows until the server accepts the turn. Same standard the auditor applied to web (partial). |  |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | The cited lines only cover follow-ups: data-delivery-state=queued is set when isFollowUp, and setUserMessageState is called only for activeQueuedClientMessageId. A first send (no active turn) renders the user bubble with no delivery state while the host waits for the local runtime; only the typing indicator shows. Partial with miss states; remaining: mark first-turn sends as pending/sending until the runtime accepts them. needs-local-cli still applies. |  |
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/web/features/chat/components/Composer/SendButton.tsx:95-96`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:5188-5188`, `apps/web/features/chat/components/messages/ChatMessageList.tsx:1192-1192`, `apps/mobile/src/features/chat/components/MessageBubble.tsx:684-700`

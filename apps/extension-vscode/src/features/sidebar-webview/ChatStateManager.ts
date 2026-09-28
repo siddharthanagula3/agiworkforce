@@ -141,6 +141,7 @@ const RUNTIME_SETUP_ERROR_MARKERS = [CLI_NOT_FOUND_MARKER, CLI_NOT_EXECUTABLE_MA
 const RUNTIME_SETUP_ERROR_MAX_LENGTH = 320;
 
 const RECENT_CONVERSATION_LIMIT = 5;
+const TEXT_ATTACHMENT_CHAR_LIMIT = 40_000;
 const MAX_QUEUED_SENDS = 20;
 const MAX_PRE_START_TURN_EVENTS = 1_024;
 const PRE_START_EVENT_OVERFLOW_MESSAGE =
@@ -406,7 +407,7 @@ export type ExtToWebviewMessage =
   | {
       type: 'attachFilesAck';
       payload: {
-        added: Array<{ id: string; name: string }>;
+        added: Array<{ id: string; name: string; truncatedAt?: number }>;
         skipped: Array<{ name: string; reason: string }>;
       };
     }
@@ -1342,7 +1343,7 @@ export class ChatStateManager {
       }
 
       case 'attachFiles': {
-        const added: Array<{ id: string; name: string }> = [];
+        const added: Array<{ id: string; name: string; truncatedAt?: number }> = [];
         const skipped: Array<{ name: string; reason: string }> = [];
         for (const file of msg.payload.files) {
           const safeName = file.name.replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 200) || 'attachment';
@@ -1378,7 +1379,7 @@ export class ChatStateManager {
               id: imageId,
               input: { type: 'image', image_url: file.dataUrl },
             });
-            added.push({ id: imageId, name: safeName });
+            added.push({ id: imageId, name: file.name });
             continue;
           }
           const isText =
@@ -1388,8 +1389,15 @@ export class ChatStateManager {
             skipped.push({ name: file.name, reason: 'unsupported binary attachment' });
             continue;
           }
-          const textId = this._pushTextAttachment(safeName, new TextDecoder().decode(bytes));
-          added.push({ id: textId, name: safeName });
+          const text = new TextDecoder().decode(bytes);
+          const textId = this._pushTextAttachment(safeName, text);
+          added.push({
+            id: textId,
+            name: file.name,
+            ...(text.length > TEXT_ATTACHMENT_CHAR_LIMIT
+              ? { truncatedAt: TEXT_ATTACHMENT_CHAR_LIMIT }
+              : {}),
+          });
         }
 
         this._post({ type: 'attachFilesAck', payload: { added, skipped } });
@@ -2129,7 +2137,7 @@ export class ChatStateManager {
    * whether the text came from a dropped file or the composer context menu.
    */
   private _pushTextAttachment(name: string, raw: string): string {
-    const selected = raw.slice(0, 40_000);
+    const selected = raw.slice(0, TEXT_ATTACHMENT_CHAR_LIMIT);
     const escaped = selected.replace(/<\/?untrusted_attachment[^>]*>/gi, (value) =>
       value.replace(/</g, '&lt;').replace(/>/g, '&gt;'),
     );
