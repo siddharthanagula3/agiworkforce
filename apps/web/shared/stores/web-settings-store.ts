@@ -56,6 +56,7 @@ interface SettingsState {
   /** Composer microphone dictation. Read by the composer's dictation entry point. */
   dictationEnabled: boolean;
   codeBlockWrap: boolean;
+  followUpSuggestionsEnabled: boolean;
   accentColor: AccentColor;
   highContrast: boolean;
   customCommands: CustomCommand[];
@@ -70,6 +71,7 @@ interface SettingsState {
   setNewChatsTemporary: (temporary: boolean) => void;
   setDictationEnabled: (enabled: boolean) => void;
   setCodeBlockWrap: (wrap: boolean) => void;
+  setFollowUpSuggestionsEnabled: (enabled: boolean) => void;
   setAccentColor: (accent: AccentColor) => void;
   setHighContrast: (on: boolean) => void;
   addCustomCommand: (cmd: Omit<CustomCommand, 'id'>) => void;
@@ -89,6 +91,7 @@ export const useSettingsStore = create<SettingsState>()(
       newChatsTemporary: false,
       dictationEnabled: true,
       codeBlockWrap: false,
+      followUpSuggestionsEnabled: true,
       accentColor: 'default',
       highContrast: false,
       customCommands: [],
@@ -117,6 +120,7 @@ export const useSettingsStore = create<SettingsState>()(
               : [...s.hiddenNavIds, id],
         })),
       setCodeBlockWrap: (wrap) => set({ codeBlockWrap: wrap }),
+      setFollowUpSuggestionsEnabled: (enabled) => set({ followUpSuggestionsEnabled: enabled }),
       setAccentColor: (accent) => set({ accentColor: accent }),
       setHighContrast: (on) => set({ highContrast: on }),
       addCustomCommand: (cmd) =>

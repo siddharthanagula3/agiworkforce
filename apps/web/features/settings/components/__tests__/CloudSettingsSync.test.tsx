@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useSettingsStore } from '@shared/stores/web-settings-store';
 
-const session = { isLoaded: true, isSignedIn: false };
+const session = { isLoaded: true, isSignedIn: false, userId: 'user-1' };
 const themeState = {
   theme: 'system',
   setTheme: vi.fn((next: string) => {
@@ -88,6 +88,7 @@ beforeEach(() => {
     motion: 'system',
     highContrast: false,
     codeBlockWrap: false,
+    followUpSuggestionsEnabled: true,
     dictationEnabled: true,
     voiceSpeed: 'normal',
     hiddenNavIds: [],
@@ -127,6 +128,7 @@ describe('signing in', () => {
             motion: 'reduced',
             highContrast: true,
             codeBlockWrap: true,
+            followUpSuggestions: false,
             dictationEnabled: false,
             voiceSpeed: 'fast',
             hiddenNavIds: ['projects'],
@@ -240,6 +242,7 @@ describe('changing a control on web', () => {
             motion: 'system',
             highContrast: false,
             codeBlockWrap: false,
+            followUpSuggestions: true,
             dictationEnabled: true,
             voiceSpeed: 'normal',
             hiddenNavIds: [],
@@ -274,6 +277,7 @@ describe('changing a control on web', () => {
             motion: 'system',
             highContrast: false,
             codeBlockWrap: false,
+            followUpSuggestions: true,
             dictationEnabled: true,
             voiceSpeed: 'normal',
             hiddenNavIds: [],

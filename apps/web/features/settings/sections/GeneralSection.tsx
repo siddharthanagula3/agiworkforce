@@ -977,6 +977,7 @@ export function GeneralSection() {
 
           {/* Code block wrapping */}
           <CodeBlockWrapRow />
+          <FollowUpSuggestionsRow />
 
           {/* Read-aloud voice */}
           <ReadAloudVoiceRow />
@@ -1407,6 +1408,33 @@ function CodeBlockWrapRow() {
           aria-hidden="true"
           className={`block h-5 w-5 rounded-full bg-background transition-transform ${
             codeBlockWrap ? 'translate-x-[22px]' : 'translate-x-0.5'
+          }`}
+        />
+      </button>
+    </Row>
+  );
+}
+
+function FollowUpSuggestionsRow() {
+  const enabled = useSettingsStore((state) => state.followUpSuggestionsEnabled);
+  const setEnabled = useSettingsStore((state) => state.setFollowUpSuggestionsEnabled);
+
+  return (
+    <Row label="Show follow-up suggestions in chats">
+      <button
+        type="button"
+        role="switch"
+        aria-checked={enabled}
+        aria-label="Show follow-up suggestions in chats"
+        onClick={() => setEnabled(!enabled)}
+        className={`h-6 w-11 shrink-0 rounded-full transition-colors ${
+          enabled ? 'bg-primary' : 'bg-muted'
+        }`}
+      >
+        <span
+          aria-hidden="true"
+          className={`block h-5 w-5 rounded-full bg-background transition-transform ${
+            enabled ? 'translate-x-[22px]' : 'translate-x-0.5'
           }`}
         />
       </button>

@@ -19,6 +19,7 @@ export interface AppearanceSettings {
   motion: MotionPreference;
   highContrast: boolean;
   codeBlockWrap: boolean;
+  followUpSuggestionsEnabled: boolean;
   dictationEnabled: boolean;
   voiceSpeed: VoiceSpeed;
   hiddenNavIds: string[];
@@ -32,6 +33,7 @@ export interface AppearanceNamespace {
   motion?: MotionPreference;
   highContrast?: boolean;
   codeBlockWrap?: boolean;
+  followUpSuggestions?: boolean;
   dictationEnabled?: boolean;
   voiceSpeed?: VoiceSpeed;
   hiddenNavIds?: string[];
@@ -101,6 +103,7 @@ export function toAppearanceNamespace(settings: AppearanceSettings): Required<Ap
     motion: settings.motion,
     highContrast: settings.highContrast,
     codeBlockWrap: settings.codeBlockWrap,
+    followUpSuggestions: settings.followUpSuggestionsEnabled,
     dictationEnabled: settings.dictationEnabled,
     voiceSpeed: settings.voiceSpeed,
     hiddenNavIds: settings.hiddenNavIds,
@@ -132,6 +135,9 @@ export function fromAppearanceNamespace(stored: unknown): Partial<AppearanceSett
 
   const codeBlockWrap = boolean(source['codeBlockWrap']);
   if (codeBlockWrap !== undefined) patch.codeBlockWrap = codeBlockWrap;
+
+  const followUpSuggestions = boolean(source['followUpSuggestions']);
+  if (followUpSuggestions !== undefined) patch.followUpSuggestionsEnabled = followUpSuggestions;
 
   const dictationEnabled = boolean(source['dictationEnabled']);
   if (dictationEnabled !== undefined) patch.dictationEnabled = dictationEnabled;
