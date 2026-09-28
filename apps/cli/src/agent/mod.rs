@@ -497,10 +497,11 @@ impl AgentSession {
         Self::new_with_provider(model, sys_context, custom_system_prompt, provider)
     }
 
-    /// Refresh the account memory cache before a session is built, so the
-    /// system prompt carries what the account holds right now rather than what
-    /// this device last saw. Managed sessions only, and best effort: a session
-    /// still starts when the account is unreachable, with the cached copy.
+    /// Refresh the account memory cache and the workspace policy before a
+    /// session is built, so the system prompt carries what the account holds
+    /// right now rather than what this device last saw. Managed sessions only,
+    /// and best effort: a session still starts when the account is
+    /// unreachable, with the cached copy.
     pub async fn prime_account_memory(model: &str, provider_override: Option<&str>) {
         let Ok(provider) = models::resolve_selected_provider(model, provider_override) else {
             return;
@@ -517,12 +518,23 @@ impl AgentSession {
                 }
             }
         }
-        match crate::cloud::refresh_memory(PrivacyMode::Managed).await {
+        let (memory, policy) = tokio::join!(
+            crate::cloud::refresh_memory(PrivacyMode::Managed),
+            crate::cloud::workspace_policy::refresh(PrivacyMode::Managed),
+        );
+        match memory {
             Ok(_) => {}
             Err(error) if error.is_boundary() => crate::cloud::report_boundary_once(&error),
             Err(error) => crate::output::print_warn(&format!(
                 "using the account memory this device already had: {error}"
             )),
+        }
+        if let Err(error) = policy {
+            if !error.is_boundary() && crate::cloud::workspace_policy::governed() {
+                crate::output::print_warn(&format!(
+                    "using the workspace policy this device already had: {error}"
+                ));
+            }
         }
     }
 
@@ -802,6 +814,15 @@ impl AgentSession {
                 self.allowed_tools.as_deref(),
                 mcp_tool_definitions.as_deref(),
             );
+
+        if !planning_locked
+            && self.privacy_mode == PrivacyMode::Managed
+            && crate::plans::cached_plan_allows("image_generation")
+        {
+            tool_definitions.extend(crate::runtime::tool_catalog::image_tool_definitions(
+                self.allowed_tools.as_deref(),
+            ));
+        }
 
         if !self.disallowed_tools.is_empty() {
             tool_definitions.retain(|tool_definition| {

@@ -24,9 +24,9 @@ Code: `apps/web/lib/connectors/microsoft-graph.ts:297-297`, `apps/web/lib/connec
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | partials/mcp-web a8fe8b9e9: version ranges are checked instead of refused (semver, code.claude.com/docs/en/plugin-dependencies read 2026-09-28): conflicting ranges, an installed version out of range and a listed version out of range each refuse with Claude Code's wording, and a directory dependency's <name>--v<version> release tags are read to say whether the CLI can install one. The web app installs only the listed, inspected version. Still owed by other lanes: the CLI resolver call (p-desktop-cli) and dependency resolution for uploaded and authored plugins (p-routines-voice). | handler |
+| platform | partial | The CLI resolver call is done (ec7e0839d5: declared dependencies, as names or objects with semver ranges, install and enable breadth first and bounded, same marketplace unless allowCrossMarketplaceDependenciesOn names another). Dependency resolution for uploaded and authored plugins is still owed by p-routines-voice | handler |
 
-Code: `apps/web/lib/services/plugin-dependencies.ts:52-52`, `apps/web/lib/services/plugin-dependencies.ts:155-155`, `apps/web/features/plugins/server/directory/dependencies.ts:502-502`, `apps/web/features/plugins/server/directory/release-tags.ts:22-22`
+Code: `apps/cli/src/installs.rs:140-140`, `apps/cli/src/installs.rs:257-257`, `apps/cli/src/installs.rs:278-278`, `apps/cli/src/features/plugins/plugins.rs:141-141`
 
 ## S98.26: Publisher identity service.
 

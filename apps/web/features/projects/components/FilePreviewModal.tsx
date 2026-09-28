@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { isTextAttachmentMeta, type ProjectKnowledgeFile } from '@agiworkforce/types';
-import { MarkdownContent } from '@agiworkforce/unified-chat';
-import { useDialogKeyboard } from '@agiworkforce/ui';
+import { FileTextPreview, MarkdownContent, useFileTextPreview } from '@agiworkforce/unified-chat';
+import { Spinner, useDialogKeyboard } from '@agiworkforce/ui';
 import { toast } from 'sonner';
 
 interface Props {
@@ -180,6 +180,47 @@ function TextPreview({ storageUri, fileName, mimeType }: TextPreviewProps) {
   );
 }
 
+function loadExtractedText(storageUri: string): Promise<Response> {
+  return fetch(`${storageUri}/text`);
+}
+
+function ExtractedTextPreview({ storageUri }: { storageUri: string }) {
+  const preview = useFileTextPreview(storageUri, loadExtractedText);
+
+  if (preview.status === 'failed') {
+    return (
+      <div style={{ padding: 'var(--space-6)', textAlign: 'center', width: '100%' }}>
+        <p style={{ fontSize: 12, color: 'var(--agi-ink-2)', margin: 0 }}>
+          Failed to load file contents.
+        </p>
+      </div>
+    );
+  }
+
+  if (preview.status !== 'ready') {
+    return (
+      <div
+        style={{
+          padding: 'var(--space-6)',
+          display: 'flex',
+          justifyContent: 'center',
+          width: '100%',
+        }}
+      >
+        <Spinner size="sm" aria-label="Loading file contents" />
+      </div>
+    );
+  }
+
+  return (
+    <div
+      style={{ width: '100%', padding: 'var(--space-4) var(--space-5)', boxSizing: 'border-box' }}
+    >
+      <FileTextPreview preview={preview.preview} />
+    </div>
+  );
+}
+
 export function FilePreviewModal({ file, onClose, page }: Props) {
   const dialogRef = useRef<HTMLDivElement>(null);
   useDialogKeyboard({ open: file !== null, onClose, panelRef: dialogRef });
@@ -198,7 +239,9 @@ export function FilePreviewModal({ file, onClose, page }: Props) {
   const isImage = file.mimeType.startsWith('image/');
   const isPdf = file.mimeType === 'application/pdf';
   const ext = fileExt(file.fileName);
-  const isText = isTextAttachmentMeta(file.fileName, file.mimeType) || ext in EXT_LANG;
+  const isExtracted = file.textPreview === true;
+  const isText =
+    !isExtracted && (isTextAttachmentMeta(file.fileName, file.mimeType) || ext in EXT_LANG);
 
   const formatSize = (bytes: number) => {
     if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -366,6 +409,8 @@ export function FilePreviewModal({ file, onClose, page }: Props) {
             />
           )}
 
+          {isExtracted && <ExtractedTextPreview storageUri={file.storageUri} />}
+
           {isText && (
             <TextPreview
               storageUri={file.storageUri}
@@ -374,7 +419,7 @@ export function FilePreviewModal({ file, onClose, page }: Props) {
             />
           )}
 
-          {!isImage && !isPdf && !isText && (
+          {!isImage && !isPdf && !isText && !isExtracted && (
             <div style={{ padding: 'var(--space-6)', textAlign: 'center', width: '100%' }}>
               <p style={{ fontSize: 14, color: 'var(--agi-ink-2)', margin: 0 }}>
                 Preview is not available for this file type.

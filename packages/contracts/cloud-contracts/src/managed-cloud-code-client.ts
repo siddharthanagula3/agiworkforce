@@ -390,6 +390,7 @@ export function createManagedCloudCodeApi(config: ManagedCloudCodeApiConfig): Cl
             goal: input.goal,
             model: input.model,
             ...(input.maxSteps ? { maxSteps: input.maxSteps } : {}),
+            ...(input.mode ? { mode: input.mode } : {}),
           }),
           signal,
         },

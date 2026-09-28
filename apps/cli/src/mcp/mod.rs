@@ -658,6 +658,34 @@ async fn complete_step_up(url: &str, oauth: &OAuthConfig, hooks: &ClientHooks) -
     store.delete_step_up_scope(url)
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct McpSignInRequired {
+    pub tool: String,
+    pub server: String,
+    pub scope: Option<String>,
+}
+
+tokio::task_local! {
+    static SIGN_IN_REQUIRED: std::cell::RefCell<Vec<McpSignInRequired>>;
+}
+
+pub async fn collect_sign_in_required<F: Future>(future: F) -> F::Output {
+    SIGN_IN_REQUIRED
+        .scope(std::cell::RefCell::new(Vec::new()), future)
+        .await
+}
+
+pub fn take_sign_in_required(tool: &str) -> Option<McpSignInRequired> {
+    SIGN_IN_REQUIRED
+        .try_with(|required| {
+            let mut required = required.borrow_mut();
+            let position = required.iter().position(|entry| entry.tool == tool)?;
+            Some(required.remove(position))
+        })
+        .ok()
+        .flatten()
+}
+
 fn needs_sign_in(error: &anyhow::Error) -> bool {
     error.chain().any(|cause| {
         cause
@@ -1612,7 +1640,15 @@ impl McpManager {
             .await
             .map_err(|error| {
                 if needs_sign_in(&error) {
-                    match remember_step_up(&error) {
+                    let scope = remember_step_up(&error);
+                    let _ = SIGN_IN_REQUIRED.try_with(|required| {
+                        required.borrow_mut().push(McpSignInRequired {
+                            tool: namespaced_name.to_string(),
+                            server: tool.server_name.clone(),
+                            scope: scope.clone(),
+                        })
+                    });
+                    match scope {
                         Some(scope) => anyhow::anyhow!(
                             "{error:#}. MCP server '{0}' needs the additional permission '{scope}'. Run `agi mcp login {0}` to grant it.",
                             tool.server_name

@@ -354,6 +354,8 @@ export type {
   SurfaceFilter,
 } from './components/library/LibraryView';
 export type { MediaJobsTransport } from './components/library/MediaJobsSection';
+export { FileTextPreview, useFileTextPreview } from './components/library/FileTextPreview';
+export type { FileTextPreviewState } from './components/library/FileTextPreview';
 export { TasksPage } from './components/tasks/TasksPage';
 export type { TasksTransport } from './components/tasks/TasksPage';
 export type { AgiWorkRerunGoal } from './components/tasks/task-display';

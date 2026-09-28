@@ -1,19 +1,14 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { MAX_FILE_TEXT_CHARS } from '@agiworkforce/types';
+import type { FileTextPreview } from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { getActiveWorkspaceMediaAssetById } from '@/lib/server/media-assets';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { isMediaStorageConfigured, readStoredMedia } from '@/lib/server/media-storage';
-import {
-  OfficeDocumentUnreadableError,
-  extractOfficeDocumentText,
-  officeDocumentKind,
-} from '@/lib/server/office-document-text';
-import { fileTextPreviewKind } from '@/lib/server/file-text-preview';
+import { fileTextPreviewKind, renderFileTextPreview } from '@/lib/server/file-text-preview';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -49,29 +44,8 @@ async function handleGetFileText(
   const object = await readStoredMedia(asset.storagePathname);
   if (!object) throw createError.notFound('File bytes are not available');
 
-  let text: string;
-  if (kind === 'office') {
-    const officeKind = officeDocumentKind(fileName, asset.mimeType);
-    if (!officeKind) throw createError.notFound('This file has no text preview');
-    try {
-      text = await extractOfficeDocumentText(object.data, fileName, officeKind);
-    } catch (error) {
-      if (error instanceof OfficeDocumentUnreadableError) {
-        throw createError.validation('This document could not be read');
-      }
-      throw error;
-    }
-  } else {
-    text = object.data.toString('utf8');
-  }
-
-  const truncated = text.length > MAX_FILE_TEXT_CHARS;
-  return NextResponse.json(
-    {
-      kind: kind === 'table' ? 'table' : 'text',
-      text: truncated ? text.slice(0, MAX_FILE_TEXT_CHARS) : text,
-      truncated,
-    },
+  return NextResponse.json<FileTextPreview>(
+    await renderFileTextPreview(kind, fileName, asset.mimeType, object.data),
     { headers: { 'Cache-Control': 'private, no-store' } },
   );
 }
