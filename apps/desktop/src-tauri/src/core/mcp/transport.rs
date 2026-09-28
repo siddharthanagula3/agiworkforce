@@ -627,6 +627,9 @@ pub struct HttpSseConfig {
     pub headers: HashMap<String, String>,
     pub timeout_secs: u64,
     pub verify_ssl: bool,
+    pub oauth_client_id: Option<String>,
+    pub oauth_client_secret: Option<String>,
+    pub oauth_token_url: Option<String>,
 }
 
 impl Default for HttpSseConfig {
@@ -638,6 +641,9 @@ impl Default for HttpSseConfig {
             headers: HashMap::new(),
             timeout_secs: HTTP_REQUEST_TIMEOUT_SECS,
             verify_ssl: true,
+            oauth_client_id: None,
+            oauth_client_secret: None,
+            oauth_token_url: None,
         }
     }
 }
@@ -784,8 +790,15 @@ fn remote_engine_config(
     let carries_authorization = headers
         .keys()
         .any(|name| name.eq_ignore_ascii_case("authorization"));
-    let oauth = (!carries_authorization && refuse_cleartext_credential_hop(&url).is_ok())
-        .then(agiworkforce_mcp::OAuthConfig::default);
+    let oauth =
+        (!carries_authorization && refuse_cleartext_credential_hop(&url).is_ok()).then(|| {
+            agiworkforce_mcp::OAuthConfig {
+                client_id: config.oauth_client_id.clone(),
+                client_secret: config.oauth_client_secret.clone(),
+                token_url: config.oauth_token_url.clone(),
+                ..agiworkforce_mcp::OAuthConfig::default()
+            }
+        });
     let timeouts = agiworkforce_mcp::McpTimeouts {
         initialize: std::time::Duration::from_secs(config.timeout_secs),
         validate_urls: true,
@@ -987,13 +1000,23 @@ impl serde::Serialize for HttpSseConfig {
         S: serde::Serializer,
     {
         use serde::ser::SerializeStruct;
-        let mut state = serializer.serialize_struct("HttpSseConfig", 6)?;
+        let mut state = serializer.serialize_struct("HttpSseConfig", 9)?;
         state.serialize_field("url", &self.url)?;
         state.serialize_field("api_key", &self.api_key)?;
         state.serialize_field("bearer_token", &self.bearer_token)?;
         state.serialize_field("headers", &self.headers)?;
         state.serialize_field("timeout_secs", &self.timeout_secs)?;
         state.serialize_field("verify_ssl", &self.verify_ssl)?;
+        for (key, value) in [
+            ("oauth_client_id", &self.oauth_client_id),
+            ("oauth_client_secret", &self.oauth_client_secret),
+            ("oauth_token_url", &self.oauth_token_url),
+        ] {
+            match value {
+                Some(value) => state.serialize_field(key, value)?,
+                None => state.skip_field(key)?,
+            }
+        }
         state.end()
     }
 }
@@ -1016,6 +1039,12 @@ impl<'de> serde::Deserialize<'de> for HttpSseConfig {
             timeout_secs: u64,
             #[serde(default = "default_verify_ssl")]
             verify_ssl: bool,
+            #[serde(default)]
+            oauth_client_id: Option<String>,
+            #[serde(default)]
+            oauth_client_secret: Option<String>,
+            #[serde(default)]
+            oauth_token_url: Option<String>,
         }
 
         fn default_timeout() -> u64 {
@@ -1034,6 +1063,9 @@ impl<'de> serde::Deserialize<'de> for HttpSseConfig {
             headers: helper.headers,
             timeout_secs: helper.timeout_secs,
             verify_ssl: helper.verify_ssl,
+            oauth_client_id: helper.oauth_client_id,
+            oauth_client_secret: helper.oauth_client_secret,
+            oauth_token_url: helper.oauth_token_url,
         })
     }
 }
@@ -1131,6 +1163,7 @@ mod tests {
             },
             timeout_secs: 60,
             verify_ssl: true,
+            ..Default::default()
         };
 
         let json = serde_json::to_string(&config).unwrap();

@@ -136,10 +136,9 @@ Code: `apps/web/shared/components/people/MemberPicker.tsx:99-99`, `apps/web/feat
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | Only generated artifacts are listed (Artifacts view); uploaded and library files cannot be browsed from VS Code. | ui |
 | chrome | partial | Only generated artifacts are listed in the drawer; uploaded and library files cannot be browsed from the side panel. | ui |
 
-Code: `apps/extension-vscode/src/features/artifacts/artifactsTree.ts:98-110`, `apps/extension-vscode/src/core/chatSetup.ts:105-105`, `apps/extension/src/features/side-panel/artifactsDrawer.ts:230-236`, `apps/extension/src/side_panel.ts:7021-7021`
+Code: `apps/extension/src/features/side-panel/artifactsDrawer.ts:230-236`, `apps/extension/src/side_panel.ts:7021-7021`
 
 ## S9.14: Folder tree.
 
@@ -163,10 +162,9 @@ Code: `apps/extension-vscode/src/features/artifacts/artifactsTree.ts:98-110`, `a
 | --- | --- | --- | --- |
 | mobile | partial | Tables in answers render as static rows; there is no sortable data table for tabular results. | ui |
 | cli | partial | Tables now wrap without losing text; there is still no sorting or horizontal scrolling. | ui |
-| vscode | partial | Markdown tables render static through markdown-it in the sidebar; no sortable data table. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/chat/components/MessageContentRenderer.tsx:306-332`, `apps/cli/src/tui/markdown_renderer.rs:448-448`, `apps/extension-vscode/src/webview/render.ts:5-10`
+Code: `apps/mobile/src/features/chat/components/MessageContentRenderer.tsx:306-332`, `apps/cli/src/tui/markdown_renderer.rs:448-448`
 
 ## S9.17: Media gallery.
 
@@ -197,15 +195,14 @@ Code: `apps/cli/src/tui/tui_app.rs:3278-3295`
 
 - Done when: Tasks are laid out as a board with a column per status so the user sees and manages work by stage.
 - Wave: 3
-- Already works on: web, desktop, chrome
+- Already works on: web, desktop, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Tasks are a filtered list; add a board with a column per status (queued, running, needs approval, done) that the user can scan and move work across. | ui |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | The Cloud Tasks view is one flat tree of runs with state icons; add a status-grouped board or at least grouping by stage. | ui |
 
-Code: `apps/mobile/src/features/tasks/CloudTasksScreen.tsx:448-458`, `apps/extension-vscode/src/features/cloud-tasks/cloudTasksTree.ts:102-104`
+Code: `apps/mobile/src/features/tasks/CloudTasksScreen.tsx:448-458`
 
 ## S9.22: Stepper.
 
@@ -336,10 +333,9 @@ Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2181
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | /mcp lists only servers that loaded, each hard-coded "Connected"; show failed or needs-auth servers and the account's cloud connectors with a connect action. | ui |
-| vscode | partial | Connectors list with status in a quick pick, but connecting or disconnecting opens the web app; add in-extension connect. | surface-only |
+| cli | partial | Configured servers now show their real state; the account's cloud connectors with a connect action are still not listed. | ui |
 
-Code: `apps/cli/src/tui/tui_app.rs:3613-3613`, `apps/cli/src/tui/tui_app.rs:3625-3625`, `apps/extension-vscode/src/features/connectors/connectorPresentation.ts:10-10`, `apps/extension-vscode/src/core/commandSetup.ts:2307-2307`
+Code: `apps/cli/src/tui/tui_app.rs:4021-4021`
 
 ## S9.34: Capability-warning card.
 

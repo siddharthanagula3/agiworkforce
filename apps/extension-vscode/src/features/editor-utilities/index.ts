@@ -3,6 +3,8 @@ export {
   buildExplainErrorPrompt,
   buildExplainSelectionPrompt,
   buildExplainTerminalPrompt,
+  buildPullRequestReviewPrompt,
+  buildSecurityReviewPrompt,
   runEditorUtility,
   setEditorUtilityChat,
   type EditorUtility,

@@ -845,12 +845,9 @@ function ArtifactDrawer({ artifact, onClose }: ArtifactDrawerProps) {
               style={{
                 fontSize: 'var(--agi-text-xs)',
                 fontWeight: 500,
-                color: 'var(--agi-ink-2)',
-                border: '1px solid var(--agi-rule)',
-                borderRadius: 'var(--corner-control)',
-                padding: 'var(--space-1) var(--space-2)',
-                textDecoration: 'none',
-                flexShrink: 0,
+                color: 'var(--agi-ink)',
+                textDecoration: 'underline',
+                textUnderlineOffset: 3,
               }}
             >
               Open chat

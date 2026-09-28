@@ -16,6 +16,16 @@ const CLIENT_KEY_PREFIX: &str = "mcp_oauth_v3_client";
 pub struct DesktopTokenStore;
 
 impl DesktopTokenStore {
+    pub fn forget(server_url: &str) -> Result<(), String> {
+        let conn = open_mcp_settings_db()?;
+        conn.execute(
+            "DELETE FROM settings_v2 WHERE key = ?1",
+            rusqlite::params![Self::key(TOKEN_KEY_PREFIX, server_url)],
+        )
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+    }
+
     fn key(prefix: &str, value: &str) -> String {
         format!("{prefix}_{}", hex::encode(Sha256::digest(value.as_bytes())))
     }

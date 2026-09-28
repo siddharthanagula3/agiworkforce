@@ -5,7 +5,12 @@ import { sha256Hex } from './hash-denylist';
 import type { ModerationCategory } from './text-classifier';
 
 export type ModerationSurface =
-  'managed-chat' | 'managed-image' | 'managed-video' | 'upload' | 'generated-output';
+  | 'managed-chat'
+  | 'managed-image'
+  | 'managed-video'
+  | 'upload'
+  | 'generated-output'
+  | 'published-artifact';
 
 export interface ModerationEvent {
   surface: ModerationSurface;

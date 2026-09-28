@@ -458,6 +458,36 @@
           },
           "max_output": {
             "type": "integer"
+          },
+          "capabilities": {
+            "type": "object",
+            "description": "What the model accepts and produces, from the model registry. `null` means the registry has no verified answer.",
+            "properties": {
+              "image_input": {
+                "type": "boolean",
+                "nullable": true
+              },
+              "audio_input": {
+                "type": "boolean",
+                "nullable": true
+              },
+              "video_input": {
+                "type": "boolean",
+                "nullable": true
+              },
+              "structured_output": {
+                "type": "boolean",
+                "nullable": true
+              },
+              "function_calling": {
+                "type": "boolean",
+                "nullable": true
+              },
+              "reasoning": {
+                "type": "boolean",
+                "nullable": true
+              }
+            }
           }
         }
       },
