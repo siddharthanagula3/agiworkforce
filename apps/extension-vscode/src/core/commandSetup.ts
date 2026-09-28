@@ -79,6 +79,8 @@ import {
   OPEN_ARTIFACT_ON_WEB_COMMAND,
   REFRESH_ARTIFACTS_COMMAND,
   SAVE_ARTIFACT_COMMAND,
+  COPY_ARTIFACT_COMMAND,
+  copyArtifactContent,
   artifactsWebUrl,
   describeArtifactFailure,
   openArtifactReadOnly,
@@ -2486,6 +2488,11 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       const artifact = readArtifactCommandArgument(item);
       if (artifact === undefined) return;
       await withArtifactsWorkspace((workspace) => saveArtifactToWorkspace(workspace, artifact));
+    }),
+    register(COPY_ARTIFACT_COMMAND, async (item: unknown) => {
+      const artifact = readArtifactCommandArgument(item);
+      if (artifact === undefined) return;
+      await withArtifactsWorkspace((workspace) => copyArtifactContent(workspace, artifact));
     }),
     register(OPEN_ARTIFACT_ON_WEB_COMMAND, async (item: unknown) => {
       const published = (item as { published?: unknown } | null)?.published;
