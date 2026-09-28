@@ -430,6 +430,10 @@
         "icon": "$(add)"
       },
       {
+        "command": "agi-workforce.memory.rememberSelection",
+        "title": "AGI Workforce: Remember This"
+      },
+      {
         "command": "agi-workforce.memory.edit",
         "title": "AGI Workforce: Edit Memory Fact",
         "icon": "$(edit)"
@@ -898,6 +902,11 @@
           "command": "agi-workforce.sendSelectionToNewSession",
           "when": "editorHasSelection",
           "group": "agi-workforce@10"
+        },
+        {
+          "command": "agi-workforce.memory.rememberSelection",
+          "when": "editorHasSelection",
+          "group": "agi-workforce@11"
         }
       ],
       "commandPalette": [
