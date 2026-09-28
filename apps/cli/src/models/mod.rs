@@ -224,4 +224,5 @@ pub struct CompletionResult {
     /// not report this field.
     pub reasoning_output_tokens: u32,
     pub managed_request_id: Option<String>,
+    pub resolved_model: Option<String>,
 }
