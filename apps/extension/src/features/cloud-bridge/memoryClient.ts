@@ -52,6 +52,12 @@ export interface MemoryCommandResult {
 
 export type MemoryCommandRequest = ManagedMemoryCommandRequest;
 
+export interface MemoryPreferences {
+  memory: boolean;
+  searchPastChats: boolean;
+  organizationAllows: boolean;
+}
+
 export interface ActiveMemoryWorkspace {
   scope: 'personal' | 'organization';
   name: string | null;
@@ -63,6 +69,7 @@ export const ACCOUNT_MEMORY_COMMANDS_PATH = '/api/memory/commands';
 export const MEMORY_COMMAND_HINT = /\b(remember(?:ing)?|forget|memor(?:y|ies|i[sz]e))\b/i;
 export const ACCOUNT_WORKSPACES_PATH = '/api/settings/workspaces';
 export const MEMORY_PREFERENCES_NAMESPACE = 'memory';
+export const MEMORY_CAPABILITIES_NAMESPACE = 'capabilities';
 export const MEMORY_EXCLUSION_MIN_CHARS = 3;
 export const MEMORY_EXCLUSION_MAX_CHARS = 100;
 export const MEMORY_EXCLUSION_MAX_TERMS = 50;
@@ -221,6 +228,35 @@ export async function saveMemoryExclusions(token: string, terms: readonly string
     body: JSON.stringify({
       namespace: MEMORY_PREFERENCES_NAMESPACE,
       patch: { excludedTerms: normalizeMemoryExclusions(terms) },
+    }),
+  });
+}
+
+export async function fetchMemoryPreferences(token: string): Promise<MemoryPreferences> {
+  const body = (await send(
+    token,
+    managedCloudPreferencesNamespacePath(MEMORY_CAPABILITIES_NAMESPACE),
+    { method: 'GET' },
+  )) as Record<string, unknown> | null;
+  const settings = body?.['settings'];
+  const record =
+    settings && typeof settings === 'object' ? (settings as Record<string, unknown>) : {};
+  return {
+    memory: record['memory'] === true,
+    searchPastChats: record['searchPastChats'] === true,
+    organizationAllows: body?.['organizationMemoryAllowed'] !== false,
+  };
+}
+
+export async function saveMemoryPreferences(
+  token: string,
+  preferences: Pick<MemoryPreferences, 'memory' | 'searchPastChats'>,
+): Promise<void> {
+  await send(token, MANAGED_CLOUD_SETTINGS_PREFERENCES_PATH, {
+    method: 'PUT',
+    body: JSON.stringify({
+      namespace: MEMORY_CAPABILITIES_NAMESPACE,
+      patch: { memory: preferences.memory, searchPastChats: preferences.searchPastChats },
     }),
   });
 }
