@@ -14,9 +14,9 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | /changelog prints only the running version and a GitHub releases link; notes are not shown in the terminal. | ui |
+| cli | partial | The release feed carries no notes; showing notes in the terminal needs the CLI release route to include them (apps/web). | ui |
 
-Code: `apps/cli/src/claude_parity.rs:194-196`, `apps/cli/src/claude_parity.rs:1138-1146`, `apps/cli/src/tui/tui_app.rs:4090-4091`
+Code: `apps/cli/src/claude_parity.rs:1381-1381`
 
 ## S2.35: Contact and support page.
 

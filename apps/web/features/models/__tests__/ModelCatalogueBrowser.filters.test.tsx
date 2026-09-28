@@ -77,6 +77,7 @@ function renderBrowser(overrides: Partial<Parameters<typeof ModelCatalogueBrowse
       onRetry={vi.fn()}
       onToggleFavourite={vi.fn()}
       onTry={onTry}
+      onCompareAnswers={vi.fn()}
       {...overrides}
     />,
   );

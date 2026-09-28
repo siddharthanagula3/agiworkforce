@@ -63,6 +63,10 @@ import {
 } from '@shared/stores/web-chat-store';
 import { useStyleStore } from '@features/chat/stores/style-store';
 import {
+  ProjectSourcesPanel,
+  ProjectSourcesToggleButton,
+} from '@features/projects/components/ProjectSourcesPanel';
+import {
   EMPTY_VARIANT_INFO,
   resolveLeafForSibling,
   resolveSurvivingLeaf,
@@ -77,7 +81,11 @@ import {
 } from '../lib/message-variants-gate';
 import { useThinkingStore } from '@shared/stores/thinking-store';
 import { addCsrfHeaders } from '@/lib/client/csrf';
-import { resolveSelectableModelId, useModelStore } from '@shared/stores/model-store';
+import {
+  isSelectableModelId,
+  resolveSelectableModelId,
+  useModelStore,
+} from '@shared/stores/model-store';
 import { useNotificationStore } from '@shared/stores/notification-store';
 import { useMediaStore } from '@shared/stores/media-store';
 import { TimeoutPresets } from '@shared/lib/error-utils';
@@ -221,6 +229,7 @@ import { useTurnErrorNotice } from '../hooks/use-turn-error-notice';
 import { turnNeedsTwoFactor } from '../lib/turn-error-notice';
 import { TranscriptNotice } from '../components/messages/TranscriptNotice';
 import { ApprovalInbox } from '../components/approvals/ApprovalInbox';
+import { hasPendingApproval } from '../lib/pending-approval';
 import {
   WorkSessionPanel,
   WorkSessionToggleButton,
@@ -963,6 +972,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   // selector: `useArtifactsStore` re-renders this page on every artifact write.
   const artifactPanelOpen = useZustandStore(_sharedArtifactStore, (state) => state.panelOpen);
   const researchPanelOpen = useResearchPanelStore((state) => state.panelOpen);
+  const [projectSourcesOpen, setProjectSourcesOpen] = useState(false);
   const [activeSecondaryPanel, setActiveSecondaryPanel] = useState<SecondaryPanel | null>(null);
   const previousSecondaryPanels = useRef<SecondaryPanelFlags>(CLOSED_SECONDARY_PANELS);
   const secondaryPanelFlags = useMemo<SecondaryPanelFlags>(
@@ -970,8 +980,9 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       work: workSessionPanelOpen,
       research: researchPanelOpen,
       artifacts: artifactPanelOpen,
+      sources: projectSourcesOpen,
     }),
-    [artifactPanelOpen, researchPanelOpen, workSessionPanelOpen],
+    [artifactPanelOpen, projectSourcesOpen, researchPanelOpen, workSessionPanelOpen],
   );
 
   useEffect(() => {
@@ -989,9 +1000,11 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     if (next !== 'artifacts' && artifactPanelOpen) {
       _sharedArtifactStore.getState().setPanelOpen(false);
     }
+    if (next !== 'sources' && projectSourcesOpen) setProjectSourcesOpen(false);
   }, [
     activeSecondaryPanel,
     artifactPanelOpen,
+    projectSourcesOpen,
     researchPanelOpen,
     secondaryPanelFlags,
     setWorkSessionPanelOpen,
@@ -1007,6 +1020,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       else if (researchPanelOpen) useResearchPanelStore.getState().closePanel();
       if (!isOpen && panel === 'artifacts') _sharedArtifactStore.getState().togglePanel();
       else if (artifactPanelOpen) _sharedArtifactStore.getState().setPanelOpen(false);
+      setProjectSourcesOpen(!isOpen && panel === 'sources');
     },
     [
       activeSecondaryPanel,
@@ -1608,6 +1622,12 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         : null,
     [conversations, displayedConversationId],
   );
+  const conversationProjectId = displayedConversation?.projectId ?? null;
+  const conversationProject = useProjectStore((state) =>
+    conversationProjectId
+      ? (state.projects.find((project) => project.id === conversationProjectId) ?? null)
+      : null,
+  );
 
   const variantsEnabled = useMessageVariantsEnabled();
   const persistActiveLeaf = useCallback(
@@ -1687,6 +1707,24 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     setModelSubstitution(describeModelSubstitution(persistedModel));
   }, [displayedConversation?.model, displayedConversationId, setSelectedModelId]);
   useNewChatDefaultModel(displayedConversationId ?? null);
+
+  const projectDefaultModelAppliedRef = useRef<string | null>(null);
+  const activeProjectDefaultModelId = activeProjectId
+    ? (storeProjects.find((project) => project.id === activeProjectId)?.defaultModelId ?? null)
+    : null;
+  useEffect(() => {
+    if (displayedConversationId) {
+      projectDefaultModelAppliedRef.current = null;
+      return;
+    }
+    if (!activeProjectId || !activeProjectDefaultModelId) return;
+    const key = `${activeProjectId}:${activeProjectDefaultModelId}`;
+    if (projectDefaultModelAppliedRef.current === key) return;
+    projectDefaultModelAppliedRef.current = key;
+    if (isSelectableModelId(activeProjectDefaultModelId)) {
+      setSelectedModelId(resolveSelectableModelId(activeProjectDefaultModelId));
+    }
+  }, [activeProjectDefaultModelId, activeProjectId, displayedConversationId, setSelectedModelId]);
 
   const handleConversationModelChange = useCallback(
     async (nextModelId: string): Promise<boolean> => {
@@ -4931,6 +4969,13 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     [handleSend],
   );
 
+  const handleResearchRunAgain = useCallback(
+    (query: string) => {
+      handleSend(query, undefined, undefined, { researchEnabled: true });
+    },
+    [handleSend],
+  );
+
   const handleResearchPlanDecision = useCallback(
     async (id: string, decision: ResearchPlanDecision, options?: ResearchPlanOptions) => {
       if (!displayedConversationId || isStreaming) return;
@@ -5448,6 +5493,13 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     () => new Set([...loadingConversationIds, ...streamingConversationIds]),
     [loadingConversationIds, streamingConversationIds],
   );
+  const awaitingYouConversationId = useMemo(
+    () =>
+      displayedConversationId && hasPendingApproval(displayedMessages)
+        ? displayedConversationId
+        : null,
+    [displayedConversationId, displayedMessages],
+  );
   const sidebarSessions = useMemo<SidebarSession[]>(
     () =>
       toSidebarSessions(conversations, {
@@ -5457,9 +5509,16 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             ? { agiWork: true }
             : {}),
           ...(runningConversationIds.has(c.id) ? { runState: 'running' as const } : {}),
+          ...(c.needsYou || awaitingYouConversationId === c.id ? { needsYou: true } : {}),
         }),
       }),
-    [conversations, isUnread, runningConversationIds, workModeByConversation],
+    [
+      conversations,
+      isUnread,
+      awaitingYouConversationId,
+      runningConversationIds,
+      workModeByConversation,
+    ],
   );
 
   // Top-level destinations stay visible in the production sidebar. The rail body
@@ -5891,6 +5950,12 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                       count={researchSourceCount}
                       onToggle={() => toggleSecondaryPanel('research')}
                     />
+                    {conversationProject ? (
+                      <ProjectSourcesToggleButton
+                        open={projectSourcesOpen}
+                        onToggle={() => toggleSecondaryPanel('sources')}
+                      />
+                    ) : null}
                     <ArtifactsToggleButton onToggle={() => toggleSecondaryPanel('artifacts')} />
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -5924,6 +5989,12 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                   count={researchSourceCount}
                   onToggle={() => toggleSecondaryPanel('research')}
                 />
+                {conversationProject ? (
+                  <ProjectSourcesToggleButton
+                    open={projectSourcesOpen}
+                    onToggle={() => toggleSecondaryPanel('sources')}
+                  />
+                ) : null}
                 <ArtifactsToggleButton onToggle={() => toggleSecondaryPanel('artifacts')} />
               </div>
             </header>
@@ -6219,9 +6290,24 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           />
         )}
         {!compact && activeSecondaryPanel === 'research' && (
-          <ResearchPanel {...(isStreaming ? {} : { onAskFollowUp: handleResearchFollowUp })} />
+          <ResearchPanel
+            {...(isStreaming
+              ? {}
+              : { onAskFollowUp: handleResearchFollowUp, onRunAgain: handleResearchRunAgain })}
+          />
         )}
         {!compact && activeSecondaryPanel === 'artifacts' && <ArtifactsPanel />}
+        {!compact && activeSecondaryPanel === 'sources' && conversationProject ? (
+          <ProjectSourcesPanel
+            projectId={conversationProject.id}
+            projectName={conversationProject.name}
+            readOnly={
+              conversationProject.isOrgShared === true &&
+              conversationProject.sharedAccess !== 'write'
+            }
+            onClose={() => setProjectSourcesOpen(false)}
+          />
+        ) : null}
       </div>
       <CreateProjectDialog
         open={createProjectOpen}

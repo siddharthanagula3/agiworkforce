@@ -2,6 +2,7 @@ import {
   DEFAULT_MAX_RETRIES,
   MCP_INIT_TIMEOUT_MS,
   MCP_OAUTH_TIMEOUT_MS,
+  MCP_SIGN_IN_TIMEOUT_MS,
   MCP_TIMEOUT_MS,
   MCP_TOOL_CALL_TIMEOUT_MS,
   RETRY_BACKOFF_MULTIPLIER,
@@ -153,7 +154,7 @@ export async function mcpListServers(): Promise<McpServerInfo[]> {
 export async function mcpConnectServer(name: string): Promise<string> {
   try {
     validateNonEmpty(name, 'server name');
-    return await invokeWithTimeout<string>('mcp_connect_server', { name }, MCP_INIT_TIMEOUT_MS);
+    return await invokeWithTimeout<string>('mcp_connect_server', { name }, MCP_SIGN_IN_TIMEOUT_MS);
   } catch (error) {
     throw new Error(`Failed to connect to MCP server '${name}': ${error}`);
   }
@@ -547,7 +548,7 @@ export async function mcpOAuthSetCredentials(
   try {
     validateNonEmpty(provider, 'provider');
     validateNonEmpty(clientId, 'client ID');
-    validateNonEmpty(clientSecret, 'client secret');
+    if (provider !== 'microsoft') validateNonEmpty(clientSecret, 'client secret');
     await invokeWithTimeout<void>('mcp_oauth_set_credentials', {
       provider,
       clientId,
@@ -579,7 +580,7 @@ export async function mcpOAuthSetCredentialsRaw(
   try {
     validateNonEmpty(provider, 'provider');
     validateNonEmpty(clientId, 'client ID');
-    validateNonEmpty(clientSecret, 'client secret');
+    if (provider !== 'microsoft') validateNonEmpty(clientSecret, 'client secret');
     await invokeWithTimeout<void>('mcp_oauth_set_credentials', {
       provider,
       clientId,
@@ -635,7 +636,11 @@ export async function mcpGetSupportedConnectorIds(): Promise<string[]> {
 export async function mcpConnectConnector(connectorId: string): Promise<unknown> {
   try {
     validateNonEmpty(connectorId, 'connector ID');
-    return await invokeWithTimeout('mcp_connect_connector', { connectorId });
+    return await invokeWithTimeout(
+      'mcp_connect_connector',
+      { connectorId },
+      MCP_SIGN_IN_TIMEOUT_MS,
+    );
   } catch (error) {
     throw new Error(`Failed to connect MCP connector '${connectorId}': ${error}`);
   }

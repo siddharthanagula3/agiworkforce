@@ -40,16 +40,14 @@ Code: `apps/web/lib/url-fetch/url-fetch-tool.ts:479-479`, `apps/web/lib/prompts/
 
 - Done when: The assistant can call a tool that searches the user's files (by name or content) and returns matching paths or snippets.
 - Wave: 3
-- Already works on: cli, vscode
+- Already works on: web, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | No model-callable search over the user's own files: project and library files are retrieved automatically before the turn, and the sandbox list_files tool only lists (and is behind AGI_E2B_EXECUTION). | handler |
-| desktop | partial | Electron can glob and grep a granted folder (file_glob, file_grep) but no device step offers search to the model; only device_list_folder lists entries. | handler |
-| mobile | partial | No model-callable search over the user's own files: project and library files are retrieved automatically before the turn, and the sandbox list_files tool only lists (and is behind AGI_E2B_EXECUTION). | handler |
+| desktop | partial | search_files also runs in the desktop app over the account's files; searching a granted local folder as a device step (file_glob/file_grep) belongs to p-sessions. | handler |
 | chrome | partial | No model-callable search over the user's own files: project and library files are retrieved automatically before the turn, and the sandbox list_files tool only lists (and is behind AGI_E2B_EXECUTION). | handler |
 
-Code: `apps/web/lib/e2b/execution-tools.ts:17-17`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:2009-2015`, `apps/desktop/electron/runtime/dispatcher.ts:742-747`, `packages/contracts/local-runtime/src/device-steps.ts:78-83`
+Code: `apps/web/lib/server/tools/file-search-tool.ts:64-64`, `apps/web/lib/e2b/execution-tools.ts:17-17`
 
 ## S57.05: File-read tool.
 
@@ -237,27 +235,15 @@ Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:194-194`, 
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Videos are generated only from the user's Video mode; the model cannot call a video tool during a turn. | handler |
-| desktop | partial | Videos are generated only from the user's Video mode; the model cannot call a video tool during a turn. | handler |
-| mobile | partial | Videos are generated only from the user's Video mode; the model cannot call a video tool during a turn. | handler |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-| api | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:1218-1220`, `apps/web/features/media/services/media-api-service.ts:195-195`, `apps/mobile/app/(app)/chat/[id].tsx:386-386`, `apps/mobile/src/features/video/services/videogen.ts:65-65`
 
 ## S57.21: Memory tool.
 
 - Done when: The assistant can call a memory tool to save, recall or delete a remembered fact during a turn.
 - Wave: 3
-- Already works on: cli
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Memory is extracted and injected automatically around the turn; the model cannot call a memory tool to save, look up or forget a fact on request. | handler |
-| desktop | partial | Memory is extracted and injected automatically around the turn; the model cannot call a memory tool to save, look up or forget a fact on request. | handler |
-| mobile | partial | Memory is extracted and injected automatically around the turn; the model cannot call a memory tool to save, look up or forget a fact on request. | handler |
 | vscode | partial | The CLI runtime injects and saves memory automatically; the agent has no memory tool. | handler |
 | chrome | partial | Memory is extracted and injected automatically around the turn; the model cannot call a memory tool to save, look up or forget a fact on request. | handler |
 
@@ -281,16 +267,13 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:3056-30
 
 - Done when: The assistant can call a tool that creates, lists or deletes a scheduled task for the user.
 - Wave: 3
-- Already works on: cli, vscode
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Schedules are created only from the Schedules screen; the assistant cannot create or change a schedule as a tool during chat. | handler |
-| desktop | partial | Schedules are created only from the Schedules screen; the assistant cannot create or change a schedule as a tool during chat. | handler |
-| mobile | partial | Schedules are created only from the Schedules screen; the assistant cannot create or change a schedule as a tool during chat. | handler |
 | chrome | partial | Schedules are created only from the Schedules screen; the assistant cannot create or change a schedule as a tool during chat. | handler |
 
-Code: `apps/web/app/chat/schedules/page.tsx:12-12`, `apps/mobile/lib/v1FeatureFlags.ts:16-16`, `apps/extension/src/side_panel.ts:9307-9307`
+Code: `apps/extension/src/side_panel.ts:9307-9307`
 
 ## S57.26: Clarification/input tool.
 
@@ -310,15 +293,11 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1756-1756`, `apps/web/app/a
 
 - Done when: The model or user can search the available tools by keyword and get matching tools with their descriptions.
 - Wave: 3
-- Already works on: cli, vscode
+- Already works on: web, desktop, mobile, cli, vscode, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The model sees a name list of deferred connector tools and loads schemas by exact name (load_connector_tools); it cannot search tools by keyword, and the user has no tool search. | handler |
-| desktop | partial | The model sees a name list of deferred connector tools and loads schemas by exact name (load_connector_tools); it cannot search tools by keyword, and the user has no tool search. | handler |
-| mobile | partial | The model sees a name list of deferred connector tools and loads schemas by exact name (load_connector_tools); it cannot search tools by keyword, and the user has no tool search. | handler |
 | chrome | partial | The model sees a name list of deferred connector tools and loads schemas by exact name (load_connector_tools); it cannot search tools by keyword, and the user has no tool search. | handler |
-| api | partial | Only the exact-name loader exists, and it is undocumented for API callers. | api |
 
 Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-schema-loader.ts:152-160`
 

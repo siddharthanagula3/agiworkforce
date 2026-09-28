@@ -57,7 +57,7 @@ describe('the comparison table reads the catalogue, not a second copy of it', ()
     expect(within(row('Model id')).getByText('left-model')).toBeTruthy();
     expect(within(row('Model id')).getByText('right-model')).toBeTruthy();
     expect(within(row('Access')).getByText('Included in Free')).toBeTruthy();
-    expect(within(row('Access')).getByText('Max 5x and above')).toBeTruthy();
+    expect(within(row('Access')).getByText('Upgrade to use · Max 5x')).toBeTruthy();
   });
 
   it('shows no per million price, so a plan allowance cannot be worked back into tokens', () => {

@@ -1,4 +1,11 @@
-import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
+import {
+  useState,
+  useRef,
+  useCallback,
+  useMemo,
+  useEffect,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from 'react';
 import {
   Tabs,
   TabsContent,
@@ -28,12 +35,17 @@ import {
   FolderOpen,
   FolderPlus,
   Globe,
+  Library,
+  List,
   Pencil,
   GitFork,
   Sparkles,
 } from 'lucide-react';
 import type { PublishResult } from '@agiworkforce/artifacts';
 import { isSupportedChatAttachment } from '@agiworkforce/cloud-contracts';
+import { addCsrfHeaders } from '@/lib/client/csrf';
+import { exportDocument } from '@features/chat/services/document-export-service';
+import { extractMarkdownHeadings } from '@features/chat/components/research/ResearchReportView';
 import {
   summarizeGeneratedFileBundle,
   type ArtifactManifest,
@@ -45,6 +57,7 @@ import {
   ChartArtifact,
   GeneratedFileCard,
   MarkdownContent,
+  toggleMarkdownTask,
   MermaidDiagram,
   SpreadsheetArtifact,
   PresentationArtifact,
@@ -180,8 +193,136 @@ interface ArtifactPreviewProps {
   versionHistory?: SharedArtifact[];
   publishArtifact?: (selection: ArtifactPublishSelection) => Promise<PublishResult>;
   artifactAudience?: ArtifactAudienceControl;
+  publishedLink?: string;
   projectLink?: ArtifactProjectLink;
   projectSave?: ArtifactProjectSave;
+}
+
+const OUTLINE_MIN_HEADINGS = 3;
+
+function MarkdownDocumentPreview({
+  content,
+  className,
+  onTaskToggle,
+  pendingChecklistSave,
+}: {
+  content: string;
+  className: string;
+  onTaskToggle?: (index: number) => void;
+  pendingChecklistSave?: boolean;
+}) {
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const headings = useMemo(() => extractMarkdownHeadings(content), [content]);
+
+  useEffect(() => {
+    const rendered = bodyRef.current?.querySelectorAll<HTMLElement>('h1, h2, h3, h4');
+    if (!rendered) return;
+    headings.forEach((heading, index) => {
+      const element = rendered[index];
+      if (element) element.id = `artifact-${heading.id}`;
+    });
+  }, [headings]);
+
+  return (
+    <div
+      className={cn('overflow-auto bg-background px-6 py-5', className)}
+      data-testid="artifact-markdown-preview"
+    >
+      <div className="mx-auto max-w-3xl">
+        <p
+          role="status"
+          className={pendingChecklistSave ? 'mb-2 text-xs text-muted-foreground' : 'sr-only'}
+        >
+          {pendingChecklistSave ? 'Checklist changes save as a new version when you pause.' : ''}
+        </p>
+        {headings.length >= OUTLINE_MIN_HEADINGS && (
+          <nav
+            className="mb-4 rounded-lg border border-border/30 bg-muted/20 p-3"
+            aria-label="Document outline"
+          >
+            <p className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <List className="h-3.5 w-3.5" aria-hidden="true" />
+              Outline
+            </p>
+            <ol className="space-y-0.5" data-testid="artifact-document-outline">
+              {headings.map((heading) => (
+                <li
+                  key={heading.id}
+                  style={{
+                    paddingLeft: `${(heading.level - (headings[0]?.level ?? 1)) * 12}px`,
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() =>
+                      bodyRef.current?.ownerDocument
+                        .getElementById(`artifact-${heading.id}`)
+                        ?.scrollIntoView?.({ block: 'start' })
+                    }
+                    className="block w-full truncate text-left text-xs text-muted-foreground transition-colors hover:text-primary"
+                  >
+                    {heading.text}
+                  </button>
+                </li>
+              ))}
+            </ol>
+          </nav>
+        )}
+        <div ref={bodyRef}>
+          <MarkdownContent content={content} {...(onTaskToggle ? { onTaskToggle } : {})} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const MARKDOWN_SHORTCUTS: Readonly<
+  Record<string, { before: string; after: string; placeholder: string }>
+> = {
+  b: { before: '**', after: '**', placeholder: 'bold text' },
+  i: { before: '_', after: '_', placeholder: 'italic text' },
+  k: { before: '[', after: '](https://)', placeholder: 'link text' },
+};
+
+const ARTIFACT_DRAFT_STORAGE_PREFIX = 'agi.artifact-draft:';
+const ARTIFACT_DRAFT_AUTOSAVE_MS = 800;
+const CHECKLIST_COMMIT_IDLE_MS = 4_000;
+
+function readStoredDraft(key: string): string | null {
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredDraft(key: string, value: string): boolean {
+  try {
+    window.localStorage.setItem(key, value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function removeStoredDraft(key: string): void {
+  try {
+    window.localStorage.removeItem(key);
+  } catch {
+    return;
+  }
+}
+
+function escapeHtmlAttribute(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function sandboxedPreviewPage(title: string, html: string): string {
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtmlAttribute(title)}</title><style>html,body{margin:0;height:100%}iframe{border:0;width:100%;height:100%;display:block}</style></head><body><iframe sandbox="allow-scripts allow-modals" referrerpolicy="no-referrer" srcdoc="${escapeHtmlAttribute(html)}"></iframe></body></html>`;
 }
 
 /**
@@ -234,6 +375,7 @@ export function ArtifactPreview({
   versionHistory,
   publishArtifact,
   artifactAudience,
+  publishedLink,
   projectLink,
   projectSave,
 }: ArtifactPreviewProps) {
@@ -248,6 +390,7 @@ export function ArtifactPreview({
   // so one artifact's link can never be shown under another's title.
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
+  const shownPublishedUrl = publishedUrl ?? publishedLink ?? null;
   const [isChangingAudience, setIsChangingAudience] = useState(false);
   const [mermaidSvg, setMermaidSvg] = useState<string | null>(null);
 
@@ -289,7 +432,11 @@ export function ArtifactPreview({
         const mammoth = (await import('mammoth')).default;
         // content may be a base64 data-URI or raw binary string
         let arrayBuffer: ArrayBuffer;
-        if (artifact.content.startsWith('data:')) {
+        if (artifact.content.startsWith('/api/files/')) {
+          const response = await fetch(artifact.content, { credentials: 'same-origin' });
+          if (!response.ok) throw new Error('The document could not be loaded for preview.');
+          arrayBuffer = await response.arrayBuffer();
+        } else if (artifact.content.startsWith('data:')) {
           const base64 = artifact.content.split(',')[1] ?? '';
           const binary = atob(base64);
           arrayBuffer = new Uint8Array(binary.length).map((_, i) => binary.charCodeAt(i)).buffer;
@@ -509,6 +656,7 @@ export function ArtifactPreview({
         destructive: draftIsUnsaved,
         onConfirm: () => {
           if (restoreArtifactVersion(artifact.id, index)) {
+            removeStoredDraft(`${ARTIFACT_DRAFT_STORAGE_PREFIX}${artifact.id}`);
             setSourceDraft(null);
             setViewedVersionIndex(null);
           }
@@ -520,6 +668,53 @@ export function ArtifactPreview({
   const canEditSource =
     variant === 'panel' && isStoredArtifact && isLatestVersion && !isPdf && !isDocx && !isImage;
 
+  const draftStorageKey = `${ARTIFACT_DRAFT_STORAGE_PREFIX}${artifact.id}`;
+  const [draftStatus, setDraftStatus] = useState<'saved' | 'unsaved' | null>(null);
+  const [draftOrigin, setDraftOrigin] = useState<'editor' | 'checklist' | null>(null);
+
+  useEffect(() => {
+    if (!canEditSource) return;
+    const kept = readStoredDraft(draftStorageKey);
+    if (kept === null || kept === activeContent) return;
+    setSourceDraft(kept);
+    setDraftOrigin('editor');
+    setActiveTab('code');
+    setDraftStatus('saved');
+    toast.message('Restored your unsaved edits to this artifact');
+  }, [activeContent, canEditSource, draftStorageKey]);
+
+  useEffect(() => {
+    if (sourceDraft === null) return;
+    const timer = setTimeout(() => {
+      setDraftStatus(writeStoredDraft(draftStorageKey, sourceDraft) ? 'saved' : 'unsaved');
+    }, ARTIFACT_DRAFT_AUTOSAVE_MS);
+    return () => clearTimeout(timer);
+  }, [draftStorageKey, sourceDraft]);
+
+  const handleMarkdownShortcut = useCallback((event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+    if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return;
+    const wrap = MARKDOWN_SHORTCUTS[event.key.toLowerCase()];
+    if (!wrap) return;
+    event.preventDefault();
+    const field = event.currentTarget;
+    const { selectionStart, selectionEnd, value } = field;
+    const selected = value.slice(selectionStart, selectionEnd) || wrap.placeholder;
+    const replacement = `${wrap.before}${selected}${wrap.after}`;
+    const next = value.slice(0, selectionStart) + replacement + value.slice(selectionEnd);
+    setSourceDraft(next);
+    const cursor = selectionStart + wrap.before.length;
+    requestAnimationFrame(() => {
+      field.setSelectionRange(cursor, cursor + selected.length);
+    });
+  }, []);
+
+  const endSourceEdit = useCallback(() => {
+    removeStoredDraft(draftStorageKey);
+    setDraftStatus(null);
+    setDraftOrigin(null);
+    setSourceDraft(null);
+  }, [draftStorageKey]);
+
   const saveSourceEdit = useCallback(() => {
     if (sourceDraft === null) return;
     const stored = useArtifactsStore.getState().artifacts.find((a) => a.id === artifact.id);
@@ -527,8 +722,22 @@ export function ArtifactPreview({
     if (sourceDraft !== stored.content) {
       upsertArtifact({ ...stored, content: sourceDraft, createdAt: new Date() });
     }
-    setSourceDraft(null);
-  }, [artifact.id, sourceDraft, upsertArtifact]);
+    endSourceEdit();
+  }, [artifact.id, endSourceEdit, sourceDraft, upsertArtifact]);
+
+  const handleTaskToggle = useCallback(
+    (index: number) => {
+      setSourceDraft((current) => toggleMarkdownTask(current ?? activeContent, index));
+      setDraftOrigin((origin) => origin ?? 'checklist');
+    },
+    [activeContent],
+  );
+
+  useEffect(() => {
+    if (draftOrigin !== 'checklist' || sourceDraft === null) return;
+    const timer = setTimeout(saveSourceEdit, CHECKLIST_COMMIT_IDLE_MS);
+    return () => clearTimeout(timer);
+  }, [draftOrigin, saveSourceEdit, sourceDraft]);
 
   // AUDIT-FIX ART-6 / ART-14: the security banner is DERIVED, never latched,
   // and it now states what actually happened per renderer:
@@ -833,6 +1042,32 @@ if (__AgiApp) {
   }, [activeContent, artifact.language, artifact.title, artifact.type]);
 
   const [savingProjectId, setSavingProjectId] = useState<string | null>(null);
+  const [savingToLibrary, setSavingToLibrary] = useState(false);
+
+  const handleSaveToLibrary = useCallback(async () => {
+    setSavingToLibrary(true);
+    try {
+      const file = artifactSourceFile();
+      const response = await fetch('/api/library', {
+        method: 'POST',
+        credentials: 'include',
+        headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ fileName: file.name, content: await file.text() }),
+      });
+      if (!response.ok) {
+        const body = (await response.json().catch(() => null)) as {
+          error?: { message?: string } | string;
+        } | null;
+        const message = typeof body?.error === 'string' ? body.error : body?.error?.message;
+        throw new Error(message ?? 'That artifact could not be saved to your Library');
+      }
+      toast.success('Saved to your Library');
+    } catch (error) {
+      toast.error(toUserMessage(error, 'That artifact could not be saved to your Library'));
+    } finally {
+      setSavingToLibrary(false);
+    }
+  }, [artifactSourceFile]);
 
   const handleSaveToProject = useCallback(
     async (project: ArtifactProjectLink) => {
@@ -849,6 +1084,22 @@ if (__AgiApp) {
     },
     [artifactSourceFile, projectSave],
   );
+
+  const isTextDocument = artifact.type === 'document' && !isPdf && !isDocx;
+
+  const handleExportDocument = async (format: 'docx' | 'pdf') => {
+    const title = artifact.title || 'Artifact';
+    try {
+      await exportDocument(activeContent, format, title, { title });
+    } catch (error) {
+      toast.error(
+        toUserMessage(
+          error,
+          `This document could not be exported as ${format === 'docx' ? 'Word' : 'PDF'}`,
+        ),
+      );
+    }
+  };
 
   const handleDownloadGeneratedFile = async () => {
     if (!generatedFileSummary.primaryUri) return;
@@ -923,12 +1174,8 @@ if (__AgiApp) {
   };
 
   const handleOpenInNewTab = () => {
-    // Keep executable artifact rendering inside SandboxedIframe. The new tab
-    // shows source text so untrusted artifact HTML does not execute on a Blob
-    // origin.
-    const html = getPreviewHTML();
-
-    const blob = new Blob([html], { type: 'text/plain;charset=utf-8' });
+    const page = sandboxedPreviewPage(artifact.title || 'Artifact', getPreviewHTML());
+    const blob = new Blob([page], { type: 'text/html;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     window.open(url, '_blank', 'noopener,noreferrer');
     setTimeout(() => URL.revokeObjectURL(url), 60_000);
@@ -1062,14 +1309,12 @@ if (__AgiApp) {
   );
 
   const renderMarkdownPreview = (containerClassName: string) => (
-    <div
-      className={cn('overflow-auto bg-background px-6 py-5', containerClassName)}
-      data-testid="artifact-markdown-preview"
-    >
-      <div className="mx-auto max-w-3xl">
-        <MarkdownContent content={activeContent} />
-      </div>
-    </div>
+    <MarkdownDocumentPreview
+      content={sourceDraft ?? activeContent}
+      className={containerClassName}
+      {...(canEditSource ? { onTaskToggle: handleTaskToggle } : {})}
+      pendingChecklistSave={draftOrigin === 'checklist' && sourceDraft !== null}
+    />
   );
 
   const renderSharedPreview = (containerClassName: string) => (
@@ -1372,7 +1617,10 @@ if (__AgiApp) {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => setSourceDraft(activeContent)}
+                  onClick={() => {
+                    setSourceDraft(activeContent);
+                    setDraftOrigin('editor');
+                  }}
                   className="h-7 px-2"
                   aria-label="Edit artifact source"
                   title="Edit"
@@ -1395,10 +1643,15 @@ if (__AgiApp) {
                     <Check className="h-3.5 w-3.5" />
                     <span className="ml-1 hidden text-xs @[30rem]:inline">Save</span>
                   </Button>
+                  {draftStatus ? (
+                    <span className="text-xs text-muted-foreground" role="status">
+                      {draftStatus === 'saved' ? 'Draft kept on this device' : 'Draft not kept'}
+                    </span>
+                  ) : null}
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => setSourceDraft(null)}
+                    onClick={endSourceEdit}
                     className="h-7 px-2"
                     aria-label="Discard artifact source edit"
                     title="Discard changes"
@@ -1485,6 +1738,16 @@ if (__AgiApp) {
                   <DropdownMenuItem onClick={() => handleDownload('md')}>
                     Download as Markdown
                   </DropdownMenuItem>
+                  {isTextDocument && (
+                    <>
+                      <DropdownMenuItem onClick={() => void handleExportDocument('docx')}>
+                        Download as Word (.docx)
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => void handleExportDocument('pdf')}>
+                        Download as PDF
+                      </DropdownMenuItem>
+                    </>
+                  )}
                   {hasGeneratedFileManifest && generatedFileSummary.primaryUri && (
                     <DropdownMenuItem onClick={() => void handleDownloadGeneratedFile()}>
                       Download generated file
@@ -1583,6 +1846,24 @@ if (__AgiApp) {
               </DropdownMenu>
             )}
 
+            {variant === 'panel' && !hasGeneratedFileManifest && !isImage && !isPdf && !isDocx && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2"
+                disabled={savingToLibrary}
+                onClick={() => void handleSaveToLibrary()}
+                aria-label="Save this artifact to your Library"
+                title="Save to Library"
+                data-testid="artifact-save-to-library"
+              >
+                <Library className="h-3.5 w-3.5" aria-hidden="true" />
+                <span className="ml-1 hidden text-xs @[30rem]:inline">
+                  {savingToLibrary ? 'Saving…' : 'Save to Library'}
+                </span>
+              </Button>
+            )}
+
             {/* Publish, only rendered when a host injected a real publisher
                 (CAP-015 slice 3). No publisher, no button: offering a Publish
                 action that can only copy to the clipboard is the behaviour
@@ -1625,8 +1906,8 @@ if (__AgiApp) {
                 size="sm"
                 onClick={handleOpenInNewTab}
                 className="hidden h-7 px-2 @[22rem]:flex"
-                aria-label="Open source in new tab"
-                title="Open source in new tab"
+                aria-label="Open in new tab"
+                title="Open in new tab"
               >
                 <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
               </Button>
@@ -1709,26 +1990,26 @@ if (__AgiApp) {
 
         {/* CAP-015: the live link for this artifact. Shown only after a publish
             actually returned a URL, never as an aspirational bar. */}
-        {publishedUrl && (
+        {shownPublishedUrl && (
           <div
             className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border/30 bg-muted/20 px-4 py-2"
             data-testid="artifact-published-url"
           >
             <Globe className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
             <a
-              href={publishedUrl}
+              href={shownPublishedUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="min-w-0 flex-1 truncate text-xs text-primary underline-offset-2 hover:underline"
             >
-              {publishedUrl}
+              {shownPublishedUrl}
             </a>
             <Button
               variant="ghost"
               size="sm"
               className="h-6 px-2 text-xs"
               onClick={() => {
-                void writeToClipboard(publishedUrl).then((ok) => {
+                void writeToClipboard(shownPublishedUrl).then((ok) => {
                   if (ok) toast.success('Link copied');
                   else toast.error('Could not copy the link');
                 });
@@ -1899,6 +2180,7 @@ if (__AgiApp) {
               <textarea
                 value={sourceDraft}
                 onChange={(event) => setSourceDraft(event.target.value)}
+                onKeyDown={artifact.type === 'document' ? handleMarkdownShortcut : undefined}
                 spellCheck={false}
                 autoComplete="off"
                 className="h-full w-full resize-none border-0 bg-gray-900 p-4 font-mono text-sm text-gray-100 outline-none focus:ring-0"
@@ -2041,6 +2323,16 @@ if (__AgiApp) {
                 <DropdownMenuItem onClick={() => handleDownload('md')}>
                   Download as Markdown
                 </DropdownMenuItem>
+                {isTextDocument && (
+                  <>
+                    <DropdownMenuItem onClick={() => void handleExportDocument('docx')}>
+                      Download as Word (.docx)
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => void handleExportDocument('pdf')}>
+                      Download as PDF
+                    </DropdownMenuItem>
+                  </>
+                )}
                 {hasGeneratedFileManifest && generatedFileSummary.primaryUri && (
                   <DropdownMenuItem onClick={() => void handleDownloadGeneratedFile()}>
                     Download generated file

@@ -119,6 +119,7 @@
     "restore": "Restore",
     "running": "Running",
     "unread": "Unread",
+    "needsYou": "Needs you",
     "searchConversations": "Search conversations",
     "searchConversationsDescription": "Search your conversation history and open a matching conversation.",
     "share": "Share",

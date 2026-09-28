@@ -299,6 +299,7 @@ export function translateChatRequestToResponses(
     ...(options.serviceTier ? { service_tier: options.serviceTier } : {}),
     ...(req.metadata ? { metadata: req.metadata as Record<string, string> } : {}),
     ...(promptCacheKey ? { prompt_cache_key: promptCacheKey } : {}),
+    ...(req.responseFormat ? { text: { format: req.responseFormat } } : {}),
   };
 
   return params;

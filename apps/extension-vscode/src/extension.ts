@@ -19,6 +19,7 @@ import {
   showCloudCodeSession,
 } from './features/cloud-tasks';
 import { getCloudWebOrigin } from './utils/api';
+import { SHOW_HELP_COMMAND, showHelpMenu } from './features/help/helpMenu';
 import {
   SHOW_APPROVAL_HISTORY_COMMAND,
   showApprovalHistory,
@@ -57,7 +58,12 @@ import {
   resolveCliPath,
 } from './platform/remoteEnvironment';
 import { ChatEditorPanel } from './providers/chatEditorPanel';
-import { setEditorUtilityChat } from './features/editor-utilities';
+import {
+  buildPullRequestReviewPrompt,
+  buildSecurityReviewPrompt,
+  runEditorUtility,
+  setEditorUtilityChat,
+} from './features/editor-utilities';
 import {
   initializeAgentModeConsent,
   reconcileAgentControlConsent,
@@ -252,7 +258,22 @@ export function activate(context: vscode.ExtensionContext): void {
           }
         },
   );
-  context.subscriptions.push({ dispose: () => setEditorUtilityChat(undefined) });
+  context.subscriptions.push(
+    { dispose: () => setEditorUtilityChat(undefined) },
+    vscode.commands.registerCommand('agi-workforce.reviewPullRequest', async () => {
+      const reference = await vscode.window.showInputBox({
+        title: 'AGI Workforce, Review a pull request',
+        prompt: 'A pull request number, such as 128, or a branch name',
+        ignoreFocusOut: true,
+      });
+      if (reference === undefined || reference.trim() === '') return;
+      await runEditorUtility(buildPullRequestReviewPrompt(reference));
+    }),
+    vscode.commands.registerCommand(SHOW_HELP_COMMAND, showHelpMenu),
+    vscode.commands.registerCommand('agi-workforce.securityReview', () =>
+      runEditorUtility(buildSecurityReviewPrompt()),
+    ),
+  );
 
   const refreshRuntimeSurfaces = (): void => {
     sidebarProvider?.refreshRuntimeStatus();

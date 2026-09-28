@@ -157,7 +157,7 @@ export function toolDirectoryToolDef(deferred: readonly DeferredTool[]): WebMcpT
     serverId: 'agiworkforce',
     toolName: TOOL_DIRECTORY_TOOL_NAME,
     origin: 'operator',
-    description: `Load the full input schema for connected tools that were not included in this turn. Call this before using any of them.\n\n${listing}`,
+    description: `Load the full input schema for connected tools that were not included in this turn, by exact name or by keyword. Call this before using any of them.\n\n${listing}`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -166,8 +166,13 @@ export function toolDirectoryToolDef(deferred: readonly DeferredTool[]): WebMcpT
           items: { type: 'string', enum: deferred.map((entry) => entry.qualifiedName) },
           description: 'The qualified names of the tools whose schemas to load.',
         },
+        query: {
+          type: 'string',
+          maxLength: 200,
+          description:
+            'Keywords describing what the tool should do, when you do not know its name. The best matches are loaded and listed with their descriptions.',
+        },
       },
-      required: ['names'],
       additionalProperties: false,
     },
   };

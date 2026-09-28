@@ -122,7 +122,9 @@ Descriptor fields, validated by `apps/web/lib/connectors/oauth-registry.ts`:
 `connectorId`, `displayName`, `issuer`, `authorizationUrl`, `tokenUrl`,
 `revocationUrl`, `mcpUrl`, `transport`, `scopes`, `tokenAuthMethod`,
 `authorizationParams`, `codeChallengeMethodsSupported`, `resourceIndicator`,
-`enabled`. `issuer` names the authorization server the app was registered with:
+`mcpHeaders`, `enabled`. `mcpHeaders` names at most four `X-MCP-*` option
+headers sent with every call to the MCP server beside the grant's
+`Authorization`, which it cannot replace. `issuer` names the authorization server the app was registered with:
 when the server's protected resource metadata no longer lists it, and lists no
 authorization server whose own metadata declares it, the connector is refused
 rather than sending the pair to a different server, and the callback checks
@@ -146,7 +148,8 @@ set the named variables in production and locally.
   authorization (OAuth) during installation" so an installation can be tied to
   the signed-in account.
 - Permissions the three declared tools need: pull requests read and write,
-  issues read and write, contents read.
+  issues read and write, contents read. Add checks read so a Cloud Code
+  session can show the CI status of the pull request it opened.
 - Generate a private key and base64-encode the PEM file for
   `GITHUB_APP_PRIVATE_KEY_BASE64`.
 - Variables: `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY_BASE64`,
@@ -174,7 +177,15 @@ set the named variables in production and locally.
   `userinfo.profile`, then per connector Gmail `gmail.readonly`, `gmail.compose`
   (drafts), `gmail.send`;
   Drive `drive.file`, `drive.metadata.readonly`; Calendar `calendar.readonly`,
-  `calendar.events`. The full-mailbox, full-drive and full-calendar scopes are
+  `calendar.events`. AGI adds two Gmail tools beside Google's server, both
+  calling the Gmail API with the same grant: `send_draft` sends a draft the
+  user has seen (`drafts.send`, which needs `gmail.compose`) and
+  `read_attachments` reads a message's attachments as text
+  (`messages.attachments.get`, which needs `gmail.readonly`), and
+  `create_draft_with_attachments` builds a draft with up to five of the
+  account's own files attached (`drafts.create`, which needs `gmail.compose`).
+  The full-mailbox,
+  full-drive and full-calendar scopes are
   forbidden and dropped. `gmail.modify`, which Gmail's label tools need, is left
   out like Microsoft's `Mail.ReadWrite`; admitting it is an owner decision.
 - Variables: `CONNECTOR_OAUTH_GMAIL_CLIENT_ID`,
@@ -194,10 +205,16 @@ a client the host registers itself
 - Console: https://github.com/settings/apps/new, a GitHub App. Callback URL
   `<origin>/api/connectors/oauth/callback`. Turn on "Expire user authorization
   tokens" so the app issues refresh tokens.
-- Repository permissions for the server's default toolsets: Metadata read,
-  Contents read and write, Issues read and write, Pull requests read and write,
-  Actions read. A GitHub App's permissions are its ceiling; it ignores the
-  `scope` parameter.
+- Repository permissions for the server's default toolsets plus Actions:
+  Metadata read, Contents read and write, Issues read and write, Pull requests
+  read and write, Actions read. A GitHub App's permissions are its ceiling; it
+  ignores the `scope` parameter.
+- The remote server enables only its default toolsets unless the request names
+  others, by path (`/x/<toolset>`, one at a time) or by the `X-MCP-Toolsets`
+  header (a comma-separated list), so the descriptor's `mcpHeaders` names the
+  five default toolsets and `actions`, which reads workflow runs and job logs
+  (https://github.com/github/github-mcp-server/blob/main/docs/remote-server.md).
+  `/x/all` is not used: it would exceed the per-account connector tool cap.
 - Descriptor, from the server's own metadata (fetched 2026-09-27):
 
   ```json
@@ -209,7 +226,10 @@ a client the host registers itself
     "tokenUrl": "https://github.com/login/oauth/access_token",
     "mcpUrl": "https://api.githubcopilot.com/mcp/",
     "transport": "streamable-http",
-    "scopes": ["offline_access"]
+    "scopes": ["offline_access"],
+    "mcpHeaders": {
+      "X-MCP-Toolsets": "context,repos,issues,pull_requests,users,actions"
+    }
   }
   ```
 
@@ -263,6 +283,31 @@ through `https://mcp.svc.cloud.microsoft/enterprise`, not mail or files
 
 - Variables: `CONNECTOR_OAUTH_MICROSOFT_365_CLIENT_ID`,
   `CONNECTOR_OAUTH_MICROSOFT_365_CLIENT_SECRET`.
+
+### BigQuery
+
+Google hosts a BigQuery MCP server at `https://bigquery.googleapis.com/mcp`
+(https://docs.cloud.google.com/bigquery/docs/use-bigquery-mcp). Its protected
+resource metadata, read on 2026-09-27, names `https://accounts.google.com/` as
+the authorization server and `https://www.googleapis.com/auth/bigquery` as the
+only supported scope, which views and manages all BigQuery data. The ceiling
+admits `bigquery.readonly` and `devstorage.read_only` only, so a `bigquery`
+descriptor pointing at that server cannot be granted the scope the server
+asks for. Admitting the manage scope is an owner decision, like `gmail.modify`
+and Box's `root_readwrite`.
+
+Snowflake and Databricks host MCP servers per account, so there is no single
+endpoint to pin; a user adds one by URL as a custom connector, with the OAuth
+client they registered at the vendor under Advanced settings. Neither page says
+whether the server publishes MCP authorization metadata, which the custom
+connector sign-in needs, so that part is unverified. Snowflake-managed
+servers (GA) live at
+`https://<account_url>/api/v2/databases/<db>/schemas/<schema>/mcp-servers/<name>`
+and use Snowflake OAuth
+(https://docs.snowflake.com/en/user-guide/snowflake-cortex/cortex-agents-mcp).
+Databricks managed servers (Public Preview) live on the workspace host, for
+example `https://<workspace-hostname>/api/2.0/mcp/sql`, with a scope per server
+(https://docs.databricks.com/aws/en/generative-ai/mcp/managed-mcp).
 
 ### Notion
 

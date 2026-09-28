@@ -14,10 +14,9 @@ nothing is left.
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | The design is code, so its source can be viewed, copied and downloaded; there is no inspect/spec mode (measurements, tokens, assets) for developers. `agi artifacts show --out` writes the source into the project. | ui |
-| vscode | partial | The design is code, so its source can be viewed, copied and downloaded; there is no inspect/spec mode (measurements, tokens, assets) for developers. "Save Artifact into Workspace" writes the source into the folder. | ui |
 | chrome | partial | The design is code, so its source can be viewed, copied and downloaded; there is no inspect/spec mode (measurements, tokens, assets) for developers. The side panel can only copy the source. | surface-only |
 
-Code: `apps/cli/src/lib.rs:1034-1043`, `apps/cli/src/lib.rs:1942-1948`, `apps/extension-vscode/package.json:593-594`, `apps/extension-vscode/src/core/commandSetup.ts:2297-2301`
+Code: `apps/cli/src/lib.rs:1034-1043`, `apps/cli/src/lib.rs:1942-1948`, `apps/extension/src/features/side-panel/artifactsDrawer.ts:194-205`, `apps/extension/src/features/side-panel/artifactsDrawer.ts:200-205`
 
 ## S32.30: Figma import/export integration.
 
@@ -41,22 +40,6 @@ Code: `apps/cli/src/lib.rs:1034-1043`, `apps/cli/src/lib.rs:1942-1948`, `apps/ex
 
 Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:426-436`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:236-241`
 
-## S32.32: Export to PDF.
-
-- Done when: The user can export the design as a PDF.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Library exports document, markdown, code, mermaid and presentation artifacts to PDF as text; HTML/React/SVG designs cannot be exported to PDF and no export renders the visual design. | ui |
-| desktop | partial | Library exports document, markdown, code, mermaid and presentation artifacts to PDF as text; HTML/React/SVG designs cannot be exported to PDF and no export renders the visual design. | ui |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/library/components/LibraryView.tsx:220-228`, `packages/ui/unified-chat/src/components/ArtifactRenderer.tsx:554-556`, `packages/ui/unified-chat/src/components/ArtifactRenderer.tsx:660-676`, `apps/web/features/chat/services/document-export-service.ts:479-481`
-
 ## S32.33: Export to image or archive.
 
 - Done when: The user can export the design as an image file or as a downloadable archive.
@@ -67,9 +50,8 @@ Code: `apps/web/features/library/components/LibraryView.tsx:220-228`, `packages/
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | SVG artifacts are written as .svg files; there is no raster image of an HTML design and no archive export. | ui |
-| vscode | partial | SVG artifacts are saved into the workspace as .svg files; there is no raster image of an HTML design and no archive export. | ui |
 
-Code: `apps/cli/src/cloud/artifacts.rs:212-216`, `apps/cli/src/lib.rs:1034-1043`, `apps/extension-vscode/src/features/artifacts/artifactPresentation.ts:62-63`, `apps/extension-vscode/package.json:593-594`
+Code: `apps/cli/src/cloud/artifacts.rs:212-216`, `apps/cli/src/lib.rs:1034-1043`
 
 ## S32.34: Version comparison and restoration.
 

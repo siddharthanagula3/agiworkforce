@@ -95,17 +95,14 @@ Code: `apps/extension/src/features/side-panel/projectsDrawer.ts:239-245`, `apps/
 
 - Done when: A project members view shows who has access to a project and lets the owner add or remove people.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Project organisation-sharing only: a project can be shared with the whole organisation (Workspace > Sharing); there is no per-project member list or per-person invite. | ui |
-| desktop | partial | Project organisation-sharing only: a project can be shared with the whole organisation (Workspace > Sharing); there is no per-project member list or per-person invite. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/workspace/sharing/page.tsx:16-16`, `apps/web/features/settings/sections/OrganizationSharingSection.tsx:208-218`, `apps/web/app/api/settings/organization/shared/projects/[projectId]/route.ts:71-71`
 
 ## S4.12: Project Memory.
 
@@ -275,17 +272,15 @@ Code: `apps/cli/src/lib.rs:1023-1024`, `apps/cli/src/lib.rs:1888-1900`, `apps/ex
 
 - Done when: A dedicated image studio where the user writes a prompt, picks style/size options, generates images and sees results/history in one place.
 - Wave: 3
-- Already works on: cli
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Images are generated from a chat composer mode ("Create image") and land in the conversation and Library; there is no dedicated image studio page (prompt, presets, history side by side). | ui |
-| desktop | partial | Images are generated from a chat composer mode ("Create image") and land in the conversation and Library; there is no dedicated image studio page (prompt, presets, history side by side). | ui |
-| mobile | partial | Images are generated from the chat composer (Add to chat / task chips) and appear in Library > Images; there is no dedicated image studio screen. | ui |
+| mobile | partial | Mobile studio screen waits for the Codex mobile release (rule 12); the web studio's building blocks (image options, Library kind=image history) are ready to reuse. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:72-73`, `apps/web/app/api/media/image/generate/route.ts:1037-1038`, `apps/mobile/src/features/chat/actions/runImageGenerationTurn.ts:95-110`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:1-60`
+Code: `apps/web/features/images/components/ImageStudio.tsx:73-73`
 
 ## S4.28: Image collection.
 
@@ -319,17 +314,14 @@ Code: `apps/web/shared/stores/media-store.ts:29-41`, `packages/ui/unified-chat/s
 
 - Done when: A notebook workspace holds a set of sources and notes that the user reads, annotates and chats over, with generated outputs (NotebookLM-style).
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | No NotebookLM-style notebook destination (source rail, notes, studio outputs); the nearest are Jupyter-style notebook sessions inside AGI Code and a project's Sources tab with grounded chat. | ui |
-| desktop | partial | No NotebookLM-style notebook destination (source rail, notes, studio outputs); the nearest are Jupyter-style notebook sessions inside AGI Code and a project's Sources tab with grounded chat. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/code/CloudCodePage.tsx:1122-1127`, `apps/web/features/notebook/NotebookPanel.tsx:12-32`
 
 ## S4.32: Research report reader.
 
@@ -414,16 +406,14 @@ Code: `apps/extension-vscode/src/features/surfaces/capabilityManagement.ts:124-1
 ## S4.38: Model catalog.
 
 - Done when: A model catalog lists the models the user can reach with capabilities/context/price and lets them pick one or set a default.
-- Wave: 2
-- Already works on: mobile, cli, api
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The /models catalog page has no navigation entry; paid users reach the catalog via the composer "All models" row, but Free users (row hidden) can only type the URL. | mount |
-| desktop | partial | Same as web: /models has no navigation entry and the composer "All models" row is hidden on Free. | mount |
 | chrome | partial | Only the side-panel model dropdown (Auto, primary, more); no catalog view with capabilities, context size or pricing. | ui |
 
-Code: `apps/web/app/models/page.tsx:12-18`, `apps/web/features/models/components/ModelsPage.tsx:12-27`, `apps/web/features/chat/lib/use-model-catalogue.ts:1-10`, `apps/web/features/chat/components/Composer/ComposerFooter.tsx:1494-1504`
+Code: `apps/extension/src/side_panel.ts:6168-6178`, `apps/extension/src/features/cloud-bridge/managedModelPicker.ts:47-50`
 
 ## S4.39: Usage dashboard.
 
@@ -485,11 +475,10 @@ Code: `apps/web/features/settings/sections/AccountSection.tsx:369-376`, `apps/we
 
 - Done when: A help-and-feedback destination links to help/docs/status and lets the user send product feedback or a bug report from inside the product.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | /help lists commands, but /feedback and /bug only print a GitHub issues URL; there is no in-product feedback submission. | surface-only |
-| vscode | partial | "Send Feedback" collects type and text but submits by opening a prefilled GitHub issue (needs a GitHub account and a public repo); no in-product submission. | surface-only |
 
-Code: `apps/cli/src/tui/tui_app.rs:3531-3540`, `apps/cli/src/tui/tui_app.rs:3535-3540`, `apps/extension-vscode/src/core/commandSetup.ts:1319-1335`, `apps/extension-vscode/src/core/commandSetup.ts:1354-1362`
+Code: `apps/cli/src/tui/tui_app.rs:3531-3540`, `apps/cli/src/tui/tui_app.rs:3535-3540`

@@ -36,13 +36,13 @@ function buildCspWithNonce(nonce: string, frameAncestors: "'none'" | "'self'" = 
   const identityConnect = identityOrigins.connect.map((origin) => ` ${origin}`).join('');
   return `
     default-src 'self';
-    script-src 'self' 'nonce-${nonce}'${devUnsafeEval}${identityScript} https://js.stripe.com https://challenges.cloudflare.com https://www.googletagmanager.com;
+    script-src 'self' 'nonce-${nonce}'${devUnsafeEval}${identityScript} https://js.stripe.com https://challenges.cloudflare.com https://www.googletagmanager.com https://apis.google.com;
     style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://js.stripe.com;
     img-src 'self' data: blob: https:;
     font-src 'self' https://fonts.gstatic.com https://js.stripe.com data:;
     connect-src 'self'${storageUploadOrigins}${identityConnect} https://api.stripe.com https://vitals.vercel-insights.com https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com;
     worker-src 'self' blob:;
-    frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://challenges.cloudflare.com${sandboxFrameSrc};
+    frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://challenges.cloudflare.com https://docs.google.com${sandboxFrameSrc};
     frame-ancestors ${frameAncestors};
     form-action 'self';
     base-uri 'self';
