@@ -21,7 +21,7 @@ export interface PdfAttachmentContent {
    * into this array is the page number a caller can anchor an offset to.
    */
   pages: string[];
-  pageImages: { mimeType: 'image/png'; base64: string }[];
+  pageImages: { mimeType: 'image/png'; base64: string; page: number }[];
   /**
    * The document has more pages than `MAX_TEXT_PAGES`, so `text` covers only
    * the first of them. A chat turn lives with that; a store that keeps the
@@ -164,8 +164,15 @@ export async function extractPdfAttachmentContent(
       pages.push(text);
     }
 
-    const text = boundText(pages.filter(Boolean).join('\n\n'));
-    if (text) return { text, pages, pageImages: [], pagesOmitted };
+    if (boundText(pages.filter(Boolean).join('\n\n'))) {
+      const text = boundText(
+        pages
+          .map((pageText, index) => (pageText ? `[Page ${index + 1}]\n${pageText}` : ''))
+          .filter(Boolean)
+          .join('\n\n'),
+      );
+      if (text) return { text, pages, pageImages: [], pagesOmitted };
+    }
 
     const pageImages: PdfAttachmentContent['pageImages'] = [];
     let imageBytes = 0;
@@ -204,7 +211,11 @@ export async function extractPdfAttachmentContent(
         const png = encodePng(candidate.width, candidate.height, rgb);
         if (imageBytes + png.byteLength > MAX_IMAGE_BYTES) break;
         imageBytes += png.byteLength;
-        pageImages.push({ mimeType: 'image/png', base64: png.toString('base64') });
+        pageImages.push({
+          mimeType: 'image/png',
+          base64: png.toString('base64'),
+          page: pageNumber,
+        });
         break;
       }
     }
