@@ -3,6 +3,7 @@
   "generatedFrom": "packages/contracts/types/src top-level modules (excl. generated/, __tests__) + packages/contracts/cloud-contracts/src top-level modules + packages/contracts/types/src/generated/protocol file count (ts-rs output from crates/agiworkforce-protocol)",
   "typesModules": [
     "a2a",
+    "account-eligibility",
     "account-usage-client",
     "agent",
     "agent-status",
@@ -182,5 +183,5 @@
     "tool-events",
     "triggers"
   ],
-  "generatedProtocolTypeCount": 402
+  "generatedProtocolTypeCount": 406
 }
