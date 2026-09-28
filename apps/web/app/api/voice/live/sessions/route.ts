@@ -17,7 +17,8 @@ import {
   buildSpendLimitGateResponse,
   buildModelPolicyGateResponse,
 } from '@/lib/managed-compute-gate';
-import { readSurfaceHint, resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
+import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
+import { isAppError } from '@/lib/errors';
 import { assertCapabilityAvailable } from '@/lib/feature-flags/capability-gate';
 import { buildFlagSubject } from '@/lib/feature-flags/flag-evaluation-service';
 import {
@@ -163,18 +164,6 @@ async function handleCreateLiveSession(request: NextRequest) {
     gateHeaders,
   );
   if (modelPolicyResponse) return modelPolicyResponse;
-  await assertCapabilityAvailable(
-    buildFlagSubject(request, {
-      userId,
-      workspaceId: null,
-      role: null,
-      plan: null,
-      surface: readSurfaceHint(request),
-    }),
-    'canUseVoice',
-    'Voice',
-  );
-
   let body: z.infer<typeof CreateLiveSessionSchema>;
   try {
     body = CreateLiveSessionSchema.parse(await request.json());
@@ -279,6 +268,17 @@ async function handleCreateLiveSession(request: NextRequest) {
       if (gateResponse) return gateResponse;
     }
     planTier = entitlement.plan;
+    await assertCapabilityAvailable(
+      buildFlagSubject(request, {
+        userId,
+        workspaceId: scoped.organizationId,
+        role: null,
+        plan: planTier,
+        surface: resolveCloudChatSurface(request),
+      }),
+      'canUseVoice',
+      'Voice',
+    );
     if (!getTierPolicy(planTier).allowVoice) {
       return voiceJsonError(
         request,
@@ -322,6 +322,7 @@ async function handleCreateLiveSession(request: NextRequest) {
       quotaFeature: LIVE_VOICE_FEATURE,
     });
   } catch (error) {
+    if (isAppError(error)) throw error;
     if (error instanceof ManagedUsageRequestError) {
       return voiceUsageErrorResponse(request, error, limitResets);
     }
