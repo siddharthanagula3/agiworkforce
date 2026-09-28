@@ -30,7 +30,9 @@ const IMAGE_MODEL_ID = getModelsForProvider('openai', {
   modelTypes: ['image'],
 }).filter(isExecutableImageModel)[0]?.id;
 
-function renderCard(onRegenerate?: (opts: unknown) => Promise<string>) {
+function renderCard(
+  onRegenerate: (opts: unknown) => Promise<string> = vi.fn(async () => IMAGE_URL),
+) {
   return render(
     <ImageGenerationCard
       imageUrl={IMAGE_URL}

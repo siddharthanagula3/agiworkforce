@@ -1010,7 +1010,7 @@ export function Sidebar(props: SidebarProps) {
                       ? 'bg-danger-fill'
                       : budgetPercent >= 80
                         ? 'bg-warning-fill'
-                        : 'bg-blue-500',
+                        : 'bg-primary',
                   )}
                   style={{ width: `${Math.min(Math.max(budgetPercent, 0), 100)}%` }}
                 />

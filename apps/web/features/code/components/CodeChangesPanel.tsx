@@ -286,6 +286,7 @@ export function CodeChangesPanel({
   const changedPaths = changes?.files.map((file) => file.path) ?? [];
   const includedPaths = changedPaths.filter((path) => !excluded.has(path));
   const choosingFiles = includedPaths.length < changedPaths.length;
+  const nothingChosen = changedPaths.length > 0 && includedPaths.length === 0;
 
   const pullRequestBlocked = closedOrArchived
     ? CODE_COPY.pullRequestNeedsOpenSession
@@ -309,7 +310,7 @@ export function CodeChangesPanel({
 
   const submitCommit = (event: FormEvent) => {
     event.preventDefault();
-    if (!commitMessage.trim() || committing || includedPaths.length === 0) return;
+    if (!commitMessage.trim() || committing || nothingChosen) return;
     onCommit(commitMessage.trim(), choosingFiles ? includedPaths : null);
   };
 
@@ -466,7 +467,7 @@ export function CodeChangesPanel({
               <button
                 type="submit"
                 className={styles['secondaryButton']}
-                disabled={committing || !commitMessage.trim() || includedPaths.length === 0}
+                disabled={committing || !commitMessage.trim() || nothingChosen}
               >
                 {committing && <Spinner size="sm" aria-hidden="true" />}
                 {CODE_COPY.commitAction}
