@@ -11,6 +11,7 @@ export type PluginMcpTransportKind = 'stdio' | 'http' | 'sse' | 'unknown';
 export interface PluginMcpServerSummary {
   name: string;
   transport: PluginMcpTransportKind;
+  url?: string;
 }
 
 export interface PluginRuntimeComponents {
