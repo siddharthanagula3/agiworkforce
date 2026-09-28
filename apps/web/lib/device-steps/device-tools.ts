@@ -5,6 +5,7 @@ import {
   MAX_DEVICE_DISPLAY_ID,
   MAX_DEVICE_REVIEW_LENGTH,
   MAX_DEVICE_SCROLL_DELTA,
+  MAX_DEVICE_SEARCH_LENGTH,
   MAX_DEVICE_TYPE_LENGTH,
   MAX_DEVICE_WAIT_MS,
   DEVICE_KEY_MODIFIERS,
@@ -94,6 +95,63 @@ function parametersFor(
           text: { type: 'string', description: 'The complete new contents of the file.' },
         },
         required: ['rootId', 'path', 'text'],
+      };
+    case 'device_edit_file':
+      return {
+        type: 'object',
+        properties: {
+          rootId,
+          path: { type: 'string', description: 'Path to the file, relative to the folder.' },
+          oldText: {
+            type: 'string',
+            description: 'The exact passage to replace, copied from the file as it is now.',
+          },
+          newText: { type: 'string', description: 'The text to put in its place.' },
+          replaceAll: {
+            type: 'boolean',
+            description: 'Replace every occurrence instead of requiring exactly one.',
+          },
+        },
+        required: ['rootId', 'path', 'oldText', 'newText'],
+      };
+    case 'device_find_files':
+      return {
+        type: 'object',
+        properties: {
+          rootId,
+          pattern: {
+            type: 'string',
+            maxLength: MAX_DEVICE_SEARCH_LENGTH,
+            description:
+              'Glob pattern relative to the folder: * matches within one name and ** matches across folders.',
+          },
+          path: {
+            type: 'string',
+            description: 'Subfolder to search, relative to the folder. Omit to search all of it.',
+          },
+        },
+        required: ['rootId', 'pattern'],
+      };
+    case 'device_search_text':
+      return {
+        type: 'object',
+        properties: {
+          rootId,
+          query: {
+            type: 'string',
+            maxLength: MAX_DEVICE_SEARCH_LENGTH,
+            description: 'The text to look for, matched literally.',
+          },
+          ignoreCase: {
+            type: 'boolean',
+            description: 'Match regardless of upper and lower case.',
+          },
+          path: {
+            type: 'string',
+            description: 'Subfolder to search, relative to the folder. Omit to search all of it.',
+          },
+        },
+        required: ['rootId', 'query'],
       };
     case 'device_run_command':
       return {

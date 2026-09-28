@@ -970,10 +970,14 @@ pub fn rewind_session(
     let steps = steps.min(available);
     match session.rewind_to(available - steps, mode) {
         Ok(outcome) => {
+            let mut text = describe_rewind(steps, &outcome, session.messages.len());
             if outcome.conversation_restored {
-                let _ = session.persist_managed_session();
+                if let Err(error) = session.persist_managed_session() {
+                    text.push_str(&format!(
+                        "\nThe rewound conversation could not be saved ({error:#}); resuming this session later brings back the later messages."
+                    ));
+                }
             }
-            let text = describe_rewind(steps, &outcome, session.messages.len());
             (CommandOutcome::Info(text), Some(outcome))
         }
         Err(error) => (
@@ -998,10 +1002,15 @@ fn checkpoint_list(session: &AgentSession) -> CommandOutcome {
         .map(|(offset, summary)| (offset + 1, summary))
     {
         lines.push(format!(
-            "  {steps:>3}  {}  {}  ({})",
+            "  {steps:>3}  {}  {}  ({}{})",
             summary.created_at.format("%H:%M"),
             checkpoint_prompt_line(&summary.prompt),
-            checkpoint_files_label(summary.tracked_files)
+            checkpoint_files_label(summary.tracked_files),
+            if summary.conversation_available() {
+                ""
+            } else {
+                "; conversation compacted since, code only"
+            }
         ));
     }
     lines.push(REWIND_USAGE.to_string());

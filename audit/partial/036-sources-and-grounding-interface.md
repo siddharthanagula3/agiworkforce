@@ -81,17 +81,16 @@ Code: `apps/mobile/types/chat.ts:35-39`, `apps/mobile/src/features/chat/componen
 
 - Done when: Cited sources show when they were retrieved/accessed.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Research report sources show Published and Retrieved dates (4fde83c28); chat web-search citations still carry no retrieval time (x_search_results has no retrieved date field). | ui |
-| desktop | partial | Research report sources show Published and Retrieved dates (4fde83c28); chat web-search citations still carry no retrieval time (x_search_results has no retrieved date field). | ui |
-| mobile | partial | Report citations arrive with accessedAt and the mobile report service parses it, but the sources list never shows it. | ui |
+| mobile | partial | The report detail's 'Sources retrieved <date>' line is post-codex/p-privacy-s36.06-mobile-report-retrieved.patch, because ReportsScreen.tsx is held by Codex; apply after Codex finishes | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/research/ResearchReportView.tsx:227-227`, `apps/mobile/src/features/research/service.ts:52-52`, `apps/mobile/src/features/research/ReportsScreen.tsx:128-132`
+Code: `apps/mobile/src/features/research/service.ts:52-52`
 
 ## S36.07: Source-type icon.
 
@@ -153,14 +152,6 @@ Code: `apps/mobile/src/features/chat/components/WebSearchResultCard.tsx:57-67`, 
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | A cited past-chat message is scrolled to and outlined, but a cited project file opens at its page without highlighting the passage, and web sources open the plain page. | ui |
-| desktop | partial | Same as web (hosted): A cited past-chat message is scrolled to and outlined, but a cited project file opens at its page without highlighting the passage, and web sources open the plain page. | ui |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/pages/WebChatPage.tsx:3931-3935`, `apps/web/features/projects/components/SourcesPanel.tsx:112-113`
 
 ## S36.16: Claim-to-source relationship.
 

@@ -30,7 +30,7 @@
       "ApiKeyAuth": {
         "type": "http",
         "scheme": "bearer",
-        "description": "AGI API key (`sk_live_\u2026` / `sk_test_\u2026`) issued under Settings > API Keys. Scopes are chosen at issue time; an operation lists the one it needs in `x-agi-api-key-scope` and answers 403 `insufficient_scope` without it."
+        "description": "AGI API key (`sk_live_\u2026` / `sk_test_\u2026`) issued in the developer console at /developers. Scopes are chosen at issue time; an operation lists the one it needs in `x-agi-api-key-scope` and answers 403 `insufficient_scope` without it."
       },
       "WorkspaceApiKeyAuth": {
         "type": "http",
@@ -748,6 +748,15 @@
                   "maxLength": 253
                 },
                 "description": "Never read or cite pages on these sites."
+              },
+              "connectors": {
+                "type": "array",
+                "maxItems": 8,
+                "items": {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "description": "Connected apps to search for the run's planned questions, by connector id. An app is read through the MCP `search` and `fetch` tools deep research servers expose; one that offers no `search` tool, or is not connected to your account, is named in the report as not searched. Applies only to Deep Research."
               }
             }
           },
@@ -810,6 +819,11 @@
                     }
                   }
                 }
+              },
+              "guidance": {
+                "type": "string",
+                "maxLength": 2000,
+                "description": "Guidance for the rest of the run, sent when it resumes. It is added to the plan as a step and the searches still to run are re-planned to follow it."
               },
               "deliverable": {
                 "type": "object",
@@ -2224,6 +2238,18 @@
           }
         ],
         "x-agi-api-key-scope": "inference:write",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Required with a session bearer token. Optional with an AGI API key: when it is absent the gateway assigns the request its own key, so a retry is billed as a new request. Reuse a key only to retry the same body. `GET /usage/turns/{requestId}` looks up the credits a request settled at by the key it was sent with.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._:-]{8,128}$"
+            }
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {

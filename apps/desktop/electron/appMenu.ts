@@ -28,6 +28,8 @@ export interface AppMenuActions {
   newWindow: () => void;
   openConversationInNewWindow: () => void;
   hasFocusedConversation: () => boolean;
+  isFrontWindowOnTop: () => boolean | null;
+  setFrontWindowOnTop: (onTop: boolean) => void;
   toggleQuickAsk: () => void;
   captureScreenshot: () => void;
   openSettings: () => void;
@@ -228,12 +230,20 @@ function windowMenu(actions: AppMenuActions): MenuItemConstructorOptions {
   // Moving a conversation out is disabled rather than hidden when the front
   // window is not on one: an item that appears and disappears as the user
   // navigates is harder to find again than one that is visibly unavailable.
+  const onTop = actions.isFrontWindowOnTop();
   const items: MenuItemConstructorOptions[] = [
     { label: 'New Window', click: actions.newWindow },
     {
       label: 'Move Conversation to New Window',
       enabled: actions.hasFocusedConversation(),
       click: actions.openConversationInNewWindow,
+    },
+    {
+      label: 'Always on Top',
+      type: 'checkbox',
+      checked: onTop === true,
+      enabled: onTop !== null,
+      click: (item) => actions.setFrontWindowOnTop(item.checked),
     },
     { type: 'separator' },
     { role: 'minimize' },

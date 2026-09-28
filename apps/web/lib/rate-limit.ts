@@ -592,6 +592,16 @@ export const rateLimitConfigs = {
     window: '1 m',
     failClosed: true,
   },
+  'developer-console': {
+    limit: 60,
+    window: '1 m',
+    failClosed: false,
+  },
+  'developer-console-write': {
+    limit: 20,
+    window: '1 m',
+    failClosed: false,
+  },
   'usage-providers': {
     limit: 60,
     window: '1 m',

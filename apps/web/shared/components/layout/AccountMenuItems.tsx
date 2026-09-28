@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useTranslation } from 'react-i18next';
 import {
+  Code2,
   Settings,
   HelpCircle,
   Keyboard,
@@ -111,6 +112,12 @@ export function AccountMenuItems({
       <DropdownMenuItem onClick={onDownloadApps}>
         <Download className="mr-2 h-4 w-4" />
         {t('common:navGetApps')}
+      </DropdownMenuItem>
+      <DropdownMenuItem asChild>
+        <Link href="/developers">
+          <Code2 className="mr-2 h-4 w-4" />
+          {t('common:navDeveloperConsole')}
+        </Link>
       </DropdownMenuItem>
       <DropdownMenuSeparator />
       <DropdownMenuItem asChild>
