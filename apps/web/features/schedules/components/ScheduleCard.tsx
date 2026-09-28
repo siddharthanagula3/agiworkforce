@@ -24,7 +24,7 @@ import {
   X,
 } from 'lucide-react';
 import { formatCredits } from '@agiworkforce/types';
-import { describeCronCadence } from '@/lib/schedules/schedule-time';
+import { describeCronCadence } from '@agiworkforce/utils/cron';
 import { describeRecurrenceRule } from '@/lib/schedules/recurrence-rule';
 import ScheduleTriggersPanel from './ScheduleTriggersPanel';
 import { cn } from '@shared/utils/cn';
