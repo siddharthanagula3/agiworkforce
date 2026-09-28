@@ -6,6 +6,7 @@ import { logger } from './logger';
 import { getRequestId } from './observability/trace-context';
 import { getKeyValueStore } from './server/key-value';
 import { trackAuditedProductEvent } from './server/product-analytics';
+import { auditDomainEvent, domainEventAuditFields } from './audit-domain-events';
 
 /**
  * Counts writes to `security_audit_logs` since the last anomaly check, so the
@@ -637,11 +638,13 @@ export async function recordAuditEvent(event: AuditEvent): Promise<void> {
     id: typeof detail['resourceId'] === 'string' ? detail['resourceId'] : null,
     workspaceId: event.organizationId ?? null,
   });
+  const domainEventFields = domainEventAuditFields(mintAuditDomainEvent(event, outcome, detail));
 
   try {
     const detailsForSecurityLog: Record<string, unknown> = {
       ...detail,
       ...auditEnvelopeFields(event),
+      ...domainEventFields,
     };
     if (typeof detail['resourceType'] === 'string') {
       detailsForSecurityLog['resource_type'] = detail['resourceType'];
@@ -688,6 +691,7 @@ export async function recordAuditEvent(event: AuditEvent): Promise<void> {
     const enterpriseMetadata: Record<string, unknown> = {
       ...detail,
       ...auditEnvelopeFields(event),
+      ...domainEventFields,
     };
     if (ipAddress) enterpriseMetadata['ipAddress'] = ipAddress;
     if (userAgent) enterpriseMetadata['userAgent'] = userAgent;
@@ -709,6 +713,33 @@ export async function recordAuditEvent(event: AuditEvent): Promise<void> {
     );
   } catch (err) {
     logger.error({ error: err, eventType }, 'Failed to record enterprise audit event');
+  }
+}
+
+function mintAuditDomainEvent(
+  event: AuditEvent,
+  outcome: AuditOutcome,
+  detail: Record<string, unknown>,
+): ReturnType<typeof auditDomainEvent> {
+  try {
+    const correlationId = event.correlationId ?? getRequestId() ?? undefined;
+    return auditDomainEvent({
+      eventType: event.eventType,
+      outcome,
+      userId: event.userId ?? null,
+      organizationId: event.organizationId ?? null,
+      resourceId: typeof detail['resourceId'] === 'string' ? detail['resourceId'] : null,
+      occurredAt: new Date().toISOString(),
+      ...(correlationId ? { correlationId } : {}),
+      ...(event.causationId ? { causationId: event.causationId } : {}),
+      ...(event.operationRef ? { operationRef: event.operationRef } : {}),
+    });
+  } catch (err) {
+    logger.error(
+      { error: err, eventType: event.eventType },
+      'Failed to mint the audit domain event',
+    );
+    return null;
   }
 }
 
