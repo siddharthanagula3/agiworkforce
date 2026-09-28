@@ -1,3 +1,4 @@
+import { deriveArtifacts } from '@agiworkforce/artifacts';
 import {
   createManagedCloudChatClient,
   ManagedCloudChatHttpError,
@@ -38,8 +39,14 @@ export interface ChromeArtifactsError {
 export type ChromeArtifactListResult =
   { status: 'success'; artifacts: ChromeArtifact[] } | ChromeArtifactsError;
 
+export interface ChromeArtifactSource {
+  content: string;
+  title: string;
+  language: string | null;
+}
+
 export type ChromeArtifactSourceResult =
-  { status: 'success'; content: string } | ChromeArtifactsError;
+  ({ status: 'success' } & ChromeArtifactSource) | ChromeArtifactsError;
 
 export class ChromeArtifactsHttpError extends Error {
   constructor(
@@ -185,7 +192,7 @@ export async function listChromeArtifacts(
  * artifact route for content that no route holds.
  */
 export async function readChromeArtifactSource(
-  input: { conversationId: string; messageId: string; signal?: AbortSignal },
+  input: { artifactId: string; conversationId: string; messageId: string; signal?: AbortSignal },
   dependencies: Partial<ChromeArtifactsDependencies> = {},
 ): Promise<ChromeArtifactSourceResult> {
   const deps = { ...DEFAULT_DEPENDENCIES, ...dependencies };
@@ -200,13 +207,26 @@ export async function readChromeArtifactSource(
         input.signal ? { signal: input.signal } : {},
       );
       const found = detail.messages.find((message) => message.id === input.messageId);
-      if (found) return { status: 'success', content: found.content };
+      if (found) {
+        const artifact = deriveArtifacts(found.content, {
+          conversationId: input.conversationId,
+          messageId: input.messageId,
+          include: () => true,
+        }).find((candidate) => candidate.id === input.artifactId);
+        if (!artifact) break;
+        return {
+          status: 'success',
+          content: artifact.content,
+          title: artifact.title,
+          language: artifact.language ?? null,
+        };
+      }
       if (!detail.hasMore) break;
     }
     return {
       status: 'error',
       code: 'not_found',
-      message: 'The message that produced this artifact could not be read.',
+      message: 'This artifact could not be found in the message that produced it.',
     };
   } catch (error) {
     return describeArtifactsFailure(error, input.signal);
