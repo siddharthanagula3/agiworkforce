@@ -15,6 +15,7 @@ import { logger } from '@/lib/logger';
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
 import { createDeadline, credentialedFetch } from '@/lib/url-fetch/guarded-fetch';
 
+import { filterConnectorScopes } from './oauth-scope-allowlist';
 import { describeConnectorSetup } from './oauth-setup';
 import { BANK_ACCOUNTS_CONNECTOR_ID, plaidApiOrigin, plaidCredentials } from './plaid-config';
 
@@ -27,7 +28,7 @@ const BANK_ACCOUNTS_TOOLS: ReadonlySet<string> = new Set([
 ]);
 
 const PLAID_CLIENT_NAME = 'AGI Workforce';
-const PLAID_PRODUCTS = ['transactions'];
+const PLAID_PRODUCTS = filterConnectorScopes(BANK_ACCOUNTS_CONNECTOR_ID, ['transactions']).scopes;
 const PLAID_COUNTRY_CODES = ['US'];
 const PLAID_LANGUAGE = 'en';
 const PLAID_TOKEN_TYPE = 'Bearer';
