@@ -823,13 +823,14 @@ export async function runBrowserCommand(
   }
   // A local client already put the tool call through its own approval, so a
   // second dialog here would ask the same question with no new information.
-  if (!caller && !(await approveBrowserCommand(window, plan))) {
+  if (!caller && plan.confirm && !(await approveBrowserCommand(window, plan))) {
     return runtimeFailure('cancelled', 'That browser action was not run.');
   }
 
-  const activity = caller
-    ? null
-    : recordBrowserActivity(MANUAL_BROWSER_CLIENT, plan.command, plan.args);
+  const activity =
+    caller || !plan.confirm
+      ? null
+      : recordBrowserActivity(MANUAL_BROWSER_CLIENT, plan.command, plan.args);
   let value: unknown;
   try {
     value = await sendBrowserCommand(plan.command, plan.args);
@@ -843,7 +844,7 @@ export async function runBrowserCommand(
     throw error;
   }
   if (activity) settleBrowserActivity(activity, null);
-  consumeSingleUse(plan.capability, scope);
+  if (plan.confirm) consumeSingleUse(plan.capability, scope);
   return runtimeSuccess(value);
 }
 

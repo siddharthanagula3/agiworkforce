@@ -111,6 +111,13 @@ export const PLATFORM_TOOL_METADATA: Readonly<Record<string, ToolMetadata>> = Ob
     declared: true,
     autoInReadOnlyMode: true,
   },
+  browser_list_tabs: {
+    actionClass: 'read',
+    reversible: true,
+    acceptsUntrustedContent: true,
+    createsEgressPath: false,
+    declared: true,
+  },
   search_maps: {
     actionClass: 'read',
     reversible: true,

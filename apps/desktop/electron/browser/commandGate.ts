@@ -9,6 +9,7 @@ export interface BrowserCommandPlan {
   capability: DesktopCapability;
   summary: string;
   detail: string;
+  confirm: boolean;
 }
 
 function requireString(args: Record<string, unknown>, key: string): string {
@@ -70,21 +71,38 @@ export function planBrowserCommand(
     ? 'browser.cdp'
     : 'browser.site';
 
-  const plan = (args: Record<string, unknown>, summary: string, detail: string) => ({
+  const plan = (
+    args: Record<string, unknown>,
+    summary: string,
+    detail: string,
+    confirm = true,
+  ) => ({
     command,
     args,
     capability,
     summary,
     detail,
+    confirm,
   });
 
   switch (command) {
-    case 'browser_read_page':
+    case 'browser_list_tabs':
       return plan(
         {},
-        'Read the page open in the paired browser?',
-        'The address, title and visible text of the active tab are copied into this conversation.',
+        'List the tabs open in the paired browser?',
+        'The titles and addresses of the open web tabs are shown so you can choose one.',
+        false,
       );
+    case 'browser_read_page': {
+      const tabId = optionalNumber(rawArgs, 'tabId');
+      return plan(
+        withDefined({ tabId }),
+        'Read the page open in the paired browser?',
+        tabId === undefined
+          ? 'The address, title and visible text of the active tab are copied into this conversation.'
+          : 'The address, title and visible text of the tab you chose are copied into this conversation.',
+      );
+    }
     case 'browser_click': {
       const selector = requireString(rawArgs, 'selector');
       return plan(
