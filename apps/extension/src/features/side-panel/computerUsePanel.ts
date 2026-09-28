@@ -136,6 +136,25 @@ export const COMPUTER_USE_PANEL_CSS = `
     color: var(--agi-ext-accent-text);
   }
 
+  .sp-cu-takeover-btn {
+    background: none;
+    border: 1px solid var(--agi-ext-border);
+    border-radius: 5px;
+    color: var(--agi-ext-text);
+    font-size: 11px;
+    padding: 3px 10px;
+    cursor: pointer;
+  }
+
+  .sp-cu-takeover-btn:hover {
+    border-color: var(--agi-ext-accent);
+  }
+
+  .sp-cu-takeover-btn[hidden],
+  .sp-cu-run-btn[hidden] {
+    display: none;
+  }
+
   .sp-cu-run-btn {
     background: var(--agi-ext-accent);
     color: var(--agi-ext-on-accent);
@@ -583,7 +602,7 @@ const KIND_EMOJI: Record<string, string> = {
 export type AutofillOutcome = 'escalation' | 'success' | 'error';
 
 /** `run_stopped` reports the end of a browser-control run, not an autofill. */
-export type PanelNoticeKind = AutofillOutcome | 'run_stopped';
+export type PanelNoticeKind = AutofillOutcome | 'run_stopped' | 'handoff';
 
 const BANNER_PRESENTATION: Record<PanelNoticeKind, { title: string; icon: string; style: string }> =
   {
@@ -606,6 +625,11 @@ const BANNER_PRESENTATION: Record<PanelNoticeKind, { title: string; icon: string
       title: 'Browser control stopped',
       icon: '\u{25A0}', // filled square
       style: 'error',
+    },
+    handoff: {
+      title: 'Your turn',
+      icon: '\u{270B}',
+      style: 'escalation',
     },
   };
 
@@ -672,6 +696,7 @@ export interface ComputerUsePanelAPI {
   updateUsageMeter(usage: AgentLoopUsage): void;
   refreshAuthChip(): void;
   setRunState(running: boolean, runId?: string, generation?: number): void;
+  setPaused(paused: boolean, reason?: string): void;
   ownsRun(runId: unknown): boolean;
   noteRunActivity(): void;
 }
@@ -777,6 +802,21 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
   stopBtn.title = 'Stop the active computer-use run';
   stopBtn.setAttribute('aria-label', 'Stop computer use');
 
+  const takeOverBtn = document.createElement('button');
+  takeOverBtn.type = 'button';
+  takeOverBtn.className = 'sp-cu-takeover-btn';
+  takeOverBtn.textContent = 'Take over';
+  takeOverBtn.title = 'Pause AGI and use the page yourself; it continues when you hand it back';
+  takeOverBtn.hidden = true;
+
+  const continueBtn = document.createElement('button');
+  continueBtn.type = 'button';
+  continueBtn.className = 'sp-cu-run-btn';
+  continueBtn.textContent = 'Continue';
+  continueBtn.title = 'Hand the page back so AGI continues the task';
+  continueBtn.hidden = true;
+  let paused = false;
+
   let activeRunId: string | null = null;
   let activeRunGeneration = 0;
   let runActivityTimer: ReturnType<typeof setTimeout> | null = null;
@@ -814,6 +854,8 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
     stopBtn.disabled = false;
     stopBtn.textContent = 'Stop';
     stopBtn.classList.toggle('visible', running);
+    if (running) paused = false;
+    renderTakeover();
     controlsLabel.textContent = running
       ? 'AGI Cloud • agent running'
       : 'AGI Cloud • powered by AGI';
@@ -823,6 +865,59 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
       clearRunActivityWatchdog();
     }
   }
+
+  function renderTakeover(): void {
+    const running = activeRunId !== null;
+    takeOverBtn.hidden = !running || paused;
+    continueBtn.hidden = !running || !paused;
+    takeOverBtn.disabled = false;
+    continueBtn.disabled = false;
+  }
+
+  function setPaused(next: boolean, reason?: string): void {
+    if (!activeRunId) return;
+    paused = next;
+    renderTakeover();
+    if (next) {
+      showHandoffBanner(
+        `${reason ?? 'AGI needs you to use this page.'} Choose Continue when you are done.`,
+        'handoff',
+      );
+      continueBtn.focus();
+    } else {
+      hideHandoffBanner();
+    }
+  }
+
+  async function sendTakeover(type: 'PAUSE_COMPUTER_USE' | 'RESUME_COMPUTER_USE'): Promise<void> {
+    const runId = activeRunId;
+    if (!runId) return;
+    takeOverBtn.disabled = true;
+    continueBtn.disabled = true;
+    let response: ComputerUseCommandResponse | null = null;
+    try {
+      response = (await chrome.runtime.sendMessage({ type, runId })) as ComputerUseCommandResponse;
+    } catch {
+      response = null;
+    }
+    renderTakeover();
+    if (response?.success !== true) {
+      showHandoffBanner(
+        response?.error ??
+          (type === 'PAUSE_COMPUTER_USE'
+            ? 'AGI could not hand you the page. Use Stop to end the run.'
+            : 'AGI could not take the page back. Try Continue again, or use Stop.'),
+        'error',
+      );
+    }
+  }
+
+  takeOverBtn.addEventListener('click', () => {
+    void sendTakeover('PAUSE_COMPUTER_USE');
+  });
+  continueBtn.addEventListener('click', () => {
+    void sendTakeover('RESUME_COMPUTER_USE');
+  });
 
   function ownsRun(runId: unknown): boolean {
     return typeof runId === 'string' && activeRunId === runId;
@@ -879,6 +974,7 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
       typeof state.runGeneration === 'number' ? state.runGeneration : undefined,
     );
     showHandoffBanner(RUN_RECOVERED_MESSAGE, 'run_stopped');
+    if (state.paused === true) setPaused(true, state.pauseReason);
   }
 
   async function requestCancellation(
@@ -966,6 +1062,8 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
   refreshAuthChip();
 
   controls.appendChild(runAutofillBtn);
+  controls.appendChild(continueBtn);
+  controls.appendChild(takeOverBtn);
   controls.appendChild(stopBtn);
   controls.appendChild(authChip);
   controls.appendChild(controlsLabel);
@@ -1436,6 +1534,7 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
     updateUsageMeter,
     refreshAuthChip,
     setRunState,
+    setPaused,
     ownsRun,
     noteRunActivity,
   };
