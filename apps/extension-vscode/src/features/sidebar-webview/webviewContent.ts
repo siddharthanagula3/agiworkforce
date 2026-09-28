@@ -3,6 +3,7 @@ import { MODEL_LOCKED_HINT, getModelPickerOptionsForTier } from '../model-picker
 import {
   AGENT_MODE_LABEL,
   EFFORT_LABEL,
+  REMOTE_CODE_LIMITS,
   TOOL_APPROVAL_ACTION_LABELS,
   toolCallStatusLabel,
   type AgentMode,
@@ -748,6 +749,18 @@ export function getWebviewContent(
       flex-wrap: wrap;
       gap: 6px;
       margin-top: 10px;
+    }
+    .approval-card__guidance {
+      width: 100%;
+      margin-top: 8px;
+      padding: 5px 8px;
+      background: var(--vscode-input-background, var(--bg-elevated));
+      border: 1px solid var(--vscode-input-border, var(--border));
+      border-radius: var(--corner-field);
+      color: var(--vscode-input-foreground, var(--text-primary));
+      font: inherit;
+      font-size: var(--type-label-size);
+      line-height: var(--type-label-height);
     }
     .approval-card__action {
       min-height: var(--control-md);
@@ -4976,6 +4989,21 @@ export function getWebviewContent(
           actions.appendChild(button);
         })(APPROVAL_ACTIONS[i]);
       }
+      var guidance = document.createElement('input');
+      guidance.type = 'text';
+      guidance.className = 'approval-card__guidance';
+      guidance.maxLength = ${REMOTE_CODE_LIMITS.guidanceLength};
+      guidance.placeholder = 'Or deny and tell AGI what to do instead, then press Enter';
+      guidance.setAttribute('aria-label', 'Deny and tell AGI what to do instead');
+      guidance.addEventListener('keydown', function (event) {
+        if (event.key !== 'Enter' || !guidance.value.trim()) return;
+        event.preventDefault();
+        vscode.postMessage({
+          type: 'respondToApproval',
+          payload: { requestId: payload.requestId, decision: 'deny', guidance: guidance.value.trim() },
+        });
+      });
+      actions.appendChild(guidance);
       card.appendChild(actions);
 
       approvalCards[payload.requestId] = { el: card, actions: actions };
