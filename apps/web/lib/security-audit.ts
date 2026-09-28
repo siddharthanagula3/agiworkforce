@@ -375,6 +375,7 @@ export type AuditEventType =
   | 'new_location_sign_in'
   | 'account_recovery_requested'
   | 'account_recovery_completed'
+  | 'support_appeal_submitted'
   /**
    * The risk engine fired, the account holder said they were compromised, the
    * guided response finished, and the hold it left was lifted. All four are
