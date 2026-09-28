@@ -27,6 +27,7 @@ import {
   type EnterpriseCollectionAccessState,
 } from '@/lib/services/subscription-access-policy';
 import { timePhase } from '@/lib/observability/phase-timer';
+import { developerProjectSpendRefusal } from '@/lib/developer-api/project-spend';
 import { resolveAuthenticatedSurface } from './request-surface';
 import { CHAT_TURN_PHASE } from './turn-phases';
 
@@ -57,6 +58,7 @@ export type AuthGateSuccess = {
   subscription: SubscriptionInfo;
   surfaceClass?: AuthenticatedSurfaceClass;
   boundSurface?: BoundSurface;
+  apiKeyId?: string;
 };
 
 type AuthGateFailure = {
@@ -147,9 +149,11 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
   let userId: string;
   let surfaceClass: AuthenticatedSurfaceClass | undefined;
   let boundSurface: BoundSurface | undefined;
+  let apiKeyId: string | undefined;
   try {
-    ({ userId, surfaceClass, boundSurface } = await timePhase(CHAT_TURN_PHASE.identityVerify, () =>
-      getClerkAuthUser(request, { apiKeyScope: 'inference:write' }),
+    ({ userId, surfaceClass, boundSurface, apiKeyId } = await timePhase(
+      CHAT_TURN_PHASE.identityVerify,
+      () => getClerkAuthUser(request, { apiKeyScope: 'inference:write' }),
     ));
   } catch (error) {
     if (isMfaRequiredError(error)) {
@@ -199,6 +203,7 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
   const credential = {
     ...(surfaceClass ? { surfaceClass } : {}),
     ...(boundSurface ? { boundSurface } : {}),
+    ...(apiKeyId ? { apiKeyId } : {}),
   };
 
   const subscriptionPromise = resolveEffectiveSubscription(
@@ -214,6 +219,11 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
     withRateLimit(request, 'llm-completion', `user:${userId}`),
   );
   if (userRateLimitResponse) return { ok: false, response: userRateLimitResponse };
+
+  if (apiKeyId) {
+    const spendRefusal = await developerProjectSpendRefusal({ userId, apiKeyId });
+    if (spendRefusal) return { ok: false, response: spendRefusal };
+  }
 
   const subscription = await timePhase(
     CHAT_TURN_PHASE.subscriptionLookup,
