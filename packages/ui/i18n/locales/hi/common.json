@@ -122,5 +122,40 @@
   "previous": "पिछला",
   "previousSlide": "पिछली स्लाइड",
   "rowsPerPage": "प्रति पृष्ठ पंक्तियाँ",
-  "rowsSelected": "{{total}} में से {{selected}} पंक्ति(याँ) चयनित।"
+  "rowsSelected": "{{total}} में से {{selected}} पंक्ति(याँ) चयनित।",
+  "support": {
+    "waitRemaining_one": "मैं {{count}} सेकंड और इंतज़ार करूंगा, फिर इसे ईमेल कर दूंगा।",
+    "waitRemaining_other": "मैं {{count}} सेकंड और इंतज़ार करूंगा, फिर इसे ईमेल कर दूंगा।"
+  },
+  "counts": {
+    "results_one": "{{count}} परिणाम",
+    "results_other": "{{count}} परिणाम",
+    "messages_one": "{{count}} संदेश",
+    "messages_other": "{{count}} संदेश",
+    "agentsConfigured_one": "{{count}} एजेंट कॉन्फ़िगर है",
+    "agentsConfigured_other": "{{count}} एजेंट कॉन्फ़िगर हैं",
+    "skills_one": "{{count}} स्किल",
+    "skills_other": "{{count}} स्किल",
+    "agents_one": "{{count}} एजेंट",
+    "agents_other": "{{count}} एजेंट"
+  },
+  "relative": {
+    "minutesAgo_one": "{{count}} मिनट पहले",
+    "minutesAgo_other": "{{count}} मिनट पहले",
+    "hoursAgo_one": "{{count}} घंटा पहले",
+    "hoursAgo_other": "{{count}} घंटे पहले",
+    "daysAgo_one": "{{count}} दिन पहले",
+    "daysAgo_other": "{{count}} दिन पहले"
+  },
+  "unsavedChanges": {
+    "title": "सहेजे न गए बदलाव छोड़ दें?",
+    "description": "आपके बदलाव सहेजे नहीं गए हैं। अभी छोड़ने पर वे खो जाएंगे।",
+    "discard": "छोड़ें",
+    "keepEditing": "संपादन जारी रखें"
+  },
+  "chipInput": {
+    "full": "इस सूची में अधिकतम प्रविष्टियाँ: {{count}}।",
+    "rejected": "{{value}} नहीं जोड़ा गया। {{reason}}",
+    "remove": "{{value}} हटाएँ"
+  }
 }

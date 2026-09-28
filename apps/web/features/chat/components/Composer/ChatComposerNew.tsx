@@ -152,11 +152,13 @@ import {
   readPersistedDraft,
   writePersistedDraft,
 } from './composer-draft-storage';
+import type { DraftReplacement } from '@features/chat/hooks/use-conversation-draft-sync';
 import { modelSupportsResearch } from '@features/chat/lib/research-capability-gate';
 import { routeVisualRequest } from '@features/chat/components/artifacts/structuredVisualArtifact';
 import { useCoworkFolderStore, supportsDirectoryPicker } from '@shared/stores/cowork-folder-store';
 import {
   MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH,
+  MANAGED_MEDIA_MAX_IMAGE_REFERENCES,
   MANAGED_OFFICE_FILE_TOOL_NAME,
 } from '@agiworkforce/cloud-contracts';
 import {
@@ -171,6 +173,7 @@ import {
   IMAGE_STYLE_PRESETS,
   isImageAspectRatioSupported,
   readImageFileAsBase64,
+  readReferenceImageAsBase64,
   type ImageAspectRatio,
   type ImageEditRequest,
 } from '../../lib/imageGenerationOptions';
@@ -388,6 +391,8 @@ interface ChatComposerProps {
   prefillText?: string;
   /** Callback fired after prefillText has been consumed and applied. */
   onPrefillConsumed?: () => void;
+  draftReplacement?: DraftReplacement | null;
+  onDraftReplacementApplied?: () => void;
   /** Files dropped onto the message area that should be added as attachments. */
   droppedFiles?: File[] | null;
   /** Callback fired after droppedFiles have been consumed and added to attachments. */
@@ -434,7 +439,12 @@ interface ChatComposerProps {
    */
   onGenerateImage?: (
     prompt: string,
-    options: { aspectRatio: ImageAspectRatio; modelId: string; edit?: ImageEditRequest },
+    options: {
+      aspectRatio: ImageAspectRatio;
+      modelId: string;
+      edit?: ImageEditRequest;
+      transparentBackground?: boolean;
+    },
   ) => void;
   /**
    * Called when the user submits in video-generation mode. Same contract as
@@ -679,6 +689,8 @@ const ChatComposerNewComponent = ({
   disabled = false,
   prefillText,
   onPrefillConsumed,
+  draftReplacement = null,
+  onDraftReplacementApplied,
   droppedFiles,
   onDroppedFilesConsumed,
   attachmentUploadAttempt,
@@ -2909,6 +2921,9 @@ const ChatComposerNewComponent = ({
         onGenerateImage(prompt, {
           aspectRatio: effectiveImageAspectRatio,
           modelId: imageModelId,
+          ...(imageTransparentBackground && imageModelSupportsEdit
+            ? { transparentBackground: true }
+            : {}),
         });
         clearComposerState();
         return;
@@ -2917,6 +2932,13 @@ const ChatComposerNewComponent = ({
       // valid once the state holding it is gone, and holding the composer open
       // through a multi-megabyte read would make the send feel stuck.
       const maskFile = effectiveImageOperation === 'inpaint' ? attachments[1] : undefined;
+      const referenceFiles = effectiveImageOperation === 'edit' ? attachments.slice(1) : [];
+      if (referenceFiles.length > MANAGED_MEDIA_MAX_IMAGE_REFERENCES) {
+        setLocalNotice(
+          `Attach up to ${MANAGED_MEDIA_MAX_IMAGE_REFERENCES + 1} images: the first is edited and the others guide it.`,
+        );
+        return;
+      }
       const operation = effectiveImageOperation;
       const transparentBackground = imageTransparentBackground;
       const aspectRatio = effectiveImageAspectRatio;
@@ -2924,9 +2946,10 @@ const ChatComposerNewComponent = ({
       clearComposerState();
       void (async () => {
         try {
-          const [sourceImageBase64, maskImageBase64] = await Promise.all([
+          const [sourceImageBase64, maskImageBase64, referenceImagesBase64] = await Promise.all([
             readImageFileAsBase64(sourceFile),
             maskFile ? readImageFileAsBase64(maskFile) : Promise.resolve(undefined),
+            Promise.all(referenceFiles.map(readReferenceImageAsBase64)),
           ]);
           onGenerateImage(prompt, {
             aspectRatio,
@@ -2935,6 +2958,7 @@ const ChatComposerNewComponent = ({
               operation,
               sourceImageBase64,
               ...(maskImageBase64 ? { maskImageBase64 } : {}),
+              ...(referenceImagesBase64.length > 0 ? { referenceImagesBase64 } : {}),
               ...(transparentBackground ? { transparentBackground: true } : {}),
             },
           });
@@ -3344,6 +3368,17 @@ const ChatComposerNewComponent = ({
     setLocalNotice(RESTORED_DRAFT_NOTICE);
     clearDraftContent(conversationId);
   }, [clearDraftContent, conversationId, message, parkedDraft, writeComposerMessage]);
+
+  const appliedDraftReplacementRef = useRef(0);
+  useEffect(() => {
+    if (!draftReplacement || draftReplacement.nonce === appliedDraftReplacementRef.current) return;
+    if (draftReplacement.conversationId !== conversationId) return;
+    appliedDraftReplacementRef.current = draftReplacement.nonce;
+    seenParkedDraftRef.current = draftReplacement.content;
+    deferredHandbackRef.current = null;
+    writeComposerMessage(draftReplacement.content);
+    onDraftReplacementApplied?.();
+  }, [conversationId, draftReplacement, onDraftReplacementApplied, writeComposerMessage]);
 
   useEffect(() => {
     if (!deferredUnsentDraft || messageRef.current.trim()) return;
@@ -4875,15 +4910,15 @@ const ChatComposerNewComponent = ({
                         ))}
                         {imageMaskFile === undefined && (
                           <p className="px-3 py-1.5 text-xs text-muted-foreground">
-                            Attach a second image, black where the model should redraw, to mask an
-                            edit.
+                            Attach a second PNG the same size, transparent where the model should
+                            redraw, to mask an edit.
                           </p>
                         )}
                       </AnchoredComposerMenu>
                     </div>
                   )}
 
-                  {imageSourceFile && imageModelSupportsEdit && (
+                  {imageModelSupportsEdit && (
                     <button
                       type="button"
                       aria-pressed={imageTransparentBackground}
@@ -4894,11 +4929,20 @@ const ChatComposerNewComponent = ({
                           ? 'border-primary/30 bg-primary/15 text-primary'
                           : 'border-border/60 bg-muted/40 text-muted-foreground hover:bg-muted/60 hover:text-foreground',
                       )}
-                      title="Return the edit on a transparent background"
+                      title="Return the image on a transparent background"
                     >
                       Transparent
                     </button>
                   )}
+
+                  {imageSourceFile &&
+                    imageModelSupportsEdit &&
+                    effectiveImageOperation === 'edit' &&
+                    attachments.length > 1 && (
+                      <span className="text-xs text-muted-foreground">
+                        {`Editing the first image, guided by the other ${attachments.length - 1}`}
+                      </span>
+                    )}
 
                   {imageSourceFile && !imageModelSupportsEdit && (
                     <span className="text-xs text-muted-foreground">

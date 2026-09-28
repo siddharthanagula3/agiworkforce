@@ -989,13 +989,23 @@
       }
     }
   },
-  "spProjectsCount": {
-    "message": "$COUNT$ chats",
-    "description": "Conversation count on a project row",
+  "spProjectsCount_one": {
+    "message": "$COUNT$ chat",
+    "description": "Conversation count on a project row when the count takes the one plural form",
     "placeholders": {
       "count": {
         "content": "$1",
-        "example": "4"
+        "example": "3"
+      }
+    }
+  },
+  "spProjectsCount_other": {
+    "message": "$COUNT$ chats",
+    "description": "Conversation count on a project row for every other plural form",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "3"
       }
     }
   },
@@ -1372,5 +1382,155 @@
   "spPlansPricing": {
     "message": "Prices and checkout",
     "description": "Button that opens web pricing from the plan comparison"
+  },
+  "spVoiceMicBlocked": {
+    "message": "Microphone access is blocked. Allow the microphone for AGI in Chrome site settings, then try again.",
+    "description": "Dictation error when Chrome has the microphone blocked for the extension"
+  },
+  "spVoiceNotice": {
+    "message": "Dictation uses your microphone only while it is listening, from when you press the microphone until you press it again. Chrome turns your speech into text with its speech service, and AGI receives only that text, which stays in this chat like anything you type. Chrome asks for microphone access next. If you block it, allow the microphone for AGI in Chrome site settings.",
+    "description": "Notice shown once before the first dictation"
+  },
+  "spVoiceNoticeAria": {
+    "message": "Before you dictate",
+    "description": "Accessible name of the dictation notice"
+  },
+  "spVoiceNoticeDecline": {
+    "message": "Not now",
+    "description": "Dictation notice button that closes it without dictating"
+  },
+  "spVoiceNoticeContinue": {
+    "message": "Continue",
+    "description": "Dictation notice button that starts dictating"
+  },
+  "spVoiceErrorServiceNotAllowed": {
+    "message": "Voice recognition is not available in this browser profile.",
+    "description": "Dictation error when the speech service is not allowed"
+  },
+  "spVoiceErrorAudioCapture": {
+    "message": "No microphone was found.",
+    "description": "Dictation error when no microphone is available"
+  },
+  "spVoiceErrorNoSpeech": {
+    "message": "No speech was heard. Try again and speak after the button starts pulsing.",
+    "description": "Dictation error when nothing was said"
+  },
+  "spVoiceErrorNetwork": {
+    "message": "Voice recognition needs a network connection.",
+    "description": "Dictation error when the speech service is unreachable"
+  },
+  "spVoiceErrorGeneric": {
+    "message": "Voice input failed. Try again.",
+    "description": "Dictation error for any other failure"
+  },
+  "spVoiceTooltip": {
+    "message": "Voice input",
+    "description": "Microphone button tooltip"
+  },
+  "spVoiceTooltipLanguage": {
+    "message": "Voice input · $LANGUAGE$",
+    "description": "Microphone button tooltip naming the dictation language",
+    "placeholders": {
+      "language": {
+        "content": "$1",
+        "example": "Français (France)"
+      }
+    }
+  },
+  "spVoiceUnsupported": {
+    "message": "Voice input is not supported in this browser",
+    "description": "Microphone button tooltip when the browser has no speech recognition"
+  },
+  "spVoiceListening": {
+    "message": "Listening… click to stop",
+    "description": "Microphone button tooltip while dictating"
+  },
+  "spWaitSeconds_one": {
+    "message": "about $COUNT$ second",
+    "description": "Provider-stated wait, one plural form",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "3"
+      }
+    }
+  },
+  "spWaitSeconds_other": {
+    "message": "about $COUNT$ seconds",
+    "description": "Provider-stated wait, every other plural form",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "3"
+      }
+    }
+  },
+  "spWaitMinutes_one": {
+    "message": "about $COUNT$ minute",
+    "description": "Provider-stated wait, one plural form",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "3"
+      }
+    }
+  },
+  "spWaitMinutes_other": {
+    "message": "about $COUNT$ minutes",
+    "description": "Provider-stated wait, every other plural form",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "3"
+      }
+    }
+  },
+  "spWaitHours_one": {
+    "message": "about $COUNT$ hour",
+    "description": "Provider-stated wait, one plural form",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "3"
+      }
+    }
+  },
+  "spWaitHours_other": {
+    "message": "about $COUNT$ hours",
+    "description": "Provider-stated wait, every other plural form",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "3"
+      }
+    }
+  },
+  "spStreamTryAgainIn": {
+    "message": "$ERROR$ Try again in $WAIT$.",
+    "description": "Failed turn sentence with the provider-stated wait appended",
+    "placeholders": {
+      "error": {
+        "content": "$1",
+        "example": "This model is overloaded right now."
+      },
+      "wait": {
+        "content": "$2",
+        "example": "about 2 minutes"
+      }
+    }
+  },
+  "spStreamReference": {
+    "message": "$TEXT$ Reference: $ID$",
+    "description": "Failed turn sentence with the request id support can search for",
+    "placeholders": {
+      "text": {
+        "content": "$1",
+        "example": "This model is overloaded right now."
+      },
+      "id": {
+        "content": "$2",
+        "example": "req_123"
+      }
+    }
   }
 }

@@ -18,7 +18,7 @@ import {
   buildSpendLimitGateResponse,
   buildModelPolicyGateResponse,
 } from '@/lib/managed-compute-gate';
-import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
+import { resolveAuthenticatedSurface } from '../../chat/completions/lib/request-surface';
 import {
   getModelMetadataById,
   getRoutingSlotModel,
@@ -262,7 +262,8 @@ async function handleTranscriptions(request: NextRequest, admit?: TranscriptionA
   const rateLimitResponse = await withRateLimit(request, 'audio-transcription');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { userId } = await getClerkAuthUser(request, { apiKeyScope: 'inference:write' });
+  const auth = await getClerkAuthUser(request, { apiKeyScope: 'inference:write' });
+  const { userId } = auth;
   await admit?.(request, userId);
 
   const managedGateResponse = buildManagedComputeGateResponse(
@@ -286,7 +287,11 @@ async function handleTranscriptions(request: NextRequest, admit?: TranscriptionA
       provider: 'openai',
       model: 'audio-transcription',
       feature: 'audio_transcription',
-      surface: resolveCloudChatSurface(request),
+      surface: resolveAuthenticatedSurface(request, {
+        token: request.headers.get('authorization')?.replace(/^Bearer /, '') ?? '',
+        surfaceClass: auth.surfaceClass,
+        boundSurface: auth.boundSurface,
+      }),
     },
     {
       ...getCorsHeaders(request),

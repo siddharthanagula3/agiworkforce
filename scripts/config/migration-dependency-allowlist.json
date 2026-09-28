@@ -275,6 +275,46 @@
       "file": "apps/web/lib/services/schedule-share-service.ts",
       "migration": 311,
       "reason": "Owns scheduled_task_shares and ships with 0311: the deploy applies 0311 before this release reaches production. Until then sharing a schedule and opening a schedule share link fail with an error; nothing else reads the table."
+    },
+    {
+      "file": "apps/web/app/api/admin/directory-sync/groups/route.ts",
+      "migration": 314,
+      "reason": "Reads workspace-managed groups (organization_group_members, scim_groups.source, scim_groups.created_by_user_id) that 0314 adds. The deploy applies 0314 before this code reaches production; authorization reads group membership on every request, so 0314 must precede the deploy."
+    },
+    {
+      "file": "apps/web/lib/authorization/authorize.ts",
+      "migration": 314,
+      "reason": "Reads workspace-managed groups (organization_group_members, scim_groups.source, scim_groups.created_by_user_id) that 0314 adds. The deploy applies 0314 before this code reaches production; authorization reads group membership on every request, so 0314 must precede the deploy."
+    },
+    {
+      "file": "apps/web/lib/server/account-erasure.ts",
+      "migration": 314,
+      "reason": "Reads workspace-managed groups (organization_group_members, scim_groups.source, scim_groups.created_by_user_id) that 0314 adds. The deploy applies 0314 before this code reaches production; authorization reads group membership on every request, so 0314 must precede the deploy."
+    },
+    {
+      "file": "apps/web/lib/server/organization-erasure.ts",
+      "migration": 314,
+      "reason": "Reads workspace-managed groups (organization_group_members, scim_groups.source, scim_groups.created_by_user_id) that 0314 adds. The deploy applies 0314 before this code reaches production; authorization reads group membership on every request, so 0314 must precede the deploy."
+    },
+    {
+      "file": "apps/web/lib/server/scim/scim-provisioning-service.ts",
+      "migration": 314,
+      "reason": "Reads workspace-managed groups (organization_group_members, scim_groups.source, scim_groups.created_by_user_id) that 0314 adds. The deploy applies 0314 before this code reaches production; authorization reads group membership on every request, so 0314 must precede the deploy."
+    },
+    {
+      "file": "apps/web/lib/services/deletion-manifest.ts",
+      "migration": 314,
+      "reason": "Reads workspace-managed groups (organization_group_members, scim_groups.source, scim_groups.created_by_user_id) that 0314 adds. The deploy applies 0314 before this code reaches production; authorization reads group membership on every request, so 0314 must precede the deploy."
+    },
+    {
+      "file": "apps/web/lib/services/organization-policy-override-service.ts",
+      "migration": 314,
+      "reason": "Reads workspace-managed groups (organization_group_members, scim_groups.source, scim_groups.created_by_user_id) that 0314 adds. The deploy applies 0314 before this code reaches production; authorization reads group membership on every request, so 0314 must precede the deploy."
+    },
+    {
+      "file": "apps/web/lib/services/organization-role-service.ts",
+      "migration": 314,
+      "reason": "Reads workspace-managed groups (organization_group_members, scim_groups.source, scim_groups.created_by_user_id) that 0314 adds. The deploy applies 0314 before this code reaches production; authorization reads group membership on every request, so 0314 must precede the deploy."
     }
   ]
 }

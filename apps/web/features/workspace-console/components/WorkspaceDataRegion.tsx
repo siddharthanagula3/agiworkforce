@@ -97,7 +97,8 @@ export function WorkspaceDataRegion() {
   >({
     mutationFn: ({ method, region }) => send(method, region ? { region } : undefined),
     onSuccess: (state) => {
-      queryClient.setQueryData<Lookup>(DATA_REGION_QUERY_KEY, { kind: 'ready', state });
+      const next: Lookup = { kind: 'ready', state };
+      queryClient.setQueryData(DATA_REGION_QUERY_KEY, next);
       setTarget('');
     },
   });

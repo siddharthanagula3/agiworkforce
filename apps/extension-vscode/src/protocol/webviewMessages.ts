@@ -196,6 +196,7 @@ const resolveTurnFailure = z.object({
       'upgrade-plan',
       'open-settings',
       'switch-model',
+      'update-extension',
     ]),
     provider: z
       .string()

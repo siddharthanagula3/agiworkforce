@@ -13,14 +13,11 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The xlsx tool accepts a title but generateXlsx drops it (no docProps written) and there is no workbook view to show or edit title and metadata. | ui, handler |
-| desktop | partial | The xlsx tool accepts a title but generateXlsx drops it (no docProps written) and there is no workbook view to show or edit title and metadata. | ui, handler |
-| mobile | partial | Workbooks come only from the assistant office-file tool, which drops the title (no document properties); no view to see or edit metadata. | ui, handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | Workbooks come only from the assistant office-file tool, which drops the title (no document properties); no view to see or edit metadata. Chrome offers the tool only when the prompt names an Office file (no toggle). | ui, handler |
 
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:868-875`, `apps/web/features/chat/components/messages/MessageBubble.tsx:2286-2301`, `apps/web/lib/services/managed-office-file-service.ts:620-638`, `apps/web/lib/services/managed-office-file-service.ts:170-174`
+Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:577-583`, `apps/extension/src/features/side-panel/bubbles.ts:434-456`, `apps/web/lib/services/managed-office-file-service.ts:620-638`, `apps/web/lib/services/managed-office-file-service.ts:170-174`
 
 ## S29.02: Sheet tabs.
 
@@ -29,14 +26,11 @@ Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:868-875`,
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Generated .xlsx files keep named sheets in tab order, but the product never displays a workbook: it is a download chip only, and the CSV viewer has a single table with no tabs. | ui |
-| desktop | partial | Generated .xlsx files keep named sheets in tab order, but the product never displays a workbook: it is a download chip only, and the CSV viewer has a single table with no tabs. | ui |
-| mobile | partial | Named sheets exist only inside the downloaded .xlsx; the app shows no sheet tabs. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | Named sheets exist only inside the downloaded .xlsx; the app shows no sheet tabs. Chrome offers the tool only when the prompt names an Office file (no toggle). | ui |
 
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:868-875`, `apps/web/features/chat/components/messages/MessageBubble.tsx:2286-2301`, `apps/web/lib/services/managed-office-file-service.ts:82-91`, `apps/web/lib/services/managed-workbook-builder.ts:177-187`
+Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:577-583`, `apps/extension/src/features/side-panel/bubbles.ts:434-456`, `apps/web/lib/services/managed-office-file-service.ts:82-91`, `apps/web/lib/services/managed-workbook-builder.ts:177-187`
 
 ## S29.03: Add, rename, duplicate, and delete sheets.
 
@@ -45,14 +39,11 @@ Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:868-875`,
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Sheets can be named and added only when the assistant first creates a workbook; nothing renames, duplicates or deletes a sheet in an existing workbook (no edit tool, no UI). | ui, handler |
-| desktop | partial | Sheets can be named and added only when the assistant first creates a workbook; nothing renames, duplicates or deletes a sheet in an existing workbook (no edit tool, no UI). | ui, handler |
-| mobile | partial | Only creation-time sheets via the assistant tool; no rename, duplicate or delete of sheets. | ui, handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | Only creation-time sheets via the assistant tool; no rename, duplicate or delete of sheets. Chrome offers the tool only when the prompt names an Office file (no toggle). | ui, handler |
 
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:868-875`, `apps/web/features/chat/components/messages/MessageBubble.tsx:2286-2301`, `apps/web/lib/services/managed-office-file-service.ts:202-212`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:1868-1880`
+Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:577-583`, `apps/extension/src/features/side-panel/bubbles.ts:434-456`, `apps/web/lib/services/managed-office-file-service.ts:202-212`
 
 ## S29.04: Grid selection.
 
@@ -61,14 +52,9 @@ Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:868-875`,
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only single-cell selection (click or arrow keys) in the read-only CSV viewer; no range selection and no workbook grid. | ui |
-| desktop | partial | Only single-cell selection (click or arrow keys) in the read-only CSV viewer; no range selection and no workbook grid. | ui |
-| mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1040-1046`, `packages/ui/unified-chat/src/components/artifact-components/SpreadsheetArtifact.tsx:243-257`, `packages/ui/unified-chat/src/components/artifact-components/SpreadsheetArtifact.tsx:77-95`, `apps/web/features/chat/components/messages/MessageBubble.tsx:320-327`
 
 ## S29.10: Sort and filter.
 
@@ -77,14 +63,9 @@ Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1040-1046
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The CSV viewer sorts by a column (ascending, descending, off) but has no filter; generated workbooks have no autofilter. | ui |
-| desktop | partial | The CSV viewer sorts by a column (ascending, descending, off) but has no filter; generated workbooks have no autofilter. | ui |
-| mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1040-1046`, `packages/ui/unified-chat/src/components/artifact-components/SpreadsheetArtifact.tsx:56-63`, `packages/ui/unified-chat/src/components/artifact-components/SpreadsheetArtifact.tsx:202-210`, `apps/web/features/chat/components/messages/MessageBubble.tsx:320-327`
 
 ## S29.11: Freeze rows and columns.
 
@@ -93,14 +74,9 @@ Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1040-1046
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only the CSV viewer's header row stays pinned while scrolling; users cannot choose rows or columns to freeze, and generated workbooks have no frozen panes. | ui |
-| desktop | partial | Only the CSV viewer's header row stays pinned while scrolling; users cannot choose rows or columns to freeze, and generated workbooks have no frozen panes. | ui |
-| mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1040-1046`, `packages/ui/unified-chat/src/components/artifact-components/SpreadsheetArtifact.tsx:175-182`, `apps/web/features/chat/components/messages/MessageBubble.tsx:320-327`
 
 ## S29.17: Chart insertion.
 

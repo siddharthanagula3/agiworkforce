@@ -21,7 +21,8 @@
  */
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
+import { useGuardedRouter } from '@shared/hooks/use-guarded-router';
 import { useTranslation } from 'react-i18next';
 import { useCurrentUser, useSignOut } from '@/lib/identity/client';
 import { ChevronUp, Menu } from '@agiworkforce/icons';
@@ -116,7 +117,7 @@ interface WebAppShellProps {
 }
 
 export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppShellProps) {
-  const router = useRouter();
+  const router = useGuardedRouter();
   const pathname = usePathname();
   const { openSettings } = useSettingsModal();
   const identitySignOut = useSignOut();

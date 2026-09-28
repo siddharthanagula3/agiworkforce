@@ -33,13 +33,17 @@ describe('response_format, accepted', () => {
 });
 
 describe('response_format, refused', () => {
-  it('refuses json_schema, and says what to use instead', () => {
-    const result = parse({ response_format: { type: 'json_schema', json_schema: {} } });
+  it('refuses a json_schema it cannot enforce, and says which keyword', () => {
+    const result = parse({
+      response_format: {
+        type: 'json_schema',
+        json_schema: { name: 'x', schema: { type: 'object', oneOf: [] } },
+      },
+    });
 
     expect(result.success).toBe(false);
     const message = result.success ? '' : result.error.issues[0]!.message;
-    expect(message).toMatch(/json_object/);
-    expect(message).toMatch(/tool_choice/);
+    expect(message).toMatch(/oneOf/);
   });
 
   it('refuses streamed json_object, and explains why the guarantee fails', () => {

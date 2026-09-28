@@ -62,20 +62,6 @@ Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:690-695`, `ap
 
 Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:693-700`, `apps/mobile/src/features/chat/actions/runVideoGenerationTurn.ts:103-110`, `apps/web/app/api/media/video/generate/route.ts:421-424`
 
-## S46.25: Generation queue.
-
-- Done when: User sees a queue of pending video jobs and their order.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Each durable job shows only in its own chat message; there is no queue view listing pending jobs across chats. | ui |
-| desktop | partial | Each durable job shows only in its own chat message; there is no queue view listing pending jobs across chats. | ui |
-| mobile | partial | Each job shows only in its own chat message; no queue view. | ui |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/messages/MessageBubble.tsx:2419-2427`, `apps/web/app/api/media/video/generate/route.ts:699-702`, `apps/mobile/src/features/chat/components/VideoGenProgress.tsx:60-62`, `apps/mobile/src/features/video/services/videogen.ts:70-73`
-
 ## S46.26: Progress display.
 
 - Done when: User sees progress while the video is generated.

@@ -270,4 +270,5 @@ export interface FriendlyError {
   message: string;
   suggestion?: string;
   icon?: 'error' | 'warning' | 'info' | 'network' | 'payment' | 'auth';
+  copyKey?: string;
 }

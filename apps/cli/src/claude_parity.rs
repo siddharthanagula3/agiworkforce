@@ -37,6 +37,7 @@ pub(crate) fn shared_runtime_command_names() -> &'static [&'static str] {
         "new",
         "mcp",
         "output-style",
+        "tools",
         "fallback",
         "replay",
         "insights",
@@ -123,6 +124,7 @@ pub fn handle_shared_command(
         }
         "/mcp" => ParityCommandResult::SystemMessage(render_mcp(session)),
         "/output-style" => ParityCommandResult::SystemMessage(handle_output_style(session, arg)),
+        "/tools" => handle_tools(session, arg),
         "/fallback" => ParityCommandResult::SystemMessage(render_fallback(session)),
         "/replay" => ParityCommandResult::SystemMessage(render_replay()),
         "/insights" => ParityCommandResult::SystemMessage(render_insights(session)),
@@ -974,6 +976,157 @@ fn output_style_overview(session: &AgentSession) -> String {
             .to_string(),
     );
     lines.join("\n")
+}
+
+struct ToolRun {
+    name: String,
+    input: serde_json::Value,
+    result: Option<(String, bool)>,
+}
+
+fn session_tool_runs(session: &AgentSession) -> Vec<ToolRun> {
+    use crate::models::{ContentBlock, MessageContent};
+    let mut runs: Vec<(String, ToolRun)> = Vec::new();
+    for message in &session.messages {
+        let MessageContent::Blocks(blocks) = &message.content else {
+            continue;
+        };
+        for block in blocks {
+            match block {
+                ContentBlock::ToolUse { id, name, input } => runs.push((
+                    id.clone(),
+                    ToolRun {
+                        name: name.clone(),
+                        input: input.clone(),
+                        result: None,
+                    },
+                )),
+                ContentBlock::ToolResult {
+                    tool_use_id,
+                    content,
+                    is_error,
+                } => {
+                    if let Some((_, run)) = runs.iter_mut().find(|(id, _)| id == tool_use_id) {
+                        run.result = Some((content.clone(), *is_error));
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    runs.into_iter().map(|(_, run)| run).collect()
+}
+
+fn one_line(text: &str, limit: usize) -> String {
+    let line = text
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .unwrap_or("");
+    let clipped: String = line.chars().take(limit).collect();
+    if line.chars().count() > limit {
+        format!("{clipped}…")
+    } else {
+        clipped
+    }
+}
+
+fn handle_tools(session: &AgentSession, arg: &str) -> ParityCommandResult {
+    let arg = arg.trim();
+    let (action, rest) = arg.split_once(char::is_whitespace).unwrap_or((arg, ""));
+    let message = match action {
+        "" => {
+            let tools = session.effective_tool_definitions();
+            let mut lines = vec![format!(
+                "Tools the model can call in this session ({}):",
+                tools.len()
+            )];
+            for tool in &tools {
+                lines.push(format!(
+                    "  {:<24} {}",
+                    tool.name,
+                    one_line(&tool.description, 90)
+                ));
+            }
+            lines.push(
+                "/tools <name> shows a tool's parameters · /tools log lists the calls made · /tools retry reruns the last failed call"
+                    .to_string(),
+            );
+            lines.join("\n")
+        }
+        "log" => {
+            let runs = session_tool_runs(session);
+            if runs.is_empty() {
+                "No tool calls in this session yet.".to_string()
+            } else if let Ok(index) = rest.trim().parse::<usize>() {
+                match runs.get(index.wrapping_sub(1)) {
+                    Some(run) => format!(
+                        "{index}. {}\nInput:\n{}\nResult{}:\n{}",
+                        run.name,
+                        serde_json::to_string_pretty(&run.input).unwrap_or_default(),
+                        match run.result {
+                            Some((_, true)) => " (failed)",
+                            _ => "",
+                        },
+                        run.result
+                            .as_ref()
+                            .map(|(content, _)| content.as_str())
+                            .unwrap_or("(no result recorded)")
+                    ),
+                    None => format!("There is no call {index}; /tools log lists {}.", runs.len()),
+                }
+            } else {
+                let mut lines = vec![format!("Tool calls in this session ({}):", runs.len())];
+                for (index, run) in runs.iter().enumerate() {
+                    let outcome = match &run.result {
+                        Some((content, true)) => format!("failed: {}", one_line(content, 70)),
+                        Some((content, false)) => format!("ok: {}", one_line(content, 70)),
+                        None => "no result".to_string(),
+                    };
+                    lines.push(format!(
+                        "  {:>3}. {:<20} {:<40} {}",
+                        index + 1,
+                        run.name,
+                        one_line(&run.input.to_string(), 40),
+                        outcome
+                    ));
+                }
+                lines.push("/tools log <n> shows one call in full.".to_string());
+                lines.join("\n")
+            }
+        }
+        "retry" => {
+            return match session_tool_runs(session)
+                .into_iter()
+                .rev()
+                .find(|run| matches!(run.result, Some((_, true))))
+            {
+                Some(run) => ParityCommandResult::Prompt(format!(
+                    "The {} tool call with input {} failed. Run it again now, adjusting the input only if the error shows the input was wrong, and report the result.",
+                    run.name, run.input
+                )),
+                None => ParityCommandResult::SystemMessage(
+                    "No failed tool call in this session to retry.".to_string(),
+                ),
+            };
+        }
+        name => match session
+            .effective_tool_definitions()
+            .into_iter()
+            .find(|tool| tool.name == name)
+        {
+            Some(tool) => format!(
+                "{}\n\n{}\n\nParameters:\n{}",
+                tool.name,
+                tool.description,
+                serde_json::to_string_pretty(&tool.input_schema).unwrap_or_default()
+            ),
+            None => format!("No tool named {name} in this session. /tools lists them."),
+        },
+    };
+    ParityCommandResult::SystemMessage(
+        crate::terminal_text::sanitize_terminal_text(&message).into_owned(),
+    )
 }
 
 pub fn render_fallback(session: &AgentSession) -> String {

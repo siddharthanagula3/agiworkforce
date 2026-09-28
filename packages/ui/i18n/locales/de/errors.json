@@ -218,5 +218,156 @@
       "Prüfen Sie die Fehlerprotokolle für Details",
       "Melden Sie dieses Problem, wenn es anhält"
     ]
+  },
+  "network": {
+    "offline": "Sie scheinen offline zu sein. Prüfen Sie Ihre Verbindung.",
+    "unreachable": "Der Server ist nicht erreichbar."
+  },
+  "http": {
+    "sessionExpired": "Ihre Sitzung ist abgelaufen. Melden Sie sich erneut an, um fortzufahren.",
+    "forbidden": "Sie haben keinen Zugriff darauf.",
+    "notFound": "Das ist nicht mehr verfügbar.",
+    "timeout": "Der Server hat zu lange für die Antwort gebraucht. Versuchen Sie es erneut.",
+    "rateLimited": "Das ging etwas zu schnell. Warten Sie kurz und versuchen Sie es erneut.",
+    "server": "Bei uns ist etwas schiefgelaufen. Versuchen Sie es gleich noch einmal."
+  },
+  "boundary": {
+    "title": "Etwas ist schiefgelaufen",
+    "message": "Leider ist etwas Unerwartetes passiert.",
+    "sectionFailed": "{{name}} konnte nicht geladen werden",
+    "tryAgain": "Erneut versuchen",
+    "goHome": "Zur Startseite",
+    "goToChat": "Zum Chat",
+    "signIn": "Anmelden",
+    "supportReference": "Referenz für den Support: {{reference}}",
+    "errorId": "Fehler-ID: {{reference}}",
+    "errorIdLabel": "Fehler-ID:",
+    "includeId": "Bitte geben Sie diese ID an, wenn Sie den Support kontaktieren.",
+    "keepsHappening": "Wenn das weiterhin passiert,",
+    "contactSupport": "kontaktieren Sie den Support",
+    "reload": "Seite neu laden",
+    "reloadLabel": "Gesamte Seite neu laden",
+    "desktopMessage": "In der Anwendung ist ein unerwarteter Fehler aufgetreten. Sie können die Seite neu laden oder die Ansicht zurücksetzen.",
+    "reportSent": "Fehlerbericht erfolgreich gesendet. Danke, dass Sie uns helfen, besser zu werden!",
+    "recoveryActions": "Aktionen zur Fehlerbehebung",
+    "resetView": "Ansicht zurücksetzen",
+    "resetViewLabel": "Aktuelle Ansicht zurücksetzen, um den Fehler zu beheben",
+    "copy": "Fehler kopieren",
+    "copied": "Kopiert",
+    "copyLabel": "Fehlerdetails in die Zwischenablage kopieren",
+    "copiedLabel": "Fehlerdetails in die Zwischenablage kopiert",
+    "report": "Fehler melden",
+    "reportLabel": "Fehlerbericht senden, um die Anwendung zu verbessern",
+    "chatTitle": "Chat-Fehler",
+    "chatMessage": "In der Chat-Oberfläche ist ein Fehler aufgetreten. Ihr Gesprächsverlauf ist sicher. Starten Sie den Chat neu, um fortzufahren.",
+    "restartChat": "Chat neu starten"
+  },
+  "chatFailure": {
+    "offlineTitle": "Sie sind offline",
+    "title": "Der Chat konnte nicht angezeigt werden",
+    "offlineDescription": "Diese Unterhaltung kann ohne Verbindung nicht geladen werden. Ihre Nachrichten sind gespeichert. Stellen Sie die Verbindung wieder her und versuchen Sie es erneut.",
+    "networkDescription": "{{network}} Ihre Nachrichten sind gespeichert. Versuchen Sie es erneut oder öffnen Sie eine andere Unterhaltung.",
+    "description": "Beim Anzeigen dieser Unterhaltung ist ein Fehler aufgetreten. Ihre Nachrichten sind gespeichert. Versuchen Sie es erneut oder öffnen Sie eine andere Unterhaltung.",
+    "backToChat": "Zurück zum Chat"
+  },
+  "toast": {
+    "dismiss": "Schließen",
+    "retry": "Erneut versuchen",
+    "learnMore": "Mehr erfahren",
+    "showDetails": "Details anzeigen (nur Entwicklung)"
+  },
+  "turn": {
+    "cause": {
+      "rateLimit": "Dieses Modell erhält gerade zu viele Anfragen. Warten Sie kurz und versuchen Sie es erneut, oder wechseln Sie zu einem anderen Modell, falls Ihr Tarif eines enthält.",
+      "providerOutage": "Der Modellanbieter ist vorübergehend nicht erreichbar. Versuchen Sie es erneut oder wechseln Sie zu einem anderen Modell, falls Ihr Tarif eines enthält.",
+      "timeout": "Das Modell hat zu lange für die Antwort gebraucht. Versuchen Sie es erneut oder wählen Sie in der Modellauswahl ein schnelleres Modell.",
+      "modelRestriction": "Das ausgewählte Modell konnte diese Anfrage nicht abschließen. Versuchen Sie es erneut oder wählen Sie ein anderes Modell.",
+      "contextLength": "Diese Unterhaltung ist für das ausgewählte Modell zu lang. Starten Sie einen neuen Chat, entfernen Sie einige Anhänge oder wählen Sie ein Modell mit größerem Kontextfenster.",
+      "outputLimit": "Die Antwort hat die maximale Länge dieses Modells erreicht und endet dort. Bitten Sie um eine kürzere Antwort oder teilen Sie die Anfrage auf.",
+      "attachment": "Dieses Modell konnte einen der Anhänge nicht lesen. Entfernen Sie ihn oder wählen Sie ein Modell, das diesen Dateityp unterstützt.",
+      "toolCall": "Das Modell hat einen Tool-Aufruf erzeugt, den diese Anfrage nicht annehmen konnte. Versuchen Sie es erneut oder deaktivieren Sie die Tools, die dieser Schritt nicht braucht.",
+      "contentFiltered": "Das Sicherheitssystem hat diese Antwort gestoppt. Formulieren Sie die Anfrage um oder versuchen Sie ein anderes Modell.",
+      "planRestriction": "Das ausgewählte Modell ist nicht in Ihrem Tarif enthalten. Wählen Sie ein Modell, das Ihr Tarif enthält.",
+      "workspacePolicy": "Ihr Workspace-Administrator hat dies für Ihr Konto deaktiviert. Wenden Sie sich an einen Administrator, wenn Sie es benötigen.",
+      "twoFactorRequired": "Ihr Workspace erfordert die Zwei-Faktor-Authentifizierung. Aktivieren Sie sie in den Einstellungen und versuchen Sie es dann erneut.",
+      "sessionExpired": "Ihre Sitzung ist abgelaufen, bevor diese Antwort fertig war. Melden Sie sich erneut an und versuchen Sie es dann noch einmal.",
+      "accountLimit": "Sie haben ein Nutzungslimit Ihres Kontos erreicht. Öffnen Sie „Nutzung“, um zu sehen, wann es zurückgesetzt wird, und versuchen Sie es dann erneut.",
+      "sharedFreeAllowance": "Das kostenlose Modell hat das Kontingent aufgebraucht, das sich alle Nutzer des Free-Tarifs teilen. Es handelt sich also nicht um ein Limit Ihres Kontos. Es wird nach dem Zeitplan des Anbieters zurückgesetzt. Versuchen Sie es später erneut oder verwenden Sie Ihren eigenen Anbieterschlüssel.",
+      "interrupted": "Die Antwort wurde mittendrin abgebrochen. Der bereits empfangene Teil bleibt oben erhalten. Versuchen Sie es erneut, um eine vollständige Antwort zu erhalten.",
+      "emptyResponse": "Das Modell hat für diesen Schritt keine Antwort geliefert. Versuchen Sie es erneut oder formulieren Sie Ihre Nachricht um."
+    },
+    "rateLimitWait": "Dieses Modell erhält gerade zu viele Anfragen. Versuchen Sie es in {{wait}} erneut oder wechseln Sie zu einem anderen Modell, falls Ihr Tarif eines enthält.",
+    "incomplete": "Dieser Schritt wurde nicht abgeschlossen. Es kam keine Antwort.",
+    "reference": "{{text}} Referenz: {{reference}}",
+    "reason": {
+      "connection": "die Verbindung zum Modell wurde unterbrochen.",
+      "rateLimit": "dieses Modell erhält gerade zu viele Anfragen.",
+      "providerOutage": "dieses Modell ist aus einem Grund auf unserer Seite gerade nicht verfügbar.",
+      "timeout": "das Modell hat zu lange für die Antwort gebraucht.",
+      "modelRestriction": "das ausgewählte Modell konnte diese Anfrage nicht abschließen.",
+      "contextLength": "diese Unterhaltung ist für das ausgewählte Modell zu lang.",
+      "outputLimit": "die Antwort hat die maximale Länge dieses Modells erreicht und endet dort.",
+      "attachment": "dieses Modell konnte einen der Anhänge nicht lesen.",
+      "toolCall": "das Modell hat einen Tool-Aufruf erzeugt, den diese Anfrage nicht annehmen konnte.",
+      "contentFiltered": "das Sicherheitssystem hat diese Antwort gestoppt.",
+      "planRestriction": "das ausgewählte Modell ist nicht in Ihrem Tarif enthalten.",
+      "workspacePolicy": "Ihr Workspace-Administrator hat dies für Ihr Konto deaktiviert.",
+      "twoFactorRequired": "Ihr Workspace erfordert die Zwei-Faktor-Authentifizierung.",
+      "sessionExpired": "Ihre Sitzung ist abgelaufen, bevor diese Antwort fertig war.",
+      "accountLimit": "Sie haben ein Nutzungslimit Ihres Kontos erreicht.",
+      "interrupted": "die Antwort wurde mittendrin abgebrochen; der empfangene Teil bleibt oben erhalten.",
+      "sharedFreeAllowance": "das kostenlose Modell hat das Kontingent aufgebraucht, das sich alle Nutzer des Free-Tarifs teilen. Das ist kein Limit Ihres Kontos.",
+      "emptyResponse": "es wurde keine Antwort zurückgegeben."
+    },
+    "wait": {
+      "seconds_one": "etwa {{count}} Sekunde",
+      "seconds_other": "etwa {{count}} Sekunden",
+      "minutes_one": "etwa {{count}} Minute",
+      "minutes_other": "etwa {{count}} Minuten",
+      "hours_one": "etwa {{count}} Stunde",
+      "hours_other": "etwa {{count}} Stunden"
+    }
+  },
+  "friendly": {
+    "server": {
+      "title": "Etwas ist schiefgelaufen",
+      "message": "Wir haben gerade technische Schwierigkeiten.",
+      "suggestion": "Unser Team wurde benachrichtigt. Bitte versuchen Sie es in ein paar Minuten erneut."
+    },
+    "rateLimit": {
+      "title": "Etwas langsamer",
+      "message": "Sie senden Anfragen zu schnell.",
+      "suggestion": "Bitte warten Sie einen Moment, bevor Sie es erneut versuchen."
+    },
+    "fallback": {
+      "title": "Etwas ist schiefgelaufen",
+      "message": "Wir konnten Ihre Anfrage nicht abschließen.",
+      "suggestion": "Bitte versuchen Sie es erneut. Wenn das weiterhin passiert, kontaktieren Sie den Support."
+    },
+    "apiKey": {
+      "title": "Problem mit dem API-Schlüssel",
+      "message": "Mit der Konfiguration Ihres API-Schlüssels stimmt etwas nicht.",
+      "suggestion": "Bitte prüfen Sie Ihren API-Schlüssel in den Einstellungen und versuchen Sie es erneut."
+    },
+    "network": {
+      "title": "Verbindungsproblem",
+      "message": "Der Server ist nicht erreichbar.",
+      "suggestion": "Bitte prüfen Sie Ihre Internetverbindung und versuchen Sie es erneut."
+    },
+    "timeout": {
+      "title": "Das dauert zu lange",
+      "message": "Die Anfrage dauert länger als erwartet.",
+      "suggestion": "Bitte versuchen Sie es gleich noch einmal. Wenn das Problem weiterhin besteht, kontaktieren Sie den Support."
+    },
+    "accessDenied": {
+      "title": "Zugriff verweigert",
+      "message": "Ihr Konto hat dafür keine Berechtigung. Es wurde nichts geändert.",
+      "suggestion": "Bitten Sie einen Workspace-Administrator um Zugriff. Ein erneuter Versuch hilft nicht."
+    },
+    "signIn": {
+      "title": "Anmeldung erforderlich",
+      "message": "Ihre Sitzung ist abgelaufen. Ihre gespeicherte Arbeit ist davon nicht betroffen.",
+      "suggestion": "Melden Sie sich erneut an, um fortzufahren."
+    }
   }
 }

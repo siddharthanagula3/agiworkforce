@@ -21,6 +21,23 @@ export function flattenKeys(value, prefix = '') {
   return keys;
 }
 
+const PLURAL_SUFFIX = /_(zero|one|two|few|many|other)$/;
+
+function pluralCategories(locale) {
+  return new Set(new Intl.PluralRules(locale).resolvedOptions().pluralCategories);
+}
+
+function unexpectedKeys(localeKeys, referenceKeys, locale) {
+  const categories = pluralCategories(locale);
+  return [...localeKeys].filter((key) => {
+    if (referenceKeys.has(key)) return false;
+    const match = PLURAL_SUFFIX.exec(key);
+    if (!match) return true;
+    const base = key.slice(0, match.index);
+    return !categories.has(match[1]) || !referenceKeys.has(`${base}_other`);
+  });
+}
+
 function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, 'utf8'));
 }
@@ -56,7 +73,7 @@ export function compareLocales(localesDir) {
       }
       const expected = referenceKeys.get(ns);
       const missing = [...expected].filter((key) => !keys.has(key));
-      const extra = [...keys].filter((key) => !expected.has(key));
+      const extra = unexpectedKeys(keys, expected, locale);
       if (missing.length > 0) findings.push(`${locale}/${ns}: missing ${missing.join(', ')}`);
       if (extra.length > 0) findings.push(`${locale}/${ns}: extra ${extra.join(', ')}`);
     }

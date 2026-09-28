@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { platformRequestHeaders } from '../platform/platformHeaders';
 
 export const MEMORY_SYNC_PATH = '/api/memory/sync';
+export const MEMORY_PATH = '/api/memory';
 export const MEMORY_SYNC_PROTOCOL_VERSION = 2;
 export const MEMORY_SOURCE = 'vscode';
 export const INITIAL_CURSOR = '0';
@@ -70,6 +71,7 @@ export interface AccountMemoryClient {
   pull(since: string): Promise<MemoryPullResponse>;
   pullAll(since: string): Promise<MemoryPullResponse>;
   push(memories: MemoryPushItem[]): Promise<MemoryPushResponse>;
+  deleteAll(): Promise<void>;
 }
 
 export function createAccountMemoryClient(config: AccountMemoryClientConfig): AccountMemoryClient {
@@ -151,6 +153,10 @@ export function createAccountMemoryClient(config: AccountMemoryClientConfig): Ac
         );
       }
       return parsed.data;
+    },
+
+    async deleteAll() {
+      await request(MEMORY_PATH, { method: 'DELETE' });
     },
   };
 }

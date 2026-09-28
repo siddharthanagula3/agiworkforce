@@ -20,6 +20,7 @@ import {
   Input,
   Label,
   Textarea,
+  useUnsavedChangesGuard,
 } from '@agiworkforce/ui';
 import {
   parseSkillDraftFromMarkdown,
@@ -107,6 +108,29 @@ export function SkillEditorDialog({
     reader.readAsText(file);
   }, []);
 
+  const baseline = initialSkill ?? EMPTY_DRAFT;
+  const dirty =
+    open &&
+    !submitting &&
+    (draft.name !== baseline.name ||
+      draft.description !== baseline.description ||
+      draft.body !== baseline.body);
+  const { confirmDiscard, dialog: discardDialog } = useUnsavedChangesGuard({
+    dirty,
+    description:
+      mode === 'create'
+        ? 'This skill has not been created yet. If you leave now, what you entered will be lost.'
+        : 'Your changes to this skill have not been saved. If you leave now, they will be lost.',
+  });
+
+  const requestClose = (next: boolean) => {
+    if (next) {
+      onOpenChange(true);
+      return;
+    }
+    confirmDiscard(() => onOpenChange(false));
+  };
+
   const validation = validateSkillDraft(draft);
   const showValidation = touched && !validation.ok;
 
@@ -122,110 +146,117 @@ export function SkillEditorDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[85vh] flex-col sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>{mode === 'create' ? 'New skill' : 'Edit skill'}</DialogTitle>
-          <DialogDescription>
-            A skill is a set of instructions the model follows once your prompt matches its
-            description.
-          </DialogDescription>
-        </DialogHeader>
-        <form
-          onSubmit={handleSubmit}
-          className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto"
-        >
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-            <Button type="button" variant="outline" onClick={() => importInputRef.current?.click()}>
-              Import a SKILL.md
-            </Button>
-            <p className="text-xs text-muted-foreground">
-              Fills these fields from the file&rsquo;s frontmatter and body.
-            </p>
-            <input
-              ref={importInputRef}
-              type="file"
-              accept={IMPORT_ACCEPT}
-              className="hidden"
-              onChange={importSkillFile}
-              aria-label="Import a SKILL.md file"
-            />
-          </div>
-          {importErrors.length > 0 ? (
-            <ul role="alert" className="list-disc space-y-1 pl-4 text-xs text-danger">
-              {importErrors.map((error) => (
-                <li key={error}>{error}</li>
-              ))}
-            </ul>
-          ) : null}
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor={nameId}>Name</Label>
-            <Input
-              id={nameId}
-              value={draft.name}
-              onChange={(event) => setDraft((prev) => ({ ...prev, name: event.target.value }))}
-              placeholder="release-notes"
-              maxLength={SKILL_DRAFT_NAME_MAX_LENGTH}
-              autoFocus={mode === 'create'}
-            />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor={descriptionId}>Description</Label>
-            <Textarea
-              id={descriptionId}
-              value={draft.description}
-              onChange={(event) =>
-                setDraft((prev) => ({ ...prev, description: event.target.value }))
-              }
-              placeholder="What this does and when to use it. This is what matches your prompts to the skill."
-              rows={2}
-              maxLength={SKILL_DRAFT_DESCRIPTION_MAX_LENGTH}
-            />
-          </div>
-          <div className="flex min-h-0 flex-1 flex-col gap-1.5">
-            <Label htmlFor={bodyId}>Instructions</Label>
-            {bodyLoading ? (
-              <p className="text-xs text-muted-foreground">Loading current instructions…</p>
-            ) : (
-              <Textarea
-                id={bodyId}
-                value={draft.body}
-                onChange={(event) => setDraft((prev) => ({ ...prev, body: event.target.value }))}
-                placeholder="Step-by-step instructions the model follows when this skill is selected."
-                rows={12}
-                className="min-h-[220px] resize-y font-mono text-xs"
-                spellCheck={false}
-                maxLength={SKILL_DRAFT_BODY_MAX_LENGTH}
+    <>
+      <Dialog open={open} onOpenChange={requestClose}>
+        <DialogContent className="flex max-h-[85vh] flex-col sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{mode === 'create' ? 'New skill' : 'Edit skill'}</DialogTitle>
+            <DialogDescription>
+              A skill is a set of instructions the model follows once your prompt matches its
+              description.
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            onSubmit={handleSubmit}
+            className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto"
+          >
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => importInputRef.current?.click()}
+              >
+                Import a SKILL.md
+              </Button>
+              <p className="text-xs text-muted-foreground">
+                Fills these fields from the file&rsquo;s frontmatter and body.
+              </p>
+              <input
+                ref={importInputRef}
+                type="file"
+                accept={IMPORT_ACCEPT}
+                className="hidden"
+                onChange={importSkillFile}
+                aria-label="Import a SKILL.md file"
               />
-            )}
-            {bodyError ? (
+            </div>
+            {importErrors.length > 0 ? (
+              <ul role="alert" className="list-disc space-y-1 pl-4 text-xs text-danger">
+                {importErrors.map((error) => (
+                  <li key={error}>{error}</li>
+                ))}
+              </ul>
+            ) : null}
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor={nameId}>Name</Label>
+              <Input
+                id={nameId}
+                value={draft.name}
+                onChange={(event) => setDraft((prev) => ({ ...prev, name: event.target.value }))}
+                placeholder="release-notes"
+                maxLength={SKILL_DRAFT_NAME_MAX_LENGTH}
+                autoFocus={mode === 'create'}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor={descriptionId}>Description</Label>
+              <Textarea
+                id={descriptionId}
+                value={draft.description}
+                onChange={(event) =>
+                  setDraft((prev) => ({ ...prev, description: event.target.value }))
+                }
+                placeholder="What this does and when to use it. This is what matches your prompts to the skill."
+                rows={2}
+                maxLength={SKILL_DRAFT_DESCRIPTION_MAX_LENGTH}
+              />
+            </div>
+            <div className="flex min-h-0 flex-1 flex-col gap-1.5">
+              <Label htmlFor={bodyId}>Instructions</Label>
+              {bodyLoading ? (
+                <p className="text-xs text-muted-foreground">Loading current instructions…</p>
+              ) : (
+                <Textarea
+                  id={bodyId}
+                  value={draft.body}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, body: event.target.value }))}
+                  placeholder="Step-by-step instructions the model follows when this skill is selected."
+                  rows={12}
+                  className="min-h-[220px] resize-y font-mono text-xs"
+                  spellCheck={false}
+                  maxLength={SKILL_DRAFT_BODY_MAX_LENGTH}
+                />
+              )}
+              {bodyError ? (
+                <p role="alert" className="text-xs text-danger">
+                  {bodyError}
+                </p>
+              ) : null}
+            </div>
+            {showValidation ? (
+              <ul role="alert" className="list-disc space-y-1 pl-4 text-xs text-danger">
+                {validation.errors.map((error) => (
+                  <li key={error}>{error}</li>
+                ))}
+              </ul>
+            ) : null}
+            {submitError ? (
               <p role="alert" className="text-xs text-danger">
-                {bodyError}
+                {submitError}
               </p>
             ) : null}
-          </div>
-          {showValidation ? (
-            <ul role="alert" className="list-disc space-y-1 pl-4 text-xs text-danger">
-              {validation.errors.map((error) => (
-                <li key={error}>{error}</li>
-              ))}
-            </ul>
-          ) : null}
-          {submitError ? (
-            <p role="alert" className="text-xs text-danger">
-              {submitError}
-            </p>
-          ) : null}
-          <DialogFooter>
-            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={submitting || bodyLoading}>
-              {submitting ? 'Saving…' : mode === 'create' ? 'Create skill' : 'Save changes'}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+            <DialogFooter>
+              <Button type="button" variant="ghost" onClick={() => requestClose(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={submitting || bodyLoading}>
+                {submitting ? 'Saving…' : mode === 'create' ? 'Create skill' : 'Save changes'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+      {discardDialog}
+    </>
   );
 }

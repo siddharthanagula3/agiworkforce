@@ -66,6 +66,7 @@ export {
   DropdownMenuRadioGroup,
 } from './DropdownMenu';
 export { Input, type InputProps } from './Input';
+export { ChipInput, type ChipInputProps } from './ChipInput';
 export { Progress } from './Progress';
 export { ScrollArea, ScrollBar } from './ScrollArea';
 export {

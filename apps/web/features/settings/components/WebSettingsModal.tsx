@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { usePathname } from 'next/navigation';
 import { useSession } from '@/lib/identity/client';
 import {
+  confirmNavigation,
   SettingsModal,
   SETTINGS_NAV_GROUP_CUSTOMIZE,
   SETTINGS_NAV_GROUP_DESKTOP,
@@ -142,6 +143,11 @@ export function WebSettingsModal({
     if (next !== null) replaceSettingsHash(next);
   }, []);
 
+  const handleSectionLink = useCallback(
+    (key: string) => confirmNavigation(() => handleSectionChange(key)),
+    [handleSectionChange],
+  );
+
   const [customConnectorOpen, setCustomConnectorOpen] = useState(false);
 
   useEffect(() => {
@@ -216,7 +222,7 @@ export function WebSettingsModal({
 
   return (
     <Suspense fallback={<SectionSkeleton />}>
-      <SettingsSectionNavigationProvider onNavigate={handleSectionChange} onExit={onClose}>
+      <SettingsSectionNavigationProvider onNavigate={handleSectionLink} onExit={onClose}>
         <SettingsModal
           open={open}
           onClose={onClose}

@@ -3,7 +3,7 @@
   "info": {
     "title": "AGI Workforce API",
     "version": "1.0.0",
-    "description": "OpenAI-compatible inference gateway, the billing and device-authorization endpoints the first-party apps use, and the workspace administration API.\n\nThe complete API base URL is `https://agiworkforce.com/api`. The API host also exposes the OpenAI-compatible aliases `/v1/chat/completions`, `/v1/models`, `/v1/embeddings`, `/v1/audio/transcriptions`, and `/v1/credits/balance` at `https://api.agiworkforce.com`, plus `/health`. Other operations use the complete API base URL above.\n\nThree credential types authenticate here and they are NOT interchangeable. An AGI API key (`sk_live_…`/`sk_test_…`, issued under Settings > API Keys) works only on the operations that declare `ApiKeyAuth`. A workspace API key (`agiadm_…`, issued in the workspace console under Audit > Workspace API keys) works only on the workspace administration operations that declare `WorkspaceApiKeyAuth`. Every other operation needs a session bearer token. Each operation states which one it takes. Rate limits are published in `docs/standards/api-rate-limits.md`.",
+    "description": "OpenAI-compatible inference gateway, the billing and device-authorization endpoints the first-party apps use, and the workspace administration API.\n\nThe complete API base URL is `https://agiworkforce.com/api`. The API host also exposes the OpenAI-compatible aliases `/v1/chat/completions`, `/v1/models`, `/v1/embeddings`, `/v1/audio/transcriptions`, and `/v1/credits/balance` at `https://api.agiworkforce.com`, plus `/health`. Other operations use the complete API base URL above.\n\nThree credential types authenticate here and they are NOT interchangeable. An AGI API key (`sk_live_\u2026`/`sk_test_\u2026`, issued under Settings > API Keys) works only on the operations that declare `ApiKeyAuth`. A workspace API key (`agiadm_\u2026`, issued in the workspace console under Audit > Workspace API keys) works only on the workspace administration operations that declare `WorkspaceApiKeyAuth`. Every other operation needs a session bearer token. Each operation states which one it takes. Rate limits are published in `docs/standards/api-rate-limits.md`.",
     "contact": {
       "name": "AGI Workforce Support",
       "email": "contact@agiworkforce.com",
@@ -30,12 +30,12 @@
       "ApiKeyAuth": {
         "type": "http",
         "scheme": "bearer",
-        "description": "AGI API key (`sk_live_…` / `sk_test_…`) issued under Settings > API Keys. Scopes are chosen at issue time; an operation lists the one it needs in `x-agi-api-key-scope` and answers 403 `insufficient_scope` without it."
+        "description": "AGI API key (`sk_live_\u2026` / `sk_test_\u2026`) issued under Settings > API Keys. Scopes are chosen at issue time; an operation lists the one it needs in `x-agi-api-key-scope` and answers 403 `insufficient_scope` without it."
       },
       "WorkspaceApiKeyAuth": {
         "type": "http",
         "scheme": "bearer",
-        "description": "Workspace API key (`agiadm_…`) issued in the workspace console under Audit > Workspace API keys. It acts for the workspace rather than for a person, keeps working after the member who issued it leaves, and needs an active Team or Enterprise plan. The issuer picks its scopes, only from permissions they hold, and an optional expiry; neither can change after issue, and the key can be revoked at any time. An operation names the scope it needs in `x-agi-workspace-scope` and answers 403 without it, listing the scopes the key carries. A revoked, expired or unknown key answers 401, and a call from outside the workspace's IP allow list answers 403 `IP_NOT_ALLOWED`. Writes made with a key need no CSRF token."
+        "description": "Workspace API key (`agiadm_\u2026`) issued in the workspace console under Audit > Workspace API keys. It acts for the workspace rather than for a person, keeps working after the member who issued it leaves, and needs an active Team or Enterprise plan. The issuer picks its scopes, only from permissions they hold, and an optional expiry; neither can change after issue, and the key can be revoked at any time. An operation names the scope it needs in `x-agi-workspace-scope` and answers 403 without it, listing the scopes the key carries. A revoked, expired or unknown key answers 401, and a call from outside the workspace's IP allow list answers 403 `IP_NOT_ALLOWED`. Writes made with a key need no CSRF token."
       }
     },
     "schemas": {
@@ -617,11 +617,34 @@
           },
           "response_format": {
             "type": "object",
-            "description": "`text` and `json_object` are honoured. `json_schema` is refused rather than ignored.",
+            "description": "`text`, `json_object` and `json_schema` are honoured. `json_object` and `json_schema` need `stream: false`, because the reply is validated before it is returned. With `json_schema` the reply is checked against the schema, and a reply that does not satisfy it answers 502 `json_schema_not_satisfied` rather than returning unvalidated output. It works with image input on any model the registry marks for both vision and structured output; a model without structured output answers 400 `model_no_structured_output`.",
             "properties": {
               "type": {
                 "type": "string",
-                "enum": ["text", "json_object"]
+                "enum": ["text", "json_object", "json_schema"]
+              },
+              "json_schema": {
+                "type": "object",
+                "required": ["name", "schema"],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "maxLength": 64,
+                    "pattern": "^[A-Za-z0-9_-]+$"
+                  },
+                  "description": {
+                    "type": "string",
+                    "maxLength": 1000
+                  },
+                  "schema": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "description": "A JSON Schema whose root has type `object`. Supported keywords: type, properties, required, additionalProperties, items, enum, const, anyOf, $defs and local $ref, minimum, maximum, minLength, maxLength, minItems, maxItems, pattern, format, description, title and default. Any other keyword is refused with 400."
+                  },
+                  "strict": {
+                    "type": "boolean"
+                  }
+                }
               }
             }
           },
@@ -639,7 +662,7 @@
           },
           "research_sources": {
             "type": "object",
-            "description": "What a Deep Research run may read. Applies only when `research` is true.",
+            "description": "What a Deep Research run may read when `research` is true. `allow_domains` and `deny_domains` also apply to ordinary `web_search`: they are passed to the search backend as its domain filter and every result is checked against them before the model sees it, so a page outside the allowed sites or on a denied one is never returned. `files` applies only to Deep Research.",
             "properties": {
               "files": {
                 "type": "boolean",
@@ -648,13 +671,19 @@
               "allow_domains": {
                 "type": "array",
                 "maxItems": 32,
-                "items": { "type": "string", "maxLength": 253 },
+                "items": {
+                  "type": "string",
+                  "maxLength": 253
+                },
                 "description": "Only read and cite pages on these sites, for example `nature.com`."
               },
               "deny_domains": {
                 "type": "array",
                 "maxItems": 32,
-                "items": { "type": "string", "maxLength": 253 },
+                "items": {
+                  "type": "string",
+                  "maxLength": 253
+                },
                 "description": "Never read or cite pages on these sites."
               }
             }
@@ -5366,7 +5395,7 @@
     "/connectors/permissions": {
       "get": {
         "summary": "List saved connector tool permissions",
-        "description": "The per-tool levels the caller has saved. A tool with no saved level follows the account's approval policy.",
+        "description": "The levels the caller has saved. A tool with no saved level takes its category's level when one is saved (reported with toolName `*read_only` or `*write`), and otherwise follows the account's approval policy.",
         "tags": ["Users"],
         "security": [
           {
@@ -5417,7 +5446,7 @@
       },
       "put": {
         "summary": "Save a connector tool permission",
-        "description": "Saves `allow`, `ask` or `deny` for one connector tool (`toolName`) or for up to 200 of them at once (`toolNames`), which is how a whole category such as the connector's write and delete tools is set. Send exactly one of the two. Whether a tool is destructive is decided by the server, and a `destructive` field in the body is ignored.",
+        "description": "Saves `allow`, `ask` or `deny` for one connector tool (`toolName`), for up to 200 of them at once (`toolNames`), or for a whole `category`. Send `toolName` or `toolNames` unless `category` is set. Whether a tool is destructive is decided by the server, and a `destructive` field in the body is ignored.",
         "tags": ["Users"],
         "security": [
           {
@@ -5456,6 +5485,11 @@
                     "type": "string",
                     "enum": ["allow", "ask", "deny"],
                     "description": "`allow` runs the tool without asking, `ask` asks every time, `deny` never runs it. A saved `allow` still asks when the call would send private data out after reading untrusted content."
+                  },
+                  "category": {
+                    "type": "string",
+                    "enum": ["read_only", "write"],
+                    "description": "Saves the level for a whole category of this connector's tools: its read-only tools, or its write and delete tools. A tool with no level of its own takes its category's level, including tools the connector adds later; an undeclared tool counts as write. May be sent with toolNames to set the listed tools in the same call."
                   }
                 }
               }
@@ -5484,7 +5518,7 @@
             }
           },
           "400": {
-            "description": "Missing connectorId, neither or both of toolName and toolNames, or an unknown level",
+            "description": "Missing connectorId, no tool or category, both toolName and toolNames, or an unknown level or category",
             "content": {
               "application/json": {
                 "schema": {
