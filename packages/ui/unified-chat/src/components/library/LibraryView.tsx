@@ -20,6 +20,7 @@ import {
   LayoutGrid,
   Link2,
   List,
+  MessageSquare,
   MessageSquarePlus,
   Mic,
   MoreHorizontal,
@@ -268,6 +269,7 @@ export interface LibraryTransport {
   ) => Promise<void>;
   nativeExportFormats?: readonly NativeExportFormat[];
   addToChat?: (item: LibraryItem) => Promise<void>;
+  openConversation?: (conversationId: string) => void;
   addToWork?: (item: LibraryItem) => Promise<void>;
   /** Starts a new image generation from a saved image, seeded with its prompt.
    *  Hosts with no image composer omit it and no Remix row is rendered. */
@@ -562,7 +564,18 @@ export function LibraryView({
     [setRowError],
   );
 
-  const { addToChat, addToWork, addToProject, remixItem, shareArtifact } = transport;
+  const { addToChat, addToWork, addToProject, remixItem, shareArtifact, openConversation } =
+    transport;
+
+  const handleOpenConversation = useMemo(
+    () =>
+      openConversation
+        ? (item: LibraryItem) => {
+            if (item.conversation_id) openConversation(item.conversation_id);
+          }
+        : undefined,
+    [openConversation],
+  );
 
   const handleAddToChat = useMemo(
     () =>
@@ -744,6 +757,7 @@ export function LibraryView({
       onPermanentDelete: confirmPermanentDelete,
       onAddToChat: handleAddToChat,
       onAddToWork: handleAddToWork,
+      onOpenConversation: handleOpenConversation,
       onAddToProject: handleChooseProject,
       onRemix: handleRemix,
       onShare: confirmShare,
@@ -756,6 +770,7 @@ export function LibraryView({
       confirmPermanentDelete,
       handleAddToChat,
       handleAddToWork,
+      handleOpenConversation,
       handleChooseProject,
       handleRemix,
       confirmShare,
@@ -1215,6 +1230,7 @@ interface RowActions {
   onPermanentDelete: (item: LibraryItem) => void;
   onAddToChat?: (item: LibraryItem) => void;
   onAddToWork?: (item: LibraryItem) => void;
+  onOpenConversation?: (item: LibraryItem) => void;
   onAddToProject?: (item: LibraryItem) => void;
   onRemix?: (item: LibraryItem) => void;
   onShare?: (item: LibraryItem) => void;
@@ -1639,6 +1655,17 @@ function ItemMenu({
                 >
                   <Briefcase className="h-4 w-4" aria-hidden />
                   Add to AGI Work
+                </button>
+              ) : null}
+              {actions.onOpenConversation && item.conversation_id ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={MENU_ITEM_CLASS}
+                  onClick={choose(() => actions.onOpenConversation?.(item))}
+                >
+                  <MessageSquare className="h-4 w-4" aria-hidden />
+                  Open chat
                 </button>
               ) : null}
               {actions.onRemix && isImageItem(item) ? (

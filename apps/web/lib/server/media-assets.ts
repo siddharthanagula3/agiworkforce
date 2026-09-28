@@ -410,6 +410,7 @@ export interface LibraryAssetRow {
   metadata: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
+  conversationId: string | null;
 }
 
 export interface ListLibraryAssetsOptions {
@@ -451,6 +452,7 @@ function mapLibraryRow(row: Record<string, unknown>): LibraryAssetRow {
     metadata: (row['metadata'] as Record<string, unknown> | null) ?? {},
     createdAt: new Date(row['created_at'] as string).toISOString(),
     updatedAt: new Date((row['updated_at'] ?? row['created_at']) as string).toISOString(),
+    conversationId: (row['conversation_id'] as string | null) ?? null,
   };
 }
 
@@ -501,7 +503,8 @@ export async function listLibraryAssets(
 
     params.push(limit, offset);
     const rows = await db.query<Record<string, unknown>>(
-      `select id, kind, mime_type, byte_size, prompt, provider, model, source_surface, metadata, created_at, updated_at, deleted_at
+      `select id, kind, mime_type, byte_size, prompt, provider, model, source_surface, metadata, created_at, updated_at, deleted_at,
+              conversation_id
          from public.media_assets
         where user_id = $1
           and organization_id is not distinct from $2::uuid
