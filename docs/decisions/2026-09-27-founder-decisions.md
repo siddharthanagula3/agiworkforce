@@ -125,3 +125,38 @@ build it, and the audit cell is recorded as not applicable by this decision.
   built, because ChatGPT has one. Per-image cost and remaining image counts
   (S44.14, S44.15), negative prompts (S44.13), a generation queue view (S44.16,
   S46.25), external image sharing (S44.31) and adding videos to projects (S46.34) are declined too.
+
+## D-2026-09-28-01 Authenticator app and backup codes are temporarily unavailable
+
+The Clerk plan that provides authenticator apps and backup codes is not bought
+yet. The enrolment controls stay visible and say "Temporarily unavailable", and
+a workspace cannot require two-factor sign-in while members cannot enrol.
+
+## D-2026-09-28-02 Mobile keeps Local and Cloud memory separate
+
+Local mode keeps its memory on the device and Cloud mode uses the account's
+memory; one is never copied into the other (S39.31, S39.32 mobile).
+
+## D-2026-09-28-03 Session and email extras follow ChatGPT and Claude
+
+Neither offers a read-only attach to another client's session (S68.10), a
+summary-only or fork-style hand-off (S68.28, S68.29), or an address to forward
+email to an agent (S110.10), so none is built.
+
+## D-2026-09-28-04 Voice runs on OpenAI's Live API
+
+Live voice stays on OpenAI's Live API, not the legacy Realtime API, and uses
+OpenAI's voices, including for voice previews. What the Live API does not
+offer is not built: typed text or camera frames during a call (S48.24, S48.30,
+S97.26) and client-set speech or turn detection (S97.21, S97.22).
+
+## D-2026-09-28-05 Temporary chats keep no safety copy
+
+Temporary chats keep no 30-day copy for safety review.
+
+## D-2026-09-28-06 Deployment order
+
+Migrations are applied as soon as they are merged (0295 to 0315 were applied on
+2026-09-28 after a Neon snapshot branch). The signaling server is deployed to
+Fly.io next. The website is deployed once every partial item is complete, and
+the CLI and desktop builds after the website.

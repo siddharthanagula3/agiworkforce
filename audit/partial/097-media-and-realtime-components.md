@@ -27,36 +27,3 @@ Code: `apps/web/app/api/media/image/lib/image-generation-provider.ts:470-475`, `
 | platform | partial | No server text-to-speech: read-aloud uses each device's built-in voices (browser speech synthesis, expo-speech) and the catalogue's TTS models are never called; add a TTS endpoint. | handler |
 
 Code: `apps/web/lib/hooks/useTTS.ts:175-175`, `apps/mobile/src/features/voice/services/tts.ts:39-39`
-
-## S97.21: Voice activity detection.
-
-- Done when: Voice activity (speech start and end) is detected, with tunable sensitivity where needed.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Speech detection is left to the hosted provider's defaults; the session sets no detection options and the product has no VAD of its own (dictation is click-to-stop). | handler |
-
-Code: `apps/web/app/api/voice/live/sessions/route.ts:337-340`
-
-## S97.22: Turn-detection coordinator.
-
-- Done when: A coordinator decides when the user's turn ends and the assistant's begins, and records the turns.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Turn-taking comes from the provider's default detection; the product only splits the transcript into turns afterwards (overlap and settle timers) and has no turn settings. | handler |
-
-Code: `apps/web/features/chat/lib/live-voice-session.ts:668-676`
-
-## S97.26: Visual-frame ingestion.
-
-- Done when: Camera or screen frames are captured and delivered to the realtime model during a voice session.
-- Wave: 2
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | blocked: GPT-Live has no documented frame input (fetched 2026-09-27) | handler, mount |
-
-Code: `apps/web/features/chat/components/Voice/VoiceModeSurface.tsx:445-445`
