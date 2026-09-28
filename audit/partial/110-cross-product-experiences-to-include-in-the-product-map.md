@@ -13,12 +13,12 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Chat documents open in the artifact panel but Edit is a raw Markdown/source textarea; build a real document editor (S27.02 missing), and DOCX/PDF outputs cannot be edited at all. | ui |
-| desktop | partial | Same as web: only a raw source textarea (S27.02 missing); no document editor. | ui |
+| web | partial | Edit is still a raw source textarea over the artifact text; Save writes a new version, but there is no document editor, and DOCX/PDF outputs cannot be edited. | ui |
+| desktop | partial | Edit is still a raw source textarea over the artifact text; Save writes a new version, but there is no document editor, and DOCX/PDF outputs cannot be edited. | ui |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | The document leaves chat only as a file (`agi artifacts show --out` or an agent file write) to edit in an outside editor; nothing reads edits back as a version (S26.15 missing). | ui |
+| cli | partial | agi artifacts show --out writes the document to a file for an outside editor; nothing reads the edited file back as a version. | ui |
 
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1340-1356`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1863-1872`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:488-496`, `apps/cli/src/lib.rs:1034-1043`
+Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:2232-2232`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:735-735`, `apps/cli/src/lib.rs:1101-1101`, `apps/cli/src/lib.rs:2391-2391`
 
 ## S110.02: Document → presentation.
 
@@ -27,14 +27,14 @@ Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1340-1356
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only by asking the office-file tool for a new fixed-layout .pptx (download only); no Turn-into-deck action, deck viewer or deck editing (S30.03/S30.10/S30.28); uploaded source docs also need UPLOAD_SCAN_WEBHOOK_URL. | ui |
-| desktop | partial | Same as web: office-file tool makes a new download-only .pptx; no deck workspace (S30.10 missing). | ui |
-| mobile | partial | Office-file tool can make a new .pptx from the chat's document text; no deck action or editor, and an existing deck cannot be attached (S30.23 missing). | ui |
+| web | partial | Only the office-file tool makes a new fixed-layout, download-only .pptx; there is no turn-into-deck action, deck viewer or deck editing. Uploaded source documents need UPLOAD_SCAN_WEBHOOK_URL in production. | ui |
+| desktop | partial | Only the office-file tool makes a new fixed-layout, download-only .pptx; there is no turn-into-deck action, deck viewer or deck editing. Uploaded source documents need UPLOAD_SCAN_WEBHOOK_URL in production. | ui |
+| mobile | partial | The office-file tool can build a .pptx from the chat's text; no deck action or editor. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | The office tool is offered only when the prompt names an Office file; the source can only be the page or pasted text (images-only attachments); no deck view (S30.28 partial). | ui |
+| chrome | partial | The office tool is offered only when the prompt names an Office file; the source can only be the page or pasted text; no deck view. | ui |
 
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:868-875`, `apps/web/features/chat/components/messages/MessageBubble.tsx:2286-2301`, `apps/web/lib/services/managed-office-file-service.ts:513-526`, `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1756`
+Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:1001-1001`, `apps/web/lib/services/managed-office-file-service.ts:513-513`, `apps/mobile/stores/chat/chatExecutionStore.ts:1811-1811`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:686-687`
 
 ## S110.03: Spreadsheet → chart → report.
 
@@ -43,30 +43,27 @@ Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:868-875`,
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Charts exist only as chat chart artifacts or one chart per sheet in a new .xlsx; the DOCX/PDF report tool takes text and tables only, so the chart cannot go into the report; spreadsheet upload needs UPLOAD_SCAN_WEBHOOK_URL. | ui, flag-off |
-| desktop | partial | Same as web: chart cannot be carried into the DOCX/PDF report; upload scanner gate. | ui, flag-off |
-| mobile | partial | Charts render as text on mobile (S22.08 partial) and the report tool cannot embed a chart; report only via the office-file tool (S29.38 partial). | ui |
+| web | partial | A chart can land only in a new .xlsx sheet; the DOCX/PDF report input takes text and tables, so the chart never reaches the report. Spreadsheet upload needs UPLOAD_SCAN_WEBHOOK_URL in production. | ui, flag-off |
+| desktop | partial | A chart can land only in a new .xlsx sheet; the DOCX/PDF report input takes text and tables, so the chart never reaches the report. Spreadsheet upload needs UPLOAD_SCAN_WEBHOOK_URL in production. | ui, flag-off |
+| mobile | partial | Chart artifacts render as text in the mobile artifact viewer and the report tool cannot embed a chart. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:868-875`, `apps/web/features/chat/components/messages/MessageBubble.tsx:2286-2301`, `apps/web/lib/services/managed-office-file-service.ts:156-156`, `apps/web/lib/services/managed-office-file-service.ts:67-80`
+Code: `apps/web/lib/services/managed-office-file-service.ts:156-156`, `apps/web/lib/services/managed-office-file-service.ts:67-68`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:792-792`, `apps/mobile/stores/chat/chatExecutionStore.ts:1811-1811`
 
 ## S110.05: Research → interactive page.
 
 - Done when: A finished research report can be converted in one step into an interactive page (charts, navigation, controls) the user can open and publish.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The report hands off only as a static Markdown document artifact (S35.31); nothing turns it into an interactive page or app, so the user must re-prompt the chat to build one. | handler |
-| desktop | partial | The report hands off only as a static Markdown document artifact (S35.31); nothing turns it into an interactive page or app, so the user must re-prompt the chat to build one. | handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/research/ResearchReportView.tsx:462-472`, `apps/web/features/chat/components/research/ResearchReportView.tsx:184-192`
 
 ## S110.07: Voice → durable work task.
 
@@ -75,30 +72,29 @@ Code: `apps/web/features/chat/components/research/ResearchReportView.tsx:462-472
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Voice cannot start or hand off an AGI Work task (agi_work reachable:false in the live-voice registry, S97.25 missing); the user must leave voice and resend the request in Work mode. | handler |
-| desktop | partial | Voice cannot start or hand off an AGI Work task (agi_work reachable:false in the live-voice registry, S97.25 missing); the user must leave voice and resend the request in Work mode. | handler |
-| mobile | partial | Voice cannot start AGI Work (S97.25 missing); the user must leave voice, open Tasks > New task and retype the goal, which carries no voice context. | handler |
-| cli | partial | A /voice turn is an ordinary agent turn in a saved session, but voice exists only in builds with the off-by-default voice cargo feature and needs the user own OPENAI_API_KEY or local whisper. | flag-off |
+| web | partial | The live-voice tool registry keeps agi_work unreachable, so a voice turn cannot start or hand off an AGI Work task; the user leaves voice and retypes in Work mode. | handler |
+| desktop | partial | The live-voice tool registry keeps agi_work unreachable, so a voice turn cannot start or hand off an AGI Work task; the user leaves voice and retypes in Work mode. | handler |
+| mobile | partial | agi_work is unreachable from live voice; the user must switch to text and start a task from the Tasks screen, carrying no voice context. | handler |
+| cli | partial | A /voice turn is an ordinary agent turn, but voice ships only in builds with the off-by-default voice feature and needs the user's own OPENAI_API_KEY or local whisper. | flag-off |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/voice/live-voice-tools.ts:130-140`, `apps/web/features/chat/components/Voice/VoiceComposer.tsx:158-166`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:4562-4576`, `apps/mobile/src/features/voice/components/LiveVoiceBar.tsx:204-204`
+Code: `apps/web/lib/voice/live-voice-tools.ts:215-215`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:4985-4985`, `apps/mobile/src/features/voice/components/LiveVoiceBar.tsx:331-331`, `apps/mobile/src/features/tasks/CloudTasksScreen.tsx:96-96`
 
 ## S110.08: Voice → generated document.
 
 - Done when: A spoken request in voice mode produces a document (docx/pdf/markdown artifact) the user can open from the voice session.
 - Wave: 2
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Voice turns cannot generate a document (only web_search and code_interpreter are reachable; write_file unreachable), and the dock only links to the Library; the user must switch to text to create the file (S48.28). | handler |
-| desktop | partial | Voice turns cannot generate a document (only web_search and code_interpreter are reachable; write_file unreachable), and the dock only links to the Library; the user must switch to text to create the file (S48.28). | handler |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | A /voice turn is an agent turn so files it writes land in the workspace, but voice needs the off-by-default voice cargo feature and the user own OPENAI_API_KEY or local whisper. | flag-off |
+| cli | partial | Files a /voice turn writes land in the workspace, but voice is behind the off-by-default voice feature and needs the user's own OPENAI_API_KEY or local whisper. | flag-off |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/voice/live-voice-tools.ts:110-119`, `apps/web/features/chat/components/Voice/VoiceChatDock.tsx:75-79`, `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`
+Code: `apps/cli/Cargo.toml:111-111`, `apps/cli/src/voice.rs:255-255`
 
 ## S110.10: Email thread → agent task.
 
@@ -108,12 +104,12 @@ Code: `apps/web/lib/voice/live-voice-tools.ts:110-119`, `apps/web/features/chat/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile can start AGI Work and the turn gets the Gmail connector only when the operator configured it; sharing an email from the Mail app only drafts a chat, not a task. | flag-off, handler |
-| cli | partial | CLI managed-cloud turns receive the account's connector tools, but Gmail exists only with the operator JSON entry and only tools pre-set to Always allow on web run (approval requests are not shown); no email intake. | flag-off, ui, states |
-| vscode | partial | VS Code chat reaches connector tools only through the local CLI's managed-cloud turn; Gmail is operator-gated and only Always-allow tools run; no email intake. | flag-off, ui, states |
+| mobile | partial | The share extension drafts an ordinary chat, never an AGI Work task; Gmail reaches mobile only when the operator configured the connector. | flag-off, handler |
+| cli | partial | Managed-cloud turns get the account's Gmail connector when configured, but Always-allow tools run silently and there is no email intake command. | flag-off, ui, states |
+| vscode | partial | Turns run through the local CLI and inherit its limits: operator-gated Gmail, Always-allow tools only, no email intake. | flag-off, ui, states |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/share-preview/index.tsx:93-104`, `apps/cli/src/models/streaming.rs:226-236`
+Code: `apps/mobile/src/features/share-preview/index.tsx:93-93`, `apps/cli/src/models/streaming.rs:361-361`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:1157-1157`
 
 ## S110.11: Team mention → coding session.
 
@@ -122,13 +118,13 @@ Code: `apps/mobile/src/features/share-preview/index.tsx:93-104`, `apps/cli/src/m
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Migration 0284 is now applied in production (2026-09-27). Still open: A GitHub @agi-workforce mention on a pull request only queues an automated review (issue mentions are ignored) and a Slack mention only starts a fixed saved routine that fails in production until pending migration 0284 ships; nothing opens a coding session, and web cloud Code is off by default (AGI_E2B_EXECUTION). | handler, flag-off |
-| desktop | partial | Migration 0284 is now applied in production (2026-09-27). Still open: A GitHub @agi-workforce mention on a pull request only queues an automated review (issue mentions are ignored) and a Slack mention only starts a fixed saved routine that fails in production until pending migration 0284 ships; nothing opens a coding session, and web cloud Code is off by default (AGI_E2B_EXECUTION). | handler, flag-off |
+| web | partial | Since 7563a9e6e an @agi-workforce mention on an issue or pull request opens a Cloud Code session, commits, opens a pull request and reports back, but it runs only with AGI_E2B_EXECUTION=1 (off by default), the managed-compute private beta, and a GitHub installation with review enabled and verified ownership. A Slack mention still starts a saved routine, not a coding session. | handler, flag-off |
+| desktop | partial | Since 7563a9e6e an @agi-workforce mention on an issue or pull request opens a Cloud Code session, commits, opens a pull request and reports back, but it runs only with AGI_E2B_EXECUTION=1 (off by default), the managed-compute private beta, and a GitHub installation with review enabled and verified ownership. A Slack mention still starts a saved routine, not a coding session. | handler, flag-off |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/web/app/api/github/webhook/route.ts:215-238`
+Code: `apps/web/app/api/github/webhook/route.ts:223-223`, `apps/web/lib/services/cloud-code-github-task.ts:204-204`
 
 ## S110.12: Design → implementation.
 
@@ -137,12 +133,12 @@ Code: `apps/web/app/api/github/webhook/route.ts:215-238`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Design source can be viewed/downloaded but there is no spec handoff (S32.28 partial), and web cloud Code needs AGI_E2B_EXECUTION=1 and has no file-write tool (S67.06 partial). | ui, flag-off |
-| desktop | partial | Local sessions now run the CLI bundled with the desktop app (partials/desktop-cli). Still open: a design must be downloaded and referenced by hand in a local session; there is no design-to-code handoff (S32.28). | ui |
-| mobile | partial | Phone can only steer an existing desktop session (S67.06 partial) and saves design source as a text file (S32.28 partial). | ui |
-| cli | partial | `agi artifacts show --out` writes the design source into the repo and the agent can implement it, but there is no spec/inspect handoff and no Figma import (S32.28 partial, S32.30 missing). | ui |
+| web | partial | The design source can be viewed and downloaded, a dedicated spec handoff was declined (D-2026-09-27-02), and cloud Code needs AGI_E2B_EXECUTION=1 and edits files only through approved shell commands. | ui, flag-off |
+| desktop | partial | Local sessions run the bundled CLI with full file tools, but the design must be downloaded and referenced by hand. | ui |
+| mobile | partial | The phone can steer an existing desktop Code session and download the design source as text; no design-to-code handoff. | ui |
+| cli | partial | agi artifacts show --out writes the design into the repo for the agent to implement; no spec handoff or Figma import. | ui |
 
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1220-1232`, `apps/desktop/electron/runtime/developerSessionService.ts:160-160`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:426-436`, `apps/cli/src/lib.rs:1034-1043`
+Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1533-1533`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:111-111`, `apps/desktop/electron/runtime/developerSessionService.ts:169-169`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:435-435`
 
 ## S110.14: Completed task → reusable Skill.
 
@@ -151,14 +147,14 @@ Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1220-1232
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
+| web | partial | Asking the assistant to turn finished work into a skill offers draft_plugin and a 'Save as a skill' card that creates a real skill, but it is off by default (AGI_USER_SKILL_AUTHORING=0) and needs the ask phrasing; there is no one-click action on a finished task. The ledger's S60.28 web/desktop 'missing' predates this. |  |
+| desktop | partial | Asking the assistant to turn finished work into a skill offers draft_plugin and a 'Save as a skill' card that creates a real skill, but it is off by default (AGI_USER_SKILL_AUTHORING=0) and needs the ask phrasing; there is no one-click action on a finished task. The ledger's S60.28 web/desktop 'missing' predates this. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Add a user command to save a finished task as a Skill; today the CLI only auto-writes SKILL.md from tool patterns repeated across sessions (S60.28), without asking. | ui |
+| cli | partial | Skills are only auto-learned from patterns across three sessions; no command saves the finished task as a skill. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/cli/src/agent/chat.rs:1047-1057`
+Code: `apps/web/lib/server/tools/plugin-draft-tool.ts:42-42`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4382-4382`, `apps/web/features/chat/components/PluginDraftCard.tsx:20-20`, `apps/cli/src/agent/chat.rs:1062-1062`
 
 ## S110.15: Completed task → scheduled routine.
 
@@ -170,11 +166,11 @@ Code: `apps/cli/src/agent/chat.rs:1047-1057`
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Migration 0284 is now applied in production (2026-09-27). Still open: No command turns a finished task into a routine (only asking the agent to call cron_create with a fresh prompt), and the hosted schedule it creates fails every run until pending migration 0284 ships. | ui |
+| cli | partial | The agent can create a routine only when asked with a fresh prompt (cron_create); no command turns a finished task into one. Routine runs no longer fail: production is migrated through 0323, so 0284's columns exist (the 'NOT YET APPLIED' header in 0284_context_manifest_accounting.sql is stale). | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/cli/src/features/exec/tools/task_registry/mod.rs:136-156`, `apps/web/lib/services/scheduled-agent-executor.ts:588-596`, `packages/platform/context-engine/src/manifest-store.ts:52-62`
+Code: `apps/cli/src/features/exec/tools/task_registry/mod.rs:136-136`
 
 ## S110.21: Mobile request → authorized local-host execution.
 
@@ -184,11 +180,11 @@ Code: `apps/cli/src/features/exec/tools/task_registry/mod.rs:136-156`, `apps/web
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The phone can steer, stop and approve a desktop coding session that is already running, but its 'Start on Desktop' request (dispatch.task.create) is acknowledged and then dropped by Electron, and it cannot start a session in an allowed folder (S68.24); add a desktop handler that starts authorized work. | handler |
+| mobile | partial | The request now runs on the paired computer, but the phone never shows the result (the task list shows status only, dispatch.task.status has no notification action, and the session view clears the reply text when the turn finishes), and it always runs in the first approved folder. | handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/companion/components/DispatchTaskComposer.tsx:40-62`, `apps/mobile/services/companion.ts:130-140`, `apps/mobile/src/features/companion/remote-code/service.ts:41-50`
+Code: `apps/mobile/src/features/companion/components/DispatchTaskComposer.tsx:41-41`, `apps/mobile/services/companion.ts:115-115`, `apps/mobile/services/companionNotifications.ts:26-26`
 
 ## S110.22: Local work → explicit cloud handoff.
 
@@ -200,10 +196,10 @@ Code: `apps/mobile/src/features/companion/components/DispatchTaskComposer.tsx:40
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | /continue-with-cloud only moves the conversation to the managed cloud model while tools still run locally; the app-server's cloud handoff record (S99.30) has no client that issues it and no cloud importer, and web cloud Code is flag-off. | handler |
-| vscode | partial | Continue in the Cloud moves work to a cloud AGI Code session after a review (835ae2a5d). Needs AGI_E2B_EXECUTION on in production. | flag-off |
+| cli | partial | /continue-with-cloud only switches to the managed cloud model; the app-server's hand_off_thread can target Cloud but no client calls it, and there is no cloud importer. | handler |
+| vscode | partial | Continue in the Cloud starts a new cloud session from the pushed branch and a new goal after review; it carries no session history and needs AGI_E2B_EXECUTION=1. | flag-off |
 
-Code: `apps/cli/src/claude_parity.rs:169-179`, `apps/extension-vscode/src/features/cloud-tasks/continueInCloud.ts:87-87`
+Code: `apps/cli/src/claude_parity.rs:178-180`, `apps/cli/src/app_server/developer_host.rs:1678-1678`, `apps/extension-vscode/src/features/cloud-tasks/continueInCloud.ts:79-80`
 
 ## S110.23: Cloud result → local repository application.
 
@@ -212,12 +208,12 @@ Code: `apps/cli/src/claude_parity.rs:169-179`, `apps/extension-vscode/src/featur
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Cloud sessions can commit, push a branch or open a PR for the user to pull by hand; nothing hands the result to a local client, and cloud sessions need AGI_E2B_EXECUTION=1 (ships 0). | flag-off, handler |
-| desktop | missing | Not built on this surface. |  |
+| web | partial | Continue in VS Code hands the cloud branch to VS Code, which pulls it into the checkout after a review and an overwrite check; it needs VS Code with the extension and AGI_E2B_EXECUTION=1 for cloud sessions to exist. | flag-off, handler |
+| desktop | partial | The same Continue in VS Code handoff opens from the desktop through its editor-handoff allowance (the ledger's 'missing' is stale); no native pull, and AGI_E2B_EXECUTION=1 is needed. |  |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | A cloud session opened from Sessions brings its branch into the workspace through the guarded pull command, which now has a caller (b432ccd73). Cloud sessions need AGI_E2B_EXECUTION on in production. | flag-off |
+| vscode | partial | Bring the branch in pulls a cloud session's branch after review; needs AGI_E2B_EXECUTION=1. | flag-off |
 
-Code: `apps/web/features/code/components/CodeChangesPanel.tsx:281-285`, `apps/extension-vscode/src/features/cloud-tasks/cloudCodeSessions.ts:305-305`
+Code: `apps/web/features/code/code-surface.ts:412-414`, `apps/extension-vscode/src/features/context-handoff/index.ts:235-235`, `apps/desktop/electron/windowPolicy.ts:47-47`, `apps/extension-vscode/src/features/cloud-tasks/cloudCodeSessions.ts:266-266`
 
 ## S110.24: Existing notebook → main assistant context.
 
@@ -227,11 +223,12 @@ Code: `apps/web/features/code/components/CodeChangesPanel.tsx:281-285`, `apps/ex
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The mobile project selector applies only the project instructions; the turn carries no conversation_id, so the project sources never reach the answer (S37.14, S37.37). | handler |
-| cli | missing | Not built on this surface. |  |
-| chrome | partial | Project binding applies from the turn after the chat is synced; the first turn of a new chat is answered without the project context (S37.37 contest, S37.14 partial). | handler |
+| mobile | partial | A selected project adds only its instructions locally; the stream request carries no conversation or project id, so the server never loads the project's sources. | handler |
+| cli | partial | agi projects link binds the folder to a project and its instructions reach every managed-cloud turn, but no knowledge-file content grounds a turn (the ledger's 'missing' is stale). |  |
+| vscode | partial | 'Use in this chat' adds the project's instructions to each turn but not its files, the same shape as S37.37 vscode partial (the ledger's n/a for this flow contradicts it). |  |
+| chrome | partial | The first turn of a chat just bound to a project goes without the conversation id, so it is not grounded on the project's sources. | handler |
 
-Code: `apps/mobile/src/features/chat/components/ProjectSelectorBar.tsx:38-38`, `apps/mobile/stores/chat/chatExecutionStore.ts:1348-1348`, `apps/extension/src/side_panel.ts:669-682`, `apps/extension/src/features/cloud-bridge/freeTrialClient.ts:846-846`
+Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1382-1382`, `apps/mobile/services/streaming.ts:186-186`, `apps/cli/src/lib.rs:1057-1057`, `apps/cli/src/agent/mod.rs:2031-2031`
 
 ## S110.25: Main conversation → persistent notebook sources.
 
@@ -240,14 +237,14 @@ Code: `apps/mobile/src/features/chat/components/ProjectSelectorBar.tsx:38-38`, `
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only artifacts and research reports can be saved to a project; an ordinary chat answer cannot, and saving hits the 0-byte storage cap for Free and Team-seat users and the upload-scanner gate (S37.16, S81.11). | ui |
-| desktop | partial | Only artifacts and research reports can be saved to a project; an ordinary chat answer cannot, and saving hits the 0-byte storage cap for Free and Team-seat users and the upload-scanner gate (S37.16, S81.11). | ui |
+| web | partial | Artifacts and research reports can be saved to a project, but an ordinary chat answer has no Save to project action. The storage-cap half of the older gap is fixed (S81.11 done). | ui |
+| desktop | partial | Artifacts and research reports can be saved to a project, but an ordinary chat answer has no Save to project action. The storage-cap half of the older gap is fixed (S81.11 done). | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1542-1542`, `apps/web/features/chat/components/artifacts/ArtifactsPanel.tsx:296-296`, `apps/web/app/api/projects/[id]/knowledge-files/route.ts:227-228`
+Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1859-1859`, `apps/web/app/api/projects/[id]/knowledge-files/route.ts:108-109`
 
 ## S110.26: Usage exhaustion → alternative eligible path.
 
@@ -257,13 +254,14 @@ Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1542-1542
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | At a limit the card shows the reset time and upgrade, but never names a one-click eligible model (S82.26), and upgrade and extra-usage checkout are behind the beta_redemptions waitlist gate (S82.29). | ui, flag-off |
-| desktop | partial | At a limit the card shows the reset time and upgrade, but never names a one-click eligible model (S82.26), and upgrade and extra-usage checkout are behind the beta_redemptions waitlist gate (S82.29). | ui, flag-off |
-| mobile | partial | Mobile paywall shows only the server reason: no eligible model, no reset time in the sheet (S82.26/S82.27), and IAP purchase is off (MOBILE_IAP_ENABLED) plus waitlist-gated (S82.29). | ui, flag-off |
-| chrome | partial | Chrome silently falls back to Auto and prints the period-end reset rather than the rolling-window reset (S82.26, S82.27 fv downgrade); no eligible model is proposed. | ui |
-| api | partial | Limit errors carry a recovery hint but no eligible model id and no reset timestamp (S82.26, S82.27). | ui |
+| web | partial | A one-click 'Switch to <model>' appears only for the flagship weekly limit and the free-trial model block; the credit, monthly and rolling limits show a reset time and Upgrade only, and checkout stays behind the beta_redemptions waitlist for accounts without a paid plan. | ui, flag-off |
+| desktop | partial | A one-click 'Switch to <model>' appears only for the flagship weekly limit and the free-trial model block; the credit, monthly and rolling limits show a reset time and Upgrade only, and checkout stays behind the beta_redemptions waitlist for accounts without a paid plan. | ui, flag-off |
+| mobile | partial | The paywall sheet names no model and no reset time, and in-app purchase is off (MOBILE_IAP_ENABLED unset); post-codex/no-yearly-s82-mobile-chat-usage.patch adds the model choice and reset line. | ui, flag-off |
+| vscode | partial | The VS Code chat sidebar reaches usage limits, but its usage error path offers no switch to an eligible model (p-privacy S110 re-trace); owner p-sessions | ui |
+| chrome | partial | A disallowed selection falls back to Auto without naming a model, the reset time is only in Usage settings, and the copy states upgrades need the waitlist. | ui |
+| api | partial | Error bodies carry alternative_model only for the flagship and free-trial cases; most exhaustion errors carry no alternative, and checkout recovery links hit the waitlist. | ui |
 
-Code: `apps/web/features/chat/components/InlinePaywallCard.tsx:430-434`, `packages/contracts/types/src/billing-catalog.ts:515-524`, `apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx:77-88`, `apps/extension/src/features/cloud-bridge/managedModelPicker.ts:94-106`
+Code: `packages/contracts/types/src/billing-catalog.ts:587-587`, `apps/web/features/chat/components/InlinePaywallCard.tsx:442-442`, `apps/web/app/api/checkout/route.ts:201-201`, `apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx:41-41`
 
 ## S110.27: Disconnected integration → reconnect and resume.
 
@@ -272,13 +270,14 @@ Code: `apps/web/features/chat/components/InlinePaywallCard.tsx:430-434`, `packag
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Reconnect appears only as the in-chat card after a tool call fails (Settings offers only Disconnect, S55.20); after the OAuth return nothing resumes the interrupted turn or run: the user presses Retry, which re-runs from the last message. | ui, states |
-| desktop | partial | Reconnect appears only as the in-chat card after a tool call fails (Settings offers only Disconnect, S55.20); after the OAuth return nothing resumes the interrupted turn or run: the user presses Retry, which re-runs from the last message. | ui, states |
-| mobile | partial | Mobile reconnects from Settings > Connectors, but chat never recognises a connector-authorization-required result and nothing resumes; the user must regenerate by hand, and paused runs cannot be resumed (S60.22 missing). | ui, states |
-| cli | partial | `agi mcp login` re-authorizes user-registered MCP servers, but account (web) connectors cannot be reauthorized from the CLI and nothing resumes the interrupted turn; the user re-prompts or reopens with /resume. | states |
-| chrome | partial | Chrome only links out to agiworkforce.com/connectors to reconnect; its Retry resends the prompt text only (drops attachments and page context) and nothing resumes the turn. | ui, states |
+| web | partial | Settings now offers Connect on an expired connection and the chat card offers Reconnect after a failed call, but nothing resumes the interrupted turn: the card itself says to use Retry, which reruns the exchange. | ui, states |
+| desktop | partial | Settings now offers Connect on an expired connection and the chat card offers Reconnect after a failed call, but nothing resumes the interrupted turn: the card itself says to use Retry, which reruns the exchange. | ui, states |
+| mobile | partial | Reconnect works in Settings, but chat never recognises an authorization-required tool result, and there is no resume. | ui, states |
+| cli | partial | agi mcp login reauthorises the user's own MCP servers, but account connectors have no CLI reauth path, and nothing resumes after reconnecting. | states |
+| vscode | partial | The Connectors tree shows a reauth state but reconnecting is a browser link-out and nothing resumes the turn, as for Chrome (p-privacy S110 re-trace); owner p-sessions | ui, states |
+| chrome | partial | Only a generic Connectors link-out; retry replays some turns but nothing resumes the interrupted call. | ui, states |
 
-Code: `packages/ui/unified-chat/src/components/ConnectorConnectCard.tsx:128-146`, `apps/web/features/chat/components/messages/MessageBubble.tsx:900-903`, `apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx:318-330`
+Code: `packages/ui/ui/src/settings-modal/SettingsModal.tsx:282-282`, `packages/ui/unified-chat/src/components/ConnectorConnectCard.tsx:129-129`, `apps/web/features/chat/components/messages/MessageBubble.tsx:890-890`, `apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx:318-318`
 
 ## S110.28: Published output → versioned update.
 
@@ -287,13 +286,13 @@ Code: `packages/ui/unified-chat/src/components/ConnectorConnectCard.tsx:128-146`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Edit and republish to the same URL work and each publish is stored as a version, but no UI shows publish history (GET ?versionsOf= and restore PATCH have no caller, S33.09 partial). | ui |
-| desktop | partial | Same as web: no publish history UI (S33.09 partial). | ui |
-| mobile | partial | Republish and rollback to the same link work, but mobile cannot edit an artifact (S26.15 missing; updates only via a new assistant version) and has no publish history (S33.09 missing). | ui |
+| web | partial | Edit and republish to the same link work and each publish is recorded in published_artifact_versions, but nothing reads that history back: no publish-history view and no way to put an earlier published version live except restoring a local version and republishing. S33.09 was declined with the hosting dashboard, so this remaining gap needs its own cell. | ui |
+| desktop | partial | Edit and republish to the same link work and each publish is recorded in published_artifact_versions, but nothing reads that history back: no publish-history view and no way to put an earlier published version live except restoring a local version and republishing. S33.09 was declined with the hosting dashboard, so this remaining gap needs its own cell. | ui |
+| mobile | partial | Republish and restore-then-republish work, but mobile cannot edit an artifact and has no publish history. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1563-1578`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:670-676`, `apps/web/app/api/artifacts/publish/route.ts:244-253`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:405-418`
+Code: `apps/web/app/api/artifacts/publish/route.ts:113-113`, `apps/web/app/api/artifacts/publish/route.ts:265-265`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:662-662`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:414-414`
 
 ## S110.29: Public creation → private fork.
 
@@ -302,14 +301,14 @@ Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1563-1578
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Shared conversations can be copied into a new private chat ("Open in AGI" -> /chat/from-share, text only: attachments and artifacts dropped), but shared or published artifacts and apps cannot be forked (S28.31 missing). | handler |
-| desktop | partial | Shared conversations can be copied into a new private chat ("Open in AGI" -> /chat/from-share, text only: attachments and artifacts dropped), but shared or published artifacts and apps cannot be forked (S28.31 missing). | handler |
+| web | partial | Open in AGI copies a shared conversation's text into a private chat (attachments and artifacts are dropped); the public artifact viewer has no fork action, and the panel's Duplicate works only on the viewer's own artifacts. | handler |
+| desktop | partial | Open in AGI copies a shared conversation's text into a private chat (attachments and artifacts are dropped); the public artifact viewer has no fork action, and the panel's Duplicate works only on the viewer's own artifacts. | handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/share/SharedSessionViewer.tsx:64-72`, `apps/web/app/share/[token]/page.tsx:88-92`, `apps/web/app/chat/from-share/[token]/page.tsx:115-138`
+Code: `apps/web/app/chat/from-share/[token]/page.tsx:25-25`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1806-1806`
 
 ## S110.30: Personal resource → explicitly shared workspace resource.
 
@@ -318,9 +317,9 @@ Code: `apps/web/features/chat/components/share/SharedSessionViewer.tsx:64-72`, `
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Owners can share their own project into the workspace only if their role has sharing.manage (artifacts need content.share via the publish audience); recipients find shared items only on Workspace > Sharing, not in their Projects list or Library (S24.10); the project Share item only copies a URL (S23.24); skills, custom assistants and plugins cannot be shared to the organization (S53.25). | ui |
-| desktop | partial | Owners can share their own project into the workspace only if their role has sharing.manage (artifacts need content.share via the publish audience); recipients find shared items only on Workspace > Sharing, not in their Projects list or Library (S24.10); the project Share item only copies a URL (S23.24); skills, custom assistants and plugins cannot be shared to the organization (S53.25). | ui |
+| web | partial | Projects now share end to end (invited people or the workspace, and shared projects appear in the recipient's Projects list; a separate Shared with me view was declined). Artifacts and conversations shared to the workspace are listed on Workspace > Sharing by name only, with no link and no place in the recipient's Library or history, and skills, assistants and plugins cannot be shared. | ui |
+| desktop | partial | Projects now share end to end (invited people or the workspace, and shared projects appear in the recipient's Projects list; a separate Shared with me view was declined). Artifacts and conversations shared to the workspace are listed on Workspace > Sharing by name only, with no link and no place in the recipient's Library or history, and skills, assistants and plugins cannot be shared. | ui |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/settings/sections/OrganizationSharingSection.tsx:179-181`, `apps/web/app/api/settings/organization/shared/projects/[projectId]/route.ts:62-75`, `apps/web/lib/services/org-sharing-service.ts:63-75`, `apps/web/lib/services/org-sharing-service.ts:279-288`
+Code: `apps/web/features/projects/components/ProjectShareDialog.tsx:60-60`, `apps/web/app/api/projects/route.ts:54-54`, `apps/web/features/settings/sections/OrganizationSharingSection.tsx:322-322`

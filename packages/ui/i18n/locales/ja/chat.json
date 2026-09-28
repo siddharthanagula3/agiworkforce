@@ -67,7 +67,13 @@
     "sharedFrom": "AGI から共有",
     "sharedWithWorkspace": "ワークスペースと共有",
     "renderFailed": "このアーティファクトを表示できませんでした: {{error}}",
-    "svgUnavailable": "この SVG には安全に表示できる内容が含まれていませんでした。"
+    "svgUnavailable": "この SVG には安全に表示できる内容が含まれていませんでした。",
+    "runtimeSignIn": "このアプリの AI と保存データを使うにはサインインしてください。",
+    "runtimeSignInAction": "サインイン",
+    "runtimeConsentLabel": "AI の許可",
+    "runtimeConsent": "このアプリがあなたのアカウントで AI を使おうとしています。各リクエストはプランの使用量に含まれます。",
+    "runtimeAllow": "許可",
+    "runtimeDecline": "許可しない"
   },
   "sidebar": {
     "activeConversation": "アクティブな会話",

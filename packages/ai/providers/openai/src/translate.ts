@@ -315,7 +315,7 @@ export function translateChatRequest(
   ];
   const toolChoice = translateToolChoice(req.toolChoice);
   const promptCacheKey = derivePromptCacheKey(req);
-  const responseFormat = provider === 'openai' ? translateResponseFormat(req) : undefined;
+  const responseFormat = translateResponseFormat(req);
 
   const params: OpenAIChatCompletionCreateParams = {
     model: req.model,

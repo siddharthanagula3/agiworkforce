@@ -5,7 +5,11 @@ import { createHash } from 'node:crypto';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type { PluginMarketplaceInstallation } from '@agiworkforce/cloud-contracts';
 
-import { pluginLabel, PluginDependencyError } from '@/lib/services/plugin-dependencies';
+import {
+  pluginLabel,
+  PluginDependencyError,
+  type PluginDependencyRef,
+} from '@/lib/services/plugin-dependencies';
 import {
   getMarketplaceInstallation,
   installMarketplaceEntries,
@@ -58,6 +62,8 @@ export type DirectoryInstallResult =
   | { status: 'not-permitted'; message: string }
   | { status: 'skills-unavailable'; message: string }
   | { status: 'source-unavailable'; message: string };
+
+export type DirectoryInstallRefusal = Exclude<DirectoryInstallResult, { status: 'installed' }>;
 
 export interface DirectoryDependencyAdmission {
   pluginKey: string;
@@ -221,7 +227,7 @@ async function writeDependencySkills(plan: DependencyPlan): Promise<void> {
   }
 }
 
-async function writeDependencyPlan(
+export async function writeDependencyPlan(
   tx: DatabaseAdapter,
   userId: string,
   plan: DependencyPlan,
@@ -268,7 +274,7 @@ async function planDependencies(
   context: DependencyContext,
   root: () => Promise<DependencyRoot>,
   installCommand: string | null,
-): Promise<{ plan: DependencyPlan } | { refused: DirectoryInstallResult }> {
+): Promise<{ plan: DependencyPlan } | { refused: DirectoryInstallRefusal }> {
   try {
     return { plan: await planMarketplaceDependencies(context, await root()) };
   } catch (error) {
@@ -327,7 +333,6 @@ export async function installDirectoryPlugin(
       name: record.id,
       marketplace: root.marketplaceName,
       allowlist: record.marketplace?.allowCrossMarketplaceDependenciesOn ?? [],
-      plugin: { kind: 'directory', source: root },
       dependencies: await directoryDependencies(
         root,
         context.fetchImpl,
@@ -392,7 +397,6 @@ export async function installMarketplaceEntryPlugin(
       name: entry.pluginKey,
       marketplace: found.sourceName,
       allowlist: found.allowlist,
-      plugin: { kind: 'entry', found },
       dependencies: declared,
     }),
     null,
@@ -418,6 +422,57 @@ export async function installMarketplaceEntryPlugin(
     skills: entry.declaredSkills,
     dependencies: installedDependencies(plan, written.installationIds),
   };
+}
+
+function mergeDependencyPlans(plans: readonly DependencyPlan[]): DependencyPlan {
+  const merged: DependencyPlan = { resolved: [], directory: [], entries: [], enable: [] };
+  const labels = new Set<string>();
+  for (const plan of plans) {
+    const fresh = plan.resolved.filter((dependency) => !labels.has(dependency.label));
+    for (const dependency of fresh) labels.add(dependency.label);
+    merged.resolved.push(...fresh);
+    merged.directory.push(...plan.directory.filter((item) => fresh.includes(item.resolved)));
+    merged.entries.push(...plan.entries.filter((item) => fresh.includes(item.resolved)));
+    merged.enable.push(...plan.enable.filter((item) => fresh.includes(item.resolved)));
+  }
+  return merged;
+}
+
+export interface OwnedDependencyRoots {
+  marketplace: string;
+  allowlist: readonly string[];
+  plugins: readonly { key: string; dependencies: readonly PluginDependencyRef[] }[];
+}
+
+export async function prepareOwnedPluginDependencies(
+  db: DatabaseAdapter,
+  userId: string,
+  owned: OwnedDependencyRoots,
+  deps: DirectoryInstallDependencies = {},
+): Promise<{ plan: DependencyPlan } | { refused: DirectoryInstallRefusal }> {
+  const context = dependencyContext(db, userId, deps);
+  const bundled = new Set(owned.plugins.map((plugin) => plugin.key));
+  const plans: DependencyPlan[] = [];
+  for (const plugin of owned.plugins) {
+    const planned = await planDependencies(
+      context,
+      async () => ({
+        name: plugin.key,
+        marketplace: owned.marketplace,
+        allowlist: owned.allowlist,
+        dependencies: plugin.dependencies,
+        bundled,
+      }),
+      null,
+    );
+    if ('refused' in planned) return planned;
+    plans.push(planned.plan);
+  }
+  const plan = mergeDependencyPlans(plans);
+  const refusal = await admitDependencies(plan, deps);
+  if (refusal) return { refused: { status: 'not-permitted', message: refusal } };
+  await writeDependencySkills(plan);
+  return { plan };
 }
 
 interface RemovedInstallationRow {

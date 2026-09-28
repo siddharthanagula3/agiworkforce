@@ -10,17 +10,15 @@ import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { isApiKeyScopeError } from '@/lib/api-key-scope-error';
 import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
 import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
+import type { AccountUsageHistoryResponse } from '@agiworkforce/types';
 import {
   readAccountUsageHistory,
   resolveUsageHistoryGranularity,
   usageHistoryWindowStart,
-  type AccountUsageHistory,
 } from '@/lib/services/account-usage-history-service';
 import { resolveUsageWindow } from '@/lib/services/usage-aggregation';
 
 export const runtime = 'nodejs';
-
-export type AccountUsageHistoryResponse = AccountUsageHistory;
 
 async function handler(request: NextRequest) {
   let scoped: UserScopedDb;

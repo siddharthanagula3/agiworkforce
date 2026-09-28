@@ -460,6 +460,7 @@ export {
   type DirectoryPluginScan,
   type DirectoryPluginScanVerdict,
   type DirectoryPluginVersionOption,
+  type DirectoryPluginSubmission,
   type DirectoryPluginVersions,
   type DirectoryPluginSettings,
   type DirectoryPluginSkillSetting,
