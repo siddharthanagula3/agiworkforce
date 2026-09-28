@@ -2,6 +2,11 @@ export const CONNECTOR_SURFACES = ['web', 'mobile', 'desktop', 'cli', 'extension
 export type ConnectorSurface = (typeof CONNECTOR_SURFACES)[number];
 
 import type {
+  ConnectorConnection,
+  CreateCustomConnectorRequest,
+  CustomConnector,
+} from '@agiworkforce/cloud-contracts';
+import type {
   ConnectorHealthState,
   ConnectorSource,
   ConnectorToolPermissionLevel,
@@ -15,25 +20,9 @@ export {
 export type { ConnectorSource, ConnectorToolPermissionLevel };
 export type ConnectorHealth = ConnectorHealthState;
 
-export interface ConnectedConnector {
-  id: string;
-  connectorId: string;
-  authType: string;
-  connectedAt: string;
-  updatedAt: string;
-  source: ConnectorSource;
-  name?: string;
-  toolConnectorId?: string;
-  scopes?: string[];
-  needsReauthorization?: boolean;
-  health?: ConnectorHealth;
-}
+export type ConnectedConnector = ConnectorConnection;
 
-export interface ConnectorToolPermission {
-  connectorId: string;
-  toolName: string;
-  level: ConnectorToolPermissionLevel;
-}
+export type { ConnectorToolPermission } from '@agiworkforce/cloud-contracts';
 
 export interface ConnectorDirectoryEntry {
   connectorId: string;
@@ -84,16 +73,9 @@ export type ConnectResult =
   | { kind: 'oauth-required'; connectorId: string; authorizeUrl: string }
   | { kind: 'install-required'; connectorId: string; installUrl: string };
 
-export interface AddCustomConnectorInput {
-  name: string;
-  url: string;
-  transport?: 'sse' | 'streamable-http';
-  authToken?: string;
-}
+export type AddCustomConnectorInput = Pick<
+  CreateCustomConnectorRequest,
+  'name' | 'url' | 'transport' | 'authToken'
+>;
 
-export interface CustomConnectorResult {
-  id: string;
-  shortId: string;
-  name: string;
-  url: string;
-}
+export type CustomConnectorResult = Pick<CustomConnector, 'id' | 'shortId' | 'name' | 'url'>;

@@ -1,15 +1,19 @@
 import {
-  CONNECTOR_HEALTH_STATES,
-  CONNECTOR_SOURCES,
-  CONNECTOR_TOOL_PERMISSION_LEVELS,
-  type ConnectedConnector,
-  type ConnectorAccessPolicy,
-  type ConnectorHealth,
-  type ConnectorOAuthStart,
-  type ConnectorSource,
-  type ConnectorToolPermission,
-  type ConnectorToolPermissionLevel,
-  type CustomConnectorResult,
+  ConnectorConnectionSchema,
+  ConnectorOAuthStartResponseSchema,
+  ConnectorToolPermissionSchema,
+  CreatedCustomConnectorSchema,
+  CustomConnectorSchema,
+  ListConnectorToolPermissionsResponseSchema,
+  ListConnectorsResponseSchema,
+} from '@agiworkforce/cloud-contracts';
+
+import type {
+  ConnectedConnector,
+  ConnectorAccessPolicy,
+  ConnectorOAuthStart,
+  ConnectorToolPermission,
+  CustomConnectorResult,
 } from './types';
 
 export class ConnectorResponseError extends Error {
@@ -18,6 +22,22 @@ export class ConnectorResponseError extends Error {
     this.name = 'ConnectorResponseError';
   }
 }
+
+const INVALID_CONNECTORS = 'Invalid connectors response';
+const INVALID_PERMISSIONS = 'Invalid connector permissions response';
+const INVALID_AUTHORIZATION = 'Invalid connector authorization response';
+const INVALID_CUSTOM_CONNECTOR = 'Invalid custom connector response';
+
+const ConnectorListSchema = ListConnectorsResponseSchema.pick({
+  connectors: true,
+  available: true,
+});
+
+const CustomConnectorResponseSchema = CreatedCustomConnectorSchema.pick({ connector: true }).extend(
+  {
+    connector: CustomConnectorSchema.pick({ id: true, shortId: true, name: true, url: true }),
+  },
+);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -29,48 +49,9 @@ function stringArrayOrNull(value: unknown): string[] | null {
 }
 
 export function parseConnectedConnector(value: unknown): ConnectedConnector {
-  if (!isRecord(value)) throw new ConnectorResponseError('Invalid connectors response');
-  const source = value['source'];
-  if (!CONNECTOR_SOURCES.includes(source as ConnectorSource)) {
-    throw new ConnectorResponseError('Invalid connectors response');
-  }
-  for (const field of ['id', 'connectorId', 'authType', 'connectedAt', 'updatedAt'] as const) {
-    if (typeof value[field] !== 'string') {
-      throw new ConnectorResponseError('Invalid connectors response');
-    }
-  }
-  for (const field of ['name', 'toolConnectorId'] as const) {
-    if (value[field] !== undefined && typeof value[field] !== 'string') {
-      throw new ConnectorResponseError('Invalid connectors response');
-    }
-  }
-  const scopes = value['scopes'];
-  if (scopes !== undefined && stringArrayOrNull(scopes) === null) {
-    throw new ConnectorResponseError('Invalid connectors response');
-  }
-  const needsReauthorization = value['needsReauthorization'];
-  if (needsReauthorization !== undefined && typeof needsReauthorization !== 'boolean') {
-    throw new ConnectorResponseError('Invalid connectors response');
-  }
-  const health = value['health'];
-  if (health !== undefined && !CONNECTOR_HEALTH_STATES.includes(health as ConnectorHealth)) {
-    throw new ConnectorResponseError('Invalid connectors response');
-  }
-  return {
-    id: value['id'] as string,
-    connectorId: value['connectorId'] as string,
-    authType: value['authType'] as string,
-    connectedAt: value['connectedAt'] as string,
-    updatedAt: value['updatedAt'] as string,
-    source: source as ConnectorSource,
-    ...(typeof value['name'] === 'string' ? { name: value['name'] } : {}),
-    ...(typeof value['toolConnectorId'] === 'string'
-      ? { toolConnectorId: value['toolConnectorId'] }
-      : {}),
-    ...(Array.isArray(scopes) ? { scopes: scopes as string[] } : {}),
-    ...(typeof needsReauthorization === 'boolean' ? { needsReauthorization } : {}),
-    ...(typeof health === 'string' ? { health: health as ConnectorHealth } : {}),
-  };
+  const parsed = ConnectorConnectionSchema.safeParse(value);
+  if (!parsed.success) throw new ConnectorResponseError(INVALID_CONNECTORS);
+  return parsed.data;
 }
 
 export interface ParsedConnectorList {
@@ -79,14 +60,11 @@ export interface ParsedConnectorList {
 }
 
 export function parseConnectorList(value: unknown): ParsedConnectorList {
-  if (!isRecord(value) || !Array.isArray(value['connectors'])) {
-    throw new ConnectorResponseError('Invalid connectors response');
-  }
-  const available = stringArrayOrNull(value['available']);
-  if (available === null) throw new ConnectorResponseError('Invalid connectors response');
+  const parsed = ConnectorListSchema.safeParse(value);
+  if (!parsed.success) throw new ConnectorResponseError(INVALID_CONNECTORS);
   return {
-    connectors: value['connectors'].map(parseConnectedConnector),
-    available: [...new Set(available)],
+    connectors: parsed.data.connectors,
+    available: [...new Set(parsed.data.available)],
   };
 }
 
@@ -110,27 +88,15 @@ export function parseConnectorPolicy(value: unknown): ConnectorAccessPolicy | nu
 }
 
 export function parseConnectorToolPermission(value: unknown): ConnectorToolPermission {
-  if (!isRecord(value)) throw new ConnectorResponseError('Invalid connector permissions response');
-  const connectorId = value['connectorId'];
-  const toolName = value['toolName'];
-  const level = value['level'];
-  if (
-    typeof connectorId !== 'string' ||
-    connectorId.length === 0 ||
-    typeof toolName !== 'string' ||
-    toolName.length === 0 ||
-    !CONNECTOR_TOOL_PERMISSION_LEVELS.includes(level as ConnectorToolPermissionLevel)
-  ) {
-    throw new ConnectorResponseError('Invalid connector permissions response');
-  }
-  return { connectorId, toolName, level: level as ConnectorToolPermissionLevel };
+  const parsed = ConnectorToolPermissionSchema.safeParse(value);
+  if (!parsed.success) throw new ConnectorResponseError(INVALID_PERMISSIONS);
+  return parsed.data;
 }
 
 export function parseConnectorToolPermissions(value: unknown): ConnectorToolPermission[] {
-  if (!isRecord(value) || !Array.isArray(value['permissions'])) {
-    throw new ConnectorResponseError('Invalid connector permissions response');
-  }
-  return value['permissions'].map(parseConnectorToolPermission);
+  const parsed = ListConnectorToolPermissionsResponseSchema.safeParse(value);
+  if (!parsed.success) throw new ConnectorResponseError(INVALID_PERMISSIONS);
+  return parsed.data.permissions;
 }
 
 function isHttpsAuthorizeUrl(value: unknown): value is string {
@@ -144,30 +110,17 @@ function isHttpsAuthorizeUrl(value: unknown): value is string {
 }
 
 export function parseConnectorOAuthStart(connectorId: string, value: unknown): ConnectorOAuthStart {
-  if (!isRecord(value) || value['connectorId'] !== connectorId) {
-    throw new ConnectorResponseError('Invalid connector authorization response');
+  const parsed = ConnectorOAuthStartResponseSchema.safeParse(value);
+  if (!parsed.success || parsed.data.connectorId !== connectorId) {
+    throw new ConnectorResponseError(INVALID_AUTHORIZATION);
   }
-  const authorizeUrl = value['authorizeUrl'];
-  if (!isHttpsAuthorizeUrl(authorizeUrl)) {
-    throw new ConnectorResponseError('Invalid connector authorization response');
-  }
+  const { authorizeUrl } = parsed.data;
+  if (!isHttpsAuthorizeUrl(authorizeUrl)) throw new ConnectorResponseError(INVALID_AUTHORIZATION);
   return { connectorId, authorizeUrl };
 }
 
 export function parseCustomConnector(value: unknown): CustomConnectorResult {
-  const connector = isRecord(value) ? value['connector'] : null;
-  if (!isRecord(connector)) {
-    throw new ConnectorResponseError('Invalid custom connector response');
-  }
-  for (const field of ['id', 'shortId', 'name', 'url'] as const) {
-    if (typeof connector[field] !== 'string') {
-      throw new ConnectorResponseError('Invalid custom connector response');
-    }
-  }
-  return {
-    id: connector['id'] as string,
-    shortId: connector['shortId'] as string,
-    name: connector['name'] as string,
-    url: connector['url'] as string,
-  };
+  const parsed = CustomConnectorResponseSchema.safeParse(value);
+  if (!parsed.success) throw new ConnectorResponseError(INVALID_CUSTOM_CONNECTOR);
+  return parsed.data.connector;
 }
