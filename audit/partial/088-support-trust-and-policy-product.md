@@ -232,18 +232,6 @@ Code: `apps/mobile/app/(app)/settings/memory-import.tsx:5-8`
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S88.24: Policy-version history.
-
-- Done when: Users can see earlier versions of the terms and policies and what changed between them.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Policies show the current revision date and material changes are listed on /changelog, but earlier versions of the policy text are not published. | ui |
-| desktop | partial | Policies show the current revision date and material changes are listed on /changelog, but earlier versions of the policy text are not published. | ui |
-
-Code: `apps/web/app/privacy/page.tsx:1249-1253`, `apps/web/app/signup/TermsGate.tsx:108-110`, `apps/web/lib/server/terms.ts:7-7`
-
 ## S88.26: Security/compliance evidence portal.
 
 - Done when: Customers can review security and compliance evidence (reports, certifications, questionnaires) in a trust portal.
