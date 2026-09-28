@@ -165,6 +165,7 @@ pub fn list_plugins(workspace_root: &Path) -> PluginListResponse {
     if manager.load_all(Some(workspace_root)).is_err() {
         return PluginListResponse {
             plugins: Vec::new(),
+            notices: Vec::new(),
         };
     }
     let installed = crate::marketplace::InstalledPlugins::load(manager.global_dir());
@@ -193,7 +194,10 @@ pub fn list_plugins(workspace_root: &Path) -> PluginListResponse {
         })
         .collect();
     plugins.sort_by(|left, right| left.id.cmp(&right.id));
-    PluginListResponse { plugins }
+    PluginListResponse {
+        plugins,
+        notices: Vec::new(),
+    }
 }
 
 pub fn set_plugin_enabled(

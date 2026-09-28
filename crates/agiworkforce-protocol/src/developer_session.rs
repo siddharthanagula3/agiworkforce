@@ -1922,6 +1922,8 @@ pub struct PluginSummary {
 #[ts(rename_all = "camelCase")]
 pub struct PluginListResponse {
     pub plugins: Vec<PluginSummary>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub notices: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]

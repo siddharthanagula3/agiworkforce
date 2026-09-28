@@ -567,7 +567,7 @@ impl<T: RegistryTransport> PluginRegistryClient<T> {
 
             let plugin = self.resolve(&name, options).await?;
             for dependency in &plugin.manifest.dependencies {
-                queue.push((dependency.clone(), depth + 1));
+                queue.push((dependency.reference(), depth + 1));
             }
             resolved.push(plugin);
         }

@@ -1235,6 +1235,7 @@ impl DeveloperSessionHost for SurfaceHost {
                 path: "/home/dev/.agiworkforce/plugins/reviewer".to_string(),
                 format: Some("agi".to_string()),
             }],
+            notices: Vec::new(),
         })
     }
 
