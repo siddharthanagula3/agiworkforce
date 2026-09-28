@@ -34,16 +34,15 @@ Code: `apps/mobile/src/features/share-preview/index.tsx:31-35`, `apps/mobile/src
 
 - Done when: One action summarizes the page the user is viewing.
 - Wave: 3
-- Already works on: chrome
+- Already works on: desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| desktop | partial | No summarize action: the user must read the page in Use the browser, add it to chat, then ask for a summary. | ui |
 | mobile | partial | Only shared text or an address arrives through the share sheet; there is no summarize-this-page action. | surface-only |
 | cli | partial | No summarize command: the user has to ask in chat and the agent calls browser_read_page. | ui |
 | vscode | partial | No summarize command: the user asks in chat and the local CLI runtime reads the page. | ui |
 
-Code: `apps/web/features/desktop-host/components/BrowserToolsDialog.tsx:89-100`, `apps/desktop/electron/runtime/dispatcher.ts:594-606`, `apps/mobile/src/features/share-preview/index.tsx:31-35`, `apps/mobile/src/features/share-preview/index.tsx:94-103`
+Code: `apps/mobile/src/features/share-preview/index.tsx:31-35`, `apps/mobile/src/features/share-preview/index.tsx:94-103`, `apps/cli/src/platform/runtime/tool_catalog.rs:961-970`, `apps/cli/src/features/exec/tools/mod.rs:1236-1248`
 
 ## S64.06: Question about page.
 
@@ -75,16 +74,15 @@ Code: `apps/extension/src/features/content/in-page-panel/pageActions.ts:52-74`, 
 
 - Done when: The assistant opens a web address in the browser for the user.
 - Wave: 3
-- Already works on: cli, vscode
+- Already works on: desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
-| desktop | partial | The desktop assistant has no browser tool; only the user can open a page by hand in Use the browser. | handler |
 | mobile | missing | Not built on this surface. |  |
 | chrome | partial | In Chrome itself the side-panel chat cannot open a page; only the job-autofill agent and commands from a paired AGI Desktop or CLI can navigate. | ui |
 
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:745-755`, `apps/web/features/desktop-host/components/BrowserToolsDialog.tsx:114-117`, `apps/desktop/electron/runtime/dispatcher.ts:594-606`, `apps/extension/src/features/computer-use/agentLoop.ts:338-350`
+Code: `apps/extension/src/features/computer-use/agentLoop.ts:338-350`, `apps/extension/src/features/native-bridge/desktopCommands.ts:102-106`, `apps/extension/src/side_panel.ts:9490-9502`, `apps/extension/src/content.ts:1137-1150`
 
 ## S64.13: Organize tabs.
 
@@ -120,17 +118,17 @@ Code: `apps/cli/src/platform/runtime/tool_catalog.rs:961-970`, `apps/cli/src/fea
 
 - Done when: The assistant fills in a web form on the user's behalf.
 - Wave: 3
+- Already works on: desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
-| desktop | partial | The desktop assistant cannot fill forms; the user can only type into one CSS selector at a time in Use the browser. | handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | browser_type fills one field per call by CSS selector, but the agent never receives the form's fields or selectors, so it must guess them. | handler |
 | vscode | partial | Same limit as the CLI runtime: one guessed CSS selector per field. | handler |
 | chrome | partial | Autofill and the agent only fill job applications on Greenhouse, Lever, LinkedIn and Ashby; any other form is refused. | surface-only |
 
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:745-755`, `apps/web/features/desktop-host/components/BrowserToolsDialog.tsx:111-113`, `apps/desktop/electron/runtime/dispatcher.ts:594-606`, `apps/cli/src/platform/runtime/tool_catalog.rs:961-970`
+Code: `apps/cli/src/platform/runtime/tool_catalog.rs:961-970`, `apps/cli/src/features/exec/tools/mod.rs:1236-1248`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:1266-1272`, `apps/extension/src/features/side-panel/computerUsePanel.ts:652-656`
 
 ## S64.16: Multi-step website task.
 
@@ -166,16 +164,15 @@ Code: `apps/extension/src/background.ts:3517-3530`, `apps/extension/src/features
 
 - Done when: Each browser action the assistant takes is listed for the user as it happens.
 - Wave: 2
-- Already works on: cli, vscode
+- Already works on: desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
-| desktop | partial | The bridge records every action a CLI or VS Code client runs in Chrome, but no screen shows that record; the manual dialog shows only its last result. | ui |
 | mobile | missing | Not built on this surface. |  |
 | chrome | partial | Works inside the Chrome agent loop, but an agent run is reachable only via the job-form Autofill escalation; the user cannot start it with any other goal. | mount |
 
-Code: `apps/desktop/electron/browser/bridgeServer.ts:761-775`, `apps/extension/src/features/side-panel/computerUsePanel.ts:945-958`, `apps/extension/src/side_panel.ts:9407-9413`, `apps/extension/src/side_panel.ts:9490-9502`
+Code: `apps/extension/src/features/side-panel/computerUsePanel.ts:945-958`, `apps/extension/src/side_panel.ts:9407-9413`, `apps/extension/src/side_panel.ts:9490-9502`
 
 ## S64.19: Live browser preview.
 
@@ -256,16 +253,16 @@ Code: `apps/cli/src/features/exec/tools/mod.rs:1236-1248`, `apps/extension-vscod
 
 - Done when: Files the assistant downloads are approved and listed so the user can review them.
 - Wave: 2
+- Already works on: desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
-| desktop | partial | The user can start a download by hand in Use the browser, but the desktop shows no list of downloads to review. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | chrome | partial | Works inside the Chrome agent loop, but an agent run is reachable only via the job-form Autofill escalation; the user cannot start it with any other goal. | mount |
 
-Code: `apps/web/features/desktop-host/components/BrowserToolsDialog.tsx:138-144`, `apps/desktop/electron/runtime/dispatcher.ts:594-606`, `apps/extension/src/features/side-panel/browserToolsPanel.ts:290-311`, `apps/extension/src/features/computer-use/approvalPolicy.ts:211-222`
+Code: `apps/extension/src/features/side-panel/browserToolsPanel.ts:290-311`, `apps/extension/src/features/computer-use/approvalPolicy.ts:211-222`, `apps/extension/src/side_panel.ts:9490-9502`
 
 ## S64.27: Upload review.
 
@@ -286,13 +283,12 @@ Code: `apps/extension/src/features/computer-use/approvalPolicy.ts:216-218`, `app
 
 - Done when: When a browser task ends the assistant reports what it did and what still needs the user.
 - Wave: 2
-- Already works on: cli, vscode
+- Already works on: desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
-| desktop | partial | The desktop runs no browser task; its manual dialog shows only the last command's result. | ui |
 | mobile | missing | Not built on this surface. |  |
 | chrome | partial | Works inside the Chrome agent loop, but an agent run is reachable only via the job-form Autofill escalation; the user cannot start it with any other goal. | mount |
 
-Code: `apps/web/features/desktop-host/components/BrowserToolsDialog.tsx:101-117`, `apps/extension/src/features/side-panel/computerUsePanel.ts:976-984`, `apps/extension/src/features/computer-use/escalationEngine.ts:276-281`, `apps/extension/src/side_panel.ts:9490-9502`
+Code: `apps/extension/src/features/side-panel/computerUsePanel.ts:976-984`, `apps/extension/src/features/computer-use/escalationEngine.ts:276-281`, `apps/extension/src/side_panel.ts:9490-9502`

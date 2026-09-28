@@ -41,45 +41,42 @@ nothing is left.
 ## S14.06: Screenshot capture.
 
 - Done when: A composer control captures the screen and attaches the screenshot to the next message.
-- Wave: 2
+- Wave: 3
 - Already works on: desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Show "Take a screenshot" in the browser too; the capture code works with the browser screen picker, but the web capability table (canTakeScreenshot false) hides the row outside the desktop app. | mount |
+| web | partial | claude.ai's own Plus menu offers Take a screenshot in the browser (docs/research/leader-settings-and-directory-reference-2026-09-07.md:164, observed 2026-09-07), so this is not n/a: the web capability table still hides the row (p-contrast next batch). | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:857-857`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:4461-4465`, `packages/contracts/types/src/capabilities.ts:57-57`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:1827-1872`
+Code: `packages/contracts/types/src/capabilities.ts:57-57`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:4633-4633`, `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:872-872`
 
 ## S14.07: Window capture.
 
 - Done when: The user can pick a single application window and attach a capture of it.
-- Wave: 2
+- Wave: 3
 - Already works on: desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Offer window capture in the browser; getDisplayMedia would let the user choose a window, but the screenshot row is hidden on web (canTakeScreenshot false). | mount |
+| web | partial | the browser's screen picker lets the user choose one window once the screenshot row shows on web (S14.06; p-contrast next batch). | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:857-857`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:4461-4465`, `packages/contracts/types/src/capabilities.ts:57-57`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:1827-1872`
+Code: `packages/contracts/types/src/capabilities.ts:57-57`, `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:872-872`
 
 ## S14.08: URL attachment.
 
 - Done when: The user can attach a web page by its URL so its content is used as context for the message.
 - Wave: 3
-- Already works on: cli, vscode
+- Already works on: cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Add a control that attaches a link as a context chip; today a link pasted into the message is read only if the model chooses to call url_fetch. | ui |
-| desktop | partial | Add a control that attaches a link as a context chip; today a link pasted into the message is read only if the model chooses to call url_fetch. | ui |
 | mobile | partial | Attach a shared or pasted link as a page; today a link shared into the app becomes draft text and is read only if the cloud model calls url_fetch. | ui |
-| chrome | partial | The item is attaching a page by its URL. The cited control captures the text of the tab currently open; there is no URL input, and the auditor's own note concedes the user must navigate first. Page-context capture is a partial answer, not done. |  |
 
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:1501-1508`, `apps/web/lib/url-fetch/url-fetch-tool.ts:10-10`, `apps/web/features/chat/pages/WebChatPage.tsx:5668-5668`, `apps/mobile/src/features/share-preview/index.tsx:81-81`
+Code: `apps/mobile/src/features/share-preview/index.tsx:81-81`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:1501-1508`
 
 ## S14.09: Cloud-file picker.
 
@@ -122,19 +119,6 @@ Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:396-418`, `ap
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S14.12: Folder attachment.
-
-- Done when: The user can attach a whole folder so the assistant can use the files inside it.
-- Wave: 2
-- Already works on: cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Show "Add working folder" in the browser; the folder picker (showDirectoryPicker) exists but the web capability table sets canUseWorkingDirectory false, so the row never renders. | mount |
-| desktop | partial | Attach a whole folder to a message; today dropping a folder (or choosing one) only approves it for local access, and its files are then attached one at a time from "Attach from local folder". | ui |
-
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:858-858`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:4470-4470`, `packages/contracts/types/src/capabilities.ts:52-52`, `apps/desktop/electron/workspaceDrop.ts:29-49`
-
 ## S14.15: Multiple-file selection.
 
 - Done when: One pick action can select several files, and all of them are attached.
@@ -168,12 +152,12 @@ Code: `apps/mobile/src/features/chat/components/AttachmentPreview.tsx:137-150`, 
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Show name and size on image attachments too; documents show both, but an image shows only its thumbnail (name only as alt text). | ui |
-| desktop | partial | Show name and size on image attachments too; documents show both, but an image shows only its thumbnail (name only as alt text). | ui |
+| web | partial | image thumbnails show name and size only as a tooltip while document rows show them as text; a visible caption departs from the leaders' bare thumbnails (observed, undocumented), owner call. | ui |
+| desktop | partial | image thumbnails show name and size only as a tooltip while document rows show them as text; a visible caption departs from the leaders' bare thumbnails (observed, undocumented), owner call. | ui |
 | mobile | partial | Show name and size on photo attachments; documents show both, photos show only the thumbnail. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/Composer/AttachmentPreview.tsx:250-259`, `apps/web/features/chat/components/Composer/AttachmentPreview.tsx:193-196`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:3891-3896`, `apps/mobile/src/features/chat/components/AttachmentPreview.tsx:148-159`
+Code: `apps/web/features/chat/components/Composer/AttachmentPreview.tsx:200-200`, `apps/web/features/chat/components/Composer/AttachmentPreview.tsx:267-267`, `apps/mobile/src/features/chat/components/AttachmentPreview.tsx:148-159`, `apps/mobile/src/features/chat/components/AttachmentPreview.tsx:101-107`
 
 ## S14.21: Indexing progress.
 
@@ -193,68 +177,48 @@ Code: `apps/web/features/chat/components/Composer/AttachmentPreview.tsx:250-259`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Tell the user when an attached document was cut short; today "[Content truncated during extraction.]" is added only to the text the model receives. | ui |
-| desktop | partial | Tell the user when an attached document was cut short; today "[Content truncated during extraction.]" is added only to the text the model receives. | ui |
+| web | partial | the truncation marker reaches only the model; the client needs a notice that the document was cut off, which needs request-processor (p-chat-gates) to return the hydration truncation to the client. | ui |
+| desktop | partial | the truncation marker reaches only the model; the client needs a notice that the document was cut off, which needs request-processor (p-chat-gates) to return the hydration truncation to the client. | ui |
 | mobile | partial | Tell the user when a document was cut to 100,000 characters or could not be read on the device; today only the model sees "[truncated]" or "could not be extracted". | ui |
 
-Code: `apps/web/lib/server/office-document-text.ts:88-95`, `apps/web/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration.ts:489-509`, `apps/mobile/services/attachmentContext.ts:15-29`
+Code: `apps/web/lib/server/office-document-text.ts:95-95`, `apps/web/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration.ts:508-508`, `apps/mobile/services/attachmentContext.ts:15-29`
 
 ## S14.25: Password-protected-file notice.
 
 - Done when: A password-protected file produces a notice that says it is locked and how to fix it.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Say "password protected, remove the password" in chat; the extractor knows (encrypted reason) but the chat turn only reports "could not be read as an Office document", and locked PDFs are not detected. | ui |
-| desktop | partial | Say "password protected, remove the password" in chat; the chat turn only reports "could not be read as an Office document", and locked PDFs are not detected. | ui |
 | mobile | partial | Tell the user a PDF is password protected; the on-device parser detects it (ENCRYPTED_PDF) but the message only tells the model the content could not be extracted. | ui |
 
-Code: `apps/web/lib/server/office-document-text.ts:52-52`, `apps/web/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration.ts:494-502`, `apps/mobile/services/docParser.ts:272-276`, `apps/mobile/services/attachmentContext.ts:24-27`
-
-## S14.27: Upload cancellation.
-
-- Done when: While a file is uploading the user can cancel that upload.
-- Wave: 3
-- Already works on: mobile
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Let the user cancel an upload in progress; the upload client accepts an AbortSignal but the chat never passes one, and Remove is disabled until an upload fails. | ui |
-| desktop | partial | Let the user cancel an upload in progress; the upload client accepts an AbortSignal but the chat never passes one, and Remove is disabled until an upload fails. | ui |
-
-Code: `packages/contracts/cloud-contracts/src/managed-cloud-chat-attachments-client.ts:25-25`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:3884-3886`, `apps/web/features/chat/pages/WebChatPage.tsx:2022-2032`
+Code: `apps/mobile/services/docParser.ts:272-276`, `apps/mobile/services/attachmentContext.ts:24-27`
 
 ## S14.31: Duplicate-file treatment.
 
 - Done when: Adding the same file twice is detected and handled visibly (skipped, merged or flagged) rather than sent twice silently.
 - Wave: 3
-- Already works on: cli
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Warn or skip when the same file is added twice; today the composer shows two chips and sends both, and only the server quietly reuses the stored copy. | ui |
-| desktop | partial | Warn or skip when the same file is added twice; today the composer shows two chips and sends both, and only the server quietly reuses the stored copy. | ui |
 | mobile | partial | Warn or skip when the same file is added twice; the composer accepts it twice, and only the server quietly reuses the stored copy. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/app/api/uploads/chat-attachment/complete/route.ts:221-241`, `apps/web/features/chat/hooks/use-attachments.ts:148-188`, `apps/mobile/src/features/chat/components/ChatInput.tsx:247-257`
+Code: `apps/web/app/api/uploads/chat-attachment/complete/route.ts:221-241`, `apps/mobile/src/features/chat/components/ChatInput.tsx:247-257`
 
 ## S14.33: Batch-upload summary.
 
 - Done when: After adding several files at once the user sees one summary of what was attached and what was refused.
 - Wave: 3
-- Already works on: mobile, cli
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Summarise a multi-file add (e.g. "3 attached, 2 refused: reasons"); today each refusal overwrites the previous notice, so only the last one shows. | ui |
-| desktop | partial | Summarise a multi-file add; today each refusal overwrites the previous notice, so only the last one shows. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:778-779`, `apps/web/features/chat/hooks/use-attachments.ts:165-169`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:3655-3662`
 
 ## S14.34: File-retention explanation.
 

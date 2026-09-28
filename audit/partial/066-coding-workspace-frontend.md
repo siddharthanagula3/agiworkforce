@@ -91,14 +91,13 @@ Code: `apps/web/features/code/CloudCodePage.tsx:1034-1048`, `apps/web/features/c
 
 - Done when: Each coding session shows whether it is running, waiting for approval, idle, failed or closed.
 - Wave: 2
-- Already works on: mobile, cli, vscode
+- Already works on: desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Running dot, failed label and closed/archived banners exist, but sessions exist only when Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
-| desktop | partial | 4ce37835a added a running dot plus "Needs approval" and "Failed" badges per local session row, but idle and closed/archived sessions still render the same plain terminal icon with no status text, so those two states remain indistinguishable from each other. | ui |
 
-Code: `apps/web/features/code/components/CodeRail.tsx:295-307`, `apps/web/features/code/CloudCodePage.tsx:883-884`, `apps/web/lib/e2b/gate.ts:22-27`, `apps/web/features/code/components/LocalSessionsSection.tsx:99-99`
+Code: `apps/web/features/code/components/CodeRail.tsx:295-307`, `apps/web/features/code/CloudCodePage.tsx:883-884`, `apps/web/lib/e2b/gate.ts:22-27`
 
 ## S66.08: File tree.
 

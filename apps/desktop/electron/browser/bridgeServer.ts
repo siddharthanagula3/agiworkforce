@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import {
+  type BrowserActivityEntry,
   type BrowserPairRequestPrompt,
   type BrowserPairingState,
 } from '@agiworkforce/local-runtime-contract';
@@ -605,7 +606,7 @@ async function handleLocalClientCommandRoute(
   }
 
   const described = describeLocalClient(parsed.client);
-  recordLocalClientActivity(described.label, parsed.command);
+  const activity = recordBrowserActivity(described.label, parsed.command, parsed.args);
   // An uncaught throw becomes a plain-text 500, which a client parsing JSON
   // reads as a broken connection rather than the refusal it was.
   let outcome: { ok: boolean; value?: unknown; error?: string; code?: string };
@@ -625,6 +626,7 @@ async function handleLocalClientCommandRoute(
       code: isLocalClientFailureCode(code) ? code : 'timeout',
     };
   }
+  settleBrowserActivity(activity, outcome.ok ? null : (outcome.error ?? null));
   sendJson(response, 200, {
     version: LOCAL_CLIENT_PROTOCOL_VERSION,
     ...outcome,
@@ -850,21 +852,47 @@ export function removeHostAndPairing(): void {
 }
 
 /** Bounded, so a runaway client cannot grow it without limit. */
-const localClientActivity: { atMs: number; client: string; command: string }[] = [];
+const localClientActivity: BrowserActivityEntry[] = [];
 const MAX_LOCAL_CLIENT_ACTIVITY = 200;
 
-function recordLocalClientActivity(client: string, command: string): void {
-  localClientActivity.push({ atMs: Date.now(), client, command });
-  if (localClientActivity.length > MAX_LOCAL_CLIENT_ACTIVITY) localClientActivity.shift();
-  console.debug(`[browser-bridge] ${client} ran ${command} in the paired browser`);
+function activityTarget(args: Record<string, unknown>): string | null {
+  for (const key of ['url', 'selector']) {
+    const value = args[key];
+    if (typeof value === 'string' && value.length > 0) return value;
+  }
+  return null;
 }
 
-export function listLocalClientActivity(): readonly {
-  atMs: number;
-  client: string;
-  command: string;
-}[] {
+export function recordBrowserActivity(
+  client: string,
+  command: string,
+  args: Record<string, unknown>,
+): BrowserActivityEntry {
+  const entry: BrowserActivityEntry = {
+    atMs: Date.now(),
+    client,
+    command,
+    target: activityTarget(args),
+    outcome: 'running',
+    error: null,
+  };
+  localClientActivity.push(entry);
+  if (localClientActivity.length > MAX_LOCAL_CLIENT_ACTIVITY) localClientActivity.shift();
+  console.debug(`[browser-bridge] ${client} ran ${command} in the paired browser`);
+  return entry;
+}
+
+export function settleBrowserActivity(entry: BrowserActivityEntry, error: string | null): void {
+  entry.outcome = error === null ? 'ok' : 'failed';
+  entry.error = error;
+}
+
+export function listLocalClientActivity(): readonly BrowserActivityEntry[] {
   return localClientActivity;
+}
+
+export function listBrowserActivity(): BrowserActivityEntry[] {
+  return localClientActivity.map((entry) => ({ ...entry })).reverse();
 }
 
 export function resetBridgeForTests(): void {
