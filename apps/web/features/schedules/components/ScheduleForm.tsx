@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 import { Button, Input, Label, Switch, Textarea } from '@agiworkforce/ui';
 import { MANAGED_CLOUD_SCHEDULE_MAX_CREDIT_CAP } from '@agiworkforce/cloud-contracts';
 import { formatCredits } from '@agiworkforce/types';
@@ -46,6 +46,29 @@ const FIELD_ORDER: (keyof ScheduleDraft)[] = [
 
 const fieldId = (field: keyof ScheduleDraft) => `schedule-${field}`;
 
+const TIME_ZONE_OPTIONS_ID = 'schedule-timezone-options';
+const NO_TIME_ZONES: readonly string[] = [];
+let timeZoneList: readonly string[] | null = null;
+
+function readTimeZones(): readonly string[] {
+  if (timeZoneList === null) {
+    try {
+      timeZoneList = Intl.supportedValuesOf('timeZone');
+    } catch {
+      timeZoneList = NO_TIME_ZONES;
+    }
+  }
+  return timeZoneList;
+}
+
+function readNoTimeZones(): readonly string[] {
+  return NO_TIME_ZONES;
+}
+
+function subscribeToTimeZones(): () => void {
+  return () => undefined;
+}
+
 function FieldError({ field, errors }: { field: keyof ScheduleDraft; errors: ScheduleFormErrors }) {
   const message = errors[field];
   if (!message) return null;
@@ -84,6 +107,7 @@ export function ScheduleForm({
   onSubmit,
   onCancel,
 }: ScheduleFormProps) {
+  const timeZones = useSyncExternalStore(subscribeToTimeZones, readTimeZones, readNoTimeZones);
   const visibleIntervalUnits = INTERVAL_UNITS.filter(
     (unit) => unit.ms >= SWEEP_INTERVAL_MS || unit.value === draft.intervalUnit,
   );
@@ -261,8 +285,8 @@ export function ScheduleForm({
               aria-describedby={describedBy('scheduledLocal', errors, 'schedule-run-at-helper')}
             />
             <p id="schedule-run-at-helper" className="text-xs text-muted-foreground">
-              Interpreted in the IANA time zone below. Ambiguous or skipped daylight-saving times
-              are rejected.
+              Interpreted in the time zone below. Ambiguous or skipped daylight-saving times are
+              rejected.
             </p>
             <FieldError field="scheduledLocal" errors={errors} />
           </div>
@@ -441,20 +465,27 @@ export function ScheduleForm({
         )}
 
         <div className="space-y-2">
-          <Label htmlFor={fieldId('timezone')}>IANA Time Zone</Label>
+          <Label htmlFor={fieldId('timezone')}>Time Zone</Label>
           <Input
             id={fieldId('timezone')}
             name="timezone"
+            list={TIME_ZONE_OPTIONS_ID}
             autoComplete="off"
             spellCheck={false}
             value={draft.timezone}
             onChange={(event) => set({ timezone: event.target.value })}
-            placeholder="America/Chicago…"
+            placeholder="Search by city or region…"
             aria-invalid={Boolean(errors.timezone)}
             aria-describedby={describedBy('timezone', errors, 'schedule-timezone-helper')}
           />
+          <datalist id={TIME_ZONE_OPTIONS_ID}>
+            {timeZones.map((zone) => (
+              <option key={zone} value={zone} />
+            ))}
+          </datalist>
           <p id="schedule-timezone-helper" className="text-xs text-muted-foreground">
-            Uses daylight-saving rules for this location. Example: America/Chicago.
+            Type a city or region to search the list. A new task starts in this device's time zone,
+            and daylight-saving rules follow the zone you pick.
           </p>
           <FieldError field="timezone" errors={errors} />
         </div>
