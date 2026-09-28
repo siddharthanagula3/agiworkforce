@@ -4888,6 +4888,13 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     [handleSend],
   );
 
+  const handleResearchRunAgain = useCallback(
+    (query: string) => {
+      handleSend(query, undefined, undefined, { researchEnabled: true });
+    },
+    [handleSend],
+  );
+
   const handleResearchPlanDecision = useCallback(
     async (id: string, decision: ResearchPlanDecision, options?: ResearchPlanOptions) => {
       if (!displayedConversationId || isStreaming) return;
@@ -6168,7 +6175,11 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           />
         )}
         {!compact && activeSecondaryPanel === 'research' && (
-          <ResearchPanel {...(isStreaming ? {} : { onAskFollowUp: handleResearchFollowUp })} />
+          <ResearchPanel
+            {...(isStreaming
+              ? {}
+              : { onAskFollowUp: handleResearchFollowUp, onRunAgain: handleResearchRunAgain })}
+          />
         )}
         {!compact && activeSecondaryPanel === 'artifacts' && <ArtifactsPanel />}
       </div>

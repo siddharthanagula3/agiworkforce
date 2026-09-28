@@ -28,6 +28,7 @@ import {
   List,
   Maximize2,
   Minimize2,
+  RefreshCw,
   SendHorizontal,
   Telescope,
   TriangleAlert,
@@ -330,6 +331,12 @@ interface ResearchReportViewProps {
    */
   onAskFollowUp?: (prompt: string) => void;
   /**
+   * Host-injected start of a new Deep Research run on the same question, so a
+   * finished report can be refreshed. Supplied only by hosts that can start a
+   * research turn.
+   */
+  onRunAgain?: (query: string) => void;
+  /**
    * Host-injected save into the account's library, which is a different place
    * from the artifacts panel and from a project's sources: the report becomes
    * a file of its own that outlives this conversation. Supplied only by hosts
@@ -350,6 +357,7 @@ export function ResearchReportView({
   exportService,
   onCreateArtifact,
   onAskFollowUp,
+  onRunAgain,
   onSaveToLibrary,
   saveToProject,
 }: ResearchReportViewProps) {
@@ -509,6 +517,19 @@ export function ResearchReportView({
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1">
+          {onRunAgain && report.query ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1 px-2 text-xs"
+              onClick={() => onRunAgain(report.query!)}
+              data-testid="research-report-run-again"
+              aria-label="Run this research again for current sources"
+            >
+              <RefreshCw className="h-3 w-3" aria-hidden="true" />
+              Run again
+            </Button>
+          ) : null}
           {onCreateArtifact && (
             <Button
               variant="ghost"
