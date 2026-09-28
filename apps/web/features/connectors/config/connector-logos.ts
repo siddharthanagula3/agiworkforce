@@ -1,4 +1,3 @@
-
 export const CONNECTOR_LOGOS: Record<
   string,
   {
@@ -475,4 +474,3 @@ export function getConnectorLogo(connectorId: string) {
 export function hasOfficialLogo(connectorId: string): boolean {
   return !!CONNECTOR_LOGOS[connectorId];
 }
-

@@ -31,6 +31,8 @@ export const URL_FETCH_MAX_RESPONSE_BYTES = 1_572_864;
 export const URL_FETCH_MAX_CONTENT_CHARS = 20_000;
 export const URL_FETCH_MAX_EXTRACT_CHARS = 262_144;
 export const URL_FETCH_MAX_REDIRECTS = 5;
+export const URL_FETCH_MAX_DOCUMENT_BYTES = 10_485_760;
+const PDF_MIME_TYPE = 'application/pdf';
 const MAX_URL_LENGTH = 2_048;
 
 const ALLOWED_CONTENT_TYPES = new Set([
@@ -50,6 +52,7 @@ export type UrlFetchErrorCode =
   | 'timeout'
   | 'response_too_large'
   | 'unsupported_content_type'
+  | 'unreadable_document'
   | 'too_many_redirects';
 
 export type UrlFetchOutcome =
@@ -471,6 +474,21 @@ function err(errorCode: UrlFetchErrorCode, error: string): UrlFetchOutcome {
   return { ok: false, errorCode, error };
 }
 
+type DocumentReader = (bytes: Uint8Array, fileName: string) => Promise<string | null>;
+
+async function documentReaderFor(mime: string): Promise<DocumentReader | null> {
+  if (mime === PDF_MIME_TYPE) {
+    const { extractPdfAttachmentContent } = await import('@/lib/server/pdf-attachment-content');
+    return async (bytes, fileName) =>
+      (await extractPdfAttachmentContent(Buffer.from(bytes), fileName)).text;
+  }
+  const { extractOfficeDocumentText, officeDocumentKind } =
+    await import('@/lib/server/office-document-text');
+  const kind = officeDocumentKind('', mime);
+  if (!kind) return null;
+  return (bytes, fileName) => extractOfficeDocumentText(Buffer.from(bytes), fileName, kind);
+}
+
 const REFUSAL_CODES: Readonly<Record<GuardedFetchRefusal, UrlFetchErrorCode>> = {
   malformed_url: 'url_not_accessible',
   unsupported_scheme: 'invalid_tool_input',
@@ -519,7 +537,8 @@ export async function executeUrlFetch(
       deadline,
       maxRedirects,
       headers: {
-        Accept: 'text/html, text/plain, text/markdown, application/json;q=0.9, */*;q=0.1',
+        Accept:
+          'text/html, text/plain, text/markdown, application/json;q=0.9, application/pdf;q=0.8, */*;q=0.1',
         'User-Agent': 'AGIWorkforce-URLFetch/1.0 (+https://agiworkforce.com)',
       },
       ...(overrides.fetchImpl ? { fetchImpl: overrides.fetchImpl } : {}),
@@ -544,27 +563,31 @@ export async function executeUrlFetch(
 
     const contentTypeHeader = response.headers.get('content-type') ?? '';
     const mime = contentTypeHeader.split(';')[0]?.trim().toLowerCase() ?? '';
-    if (!ALLOWED_CONTENT_TYPES.has(mime)) {
+    const documentReader = ALLOWED_CONTENT_TYPES.has(mime) ? null : await documentReaderFor(mime);
+    if (!ALLOWED_CONTENT_TYPES.has(mime) && !documentReader) {
       await response.body?.cancel().catch(() => undefined);
       return err(
         'unsupported_content_type',
         `Content type "${mime || 'unknown'}" is not supported. ` +
-          'Supported: text/html, text/plain, text/markdown, application/json.',
+          'Supported: web pages, plain text, Markdown, JSON, PDF, and Word, Excel or PowerPoint files.',
       );
     }
+    const byteLimit = documentReader
+      ? (overrides.maxResponseBytes ?? URL_FETCH_MAX_DOCUMENT_BYTES)
+      : maxResponseBytes;
 
     const declaredLength = Number(response.headers.get('content-length') ?? NaN);
-    if (Number.isFinite(declaredLength) && declaredLength > maxResponseBytes) {
+    if (Number.isFinite(declaredLength) && declaredLength > byteLimit) {
       await response.body?.cancel().catch(() => undefined);
       return err(
         'response_too_large',
-        `Response is ${declaredLength} bytes, exceeds the ${maxResponseBytes}-byte limit.`,
+        `Response is ${declaredLength} bytes, exceeds the ${byteLimit}-byte limit.`,
       );
     }
 
     let bytes: Uint8Array | null;
     try {
-      bytes = await readBodyCapped(response, maxResponseBytes);
+      bytes = await readBodyCapped(response, byteLimit);
     } catch (readErr) {
       const stopped = deadline.reason();
       if (stopped === 'cancelled') return err('cancelled', CANCELLED_MESSAGE);
@@ -577,13 +600,22 @@ export async function executeUrlFetch(
     if (bytes === null) {
       return err(
         'response_too_large',
-        `Response exceeded the ${maxResponseBytes}-byte limit while downloading.`,
+        `Response exceeded the ${byteLimit}-byte limit while downloading.`,
       );
     }
 
-    const raw = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+    const raw = documentReader ? '' : new TextDecoder('utf-8', { fatal: false }).decode(bytes);
     const isHtml = mime === 'text/html' || mime === 'application/xhtml+xml';
-    const extracted = isHtml ? extractHtmlText(raw) : raw.trim();
+    let extracted: string;
+    if (documentReader) {
+      try {
+        extracted = ((await documentReader(bytes, titleFromUrl(current))) ?? '').trim();
+      } catch {
+        return err('unreadable_document', `The document at ${current.href} could not be read.`);
+      }
+    } else {
+      extracted = isHtml ? extractHtmlText(raw) : raw.trim();
+    }
     const title = (isHtml ? extractHtmlTitle(raw) : undefined) ?? titleFromUrl(current);
 
     if (extracted.length === 0) {
