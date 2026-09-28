@@ -20,6 +20,10 @@ import {
 } from './features/cloud-tasks';
 import { getCloudWebOrigin } from './utils/api';
 import {
+  SHOW_APPROVAL_HISTORY_COMMAND,
+  showApprovalHistory,
+} from './features/permissions/approvalHistory';
+import {
   SHOW_SESSION_ACTIVITY_COMMAND,
   showSessionReceipt,
 } from './features/sidebar-webview/sessionReceipt';
@@ -205,6 +209,9 @@ export function activate(context: vscode.ExtensionContext): void {
             },
           });
         },
+      ),
+      vscode.commands.registerCommand(SHOW_APPROVAL_HISTORY_COMMAND, () =>
+        showApprovalHistory(context.secrets),
       ),
       vscode.commands.registerCommand(SHOW_SESSION_ACTIVITY_COMMAND, async () => {
         const provider = chatState?.sidebarProvider;

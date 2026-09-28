@@ -35,14 +35,13 @@ Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:115-121`, `a
 
 - Done when: A user can own personal skills that only they have and that they created or added.
 - Wave: 2
-- Already works on: cli
+- Already works on: cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Every install path, including self-authored plugins, now goes through one gate (install-gate.ts:21-45) that enforces AGI_USER_SKILL_AUTHORING, the workspace plugins gate and organization policy. Personal skills stay off until the lead switches AGI_USER_SKILL_AUTHORING on at the end of the run. | flag-off |
 | desktop | partial | Every install path, including self-authored plugins, now goes through one gate (install-gate.ts:21-45) that enforces AGI_USER_SKILL_AUTHORING, the workspace plugins gate and organization policy. Personal skills stay off until the lead switches AGI_USER_SKILL_AUTHORING on at the end of the run. | flag-off |
 | mobile | partial | Mobile would list personal skills the server returns but cannot create one; web creation is itself flag-off. | ui, flag-off |
-| vscode | partial | VS Code shows the CLI's personal skills read-only; it cannot add one. | ui |
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/web/lib/services/user-skill-authoring.ts:3-7`, `apps/web/lib/services/user-skill-service.ts:68-72`, `apps/web/features/skills/hooks/use-skills-settings-adapter.tsx:160-163`, `packages/ui/ui/src/directory/CreatePluginDialog.tsx:179-210`
@@ -51,17 +50,14 @@ Code: `apps/web/lib/services/user-skill-authoring.ts:3-7`, `apps/web/lib/service
 
 - Done when: Skills can be scoped to a project so they load only in that project.
 - Wave: 3
-- Already works on: cli
+- Already works on: cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| vscode | partial | VS Code lists the CLI's project skills read-only (scope shown by the runtime); it cannot add one or grant consent. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/extension-vscode/src/features/surfaces/surfaceMenu.ts:30-30`, `apps/extension-vscode/src/features/surfaces/index.ts:382-400`, `apps/cli/src/app_server/surfaces.rs:93-106`
 
 ## S53.06: Skill detail page.
 
@@ -178,15 +174,14 @@ Code: `packages/tools/skills/src/tool.ts:180-200`
 
 - Done when: A user can explicitly pick a skill for a message and the model then uses that skill.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| vscode | partial | The VS Code / menu lists skills but running one calls the runtime's runCommand, which executes only six built-ins; a skill command fails with a warning. | handler |
 | chrome | missing | Not built on this surface. |  |
 | api | partial | skill_name works on POST /api/llm/v1/chat/completions but is undocumented in the API reference. | ui |
 
-Code: `apps/extension-vscode/src/core/commandSetup.ts:2318-2324`, `apps/cli/src/app_server/surfaces.rs:30-30`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:613-637`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:498-512`
+Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:613-637`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:498-512`
 
 ## S53.18: Automatic relevance-based invocation.
 
@@ -204,15 +199,12 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:639-639
 
 - Done when: A user can turn an installed skill off and back on without deleting it.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| vscode | partial | The runtime client has setSkillEnabled but no VS Code command or list row calls it; the list is read-only. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/extension-vscode/src/integrations/localRuntimeClient.ts:1022-1022`, `apps/extension-vscode/src/features/surfaces/index.ts:382-400`
 
 ## S53.21: Upload/import.
 

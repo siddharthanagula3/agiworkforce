@@ -88,7 +88,7 @@ function clip(text: string | null | undefined, max = MAX_SOURCE_CHARS): string {
 
 export async function loadRetrievalSourceText(
   db: DatabaseAdapter,
-  document: Pick<RetrievalDocumentRow, 'source_kind' | 'source_id' | 'user_id'>,
+  document: Pick<RetrievalDocumentRow, 'source_kind' | 'source_id' | 'user_id' | 'organization_id'>,
 ): Promise<RetrievalSourceText | null> {
   switch (document.source_kind) {
     case 'project_knowledge': {

@@ -232,15 +232,12 @@ Code: `apps/extension/src/features/side-panel/artifactsDrawer.ts:198-212`
 
 - Done when: Users can open a file in its native application.
 - Wave: 3
-- Already works on: mobile, vscode
+- Already works on: mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | desktop | missing | Not built on this surface. |  |
-| cli | partial | `agi artifacts show --out` writes the file but nothing opens it in the OS default app; `agi artifacts open` opens the web page. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:1914-1938`
 
 ## S25.30: Unsupported-preview fallback.
 

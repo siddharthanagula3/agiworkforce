@@ -129,16 +129,15 @@ Code: `apps/cli/src/agent/tools.rs:116-139`, `apps/extension-vscode/src/features
 
 - Done when: Instead of just denying, the user can tell the agent what to do instead, and the agent continues with that guidance.
 - Wave: 3
-- Already works on: web, desktop, api
+- Already works on: web, desktop, vscode, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Guidance input and resume wiring are held in post-codex/chat-gates-s59.patch because the handler lives in Codex-held files ([id].tsx, streaming.ts, MessageBubble.tsx, chatExecutionStore.ts, chatStore.ts). | ui |
 | cli | partial | The overlay answers No or Deny All; the user cannot attach guidance to a denial (they must type a new message after the turn). | ui |
-| vscode | partial | Cloud-run approvals accept guidance, but local runtime approvals are once/session/deny/abort only. | ui |
 | chrome | partial | Chrome approvals are Approve/Decline only. | ui |
 
-Code: `apps/mobile/src/features/chat/components/CloudToolApprovalControls.tsx:114-114`, `apps/cli/src/tui/widgets/approval_overlay.rs:81-87`, `apps/extension-vscode/src/features/cloud-tasks/cloudRunApproval.ts:8-10`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:4596-4601`
+Code: `apps/mobile/src/features/chat/components/CloudToolApprovalControls.tsx:114-114`, `apps/cli/src/tui/widgets/approval_overlay.rs:81-87`, `apps/extension/src/features/side-panel/bubbles.ts:489-499`
 
 ## S59.23: Approval expiration.
 
@@ -156,11 +155,10 @@ Code: `apps/cli/src/app_server/developer_host.rs:68-68`
 
 - Done when: The user can review a history of past approval requests and their decisions.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| vscode | partial | Decisions from every surface land in the shared approval history (GET /api/settings/approvals); this surface has no view of it yet. | ui |
 | chrome | partial | Decisions from every surface land in the shared approval history (GET /api/settings/approvals); this surface has no view of it yet. | ui |
 
 ## S59.26: Approval from another device.
