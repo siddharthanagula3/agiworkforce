@@ -1,0 +1,107 @@
+'use client';
+
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { desktopSignInLink } from '@agiworkforce/local-runtime-contract';
+import { Spinner } from '@agiworkforce/ui';
+import { AuthStepFrame } from '@/features/auth/AuthStepFrame';
+import { AUTH_ERROR_CLASS, AUTH_PRIMARY_BUTTON_CLASS } from '@/features/auth/authStyles';
+import { addCsrfHeaders } from '@/lib/client/csrf';
+import { toUserMessage } from '@/lib/user-error-message';
+
+const GRANT_PATH = '/api/auth/desktop/grant';
+const HEADING = 'Return to AGI Cloud';
+const DETAIL =
+  'Your browser asks to open AGI Cloud. Allow it, and the desktop app finishes signing you in. You can close this tab afterwards.';
+const OPEN_LABEL = 'Open AGI Cloud';
+const PREPARING = 'Preparing your sign-in';
+const GRANT_FAILED = 'This sign-in could not be handed to the desktop app. Try again.';
+const INVALID_HEADING = 'Start from the desktop app';
+const INVALID_DETAIL =
+  'This link is missing part of the sign-in. Open AGI Cloud on your computer and choose Continue in your browser again.';
+
+type HandoffState = { kind: 'preparing' } | { kind: 'ready' } | { kind: 'failed'; message: string };
+
+function readErrorMessage(body: unknown): string | null {
+  if (!body || typeof body !== 'object') return null;
+  const error = (body as { error?: unknown }).error;
+  if (typeof error === 'string') return error;
+  if (error && typeof error === 'object') {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === 'string' && message.trim()) return message;
+  }
+  return null;
+}
+
+async function requestGrant(challenge: string): Promise<string> {
+  const response = await fetch(GRANT_PATH, {
+    method: 'POST',
+    credentials: 'include',
+    headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ challenge }),
+  });
+  const body: unknown = await response.json().catch(() => null);
+  const code = body && typeof body === 'object' ? (body as { code?: unknown }).code : undefined;
+  if (!response.ok || typeof code !== 'string') {
+    throw new Error(readErrorMessage(body) ?? GRANT_FAILED);
+  }
+  return code;
+}
+
+export function DesktopSignInHandoff({ challenge }: { challenge: string | null }) {
+  const [state, setState] = useState<HandoffState>({ kind: 'preparing' });
+  const started = useRef(false);
+
+  const handOff = useCallback(async (): Promise<HandoffState> => {
+    if (challenge === null) return { kind: 'failed', message: GRANT_FAILED };
+    try {
+      const code = await requestGrant(challenge);
+      window.location.assign(desktopSignInLink(code));
+      return { kind: 'ready' };
+    } catch (cause) {
+      return { kind: 'failed', message: toUserMessage(cause, GRANT_FAILED) };
+    }
+  }, [challenge]);
+
+  useEffect(() => {
+    if (challenge === null || started.current) return;
+    started.current = true;
+    void handOff().then(setState);
+  }, [challenge, handOff]);
+
+  if (challenge === null) {
+    return (
+      <AuthStepFrame heading={INVALID_HEADING} detail={<p>{INVALID_DETAIL}</p>}>
+        {null}
+      </AuthStepFrame>
+    );
+  }
+
+  return (
+    <AuthStepFrame heading={HEADING} detail={<p>{DETAIL}</p>}>
+      {state.kind === 'preparing' ? (
+        <p role="status" className="flex items-center justify-center gap-2 text-sm text-text-muted">
+          <Spinner size="sm" />
+          <span>{PREPARING}</span>
+        </p>
+      ) : (
+        <>
+          <button
+            type="button"
+            className={`${AUTH_PRIMARY_BUTTON_CLASS} w-full`}
+            onClick={() => {
+              setState({ kind: 'preparing' });
+              void handOff().then(setState);
+            }}
+          >
+            {OPEN_LABEL}
+          </button>
+          {state.kind === 'failed' ? (
+            <p role="alert" className={AUTH_ERROR_CLASS}>
+              {state.message}
+            </p>
+          ) : null}
+        </>
+      )}
+    </AuthStepFrame>
+  );
+}
