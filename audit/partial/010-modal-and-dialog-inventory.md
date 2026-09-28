@@ -357,17 +357,14 @@ Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:4465-4465`
 
 - Done when: Before private or sensitive data is sent to an outside destination, the user is asked to approve that transfer and told what goes where.
 - Wave: 3
-- Already works on: chrome
+- Already works on: web, desktop, mobile, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The gate re-asks when private data could leave through an outbound call, but the prompt looks like any other approval; say that private data would be sent and to where. | ui |
-| desktop | partial | The gate re-asks when private data could leave through an outbound call, but the prompt looks like any other approval; say that private data would be sent and to where. | ui |
-| mobile | partial | The gate re-asks when private data could leave through an outbound call, but the prompt looks like any other approval; say that private data would be sent and to where. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | partial | Credential files and untrusted workspaces are blocked from leaving outright; there is no approve-this-transfer prompt for other sensitive content. | ui |
 
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-call-gate.ts:83-83`, `packages/ui/unified-chat/src/components/ToolCallCard.tsx:473-473`, `apps/mobile/src/features/chat/components/ApprovalCard.tsx:333-333`, `apps/extension-vscode/src/core/outboundContentGuard.ts:10-10`
+Code: `apps/extension-vscode/src/core/outboundContentGuard.ts:10-10`, `apps/extension-vscode/src/core/runInlineCommand.ts:42-42`
 
 ## S10.40: Remote-device pairing.
 
