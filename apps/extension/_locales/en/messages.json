@@ -2418,5 +2418,9 @@
         "example": "Medium"
       }
     }
+  },
+  "spShortcutDelete": {
+    "message": "Delete",
+    "description": "Accessible name of the delete button on a saved shortcut or recorded workflow"
   }
 }
