@@ -359,7 +359,7 @@ export async function recordIdentityObservation(
   } catch (error) {
     if (COOLDOWN_EVENT_KEYS.has(current.eventKey)) {
       logger.error(
-        { error, userId: input.userId, eventKey: current.eventKey },
+        { error, userId: input.userId, riskEvent: current.eventKey },
         '[risk-signals] a change that starts a cooldown could not be recorded; refusing it',
       );
       throw error;

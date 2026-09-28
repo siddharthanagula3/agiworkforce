@@ -123,13 +123,6 @@
         "column": "archived_at",
         "restoredBy": null
       }
-    },
-    "developer_projects": {
-      "concept": "developer-project",
-      "archived": {
-        "column": "archived_at",
-        "restoredBy": null
-      }
     }
   },
   "recoveryGaps": [
@@ -512,12 +505,6 @@
       "table": "media_assets",
       "class": "tombstone-check",
       "why": "The resolver selects deleted_at and answers \"deleted\" on it, which it cannot do without reading the withdrawn row."
-    },
-    {
-      "file": "apps/web/lib/services/published-artifact-service.ts",
-      "table": "web_conversations",
-      "class": "ownership-check",
-      "why": "The read answers whether the publisher owns the conversation the artifact came from."
     },
     {
       "file": "apps/web/lib/services/retention-service.ts",
