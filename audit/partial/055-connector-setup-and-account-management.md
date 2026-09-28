@@ -70,16 +70,15 @@ Code: `apps/cli/src/claude_parity.rs:832-859`, `apps/cli/src/tui/tui_app.rs:3596
 
 - Done when: Before connecting, the user sees in plain language what the connector can read and what it can change.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | ConnectorScopeList renders a placeholder "not reviewed yet" for the 17 curated providers whose ceiling is SCOPE_REVIEW_PENDING (airtable, clickup, stripe, ...) and nothing at all (status none -> null) for registry connectors, so most connectors give no read/write explanation before connecting. |  |
-| desktop | partial | ConnectorScopeList renders a placeholder "not reviewed yet" for the 17 curated providers whose ceiling is SCOPE_REVIEW_PENDING (airtable, clickup, stripe, ...) and nothing at all (status none -> null) for registry connectors, so most connectors give no read/write explanation before connecting. |  |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | partial | VS Code tooltips list raw granted scope strings with no read/write explanation. | ui |
 
-Code: `apps/web/features/connectors/hooks/use-connectors-settings-adapter.tsx:841-843`, `apps/web/features/connectors/components/ConnectorScopeList.tsx:51-69`, `apps/web/lib/connectors/scope-descriptions.ts:283-295`, `apps/extension-vscode/src/features/connectors/connectorPresentation.ts:52-61`
+Code: `apps/extension-vscode/src/features/connectors/connectorPresentation.ts:52-61`
 
 ## S55.09: API-key authorization.
 
@@ -115,13 +114,13 @@ Code: `apps/web/features/connectors/components/ConnectorAccountSelector.tsx:43-4
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The accounts list renders a label, but nothing ever records one (callbacks pass no accountLabel), so every account reads "Personal" instead of the provider account name. | handler |
-| desktop | partial | The accounts list renders a label, but nothing ever records one (callbacks pass no accountLabel), so every account reads "Personal" instead of the provider account name. | handler |
+| web | partial | 439e7cf79 records the account's email or username from the OpenID id_token (Google, Microsoft and other OIDC providers), so those accounts show their address instead of "Personal". Providers that return no id_token (Notion, Linear, GitHub) still show "Personal"; they would need a per-provider identity call. | handler |
+| desktop | partial | 439e7cf79 records the account's email or username from the OpenID id_token (Google, Microsoft and other OIDC providers), so those accounts show their address instead of "Personal". Providers that return no id_token (Notion, Linear, GitHub) still show "Personal"; they would need a per-provider identity call. | handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/connectors/components/ConnectorAccountSelector.tsx:151-169`, `apps/web/lib/connectors/accounts.ts:32-36`, `apps/web/app/api/connectors/oauth/callback/route.ts:153-161`
+Code: `apps/web/lib/connectors/accounts.ts:134-134`, `apps/web/lib/connectors/oauth-client.ts:158-158`, `apps/web/lib/connectors/mcp-discovery.ts:365-365`
 
 ## S55.14: Account identity and domain.
 
@@ -130,13 +129,13 @@ Code: `apps/web/features/connectors/components/ConnectorAccountSelector.tsx:151-
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only GitHub App installations show the account login (in the PR-review block); OAuth connectors never record which provider account or domain was connected. | handler |
-| desktop | partial | Only GitHub App installations show the account login (in the PR-review block); OAuth connectors never record which provider account or domain was connected. | handler |
+| web | partial | Identity and domain now show for OIDC providers through the id_token email; non-OIDC OAuth connectors still record no identity. | handler |
+| desktop | partial | Identity and domain now show for OIDC providers through the id_token email; non-OIDC OAuth connectors still record no identity. | handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/connectors/hooks/use-connectors-settings-adapter.tsx:802-804`, `apps/web/features/connectors/components/ConnectorAccountSelector.tsx:151-169`, `apps/web/app/api/connectors/oauth/callback/route.ts:153-161`
+Code: `apps/web/lib/connectors/accounts.ts:134-134`
 
 ## S55.17: Granted-scope display.
 
