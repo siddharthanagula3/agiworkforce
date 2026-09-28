@@ -23,6 +23,7 @@ import { normalizeProviderId } from '@/lib/services/llm-cost-calculator';
 import { openRouterFailoverSlugFor, openRouterSlugFor } from '@/lib/services/aggregator-routing';
 import type { ProcessedRequest } from './request-processor';
 import { applyRequestParameters } from './request-parameters';
+import { nativeDocumentAdmission, withNativeDocuments } from './media-input';
 
 type InternalMessage = ProcessedRequest['llmRequest']['messages'][number];
 
@@ -36,10 +37,15 @@ function isFunctionToolDef(tool: unknown): tool is OpenAIWireToolDefinition {
   );
 }
 
-function toWireMessage(msg: InternalMessage): OpenAIWireMessage {
+function toWireMessage(
+  msg: InternalMessage,
+  admitDocument: ReturnType<typeof nativeDocumentAdmission>,
+): OpenAIWireMessage {
   const wire: OpenAIWireMessage = {
     role: msg.role,
-    content: (msg.multimodal_content as OpenAIWireMessage['content'] | undefined) ?? msg.content,
+    content: msg.multimodal_content
+      ? (withNativeDocuments(msg.multimodal_content, admitDocument) as OpenAIWireMessage['content'])
+      : msg.content,
   };
   if (msg.tool_call_id !== undefined) wire.tool_call_id = msg.tool_call_id;
   if (msg.tool_calls !== undefined) wire.tool_calls = msg.tool_calls as OpenAIWireToolCall[];
@@ -126,10 +132,12 @@ function requiresZeroDataRetention(processed: ProcessedRequest, modelId: string)
 export function toCanonicalChatRequest(processed: ProcessedRequest): ChatRequest {
   const { llmRequest } = processed;
   const { functionTools, rawVendorTools } = splitTools(llmRequest.tools);
+  const harnessId = dispatchRoute(llmRequest.model, processed.provider)?.harnessId;
+  const admitDocument = nativeDocumentAdmission(llmRequest.model, harnessId);
 
   const wireRequest: OpenAIWireChatRequest = {
     model: wireModelId(llmRequest.model, processed.provider),
-    messages: llmRequest.messages.map(toWireMessage),
+    messages: llmRequest.messages.map((message) => toWireMessage(message, admitDocument)),
     ...(llmRequest.stream !== undefined ? { stream: llmRequest.stream } : {}),
     ...(llmRequest.temperature !== undefined ? { temperature: llmRequest.temperature } : {}),
     ...(llmRequest.max_tokens !== undefined ? { max_tokens: llmRequest.max_tokens } : {}),
@@ -141,12 +149,7 @@ export function toCanonicalChatRequest(processed: ProcessedRequest): ChatRequest
 
   const chatRequest = openAIWireRequestToChatRequest(wireRequest);
   if (rawVendorTools.length > 0) chatRequest.rawVendorTools = rawVendorTools;
-  applyRequestParameters(
-    chatRequest,
-    llmRequest.requestParameters,
-    llmRequest.model,
-    dispatchRoute(llmRequest.model, processed.provider)?.harnessId,
-  );
+  applyRequestParameters(chatRequest, llmRequest.requestParameters, llmRequest.model, harnessId);
   if (
     llmRequest.responseFormat &&
     getModelMetadataById(llmRequest.model)?.capabilities.json === true

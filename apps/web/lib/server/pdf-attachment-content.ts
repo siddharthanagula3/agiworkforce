@@ -31,6 +31,7 @@ export interface PdfAttachmentContent {
   pagesOmitted: boolean;
   /** Pages with no text layer that did not fit the image budget and reach no caller. */
   scannedPagesOmitted: number[];
+  pageCount: number;
 }
 
 type PdfAttachmentFailureReason = 'corrupt' | 'encrypted';
@@ -258,7 +259,14 @@ export async function extractPdfAttachmentContent(
             .join('\n\n'),
         )
       : null;
-    return { text, pages, pageImages, pagesOmitted, scannedPagesOmitted };
+    return {
+      text,
+      pages,
+      pageImages,
+      pagesOmitted,
+      scannedPagesOmitted,
+      pageCount: document.numPages,
+    };
   } catch (error) {
     if (error instanceof PdfAttachmentUnreadableError) throw error;
     if (error instanceof Error && error.name === PDF_PASSWORD_EXCEPTION) {
