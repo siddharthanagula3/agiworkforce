@@ -1,6 +1,7 @@
 import { type AgiThemeMode } from '@agiworkforce/design-tokens';
 import { BarChart3, Download } from 'lucide-react';
 import React, { Suspense, lazy, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { translateUiPlural } from '@agiworkforce/ui';
 import { toUserMessage } from '../../lib/network-error';
 import { cn } from '../../lib/utils';
 import type { Artifact } from '../../lib/types';
@@ -232,7 +233,15 @@ export function ChartArtifact({ artifact, className, isDark }: ChartArtifactProp
             <span className="capitalize">{kind}</span>
           </div>
           <span className="text-xs text-muted-foreground">
-            {rows.length} {rows.length === 1 ? 'point' : 'points'} · {series.length} series
+            {translateUiPlural('chat', 'counts.chartPoints', rows.length, {
+              one: '{{count}} point',
+              other: '{{count}} points',
+            })}{' '}
+            ·{' '}
+            {translateUiPlural('chat', 'counts.chartSeries', series.length, {
+              one: '{{count}} series',
+              other: '{{count}} series',
+            })}
           </span>
         </div>
         <button

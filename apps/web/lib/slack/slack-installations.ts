@@ -6,6 +6,7 @@ import { decryptConnectorToken, encryptConnectorToken } from '@/lib/custom-conne
 import { logger } from '@/lib/logger';
 
 import { isSlackTokenRevoked, revokeSlackToken } from './slack-api';
+import { parkedSlackTasks, stopParkedSlackTasks } from './slack-runs';
 
 const BOT_TOKEN_PURPOSE = 'slack-bot-token';
 
@@ -128,12 +129,27 @@ export async function findSlackInstallationById(
   };
 }
 
+const PARKED_RUNS_OF_REMOVED = `
+  select run.user_id, run.agent_run_id
+    from removed
+    left join slack_assistant_runs as run
+      on run.installation_id = removed.id
+     and run.status = 'awaiting_approval'
+     and run.agent_run_id is not null`;
+
 export async function deleteSlackInstallationForTeam(
   db: DatabaseAdapter,
   teamId: string,
 ): Promise<boolean> {
-  const removed = await db.execute(`delete from slack_installations where team_id = $1`, [teamId]);
-  return removed > 0;
+  const rows = await db.query<{ user_id: string | null; agent_run_id: string | null }>(
+    `with removed as (
+       delete from slack_installations where team_id = $1 returning id
+     )
+     ${PARKED_RUNS_OF_REMOVED}`,
+    [teamId],
+  );
+  await stopParkedSlackTasks(db, parkedSlackTasks(rows), 'cancelled');
+  return rows.length > 0;
 }
 
 export async function listSlackWorkspacesInstalledBy(
@@ -181,9 +197,15 @@ export async function uninstallSlackWorkspace(
       'Slack bot token was already revoked; removing the installation',
     );
   }
-  await db.execute(`delete from slack_installations where id = $1 and installed_by_user_id = $2`, [
-    input.installationId,
-    input.userId,
-  ]);
+  const parked = await db.query<{ user_id: string | null; agent_run_id: string | null }>(
+    `with removed as (
+       delete from slack_installations
+        where id = $1 and installed_by_user_id = $2
+        returning id
+     )
+     ${PARKED_RUNS_OF_REMOVED}`,
+    [input.installationId, input.userId],
+  );
+  await stopParkedSlackTasks(db, parkedSlackTasks(parked), 'cancelled');
   return mapInstallation(row);
 }

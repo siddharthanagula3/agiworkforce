@@ -29,6 +29,7 @@ fn provider_spec_debug_redacts_key_material() {
         base_url: "https://api.openai.com/v1/chat/completions".into(),
         auth: Auth::Bearer(SECRET.into()),
         extra_headers: vec![("User-Agent".into(), "agiworkforce-test/0.0".into())],
+        extra_body: Vec::new(),
     };
     let rendered = format!("{bearer_spec:?}");
     assert!(!rendered.contains(SECRET), "Bearer key leaked: {rendered}");
@@ -46,6 +47,7 @@ fn provider_spec_debug_redacts_key_material() {
             value: SECRET.into(),
         },
         extra_headers: Vec::new(),
+        extra_body: Vec::new(),
     };
     let rendered = format!("{header_spec:?}");
     assert!(!rendered.contains(SECRET), "header key leaked: {rendered}");
@@ -155,6 +157,7 @@ async fn trace_output_of_real_request_contains_no_key_material() {
         base_url: format!("http://127.0.0.1:{port}/v1/chat/completions"),
         auth: Auth::Bearer(SECRET.into()),
         extra_headers: vec![("User-Agent".into(), "agiworkforce-test/0.0".into())],
+        extra_body: Vec::new(),
     };
     let messages = [Message::text("user", "hi")];
     let req = ChatRequest {

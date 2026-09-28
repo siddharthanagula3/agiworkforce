@@ -1,5 +1,6 @@
 'use client';
 
+import { translateUiPlural } from '@agiworkforce/ui';
 import { ChangeEvent, useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Download, Loader2, Play, Plus, Upload } from 'lucide-react';
 import type { CloudCodeSession, NotebookCellLanguage } from '@agiworkforce/types';
@@ -155,7 +156,10 @@ export function NotebookPanel({
         {runAllError
           ? runAllError
           : lastRun
-            ? `Ran ${lastRun.cellCount} ${lastRun.cellCount === 1 ? 'cell' : 'cells'} ${
+            ? `${translateUiPlural('chat', 'counts.ranCells', lastRun.cellCount, {
+                one: 'Ran {{count}} cell',
+                other: 'Ran {{count}} cells',
+              })} ${
                 lastRun.fromTop ? 'from the top' : 'in place'
               } at ${new Date(lastRun.finishedAt).toLocaleTimeString()}${
                 lastRun.completed ? '' : ', stopped at the first error'

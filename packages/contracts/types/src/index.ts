@@ -122,6 +122,7 @@ export * from './project-instructions';
 export * from './scheduler';
 
 export * from './memory';
+export * from './memory-wire';
 
 export * from './research';
 

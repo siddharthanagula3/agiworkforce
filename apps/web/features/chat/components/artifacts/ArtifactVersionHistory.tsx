@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { X } from 'lucide-react';
 import type { SharedArtifact } from '@agiworkforce/types';
+import { translateUiPlural } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 
 export interface ArtifactVersionHistoryProps {
@@ -34,13 +35,18 @@ function lineChange(previous: string, next: string): { added: number; removed: n
   return { added, removed };
 }
 
-function plural(count: number, word: string): string {
-  return `${count} ${word}${count === 1 ? '' : 's'}`;
-}
-
 function describeChange(versions: SharedArtifact[], index: number): string {
   const version = versions[index]!;
-  if (index === 0) return `Created, ${plural(version.content.split('\n').length, 'line')}`;
+  if (index === 0)
+    return translateUiPlural(
+      'chat',
+      'counts.artifactCreatedLines',
+      version.content.split('\n').length,
+      {
+        one: 'Created, {{count}} line',
+        other: 'Created, {{count}} lines',
+      },
+    );
   const match = versions.findIndex(
     (candidate, candidateIndex) =>
       candidateIndex < index - 1 && candidate.content === version.content,
@@ -48,7 +54,16 @@ function describeChange(versions: SharedArtifact[], index: number): string {
   if (match >= 0) return `Same as version ${match + 1}`;
   const { added, removed } = lineChange(versions[index - 1]!.content, version.content);
   if (added === 0 && removed === 0) return 'Line order changed';
-  return `${plural(added, 'line')} added, ${removed} removed`;
+  return translateUiPlural(
+    'chat',
+    'counts.artifactLinesChanged',
+    added,
+    {
+      one: '{{count}} line added, {{removed}} removed',
+      other: '{{count}} lines added, {{removed}} removed',
+    },
+    { removed },
+  );
 }
 
 function formatWhen(value: string | undefined): string | null {
@@ -103,7 +118,10 @@ export function ArtifactVersionHistory({
     >
       <div className="flex items-center justify-between px-4 py-2">
         <h3 className="text-xs font-medium text-muted-foreground">
-          {plural(versions.length, 'version')}
+          {translateUiPlural('chat', 'counts.artifactVersions', versions.length, {
+            one: '{{count}} version',
+            other: '{{count}} versions',
+          })}
         </h3>
         <button
           type="button"

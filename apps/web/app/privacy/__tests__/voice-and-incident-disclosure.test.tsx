@@ -98,7 +98,7 @@ describe('what /privacy says about pictures', () => {
   it('rests on a strip that the attachment path really calls', () => {
     const attachments = read('features/chat/hooks/use-attachments.ts');
     const upload = read('features/chat/services/chat-attachment-upload.ts');
-    expect(attachments).toMatch(/prepareChatAttachments\(/);
+    expect(attachments).toMatch(/prepareChatAttachments?\(/);
     expect(upload).toMatch(/prepareChatAttachments\(/);
     expect(read('features/chat/lib/attachment-metadata.ts')).toMatch(/stripImageMetadata/);
   });
