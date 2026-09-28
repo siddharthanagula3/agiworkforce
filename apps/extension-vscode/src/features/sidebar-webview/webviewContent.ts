@@ -3783,6 +3783,13 @@ export function getWebviewContent(
       messageEl.appendChild(row);
     }
 
+    function prependAuthor(messageEl, label) {
+      var author = document.createElement('span');
+      author.className = 'visually-hidden';
+      author.textContent = label + ' ';
+      messageEl.insertBefore(author, messageEl.firstChild);
+    }
+
     function answerMeta(payload) {
       if (!payload || !payload.modelLabel) return null;
       var tokens = (payload.inputTokens || 0) + (payload.outputTokens || 0);
@@ -4367,7 +4374,7 @@ export function getWebviewContent(
       var clientMessageId = 'msg-' + Date.now() + '-' + (++clientMessageSeq);
       var userMessageEl = addMessage('user', text);
       userMessageEl.setAttribute('data-client-message-id', clientMessageId);
-      userMessageEl.setAttribute('aria-label', 'You said: ' + text);
+      prependAuthor(userMessageEl, 'You said:');
       appendSentContext(userMessageEl);
       if (isFollowUp) {
         userMessageEl.setAttribute('data-delivery-state', 'queued');
@@ -5673,6 +5680,10 @@ export function getWebviewContent(
           // Content is already rendered; re-render once to ensure the final
           // token is flushed, then bind actions on any code blocks.
           currentAssistantEl.innerHTML = renderAssistant(accumulatedContent);
+          prependAuthor(
+            currentAssistantEl,
+            msg.payload && msg.payload.modelLabel ? 'AGI (' + msg.payload.modelLabel + ') replied:' : 'AGI replied:'
+          );
           bindCodeBlockActions(currentAssistantEl);
           appendMessageActions(currentAssistantEl, accumulatedContent, answerMeta(msg.payload));
         }
