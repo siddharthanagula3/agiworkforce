@@ -19,6 +19,7 @@ import {
   getMinimumRequiredTier,
   getModelMetadataById,
   getPickerModelsForRuntimeProfile,
+  getRegistryRoute,
   normalizeSubscriptionAccessTier,
   resolveMaxOutputTokens,
 } from '@agiworkforce/types';
@@ -27,6 +28,7 @@ import { buildFlagSubject } from '@/lib/feature-flags/flag-evaluation-service';
 import { isApiKeyScopeError } from '@/lib/api-key-scope-error';
 import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
 import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
+import { acceptedRequestParameters } from '../chat/completions/lib/request-parameters';
 
 type OpenAiCompatibleModel = {
   id: string;
@@ -48,6 +50,7 @@ type OpenAiCompatibleModel = {
   capabilities: Record<string, boolean | null>;
   deprecation_date: string | null;
   image_detail?: string[];
+  request_parameters: string[];
 };
 
 const PUBLISHED_CAPABILITIES = {
@@ -89,6 +92,8 @@ function toModelRecord(model: CatalogueEntry): OpenAiCompatibleModel | null {
   }
 
   const imageDetail = getModelMetadataById(model.id)?.imageInput?.detailValues;
+  const servingRoute = model.routes.find((route) => route.isDefault) ?? model.routes[0];
+  const servingHarnessId = servingRoute ? getRegistryRoute(servingRoute.routeId)?.harnessId : null;
   return {
     id: model.id,
     object: 'model',
@@ -103,6 +108,9 @@ function toModelRecord(model: CatalogueEntry): OpenAiCompatibleModel | null {
     capabilities: publishedCapabilities(model.id),
     deprecation_date: model.deprecatedOn,
     ...(imageDetail ? { image_detail: [...imageDetail] } : {}),
+    request_parameters: servingHarnessId
+      ? acceptedRequestParameters(model.id, servingHarnessId)
+      : [],
   };
 }
 
