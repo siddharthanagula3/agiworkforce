@@ -384,6 +384,11 @@ export default function TrustPage() {
                       {
                         label: '2026-09-28',
                         value:
+                          'External resource references joined the enumerated erasure list, taking it from 105 to 106 user-scoped tables: the record of the repositories, web pages, MCP servers and connector items an account reached. They are deleted with the account.',
+                      },
+                      {
+                        label: '2026-09-28',
+                        value:
                           'Developer webhooks joined the enumerated erasure list, taking it from 103 to 105 user-scoped tables: the endpoints a developer registers and the log of what was delivered to them. Both are deleted with the account.',
                       },
                       {
