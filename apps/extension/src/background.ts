@@ -12,6 +12,7 @@ import { t } from './i18n';
 import { describeComputerUseAction } from './features/computer-use/describeAction';
 import {
   describeApprovalReason,
+  readsWithoutActing,
   type ActionApprovalRequirement,
 } from './features/computer-use/approvalPolicy';
 import { timingSafeEqual } from '@agiworkforce/utils/crypto';
@@ -4181,13 +4182,23 @@ async function handleMessageAsync(
         credential: authContext.token,
       });
 
+      const siteTools = await discoverRunSiteTools(cuTabId, cuTab.url);
+      if (!computerUseRuns.isCurrent(lease)) {
+        return failStart('AGI_START_COMPUTER_USE: superseded or cancelled before admission');
+      }
+
+      const allowedForTask = new Set<string>();
       const onBeforeAction = async (
         toolName: string,
         args: Record<string, unknown>,
         signal: AbortSignal | undefined,
         requirement: ActionApprovalRequirement,
       ): Promise<boolean> => {
-        if (!askBeforeActing && !requirement.alwaysAsk) return true;
+        if (!requirement.alwaysAsk) {
+          if (!askBeforeActing || allowedForTask.has(toolName)) return true;
+          const siteTool = siteTools.find((tool) => tool.name === toolName);
+          if (readsWithoutActing(toolName, siteTool?.effect)) return true;
+        }
         {
           const requestId = `cu_approve_${crypto.randomUUID()}`;
           const action =
@@ -4200,6 +4211,7 @@ async function handleMessageAsync(
             requestId,
             toolName,
             description: reason ? `${reason} ${action}` : action,
+            canAllowForTask: !requirement.alwaysAsk,
           });
           const decision = await new Promise<boolean>((resolve, reject) => {
             let settled = false;
@@ -4208,10 +4220,11 @@ async function handleMessageAsync(
               signal?.removeEventListener('abort', onAbort);
               chrome.runtime.onMessage.removeListener(listener);
             };
-            const finish = (allowed: boolean): void => {
+            const finish = (allowed: boolean, forTask = false): void => {
               if (settled) return;
               settled = true;
               cleanup();
+              if (allowed && forTask && !requirement.alwaysAsk) allowedForTask.add(toolName);
               resolve(allowed);
             };
             const onAbort = (): void => {
@@ -4249,7 +4262,10 @@ async function handleMessageAsync(
                 (msg as Record<string, unknown>)['type'] === 'AGI_CU_APPROVE_RESPONSE' &&
                 (msg as Record<string, unknown>)['requestId'] === requestId
               ) {
-                finish((msg as Record<string, unknown>)['allowed'] === true);
+                finish(
+                  (msg as Record<string, unknown>)['allowed'] === true,
+                  (msg as Record<string, unknown>)['forTask'] === true,
+                );
               }
             }
             chrome.runtime.onMessage.addListener(listener);
@@ -4259,11 +4275,6 @@ async function handleMessageAsync(
           return decision;
         }
       };
-
-      const siteTools = await discoverRunSiteTools(cuTabId, cuTab.url);
-      if (!computerUseRuns.isCurrent(lease)) {
-        return failStart('AGI_START_COMPUTER_USE: superseded or cancelled before admission');
-      }
 
       const completion = runAgentLoop(cuGoal, cuTabId, {
         model: computerUseModel,
