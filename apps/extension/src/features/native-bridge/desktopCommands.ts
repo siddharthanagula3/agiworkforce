@@ -73,6 +73,8 @@ async function execute(
   const { args } = request;
 
   switch (request.command) {
+    case 'browser_list_tabs':
+      return context.listTabs();
     case 'browser_read_page': {
       const info = requireSuccess(await context.send(tabId, { type: 'GET_PAGE_INFO' }));
       const text = await context.send(tabId, { type: 'GET_TEXT', selector: 'body' });
