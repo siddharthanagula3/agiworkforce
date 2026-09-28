@@ -8,6 +8,7 @@ pub mod api_keys;
 pub mod artifacts;
 pub mod chat;
 pub mod client;
+pub mod code_handoff;
 pub mod code_sessions;
 pub mod connectors;
 pub mod devices;
