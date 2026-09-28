@@ -99,7 +99,7 @@ function EntryList({
           {entries.map((entry) => (
             <li
               key={entry}
-              className="flex items-center gap-1 rounded-sm border py-0.5 pl-2 pr-0.5 text-xs"
+              className="flex items-center gap-1 rounded-sm border py-0.5 ps-2 pe-0.5 text-xs"
               style={{
                 borderColor: destructive ? 'currentColor' : 'var(--settings-border)',
                 color: destructive ? 'var(--settings-destructive-text)' : 'var(--text-1)',
@@ -196,7 +196,7 @@ function PluginPolicySection({
             className={smallButtonClass}
             style={{ borderColor: 'var(--settings-border)', color: 'var(--text-1)' }}
           >
-            <Check aria-hidden className="mr-1 inline h-3 w-3" />
+            <Check aria-hidden className="me-1 inline h-3 w-3" />
             Approve
           </button>
           <button
@@ -209,7 +209,7 @@ function PluginPolicySection({
               color: 'var(--settings-destructive-text)',
             }}
           >
-            <Ban aria-hidden className="mr-1 inline h-3 w-3" />
+            <Ban aria-hidden className="me-1 inline h-3 w-3" />
             Block
           </button>
         </form>
@@ -364,7 +364,7 @@ function WebDomainPolicySection({
             className={smallButtonClass}
             style={{ borderColor: 'var(--settings-border)', color: 'var(--text-1)' }}
           >
-            <Check aria-hidden className="mr-1 inline h-3 w-3" />
+            <Check aria-hidden className="me-1 inline h-3 w-3" />
             Allow site
           </button>
           <button
@@ -379,7 +379,7 @@ function WebDomainPolicySection({
               color: 'var(--settings-destructive-text)',
             }}
           >
-            <Ban aria-hidden className="mr-1 inline h-3 w-3" />
+            <Ban aria-hidden className="me-1 inline h-3 w-3" />
             Block site
           </button>
         </form>
@@ -617,7 +617,7 @@ export function WorkspaceConnectorPolicy() {
                         color: explicitlyAllowed ? 'var(--text-1)' : 'var(--text-3)',
                       }}
                     >
-                      <Check aria-hidden className="mr-1 inline h-3 w-3" />
+                      <Check aria-hidden className="me-1 inline h-3 w-3" />
                       Approve
                     </button>
                     <button
@@ -641,7 +641,7 @@ export function WorkspaceConnectorPolicy() {
                           : 'var(--text-3)',
                       }}
                     >
-                      <Ban aria-hidden className="mr-1 inline h-3 w-3" />
+                      <Ban aria-hidden className="me-1 inline h-3 w-3" />
                       Block
                     </button>
                   </div>

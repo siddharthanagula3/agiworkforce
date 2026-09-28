@@ -195,7 +195,7 @@ export function ScheduleCard({
   }, [menuOpen, closeMenu]);
 
   const menuItemCls =
-    'flex w-full items-center gap-2 px-3 py-1.5 text-sm text-left text-foreground hover:bg-accent transition-colors disabled:pointer-events-none disabled:opacity-50';
+    'flex w-full items-center gap-2 px-3 py-1.5 text-sm text-start text-foreground hover:bg-accent transition-colors disabled:pointer-events-none disabled:opacity-50';
 
   return (
     <Card
@@ -404,7 +404,7 @@ export function ScheduleCard({
                   ref={menuPanelRef}
                   role="menu"
                   aria-label={`Actions for ${schedule.name}`}
-                  className="absolute right-0 top-full z-[var(--z-content-sticky)] mt-1 min-w-[190px] rounded-lg border border-border bg-popover py-1 shadow-lg"
+                  className="absolute end-0 top-full z-[var(--z-content-sticky)] mt-1 min-w-[190px] rounded-lg border border-border bg-popover py-1 shadow-lg"
                 >
                   <button
                     type="button"
@@ -495,7 +495,7 @@ export function ScheduleCard({
                 onClick={() => onToggleHistory(schedule)}
                 aria-label={`Close Run History for ${schedule.name}`}
               >
-                <X className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+                <X className="me-1.5 h-3.5 w-3.5" aria-hidden="true" />
                 Close
               </Button>
             </div>

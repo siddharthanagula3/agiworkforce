@@ -38,7 +38,7 @@ function LoadingButton({
       aria-disabled={isDisabled}
     >
       {loading && spinnerPosition === 'left' && spinner}
-      <span className={cn(loading && spinnerPosition === 'left' && 'ml-2')}>{content}</span>
+      <span className={cn(loading && spinnerPosition === 'left' && 'ms-2')}>{content}</span>
       {loading && spinnerPosition === 'right' && spinner}
       {loading && (
         <span className="sr-only" aria-live="polite">

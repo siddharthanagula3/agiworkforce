@@ -80,7 +80,7 @@ export const SkillMentionPicker: React.FC<SkillMentionPickerProps> = ({
     <div
       ref={listRef}
       className={cn(
-        'absolute bottom-full left-0 z-[var(--z-dropdown)] mb-2 w-72 max-h-72 overflow-y-auto',
+        'absolute bottom-full start-0 z-[var(--z-dropdown)] mb-2 w-72 max-h-72 overflow-y-auto',
         'rounded-xl border border-border bg-popover shadow-e4 backdrop-blur-xl',
       )}
       role="listbox"
@@ -98,7 +98,7 @@ export const SkillMentionPicker: React.FC<SkillMentionPickerProps> = ({
           role="option"
           aria-selected={i === selectedIndex}
           className={cn(
-            'w-full text-left px-3 py-2 flex items-center justify-between gap-2 transition-colors text-sm',
+            'w-full text-start px-3 py-2 flex items-center justify-between gap-2 transition-colors text-sm',
             i === selectedIndex
               ? 'bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary-foreground'
               : 'text-foreground hover:bg-accent',

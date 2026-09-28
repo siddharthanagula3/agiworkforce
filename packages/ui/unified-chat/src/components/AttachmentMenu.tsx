@@ -110,7 +110,7 @@ function MenuItem({
       title={title}
       aria-pressed={checked === undefined ? undefined : checked}
       className={cn(
-        'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm',
+        'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-start text-sm',
         'text-[var(--chat-text-primary)] transition-colors duration-instant',
         'hover:bg-[var(--chat-surface-hover)]',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]',
@@ -308,7 +308,7 @@ function CameraCaptureOverlay({
               type="button"
               onClick={() => setFacing((current) => (current === 'user' ? 'environment' : 'user'))}
               aria-label={facing === 'user' ? 'Switch to rear camera' : 'Switch to front camera'}
-              className="mr-auto flex h-9 items-center gap-2 rounded-lg border border-[var(--chat-border)] px-3 text-sm text-[var(--chat-text-primary)] hover:bg-[var(--chat-surface-hover)]"
+              className="me-auto flex h-9 items-center gap-2 rounded-lg border border-[var(--chat-border)] px-3 text-sm text-[var(--chat-text-primary)] hover:bg-[var(--chat-surface-hover)]"
             >
               <SwitchCamera size={15} aria-hidden="true" />
               {facing === 'user' ? 'Rear camera' : 'Front camera'}
@@ -499,7 +499,7 @@ function LiveVisualOverlay({
           >
             {liveStateLabel(status)}
           </span>
-          <span className="ml-auto text-xs text-[var(--chat-text-muted)]">
+          <span className="ms-auto text-xs text-[var(--chat-text-muted)]">
             {status.sampledFrames} kept · {status.droppedFrames} skipped
           </span>
         </div>
@@ -515,7 +515,7 @@ function LiveVisualOverlay({
             }}
             disabled={!capturing && status.state !== 'paused'}
             className={cn(
-              'mr-auto flex h-9 items-center gap-2 rounded-lg border border-[var(--chat-border)] px-3 text-sm',
+              'me-auto flex h-9 items-center gap-2 rounded-lg border border-[var(--chat-border)] px-3 text-sm',
               'text-[var(--chat-text-primary)] hover:bg-[var(--chat-surface-hover)]',
               !capturing && status.state !== 'paused' && 'cursor-not-allowed opacity-50',
             )}
@@ -878,7 +878,7 @@ export function AttachmentMenu({
               onClick={() => setStyleOpen((v) => !v)}
             />
             {styleOpen && (
-              <div className="mt-0.5 ml-8 flex flex-col gap-0.5">
+              <div className="mt-0.5 ms-8 flex flex-col gap-0.5">
                 {STYLE_OPTIONS.map((opt) => (
                   <button
                     key={opt.value}
@@ -889,7 +889,7 @@ export function AttachmentMenu({
                       onOpenChange(false);
                     }}
                     className={cn(
-                      'flex w-full items-center justify-between rounded-lg px-3 py-1.5 text-left text-sm',
+                      'flex w-full items-center justify-between rounded-lg px-3 py-1.5 text-start text-sm',
                       'transition-colors duration-instant',
                       'hover:bg-[var(--chat-surface-hover)]',
                       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]',

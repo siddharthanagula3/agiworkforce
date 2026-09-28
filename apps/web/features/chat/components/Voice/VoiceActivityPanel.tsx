@@ -37,7 +37,7 @@ export function VoiceActivityPanel({ open, activity, onClose }: VoiceActivityPan
     <aside
       aria-label={LABEL.panel}
       data-testid="voice-activity-panel"
-      className="flex w-[290px] shrink-0 flex-col overflow-hidden border-l border-[var(--chat-border-subtle)] bg-[var(--chat-surface-base)]"
+      className="flex w-[290px] shrink-0 flex-col overflow-hidden border-s border-[var(--chat-border-subtle)] bg-[var(--chat-surface-base)]"
     >
       <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-[var(--chat-border-subtle)] px-4">
         <h2 className="text-sm font-semibold text-[var(--chat-text-primary)]">{LABEL.panel}</h2>

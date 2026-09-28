@@ -54,6 +54,7 @@ import { useMicrophoneNoticeStore } from '@features/chat/stores/microphone-notic
 import {
   DesktopRuntimeError,
   LOCAL_ATTACHMENT_REFUSAL,
+  type WorkspaceRoot,
 } from '@agiworkforce/local-runtime-contract';
 import {
   BrowserToolsDialog,
@@ -89,6 +90,7 @@ import { chatDraftRefusalNotes } from '@features/chat/lib/attachment-metadata';
 import { preloadTranscriptMarkdown } from '@features/chat/lib/preload-transcript-markdown';
 import { isChatImageMimeType } from '@/lib/chat-attachment-policy';
 import { useSkillsList, type SkillItem } from '@features/chat/hooks/use-skills-list';
+import { readFolderForMention, useMentionFolders } from '@features/chat/hooks/use-mention-folders';
 import { useMediaModelAvailability } from '@features/chat/hooks/use-media-model-availability';
 import { usePromotionalMediaModels } from '@features/chat/hooks/use-promotional-media-models';
 import { useSearchAllowance } from '@features/chat/hooks/use-search-allowance';
@@ -171,6 +173,7 @@ import {
   MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH,
   MANAGED_MEDIA_MAX_IMAGE_REFERENCES,
   MANAGED_OFFICE_FILE_TOOL_NAME,
+  MAX_CHAT_ATTACHMENT_COUNT,
   cloudAgentRunSteerProgressId,
   isCloudAgentRunSteerProgressId,
   type LibraryItem,
@@ -2519,6 +2522,10 @@ const ChatComposerNewComponent = ({
 
   const mentionFiles = useLibraryFiles(showMentions && !attachmentsUnavailable, mentionQuery);
   const mentionFileItems = attachmentsUnavailable ? NO_MENTION_FILES : mentionFiles.items;
+  const mentionFolders = useMentionFolders(
+    showMentions && desktopHost !== null && !attachmentsUnavailable,
+    mentionQuery,
+  );
 
   const mentionItems = useMemo(
     () => [
@@ -2528,9 +2535,16 @@ const ChatComposerNewComponent = ({
         kind: 'connector' as const,
         connector,
       })),
+      ...mentionFolders.map((folder) => ({ kind: 'folder' as const, folder })),
       ...mentionFileItems.map((file) => ({ kind: 'file' as const, file })),
     ],
-    [filteredSkills, filteredMentionProjects, filteredMentionConnectors, mentionFileItems],
+    [
+      filteredSkills,
+      filteredMentionProjects,
+      filteredMentionConnectors,
+      mentionFolders,
+      mentionFileItems,
+    ],
   );
 
   const activeMentionIndex =
@@ -2647,12 +2661,44 @@ const ChatComposerNewComponent = ({
     [replaceMentionToken, handleFileDrop],
   );
 
+  const handleMentionFolderSelect = useCallback(
+    (folder: WorkspaceRoot) => {
+      replaceMentionToken();
+      void readFolderForMention(folder, MAX_CHAT_ATTACHMENT_COUNT - attachments.length)
+        .then(({ files, leftOut, unreadable }) => {
+          if (files.length === 0 && leftOut === 0 && unreadable === 0) {
+            setLocalNotice(`${folder.name} has no files this chat can read.`);
+            return;
+          }
+          handleFileDrop(files);
+          const skipped = leftOut + unreadable;
+          if (skipped > 0) {
+            setLocalNotice(
+              plural(
+                'counts.folderFilesLeftOut',
+                skipped,
+                {
+                  one: '{{count}} file in {{folder}} was not attached. Attach it from a local folder.',
+                  other:
+                    '{{count}} files in {{folder}} were not attached. Attach them from a local folder.',
+                },
+                { folder: folder.name },
+              ),
+            );
+          }
+        })
+        .catch(() => setLocalNotice(COMPOSER_FILES_ATTACH_FAILED_COPY));
+    },
+    [replaceMentionToken, attachments.length, handleFileDrop, plural],
+  );
+
   const commitActiveMention = useCallback(() => {
     const item = mentionItems[activeMentionIndex];
     if (!item) return;
     if (item.kind === 'skill') handleMentionSelect(item.skill);
     else if (item.kind === 'project') handleMentionProjectSelect(item.project.id);
     else if (item.kind === 'connector') handleMentionConnectorSelect(item.connector);
+    else if (item.kind === 'folder') handleMentionFolderSelect(item.folder);
     else handleMentionFileSelect(item.file);
   }, [
     mentionItems,
@@ -2660,6 +2706,7 @@ const ChatComposerNewComponent = ({
     handleMentionSelect,
     handleMentionProjectSelect,
     handleMentionConnectorSelect,
+    handleMentionFolderSelect,
     handleMentionFileSelect,
   ]);
 
@@ -4053,7 +4100,7 @@ const ChatComposerNewComponent = ({
           <button
             type="button"
             aria-label="Dismiss paste notice"
-            className="ml-auto text-muted-foreground transition-colors hover:text-foreground focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="ms-auto text-muted-foreground transition-colors hover:text-foreground focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             onClick={() => setPastedTextUndo(null)}
           >
             <X className="h-4 w-4" aria-hidden="true" />
@@ -4085,7 +4132,7 @@ const ChatComposerNewComponent = ({
           <button
             type="button"
             aria-label="Dismiss code paste notice"
-            className="ml-auto text-muted-foreground transition-colors hover:text-foreground focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="ms-auto text-muted-foreground transition-colors hover:text-foreground focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             onClick={() => setPastedCodeUndo(null)}
           >
             <X className="h-4 w-4" aria-hidden="true" />
@@ -4113,7 +4160,7 @@ const ChatComposerNewComponent = ({
                     they are editable while it waits (the "+" menu stays open during
                     streaming), so the user can see and change them. */}
                 {queued.toolsLabel && (
-                  <span className="ml-1 text-[var(--chat-text-muted)]">· {queued.toolsLabel}</span>
+                  <span className="ms-1 text-[var(--chat-text-muted)]">· {queued.toolsLabel}</span>
                 )}
               </span>
               {canSteerQueued(queued) ? (
@@ -4384,7 +4431,7 @@ const ChatComposerNewComponent = ({
             <button
               type="button"
               onClick={retrySearchAllowance}
-              className="ml-2 font-medium text-primary underline underline-offset-2"
+              className="ms-2 font-medium text-primary underline underline-offset-2"
             >
               Check again
             </button>
@@ -4498,7 +4545,7 @@ const ChatComposerNewComponent = ({
                       if (saved) setShowCompatibleModels(false);
                     });
                   }}
-                  className="block w-full rounded-md px-2 py-1.5 text-left text-xs hover:bg-muted"
+                  className="block w-full rounded-md px-2 py-1.5 text-start text-xs hover:bg-muted"
                 >
                   {model.name}
                 </button>
@@ -4578,7 +4625,7 @@ const ChatComposerNewComponent = ({
                   onMouseEnter={() => setMentionIndex(i)}
                   onClick={() => handleMentionSelect(skill)}
                   className={cn(
-                    'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors',
+                    'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-start transition-colors',
                     i === activeMentionIndex ? 'bg-muted/70' : 'hover:bg-muted/60',
                   )}
                 >
@@ -4616,7 +4663,7 @@ const ChatComposerNewComponent = ({
                         onMouseEnter={() => setMentionIndex(index)}
                         onClick={() => handleMentionProjectSelect(project.id)}
                         className={cn(
-                          'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors',
+                          'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-start transition-colors',
                           index === activeMentionIndex ? 'bg-muted/70' : 'hover:bg-muted/60',
                         )}
                       >
@@ -4647,7 +4694,7 @@ const ChatComposerNewComponent = ({
                       onMouseEnter={() => setMentionIndex(index)}
                       onClick={() => handleMentionConnectorSelect(connector)}
                       className={cn(
-                        'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors',
+                        'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-start transition-colors',
                         index === activeMentionIndex ? 'bg-muted/70' : 'hover:bg-muted/60',
                       )}
                     >
@@ -4662,6 +4709,41 @@ const ChatComposerNewComponent = ({
                             {connector.description}
                           </div>
                         ) : null}
+                      </div>
+                    </button>
+                  );
+                })}
+              </>
+            )}
+
+            {mentionFolders.length > 0 && (
+              <>
+                <div className="mb-1.5 mt-2 border-t border-border/40 px-3 pt-2 text-caption font-medium uppercase tracking-wider text-muted-foreground">
+                  Local folders
+                </div>
+                {mentionFolders.map((folder, i) => {
+                  const index =
+                    filteredSkills.length +
+                    filteredMentionProjects.length +
+                    filteredMentionConnectors.length +
+                    i;
+                  return (
+                    <button
+                      key={folder.id}
+                      type="button"
+                      role="option"
+                      aria-selected={index === activeMentionIndex}
+                      onMouseEnter={() => setMentionIndex(index)}
+                      onClick={() => handleMentionFolderSelect(folder)}
+                      className={cn(
+                        'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-start transition-colors',
+                        index === activeMentionIndex ? 'bg-muted/70' : 'hover:bg-muted/60',
+                      )}
+                    >
+                      <FolderOpen aria-hidden className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-medium">{folder.name}</div>
+                        <div className="truncate text-xs text-muted-foreground">{folder.path}</div>
                       </div>
                     </button>
                   );
@@ -4689,6 +4771,7 @@ const ChatComposerNewComponent = ({
                       filteredSkills.length +
                       filteredMentionProjects.length +
                       filteredMentionConnectors.length +
+                      mentionFolders.length +
                       i;
                     const Glyph = libraryFileGlyph(file);
                     return (
@@ -4700,7 +4783,7 @@ const ChatComposerNewComponent = ({
                         onMouseEnter={() => setMentionIndex(index)}
                         onClick={() => handleMentionFileSelect(file)}
                         className={cn(
-                          'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors',
+                          'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-start transition-colors',
                           index === activeMentionIndex ? 'bg-muted/70' : 'hover:bg-muted/60',
                         )}
                       >
@@ -4811,7 +4894,7 @@ const ChatComposerNewComponent = ({
                   aria-expanded={composerExpanded}
                   aria-label={expandControlLabel}
                   title={expandControlLabel}
-                  className="absolute right-0 top-0 z-[var(--z-content-sticky)] flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:h-11 pointer-coarse:w-11"
+                  className="absolute end-0 top-0 z-[var(--z-content-sticky)] flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:h-11 pointer-coarse:w-11"
                 >
                   {composerExpanded ? (
                     <Minimize2 className="h-4 w-4" aria-hidden="true" />
@@ -4827,7 +4910,7 @@ const ChatComposerNewComponent = ({
                   id="composer-char-counter"
                   role="status"
                   className={cn(
-                    'absolute bottom-0 right-2 z-[var(--z-content-sticky)] text-caption tabular-nums',
+                    'absolute bottom-0 end-2 z-[var(--z-content-sticky)] text-caption tabular-nums',
                     charCounterExceeded ? 'text-danger' : 'text-muted-foreground',
                   )}
                 >
@@ -4850,7 +4933,7 @@ const ChatComposerNewComponent = ({
               <div
                 className={cn(
                   'chat-composer-leading-end flex shrink-0 flex-row items-center gap-1 sm:gap-2',
-                  emptyState ? 'mr-auto' : 'order-[-2]',
+                  emptyState ? 'me-auto' : 'order-[-2]',
                 )}
               >
                 {/* + Overflow Menu Button */}
@@ -4889,7 +4972,7 @@ const ChatComposerNewComponent = ({
                     {hasOverflowActive && (
                       <span
                         aria-hidden="true"
-                        className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-caption font-bold text-primary-foreground"
+                        className="absolute -end-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-caption font-bold text-primary-foreground"
                       >
                         {overflowActiveCount}
                       </span>
@@ -5203,7 +5286,7 @@ const ChatComposerNewComponent = ({
                                 : 'hover:bg-muted/60',
                             )}
                           >
-                            <span className="flex-1 text-left">{opt.label}</span>
+                            <span className="flex-1 text-start">{opt.label}</span>
                             {effectiveImageAspectRatio === opt.id && (
                               <Check className="h-4 w-4 shrink-0 text-primary" />
                             )}
@@ -5246,7 +5329,7 @@ const ChatComposerNewComponent = ({
                             setShowImageStyleMenu(false);
                             focusComposer();
                           }}
-                          className="flex w-full flex-col items-start gap-0.5 rounded-lg px-3 py-1.5 text-left text-xs transition-colors hover:bg-muted/60"
+                          className="flex w-full flex-col items-start gap-0.5 rounded-lg px-3 py-1.5 text-start text-xs transition-colors hover:bg-muted/60"
                         >
                           <span className="font-medium text-foreground">{preset.label}</span>
                           <span className="text-muted-foreground">{preset.phrase}</span>
@@ -5305,7 +5388,7 @@ const ChatComposerNewComponent = ({
                                 : 'hover:bg-muted/60',
                             )}
                           >
-                            <span className="flex-1 text-left">
+                            <span className="flex-1 text-start">
                               <span className="block font-medium">{option.label}</span>
                               <span className="block text-muted-foreground">{option.hint}</span>
                             </span>
@@ -5424,7 +5507,7 @@ const ChatComposerNewComponent = ({
                                 : 'hover:bg-muted/60',
                             )}
                           >
-                            <span className="flex-1 text-left">{opt.label}</span>
+                            <span className="flex-1 text-start">{opt.label}</span>
                             {effectiveVideoAspectRatio === opt.id && (
                               <Check className="h-4 w-4 shrink-0 text-primary" />
                             )}
@@ -5478,7 +5561,7 @@ const ChatComposerNewComponent = ({
                                 : 'hover:bg-muted/60',
                             )}
                           >
-                            <span className="flex-1 text-left">{opt.label}</span>
+                            <span className="flex-1 text-start">{opt.label}</span>
                             {opt.durationSecs && (
                               <span className="shrink-0 text-caption text-muted-foreground">
                                 {opt.durationSecs.join('/')}s only
@@ -5531,7 +5614,7 @@ const ChatComposerNewComponent = ({
                                 : 'hover:bg-muted/60',
                             )}
                           >
-                            <span className="flex-1 text-left">{secs} seconds</span>
+                            <span className="flex-1 text-start">{secs} seconds</span>
                             {effectiveVideoDurationSecs === secs && (
                               <Check className="h-4 w-4 shrink-0 text-primary" />
                             )}
@@ -5566,7 +5649,7 @@ const ChatComposerNewComponent = ({
               {/* Style and model selectors. In normal mode the full ComposerFooter
               sits inline beside the send button; in image mode the image-model
               picker takes its place. The textbox above carries the row's
-              `flex-1`, so these right-cluster controls need no `ml-auto` of
+              `flex-1`, so these right-cluster controls need no `ms-auto` of
               their own to reach the right edge.
 
               Video mode is excluded for the same reason as image mode, and it used
@@ -5644,7 +5727,7 @@ const ChatComposerNewComponent = ({
                             : 'hover:bg-muted/60',
                         )}
                       >
-                        <span className="min-w-0 flex-1 text-left">
+                        <span className="min-w-0 flex-1 text-start">
                           <span className="block truncate">{m.label}</span>
                           <span
                             id={`image-model-route-${index}`}
@@ -5664,7 +5747,7 @@ const ChatComposerNewComponent = ({
                       <button
                         type="button"
                         onClick={retryMediaAvailability}
-                        className="w-full rounded-lg px-3 py-2 text-left text-xs text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                        className="w-full rounded-lg px-3 py-2 text-start text-xs text-muted-foreground hover:bg-muted/60 hover:text-foreground"
                       >
                         Retry model availability
                       </button>
@@ -5673,7 +5756,7 @@ const ChatComposerNewComponent = ({
                       <button
                         type="button"
                         onClick={retryPromotionalMedia}
-                        className="w-full rounded-lg px-3 py-2 text-left text-xs text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                        className="w-full rounded-lg px-3 py-2 text-start text-xs text-muted-foreground hover:bg-muted/60 hover:text-foreground"
                       >
                         Retry free model availability
                       </button>
@@ -5738,7 +5821,7 @@ const ChatComposerNewComponent = ({
                             : 'hover:bg-muted/60',
                         )}
                       >
-                        <span className="min-w-0 flex-1 text-left">
+                        <span className="min-w-0 flex-1 text-start">
                           <span className="block truncate">{m.label}</span>
                           <span
                             id={`video-model-route-${index}`}
@@ -5758,7 +5841,7 @@ const ChatComposerNewComponent = ({
                       <button
                         type="button"
                         onClick={retryMediaAvailability}
-                        className="w-full rounded-lg px-3 py-2 text-left text-xs text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                        className="w-full rounded-lg px-3 py-2 text-start text-xs text-muted-foreground hover:bg-muted/60 hover:text-foreground"
                       >
                         Retry model availability
                       </button>
@@ -5767,7 +5850,7 @@ const ChatComposerNewComponent = ({
                       <button
                         type="button"
                         onClick={retryPromotionalMedia}
-                        className="w-full rounded-lg px-3 py-2 text-left text-xs text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                        className="w-full rounded-lg px-3 py-2 text-start text-xs text-muted-foreground hover:bg-muted/60 hover:text-foreground"
                       >
                         Retry free model availability
                       </button>
@@ -5887,7 +5970,7 @@ const ChatComposerNewComponent = ({
           {workScopeBarVisible ? (
             <div
               data-testid="composer-work-bar"
-              className="-mt-3 ml-6 flex w-fit max-w-[calc(100%-3rem)] flex-wrap items-center gap-0.5 rounded-b-2xl border border-t-0 border-[var(--chat-border-strong)] bg-[var(--chat-surface-hover)] px-1 pb-1.5 pt-4"
+              className="-mt-3 ms-6 flex w-fit max-w-[calc(100%-3rem)] flex-wrap items-center gap-0.5 rounded-b-2xl border border-t-0 border-[var(--chat-border-strong)] bg-[var(--chat-surface-hover)] px-1 pb-1.5 pt-4"
             >
               <button
                 ref={projectPickerTriggerRef}
@@ -5960,7 +6043,7 @@ const ChatComposerNewComponent = ({
                             connector={connector}
                             className={cn(
                               'h-4 w-4 rounded-full border-[var(--chat-input-bg)] shadow-none',
-                              index > 0 && '-ml-1.5',
+                              index > 0 && '-ms-1.5',
                             )}
                           />
                         ))}
@@ -5992,8 +6075,8 @@ const ChatComposerNewComponent = ({
                   }}
                   disabled={isTurnActive || composerDisabled}
                   className={cn(
-                    'flex h-full min-w-0 items-center gap-1.5 pl-2.5 text-xs font-medium',
-                    pickerHasSelection ? 'pr-1' : 'pr-2.5',
+                    'flex h-full min-w-0 items-center gap-1.5 ps-2.5 text-xs font-medium',
+                    pickerHasSelection ? 'pe-1' : 'pe-2.5',
                     (isTurnActive || composerDisabled) && 'cursor-not-allowed opacity-50',
                   )}
                   aria-label={
@@ -6014,7 +6097,7 @@ const ChatComposerNewComponent = ({
                   <button
                     type="button"
                     onClick={handleClearPickerSelection}
-                    className="mr-1.5 shrink-0 rounded-full p-0.5 hover:bg-[var(--chat-accent-primary)]/20"
+                    className="me-1.5 shrink-0 rounded-full p-0.5 hover:bg-[var(--chat-accent-primary)]/20"
                     aria-label="Clear project or folder selection"
                   >
                     <X className="h-4 w-4" />
@@ -6054,7 +6137,7 @@ const ChatComposerNewComponent = ({
                   onClick={() => handlePickProject(project.id)}
                   className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
                 >
-                  <span className="min-w-0 flex-1 truncate text-left">{project.name}</span>
+                  <span className="min-w-0 flex-1 truncate text-start">{project.name}</span>
                   {projectPicker.activeProjectId === project.id && (
                     <Check className="h-4 w-4 shrink-0 text-foreground" />
                   )}
@@ -6080,7 +6163,7 @@ const ChatComposerNewComponent = ({
                 )}
               >
                 <FolderOpen className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <span className="flex-1 text-left">Choose a different folder</span>
+                <span className="flex-1 text-start">Choose a different folder</span>
               </button>
             )}
 
@@ -6093,7 +6176,7 @@ const ChatComposerNewComponent = ({
               className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
             >
               <Plus className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <span className="flex-1 text-left">Create new project</span>
+              <span className="flex-1 text-start">Create new project</span>
             </button>
 
             <button
@@ -6105,7 +6188,7 @@ const ChatComposerNewComponent = ({
               className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
             >
               <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <span className="flex-1 text-left">View all projects</span>
+              <span className="flex-1 text-start">View all projects</span>
               <ChevronRight className="h-4 w-4 text-muted-foreground" />
             </button>
           </AnchoredComposerMenu>

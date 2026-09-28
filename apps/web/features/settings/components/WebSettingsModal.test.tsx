@@ -36,6 +36,12 @@ vi.mock('../sections/ReflectSection', () => ({
   ReflectSection: () => <div>Reflect settings content</div>,
 }));
 
+function settingsPane(): HTMLElement {
+  const pane = document.getElementById('settings-pane');
+  if (!pane) throw new Error('The settings pane is not rendered.');
+  return pane;
+}
+
 async function findConnectedGlyph(name: string) {
   const card = (await screen.findByRole('button', { name })).closest('.group') as HTMLElement;
   return within(card).findByRole('img', { name: 'Connected' });
@@ -286,7 +292,7 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
 
     expect(await findConnectedGlyph('Notion')).toBeTruthy();
-    expect(await screen.findByRole('button', { name: 'Slack' })).toBeTruthy();
+    expect(await within(settingsPane()).findByRole('button', { name: 'Slack' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Connect Slack' })).toBeNull();
     expect(screen.queryByText('Coming soon')).toBeNull();
   }, 15_000);
@@ -578,7 +584,9 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     const fetchMock = stubFetch({
       installations: [{ installation_id: 42, created_at: '2026-06-01T00:00:00Z' }],
     });
-    render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
+    render(<WebSettingsModal open onClose={vi.fn()} initialSection="general" />);
+    await settleParentConnectorState();
+    openConnectorsSection();
 
     const patient = { timeout: 5_000 };
     fireEvent.click(await screen.findByRole('button', { name: 'GitHub' }, patient));

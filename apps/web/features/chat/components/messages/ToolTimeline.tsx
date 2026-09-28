@@ -498,7 +498,7 @@ function TimelineStepRow({
       </div>
       {/* Filename chip: BELOW the label row, indented to align with the label text */}
       {hasFile && (
-        <div className="pl-7">
+        <div className="ps-7">
           <span className="inline-flex items-center gap-1 rounded-md bg-muted/60 px-2 py-0.5 max-w-full">
             <span className="truncate font-mono text-caption text-muted-foreground">
               {filename}
@@ -509,7 +509,7 @@ function TimelineStepRow({
       {/* Lazy authentication: inline Connect card for a connector tool call the
           server answered with a verified "connect required" envelope. */}
       {connectRequest && (
-        <div className="pl-7 mt-1.5">
+        <div className="ps-7 mt-1.5">
           <ConnectorConnectCard
             request={connectRequest}
             {...(onRetryTurn ? { onRetryTurn } : {})}
@@ -517,12 +517,12 @@ function TimelineStepRow({
         </div>
       )}
       {pluginDraft ? (
-        <div className="pl-7 mt-1.5">
+        <div className="ps-7 mt-1.5">
           <PluginDraftCard draft={pluginDraft} />
         </div>
       ) : null}
       {hasSources && (
-        <div className="pl-7 mt-1 text-xs text-muted-foreground">
+        <div className="ps-7 mt-1 text-xs text-muted-foreground">
           {translateUiPlural('chat', 'counts.sources', searchSources!.length, {
             one: '{{count}} source',
             other: '{{count}} sources',
@@ -530,10 +530,10 @@ function TimelineStepRow({
         </div>
       )}
       {tool.status === 'awaiting_input' && renderInputRequest ? (
-        <div className="pl-7 mt-1.5">{renderInputRequest(tool)}</div>
+        <div className="ps-7 mt-1.5">{renderInputRequest(tool)}</div>
       ) : null}
       {showPermissionPicker && mcpTool && (
-        <div className="pl-7 mt-1">
+        <div className="ps-7 mt-1">
           <ToolPermissionQuickPicker
             serverId={mcpTool.serverId}
             toolName={mcpTool.toolName}
@@ -760,16 +760,16 @@ function ToolTimeline({
         aria-label="Toggle tool timeline"
         className="w-full flex items-center gap-2 py-0.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
       >
-        <span className="flex-1 text-left">
+        <span className="flex-1 text-start">
           {hasRunning ? (
             <span className="text-primary">{runningPhrase}</span>
           ) : (
             <>
               {summary}
               {errorCount > 0 && (
-                <span className="text-danger-text ml-1.5 text-xs">{errorCount} failed</span>
+                <span className="text-danger-text ms-1.5 text-xs">{errorCount} failed</span>
               )}
-              {deniedCount > 0 && <span className="ml-1.5 text-xs">{deniedCount} denied</span>}
+              {deniedCount > 0 && <span className="ms-1.5 text-xs">{deniedCount} denied</span>}
             </>
           )}
         </span>
@@ -801,10 +801,10 @@ function ToolTimeline({
             className="overflow-hidden"
           >
             {/* Vertical timeline: thin connector line runs along the left edge of icons */}
-            <div className="relative mt-2 pl-2">
+            <div className="relative mt-2 ps-2">
               {/* Vertical connector line */}
               <div
-                className="absolute left-4 top-2 bottom-6 w-px bg-border/40"
+                className="absolute start-4 top-2 bottom-6 w-px bg-border/40"
                 aria-hidden="true"
               />
               <div className="space-y-3">
@@ -818,7 +818,7 @@ function ToolTimeline({
                       return (
                         <div
                           key={group.parallelGroup ?? gi}
-                          className="border-l-2 border-info-fill/30 pl-2 py-0.5 space-y-3 ml-2"
+                          className="border-s-2 border-info-fill/30 ps-2 py-0.5 space-y-3 ms-2"
                         >
                           <div className="flex items-center gap-1 mb-0.5">
                             <GitBranch className="w-2.5 h-2.5 text-info-text shrink-0" />
