@@ -2,13 +2,16 @@ import 'server-only';
 
 import { after } from 'next/server';
 
+import { sessionStartedAt } from '@/lib/auth/session-age';
 import { sessionAbsoluteLifetimeMs } from '@/lib/auth/session-policy';
 import { logger } from '@/lib/logger';
+import { getIdentityProvider } from '@/lib/server/identity';
 import { getKeyValueStore } from '@/lib/server/key-value';
 import { getNeonDb } from '@/lib/server/neon-db';
 
 const SEEN_KEY_PREFIX = 'session-seen';
 const MAX_REMEMBERED_SESSIONS = 5_000;
+const NEW_SESSION_WINDOW_MS = 15 * 60 * 1000;
 
 const rememberedSessions = new Set<string>();
 
@@ -22,6 +25,8 @@ async function announceIfFirstSighting(
   sessionId: string,
   request: Request | undefined,
 ): Promise<void> {
+  const startedAt = await sessionStartedAt(getIdentityProvider(), sessionId, userId);
+  if (startedAt === null || Date.now() - startedAt > NEW_SESSION_WINDOW_MS) return;
   const store = getKeyValueStore();
   if (!store) return;
   const first = await store.set(`${SEEN_KEY_PREFIX}:${sessionId}`, userId, {
