@@ -16,8 +16,10 @@ import type {
   CloudCodeRuntime,
   CloudCodeSession,
   CloudCodeTerminalEntry,
+  CloudCodeTurnStepBound,
 } from '@agiworkforce/types';
 import {
+  CLOUD_CODE_DEFAULT_TURN_STEPS,
   cloudCodeStopReasonIsRetryable,
   normalizeBillingPlanTier,
   NOTEBOOK_TEMPLATE_ID,
@@ -131,6 +133,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
   const [routeNotice, setRouteNotice] = useState<string | null>(null);
   const [draft, setDraft] = useState<CodeDraft>(EMPTY_CODE_DRAFT);
   const [task, setTask] = useState('');
+  const [turnSteps, setTurnSteps] = useState<CloudCodeTurnStepBound>(CLOUD_CODE_DEFAULT_TURN_STEPS);
   const [busy, setBusy] = useState(false);
   const [running, setRunning] = useState(false);
   const [committing, setCommitting] = useState(false);
@@ -293,6 +296,14 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
   const selectedSession = useMemo(
     () => sessions.find((session) => session.id === selectedId) ?? null,
     [selectedId, sessions],
+  );
+  const runtimeRunsOwnAgent = useCallback(
+    (runtimeId: string | null) =>
+      runtimes.some((runtime) => runtime.id === runtimeId && runtime.runsOwnAgent === true),
+    [runtimes],
+  );
+  const turnControls = !runtimeRunsOwnAgent(
+    selectedSession ? selectedSession.runtimeId : draft.runtimeId || null,
   );
 
   const canCreate =
@@ -458,6 +469,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
           goal,
           model: agentModel,
           idempotencyKey: makeRequestId(),
+          ...(runtimeRunsOwnAgent(session.runtimeId) ? {} : { maxSteps: turnSteps }),
         });
         applyTurn(recordId, turn, goal);
         void loadSessions(statusFilter);
@@ -486,7 +498,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
         setStopping(false);
       }
     },
-    [agentModel, api, applyTurn, loadSessions, statusFilter],
+    [agentModel, api, applyTurn, loadSessions, runtimeRunsOwnAgent, statusFilter, turnSteps],
   );
 
   const createSession = useCallback(
@@ -1225,6 +1237,9 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
                           : null
                       }
                       contextWindow={agentContextWindow}
+                      turnControls={turnControls}
+                      turnSteps={turnSteps}
+                      onTurnStepsChange={setTurnSteps}
                     />
                   )}
                 </div>

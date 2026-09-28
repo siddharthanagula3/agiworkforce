@@ -243,6 +243,7 @@ export interface StartCloudCodeAgentTurnRequest {
   model: string;
   /** Sent as `Idempotency-Key`; the managed-usage ledger refuses the turn without it. */
   idempotencyKey: string;
+  maxSteps?: number;
 }
 
 export interface CommitCloudCodeSessionRequest {

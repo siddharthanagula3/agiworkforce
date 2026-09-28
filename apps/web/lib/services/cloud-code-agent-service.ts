@@ -7,12 +7,7 @@ import type {
   CloudCodeSession,
   ProviderMessage,
 } from '@agiworkforce/types';
-import {
-  CLOUD_CODE_AGENT_TURN_REQUEST_LIMIT_MS,
-  SLOT_REGISTRY,
-  normalizeModelId,
-} from '@agiworkforce/types';
-import { CLOUD_CODE_TURN_BUDGET_MS, FUNCTION_TEARDOWN_RESERVE_MS } from '@/lib/deadline-policy';
+import { SLOT_REGISTRY, normalizeModelId } from '@agiworkforce/types';
 import { getE2BExecutor, revokeE2BSessionCredentials } from '@/lib/e2b/runtime';
 import {
   MANAGED_CLOUD_E2B_TENANT_ID,
@@ -32,6 +27,10 @@ import {
 } from './managed-usage-request-service';
 import { selectHarnessRunner } from '@/lib/e2b/harnesses';
 import { createCloudCodeToolRunner } from './cloud-code-agent-runner';
+import {
+  CLOUD_CODE_AGENT_TURN_BUDGET_MS,
+  CLOUD_CODE_ROUTE_FUNCTION_LIMIT_MS,
+} from './cloud-code-turn-budget';
 import { cloudCodeGoalPrompt } from './cloud-code-commands';
 import { mirrorCloudCodeStopOntoDurableRun } from './cloud-code-durable-run';
 import { createHarnessStepProjector, runCloudCodeHarnessTurn } from './cloud-code-harness-turn';
@@ -49,6 +48,7 @@ import {
   runCloudCodeAgentTurn,
   type CloudCodeAgentEvent,
   type CloudCodeAgentResult,
+  type CloudCodePreApproved,
   type CloudCodeTurnUsage,
   type RunCloudCodeAgentTurnInput,
 } from './cloud-code-agent-loop';
@@ -68,6 +68,7 @@ import {
   validateCloudCodeSessionId,
 } from './cloud-code-session-service';
 import type { E2BExecutor } from '@/lib/e2b/types';
+import { loadToolApprovalPolicy } from '@/app/api/llm/v1/chat/completions/lib/tool-approval-policy';
 
 const ESTIMATED_TURN_COST_CENTS = 25;
 
@@ -89,38 +90,7 @@ const READER_FACING_FAILURES = [
 
 const MAX_STEP_OUTPUT_LENGTH = 100_000;
 
-/**
- * The wall-clock ceiling the platform enforces on the two routes that reach this
- * service: `export const maxDuration = 300` in
- * `app/api/code/sessions/[sessionId]/agent/route.ts` and in that route's
- * `approvals/route.ts`. Next.js needs `maxDuration` to be a literal, so it
- * cannot import this, the route literals and the shared limit clients wait on
- * are kept in step by hand.
- */
-export const CLOUD_CODE_ROUTE_FUNCTION_LIMIT_MS = CLOUD_CODE_AGENT_TURN_REQUEST_LIMIT_MS;
-
-/**
- * What an agent turn is actually allowed to spend, and why it is not
- * {@link CLOUD_CODE_TURN_BUDGET_MS}.
- *
- * `cloud-code-agent-loop.ts` defaults to that 600 s standalone budget, which is
- * twice the platform ceiling above. Under that default the loop's own `timeout`
- * guard is unreachable dead code: the function is killed at 300 s, and a
- * platform kill runs no `finally`, no `catch`, nothing. The turn row is left at
- * `state = 'running'` with a null `stop_reason`, the managed-usage reservation
- * is never finalised, and the E2B sandbox is never paused or disposed, it just
- * keeps costing money until something else reaps it.
- *
- * The ceiling is the one budget we do not control, so the loop budget moves
- * under it and keeps the same teardown reserve the chat tool loop keeps for its
- * own unwind (settle the reservation, write the terminal turn row, pause the
- * sandbox). The loop now reaches its `timeout` return with time to spare, which
- * is what makes every line of that unwind path run at all.
- */
-export const CLOUD_CODE_AGENT_TURN_BUDGET_MS = Math.min(
-  CLOUD_CODE_TURN_BUDGET_MS,
-  CLOUD_CODE_ROUTE_FUNCTION_LIMIT_MS - FUNCTION_TEARDOWN_RESERVE_MS,
-);
+export { CLOUD_CODE_AGENT_TURN_BUDGET_MS, CLOUD_CODE_ROUTE_FUNCTION_LIMIT_MS };
 
 /**
  * How often a running turn asks whether it has been stopped.
@@ -505,6 +475,7 @@ export interface StartCloudCodeAgentTurnInput {
   planTier: string;
   idempotencyKey: string;
   signal: AbortSignal;
+  maxSteps?: number | null;
 }
 
 export interface CloudCodeAgentTurnOutcome {
@@ -573,6 +544,7 @@ function terminalErrorMessage(
   result: CloudCodeAgentResult,
   stoppedByUser: boolean,
   preservedFiles = 0,
+  stepLimit = CLOUD_CODE_AGENT_MAX_STEPS,
 ): string | null {
   const preserved = preservedWorkSentence(preservedFiles);
   if (result.errorMessage) return `${result.errorMessage}${preserved}`.slice(0, 2000);
@@ -580,7 +552,7 @@ function terminalErrorMessage(
     case 'timeout':
       return `Agent turn exceeded its time budget and was stopped.${preserved}`;
     case 'max_steps':
-      return `Agent turn reached its ${CLOUD_CODE_AGENT_MAX_STEPS}-step limit before finishing.${preserved}`;
+      return `Agent turn reached its ${stepLimit}-step limit before finishing.${preserved}`;
     case 'denied':
       return `Agent turn stopped: a required command was denied.${preserved}`;
     case 'cancelled':
@@ -621,7 +593,7 @@ export interface PersistedAgentTurnExecution {
   idempotencyKey: string;
   signal: AbortSignal;
   priorMessages?: ProviderMessage[];
-  preApproved?: { toolUseId: string; command: string; approved: boolean };
+  preApproved?: CloudCodePreApproved;
   initialStepIndex?: number;
   /**
    * How each provider and tool call is performed. Absent inline, where they are
@@ -635,6 +607,20 @@ export interface PersistedAgentTurnExecution {
    * look than this turn's own row. The durable transport reads the run row too.
    */
   isCancellationRequested?: () => Promise<boolean>;
+}
+
+const MIN_REMAINING_STEPS = 1;
+
+async function readTurnStepBound(
+  db: DatabaseAdapter,
+  owner: CloudCodeOwner,
+  turnId: string,
+): Promise<number | null> {
+  const rows = await db.query<{ max_steps: number | null }>(
+    'select max_steps from cloud_code_agent_turns where id = $1 and user_id = $2 limit 1',
+    [turnId, owner.userId],
+  );
+  return rows[0]?.max_steps ?? null;
 }
 
 export async function executePersistedAgentTurn(
@@ -670,6 +656,8 @@ async function runClaimedAgentTurn(
           goal,
           cloudCodeSessionBaseBranch(await getCloudCodeSession(db, owner, sessionId)),
         );
+  const approvalPolicy = await loadToolApprovalPolicy(db, owner.userId);
+  const stepBound = await readTurnStepBound(db, owner, turnId);
 
   let reservation: ManagedUsageRequestReservation;
   try {
@@ -790,6 +778,7 @@ async function runClaimedAgentTurn(
         model,
         signal: deadline.signal,
         maxDurationMs: CLOUD_CODE_AGENT_TURN_BUDGET_MS,
+        ...(stepBound !== null ? { maxTurns: stepBound } : {}),
         onEvent: async (event) => {
           const step = projectStep(event);
           if (step) await recordStep(step);
@@ -815,6 +804,10 @@ async function runClaimedAgentTurn(
         projectInstructions,
         ...(input.priorMessages ? { priorMessages: input.priorMessages } : {}),
         ...(input.preApproved ? { preApproved: input.preApproved } : {}),
+        approvalPolicy,
+        ...(stepBound !== null
+          ? { maxSteps: Math.max(MIN_REMAINING_STEPS, stepBound - initialStepIndex) }
+          : {}),
         onStepCommitted: async (step: number) => {
           await reserveManagedUsageProviderStep({
             reservation,
@@ -922,7 +915,12 @@ async function runClaimedAgentTurn(
         cumulativeSteps,
         result.stopReason === 'awaiting_approval' ? null : result.stopReason,
         result.finalMessage.slice(0, 100_000) || null,
-        terminalErrorMessage(result, stoppedByUser, preservedFiles),
+        terminalErrorMessage(
+          result,
+          stoppedByUser,
+          preservedFiles,
+          stepBound ?? CLOUD_CODE_AGENT_MAX_STEPS,
+        ),
         owner.userId,
         result.usage.inputTokens,
         result.usage.outputTokens,
@@ -943,12 +941,19 @@ async function runClaimedAgentTurn(
     const approvalRows = await db
       .query<{ step_index: number }>(
         `insert into cloud_code_agent_approvals
-         (turn_id, step_index, command, reason, expires_at)
-       select $1, coalesce(max(step_index), -1) + 1, $2, $3, now() + interval '30 minutes'
+         (turn_id, step_index, command, reason, tool_name, tool_args, expires_at)
+       select $1, coalesce(max(step_index), -1) + 1, $2, $3, $4, $5::jsonb,
+              now() + interval '30 minutes'
          from cloud_code_agent_approvals
         where turn_id = $1
        returning step_index`,
-        [turnId, pendingApproval.command, pendingApproval.reason],
+        [
+          turnId,
+          pendingApproval.command,
+          pendingApproval.reason,
+          pendingApproval.toolName,
+          JSON.stringify(pendingApproval.args),
+        ],
       )
       .catch((error) => {
         logger.error({ error, turnId }, 'Could not record the Code approval request');
@@ -1000,7 +1005,12 @@ async function runClaimedAgentTurn(
 
   // The same explanation that went into the row, so a client that only reads the
   // response is not left with a bare `timeout` and no words.
-  const errorMessage = terminalErrorMessage(result, stoppedByUser, preservedFiles);
+  const errorMessage = terminalErrorMessage(
+    result,
+    stoppedByUser,
+    preservedFiles,
+    stepBound ?? CLOUD_CODE_AGENT_MAX_STEPS,
+  );
 
   return {
     turnId,
@@ -1054,11 +1064,21 @@ export async function prepareCloudCodeAgentTurn(
 
   const turnRows = await db.query<{ id: string }>(
     `insert into cloud_code_agent_turns
-       (session_id, user_id, organization_id, goal, idempotency_key, model, provider, state)
-     values ($1, $2, $3, $4, $5, $6, $7, 'running')
+       (session_id, user_id, organization_id, goal, idempotency_key, model, provider, state,
+        max_steps)
+     values ($1, $2, $3, $4, $5, $6, $7, 'running', $8)
      on conflict (user_id, idempotency_key) do update set updated_at = now()
      returning id`,
-    [sessionId, owner.userId, owner.organizationId, goal, idempotencyKey, model, provider],
+    [
+      sessionId,
+      owner.userId,
+      owner.organizationId,
+      goal,
+      idempotencyKey,
+      model,
+      provider,
+      input.maxSteps ?? null,
+    ],
   );
   const turnId = turnRows[0]?.id;
   if (!turnId) throw new CloudCodeUnavailableError('Could not open an agent turn');

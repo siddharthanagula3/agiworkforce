@@ -356,7 +356,11 @@ export function createManagedCloudCodeApi(config: ManagedCloudCodeApiConfig): Cl
         {
           method: 'POST',
           headers: { ...(await mutationHeaders()), 'idempotency-key': input.idempotencyKey },
-          body: JSON.stringify({ goal: input.goal, model: input.model }),
+          body: JSON.stringify({
+            goal: input.goal,
+            model: input.model,
+            ...(input.maxSteps ? { maxSteps: input.maxSteps } : {}),
+          }),
           signal,
         },
         CloudCodeAgentTurnSchema,
