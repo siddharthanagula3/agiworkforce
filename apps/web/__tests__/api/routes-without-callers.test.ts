@@ -126,10 +126,6 @@ const CALLERLESS: ReadonlyArray<{ url: string; why: string }> = [
     why: 'platform staff record a workspace region cutover through the API; no product screen calls it',
   },
   {
-    url: '/api/me/routing-preferences',
-    why: 'the chat request path reads these preferences server side; no settings control calls the route yet',
-  },
-  {
     url: '/api/settings/security/compromise',
     why: 'authenticated emergency account-compromise response, not a routine settings control',
   },
