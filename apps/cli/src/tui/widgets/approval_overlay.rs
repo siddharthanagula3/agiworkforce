@@ -54,6 +54,7 @@ pub enum ApprovalChoice {
     AlwaysAllow,
     /// Deny all remaining tool calls and stop the agentic loop.
     DenyAll,
+    AllowAll,
 }
 
 impl ApprovalChoice {
@@ -65,6 +66,7 @@ impl ApprovalChoice {
             Self::AllowSession => 2,
             Self::AlwaysAllow => 3,
             Self::DenyAll => 4,
+            Self::AllowAll => 5,
         }
     }
 
@@ -76,16 +78,37 @@ impl ApprovalChoice {
             Self::AllowSession => " Allow Session ",
             Self::AlwaysAllow => " Always Allow ",
             Self::DenyAll => " Deny All ",
+            Self::AllowAll => " Allow All ",
         }
+    }
+
+    pub fn description(self) -> &'static str {
+        match self {
+            Self::Yes => "Run it this once. Tab adds a note for the agent.",
+            Self::No => {
+                "Skip this call; the agent carries on. Tab adds a note saying what to do instead."
+            }
+            Self::AllowSession => "Allow it without asking again until this session ends.",
+            Self::AlwaysAllow => "Save a rule so it is always allowed.",
+            Self::DenyAll => "Refuse this and everything else the agent asks this turn.",
+            Self::AllowAll => {
+                "Allow this and the rest of this turn's requests, except high-risk ones."
+            }
+        }
+    }
+
+    fn takes_note(self) -> bool {
+        matches!(self, Self::Yes | Self::No)
     }
 }
 
-const CHOICES: [ApprovalChoice; 5] = [
+const CHOICES: [ApprovalChoice; 6] = [
     ApprovalChoice::Yes,
     ApprovalChoice::No,
     ApprovalChoice::AllowSession,
     ApprovalChoice::AlwaysAllow,
     ApprovalChoice::DenyAll,
+    ApprovalChoice::AllowAll,
 ];
 
 /// Matches Claude Code and Codex: the allowing choice is preselected and
@@ -113,6 +136,9 @@ pub struct ApprovalOverlayState {
     pub cursor: usize,
     /// Set once the user confirms; `None` while the overlay is active.
     pub result: Option<ApprovalChoice>,
+    pub note: String,
+    pub note_choice: Option<ApprovalChoice>,
+    pub editing_note: bool,
 }
 
 impl Default for ApprovalOverlayState {
@@ -123,6 +149,9 @@ impl Default for ApprovalOverlayState {
             detail: Vec::new(),
             cursor: DEFAULT_CURSOR,
             result: None,
+            note: String::new(),
+            note_choice: None,
+            editing_note: false,
         }
     }
 }
@@ -142,7 +171,47 @@ impl ApprovalOverlayState {
             .collect();
         self.cursor = DEFAULT_CURSOR;
         self.result = None;
+        self.note.clear();
+        self.note_choice = None;
+        self.editing_note = false;
         self.visible = true;
+    }
+
+    pub fn note(&self) -> Option<String> {
+        let note = self.note.trim();
+        (!note.is_empty() && self.result.is_some() && self.result == self.note_choice)
+            .then(|| note.to_string())
+    }
+
+    pub fn insert_note_text(&mut self, text: &str) {
+        if self.editing_note {
+            self.note
+                .extend(text.chars().filter(|character| !character.is_control()));
+        }
+    }
+
+    fn submit(&mut self, choice: ApprovalChoice) -> ViewAction {
+        self.cursor = choice.index();
+        self.result = Some(choice);
+        self.editing_note = false;
+        self.visible = false;
+        ViewAction::Submit(self.cursor)
+    }
+
+    fn handle_note_key(&mut self, key: KeyAction) -> ViewAction {
+        match key {
+            KeyAction::Char(character) => self.note.push(character),
+            KeyAction::Backspace => {
+                self.note.pop();
+            }
+            KeyAction::Enter => {
+                let choice = self.note_choice.unwrap_or(CHOICES[self.cursor]);
+                return self.submit(choice);
+            }
+            KeyAction::Tab | KeyAction::Esc => self.editing_note = false,
+            _ => {}
+        }
+        ViewAction::Continue
     }
 
     /// Close and clear state.
@@ -172,12 +241,17 @@ impl ApprovalOverlayState {
             .flat_map(|d| wrap_cols(d, detail_cols))
             .collect();
         let detail_lines = detail.len() as u16;
-        let inner_height = 2          // top padding + prompt
-            + detail_lines.max(1)     // detail or blank
-            + 2                       // blank + button strip
-            + 1                       // hint line
-            + 1; // bottom padding
-        let box_height = inner_height + 2; // borders
+        let button_rows = self.button_rows(usize::from(box_width.saturating_sub(4)).max(8));
+        let note_line = self.note_line();
+        let inner_height = 2
+            + detail_lines.max(1)
+            + 1
+            + button_rows.len() as u16
+            + 1
+            + u16::from(note_line.is_some())
+            + 1
+            + 1;
+        let box_height = inner_height + 2;
 
         let vert = Layout::default()
             .direction(Direction::Vertical)
@@ -236,37 +310,84 @@ impl ApprovalOverlayState {
 
         lines.push(Line::from("")); // spacer before buttons
 
-        // Button strip
-        let mut button_spans: Vec<Span> = vec![Span::raw("  ")];
-        for (i, choice) in CHOICES.iter().enumerate() {
-            let selected = i == self.cursor;
-            let destructive = *choice == ApprovalChoice::DenyAll;
-            let style = match (selected, destructive) {
-                (true, true) => Style::default()
-                    .fg(ui_on_light())
-                    .bg(ui_danger())
-                    .add_modifier(Modifier::BOLD),
-                (true, false) => Style::default()
-                    .fg(ui_on_light())
-                    .bg(ui_warning())
-                    .add_modifier(Modifier::BOLD),
-                (false, true) => Style::default().fg(ui_danger()),
-                (false, false) => Style::default(),
-            };
-            let label = format!("[{}]", choice.label());
-            button_spans.push(Span::styled(label, style));
-            button_spans.push(Span::raw("  "));
+        for row in button_rows {
+            let mut spans: Vec<Span> = vec![Span::raw("  ")];
+            for index in row {
+                let choice = CHOICES[index];
+                let selected = index == self.cursor;
+                let destructive = choice == ApprovalChoice::DenyAll;
+                let style = match (selected, destructive) {
+                    (true, true) => Style::default()
+                        .fg(ui_on_light())
+                        .bg(ui_danger())
+                        .add_modifier(Modifier::BOLD),
+                    (true, false) => Style::default()
+                        .fg(ui_on_light())
+                        .bg(ui_warning())
+                        .add_modifier(Modifier::BOLD),
+                    (false, true) => Style::default().fg(ui_danger()),
+                    (false, false) => Style::default(),
+                };
+                spans.push(Span::styled(format!("[{}]", choice.label()), style));
+                spans.push(Span::raw("  "));
+            }
+            lines.push(Line::from(spans));
         }
-        lines.push(Line::from(button_spans));
 
-        // Hint line
         lines.push(Line::from(vec![Span::styled(
-            "  \u{2190}/\u{2192} move   Enter confirm   Esc = No",
+            format!("  {}", CHOICES[self.cursor].description()),
+            Style::default().fg(ui_muted()),
+        )]));
+
+        if let Some(note_line) = note_line {
+            lines.push(Line::from(vec![Span::styled(
+                note_line,
+                Style::default().add_modifier(Modifier::BOLD),
+            )]));
+        }
+
+        lines.push(Line::from(vec![Span::styled(
+            if self.editing_note {
+                "  Enter answers with the note   Tab or Esc closes the note"
+            } else {
+                "  \u{2190}/\u{2192} move   Enter confirm   Tab note   Esc = No"
+            },
             Style::default().fg(ui_muted()),
         )]));
 
         let para = Paragraph::new(lines);
         frame.render_widget(para, inner);
+    }
+
+    fn button_rows(&self, max_cols: usize) -> Vec<Vec<usize>> {
+        let mut rows: Vec<Vec<usize>> = vec![Vec::new()];
+        let mut width = 2;
+        for (index, choice) in CHOICES.iter().enumerate() {
+            let cell = display_width(choice.label()) + 4;
+            let row_is_empty = rows.last().is_none_or(Vec::is_empty);
+            if width + cell > max_cols && !row_is_empty {
+                rows.push(Vec::new());
+                width = 2;
+            }
+            if let Some(row) = rows.last_mut() {
+                row.push(index);
+            }
+            width += cell;
+        }
+        rows
+    }
+
+    fn note_line(&self) -> Option<String> {
+        let choice = self.note_choice?;
+        if !self.editing_note && self.note.is_empty() {
+            return None;
+        }
+        Some(format!(
+            "  Note with {}: {}{}",
+            choice.label().trim(),
+            self.note,
+            if self.editing_note { "\u{258f}" } else { "" }
+        ))
     }
 
     /// Text-only render used when ratatui frame is unavailable (REPL / tests).
@@ -292,19 +413,29 @@ impl ApprovalOverlayState {
             "│                                                                              │\n",
         );
 
-        let mut buttons = String::from("  ");
-        for (i, choice) in CHOICES.iter().enumerate() {
-            if i == self.cursor {
-                buttons.push_str(&format!("[{}]", choice.label().trim()));
-            } else {
-                buttons.push_str(&format!(" {}  ", choice.label().trim()));
+        for row in self.button_rows(78) {
+            let mut buttons = String::from("  ");
+            for index in row {
+                let label = CHOICES[index].label().trim();
+                if index == self.cursor {
+                    buttons.push_str(&format!("[{label}]"));
+                } else {
+                    buttons.push_str(&format!(" {label}  "));
+                }
+                buttons.push_str("  ");
             }
-            buttons.push_str("  ");
+            out.push_str(&format!("│{}│\n", pad_to_cols(&buttons, 78)));
         }
-        out.push_str(&format!("│{}│\n", pad_to_cols(&buttons, 78)));
         out.push_str(&format!(
             "│{}│\n",
-            pad_to_cols("  ←/→ move   Enter confirm   Esc = No", 78)
+            pad_to_cols(&format!("  {}", CHOICES[self.cursor].description()), 78)
+        ));
+        if let Some(note_line) = self.note_line() {
+            out.push_str(&format!("│{}│\n", pad_to_cols(&note_line, 78)));
+        }
+        out.push_str(&format!(
+            "│{}│\n",
+            pad_to_cols("  ←/→ move   Enter confirm   Tab note   Esc = No", 78)
         ));
         out.push_str(
             "└──────────────────────────────────────────────────────────────────────────────┘\n",
@@ -323,7 +454,19 @@ impl InteractiveView for ApprovalOverlayState {
     }
 
     fn handle_key(&mut self, key: KeyAction) -> ViewAction {
+        if self.editing_note {
+            return self.handle_note_key(key);
+        }
         match key {
+            KeyAction::Tab if CHOICES[self.cursor].takes_note() => {
+                let choice = CHOICES[self.cursor];
+                if self.note_choice != Some(choice) {
+                    self.note_choice = Some(choice);
+                }
+                self.editing_note = true;
+                ViewAction::Continue
+            }
+            KeyAction::Char('t') | KeyAction::Char('T') => self.submit(ApprovalChoice::AllowAll),
             KeyAction::Left | KeyAction::Char('h') => {
                 if self.cursor > 0 {
                     self.cursor -= 1;
@@ -348,12 +491,7 @@ impl InteractiveView for ApprovalOverlayState {
                 }
                 ViewAction::Continue
             }
-            KeyAction::Enter => {
-                let choice = CHOICES[self.cursor];
-                self.result = Some(choice);
-                self.visible = false;
-                ViewAction::Submit(self.cursor)
-            }
+            KeyAction::Enter => self.submit(CHOICES[self.cursor]),
             KeyAction::Esc => {
                 // Esc = No (deny this one call, don't stop the loop)
                 self.result = Some(ApprovalChoice::No);
@@ -404,7 +542,7 @@ impl InteractiveView for ApprovalOverlayState {
     }
 }
 
-fn wrap_cols(text: &str, max_cols: usize) -> Vec<String> {
+pub(crate) fn wrap_cols(text: &str, max_cols: usize) -> Vec<String> {
     let mut lines = Vec::new();
     let mut current = String::new();
     let mut width = 0;

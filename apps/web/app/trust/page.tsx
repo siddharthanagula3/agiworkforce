@@ -105,7 +105,7 @@ const COMPLIANCE: { label: string; value: string }[] = [
   {
     label: 'GDPR: data subject rights',
     value:
-      'Implemented. Self-service export returns your account data as a JSON download, and account deletion runs an enumerated erasure across 100 user-scoped tables plus stored objects, on a daily scheduled job. Mechanism is documented on /security; the deletion window is stated in the privacy policy. The figure is derived from the implementation by a test so changes to the erasure list cannot silently leave this claim behind. As of 2026-09-27.',
+      'Implemented. Self-service export returns your account data as a JSON download, and account deletion runs an enumerated erasure across 105 user-scoped tables plus stored objects, on a daily scheduled job. Mechanism is documented on /security; the deletion window is stated in the privacy policy. The figure is derived from the implementation by a test so changes to the erasure list cannot silently leave this claim behind. As of 2026-09-28.',
   },
   {
     label: 'GDPR: Article 27 EU representative',
@@ -203,7 +203,7 @@ const POSTURE: { label: string; value: string }[] = [
   {
     label: 'Authentication and CSRF',
     value:
-      'Implemented. Fifteen protected route groups are checked at the edge before render; admin routes require an explicit server-side role. CSRF tokens are HMAC-SHA256 with an enforced minimum secret length, constant-time comparison, a rotation window, and fail-closed behaviour when unconfigured. This row read six until 2026-09-12, while the matcher had grown to twelve. As of 2026-09-21.',
+      'Implemented. Sixteen protected route groups are checked at the edge before render; admin routes require an explicit server-side role. CSRF tokens are HMAC-SHA256 with an enforced minimum secret length, constant-time comparison, a rotation window, and fail-closed behaviour when unconfigured. This row read six until 2026-09-12, while the matcher had grown to twelve. As of 2026-09-27.',
   },
   {
     label: 'Rate limiting',
@@ -381,6 +381,21 @@ export default function TrustPage() {
                   <Ledger
                     caption="Change record"
                     rows={[
+                      {
+                        label: '2026-09-28',
+                        value:
+                          'Developer webhooks joined the enumerated erasure list, taking it from 103 to 105 user-scoped tables: the endpoints a developer registers and the log of what was delivered to them. Both are deleted with the account.',
+                      },
+                      {
+                        label: '2026-09-28',
+                        value:
+                          'Three tables joined the enumerated erasure list, taking it from 100 to 103 user-scoped tables: the links that share a schedule, the files a personal skill bundles, and developer projects. Each is deleted with the account.',
+                      },
+                      {
+                        label: '2026-09-27',
+                        value:
+                          'Protected route groups moved from fifteen to sixteen with the developer console, which holds API keys, rate limits and a request playground and is checked at the edge before render like the rest of the signed-in app.',
+                      },
                       {
                         label: '2026-09-27',
                         value:

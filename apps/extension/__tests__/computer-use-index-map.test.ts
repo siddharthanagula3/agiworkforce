@@ -218,7 +218,10 @@ describe('resolution refuses anything but the element the index named', () => {
     await getPageContent(EVAL_TAB_ID);
     const [index] = [...getElementIndexMap(EVAL_TAB_ID)][0]!;
 
-    await expect(click(EVAL_TAB_ID, { index })).resolves.toBeUndefined();
+    await expect(click(EVAL_TAB_ID, { index })).resolves.toEqual({
+      x: expect.any(Number),
+      y: expect.any(Number),
+    });
     const methods = chromeMock.debugger.sendCommand.mock.calls.map((call) => call[1]);
     expect(methods).toContain('DOM.getBoxModel');
     expect(methods).toContain('Input.dispatchMouseEvent');

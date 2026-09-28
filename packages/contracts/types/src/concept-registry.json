@@ -253,7 +253,7 @@
       "label": "Skill",
       "schema": "packages/contracts/cloud-contracts/src/skills.ts",
       "symbol": "ManagedSkillSummary",
-      "tables": ["user_skills"],
+      "tables": ["user_skills", "user_skill_files"],
       "writeFunctions": [],
       "mutators": ["apps/web/lib/services/user-skill-service.ts"],
       "projections": [],
@@ -1476,6 +1476,21 @@
       "why": "filed once by its owner and decided once by the platform, never edited by a client, so there is no creator distinct from the owner and no concurrent write to version"
     },
     {
+      "table": "developer_projects",
+      "exempt": [],
+      "why": "created, renamed and archived only by its owner in the developer console, so its creator is always its owner, and a rename or a new limit is a single last-write-wins edit that no If-Match precondition quotes"
+    },
+    {
+      "table": "developer_webhook_deliveries",
+      "exempt": [],
+      "why": "written only by the delivery job and the owner's resend, one row per attempt at an event, and never edited under an If-Match precondition, so there is no creator distinct from the owner and no concurrent write to version"
+    },
+    {
+      "table": "developer_webhook_endpoints",
+      "exempt": [],
+      "why": "registered, changed and removed only by its owner in the developer console, so its creator is always its owner, and each change is a single last-write-wins edit that no If-Match precondition quotes"
+    },
+    {
       "table": "external_resource_references",
       "exempt": ["createdBy", "version"],
       "why": "recorded by the server for the account that reached the resource, so its creator is always its owner, and no client edits a reference under an If-Match precondition: a repeat sighting refreshes it in place"
@@ -1612,6 +1627,25 @@
       "why": "an api key is a first class developer object with a name, scopes, a prefix and a revocation, and no shared contract type describes it",
       "becomes": "api-key",
       "fix": "add packages/contracts/types/src/api-key.ts exporting ApiKeyRecord (id, name, keyPrefix, scopes, revokedAt, expiresAt) and register the concept over api_keys"
+    },
+    {
+      "table": "developer_projects",
+      "disposition": "canonical-gap",
+      "why": "a developer project is a first class developer object that groups api keys under a name and a monthly credit limit, and no shared contract type describes it",
+      "becomes": "developer-project",
+      "fix": "add packages/contracts/types/src/developer-project.ts exporting DeveloperProjectRecord (id, name, monthlyCreditLimit, archivedAt) and register the concept over developer_projects beside api-key"
+    },
+    {
+      "table": "developer_webhook_endpoints",
+      "disposition": "canonical-gap",
+      "why": "a webhook endpoint is a first class developer object with a url, the events it receives and a signing secret, and no shared contract type describes it",
+      "becomes": "developer-webhook",
+      "fix": "add packages/contracts/types/src/developer-webhook.ts exporting DeveloperWebhookEndpointRecord (id, url, eventTypes, enabled, secretPrefix) and register the concept over developer_webhook_endpoints and developer_webhook_deliveries"
+    },
+    {
+      "table": "developer_webhook_deliveries",
+      "disposition": "operational",
+      "why": "the record of each attempt to deliver an event to an endpoint, kept so its owner can see what was sent and resend it; the endpoint is the product object"
     },
     {
       "table": "shared_conversations",

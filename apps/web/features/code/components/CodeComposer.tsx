@@ -40,18 +40,25 @@ import {
   Spinner,
 } from '@agiworkforce/ui';
 import {
+  CLOUD_CODE_GOAL_COMMANDS,
+  CLOUD_CODE_TURN_STEP_BOUNDS,
   cloudCodeRepositoryLabel,
+  isCloudCodeTurnStepBound,
   type CloudCodeNetworkAccess,
   type CloudCodeRepositoryReference,
   type CloudCodeRuntime,
+  type CloudCodeTurnStepBound,
 } from '@agiworkforce/types';
 import Link from 'next/link';
+import { SlashCommandMenu, type CommandSuggestion } from '@agiworkforce/unified-chat';
 import { ComposerFooter } from '@features/chat/components/Composer/ComposerFooter';
 import { DictationStrip } from '@features/chat/components/Composer/DictationStrip';
 import { useDictation } from '@features/chat/hooks/use-dictation';
 import { MicrophonePrivacyNotice } from '@features/chat/components/MicrophonePrivacyNotice';
 import { useMicrophoneNoticeStore } from '@features/chat/stores/microphone-notice-store';
 import { useManagedUsageSummary } from '@/lib/hooks/useManagedUsageSummary';
+import { listLocalBranches, switchLocalBranch } from '@/features/desktop-host';
+import { toUserMessage } from '@/lib/user-error-message';
 import {
   fetchPreferenceNamespace,
   savePreferenceNamespace,
@@ -67,9 +74,11 @@ import {
 } from '@shared/types/toolApprovalPolicy';
 import {
   CODE_COPY,
+  CODE_GOAL_COMMAND_DESCRIPTIONS,
   CODE_LIMITS,
   CODE_NETWORK_OPTIONS,
   CODE_ROUTES,
+  CODE_TURN_STEP_HINTS,
   DEFAULT_CODE_ENVIRONMENT,
   DEFAULT_NETWORK_ACCESS,
   DEFAULT_RUNTIME_ID,
@@ -77,6 +86,7 @@ import {
   contextWindowLabel,
   environmentChipLabel,
   formatResetIn,
+  turnBudgetNote,
   type CodeEnvironment,
 } from '../code-surface';
 import {
@@ -88,6 +98,7 @@ import {
 import { LocalModelChip } from './LocalModelChip';
 import { describeRuntime, runtimeHelpText } from '../code-runtime';
 import { useCodeRepositories, type CodeRepositoryState } from '../hooks/use-code-repositories';
+import { useCodeBranches } from '../hooks/use-code-branches';
 import type { CloudCodeApi, CloudCodeRepository } from '@agiworkforce/cloud-contracts';
 import styles from '../CloudCodePage.module.css';
 
@@ -97,6 +108,7 @@ const SEND_GLYPH_SIZE = 16;
 const POPOVER_WIDTH = 320;
 const POPOVER_OFFSET = 8;
 const ENTER_KEY = 'Enter';
+const COMMAND_QUERY = /^\/[a-z-]*$/i;
 const FIRST_SHORTCUT = 1;
 const USAGE_RING_SIZE = 16;
 const USAGE_RING_STROKE = 3;
@@ -140,6 +152,7 @@ export interface CodeLocalState {
   adding: boolean;
   onAddFolder: () => void;
   onModelChange: (modelId: string) => void;
+  onBranchSwitched: () => void;
 }
 
 export function draftRepositoryLabel(draft: CodeDraft): string {
@@ -690,22 +703,42 @@ function RepositoryPicker({
 function BranchChip({
   draft,
   onDraftChange,
+  api,
 }: {
   draft: CodeDraft;
   onDraftChange: (patch: Partial<CodeDraft>) => void;
+  api: CloudCodeApi;
 }) {
   const [open, setOpen] = useState(false);
   const [branch, setBranch] = useState(draft.repositoryBranch);
+  const [search, setSearch] = useState('');
   const fieldId = useId();
+  const searchFieldId = useId();
+  const listed = draft.repository !== null;
+  const { state, reload } = useCodeBranches(draft.repository, open && listed, api);
 
   useEffect(() => setBranch(draft.repositoryBranch), [draft.repositoryBranch]);
+
+  const choose = (name: string) => {
+    onDraftChange({ repositoryBranch: name });
+    setSearch('');
+    setOpen(false);
+  };
 
   const apply = () => {
     const next = branch.trim();
     if (!next) return;
-    onDraftChange({ repositoryBranch: next });
-    setOpen(false);
+    choose(next);
   };
+
+  const needle = search.trim();
+  const matches =
+    state.status === 'ready'
+      ? state.branches.filter((candidate) =>
+          candidate.name.toLowerCase().includes(needle.toLowerCase()),
+        )
+      : [];
+  const typedIsListed = matches.some((candidate) => candidate.name === needle);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -721,34 +754,240 @@ function BranchChip({
         sideOffset={POPOVER_OFFSET}
         style={{ width: POPOVER_WIDTH }}
         className="p-0"
+        aria-label={CODE_COPY.branchEdit}
       >
         <div className={styles['popover']}>
-          <div className={styles['formField']}>
-            <label className={styles['formLabel']} htmlFor={fieldId}>
-              {CODE_COPY.repositoryBranchLabel}
-            </label>
-            <input
-              id={fieldId}
-              className={styles['textInput']}
-              value={branch}
-              onChange={(event) => setBranch(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key !== ENTER_KEY) return;
-                event.preventDefault();
-                apply();
-              }}
-              maxLength={CODE_LIMITS.repositoryBranch}
-            />
+          {listed ? (
+            <>
+              <div className={styles['repositoryList']} aria-label={CODE_COPY.branchListLabel}>
+                {(state.status === 'loading' || state.status === 'idle') && (
+                  <div className={styles['repositoryEmpty']}>
+                    <Spinner size="sm" aria-label={CODE_COPY.branchLoading} />
+                  </div>
+                )}
+
+                {state.status === 'error' && (
+                  <div className={styles['repositoryEmpty']}>
+                    <span>{CODE_COPY.branchLoadFailed}</span>
+                    <button type="button" className={styles['secondaryButton']} onClick={reload}>
+                      {CODE_COPY.retry}
+                    </button>
+                  </div>
+                )}
+
+                {state.status === 'ready' && matches.length === 0 && !needle && (
+                  <div className={styles['repositoryEmpty']}>
+                    <span>{CODE_COPY.branchNoMatches}</span>
+                  </div>
+                )}
+
+                {matches.map((candidate) => (
+                  <button
+                    key={candidate.name}
+                    type="button"
+                    className={styles['repositoryRow']}
+                    aria-current={candidate.name === draft.repositoryBranch ? 'true' : undefined}
+                    onClick={() => choose(candidate.name)}
+                  >
+                    <GitBranch size={CHIP_GLYPH_SIZE} aria-hidden="true" />
+                    <span className={styles['repositoryName']}>{candidate.name}</span>
+                    {candidate.isProtected && (
+                      <Lock
+                        size={CHIP_GLYPH_SIZE}
+                        className={styles['repositoryPrivate']}
+                        aria-label={CODE_COPY.branchProtected}
+                      />
+                    )}
+                  </button>
+                ))}
+
+                {needle && !typedIsListed && state.status !== 'loading' && (
+                  <button
+                    type="button"
+                    className={styles['repositoryRow']}
+                    onClick={() => choose(needle)}
+                  >
+                    <Plus size={CHIP_GLYPH_SIZE} aria-hidden="true" />
+                    <span className={styles['repositoryName']}>
+                      {`${CODE_COPY.branchUseTyped} ${needle}`}
+                    </span>
+                  </button>
+                )}
+              </div>
+
+              {state.status === 'ready' && state.truncated && (
+                <span className={styles['formHelp']}>{CODE_COPY.branchTruncated}</span>
+              )}
+
+              <div className={styles['repositorySearch']}>
+                <Search size={CHIP_GLYPH_SIZE} aria-hidden="true" />
+                <input
+                  id={searchFieldId}
+                  className={styles['repositorySearchInput']}
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key !== ENTER_KEY || !needle) return;
+                    event.preventDefault();
+                    choose(needle);
+                  }}
+                  placeholder={CODE_COPY.branchSearchPlaceholder}
+                  aria-label={CODE_COPY.branchSearchLabel}
+                  maxLength={CODE_LIMITS.repositoryBranch}
+                />
+              </div>
+            </>
+          ) : (
+            <>
+              <div className={styles['formField']}>
+                <label className={styles['formLabel']} htmlFor={fieldId}>
+                  {CODE_COPY.repositoryBranchLabel}
+                </label>
+                <input
+                  id={fieldId}
+                  className={styles['textInput']}
+                  value={branch}
+                  onChange={(event) => setBranch(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key !== ENTER_KEY) return;
+                    event.preventDefault();
+                    apply();
+                  }}
+                  maxLength={CODE_LIMITS.repositoryBranch}
+                />
+              </div>
+              <div className={styles['popoverActions']}>
+                <button
+                  type="button"
+                  className={styles['primaryButton']}
+                  disabled={branch.trim().length === 0}
+                  onClick={apply}
+                >
+                  {CODE_COPY.branchApply}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function LocalBranchChip({
+  rootId,
+  branch,
+  disabled,
+  onSwitched,
+}: {
+  rootId: string;
+  branch: string;
+  disabled: boolean;
+  onSwitched: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [branches, setBranches] = useState<string[] | null>(null);
+  const [search, setSearch] = useState('');
+  const [switching, setSwitching] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const searchFieldId = useId();
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    setBranches(null);
+    setError(null);
+    listLocalBranches(rootId)
+      .then((listed) => {
+        if (!cancelled) setBranches(listed?.branches ?? []);
+      })
+      .catch((cause: unknown) => {
+        if (!cancelled) setError(toUserMessage(cause, CODE_COPY.branchLoadFailed));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, rootId]);
+
+  const choose = async (next: string) => {
+    if (next === branch) {
+      setOpen(false);
+      return;
+    }
+    setSwitching(true);
+    setError(null);
+    try {
+      await switchLocalBranch(rootId, next);
+      onSwitched();
+      setOpen(false);
+    } catch (cause: unknown) {
+      setError(toUserMessage(cause, CODE_COPY.branchSwitchFailed));
+    } finally {
+      setSwitching(false);
+    }
+  };
+
+  const needle = search.trim().toLowerCase();
+  const matches = (branches ?? []).filter((name) => name.toLowerCase().includes(needle));
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={styles['chip']}
+          aria-label={CODE_COPY.branchEdit}
+          disabled={disabled}
+        >
+          <GitBranch size={CHIP_GLYPH_SIZE} aria-hidden="true" />
+          <span>{branch}</span>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        side="top"
+        sideOffset={POPOVER_OFFSET}
+        style={{ width: POPOVER_WIDTH }}
+        className="p-0"
+        aria-label={CODE_COPY.branchEdit}
+      >
+        <div className={styles['popover']}>
+          {error !== null && (
+            <span className={styles['formHelp']} role="alert">
+              {error}
+            </span>
+          )}
+          <div className={styles['repositoryList']} aria-label={CODE_COPY.branchListLabel}>
+            {branches === null && error === null && (
+              <div className={styles['repositoryEmpty']}>
+                <Spinner size="sm" aria-label={CODE_COPY.branchLoading} />
+              </div>
+            )}
+            {matches.map((name) => (
+              <button
+                key={name}
+                type="button"
+                className={styles['repositoryRow']}
+                aria-current={name === branch ? 'true' : undefined}
+                disabled={switching}
+                onClick={() => void choose(name)}
+              >
+                <GitBranch size={CHIP_GLYPH_SIZE} aria-hidden="true" />
+                <span className={styles['repositoryName']}>{name}</span>
+              </button>
+            ))}
           </div>
-          <div className={styles['popoverActions']}>
-            <button
-              type="button"
-              className={styles['primaryButton']}
-              disabled={branch.trim().length === 0}
-              onClick={apply}
-            >
-              {CODE_COPY.branchApply}
-            </button>
+          <span className={styles['formHelp']}>{CODE_COPY.branchSwitchHelp}</span>
+          <div className={styles['repositorySearch']}>
+            <Search size={CHIP_GLYPH_SIZE} aria-hidden="true" />
+            <input
+              id={searchFieldId}
+              className={styles['repositorySearchInput']}
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder={CODE_COPY.branchSearchLabel}
+              aria-label={CODE_COPY.branchSearchLabel}
+            />
           </div>
         </div>
       </PopoverContent>
@@ -801,7 +1040,9 @@ function RepositoryChips({
           </button>
         }
       />
-      {draft.repositoryBranch && <BranchChip draft={draft} onDraftChange={onDraftChange} />}
+      {draft.repositoryBranch && (
+        <BranchChip draft={draft} onDraftChange={onDraftChange} api={api} />
+      )}
       <button
         type="button"
         className={`${styles['chip']} ${styles['chipCompact']}`}
@@ -814,7 +1055,13 @@ function RepositoryChips({
   );
 }
 
-function ApprovalModeControl() {
+function ApprovalModeControl({
+  turnSteps,
+  onTurnStepsChange,
+}: {
+  turnSteps: CloudCodeTurnStepBound | null;
+  onTurnStepsChange: (value: CloudCodeTurnStepBound) => void;
+}) {
   const [policy, setPolicy] = useState<ToolApprovalPolicy | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -886,6 +1133,31 @@ function ApprovalModeControl() {
             </DropdownMenuRadioItem>
           ))}
         </DropdownMenuRadioGroup>
+        {turnSteps !== null && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>{CODE_COPY.turnStepsMenu}</DropdownMenuLabel>
+            <DropdownMenuRadioGroup
+              value={String(turnSteps)}
+              onValueChange={(value) => {
+                const bound = Number(value);
+                if (isCloudCodeTurnStepBound(bound)) onTurnStepsChange(bound);
+              }}
+            >
+              {CLOUD_CODE_TURN_STEP_BOUNDS.map((bound) => (
+                <DropdownMenuRadioItem key={bound} value={String(bound)}>
+                  <span className={styles['menuRowLabel']}>
+                    <span className={styles['optionLabel']}>
+                      {bound} {CODE_COPY.turnStepsUnit}
+                    </span>
+                    <span className={styles['optionHint']}>{CODE_TURN_STEP_HINTS[bound]}</span>
+                  </span>
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+            <p className={styles['menuNote']}>{turnBudgetNote()}</p>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -915,7 +1187,7 @@ function AttachMenu() {
   );
 }
 
-function UsageRing({
+export function UsageRing({
   contextTokens,
   contextWindow,
 }: {
@@ -1053,6 +1325,9 @@ export interface CodeComposerProps {
   onStop: () => void;
   contextTokens: number | null;
   contextWindow: number | null;
+  turnControls: boolean;
+  turnSteps: CloudCodeTurnStepBound;
+  onTurnStepsChange: (value: CloudCodeTurnStepBound) => void;
 }
 
 export function CodeComposer({
@@ -1075,6 +1350,9 @@ export function CodeComposer({
   onStop,
   contextTokens,
   contextWindow,
+  turnControls,
+  turnSteps,
+  onTurnStepsChange,
 }: CodeComposerProps) {
   const [focused, setFocused] = useState(false);
   const folder = local.folders.find((choice) => choice.rootId === draft.localRootId) ?? null;
@@ -1101,8 +1379,45 @@ export function CodeComposer({
   );
 
   const sendable = value.trim().length > 0 && !disabled && !busy;
+  const [commandIndex, setCommandIndex] = useState(0);
+  const [dismissedCommandQuery, setDismissedCommandQuery] = useState<string | null>(null);
+  const cloudTurn = !showChips || draft.environment === 'cloud';
+  const commandQuery = cloudTurn && COMMAND_QUERY.test(value) ? value.toLowerCase() : null;
+  const commandSuggestions: CommandSuggestion[] =
+    commandQuery === null || commandQuery === dismissedCommandQuery
+      ? []
+      : CLOUD_CODE_GOAL_COMMANDS.filter((command) => command.startsWith(commandQuery)).map(
+          (command) => ({
+            id: command,
+            command,
+            description: CODE_GOAL_COMMAND_DESCRIPTIONS[command],
+          }),
+        );
+  const commandsOpen = focused && commandSuggestions.length > 0;
+
+  useEffect(() => setCommandIndex(0), [commandQuery]);
+
+  const chooseCommand = (suggestion: CommandSuggestion) => {
+    onChange(`${suggestion.command} `);
+    setDismissedCommandQuery(null);
+  };
+
+  const handleCommandKey = (event: KeyboardEvent<HTMLTextAreaElement>): boolean => {
+    if (!commandsOpen) return false;
+    const count = commandSuggestions.length;
+    if (event.key === 'ArrowDown') setCommandIndex((index) => (index + 1) % count);
+    else if (event.key === 'ArrowUp') setCommandIndex((index) => (index - 1 + count) % count);
+    else if (event.key === ENTER_KEY || event.key === 'Tab') {
+      const suggestion = commandSuggestions[commandIndex];
+      if (suggestion) chooseCommand(suggestion);
+    } else if (event.key === 'Escape') setDismissedCommandQuery(commandQuery);
+    else return false;
+    event.preventDefault();
+    return true;
+  };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (handleCommandKey(event)) return;
     if (event.key !== ENTER_KEY || event.shiftKey) return;
     event.preventDefault();
     if (sendable) onSubmit(value.trim());
@@ -1125,10 +1440,12 @@ export function CodeComposer({
             />
             {draft.environment === 'local' ? (
               folder?.branch && (
-                <span className={`${styles['chip']} ${styles['chipStatic']}`}>
-                  <GitBranch size={CHIP_GLYPH_SIZE} aria-hidden="true" />
-                  <span>{folder.branch}</span>
-                </span>
+                <LocalBranchChip
+                  rootId={folder.rootId}
+                  branch={folder.branch}
+                  disabled={disabled || busy}
+                  onSwitched={local.onBranchSwitched}
+                />
               )
             ) : (
               <RepositoryChips draft={draft} onDraftChange={onDraftChange} api={api} />
@@ -1152,6 +1469,13 @@ export function CodeComposer({
         )}
 
         <div className={`${styles['field']} ${focused ? styles['fieldFocused'] : ''}`}>
+          <SlashCommandMenu
+            show={commandsOpen}
+            suggestions={commandSuggestions}
+            selectedIndex={commandIndex}
+            onSelect={chooseCommand}
+            onHover={setCommandIndex}
+          />
           <div className={styles['fieldRow']}>
             <textarea
               ref={inputRef}
@@ -1212,7 +1536,12 @@ export function CodeComposer({
               />
             ) : (
               <>
-                <ApprovalModeControl />
+                {turnControls && (
+                  <ApprovalModeControl
+                    turnSteps={cloudTurn ? turnSteps : null}
+                    onTurnStepsChange={onTurnStepsChange}
+                  />
+                )}
                 <AttachMenu />
                 <button
                   type="button"

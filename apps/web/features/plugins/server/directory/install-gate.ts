@@ -48,3 +48,37 @@ export async function refusePluginInstall(
   }
   return null;
 }
+
+export interface PluginDependencyInstall {
+  pluginKey: string;
+  requiredBy: string;
+}
+
+export async function pluginDependencyRefusal(
+  request: NextRequest,
+  scope: UserScopedDb,
+  dependencies: readonly PluginDependencyInstall[],
+): Promise<string | null> {
+  for (const dependency of dependencies) {
+    const policy = await evaluatePluginPolicyForUser({
+      db: scope.db,
+      userId: scope.userId,
+      organizationId: scope.organizationId,
+      pluginKey: dependency.pluginKey,
+      request,
+    });
+    if (!policy.allowed) {
+      return `Plugin "${dependency.requiredBy}" depends on "${dependency.pluginKey}", so it cannot be installed. ${policy.reason}`;
+    }
+  }
+  return null;
+}
+
+export async function refusePluginDependencyInstall(
+  request: NextRequest,
+  scope: UserScopedDb,
+  dependencies: readonly PluginDependencyInstall[],
+): Promise<NextResponse | null> {
+  const refusal = await pluginDependencyRefusal(request, scope, dependencies);
+  return refusal ? pluginNotPermittedResponse(refusal) : null;
+}

@@ -10,6 +10,7 @@ import {
   type FileSearchMatch,
   type FileStat,
   type FileTextContent,
+  type FileTextEdit,
   type WorkspaceRoot,
 } from '@agiworkforce/local-runtime-contract';
 import {
@@ -182,6 +183,49 @@ export async function writeTextFile(
   return statPath(root, relativePath);
 }
 
+export class TextEditRefused extends Error {}
+
+function countOccurrences(text: string, passage: string): number {
+  let count = 0;
+  let index = text.indexOf(passage);
+  while (index !== -1) {
+    count += 1;
+    index = text.indexOf(passage, index + passage.length);
+  }
+  return count;
+}
+
+export async function editTextFile(
+  root: WorkspaceRoot,
+  relativePath: string,
+  oldText: string,
+  newText: string,
+  replaceAll: boolean,
+): Promise<FileTextEdit> {
+  const current = await readTextFile(root, relativePath);
+  if (current.truncated) {
+    throw new TextEditRefused(
+      `${current.path} is too large to edit in place. Replace it whole instead.`,
+    );
+  }
+  const occurrences = countOccurrences(current.text, oldText);
+  if (occurrences === 0) {
+    throw new TextEditRefused(
+      `The passage to replace is not in ${current.path}. Read the file again and copy the passage exactly.`,
+    );
+  }
+  if (occurrences > 1 && !replaceAll) {
+    throw new TextEditRefused(
+      `The passage appears ${occurrences} times in ${current.path}. Include more of the surrounding text so it appears once, or set replaceAll.`,
+    );
+  }
+  const next = replaceAll
+    ? current.text.split(oldText).join(newText)
+    : current.text.replace(oldText, () => newText);
+  const stat = await writeTextFile(root, relativePath, next);
+  return { path: current.path, replacements: occurrences, sizeBytes: stat.sizeBytes };
+}
+
 export async function createDirectory(
   root: WorkspaceRoot,
   relativePath: string,
@@ -228,13 +272,19 @@ async function* walk(
   }
 }
 
+export interface SearchOptions {
+  ignoreCase?: boolean;
+}
+
 export async function globFiles(
   root: WorkspaceRoot,
   pattern: string,
   relativePath = '',
+  options: SearchOptions = {},
 ): Promise<FileEntry[]> {
   const resolved = await resolveWithinRoot(root, relativePath);
-  const matcher = globToRegExp(pattern);
+  const exact = globToRegExp(pattern);
+  const matcher = options.ignoreCase ? new RegExp(exact.source, 'i') : exact;
   const results: FileEntry[] = [];
 
   for await (const found of walk(resolved.absolute, resolved.relative, 0)) {
@@ -246,10 +296,31 @@ export async function globFiles(
   return results;
 }
 
+function grepText(
+  relative: string,
+  text: string,
+  query: string,
+  limit: number,
+  ignoreCase: boolean,
+): FileSearchMatch[] {
+  if (!ignoreCase) {
+    return grepLines(relative, text, query, { limit, previewLimit: GREP_PREVIEW_LIMIT });
+  }
+  const lines = text.split('\n');
+  return grepLines(relative, text.toLowerCase(), query.toLowerCase(), {
+    limit,
+    previewLimit: GREP_PREVIEW_LIMIT,
+  }).map((match) => ({
+    ...match,
+    preview: (lines[match.line - 1] ?? match.preview).slice(0, GREP_PREVIEW_LIMIT),
+  }));
+}
+
 export async function grepFiles(
   root: WorkspaceRoot,
   query: string,
   relativePath = '',
+  options: SearchOptions = {},
 ): Promise<FileSearchMatch[]> {
   if (query.length === 0) return [];
   const resolved = await resolveWithinRoot(root, relativePath);
@@ -269,10 +340,13 @@ export async function grepFiles(
     if (looksBinary(buffer)) continue;
 
     matches.push(
-      ...grepLines(found.relative, buffer.toString('utf8'), query, {
-        limit: MAX_GREP_MATCHES - matches.length,
-        previewLimit: GREP_PREVIEW_LIMIT,
-      }),
+      ...grepText(
+        found.relative,
+        buffer.toString('utf8'),
+        query,
+        MAX_GREP_MATCHES - matches.length,
+        options.ignoreCase === true,
+      ),
     );
   }
   return matches;

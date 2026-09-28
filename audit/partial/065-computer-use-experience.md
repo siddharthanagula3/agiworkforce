@@ -10,15 +10,12 @@ nothing is left.
 
 - Done when: The user turns computer use on in a guided setup that grants the needed permissions.
 - Wave: 3
+- Already works on: desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
-| desktop | partial | No setup screen or status: computer use appears only when the first screen step raises the grant prompt and macOS opens Accessibility; add a settings row that shows and grants it. | ui |
 | cli | missing | Not built on this surface. |  |
-| chrome | partial | Browser control is set up per site by approving it, but there is no guided setup; the agent itself can only be reached from Run Autofill. | ui |
-
-Code: `apps/desktop/electron/runtime/permissionManager.ts:292-320`, `apps/desktop/electron/runtime/computerUseService.ts:240-264`, `apps/extension/src/features/computer-use/browserControlConsent.ts:90-96`, `apps/extension/src/side_panel.ts:9490-9502`
 
 ## S65.02: Operating-system permission explanation.
 
@@ -44,75 +41,51 @@ Code: `apps/desktop/electron/runtime/permissionManager.ts:292-320`, `apps/deskto
 
 - Done when: The user sees what the agent sees on screen as it works.
 - Wave: 3
-- Already works on: desktop
+- Already works on: desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
-| chrome | partial | The driven tab is the visible one, but the log's screenshot thumbnails never fill because no step carries the image. | ui |
-
-Code: `apps/extension/src/features/side-panel/computerUsePanel.ts:1000-1005`
 
 ## S65.08: Cursor/action visualization.
 
 - Done when: The agent's pointer position or action target is shown visually as it acts.
 - Wave: 3
+- Already works on: chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
-| chrome | partial | The log names each click ("Click at (x, y)" or selector); nothing marks the target on the page. | ui |
-
-Code: `apps/extension/src/features/side-panel/computerUsePanel.ts:1025-1031`
 
 ## S65.09: Current-application indicator.
 
 - Done when: The product shows which application the agent is currently working in.
 - Wave: 3
+- Already works on: desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
-| desktop | partial | Each step names only the display ("on <device>") ; nothing reports the application in front. | ui |
-
-Code: `apps/desktop/electron/runtime/computerUseService.ts:349-357`, `packages/ui/unified-chat/src/components/AgentActivityTimeline.tsx:467-495`
 
 ## S65.10: Current-window indicator.
 
 - Done when: The product shows which window the agent is currently working in.
 - Wave: 3
+- Already works on: desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
-| desktop | partial | Each step names only the display ("on <device>") ; nothing reports the window in front. | ui |
-
-Code: `apps/desktop/electron/runtime/computerUseService.ts:349-357`, `packages/ui/unified-chat/src/components/AgentActivityTimeline.tsx:467-495`
 
 ## S65.11: Clipboard permission.
 
 - Done when: Clipboard access by the agent needs its own permission.
 - Wave: 3
+- Already works on: desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
-| desktop | partial | The clipboard.read grant covers only the Attach clipboard action; the screen agent can still copy and paste with key presses under its computer-use grant. | handler |
-
-Code: `apps/desktop/electron/runtime/dispatcher.ts:421-424`, `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:712-716`
-
-## S65.12: Local-folder permission.
-
-- Done when: The user grants the agent specific local folders and can revoke them.
-- Wave: 2
-- Already works on: vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| desktop | partial | Folders can be granted (workspace_pick_root), but the only review and revoke screen, Local access, mounts only in the internal Tauri shell, so Electron users cannot revoke a granted folder. | ui, mount |
-| cli | partial | /add-dir is a real grant (path_security roots gate validate_workspace_path), but the criterion also needs revoke: there is no /remove-dir or any command that unregisters one directory; unregister_additional_workspace_roots runs only when a privacy handoff resets the session. Remaining: add a /remove-dir that unregisters the root. |  |
-
-Code: `apps/desktop/electron/runtime/dispatcher.ts:704-712`, `packages/contracts/local-runtime/src/host-bridge.ts:310-312`, `apps/web/features/settings/sections/CapabilitiesSection.tsx:91-91`, `apps/cli/src/claude_parity.rs:238-246`
 
 ## S65.14: Clicking and typing.
 
@@ -156,9 +129,6 @@ Code: `apps/desktop/electron/runtime/dispatcher.ts:704-712`, `packages/contracts
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
-| chrome | partial | The agent can open a page's upload button (with approval) but the user must choose the file in Chrome's picker; it cannot drive the dialog. | handler |
-
-Code: `apps/extension/src/features/computer-use/approvalPolicy.ts:216-218`
 
 ## S65.18: Background application operation where supported.
 
@@ -169,35 +139,29 @@ Code: `apps/extension/src/features/computer-use/approvalPolicy.ts:216-218`
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
-| chrome | partial | The agent drives a tab through the debugger, but the run stops if the user switches to another tab, so it cannot work in a background tab. | handler |
+| chrome | partial | Claude in Chrome keeps working when the user switches tabs (support.claude.com/en/articles/12012173). The run still stops when another tab is activated outside a take-over; working in a hidden tab needs a live check that Page.captureScreenshot answers for a background tab before the cancellation can be lifted. | handler |
 
-Code: `apps/extension/src/background.ts:4707-4720`
+Code: `apps/extension/src/background.ts:4919-4919`
 
 ## S65.19: User-input arbitration.
 
 - Done when: When the user moves the mouse or types, the agent yields rather than fighting for control.
 - Wave: 3
+- Already works on: desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
-| desktop | partial | Nothing detects the user's own input; the user must choose Take Over Screen Control from the menu to make the agent stop. | handler |
-| chrome | partial | The cited lines stop the run only when the user activates another tab; the debugger detach path stops it when they dismiss Chrome's bar. Nothing observes the user moving the mouse or typing inside the driven tab, so the agent and the user can fight for the same page. Remaining: detect user input on the driven tab (or CDP Input events not sent by the loop) and pause. |  |
-
-Code: `apps/desktop/electron/appMenu.ts:115-116`, `apps/desktop/electron/runtime/dispatcher.ts:253-262`, `apps/extension/src/background.ts:4707-4720`, `apps/extension/src/features/side-panel/computerUsePanel.ts:519-526`
 
 ## S65.20: Emergency stop.
 
 - Done when: One immediate control stops all computer control.
-- Wave: 2
-- Already works on: chrome
+- Wave: 3
+- Already works on: desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
-| desktop | partial | Only the app-menu item Take Over Screen Control (no shortcut) halts it; the real stop, computer_stop, which also withdraws the grant, has no caller. | ui, mount |
-
-Code: `apps/desktop/electron/appMenu.ts:115-116`, `apps/desktop/electron/runtime/computerUseService.ts:177-195`, `apps/desktop/electron/runtime/dispatcher.ts:449-453`
 
 ## S65.21: Pause and takeover.
 
@@ -214,40 +178,33 @@ Code: `apps/desktop/electron/appMenu.ts:115-116`, `apps/desktop/electron/runtime
 
 - Done when: After taking over, the user hands control back and the agent continues.
 - Wave: 3
+- Already works on: desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
-| desktop | partial | Hand Back only flips the flag (computerUseService.ts:190-195). The refusal that paused the run told the model to "wait for them to hand control back" and the turn has already ended with that tool error; nothing resumes it, so the agent continues only when the user sends a new message. Remaining: after Hand Back, re-issue the paused step or re-open the turn automatically. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/desktop/electron/appMenu.ts:116-116`, `apps/desktop/electron/runtime/computerUseService.ts:190-195`
 
 ## S65.23: Sensitive-action review.
 
 - Done when: Sensitive actions (payments, passwords, sending) require the user's review before the agent does them.
+- Wave: 3
+- Already works on: desktop, chrome
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+| web | missing | Not built on this surface. |  |
+
+## S65.24: Authentication handoff.
+
+- Done when: When sign-in is required the agent hands off to the user and continues afterwards.
 - Wave: 3
 - Already works on: chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
-| desktop | partial | One session-long computer-use grant covers every click and keystroke; nothing pauses for review before a payment, password or send, although /desktop marketing says every device step asks. | handler |
-
-Code: `apps/desktop/electron/runtime/permissionManager.ts:292-320`, `apps/desktop/electron/runtime/dispatcher.ts:413-434`
-
-## S65.24: Authentication handoff.
-
-- Done when: When sign-in is required the agent hands off to the user and continues afterwards.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
-| chrome | partial | The agent never fills passwords and asks before sensitive fields, but a sign-in stops the run; there is no continue-after-sign-in. | ui, handler |
-
-Code: `apps/extension/src/features/computer-use/approvalPolicy.ts:219-221`
 
 ## S65.25: Action outcome/receipt.
 
@@ -263,40 +220,33 @@ Code: `apps/extension/src/features/computer-use/approvalPolicy.ts:219-221`
 
 - Done when: When an application cannot be controlled the product says why.
 - Wave: 3
-- Already works on: chrome
+- Already works on: desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
-| desktop | partial | Only whole-machine reasons are given (not macOS, helper missing, permission off); nothing explains a specific app that ignores input. | handler |
-
-Code: `apps/desktop/electron/runtime/computerUseService.ts:240-264`
 
 ## S65.27: Device-offline state.
 
 - Done when: When the target computer is offline the product says so and waits or stops clearly.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Linked devices shows Online/Offline, but a durable run waiting for an offline computer tells the user nothing (the reason is only logged). | ui |
-| desktop | partial | A step for another machine says "waiting on <device>", but a durable run silently waits for an offline computer and then drops its tools. | ui |
 | mobile | partial | Covers Remote Control of desktop code sessions only; there is no computer use to wait for. | surface-only |
 
-Code: `apps/web/features/settings/components/LinkedDevicesPanel.tsx:49-60`, `apps/web/lib/workflows/cloud-agent-workflow.ts:16-30`, `apps/web/lib/hooks/useChatStream.ts:1234-1239`, `apps/mobile/src/features/companion/components/StatusBanners.tsx:38-45`
+Code: `apps/mobile/src/features/companion/components/StatusBanners.tsx:38-45`
 
 ## S65.28: Permission-revoked state.
 
 - Done when: When a permission is revoked the agent stops and the user is told how to restore it.
-- Wave: 2
+- Wave: 3
+- Already works on: desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
-| desktop | partial | OS permission loss is explained, but the product grant cannot be revoked: the only revoker, computer_stop, has no caller and no screen lists grants. | ui, mount |
-| chrome | partial | The stop half holds and is stronger than cited: removing a site or an admin policy change also cancels the run (background.ts:2615-2634). The second half does not: the copy names the cause only ("...so the run was stopped"), a removed site is reported as "The tab left the page this run was approved for", and nothing tells the user how to restore control (re-approve the site, start Run Autofill again). Remaining: add restore guidance to the cancellation copy and a distinct reason for site removal. |  |
-
-Code: `apps/desktop/electron/runtime/dispatcher.ts:449-453`, `apps/desktop/electron/runtime/computerUseService.ts:240-264`, `apps/desktop/electron/runtime/dispatcher.ts:651-672`, `apps/extension/src/background.ts:4148-4165`
 
 ## S65.29: Remote access to a permitted local computer.
 

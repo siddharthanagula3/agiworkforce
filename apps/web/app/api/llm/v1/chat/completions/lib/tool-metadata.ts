@@ -118,6 +118,20 @@ export const PLATFORM_TOOL_METADATA: Readonly<Record<string, ToolMetadata>> = Ob
     createsEgressPath: false,
     declared: true,
   },
+  plan_itinerary: {
+    actionClass: 'read',
+    reversible: true,
+    acceptsUntrustedContent: false,
+    createsEgressPath: false,
+    declared: true,
+  },
+  compare_products: {
+    actionClass: 'read',
+    reversible: true,
+    acceptsUntrustedContent: false,
+    createsEgressPath: false,
+    declared: true,
+  },
   url_fetch: {
     actionClass: 'read',
     reversible: true,
@@ -176,6 +190,22 @@ export const PLATFORM_TOOL_METADATA: Readonly<Record<string, ToolMetadata>> = Ob
     createsEgressPath: false,
     declared: true,
   },
+  generate_image: {
+    actionClass: 'write',
+    reversible: true,
+    acceptsUntrustedContent: false,
+    createsEgressPath: false,
+    declared: true,
+    retrySafety: 'idempotent',
+  },
+  edit_image: {
+    actionClass: 'write',
+    reversible: true,
+    acceptsUntrustedContent: false,
+    createsEgressPath: false,
+    declared: true,
+    retrySafety: 'idempotent',
+  },
   skill: {
     actionClass: 'read',
     reversible: true,
@@ -220,6 +250,13 @@ export const PLATFORM_TOOL_METADATA: Readonly<Record<string, ToolMetadata>> = Ob
   },
   create_schedule: {
     actionClass: 'write',
+    reversible: true,
+    acceptsUntrustedContent: false,
+    createsEgressPath: false,
+    declared: true,
+  },
+  draft_plugin: {
+    actionClass: 'read',
     reversible: true,
     acceptsUntrustedContent: false,
     createsEgressPath: false,

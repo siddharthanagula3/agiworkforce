@@ -24,4 +24,5 @@ export type TurnStartParams = {
    * runs the same tools twice.
    */
   clientTurnId?: string;
+  maxTurns?: number;
 };

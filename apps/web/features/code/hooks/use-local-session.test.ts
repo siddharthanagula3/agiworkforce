@@ -79,6 +79,8 @@ describe('one local session', () => {
       outcome: 'completed',
       response: 'desktop leg ok',
       failure: null,
+      inputTokens: 0,
+      outputTokens: 0,
     });
 
     await waitFor(() => expect(result.current.messages).toHaveLength(2));
@@ -106,6 +108,8 @@ describe('one local session', () => {
         action: 'sign_in_provider',
         retryable: false,
       },
+      inputTokens: 0,
+      outputTokens: 0,
     });
 
     await waitFor(() => expect(result.current.turn.outcome).toBe('failed'));
@@ -132,6 +136,8 @@ describe('one local session', () => {
       outcome: 'interrupted',
       response: '',
       failure: null,
+      inputTokens: 0,
+      outputTokens: 0,
     });
 
     expect(interruptDeveloperTurn).toHaveBeenCalledWith('root-1', 'thread-1', 'turn-1');

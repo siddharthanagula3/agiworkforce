@@ -19,6 +19,8 @@ function actions() {
     newWindow: vi.fn(),
     openConversationInNewWindow: vi.fn(),
     hasFocusedConversation: vi.fn(() => true),
+    isFrontWindowOnTop: vi.fn(() => false),
+    setFrontWindowOnTop: vi.fn(),
     toggleQuickAsk: vi.fn(),
     captureScreenshot: vi.fn(),
     openSettings: vi.fn(),
@@ -33,6 +35,7 @@ function actions() {
     stepZoomLevel: vi.fn(),
     takeOverScreen: vi.fn(),
     handBackScreen: vi.fn(),
+    stopScreenControl: vi.fn(),
   };
 }
 

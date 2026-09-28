@@ -20,14 +20,19 @@ import {
   type SkillToolFileAccess,
   type SkillToolResult,
   type SkillToolRuntimeContext,
+  type SkillWithFileAccess,
 } from '@agiworkforce/skills';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
-import { listInstalledDirectorySkills } from '@/features/plugins/server/directory/installed-skills';
+import {
+  findInstalledDirectorySkillWithFiles,
+  listInstalledDirectorySkills,
+} from '@/features/plugins/server/directory/installed-skills';
 import { logger } from '@/lib/logger';
 import {
   findUserSkillByName,
+  findUserSkillWithFiles,
   listUserSkillsAsManagedSkills,
   toManagedSkillFromUserSkill,
 } from './user-skill-service';
@@ -490,6 +495,25 @@ export async function executeManagedSkillToolForPlugins(
   );
 }
 
+export async function listManagedPluginSkillsWithFiles(
+  pluginId: string,
+): Promise<SkillWithFileAccess[]> {
+  return (await getManagedSkillDirectory())
+    .filter((skill) => skillPluginOwner(skill) === pluginId)
+    .map((skill) => ({ skill, access: managedSkillFileAccess }));
+}
+
+export async function findManagedSkillWithFiles(
+  name: string,
+  enabledPluginIds: ReadonlySet<string> | null,
+): Promise<SkillWithFileAccess | null> {
+  const catalog = enabledPluginIds
+    ? await getManagedSkillCatalogForPlugins(enabledPluginIds)
+    : await getManagedSkillCatalog();
+  const skill = catalog.find((candidate) => candidate.name === name);
+  return skill ? { skill, access: managedSkillFileAccess } : null;
+}
+
 /**
  * Called when a cached directory read produces a response that fails the
  * public contract (`ManagedSkillsResponseSchema`). Without this, a directory
@@ -587,6 +611,32 @@ export async function findSelectableSkillByName(
     findUserSkillByName(params.db, params.userId, params.name),
   );
   return authored ? toManagedSkillFromUserSkill(authored) : null;
+}
+
+export interface SelectableSkillWithFiles extends SkillWithFileAccess {
+  managed: boolean;
+}
+
+export async function findSelectableSkillWithFiles(
+  params: SkillDetailLookupParams,
+): Promise<SelectableSkillWithFiles | null> {
+  const enabledPluginIds = await readOptionalSkillSource(
+    'enabled-plugin-ids',
+    EMPTY_PLUGIN_IDS,
+    () => params.loadEnabledPluginIds(),
+  );
+  const managed = (await getManagedSkillDirectoryForPlugins(enabledPluginIds)).find(
+    (skill) => skill.name === params.name,
+  );
+  if (managed) return { skill: managed, access: managedSkillFileAccess, managed: true };
+  const owned =
+    (await readOptionalSkillSource('directory-skills', null, () =>
+      findInstalledDirectorySkillWithFiles(params.db, params.userId, params.name),
+    )) ??
+    (await readOptionalSkillSource('user-skills', null, () =>
+      findUserSkillWithFiles(params.db, params.userId, params.name),
+    ));
+  return owned ? { ...owned, managed: false } : null;
 }
 
 export function memoizeAsync<T>(load: () => Promise<T>): () => Promise<T> {

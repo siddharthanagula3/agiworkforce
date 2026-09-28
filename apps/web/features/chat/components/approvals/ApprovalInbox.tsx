@@ -151,7 +151,7 @@ export function ApprovalInbox({
           <span className="hidden text-xs sm:inline">Approvals</span>
           {approvals.length > 0 && (
             <span
-              className="flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-caption font-semibold leading-none text-amber-950"
+              className="flex h-4 min-w-4 items-center justify-center rounded-full bg-warning-fill px-1 text-caption font-semibold leading-none text-warning-on-fill"
               aria-hidden="true"
             >
               {approvals.length > 99 ? '99+' : approvals.length}
@@ -191,7 +191,7 @@ export function ApprovalInbox({
                 >
                   <div className="flex items-start gap-2">
                     <ShieldCheck
-                      className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-500"
+                      className="mt-0.5 h-4 w-4 shrink-0 text-warning-text"
                       aria-hidden="true"
                     />
                     <div className="min-w-0 flex-1">
@@ -209,7 +209,7 @@ export function ApprovalInbox({
                   )}
 
                   {expired ? (
-                    <div className="mt-3 rounded-md bg-amber-500/10 px-2.5 py-2 text-xs text-amber-700 dark:text-amber-300">
+                    <div className="mt-3 rounded-md bg-warning-fill/10 px-2.5 py-2 text-xs text-warning-text">
                       This request expired. Open the conversation to rerun the turn.
                     </div>
                   ) : (

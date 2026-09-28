@@ -3,8 +3,8 @@ id: troubleshooting
 title: Troubleshooting: when something does not work
 path: /support
 category: troubleshooting
-tags: troubleshooting, not working, error, failed, broken, stuck, cannot send, no response, offline, retry, upgrade required, unavailable, contact support, search failed, search unavailable, cli login, agi login, device code, extension
-updated: 2026-09-22
+tags: troubleshooting, not working, error, failed, broken, stuck, unsupported browser, supported browsers, javascript, cannot send, no response, offline, retry, upgrade required, unavailable, contact support, search failed, search unavailable, cli login, agi login, device code, extension
+updated: 2026-09-28
 scope: public
 ---
 
@@ -16,6 +16,12 @@ this", "this model cannot do this" and "this is broken", and the fix is
 different for each.
 
 Check the status page before investigating your own account.
+
+## The page says this browser is too old
+
+AGI runs in current versions of Chrome, Edge, Firefox and Safari. A browser too
+old to run it shows a notice at the top of the page naming those browsers, and
+a browser with JavaScript turned off shows a notice asking you to turn it on.
 
 ## A chat will not load
 
@@ -51,9 +57,8 @@ or a workspace restriction. Check the approval prompt, the connector's
 
 ## A model is missing from the picker
 
-The badge says which case it is: **Upgrade** (your plan), **Coming soon, not yet
-available** (not live yet), or **Unavailable right now** (live but not
-answering). A workspace model policy can also remove models entirely, in which
+The badge says which case it is: **Upgrade** (your plan), **Coming soon** (not
+live yet), or **Unavailable right now** (live but not answering). A workspace model policy can also remove models entirely, in which
 case they do not appear at all.
 
 ## A retired model

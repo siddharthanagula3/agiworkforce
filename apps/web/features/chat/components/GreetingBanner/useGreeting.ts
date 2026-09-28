@@ -12,6 +12,7 @@ import {
 } from '@agiworkforce/unified-chat';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import { useBillingStore } from '@shared/stores/web-auth-store';
+import { useNameOptedOut } from './useNameOptedOut';
 
 interface GreetingResult {
   headline: string;
@@ -28,12 +29,14 @@ export function useGreeting(): GreetingResult {
   const { t, i18n } = useTranslation('chat');
   const { user: compatibilityUser, isLoading, initialized } = useAuthStore();
   const canonicalUser = useBillingStore((state) => state.user);
+  const nameOptedOut = useNameOptedOut();
 
-  const userName =
-    canonicalUser?.profile?.preferred_name ||
-    canonicalUser?.name ||
-    compatibilityUser?.preferredName ||
-    compatibilityUser?.name;
+  const userName = nameOptedOut
+    ? undefined
+    : canonicalUser?.profile?.preferred_name ||
+      canonicalUser?.name ||
+      compatibilityUser?.preferredName ||
+      compatibilityUser?.name;
 
   const [snapshot] = React.useState(() => {
     const now = new Date();

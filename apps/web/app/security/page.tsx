@@ -161,7 +161,7 @@ const ACCESS: { label: string; value: string }[] = [
   {
     label: 'Sessions and protected routes',
     value:
-      'Authentication is handled by Clerk. Fifteen route groups (chat, code, library, models, open, quick-ask, schedules, tasks, settings, billing, upgrade, admin, workspace, operator, and welcome) are checked at the edge before the page renders; a request without a session cookie is redirected to login carrying its intended destination, so a protected page never renders and then complains.',
+      'Authentication is handled by Clerk. Sixteen route groups (chat, code, library, models, developers, open, quick-ask, schedules, tasks, settings, billing, upgrade, admin, workspace, operator, and welcome) are checked at the edge before the page renders; a request without a session cookie is redirected to login carrying its intended destination, so a protected page never renders and then complains.',
   },
   {
     label: 'Administrative access',
@@ -293,7 +293,7 @@ const DELETION: { label: string; value: string }[] = [
   {
     label: 'The list is enumerated, not implied',
     value:
-      'Erasure walks a hardcoded, foreign-key-ordered list of 100 user-scoped tables covering conversations, artifacts, folders, tags, branches, bookmarks, reactions, shares, memories, settings, projects, shortcuts, search history, schedules, work plans, connectors, connector permissions, notifications, feedback, support tickets and their replies, API keys, two-factor enrolment, sessions, voice sessions, automation audit events, credits, redemptions, usage and billing records, mobile store transactions, video generation jobs, image generation jobs, consent records, data-rights requests, beta applications, email preferences, device registrations, connector call logs, sync data, routing decision traces, product analytics events, workspace membership, subscriptions, and finally the profile row. Child tables that cascade are deliberately left out of the list so there is one source of truth, not two.',
+      'Erasure walks a hardcoded, foreign-key-ordered list of 105 user-scoped tables covering conversations, artifacts, folders, tags, branches, bookmarks, reactions, shares, memories, settings, projects, shortcuts, search history, schedules, work plans, connectors, connector permissions, notifications, feedback, support tickets and their replies, API keys, two-factor enrolment, sessions, voice sessions, automation audit events, credits, redemptions, usage and billing records, mobile store transactions, video generation jobs, image generation jobs, consent records, data-rights requests, beta applications, email preferences, device registrations, connector call logs, sync data, routing decision traces, product analytics events, workspace membership, subscriptions, and finally the profile row. Child tables that cascade are deliberately left out of the list so there is one source of truth, not two.',
   },
   {
     label: 'Bytes before rows',

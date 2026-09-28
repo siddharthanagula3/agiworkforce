@@ -9,6 +9,7 @@ import { platformRequestHeaders } from '../platform/platformHeaders';
 
 export const MEMORY_SYNC_PATH = '/api/memory/sync';
 export const MEMORY_PATH = '/api/memory';
+export const WORKSPACES_PATH = '/api/settings/workspaces';
 export const MEMORY_SYNC_PROTOCOL_VERSION = 2;
 export const MEMORY_SOURCE = 'vscode';
 export const INITIAL_CURSOR = '0';
@@ -23,6 +24,17 @@ const PushResponseSchema = MemorySyncPushResponseSchema.extend({
     .optional()
     .default([]),
 });
+
+const WorkspaceListSchema = z.object({
+  workspaces: z.array(z.object({ id: z.string(), name: z.string() })),
+  activeWorkspaceId: z.string().nullable(),
+  activeOrganizationId: z.string().nullable(),
+});
+
+export interface MemoryScope {
+  organizationId: string | null;
+  workspaceName: string | null;
+}
 
 export type MemoryPullResponse = z.infer<typeof MemorySyncPullResponseSchema>;
 export type MemoryPushResponse = z.infer<typeof PushResponseSchema>;
@@ -72,6 +84,7 @@ export interface AccountMemoryClient {
   pullAll(since: string): Promise<MemoryPullResponse>;
   push(memories: MemoryPushItem[]): Promise<MemoryPushResponse>;
   deleteAll(): Promise<void>;
+  readScope(): Promise<MemoryScope>;
 }
 
 export function createAccountMemoryClient(config: AccountMemoryClientConfig): AccountMemoryClient {
@@ -157,6 +170,26 @@ export function createAccountMemoryClient(config: AccountMemoryClientConfig): Ac
 
     async deleteAll() {
       await request(MEMORY_PATH, { method: 'DELETE' });
+    },
+
+    async readScope() {
+      const parsed = WorkspaceListSchema.safeParse(
+        await request(WORKSPACES_PATH, { method: 'GET' }),
+      );
+      if (!parsed.success) {
+        throw new AccountMemoryHttpError(
+          'AGI Cloud returned an unreadable workspace response.',
+          CONTRACT_VIOLATION_STATUS,
+        );
+      }
+      const { workspaces, activeWorkspaceId, activeOrganizationId } = parsed.data;
+      return {
+        organizationId: activeOrganizationId,
+        workspaceName:
+          activeOrganizationId === null
+            ? null
+            : (workspaces.find((workspace) => workspace.id === activeWorkspaceId)?.name ?? null),
+      };
     },
   };
 }

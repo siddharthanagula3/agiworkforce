@@ -1,6 +1,15 @@
+import Link from 'next/link';
+
 import { BYOK_SURFACES } from '@/lib/marketing-constants';
 import { listScheduledModelRetirements } from '@/lib/developer-api/model-retirements';
+import {
+  DEVELOPER_WEBHOOK_EVENTS,
+  DEVELOPER_WEBHOOK_TEST_EVENT,
+  DEVELOPER_WEBHOOK_TIMEOUT_SECONDS,
+  developerWebhookRetryDays,
+} from '@/lib/developer-api/webhook-events';
 import { buildMetadata } from '@/lib/seo/metadata';
+import { SITE_URL } from '@/lib/seo/site';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import {
@@ -31,33 +40,34 @@ const RETIREMENT_DATE = new Intl.DateTimeFormat('en', {
   timeZone: 'UTC',
 });
 
+const GATEWAY_BASE_URL = `${SITE_URL}/api/llm/v1`;
+const API_BASE_URL = `${SITE_URL}/api`;
+
 const HERO_TABS = [
   {
     label: 'curl',
     language: 'shell',
-    code: `curl https://agiworkforce.com/api/llm/v1/chat/completions \\
-  -H "Authorization: Bearer <session token>" \\
+    code: `curl ${GATEWAY_BASE_URL}/chat/completions \\
+  -H "Authorization: Bearer $AGI_API_KEY" \\
   -H "Content-Type: application/json" \\
-  -H "Idempotency-Key: $(uuidgen)" \\
   -d '{ "model": "auto", "messages": [{ "role": "user", "content": "hello" }] }'`,
   },
   {
     label: 'Python',
     language: 'python',
-    code: `import uuid
+    code: `import os
 from openai import OpenAI
 
 client = OpenAI(
-    base_url="https://agiworkforce.com/api/llm/v1",
-    api_key="<session token>",
+    base_url="${GATEWAY_BASE_URL}",
+    api_key=os.environ["AGI_API_KEY"],
 )
 reply = client.chat.completions.create(
     model="auto",
     messages=[{"role": "user", "content": "hello"}],
-    extra_headers={"Idempotency-Key": str(uuid.uuid4())},
 )
 print(reply.choices[0].message.content)`,
-    note: 'Any OpenAI-compatible client works once it points at this base URL, carries your credential and sends an Idempotency-Key with each chat completion.',
+    note: "OpenAI's official Python and TypeScript libraries work unchanged once they point at this base URL and carry an AGI API key.",
   },
   {
     label: 'TypeScript',
@@ -65,13 +75,168 @@ print(reply.choices[0].message.content)`,
     code: `import OpenAI from 'openai';
 
 const client = new OpenAI({
-  baseURL: 'https://agiworkforce.com/api/llm/v1',
-  apiKey: '<session token>',
+  baseURL: '${GATEWAY_BASE_URL}',
+  apiKey: process.env.AGI_API_KEY,
 });
-const reply = await client.chat.completions.create(
-  { model: 'auto', messages: [{ role: 'user', content: 'hello' }] },
+const reply = await client.chat.completions.create({
+  model: 'auto',
+  messages: [{ role: 'user', content: 'hello' }],
+});
+console.log(reply.choices[0]?.message.content);`,
+  },
+] as const;
+
+const SDK_TABS = [
+  {
+    label: 'Python',
+    language: 'python',
+    code: `# pip install openai
+# export OPENAI_BASE_URL=${GATEWAY_BASE_URL}
+# export OPENAI_API_KEY=sk_live_...
+import uuid
+from openai import OpenAI
+
+client = OpenAI()
+
+for model in client.models.list():
+    print(model.id)
+
+stream = client.chat.completions.create(
+    model="auto",
+    messages=[{"role": "user", "content": "Summarise the attached notes"}],
+    stream=True,
+    extra_headers={"Idempotency-Key": str(uuid.uuid4())},
+)
+for chunk in stream:
+    if chunk.choices:
+        print(chunk.choices[0].delta.content or "", end="")
+
+with open("meeting.m4a", "rb") as audio:
+    transcript = client.audio.transcriptions.create(file=audio, model="auto")
+print(transcript.text)`,
+    note: 'The client reads OPENAI_BASE_URL and OPENAI_API_KEY when base_url and api_key are not passed.',
+  },
+  {
+    label: 'TypeScript',
+    language: 'typescript',
+    code: `// npm install openai
+// export OPENAI_BASE_URL=${GATEWAY_BASE_URL}
+// export OPENAI_API_KEY=sk_live_...
+import fs from 'node:fs';
+import OpenAI from 'openai';
+
+const client = new OpenAI();
+
+for await (const model of client.models.list()) {
+  console.log(model.id);
+}
+
+const stream = await client.chat.completions.create(
+  {
+    model: 'auto',
+    messages: [{ role: 'user', content: 'Summarise the attached notes' }],
+    stream: true,
+  },
   { headers: { 'Idempotency-Key': crypto.randomUUID() } },
-);`,
+);
+for await (const chunk of stream) {
+  process.stdout.write(chunk.choices[0]?.delta.content ?? '');
+}
+
+const transcript = await client.audio.transcriptions.create({
+  file: fs.createReadStream('meeting.m4a'),
+  model: 'auto',
+});
+console.log(transcript.text);`,
+    note: 'The client reads OPENAI_BASE_URL and OPENAI_API_KEY when baseURL and apiKey are not passed.',
+  },
+] as const;
+
+const HTTP_TABS = [
+  {
+    label: 'Route preview',
+    language: 'shell',
+    code: `curl ${GATEWAY_BASE_URL}/route/preview \\
+  -H "Authorization: Bearer $AGI_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{ "selection": "auto", "taskType": "general" }'`,
+    note: 'The route auto would take for a task, without running it. Needs inference:write.',
+  },
+  {
+    label: 'Credit balance',
+    language: 'shell',
+    code: `curl ${GATEWAY_BASE_URL}/credits/balance \\
+  -H "Authorization: Bearer $AGI_API_KEY"`,
+    note: 'How much of the plan is used and when it resets. Needs usage:read.',
+  },
+  {
+    label: 'Estimate',
+    language: 'shell',
+    code: `curl ${API_BASE_URL}/usage/estimate \\
+  -H "Authorization: Bearer $AGI_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{ "model": "<id from GET /models>", "messages": [{ "role": "user", "content": "hello" }], "max_tokens": 500 }'`,
+    note: 'The credit range a chat completion body would cost on a named model, with no provider call and no charge. Needs usage:read.',
+  },
+  {
+    label: 'Settled cost',
+    language: 'shell',
+    code: `curl ${API_BASE_URL}/usage/turns/$IDEMPOTENCY_KEY \\
+  -H "Authorization: Bearer $AGI_API_KEY"`,
+    note: 'The credits a request settled at, looked up by the Idempotency-Key it was sent with. Needs usage:read.',
+  },
+] as const;
+
+const WEBHOOK_TABS = [
+  {
+    label: 'Payload',
+    language: 'json',
+    code: `{
+  "object": "event",
+  "id": "4f2b1c9e-6a3d-4c8e-9b1f-2d7e5a0c3b18",
+  "type": "api_key.revoked",
+  "created_at": 1790553600,
+  "data": {
+    "id": "b7a0e2d4-1f3c-4e5a-8b6d-9c0f1e2a3b4c",
+    "name": "Production",
+    "project_id": null,
+    "reason": "deleted"
+  }
+}`,
+    note: 'webhook-id carries the event id, which stays the same when a delivery is retried or resent.',
+  },
+  {
+    label: 'Python',
+    language: 'python',
+    code: `# pip install standardwebhooks
+import os
+from standardwebhooks.webhooks import Webhook
+
+webhook = Webhook(os.environ["AGI_WEBHOOK_SECRET"])
+
+def handle(request_body: bytes, headers: dict) -> None:
+    event = webhook.verify(request_body, headers)
+    print(event["type"], event["data"])`,
+    note: 'verify raises when the signature does not match or the timestamp is more than five minutes old.',
+  },
+  {
+    label: 'TypeScript',
+    language: 'typescript',
+    code: `// npm install standardwebhooks
+import { Webhook } from 'standardwebhooks';
+
+const webhook = new Webhook(process.env.AGI_WEBHOOK_SECRET!);
+
+export async function POST(request: Request) {
+  const body = await request.text();
+  const event = webhook.verify(body, Object.fromEntries(request.headers)) as {
+    type: string;
+    data: unknown;
+  };
+  console.log(event.type, event.data);
+  return new Response(null, { status: 204 });
+}`,
+    note: 'Verify the raw body exactly as received; parsing and re-serialising it changes the bytes that were signed.',
   },
 ] as const;
 
@@ -99,7 +264,7 @@ inference:write  POST /api/llm/v1/chat/completions
 inference:write  POST /api/llm/v1/audio/transcriptions
 inference:write  POST /api/llm/v1/route/preview
 usage:read       GET  /api/llm/v1/credits/balance`,
-    note: 'An AGI API key issued under Settings, API Keys. Embeddings refuses it, and a call missing the scope on its left answers 403 insufficient_scope.',
+    note: 'An AGI API key issued in the developer console. Embeddings refuses it, and a call missing the scope on its left answers 403 insufficient_scope.',
   },
 ] as const;
 
@@ -130,12 +295,12 @@ export default function ApiDocsPage() {
             body={
               <p>
                 A session bearer token, the same one the apps hold, is accepted on every operation.
-                An AGI API key (<code>sk_live_…</code>, issued under Settings, API Keys) carries the
-                scopes you pick when you create it and reaches everything except embeddings:{' '}
-                <code>models:read</code> for the catalog, <code>inference:write</code> for chat
-                completions, audio transcriptions and route preview, <code>usage:read</code> for the
-                credit balance. Every operation in the bundle names the credential and the scope it
-                accepts.
+                An AGI API key (<code>sk_live_…</code>, issued in the{' '}
+                <Link href="/developers">developer console</Link>) carries the scopes you pick when
+                you create it and reaches everything except embeddings: <code>models:read</code> for
+                the catalog, <code>inference:write</code> for chat completions, audio transcriptions
+                and route preview, <code>usage:read</code> for the credit balance. Every operation
+                in the bundle names the credential and the scope it accepts.
               </p>
             }
             points={[
@@ -147,6 +312,71 @@ export default function ApiDocsPage() {
               <CodeTabs tabs={CREDENTIAL_TABS} title="Which credential each endpoint takes" />
             }
           />
+        </Section>
+
+        <Section id="sdks" labelledBy="agi-api-docs-sdks-title" rule ground="2">
+          <Stack gap="loose">
+            <div>
+              <h2 className="agi-ds-h2" id="agi-api-docs-sdks-title">
+                SDKs.
+              </h2>
+              <Prose>
+                There is no AGI SDK. The gateway speaks the OpenAI chat format, so OpenAI&apos;s
+                official libraries are the client: install <code>openai</code> from pip or npm, set{' '}
+                <code>OPENAI_BASE_URL</code> to <code>{GATEWAY_BASE_URL}</code> and{' '}
+                <code>OPENAI_API_KEY</code> to an AGI API key, or pass the same two values to the
+                client. Through the library you list models, create chat completions, buffered or
+                streamed, and transcribe audio. Embeddings take a session token, not a key. An{' '}
+                <code>Idempotency-Key</code> header, sent through <code>extra_headers</code> in
+                Python or the request options&apos; <code>headers</code> in TypeScript, makes a
+                retry count once and lets you look up what the request cost; without one the gateway
+                assigns its own to each call.
+              </Prose>
+            </div>
+            <CodeTabs tabs={SDK_TABS} title="OpenAI's official libraries against the gateway" />
+            <div>
+              <h3 className="agi-ds-h3">Plain HTTP for the rest</h3>
+              <Prose>
+                Route preview, the credit balance, cost estimates and settled costs are AGI
+                endpoints that the OpenAI libraries have no method for. Call them with any HTTP
+                client, with the same key in the <code>Authorization</code> header.
+              </Prose>
+            </div>
+            <CodeTabs tabs={HTTP_TABS} title="AGI endpoints over plain HTTP" />
+          </Stack>
+        </Section>
+
+        <Section id="webhooks" labelledBy="agi-api-docs-webhooks-title" rule>
+          <Stack gap="loose">
+            <div>
+              <h2 className="agi-ds-h2" id="agi-api-docs-webhooks-title">
+                Webhooks.
+              </h2>
+              <Prose>
+                Register an HTTPS endpoint in the <Link href="/developers">developer console</Link>{' '}
+                and choose its events. Each event is a POST with a JSON body carrying{' '}
+                <code>object</code>, <code>id</code>, <code>type</code>, <code>created_at</code> in
+                Unix seconds and <code>data</code>. Requests follow Standard Webhooks:{' '}
+                <code>webhook-id</code> is the event id, <code>webhook-timestamp</code> the send
+                time in Unix seconds, and <code>webhook-signature</code> is <code>v1,</code>{' '}
+                followed by the base64 HMAC-SHA256 of the id, the timestamp and the raw body joined
+                with full stops, keyed with the part of your <code>whsec_</code> secret after the
+                prefix. Answer with a 2xx within {DEVELOPER_WEBHOOK_TIMEOUT_SECONDS} seconds. Any
+                other answer, a redirect or silence is retried with exponential backoff for about{' '}
+                {developerWebhookRetryDays()} days, and the console&apos;s delivery log shows each
+                attempt and resends any delivery. Send test event delivers{' '}
+                <code>{DEVELOPER_WEBHOOK_TEST_EVENT}</code>.
+              </Prose>
+            </div>
+            <Ledger
+              caption="Events an endpoint can receive"
+              rows={DEVELOPER_WEBHOOK_EVENTS.map((event) => ({
+                label: <code>{event.type}</code>,
+                value: event.description,
+              }))}
+            />
+            <CodeTabs tabs={WEBHOOK_TABS} title="Receiving and verifying an event" />
+          </Stack>
         </Section>
 
         <Section id="migrating" labelledBy="agi-api-docs-migrating-title" rule ground="2">
@@ -163,20 +393,20 @@ export default function ApiDocsPage() {
             <div>
               <h3 className="agi-ds-h3">From the OpenAI API</h3>
               <Prose>
-                Point the client at <code>https://agiworkforce.com/api/llm/v1</code>, pass an AGI
-                API key with the <code>inference:write</code> scope, and send an{' '}
-                <code>Idempotency-Key</code> header with each chat completion; reuse a key only to
-                retry the same body. Replace model names with an id from <code>GET /models</code>,
-                or send <code>auto</code> to have each request routed. The model receives{' '}
-                <code>messages</code>, <code>temperature</code>, <code>max_tokens</code> or{' '}
-                <code>max_completion_tokens</code>, and <code>tools</code> with{' '}
-                <code>tool_choice</code>; <code>response_format</code> with <code>json_object</code>{' '}
-                or <code>json_schema</code> is enforced when <code>stream</code> is false.{' '}
-                <code>top_p</code>, <code>n</code>, <code>stop</code>, <code>seed</code>, the
-                penalties, <code>logit_bias</code> and <code>user</code> are accepted but not passed
-                to the model. The gateway serves chat completions, models, audio transcriptions,
-                embeddings (session token only), route preview and the credit balance; there is no
-                Responses, Assistants, Batch, Files, Images or fine-tuning endpoint.
+                Point the client at <code>{GATEWAY_BASE_URL}</code> and pass an AGI API key with the{' '}
+                <code>inference:write</code> scope. An <code>Idempotency-Key</code> header is
+                optional with a key; reuse one only to retry the same body. Replace model names with
+                an id from <code>GET /models</code>, or send <code>auto</code> to have each request
+                routed. The model receives <code>messages</code>, <code>temperature</code>,{' '}
+                <code>max_tokens</code> or <code>max_completion_tokens</code>, and{' '}
+                <code>tools</code> with <code>tool_choice</code>; <code>response_format</code> with{' '}
+                <code>json_object</code> or <code>json_schema</code> is enforced when{' '}
+                <code>stream</code> is false. <code>top_p</code>, <code>n</code>, <code>stop</code>,{' '}
+                <code>seed</code>, the penalties, <code>logit_bias</code> and <code>user</code> are
+                accepted but not passed to the model. The gateway serves chat completions, models,
+                audio transcriptions, embeddings (session token only), route preview and the credit
+                balance; there is no Responses, Assistants, Batch, Files, Images or fine-tuning
+                endpoint.
               </Prose>
             </div>
             <div>
@@ -251,8 +481,9 @@ export default function ApiDocsPage() {
               </h2>
               <Prose>
                 The OpenAPI 3 bundle is published. It describes every endpoint that ships and the
-                credential each one takes. There is no Postman collection and no client SDK, call
-                the REST endpoints directly.
+                credential each one takes. There is no Postman collection and no AGI SDK: use
+                OpenAI&apos;s libraries for models, chat and transcription, and plain HTTP for the
+                rest.
               </Prose>
             </div>
             <ButtonRow>

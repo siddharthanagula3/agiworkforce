@@ -6,18 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S59.02: Batch approval.
-
-- Done when: The user can approve or deny several pending tool calls of a run in one action.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | The overlay offers Deny All and Allow Session, but no single action approves all pending calls of a turn. | ui |
-
-Code: `apps/cli/src/tui/widgets/approval_overlay.rs:81-87`, `apps/cli/src/tui/tui_app.rs:861-871`
-
 ## S59.03: Per-session approval.
 
 - Done when: The user can allow a tool for the rest of the current session so it stops asking until the session ends.
@@ -60,14 +48,13 @@ Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:4596
 
 - Done when: The user can allow or block specific websites/domains the agent may act on or fetch, and it is enforced.
 - Wave: 3
-- Already works on: chrome
+- Already works on: cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Domain allow/deny exists only for Deep Research sources; ordinary web search and url_fetch have no user-set domain permissions (only the private-network egress guard). | ui |
 | desktop | partial | Same as web: domain rules exist only for Deep Research; the native browser gate asks per command. | ui |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | web_fetch asks only for internal/private destinations; there is no user list of allowed or blocked domains. | ui |
 | vscode | partial | The runtime asks only for internal fetch destinations; no per-domain setting. | ui |
 
 Code: `apps/web/app/api/llm/v1/chat/completions/lib/research-sources.ts:48-58`, `apps/cli/src/features/exec/tools/mod.rs:706-711`
@@ -101,41 +88,38 @@ Code: `apps/extension/src/features/side-panel/computerUsePanel.ts:607-610`
 
 - Done when: Before a send is approved, the approval names exactly who will receive it.
 - Wave: 3
-- Already works on: web, desktop, mobile, vscode
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | MCP tools that send messages (Slack, email servers) ask for approval, but recipients appear only inside the raw argument preview; the approval does not call out who will receive it. | ui |
 | chrome | partial | Recipients appear only inside the raw JSON arguments of the call; the approval does not call out who will receive the message. | ui |
 
-Code: `apps/cli/src/agent/tools.rs:116-139`, `apps/extension/src/features/side-panel/bubbles.ts:537-537`
+Code: `apps/extension/src/features/side-panel/bubbles.ts:537-537`
 
 ## S59.15: Exact amount or purchase.
 
 - Done when: Before a payment or purchase is approved, the approval shows the exact amount and what is bought.
 - Wave: 3
-- Already works on: web, desktop, mobile, vscode
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Payment or store MCP servers (Stripe, Shopify) can be added, and their calls ask for approval, but the approval shows only the raw arguments, never a highlighted amount or item. | ui |
 | chrome | partial | The browser agent can click a Buy button on a site; its approval card describes the click, not the amount. | ui |
 
-Code: `apps/cli/src/agent/tools.rs:116-139`, `apps/extension/src/features/side-panel/computerUsePanel.ts:1107-1112`
+Code: `apps/extension/src/features/side-panel/computerUsePanel.ts:1107-1112`
 
 ## S59.22: Ask for an alternative.
 
 - Done when: Instead of just denying, the user can tell the agent what to do instead, and the agent continues with that guidance.
 - Wave: 3
-- Already works on: web, desktop, vscode, api
+- Already works on: web, desktop, cli, vscode, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Guidance input and resume wiring are held in post-codex/chat-gates-s59.patch because the handler lives in Codex-held files ([id].tsx, streaming.ts, MessageBubble.tsx, chatExecutionStore.ts, chatStore.ts). | ui |
-| cli | partial | The overlay answers No or Deny All; the user cannot attach guidance to a denial (they must type a new message after the turn). | ui |
 | chrome | partial | Chrome approvals are Approve/Decline only. | ui |
 
-Code: `apps/mobile/src/features/chat/components/CloudToolApprovalControls.tsx:114-114`, `apps/cli/src/tui/widgets/approval_overlay.rs:81-87`, `apps/extension/src/features/side-panel/bubbles.ts:489-499`
+Code: `apps/mobile/src/features/chat/components/CloudToolApprovalControls.tsx:114-114`, `apps/extension/src/features/side-panel/bubbles.ts:489-499`
 
 ## S59.23: Approval expiration.
 

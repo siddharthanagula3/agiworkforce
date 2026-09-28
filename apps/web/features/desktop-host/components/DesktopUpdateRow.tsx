@@ -10,6 +10,7 @@ const LABEL = 'App version';
 const CHECK_LABEL = 'Check for updates';
 const CHECKING_LABEL = 'Checking…';
 const INSTALL_LABEL = 'Download installer';
+const RESTART_LABEL = 'Restart to update';
 const UP_TO_DATE = 'This is the latest version.';
 const CHECK_FAILED = 'The update check did not complete.';
 
@@ -76,6 +77,8 @@ export function DesktopUpdateRow() {
   if (!host) return null;
 
   const updateAvailable = result?.available === true;
+  const readyToInstall = updateAvailable && result.readyToInstall === true;
+  const downloading = updateAvailable && !readyToInstall && result.installsAutomatically === true;
 
   return (
     <div style={rowStyle}>
@@ -87,6 +90,14 @@ export function DesktopUpdateRow() {
         {error ? (
           <p role="alert" style={errorStyle}>
             {error}
+          </p>
+        ) : readyToInstall ? (
+          <p role="status" style={hintStyle}>
+            {`Version ${result.version} is ready to install.`}
+          </p>
+        ) : downloading ? (
+          <p role="status" style={hintStyle}>
+            {`Version ${result.version} is downloading. You will be told when it is ready.`}
           </p>
         ) : updateAvailable ? (
           <p role="status" style={hintStyle}>
@@ -107,9 +118,9 @@ export function DesktopUpdateRow() {
         >
           {checking ? CHECKING_LABEL : CHECK_LABEL}
         </button>
-        {updateAvailable ? (
+        {updateAvailable && !downloading ? (
           <button type="button" style={buttonStyle} onClick={() => void host.openUpdateInstaller()}>
-            {INSTALL_LABEL}
+            {readyToInstall ? RESTART_LABEL : INSTALL_LABEL}
           </button>
         ) : null}
       </div>

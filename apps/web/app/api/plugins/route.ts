@@ -23,6 +23,7 @@ export const dynamic = 'force-dynamic';
 
 const CURSOR_PATTERN = new RegExp(`^\\d{1,${PLUGIN_DIRECTORY_MAX_CURSOR_CHARS}}$`);
 const CATEGORY_MAX_CHARS = 100;
+const PUBLISHER_MAX_CHARS = 200;
 const OFFSET_MAX = 10_000;
 const BooleanParam = z.enum(['true', 'false']).transform((value) => value === 'true');
 
@@ -32,6 +33,7 @@ const QuerySchema = z.object({
   worksWith: z.enum(PLUGIN_WORKS_WITH).optional(),
   source: z.enum(PLUGIN_SOURCE_FACETS).optional(),
   category: z.string().trim().min(1).max(CATEGORY_MAX_CHARS).optional(),
+  publisher: z.string().trim().min(1).max(PUBLISHER_MAX_CHARS).optional(),
   status: z.enum(PLUGIN_REGISTRY_STATUSES as unknown as [string, ...string[]]).optional(),
   sort: z.enum(PLUGIN_SORTS).optional(),
   limit: z.coerce.number().int().min(1).max(PLUGIN_DIRECTORY_MAX_LIMIT).optional(),

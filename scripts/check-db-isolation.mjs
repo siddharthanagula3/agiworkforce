@@ -680,10 +680,8 @@ const ALLOWLIST = [
     reason:
       "the takedown moderation queue: reading every reporter's notice and updating its " +
       'disposition is the purpose, the same shape as the content-report-triage.ts entry above ' +
-      '(an owner filter would hide every notice but one). No route calls either export today, ' +
-      "this file is dead code ahead of the takedown admin surface the submission route's own " +
-      'comment names; whoever wires a route must gate it on requirePlatformAdmin like every other ' +
-      'admin route and then narrow this entry to cite that route.',
+      '(an owner filter would hide every notice but one). The only caller is ' +
+      'api/admin/copyright-notices, gated on requirePlatformAdmin like every other admin route.',
   },
   {
     match: /lib\/services\/organization-invitation-service\.ts$/,

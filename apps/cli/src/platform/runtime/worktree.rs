@@ -237,6 +237,331 @@ pub async fn list_worktrees(repo: &Path) -> Result<Vec<Worktree>> {
         .collect())
 }
 
+pub const SESSION_WORKTREE_DIR: &str = ".agiworkforce/worktrees";
+const SESSION_BRANCH_PREFIX: &str = "worktree-";
+const MAX_SESSION_WORKTREE_NAME: usize = 64;
+
+#[derive(Debug, Clone)]
+pub struct SessionWorktree {
+    pub name: String,
+    pub path: PathBuf,
+    pub branch: String,
+    pub base: String,
+    pub root: PathBuf,
+    pub generated: bool,
+    pub created: bool,
+}
+
+async fn git_text(dir: &Path, args: &[&str]) -> Result<String> {
+    let mut command = Command::new("git");
+    command.current_dir(dir).args(args);
+    let output = crate::process_tree::output(command, None, Some(GIT_WORKTREE_TIMEOUT))
+        .await
+        .with_context(|| format!("invoke git {}", args.join(" ")))?;
+    if !output.status.success() {
+        anyhow::bail!(
+            "git {} failed: {}",
+            args.join(" "),
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+pub async fn main_checkout_root(dir: &Path) -> Result<PathBuf> {
+    let common = PathBuf::from(
+        git_text(
+            dir,
+            &["rev-parse", "--path-format=absolute", "--git-common-dir"],
+        )
+        .await?,
+    );
+    if common.file_name().is_some_and(|name| name == ".git") {
+        if let Some(parent) = common.parent() {
+            return Ok(parent.to_path_buf());
+        }
+    }
+    Ok(PathBuf::from(
+        git_text(dir, &["rev-parse", "--show-toplevel"]).await?,
+    ))
+}
+
+pub fn valid_session_worktree_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= MAX_SESSION_WORKTREE_NAME
+        && !name.starts_with(['-', '.'])
+        && name.chars().all(|character| {
+            character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.')
+        })
+}
+
+fn same_path(left: &Path, right: &Path) -> bool {
+    match (left.canonicalize(), right.canonicalize()) {
+        (Ok(left), Ok(right)) => left == right,
+        _ => left == right,
+    }
+}
+
+async fn default_base(root: &Path) -> String {
+    let base = git_text(
+        root,
+        &[
+            "symbolic-ref",
+            "--quiet",
+            "--short",
+            "refs/remotes/origin/HEAD",
+        ],
+    )
+    .await
+    .ok()
+    .filter(|base| !base.is_empty())
+    .unwrap_or_else(|| "HEAD".to_string());
+    git_text(root, &["rev-parse", "--verify", "--quiet", &base])
+        .await
+        .unwrap_or(base)
+}
+
+async fn exclude_session_worktrees(root: &Path) -> Result<()> {
+    let common = PathBuf::from(
+        git_text(
+            root,
+            &["rev-parse", "--path-format=absolute", "--git-common-dir"],
+        )
+        .await?,
+    );
+    let exclude = common.join("info").join("exclude");
+    let entry = format!("/{SESSION_WORKTREE_DIR}/");
+    let existing = std::fs::read_to_string(&exclude).unwrap_or_default();
+    if existing.lines().any(|line| line.trim() == entry) {
+        return Ok(());
+    }
+    if let Some(parent) = exclude.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let separator = if existing.is_empty() || existing.ends_with('\n') {
+        ""
+    } else {
+        "\n"
+    };
+    std::fs::write(&exclude, format!("{existing}{separator}{entry}\n"))
+        .with_context(|| format!("writing {}", exclude.display()))
+}
+
+async fn copy_worktree_includes(root: &Path, worktree: &Path) -> Result<usize> {
+    let Ok(text) = std::fs::read_to_string(root.join(".worktreeinclude")) else {
+        return Ok(0);
+    };
+    let mut copied = 0;
+    for pattern in text
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with('#'))
+    {
+        let full = root.join(pattern.trim_start_matches('/'));
+        let Some(full) = full.to_str() else {
+            continue;
+        };
+        for source in glob::glob(full)
+            .with_context(|| format!("reading the .worktreeinclude pattern {pattern}"))?
+            .flatten()
+        {
+            let Ok(relative) = source.strip_prefix(root) else {
+                continue;
+            };
+            if !source.is_file()
+                || relative.starts_with(SESSION_WORKTREE_DIR)
+                || relative.starts_with(".git")
+            {
+                continue;
+            }
+            let mut check = Command::new("git");
+            check
+                .current_dir(root)
+                .args(["check-ignore", "--quiet", "--"])
+                .arg(relative);
+            let ignored = crate::process_tree::output(check, None, Some(GIT_WORKTREE_TIMEOUT))
+                .await
+                .is_ok_and(|output| output.status.success());
+            if !ignored {
+                continue;
+            }
+            let target = worktree.join(relative);
+            if let Some(parent) = target.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            std::fs::copy(&source, &target)
+                .with_context(|| format!("copying {} into the worktree", relative.display()))?;
+            copied += 1;
+        }
+    }
+    Ok(copied)
+}
+
+pub async fn open_session_worktree(
+    start: &Path,
+    requested: Option<&str>,
+) -> Result<SessionWorktree> {
+    let root = main_checkout_root(start).await?;
+    let requested = requested.map(str::trim).filter(|name| !name.is_empty());
+    let (name, generated) = match requested {
+        Some(name) => {
+            anyhow::ensure!(
+                valid_session_worktree_name(name),
+                "a worktree name uses letters, digits, '-', '_' or '.', up to {MAX_SESSION_WORKTREE_NAME} characters, and does not start with '-' or '.'"
+            );
+            (name.to_string(), false)
+        }
+        None => (
+            format!(
+                "session-{}",
+                &uuid::Uuid::new_v4().simple().to_string()[..8]
+            ),
+            true,
+        ),
+    };
+    let path = root.join(SESSION_WORKTREE_DIR).join(&name);
+    let branch = format!("{SESSION_BRANCH_PREFIX}{name}");
+    for component in [
+        root.join(".agiworkforce"),
+        root.join(SESSION_WORKTREE_DIR),
+        path.clone(),
+    ] {
+        if std::fs::symlink_metadata(&component).is_ok_and(|meta| meta.file_type().is_symlink()) {
+            anyhow::bail!(
+                "{} is a symbolic link, so no worktree is created there; remove the link and try again",
+                component.display()
+            );
+        }
+    }
+    let base = default_base(&root).await;
+    if list_worktree_entries(&root)
+        .await?
+        .iter()
+        .any(|entry| same_path(&entry.path, &path))
+    {
+        return Ok(SessionWorktree {
+            name,
+            path,
+            branch,
+            base,
+            root,
+            generated,
+            created: false,
+        });
+    }
+    anyhow::ensure!(
+        !path.exists(),
+        "{} exists but is not a git worktree; move it aside and try again",
+        path.display()
+    );
+    std::fs::create_dir_all(root.join(SESSION_WORKTREE_DIR))?;
+    exclude_session_worktrees(&root).await?;
+    let branch_exists = git_text(
+        &root,
+        &[
+            "rev-parse",
+            "--verify",
+            "--quiet",
+            &format!("refs/heads/{branch}"),
+        ],
+    )
+    .await
+    .is_ok();
+    let mut command = Command::new("git");
+    command.current_dir(&root).args(["worktree", "add"]);
+    if branch_exists {
+        command.arg("--").arg(&path).arg(&branch);
+    } else {
+        command.args(["-b", &branch, "--"]).arg(&path).arg(&base);
+    }
+    let output = crate::process_tree::output(command, None, Some(GIT_WORKTREE_TIMEOUT))
+        .await
+        .context("invoke git worktree add")?;
+    if !output.status.success() {
+        anyhow::bail!(
+            "git worktree add failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+    copy_worktree_includes(&root, &path).await?;
+    Ok(SessionWorktree {
+        name,
+        path,
+        branch,
+        base,
+        root,
+        generated,
+        created: true,
+    })
+}
+
+pub async fn session_worktree_has_work(worktree: &SessionWorktree) -> Result<bool> {
+    if !git_text(&worktree.path, &["status", "--porcelain"])
+        .await?
+        .is_empty()
+    {
+        return Ok(true);
+    }
+    let ahead = git_text(
+        &worktree.path,
+        &["rev-list", "--count", &format!("{}..HEAD", worktree.base)],
+    )
+    .await?;
+    Ok(ahead != "0")
+}
+
+pub async fn list_session_worktrees(start: &Path) -> Result<Vec<SessionWorktree>> {
+    let root = main_checkout_root(start).await?;
+    let base = default_base(&root).await;
+    let dir = root.join(SESSION_WORKTREE_DIR);
+    Ok(list_worktree_entries(&root)
+        .await?
+        .into_iter()
+        .filter(|entry| {
+            entry
+                .path
+                .parent()
+                .is_some_and(|parent| same_path(parent, &dir))
+        })
+        .filter_map(|entry| {
+            let name = entry.path.file_name()?.to_string_lossy().into_owned();
+            Some(SessionWorktree {
+                branch: entry
+                    .branch
+                    .clone()
+                    .unwrap_or_else(|| format!("{SESSION_BRANCH_PREFIX}{name}")),
+                name,
+                path: entry.path,
+                base: base.clone(),
+                root: root.clone(),
+                generated: false,
+                created: false,
+            })
+        })
+        .collect())
+}
+
+pub async fn remove_session_worktree(worktree: &SessionWorktree, force: bool) -> Result<()> {
+    if force {
+        git_text(
+            &worktree.root,
+            &[
+                "worktree",
+                "remove",
+                "--force",
+                &worktree.path.to_string_lossy(),
+            ],
+        )
+        .await?;
+    } else {
+        exit_worktree(&worktree.root, &worktree.path).await?;
+    }
+    if worktree.branch.starts_with(SESSION_BRANCH_PREFIX) {
+        git_text(&worktree.root, &["branch", "-D", &worktree.branch]).await?;
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

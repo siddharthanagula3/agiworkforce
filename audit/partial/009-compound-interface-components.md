@@ -31,20 +31,6 @@ Code: `apps/extension/src/side_panel.ts:6699-6707`, `apps/extension/src/side_pan
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S9.04: Connected-account picker.
-
-- Done when: When a connector has more than one linked account, the user can pick which account a task or chat uses.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | The accounts list and default switch exist, but both OAuth callbacks store every grant as the one default account, so a second account can never be added and there is nothing to pick between. | handler |
-| desktop | partial | The accounts list and default switch exist, but both OAuth callbacks store every grant as the one default account, so a second account can never be added and there is nothing to pick between. | handler |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/connectors/components/ConnectorAccountSelector.tsx:158-165`, `apps/web/features/connectors/hooks/use-connectors-settings-adapter.tsx:785-785`, `apps/web/app/api/connectors/oauth/callback/route.ts:153-158`
-
 ## S9.05: Workspace picker.
 
 - Done when: The user can see their personal and team workspaces in a list and switch the active one.
@@ -255,16 +241,15 @@ Code: `apps/mobile/app/(app)/_layout.tsx:15-15`, `apps/mobile/src/shared/hooks/u
 
 - Done when: A panel lists a resource's saved versions (when, what) and lets the user open or restore one.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Versions are paged one at a time (vN/M with Restore); add a panel listing every version with when and what changed. | ui |
-| cli | partial | /rewind only steps back N checkpoints blind; add a list of checkpoints (time, last message) to pick from. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:556-556`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:575-575`, `apps/cli/src/tui/tui_app.rs:3591-3591`, `apps/cli/src/repl/registry.rs:872-872`
+Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:556-556`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:575-575`
 
 ## S9.27: Diff viewer.
 

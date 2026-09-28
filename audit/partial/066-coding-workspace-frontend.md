@@ -23,16 +23,15 @@ Code: `apps/web/features/code/components/CodeComposer.tsx:532-552`, `apps/web/fe
 
 - Done when: The user chooses the git branch a coding session starts from or works on.
 - Wave: 2
-- Already works on: vscode
+- Already works on: desktop, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Branch is a free-text field, not a list of the repo's branches; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off, ui |
-| desktop | partial | Hosted-web cloud branch field is free text and gated; local folders only display the checked-out branch, with no way to switch it. | flag-off, ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/code/components/CodeComposer.tsx:688-708`, `apps/web/features/code/CloudCodePage.tsx:514-521`, `apps/web/lib/e2b/gate.ts:22-27`, `apps/web/features/code/components/CodeComposer.tsx:1125-1130`
+Code: `apps/web/features/code/components/CodeComposer.tsx:688-708`, `apps/web/features/code/CloudCodePage.tsx:514-521`, `apps/web/lib/e2b/gate.ts:22-27`
 
 ## S66.03: Worktree picker.
 
@@ -92,14 +91,13 @@ Code: `apps/web/features/code/CloudCodePage.tsx:1034-1048`, `apps/web/features/c
 
 - Done when: Each coding session shows whether it is running, waiting for approval, idle, failed or closed.
 - Wave: 2
-- Already works on: mobile, cli, vscode
+- Already works on: desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Running dot, failed label and closed/archived banners exist, but sessions exist only when Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
-| desktop | partial | The local panel shows only a running row while a turn works; the rail has no idle/waiting/failed badge per local session. | ui |
 
-Code: `apps/web/features/code/components/CodeRail.tsx:295-307`, `apps/web/features/code/CloudCodePage.tsx:883-884`, `apps/web/lib/e2b/gate.ts:22-27`, `apps/web/features/code/components/LocalSessionPanel.tsx:228-234`
+Code: `apps/web/features/code/components/CodeRail.tsx:295-307`, `apps/web/features/code/CloudCodePage.tsx:883-884`, `apps/web/lib/e2b/gate.ts:22-27`
 
 ## S66.08: File tree.
 
@@ -144,16 +142,13 @@ Code: `apps/cli/src/features/exec/tools/mod.rs:644-644`
 
 - Done when: The user can open and edit a source file inside the coding surface.
 - Wave: 3
-- Already works on: vscode
+- Already works on: desktop, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
-| desktop | partial | No in-app editor; the local panel's "Open in editor" hands the folder to the user's own editor. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/code/components/LocalSessionPanel.tsx:199-204`, `apps/desktop/electron/runtime/dispatcher.ts:788-789`
 
 ## S66.12: Editor tabs.
 
@@ -198,12 +193,11 @@ Code: `apps/cli/src/agent/mod.rs:430-430`
 
 - Done when: The user runs shell commands in a terminal attached to the coding session and sees their output.
 - Wave: 2
-- Already works on: cli, vscode
+- Already works on: desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Terminal box runs one command at a time in the sandbox (no interactive PTY); Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
-| desktop | partial | Only the hosted-web cloud terminal exists and it is gated; local AGI Code sessions have no terminal pane. | flag-off |
 | mobile | missing | Not built on this surface. |  |
 
 Code: `apps/web/features/code/components/CodeChangesPanel.tsx:338-355`, `apps/web/features/code/CloudCodePage.tsx:672-680`, `apps/web/lib/e2b/gate.ts:22-27`
@@ -224,12 +218,11 @@ Code: `apps/web/features/code/components/CodeChangesPanel.tsx:338-355`, `apps/we
 
 - Done when: The user can review the commands run in the session with their output and exit status.
 - Wave: 2
-- Already works on: cli, vscode
+- Already works on: desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Command groups in the transcript and the terminal journal show output and exit codes; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
-| desktop | partial | Hosted-web cloud journal is gated; local sessions show tool steps in the transcript but no command/exit-code history. | flag-off |
 | mobile | partial | Only in-flight tool lines while a turn runs; finished commands and their output are not kept in view. | ui |
 
 Code: `apps/web/features/code/components/CodeTranscript.tsx:150-170`, `apps/web/features/code/CloudCodePage.tsx:328-330`, `apps/web/lib/e2b/gate.ts:22-27`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:261-265`
@@ -238,12 +231,11 @@ Code: `apps/web/features/code/components/CodeTranscript.tsx:150-170`, `apps/web/
 
 - Done when: The user views a line-level diff of the changes the agent made.
 - Wave: 2
-- Already works on: mobile, cli, vscode
+- Already works on: desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Changes panel expands each changed file into a coloured unified diff; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
-| desktop | partial | Hosted-web diff is gated; the local session panel shows no diff (Electron computes diffs only for the mobile relay). | flag-off, ui |
 
 Code: `apps/web/features/code/components/CodeChangesPanel.tsx:48-78`, `apps/web/features/code/CloudCodePage.tsx:235-240`, `apps/web/lib/e2b/gate.ts:22-27`
 
@@ -251,12 +243,11 @@ Code: `apps/web/features/code/components/CodeChangesPanel.tsx:48-78`, `apps/web/
 
 - Done when: The user sees a summary of which files the session created, modified or deleted.
 - Wave: 2
-- Already works on: mobile, cli
+- Already works on: desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Changes panel lists each file with its change state; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
-| desktop | partial | Hosted-web changes list is gated; the local session panel has no changed-file summary. | flag-off, ui |
 | vscode | partial | Only the host Source Control view lists changed files; the extension shows no per-session summary of what the agent changed. | ui |
 
 Code: `apps/web/features/code/components/CodeChangesPanel.tsx:265-273`, `apps/web/features/code/CloudCodePage.tsx:235-240`, `apps/web/lib/e2b/gate.ts:22-27`, `apps/extension-vscode/src/core/commandSetup.ts:1383-1396`
@@ -280,82 +271,74 @@ Code: `apps/cli/src/tui/tui_app.rs:748-762`, `apps/cli/src/tui/tui_app.rs:3974-3
 
 - Done when: The user sees a list of checkpoints (saved states of code and conversation) for the session.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Checkpoints are conversation-only snapshots; /stats shows just their count and there is no list to pick from. | ui, handler |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/agent/history.rs:14-16`, `apps/cli/src/claude_parity.rs:586-586`
 
 ## S66.23: Restore checkpoint.
 
 - Done when: The user restores the session's code and conversation to an earlier checkpoint.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | /rewind restores only the conversation; files the agent edited are not rolled back. | handler |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/tui/tui_app.rs:3591-3593`, `apps/cli/src/agent/history.rs:20-26`
 
 ## S66.24: Plan mode.
 
 - Done when: The user switches the agent into a plan mode where it proposes a plan and makes no edits until approved.
 - Wave: 3
-- Already works on: cli, vscode
+- Already works on: desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
 
 ## S66.25: Edit/agent mode.
 
 - Done when: The user chooses a mode in which the agent may edit files and run tools on its own (edit/agent mode) versus asking first.
 - Wave: 2
-- Already works on: cli, vscode
+- Already works on: desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Cloud sessions always run as an agent with no mode switch (edits go through run_command with fixed approval rules); Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off, ui |
-| desktop | partial | Local sessions start with the runtime default mode and the panel has no mode switch; the hosted-web cloud path is gated. | ui, flag-off |
 | mobile | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/services/cloud-code-agent-tools.ts:272-272`, `apps/web/features/code/components/CodeComposer.tsx:815-820`, `apps/web/lib/e2b/gate.ts:22-27`, `apps/web/features/code/components/LocalSessionPanel.tsx:160-160`
+Code: `apps/web/lib/services/cloud-code-agent-tools.ts:272-272`, `apps/web/features/code/components/CodeComposer.tsx:815-820`, `apps/web/lib/e2b/gate.ts:22-27`
 
 ## S66.26: Permission-mode control.
 
 - Done when: The user sets how much the agent must ask before acting (ask every time / auto-approve safe / autonomous), and the running session honours it.
 - Wave: 2
-- Already works on: cli, vscode
+- Already works on: desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | The Code composer's mode menu saves the chat tool-approval preference, but cloud code turns ignore it (classifyCommandRisk alone decides what needs approval); Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | handler, flag-off |
-| desktop | partial | Same hosted-web menu (ignored by cloud turns); local sessions have no permission control and run with the runtime default. | handler, ui |
 | mobile | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/code/components/CodeComposer.tsx:837-845`, `apps/web/lib/services/cloud-code-agent-tools.ts:181-193`, `apps/web/features/code/components/CodeComposer.tsx:815-835`
+Code: `apps/web/features/code/components/CodeComposer.tsx:837-845`, `apps/web/lib/services/cloud-code-agent-tools.ts:181-193`
 
 ## S66.27: Context-usage indicator.
 
 - Done when: The workspace shows how much of the model's context window the session has used.
 - Wave: 2
-- Already works on: cli, vscode
+- Already works on: desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | The usage popover draws a context bar from the session's token counts; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
-| desktop | partial | Hosted-web context bar is gated; the local session panel shows no context usage. | flag-off, ui |
 | mobile | missing | Not built on this surface. |  |
 
 Code: `apps/web/features/code/components/CodeComposer.tsx:985-997`, `apps/web/features/code/CloudCodePage.tsx:1213-1217`, `apps/web/lib/e2b/gate.ts:22-27`
@@ -401,11 +384,11 @@ Code: `apps/mobile/src/features/settings/cloud-usage/index.tsx:179-179`
 
 - Done when: The workspace shows the session's pull request (open one, see its number/link and state).
 - Wave: 2
+- Already works on: desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Create pull request button and PR #n link work against GitHub, but the route refuses unless Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
-| desktop | partial | Hosted-web PR panel only, gated the same way; local sessions have no PR control. | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |

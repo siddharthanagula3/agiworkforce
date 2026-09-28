@@ -64,7 +64,7 @@ interface GlobalSearchDialogProps {
 const EMPTY_SHORTCUT_IDS: string[] = [];
 
 const FOOTER_KEY_CLASS =
-  'rounded-compact border border-gray-200 bg-gray-100 px-1.5 py-0.5 text-xs font-semibold text-gray-800 dark:border-gray-500 dark:bg-gray-600 dark:text-gray-100';
+  'rounded-compact border border-border bg-muted px-1.5 py-0.5 text-xs font-semibold text-foreground';
 
 const RESULT_TYPE_LABELS: Partial<Record<SearchResult['type'], string>> = {
   project: 'Project',
@@ -256,7 +256,7 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
 
   const handleResultClick = (result: SearchResult) => {
     onOpenChange(false);
-    router.push(globalSearchResultHref(result));
+    router.push(globalSearchResultHref(result, query));
   };
 
   const handleClearFilters = () => {
@@ -601,11 +601,11 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
                           onClick={() => handleSuggestionClick(search.query)}
                           className="group flex items-center gap-1.5 rounded-full border border-primary/10 bg-primary/5 px-3 py-1.5 text-sm transition-colors hover:bg-primary/10 hover:border-primary/30"
                         >
-                          <TrendingUp className="h-3 w-3 text-primary/70 group-hover:text-primary" />
+                          <TrendingUp className="h-3 w-3 text-primary" />
                           <span className="max-w-[150px] truncate">{search.query}</span>
                           <Badge
                             variant="outline"
-                            className="ml-1 border-primary/20 px-1.5 py-0 text-caption text-primary/70"
+                            className="ml-1 border-primary/20 px-1.5 py-0 text-caption text-muted-foreground"
                           >
                             {search.searchCount} searches
                           </Badge>

@@ -2,6 +2,7 @@ import {
   DEVELOPER_FILE_CHANGE_LABELS,
   DEVELOPER_SESSION_ORIGIN_LABELS,
   DEVELOPER_SESSION_TRUST_LABELS,
+  type DeveloperAgentMode,
   type DeveloperFileChange,
   type DeveloperRuntimeModels,
   type DeveloperSessionGroup,
@@ -9,7 +10,7 @@ import {
   type DeveloperTurnOutcome,
   type LocalDeveloperSession,
 } from '@agiworkforce/local-runtime-contract';
-import type { DeveloperMessage } from '@agiworkforce/types/protocol';
+import type { DeveloperMessage, ThreadStatus } from '@agiworkforce/types/protocol';
 import {
   providerLabels,
   type CloudCodeAgentStep,
@@ -58,7 +59,115 @@ export const LOCAL_CODE_COPY = {
     `${model} cannot run on this machine yet: ${provider} needs a sign-in first.`,
   readFailed: 'That session could not be opened.',
   turnFailed: 'That message could not be sent.',
+  modeMenu: 'Permissions',
+  modeControl: 'Permission mode',
+  sessionRunning: 'Running',
+  changesFailed: 'The changes in this folder could not be read.',
+  changesNotRepository: 'This folder is not a git repository, so there are no changes to show.',
+  discardFailed: 'That change could not be discarded.',
+  commandFailed: 'That command could not be run.',
+  editFile: 'Edit',
+  closeFile: 'Close the file',
+  openingFile: 'Opening the file',
+  saveFile: 'Save',
+  fileReadFailed: 'That file could not be opened.',
+  fileSaveFailed: 'That file could not be saved.',
+  fileTooLarge: 'This file is too large to edit here. Open it in your editor instead.',
+  pushAndOpenPullRequest: 'Push and open a pull request',
+  pullRequestOnGitHub: 'Open a pull request on GitHub',
+  pullRequestNotConnected:
+    'The AGI GitHub App is not installed on this repository, so GitHub opens the compare page instead.',
+  pullRequestOnBase: 'Switch to a branch other than the default branch to open a pull request.',
+  pullRequestNoBase: 'The remote has no default branch to open a pull request against.',
+  pullRequestReadFailed: 'The pull request for this branch could not be read.',
+  pullRequestOpenFailed: 'The pull request could not be opened.',
+  commandStopped: 'stopped',
+  extensions: 'Skills and plugins',
+  skillsHeading: 'Skills',
+  pluginsHeading: 'Plugins',
+  extensionsLoading: 'Loading skills and plugins',
+  extensionsFailed: 'Skills and plugins could not be read.',
+  extensionsUpdateFailed: 'That change could not be saved.',
+  extensionsNone: 'No skills or plugins are installed for this folder.',
+  projectSkillsUntrusted:
+    "This folder's own skills stay off until you trust them. Trusted skills can run their scripts with your account.",
+  trustProjectSkills: "Trust this folder's skills",
+  revokeProjectSkills: "Stop trusting this folder's skills",
+  skillScopeLabels: { project: 'This folder', user: 'Your account', plugin: 'From a plugin' },
+  memory: 'Memory',
+  memoryHeading: 'Remember for later sessions',
+  memoryLabel: 'What to remember',
+  memoryPlaceholder: 'A fact about this repository the agent should keep in mind',
+  memoryProject: 'Project memory',
+  memoryProjectHint: 'Saved in this repository and shared through git.',
+  memoryUser: 'User memory',
+  memoryUserHint: 'Saved for all your projects on this computer.',
+  memorySave: 'Save to memory',
+  memorySaving: 'Saving to memory',
+  memorySavedTo: 'Saved to',
+  memoryFailed: 'That could not be saved to memory.',
 } as const;
+
+const LOCAL_SESSION_STATUS_LABELS: Partial<Record<ThreadStatus, string>> = {
+  awaiting_approval: 'Needs approval',
+  failed: 'Failed',
+  archived: 'Archived',
+};
+
+const QUIET_LOCAL_SESSION_STATUSES: ReadonlySet<ThreadStatus> = new Set(['archived']);
+
+const LOCAL_PULL_REQUEST_STATE_LABELS = {
+  open: 'open',
+  draft: 'draft',
+  merged: 'merged',
+  closed: 'closed',
+} as const;
+
+const LOCAL_PULL_REQUEST_CHECK_LABELS = {
+  passing: 'checks passing',
+  failing: 'checks failing',
+  pending: 'checks running',
+  none: '',
+} as const;
+
+export function localPullRequestLabel(pullRequest: {
+  number: number;
+  state: keyof typeof LOCAL_PULL_REQUEST_STATE_LABELS;
+  checks: keyof typeof LOCAL_PULL_REQUEST_CHECK_LABELS;
+}): string {
+  return [
+    `Pull request #${pullRequest.number}`,
+    LOCAL_PULL_REQUEST_STATE_LABELS[pullRequest.state],
+    LOCAL_PULL_REQUEST_CHECK_LABELS[pullRequest.checks],
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
+
+export function localSessionStatusLabel(status: ThreadStatus): string | null {
+  return LOCAL_SESSION_STATUS_LABELS[status] ?? null;
+}
+
+export function localSessionStatusIsQuiet(status: ThreadStatus): boolean {
+  return QUIET_LOCAL_SESSION_STATUSES.has(status);
+}
+
+export const LOCAL_AGENT_MODES = [
+  'plan',
+  'ask',
+  'auto',
+] as const satisfies readonly DeveloperAgentMode[];
+export type LocalAgentMode = (typeof LOCAL_AGENT_MODES)[number];
+
+export const LOCAL_AGENT_MODE_HINTS: Record<LocalAgentMode, string> = {
+  plan: 'Reads the code and proposes a plan. Changes nothing.',
+  ask: 'Asks before every edit and command.',
+  auto: 'Edits files and runs safe commands on its own. Other commands still ask.',
+};
+
+export function localAgentMode(mode: DeveloperAgentMode | null | undefined): LocalAgentMode {
+  return mode === 'plan' || mode === 'auto' ? mode : 'ask';
+}
 
 /**
  * A model as the catalog names it. A model the catalog does not carry, which is

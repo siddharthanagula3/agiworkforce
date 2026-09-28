@@ -20,6 +20,10 @@
       "serves": "platform_only",
       "reason": "What the platform paid providers. Aggregates, no tenant content."
     },
+    "apps/web/app/api/admin/data-region/route.ts": {
+      "serves": "platform_only",
+      "reason": "Pending data region moves and their completion: which workspace asked to move and to which region. It reads and writes the workspace region record, never workspace content."
+    },
     "apps/web/app/api/admin/economics/route.ts": {
       "serves": "platform_only",
       "reason": "Margin and spend aggregates across the platform."
@@ -55,6 +59,10 @@
     "apps/web/app/api/admin/observability/route.ts": {
       "serves": "platform_only",
       "reason": "Route cache and latency counters."
+    },
+    "apps/web/app/api/admin/plugins/route.ts": {
+      "serves": "platform_only",
+      "reason": "The plugin registry catalogue and the review state of its versions. No tenant row is read."
     },
     "apps/web/app/api/admin/privacy/erasures/route.ts": {
       "serves": "submitted_to_platform",
@@ -127,6 +135,10 @@
     "apps/web/app/api/support/handoff/agent/queue/route.ts": {
       "serves": "submitted_to_platform",
       "reason": "The queue of members waiting for a human, each entry raised by the member in it."
+    },
+    "apps/web/app/api/support/staff/tickets/[ticketId]/recovery/route.ts": {
+      "serves": "submitted_to_platform",
+      "reason": "An account-recovery request the person filed with support for this very purpose; staff act on that ticket and the account it names, and read no workspace content."
     },
     "apps/web/app/api/support/staff/tickets/[ticketId]/route.ts": {
       "serves": "submitted_to_platform",

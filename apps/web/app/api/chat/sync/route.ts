@@ -299,6 +299,16 @@ const CLEAR_COMPACTION_SUMMARY_SQL = `update web_conversations
              and id = any($2::uuid[])
              and compaction_summary is not null`;
 
+const RECORD_ARTIFACT_VERSIONS_SQL = `insert into web_artifact_versions
+             (artifact_id, version, content, content_hash)
+           select artifact.id, artifact.current_version, artifact.content,
+                  encode(sha256(convert_to(artifact.content, 'UTF8')), 'hex')
+             from web_artifacts as artifact
+            where artifact.user_id = $1
+              and artifact.id = any($2::uuid[])
+              and artifact.deleted_at is null
+           on conflict (artifact_id, version) do nothing`;
+
 /**
  * The conversations whose turns this batch actually changed. A push that only
  * conflicts leaves every row as it was, so the summary covering them still
@@ -750,6 +760,12 @@ async function handlePush(request: NextRequest) {
         [userId, JSON.stringify(artifacts)],
       );
       collectBatchRows(rows, applied.artifacts, conflicts.artifacts);
+      if (applied.artifacts.length > 0) {
+        await db.query(RECORD_ARTIFACT_VERSIONS_SQL, [
+          userId,
+          applied.artifacts.map((row) => row.id),
+        ]);
+      }
     }
 
     const conflictRows = [

@@ -1,12 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type {
   DeveloperRuntimeModels,
+  DeveloperSessionEvent,
   LocalDeveloperSession,
   DeveloperSessionGroup,
   WorkspaceRootKind,
 } from '@agiworkforce/local-runtime-contract';
+import type { ThreadStatus } from '@agiworkforce/types/protocol';
 import {
   listDeveloperModels,
   listDeveloperSessions,
@@ -17,6 +19,20 @@ import {
 } from '@/features/desktop-host';
 import { toUserMessage } from '@/lib/user-error-message';
 import { LOCAL_CODE_COPY, sharedUnavailableLine, startingModelId } from '../local-code';
+
+function liveThreadStatus(event: DeveloperSessionEvent): ThreadStatus | null {
+  switch (event.type) {
+    case 'turn-started':
+    case 'approval-answered':
+      return 'running';
+    case 'approval-requested':
+      return 'awaiting_approval';
+    case 'turn-finished':
+      return event.failure ? 'failed' : 'idle';
+    default:
+      return null;
+  }
+}
 
 export interface LocalSessionsState {
   supported: boolean;
@@ -44,6 +60,7 @@ export function useLocalSessions(): LocalSessionsState {
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [models, setModels] = useState<Record<string, DeveloperRuntimeModels>>({});
+  const [liveStatus, setLiveStatus] = useState<Readonly<Record<string, ThreadStatus>>>({});
 
   const refresh = useCallback(() => setReloadKey((key) => key + 1), []);
 
@@ -74,6 +91,10 @@ export function useLocalSessions(): LocalSessionsState {
   useEffect(() => {
     if (!supported) return;
     return onDeveloperSessionEvent((_rootId, event) => {
+      const next = liveThreadStatus(event);
+      if (next && 'threadId' in event) {
+        setLiveStatus((current) => ({ ...current, [event.threadId]: next }));
+      }
       if (event.type === 'turn-finished') refresh();
     });
   }, [supported, refresh]);
@@ -148,9 +169,21 @@ export function useLocalSessions(): LocalSessionsState {
 
   const modelsFor = useCallback((rootId: string) => models[rootId] ?? null, [models]);
 
+  const liveGroups = useMemo(
+    () =>
+      groups.map((group) => ({
+        ...group,
+        sessions: group.sessions.map((session) => {
+          const status = liveStatus[session.id];
+          return status ? { ...session, status } : session;
+        }),
+      })),
+    [groups, liveStatus],
+  );
+
   return {
     supported,
-    groups,
+    groups: liveGroups,
     modelsFor,
     loading,
     adding,

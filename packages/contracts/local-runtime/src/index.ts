@@ -51,7 +51,9 @@ export {
   DEVELOPER_SESSION_ORIGIN_LABELS,
   DEVELOPER_SESSION_TRUST_LABELS,
   DEVELOPER_TURN_OUTCOMES,
+  WORKING_TREE_CHANGE_STATES,
   isDeveloperSessionCommand,
+  parseWorkingTreeStatus,
 } from './developer-sessions';
 export type {
   DeveloperApprovalAnswer,
@@ -59,6 +61,7 @@ export type {
   DeveloperHostModel,
   DeveloperModelOption,
   DeveloperModelUnreachable,
+  DeveloperRuntimeFeatures,
   DeveloperRuntimeModels,
   DeveloperRuntimeStatus,
   DeveloperRuntimeUnavailable,
@@ -71,6 +74,11 @@ export type {
   DeveloperTurnFailure,
   DeveloperTurnOutcome,
   DeveloperTurnRequest,
+  LocalBranchPush,
+  LocalBranches,
+  WorkingTreeChange,
+  WorkingTreeChangeState,
+  WorkingTreeChanges,
 } from './developer-sessions';
 
 export {
@@ -91,6 +99,8 @@ export type { DeveloperAgentMode, DeveloperSessionNegotiation } from './develope
 
 export { BROWSER_PAIRING_COMMANDS } from './browser-bridge';
 export type {
+  BrowserActivityEntry,
+  BrowserActivityOutcome,
   BrowserPairRequestPrompt,
   BrowserPairingCommand,
   BrowserPairingState,
@@ -119,6 +129,7 @@ export type {
   FileSearchMatch,
   FileStat,
   FileTextContent,
+  FileTextEdit,
   FilesystemCommand,
 } from './filesystem';
 
@@ -192,6 +203,7 @@ export type {
 } from './inference';
 
 export {
+  CODE_HOME_DEEP_LINK_ID,
   DEFAULT_SESSION_COMPLETION_ALERTS,
   DESKTOP_DEEP_LINK_SCHEME,
   DESKTOP_DEEP_LINK_TARGETS,
@@ -240,10 +252,12 @@ export {
 export type { ContainmentOptions, PathPlatform } from './path-safety';
 
 export {
+  BROWSER_STEP_COMMAND,
   DEVICE_HOST_HEADER,
   DEVICE_KEY_MODIFIERS,
   DEVICE_MOUSE_BUTTONS,
   DEVICE_NAMED_KEYS,
+  DEVICE_REVIEWED_STEP_TOOLS,
   DEVICE_STEP_DEFINITIONS,
   DEVICE_STEP_TOOLS,
   DEVICE_STEP_TTL_MINUTES,
@@ -252,6 +266,8 @@ export {
   MAX_DEVICE_COORDINATE,
   MAX_DEVICE_DISPLAY_ID,
   MAX_DEVICE_HOST_HEADER_LENGTH,
+  MAX_DEVICE_REVIEW_LENGTH,
+  MAX_DEVICE_SEARCH_LENGTH,
   MAX_DEVICE_SCROLL_DELTA,
   MAX_DEVICE_STEP_RESULT_LENGTH,
   MAX_DEVICE_STEP_ROOTS,
@@ -259,6 +275,7 @@ export {
   MAX_DEVICE_WAIT_MS,
   describeDeviceDisplays,
   describeDeviceStep,
+  deviceStepBrowserCommand,
   deviceStepCapability,
   deviceStepCommand,
   deviceStepScope,
@@ -295,3 +312,38 @@ export type {
   RemoteControlState,
   RemoteControlStatus,
 } from './remote-control';
+
+export {
+  SYSTEM_PERMISSION_KINDS,
+  SYSTEM_PERMISSION_LABELS,
+  SYSTEM_PERMISSION_PURPOSES,
+  isSystemPermissionKind,
+} from './desktop-privacy';
+export type {
+  DesktopPermissionsReview,
+  ReviewedPermission,
+  SystemPermissionKind,
+  SystemPermissionStatus,
+} from './desktop-privacy';
+
+export {
+  COMPUTER_USE_PHASES,
+  COMPUTER_USE_STOP_SHORTCUT,
+  describeDeviceFrontWindow,
+  deviceFrontWindowRefusal,
+  readDeviceFrontWindow,
+} from './computer-use';
+export type {
+  ComputerUsePauseCause,
+  ComputerUsePhase,
+  ComputerUseStatus,
+  DeviceFrontWindow,
+} from './computer-use';
+
+export { BACKGROUND_WORK_KINDS, isBackgroundWorkKind } from './background-activity';
+export type {
+  BackgroundActivity,
+  BackgroundCodingRuntime,
+  BackgroundCommandRun,
+  BackgroundWorkKind,
+} from './background-activity';

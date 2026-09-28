@@ -50,3 +50,8 @@ export function useLocalModeHost(): HostBridge | null {
 export function isLocalModeHost(): boolean {
   return hostHasLocalMode(getHostBridge());
 }
+
+export function useElectronHost(): HostBridge | null {
+  const host = useDesktopHost();
+  return host?.shell === 'electron' ? host : null;
+}

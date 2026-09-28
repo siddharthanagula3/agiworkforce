@@ -6,10 +6,14 @@ import {
   LocalInferenceRefused,
   ShellCommandRefused,
   assertLocalTurnCarriesNoAttachments,
+  isBackgroundWorkKind,
+  isDesktopCapability,
+  isSystemPermissionKind,
   isWorkspaceRootKind,
   runtimeFailure,
   runtimeSuccess,
   type DesktopCapability,
+  type DesktopPermissionsReview,
   type DesktopRuntimeErrorCode,
   type DesktopRuntimeResponse,
   type LocalChatMessage,
@@ -17,11 +21,13 @@ import {
   type LocalModelSettings,
   type LocalModelSnapshot,
   type PermissionScope,
+  type PermissionScopeKind,
   type ShellPolicy,
   type WorkspaceRoot,
   type WorkspaceSnapshot,
 } from '@agiworkforce/local-runtime-contract';
 import {
+  BROWSER_STEP_COMMAND,
   DEVICE_REGISTRY_PROFILE_COMMAND,
   type DeviceRegistryProfile,
   DEVICE_STEP_TOOLS,
@@ -32,15 +38,25 @@ import {
   type DeviceKeyModifier,
   type DeviceMouseButton,
   type DeviceStepRegion,
+  type DeveloperAgentMode,
+  normalizeDeveloperAgentMode,
 } from '@agiworkforce/local-runtime-contract';
-import { isBrowserCommand } from '@agiworkforce/types';
+import {
+  CLOUD_CODE_TURN_STEP_BOUNDS,
+  isBrowserCommand,
+  isCloudCodeTurnStepBound,
+} from '@agiworkforce/types';
 import {
   BrowserBridgeError,
   installHostForPairedExtension,
+  listBrowserActivity,
   pairingState,
+  recordBrowserActivity,
   removeHostAndPairing,
   sendBrowserCommand,
+  settleBrowserActivity,
 } from '../browser/bridgeServer';
+import { BrowserStepRefused, runBrowserStep } from '../browser/browserSteps';
 import {
   InvalidBrowserArguments,
   planBrowserCommand,
@@ -55,16 +71,26 @@ import {
   clickPointer,
   computerUseAvailability,
   dragPointer,
-  isComputerUseTakenOver,
   movePointer,
   pressKey,
   screenChangesSeen,
   scrollPointer,
-  stopComputerUseHelper,
-  takeOverComputerUse,
   typeText,
   waitFor,
 } from './computerUseService';
+import {
+  computerUseEnabled,
+  computerUseStatus,
+  enterScreenStep,
+  finishComputerUse,
+  refuseScreenStepEarly,
+  setComputerUseEnabled,
+  stopComputerUse,
+  takeOverComputerUse,
+} from './computerUseSession';
+import { confirmHandBack, runScreenAction } from './computerUseSteps';
+import { readBackgroundActivity, stopBackgroundWork } from './backgroundActivity';
+import { openSystemPermission } from './systemPermissions';
 import {
   computerUseLoopMessage,
   createComputerUseLoopDetector,
@@ -92,7 +118,9 @@ import { cancelShellRun, runShellCommand, type ShellApprovalRequest } from './sh
 import { detectShellSandbox, type ShellSandbox } from './shellSandbox';
 import { readShellPolicy, writeShellPolicy } from './shellPolicyStore';
 import {
+  TextEditRefused,
   createDirectory,
+  editTextFile,
   globFiles,
   grepFiles,
   listDirectory,
@@ -101,16 +129,29 @@ import {
   statPath,
   writeTextFile,
 } from './filesystemService';
-import { readWorkspaceGit } from './gitService';
+import {
+  discardWorkingTreeChanges,
+  listLocalBranches,
+  pushLocalBranch,
+  readWorkingTreeChanges,
+  readWorkspaceGit,
+  switchLocalBranch,
+} from './gitService';
 import {
   DeveloperRuntimeUnavailableError,
+  addDeveloperMemory,
   answerDeveloperApproval,
   interruptDeveloperTurn,
+  listDeveloperPlugins,
   listDeveloperSessions,
+  listDeveloperSkills,
   readDeveloperModels,
   readDeveloperRuntimeStatus,
   readDeveloperSession,
   resumeDeveloperSession,
+  setDeveloperPluginEnabled,
+  setDeveloperSkillConsent,
+  setDeveloperSkillEnabled,
   startDeveloperSession,
   startDeveloperTurn,
   stopDeveloperRuntime,
@@ -123,7 +164,9 @@ import {
   consumeSingleUse,
   getPermissionState,
   requestPermission,
+  reviewPermissions,
   revokePermission,
+  revokeScope,
 } from './permissionManager';
 import {
   findContainingRoot,
@@ -178,6 +221,36 @@ function optionalString(args: Args, key: string, fallback: string): string {
   return value;
 }
 
+const MAX_DISCARD_PATHS = 500;
+
+function requirePathList(args: Args, key: string): string[] {
+  const value = args[key];
+  if (
+    !Array.isArray(value) ||
+    value.length === 0 ||
+    value.length > MAX_DISCARD_PATHS ||
+    value.some((entry) => typeof entry !== 'string' || entry.length === 0 || entry.includes('\0'))
+  ) {
+    throw new InvalidArguments(`"${key}" must list between 1 and ${MAX_DISCARD_PATHS} paths.`);
+  }
+  return value as string[];
+}
+
+function requireBoolean(args: Args, key: string): boolean {
+  const value = args[key];
+  if (typeof value !== 'boolean') throw new InvalidArguments(`"${key}" must be true or false.`);
+  return value;
+}
+
+function rendererAgentMode(raw: string): DeveloperAgentMode | null {
+  if (raw === '') return null;
+  const mode = normalizeDeveloperAgentMode(raw);
+  if (mode === null || mode === 'bypass') {
+    throw new InvalidArguments('"agentMode" must be plan, ask or auto.');
+  }
+  return mode;
+}
+
 function requireNumber(args: Args, key: string): number {
   const value = args[key];
   if (typeof value !== 'number' || !Number.isFinite(value)) {
@@ -221,6 +294,31 @@ function requireRegion(args: Args): DeviceStepRegion {
   return requireRegionFields(value as Args);
 }
 
+const PERMISSION_SCOPE_KINDS: readonly PermissionScopeKind[] = [
+  'workspace',
+  'application',
+  'site',
+  'global',
+];
+
+function requireScope(args: Args): PermissionScope {
+  const value = args['scope'];
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new InvalidArguments('"scope" must be an object with a kind.');
+  }
+  const kind = (value as Args)['kind'];
+  const target = (value as Args)['target'];
+  if (!PERMISSION_SCOPE_KINDS.includes(kind as PermissionScopeKind)) {
+    throw new InvalidArguments('"scope.kind" must be workspace, application, site or global.');
+  }
+  if (target !== undefined && target !== null && typeof target !== 'string') {
+    throw new InvalidArguments('"scope.target" must be a string.');
+  }
+  return typeof target === 'string' && target.length > 0
+    ? { kind: kind as PermissionScopeKind, target }
+    : { kind: kind as PermissionScopeKind };
+}
+
 function requireRegionFields(region: Args): DeviceStepRegion {
   return {
     x: requireNumber(region, 'x'),
@@ -250,13 +348,12 @@ export function resetScreenStepGate(): void {
   screenChangesAtLastStep = screenChangesSeen();
 }
 
-function guardScreenStep(command: string, args: Args): void {
-  if (isComputerUseTakenOver()) {
-    throw new ComputerUseRefused(
-      'paused',
-      'The user has taken over the screen. Do not try another screen step; tell them what you were about to do and wait for them to hand control back.',
-    );
-  }
+async function guardScreenStep(
+  window: BrowserWindow | null,
+  command: string,
+  args: Args,
+): Promise<void> {
+  await enterScreenStep(window, command);
   if (command === 'computer_screenshot' || command === 'computer_zoom') return;
   // A screenshot that showed the screen moving means the steps so far did
   // something, so the same step again is progress and not a loop.
@@ -368,6 +465,10 @@ const CAPABILITY_BY_COMMAND: Record<string, { capability: DesktopCapability; rea
     capability: 'filesystem.write',
     reason: 'The agent wants to create or change files in this folder.',
   },
+  file_edit_text: {
+    capability: 'filesystem.write',
+    reason: 'The agent wants to change part of a file in this folder.',
+  },
   file_create_directory: {
     capability: 'filesystem.write',
     reason: 'The agent wants to create a folder here.',
@@ -408,10 +509,67 @@ const CAPABILITY_BY_COMMAND: Record<string, { capability: DesktopCapability; rea
     reason:
       'A coding session runs the AGI CLI agent in this folder. It can read and change files here and run programs with your account.',
   },
+  developer_session_changes: {
+    capability: 'git.read',
+    reason: 'Showing what a coding session changed reads the changed files in this folder.',
+  },
+  developer_session_discard: {
+    capability: 'git.destructive',
+    reason: 'Discarding a change puts files in this folder back to their last committed version.',
+  },
+  developer_branches_list: {
+    capability: 'git.read',
+    reason: "Listing branches reads this folder's git repository.",
+  },
+  developer_branch_switch: {
+    capability: 'git.write',
+    reason: 'Switching branches changes the files in this folder to that branch.',
+  },
+  developer_branch_push: {
+    capability: 'git.write',
+    reason: "Opening a pull request pushes this folder's current branch to its GitHub remote.",
+  },
+  developer_skills_list: {
+    capability: 'filesystem.read',
+    reason: 'Listing skills reads the skill files this folder and your account provide.',
+  },
+  developer_plugins_list: {
+    capability: 'filesystem.read',
+    reason: 'Listing plugins reads the plugin files this folder and your account provide.',
+  },
+  developer_skill_set_enabled: {
+    capability: 'shell.execute',
+    reason:
+      'Turning a skill on lets coding sessions here follow its instructions and run its scripts.',
+  },
+  developer_skill_consent: {
+    capability: 'shell.execute',
+    reason:
+      "Trusting this folder's skills lets coding sessions here follow them and run their scripts with your account.",
+  },
+  developer_plugin_set_enabled: {
+    capability: 'shell.execute',
+    reason: 'Turning a plugin on lets coding sessions here use its commands, skills and servers.',
+  },
 };
 
 const COMPUTER_USE_REASON =
   'The agent moves the pointer, clicks and types on this Mac as if you were doing it, and reads the screen to decide where. It can reach anything already open, including apps and pages you are signed into.';
+
+function revokeReviewedPermission(
+  window: BrowserWindow | null,
+  args: Args,
+): DesktopPermissionsReview {
+  const capability = requireString(args, 'capability');
+  if (!isDesktopCapability(capability)) {
+    throw new InvalidArguments(`"${capability}" is not a desktop permission.`);
+  }
+  const scope = requireScope(args);
+  if (capability === 'computer.use' && scope.kind === 'global') stopComputerUse();
+  else revokePermission(capability, scope);
+  emitRuntimeEvent(window, { kind: 'permission-changed', capability, scope });
+  return reviewPermissions();
+}
 
 /** Capabilities scoped to the session rather than to one folder. */
 const GLOBAL_CAPABILITY_BY_COMMAND: Record<
@@ -432,25 +590,6 @@ const GLOBAL_CAPABILITY_BY_COMMAND: Record<
   computer_key: { capability: 'computer.use', reason: COMPUTER_USE_REASON },
   computer_wait: { capability: 'computer.use', reason: COMPUTER_USE_REASON },
 };
-
-/**
- * Stop a screen-control run now.
- *
- * Killing the helper ends the action in flight, and withdrawing the grant is
- * what stops the next one: each step is independent here, so without that the
- * very next call spawns a new helper and the pointer keeps moving. The user
- * grants again to carry on, which is the same prompt that started it.
- *
- * Deliberately outside the capability table. Needing permission to stop
- * something already running is the one place a prompt must not appear, and
- * until now the only way to end a run was to quit the app while it held the
- * mouse.
- */
-function stopComputerUse(): { stopped: true } {
-  stopComputerUseHelper();
-  revokePermission('computer.use', { kind: 'global' });
-  return { stopped: true };
-}
 
 async function snapshotFor(root: WorkspaceRoot): Promise<WorkspaceSnapshot> {
   const git = await readWorkspaceGit(root);
@@ -591,6 +730,9 @@ const BROWSER_OBJECT_PHRASES: Readonly<Record<string, string>> = Object.freeze({
   'browser.cdp': "read the paired browser's page internals",
 });
 
+const MANUAL_BROWSER_CLIENT = 'You';
+const FAILED_BROWSER_ACTION = 'The browser did not answer.';
+
 export async function runBrowserCommand(
   window: BrowserWindow | null,
   command: string,
@@ -638,7 +780,22 @@ export async function runBrowserCommand(
     return runtimeFailure('cancelled', 'That browser action was not run.');
   }
 
-  const value = await sendBrowserCommand(plan.command, plan.args);
+  const activity = caller
+    ? null
+    : recordBrowserActivity(MANUAL_BROWSER_CLIENT, plan.command, plan.args);
+  let value: unknown;
+  try {
+    value = await sendBrowserCommand(plan.command, plan.args);
+  } catch (error) {
+    if (activity) {
+      settleBrowserActivity(
+        activity,
+        error instanceof Error ? error.message : FAILED_BROWSER_ACTION,
+      );
+    }
+    throw error;
+  }
+  if (activity) settleBrowserActivity(activity, null);
   consumeSingleUse(plan.capability, scope);
   return runtimeSuccess(value);
 }
@@ -651,18 +808,22 @@ export async function runBrowserCommand(
 function declareDeviceHost(): DesktopHostDeclaration {
   const roots = listRoots();
   const identity = deviceIdentity();
-  const screenUsable = computerUseAvailability().supported;
+  const screenUsable = computerUseEnabled() && computerUseAvailability().supported;
   const capabilities = [
     ...new Set(
-      DEVICE_STEP_TOOLS.filter((tool) =>
-        deviceStepScope(tool) === 'screen'
-          ? screenUsable &&
-            getPermissionState(deviceStepCapability(tool), { kind: 'global' }) !== 'denied'
-          : roots.some(
-              (root) =>
-                getPermissionState(deviceStepCapability(tool), workspaceScope(root)) !== 'denied',
-            ),
-      ).map(deviceStepCapability),
+      DEVICE_STEP_TOOLS.filter((tool) => {
+        const scope = deviceStepScope(tool);
+        if (scope === 'workspace') {
+          return roots.some(
+            (root) =>
+              getPermissionState(deviceStepCapability(tool), workspaceScope(root)) !== 'denied',
+          );
+        }
+        const usable = scope === 'screen' ? screenUsable : pairingState().paired;
+        return (
+          usable && getPermissionState(deviceStepCapability(tool), { kind: 'global' }) !== 'denied'
+        );
+      }).map(deviceStepCapability),
     ),
   ];
   return {
@@ -675,13 +836,7 @@ function declareDeviceHost(): DesktopHostDeclaration {
   };
 }
 
-async function localModelsAvailable(): Promise<boolean> {
-  if (getPermissionState('local.inference', { kind: 'global' }) === 'denied') return false;
-  const servers = await listLocalServers();
-  return servers.some((server) => server.reachable && server.modelCount > 0);
-}
-
-async function describeDeviceForRegistry(): Promise<DeviceRegistryProfile> {
+function describeDeviceForRegistry(): DeviceRegistryProfile {
   const identity = deviceIdentity();
   return {
     installId: identity.deviceId,
@@ -692,8 +847,8 @@ async function describeDeviceForRegistry(): Promise<DeviceRegistryProfile> {
     appVersion: app.getVersion(),
     capabilities: {
       browser: pairingState().paired,
-      computerUse: computerUseAvailability().supported,
-      localModels: await localModelsAvailable(),
+      computerUse: computerUseEnabled() && computerUseAvailability().supported,
+      localModels: !localInferenceCommands.has('local_chat_start'),
       localMcp: false,
       remoteControl: remoteControlAvailable(),
     },
@@ -705,7 +860,7 @@ async function execute(
   command: string,
   args: Args,
 ): Promise<unknown> {
-  if (SCREEN_STEP_COMMANDS.has(command)) guardScreenStep(command, args);
+  if (SCREEN_STEP_COMMANDS.has(command)) await guardScreenStep(window, command, args);
   switch (command) {
     case 'workspace_pick_root':
       return pickRoot(window, args);
@@ -714,6 +869,8 @@ async function execute(
     case 'workspace_revoke_root': {
       const rootId = requireString(args, 'rootId');
       stopDeveloperRuntime(rootId);
+      const root = getRoot(rootId);
+      if (root) revokeScope(workspaceScope(root));
       return revokeRoot(rootId);
     }
     case 'workspace_snapshot':
@@ -737,6 +894,20 @@ async function execute(
         requireString(args, 'path'),
         optionalString(args, 'text', ''),
       );
+    case 'file_edit_text': {
+      const oldText = args['oldText'];
+      const newText = args['newText'];
+      if (typeof oldText !== 'string' || oldText.length === 0 || typeof newText !== 'string') {
+        throw new InvalidArguments('"oldText" must be a non-empty string and "newText" a string.');
+      }
+      return editTextFile(
+        resolveRoot(args),
+        requireString(args, 'path'),
+        oldText,
+        newText,
+        args['replaceAll'] === true,
+      );
+    }
     case 'file_create_directory':
       return createDirectory(resolveRoot(args), requireString(args, 'path'));
     case 'file_glob':
@@ -744,12 +915,14 @@ async function execute(
         resolveRoot(args),
         requireString(args, 'pattern'),
         optionalString(args, 'path', ''),
+        { ignoreCase: args['ignoreCase'] === true },
       );
     case 'file_grep':
       return grepFiles(
         resolveRoot(args),
         requireString(args, 'query'),
         optionalString(args, 'path', ''),
+        { ignoreCase: args['ignoreCase'] === true },
       );
     case 'shell_run': {
       const root = resolveRoot(args);
@@ -838,39 +1011,83 @@ async function execute(
     }
     case 'computer_zoom':
       return captureRegion(requireRegion(args));
-    case 'computer_move':
-      return movePointer(requireNumber(args, 'x'), requireNumber(args, 'y'));
-    case 'computer_click':
-      return clickPointer(
-        requireNumber(args, 'x'),
-        requireNumber(args, 'y'),
-        requireMouseButton(args),
-        optionalNumberOr(args, 'count', 1),
-      );
-    case 'computer_drag':
-      return dragPointer(
-        requireNumber(args, 'x'),
-        requireNumber(args, 'y'),
-        requireNumber(args, 'toX'),
-        requireNumber(args, 'toY'),
-      );
-    case 'computer_scroll':
-      return scrollPointer(
-        requireNumber(args, 'x'),
-        requireNumber(args, 'y'),
-        optionalNumberOr(args, 'deltaX', 0),
-        optionalNumberOr(args, 'deltaY', 0),
-      );
-    case 'computer_type':
-      return typeText(requireString(args, 'text'));
-    case 'computer_key':
-      return pressKey(requireString(args, 'key'), requireModifiers(args));
+    case 'computer_move': {
+      const [x, y] = [requireNumber(args, 'x'), requireNumber(args, 'y')];
+      return runScreenAction(window, command, args, () => movePointer(x, y));
+    }
+    case 'computer_click': {
+      const [x, y] = [requireNumber(args, 'x'), requireNumber(args, 'y')];
+      const button = requireMouseButton(args);
+      const count = optionalNumberOr(args, 'count', 1);
+      return runScreenAction(window, command, args, () => clickPointer(x, y, button, count));
+    }
+    case 'computer_drag': {
+      const [x, y] = [requireNumber(args, 'x'), requireNumber(args, 'y')];
+      const [toX, toY] = [requireNumber(args, 'toX'), requireNumber(args, 'toY')];
+      return runScreenAction(window, command, args, () => dragPointer(x, y, toX, toY));
+    }
+    case 'computer_scroll': {
+      const [x, y] = [requireNumber(args, 'x'), requireNumber(args, 'y')];
+      const deltaX = optionalNumberOr(args, 'deltaX', 0);
+      const deltaY = optionalNumberOr(args, 'deltaY', 0);
+      return runScreenAction(window, command, args, () => scrollPointer(x, y, deltaX, deltaY));
+    }
+    case 'computer_type': {
+      const text = requireString(args, 'text');
+      return runScreenAction(window, command, args, () => typeText(text));
+    }
+    case 'computer_key': {
+      const key = requireString(args, 'key');
+      const modifiers = requireModifiers(args);
+      return runScreenAction(window, command, args, () => pressKey(key, modifiers));
+    }
     case 'computer_wait':
       return waitFor(optionalNumberOr(args, 'ms', 500));
     case 'computer_stop':
       return stopComputerUse();
     case 'computer_take_over':
       return takeOverComputerUse();
+    case 'computer_hand_back':
+      return confirmHandBack(window);
+    case 'computer_use_status':
+      return computerUseStatus();
+    case 'computer_use_set_enabled':
+      return setComputerUseEnabled(requireBoolean(args, 'enabled'));
+    case 'computer_use_finish':
+      return finishComputerUse(window);
+    case 'system_permission_open': {
+      const permission = args['permission'];
+      if (!isSystemPermissionKind(permission)) {
+        throw new InvalidArguments(
+          '"permission" must be screen-recording, accessibility or microphone.',
+        );
+      }
+      return openSystemPermission(permission);
+    }
+    case 'permission_review':
+      return reviewPermissions();
+    case 'permission_revoke':
+      return revokeReviewedPermission(window, args);
+    case BROWSER_STEP_COMMAND:
+      return runBrowserStep(window, args);
+    case 'browser_activity':
+      return listBrowserActivity();
+    case 'browser_downloads_open': {
+      const failure = await shell.openPath(app.getPath('downloads'));
+      if (failure !== '') throw new InvalidArguments(failure);
+      return true;
+    }
+    case 'background_activity':
+      return readBackgroundActivity();
+    case 'background_stop': {
+      const kind = args['kind'];
+      if (!isBackgroundWorkKind(kind)) {
+        throw new InvalidArguments(
+          '"kind" must be coding-runtime, command, computer-use or remote-control.',
+        );
+      }
+      return stopBackgroundWork(kind, optionalString(args, 'id', '') || null);
+    }
     case 'device_host_declaration':
       return declareDeviceHost();
     case DEVICE_REGISTRY_PROFILE_COMMAND:
@@ -897,12 +1114,28 @@ async function execute(
     }
     case 'developer_turn_start': {
       const model = optionalString(args, 'model', '');
+      const agentMode = rendererAgentMode(optionalString(args, 'agentMode', ''));
+      const maxTurns = optionalNumber(args, 'maxTurns');
+      if (maxTurns !== undefined && !isCloudCodeTurnStepBound(maxTurns)) {
+        throw new InvalidArguments(
+          `"maxTurns" must be one of ${CLOUD_CODE_TURN_STEP_BOUNDS.join(', ')}.`,
+        );
+      }
       return startDeveloperTurn({
         rootId: requireString(args, 'rootId'),
         threadId: requireString(args, 'threadId'),
         text: requireString(args, 'text'),
         ...(model === '' ? {} : { model }),
+        ...(agentMode ? { agentMode } : {}),
+        ...(maxTurns === undefined ? {} : { maxTurns }),
       });
+    }
+    case 'developer_memory_add': {
+      const scope = requireString(args, 'scope');
+      if (scope !== 'project' && scope !== 'user') {
+        throw new InvalidArguments('"scope" must be project or user.');
+      }
+      return addDeveloperMemory(requireString(args, 'rootId'), requireString(args, 'text'), scope);
     }
     case 'developer_turn_interrupt':
       return interruptDeveloperTurn(
@@ -918,6 +1151,37 @@ async function execute(
         requestId: requireString(args, 'requestId'),
         approved: args['approved'] === true,
       });
+    case 'developer_branches_list':
+      return listLocalBranches(resolveRoot(args).path);
+    case 'developer_branch_switch':
+      return switchLocalBranch(resolveRoot(args).path, requireString(args, 'branch'));
+    case 'developer_branch_push':
+      return pushLocalBranch(resolveRoot(args).path);
+    case 'developer_skills_list':
+      return listDeveloperSkills(requireString(args, 'rootId'));
+    case 'developer_skill_set_enabled':
+      return setDeveloperSkillEnabled(
+        requireString(args, 'rootId'),
+        requireString(args, 'name'),
+        requireBoolean(args, 'enabled'),
+      );
+    case 'developer_skill_consent':
+      return setDeveloperSkillConsent(
+        requireString(args, 'rootId'),
+        requireBoolean(args, 'granted'),
+      );
+    case 'developer_plugins_list':
+      return listDeveloperPlugins(requireString(args, 'rootId'));
+    case 'developer_plugin_set_enabled':
+      return setDeveloperPluginEnabled(
+        requireString(args, 'rootId'),
+        requireString(args, 'id'),
+        requireBoolean(args, 'enabled'),
+      );
+    case 'developer_session_changes':
+      return readWorkingTreeChanges(resolveRoot(args).path);
+    case 'developer_session_discard':
+      return discardWorkingTreeChanges(resolveRoot(args).path, requirePathList(args, 'paths'));
     case 'developer_account_report': {
       reportShellIdentity({
         signedIn: args['signedIn'] === true,
@@ -954,10 +1218,17 @@ function toFailure(error: unknown): DesktopRuntimeResponse<never> {
     return runtimeFailure(REFUSAL_CODES[error.reason] ?? 'io-error', error.message);
   }
   if (error instanceof InvalidArguments) return runtimeFailure('invalid-arguments', error.message);
+  if (error instanceof TextEditRefused) return runtimeFailure('invalid-arguments', error.message);
   if (error instanceof InvalidBrowserArguments) {
     return runtimeFailure('invalid-arguments', error.message);
   }
   if (error instanceof BrowserBridgeError) return runtimeFailure('io-error', error.message);
+  if (error instanceof BrowserStepRefused) {
+    return runtimeFailure(
+      error.reason === 'permission' ? 'permission-denied' : 'cancelled',
+      error.message,
+    );
+  }
   if (error instanceof UnknownWorkspace) return runtimeFailure('not-found', error.message);
   if (error instanceof DeveloperRuntimeUnavailableError) {
     return runtimeFailure('runtime-unavailable', `${error.message} ${error.hint}`);
@@ -1044,6 +1315,7 @@ export async function dispatch(
 
     const globalRequirement = GLOBAL_CAPABILITY_BY_COMMAND[command];
     if (globalRequirement) {
+      if (SCREEN_STEP_COMMANDS.has(command)) refuseScreenStepEarly();
       const scope: PermissionScope = { kind: 'global' };
       const state =
         getPermissionState(globalRequirement.capability, scope) === 'prompt'
