@@ -22,6 +22,7 @@ import type { LiveTranscriptTurn } from '@/src/features/voice/services/liveVoice
 export interface LiveVoiceBarProps {
   visible: boolean;
   status: LiveVoiceStatus;
+  reconnecting: boolean;
   muted: boolean;
   assistantSpeaking: boolean;
   backendBusy: boolean;
@@ -45,7 +46,9 @@ function statusLabel(
   muted: boolean,
   assistantSpeaking: boolean,
   interrupted: boolean,
+  reconnecting: boolean,
 ): string {
+  if (reconnecting) return 'Reconnecting live voice...';
   if (status === 'connecting') return 'Connecting live voice...';
   if (status === 'error') return 'Live voice stopped';
   if (muted) return 'Muted, tap the mic to talk';
@@ -57,6 +60,7 @@ function statusLabel(
 export function LiveVoiceBar({
   visible,
   status,
+  reconnecting,
   muted,
   assistantSpeaking,
   backendBusy,
@@ -119,7 +123,7 @@ export function LiveVoiceBar({
         testID="live-voice-status"
         style={{ color: colors.textSecondary, fontSize: 13, textAlign: 'center', marginBottom: 8 }}
       >
-        {statusLabel(status, muted, assistantSpeaking, interrupted)}
+        {statusLabel(status, muted, assistantSpeaking, interrupted, reconnecting)}
       </Text>
 
       {error ? (

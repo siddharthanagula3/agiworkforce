@@ -23,6 +23,7 @@ import { cn } from '../../lib/utils';
 import { toUserMessageWithStatus } from '../../lib/network-error';
 import { getManagedModelPresentationLabel } from '../../lib/modelInfo';
 import { TaskDetailPanel } from './TaskDetailPanel';
+import { TasksBoard } from './TasksBoard';
 import {
   TASK_TONE_BADGE_CLASS,
   type AgentTaskState,
@@ -72,6 +73,33 @@ const FILTERS: ReadonlyArray<{ value: TaskFilter; label: string }> = [
   { value: 'all', label: 'All' },
   { value: 'archived', label: 'Archived' },
 ];
+
+type TaskLayout = 'list' | 'board';
+
+const LAYOUTS: ReadonlyArray<{ value: TaskLayout; label: string }> = [
+  { value: 'list', label: 'List' },
+  { value: 'board', label: 'Board' },
+];
+
+const TASK_LAYOUT_STORAGE_KEY = 'agi-tasks-layout';
+
+function loadTaskLayout(): TaskLayout {
+  if (typeof window === 'undefined') return 'list';
+  try {
+    return window.localStorage.getItem(TASK_LAYOUT_STORAGE_KEY) === 'board' ? 'board' : 'list';
+  } catch {
+    return 'list';
+  }
+}
+
+function saveTaskLayout(layout: TaskLayout): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(TASK_LAYOUT_STORAGE_KEY, layout);
+  } catch {
+    return;
+  }
+}
 
 function statesForFilter(filter: TaskFilter): AgentTaskState[] | undefined {
   if (filter === 'all') return ALL_STATES;
@@ -184,6 +212,7 @@ export interface TasksPageProps {
 
 export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
   const [filter, setFilter] = useState<TaskFilter>('active');
+  const [layout, setLayout] = useState<TaskLayout>('list');
   const [runs, setRuns] = useState<CloudAgentRun[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -234,6 +263,15 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
   useEffect(() => {
     void load(filter, null);
   }, [filter, load]);
+
+  useEffect(() => {
+    setLayout(loadTaskLayout());
+  }, []);
+
+  const changeLayout = useCallback((next: TaskLayout) => {
+    setLayout(next);
+    saveTaskLayout(next);
+  }, []);
 
   const loadJournal = useCallback(
     async (runId: string, signal?: AbortSignal, options?: { background?: boolean }) => {
@@ -474,7 +512,10 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
   return (
     <div
       data-testid="tasks-view"
-      className="mx-auto flex h-full w-full max-w-5xl flex-col px-4 py-6"
+      className={cn(
+        'mx-auto flex h-full w-full flex-col px-4 py-6',
+        layout === 'board' ? 'max-w-7xl' : 'max-w-5xl',
+      )}
     >
       <header className="mb-4 flex flex-col gap-1">
         <div className="flex items-center gap-2">
@@ -484,16 +525,23 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
         <p className="text-sm text-muted-foreground">Your Managed Cloud work sessions</p>
       </header>
 
-      <SegmentedControl
-        className="mb-4"
-        aria-label="Filter work sessions"
-        options={FILTERS}
-        value={filter}
-        onValueChange={(next) => {
-          setFilter(next);
-          setSelectedRunId(null);
-        }}
-      />
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <SegmentedControl
+          aria-label="Filter work sessions"
+          options={FILTERS}
+          value={filter}
+          onValueChange={(next) => {
+            setFilter(next);
+            setSelectedRunId(null);
+          }}
+        />
+        <SegmentedControl
+          aria-label="Task layout"
+          options={LAYOUTS}
+          value={layout}
+          onValueChange={changeLayout}
+        />
+      </div>
 
       {loading ? (
         <div className="flex flex-1 items-center justify-center py-16">
@@ -534,6 +582,65 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
             <Button size="sm" onClick={transport.startWork}>
               Start AGI Work
             </Button>
+          ) : null}
+        </div>
+      ) : layout === 'board' ? (
+        <div
+          className={cn('grid min-h-0 gap-4', selectedRun && 'lg:grid-cols-[minmax(0,1fr)_360px]')}
+        >
+          <div className="flex min-w-0 flex-col gap-3">
+            <TasksBoard
+              runs={runs}
+              showEmptyStages={filter !== 'archived'}
+              selectedRunId={selectedRunId}
+              runTitle={runTitle}
+              cancellingId={cancellingId}
+              pausingId={pausingId}
+              archivingId={archivingId}
+              resolvingApprovalId={resolvingApprovalId}
+              canArchive={Boolean(transport.setRunArchived)}
+              onSelect={setSelectedRunId}
+              onOpenConversation={openConversation}
+              onApprove={(run) => void handleApproval(run, 'approved')}
+              onDeny={(run) => void handleApproval(run, 'rejected')}
+              onPause={(runId) => void handlePause(runId)}
+              onResume={(runId) => void handleResume(runId)}
+              onCancel={(runId) => void handleCancel(runId)}
+              onArchive={(run, archived) => void handleArchive(run, archived)}
+            />
+            {nextCursor ? (
+              <div className="flex justify-center">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={loadingMore}
+                  onClick={() => void load(filter, nextCursor)}
+                >
+                  {loadingMore ? <Spinner size="sm" aria-label="Loading more tasks" /> : null}
+                  Show more
+                </Button>
+              </div>
+            ) : null}
+          </div>
+          {selectedRun ? (
+            <TaskDetailPanel
+              run={selectedRun}
+              events={journal?.events ?? []}
+              loading={journalLoading}
+              error={journalError}
+              truncated={journal?.truncated}
+              autoRefreshing={autoRefreshing && !journalError}
+              onRefresh={() => {
+                if (selectedRunId) void loadJournal(selectedRunId);
+              }}
+              onClose={() => setSelectedRunId(null)}
+              onOpenConversation={(conversationId) => transport.openConversation(conversationId)}
+              onRerun={
+                transport.rerunWork && selectedRun?.workMode === 'agiwork'
+                  ? (goal) => transport.rerunWork?.(goal)
+                  : undefined
+              }
+            />
           ) : null}
         </div>
       ) : (
