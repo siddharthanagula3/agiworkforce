@@ -1,5 +1,10 @@
 import { Menu, app, type MenuItemConstructorOptions } from 'electron';
-import { HOST_MENU_SHORTCUTS, type HostCommand } from '@agiworkforce/local-runtime-contract';
+import {
+  COMPUTER_USE_STOP_SHORTCUT,
+  HOST_MENU_SHORTCUTS,
+  type ComputerUsePhase,
+  type HostCommand,
+} from '@agiworkforce/local-runtime-contract';
 import { isLaunchAtLoginEnabled, setLaunchAtLogin } from './launchAtLogin';
 
 /**
@@ -37,6 +42,7 @@ export interface AppMenuActions {
   stepZoomLevel: (delta: number) => void;
   takeOverScreen: () => void;
   handBackScreen: () => void;
+  stopScreenControl: () => void;
 }
 
 export interface AppMenuAccelerators {
@@ -95,6 +101,7 @@ function appleMenu(): MenuItemConstructorOptions[] {
 function fileMenu(
   actions: AppMenuActions,
   accelerators: AppMenuAccelerators,
+  computerUse: ComputerUsePhase,
 ): MenuItemConstructorOptions {
   const items: MenuItemConstructorOptions[] = [
     { label: 'New Chat', accelerator: hostAccelerator('host-new-chat'), click: actions.newChat },
@@ -112,8 +119,23 @@ function fileMenu(
       click: actions.captureScreenshot,
     },
     { type: 'separator' },
-    { label: 'Take Over Screen Control', click: actions.takeOverScreen },
-    { label: 'Hand Back Screen Control', click: actions.handBackScreen },
+    {
+      label: 'Stop Computer Use',
+      accelerator: COMPUTER_USE_STOP_SHORTCUT,
+      registerAccelerator: false,
+      enabled: computerUse !== 'idle',
+      click: actions.stopScreenControl,
+    },
+    {
+      label: 'Take Over Screen Control',
+      enabled: computerUse === 'active',
+      click: actions.takeOverScreen,
+    },
+    {
+      label: 'Hand Back Screen Control',
+      enabled: computerUse === 'paused',
+      click: actions.handBackScreen,
+    },
     { type: 'separator' },
     {
       label: 'Settings',
@@ -246,10 +268,11 @@ function helpMenu(actions: AppMenuActions): MenuItemConstructorOptions {
 export function appMenuTemplate(
   actions: AppMenuActions,
   accelerators: AppMenuAccelerators,
+  computerUse: ComputerUsePhase = 'idle',
 ): MenuItemConstructorOptions[] {
   return [
     ...appleMenu(),
-    fileMenu(actions, accelerators),
+    fileMenu(actions, accelerators, computerUse),
     editMenu(),
     viewMenu(actions),
     historyMenu(actions),
@@ -258,10 +281,18 @@ export function appMenuTemplate(
   ];
 }
 
-export function buildAppMenu(actions: AppMenuActions, accelerators: AppMenuAccelerators): Menu {
-  return Menu.buildFromTemplate(appMenuTemplate(actions, accelerators));
+export function buildAppMenu(
+  actions: AppMenuActions,
+  accelerators: AppMenuAccelerators,
+  computerUse: ComputerUsePhase = 'idle',
+): Menu {
+  return Menu.buildFromTemplate(appMenuTemplate(actions, accelerators, computerUse));
 }
 
-export function installAppMenu(actions: AppMenuActions, accelerators: AppMenuAccelerators): void {
-  Menu.setApplicationMenu(buildAppMenu(actions, accelerators));
+export function installAppMenu(
+  actions: AppMenuActions,
+  accelerators: AppMenuAccelerators,
+  computerUse: ComputerUsePhase = 'idle',
+): void {
+  Menu.setApplicationMenu(buildAppMenu(actions, accelerators, computerUse));
 }
