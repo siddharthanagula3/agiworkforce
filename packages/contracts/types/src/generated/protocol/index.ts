@@ -105,6 +105,7 @@ export * from './DeveloperFileChangeKind';
 export * from './DeveloperMessage';
 export * from './DeveloperPlanStep';
 export * from './DeveloperReasoningEffort';
+export * from './DeveloperRoutingProfile';
 export * from './DeveloperRoutingTaskType';
 export * from './DeveloperSessionApproval';
 export * from './DeveloperSessionFileChange';
