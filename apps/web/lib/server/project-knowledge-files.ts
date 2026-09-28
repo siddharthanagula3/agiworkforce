@@ -220,7 +220,9 @@ export async function registerProjectKnowledgeFile(
     throw createError.conflict(`This file is already in the project as "${duplicate.file_name}".`);
   }
 
-  const planTier = await resolveEntitledPlanTier(db, userId);
+  const planTier = await resolveEntitledPlanTier(db, userId, {
+    workspaceOrganizationId: organizationId,
+  });
   const storageLimitBytes = getKnowledgeStorageLimitBytes(planTier);
   if (storageLimitBytes !== null) {
     let usedBytes = 0;
