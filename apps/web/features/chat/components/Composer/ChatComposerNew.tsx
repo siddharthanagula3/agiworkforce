@@ -123,6 +123,7 @@ import { useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 import {
   canUseBillingPlanCapability,
+  describeCapabilityDenial,
   getModels,
   isExecutableVideoModel,
   isFreeBillingPlanTier,
@@ -142,6 +143,7 @@ import {
   matchMentionQuery,
   pastedCodeFence,
   useCapability,
+  useCapabilityDecision,
   useOnlineStatus,
 } from '@agiworkforce/unified-chat';
 import { isImeComposingKey } from '@agiworkforce/unified-chat/composer-editor';
@@ -1392,6 +1394,14 @@ const ChatComposerNewComponent = ({
   const researchAvailableForModel =
     !promotionalTextOnlyChat &&
     (isAutoSelected || modelSupportsResearch(selectedModelCaps, selectedModelMeta?.contextWindow));
+  const researchDecision = useCapabilityDecision('canUseDeepResearch');
+  const researchNeedsUpgrade = isFreeTrial || researchDecision?.reason === 'requires_upgrade';
+  const researchAllowed =
+    billingPolicyReady && !researchNeedsUpgrade && (researchDecision?.allowed ?? true);
+  const researchDenialTitle =
+    researchDecision && !researchDecision.allowed && researchDecision.reason
+      ? describeCapabilityDenial(researchDecision.reason).message
+      : null;
   const modelSupportsThinkingCap = selectedModelCaps?.thinking ?? false;
   const canUseCloudExecution = useCapability('canUseCloudExecution');
   const deploymentCodeExecution = billingPolicyReady && canUseCloudExecution;
@@ -1443,10 +1453,16 @@ const ChatComposerNewComponent = ({
   // Clear Research if the model loses research support.
   useEffect(() => {
     if (!billingPolicyReady) return;
-    if (researchEnabled && !researchAvailableForModel) {
+    if (researchEnabled && (!researchAllowed || !researchAvailableForModel)) {
       setComposerToggles({ researchEnabled: false });
     }
-  }, [billingPolicyReady, researchEnabled, researchAvailableForModel, setComposerToggles]);
+  }, [
+    billingPolicyReady,
+    researchAllowed,
+    researchEnabled,
+    researchAvailableForModel,
+    setComposerToggles,
+  ]);
 
   // If the user switches to a model that can't execute code, clear the toggle.
   useEffect(() => {
@@ -4972,13 +4988,17 @@ const ChatComposerNewComponent = ({
                       closeMenu();
                     }}
                     researchEnabled={researchEnabled}
-                    researchDisabled={disabled || isFreeTrial || !researchAvailableForModel}
+                    researchDisabled={disabled || !researchAllowed || !researchAvailableForModel}
                     researchTitle={
-                      isFreeTrial
+                      researchNeedsUpgrade
                         ? 'Upgrade to use Deep Research'
-                        : !researchAvailableForModel
-                          ? "Deep Research isn't available for this model. Choose Auto or a model that supports Deep Research."
-                          : undefined
+                        : !billingPolicyReady
+                          ? 'Checking your plan…'
+                          : researchDenialTitle
+                            ? researchDenialTitle
+                            : !researchAvailableForModel
+                              ? "Deep Research isn't available for this model. Choose Auto or a model that supports Deep Research."
+                              : undefined
                     }
                     onToggleResearch={() => {
                       handleResearchToggle();
