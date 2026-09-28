@@ -650,6 +650,11 @@
         "icon": "$(pin)"
       },
       {
+        "command": "agi-workforce.personalize",
+        "title": "AGI Workforce: Personalization",
+        "icon": "$(person)"
+      },
+      {
         "command": "agi-workforce.showSkills",
         "title": "AGI Workforce: Show Skills",
         "icon": "$(lightbulb)"

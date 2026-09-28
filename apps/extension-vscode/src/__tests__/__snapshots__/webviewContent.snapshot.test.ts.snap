@@ -2343,6 +2343,14 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
             type="button"
             class="actions-menu-item"
             role="menuitem"
+            data-surface="personalization"
+          >
+            <span class="codicon codicon-person" aria-hidden="true"></span>
+            <span>Personalization</span>
+          </button><button
+            type="button"
+            class="actions-menu-item"
+            role="menuitem"
             data-surface="skills"
           >
             <span class="codicon codicon-lightbulb" aria-hidden="true"></span>
@@ -8781,6 +8789,14 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
             type="button"
             class="actions-menu-item"
             role="menuitem"
+            data-surface="personalization"
+          >
+            <span class="codicon codicon-person" aria-hidden="true"></span>
+            <span>Personalization</span>
+          </button><button
+            type="button"
+            class="actions-menu-item"
+            role="menuitem"
             data-surface="skills"
           >
             <span class="codicon codicon-lightbulb" aria-hidden="true"></span>
@@ -15215,6 +15231,14 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
           >
             <span class="codicon codicon-book" aria-hidden="true"></span>
             <span>Memory</span>
+          </button><button
+            type="button"
+            class="actions-menu-item"
+            role="menuitem"
+            data-surface="personalization"
+          >
+            <span class="codicon codicon-person" aria-hidden="true"></span>
+            <span>Personalization</span>
           </button><button
             type="button"
             class="actions-menu-item"
