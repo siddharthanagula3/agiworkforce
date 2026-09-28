@@ -23,7 +23,7 @@ import {
   isStudyMode,
   normalizeStudyTopic,
 } from '@/features/study/lib/study-session';
-import { AgiWorkGoalSchema } from './agiwork-plan';
+import { AgiWorkGoalSchema, AgiWorkSuppliedPlanSchema } from './agiwork-plan';
 import { FREE_USAGE_LIMIT_REACHED_MESSAGE } from './upstream-error-copy';
 import { demoteLowConfidencePremiumSelection } from './route-selection';
 import { hostedToolRunsUnasked, loadToolApprovalPolicy } from './tool-approval-policy';
@@ -537,6 +537,8 @@ export const ChatCompletionRequestSchema = z
     connector_tools_enabled: z.boolean().optional(),
     work_mode: z.enum(CLOUD_WORK_MODES).optional(),
     agi_work_goal: AgiWorkGoalSchema.optional(),
+    agi_work_plan: AgiWorkSuppliedPlanSchema.optional(),
+    agi_work_plan_approval: z.boolean().optional(),
     thinking_mode: z.boolean().optional(),
     thinking: z
       .object({

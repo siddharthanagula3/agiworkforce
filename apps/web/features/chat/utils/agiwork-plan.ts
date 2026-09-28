@@ -91,3 +91,37 @@ export function agiWorkPlanProgress(steps: AgiWorkPlanStep[] | undefined): {
     total: list.length,
   };
 }
+
+export interface AgiWorkPlanReview {
+  goal: AgiWorkGoalInput;
+  awaitingApproval: boolean;
+}
+
+function optionalText(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value : undefined;
+}
+
+export function parseAgiWorkPlanReview(payload: unknown): AgiWorkPlanReview | null {
+  if (!payload || typeof payload !== 'object') return null;
+  const record = payload as { goal?: unknown; awaiting_approval?: unknown };
+  if (!record.goal || typeof record.goal !== 'object') return null;
+  const goal = record.goal as Record<string, unknown>;
+  const text = optionalText(goal['goal']);
+  if (!text) return null;
+  const constraints = optionalText(goal['constraints']);
+  const deliverable = optionalText(goal['deliverable']);
+  const excludedTools = Array.isArray(goal['excludedTools'])
+    ? goal['excludedTools'].filter((tool): tool is AgiWorkExcludableTool =>
+        (AGIWORK_EXCLUDABLE_TOOLS as readonly unknown[]).includes(tool),
+      )
+    : [];
+  return {
+    goal: {
+      goal: text,
+      ...(constraints ? { constraints } : {}),
+      ...(deliverable ? { deliverable } : {}),
+      ...(excludedTools.length > 0 ? { excludedTools } : {}),
+    },
+    awaitingApproval: record.awaiting_approval === true,
+  };
+}
