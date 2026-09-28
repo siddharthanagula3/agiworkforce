@@ -83,6 +83,10 @@ async function imageJobs(
               on assets.job_id = jobs.id and assets.user_id = $1
       where jobs.user_id = $1
         and jobs.organization_id is not distinct from $2::uuid
+        and not exists (
+          select 1 from public.web_conversations c
+           where c.id = jobs.conversation_id and coalesce(c.is_temporary, false)
+        )
       group by jobs.id
       order by jobs.created_at desc
       limit $3`,
@@ -117,10 +121,14 @@ async function videoJobs(
   const rows = await db.query<VideoJobRow>(
     `select id, status, prompt, model, public_error, cancel_requested_at, progress, asset_id,
             conversation_id, created_at, updated_at
-       from public.video_generation_jobs
-      where user_id = $1
-        and organization_id is not distinct from $2::uuid
-      order by created_at desc
+       from public.video_generation_jobs jobs
+      where jobs.user_id = $1
+        and jobs.organization_id is not distinct from $2::uuid
+        and not exists (
+          select 1 from public.web_conversations c
+           where c.id = jobs.conversation_id and coalesce(c.is_temporary, false)
+        )
+      order by jobs.created_at desc
       limit $3`,
     [userId, organizationId, MEDIA_JOB_HISTORY_MAX],
   );

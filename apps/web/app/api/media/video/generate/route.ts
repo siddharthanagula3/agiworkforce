@@ -139,11 +139,11 @@ const VideoGenerationRouteRequestSchema = ManagedMediaVideoGenerationRequestSche
   conversation_id: z.string().uuid().optional(),
   assistant_message_id: z.string().uuid().optional(),
 }).superRefine((value, ctx) => {
-  if (Boolean(value.conversation_id) !== Boolean(value.assistant_message_id)) {
+  if (value.assistant_message_id && !value.conversation_id) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      path: value.conversation_id ? ['assistant_message_id'] : ['conversation_id'],
-      message: 'conversation_id and assistant_message_id must be supplied together',
+      path: ['conversation_id'],
+      message: 'assistant_message_id needs the conversation_id it belongs to',
     });
   }
 });
@@ -1160,8 +1160,8 @@ async function submitVideoCandidates(
         ...input,
         idempotencyKey,
         // The transcript placeholder is one row and one job owns it, so the
-        // extra candidates are library-only rather than silently rebinding it.
-        conversationId: isFirst ? input.conversationId : undefined,
+        // extra candidates keep the conversation but never rebind the placeholder.
+        conversationId: input.conversationId,
         assistantMessageId: isFirst ? input.assistantMessageId : undefined,
       });
     } catch (error) {
