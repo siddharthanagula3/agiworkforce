@@ -1545,6 +1545,12 @@ enum McpSubcommand {
         /// Transport for a remote server.
         #[arg(long, value_enum, default_value_t = RemoteMcpTransport::Http, requires = "url")]
         transport: RemoteMcpTransport,
+        /// Environment variable for a stdio server as KEY=VALUE, repeat for each.
+        #[arg(long = "env", value_name = "KEY=VALUE", requires = "command")]
+        env: Vec<String>,
+        /// Header for a remote server as "Name: value", for example an API key. Repeat for each.
+        #[arg(long = "header", value_name = "NAME: VALUE", requires = "url")]
+        headers: Vec<String>,
         /// Replace an existing entry with the same name.
         #[arg(long)]
         force: bool,
@@ -3178,9 +3184,11 @@ async fn run_mcp_registry_command(action: &McpSubcommand) -> Result<()> {
             args,
             url,
             transport,
+            env,
+            headers,
             force,
         } => {
-            let entry = match (command, url) {
+            let mut entry = match (command, url) {
                 (Some(command), None) => {
                     registry::build_server_entry(TransportKind::Stdio, command, args)?
                 }
@@ -3195,8 +3203,38 @@ async fn run_mcp_registry_command(action: &McpSubcommand) -> Result<()> {
                     "pass either --command <executable> for a stdio server or --url <url> for a remote one"
                 ),
             };
+            if !env.is_empty() {
+                let mut map = serde_json::Map::new();
+                for pair in env {
+                    let (key, value) = pair
+                        .split_once('=')
+                        .filter(|(key, _)| !key.trim().is_empty())
+                        .with_context(|| format!("--env takes KEY=VALUE, got {pair}"))?;
+                    map.insert(key.trim().to_string(), serde_json::json!(value));
+                }
+                entry["env"] = serde_json::Value::Object(map);
+            }
+            if !headers.is_empty() {
+                let mut map = serde_json::Map::new();
+                for header in headers {
+                    let (key, value) = header
+                        .split_once(':')
+                        .filter(|(key, _)| !key.trim().is_empty())
+                        .with_context(|| format!("--header takes \"Name: value\", got {header}"))?;
+                    map.insert(key.trim().to_string(), serde_json::json!(value.trim()));
+                }
+                entry["headers"] = serde_json::Value::Object(map);
+            }
             registry_file.add(name, entry, *force)?;
             registry_file.save()?;
+            #[cfg(unix)]
+            if !env.is_empty() || !headers.is_empty() {
+                use std::os::unix::fs::PermissionsExt;
+                std::fs::set_permissions(
+                    McpRegistry::default_path()?,
+                    std::fs::Permissions::from_mode(0o600),
+                )?;
+            }
             println!(
                 "Registered MCP server '{}' in {}.",
                 terminal_text::sanitize_terminal_text(name),
