@@ -1460,6 +1460,14 @@ svg + .menuRowLabel {
   flex-direction: column;
 }
 
+.extensionRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+}
+
 .fileSelectRow {
   display: flex;
   align-items: center;

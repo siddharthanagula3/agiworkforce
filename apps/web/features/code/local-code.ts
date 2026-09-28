@@ -65,6 +65,18 @@ export const LOCAL_CODE_COPY = {
   changesFailed: 'The changes in this folder could not be read.',
   changesNotRepository: 'This folder is not a git repository, so there are no changes to show.',
   discardFailed: 'That change could not be discarded.',
+  extensions: 'Skills and plugins',
+  skillsHeading: 'Skills',
+  pluginsHeading: 'Plugins',
+  extensionsLoading: 'Loading skills and plugins',
+  extensionsFailed: 'Skills and plugins could not be read.',
+  extensionsUpdateFailed: 'That change could not be saved.',
+  extensionsNone: 'No skills or plugins are installed for this folder.',
+  projectSkillsUntrusted:
+    "This folder's own skills stay off until you trust them. Trusted skills can run their scripts with your account.",
+  trustProjectSkills: "Trust this folder's skills",
+  revokeProjectSkills: "Stop trusting this folder's skills",
+  skillScopeLabels: { project: 'This folder', user: 'Your account', plugin: 'From a plugin' },
 } as const;
 
 const LOCAL_SESSION_STATUS_LABELS: Partial<Record<ThreadStatus, string>> = {

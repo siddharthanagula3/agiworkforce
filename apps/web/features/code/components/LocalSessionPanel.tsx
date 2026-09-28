@@ -59,6 +59,7 @@ import { useLocalTests } from '../hooks/use-local-tests';
 import { getModelMetadata } from '@shared/config/llm';
 import { UsageRing } from './CodeComposer';
 import { LocalChangesPanel } from './LocalChangesPanel';
+import { LocalExtensionsControl } from './LocalExtensionsControl';
 import { LocalModelChip } from './LocalModelChip';
 import { CodeTranscriptBody } from './CodeTranscript';
 import styles from '../CloudCodePage.module.css';
@@ -252,6 +253,7 @@ export function LocalSessionPanel({
           <span className={styles['headerChipText']}>{localSessionContext(session, group)}</span>
         </span>
         <div className={styles['headerActions']}>
+          <LocalExtensionsControl rootId={session.rootId} />
           <button
             type="button"
             className={`${styles['headerButton']} ${changesOpen ? styles['headerButtonActive'] : ''}`}
