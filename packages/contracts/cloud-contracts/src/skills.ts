@@ -17,6 +17,14 @@ export const MANAGED_SKILL_SOURCES = [
 export const MANAGED_SKILL_LIFECYCLES = ['included', 'draft'] as const;
 export const MANAGED_OFFICE_FILE_TOOL_NAME = 'create_office_file';
 
+export const CHAT_OUTPUT_FORMATS = ['docx', 'pptx', 'xlsx'] as const;
+export type ChatOutputFormat = (typeof CHAT_OUTPUT_FORMATS)[number];
+export const CHAT_OUTPUT_FORMAT_LABEL: Readonly<Record<ChatOutputFormat, string>> = {
+  docx: 'Document',
+  pptx: 'Presentation',
+  xlsx: 'Spreadsheet',
+};
+
 export const ManagedSkillSourceSchema = z.enum(MANAGED_SKILL_SOURCES);
 export const ManagedSkillLifecycleSchema = z.enum(MANAGED_SKILL_LIFECYCLES);
 

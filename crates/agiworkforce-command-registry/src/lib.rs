@@ -460,6 +460,13 @@ pub fn builtin_slash_registry_commands() -> Vec<RegistryCommand> {
             vec!["imagine"],
         ),
         RegistryCommand::builtin_slash(
+            "search",
+            "Answer from a web search (/search <question>)",
+            false,
+            true,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash(
             "theme",
             "Change syntax highlighting theme",
             false,

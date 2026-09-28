@@ -136,16 +136,6 @@ nothing is left.
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 
-## S87.14: Feature-access policy.
-
-- Done when: An administrator switches product features on or off for the workspace (with exceptions) and each switched-off feature is refused wherever it runs.
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | missing | Not built on this surface. |  |
-
 ## S87.15: Tool policy.
 
 - Done when: An administrator decides which individual tools members and agents may use (allow, block or require approval) and the tool loop enforces it.

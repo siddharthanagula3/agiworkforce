@@ -71,9 +71,9 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Task chips (image, write, web search) only set the mode of the next message; there is no conversation-level mode switch such as Chat vs Work. | ui |
+| mobile | partial | A Cloud conversation shows a Chat and Work switch above its composer, so later turns run as chat or AGI Work, as Claude's mobile message box does; in post-codex/chat-gates-s18.09-mobile-work-mode-in-conversation.patch. | ui |
 
-Code: `apps/mobile/src/features/chat/components/TaskChips.tsx:34-36`, `apps/mobile/src/features/chat/components/Composer/Composer.tsx:81-81`
+Code: `apps/mobile/src/features/tasks/startWork.ts:58-58`
 
 ## S18.11: Conversation search.
 
@@ -143,12 +143,12 @@ Code: `apps/mobile/src/features/chat/components/TaskChips.tsx:34-36`, `apps/mobi
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | 'Share' exports the chat as a file through the OS share sheet; creating a share link is only possible on web. | ui |
+| mobile | partial | A Cloud conversation's menu offers Share link, which confirms, creates the link through POST /api/share and opens the share sheet; temporary chats are refused; links are revoked in Settings, Shared links. In post-codex/chat-gates-s18.19-mobile-share-link.patch ([id].tsx is held). Both leaders share links from iOS (help.openai.com 7925741; support.claude.com 10593882). | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/app/(app)/chat/[id].tsx:1186-1192`, `apps/mobile/app/(app)/chat/[id].tsx:1599-1604`
+Code: `apps/mobile/src/features/shared-links/service.ts:50-50`
 
 ## S18.20: Shared-link management.
 

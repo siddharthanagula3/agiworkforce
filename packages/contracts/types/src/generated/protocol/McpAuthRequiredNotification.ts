@@ -6,4 +6,5 @@ export type McpAuthRequiredNotification = {
   toolCallId: string;
   server: string;
   scope?: string;
+  connectUrl?: string;
 };
