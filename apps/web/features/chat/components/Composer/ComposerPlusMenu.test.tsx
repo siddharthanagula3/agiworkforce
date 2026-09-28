@@ -17,6 +17,7 @@ function baseProps(): Omit<ComposerPlusMenuProps, 'anchorRef' | 'contentRef'> {
     closeMenu: vi.fn(),
     workPalette: false,
     onAddFiles: vi.fn(),
+    onAttachLibraryFile: vi.fn(),
     mediaModeActive: false,
     attachmentsUnavailable: false,
     mediaModeNoun: 'Image',
