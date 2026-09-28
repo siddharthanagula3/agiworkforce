@@ -18,6 +18,7 @@ import {
   CloudCodeChangesSchema,
   CloudCodeCommandResponseSchema,
   CloudCodeCommitResultSchema,
+  CloudCodeDiscardResultSchema,
   CloudCodePullRequestSchema,
   CloudCodeRepositoryListSchema,
   CloudCodeSessionDeletedSchema,
@@ -31,6 +32,8 @@ import {
   type CloudCodeBranchList,
   type CloudCodeChanges,
   type CloudCodeCommitResult,
+  type CloudCodeDiscardResult,
+  type CommitCloudCodeSessionRequest,
   type CloudCodePullRequest,
   type CloudCodeRepositoryList,
   type CloudCodeTurnCancellation,
@@ -102,7 +105,16 @@ export interface CloudCodeApi {
     signal?: AbortSignal,
   ): Promise<CloudCodeSession>;
   deleteSession(sessionId: string, signal?: AbortSignal): Promise<void>;
-  commit(sessionId: string, message: string, signal?: AbortSignal): Promise<CloudCodeCommitResult>;
+  commit(
+    sessionId: string,
+    input: CommitCloudCodeSessionRequest,
+    signal?: AbortSignal,
+  ): Promise<CloudCodeCommitResult>;
+  discardChanges(
+    sessionId: string,
+    files: string[],
+    signal?: AbortSignal,
+  ): Promise<CloudCodeDiscardResult>;
   startAgentTurn(
     sessionId: string,
     input: StartCloudCodeAgentTurnRequest,
@@ -304,16 +316,28 @@ export function createManagedCloudCodeApi(config: ManagedCloudCodeApiConfig): Cl
         CloudCodeSessionDeletedSchema,
       );
     },
-    async commit(sessionId, message, signal) {
+    async commit(sessionId, input, signal) {
       return request(
         `${cloudCodeSessionPath(sessionId)}/commit`,
         {
           method: 'POST',
           headers: await mutationHeaders(),
-          body: JSON.stringify({ message }),
+          body: JSON.stringify(input),
           signal,
         },
         CloudCodeCommitResultSchema,
+      );
+    },
+    async discardChanges(sessionId, files, signal) {
+      return request(
+        `${cloudCodeSessionPath(sessionId)}/changes`,
+        {
+          method: 'POST',
+          headers: await mutationHeaders(),
+          body: JSON.stringify({ discard: files }),
+          signal,
+        },
+        CloudCodeDiscardResultSchema,
       );
     },
     async startAgentTurn(sessionId, input, signal) {

@@ -161,6 +161,11 @@ export const CloudCodeChangesSchema = z.object({
   diffTruncated: z.boolean().default(false),
 });
 
+export const CloudCodeDiscardResultSchema = z.object({
+  session: CloudCodeSessionSchema,
+  discarded: z.array(z.string()),
+});
+
 export const CloudCodePullRequestSchema = z.object({
   session: CloudCodeSessionSchema,
   url: z.string(),
@@ -214,6 +219,7 @@ export type CloudCodeApprovalDecision = 'approve' | 'reject';
 export type CloudCodeCommitResult = z.infer<typeof CloudCodeCommitResultSchema>;
 export type CloudCodeRepository = z.infer<typeof CloudCodeRepositorySchema>;
 export type CloudCodeChanges = z.infer<typeof CloudCodeChangesSchema>;
+export type CloudCodeDiscardResult = z.infer<typeof CloudCodeDiscardResultSchema>;
 export type CloudCodePullRequest = z.infer<typeof CloudCodePullRequestSchema>;
 export type CloudCodeTurnCancellation = z.infer<typeof CloudCodeTurnCancellationSchema>;
 export type CloudCodeRepositoryList = z.infer<typeof CloudCodeRepositoryListSchema>;
@@ -225,6 +231,12 @@ export interface StartCloudCodeAgentTurnRequest {
   model: string;
   /** Sent as `Idempotency-Key`; the managed-usage ledger refuses the turn without it. */
   idempotencyKey: string;
+}
+
+export interface CommitCloudCodeSessionRequest {
+  message: string;
+  /** Only these changed paths are committed; absent commits every change. */
+  files?: string[];
 }
 
 export interface DecideCloudCodeApprovalRequest {
