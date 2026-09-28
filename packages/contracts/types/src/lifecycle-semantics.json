@@ -110,6 +110,13 @@
         "restoredBy": null
       }
     },
+    "developer_projects": {
+      "concept": "developer-project",
+      "archived": {
+        "column": "archived_at",
+        "restoredBy": null
+      }
+    },
     "feature_flag_definitions": {
       "concept": "feature-flag",
       "archived": {
@@ -119,6 +126,12 @@
     }
   },
   "recoveryGaps": [
+    {
+      "table": "developer_projects",
+      "facet": "archived.restore",
+      "why": "Archiving a project revokes its API keys in the same transaction and the developer console offers no unarchive, so an archived project stays listed read-only with its usage history.",
+      "fix": "An unarchive action beside archive in the developer projects route that clears archived_at; the revoked keys stay revoked and new keys are created for the project."
+    },
     {
       "table": "web_messages",
       "facet": "softDeleted.restore",
@@ -267,6 +280,12 @@
     },
     {
       "file": "apps/web/app/api/user/export/route.ts",
+      "table": "developer_projects",
+      "class": "data-export",
+      "why": "A copy of the subject data includes what the subject withdrew; an export that silently drops it misreports what is held."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
       "table": "conversations",
       "class": "data-export",
       "why": "A copy of the subject data includes what the subject withdrew; an export that silently drops it misreports what is held."
@@ -342,6 +361,12 @@
       "table": "media_assets",
       "class": "write-path",
       "why": "The read resolves the parent row a revision is being written against; the write itself fences on ownership."
+    },
+    {
+      "file": "apps/web/lib/developer-api/project-spend.ts",
+      "table": "developer_projects",
+      "class": "ownership-check",
+      "why": "The read resolves which project the API key on this request belongs to and its monthly cap. Archiving a project revokes its keys in the same transaction, so a key that authenticated the request never belongs to an archived project, and the join returns no project content."
     },
     {
       "file": "apps/web/lib/server/media-assets.ts",

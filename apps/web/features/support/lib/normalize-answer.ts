@@ -4,7 +4,7 @@ import {
   type SupportAbstentionView,
   type SupportCitation,
   type SupportReplyView,
-} from './contract';
+} from '@agiworkforce/cloud-contracts/support';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);

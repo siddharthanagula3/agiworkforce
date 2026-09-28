@@ -6,6 +6,7 @@ import { sendAuthorizedJson } from '@/features/auth/step-up-fetch';
 import { useStepUp } from '@/features/settings/hooks/use-step-up';
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import { toUserMessage } from '@/lib/user-error-message';
+import type { KeyRewrapState } from '@agiworkforce/types/encryption-key';
 
 const KEYS_PATH = '/api/settings/organization/keys';
 const REWRAP_PATH = '/api/settings/organization/keys/rewrap';
@@ -30,7 +31,7 @@ export type KeyAvailability =
 export interface KeyRewrapRun {
   fromVersion: string;
   toVersion: string;
-  state: 'pending' | 'running' | 'complete' | 'failed';
+  state: KeyRewrapState;
   scanned: number;
   resealed: number;
   remaining: number;
