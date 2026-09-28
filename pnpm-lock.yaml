@@ -1953,6 +1953,9 @@ importers:
 
   packages/client/client-runtime:
     dependencies:
+      '@agiworkforce/cloud-contracts':
+        specifier: workspace:*
+        version: link:../../contracts/cloud-contracts
       '@agiworkforce/local-runtime-contract':
         specifier: workspace:*
         version: link:../../contracts/local-runtime
