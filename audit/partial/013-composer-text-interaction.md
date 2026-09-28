@@ -145,10 +145,10 @@ Code: `apps/cli/src/app_server/developer_host.rs:890-890`, `apps/cli/src/app_ser
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The criterion is invoking a skill from the composer. The cited ui anchor is the Skills screen; the composer's Add-to-chat sheet lists Camera, Photos, File, Library, Model, Image, Video, Deep research, Project and Choose style with no Skills entry, and the '/' palette has four commands (/image, /voice, /compare, /export). The skill chip and skill_name plumbing are real, so partial. |  |
+| mobile | partial | The add-to-chat sheet's Skills row (5799eb1bf8) shows once a screen passes onOpenSkills. post-codex/chat-gates-s13.23-mobile-skill-in-conversation.patch passes it on both chat screens, returns from Skills to the composer, and sends the chosen skill from an existing conversation (Codex holds chat.tsx, [id].tsx, Composer.tsx and SkillsScreen.tsx). | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/skills/SkillsScreen.tsx:536-544`, `apps/mobile/app/(app)/(tabs)/chat.tsx:417-420`, `apps/mobile/stores/chat/chatExecutionStore.ts:1761-1761`, `apps/mobile/app/(app)/skills/index.tsx:4-4`
+Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:959-959`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:74-74`
 
 ## S13.24: Agent or assistant mention.
 
@@ -260,11 +260,11 @@ Code: `apps/mobile/src/features/chat/components/ChatInput.tsx:210-231`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Add an output-format choice; the style picker covers tone and length only (Normal, Concise, Detailed, Creative). | ui |
+| mobile | partial | The add-to-chat Output choice (document, presentation, spreadsheet, from the shared list now in cloud-contracts, 82cb7643d7) appears once the screens pass offersOutputFormat and the store sends office_format, in post-codex/chat-gates-s13.34-mobile-output-format.patch. apps/web/lib/chat-output-format.ts should re-export CHAT_OUTPUT_FORMATS and CHAT_OUTPUT_FORMAT_LABEL from @agiworkforce/cloud-contracts so the list lives once. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/chat/components/StyleSelector.tsx:16-19`
+Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:892-892`, `packages/contracts/cloud-contracts/src/skills.ts:20-20`
 
 ## S13.36: Dictation control.
 
@@ -326,9 +326,9 @@ Code: `apps/mobile/src/features/chat/components/ChatInput.tsx:871-887`, `apps/mo
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Let users steer a running mobile chat; steering exists only for a paired desktop's code session ("Steer this run" in Remote), while mobile chats queue messages. | ui |
+| mobile | partial | A running agent turn offers Message the agent in its timeline (24f4239b00): the text goes to the run's steer queue and the agent reads it at its next step. It shows once MessageBubble passes the run id, in post-codex/chat-gates-s13.40-mobile-steer-running-turn.patch. The Tasks screen already steers runs. | ui |
 
-Code: `apps/mobile/src/features/companion/components/CodeSessionView.tsx:177-190`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:85-97`
+Code: `apps/mobile/src/features/chat/components/RunSteerInput.tsx:24-24`, `apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx:523-523`
 
 ## S13.41: Separate side question that does not modify the main task.
 

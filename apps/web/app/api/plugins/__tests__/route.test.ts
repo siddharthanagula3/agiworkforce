@@ -130,6 +130,7 @@ describe('GET /api/plugins', () => {
       verified: 3,
       bySource: { builtin: 1, partner: 1, marketplace: 1 },
       byWorksWith: { 'claude-code': 1, cowork: 1, web: 1 },
+      byCategory: { design: 2, developer: 1 },
     });
   });
 

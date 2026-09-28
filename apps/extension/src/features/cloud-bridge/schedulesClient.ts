@@ -1,7 +1,10 @@
 import {
   createManagedCloudSchedulesClient,
+  ManagedCloudScheduleMutationSchema,
+  ManagedCloudScheduleResponseSchema,
   ManagedCloudSchedulesHttpError,
   MANAGED_CLOUD_SCHEDULES_DEFAULT_PAGE_SIZE,
+  managedCloudSchedulePath,
   type ManagedCloudScheduleMutation,
   type ManagedCloudScheduleRun,
   type ManagedCloudScheduleRunApproval,
@@ -17,7 +20,19 @@ export interface ChromeSchedulesDependencies {
   getAuthToken: typeof getAuthToken;
   createClient: (token: string) => ManagedCloudSchedulesClient;
   newIdempotencyKey: () => string;
+  fetchImpl?: (input: string, init?: RequestInit) => Promise<Response>;
 }
+
+export type ChromeScheduleDetails = Pick<
+  ManagedCloudScheduleMutation,
+  'name' | 'description' | 'prompt'
+>;
+
+const ScheduleDetailsSchema = ManagedCloudScheduleMutationSchema.pick({
+  name: true,
+  description: true,
+  prompt: true,
+});
 
 export type ChromeSchedulesErrorCode = 'auth_required' | 'cancelled' | 'server_error';
 
@@ -35,21 +50,27 @@ export type ChromeScheduleResult =
 
 export type ChromeScheduleRunResult = { status: 'success'; replay: boolean } | ChromeSchedulesError;
 
+export type ChromeScheduleDeleteResult = { status: 'success' } | ChromeSchedulesError;
+
 export type ChromeScheduleApprovalResult =
   { status: 'success'; run: ManagedCloudScheduleRun | null } | ChromeSchedulesError;
 
 export type ChromeScheduleRunsResult =
   { status: 'success'; runs: ManagedCloudScheduleRun[]; hasMore: boolean } | ChromeSchedulesError;
 
+function scheduleHeaders(token: string): Record<string, string> {
+  return {
+    Authorization: `Bearer ${token}`,
+    Accept: 'application/json',
+    'X-Requested-With': 'XMLHttpRequest',
+    ...platformRequestHeaders(),
+  };
+}
+
 function createDefaultClient(token: string): ManagedCloudSchedulesClient {
   return createManagedCloudSchedulesClient({
     baseUrl: FREE_TRIAL_GATEWAY,
-    getHeaders: () => ({
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/json',
-      'X-Requested-With': 'XMLHttpRequest',
-      ...platformRequestHeaders(),
-    }),
+    getHeaders: () => scheduleHeaders(token),
   });
 }
 
@@ -148,6 +169,77 @@ export async function runChromeScheduleNow(
   );
   if (result.status === 'error') return result;
   return { status: 'success', replay: result.value.replay };
+}
+
+export async function deleteChromeSchedule(
+  scheduleId: string,
+  options: { signal?: AbortSignal } = {},
+  dependencies: Partial<ChromeSchedulesDependencies> = {},
+): Promise<ChromeScheduleDeleteResult> {
+  const result = await withSchedulesClient(dependencies, options.signal, (client) =>
+    client.deleteSchedule(scheduleId, options.signal),
+  );
+  if (result.status === 'error') return result;
+  return { status: 'success' };
+}
+
+async function scheduleRequestFailure(response: Response): Promise<ManagedCloudSchedulesHttpError> {
+  const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+  const error = body['error'];
+  const message =
+    error && typeof error === 'object' ? (error as Record<string, unknown>)['message'] : error;
+  return new ManagedCloudSchedulesHttpError(
+    typeof message === 'string' && message.trim()
+      ? message.trim()
+      : `Request failed (${response.status}).`,
+    response.status,
+  );
+}
+
+export async function updateChromeScheduleDetails(
+  scheduleId: string,
+  details: ChromeScheduleDetails,
+  options: { signal?: AbortSignal } = {},
+  dependencies: Partial<ChromeSchedulesDependencies> = {},
+): Promise<ChromeScheduleResult> {
+  const deps = { ...DEFAULT_DEPENDENCIES, ...dependencies };
+  const body = ScheduleDetailsSchema.safeParse(details);
+  if (!body.success) {
+    return {
+      status: 'error',
+      code: 'server_error',
+      message: 'A schedule needs a name and instructions.',
+    };
+  }
+  const fetchImpl: NonNullable<ChromeSchedulesDependencies['fetchImpl']> =
+    deps.fetchImpl ?? ((input, init) => fetch(input, init));
+  try {
+    const token = await deps.getAuthToken();
+    if (!token) return signedOut();
+    const response = await fetchImpl(
+      `${FREE_TRIAL_GATEWAY}${managedCloudSchedulePath(scheduleId)}`,
+      {
+        method: 'PUT',
+        headers: { ...scheduleHeaders(token), 'Content-Type': 'application/json' },
+        body: JSON.stringify(body.data),
+        ...(options.signal ? { signal: options.signal } : {}),
+      },
+    );
+    if (!response.ok) throw await scheduleRequestFailure(response);
+    const parsed = ManagedCloudScheduleResponseSchema.safeParse(
+      await response.json().catch(() => undefined),
+    );
+    if (!parsed.success) {
+      return {
+        status: 'error',
+        code: 'server_error',
+        message: 'Schedules returned an unreadable answer. Refresh and try again.',
+      };
+    }
+    return { status: 'success', schedule: parsed.data.schedule };
+  } catch (error) {
+    return describeSchedulesFailure(error, options.signal);
+  }
 }
 
 export async function listChromeScheduleRuns(

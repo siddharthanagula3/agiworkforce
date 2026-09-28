@@ -17,17 +17,6 @@ nothing is left.
 
 Code: `apps/extension/src/features/content/in-page-panel/pageActions.ts:52-74`, `apps/extension/src/features/content/in-page-panel/panel.ts:423-433`
 
-## S74.12: Page-context chips.
-
-- Done when: Attached page context shows as a visible chip the user can see and remove.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | Once page context is attached nothing visible appears in the composer; the only sign is a check inside the closed + menu (the has-context style targets a different class). | ui |
-
-Code: `apps/extension/src/side_panel.ts:5099-5114`, `apps/extension/src/side_panel.ts:5391-5396`
-
 ## S74.16: Browser-control mode.
 
 - Done when: The user switches the extension into a mode where it controls the browser for a goal they give.

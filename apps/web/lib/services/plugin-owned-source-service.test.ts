@@ -129,8 +129,15 @@ describe('storeOwnedPluginSource', () => {
     });
     const insert = statementMatching(statements, 'insert into public.plugin_marketplace_sources');
     expect(insert.sql).toContain('repository_url');
-    expect(insert.params).toEqual([USER_ID, 'My plugin', 'upload', 'active', expect.any(String)]);
-    expect(insert.sql).toContain('values ($1, $2, $3, null, null, $4, $5, now())');
+    expect(insert.params).toEqual([
+      USER_ID,
+      'My plugin',
+      'upload',
+      'active',
+      expect.any(String),
+      '[]',
+    ]);
+    expect(insert.sql).toContain('values ($1, $2, $3, null, null, $4, $5, $6::jsonb, now())');
   });
 
   it('stores each skill body with its own hash and byte size', async () => {
@@ -283,7 +290,7 @@ describe('listOwnedEntryFiles', () => {
     const db = { query, execute: vi.fn() } as unknown as DatabaseAdapter;
     const files = await listOwnedEntryFiles(db, USER_ID, [ENTRY_ID]);
     expect(String(query.mock.calls[0]![0])).toContain('sources.user_id = $2');
-    expect(query.mock.calls[0]![1]).toEqual([[ENTRY_ID], USER_ID]);
+    expect(query.mock.calls[0]![1]).toEqual([[ENTRY_ID], USER_ID, 'SKILL.md', '%/SKILL.md']);
     expect(files.get(ENTRY_ID)).toEqual([
       { path: 'skills/a/SKILL.md', content: 'A' },
       { path: 'skills/b/SKILL.md', content: 'B' },

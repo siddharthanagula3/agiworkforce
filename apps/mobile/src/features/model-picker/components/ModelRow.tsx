@@ -6,7 +6,12 @@ import { Text } from '@/components/ui/text';
 import { Badge } from '@/components/ui/badge';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { CLOUD_LOCK_REASON, type ModelDef } from '@/src/features/model-picker/service';
-import { getModelReasoning, resolveMaxOutputTokens } from '@agiworkforce/types';
+import {
+  getModelMetadataById,
+  getModelReasoning,
+  resolveMaxOutputTokens,
+  type ModelSpeed,
+} from '@agiworkforce/types';
 import { formatContextWindow } from '@/lib/models';
 import {
   useModelInstallStore,
@@ -14,6 +19,22 @@ import {
 } from '@/src/features/model-picker/installStore';
 import { useThemeColors } from '@/src/ui/theme';
 import { ProviderLogo, usesProviderAppTile } from './ProviderLogo';
+import { useProviderOutage } from '@/src/features/model-picker/providerAvailabilityStore';
+
+const MODEL_SPEED_LABEL: Readonly<Partial<Record<ModelSpeed, string>>> = {
+  'very-fast': 'Very fast',
+  fast: 'Fast',
+  slow: 'Slower',
+};
+
+const INPUT_MODALITY_LABEL = {
+  image: 'Images',
+  pdf: 'PDFs',
+  audio: 'Audio',
+  video: 'Video',
+} as const;
+
+type BadgedModality = keyof typeof INPUT_MODALITY_LABEL;
 
 interface ModelRowProps {
   model: ModelDef;
@@ -55,7 +76,15 @@ export function ModelRow({
   const isUnavailable = installStatus.status === 'unavailable';
   const isFailed = installStatus.status === 'failed';
   const isReady = installStatus.status === 'ready';
-  const disabled = isDownloading || isUnavailable;
+  const outage = useProviderOutage(model.provider, !isLocal && !isLocked);
+  const disabled = isDownloading || isUnavailable || outage !== null;
+  const metadata = isLocal ? undefined : getModelMetadataById(model.id);
+  const speedLabel = metadata?.speed ? MODEL_SPEED_LABEL[metadata.speed] : undefined;
+  const inputModalities: readonly string[] =
+    metadata?.inputModalities ?? (metadata?.capabilities.vision ? ['image'] : []);
+  const inputBadges = inputModalities.flatMap((modality) =>
+    modality in INPUT_MODALITY_LABEL ? [INPUT_MODALITY_LABEL[modality as BadgedModality]] : [],
+  );
   const visiblySelected = isSelected && (!isLocal || isReady) && !isLocked;
   const progressPercent = Math.round(installStatus.progress * 100);
   const unavailableHint =
@@ -102,7 +131,7 @@ export function ModelRow({
         onLongPress={handleLongPress}
         delayLongPress={400}
         disabled={disabled}
-        accessibilityLabel={`${model.name}${visiblySelected ? ', selected' : ''}${isFavorite ? ', favorite' : ''}${isLocked ? `, ${isSignInLock ? 'sign in required' : 'upgrade required'}, ${model.lockReason ?? ''}` : ''}${isDownloading ? `, downloading ${progressPercent}%` : ''}${isFailed ? ', download failed' : ''}${isUnavailable ? ', unavailable' : ''}${isLocal && isReady ? ', ready' : ''}${isLocal && installStatus.status === 'download_required' ? ', not downloaded' : ''}`}
+        accessibilityLabel={`${model.name}${visiblySelected ? ', selected' : ''}${isFavorite ? ', favorite' : ''}${isLocked ? `, ${isSignInLock ? 'sign in required' : 'upgrade required'}, ${model.lockReason ?? ''}` : ''}${isDownloading ? `, downloading ${progressPercent}%` : ''}${isFailed ? ', download failed' : ''}${isUnavailable ? ', unavailable' : ''}${outage ? ', unavailable right now' : ''}${isLocal && isReady ? ', ready' : ''}${isLocal && installStatus.status === 'download_required' ? ', not downloaded' : ''}`}
         accessibilityRole="button"
         accessibilityHint={
           isLocked
@@ -111,13 +140,15 @@ export function ModelRow({
               : 'Opens plan upgrade options'
             : isUnavailable
               ? unavailableHint
-              : isDownloading
-                ? 'Model download is in progress'
-                : isFailed
-                  ? 'Tap to retry download'
-                  : installStatus.status === 'download_required'
-                    ? 'Tap to download, long press to favorite'
-                    : 'Tap to select, long press to favorite'
+              : outage
+                ? outage.reason || 'This model is unavailable right now.'
+                : isDownloading
+                  ? 'Model download is in progress'
+                  : isFailed
+                    ? 'Tap to retry download'
+                    : installStatus.status === 'download_required'
+                      ? 'Tap to download, long press to favorite'
+                      : 'Tap to select, long press to favorite'
         }
         accessibilityState={{ selected: visiblySelected, disabled }}
         style={{
@@ -168,12 +199,29 @@ export function ModelRow({
           <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 11, marginTop: 2 }}>
             {model.detailLabel}
           </Text>
-          {!isLocal && model.contextWindow > 0 ? (
+          {!isLocal && (speedLabel || model.contextWindow > 0) ? (
             <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 11, marginTop: 2 }}>
-              {`${formatContextWindow(model.contextWindow)} context · ${formatContextWindow(
-                resolveMaxOutputTokens(model.id),
-              )} output`}
+              {[
+                speedLabel,
+                model.contextWindow > 0
+                  ? `${formatContextWindow(model.contextWindow)} context · ${formatContextWindow(
+                      resolveMaxOutputTokens(model.id),
+                    )} output`
+                  : undefined,
+              ]
+                .filter(Boolean)
+                .join(' · ')}
             </Text>
+          ) : null}
+          {inputBadges.length > 0 ? (
+            <View
+              style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 4 }}
+              accessibilityLabel={`Accepts ${inputBadges.join(', ')}`}
+            >
+              {inputBadges.map((label) => (
+                <Badge key={label} label={label} color="gray" />
+              ))}
+            </View>
           ) : null}
         </View>
 
@@ -193,6 +241,7 @@ export function ModelRow({
           ) : null}
           {isLocal && isFailed ? <Badge label="Retry" color="yellow" /> : null}
           {isLocal && isUnavailable ? <Badge label="Device" color="gray" /> : null}
+          {outage ? <Badge label="Unavailable" color="gray" /> : null}
           {isLocked ? (
             <>
               <Badge label={isSignInLock ? 'Sign in' : 'Upgrade'} color="yellow" />
@@ -220,6 +269,16 @@ export function ModelRow({
           <Cloud size={13} color={colors.agentWarning} />
           <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 12 }}>
             {model.lockReason ?? 'Sign in to use AGI Cloud chat.'}
+          </Text>
+        </View>
+      ) : null}
+
+      {outage ? (
+        <View style={{ paddingLeft: 58, paddingRight: 16, paddingBottom: 10 }}>
+          <Text numberOfLines={2} style={{ color: colors.textMuted, fontSize: 12, lineHeight: 16 }}>
+            {outage.reason
+              ? `Unavailable right now: ${outage.reason}`
+              : 'Unavailable right now. Try again soon or pick another model.'}
           </Text>
         </View>
       ) : null}
