@@ -82,17 +82,15 @@ Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:3550
 
 - Done when: The user can choose where the task executes (cloud sandbox versus this computer or another device).
 - Wave: 3
+- Already works on: desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
-| desktop | partial | In the desktop app device steps run on this computer automatically when the page declares the host; there is no per-task choice between cloud-only and this computer. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/desktop/electron/runtime/dispatcher.ts:868-869`, `apps/web/features/desktop-host/lib/device-steps.ts:56-61`
 
 ## S60.08: Model/profile selection.
 

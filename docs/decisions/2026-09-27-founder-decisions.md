@@ -256,3 +256,11 @@ are at parity. Claude offers preset voices only, to prevent voice cloning and
 impersonation, and no download of spoken replies; with D-2026-09-28-04 keeping
 OpenAI's preset voices, custom voice creation (S50.31) and downloading
 generated speech (S50.04) are not built. help.openai.com refused the fetch.
+
+## D-2026-09-28-13 Full-screen code blocks stay off the phone
+
+Neither leader's iOS app opens an ordinary code block full screen: ChatGPT's
+full-screen writing and code blocks are listed for the web
+(help.openai.com/en/articles/6825453, 2026-06-08) and Claude opens only
+artifacts full screen. The mobile app therefore keeps code blocks inline
+(S21.08 mobile). Checked 2026-09-28.

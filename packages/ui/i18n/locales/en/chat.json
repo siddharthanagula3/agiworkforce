@@ -72,6 +72,7 @@
     "runtimeSignInAction": "Sign in",
     "runtimeConsentLabel": "AI permission",
     "runtimeConsent": "This app wants to use AI with your account. Each request counts toward your plan's usage.",
+    "runtimeConsentConnectors": "This app wants to use AI with your account and read or change data in {{apps}}. It sees what those apps return, and each request counts toward your plan's usage.",
     "runtimeAllow": "Allow",
     "runtimeDecline": "Don't allow"
   },

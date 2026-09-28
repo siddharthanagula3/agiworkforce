@@ -30,22 +30,21 @@ Code: `apps/mobile/src/features/projects/components/ProjectHeader.tsx:126-126`
 | --- | --- | --- | --- |
 | mobile | partial | partials/chat-gates a805b3efe moved speedFirstSlots into @agiworkforce/routing so the device resolver can prefer the fastest slots. Picker rows and the on-device routing_profile mapping are in post-codex/chat-gates-s79-routing-profile-mobile.patch; the Instant fastest-slot preference is in post-codex/chat-gates-s79.05-mobile-speed-first.patch (applies after it). ModelPickerSheet.tsx, chatExecutionStore.ts and cloudDispatchRouting.ts are Codex-held. | ui |
 | cli | partial | /fast swaps to a configured cheaper model; it does not select a speed-first routing profile. | ui |
-| vscode | partial | partials/desktop-cli b82e0ef24: turn/start takes routingProfile and managed Auto now resolves with the account's plan. speed selects the economy band only: a fastest-slot preference needs model speed in the generated Rust registry (crates/agiworkforce-model-registry, from packages/ai/model-registry) and a preferred-slots field on AutoRoutingRequest. VS Code picker rows are p-sessions'. | ui |
+| vscode | partial | The CLI maps routingProfile speed to the same economy band as cost (developer_host.rs routing_profile_selection), so a Fastest row would be Economy under another name. It needs p-desktop-cli's fastest-slot preference (model speed in the Rust registry and preferred slots on AutoRoutingRequest); the VS Code row is then one entry in ROUTING_PROFILE_BY_AUTO_PROFILE. | ui |
 | chrome | partial | Quick mode routes to the economy (cheapest) alias, not a latency-optimised profile. | ui |
 
-Code: `packages/ai/routing/src/speed-first-slots.ts:6-6`, `packages/contracts/types/src/routing-profile-choice.ts:48-48`, `crates/agiworkforce-command-registry/src/lib.rs:178-178`, `crates/agiworkforce-protocol/src/developer_session.rs:1300-1300`
+Code: `packages/ai/routing/src/speed-first-slots.ts:6-6`, `packages/contracts/types/src/routing-profile-choice.ts:48-48`, `crates/agiworkforce-command-registry/src/lib.rs:178-178`, `apps/extension-vscode/src/features/model-picker/modelConstants.ts:442-442`
 
 ## S79.06: Quality-first profile.
 
 - Done when: A quality-first routing profile can be applied that prefers the most capable eligible route.
 - Wave: 3
-- Already works on: web, desktop, api
+- Already works on: web, desktop, vscode, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Same post-codex patch as S79.05. | ui |
 | cli | partial | The premium profile is applied automatically for coding/reasoning on higher plans; this surface offers no quality-first choice. | ui |
-| vscode | partial | partials/desktop-cli b82e0ef24: routingProfile quality selects auto-premium and managed Auto is no longer clamped to tier free, so Best is reachable through the app-server; VS Code adds the Best row (p-sessions). | ui |
 | chrome | partial | The premium profile is applied automatically for coding/reasoning on higher plans; this surface offers no quality-first choice. | ui |
 
 Code: `packages/contracts/types/src/routing-profile-choice.ts:48-48`, `apps/cli/src/provider.rs:260-267`, `apps/cli/src/models/streaming.rs:234-234`, `packages/ai/routing/src/auto.ts:32-32`
@@ -54,14 +53,13 @@ Code: `packages/contracts/types/src/routing-profile-choice.ts:48-48`, `apps/cli/
 
 - Done when: A cost-first routing profile can be applied that prefers the cheapest eligible route.
 - Wave: 3
-- Already works on: web, desktop, cli, chrome, api
+- Already works on: web, desktop, cli, vscode, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Same post-codex patch as S79.05. | ui |
-| vscode | partial | partials/desktop-cli b82e0ef24: routingProfile cost selects auto-economy through the app-server; VS Code adds the Economy row (p-sessions). | ui |
 
-Code: `packages/contracts/types/src/routing-profile-choice.ts:48-48`, `apps/cli/src/app_server/developer_host.rs:3699-3699`
+Code: `packages/contracts/types/src/routing-profile-choice.ts:48-48`
 
 ## S79.08: Privacy-first profile.
 

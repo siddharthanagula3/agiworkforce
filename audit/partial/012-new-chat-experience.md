@@ -77,11 +77,10 @@ Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:752-763`, `ap
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Recommend skills on the new-chat screen; today a skill is chosen on the Skills screen and shown as a chip in the composer. | handler, ui |
 | cli | partial | Recommend a skill for a new session; today /skills only browses the installed list. | handler, ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/chat/components/ChatInput.tsx:735-771`, `crates/agiworkforce-command-registry/src/lib.rs:248-248`
+Code: `crates/agiworkforce-command-registry/src/lib.rs:248-248`
 
 ## S12.09: Recommended connected apps.
 
@@ -252,7 +251,7 @@ Code: `apps/mobile/app/(app)/(tabs)/chat.tsx:200-203`, `apps/cli/src/tui/tui_app
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | partials/contrast 45941613aa: the signed-out /chat UI on p-auth's guest route is built (text only on the free default model; no files, images, voice, tools, memory or history; Log in and Sign up for free; the daily limit stated and what is left after each reply; the Terms and Privacy line; every refusal code handled, with Retry after a failed reply). Left: (1) proxy.ts:280 must let a visitor without a session cookie through to exactly /chat (one condition, sent to the lead) so the layout can render it; (2) the guest.chat switch with AGI_BOT_CHALLENGE_ENFORCED at the final pass. | proxy, switch |
-| desktop | partial | partials/contrast 45941613aa: the signed-out /chat UI on p-auth's guest route is built (text only on the free default model; no files, images, voice, tools, memory or history; Log in and Sign up for free; the daily limit stated and what is left after each reply; the Terms and Privacy line; every refusal code handled, with Retry after a failed reply). Left: (1) proxy.ts:280 must let a visitor without a session cookie through to exactly /chat (one condition, sent to the lead) so the layout can render it; (2) the guest.chat switch with AGI_BOT_CHALLENGE_ENFORCED at the final pass. | proxy, switch |
+| web | partial | partials/contrast 45941613aa and 1edf7c6eba: a visitor without a session reaches exactly /chat (proxy exemption, lead-approved) and gets the text-only guest chat on p-auth's route: the free default model; no files, images, voice, tools, memory or history; Log in and Sign up for free; the daily limit stated and what is left after each reply; the Terms and Privacy line; every refusal code handled. With the switch off the layout sends the same sign-in redirect the proxy did. Left: switching guest.chat on with AGI_BOT_CHALLENGE_ENFORCED at the final pass (supersedes p-contrast-45941613aa.json). | switch |
+| desktop | partial | partials/contrast 45941613aa and 1edf7c6eba: a visitor without a session reaches exactly /chat (proxy exemption, lead-approved) and gets the text-only guest chat on p-auth's route: the free default model; no files, images, voice, tools, memory or history; Log in and Sign up for free; the daily limit stated and what is left after each reply; the Terms and Privacy line; every refusal code handled. With the switch off the layout sends the same sign-in redirect the proxy did. Left: switching guest.chat on with AGI_BOT_CHALLENGE_ENFORCED at the final pass (supersedes p-contrast-45941613aa.json). | switch |
 
-Code: `apps/web/app/chat/layout.tsx:42-42`, `apps/web/features/chat/guest/guest-chat-stream.ts:86-86`, `apps/web/features/chat/guest/GuestChat.tsx:228-228`, `apps/web/features/chat/guest/GuestChat.tsx:221-221`
+Code: `apps/web/proxy.ts:283-283`, `apps/web/app/chat/layout.tsx:42-42`, `apps/web/features/chat/guest/guest-chat-stream.ts:86-86`, `apps/web/features/chat/guest/GuestChat.tsx:228-228`

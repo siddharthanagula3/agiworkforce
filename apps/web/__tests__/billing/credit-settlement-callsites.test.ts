@@ -10,6 +10,7 @@ function source(path: string): string {
 describe('durable post-provider credit settlements', () => {
   it.each([
     'app/api/media/image/generate/route.ts',
+    'app/api/media/image/lib/managed-image-generation.ts',
     'app/api/media/video/generate/route.ts',
     'app/api/llm/v1/chat/completions/route.ts',
     'app/api/llm/v1/chat/completions/lib/response-builder.ts',
@@ -20,14 +21,14 @@ describe('durable post-provider credit settlements', () => {
     expect(contents).not.toMatch(/CreditService\.(deductCredits|settleCreditsDurably)\(/);
   });
 
-  it('image generation owns the complete managed reservation lifecycle across route and executor', () => {
-    const route = source('app/api/media/image/generate/route.ts');
+  it('image generation owns the complete managed reservation lifecycle across generation and executor', () => {
+    const generation = source('app/api/media/image/lib/managed-image-generation.ts');
     const executor = source('app/api/media/image/lib/image-job-executor.ts');
 
-    expect(route).toMatch(/reserveManagedUsageRequest\(/);
+    expect(generation).toMatch(/reserveManagedUsageRequest\(/);
     expect(executor).toMatch(/markManagedUsageProviderStarted\(/);
     expect(executor).toMatch(/finalizeManagedUsageRequest\(/);
-    expect(route).toMatch(/markManagedUsageClientDelivered\(/);
+    expect(generation).toMatch(/markManagedUsageClientDelivered\(/);
   });
 
   it('video generation owns provider start and final settlement transactionally', () => {
