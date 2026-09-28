@@ -16,6 +16,7 @@ const cloudModules = [
   'generated-files',
   'artifact-index',
   'artifact-runtime',
+  'finance',
   'library',
   'managed-media',
   'me',
