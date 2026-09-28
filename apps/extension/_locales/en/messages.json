@@ -3734,5 +3734,85 @@
   "spMemoryPreferenceSaveFailed": {
     "message": "The memory setting could not be saved. Try again.",
     "description": "Saving a memory switch failed"
+  },
+  "spSchedulesDescriptionLabel": {
+    "message": "Description (optional)",
+    "description": "Label of the optional schedule description field"
+  },
+  "spSchedulesEdit": {
+    "message": "Edit",
+    "description": "Button that opens a schedule's name, description and instructions for editing"
+  },
+  "spSchedulesEditAria": {
+    "message": "Edit $NAME$",
+    "description": "Accessible name of a schedule's edit button and of the edit form",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Morning briefing"
+      }
+    }
+  },
+  "spSchedulesSave": {
+    "message": "Save changes",
+    "description": "Submit button of the schedule form while editing an existing schedule"
+  },
+  "spSchedulesUpdated": {
+    "message": "Saved $NAME$.",
+    "description": "Status after a schedule's details are saved",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Morning briefing"
+      }
+    }
+  },
+  "spSchedulesDelete": {
+    "message": "Delete",
+    "description": "Button that deletes a schedule, and the confirm button that finishes it"
+  },
+  "spSchedulesDeleteAria": {
+    "message": "Delete $NAME$",
+    "description": "Accessible name of a schedule's delete button",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Morning briefing"
+      }
+    }
+  },
+  "spSchedulesDeleteConfirm": {
+    "message": "Delete $NAME$ and its run history? This cannot be undone.",
+    "description": "Confirmation question shown before a schedule is deleted",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Morning briefing"
+      }
+    }
+  },
+  "spSchedulesDeleting": {
+    "message": "Deleting…",
+    "description": "Confirm button label while a schedule is being deleted"
+  },
+  "spSchedulesDeleted": {
+    "message": "Deleted $NAME$.",
+    "description": "Status after a schedule is deleted",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Morning briefing"
+      }
+    }
+  },
+  "spSchedulesLastRunError": {
+    "message": "Last run: $ERROR$",
+    "description": "Why a schedule's most recent run did not finish, shown on its row",
+    "placeholders": {
+      "error": {
+        "content": "$1",
+        "example": "The model took too long to answer."
+      }
+    }
   }
 }
