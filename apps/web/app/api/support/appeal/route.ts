@@ -1,12 +1,13 @@
 import 'server-only';
 
-import { NextResponse, type NextRequest } from 'next/server';
+import { NextResponse, after, type NextRequest } from 'next/server';
 import { z } from 'zod';
 
 import { getSuspendedAccountUser } from '@/lib/api-auth';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError, isAppError } from '@/lib/errors';
+import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { readJsonBody } from '@/lib/read-json-body';
 import { recordAuditEvent } from '@/lib/security-audit';
@@ -90,19 +91,26 @@ async function handleSubmit(request: NextRequest) {
   if (!parsed.data.email) {
     throw createError.validation('Enter the email address of the suspended account.');
   }
-  const filed = await submitSignedOutAppeal({
-    email: parsed.data.email,
-    message: parsed.data.message,
+  const { email, message } = parsed.data;
+  after(async () => {
+    try {
+      const filed = await submitSignedOutAppeal({ email, message });
+      if (!filed) return;
+      await recordAuditEvent({
+        userId: filed.userId,
+        eventType: 'support_appeal_submitted',
+        request,
+        severity: 'warning',
+        detail: {
+          resourceType: 'support_ticket',
+          resourceId: filed.ticketId,
+          status: 'signed_out',
+        },
+      });
+    } catch (error) {
+      logger.error({ error }, '[support-appeal] a signed-out appeal could not be filed');
+    }
   });
-  if (filed) {
-    await recordAuditEvent({
-      userId: filed.userId,
-      eventType: 'support_appeal_submitted',
-      request,
-      severity: 'warning',
-      detail: { resourceType: 'support_ticket', resourceId: filed.ticketId, status: 'signed_out' },
-    });
-  }
   return NextResponse.json({ received: true }, { status: 202, headers: NO_STORE });
 }
 
