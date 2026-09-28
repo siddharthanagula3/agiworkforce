@@ -303,6 +303,10 @@ const SCOPE_DESCRIPTIONS: Readonly<Record<string, ScopeDescription>> = {
     sentence: "Reads references to the patient's clinical documents.",
     access: READ,
   },
+  'patient/*.read': {
+    sentence: 'Reads your own health records, without changing them.',
+    access: READ,
+  },
 };
 
 export function describeConnectorScope(scope: string): ScopeDescription | null {

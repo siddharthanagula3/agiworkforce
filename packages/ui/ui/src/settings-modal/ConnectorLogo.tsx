@@ -200,6 +200,7 @@ const CONNECTOR_LOGO_URLS: Record<string, string> = {
 
   'epic-fhir': 'https://www.google.com/s2/favicons?domain=epic.com&sz=64',
   cerner: 'https://www.google.com/s2/favicons?domain=oracle.com&sz=64',
+  healthex: 'https://www.google.com/s2/favicons?domain=healthex.io&sz=64',
 };
 
 function getIcon(id: string): SimpleIconData | null {
