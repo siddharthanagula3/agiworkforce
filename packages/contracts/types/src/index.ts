@@ -18,6 +18,8 @@ export * from './errors';
 
 export * from './error-taxonomy';
 
+export * from './connector-vocabulary';
+
 export * from './customModel';
 
 export * from './tool-events';
