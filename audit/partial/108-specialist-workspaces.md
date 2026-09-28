@@ -160,22 +160,20 @@ Code: `apps/web/features/connectors/data/connectors.ts:1145-1154`, `apps/web/lib
 
 - Done when: The user compares products for purchase (specs, prices, merchants) in a structured comparison.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
 
 ## S108.33: Travel planning and reservations.
 
 - Done when: The user plans a trip (itinerary, places, routes) and can make reservations from the product.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | billing/no-yearly fd41d3eda renders itinerary cards natively on mobile (synced cloud chats show them now); mobile turns produce them once post-codex/no-yearly-s108-33-mobile-itinerary.patch adds itinerary.v1 to x_interactive_cards.supported in apps/mobile/stores/chat/chatExecutionStore.ts, which Codex holds | handler |
-| chrome | partial | server offers plan_itinerary to chrome once the side panel declares itinerary.v1; p-chrome adds it to supported in apps/extension/src/features/cloud-bridge/freeTrialClient.ts and an itinerary.v1 builder in apps/extension/src/features/side-panel/bubbles.ts | ui |
 
 Code: `apps/mobile/src/features/chat/components/InteractiveCardBlock.tsx:361-361`, `apps/mobile/src/features/chat/components/InteractiveCardBlock.tsx:554-554`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:950-950`

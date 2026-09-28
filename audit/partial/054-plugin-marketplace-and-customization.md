@@ -10,16 +10,13 @@ nothing is left.
 
 - Done when: One Customize destination gathers skills, connectors and plugins.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | Skills and plugins are managed in place and MCP servers can be signed in to; adding or removing a plugin, MCP server or hook still needs the agi CLI because the app-server has no install or remove calls (p-desktop-cli). | handler |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/extension-vscode/src/features/surfaces/capabilityManagement.ts:145-145`, `apps/extension-vscode/src/features/surfaces/capabilityManagement.ts:109-109`
 
 ## S54.02: Plugins tab.
 

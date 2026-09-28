@@ -217,6 +217,18 @@ export type HarnessProtocol =
 
 export type HarnessHostPolicy = 'allowlist_only' | 'registry_declared';
 
+export const REQUEST_PARAMETERS = [
+  'top_p',
+  'stop',
+  'seed',
+  'frequency_penalty',
+  'presence_penalty',
+  'logit_bias',
+  'user',
+] as const;
+
+export type RequestParameter = (typeof REQUEST_PARAMETERS)[number];
+
 interface HarnessRecord {
   provider: string;
   apiFamily: string;
@@ -227,6 +239,20 @@ interface HarnessRecord {
   baseUrl?: string;
   apiKeyEnv?: string;
   gatewayId?: string;
+  requestParameters?: readonly RequestParameter[];
+  mediaInput?: HarnessMediaInput;
+  features?: Readonly<Record<string, HarnessFeatureRecord>>;
+}
+
+interface HarnessFeatureRecord {
+  providerSupport: string;
+  implementation: string;
+}
+
+export interface HarnessMediaInput {
+  maxImagesPerRequest?: number;
+  documentMediaTypes?: readonly string[];
+  maxDocumentPagesPerRequest?: number;
 }
 
 export interface ProtocolHarness {
@@ -252,6 +278,22 @@ const PROVIDER_NATIVE_PROTOCOL = 'provider_native' satisfies HarnessProtocol;
 const REGISTRY_DECLARED_HOST_POLICY = 'registry_declared' satisfies HarnessHostPolicy;
 
 const harnessRecords = registry.harnesses as unknown as Readonly<Record<string, HarnessRecord>>;
+
+export function getHarnessRequestParameters(harnessId: string): readonly RequestParameter[] {
+  return harnessRecords[harnessId]?.requestParameters ?? [];
+}
+
+export function getHarnessMediaInput(harnessId: string): HarnessMediaInput {
+  return harnessRecords[harnessId]?.mediaInput ?? {};
+}
+
+export function harnessFeatureImplemented(harnessId: string, feature: string): boolean {
+  const record = harnessRecords[harnessId]?.features?.[feature];
+  return (
+    record?.implementation === 'implemented' &&
+    (record.providerSupport === 'native' || record.providerSupport === 'compatible')
+  );
+}
 
 function toProtocolHarness(harnessId: string, harness: HarnessRecord): ProtocolHarness | null {
   const { protocol, baseUrl, apiKeyEnv } = harness;

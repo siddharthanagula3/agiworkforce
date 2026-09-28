@@ -11,6 +11,7 @@ import { openExternalUrl } from '@/lib/safeOpenURL';
 import { ExternalLink, FileText, EyeOff } from 'lucide-react-native';
 import { View } from 'react-native';
 import { ChineseHqProviderConsentGroup } from './ChineseHqProviderConsentGroup';
+import { UsOnlyRoutingGroup } from './UsOnlyRoutingGroup';
 
 const PRIVACY_ITEMS = [
   {
@@ -156,6 +157,8 @@ export default function CloudPrivacyScreen() {
           receives, is at agiworkforce.com/subprocessors.
         </Text>
       </View>
+
+      <UsOnlyRoutingGroup />
 
       <ChineseHqProviderConsentGroup />
 

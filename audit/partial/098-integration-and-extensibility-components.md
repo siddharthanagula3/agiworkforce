@@ -17,17 +17,6 @@ nothing is left.
 
 Code: `apps/web/lib/user-connector-tools.ts:265-269`, `apps/web/lib/connectors/catalog.ts:153-153`
 
-## S98.11: Multi-account selection.
-
-- Done when: When several accounts exist for a connector, the runtime selects the right one per task.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | selectConnectorAccount has no caller and both OAuth callbacks store every grant as account "default", so a second account can never be created or chosen. | handler |
-
-Code: `apps/web/lib/connectors/accounts.ts:76-96`, `apps/web/app/api/connectors/oauth/callback/route.ts:153-153`
-
 ## S98.19: Plugin dependency resolver.
 
 - Done when: Installing a plugin resolves and installs the plugins it depends on.
@@ -35,9 +24,9 @@ Code: `apps/web/lib/connectors/accounts.ts:76-96`, `apps/web/app/api/connectors/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | partials/mcp-web 3d89fbc1d: web installs of built-in packs, directory plugins and registered-marketplace entries now resolve, gate, install or re-enable their declared dependencies (same marketplace, or another one the root marketplace allowlists in allowCrossMarketplaceDependenciesOn or that is already installed and enabled) in one step, and the directory notice lists them. Left: the CLI resolver resolve_with_dependencies (apps/cli/src/features/plugins/registry.rs:538) is still uncalled by agi plugin install (p-desktop-cli file); a dependency with a version range is refused on web because apps/web has no semver dependency; uploaded and authored plugins install without resolving dependencies (archive.ts, plugin-owned-source-service.ts, uploads route, p-routines-voice files). | cli |
+| platform | partial | partials/mcp-web a8fe8b9e9: version ranges are checked instead of refused (semver, code.claude.com/docs/en/plugin-dependencies read 2026-09-28): conflicting ranges, an installed version out of range and a listed version out of range each refuse with Claude Code's wording, and a directory dependency's <name>--v<version> release tags are read to say whether the CLI can install one. The web app installs only the listed, inspected version. Still owed by other lanes: the CLI resolver call (p-desktop-cli) and dependency resolution for uploaded and authored plugins (p-routines-voice). | handler |
 
-Code: `apps/web/lib/services/plugin-dependencies.ts:106-106`, `apps/web/lib/services/plugin-installation-service.ts:235-235`, `apps/web/lib/services/plugin-installation-service.ts:337-337`, `apps/web/app/api/plugins/installations/route.ts:120-120`
+Code: `apps/web/lib/services/plugin-dependencies.ts:52-52`, `apps/web/lib/services/plugin-dependencies.ts:155-155`, `apps/web/features/plugins/server/directory/dependencies.ts:502-502`, `apps/web/features/plugins/server/directory/release-tags.ts:22-22`
 
 ## S98.26: Publisher identity service.
 

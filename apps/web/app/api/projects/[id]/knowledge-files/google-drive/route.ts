@@ -84,14 +84,28 @@ async function handleImport(request: NextRequest, context: RouteContext): Promis
     `select project_id
        from public.organization_shared_projects
       where project_id = $1
+        and organization_id is not distinct from $2::uuid
       limit 1`,
-    [projectId],
+    [projectId, organizationId],
   );
   if (shared) {
     throw createError.conflict(
       'Google Drive files can be added only to a project that is not shared, so each person reads Drive with their own access.',
     );
   }
+
+  const [owned] = await db.query<{ id: string }>(
+    `select id
+       from user_projects
+      where id = $1
+        and user_id = $2
+        and organization_id is not distinct from $3::uuid
+        and is_archived = false
+        and deleted_at is null
+      limit 1`,
+    [projectId, userId, organizationId],
+  );
+  if (!owned) throw createError.notFound('Project not found');
 
   if (!isPrivateObjectStorageConfigured()) {
     throw createError.capabilityUnavailable('Project sources need cloud file storage.');
@@ -138,6 +152,19 @@ async function handleImport(request: NextRequest, context: RouteContext): Promis
           checksumSha256: createHash('sha256').update(drive.data).digest('hex'),
           sourceSurface: 'web',
           storageUri: key,
+        },
+        {
+          kind: 'connector_item',
+          provider: 'google_drive',
+          uri:
+            drive.webViewLink ??
+            `https://drive.google.com/file/d/${encodeURIComponent(fileId)}/view`,
+          externalId: fileId,
+          title: drive.fileName,
+          version: drive.version ? { kind: 'revision', value: drive.version } : null,
+          access: 'connector',
+          connectorId: GOOGLE_DRIVE_CONNECTOR_ID,
+          accountKey: access.accountKey,
         },
       );
       if (registration.status === 'unavailable') {

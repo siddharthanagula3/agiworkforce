@@ -36,12 +36,16 @@ export async function releaseDeletedProjectContents(
   );
   if (!options.purgeKnowledgeFiles) return [];
   const purged = await tx.query<{ storage_uri: string | null }>(
-    `update project_knowledge_files
+    `update project_knowledge_files k
         set deleted_at = now(), updated_at = now()
-      where project_id = $1::uuid
-        and deleted_at is null
-    returning storage_uri`,
-    [scope.projectId],
+       from user_projects p
+      where k.project_id = $1::uuid
+        and p.id = k.project_id
+        and p.user_id = $2
+        and p.organization_id is not distinct from $3::uuid
+        and k.deleted_at is null
+    returning k.storage_uri`,
+    [scope.projectId, scope.userId, scope.organizationId],
   );
   return purged
     .map((row) => row.storage_uri)

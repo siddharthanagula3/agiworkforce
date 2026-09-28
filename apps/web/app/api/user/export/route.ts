@@ -18,6 +18,9 @@ import { getManagedUsageSummary } from '@/lib/services/managed-usage-summary-ser
 import { recordAuditEvent } from '@/lib/security-audit';
 import { authenticatedMediaUrl } from '@/lib/server/media-storage';
 import { readRestrictedUserExportSections } from '@/lib/server/restricted-user-export-reader';
+import { requestDataExportArchive } from '@/lib/server/data-export-archive';
+import { requireCsrfToken } from '@/lib/csrf';
+import type { DataExportArchiveResponse } from '@agiworkforce/cloud-contracts';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { z } from 'zod';
 
@@ -654,6 +657,17 @@ const apiKeyExportSchema = z.object({
   expires_at: nullableTimestampSchema,
   revoked_at: nullableTimestampSchema,
   created_at: timestampSchema,
+});
+
+const developerWebhookEndpointExportSchema = z.object({
+  id: z.string(),
+  url: z.string(),
+  description: z.string().nullable(),
+  event_types: z.array(z.string()),
+  secret_prefix: z.string(),
+  enabled: z.boolean(),
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
 });
 
 const developerProjectExportSchema = z.object({
@@ -2270,6 +2284,7 @@ async function collectUserData(
     userId: user.id,
     ledger,
   });
+
   // Files the user uploaded and media generated for them. Absent from this
   // export until 2026-08-21, while account erasure has always deleted them.
   // so the product could destroy this category of personal data on request but
@@ -2601,6 +2616,19 @@ async function collectUserData(
     ledger,
   });
 
+  exportData['developer_webhook_endpoints'] = await queryExportRows({
+    db,
+    sql: `select id, url, description, event_types, secret_prefix, enabled, created_at, updated_at
+          from developer_webhook_endpoints
+          where user_id = $1
+          order by created_at asc`,
+    values: [user.id],
+    schema: developerWebhookEndpointExportSchema,
+    section: 'developer_webhook_endpoints',
+    userId: user.id,
+    ledger,
+  });
+
   // `details` is withheld: it is a free-form bag written from ~96 call sites,
   // and an admin action logs the acted-on account in it (admin/security
   // route.ts), so it would put another user's identifier in this download.
@@ -2723,7 +2751,53 @@ function createExportResponse(request: NextRequest, userId: string, data: unknow
   );
 }
 
+async function handleRequestExportArchive(request: NextRequest): Promise<NextResponse> {
+  const { userId, email } = await getClerkAuthUser(request);
+
+  const csrfError = await requireCsrfToken(request);
+  if (csrfError) return csrfError as NextResponse;
+
+  const rateLimitResponse = await withRateLimit(request, 'user-data-export', userId);
+  if (rateLimitResponse) return rateLimitResponse;
+
+  const serviceDb = getNeonDb();
+  const scopedDbFor = (organizationId: string | null): DatabaseAdapter =>
+    createClaimedUserScopedDb(serviceDb, { userId, organizationId });
+  const origin = exportOrigin(request);
+
+  const { archive, created } = await requestDataExportArchive({
+    db: scopedDbFor(null),
+    userId,
+    origin,
+    collect: () => collectUserData({ id: userId, email }, scopedDbFor, serviceDb, origin),
+  });
+  if (created) {
+    await recordAuditEvent({
+      userId,
+      eventType: 'data_exported',
+      request,
+      detail: {
+        resourceType: 'user_data',
+        resourceId: archive.id,
+        source: 'gdpr_portability_archive',
+      },
+    });
+  }
+
+  const body: DataExportArchiveResponse = { archive };
+  return NextResponse.json(body, {
+    status: 202,
+    headers: {
+      'Cache-Control': 'private, no-store',
+      ...getCorsHeaders(request),
+      ...getSecurityHeaders(),
+    },
+  });
+}
+
 export const GET = withCorsRoute(withErrorHandler(handleExportUserData));
+
+export const POST = withCorsRoute(withErrorHandler(handleRequestExportArchive));
 
 export function OPTIONS(request: NextRequest) {
   return (

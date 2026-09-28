@@ -6,42 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S105.01: Developer organization/project creation.
-
-- Done when: A developer can create an organization and projects that scope API keys, usage and limits.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Projects scope API keys (create, rename, one-way archive that revokes their keys). Per-project usage and the monthly credit limit are written (migration 0319 has the columns) but held until the per-key attribution and gate lines are approved. | usage, limits |
-| desktop | partial | Projects scope API keys (create, rename, one-way archive that revokes their keys). Per-project usage and the monthly credit limit are written (migration 0319 has the columns) but held until the per-key attribution and gate lines are approved. | usage, limits |
-
-Code: `apps/web/features/developers/components/ProjectsPanel.tsx:104-104`, `apps/web/lib/services/developer-project-service.ts:133-133`, `apps/web/app/api/settings/api-keys/route.ts:77-77`, `apps/web/app/api/developers/projects/route.ts:47-47`
-
-## S105.21: Webhook configuration.
-
-- Done when: Developers can register a webhook endpoint and choose which events it receives.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Only workspace audit-log streaming can be sent to a signed endpoint; developers cannot subscribe an endpoint to API, run or usage events. | handler |
-| desktop | partial | Hosted web: only audit-log streaming endpoints; no developer webhooks. | handler |
-
-Code: `apps/web/features/workspace-console/components/WorkspaceAuditStreaming.tsx:150-160`, `apps/web/app/api/settings/organization/audit/destination/route.ts:230-232`
-
-## S105.22: Webhook event history.
-
-- Done when: Developers can see a history of webhook deliveries with status and can redeliver.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | The audit-stream destination shows only its state and last delivery time; there is no per-event delivery log, response codes or redelivery. | ui |
-| desktop | partial | Hosted web: only last-delivery state for audit streaming. | ui |
-
-Code: `apps/web/features/workspace-console/components/WorkspaceAuditStreaming.tsx:250-262`, `apps/web/app/api/settings/organization/audit/destination/route.ts:230-232`
-
 ## S105.28: Developer support.
 
 - Done when: Developers have a support channel (tickets or contact) reachable from the product.

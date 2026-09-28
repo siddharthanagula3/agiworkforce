@@ -35,9 +35,9 @@ Code: `apps/web/lib/e2b/gate.ts:16-18`, `apps/web/lib/e2b/runtime.ts:889-893`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | Electron and the CLI run commands as one-shot piped processes; there is no PTY anywhere, so interactive programs and dev servers cannot stay up. | handler |
+| platform | partial | The CLI and its app-server now run interactive and long-running programs in a pseudo-terminal (partials/desktop-cli 9d9e7f5f0). Electron's own shellService (apps/desktop/electron/runtime/shellService.ts) still spawns one-shot piped processes; that side is p-electron's. | handler |
 
-Code: `apps/desktop/electron/runtime/shellService.ts:257-262`, `apps/cli/src/features/exec/tools/bash/mod.rs:230-233`
+Code: `apps/cli/src/terminals.rs:173-173`, `apps/cli/src/features/exec/tools/bash/mod.rs:228-228`
 
 ## S102.32: Generated-application hosting runtime.
 

@@ -79,6 +79,8 @@ import type { InteractiveCard, ThinkingBlock } from '@agiworkforce/types';
 import {
   SECRET_HANDLING_MODE_DEFAULT,
   getModelMetadataById,
+  getRegistryRoute,
+  harnessFeatureImplemented,
   isAutoModeModelId,
   isBrowserCommand,
   isImageChatToolName,
@@ -174,7 +176,10 @@ import {
   planDeviceStep,
   type DesktopHostDeclaration,
 } from '@agiworkforce/local-runtime-contract';
-import { DEVICE_SCREENSHOT_MESSAGE_PREFIX } from '@agiworkforce/cloud-contracts';
+import {
+  DEVICE_SCREENSHOT_MESSAGE_PREFIX,
+  cloudAgentRunSteerProgressId,
+} from '@agiworkforce/cloud-contracts';
 import { getE2BExecutor, pauseE2BSession } from '@/lib/e2b/runtime';
 import type { E2BUnavailableCause } from '@/lib/e2b/unavailability';
 import { nativeSearchToolName } from '@/lib/web-search/required-search';
@@ -348,7 +353,13 @@ import { searchToolsByKeyword } from '@/lib/connectors/tool-search';
 import { executeFileSearchTool, isFileSearchTool } from '@/lib/server/tools/file-search-tool';
 import { executeScheduleTool, isScheduleTool } from '@/lib/server/tools/schedule-tool';
 import { executePluginDraftTool, isPluginDraftTool } from '@/lib/server/tools/plugin-draft-tool';
-import { executeMemoryTool, isMemoryTool, memoryToolSource } from '@/lib/server/tools/memory-tools';
+import {
+  executeMemoryTool,
+  isMemoryTool,
+  memoryToolSource,
+  SAVE_MEMORY_TOOL_NAME,
+} from '@/lib/server/tools/memory-tools';
+import { isSensitiveDataToolName } from '@/lib/connectors/sensitive-data-connectors';
 import { executeMapSearchTool, isMapSearchTool } from '@/lib/services/map-search-tool-service';
 import { buildPlacesCard } from '@/lib/places/places-card';
 import {
@@ -357,6 +368,7 @@ import {
   isPlacesSearchTool,
 } from '@/lib/places/places-tool';
 import { isRequiredPlacesToolChoice } from '@/lib/places/required-places';
+import { isForcedToolChoiceFor } from '@/lib/required-tool-call';
 import { executeItineraryTool, isItineraryTool } from '@/lib/places/itinerary-tool';
 import type { PlacesSearchBilling } from '@/lib/places/places-cost';
 import { executeClarifyTool, isClarifyTool } from '@/lib/services/clarify-tool-service';
@@ -402,8 +414,11 @@ const TTFT_SLO_BREACH_MS = Number(process.env['LLM_TTFT_SLO_BREACH_MS'] ?? 5000)
 const MAX_TOOL_ARGS_JSON_CHARS = 256 * 1024;
 const MAX_RETRY_HELD_PROVIDER_CHARS = 64 * 1024;
 const MAX_TOOL_CALLS_PER_STEP = 32;
+const SENSITIVE_DATA_MEMORY_REFUSAL =
+  'Nothing was saved to memory: this turn read health or bank records, and those are never kept in memory. Tell the user it was not saved.';
 
 const MAX_PARALLEL_TOOL_CALLS = 4;
+const PARALLEL_TOOL_CALLS_FEATURE = 'parallelToolCalls';
 
 const MAX_TOOL_RESULT_HISTORY_CHARS = 200_000;
 const KEEP_RECENT_TOOL_RESULTS = 6;
@@ -715,6 +730,7 @@ export interface ToolLoopOptions {
   /** Read at each step boundary; honoured only when `onPauseCheckpoint` can store the pause. */
   isPauseRequested?: () => Promise<boolean>;
   onPauseCheckpoint?: (checkpoint: ToolLoopPauseCheckpoint) => Promise<void>;
+  takeSteerMessages?: () => Promise<readonly ToolLoopSteerMessage[]>;
   /** This continuation starts a run the user paused, with any guidance they gave on resuming. */
   resumedFromPause?: ResumeFromPause;
   signal?: AbortSignal;
@@ -722,6 +738,13 @@ export interface ToolLoopOptions {
   toolApprovalPolicy?: ToolApprovalPolicy;
   failover?: ToolLoopFailoverPlan;
 }
+
+export interface ToolLoopSteerMessage {
+  id: string;
+  text: string;
+}
+
+const STEER_RECEIVED_SUMMARY = 'Read your message';
 
 export interface ToolLoopFailoverPlan {
   next: (
@@ -911,12 +934,16 @@ function egressApprovalSummary(
 ): string {
   if (isUrlFetchTool(toolName)) {
     const host = urlHostOf(args);
-    return `Could send data from this chat to ${host ?? 'a website'}`;
+    return `Could send private data from this chat to ${host ?? 'a website'}`;
   }
-  if (isWebSearchTool(toolName)) return 'Could send data from this chat in a web search';
-  if (toolName === EXECUTE_CODE_TOOL) return 'Could send data from this chat out of the sandbox';
+  if (isWebSearchTool(toolName)) {
+    return 'Could send private data from this chat to a search engine';
+  }
+  if (toolName === EXECUTE_CODE_TOOL) {
+    return 'Could send private data from this chat out of the sandbox';
+  }
   const server = serverLabel ?? mcpServerLabel(toolName);
-  return `Could send data from this chat to ${server ?? 'an outside service'}`;
+  return `Could send private data from this chat to ${server ?? 'an outside service'}`;
 }
 
 function offeredServerLabel(toolName: string, offeredTools: WebMcpToolDef[]): string | undefined {
@@ -1965,6 +1992,7 @@ async function runMcpTool(
     queueSandboxFiles?: SandboxSeedQueue;
     conversationId?: string | null;
     latestAttachedImage?: () => string | null;
+    sensitiveDataRead?: () => boolean;
   },
 ): Promise<ToolLoopToolResult> {
   if (toolCall.qualifiedName === SKILL_TOOL_NAME) {
@@ -2071,6 +2099,12 @@ async function runMcpTool(
     }
     if (!executionContext?.userId) {
       return { content: 'A signed-in account is required to use Memory.', isError: true };
+    }
+    if (
+      toolCall.qualifiedName === SAVE_MEMORY_TOOL_NAME &&
+      executionContext.sensitiveDataRead?.() === true
+    ) {
+      return { content: SENSITIVE_DATA_MEMORY_REFUSAL, isError: true };
     }
     return executeMemoryTool(toolCall.qualifiedName, toolCall.args, {
       db: callerScopedDb(executionContext, executionContext.userId),
@@ -3226,6 +3260,7 @@ export async function* runToolLoop(
     skillInstallOverridesPromise ??= readSkillInstallOverrides(skillInstallOverridesUserId);
     return skillInstallOverridesPromise;
   };
+  let sensitiveDataRead = false;
   const encoder = new TextEncoder();
   const responseModel = processed.requestedModel;
   const turnId = options.eventTurnId ?? (processed.requestId || crypto.randomUUID());
@@ -4357,6 +4392,23 @@ export async function* runToolLoop(
     yield encoder.encode(sseDone());
   }
 
+  async function* applySteerMessages(
+    steers: readonly ToolLoopSteerMessage[],
+  ): AsyncGenerator<Uint8Array> {
+    for (const steer of steers) {
+      messages.push({ role: 'user', content: steer.text });
+      yield encoder.encode(
+        eventStream.emit({
+          type: 'progress-update',
+          progressId: cloudAgentRunSteerProgressId(steer.id),
+          summary: STEER_RECEIVED_SUMMARY,
+          detail: steer.text,
+          status: 'completed',
+        }),
+      );
+    }
+  }
+
   async function* failRequiredTool(
     code: 'web_search_not_performed' | 'web_search_no_sources' | 'code_execution_not_performed',
     message: string,
@@ -4419,10 +4471,18 @@ export async function* runToolLoop(
     if (calls.length > 0) processed.toolExecutionObserved = true;
     const readOnly = calls.filter((tc) => isReadOnlyTool(tc.qualifiedName));
     const mutating = calls.filter((tc) => !isReadOnlyTool(tc.qualifiedName));
+    const servingHarnessId = getRegistryRoute(
+      servedRouteId ??
+        buildServingRouteId(servingProcessed.provider, servingProcessed.llmRequest.model),
+    )?.harnessId;
+    const readOnlyConcurrency =
+      servingHarnessId && harnessFeatureImplemented(servingHarnessId, PARALLEL_TOOL_CALLS_FEATURE)
+        ? MAX_PARALLEL_TOOL_CALLS
+        : 1;
 
     const toolStartedAt = new Map<string, number>();
     const parallelGroup =
-      readOnly.length > 1
+      readOnly.length > 1 && readOnlyConcurrency > 1
         ? `parallel:${suspendContext.completedSteps}:${readOnly[0]!.id}`
         : undefined;
     for (const tc of calls) {
@@ -4577,8 +4637,12 @@ export async function* runToolLoop(
               ...(allowConnectorInputRequired ? { allowInputRequired: true } : {}),
               ...(resumeInput ? { inputResponses: resumeInput.inputResponses } : {}),
               ...(resumeInput?.requestState ? { requestState: resumeInput.requestState } : {}),
+              sensitiveDataRead: () => sensitiveDataRead,
             },
           );
+          if (!result.isError && isSensitiveDataToolName(tc.qualifiedName)) {
+            sensitiveDataRead = true;
+          }
           await settleSearch();
           const freeTrialSpendMicrousd = callSpend?.spentMicrousd() ?? 0;
           return freeTrialSpendMicrousd > 0 ? { ...result, freeTrialSpendMicrousd } : result;
@@ -4652,14 +4716,10 @@ export async function* runToolLoop(
       );
     };
 
-    const parallelResults = await mapWithConcurrency(
-      readOnly,
-      MAX_PARALLEL_TOOL_CALLS,
-      async (tc) => {
-        const result = await executeTool(tc);
-        return { tc, ...result };
-      },
-    );
+    const parallelResults = await mapWithConcurrency(readOnly, readOnlyConcurrency, async (tc) => {
+      const result = await executeTool(tc);
+      return { tc, ...result };
+    });
     results.push(...parallelResults);
 
     for (const tc of mutating) {
@@ -5427,6 +5487,9 @@ export async function* runToolLoop(
         yield encoder.encode(sseDone());
         return;
       }
+      if (options.takeSteerMessages) {
+        yield* applySteerMessages(await options.takeSteerMessages());
+      }
       if (maxDurationMs !== undefined && now() - startedAt >= maxDurationMs) {
         logger.warn(
           { maxDurationMs, maxSteps, completedSteps: step, provider: processed.provider },
@@ -5486,7 +5549,8 @@ export async function* runToolLoop(
         processed.chatRequest?.tool_choice === undefined &&
         (isRequiredExecutionToolChoice(llmRequest.tool_choice) ||
           isRequiredSearchToolChoice(llmRequest.tool_choice) ||
-          isRequiredPlacesToolChoice(llmRequest.tool_choice))
+          isRequiredPlacesToolChoice(llmRequest.tool_choice) ||
+          isForcedToolChoiceFor(llmRequest.tool_choice, MANAGED_OFFICE_FILE_TOOL_NAME))
           ? { tool_choice: 'auto' as const }
           : {}),
         ...(step > 1 &&
@@ -6007,6 +6071,25 @@ export async function* runToolLoop(
           );
           yield* flushTerminal('error');
           return;
+        }
+        const lateSteers =
+          options.takeSteerMessages &&
+          agiWorkTurn &&
+          step < maxSteps &&
+          !isBlockedFinishReason(finishReason) &&
+          !isCancelledFinishReason(finishReason)
+            ? await options.takeSteerMessages()
+            : [];
+        if (lateSteers.length > 0) {
+          const answerThinking = providerStep.thinkingBlocks.filter((block) => block.signature);
+          const answerMessage: (typeof messages)[number] = {
+            role: 'assistant',
+            content: answerThinking.length > 0 ? providerStep.canonicalText : textContent,
+          };
+          if (answerThinking.length > 0) answerMessage.__canonicalThinking = answerThinking;
+          messages.push(answerMessage);
+          yield* applySteerMessages(lateSteers);
+          continue;
         }
         yield* flushTerminal(canonicalStopReason(finishReason));
         return;

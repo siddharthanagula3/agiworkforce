@@ -423,13 +423,37 @@ pub async fn tasks_for_display(
     let mut words = arg.split_whitespace();
     let subcommand = words.next().unwrap_or("list");
     let id = words.next();
+    if let Some(background) = id
+        .filter(|_| matches!(subcommand, "show" | "output" | "stop" | "cancel"))
+        .and_then(crate::terminals::find)
+    {
+        if matches!(subcommand, "stop" | "cancel") {
+            let state = crate::terminals::stop(&background).await;
+            return CommandOutcome::Info(format!("{} {state}.", background.id));
+        }
+        return CommandOutcome::Block(
+            sanitize_terminal_text(&format!(
+                "{} {}: {}\n{}",
+                background.id,
+                background.state(),
+                background.command,
+                background.recent_output()
+            ))
+            .into_owned(),
+        );
+    }
     let tasks = match manager {
         Some(manager) => manager.list().await,
         None => Vec::new(),
     };
     match (subcommand, id, manager) {
         ("list" | "ls", _, _) => CommandOutcome::Block(
-            sanitize_terminal_text(&crate::subagent::format_task_list(&tasks)).into_owned(),
+            sanitize_terminal_text(&format!(
+                "{}\n\n{}",
+                crate::subagent::format_task_list(&tasks),
+                crate::terminals::summary(&crate::terminals::list())
+            ))
+            .into_owned(),
         ),
         ("show" | "output" | "stop" | "cancel", None, _) => CommandOutcome::Warn(format!(
             "Name the task: /tasks {subcommand} <id>. /tasks lists them."

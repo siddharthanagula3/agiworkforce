@@ -10,6 +10,7 @@ import {
   SHARE_TOKEN_REGEX,
   getOrgReadableSessionByToken,
   getPublicSharedSessionByToken,
+  readSharedSessionSharerName,
   type OrgReadableSession,
 } from '@/lib/services/org-shared-session-service';
 
@@ -29,18 +30,27 @@ export const runtime = 'nodejs';
  * signed-out visitor gets `null` from that second call and the same 404 as a
  * revoked link.
  */
-async function readSessionForViewer(token: string): Promise<OrgReadableSession | null> {
+async function readSessionForViewer(
+  token: string,
+): Promise<{ session: OrgReadableSession; sharedBy: string | null } | null> {
   const publiclyVisible = await getPublicSharedSessionByToken(getNeonDb(), token).catch(() => null);
-  if (publiclyVisible) return publiclyVisible;
+  if (publiclyVisible) return { session: publiclyVisible, sharedBy: null };
 
   const scoped = await getCurrentUserRlsDb().catch(() => null);
   if (!scoped) return null;
-  return getOrgReadableSessionByToken(scoped.db, token).catch(() => null);
+  const session = await getOrgReadableSessionByToken(scoped.db, token).catch(() => null);
+  if (!session) return null;
+  const sharedBy =
+    session.visibility === 'organization'
+      ? await readSharedSessionSharerName(getNeonDb(), session.ownerUserId).catch(() => null)
+      : null;
+  return { session, sharedBy };
 }
 
-function toViewerSession(session: OrgReadableSession): SharedSession {
+function toViewerSession(session: OrgReadableSession, sharedBy: string | null): SharedSession {
   return {
     title: session.title,
+    ...(sharedBy ? { shared_by: sharedBy } : {}),
     ...(session.modelId ? { model_id: session.modelId } : {}),
     ...(session.provider ? { provider: session.provider } : {}),
     messages: (Array.isArray(session.messages)
@@ -76,19 +86,19 @@ export default async function SharedSessionPage({ params }: Props) {
     notFound();
   }
 
-  const session = await readSessionForViewer(token);
+  const read = await readSessionForViewer(token);
 
-  if (!session) {
+  if (!read) {
     notFound();
   }
 
-  if (new Date(session.expiresAt).getTime() <= Date.now()) {
+  if (new Date(read.session.expiresAt).getTime() <= Date.now()) {
     return <ExpiredShareBanner />;
   }
 
   return (
     <>
-      <SharedSessionViewer session={toViewerSession(session)} token={token} />
+      <SharedSessionViewer session={toViewerSession(read.session, read.sharedBy)} token={token} />
       <ReportContentLink publicPath={`/share/${token}`} />
     </>
   );

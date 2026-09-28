@@ -380,6 +380,14 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
     [getClient, replaceRun, transport],
   );
 
+  const handleSteer = useCallback(
+    async (runId: string, message: string) => {
+      const { run } = await getClient().steerRun(runId, message);
+      replaceRun(run);
+    },
+    [getClient, replaceRun],
+  );
+
   const handleResume = useCallback(
     async (runId: string) => {
       const guidance = guidanceByRunId[runId]?.trim();
@@ -640,6 +648,7 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
                   ? (goal) => transport.rerunWork?.(goal)
                   : undefined
               }
+              onSteer={(message) => handleSteer(selectedRun.id, message)}
             />
           ) : null}
         </div>
@@ -928,6 +937,7 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
                 ? (goal) => transport.rerunWork?.(goal)
                 : undefined
             }
+            onSteer={selectedRun ? (message) => handleSteer(selectedRun.id, message) : undefined}
             {...(transport.shareConversation
               ? {
                   onShare: (conversationId: string) =>

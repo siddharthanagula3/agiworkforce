@@ -15,6 +15,7 @@ import { PageHero } from '@/features/marketing/components/pages/surfaces/shared'
 import { NoteList } from '@/features/marketing/components/pages/company/shared';
 import { PolicyContents } from '@shared/components/legal/PolicyContents';
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
+import { PolicyVersionsLink } from '@shared/components/legal/PolicyVersionsLink';
 
 export const metadata = buildMetadata({
   title: 'Trust: a dated posture ledger',
@@ -105,7 +106,7 @@ const COMPLIANCE: { label: string; value: string }[] = [
   {
     label: 'GDPR: data subject rights',
     value:
-      'Implemented. Self-service export returns your account data as a JSON download, and account deletion runs an enumerated erasure across 103 user-scoped tables plus stored objects, on a daily scheduled job. Mechanism is documented on /security; the deletion window is stated in the privacy policy. The figure is derived from the implementation by a test so changes to the erasure list cannot silently leave this claim behind. As of 2026-09-28.',
+      'Implemented. Self-service export returns your account data as a JSON download, and account deletion runs an enumerated erasure across 105 user-scoped tables plus stored objects, on a daily scheduled job. Mechanism is documented on /security; the deletion window is stated in the privacy policy. The figure is derived from the implementation by a test so changes to the erasure list cannot silently leave this claim behind. As of 2026-09-28.',
   },
   {
     label: 'GDPR: Article 27 EU representative',
@@ -295,7 +296,9 @@ export default function TrustPage() {
             <h2 className="agi-ds-h2" id="agi-trust-review-title">
               Last reviewed {LAST_REVIEWED}. Next review {NEXT_REVIEW}.
             </h2>
-            <Prose size="sm">Managed Cloud is in public alpha.</Prose>
+            <Prose size="sm">
+              Managed Cloud is in public alpha. <PolicyVersionsLink policy="trust" />
+            </Prose>
           </Stack>
         </Section>
 
@@ -381,6 +384,16 @@ export default function TrustPage() {
                   <Ledger
                     caption="Change record"
                     rows={[
+                      {
+                        label: '2026-09-28',
+                        value:
+                          'External resource references joined the enumerated erasure list, taking it from 105 to 106 user-scoped tables: the record of the repositories, web pages, MCP servers and connector items an account reached. They are deleted with the account.',
+                      },
+                      {
+                        label: '2026-09-28',
+                        value:
+                          'Developer webhooks joined the enumerated erasure list, taking it from 103 to 105 user-scoped tables: the endpoints a developer registers and the log of what was delivered to them. Both are deleted with the account.',
+                      },
                       {
                         label: '2026-09-28',
                         value:
