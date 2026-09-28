@@ -639,7 +639,7 @@
           },
           "web_fetch": {
             "type": "boolean",
-            "description": "Lets the model open a web page named in the conversation and read it. HTML and plain-text pages are read; PDFs and other binary types are refused. When omitted on a streamed request, it turns on if the prompt asks to open a link."
+            "description": "Lets the model open a web page or document named in the conversation and read it. Web pages, plain text, Markdown, JSON, PDFs and Word, Excel or PowerPoint files are read as text; images, audio and video are refused. When omitted on a streamed request, it turns on if the prompt asks to open a link."
           },
           "code_execution": {
             "type": "boolean",
