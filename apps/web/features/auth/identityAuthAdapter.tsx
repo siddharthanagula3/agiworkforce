@@ -3,6 +3,8 @@
 import { AuthenticateWithRedirectCallback, useClerk, useSignIn, useSignUp } from '@clerk/nextjs';
 import { useCallback, useMemo, useRef, useSyncExternalStore } from 'react';
 
+import { getHostBridge } from '@agiworkforce/local-runtime-contract';
+import { beginBrowserSignIn } from '@/features/desktop-host/lib/browser-sign-in';
 import { classifyAuthError, isAuthNoticeKind, type AuthErrorKind } from '@/lib/auth/error-taxonomy';
 import { useAuthCopy } from './authCopy';
 import type {
@@ -184,6 +186,11 @@ export function useIdentityAuthClient(
 
   const startEnterpriseSso = useCallback(
     async (email: string): Promise<AuthResult> => {
+      if (getHostBridge()?.shell === 'electron') {
+        return (await beginBrowserSignIn())
+          ? { status: 'redirecting', phase: 'enterprise_browser' }
+          : unexpected('unexpected');
+      }
       const { completeUrl, ssoCallbackUrl } = redirectsRef.current;
       const { error } = await signInRef.current.sso({
         identifier: email,
@@ -193,7 +200,7 @@ export function useIdentityAuthClient(
       });
       return error ? fail(error) : { status: 'redirecting', phase: 'enterprise_redirecting' };
     },
-    [fail],
+    [fail, unexpected],
   );
 
   const finalizeSignIn = useCallback(async (): Promise<AuthResult> => {
@@ -499,6 +506,51 @@ export function useIdentityAuthClient(
       switchSecondFactor,
     ],
   );
+}
+
+export interface IdentityTicketSignIn {
+  ready: boolean;
+  signInWithTicket: (ticket: string, completeUrl: string) => Promise<string | null>;
+}
+
+export function useIdentityTicketSignIn(): IdentityTicketSignIn {
+  const clerk = useClerk();
+  const { signIn } = useSignIn();
+  const copy = useAuthCopy();
+  const signInRef = useRef(signIn);
+  signInRef.current = signIn;
+  const copyRef = useRef(copy);
+  copyRef.current = copy;
+
+  const subscribeToStatus = useCallback(
+    (onChange: () => void) => {
+      clerk.on('status', onChange, { notify: true });
+      return () => clerk.off('status', onChange);
+    },
+    [clerk],
+  );
+  const readReady = useCallback(() => Boolean(clerk.loaded), [clerk]);
+  const ready = useSyncExternalStore(subscribeToStatus, readReady, () => false);
+
+  const signInWithTicket = useCallback(
+    async (ticket: string, completeUrl: string): Promise<string | null> => {
+      const describe = (error: unknown): string => {
+        const descriptor = classifyAuthError(error);
+        return descriptor.vendorMessage ?? copyRef.current.errorCopy(descriptor.kind).message;
+      };
+      const started = await signInRef.current.ticket({ ticket });
+      if (started.error) return describe(started.error);
+      const finished = await signInRef.current.finalize({
+        navigate: ({ decorateUrl }) => {
+          window.location.assign(decorateUrl(completeUrl));
+        },
+      });
+      return finished.error ? describe(finished.error) : null;
+    },
+    [],
+  );
+
+  return useMemo(() => ({ ready, signInWithTicket }), [ready, signInWithTicket]);
 }
 
 const CAPTCHA_ELEMENT_ID = 'clerk-captcha';

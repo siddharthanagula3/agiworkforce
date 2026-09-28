@@ -3,7 +3,12 @@ import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
+  BACKGROUND_SHELL_COLUMNS,
+  BACKGROUND_SHELL_FIRST_OUTPUT_MS,
+  BACKGROUND_SHELL_READ_SETTLE_MS,
+  BACKGROUND_SHELL_ROWS,
   MAX_SHELL_COMMAND_LENGTH,
+  MAX_SHELL_INPUT_LENGTH,
   MAX_SHELL_OUTPUT_BYTES,
   SHELL_TIMEOUT_DEFAULT_MS,
   SHELL_TIMEOUT_MAX_MS,
@@ -14,6 +19,7 @@ import {
   type ShellPolicy,
   type ShellPolicyVerdict,
   type BackgroundCommandRun,
+  type BackgroundShellOutput,
   type ShellRunResult,
   type WorkspaceRoot,
 } from '@agiworkforce/local-runtime-contract';
@@ -72,8 +78,36 @@ interface RunningCommand {
 
 const running = new Map<string, RunningCommand>();
 
+interface BackgroundCommand {
+  child: ChildProcessWithoutNullStreams;
+  command: string;
+  program: string;
+  rootId: string;
+  rootName: string;
+  startedAtMs: number;
+  terminal: boolean;
+  unread: string[];
+  unreadBytes: number;
+  truncated: boolean;
+  exited: boolean;
+  exitCode: number | null;
+  scratchDirectory: string | null;
+}
+
+const background = new Map<string, BackgroundCommand>();
+
+const TERMINAL_SIZE = `stty rows ${BACKGROUND_SHELL_ROWS} cols ${BACKGROUND_SHELL_COLUMNS} 2>/dev/null; exec "$@"`;
+const TERMINAL_FEED =
+  'exec /usr/bin/script -q /dev/null /bin/sh -c "$0" agi-terminal "$@" < <(exec /bin/cat 2>/dev/null)';
+
+export interface ShellInputApprovalRequest {
+  program: string;
+  input: string;
+}
+
 export function listShellRuns(): BackgroundCommandRun[] {
-  return [...running.entries()].map(([runId, run]) => ({
+  const live = [...background.entries()].filter(([, run]) => !run.exited);
+  return [...running.entries(), ...live].map(([runId, run]) => ({
     runId,
     command: run.command,
     rootName: run.rootName,
@@ -162,6 +196,11 @@ function removeScratch(directory: string | null): void {
 }
 
 export function cancelShellRun(runId: string): boolean {
+  const started = background.get(runId);
+  if (started) {
+    void stopProcessTree(started);
+    return true;
+  }
   const child = running.get(runId)?.child;
   if (!child) return false;
   child.kill('SIGTERM');
@@ -172,7 +211,7 @@ export function cancelShellRun(runId: string): boolean {
 }
 
 export function cancelAllShellRuns(): void {
-  for (const runId of [...running.keys()]) cancelShellRun(runId);
+  for (const runId of [...running.keys(), ...background.keys()]) cancelShellRun(runId);
 }
 
 /**
@@ -182,7 +221,22 @@ export function cancelAllShellRuns(): void {
  * directly, so a semicolon is an argument rather than a second command and the
  * program named in the approval prompt is the only program that starts.
  */
-export async function runShellCommand(input: RunShellCommandInput): Promise<ShellRunResult> {
+interface PreparedCommand {
+  command: string;
+  verdict: ShellPolicyVerdict;
+  program: string;
+  cwd: { absolute: string; relative: string };
+  env: NodeJS.ProcessEnv;
+  spawnCommand: string;
+  spawnArgs: string[];
+  scratchDirectory: string | null;
+  sandboxed: boolean;
+}
+
+async function prepareShellCommand(
+  input: RunShellCommandInput,
+  terminal: boolean,
+): Promise<PreparedCommand> {
   const command = input.command.trim();
   if (command.length === 0 || command.length > MAX_SHELL_COMMAND_LENGTH) {
     throw new ShellCommandRefused('too-long', 'That command is empty or too long to run.');
@@ -229,9 +283,7 @@ export async function runShellCommand(input: RunShellCommandInput): Promise<Shel
   }
 
   const [program, ...args] = argv as [string, ...string[]];
-  const timeoutMs = boundedTimeout(input.timeoutMs);
-  const runId = input.runId;
-  if (running.has(runId)) {
+  if (running.has(input.runId) || background.has(input.runId)) {
     throw new ShellCommandRefused('not-listed', 'That command is already running.');
   }
   const env = childEnvironment(await loginPath());
@@ -257,6 +309,7 @@ export async function runShellCommand(input: RunShellCommandInput): Promise<Shel
             ? await seatbeltToolchainRoots(env['PATH'], executable)
             : [],
         network: input.network,
+        terminal,
       });
       spawnCommand = planned.command;
       spawnArgs = planned.args;
@@ -266,6 +319,33 @@ export async function runShellCommand(input: RunShellCommandInput): Promise<Shel
     }
     env['TMPDIR'] = scratchDirectory;
   }
+  return {
+    command,
+    verdict,
+    program,
+    cwd,
+    env,
+    spawnCommand,
+    spawnArgs,
+    scratchDirectory,
+    sandboxed,
+  };
+}
+
+export async function runShellCommand(input: RunShellCommandInput): Promise<ShellRunResult> {
+  const {
+    command,
+    verdict,
+    program,
+    cwd,
+    env,
+    spawnCommand,
+    spawnArgs,
+    scratchDirectory,
+    sandboxed,
+  } = await prepareShellCommand(input, false);
+  const timeoutMs = boundedTimeout(input.timeoutMs);
+  const runId = input.runId;
   const startedAtMs = Date.now();
 
   return new Promise<ShellRunResult>((resolve, reject) => {
@@ -359,4 +439,246 @@ export async function runShellCommand(input: RunShellCommandInput): Promise<Shel
 
     child.on('close', (code, signal) => finish(code, signal));
   });
+}
+
+const ESC = String.fromCharCode(0x1b);
+const BEL = String.fromCharCode(0x07);
+const CSI_SEQUENCE = new RegExp(`${ESC}\\[[0-?]*[ -/]*[@-~]`, 'g');
+const OSC_SEQUENCE = new RegExp(`${ESC}\\][^${BEL}${ESC}]*(?:${BEL}|${ESC}\\\\)`, 'g');
+const OTHER_ESCAPE = new RegExp(`${ESC}[@-Z\\\\-_]`, 'g');
+
+export function terminalText(raw: string): string {
+  const stripped = raw
+    .replace(OSC_SEQUENCE, '')
+    .replace(CSI_SEQUENCE, '')
+    .replace(OTHER_ESCAPE, '');
+  return stripped
+    .split('\n')
+    .map((line) => {
+      const trimmed = line.endsWith('\r') ? line.slice(0, -1) : line;
+      const redrawn = trimmed.slice(trimmed.lastIndexOf('\r') + 1);
+      let text = '';
+      for (const character of redrawn) {
+        if (character === '\b') text = text.slice(0, -1);
+        else text += character;
+      }
+      return text;
+    })
+    .join('\n');
+}
+
+function collectBackground(
+  run: BackgroundCommand,
+  runId: string,
+  emit: RunShellCommandInput['emit'],
+) {
+  return (stream: 'stdout' | 'stderr') => (data: Buffer) => {
+    const text = data.toString('utf8');
+    run.unread.push(text);
+    run.unreadBytes += data.byteLength;
+    while (run.unreadBytes > MAX_SHELL_OUTPUT_BYTES && run.unread.length > 1) {
+      const dropped = run.unread.shift() ?? '';
+      run.unreadBytes -= Buffer.byteLength(dropped, 'utf8');
+      run.truncated = true;
+    }
+    emit({ runId, stream, chunk: text });
+  };
+}
+
+function settle(run: BackgroundCommand, ms: number): Promise<void> {
+  if (run.exited) return Promise.resolve();
+  return new Promise((resolve) => {
+    const done = () => {
+      clearTimeout(timer);
+      run.child.off('close', done);
+      resolve();
+    };
+    const timer = setTimeout(done, ms);
+    run.child.once('close', done);
+  });
+}
+
+function takeOutput(runId: string, run: BackgroundCommand): BackgroundShellOutput {
+  const raw = run.unread.join('');
+  run.unread = [];
+  run.unreadBytes = 0;
+  const truncated = run.truncated;
+  run.truncated = false;
+  if (run.exited) background.delete(runId);
+  return {
+    runId,
+    command: run.command,
+    program: run.program,
+    output: terminalText(raw),
+    running: !run.exited,
+    exitCode: run.exitCode,
+    truncated,
+    terminal: run.terminal,
+  };
+}
+
+async function descendantPids(pid: number): Promise<number[]> {
+  const found: number[] = [];
+  let frontier = [pid];
+  while (frontier.length > 0) {
+    const next = (await Promise.all(frontier.map(childPids))).flat();
+    found.push(...next);
+    frontier = next;
+  }
+  return found;
+}
+
+function childPids(pid: number): Promise<number[]> {
+  return new Promise((resolve) => {
+    execFile('/usr/bin/pgrep', ['-P', String(pid)], { timeout: 2_000 }, (_error, stdout) => {
+      resolve(
+        stdout
+          .split('\n')
+          .map((line) => Number.parseInt(line.trim(), 10))
+          .filter((value) => Number.isInteger(value) && value > 0),
+      );
+    });
+  });
+}
+
+function signalProcessGroup(pid: number, signal: NodeJS.Signals): void {
+  try {
+    process.kill(-pid, signal);
+  } catch {
+    try {
+      process.kill(pid, signal);
+    } catch {
+      return;
+    }
+  }
+}
+
+async function stopProcessTree(run: BackgroundCommand): Promise<void> {
+  const pid = run.child.pid;
+  if (run.exited || pid === undefined) return;
+  const descendants = (await descendantPids(pid)).reverse();
+  for (const descendant of descendants) signalProcessGroup(descendant, 'SIGTERM');
+  run.child.stdin.end();
+  run.child.kill('SIGTERM');
+  setTimeout(() => {
+    if (run.exited) return;
+    for (const descendant of descendants) signalProcessGroup(descendant, 'SIGKILL');
+    run.child.kill('SIGKILL');
+  }, KILL_GRACE_MS).unref?.();
+}
+
+function requireBackgroundRun(runId: string, rootId: string): BackgroundCommand {
+  const run = background.get(runId);
+  if (!run || run.rootId !== rootId) {
+    throw new ShellCommandRefused(
+      'not-listed',
+      'No command started with that runId is running in this folder.',
+    );
+  }
+  return run;
+}
+
+export async function startBackgroundCommand(
+  input: RunShellCommandInput,
+): Promise<BackgroundShellOutput> {
+  const terminal = process.platform === 'darwin';
+  const prepared = await prepareShellCommand(input, terminal);
+  const env: NodeJS.ProcessEnv = {
+    ...prepared.env,
+    TERM: 'xterm-256color',
+    PAGER: 'cat',
+    GIT_PAGER: 'cat',
+    COLUMNS: String(BACKGROUND_SHELL_COLUMNS),
+    LINES: String(BACKGROUND_SHELL_ROWS),
+  };
+
+  let child: ChildProcessWithoutNullStreams;
+  try {
+    child = terminal
+      ? spawn(
+          '/bin/bash',
+          ['-c', TERMINAL_FEED, TERMINAL_SIZE, prepared.spawnCommand, ...prepared.spawnArgs],
+          { cwd: prepared.cwd.absolute, env, shell: false, windowsHide: true },
+        )
+      : spawn(prepared.spawnCommand, prepared.spawnArgs, {
+          cwd: prepared.cwd.absolute,
+          env,
+          shell: false,
+          windowsHide: true,
+        });
+  } catch (error) {
+    removeScratch(prepared.scratchDirectory);
+    throw error;
+  }
+  child.stdin.on('error', () => undefined);
+
+  const run: BackgroundCommand = {
+    child,
+    command: prepared.command,
+    program: prepared.verdict.program,
+    rootId: input.root.id,
+    rootName: input.root.name,
+    startedAtMs: Date.now(),
+    terminal,
+    unread: [],
+    unreadBytes: 0,
+    truncated: false,
+    exited: false,
+    exitCode: null,
+    scratchDirectory: prepared.scratchDirectory,
+  };
+  background.set(input.runId, run);
+
+  const finish = (code: number | null) => {
+    run.exited = true;
+    run.exitCode = code;
+    run.child.stdin.end();
+    removeScratch(run.scratchDirectory);
+  };
+  const collect = collectBackground(run, input.runId, input.emit);
+  run.child.stdout.on('data', collect('stdout'));
+  run.child.stderr.on('data', collect('stderr'));
+  run.child.on('error', (error) => {
+    run.unread.push(`\n${error.message}\n`);
+    finish(null);
+  });
+  run.child.on('close', (code) => finish(code));
+
+  await settle(run, BACKGROUND_SHELL_FIRST_OUTPUT_MS);
+  return takeOutput(input.runId, run);
+}
+
+export async function readBackgroundCommand(
+  runId: string,
+  rootId: string,
+  typed: string | undefined,
+  approve: (request: ShellInputApprovalRequest) => Promise<boolean>,
+): Promise<BackgroundShellOutput> {
+  const run = requireBackgroundRun(runId, rootId);
+  if (typed !== undefined && typed !== '') {
+    if (run.exited) {
+      throw new ShellCommandRefused('not-listed', `${run.program} has already stopped.`);
+    }
+    if (typed.length > MAX_SHELL_INPUT_LENGTH) {
+      throw new ShellCommandRefused('too-long', 'That input is too long to type.');
+    }
+    if (!(await approve({ program: run.program, input: typed }))) {
+      throw new ShellCommandRefused('not-listed', `Typing into ${run.program} was not approved.`);
+    }
+    await new Promise<void>((resolve) => {
+      run.child.stdin.write(typed, () => resolve());
+    });
+    await settle(run, BACKGROUND_SHELL_READ_SETTLE_MS);
+  }
+  return takeOutput(runId, run);
+}
+
+export async function stopBackgroundCommand(
+  runId: string,
+  rootId: string,
+): Promise<BackgroundShellOutput> {
+  const run = requireBackgroundRun(runId, rootId);
+  await stopProcessTree(run);
+  await settle(run, KILL_GRACE_MS);
+  return takeOutput(runId, run);
 }
