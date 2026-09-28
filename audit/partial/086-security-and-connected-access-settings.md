@@ -139,16 +139,12 @@ Code: `apps/web/features/connectors/hooks/use-connectors-settings-adapter.tsx:83
 
 - Done when: The user can create, see (masked) and revoke their API keys.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | agi keys lists and revokes account API keys; creation requires a step-up token only the web can mint, so agi keys create opens account settings. | handler |
-| vscode | partial | VS Code can store and clear an existing AGI API key in SecretStorage, but cannot create, list or revoke keys (and its placeholder says "sk-agi-" while keys are issued as sk_live_). | ui, handler |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:4942-4942`, `apps/cli/src/cloud/api_keys.rs:35-35`, `apps/cli/src/cloud/api_keys.rs:40-40`, `apps/extension-vscode/src/core/commandSetup.ts:1055-1095`
 
 ## S86.16: Local folders.
 

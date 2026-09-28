@@ -114,10 +114,9 @@ Code: `apps/web/features/chat/components/research/ResearchActivity.tsx:149-149`,
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | The Cloud tasks tree shows a research run's state but not its phase, search or source counts. | ui |
 | chrome | partial | The cloud-run list shows a research run's state (running, done) but not its phase, search or source counts. | ui |
 
-Code: `apps/extension-vscode/src/features/cloud-tasks/cloudRunPresentation.ts:50-54`, `apps/extension/src/features/side-panel/cloudRunsPanel.ts:372-376`
+Code: `apps/extension/src/features/side-panel/cloudRunsPanel.ts:372-376`
 
 ## S35.10: Search activity timeline.
 
@@ -291,10 +290,9 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/research-loop.ts:1078-1079`,
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | Research runs appear in the Cloud tasks tree, but their reports cannot be read in VS Code. | ui |
 | chrome | partial | Research runs appear in the cloud-run list, but their reports cannot be opened or read in Chrome. | ui |
 
-Code: `apps/extension-vscode/src/features/cloud-tasks/cloudRunPresentation.ts:50-54`, `apps/extension/src/features/side-panel/cloudRunsPanel.ts:372-376`
+Code: `apps/extension/src/features/side-panel/cloudRunsPanel.ts:372-376`
 
 ## S35.26: Refresh or rerun research.
 
