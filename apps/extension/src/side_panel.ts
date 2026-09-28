@@ -175,6 +175,7 @@ import {
   DEFAULT_AGI_BRIDGE_URL,
   validateBridgeUrl,
   sanitizePageText,
+  SELECTED_EFFORT_STORAGE_KEY,
   SELECTED_MODEL_STORAGE_KEY,
 } from './background/policy';
 import {
@@ -1351,6 +1352,15 @@ function resumeLatestStoredManagedRun(expectedGeneration: number): void {
 }
 
 let newChatModelSelection = 'auto';
+let newChatEffortSelection: Effort | undefined;
+
+function effortForNewChat(): Effort | undefined {
+  const model = _ctx.selectedModel;
+  if (!newChatEffortSelection || _ctx.quickMode || model === 'auto' || model.startsWith('auto-')) {
+    return undefined;
+  }
+  return resolveModelEffort(model, newChatEffortSelection);
+}
 
 function clearStoredMessages(): void {
   historyRestoreToken += 1;
@@ -1364,7 +1374,7 @@ function clearStoredMessages(): void {
   _ctx.workMode = 'chat';
   _ctx.currentModelKey = undefined;
   _ctx.previousTaskType = undefined;
-  _ctx.reasoningEffort = undefined;
+  _ctx.reasoningEffort = effortForNewChat();
   refreshModelPickerUI();
   refreshEffortUI();
   const owner = _ctx.managedCloudOwner;
@@ -1438,6 +1448,8 @@ async function transitionManagedCloudOwner(nextOwner: ManagedCloudOwner | null):
     _ctx.selectedModel = 'auto';
     newChatModelSelection = 'auto';
     chrome.storage.local.remove(SELECTED_MODEL_STORAGE_KEY).catch(() => {});
+    newChatEffortSelection = undefined;
+    chrome.storage.local.remove(SELECTED_EFFORT_STORAGE_KEY).catch(() => {});
   }
   _ctx.currentModelKey = undefined;
   _ctx.previousTaskType = undefined;
@@ -9250,6 +9262,8 @@ function buildUI(): void {
       row.appendChild(check);
       row.addEventListener('click', () => {
         _ctx.reasoningEffort = option;
+        newChatEffortSelection = option;
+        chrome.storage.local.set({ [SELECTED_EFFORT_STORAGE_KEY]: option }).catch(() => {});
         renderModelDropdown();
         refreshEffortUI();
         saveMessages();
@@ -9539,6 +9553,16 @@ function buildUI(): void {
     }
     renderModelDropdown();
     renderModelTrigger();
+  });
+  chrome.storage.local.get(SELECTED_EFFORT_STORAGE_KEY, (result) => {
+    if (chrome.runtime.lastError) return;
+    const storedEffort = result[SELECTED_EFFORT_STORAGE_KEY];
+    if (typeof storedEffort !== 'string' || !Object.hasOwn(EFFORT_LABEL, storedEffort)) return;
+    newChatEffortSelection = storedEffort as Effort;
+    if (_ctx.messages.length === 0 && _ctx.reasoningEffort === undefined) {
+      _ctx.reasoningEffort = effortForNewChat();
+      refreshEffortUI();
+    }
   });
   modelSelectorWrap.appendChild(modelSelectorBtn);
   modelSelectorWrap.appendChild(modelDropdownEl);

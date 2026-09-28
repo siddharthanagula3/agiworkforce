@@ -183,6 +183,8 @@ export const SITE_ALLOWLIST_STORAGE_KEY = 'agi_site_allowlist';
  */
 export const SELECTED_MODEL_STORAGE_KEY = 'agi_model';
 
+export const SELECTED_EFFORT_STORAGE_KEY = 'agi_reasoning_effort';
+
 export const MAX_CONTEXT_HTML_CHARS = 100_000;
 
 export const MAX_JSON_LD_BYTES = 256 * 1024;
