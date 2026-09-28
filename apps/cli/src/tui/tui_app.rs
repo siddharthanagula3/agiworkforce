@@ -3716,6 +3716,24 @@ fn handle_effort_picker_key(app: &mut TuiApp, key: KeyEvent) -> InputAction {
     }
 }
 
+fn theme_set_message(
+    choice: super::widgets::theme_picker::ThemeChoice,
+    saved: Result<std::path::PathBuf>,
+) -> String {
+    match saved {
+        Ok(path) => format!(
+            "Theme set to {}, saved in {}.",
+            choice.label(),
+            path.display()
+        ),
+        Err(error) => format!(
+            "Theme set to {} for this session; it could not be saved: {}",
+            choice.label(),
+            sanitize_terminal_text(&format!("{error:#}"))
+        ),
+    }
+}
+
 fn handle_theme_picker_key(app: &mut TuiApp, key: KeyEvent) -> InputAction {
     use super::widgets::theme_picker::{handle_key, PickerAction};
 
@@ -3734,12 +3752,12 @@ fn handle_theme_picker_key(app: &mut TuiApp, key: KeyEvent) -> InputAction {
             // TUI recolors on the next frame.
             crate::tui::terminal_palette::set_active_theme(choice.applied() as u8);
             // Persist so the choice survives a restart.
-            let _ = app.config.persist_theme_project(choice.slug());
+            let text = theme_set_message(choice, app.config.persist_theme_project(choice.slug()));
             app.input.clear();
             app.cursor = 0;
             app.chat_messages.push(ChatMessage {
                 role: ChatRole::System,
-                text: format!("Theme set to {}", choice.label()),
+                text,
             });
             InputAction::None
         }
@@ -4685,8 +4703,10 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                     Some(choice) => {
                         app.theme_choice = choice;
                         crate::tui::terminal_palette::set_active_theme(choice.applied() as u8);
-                        let _ = app.config.persist_theme_project(choice.slug());
-                        SlashResult::SystemMessage(format!("Theme set to {}", choice.label()))
+                        SlashResult::SystemMessage(theme_set_message(
+                            choice,
+                            app.config.persist_theme_project(choice.slug()),
+                        ))
                     }
                     None => SlashResult::SystemMessage(format!(
                         "Unknown theme: '{arg}'. Available: {}",
