@@ -2,6 +2,10 @@ import 'server-only';
 
 import { randomBytes } from 'node:crypto';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import {
+  UNATTENDED_RUN_DENIED_STATUSES,
+  ownerMayRunUnattendedSql,
+} from '@/lib/auth/account-lifecycle';
 
 /**
  * Published artifact persistence (CAP-015 slice 1).
@@ -458,8 +462,9 @@ export async function getPublishedArtifactByToken(
        from public.published_artifacts
       where token = $1
         and visibility = 'public'
+        and ${ownerMayRunUnattendedSql('published_artifacts.user_id', 2)}
       limit 1`,
-    [token],
+    [token, UNATTENDED_RUN_DENIED_STATUSES],
   );
   const row = rows[0];
   return row ? rowToPublishedArtifact(row) : null;
