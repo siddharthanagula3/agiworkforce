@@ -340,6 +340,29 @@ const en = {
   'webview.answerTokens_other': '{model} · {count} tokens ({input} in, {output} out)',
   'webview.moreLinesHidden_one': '{count} more line not shown',
   'webview.moreLinesHidden_other': '{count} more lines not shown',
+  'mcp.connected_one': 'AGI Workforce: {name} connected in {ms} ms and offers {count} tool.',
+  'mcp.connected_other': 'AGI Workforce: {name} connected in {ms} ms and offers {count} tools.',
+  'checkpoints.trackedFiles_one': '{count} file tracked',
+  'checkpoints.trackedFiles_other': '{count} files tracked',
+  'checkpoints.skippedFiles_one': 'AGI Workforce: {count} file could not be restored: {files}',
+  'checkpoints.skippedFiles_other': 'AGI Workforce: {count} files could not be restored: {files}',
+  'checkpoints.filesRestored_one': 'AGI Workforce: {count} file went back to the checkpoint.',
+  'checkpoints.filesRestored_other': 'AGI Workforce: {count} files went back to the checkpoint.',
+  'webview.sources_one': '{count} source',
+  'webview.sources_other': '{count} sources',
+  'sessionSync.continuedIn':
+    'This session continued in {client}. Its newest messages are shown here.',
+  'sessionSync.continuedElsewhere':
+    'This session continued in another app. Its newest messages are shown here.',
+  'sessionSync.heldBy': '{client} is using this session.',
+  'sessionSync.takeOverDetail':
+    'Take it over to send your message from here. If {client} is still answering, stop it there first: two apps writing at once leave two copies of the session.',
+  'sessionSync.takeOver': 'Take over and send',
+  'sessionSync.notSent':
+    'Not sent: {client} is using this session. Send again to take it over from here.',
+  'sessionSync.takeOverFailed': 'This session could not be taken over. Send again to retry.',
+  'sessionSync.stopBeforeTerminal':
+    'Stop the running reply before continuing this session in the terminal.',
 };
 
 export default en;

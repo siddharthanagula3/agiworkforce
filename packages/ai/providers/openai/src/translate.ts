@@ -31,7 +31,12 @@ function isTextBlock(b: ContentBlock): b is TextBlock {
   return b.type === 'text';
 }
 
-function translateUserContent(blocks: ContentBlock[]): string | OpenAIChatUserMessagePart[] {
+const PDF_MEDIA_TYPE = 'application/pdf';
+
+function translateUserContent(
+  blocks: ContentBlock[],
+  acceptsPdfFiles: boolean,
+): string | OpenAIChatUserMessagePart[] {
   const hasNonText = blocks.some((b) => b.type !== 'text');
   if (!hasNonText) {
     return blocks
@@ -49,6 +54,17 @@ function translateUserContent(blocks: ContentBlock[]): string | OpenAIChatUserMe
           ? `data:${b.source.mediaType};base64,${b.source.data}`
           : b.source.url;
       return [{ type: 'image_url', image_url: b.detail ? { url, detail: b.detail } : { url } }];
+    }
+    if (b.type === 'file' && acceptsPdfFiles && b.source.mediaType === PDF_MEDIA_TYPE) {
+      return [
+        {
+          type: 'file',
+          file: {
+            filename: b.filename,
+            file_data: `data:${b.source.mediaType};base64,${b.source.data}`,
+          },
+        },
+      ];
     }
     if (b.type === 'file') {
       // The Chat Completions wire format has no file part at all, so a
@@ -111,6 +127,7 @@ function extractToolResultMessages(blocks: ContentBlock[]): OpenAIChatToolMessag
 function translateMessages(
   msgs: ProviderMessage[],
   systemRole: 'system' | 'developer',
+  acceptsPdfFiles: boolean,
 ): OpenAIChatMessageParam[] {
   const out: OpenAIChatMessageParam[] = [];
   for (const msg of msgs) {
@@ -132,7 +149,10 @@ function translateMessages(
       const remaining =
         typeof msg.content === 'string'
           ? msg.content
-          : translateUserContent(blocks.filter((b) => b.type !== 'tool_result'));
+          : translateUserContent(
+              blocks.filter((b) => b.type !== 'tool_result'),
+              acceptsPdfFiles,
+            );
       if (typeof remaining === 'string') {
         if (remaining.length > 0) {
           out.push({ role: 'user', content: remaining });
@@ -275,7 +295,7 @@ export function translateChatRequest(
   const { compat, provider } = options;
   const systemRole = compat.supportsDeveloperRole ? 'developer' : 'system';
 
-  const baseMessages = translateMessages(req.messages, systemRole);
+  const baseMessages = translateMessages(req.messages, systemRole, provider === 'openai');
   const messages = prependExplicitSystem(baseMessages, req.system, systemRole);
 
   const strict = compat.supportsStrictMode && (req.tools?.some((t) => t.strict) ?? false);
@@ -307,6 +327,11 @@ export function translateChatRequest(
     ...(req.temperature !== undefined ? { temperature: req.temperature } : {}),
     ...(req.topP !== undefined ? { top_p: req.topP } : {}),
     ...(req.stopSequences ? { stop: req.stopSequences } : {}),
+    ...(req.seed !== undefined ? { seed: req.seed } : {}),
+    ...(req.frequencyPenalty !== undefined ? { frequency_penalty: req.frequencyPenalty } : {}),
+    ...(req.presencePenalty !== undefined ? { presence_penalty: req.presencePenalty } : {}),
+    ...(req.logitBias ? { logit_bias: req.logitBias } : {}),
+    ...(req.endUserId ? { user: req.endUserId } : {}),
     ...(req.metadata ? { metadata: req.metadata as Record<string, string> } : {}),
     ...(promptCacheKey ? { prompt_cache_key: promptCacheKey } : {}),
     ...(responseFormat ? { response_format: responseFormat } : {}),

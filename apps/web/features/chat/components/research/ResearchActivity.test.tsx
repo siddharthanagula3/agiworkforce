@@ -116,15 +116,19 @@ describe('ResearchActivity retry', () => {
     expect(onRetry).toHaveBeenCalledTimes(1);
   });
 
-  it('offers Retry for an interrupted run', () => {
+  it('offers Resume for an interrupted run, continuing through the retry path', async () => {
+    const onRetry = vi.fn();
     render(
       <ResearchActivity
         isStreaming={false}
         research={research({ phase: 'interrupted' })}
-        onRetry={vi.fn()}
+        onRetry={onRetry}
       />,
     );
-    expect(screen.getByTestId('research-retry')).toBeInTheDocument();
+    expect(screen.queryByTestId('research-retry')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByTestId('research-resume'));
+    expect(onRetry).toHaveBeenCalledTimes(1);
   });
 
   it('never offers Retry for a run that succeeded or is still going', () => {
