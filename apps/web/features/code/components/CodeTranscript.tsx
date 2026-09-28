@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import {
   Check,
   ChevronRight,
@@ -20,6 +20,7 @@ import {
   type CloudCodeAgentStep,
   type CloudCodeSession,
   type CloudCodeTerminalEntry,
+  type CloudCodeTurnMode,
 } from '@agiworkforce/types';
 import type { CodeApprovalPrompt, CodeTranscriptItem } from '@agiworkforce/cloud-contracts';
 import { AgiMark } from '@shared/components/agi/AgiMark';
@@ -289,7 +290,7 @@ export interface CodeTranscriptProps {
   busySince: string | null;
   verbose: boolean;
   onDecideApproval: (approval: CodeApprovalPrompt, decision: 'approve' | 'reject') => void;
-  onRetryTask: (goal: string) => void;
+  onRetryTask: (goal: string, mode: CloudCodeTurnMode) => void;
 }
 
 export function CodeTranscript({ session, ...rest }: CodeTranscriptProps) {
@@ -336,9 +337,10 @@ export function CodeTranscriptBody({
         }
         if (item.kind === 'task') {
           return (
-            <p key={item.id} className={styles['task']}>
-              {item.text}
-            </p>
+            <Fragment key={item.id}>
+              {item.mode === 'plan' && <p className={styles['taskMode']}>{CODE_COPY.planMode}</p>}
+              <p className={styles['task']}>{item.text}</p>
+            </Fragment>
           );
         }
         if (item.kind === 'steps') {
@@ -366,7 +368,7 @@ export function CodeTranscriptBody({
               <button
                 type="button"
                 className={`${styles['secondaryButton']} ${styles['retryButton']}`}
-                onClick={() => onRetryTask(item.retryGoal ?? '')}
+                onClick={() => onRetryTask(item.retryGoal ?? '', item.retryMode)}
               >
                 <RefreshCw size={ACTION_GLYPH_SIZE} aria-hidden="true" />
                 {CODE_COPY.retryTask}
