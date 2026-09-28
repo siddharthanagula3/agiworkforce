@@ -10,6 +10,7 @@ nothing is left.
 
 - Done when: A project can set a default model that new chats in the project use.
 - Wave: 3
+- Already works on: vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -17,10 +18,9 @@ nothing is left.
 | desktop | partial | Projects store a default model (API field default_model_id) but no control sets it and chats in the project do not use it; only a workspace-wide default model is applied. | ui, handler |
 | mobile | partial | The project header shows the project's default model, but chats in the project do not use it. | handler |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | The project panel shows the project's default model, but chats started from it do not use it. | handler |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/app/api/projects/[id]/route.ts:200-200`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2242-2244`, `apps/mobile/src/features/projects/components/ProjectHeader.tsx:126-126`, `apps/extension-vscode/src/features/projects/projectPresentation.ts:52-54`
+Code: `apps/web/app/api/projects/[id]/route.ts:200-200`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2242-2244`, `apps/mobile/src/features/projects/components/ProjectHeader.tsx:126-126`
 
 ## S79.05: Speed-first profile.
 
@@ -167,7 +167,6 @@ Code: `apps/mobile/src/features/chat/actions/resolveMobileImageGenerationRequest
 | desktop | partial | Auto can escalate a conversation to a stronger model (escalation-only continuity) and web shows a receipt, but no advisor model is consulted mid-task by a worker model. | handler |
 | mobile | partial | Auto can escalate a conversation to a stronger model (escalation-only continuity) and web shows a receipt, but no advisor model is consulted mid-task by a worker model. | handler |
 | cli | partial | Auto can escalate a conversation to a stronger model (escalation-only continuity) and web shows a receipt, but no advisor model is consulted mid-task by a worker model. | handler |
-| vscode | partial | Auto can escalate a conversation to a stronger model (escalation-only continuity) and web shows a receipt, but no advisor model is consulted mid-task by a worker model. | handler |
 | chrome | partial | Auto can escalate a conversation to a stronger model (escalation-only continuity) and web shows a receipt, but no advisor model is consulted mid-task by a worker model. | handler |
 | api | partial | Auto can escalate a conversation to a stronger model (escalation-only continuity) and web shows a receipt, but no advisor model is consulted mid-task by a worker model. | handler |
 
@@ -184,10 +183,9 @@ Code: `apps/web/features/chat/components/messages/MessageBubble.tsx:2656-2662`, 
 | web | partial | Cloud agent runs cap subagent depth and fan-out, but subagents inherit the parent model; no specialist model is chosen per worker. | handler |
 | desktop | partial | Cloud agent runs cap subagent depth and fan-out, but subagents inherit the parent model; no specialist model is chosen per worker. | handler |
 | mobile | missing | Not built on this surface. |  |
-| vscode | partial | Specialist agents run only through the local CLI engine (subagent approval scope exists); VS Code has no specialist picker. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/services/cloud-agent-budget.ts:20-21`, `apps/extension-vscode/src/features/permissions/approvalScope.ts:17-17`
+Code: `apps/web/lib/services/cloud-agent-budget.ts:20-21`
 
 ## S79.24: Multi-model comparison.
 
@@ -216,7 +214,6 @@ Code: `apps/web/features/models/components/ModelCatalogueBrowser.tsx:305-309`
 | desktop | partial | Low classifier confidence only demotes a premium Auto choice to balanced; nothing abstains, asks a clarifying question or declines when unsure. | handler |
 | mobile | partial | Low classifier confidence only demotes a premium Auto choice to balanced; nothing abstains, asks a clarifying question or declines when unsure. | handler |
 | cli | partial | The agent has a tool to ask the user a clarifying question, but CLI routing never abstains or asks based on classifier confidence. | handler |
-| vscode | partial | Low classifier confidence only demotes a premium Auto choice to balanced; nothing abstains, asks a clarifying question or declines when unsure. | handler |
 | chrome | partial | Low classifier confidence only demotes a premium Auto choice to balanced; nothing abstains, asks a clarifying question or declines when unsure. | handler |
 | api | partial | Low classifier confidence only demotes a premium Auto choice to balanced; nothing abstains, asks a clarifying question or declines when unsure. | handler |
 
@@ -257,7 +254,6 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1093-1093`, `apps/extension
 | desktop | partial | The routing policy is versioned in an append-only release ledger (policy version 16), but routing decisions do not record which version served them. | handler |
 | mobile | partial | The routing policy is versioned in an append-only release ledger (policy version 16), but routing decisions do not record which version served them. | handler |
 | cli | partial | The routing policy is versioned in an append-only release ledger (policy version 16), but routing decisions do not record which version served them. | handler |
-| vscode | partial | The routing policy is versioned in an append-only release ledger (policy version 16), but routing decisions do not record which version served them. | handler |
 | chrome | partial | The routing policy is versioned in an append-only release ledger (policy version 16), but routing decisions do not record which version served them. | handler |
 | api | partial | The routing policy is versioned in an append-only release ledger (policy version 16), but routing decisions do not record which version served them. | handler |
 
@@ -274,7 +270,6 @@ Code: `apps/web/features/chat/components/Composer/ComposerFooter.tsx:278-281`, `
 | desktop | partial | A model-based turn classifier runs only in shadow (logged, never used); no Jev adapter exists and the heuristic classifier decides. | handler |
 | mobile | partial | A model-based turn classifier runs only in shadow (logged, never used); no Jev adapter exists and the heuristic classifier decides. | handler |
 | cli | partial | A model-based turn classifier runs only in shadow (logged, never used); no Jev adapter exists and the heuristic classifier decides. | handler |
-| vscode | partial | A model-based turn classifier runs only in shadow (logged, never used); no Jev adapter exists and the heuristic classifier decides. | handler |
 | chrome | partial | A model-based turn classifier runs only in shadow (logged, never used); no Jev adapter exists and the heuristic classifier decides. | handler |
 | api | partial | A model-based turn classifier runs only in shadow (logged, never used); no Jev adapter exists and the heuristic classifier decides. | handler |
 
