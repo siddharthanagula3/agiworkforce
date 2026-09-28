@@ -33,6 +33,8 @@ use super::{clip_cols, display_width, pad_to_cols, truncate_cols};
 // Constants
 // ---------------------------------------------------------------------------
 
+const APPROVAL_EXPIRY: Duration = Duration::from_secs(600);
+
 /// Duration the mode-cycle banner is shown after Shift+Tab.
 const MODE_BANNER_TTL: Duration = Duration::from_secs(2);
 
@@ -1144,16 +1146,25 @@ fn run_tui_approval_modal(
     terminal: &mut Terminal<CrosstermBackend<Stdout>>,
     ctx: &FrameCtx,
     request: &crate::tui::approval_broker::ApprovalRequest,
-) -> Result<(
-    crate::tui::widgets::approval_overlay::ApprovalChoice,
-    Option<String>,
-)> {
+) -> Result<
+    Option<(
+        crate::tui::widgets::approval_overlay::ApprovalChoice,
+        Option<String>,
+    )>,
+> {
     use crate::tui::widgets::approval_overlay::ApprovalChoice;
     use crate::tui::widgets::interactive::{InteractiveView, ViewAction};
 
     let mut overlay = approval_overlay_for(request);
+    let expires_at = Instant::now() + APPROVAL_EXPIRY;
 
     loop {
+        if Instant::now() >= expires_at {
+            terminal.draw(|frame| {
+                draw_turn_chrome(frame, ctx);
+            })?;
+            return Ok(None);
+        }
         terminal.draw(|frame| {
             let chat_area = draw_turn_chrome(frame, ctx);
             // Drawn last within the same closure so it composites on top of
@@ -1172,7 +1183,7 @@ fn run_tui_approval_modal(
                             draw_turn_chrome(frame, ctx);
                         })?;
                         let note = overlay.note();
-                        return Ok((overlay.result.unwrap_or(ApprovalChoice::No), note));
+                        return Ok(Some((overlay.result.unwrap_or(ApprovalChoice::No), note)));
                     }
                     ViewAction::Continue | ViewAction::SideAction(_) => {}
                 },
@@ -6179,6 +6190,7 @@ async fn send_message_with_prompt(
         app.session.on_tool_event = Some(crate::agent::ToolEventSink(sink));
     }
     let mut tool_cells: Vec<ToolCell> = Vec::new();
+    let mut preparing = true;
 
     // Drive the agent turn while staying responsive to approval requests. The
     // event loop is otherwise parked inside this `.await`, so without the
@@ -6275,7 +6287,23 @@ async fn send_message_with_prompt(
                             broker.complete_with_note(req.id, decision, answer).await;
                             continue;
                         }
-                        let (choice, note) = run_tui_approval_modal(terminal, &approval_ctx, &req)?;
+                        let Some((choice, note)) =
+                            run_tui_approval_modal(terminal, &approval_ctx, &req)?
+                        else {
+                            terminal.clear()?;
+                            broker
+                                .complete(req.id, crate::tui::approval_broker::ApprovalDecision::Timeout)
+                                .await;
+                            app.chat_messages.push(ChatMessage {
+                                role: ChatRole::System,
+                                text: format!(
+                                    "The approval for {} expired after {} minutes without an answer, so it did not run.",
+                                    sanitize_terminal_text(&req.summary),
+                                    APPROVAL_EXPIRY.as_secs() / 60
+                                ),
+                            });
+                            continue;
+                        };
                         // The modal ran its own key loop over frames ratatui
                         // drew; force the next frame to repaint every cell so
                         // nothing the prompt covered survives it.
@@ -6295,6 +6323,9 @@ async fn send_message_with_prompt(
                     }
                 }
                 Some(ev) = tool_rx.recv() => {
+                    if ev == crate::tui::app_event::TuiAppEvent::ModelRequested {
+                        preparing = false;
+                    }
                     apply_tool_event(&mut tool_cells, ev);
                 }
                 _ = tokio::time::sleep(std::time::Duration::from_millis(80)) => {
@@ -6353,7 +6384,7 @@ async fn send_message_with_prompt(
                     }
                     if cancelled {
                         app.status_notice =
-                            Some(("interrupted the turn".to_string(), Instant::now()));
+                            Some(("stopping the turn…".to_string(), Instant::now()));
                         break None;
                     }
                     while let Ok(text) = app.side_answers.1.try_recv() {
@@ -6386,7 +6417,11 @@ async fn send_message_with_prompt(
                         stream_start: app.stream_start,
                         stream_buffer: &app.stream_buffer,
                         spinner_char: spinner_frame(app.spinner_tick),
-                        loading_verb: loading_verb_for(turn_count),
+                        loading_verb: if preparing {
+                            "Preparing context"
+                        } else {
+                            loading_verb_for(turn_count)
+                        },
                         awaiting_approval: false,
                         scroll_offset: app.scroll_offset,
                         access_mode: turn_access_mode,
@@ -6531,7 +6566,9 @@ async fn send_message_with_prompt(
             // and reconcile session history so the next turn stays a valid
             // user→assistant sequence.
             let partial = app.stream_buffer.clone();
+            render(terminal, app)?;
             app.session.cancel_turn(&partial).await;
+            app.status_notice = Some(("stopped the turn".to_string(), Instant::now()));
             if !partial.is_empty() {
                 app.chat_messages.push(ChatMessage {
                     role: ChatRole::Assistant,
