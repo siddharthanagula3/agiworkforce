@@ -95,6 +95,7 @@ Every declared platform tool, and what each policy does with it. The rows are
 | `edit_file`          | asks                   | asks                           | write, not reversible                                                            |
 | `create_office_file` | asks                   | asks                           | write, reversible                                                                |
 | `skill`              | asks                   | runs                           | read, reversible                                                                 |
+| `read_tool_result`   | asks                   | runs                           | read, reversible, acceptsUntrustedContent                                        |
 
 A connector or MCP tool forces `approvalMode: 'manual'` on the whole turn. An
 undeclared one resolves to `UNKNOWN_TOOL_METADATA`, an irreversible write with
