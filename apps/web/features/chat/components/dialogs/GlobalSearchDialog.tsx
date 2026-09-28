@@ -64,7 +64,7 @@ interface GlobalSearchDialogProps {
 const EMPTY_SHORTCUT_IDS: string[] = [];
 
 const FOOTER_KEY_CLASS =
-  'rounded-compact border border-gray-200 bg-gray-100 px-1.5 py-0.5 text-xs font-semibold text-gray-800 dark:border-gray-500 dark:bg-gray-600 dark:text-gray-100';
+  'rounded-compact border border-border bg-muted px-1.5 py-0.5 text-xs font-semibold text-foreground';
 
 const RESULT_TYPE_LABELS: Partial<Record<SearchResult['type'], string>> = {
   project: 'Project',

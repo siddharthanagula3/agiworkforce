@@ -877,7 +877,7 @@ export function SchedulesPage({
           role="status"
           aria-label="Schedule action result"
           aria-live="polite"
-          className={actionMessage ? 'text-sm text-emerald-700 dark:text-emerald-300' : 'sr-only'}
+          className={actionMessage ? 'text-sm text-success-text' : 'sr-only'}
         >
           {actionMessage || 'No schedule action completed.'}
         </div>

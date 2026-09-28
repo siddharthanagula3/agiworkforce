@@ -208,9 +208,7 @@ export default function AdminConsolePage() {
       <main className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-6 py-10">
         <header className="flex flex-col gap-4 border-b border-border pb-6 md:flex-row md:items-end md:justify-between">
           <div>
-            <p className="font-mono text-xs uppercase text-emerald-700 dark:text-emerald-300">
-              Enterprise control plane
-            </p>
+            <p className="font-mono text-xs uppercase text-info-text">Enterprise control plane</p>
             <h1 className="mt-2 text-display text-foreground">Admin readiness</h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground">
               Operational surface for teams, policy, identity, auditability, support, and
@@ -256,10 +254,7 @@ export default function AdminConsolePage() {
           aria-labelledby="admin-controls-title"
         >
           <div className="flex items-center gap-2 border-b border-border px-4 py-3">
-            <SlidersHorizontal
-              className="h-4 w-4 text-sky-600 dark:text-sky-300"
-              aria-hidden="true"
-            />
+            <SlidersHorizontal className="h-4 w-4 text-info-text" aria-hidden="true" />
             <h2 id="admin-controls-title" className="text-h5 text-foreground">
               Admin controls
             </h2>
