@@ -2280,5 +2280,23 @@
         "example": "100"
       }
     }
+  },
+  "spMapPreviewLabel": {
+    "message": "Map of $PLACE$",
+    "description": "Accessible name of the map drawn in a map search card",
+    "placeholders": {
+      "place": {
+        "content": "$1",
+        "example": "Blue Bottle Coffee, Oakland"
+      }
+    }
+  },
+  "spMapPreviewLoading": {
+    "message": "Loading map…",
+    "description": "Shown while the tiles of a map search card load"
+  },
+  "spMapPreviewUnavailable": {
+    "message": "The map could not be loaded. You can still open these places in Maps.",
+    "description": "Shown when a map search card cannot draw its map"
   }
 }

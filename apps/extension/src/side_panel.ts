@@ -2255,6 +2255,76 @@ function injectStyles(): void {
       line-height: var(--type-caption-height);
       text-transform: capitalize;
     }
+    .sp-map-preview {
+      position: relative;
+      height: 200px;
+      margin-top: 9px;
+      overflow: hidden;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-control);
+      background: var(--agi-ext-overlay);
+    }
+    .sp-map-preview__canvas { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
+    .sp-map-preview__tile {
+      position: absolute;
+      width: 256px;
+      max-width: none;
+      height: 256px;
+      user-select: none;
+      pointer-events: none;
+    }
+    .sp-map-preview--dimmed .sp-map-preview__tile {
+      filter: invert(1) hue-rotate(180deg) saturate(0.22) sepia(0.16) brightness(1.04) contrast(0.88);
+    }
+    .sp-map-preview__marker {
+      position: absolute;
+      display: grid;
+      width: 22px;
+      height: 22px;
+      margin: -11px 0 0 -11px;
+      place-items: center;
+      border: 2px solid var(--agi-ext-surface);
+      border-radius: var(--corner-pill);
+      background: var(--agi-ext-accent);
+      color: var(--agi-ext-on-accent);
+      font-size: var(--type-caption-size);
+      font-weight: 600;
+      line-height: 1;
+      box-shadow: var(--agi-ext-elevation-2);
+    }
+    .sp-map-preview__marker--unconfirmed {
+      border-color: var(--agi-ext-warning-text);
+      background: var(--agi-ext-surface);
+      color: var(--agi-ext-warning-text);
+    }
+    .sp-map-preview__attribution {
+      position: absolute;
+      right: 4px;
+      bottom: 4px;
+      max-width: calc(100% - 8px);
+      overflow: hidden;
+      padding: 1px 5px;
+      border-radius: var(--corner-compact);
+      background: var(--agi-ext-surface);
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .sp-map-preview__status {
+      display: flex;
+      height: 100%;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 0 16px;
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      text-align: center;
+    }
+    .sp-map-preview[aria-busy='true'] .sp-map-preview__spinner svg { animation: sp-spin var(--duration-spin) linear infinite; }
     .sp-interactive-card__actions {
       display: flex;
       flex-direction: column;
