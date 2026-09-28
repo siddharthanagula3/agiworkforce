@@ -1956,7 +1956,7 @@ export class ChatStateManager {
     }
     try {
       const [page, codeSessions, workspaceRepositories] = await Promise.all([
-        resolution.workspace.chat.listConversations({ limit: 50 }),
+        resolution.workspace.chat.listConversations({ limit: 50, archived: 'exclude' }),
         code.status === 'ready' ? code.api.list('open') : null,
         workspaceGitHubRepositories(),
       ]);
