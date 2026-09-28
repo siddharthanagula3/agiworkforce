@@ -26,7 +26,7 @@ const PRIVACY_ITEMS = [
   {
     key: 'retention',
     label: 'Data retention',
-    body: 'A chat stays in your history until you delete it, and a deleted chat stays in Recently deleted until you restore it. A temporary chat and its attachments are removed after 30 days. When you delete your account, erasure starts 24 hours after you confirm, and you can cancel until then.',
+    body: 'A chat stays in your history until you delete it, and a deleted chat stays in Recently deleted for 30 days, then is deleted for good. A temporary chat and its attachments are removed after 30 days. When you delete your account, erasure starts 24 hours after you confirm, and you can cancel until then.',
   },
 ] as const;
 
