@@ -1236,6 +1236,13 @@ export function getWebviewContent(
     .code-block-wrapper pre { margin: 0; padding-top: 36px; }
     .code-block-actions { position: absolute; top: 5px; right: 5px; z-index: var(--z-content); display: flex; gap: 4px; }
     .code-lang { position: absolute; top: 4px; left: 8px; font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; }
+    .explain-btn { background: var(--vscode-button-secondaryBackground, var(--bg-overlay)); border: 1px solid var(--border); border-radius: var(--corner-compact); color: var(--vscode-button-secondaryForeground, var(--text-primary)); font-size: var(--type-label-size); line-height: var(--type-label-height); padding: 2px 8px; cursor: pointer; opacity: 0; transition: opacity var(--duration-quick); }
+    .code-block-wrapper:hover .explain-btn, .explain-btn:focus-visible { opacity: 1; }
+    .explain-btn:hover { background: var(--hover); color: var(--text-primary); }
+    .diff-add { display: inline-block; min-width: 100%; background: var(--vscode-diffEditor-insertedLineBackground, var(--vscode-diffEditor-insertedTextBackground)); }
+    .diff-del { display: inline-block; min-width: 100%; background: var(--vscode-diffEditor-removedLineBackground, var(--vscode-diffEditor-removedTextBackground)); }
+    .diff-hunk { color: var(--vscode-textLink-foreground); }
+    .diff-file { color: var(--text-secondary); font-weight: 600; }
     .copy-btn, .apply-btn { background: var(--vscode-button-secondaryBackground, var(--bg-overlay)); border: 1px solid var(--border); border-radius: var(--corner-compact); color: var(--vscode-button-secondaryForeground, var(--text-primary)); font-size: var(--type-label-size); line-height: var(--type-label-height); padding: 2px 8px; cursor: pointer; opacity: 0; transition: opacity var(--duration-quick); }
     .code-block-wrapper:hover .copy-btn, .code-block-wrapper:hover .apply-btn { opacity: 1; }
     .copy-btn:focus-visible, .apply-btn:focus-visible { opacity: 1; }
@@ -3852,6 +3859,11 @@ export function getWebviewContent(
 
     function setStreaming(value) {
       streaming = value;
+      if (!value && stopBtn && stopBtn.getAttribute('aria-busy') === 'true') {
+        stopBtn.removeAttribute('aria-busy');
+        stopBtn.setAttribute('aria-label', 'Stop response');
+        showFollowUpStatus('', 'queued', false);
+      }
       if (composerCard) composerCard.classList.toggle('is-streaming', value);
       sendBtn.disabled = runtimeBlock !== null;
       sendBtn.classList.toggle('follow-up', value);
@@ -4202,7 +4214,7 @@ export function getWebviewContent(
 
     function bindCodeBlockActions(rootEl) {
       if (!rootEl) return;
-      var btns = rootEl.querySelectorAll('.copy-btn, .apply-btn');
+      var btns = rootEl.querySelectorAll('.copy-btn, .apply-btn, .explain-btn');
       for (var i = 0; i < btns.length; i++) {
         var btn = btns[i];
         if (boundCodeActionButtons.has(btn)) continue;
@@ -4212,6 +4224,12 @@ export function getWebviewContent(
           var codeEl = getCodeBlock(b);
           if (!codeEl) return;
           var text = codeEl.textContent || '';
+          if (b.classList.contains('explain-btn')) {
+            var language = getCodeLanguage(codeEl) || '';
+            prefillComposer('Explain this code:\n\n' + '\u0060\u0060\u0060' + language + '\n' + text + '\n' + '\u0060\u0060\u0060');
+            sendMessage();
+            return;
+          }
           if (b.classList.contains('apply-btn')) {
             if (pendingApplyButton && pendingApplyButton !== b) {
               settleApplyButton('Failed', 'A newer diff proposal replaced this request.');
@@ -4395,6 +4413,10 @@ export function getWebviewContent(
     sendBtn.addEventListener('click', function() { sendMessage(); });
     if (stopBtn) {
       stopBtn.addEventListener('click', function() {
+        if (stopBtn.getAttribute('aria-busy') === 'true') return;
+        stopBtn.setAttribute('aria-busy', 'true');
+        stopBtn.setAttribute('aria-label', 'Stopping');
+        showFollowUpStatus('Stopping…', 'queued', true);
         vscode.postMessage({ type: 'cancel' });
       });
     }
