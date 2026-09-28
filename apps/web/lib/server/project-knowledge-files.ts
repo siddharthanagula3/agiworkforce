@@ -24,6 +24,8 @@ import {
 import { recordModerationEvent } from '@/lib/moderation';
 import { validateAttachmentMeta } from '@agiworkforce/types';
 import type { ManagedCloudProjectKnowledgeRegisterRequest } from '@agiworkforce/cloud-contracts';
+import type { ExternalResourceReferenceInput } from '@agiworkforce/types';
+import { recordExternalResourceReferences } from '@/lib/server/external-resource-references';
 import type { BillingPlanTier, ProjectKnowledgeIndexState } from '@agiworkforce/types';
 import {
   findProjectKnowledgeDocument,
@@ -290,6 +292,7 @@ export async function findProjectKnowledgeFileByChecksum(
 export async function registerProjectKnowledgeFile(
   scope: ProjectKnowledgeScope,
   body: ManagedCloudProjectKnowledgeRegisterRequest,
+  origin?: ExternalResourceReferenceInput,
 ): Promise<ProjectKnowledgeRegistration> {
   const { db, userId, organizationId, projectId } = scope;
   const capacity = await checkProjectKnowledgeCapacity(scope, body);
@@ -427,6 +430,27 @@ export async function registerProjectKnowledgeFile(
         logger.warn(
           { error: anchorError, projectId, fileId: inserted['id'] },
           '[knowledge-files] extraction anchors were not stored',
+        );
+      }
+    }
+
+    if (origin && typeof inserted['id'] === 'string') {
+      try {
+        const [reference] = await recordExternalResourceReferences(db, { userId, organizationId }, [
+          origin,
+        ]);
+        if (reference) {
+          await db.execute(
+            `update project_knowledge_files
+                set external_reference_id = $1
+              where id = $2 and project_id = $3`,
+            [reference.id, inserted['id'], projectId],
+          );
+        }
+      } catch (referenceError) {
+        logger.warn(
+          { error: referenceError, projectId, fileId: inserted['id'] },
+          '[knowledge-files] the imported source was not recorded',
         );
       }
     }

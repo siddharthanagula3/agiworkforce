@@ -85,6 +85,7 @@ const CUSTOMER_CONTENT = [
 
 const DERIVED_CONTENT = [
   'context_manifests',
+  'external_resource_references',
   'file_lineage',
   'retrieval_chunks',
   'retrieval_documents',

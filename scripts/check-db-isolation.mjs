@@ -71,6 +71,7 @@ const WORKSPACE_SCOPED_TABLES = new Set([
   'user_connectors',
   'user_custom_connectors',
   'search_history',
+  'external_resource_references',
 ]);
 
 const ORGANIZATION_SCOPE_TOKEN_RE = /\b(?:organization_id|org_id|current_app_org_id)\b/;
