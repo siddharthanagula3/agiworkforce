@@ -43,11 +43,11 @@ Code: `apps/mobile/src/features/model-picker/localModelRuntime.ts:60-62`, `apps/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | agi image refuses transparency for a model that cannot do it and prints a model's ratios when it refuses one, but /api/media/availability does not publish each model's ratios and sizes, so they cannot be narrowed before the request (server change). | handler |
+| cli | partial | billing/no-yearly d75b94c7b4: the server half is done. /api/media/availability now publishes per model aspect_ratios and max_images (image, read from the tables the unsupported_aspect_ratio and unsupported_image_count refusals use) and output_sizes (video: resolution, aspect_ratio, width, height, duration_secs per requestable and priced pair) plus supports_audio. The cli cell closes when agi image narrows --aspect-ratio and -n from the admission before the request (p-mcp-rust); chrome stays missing until the extension has a media surface (p-chrome). | handler |
 | vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
+| chrome | partial | billing/no-yearly d75b94c7b4: the server half is done. /api/media/availability now publishes per model aspect_ratios and max_images (image, read from the tables the unsupported_aspect_ratio and unsupported_image_count refusals use) and output_sizes (video: resolution, aspect_ratio, width, height, duration_secs per requestable and priced pair) plus supports_audio. The cli cell closes when agi image narrows --aspect-ratio and -n from the admission before the request (p-mcp-rust); chrome stays missing until the extension has a media surface (p-chrome). | handler |
 
-Code: `apps/cli/src/cloud/image.rs:446-446`
+Code: `packages/contracts/cloud-contracts/src/managed-media.ts:188-188`, `packages/contracts/cloud-contracts/src/managed-media.ts:211-211`, `packages/contracts/cloud-contracts/src/managed-media.ts:214-214`, `packages/contracts/cloud-contracts/src/managed-media.ts:215-215`
 
 ## S78.10: Role restrictions.
 
