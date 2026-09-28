@@ -30,7 +30,7 @@ Code: `apps/cli/src/features/exec/tools/web/mod.rs:286-286`
 | mobile | partial | url_fetch now reads PDFs and Word, Excel and PowerPoint files by URL (d67ced36f), but the served tool description is still v1, which says binary content is unsupported; tool.url_fetch_description@2 is recorded on the internal channel and needs a canary advance to stable. Uploaded files and connector sources are still not opened by reference. | handler |
 | cli | partial | No PDF/Office text extraction in the CLI; adding a PDF crate changes Cargo.lock (lead-owned). | handler |
 | vscode | partial | Runs the CLI tools: read_file and web_fetch read plain text only; no PDF or Office source reader. | handler |
-| chrome | partial | No tool opens a document source by reference: url_fetch refuses PDFs and other non-text types, and uploaded documents are only extracted up front; add a reader tool for PDF/Office sources. | handler |
+| chrome | partial | Same as web: url_fetch reads PDF and Office files by URL (d67ced36f), but the served tool description is still v1 until tool.url_fetch_description@2 advances to stable; uploaded files and connector sources are still not opened by reference. | handler |
 | api | partial | url_fetch now reads PDFs and Word, Excel and PowerPoint files by URL (d67ced36f), but the served tool description is still v1, which says binary content is unsupported; tool.url_fetch_description@2 is recorded on the internal channel and needs a canary advance to stable. Uploaded files and connector sources are still not opened by reference. | handler |
 
 Code: `apps/web/lib/url-fetch/url-fetch-tool.ts:479-479`, `apps/web/lib/prompts/prompt-manifest.ts:97-97`, `apps/cli/src/features/exec/tools/mod.rs:365-372`, `apps/cli/src/features/exec/tools/mod.rs:568-568`
@@ -44,9 +44,9 @@ Code: `apps/web/lib/url-fetch/url-fetch-tool.ts:479-479`, `apps/web/lib/prompts/
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | desktop | partial | search_files also runs in the desktop app over the account's files; searching a granted local folder as a device step (file_glob/file_grep) belongs to p-sessions. | handler |
-| chrome | partial | No model-callable search over the user's own files: project and library files are retrieved automatically before the turn, and the sandbox list_files tool only lists (and is behind AGI_E2B_EXECUTION). | handler |
+| chrome | partial | The server offers search_files, save_memory/search_memory/forget_memory and create_schedule only to MEMORY_COMMAND_CLIENT_SURFACES (web, desktop, mobile), so Chrome chats never get them. p-mcp-web: in apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts gate applyMemoryToolCapability, applyFileSearchToolCapability and applyScheduleToolCapability on a set that also holds chrome (memory commands keep their own set). The side panel already renders the tool steps, forget_memory approvals and the account schedules. | handler |
 
-Code: `apps/web/lib/server/tools/file-search-tool.ts:64-64`, `apps/web/lib/e2b/execution-tools.ts:17-17`
+Code: `apps/web/lib/server/tools/file-search-tool.ts:64-64`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:842-842`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:868-868`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:894-894`
 
 ## S57.05: File-read tool.
 
@@ -110,18 +110,6 @@ Code: `apps/web/lib/e2b/execution-tools.ts:14-14`, `apps/web/app/api/llm/v1/chat
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-## S57.10: Code-execution tool.
-
-- Done when: The assistant can call a tool that runs code it wrote and returns the output in the transcript.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | Default path is provider-native code execution (resolveTurnCodeExecutionTools 236-244; the E2B tools need AGI_E2B_EXECUTION=1). Its output arrives as x_code_result (stream-transform 462-470). The Chrome stream parser only lists that key as recognized (freeTrialClient 623-636) and parses x_agent_event, x_generated_files and x_interactive_card; no code in apps/extension/src reads x_code_result or codeExecutionResult. So the code runs but its output never reaches the side-panel transcript, unlike web (MessageBubble) and mobile (toolCallAccumulator). remaining: 'Render x_code_result stdout/stderr as a step in the side panel, or ship the E2B path whose tool steps it already renders.' miss: ui. |  |
-
-Code: `apps/extension/src/features/side-panel/bubbles.ts:537-538`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:588-594`, `apps/web/lib/e2b/execution-tools.ts:194-212`
 
 ## S57.11: Shell tool.
 
@@ -235,9 +223,9 @@ Code: `apps/mobile/src/features/chat/components/InteractiveCardBlock.tsx:586-586
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | vscode | partial | The CLI runtime injects and saves memory automatically; the agent has no memory tool. | handler |
-| chrome | partial | Memory is extracted and injected automatically around the turn; the model cannot call a memory tool to save, look up or forget a fact on request. | handler |
+| chrome | partial | The server offers search_files, save_memory/search_memory/forget_memory and create_schedule only to MEMORY_COMMAND_CLIENT_SURFACES (web, desktop, mobile), so Chrome chats never get them. p-mcp-web: in apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts gate applyMemoryToolCapability, applyFileSearchToolCapability and applyScheduleToolCapability on a set that also holds chrome (memory commands keep their own set). The side panel already renders the tool steps, forget_memory approvals and the account schedules. | handler |
 
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:3056-3064`
+Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:3056-3064`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:842-842`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:868-868`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:894-894`
 
 ## S57.22: Calendar tool.
 
@@ -261,46 +249,32 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:3056-30
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| chrome | partial | Schedules are created only from the Schedules screen; the assistant cannot create or change a schedule as a tool during chat. | handler |
+| chrome | partial | The server offers search_files, save_memory/search_memory/forget_memory and create_schedule only to MEMORY_COMMAND_CLIENT_SURFACES (web, desktop, mobile), so Chrome chats never get them. p-mcp-web: in apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts gate applyMemoryToolCapability, applyFileSearchToolCapability and applyScheduleToolCapability on a set that also holds chrome (memory commands keep their own set). The side panel already renders the tool steps, forget_memory approvals and the account schedules. | handler |
 
-Code: `apps/extension/src/side_panel.ts:9307-9307`
+Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:842-842`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:868-868`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:894-894`, `apps/web/lib/services/memory-commands.ts:32-32`
 
 ## S57.26: Clarification/input tool.
 
 - Done when: The assistant can call a tool that asks the user a clarifying question (with choices) and waits for the answer.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | The clarify tool is offered only when the client declares clarify.v1 cards; this client sends only map-search.v1, so the model never gets it. | ui |
 | vscode | partial | The runtime's ask_user reads the runtime process's stdin, which VS Code uses for JSON-RPC; the AskUser approval kind the webview labels is never raised outside tests. | handler |
-| chrome | partial | The clarify tool is offered only when the client declares clarify.v1 cards; this client sends only map-search.v1, so the model never gets it. | ui |
 
 Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1756-1756`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:713-713`, `apps/cli/src/features/exec/tools/task_registry/mod.rs:489-492`, `apps/extension-vscode/src/features/permissions/approvalScope.ts:15-15`
-
-## S57.29: Tool search.
-
-- Done when: The model or user can search the available tools by keyword and get matching tools with their descriptions.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | The model sees a name list of deferred connector tools and loads schemas by exact name (load_connector_tools); it cannot search tools by keyword, and the user has no tool search. | handler |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-schema-loader.ts:152-160`
 
 ## S57.30: Tool descriptions and schemas.
 
 - Done when: Each tool carries a readable description and typed parameter schema that the model uses and the user can inspect.
 - Wave: 3
-- Already works on: web, desktop, cli, api
+- Already works on: web, desktop, cli, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Every tool reaches the model with a description and typed input schema, but the user has no view of what each tool does or what parameters it takes; connector settings list tool names only. | ui |
-| chrome | partial | Every tool reaches the model with a description and typed input schema, but the user has no view of what each tool does or what parameters it takes; connector settings list tool names only. | ui |
 
 Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-metadata.ts:344-349`
 
@@ -323,11 +297,10 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:353-353`, `apps
 
 - Done when: After tool calls run, the user can later review a record of which tool ran, with what input, and its outcome.
 - Wave: 3
-- Already works on: web, desktop, cli, vscode, api
+- Already works on: web, desktop, cli, vscode, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | The transcript keeps each tool's input and output, but mobile has no call log or receipt view for connector actions. | ui |
-| chrome | partial | Tool steps show in the transcript only; Chrome has no call log or receipt view. | ui |
 
-Code: `apps/mobile/src/features/chat/components/ToolCallTimeline.tsx:368-386`, `apps/extension/src/features/side-panel/bubbles.ts:537-538`
+Code: `apps/mobile/src/features/chat/components/ToolCallTimeline.tsx:368-386`
