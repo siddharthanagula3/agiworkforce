@@ -9,11 +9,13 @@ use agiworkforce_command_registry::{CommandSource, RegistryCommand};
 use agiworkforce_protocol::developer_session::{
     CommandSourceKind, ContextInstructionsResponse, DeveloperAgentMode, DeveloperReasoningEffort,
     HookConfigScope, HookListResponse, HookSummary, InstructionFile, InstructionFileKind,
-    LocalModelProvider, LocalServerHealth, LocalServerStatus, McpServerConfiguredStatus,
-    McpServerListResponse, McpServerScope, McpServerSummary, MemoryAddParams, MemoryAddResponse,
-    MemoryScope, PluginListResponse, PluginScope, PluginSummary, SettingsReadResponse,
-    SettingsWriteParams, SkillCatalogScope, SkillConsentResponse, SkillListResponse, SkillSummary,
-    SlashCommandListResponse, SlashCommandResultKind, SlashCommandRunResponse, SlashCommandSummary,
+    LocalModelProvider, LocalServerHealth, LocalServerStatus, McpPromptArgumentSummary,
+    McpPromptSummary, McpResourceSummary, McpServerConfiguredStatus, McpServerListResponse,
+    McpServerScope, McpServerSummary, McpServerTestResponse, McpServerToolsResponse,
+    McpToolSummary, MemoryAddParams, MemoryAddResponse, MemoryScope, PluginListResponse,
+    PluginScope, PluginSummary, SettingsReadResponse, SettingsWriteParams, SkillCatalogScope,
+    SkillConsentResponse, SkillListResponse, SkillSummary, SlashCommandListResponse,
+    SlashCommandResultKind, SlashCommandRunResponse, SlashCommandSummary,
 };
 use std::path::{Path, PathBuf};
 
@@ -572,6 +574,153 @@ pub fn run_command(
             "'{other}' needs a terminal or a thread; call the typed method for it, or run it in `agi`"
         ))),
     }
+}
+
+fn startable_server(
+    workspace_root: &Path,
+    name: &str,
+) -> Result<crate::mcp::DiscoveredMcpServer, DeveloperSessionHostError> {
+    let server = crate::mcp::discover_servers(workspace_root)
+        .into_iter()
+        .find(|server| server.name == name)
+        .ok_or_else(|| {
+            DeveloperSessionHostError::not_found(format!(
+                "No MCP server named '{name}' is configured for this workspace"
+            ))
+        })?;
+    if server.origin == McpServerOrigin::Project
+        && !crate::trust::restrictions_for(workspace_root).mcp_autostart
+    {
+        return Err(DeveloperSessionHostError::conflict(format!(
+            "'{name}' comes from this workspace's .mcp.json, and project servers start only once the workspace is trusted. Run /trust grant in agi, then try again."
+        )));
+    }
+    Ok(server)
+}
+
+fn elapsed_ms(started: std::time::Instant) -> u64 {
+    u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX)
+}
+
+pub async fn test_mcp_server(
+    workspace_root: &Path,
+    name: &str,
+    limit: std::time::Duration,
+) -> Result<McpServerTestResponse, DeveloperSessionHostError> {
+    let server = startable_server(workspace_root, name)?;
+    let started = std::time::Instant::now();
+    let outcome = tokio::time::timeout(limit, async {
+        let mut connection =
+            crate::mcp::McpConnection::connect(&server.name, &server.config).await?;
+        let tools = connection.list_tools().await;
+        let _ = connection.shutdown().await;
+        tools
+    })
+    .await;
+    let (connected, tool_count, error) = match outcome {
+        Ok(Ok(tools)) => (true, u32::try_from(tools.len()).unwrap_or(u32::MAX), None),
+        Ok(Err(error)) => (false, 0, Some(format!("{error:#}"))),
+        Err(_) => (
+            false,
+            0,
+            Some(format!(
+                "it did not answer within {} seconds",
+                limit.as_secs()
+            )),
+        ),
+    };
+    Ok(McpServerTestResponse {
+        name: server.name,
+        connected,
+        elapsed_ms: elapsed_ms(started),
+        tool_count,
+        error,
+    })
+}
+
+pub async fn mcp_server_tools(
+    workspace_root: &Path,
+    name: &str,
+    limit: std::time::Duration,
+) -> Result<McpServerToolsResponse, DeveloperSessionHostError> {
+    let server = startable_server(workspace_root, name)?;
+    let listed = tokio::time::timeout(limit, async {
+        let mut connection =
+            crate::mcp::McpConnection::connect(&server.name, &server.config).await?;
+        let tools = connection.list_tools().await;
+        let prompts = connection.list_prompts().await;
+        let resources = if connection.serves_resources() {
+            Some(connection.list_resources().await)
+        } else {
+            None
+        };
+        let _ = connection.shutdown().await;
+        anyhow::Ok((tools?, prompts, resources))
+    })
+    .await
+    .map_err(|_| {
+        DeveloperSessionHostError::unavailable(format!(
+            "MCP server '{name}' did not answer within {} seconds",
+            limit.as_secs()
+        ))
+    })?
+    .map_err(|error| {
+        DeveloperSessionHostError::unavailable(format!("MCP server '{name}': {error:#}"))
+    })?;
+    let (tools, prompts, resources) = listed;
+    let mut warnings = Vec::new();
+    let prompts = match prompts {
+        Ok(prompts) => prompts,
+        Err(error) => {
+            warnings.push(format!("Its prompts could not be listed: {error:#}"));
+            Vec::new()
+        }
+    };
+    let resources = match resources {
+        Some(Ok(resources)) => resources,
+        Some(Err(error)) => {
+            warnings.push(format!("Its resources could not be listed: {error:#}"));
+            Vec::new()
+        }
+        None => Vec::new(),
+    };
+    Ok(McpServerToolsResponse {
+        name: server.name,
+        tools: tools
+            .into_iter()
+            .map(|tool| McpToolSummary {
+                name: tool.original_name,
+                description: tool.description,
+                input_schema: tool.input_schema,
+            })
+            .collect(),
+        prompts: prompts
+            .into_iter()
+            .map(|prompt| McpPromptSummary {
+                name: prompt.original_name,
+                description: prompt.description,
+                arguments: prompt
+                    .arguments
+                    .into_iter()
+                    .map(|argument| McpPromptArgumentSummary {
+                        name: argument.name,
+                        description: argument.description,
+                        required: argument.required,
+                    })
+                    .collect(),
+            })
+            .collect(),
+        resources: resources
+            .into_iter()
+            .map(|resource| McpResourceSummary {
+                uri: resource.uri,
+                name: resource.title.unwrap_or(resource.name),
+                description: resource.description,
+                mime_type: resource.mime_type,
+            })
+            .collect(),
+        warnings,
+    })
 }
 
 pub fn expand_prompt_command(text: &str) -> Result<Option<String>, DeveloperSessionHostError> {

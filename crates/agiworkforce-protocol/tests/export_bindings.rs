@@ -158,6 +158,12 @@ fn export_typescript_bindings() {
         .expect("export developer-session rewind graph");
     agiworkforce_protocol::developer_session::ThreadPlanNotification::export_all_to(dir)
         .expect("export developer-session plan notification graph");
+    agiworkforce_protocol::developer_session::McpServerParams::export_all_to(dir)
+        .expect("export developer-session mcp server params graph");
+    agiworkforce_protocol::developer_session::McpServerTestResponse::export_all_to(dir)
+        .expect("export developer-session mcp test graph");
+    agiworkforce_protocol::developer_session::McpServerToolsResponse::export_all_to(dir)
+        .expect("export developer-session mcp tools graph");
 
     // One versioned agent event envelope (W5 discipline-wave item 4), not
     // reachable from any root above (a new, independent top-level type), so
