@@ -63,8 +63,17 @@ export const CAPABILITY_READERS = Object.freeze({
     ],
   },
   vscode: {
-    gap: 'apps/extension-vscode/src/utils/api.ts requests /api/me?surface=vscode and keeps only the plan tier; the capability document in the same answer is dropped.',
-    owner: 'apps/extension-vscode',
+    reads: [
+      { file: 'apps/extension-vscode/src/utils/api.ts', evidence: 'capability_handshake' },
+      {
+        file: 'apps/extension-vscode/src/integrations/tierResolver.ts',
+        evidence: 'resolveCapabilityDocumentDecision\\(',
+      },
+      {
+        file: 'apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts',
+        evidence: 'accountCapabilityDecision\\(',
+      },
+    ],
   },
   cli: {
     reads: [

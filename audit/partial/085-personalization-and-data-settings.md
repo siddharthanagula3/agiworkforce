@@ -10,41 +10,25 @@ nothing is left.
 
 - Done when: The user can view and edit their account profile (name, photo, email) on the surface, and the change is saved to the account.
 - Wave: 3
-- Already works on: web, desktop, vscode
+- Already works on: web, desktop, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | partials/auth 68949fe36: the Full Name field now saves to the account display name through PATCH /api/me; there is still no profile photo upload on mobile | ui |
 | cli | missing | Not built on this surface. |  |
-| chrome | partial | The side panel shows the signed-in name, email and initials read-only; name and photo can only be changed on the web, and Chrome has no link to that page. | ui |
 | api | partial | GET /api/me (documented) returns the profile; updating the name or photo (PATCH /api/me) works for signed-in clients but is not part of the documented public API. | api |
 
-Code: `apps/mobile/src/features/settings/personalization/index.tsx:334-334`, `apps/extension/src/side_panel.ts:8320-8325`, `apps/extension/src/features/cloud-bridge/clerkAuth.ts:215-228`, `apps/web/app/api/me/route.ts:347-347`
-
-## S85.02: Custom instructions.
-
-- Done when: The user can write custom instructions on the surface and they are applied to that surface's chats until changed or switched off.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | Chrome cannot view or edit custom instructions; ones saved on web or mobile are applied by the server to Chrome Managed Cloud chats. | ui |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2453-2461`, `apps/web/app/api/llm/v1/chat/completions/lib/request-surface.ts:24-33`
+Code: `apps/mobile/src/features/settings/personalization/index.tsx:334-334`, `apps/web/app/api/me/route.ts:347-347`
 
 ## S85.03: Communication style.
 
 - Done when: The user can choose how the assistant communicates (tone, length, formatting) on the surface and replies follow it.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli
+- Already works on: web, desktop, mobile, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Chrome has no style control; the style saved on web or mobile is applied by the server to Chrome Managed Cloud chats. | ui |
-
-Code: `apps/web/lib/server/user-identity.ts:214-227`, `apps/web/app/api/llm/v1/chat/completions/lib/request-surface.ts:24-33`
 
 ## S85.04: Writing-style personalization.
 

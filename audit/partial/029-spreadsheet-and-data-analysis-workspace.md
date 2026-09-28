@@ -158,16 +158,15 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1756`, `apps/mobile/sr
 
 - Done when: The user can export a chart as an image or file.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Charts only inside a generated .xlsx; no chart image export. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | Charts only inside a generated .xlsx; no chart image export. Chrome offers the tool only when the prompt names an Office file (no toggle). | ui |
 
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1756`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:195-203`, `apps/web/lib/services/managed-workbook-builder.ts:218-231`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:577-583`
+Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:577-583`, `apps/extension/src/features/side-panel/bubbles.ts:434-456`, `apps/web/lib/services/managed-workbook-builder.ts:218-231`
 
 ## S29.38: Generate a report from analysis.
 

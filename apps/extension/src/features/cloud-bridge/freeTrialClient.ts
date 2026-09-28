@@ -1,4 +1,10 @@
 import {
+  ServerSentEventDecoder,
+  ServerSentEventFrameLimitError,
+  splitJoinedServerSentEventData,
+  type ServerSentEvent,
+} from '@agiworkforce/client-runtime';
+import {
   createManagedCloudAgentRunClient,
   MAX_CHAT_ATTACHMENT_BYTES,
   parseAgentEventDelta,
@@ -34,7 +40,6 @@ import {
   type ManagedUsageSummaryResponse,
 } from '@agiworkforce/types';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
-import { BoundedSseDecoder, SseFrameLimitError } from './boundedSseDecoder';
 import { getFreshClerkAuthContext, getFreshClerkToken, signOutClerk } from './clerkAuth';
 import { clearAutofillProfile } from '../content/autofill/profile-storage';
 import type { ManagedCloudOwner } from './managedCloudAuthority';
@@ -849,19 +854,6 @@ function readGatewayErrorBody(body: string): GatewayErrorBody {
   };
 }
 
-// Multi-line `data:` is one payload per the SSE spec, but the server also
-// forwards raw provider lines with no blank separator, which arrive joined.
-// Parsing is what tells the two apart; splitting unconditionally breaks the first.
-function splitJoinedFrames(dataPayload: string): string[] {
-  if (!dataPayload.includes('\n')) return [dataPayload];
-  try {
-    JSON.parse(dataPayload);
-    return [dataPayload];
-  } catch {
-    return dataPayload.split('\n');
-  }
-}
-
 class ManagedChatProtocolError extends Error {
   constructor(message: string) {
     super(message);
@@ -1326,7 +1318,7 @@ export async function* streamFreeChat(
     }
 
     const decoder = new TextDecoder('utf-8', { fatal: true });
-    const sseDecoder = new BoundedSseDecoder(MANAGED_CHAT_MAX_SSE_FRAME_CHARS);
+    const sseDecoder = new ServerSentEventDecoder(MANAGED_CHAT_MAX_SSE_FRAME_CHARS);
     let sawVisibleText = false;
     let sawAgentActivity = false;
     let sawRichOutput = false;
@@ -1346,10 +1338,12 @@ export async function* streamFreeChat(
     };
 
     const handleEvents = async (
-      dataEvents: readonly string[],
+      dataEvents: readonly ServerSentEvent[],
     ): Promise<{ chunks: FreeTrialChunk[]; terminal: boolean }> => {
       const chunks: FreeTrialChunk[] = [];
-      for (const data of dataEvents.flatMap((event) => splitJoinedFrames(event))) {
+      for (const data of dataEvents.flatMap((event) =>
+        splitJoinedServerSentEventData(event.data),
+      )) {
         const frame = parseSseData(data);
         if (frame.error) {
           chunks.push(frame.error);
@@ -1518,7 +1512,7 @@ export async function* streamFreeChat(
     };
 
     const emitHandled = async function* (
-      dataEvents: readonly string[],
+      dataEvents: readonly ServerSentEvent[],
     ): AsyncGenerator<FreeTrialChunk, boolean> {
       const handled = await handleEvents(dataEvents);
       for (const chunk of handled.chunks) yield chunk;
@@ -1582,7 +1576,10 @@ export async function* streamFreeChat(
         yield abortError();
         return;
       }
-      if (error instanceof SseFrameLimitError || error instanceof ManagedChatProtocolError) {
+      if (
+        error instanceof ServerSentEventFrameLimitError ||
+        error instanceof ManagedChatProtocolError
+      ) {
         yield {
           type: 'error',
           message: error.message,

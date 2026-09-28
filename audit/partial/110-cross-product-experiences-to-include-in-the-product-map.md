@@ -218,14 +218,13 @@ Code: `apps/web/features/code/code-surface.ts:412-414`, `apps/extension-vscode/s
 
 - Done when: From the main chat, the user brings an existing notebook (project) into the conversation so its instructions and sources ground the answers.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | A selected project adds only its instructions locally; the stream request carries no conversation or project id, so the server never loads the project's sources. | handler |
 | cli | partial | agi projects link binds the folder to a project and its instructions reach every managed-cloud turn, but no knowledge-file content grounds a turn (the ledger's 'missing' is stale). |  |
 | vscode | partial | 'Use in this chat' adds the project's instructions to each turn but not its files, the same shape as S37.37 vscode partial (the ledger's n/a for this flow contradicts it). |  |
-| chrome | partial | The first turn of a chat just bound to a project goes without the conversation id, so it is not grounded on the project's sources. | handler |
 
 Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1382-1382`, `apps/mobile/services/streaming.ts:186-186`, `apps/cli/src/lib.rs:1057-1057`, `apps/cli/src/agent/mod.rs:2031-2031`
 
@@ -246,14 +245,13 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1382-1382`, `apps/mobile/se
 
 - Done when: When the user runs out of usage, the product offers an eligible alternative (named eligible model, reset wait, or purchase) that the user can take in one step and continue.
 - Wave: 2
-- Already works on: cli
+- Already works on: cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | A one-click 'Switch to <model>' appears only for the flagship weekly limit and the free-trial model block; the credit, monthly and rolling limits show a reset time and Upgrade only, and checkout stays behind the beta_redemptions waitlist for accounts without a paid plan. | ui, flag-off |
 | desktop | partial | A one-click 'Switch to <model>' appears only for the flagship weekly limit and the free-trial model block; the credit, monthly and rolling limits show a reset time and Upgrade only, and checkout stays behind the beta_redemptions waitlist for accounts without a paid plan. | ui, flag-off |
 | mobile | partial | The paywall sheet names no model and no reset time, and in-app purchase is off (MOBILE_IAP_ENABLED unset); post-codex/no-yearly-s82-mobile-chat-usage.patch adds the model choice and reset line. | ui, flag-off |
-| vscode | partial | The app-server TurnFailure now carries alternativeModel, resetsAt and recoveryHref (4c78a38deb); VS Code has to offer the switch and reset time from them (p-sessions) | handler |
 | chrome | partial | A disallowed selection falls back to Auto without naming a model, the reset time is only in Usage settings, and the copy states upgrades need the waitlist. | ui |
 | api | partial | Error bodies carry alternative_model only for the flagship and free-trial cases; most exhaustion errors carry no alternative, and checkout recovery links hit the waitlist. | ui |
 
@@ -263,7 +261,7 @@ Code: `packages/contracts/types/src/billing-catalog.ts:587-587`, `apps/web/featu
 
 - Done when: When a connected integration expires mid-task, the user is prompted to reconnect and the interrupted turn or run continues from where it stopped once reauthorized.
 - Wave: 3
-- Already works on: api
+- Already works on: vscode, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -271,7 +269,6 @@ Code: `packages/contracts/types/src/billing-catalog.ts:587-587`, `apps/web/featu
 | desktop | partial | Settings now offers Connect on an expired connection and the chat card offers Reconnect after a failed call, but nothing resumes the interrupted turn: the card itself says to use Retry, which reruns the exchange. | ui, states |
 | mobile | partial | Reconnect works in Settings, but chat never recognises an authorization-required tool result, and there is no resume. | ui, states |
 | cli | partial | An expired account connector now prints its reconnect link (dc4299a638) and the next message continues the task; resuming the interrupted turn itself needs a server resume path after reconnect, the same gap as web | handler |
-| vscode | partial | mcp/authRequired now carries connectUrl for account connectors (dc4299a638); VS Code has to open it (p-sessions) | handler |
 | chrome | partial | Only a generic Connectors link-out; retry replays some turns but nothing resumes the interrupted call. | ui, states |
 
 Code: `packages/ui/ui/src/settings-modal/SettingsModal.tsx:282-282`, `packages/ui/unified-chat/src/components/ConnectorConnectCard.tsx:129-129`, `apps/web/features/chat/components/messages/MessageBubble.tsx:890-890`, `apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx:318-318`
@@ -280,43 +277,36 @@ Code: `packages/ui/ui/src/settings-modal/SettingsModal.tsx:282-282`, `packages/u
 
 - Done when: A published output is updated in place: the user changes it, republishes to the same link, and the new version is recorded and reversible.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Edit and republish to the same link work and each publish is recorded in published_artifact_versions, but nothing reads that history back: no publish-history view and no way to put an earlier published version live except restoring a local version and republishing. S33.09 was declined with the hosting dashboard, so this remaining gap needs its own cell. | ui |
-| desktop | partial | Edit and republish to the same link work and each publish is recorded in published_artifact_versions, but nothing reads that history back: no publish-history view and no way to put an earlier published version live except restoring a local version and republishing. S33.09 was declined with the hosting dashboard, so this remaining gap needs its own cell. | ui |
 | mobile | partial | Republish and restore-then-republish work, but mobile cannot edit an artifact and has no publish history. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/web/app/api/artifacts/publish/route.ts:113-113`, `apps/web/app/api/artifacts/publish/route.ts:265-265`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:662-662`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:414-414`
+Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:414-414`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:579-579`
 
 ## S110.29: Public creation → private fork.
 
 - Done when: A viewer of a public/shared creation (conversation, artifact, app) can make a private copy in their own account and continue it.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Open in AGI copies a shared conversation's text into a private chat (attachments and artifacts are dropped); the public artifact viewer has no fork action, and the panel's Duplicate works only on the viewer's own artifacts. | handler |
-| desktop | partial | Open in AGI copies a shared conversation's text into a private chat (attachments and artifacts are dropped); the public artifact viewer has no fork action, and the panel's Duplicate works only on the viewer's own artifacts. | handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/app/chat/from-share/[token]/page.tsx:25-25`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1806-1806`
-
 ## S110.30: Personal resource → explicitly shared workspace resource.
 
 - Done when: A user explicitly shares a resource they own (project, conversation, artifact, skill) into their workspace with an access level, and members then find and open it.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Projects now share end to end (invited people or the workspace, and shared projects appear in the recipient's Projects list; a separate Shared with me view was declined). Artifacts and conversations shared to the workspace are listed on Workspace > Sharing by name only, with no link and no place in the recipient's Library or history, and skills, assistants and plugins cannot be shared. | ui |
-| desktop | partial | Projects now share end to end (invited people or the workspace, and shared projects appear in the recipient's Projects list; a separate Shared with me view was declined). Artifacts and conversations shared to the workspace are listed on Workspace > Sharing by name only, with no link and no place in the recipient's Library or history, and skills, assistants and plugins cannot be shared. | ui |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/projects/components/ProjectShareDialog.tsx:60-60`, `apps/web/app/api/projects/route.ts:54-54`, `apps/web/features/settings/sections/OrganizationSharingSection.tsx:322-322`
