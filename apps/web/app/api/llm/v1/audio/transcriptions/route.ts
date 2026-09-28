@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireEnv } from '@shared/utils/env';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { withErrorHandler } from '@/lib/error-handler';
+import { withAdmittedRateLimitHeaders } from '@/lib/rate-limit-headers';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { logger } from '@/lib/logger';
@@ -710,7 +711,9 @@ async function handleTranscriptions(request: NextRequest, admit?: TranscriptionA
 }
 
 export function transcriptionsHandler(admit?: TranscriptionAdmission) {
-  return withErrorHandler((request: NextRequest) => handleTranscriptions(request, admit));
+  return withAdmittedRateLimitHeaders(
+    withErrorHandler((request: NextRequest) => handleTranscriptions(request, admit)),
+  );
 }
 
 export const POST = transcriptionsHandler();

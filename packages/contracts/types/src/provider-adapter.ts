@@ -87,7 +87,7 @@ export interface TextBlock {
 export interface ImageBlock {
   type: 'image';
   source: { type: 'base64'; mediaType: string; data: string } | { type: 'url'; url: string };
-  detail?: 'auto' | 'low' | 'high';
+  detail?: 'auto' | 'low' | 'high' | 'original';
 }
 
 export interface FileBlock {
@@ -153,6 +153,10 @@ export type ThinkingConfig =
    */
   | { type: 'adaptive' };
 
+export type ChatResponseFormat =
+  | { type: 'json_object' }
+  | { type: 'json_schema'; name: string; schema: Record<string, unknown>; strict: boolean };
+
 export interface ChatRequest {
   model: string;
   messages: ProviderMessage[];
@@ -167,6 +171,7 @@ export interface ChatRequest {
   stopSequences?: string[];
   thinking?: ThinkingConfig;
   effort?: Effort;
+  responseFormat?: ChatResponseFormat;
   /**
    * The caller's zero-retention requirement, the same signal Auto routing's
    * admission reads. An adapter whose provider honours it per request must

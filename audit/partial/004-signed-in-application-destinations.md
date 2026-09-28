@@ -314,17 +314,14 @@ Code: `apps/web/shared/stores/media-store.ts:29-41`, `packages/ui/unified-chat/s
 
 - Done when: A notebook workspace holds a set of sources and notes that the user reads, annotates and chats over, with generated outputs (NotebookLM-style).
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | No NotebookLM-style notebook destination (source rail, notes, studio outputs); the nearest are Jupyter-style notebook sessions inside AGI Code and a project's Sources tab with grounded chat. | ui |
-| desktop | partial | No NotebookLM-style notebook destination (source rail, notes, studio outputs); the nearest are Jupyter-style notebook sessions inside AGI Code and a project's Sources tab with grounded chat. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/code/CloudCodePage.tsx:1122-1127`, `apps/web/features/notebook/NotebookPanel.tsx:12-32`
 
 ## S4.32: Research report reader.
 
@@ -478,11 +475,10 @@ Code: `apps/web/features/settings/sections/AccountSection.tsx:369-376`, `apps/we
 
 - Done when: A help-and-feedback destination links to help/docs/status and lets the user send product feedback or a bug report from inside the product.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | /help lists commands, but /feedback and /bug only print a GitHub issues URL; there is no in-product feedback submission. | surface-only |
-| vscode | partial | "Send Feedback" collects type and text but submits by opening a prefilled GitHub issue (needs a GitHub account and a public repo); no in-product submission. | surface-only |
 
-Code: `apps/cli/src/tui/tui_app.rs:3531-3540`, `apps/cli/src/tui/tui_app.rs:3535-3540`, `apps/extension-vscode/src/core/commandSetup.ts:1319-1335`, `apps/extension-vscode/src/core/commandSetup.ts:1354-1362`
+Code: `apps/cli/src/tui/tui_app.rs:3531-3540`, `apps/cli/src/tui/tui_app.rs:3535-3540`

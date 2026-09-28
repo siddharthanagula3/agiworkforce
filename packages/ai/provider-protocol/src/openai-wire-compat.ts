@@ -107,7 +107,7 @@ function wireContentToText(content: OpenAIWireMessage['content']): string {
 type ImageDetail = NonNullable<Extract<ContentBlock, { type: 'image' }>['detail']>;
 
 function isImageDetail(value: unknown): value is ImageDetail {
-  return value === 'auto' || value === 'low' || value === 'high';
+  return value === 'auto' || value === 'low' || value === 'high' || value === 'original';
 }
 
 function wireContentToBlocks(content: Array<Record<string, unknown>>): ContentBlock[] {

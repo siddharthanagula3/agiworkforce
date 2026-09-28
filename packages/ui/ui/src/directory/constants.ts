@@ -85,6 +85,15 @@ export const COPY_LINK_LABEL = 'Copy link';
 
 export const SKILL_DESCRIPTION_LABEL = 'Description';
 export const SKILL_LICENSE_LABEL = 'License';
+export const SKILL_ACCESS_HEADING = 'Source and access';
+export const SKILL_SOURCE_LABEL = 'Source';
+export const SKILL_ADDED_LABEL = 'Added';
+export const SKILL_VERSION_LABEL = 'Version';
+export const SKILL_REQUIRED_TOOLS_LABEL = 'Needs tools';
+export const SKILL_REQUIRED_CONNECTORS_LABEL = 'Needs connectors';
+export const SKILL_ACCESS_LABEL = 'Access';
+export const SKILL_ACCESS_VALUE =
+  'Runs with the tools and connectors already on in your chat. It gets no access of its own.';
 export const SKILL_RENDERED_LABEL = 'Rendered';
 export const SKILL_RAW_LABEL = 'Raw';
 export const SKILL_COPY_LABEL = 'Copy file contents';

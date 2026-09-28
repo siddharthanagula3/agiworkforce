@@ -16,7 +16,35 @@ export const DIRECTORY_SOURCE_LABEL_PARTNERS = 'Partners';
 export const SKILL_PUBLISHER_AGI = 'Made by AGI';
 export const SKILL_PUBLISHER_YOU = 'Yours';
 export const SKILL_PUBLISHER_MANAGED = 'Managed';
+export const SKILL_PUBLISHER_PLUGIN = 'From a plugin';
 export const SKILL_LICENSE_PREFIX = 'Complete terms in';
+
+export const SKILL_ORIGIN_PERSONAL = 'Created by you';
+export const SKILL_ORIGIN_BUNDLED = 'Included with AGI Workforce';
+export const SKILL_ORIGIN_MANAGED = 'Managed for this workspace';
+export const SKILL_ORIGIN_UNKNOWN_PLUGIN = 'Part of a plugin';
+
+export function skillPluginPublisher(pluginName: string): string {
+  return `From ${pluginName}`;
+}
+
+export function skillCatalogPluginOrigin(pluginName: string): string {
+  return `Part of the ${pluginName} plugin, included with AGI Workforce`;
+}
+
+export function skillRepositoryPluginOrigin(pluginName: string, marketplace?: string): string {
+  return marketplace
+    ? `Part of the ${pluginName} plugin from the ${marketplace} marketplace`
+    : `Part of the ${pluginName} plugin`;
+}
+
+export function skillUploadedPluginOrigin(pluginName: string): string {
+  return `Part of ${pluginName}, a plugin you uploaded`;
+}
+
+export function skillAuthoredPluginOrigin(pluginName: string): string {
+  return `Part of ${pluginName}, a plugin you created`;
+}
 
 export const SKILL_STATUS_GROUP_ID = 'status';
 export const SKILL_STATUS_GROUP_LABEL = 'Status';
