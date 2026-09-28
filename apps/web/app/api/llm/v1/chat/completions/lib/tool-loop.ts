@@ -81,6 +81,7 @@ import {
   getModelMetadataById,
   isAutoModeModelId,
   isBrowserCommand,
+  isImageChatToolName,
   resolveMaxOutputTokens,
 } from '@agiworkforce/types';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
@@ -362,6 +363,7 @@ import {
   executeProductComparisonTool,
   isProductComparisonTool,
 } from '@/lib/services/product-comparison-tool-service';
+import { executeImageChatTool, latestTurnImage } from '@/app/api/media/image/lib/image-chat-tools';
 import { bindMcpTask, saveMcpAppPayload } from '@/lib/connectors/mcp-state-store';
 import {
   applyFreeTrialProviderBudget,
@@ -1959,6 +1961,8 @@ async function runMcpTool(
     loadSkillInstallOverrides?: () => Promise<ReadonlyMap<string, boolean>>;
     temporaryChat?: boolean;
     queueSandboxFiles?: SandboxSeedQueue;
+    conversationId?: string | null;
+    latestAttachedImage?: () => string | null;
   },
 ): Promise<ToolLoopToolResult> {
   if (toolCall.qualifiedName === SKILL_TOOL_NAME) {
@@ -2172,6 +2176,34 @@ async function runMcpTool(
     return outcome.ok
       ? { content: outcome.content, isError: false, interactiveCard: outcome.card }
       : { content: outcome.content, isError: true };
+  }
+
+  if (isImageChatToolName(toolCall.qualifiedName)) {
+    if (!availableTools.has(toolCall.qualifiedName)) {
+      return { content: `Unknown tool: ${toolCall.qualifiedName}`, isError: true };
+    }
+    const userId = executionContext?.userId;
+    const requestId = executionContext?.requestId;
+    if (!userId || !requestId) {
+      return { content: 'Images cannot be made in this chat.', isError: true, unavailable: true };
+    }
+    const outcome = await executeImageChatTool(toolCall.qualifiedName, toolCall.args, {
+      toolCallId: toolCall.id,
+      requestId,
+      userId,
+      organizationId: executionContext.organizationId ?? null,
+      db: callerScopedDb(executionContext, userId),
+      surface: executionContext.surface ?? null,
+      conversationId: executionContext.conversationId ?? null,
+      latestAttachedImage: executionContext.latestAttachedImage ?? (() => null),
+    });
+    return outcome.ok
+      ? { content: outcome.content, isError: false, interactiveCard: outcome.card }
+      : {
+          content: outcome.content,
+          isError: true,
+          ...(outcome.unavailable ? { unavailable: true } : {}),
+        };
   }
 
   if (isClarifyTool(toolCall.qualifiedName)) {
@@ -4514,6 +4546,12 @@ export async function* runToolLoop(
               webSearchDomainPolicy: processed.webSearchDomainPolicy ?? null,
               surface: processed.chatSurface,
               temporaryChat: processed.conversationIsTemporary === true,
+              conversationId: processed.conversationId ?? null,
+              latestAttachedImage: () =>
+                latestTurnImage({
+                  turnAttachments: processed.turnAttachments,
+                  messages: processed.chatRequest.messages,
+                }),
               onWebSearchSpend: (spend) => {
                 searchSpend = spend;
               },

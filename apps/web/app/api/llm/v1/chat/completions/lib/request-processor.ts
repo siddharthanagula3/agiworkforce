@@ -9,7 +9,11 @@ import type {
   ResolvedWorkspaceControls,
   WorkspaceFeature,
 } from '@agiworkforce/types';
-import { normalizeResearchDeliverable, RESEARCH_GUIDANCE_MAX_CHARS } from '@agiworkforce/types';
+import {
+  IMAGE_CARD_KIND,
+  normalizeResearchDeliverable,
+  RESEARCH_GUIDANCE_MAX_CHARS,
+} from '@agiworkforce/types';
 import {
   DATA_REGIONS,
   NON_US_VENDOR_TRANSPORTS,
@@ -85,6 +89,10 @@ import {
   asksForProductComparison,
   productComparisonToolDefinition,
 } from '@/lib/services/product-comparison-tool-service';
+import {
+  imageChatToolDefinitions,
+  imageChatToolOffer,
+} from '@/app/api/media/image/lib/image-chat-tools';
 import { placesSearchMicrousdPerCall } from '@/lib/places/places-config';
 import {
   PLACES_UNAVAILABLE_SYSTEM_NOTICE,
@@ -1002,6 +1010,25 @@ export function shouldOfferProductComparison(
     asksForProductComparison(params.userMessage) &&
     request.x_interactive_cards?.supported.includes(PRODUCT_COMPARISON_CARD_KIND) === true
   );
+}
+
+export function imageToolsForTurn(
+  request: ChatCompletionRequest,
+  params: {
+    surface: CloudChatSurface;
+    toolsCapable: boolean;
+    planTier: string | null | undefined;
+  },
+): ReturnType<typeof imageChatToolDefinitions> {
+  if (
+    !params.toolsCapable ||
+    request.stream !== true ||
+    request.x_interactive_cards?.supported.includes(IMAGE_CARD_KIND) !== true
+  ) {
+    return [];
+  }
+  const offer = imageChatToolOffer(params.planTier, params.surface);
+  return offer ? imageChatToolDefinitions(offer) : [];
 }
 
 export function validationRefusalMessage(error: z.ZodError): string {
@@ -4995,6 +5022,15 @@ export async function processRequest(
     })
   ) {
     resolvedTools = [...(resolvedTools ?? []), productComparisonToolDefinition()];
+  }
+
+  const imageTools = imageToolsForTurn(chatRequest, {
+    surface: chatSurface,
+    toolsCapable: resolvedModelCaps?.tools ?? true,
+    planTier: subscription.plan_tier,
+  });
+  if (imageTools.length > 0) {
+    resolvedTools = [...(resolvedTools ?? []), ...imageTools];
   }
 
   if (deviceHost) {
