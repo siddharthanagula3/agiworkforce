@@ -2061,11 +2061,6 @@ async function stageChosenFiles(
   });
 }
 
-/**
- * Throws away the workspace changes to the files the reader chose, so what is
- * left is only the work they want to keep. Nothing here can be undone, which
- * is why it takes an explicit list and refuses a file with a merge conflict.
- */
 export const discardCloudCodeSessionChanges = tracedCodeAction(
   'discard_changes',
   async function discardCloudCodeSessionChanges(
