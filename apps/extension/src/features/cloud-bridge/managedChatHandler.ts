@@ -508,6 +508,7 @@ export async function executeChromeManagedChat(
 
   const effort =
     request.effort === undefined ? undefined : resolveModelEffort(routing.modelKey, request.effort);
+  const routedModelSearches = getModelMetadataById(routing.modelKey)?.capabilities.search === true;
 
   const routingResult: ChromeManagedRoutingResult = {
     modelKey: routing.modelKey,
@@ -523,6 +524,7 @@ export async function executeChromeManagedChat(
     ...(effort ? { effort } : {}),
     extendedThinking: request.extendedThinking,
     workMode: 'chat',
+    ...(routedModelSearches ? { webSearch: true, webFetch: true } : {}),
     ...(request.conversationId ? { conversationId: request.conversationId } : {}),
     ...(request.assistantMessageId ? { assistantMessageId: request.assistantMessageId } : {}),
     signal: request.signal,
