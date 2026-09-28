@@ -1,7 +1,9 @@
 export {
   GATEWAY_BACKED_HARNESS_IDS,
+  REQUEST_PARAMETERS,
   getGatewayDefinition,
   getGatewayHarness,
+  getHarnessRequestParameters,
   getProtocolHarness,
   listGatewayRoutes,
   listProtocolRoutes,
@@ -22,4 +24,5 @@ export type {
   HarnessProtocol,
   ProtocolHarness,
   ProtocolRoute,
+  RequestParameter,
 } from '@agiworkforce/model-registry';

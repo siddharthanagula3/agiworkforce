@@ -334,6 +334,8 @@ export type AuditEventType =
   | 'data_accessed'
   | 'audit_destination_configured'
   | 'audit_destination_deleted'
+  | 'developer_webhook_configured'
+  | 'developer_webhook_deleted'
   | 'sso_jit_membership_granted'
   | 'sso_jit_membership_refused'
   | 'retention_policy_changed'
@@ -844,6 +846,9 @@ function inferResourceType(eventType: AuditEventType): string {
     case 'audit_destination_configured':
     case 'audit_destination_deleted':
       return 'audit_destination';
+    case 'developer_webhook_configured':
+    case 'developer_webhook_deleted':
+      return 'developer_webhook';
     case 'sso_jit_membership_granted':
     case 'sso_jit_membership_refused':
       return 'organization_member';

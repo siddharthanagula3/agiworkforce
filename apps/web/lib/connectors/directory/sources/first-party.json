@@ -66,6 +66,18 @@
     "directoryOnly": false
   },
   {
+    "connectorId": "google-contacts",
+    "name": "Google Contacts",
+    "description": "Look up people in your Google contacts and your organization's directory.",
+    "url": "https://people.googleapis.com/mcp/v1",
+    "transport": "streamable-http",
+    "authMode": "oauth",
+    "toolNames": ["get_user_profile", "search_contacts", "search_directory_people"],
+    "documentationUrl": "https://developers.google.com/workspace/guides/configure-mcp-servers",
+    "overridesInternalUrl": true,
+    "directoryOnly": false
+  },
+  {
     "connectorId": "slack",
     "name": "Slack",
     "description": "Send messages and search Slack workspaces, channels, and files.",

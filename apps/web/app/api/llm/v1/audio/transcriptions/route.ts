@@ -33,6 +33,7 @@ import { providerApiUrl } from '@/lib/server/provider-endpoints';
 // run on a tenant-scoped handle. getUserScopedDb covers both a session cookie and a
 // developer API key (inference:write) bearer.
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { developerProjectSpendRefusal } from '@/lib/developer-api/project-spend';
 import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
 import {
   ManagedUsageRequestError,
@@ -265,8 +266,16 @@ async function handleTranscriptions(request: NextRequest, admit?: TranscriptionA
   if (rateLimitResponse) return rateLimitResponse;
 
   const auth = await getClerkAuthUser(request, { apiKeyScope: 'inference:write' });
-  const { userId } = auth;
+  const { userId, apiKeyId } = auth;
   await admit?.(request, userId);
+
+  if (apiKeyId) {
+    const spendRefusal = await developerProjectSpendRefusal(
+      { userId, apiKeyId },
+      { ...getCorsHeaders(request), ...getSecurityHeaders() },
+    );
+    if (spendRefusal) return spendRefusal;
+  }
 
   const managedGateResponse = buildManagedComputeGateResponse(
     request,
@@ -558,6 +567,7 @@ async function handleTranscriptions(request: NextRequest, admit?: TranscriptionA
       estimatedCostMicrousd,
       planTier: entitlement.plan,
       isFlagship: false,
+      ...(apiKeyId ? { apiKeyId } : {}),
     });
   } catch (error) {
     if (error instanceof ManagedUsageRequestError) {

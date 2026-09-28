@@ -238,7 +238,7 @@ interface SendMessageOptions {
     connectors?: string[];
   };
   researchResume?: {
-    sources: Array<{ url: string; title?: string; snippet?: string }>;
+    sources: Array<{ url: string; title?: string; snippet?: string; retrievedAt?: string }>;
     steps: ResearchStep[];
     /** The plan the user pressed Start on after the server paused for approval. */
     approvedSteps?: ResearchStep[];
@@ -307,6 +307,7 @@ export interface UseChatStreamReturn {
     toolCallId: string,
     inputResponses: Record<string, unknown>,
   ) => Promise<boolean>;
+  steerActiveTurn: (conversationId: string, message: string) => Promise<string | null>;
   isStreaming: boolean;
 }
 
@@ -3772,7 +3773,15 @@ export function useChatStream(): UseChatStreamReturn {
               research_resume:
                 options.research && options.researchResume
                   ? {
-                      sources: options.researchResume.sources,
+                      sources: options.researchResume.sources.map(({ retrievedAt, ...source }) => {
+                        const retrievedMs = retrievedAt ? Date.parse(retrievedAt) : Number.NaN;
+                        return {
+                          ...source,
+                          ...(Number.isFinite(retrievedMs)
+                            ? { retrieved_at: new Date(retrievedMs).toISOString() }
+                            : {}),
+                        };
+                      }),
                       steps: options.researchResume.steps,
                       ...(options.researchResume.approvedSteps?.length
                         ? { approved_steps: options.researchResume.approvedSteps }
@@ -4316,6 +4325,20 @@ export function useChatStream(): UseChatStreamReturn {
     [getToken, stopStreaming, setLoading, abortConversation],
   );
 
+  const steerActiveTurn = useCallback(
+    async (conversationId: string, message: string): Promise<string | null> => {
+      const activeRun = activeRunsRef.current.get(conversationId);
+      if (!activeRun) return null;
+      const client = createManagedCloudAgentRunClient({
+        getAuthToken: getToken,
+        decorateMutationHeaders: addCsrfHeaders,
+      });
+      const { steer } = await client.steerRun(activeRun.runId, message);
+      return steer.id;
+    },
+    [getToken],
+  );
+
   return {
     sendMessage,
     stopGeneration,
@@ -4323,6 +4346,7 @@ export function useChatStream(): UseChatStreamReturn {
     resumeInteractiveCardTurn,
     resolveToolApproval,
     resolveToolInput,
+    steerActiveTurn,
     isStreaming,
   };
 }

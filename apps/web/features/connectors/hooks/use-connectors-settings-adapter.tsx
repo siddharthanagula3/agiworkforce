@@ -24,6 +24,10 @@ import {
   currentConnectorReturnPath,
   withConnectorReturnPath,
 } from '@/features/connectors/hooks/use-connectors';
+import {
+  connectBankAccountsWithPlaid,
+  plaidLinkRoutesOf,
+} from '@/features/connectors/lib/plaid-link';
 import { getCsrfToken } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
 import {
@@ -638,6 +642,17 @@ export function useConnectorsSettingsAdapter({
         } | null;
         if (res.status === 409 && body?.credentialsPath) {
           setApiKeyConnectorId(id);
+          return;
+        }
+        const plaidRoutes = res.status === 409 ? plaidLinkRoutesOf(body) : null;
+        if (plaidRoutes && typeof window !== 'undefined') {
+          const connectedAt = await connectBankAccountsWithPlaid(plaidRoutes, authedHeaders);
+          if (connectedAt) {
+            setConnectedConnectors((prev) => [
+              ...prev.filter((c) => c.connectorId !== id),
+              { connectorId: id, connectedAt },
+            ]);
+          }
           return;
         }
         if (res.status === 409 && typeof window !== 'undefined') {

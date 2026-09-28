@@ -42,7 +42,7 @@ export {
 } from './surfaceMenu';
 export type { SlashCommandItem, SurfaceMenuItem } from './surfaceMenu';
 export { formatSessionAge, mergeSessionRows } from './sessionRows';
-export { manageMcpServers, managePlugins, manageSkills } from './capabilityManagement';
+export { manageHooks, manageMcpServers, managePlugins, manageSkills } from './capabilityManagement';
 export type {
   SessionListSource,
   SessionOrigin,
@@ -364,11 +364,6 @@ export function openContextSurface(provider: TreeSource): Promise<void> {
 }
 
 const CAPABILITY_TITLES: Record<string, { title: string; placeholder: string; empty: string }> = {
-  hooks: {
-    title: 'AGI Workforce, Hooks',
-    placeholder: 'Hooks the AGI CLI runs…',
-    empty: 'No hooks are configured',
-  },
   instructions: {
     title: 'AGI Workforce, Instructions',
     placeholder: 'Instruction files the AGI CLI loads…',
@@ -378,7 +373,7 @@ const CAPABILITY_TITLES: Record<string, { title: string; placeholder: string; em
 
 export async function openCapabilitySurface(
   adapter: CliCapabilityAdapter,
-  capability: Extract<CliCapability, 'hooks' | 'instructions'>,
+  capability: Extract<CliCapability, 'instructions'>,
 ): Promise<void> {
   const copy = CAPABILITY_TITLES[capability];
   if (copy === undefined) return;
