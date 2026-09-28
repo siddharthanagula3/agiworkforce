@@ -245,10 +245,10 @@ describe('the sessions sheet', () => {
     );
   });
 
-  it('reveals the search field only past ten rows', () => {
+  it('reveals the search field whenever the list has rows', () => {
     boot();
     click('#sessionsBtn');
-    const rows = Array.from({ length: 11 }, (_unused, index) => ({
+    const rows = Array.from({ length: 2 }, (_unused, index) => ({
       id: `thread-${index}`,
       title: `Session ${index}`,
       age: '1h ago',
@@ -256,7 +256,7 @@ describe('the sessions sheet', () => {
       sourceLabel: 'Local',
     }));
 
-    deliver({ type: 'sessionsList', payload: { source: 'local', rows: rows.slice(0, 10) } });
+    deliver({ type: 'sessionsList', payload: { source: 'local', rows: [] } });
     expect((document.getElementById('sessionsSearch') as HTMLInputElement).hidden).toBe(true);
 
     deliver({ type: 'sessionsList', payload: { source: 'local', rows } });
