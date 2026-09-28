@@ -6274,16 +6274,19 @@ impl ImageAttachment {
 /// [`read_file_contexts`] it returns the error instead of exiting, because the
 /// interactive paths have to keep the session alive after a bad path.
 pub fn load_image_attachment(path: &str) -> Result<ImageAttachment> {
-    use agiworkforce_utils_image::{load_for_prompt_bytes, PromptImageMode};
+    load_image_attachment_with(path, agiworkforce_utils_image::PromptImageMode::ResizeToFit)
+}
+
+pub fn load_image_attachment_with(
+    path: &str,
+    mode: agiworkforce_utils_image::PromptImageMode,
+) -> Result<ImageAttachment> {
+    use agiworkforce_utils_image::load_for_prompt_bytes;
     use base64::Engine as _;
 
     let bytes = std::fs::read(path).with_context(|| format!("Failed to read image '{path}'"))?;
-    let encoded = load_for_prompt_bytes(
-        std::path::Path::new(path),
-        bytes,
-        PromptImageMode::ResizeToFit,
-    )
-    .with_context(|| format!("Failed to process image '{path}'"))?;
+    let encoded = load_for_prompt_bytes(std::path::Path::new(path), bytes, mode)
+        .with_context(|| format!("Failed to process image '{path}'"))?;
     Ok(ImageAttachment {
         path: path.to_string(),
         mime: encoded.mime,
