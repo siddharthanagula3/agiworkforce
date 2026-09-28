@@ -393,6 +393,7 @@ describe('SettingsModal nav (web IA)', () => {
       'skills',
       'connectors',
       'plugins',
+      'slack',
     ]);
   });
 

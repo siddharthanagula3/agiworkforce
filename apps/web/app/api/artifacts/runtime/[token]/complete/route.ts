@@ -1,7 +1,11 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import {
+  ARTIFACT_RUNTIME_MAX_PROMPT_CHARS,
+  ArtifactRuntimeCompleteRequestSchema,
+  type ArtifactRuntimeCompleteResponse,
+} from '@agiworkforce/cloud-contracts';
 import { applySecretHandlingToTexts } from '@/app/api/llm/v1/chat/completions/lib/secret-handling-gate';
 import { assertAccountActive } from '@/lib/api-auth';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -15,8 +19,8 @@ import { moderateManagedPrompt } from '@/lib/moderation';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import {
-  ARTIFACT_RUNTIME_MAX_PROMPT_CHARS,
   ArtifactRuntimeRouteUnavailableError,
+  buildArtifactConnectorPlan,
   completeArtifactPrompt,
   readRunnableArtifact,
   selectArtifactRuntimeRoute,
@@ -39,10 +43,6 @@ export const maxDuration = 300;
 
 const NO_STORE = { 'Cache-Control': 'private, no-store' };
 
-const CompleteSchema = z.object({
-  prompt: z.string().min(1).max(ARTIFACT_RUNTIME_MAX_PROMPT_CHARS),
-});
-
 type RouteContext = { params: Promise<{ token: string }> };
 
 function refusal(status: number, code: string, message: string): NextResponse {
@@ -50,6 +50,14 @@ function refusal(status: number, code: string, message: string): NextResponse {
 }
 
 const UNAVAILABLE_MESSAGE = 'This app is no longer available.';
+
+function connectorName(id: string): string {
+  return id
+    .split(/[_.-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
 
 async function handlePost(request: NextRequest, context: RouteContext): Promise<Response> {
   const { token } = await context.params;
@@ -64,7 +72,9 @@ async function handlePost(request: NextRequest, context: RouteContext): Promise<
   const limited = await withRateLimit(request, 'llm-completion', `user:${scoped.userId}`);
   if (limited) return limited;
 
-  const parsed = CompleteSchema.safeParse(await request.json().catch(() => null));
+  const parsed = ArtifactRuntimeCompleteRequestSchema.safeParse(
+    await request.json().catch(() => null),
+  );
   if (!parsed.success) {
     return refusal(
       400,
@@ -75,6 +85,7 @@ async function handlePost(request: NextRequest, context: RouteContext): Promise<
 
   const artifact = await readRunnableArtifact(scoped.db, token);
   if (!artifact) return refusal(404, 'artifact_not_found', UNAVAILABLE_MESSAGE);
+  const connectors = [...new Set(parsed.data.connectors)];
 
   const privacy = await evaluateActiveWorkspacePolicy(
     scoped.db,
@@ -97,6 +108,7 @@ async function handlePost(request: NextRequest, context: RouteContext): Promise<
     entitlement.subscription,
     'web',
     { request },
+    connectors.length > 0 ? 'artifact_connectors' : undefined,
   );
   const accessGate = buildManagedComputeAccessGateResponse(access, NO_STORE);
   if (accessGate) return accessGate;
@@ -138,7 +150,9 @@ async function handlePost(request: NextRequest, context: RouteContext): Promise<
 
   let route;
   try {
-    route = await selectArtifactRuntimeRoute(scoped.db, scoped.userId, prompt, entitlement.plan);
+    route = await selectArtifactRuntimeRoute(scoped.db, scoped.userId, prompt, entitlement.plan, {
+      needsTools: connectors.length > 0,
+    });
   } catch (error) {
     if (error instanceof ArtifactRuntimeRouteUnavailableError) {
       return refusal(503, 'model_unavailable', error.message);
@@ -166,6 +180,32 @@ async function handlePost(request: NextRequest, context: RouteContext): Promise<
   );
   if (egress) return egress;
 
+  const plan =
+    connectors.length > 0
+      ? await buildArtifactConnectorPlan({
+          db: scoped.db,
+          userId: scoped.userId,
+          organizationId: scoped.organizationId,
+          planTier: entitlement.plan,
+          modelKey: route.modelKey,
+          connectors,
+        })
+      : null;
+  if (connectors.length > 0 && !plan) {
+    return refusal(
+      403,
+      'connectors_unavailable',
+      'Your plan cannot use connected apps from published apps.',
+    );
+  }
+  if (plan && plan.unusable.length > 0) {
+    return refusal(
+      409,
+      'connectors_not_ready',
+      `This app uses ${plan.unusable.map(connectorName).join(', ')}. Connect ${plan.unusable.length === 1 ? 'it' : 'them'} in Settings, Connectors, and let ${plan.unusable.length === 1 ? 'its' : 'their'} tools run without asking, to use this part of the app.`,
+    );
+  }
+
   try {
     const text = await completeArtifactPrompt({
       db: scoped.db,
@@ -176,8 +216,10 @@ async function handlePost(request: NextRequest, context: RouteContext): Promise<
       route,
       planTier: entitlement.plan,
       signal: request.signal,
+      plan,
     });
-    return NextResponse.json({ text }, { headers: NO_STORE });
+    const body: ArtifactRuntimeCompleteResponse = { text };
+    return NextResponse.json(body, { headers: NO_STORE });
   } catch (error) {
     if (error instanceof ManagedUsageRequestError) {
       return refusal(error.status, error.code, error.message);

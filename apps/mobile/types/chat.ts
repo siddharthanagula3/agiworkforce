@@ -43,6 +43,8 @@ export interface ToolCall {
   filePath?: string;
   input?: string;
   output?: string;
+  stderr?: string;
+  exitCode?: number;
   status: ToolStatus;
   duration?: number;
   searchResults?: ToolSearchResult[];

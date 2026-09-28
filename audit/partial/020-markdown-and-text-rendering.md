@@ -6,18 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S20.02: Headings.
-
-- Done when: ATX headings (# to ######) render as styled headings, not literal hash marks.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Only # to #### are recognised; ##### and ###### headings show their hash marks as plain text. | ui |
-
-Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:660-660`, `apps/mobile/src/features/chat/components/MessageContentRenderer.tsx:203-203`
-
 ## S20.07: Task lists.
 
 - Done when: GFM task items (- [ ] / - [x]) render as checkboxes reflecting their state.
@@ -105,14 +93,11 @@ Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:660-660`, `app
 
 - Done when: Backslash-escaped Markdown/math delimiters (\*, \$, \_) display as the literal character without the backslash.
 - Wave: 3
-- Already works on: web, desktop, cli, vscode
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Backslash escapes are never processed: \* keeps its backslash, "$5" is escaped upstream and shown as "\$5", and prose between two amounts ("Between $5 and $10") is rendered as a KaTeX formula because the inline-math lookbehind ignores the inserted backslash. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:660-660`, `apps/mobile/src/features/chat/components/MessageContentRenderer.tsx:473-473`
 
 ## S20.22: Partially streamed Markdown.
 
@@ -146,9 +131,9 @@ Code: `apps/cli/src/tui/tui_app.rs:1590-1590`, `apps/cli/src/tui/tui_app.rs:1530
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Selection is per block: every paragraph, list item, table cell and code block is a separate selectable Text, so one selection cannot span blocks. | ui |
+| mobile | partial | A Select Text action opens the whole message as one selectable text, as ChatGPT's iOS app does (help.openai.com 6825453, iOS text selection), in post-codex/chat-gates-s16.09-s17.38-s17.39-s20.26-mobile-bubble.patch. | ui |
 
-Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:660-660`, `apps/mobile/src/features/chat/components/MessageContentRenderer.tsx:219-219`
+Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:528-528`
 
 ## S20.27: Find-in-answer highlighting.
 
@@ -167,15 +152,12 @@ Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:660-660`, `app
 
 - Done when: Printing or exporting an answer/conversation keeps the rendered formatting (headings, lists, tables, code, math).
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | PDF export converts only headings, bold/italic, code and flat lists; tables, math, links and list numbering are lost. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/ConversationExportSheet.tsx:36-36`, `apps/mobile/services/fileCreation.ts:59-59`
 
 ## S20.29: Right-to-left content.
 

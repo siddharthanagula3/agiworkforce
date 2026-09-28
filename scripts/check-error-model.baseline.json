@@ -1,9 +1,3 @@
 {
-  "retryDecidedByClient": [
-    {
-      "file": "apps/web/shared/lib/error-utils.ts",
-      "why": "toAppError infers the code and the retryable flag from substrings of the message text, so a server that answered retryable:false is overruled whenever its sentence happens to contain the word timeout.",
-      "fix": "read the code and the retryable flag off the error envelope the route returned, and fall back to isRetryableErrorCode from error-taxonomy rather than to the message text."
-    }
-  ]
+  "retryDecidedByClient": []
 }

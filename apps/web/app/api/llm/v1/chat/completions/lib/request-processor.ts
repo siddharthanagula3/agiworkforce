@@ -4993,7 +4993,7 @@ export async function processRequest(
     .filter((text) => text.length > 0)
     .join('\n\n');
   const memoryCommandNote =
-    chatRequest.memory_command && MEMORY_COMMAND_CLIENT_SURFACES.has(chatSurface)
+    chatRequest.memory_command && AMBIENT_TOOL_SURFACES.has(chatSurface)
       ? memoryCommandTurnNote(lastUserText, chatRequest.memory_command)
       : null;
   const dynamicTurnInstruction = [

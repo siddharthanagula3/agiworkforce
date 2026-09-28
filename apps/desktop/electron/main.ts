@@ -95,6 +95,7 @@ import {
   takeOverComputerUse,
 } from './runtime/computerUseSession';
 import { installAppMenu } from './appMenu';
+import { readBrowserSignInLink } from './browserSignIn';
 import { configureDevicePrompts } from './runtime/devicePrompts';
 import { desktopDiagnostics, recordDesktopEvent } from './runtime/desktopTelemetryService';
 import {
@@ -643,6 +644,13 @@ function focusMainWindow(): void {
 
 function deliverDeepLink(url: string): void {
   if (!url.startsWith(`${DEEP_LINK_SCHEME}://`)) return;
+
+  const signIn = readBrowserSignInLink(url);
+  if (signIn.kind !== 'not-sign-in') {
+    showMainWindow();
+    if (signIn.kind === 'complete') void mainWindow?.loadURL(signIn.url);
+    return;
+  }
 
   if (!DEEP_LINK_BRIDGE_ATTACHED) {
     console.warn(
@@ -1485,6 +1493,13 @@ if (!hasSingleInstanceLock) {
         installMenu();
       },
       onNotificationClick: showMainWindow,
+      onResumeOwed: (driver) => {
+        if (driver && !driver.isDestroyed()) {
+          driver.webContents.send(DESKTOP_RUNTIME_EVENT_CHANNEL, {
+            kind: 'computer-use-handed-back',
+          });
+        }
+      },
     });
     configureDevicePrompts((open) => sendRuntimeEvent({ kind: 'device-prompt-changed', open }));
     const codeSessionActivity = createCodeSessionActivity({

@@ -1,6 +1,11 @@
 import 'server-only';
 
-import { CLOUD_CODE_DEFAULT_TURN_STEPS, type ToolApprovalPolicy } from '@agiworkforce/types';
+import {
+  CLOUD_CODE_DEFAULT_TURN_MODE,
+  CLOUD_CODE_DEFAULT_TURN_STEPS,
+  type CloudCodeTurnMode,
+  type ToolApprovalPolicy,
+} from '@agiworkforce/types';
 import type {
   ChatRequest,
   ContentBlock,
@@ -26,7 +31,7 @@ import {
   CLOUD_CODE_RUN_COMMAND_TOOL,
   cloudCodeActionLabel,
   cloudCodeAgentToolDefs,
-  cloudCodeApprovalModeLine,
+  cloudCodeTurnModeLine,
   cloudCodeApprovalSummary,
   executeCodeAsShellCommand,
   gateCloudCodeTool,
@@ -163,6 +168,7 @@ export interface RunCloudCodeAgentTurnInput {
   priorMessages?: ProviderMessage[];
   preApproved?: CloudCodePreApproved;
   approvalPolicy?: ToolApprovalPolicy;
+  mode?: CloudCodeTurnMode;
   /**
    * Read between steps and before every tool call. A stop arrives as a row in
    * another request, not as an abort on this one's signal, so the loop asks
@@ -187,7 +193,10 @@ function buildSystemPrompt(input: RunCloudCodeAgentTurnInput): string {
   if (input.workspacePath) lines.push(`Workspace: ${input.workspacePath}`);
   lines.push(
     '',
-    cloudCodeApprovalModeLine(input.approvalPolicy ?? CLOUD_CODE_DEFAULT_APPROVAL_POLICY),
+    cloudCodeTurnModeLine(
+      input.mode ?? CLOUD_CODE_DEFAULT_TURN_MODE,
+      input.approvalPolicy ?? CLOUD_CODE_DEFAULT_APPROVAL_POLICY,
+    ),
   );
   for (const instruction of input.projectInstructions ?? []) {
     lines.push('', `Project instructions from ${instruction.fileName}:`, instruction.content);
@@ -195,8 +204,8 @@ function buildSystemPrompt(input: RunCloudCodeAgentTurnInput): string {
   return lines.join('\n');
 }
 
-function toProviderToolDefs(): ToolDef[] {
-  return cloudCodeAgentToolDefs().map((t) => ({
+function toProviderToolDefs(mode: CloudCodeTurnMode): ToolDef[] {
+  return cloudCodeAgentToolDefs(mode).map((t) => ({
     name: t.function.name,
     description: t.function.description,
     inputSchema: t.function.parameters,
@@ -380,7 +389,8 @@ export async function runCloudCodeAgentTurn(
     ? [...input.priorMessages]
     : [{ role: 'user', content: input.goal }];
 
-  const tools = toProviderToolDefs();
+  const mode = input.mode ?? CLOUD_CODE_DEFAULT_TURN_MODE;
+  const tools = toProviderToolDefs(mode);
   const system = buildSystemPrompt(input);
   let stepsUsed = 0;
   let finalMessage = '';
@@ -543,7 +553,7 @@ export async function runCloudCodeAgentTurn(
         };
       } else {
         const command = shellCommand ? shellCommand.command : null;
-        const gate = gateCloudCodeTool(approvalPolicy, call.name, command);
+        const gate = gateCloudCodeTool(approvalPolicy, call.name, command, mode);
         const toolName = command === null ? call.name : CLOUD_CODE_RUN_COMMAND_TOOL;
         const args = command === null ? call.input : { command };
 

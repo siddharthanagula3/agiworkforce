@@ -60,18 +60,6 @@ nothing is left.
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-## S14.08: URL attachment.
-
-- Done when: The user can attach a web page by its URL so its content is used as context for the message.
-- Wave: 3
-- Already works on: cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Attach a shared or pasted link as a page; today a link shared into the app becomes draft text and is read only if the cloud model calls url_fetch. | ui |
-
-Code: `apps/mobile/src/features/share-preview/index.tsx:81-81`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:1501-1508`
-
 ## S14.09: Cloud-file picker.
 
 - Done when: The user can browse a cloud drive (Google Drive, OneDrive, Dropbox) from the composer and attach a file from it.
@@ -91,16 +79,13 @@ Code: `apps/mobile/app/(app)/(tabs)/chat.tsx:635-638`, `apps/mobile/src/features
 
 - Done when: The user can pick a file already in their product Library and attach it to a message.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The item is the product Library. The sheet's list is built from this device's conversation messages (collectSearchableMobileFiles), while the app's real Library screen reads /api/library; the picker never reaches it, and images are filtered out. The auditor's note admits the mismatch but still credited done. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:396-418`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:214-226`, `apps/mobile/app/(app)/(tabs)/chat.tsx:927-937`
 
 ## S14.11: Repository attachment.
 
@@ -129,14 +114,11 @@ Code: `apps/mobile/app/(app)/(tabs)/chat.tsx:613-618`, `apps/mobile/app/(app)/(t
 
 - Done when: Each non-image attachment shows an icon matching its file type (PDF, spreadsheet, code, other).
 - Wave: 3
-- Already works on: web, desktop, vscode
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Show an icon per file type; today every document (PDF, TXT, CSV) shows the same page icon, with a separate icon only for pasted text. | ui |
 | cli | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/AttachmentPreview.tsx:137-150`, `apps/mobile/src/features/chat/components/ChatInput.tsx:773-781`
 
 ## S14.18: Filename and file-size metadata.
 
@@ -148,10 +130,10 @@ Code: `apps/mobile/src/features/chat/components/AttachmentPreview.tsx:137-150`, 
 | --- | --- | --- | --- |
 | web | partial | image thumbnails show name and size only as a tooltip while document rows show them as text; a visible caption departs from the leaders' bare thumbnails (observed, undocumented), owner call. | ui |
 | desktop | partial | image thumbnails show name and size only as a tooltip while document rows show them as text; a visible caption departs from the leaders' bare thumbnails (observed, undocumented), owner call. | ui |
-| mobile | partial | Show name and size on photo attachments; documents show both, photos show only the thumbnail. | ui |
+| mobile | partial | As on web: documents show name and size as text; a photo thumbnail stays bare like ChatGPT's and Claude's and carries its name and size as its accessibility label. A visible caption on photos departs from both leaders (observed, undocumented), owner call. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/Composer/AttachmentPreview.tsx:200-200`, `apps/web/features/chat/components/Composer/AttachmentPreview.tsx:267-267`, `apps/mobile/src/features/chat/components/AttachmentPreview.tsx:148-159`, `apps/mobile/src/features/chat/components/AttachmentPreview.tsx:101-107`
+Code: `apps/web/features/chat/components/Composer/AttachmentPreview.tsx:200-200`, `apps/web/features/chat/components/Composer/AttachmentPreview.tsx:267-267`, `apps/mobile/src/features/chat/components/AttachmentPreview.tsx:169-169`
 
 ## S14.21: Indexing progress.
 
@@ -216,15 +198,12 @@ Code: `apps/web/app/api/uploads/chat-attachment/complete/route.ts:221-241`, `app
 
 - Done when: The composer explains whether and how long attached files are kept.
 - Wave: 3
-- Already works on: web, desktop, chrome
+- Already works on: web, desktop, mobile, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Say how long uploaded files are kept; the upload consent only says files leave the device for AGI Cloud. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1113-1121`
 
 ## S14.35: Selected-model compatibility warning.
 

@@ -216,6 +216,7 @@ pub fn tool_status_line(
         "search_files" | "grep_files" | "glob" => value("pattern").or_else(|| value("query")),
         "web_search" => value("query"),
         "web_fetch" => value("url"),
+        "generate_image" => value("prompt"),
         "agent" | "spawn_teammate" => value("name"),
         _ => None,
     }
@@ -356,6 +357,7 @@ fn tool_owner(name: &str) -> &'static str {
         "search_files" | "grep_files" | "glob" | "list_directory" => "cli-navigation",
         "web_search" | "web_fetch" | "tool_search" => "cli-research",
         "skill" => "cli-skills",
+        "memory" => "cli-memory",
         "task" | "agent" => "cli-subagents",
         "team_create" | "team_delete" => "cli-team-registry",
         "cron_create" | "cron_delete" | "cron_list" => "cli-scheduler",
@@ -1193,6 +1195,32 @@ pub fn always_loaded_tool_definitions() -> Vec<ToolDefinition> {
 /// Return all built-in tool definitions regardless of `should_defer`. Used by
 /// `tool_search` to answer on-demand schema requests, and by the plan-mode
 /// filter which needs to inspect the full set.
+pub fn image_tool_definitions(allowed_tools: Option<&[String]>) -> Vec<ToolDefinition> {
+    vec![def(
+        "generate_image",
+        "Create an image from a description with the user's AGI Workforce account and save it in the workspace. Use it when the user asks for a picture, illustration, logo, icon, diagram-style image or photo-style image. Write the prompt as a complete, specific description: subject, setting, style, composition and any text that must appear. Each image uses the account's credits. The result names the saved file; mention its path instead of describing the image at length.",
+        serde_json::json!({
+            "type": "object",
+            "properties": {
+                "prompt": {"type": "string", "description": "The full description of the image to create."},
+                "aspect_ratio": {"type": "string", "description": "Width to height, such as 1:1, 16:9 or 9:16. Leave it out for a square image unless the user asked for a shape."},
+                "transparent_background": {"type": "boolean", "description": "Ask for a transparent background, for logos and icons."}
+            },
+            "required": ["prompt"]
+        }),
+    )
+    .with_size_cap(5_000)]
+    .into_iter()
+    .filter(|definition| {
+        allowed_tools.is_none_or(|allowed| {
+            allowed
+                .iter()
+                .any(|spec| tool_spec_matches_schema(spec, &definition.name))
+        })
+    })
+    .collect()
+}
+
 pub fn all_builtin_tool_definitions() -> Vec<ToolDefinition> {
     built_in_tool_definitions()
 }

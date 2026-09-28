@@ -9,34 +9,28 @@ import {
   type HostBridge,
 } from '@agiworkforce/local-runtime-contract';
 import { ManagedCloudCreateConversationResponseSchema } from '@agiworkforce/cloud-contracts';
-import { isFreeBillingPlanTier } from '@agiworkforce/types';
-import { freeQuotaSelection } from '@/features/chat/lib/free-quota-selection';
 import { QUICK_ASK_PATH } from '@/features/chat/lib/new-chat-entry';
 import { addCsrfHeaders } from '@/lib/client/csrf';
-import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
 import { toWebConversation } from '@/lib/hooks/useConversations';
-import { useChatStream, type UseChatStreamReturn } from '@/lib/hooks/useChatStream';
+import type { UseChatStreamReturn } from '@/lib/hooks/useChatStream';
 import { toUserMessage } from '@/lib/user-error-message';
-import { getBestAutoModeForTier } from '@shared/config/llm';
-import { isBillingPolicyReady } from '@shared/stores/billing-policy';
-import { resolveSelectableModelId, useModelStore } from '@shared/stores/model-store';
-import { useBillingStore } from '@shared/stores/web-auth-store';
 import {
   selectConversationMessages,
   useChatStore,
   type Message,
 } from '@shared/stores/web-chat-store';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
+import { desktopChatModelId } from '../lib/desktop-chat-model';
 import { reportDispatchTask, setDispatchTaskRunnerReady } from '../lib/runtime-client';
 
-type DispatchRuntime = Pick<UseChatStreamReturn, 'sendMessage' | 'stopGeneration'>;
+export type DesktopChatRuntime = Pick<UseChatStreamReturn, 'sendMessage' | 'stopGeneration'>;
 
 type DispatchUpdate = Omit<DispatchTaskReport, 'requestId' | 'conversationId'>;
 
 interface DispatchRun {
   requestId: string;
   conversationId: string | null;
-  runtime: DispatchRuntime;
+  runtime: DesktopChatRuntime;
   settled: boolean;
   cancelRequested: boolean;
   lastReport: string | null;
@@ -61,24 +55,13 @@ const TERMINAL: ReadonlySet<DispatchTaskReport['status']> = new Set([
 ]);
 
 const runs = new Map<string, DispatchRun>();
-let latestRuntime: DispatchRuntime | null = null;
+let latestRuntime: DesktopChatRuntime | null = null;
 let devicePromptOpen = false;
 let listeningTo: HostBridge | null = null;
 
 function isQuickAskWindow(): boolean {
   const path = window.location.pathname;
   return path === QUICK_ASK_PATH || path.startsWith(`${QUICK_ASK_PATH}/`);
-}
-
-function dispatchModelId(): string {
-  const selected = resolveSelectableModelId(useModelStore.getState().selectedModelId);
-  const billing = useBillingStore.getState();
-  const tier = billing.subscription?.tier ?? 'free';
-  const onFreePlan = isBillingPolicyReady(billing) && isFreeBillingPlanTier(tier);
-  if (onFreePlan && !freeQuotaSelection(selected) && !FREE_TRIAL_MODELS.includes(selected)) {
-    return getBestAutoModeForTier('free');
-  }
-  return selected;
 }
 
 async function openConversation(task: DispatchTaskAssignment, model: string): Promise<string> {
@@ -181,7 +164,11 @@ function send(run: DispatchRun, update: DispatchUpdate): void {
     requestId: run.requestId,
     ...(run.conversationId ? { conversationId: run.conversationId } : {}),
     ...update,
-  }).catch(() => undefined);
+  })
+    .then((receipt) => {
+      if (!receipt.accepted) finish(run);
+    })
+    .catch(() => undefined);
 }
 
 function refresh(run: DispatchRun): void {
@@ -193,7 +180,7 @@ function refreshAll(): void {
   for (const run of [...runs.values()]) refresh(run);
 }
 
-async function startRun(task: DispatchTaskAssignment, runtime: DispatchRuntime): Promise<void> {
+async function startRun(task: DispatchTaskAssignment, runtime: DesktopChatRuntime): Promise<void> {
   if (runs.has(task.requestId)) return;
   const run: DispatchRun = {
     requestId: task.requestId,
@@ -205,7 +192,7 @@ async function startRun(task: DispatchTaskAssignment, runtime: DispatchRuntime):
     unsubscribe: () => undefined,
   };
   runs.set(task.requestId, run);
-  const model = dispatchModelId();
+  const model = desktopChatModelId();
   try {
     run.conversationId = await openConversation(task, model);
   } catch (cause) {
@@ -266,15 +253,15 @@ function onRuntimeEvent(event: DesktopRuntimeEvent): void {
   }
 }
 
-export function useDispatchTaskRunner(host: HostBridge | null): void {
-  const { sendMessage, stopGeneration } = useChatStream({ followActiveConversation: false });
+export function useDispatchTaskRunner(host: HostBridge, runtime: DesktopChatRuntime): void {
+  const { sendMessage, stopGeneration } = runtime;
 
   useEffect(() => {
     latestRuntime = { sendMessage, stopGeneration };
   }, [sendMessage, stopGeneration]);
 
   useEffect(() => {
-    if (!host || host.shell !== 'electron' || listeningTo === host || isQuickAskWindow()) return;
+    if (host.shell !== 'electron' || listeningTo === host || isQuickAskWindow()) return;
     listeningTo = host;
     host.onRuntimeEvent(onRuntimeEvent);
     void setDispatchTaskRunnerReady(true).catch(() => undefined);

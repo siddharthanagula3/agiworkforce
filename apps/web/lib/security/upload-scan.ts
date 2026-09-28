@@ -59,7 +59,8 @@ export interface UploadScanFinding {
     | 'credential_material'
     | 'sensitive_filename'
     | 'unsafe_filename'
-    | 'external_scanner';
+    | 'external_scanner'
+    | 'encrypted_content';
   detail: string;
 }
 
@@ -306,11 +307,15 @@ async function runExternalScanner(bytes: Uint8Array): Promise<UploadScanFinding[
     if (!response.ok) {
       return [{ code: 'external_scanner', detail: `Scanner returned ${response.status}` }];
     }
-    const verdict = (await response.json()) as { safe?: unknown; detail?: unknown };
+    const verdict = (await response.json()) as {
+      safe?: unknown;
+      detail?: unknown;
+      reason?: unknown;
+    };
     if (verdict.safe === true) return [];
     return [
       {
-        code: 'external_scanner',
+        code: verdict.reason === 'encrypted' ? 'encrypted_content' : 'external_scanner',
         detail:
           typeof verdict.detail === 'string' ? verdict.detail : 'Scanner reported the file unsafe',
       },
@@ -327,6 +332,18 @@ async function runExternalScanner(bytes: Uint8Array): Promise<UploadScanFinding[
 
 export const UPLOAD_REJECTED_MESSAGE =
   'This file could not be accepted because its contents failed a safety check.';
+
+export const UPLOAD_ENCRYPTED_MESSAGE =
+  'This file is password protected, so its contents could not be checked. Remove the password and upload it again.';
+
+export function uploadRefusalMessage(
+  findings: readonly UploadScanFinding[],
+  fallback: string,
+): string {
+  return findings.some((finding) => finding.code === 'encrypted_content')
+    ? UPLOAD_ENCRYPTED_MESSAGE
+    : fallback;
+}
 
 /**
  * For the routes that hold the bytes in one request. Nothing is stored yet, so
@@ -349,7 +366,7 @@ export async function refuseUnsafeUpload(
       },
       '[upload-scan] refused an upload that failed content inspection',
     );
-    throw createError.validation(UPLOAD_REJECTED_MESSAGE);
+    throw createError.validation(uploadRefusalMessage(scan.findings, UPLOAD_REJECTED_MESSAGE));
   }
   return scan;
 }
