@@ -76,6 +76,12 @@ export interface OpenAIChatCompletionCreateParams {
   store?: boolean;
   prompt_cache_key?: string;
   service_tier?: 'auto' | 'default' | 'flex';
+  response_format?:
+    | { type: 'json_object' }
+    | {
+        type: 'json_schema';
+        json_schema: { name: string; schema: Record<string, unknown>; strict: boolean };
+      };
 }
 
 export interface OpenAIChatCompletionChunk {

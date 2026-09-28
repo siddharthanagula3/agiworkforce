@@ -182,6 +182,7 @@ import {
   ROUTING_PROFILE_CHOICES,
 } from '@agiworkforce/types';
 import type {
+  ChatResponseFormat,
   ModelCapabilities,
   ProjectFileCitation,
   PromptCacheScope,
@@ -296,6 +297,7 @@ import {
   JsonSchemaResponseFormatSchema,
   jsonSchemaDirective,
   jsonSchemaFormatProblem,
+  requestedResponseFormat,
   wantsJsonSchema,
 } from './json-schema-mode';
 import {
@@ -1165,6 +1167,7 @@ export type ProcessedRequest = {
     thinking?: { type: string; budget_tokens?: number };
     effort?: string;
     usePromptCache?: boolean;
+    responseFormat?: ChatResponseFormat;
     /**
      * Who this turn belongs to, for the prompt cache. Carried on the request
      * rather than re-derived per adapter so one turn cannot be scoped two ways,
@@ -5063,6 +5066,7 @@ export async function processRequest(
       tool_call_id: undefined,
     });
   }
+  const responseFormat = requestedResponseFormat(chatRequest.response_format);
   const llmRequest = {
     model: chatRequest.model,
     messages: internalMessages,
@@ -5078,6 +5082,7 @@ export async function processRequest(
     thinking_mode: chatRequest.thinking_mode,
     thinking: thinkingConfig,
     effort: effectiveEffort,
+    ...(responseFormat ? { responseFormat } : {}),
     ...resolveTurnPromptCache({
       requested: chatRequest.use_prompt_cache,
       temporaryChat: conversationIsTemporary,
