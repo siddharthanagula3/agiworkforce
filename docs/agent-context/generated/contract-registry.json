@@ -68,6 +68,7 @@
     "managed-usage-balance",
     "managed-usage-limits",
     "memory",
+    "memory-wire",
     "mobile-iap",
     "model",
     "model-catalog",
@@ -141,6 +142,7 @@
   "cloudContractsModules": [
     "agent-events",
     "artifact-index",
+    "artifact-runtime",
     "capability-handshake",
     "chat-attachments",
     "client-handshake",
@@ -148,6 +150,8 @@
     "cloud-agent-runs",
     "cloud-code-sessions",
     "cloud-code-transcript",
+    "connector-capabilities",
+    "connector-directory",
     "connectors",
     "conversations",
     "data-export",
@@ -182,10 +186,11 @@
     "resumable-uploads",
     "schedules",
     "skills",
+    "slack",
     "sync",
     "tool-approval-resume",
     "tool-events",
     "triggers"
   ],
-  "generatedProtocolTypeCount": 406
+  "generatedProtocolTypeCount": 413
 }
