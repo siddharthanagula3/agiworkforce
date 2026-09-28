@@ -1071,6 +1071,9 @@ const ChatComposerNewComponent = ({
 
   const canUseWorkingDirectory = useCapability('canUseWorkingDirectory');
   const canTakeScreenshotCap = useCapability('canTakeScreenshot');
+  const canPickDisplayCapture =
+    typeof navigator !== 'undefined' &&
+    typeof navigator.mediaDevices?.getDisplayMedia === 'function';
 
   // Image generation mode state (imageMode itself is per-conversation, above)
   const [imageAspectRatio, setImageAspectRatio] = useState<ImageAspectRatio>('auto');
@@ -4626,11 +4629,9 @@ const ChatComposerNewComponent = ({
                     canUseVideoGeneration={canUseVideoGeneration}
                     videoMode={videoMode}
                     onCreateVideo={handleCreateVideoFromMenu}
-                    /* The capability table answers for the web surface, which
-                       cannot capture a screen. Inside the desktop shell the
-                       same page can: the shell answers getDisplayMedia with its
-                       own screen and window picker. */
-                    canTakeScreenshot={canTakeScreenshotCap || desktopHost !== null}
+                    canTakeScreenshot={
+                      canTakeScreenshotCap || desktopHost !== null || canPickDisplayCapture
+                    }
                     isCapturingScreenshot={isCapturingScreenshot}
                     onTakeScreenshot={() => {
                       void handleTakeScreenshot();
