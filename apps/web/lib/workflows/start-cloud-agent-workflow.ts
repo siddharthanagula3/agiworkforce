@@ -346,7 +346,11 @@ function buildInlineCloudAgentTurn(input: RunCloudAgentTurnInput): ReadableStrea
     isPauseRequested: () =>
       isCloudAgentRunPauseRequested(input.db, { userId: input.userId, runId: input.runId }),
     takeSteerMessages: () =>
-      takeCloudAgentRunSteers(input.db, { userId: input.userId, runId: input.runId }),
+      takeCloudAgentRunSteers(input.db, {
+        userId: input.userId,
+        organizationId: input.processed.organizationId ?? null,
+        runId: input.runId,
+      }),
     onPauseCheckpoint: async (checkpoint) => {
       await saveCloudAgentPauseCheckpoint(input.db, {
         userId: input.userId,
