@@ -28,6 +28,9 @@ vi.mock('@/lib/services/connector-policy-gate', () => ({
 vi.mock('@/lib/services/plugin-owned-source-service', () => ({
   storeOwnedPluginSource: storeOwnedPluginSourceMock,
 }));
+vi.mock('@/lib/connectors/plugin-connectors', () => ({
+  registerPluginConnectors: async () => ({ added: [], failed: [] }),
+}));
 
 import { NextRequest, NextResponse } from 'next/server';
 import {
@@ -35,6 +38,7 @@ import {
   UPLOAD_NO_PLUGIN_MESSAGE,
 } from '@/features/plugins/server/directory/constants';
 import { DEFAULT_API_PAYLOAD_CEILING_BYTES } from '@/lib/payload-ceiling';
+import { USER_SKILL_AUTHORING_ENV_VAR } from '@/lib/services/user-skill-authoring';
 import { POST } from '../route';
 
 const USER_ID = 'user-1';
@@ -126,6 +130,7 @@ function archiveForm(
 
 beforeEach(() => {
   vi.clearAllMocks();
+  process.env[USER_SKILL_AUTHORING_ENV_VAR] = '1';
   csrfMock.mockResolvedValue(null);
   rateLimitMock.mockResolvedValue(null);
   userScopedDbMock.mockResolvedValue({ db: DB, userId: USER_ID, organizationId: null });
@@ -219,22 +224,26 @@ describe('POST /api/plugins/uploads', () => {
   it('stores the plugin as an upload against the caller scoped handle', async () => {
     const response = await POST(uploadRequest(archiveForm(await pluginZip())));
     expect(response.status).toBe(201);
-    expect(storeOwnedPluginSourceMock).toHaveBeenCalledWith(DB, USER_ID, {
-      kind: 'upload',
-      sourceName: 'my-plugin',
-      plugins: [
-        expect.objectContaining({
-          key: 'my-plugin',
-          skills: [
-            expect.objectContaining({
-              name: 'summarise',
-              path: 'skills/summarise/SKILL.md',
-              content: skillFile('summarise', 'Summarise things', 'Do it.'),
-            }),
-          ],
-        }),
-      ],
-    });
+    expect(storeOwnedPluginSourceMock).toHaveBeenCalledWith(
+      DB,
+      USER_ID,
+      expect.objectContaining({
+        kind: 'upload',
+        sourceName: 'my-plugin',
+        plugins: [
+          expect.objectContaining({
+            key: 'my-plugin',
+            skills: [
+              expect.objectContaining({
+                name: 'summarise',
+                path: 'skills/summarise/SKILL.md',
+                content: skillFile('summarise', 'Summarise things', 'Do it.'),
+              }),
+            ],
+          }),
+        ],
+      }),
+    );
     await expect(response.json()).resolves.toMatchObject({
       kind: 'upload',
       sourceName: 'my-plugin',
