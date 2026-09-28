@@ -1,4 +1,11 @@
-import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
+import {
+  useState,
+  useRef,
+  useCallback,
+  useMemo,
+  useEffect,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from 'react';
 import {
   Tabs,
   TabsContent,
@@ -187,6 +194,14 @@ interface ArtifactPreviewProps {
   projectLink?: ArtifactProjectLink;
   projectSave?: ArtifactProjectSave;
 }
+
+const MARKDOWN_SHORTCUTS: Readonly<
+  Record<string, { before: string; after: string; placeholder: string }>
+> = {
+  b: { before: '**', after: '**', placeholder: 'bold text' },
+  i: { before: '_', after: '_', placeholder: 'italic text' },
+  k: { before: '[', after: '](https://)', placeholder: 'link text' },
+};
 
 const ARTIFACT_DRAFT_STORAGE_PREFIX = 'agi.artifact-draft:';
 const ARTIFACT_DRAFT_AUTOSAVE_MS = 800;
@@ -587,6 +602,23 @@ export function ArtifactPreview({
     }, ARTIFACT_DRAFT_AUTOSAVE_MS);
     return () => clearTimeout(timer);
   }, [draftStorageKey, sourceDraft]);
+
+  const handleMarkdownShortcut = useCallback((event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+    if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return;
+    const wrap = MARKDOWN_SHORTCUTS[event.key.toLowerCase()];
+    if (!wrap) return;
+    event.preventDefault();
+    const field = event.currentTarget;
+    const { selectionStart, selectionEnd, value } = field;
+    const selected = value.slice(selectionStart, selectionEnd) || wrap.placeholder;
+    const replacement = `${wrap.before}${selected}${wrap.after}`;
+    const next = value.slice(0, selectionStart) + replacement + value.slice(selectionEnd);
+    setSourceDraft(next);
+    const cursor = selectionStart + wrap.before.length;
+    requestAnimationFrame(() => {
+      field.setSelectionRange(cursor, cursor + selected.length);
+    });
+  }, []);
 
   const endSourceEdit = useCallback(() => {
     removeStoredDraft(draftStorageKey);
@@ -2044,6 +2076,7 @@ if (__AgiApp) {
               <textarea
                 value={sourceDraft}
                 onChange={(event) => setSourceDraft(event.target.value)}
+                onKeyDown={artifact.type === 'document' ? handleMarkdownShortcut : undefined}
                 spellCheck={false}
                 autoComplete="off"
                 className="h-full w-full resize-none border-0 bg-gray-900 p-4 font-mono text-sm text-gray-100 outline-none focus:ring-0"
