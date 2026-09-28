@@ -21,7 +21,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { ChevronLeft, Telescope, TriangleAlert } from 'lucide-react';
-import type { ResearchReport } from '@agiworkforce/types';
+import { isPausedResearchReport, type ResearchReport } from '@agiworkforce/types';
 import { cn } from '@shared/lib/utils';
 import { ResearchReportView } from './ResearchReportView';
 import { toUserMessage } from '@/lib/user-error-message';
@@ -65,7 +65,7 @@ function ReportRow({ report, onOpen }: { report: GalleryReport; onOpen: () => vo
           'transition-colors hover:border-border/50 hover:bg-muted/40',
         )}
       >
-        <Telescope className="mt-0.5 h-4 w-4 shrink-0 text-primary/70" aria-hidden="true" />
+        <Telescope className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[13px] font-medium text-foreground">{label}</span>
           <span className="mt-0.5 block truncate text-caption text-muted-foreground">
@@ -80,7 +80,7 @@ function ReportRow({ report, onOpen }: { report: GalleryReport; onOpen: () => vo
             title={report.error ?? undefined}
           >
             <TriangleAlert className="h-2.5 w-2.5" aria-hidden="true" />
-            {report.status}
+            {isPausedResearchReport(report) ? 'paused' : report.status}
           </span>
         )}
       </button>

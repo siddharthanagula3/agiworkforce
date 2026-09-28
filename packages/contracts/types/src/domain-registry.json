@@ -517,7 +517,7 @@
       "owner": "apps/web/lib/services/user-skill-service.ts",
       "capabilities": ["canUseSkills"],
       "concepts": ["skill"],
-      "tables": ["user_skills"]
+      "tables": ["user_skills", "user_skill_files"]
     },
     {
       "name": "plugins",
@@ -763,7 +763,12 @@
       "owner": "apps/web/app/api/llm/v1",
       "capabilities": [],
       "concepts": [],
-      "tables": ["api_keys"]
+      "tables": [
+        "api_keys",
+        "developer_projects",
+        "developer_webhook_endpoints",
+        "developer_webhook_deliveries"
+      ]
     },
     {
       "name": "experiments",

@@ -142,6 +142,50 @@ fn export_typescript_bindings() {
         .expect("export developer-session command run params graph");
     agiworkforce_protocol::developer_session::SlashCommandRunResponse::export_all_to(dir)
         .expect("export developer-session command run graph");
+    agiworkforce_protocol::developer_session::ThreadSearchParams::export_all_to(dir)
+        .expect("export developer-session thread search params graph");
+    agiworkforce_protocol::developer_session::ThreadSearchResponse::export_all_to(dir)
+        .expect("export developer-session thread search graph");
+    agiworkforce_protocol::developer_session::MemoryAddParams::export_all_to(dir)
+        .expect("export developer-session memory add params graph");
+    agiworkforce_protocol::developer_session::MemoryAddResponse::export_all_to(dir)
+        .expect("export developer-session memory add graph");
+    agiworkforce_protocol::developer_session::ThreadCheckpointsResponse::export_all_to(dir)
+        .expect("export developer-session checkpoint list graph");
+    agiworkforce_protocol::developer_session::ThreadRewindParams::export_all_to(dir)
+        .expect("export developer-session rewind params graph");
+    agiworkforce_protocol::developer_session::ThreadRewindResponse::export_all_to(dir)
+        .expect("export developer-session rewind graph");
+    agiworkforce_protocol::developer_session::ThreadPlanNotification::export_all_to(dir)
+        .expect("export developer-session plan notification graph");
+    agiworkforce_protocol::developer_session::McpServerParams::export_all_to(dir)
+        .expect("export developer-session mcp server params graph");
+    agiworkforce_protocol::developer_session::McpServerTestResponse::export_all_to(dir)
+        .expect("export developer-session mcp test graph");
+    agiworkforce_protocol::developer_session::McpServerToolsResponse::export_all_to(dir)
+        .expect("export developer-session mcp tools graph");
+    agiworkforce_protocol::developer_session::HookAddParams::export_all_to(dir)
+        .expect("export developer-session hook add params graph");
+    agiworkforce_protocol::developer_session::HookRemoveParams::export_all_to(dir)
+        .expect("export developer-session hook remove params graph");
+    agiworkforce_protocol::developer_session::SkillInstallParams::export_all_to(dir)
+        .expect("export developer-session skill install params graph");
+    agiworkforce_protocol::developer_session::SkillRemoveParams::export_all_to(dir)
+        .expect("export developer-session skill remove params graph");
+    agiworkforce_protocol::developer_session::PluginInstallParams::export_all_to(dir)
+        .expect("export developer-session plugin install params graph");
+    agiworkforce_protocol::developer_session::PluginRemoveParams::export_all_to(dir)
+        .expect("export developer-session plugin remove params graph");
+    agiworkforce_protocol::developer_session::McpAddParams::export_all_to(dir)
+        .expect("export developer-session mcp add params graph");
+    agiworkforce_protocol::developer_session::WorktreeCreateParams::export_all_to(dir)
+        .expect("export developer-session worktree create params graph");
+    agiworkforce_protocol::developer_session::WorktreeSummary::export_all_to(dir)
+        .expect("export developer-session worktree summary graph");
+    agiworkforce_protocol::developer_session::WorktreeListResponse::export_all_to(dir)
+        .expect("export developer-session worktree list graph");
+    agiworkforce_protocol::developer_session::WorktreeRemoveParams::export_all_to(dir)
+        .expect("export developer-session worktree remove params graph");
 
     // One versioned agent event envelope (W5 discipline-wave item 4), not
     // reachable from any root above (a new, independent top-level type), so

@@ -14,6 +14,7 @@ export const CLAUDE_PLUGIN_AGENTS_DIRECTORY = 'agents';
 export const CLAUDE_SKILL_FILE_NAME = 'SKILL.md';
 
 export const CLAUDE_CLI_INSTALL_COMMAND = 'claude plugin install';
+export const AGI_CLI_PLUGIN_INSTALL_COMMAND = 'agi plugin install';
 
 export const PUBLIC_DIRECTORY_URL = 'https://claude.com/plugins';
 export const PUBLIC_DIRECTORY_PAGE_LIMIT = 20;
@@ -124,15 +125,22 @@ export const MARKETPLACE_UNAVAILABLE_MESSAGE =
   'The plugin marketplace is not available yet. Please try again later.';
 export const INSTALL_SKILLS_UNAVAILABLE_MESSAGE =
   'None of this plugin skills could be fetched from its repository right now, so it was not installed.';
+export const INSTALL_MANIFEST_UNAVAILABLE_MESSAGE =
+  "This plugin's manifest could not be read from its repository right now, so it was not installed.";
 export const INSTALL_BUILTIN_MESSAGE =
   'This plugin is a built-in pack; install it through the plugin installations route.';
 export const INSTALL_UNKNOWN_MESSAGE = 'This plugin is not in the directory.';
+export const INSTALL_ENTRY_UNAVAILABLE_MESSAGE =
+  'This marketplace plugin is not available for installation.';
 
 export const SNAPSHOT_CACHE_METHOD = 'plugins.directory.snapshot';
 export const SYNC_STATE_CACHE_METHOD = 'plugins.directory.sync-state';
 export const INGEST_LEASE_CACHE_METHOD = 'plugins.directory.ingest-lease';
 export const INSPECTIONS_CACHE_METHOD = 'plugins.directory.inspections';
 export const INSTALLED_SKILLS_CACHE_METHOD = 'plugins.directory.installed-skills';
+export const SKILL_COMPANIONS_CACHE_METHOD = 'plugins.directory.skill-companions';
+export const SKILL_COMPANION_MAX_FILES = 200;
+export const SKILL_COMPANION_MAX_BYTES = 512 * 1024;
 export const CACHE_PARAMS_VERSION = 'v1';
 export const SNAPSHOT_TTL_MS = 7 * 24 * 60 * 60 * 1_000;
 export const SYNC_STATE_TTL_MS = 30 * 24 * 60 * 60 * 1_000;
@@ -194,6 +202,10 @@ export function uploadNotUtf8Message(path: string): string {
 
 export function uploadTooManySkillsMessage(pluginName: string, limit: number): string {
   return `"${pluginName}" declares more than ${limit} skills.`;
+}
+
+export function uploadTooManySkillFilesMessage(skillPath: string, limit: number): string {
+  return `The skill at ${skillPath} bundles more than ${limit} files.`;
 }
 
 export function uploadTooManyPluginsMessage(limit: number): string {

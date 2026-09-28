@@ -24,12 +24,15 @@ import {
   PLUGIN_MARKETPLACE_MAX_MANIFEST_BYTES,
   PLUGIN_MARKETPLACE_MAX_PLUGINS,
   PLUGIN_MARKETPLACE_STANDARD_MANIFEST_PATH,
+  PLUGIN_SCAN_REVIEW_REFUSAL,
   PluginMarketplaceManifestSchema,
   type PluginMarketplaceEntry,
   type PluginMarketplaceManifest,
   type PluginMarketplaceManifestPlugin,
   type PluginMarketplaceSourceKind,
   type PluginMarketplaceSourceSummary,
+  type PluginPackageRefusalDetails,
+  type PluginScanSummary,
 } from '@agiworkforce/cloud-contracts';
 
 import {
@@ -45,12 +48,19 @@ import {
   type PluginIntegrityClaim,
   type PluginIntegrityVerdict,
   type PluginScanFile,
+  type PluginScanFinding,
   type PluginScanResult,
 } from '@agiworkforce/client-runtime/plugins';
 
 import { AppError, ErrorCode } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { isKnownConnectorId } from '@/lib/connectors/catalog';
+
+import {
+  parseMarketplaceAllowlist,
+  parsePluginDependencies,
+  type PluginDependencyRef,
+} from './plugin-dependencies';
 
 const GITHUB_REPOSITORY_URL_PATTERN =
   /^https:\/\/github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+?)(?:\.git)?\/?$/;
@@ -250,12 +260,34 @@ export async function scanAndRecordPluginPackage(
   return result;
 }
 
+interface PluginScanRefusal {
+  findings: readonly PluginScanFinding[];
+  acknowledgements?: readonly string[];
+}
+
+function refusalDetails(
+  refusal: string,
+  scan: PluginScanRefusal | undefined,
+): PluginPackageRefusalDetails {
+  if (!scan) return { refusal };
+  return {
+    refusal,
+    findings: scan.findings.map(({ path, line, message, severity }) => ({
+      path,
+      line,
+      message,
+      severity,
+    })),
+    ...(scan.acknowledgements?.length ? { acknowledgements: [...scan.acknowledgements] } : {}),
+  };
+}
+
 /** An `AppError`, so the route boundary answers 409 rather than an opaque 500. */
 export class PluginPackageRefusedError extends AppError {
   readonly refusal: string;
 
-  constructor(refusal: string, message: string) {
-    super(ErrorCode.CONFLICT, message, 409);
+  constructor(refusal: string, message: string, scan?: PluginScanRefusal) {
+    super(ErrorCode.CONFLICT, message, 409, refusalDetails(refusal, scan));
     Object.setPrototypeOf(this, PluginPackageRefusedError.prototype);
     this.name = 'PluginPackageRefusedError';
     this.refusal = refusal;
@@ -286,7 +318,7 @@ export async function assertPluginPackageInstallable(
   }
   if (scan.verdict !== 'pass') {
     throw new PluginPackageRefusedError(
-      scan.verdict === 'block' ? 'scan_blocked' : 'scan_review_required',
+      scan.verdict === 'block' ? 'scan_blocked' : PLUGIN_SCAN_REVIEW_REFUSAL,
       describePluginScan({
         verdict: scan.verdict,
         findings: scan.findings,
@@ -294,6 +326,7 @@ export async function assertPluginPackageInstallable(
         scannedFiles: 0,
         scannedBytes: 0,
       }),
+      { findings: scan.findings },
     );
   }
 }
@@ -442,6 +475,12 @@ function standardManifestPlugin(plugin: ClaudeMarketplacePlugin): PluginMarketpl
     0,
     STANDARD_DESCRIPTION_MAX_CHARS,
   );
+  const dependencies = parsePluginDependencies(plugin['dependencies']);
+  if (!dependencies) {
+    throw new PluginMarketplaceValidationError([
+      `${plugin.name} declares dependencies that cannot be read.`,
+    ]);
+  }
   return {
     id: plugin.name,
     name: (plugin.displayName?.trim() || plugin.name).slice(0, STANDARD_NAME_MAX_CHARS),
@@ -452,7 +491,20 @@ function standardManifestPlugin(plugin: ClaudeMarketplacePlugin): PluginMarketpl
     agents: [],
     examplePrompts: [],
     permissions: [],
+    dependencies,
   };
+}
+
+export function manifestPluginDependencies(
+  plugin: PluginMarketplaceManifestPlugin,
+): PluginDependencyRef[] {
+  const dependencies = parsePluginDependencies(plugin.dependencies);
+  if (!dependencies) {
+    throw new PluginMarketplaceValidationError([
+      `${plugin.id} declares dependencies that cannot be read.`,
+    ]);
+  }
+  return dependencies;
 }
 
 export function declaredPluginCount(json: unknown): number {
@@ -465,6 +517,7 @@ export function standardManifestToInternal(json: unknown): PluginMarketplaceMani
   const parsed = parseClaudeMarketplaceManifest(json);
   return PluginMarketplaceManifestSchema.parse({
     name: parsed.name,
+    allowCrossMarketplaceDependenciesOn: parsed.allowCrossMarketplaceDependenciesOn,
     plugins: parsed.plugins.map(standardManifestPlugin),
   });
 }
@@ -555,6 +608,7 @@ export async function fetchMarketplaceManifest(
       error instanceof Error ? error.message : 'The marketplace manifest is not valid.',
     ]);
   }
+  for (const plugin of manifest.plugins) manifestPluginDependencies(plugin);
 
   const contentHash = sha256OfText(rawText);
   return { manifest, contentHash, resolvedRef, manifestPath, rawText };
@@ -629,6 +683,39 @@ async function replaceSourceEntries(
   }
 }
 
+async function writeDependencyDeclarations(
+  db: DatabaseAdapter,
+  sourceId: string,
+  manifest: PluginMarketplaceManifest,
+): Promise<void> {
+  await db.execute(
+    `update public.plugin_marketplace_sources
+        set allow_cross_marketplace_dependencies_on = $2::jsonb
+      where id = $1`,
+    [
+      sourceId,
+      JSON.stringify(parseMarketplaceAllowlist(manifest.allowCrossMarketplaceDependenciesOn)),
+    ],
+  );
+  await db.execute(
+    `update public.plugin_marketplace_entries entries
+        set dependencies = declared.dependencies
+       from jsonb_to_recordset($2::jsonb) as declared(plugin_key text, dependencies jsonb)
+      where entries.source_id = $1
+        and entries.plugin_key = declared.plugin_key
+        and entries.dependencies is distinct from declared.dependencies`,
+    [
+      sourceId,
+      JSON.stringify(
+        manifest.plugins.map((plugin) => ({
+          plugin_key: plugin.id,
+          dependencies: manifestPluginDependencies(plugin),
+        })),
+      ),
+    ],
+  );
+}
+
 /**
  * The entry still moves to the published version; the installation is disabled
  * and marked for review, so an expanded permission is never exercised unapproved.
@@ -699,7 +786,7 @@ export async function assertMarketplaceEntryInstallable(
   }
   if (scan.verdict === 'pass') return;
   throw new PluginPackageRefusedError(
-    scan.verdict === 'block' ? 'scan_blocked' : 'scan_review_required',
+    scan.verdict === 'block' ? 'scan_blocked' : PLUGIN_SCAN_REVIEW_REFUSAL,
     describePluginScan({
       verdict: scan.verdict,
       findings: scan.findings,
@@ -707,6 +794,7 @@ export async function assertMarketplaceEntryInstallable(
       scannedFiles: 0,
       scannedBytes: 0,
     }),
+    { findings: scan.findings },
   );
 }
 
@@ -816,6 +904,7 @@ export async function registerMarketplaceSource(
       id = inserted.id;
     }
     await replaceSourceEntries(tx, id, manifest.plugins, contentHash);
+    await writeDependencyDeclarations(tx, id, manifest);
     await reviewPermissionChanges(tx, userId, id, manifest.plugins);
     return id;
   });
@@ -869,6 +958,7 @@ export async function refreshMarketplaceSource(
           where id = $1`,
         [sourceId],
       );
+      await writeDependencyDeclarations(db, sourceId, manifest);
     } else {
       await db.transaction(async (tx) => {
         await tx.execute(
@@ -879,6 +969,7 @@ export async function refreshMarketplaceSource(
           [sourceId, contentHash],
         );
         await replaceSourceEntries(tx, sourceId, manifest.plugins, contentHash);
+        await writeDependencyDeclarations(tx, sourceId, manifest);
         await reviewPermissionChanges(tx, userId, sourceId, manifest.plugins);
       });
     }
@@ -958,6 +1049,51 @@ export async function listMarketplaceEntriesForUser(
   return rows.map(mapEntryRow);
 }
 
+const MARKETPLACE_ENTRY_ID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+async function scannedContentHash(
+  db: DatabaseAdapter,
+  userId: string,
+  pluginId: string,
+): Promise<string | null> {
+  if (MARKETPLACE_ENTRY_ID_PATTERN.test(pluginId)) {
+    return (await getMarketplaceEntryForUser(db, userId, pluginId))?.contentHash ?? null;
+  }
+  const rows = await db.query<{ sha256: string | null }>(
+    `select versions.sha256
+       from public.plugin_registry_entries entry
+       left join public.plugin_installations installation
+              on installation.plugin_id = entry.id and installation.user_id = $2
+       join public.plugin_registry_versions versions
+         on versions.plugin_id = entry.id
+        and versions.version = coalesce(installation.installed_version, entry.version)
+      where entry.id = $1`,
+    [pluginId, userId],
+  );
+  return rows[0]?.sha256 ?? null;
+}
+
+export async function findPluginScanForUser(
+  db: DatabaseAdapter,
+  userId: string,
+  pluginId: string,
+): Promise<PluginScanSummary | null> {
+  const contentHash = await scannedContentHash(db, userId, pluginId);
+  const scan = contentHash ? await readPluginPackageScan(db, contentHash) : null;
+  if (!scan) return null;
+  return {
+    verdict: scan.verdict,
+    findings: scan.findings.map(({ path, line, message, severity }) => ({
+      path,
+      line,
+      message,
+      severity,
+    })),
+    scannedAt: scan.scannedAt,
+  };
+}
+
 export async function getMarketplaceEntryForUser(
   db: DatabaseAdapter,
   userId: string,
@@ -973,4 +1109,79 @@ export async function getMarketplaceEntryForUser(
   );
   const row = rows[0];
   return row ? mapEntryRow(row) : null;
+}
+
+export interface MarketplaceSourceEntry {
+  entry: PluginMarketplaceEntry;
+  sourceName: string;
+  allowlist: string[];
+  dependencies: PluginDependencyRef[] | null;
+}
+
+interface MarketplaceSourceEntryRow extends PluginMarketplaceEntryRow {
+  dependencies: unknown;
+  source_name: string;
+  allow_cross_marketplace_dependencies_on: unknown;
+}
+
+const SOURCE_ENTRY_SELECT = `
+  select entries.*, sources.name as source_name,
+         sources.allow_cross_marketplace_dependencies_on
+    from public.plugin_marketplace_entries entries
+    join public.plugin_marketplace_sources sources on sources.id = entries.source_id
+`;
+
+function mapSourceEntryRow(row: MarketplaceSourceEntryRow): MarketplaceSourceEntry {
+  return {
+    entry: mapEntryRow(row),
+    sourceName: row.source_name,
+    allowlist: parseMarketplaceAllowlist(row.allow_cross_marketplace_dependencies_on),
+    dependencies: parsePluginDependencies(row.dependencies),
+  };
+}
+
+export async function getMarketplaceSourceEntry(
+  db: DatabaseAdapter,
+  userId: string,
+  entryId: string,
+): Promise<MarketplaceSourceEntry | null> {
+  const rows = await db.query<MarketplaceSourceEntryRow>(
+    `${SOURCE_ENTRY_SELECT}
+      where entries.id = $1 and sources.user_id = $2
+      limit 1`,
+    [entryId, userId],
+  );
+  const row = rows[0];
+  return row ? mapSourceEntryRow(row) : null;
+}
+
+export async function findMarketplaceSourceEntry(
+  db: DatabaseAdapter,
+  userId: string,
+  sourceName: string,
+  pluginKey: string,
+): Promise<MarketplaceSourceEntry | null> {
+  const rows = await db.query<MarketplaceSourceEntryRow>(
+    `${SOURCE_ENTRY_SELECT}
+      where sources.user_id = $1 and sources.name = $2 and entries.plugin_key = $3
+      order by sources.created_at asc
+      limit 1`,
+    [userId, sourceName, pluginKey],
+  );
+  const row = rows[0];
+  return row ? mapSourceEntryRow(row) : null;
+}
+
+export async function hasMarketplaceSourceNamed(
+  db: DatabaseAdapter,
+  userId: string,
+  sourceName: string,
+): Promise<boolean> {
+  const rows = await db.query<{ id: string }>(
+    `select id from public.plugin_marketplace_sources
+      where user_id = $1 and name = $2
+      limit 1`,
+    [userId, sourceName],
+  );
+  return rows.length > 0;
 }

@@ -550,6 +550,9 @@ importers:
       '@agiworkforce/types':
         specifier: workspace:*
         version: link:../../packages/contracts/types
+      '@agiworkforce/unified-chat':
+        specifier: workspace:*
+        version: link:../../packages/ui/unified-chat
       '@agiworkforce/utils':
         specifier: workspace:*
         version: link:../../packages/platform/utils
@@ -559,10 +562,16 @@ importers:
       dompurify:
         specifier: '>=3.4.13'
         version: 3.4.15
+      markdown-it:
+        specifier: '>=14.2.0'
+        version: 15.0.2
     devDependencies:
       '@types/chrome':
         specifier: ^0.3.0
         version: 0.3.0
+      '@types/markdown-it':
+        specifier: ^14.2.0
+        version: 14.2.0
       jsdom:
         specifier: 20.0.3
         version: 20.0.3(bufferutil@4.1.0)(utf-8-validate@6.0.6)

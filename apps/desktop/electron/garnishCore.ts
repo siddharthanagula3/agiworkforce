@@ -19,12 +19,13 @@ import {
  */
 export type GarnishShortcuts = Pick<
   HostPreferences,
-  'quickAskShortcut' | 'screenshotShortcut' | 'voiceShortcut'
+  'quickAskShortcut' | 'screenshotShortcut' | 'windowShotShortcut' | 'voiceShortcut'
 >;
 
 export const DEFAULT_SHORTCUTS: GarnishShortcuts = {
   quickAskShortcut: defaultHostShortcut('quickAsk'),
   screenshotShortcut: defaultHostShortcut('screenshot'),
+  windowShotShortcut: defaultHostShortcut('windowShot'),
   voiceShortcut: defaultHostShortcut('voice'),
 };
 
@@ -38,6 +39,7 @@ export function normalizeShortcuts(raw: unknown): GarnishShortcuts {
   return {
     quickAskShortcut: readAccelerator(source, 'quickAskShortcut'),
     screenshotShortcut: readAccelerator(source, 'screenshotShortcut'),
+    windowShotShortcut: readAccelerator(source, 'windowShotShortcut'),
     voiceShortcut: readAccelerator(source, 'voiceShortcut'),
   };
 }
@@ -59,6 +61,7 @@ export function hostShortcutKeyFor(key: ShortcutKey): HostShortcutKey {
 export const SHORTCUT_LABELS: Record<ShortcutKey, string> = {
   quickAskShortcut: 'Quick Ask',
   screenshotShortcut: 'Screenshot to Chat',
+  windowShotShortcut: 'Window to Chat',
   voiceShortcut: 'Dictation',
 };
 
@@ -76,6 +79,7 @@ function readAccelerator(source: Record<string, unknown>, key: ShortcutKey): str
 export const SHORTCUT_CHOICES: Record<ShortcutKey, readonly string[]> = {
   quickAskShortcut: HOST_SHORTCUT_CHOICES.quickAsk,
   screenshotShortcut: HOST_SHORTCUT_CHOICES.screenshot,
+  windowShotShortcut: HOST_SHORTCUT_CHOICES.windowShot,
   voiceShortcut: HOST_SHORTCUT_CHOICES.voice,
 };
 
@@ -294,6 +298,7 @@ export interface GarnishPreferences {
   cliPath: string;
   sessionCompletionAlerts: SessionCompletionAlerts;
   sessionApprovalAlerts: boolean;
+  computerUseEnabled: boolean;
   /**
    * Chromium's zoom level, not a percentage: each step is a factor of 1.2, and
    * 0 is actual size. Held here so the window opens at the size the user last
@@ -322,6 +327,7 @@ export const DEFAULT_PREFERENCES: GarnishPreferences = {
   cliPath: '',
   sessionCompletionAlerts: DEFAULT_SESSION_COMPLETION_ALERTS,
   sessionApprovalAlerts: true,
+  computerUseEnabled: false,
   zoomLevel: 0,
   appearance: 'system',
   windowFrame: null,
@@ -363,6 +369,10 @@ export function normalizePreferences(raw: unknown): GarnishPreferences {
       typeof source['sessionApprovalAlerts'] === 'boolean'
         ? source['sessionApprovalAlerts']
         : DEFAULT_PREFERENCES.sessionApprovalAlerts,
+    computerUseEnabled:
+      typeof source['computerUseEnabled'] === 'boolean'
+        ? source['computerUseEnabled']
+        : DEFAULT_PREFERENCES.computerUseEnabled,
     zoomLevel:
       typeof source['zoomLevel'] === 'number'
         ? clampZoomLevel(source['zoomLevel'])

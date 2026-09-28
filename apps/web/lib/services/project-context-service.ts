@@ -7,6 +7,7 @@ import {
   type ContextSourceClass,
   type InstructionLayer,
 } from '@agiworkforce/context';
+import type { ContextCandidate, ContextSourceLoader } from '@agiworkforce/context-engine';
 import { MAX_PROJECT_KNOWLEDGE_FILES } from '@agiworkforce/types';
 
 import { fenceContextSource } from '@/app/api/llm/v1/chat/completions/lib/context/context-manifest';
@@ -512,6 +513,47 @@ export function projectContextDropOrder(
   blocks: readonly ProjectContextBlock[],
 ): ProjectContextBlock[] {
   return [...blocks].sort((left, right) => byAuthority(right, left));
+}
+
+const PROJECT_SOURCE_BUDGET_CHARS: Readonly<Record<string, number>> = {
+  project_instruction: MAX_INSTRUCTIONS_CHARS,
+  project_knowledge_file: MAX_TOTAL_FILE_CONTENT_CHARS,
+  project_sibling_chat: MAX_TOTAL_SIBLING_CHARS,
+};
+
+/**
+ * The project's own sources as engine candidates, one loader per class so the
+ * manifest says which kind of project context contributed what. The text is
+ * what each source contributes to the prompt, so the engine budgets and
+ * deduplicates the same strings the model will read.
+ */
+export function projectContextLoaders(context: LoadedProjectContext): ContextSourceLoader[] {
+  const siblingSources = context.sources.filter(
+    (source) => source.sourceClass === 'project_sibling_chat',
+  );
+  const textFor = (source: (typeof context.sources)[number]): string => {
+    const { locator } = source.provenance;
+    if (source.sourceClass === 'project_instruction') return context.instructions?.trim() ?? '';
+    if (source.sourceClass === 'project_knowledge_file') {
+      const fileId = locator.slice('project_knowledge_files/'.length);
+      const file = context.knowledgeFiles.find((entry) => entry.fileId === fileId);
+      const passages = file?.selection?.passages.map((passage) => passage.text).join('\n');
+      return passages || file?.extractedText?.trim() || file?.summary?.trim() || '';
+    }
+    return context.siblingChats[siblingSources.indexOf(source)]?.preview?.trim() ?? '';
+  };
+
+  return [...new Set(context.sources.map((source) => source.sourceClass))].map((sourceClass) => ({
+    sourceClass,
+    budgetChars: PROJECT_SOURCE_BUDGET_CHARS[sourceClass] ?? MAX_INSTRUCTIONS_CHARS,
+    load: (): ContextCandidate[] =>
+      context.sources
+        .filter((source) => source.sourceClass === sourceClass)
+        .flatMap((source): ContextCandidate[] => {
+          const text = textFor(source);
+          return text ? [{ source, text }] : [];
+        }),
+  }));
 }
 
 export function fitProjectContextBlocks(

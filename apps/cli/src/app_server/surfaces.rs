@@ -8,18 +8,25 @@ use agiworkforce_app_server::DeveloperSessionHostError;
 use agiworkforce_command_registry::{CommandSource, RegistryCommand};
 use agiworkforce_protocol::developer_session::{
     CommandSourceKind, ContextInstructionsResponse, DeveloperAgentMode, DeveloperReasoningEffort,
-    HookConfigScope, HookListResponse, HookSummary, InstructionFile, InstructionFileKind,
-    McpServerConfiguredStatus, McpServerListResponse, McpServerScope, McpServerSummary,
-    PluginListResponse, PluginScope, PluginSummary, SettingsReadResponse, SettingsWriteParams,
-    SkillCatalogScope, SkillConsentResponse, SkillListResponse, SkillSummary,
-    SlashCommandListResponse, SlashCommandResultKind, SlashCommandRunResponse, SlashCommandSummary,
+    HookAddParams, HookConfigScope, HookListResponse, HookRemoveParams, HookSummary,
+    InstructionFile, InstructionFileKind, LocalModelProvider, LocalServerHealth, LocalServerStatus,
+    McpAddParams, McpPromptArgumentSummary, McpPromptSummary, McpRemoteTransport,
+    McpResourceSummary, McpServerConfiguredStatus, McpServerListResponse, McpServerParams,
+    McpServerScope, McpServerSummary, McpServerTestResponse, McpServerToolsResponse,
+    McpToolSummary, MemoryAddParams, MemoryAddResponse, MemoryScope, PluginInstallParams,
+    PluginListResponse, PluginRemoveParams, PluginScope, PluginSummary, SettingsReadResponse,
+    SettingsWriteParams, SkillCatalogScope, SkillConsentResponse, SkillInstallParams,
+    SkillListResponse, SkillRemoveParams, SkillSummary, SlashCommandListResponse,
+    SlashCommandResultKind, SlashCommandRunResponse, SlashCommandSummary,
 };
 use std::path::{Path, PathBuf};
 
 use crate::command_registry::registry_from_builtins_skills_and_prompts;
 use crate::config::CliConfig;
 use crate::features::hooks::hooks;
+use crate::local_models::{LocalProbeHealth, LocalProviderProbe};
 use crate::mcp::{McpCredentialState, McpServerOrigin};
+use crate::memory::{MemoryManager, MemoryTier};
 use crate::plugins::PluginsManager;
 use crate::skills::{self, SkillOrigin};
 
@@ -28,6 +35,8 @@ use crate::skills::{self, SkillOrigin};
 /// Every other command needs a live TUI or a thread, so it is listed with
 /// `runnable: false` rather than offered as a control that does nothing.
 const RUNNABLE_COMMANDS: [&str; 6] = ["skills", "plugins", "mcp", "hooks", "settings", "model"];
+
+const MAX_MEMORY_TEXT_CHARS: usize = 4_000;
 
 fn invalid(message: impl Into<String>) -> DeveloperSessionHostError {
     DeveloperSessionHostError::invalid_request(message)
@@ -257,13 +266,14 @@ pub fn list_hooks(workspace_root: &Path) -> HookListResponse {
     let mut events: Vec<&String> = user_hooks.hooks.keys().collect();
     events.sort();
     for event in events {
-        for hook in &user_hooks.hooks[event] {
+        for (index, hook) in user_hooks.hooks[event].iter().enumerate() {
             summaries.push(HookSummary {
                 event: event.clone(),
                 command: hook.command.clone(),
                 scope: HookConfigScope::User,
                 trusted: true,
                 source: hooks::hooks_path().ok().as_deref().map(display),
+                position: u32::try_from(index + 1).ok(),
             });
         }
     }
@@ -281,6 +291,7 @@ pub fn list_hooks(workspace_root: &Path) -> HookListResponse {
                     scope: HookConfigScope::Plugin,
                     trusted: !from_project_dir,
                     source: None,
+                    position: None,
                 });
             }
         }
@@ -567,6 +578,425 @@ pub fn run_command(
             "'{other}' needs a terminal or a thread; call the typed method for it, or run it in `agi`"
         ))),
     }
+}
+
+fn startable_server(
+    workspace_root: &Path,
+    name: &str,
+) -> Result<crate::mcp::DiscoveredMcpServer, DeveloperSessionHostError> {
+    let server = crate::mcp::discover_servers(workspace_root)
+        .into_iter()
+        .find(|server| server.name == name)
+        .ok_or_else(|| {
+            DeveloperSessionHostError::not_found(format!(
+                "No MCP server named '{name}' is configured for this workspace"
+            ))
+        })?;
+    if server.origin == McpServerOrigin::Project
+        && !crate::trust::restrictions_for(workspace_root).mcp_autostart
+    {
+        return Err(DeveloperSessionHostError::conflict(format!(
+            "'{name}' comes from this workspace's .mcp.json, and project servers start only once the workspace is trusted. Run /trust grant in agi, then try again."
+        )));
+    }
+    Ok(server)
+}
+
+fn elapsed_ms(started: std::time::Instant) -> u64 {
+    u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX)
+}
+
+pub async fn test_mcp_server(
+    workspace_root: &Path,
+    name: &str,
+    limit: std::time::Duration,
+) -> Result<McpServerTestResponse, DeveloperSessionHostError> {
+    let server = startable_server(workspace_root, name)?;
+    let started = std::time::Instant::now();
+    let outcome = tokio::time::timeout(limit, async {
+        let mut connection =
+            crate::mcp::McpConnection::connect(&server.name, &server.config).await?;
+        let tools = connection.list_tools().await;
+        let _ = connection.shutdown().await;
+        tools
+    })
+    .await;
+    let (connected, tool_count, error) = match outcome {
+        Ok(Ok(tools)) => (true, u32::try_from(tools.len()).unwrap_or(u32::MAX), None),
+        Ok(Err(error)) => (false, 0, Some(format!("{error:#}"))),
+        Err(_) => (
+            false,
+            0,
+            Some(format!(
+                "it did not answer within {} seconds",
+                limit.as_secs()
+            )),
+        ),
+    };
+    Ok(McpServerTestResponse {
+        name: server.name,
+        connected,
+        elapsed_ms: elapsed_ms(started),
+        tool_count,
+        error,
+    })
+}
+
+pub async fn mcp_server_tools(
+    workspace_root: &Path,
+    name: &str,
+    limit: std::time::Duration,
+) -> Result<McpServerToolsResponse, DeveloperSessionHostError> {
+    let server = startable_server(workspace_root, name)?;
+    let listed = tokio::time::timeout(limit, async {
+        let mut connection =
+            crate::mcp::McpConnection::connect(&server.name, &server.config).await?;
+        let tools = connection.list_tools().await;
+        let prompts = connection.list_prompts().await;
+        let resources = if connection.serves_resources() {
+            Some(connection.list_resources().await)
+        } else {
+            None
+        };
+        let _ = connection.shutdown().await;
+        anyhow::Ok((tools?, prompts, resources))
+    })
+    .await
+    .map_err(|_| {
+        DeveloperSessionHostError::unavailable(format!(
+            "MCP server '{name}' did not answer within {} seconds",
+            limit.as_secs()
+        ))
+    })?
+    .map_err(|error| {
+        DeveloperSessionHostError::unavailable(format!("MCP server '{name}': {error:#}"))
+    })?;
+    let (tools, prompts, resources) = listed;
+    let mut warnings = Vec::new();
+    let prompts = match prompts {
+        Ok(prompts) => prompts,
+        Err(error) => {
+            warnings.push(format!("Its prompts could not be listed: {error:#}"));
+            Vec::new()
+        }
+    };
+    let resources = match resources {
+        Some(Ok(resources)) => resources,
+        Some(Err(error)) => {
+            warnings.push(format!("Its resources could not be listed: {error:#}"));
+            Vec::new()
+        }
+        None => Vec::new(),
+    };
+    Ok(McpServerToolsResponse {
+        name: server.name,
+        tools: tools
+            .into_iter()
+            .map(|tool| McpToolSummary {
+                name: tool.original_name,
+                description: tool.description,
+                input_schema: tool.input_schema,
+            })
+            .collect(),
+        prompts: prompts
+            .into_iter()
+            .map(|prompt| McpPromptSummary {
+                name: prompt.original_name,
+                description: prompt.description,
+                arguments: prompt
+                    .arguments
+                    .into_iter()
+                    .map(|argument| McpPromptArgumentSummary {
+                        name: argument.name,
+                        description: argument.description,
+                        required: argument.required,
+                    })
+                    .collect(),
+            })
+            .collect(),
+        resources: resources
+            .into_iter()
+            .map(|resource| McpResourceSummary {
+                uri: resource.uri,
+                name: resource.title.unwrap_or(resource.name),
+                description: resource.description,
+                mime_type: resource.mime_type,
+            })
+            .collect(),
+        warnings,
+    })
+}
+
+pub fn install_skill(
+    workspace_root: &Path,
+    params: SkillInstallParams,
+) -> Result<SkillListResponse, DeveloperSessionHostError> {
+    let source = crate::path_security::expand_home(params.source.trim());
+    skills::import_skill(Path::new(&source)).map_err(invalid)?;
+    Ok(list_skills(workspace_root))
+}
+
+pub fn remove_skill(
+    workspace_root: &Path,
+    params: SkillRemoveParams,
+) -> Result<SkillListResponse, DeveloperSessionHostError> {
+    crate::installs::remove_skill(workspace_root, params.name.trim())
+        .map_err(|error| invalid(format!("{error:#}")))?;
+    Ok(list_skills(workspace_root))
+}
+
+pub fn install_plugin(
+    workspace_root: &Path,
+    params: PluginInstallParams,
+) -> Result<PluginListResponse, DeveloperSessionHostError> {
+    use crate::features::plugins::plugins::{
+        PluginInstallOutcome, PluginIntegrity, PluginSignaturePolicy,
+    };
+    let integrity = match params.integrity.as_deref().map(str::trim) {
+        Some(claim) if claim.starts_with("sha256:") => {
+            PluginIntegrity::PinnedSha256(claim.to_string())
+        }
+        Some(claim) => {
+            return Err(invalid(format!(
+                "Unsupported integrity claim '{claim}'; use sha256:<hex>"
+            )))
+        }
+        None => PluginIntegrity::PublisherSignature,
+    };
+    let signature = PluginSignaturePolicy::configured(false).map_err(invalid)?;
+    match crate::installs::install_plugin(
+        params.source.trim(),
+        params.name.as_deref(),
+        integrity,
+        signature,
+    )
+    .map_err(invalid)?
+    {
+        PluginInstallOutcome::Installed { .. } | PluginInstallOutcome::AlreadyInstalled { .. } => {
+            Ok(list_plugins(workspace_root))
+        }
+        PluginInstallOutcome::Failed { error } => Err(invalid(error)),
+    }
+}
+
+pub fn remove_plugin(
+    workspace_root: &Path,
+    params: PluginRemoveParams,
+) -> Result<PluginListResponse, DeveloperSessionHostError> {
+    let plugin = list_plugins(workspace_root)
+        .plugins
+        .into_iter()
+        .find(|plugin| plugin.id == params.id)
+        .ok_or_else(|| {
+            DeveloperSessionHostError::not_found(format!("No plugin '{}' is installed", params.id))
+        })?;
+    if plugin.source == PluginScope::Project {
+        return Err(DeveloperSessionHostError::conflict(format!(
+            "'{}' comes from this workspace's plugin folder; remove it from the repository instead",
+            plugin.id
+        )));
+    }
+    crate::installs::remove_plugin(&plugin.id).map_err(|error| invalid(format!("{error:#}")))?;
+    Ok(list_plugins(workspace_root))
+}
+
+pub fn add_mcp_server(
+    workspace_root: &Path,
+    params: McpAddParams,
+) -> Result<McpServerListResponse, DeveloperSessionHostError> {
+    let target = match (params.command, params.url) {
+        (Some(command), None) => crate::installs::McpServerTarget::Stdio {
+            command,
+            args: params.args,
+        },
+        (None, Some(url)) => crate::installs::McpServerTarget::Remote {
+            url,
+            sse: params.transport == Some(McpRemoteTransport::Sse),
+        },
+        _ => {
+            return Err(invalid(
+                "mcp/add takes a command for a local server or a url for a remote one",
+            ))
+        }
+    };
+    let pairs = |map: std::collections::BTreeMap<String, String>| {
+        map.into_iter()
+            .map(|(key, value)| (key.trim().to_string(), value))
+            .collect::<Vec<_>>()
+    };
+    let env = pairs(params.env);
+    let headers = pairs(params.headers);
+    if env
+        .iter()
+        .chain(headers.iter())
+        .any(|(key, _)| key.is_empty())
+    {
+        return Err(invalid("An environment variable or header needs a name"));
+    }
+    crate::installs::add_mcp_server(&crate::installs::McpServerSpec {
+        name: params.name.trim().to_string(),
+        target,
+        env,
+        headers,
+        overwrite: params.overwrite,
+    })
+    .map_err(|error| invalid(format!("{error:#}")))?;
+    Ok(list_mcp_servers(workspace_root))
+}
+
+pub fn remove_mcp_server(
+    workspace_root: &Path,
+    params: McpServerParams,
+) -> Result<McpServerListResponse, DeveloperSessionHostError> {
+    let server = crate::mcp::discover_servers(workspace_root)
+        .into_iter()
+        .find(|server| server.name == params.name)
+        .ok_or_else(|| {
+            DeveloperSessionHostError::not_found(format!(
+                "No MCP server named '{}' is configured",
+                params.name
+            ))
+        })?;
+    match server.origin {
+        McpServerOrigin::Project => {
+            return Err(DeveloperSessionHostError::conflict(format!(
+                "'{}' comes from this workspace's .mcp.json; remove it there",
+                params.name
+            )))
+        }
+        McpServerOrigin::Plugin => {
+            return Err(DeveloperSessionHostError::conflict(format!(
+                "'{}' comes from a plugin; remove or disable that plugin",
+                params.name
+            )))
+        }
+        McpServerOrigin::User => {}
+    }
+    crate::installs::remove_mcp_server(&params.name)
+        .map_err(|error| invalid(format!("{error:#}")))?;
+    Ok(list_mcp_servers(workspace_root))
+}
+
+pub fn add_hook(
+    workspace_root: &Path,
+    params: HookAddParams,
+) -> Result<HookListResponse, DeveloperSessionHostError> {
+    let event = params.event.trim();
+    if event.is_empty() || event.contains(char::is_whitespace) {
+        return Err(invalid("A hook needs a single event name"));
+    }
+    hooks::apply_hooks_command(&format!("add {event} {}", params.command.trim()))
+        .map_err(|error| invalid(format!("{error:#}")))?;
+    Ok(list_hooks(workspace_root))
+}
+
+pub fn remove_hook(
+    workspace_root: &Path,
+    params: HookRemoveParams,
+) -> Result<HookListResponse, DeveloperSessionHostError> {
+    let event = params.event.trim();
+    if event.is_empty() || event.contains(char::is_whitespace) {
+        return Err(invalid("A hook needs a single event name"));
+    }
+    hooks::apply_hooks_command(&format!("remove {event} {}", params.position))
+        .map_err(|error| invalid(format!("{error:#}")))?;
+    Ok(list_hooks(workspace_root))
+}
+
+pub fn expand_prompt_command(text: &str) -> Result<Option<String>, DeveloperSessionHostError> {
+    let invocation = text.trim_start();
+    if !invocation.starts_with('/') {
+        return Ok(None);
+    }
+    if let Some(prompt) = crate::custom_commands::expand_custom_slash_invocation(invocation) {
+        return Ok(Some(prompt));
+    }
+    let (command, args) = invocation
+        .split_once(char::is_whitespace)
+        .unwrap_or((invocation, ""));
+    match skills::skill_command_prompt(command.trim_start_matches('/'), args) {
+        Some(Ok(prompt)) => Ok(Some(prompt)),
+        Some(Err(reason)) => Err(invalid(reason)),
+        None => Ok(None),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Local model servers
+// ---------------------------------------------------------------------------
+
+pub fn local_server_status(probe: &LocalProviderProbe) -> Option<LocalServerStatus> {
+    let (provider, name) = match probe.provider.as_str() {
+        "ollama" => (LocalModelProvider::Ollama, "Ollama"),
+        "lmstudio" => (LocalModelProvider::Lmstudio, "LM Studio"),
+        _ => return None,
+    };
+    let model_count = u32::try_from(probe.models.len()).unwrap_or(u32::MAX);
+    let (health, message) = match probe.health {
+        LocalProbeHealth::Running if model_count == 0 => (
+            LocalServerHealth::Running,
+            Some(format!(
+                "{name} is running but has no model yet. Download or load one, then refresh."
+            )),
+        ),
+        LocalProbeHealth::Running => (LocalServerHealth::Running, None),
+        LocalProbeHealth::Unreachable => (
+            LocalServerHealth::NotRunning,
+            Some(format!(
+                "{name} is not running on this computer. Start it, then refresh."
+            )),
+        ),
+        LocalProbeHealth::Faulty => (
+            LocalServerHealth::Unhealthy,
+            Some(format!(
+                "{name} answered but could not list its models. Restart it, then refresh."
+            )),
+        ),
+        LocalProbeHealth::Blocked => (
+            LocalServerHealth::Blocked,
+            Some(format!(
+                "{name} is set to an address that is not on this computer, so the CLI does not contact it."
+            )),
+        ),
+    };
+    Some(LocalServerStatus {
+        provider,
+        health,
+        model_count,
+        message,
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Memory
+// ---------------------------------------------------------------------------
+
+pub fn add_memory(
+    workspace_root: &Path,
+    params: MemoryAddParams,
+) -> Result<MemoryAddResponse, DeveloperSessionHostError> {
+    let text = params.text.trim();
+    if text.is_empty() {
+        return Err(invalid("memory/add needs the text to remember"));
+    }
+    if text.chars().count() > MAX_MEMORY_TEXT_CHARS {
+        return Err(invalid(format!(
+            "A memory can be at most {MAX_MEMORY_TEXT_CHARS} characters"
+        )));
+    }
+    let scope = params.scope.unwrap_or(MemoryScope::Project);
+    let tier = match scope {
+        MemoryScope::User => MemoryTier::Global,
+        MemoryScope::Project => MemoryTier::Project,
+        MemoryScope::Local => MemoryTier::Local,
+    };
+    let path = MemoryManager::new(workspace_root)
+        .save(&tier, text)
+        .map_err(invalid)?;
+    Ok(MemoryAddResponse {
+        scope,
+        path: display(&path),
+    })
 }
 
 #[cfg(test)]

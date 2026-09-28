@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, render } from '@testing-library/react';
+import type { DraftSaveResult } from '../services/conversation-draft';
 
 const { mockSaveConversationDraft, mockSession, mockToastError } = vi.hoisted(() => ({
-  mockSaveConversationDraft: vi.fn(async () => 'saved'),
+  mockSaveConversationDraft: vi.fn(async (): Promise<DraftSaveResult> => 'saved'),
   mockSession: { getToken: vi.fn(async () => 'token'), isLoaded: true, isSignedIn: true },
   mockToastError: vi.fn(),
 }));
@@ -117,10 +118,10 @@ describe('carrying a composer draft to the server', () => {
   });
 
   it('serializes an in-flight text save before its later clear and acknowledges the clear', async () => {
-    let finishFirst!: (saved: string) => void;
+    let finishFirst!: (saved: DraftSaveResult) => void;
     mockSaveConversationDraft.mockImplementationOnce(
       () =>
-        new Promise<string>((resolve) => {
+        new Promise<DraftSaveResult>((resolve) => {
           finishFirst = resolve;
         }),
     );

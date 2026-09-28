@@ -1,7 +1,10 @@
 import type {
+  PluginInstalledDependency,
   PluginMarketplaceEntry,
   PluginMarketplaceInstallation,
   PluginMarketplaceSourceSummary,
+  PluginScanResponse,
+  PluginVersionsResponse,
 } from '@agiworkforce/cloud-contracts';
 import {
   isPluginEntryWebInstallable,
@@ -9,8 +12,12 @@ import {
   type PluginRegistryEntry,
 } from '@agiworkforce/types';
 import {
+  COMMUNITY_BADGE,
+  DIRECTORY_CATEGORY_FILTER_ID,
+  DIRECTORY_PUBLISHER_FILTER_ID,
   DIRECTORY_SOURCE_ALL_ID,
   DIRECTORY_SOURCE_ALL_LABEL,
+  UPDATE_BADGE,
   matchesDirectorySearch,
   sortDirectoryEntries,
   type DirectoryBadgeKind,
@@ -20,6 +27,8 @@ import {
   type DirectoryManageRow,
   type DirectoryPluginComponents,
   type DirectoryPluginDetail,
+  type DirectoryPluginScan,
+  type DirectoryPluginVersions,
   type DirectoryQuery,
   type DirectorySection,
   type DirectorySortKey,
@@ -33,6 +42,7 @@ import type {
   PluginSourceFacet,
   PluginWorksWith,
 } from '@/features/plugins/server/directory/types';
+import type { PluginUpdateOffer } from '@/lib/services/plugin-lifecycle';
 import {
   PLUGIN_TARGET_BUILTIN,
   PLUGIN_TARGET_MARKETPLACE,
@@ -42,8 +52,10 @@ import {
 import {
   CSRF_HEADER,
   DIRECTORY_PAGE_SIZE,
+  DIRECTORY_QUERY_CATEGORY,
   DIRECTORY_QUERY_CURSOR,
   DIRECTORY_QUERY_LIMIT,
+  DIRECTORY_QUERY_PUBLISHER,
   DIRECTORY_QUERY_SEARCH,
   DIRECTORY_QUERY_SORT,
   DIRECTORY_QUERY_SOURCE,
@@ -59,13 +71,17 @@ import {
   PLUGIN_INSTALLS_DISABLED_STATUS,
   PLUGIN_INSTALL_FAILED_COPY,
   PLUGIN_MARKETPLACES_PATH,
+  PLUGIN_SOURCE_KIND_AUTHORED,
   PLUGIN_SOURCE_KIND_REPOSITORY,
   PLUGIN_MARKETPLACE_ENTRIES_PATH,
   PLUGIN_MARKETPLACE_INSTALLATIONS_PATH,
   PLUGIN_MESSAGE_STATUSES,
   PLUGIN_NOT_INSTALLABLE_CODE,
+  PLUGIN_CATEGORY_GROUP_LABEL,
   PLUGIN_PUBLISHED_STATUS,
-  PLUGIN_SORT_INSTALLS,
+  PLUGIN_PUBLISHER_GROUP_LABEL,
+  PLUGIN_PUBLISHER_KIND_LABELS,
+  PLUGIN_PUBLISHER_MORE_HEADING_PREFIX,
   PLUGIN_SOURCE_BUILTIN,
   PLUGIN_SOURCE_FACETS,
   PLUGIN_SOURCE_MARKETPLACE,
@@ -76,6 +92,10 @@ import {
   PLUGIN_STATE_INSTALLED,
   PLUGIN_UNINSTALL_FAILED_COPY,
   PLUGIN_UNPUBLISHED_LABEL,
+  PLUGIN_SCAN_LEAF,
+  PLUGIN_UPDATES_PATH,
+  PLUGIN_UPDATE_FAILED_COPY,
+  PLUGIN_VERSIONS_LEAF,
   PLUGIN_USER_GROUP_HEADING,
   PLUGIN_USER_GROUP_ID,
   PLUGIN_WORKS_WITH_GROUP_ID,
@@ -89,16 +109,13 @@ const VERIFIED_BADGE: DirectoryBadgeKind = 'verified';
 const BUILTIN_PUBLISHER_KIND = 'first-party';
 const EMPTY_STRINGS: readonly string[] = [];
 
-export const PLUGIN_SORT_OPTIONS: readonly DirectorySortKey[] = [
-  PLUGIN_SORT_INSTALLS,
-  DIRECTORY_SORT_NAME,
-];
+export const PLUGIN_SORT_OPTIONS: readonly DirectorySortKey[] = [DIRECTORY_SORT_NAME];
 
 export const DEFAULT_PLUGIN_QUERY: DirectoryQuery = {
   search: '',
   sourceId: null,
   selection: {},
-  sort: PLUGIN_SORT_INSTALLS,
+  sort: DIRECTORY_SORT_NAME,
   toggles: {},
 };
 
@@ -106,6 +123,8 @@ export interface PluginDirectoryRequest {
   search: string;
   source: PluginSourceFacet | null;
   worksWith: PluginWorksWith | null;
+  category: string | null;
+  publisher: string | null;
   sort: DirectorySortKey;
   cursor: string | null;
   limit?: number;
@@ -122,6 +141,7 @@ export interface PluginInstallState {
   builtinIds: ReadonlyMap<string, boolean>;
   byPluginKey: ReadonlyMap<string, PluginMarketplaceInstallation>;
   byEntryId: ReadonlyMap<string, PluginMarketplaceInstallation>;
+  updates: ReadonlyMap<string, PluginUpdateOffer>;
   notice: string | null;
 }
 
@@ -135,6 +155,7 @@ export const EMPTY_INSTALL_STATE: PluginInstallState = {
   builtinIds: new Map(),
   byPluginKey: new Map(),
   byEntryId: new Map(),
+  updates: new Map(),
   notice: null,
 };
 
@@ -161,7 +182,9 @@ export function toPluginRequest(
     search: query.search.trim(),
     source: isSourceFacet(query.sourceId) ? query.sourceId : null,
     worksWith: isWorksWith(worksWith) ? worksWith : null,
-    sort: query.sort === DIRECTORY_SORT_NAME ? DIRECTORY_SORT_NAME : PLUGIN_SORT_INSTALLS,
+    category: query.selection[DIRECTORY_CATEGORY_FILTER_ID]?.[0] ?? null,
+    publisher: query.selection[DIRECTORY_PUBLISHER_FILTER_ID]?.[0] ?? null,
+    sort: DIRECTORY_SORT_NAME,
     cursor,
   };
 }
@@ -179,6 +202,8 @@ export function pluginDirectoryHref(request: PluginDirectoryRequest): string {
   if (request.search) params.set(DIRECTORY_QUERY_SEARCH, request.search);
   if (request.source) params.set(DIRECTORY_QUERY_SOURCE, request.source);
   if (request.worksWith) params.set(DIRECTORY_QUERY_WORKS_WITH, request.worksWith);
+  if (request.category) params.set(DIRECTORY_QUERY_CATEGORY, request.category);
+  if (request.publisher) params.set(DIRECTORY_QUERY_PUBLISHER, request.publisher);
   params.set(DIRECTORY_QUERY_SORT, request.sort);
   params.set(DIRECTORY_QUERY_LIMIT, String(request.limit ?? DIRECTORY_PAGE_SIZE));
   if (request.cursor) params.set(DIRECTORY_QUERY_CURSOR, request.cursor);
@@ -186,7 +211,15 @@ export function pluginDirectoryHref(request: PluginDirectoryRequest): string {
 }
 
 export function facetRequest(source: PluginSourceFacet): PluginDirectoryRequest {
-  return { search: '', source, worksWith: null, sort: PLUGIN_SORT_INSTALLS, cursor: null };
+  return {
+    search: '',
+    source,
+    worksWith: null,
+    category: null,
+    publisher: null,
+    sort: DIRECTORY_SORT_NAME,
+    cursor: null,
+  };
 }
 
 export async function fetchPluginDirectoryPage(
@@ -213,13 +246,25 @@ function computeStats(entries: readonly PluginDirectoryEntry[]): PluginDirectory
   const byWorksWith = Object.fromEntries(
     PLUGIN_WORKS_WITH_ORDER.map((value) => [value, 0]),
   ) as Record<PluginWorksWith, number>;
+  const byCategory: Record<string, number> = {};
   let verified = 0;
   for (const entry of entries) {
     bySource[entry.sourceFacet] += 1;
     if (entry.verified) verified += 1;
     for (const value of entry.worksWith) byWorksWith[value] += 1;
+    const category = pluginCategoryKey(entry);
+    if (category) byCategory[category] = (byCategory[category] ?? 0) + 1;
   }
-  return { totalPlugins: entries.length, verified, bySource, byWorksWith };
+  return { totalPlugins: entries.length, verified, bySource, byWorksWith, byCategory };
+}
+
+function pluginCategoryKey(entry: PluginDirectoryEntry): string {
+  return entry.category.trim().toLowerCase();
+}
+
+export function pluginCategoryLabel(category: string): string {
+  const words = category.trim().replace(/[-_]+/g, ' ');
+  return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
 export function toDirectoryShape(
@@ -273,10 +318,12 @@ async function readErrorBody(response: Response): Promise<ErrorBody> {
 }
 
 export async function fetchPluginInstallState(): Promise<PluginInstallState> {
-  const [builtin, marketplace] = await Promise.all([
+  const [builtin, marketplace, offers] = await Promise.all([
     fetch(PLUGIN_INSTALLATIONS_PATH, { cache: 'no-store' }).catch(() => null),
     fetch(PLUGIN_MARKETPLACE_INSTALLATIONS_PATH, { cache: 'no-store' }).catch(() => null),
+    readOptional<{ updates?: PluginUpdateOffer[] }>(PLUGIN_UPDATES_PATH),
   ]);
+  const updates = new Map((offers?.updates ?? []).map((offer) => [offer.pluginId, offer]));
   const builtinInstallations: PluginInstallation[] = [];
   const builtinIds = new Map<string, boolean>();
   if (builtin?.ok) {
@@ -303,7 +350,7 @@ export async function fetchPluginInstallState(): Promise<PluginInstallState> {
     const body = await readErrorBody(marketplace);
     if (body.error?.code === PLUGIN_INSTALLS_DISABLED_CODE) notice = body.error.message ?? null;
   }
-  return { builtin: builtinInstallations, builtinIds, byPluginKey, byEntryId, notice };
+  return { builtin: builtinInstallations, builtinIds, byPluginKey, byEntryId, updates, notice };
 }
 
 async function readOptional<T>(path: string): Promise<T | null> {
@@ -350,27 +397,47 @@ function monogramOf(name: string): string {
   return name.slice(0, 1).toUpperCase();
 }
 
+function isCommunityPlugin(entry: PluginDirectoryEntry): boolean {
+  return !entry.verified && entry.sourceFacet === PLUGIN_SOURCE_MARKETPLACE;
+}
+
+function pluginBadges(
+  entry: PluginDirectoryEntry,
+  installs: PluginInstallState,
+): DirectoryBadgeKind[] {
+  const badges: DirectoryBadgeKind[] = [];
+  if (entry.verified) badges.push(VERIFIED_BADGE);
+  else if (isCommunityPlugin(entry)) badges.push(COMMUNITY_BADGE);
+  if (installs.updates.has(entry.id)) badges.push(UPDATE_BADGE);
+  return badges;
+}
+
 export function toPluginEntry(
   entry: PluginDirectoryEntry,
   installs: PluginInstallState,
 ): DirectoryEntry {
   const installed = isPluginInstalled(entry, installs);
   const installable = isPluginEntryWebInstallable(entry);
+  const badges = pluginBadges(entry, installs);
+  const category = pluginCategoryKey(entry);
   return {
     id: entry.id,
     name: entry.name,
     publisher: entry.publisher.name,
     description: entry.description,
     monogram: monogramOf(entry.name),
-    ...(entry.verified ? { badges: [VERIFIED_BADGE] } : {}),
+    ...(badges.length > 0 ? { badges } : {}),
     sourceId: entry.sourceFacet,
     groupId: entry.sourceFacet,
     installed,
     installable,
     statusLabel: pluginStateLabel(entry, installed, installable),
-    ...(entry.installs === null ? {} : { installCount: entry.installs }),
     updatedAt: entry.updatedAt,
-    facets: { [PLUGIN_WORKS_WITH_GROUP_ID]: entry.worksWith },
+    facets: {
+      [PLUGIN_WORKS_WITH_GROUP_ID]: entry.worksWith,
+      [DIRECTORY_CATEGORY_FILTER_ID]: category ? [category] : EMPTY_STRINGS,
+      [DIRECTORY_PUBLISHER_FILTER_ID]: [entry.publisher.id],
+    },
   };
 }
 
@@ -520,16 +587,27 @@ export function toPluginDetail(
 ): DirectoryPluginDetail {
   const installed = isPluginInstalled(entry, installs);
   const installable = isPluginEntryWebInstallable(entry);
+  const category = pluginCategoryKey(entry);
+  const kindLabel = PLUGIN_PUBLISHER_KIND_LABELS[entry.publisher.kind];
   return {
     kind: 'plugin',
     id: entry.id,
     name: entry.name,
     publisher: entry.publisher.name,
+    publisherProfile: {
+      id: entry.publisher.id,
+      name: entry.publisher.name,
+      ...(kindLabel ? { kindLabel } : {}),
+      url: entry.publisher.url ?? null,
+    },
     description: entry.description,
     verified: entry.verified,
+    community: isCommunityPlugin(entry),
+    ...(category ? { category: pluginCategoryLabel(category) } : {}),
+    ...(entry.permissions.length > 0 ? { permissions: entry.permissions } : {}),
     version: entry.version,
     ...(installed ? { enabled: pluginInstallationEnabled(entry, installs) } : {}),
-    ...(entry.installs === null ? {} : { installCount: entry.installs }),
+    customizable: installed && pluginInstallationEnabled(entry, installs),
     examplePrompts: entry.examplePrompts,
     components: toComponents(entry),
     installCommand: entry.installCommand,
@@ -553,12 +631,18 @@ export function toUserMarketplaceDetail(
   source: PluginMarketplaceSourceSummary | undefined,
   installs: PluginInstallState,
 ): DirectoryPluginDetail {
+  const installation = installs.byEntryId.get(entry.id);
+  const authored = source?.kind === PLUGIN_SOURCE_KIND_AUTHORED;
   return {
     kind: 'plugin',
     id: entry.id,
     name: entry.name,
     ...(source ? { publisher: source.name } : {}),
     description: entry.description,
+    ...(entry.permissions.length > 0 ? { permissions: entry.permissions } : {}),
+    ...(installation ? { enabled: installation.enabled } : {}),
+    editable: authored,
+    customizable: installation?.enabled === true && !authored,
     examplePrompts: entry.examplePrompts,
     components: {
       skills: entry.declaredSkills,
@@ -572,7 +656,7 @@ export function toUserMarketplaceDetail(
     ...(source ? { sourceLabel: source.name } : {}),
     sourceUrl: source?.repositoryUrl ?? null,
     updatedAt: entry.updatedAt,
-    installed: installs.byEntryId.has(entry.id),
+    installed: installation !== undefined,
     installable: true,
   };
 }
@@ -611,6 +695,33 @@ export function pluginWorksWithFilter(stats: PluginDirectoryStats | null): Direc
   };
 }
 
+export function pluginCategoryFilter(stats: PluginDirectoryStats | null): DirectoryFilterGroup {
+  const options = Object.entries(stats?.byCategory ?? {})
+    .filter(([, count]) => count > 0)
+    .map(([value]) => ({ value, label: pluginCategoryLabel(value) }))
+    .sort((left, right) => left.label.localeCompare(right.label));
+  return {
+    id: DIRECTORY_CATEGORY_FILTER_ID,
+    label: PLUGIN_CATEGORY_GROUP_LABEL,
+    options,
+    exclusive: true,
+  };
+}
+
+export function pluginPublisherFilter(
+  publisherId: string | null,
+  entries: readonly PluginDirectoryEntry[],
+): DirectoryFilterGroup | null {
+  if (!publisherId) return null;
+  const name = entries.find((entry) => entry.publisher.id === publisherId)?.publisher.name;
+  return {
+    id: DIRECTORY_PUBLISHER_FILTER_ID,
+    label: PLUGIN_PUBLISHER_GROUP_LABEL,
+    options: [{ value: publisherId, label: name ?? publisherId }],
+    exclusive: true,
+  };
+}
+
 export function initialPluginSection(): DirectorySection {
   return {
     entries: [],
@@ -618,7 +729,7 @@ export function initialPluginSection(): DirectorySection {
     installable: true,
     remote: true,
     sources: pluginSourceChips([]),
-    filterGroups: [pluginWorksWithFilter(null)],
+    filterGroups: [pluginWorksWithFilter(null), pluginCategoryFilter(null)],
     sortOptions: PLUGIN_SORT_OPTIONS,
   };
 }
@@ -639,11 +750,16 @@ interface PluginGroupSlice {
   remote: boolean;
 }
 
+function matchesFacet(entry: DirectoryEntry, groupId: string, value: string | null): boolean {
+  return value === null || (entry.facets?.[groupId] ?? EMPTY_STRINGS).includes(value);
+}
+
 function localMatcher(request: PluginDirectoryRequest): (entry: DirectoryEntry) => boolean {
   return (entry) =>
     matchesDirectorySearch(entry, request.search) &&
-    (request.worksWith === null ||
-      (entry.facets?.[PLUGIN_WORKS_WITH_GROUP_ID] ?? EMPTY_STRINGS).includes(request.worksWith));
+    matchesFacet(entry, PLUGIN_WORKS_WITH_GROUP_ID, request.worksWith) &&
+    matchesFacet(entry, DIRECTORY_CATEGORY_FILTER_ID, request.category) &&
+    matchesFacet(entry, DIRECTORY_PUBLISHER_FILTER_ID, request.publisher);
 }
 
 function facetGroup(facet: PluginSourceFacet): DirectoryGroup {
@@ -735,16 +851,30 @@ export function toPluginSection({
       ? pluginCountLabel(facetCount)
       : undefined;
 
+  const publisherFilter = pluginPublisherFilter(request.publisher, [
+    ...builtin,
+    ...partner,
+    ...(marketplace?.entries ?? []),
+  ]);
+  const publisherName = publisherFilter?.options[0]?.label;
   return {
     ...initialPluginSection(),
     entries,
     sources: pluginSourceChips(user.sources),
-    filterGroups: [pluginWorksWithFilter(stats)],
+    filterGroups: [
+      pluginWorksWithFilter(stats),
+      pluginCategoryFilter(stats),
+      ...(publisherFilter ? [publisherFilter] : []),
+    ],
     total,
     hasMore: remote !== undefined && marketplace?.nextCursor != null,
     ...(countLabel ? { countLabel } : {}),
     ...(grouped ? { groups: slices.map((slice) => slice.group) } : {}),
-    ...(catalogHeading ? { catalogHeading } : {}),
+    ...(publisherName
+      ? { catalogHeading: `${PLUGIN_PUBLISHER_MORE_HEADING_PREFIX} ${publisherName}` }
+      : catalogHeading
+        ? { catalogHeading }
+        : {}),
   };
 }
 
@@ -767,13 +897,20 @@ export type PluginInstallTarget =
   | { kind: 'user'; entryId: string };
 
 export type PluginInstallOutcome =
-  | { status: 'installed' }
+  | { status: 'installed'; dependencies: PluginInstalledDependency[] }
   | { status: 'disabled'; message: string }
   | { status: 'blocked'; message: string; installCommand: string | null };
 
 function messageFor(status: number, body: ErrorBody, fallback: string): string {
   const message = body.error?.message;
   return PLUGIN_MESSAGE_STATUSES.includes(status) && message ? message : fallback;
+}
+
+async function readInstalledDependencies(response: Response): Promise<PluginInstalledDependency[]> {
+  const body = (await response.json().catch(() => ({}))) as {
+    dependencies?: PluginInstalledDependency[];
+  };
+  return Array.isArray(body.dependencies) ? body.dependencies : [];
 }
 
 export async function installPlugin(
@@ -788,7 +925,9 @@ export async function installPlugin(
     headers: { 'Content-Type': JSON_CONTENT_TYPE, [CSRF_HEADER]: csrfToken },
     body: JSON.stringify(body),
   });
-  if (response.ok) return { status: 'installed' };
+  if (response.ok) {
+    return { status: 'installed', dependencies: await readInstalledDependencies(response) };
+  }
   const payload = await readErrorBody(response);
   const code = payload.error?.code;
   if (
@@ -843,5 +982,67 @@ export async function uninstallPlugin(
   throw new DirectoryRequestError(
     response.status,
     messageFor(response.status, payload, PLUGIN_UNINSTALL_FAILED_COPY),
+  );
+}
+
+function pluginPath(id: string, leaf: string): string {
+  return `${PLUGINS_PATH}/${encodeURIComponent(id)}/${leaf}`;
+}
+
+export async function fetchPluginScan(id: string): Promise<DirectoryPluginScan | null> {
+  const body = await readOptional<PluginScanResponse>(pluginPath(id, PLUGIN_SCAN_LEAF));
+  const scan = body?.scan;
+  if (!scan) return null;
+  return {
+    verdict: scan.verdict,
+    findings: [
+      ...new Set(
+        scan.findings.map((finding) => `${finding.path}:${finding.line} ${finding.message}`),
+      ),
+    ],
+    scannedAt: scan.scannedAt,
+  };
+}
+
+export async function fetchPluginVersions(
+  id: string,
+  latestVersion: string | null,
+): Promise<DirectoryPluginVersions | null> {
+  const body = await readOptional<PluginVersionsResponse>(pluginPath(id, PLUGIN_VERSIONS_LEAF));
+  if (!body?.installedVersion) return null;
+  const approved = new Set(body.approvedPermissions);
+  return {
+    installed: body.installedVersion,
+    latest:
+      latestVersion &&
+      latestVersion !== body.installedVersion &&
+      body.versions.some((version) => version.version === latestVersion)
+        ? latestVersion
+        : null,
+    options: body.versions.map((version) => ({
+      version: version.version,
+      publishedAt: version.publishedAt,
+      changelog: version.changelog,
+      newPermissions: version.permissions.filter((permission) => !approved.has(permission)),
+    })),
+  };
+}
+
+export async function applyPluginVersion(
+  pluginId: string,
+  toVersion: string,
+  acknowledgedPermissions: readonly string[],
+  csrfToken: string,
+): Promise<void> {
+  const response = await fetch(PLUGIN_UPDATES_PATH, {
+    method: 'POST',
+    headers: { 'Content-Type': JSON_CONTENT_TYPE, [CSRF_HEADER]: csrfToken },
+    body: JSON.stringify({ pluginId, toVersion, acknowledgedPermissions }),
+  });
+  if (response.ok) return;
+  const payload = await readErrorBody(response);
+  throw new DirectoryRequestError(
+    response.status,
+    payload.error?.message ?? PLUGIN_UPDATE_FAILED_COPY,
   );
 }

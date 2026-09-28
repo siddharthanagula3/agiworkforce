@@ -16,10 +16,10 @@ nothing is left.
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | Permissions, configuration and custom-instructions screens link to /docs?topic=..., but the docs page ignores the topic parameter and opens the general index. | states |
+| vscode | partial | /docs and /help now honour ?topic= (permissions opens the tool approvals guide; ids, section headings and tags resolve). No help article covers CLI configuration (config.toml) or local custom instructions yet, so those two VS Code links land on the index with a notice; the CLI lane would write and claim-index those two guides. | content |
 | chrome | partial | Only the prompt-injection onboarding has a contextual "Learn more" (to /security); every other help entry is the generic help centre link. | ui |
 
-Code: `apps/extension-vscode/src/features/settings/SettingsPanel.ts:31-35`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:906-910`, `apps/extension/src/side_panel.ts:5589-5592`, `apps/extension/src/side_panel.ts:7140-7149`
+Code: `apps/web/lib/support/doc-topics.ts:7-7`, `apps/web/lib/support/doc-topics.ts:25-25`, `apps/web/app/docs/page.tsx:128-128`, `apps/web/app/docs/page.tsx:151-151`
 
 ## S88.02: Searchable help center.
 
@@ -139,11 +139,11 @@ Code: `apps/cli/src/diagnostics_bundle.rs:52-67`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Same as S2.28: the release feed has no notes body to print. | ui |
+| cli | partial | Same as S2.28: the feed has the notes summary and link; the CLI prints them once p-desktop-cli reads releaseNotes. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/cli/src/claude_parity.rs:1381-1381`
+Code: `apps/web/lib/releases/github-cli-releases.ts:157-157`
 
 ## S88.14: Model-retirement notice.
 

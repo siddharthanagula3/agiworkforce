@@ -17,28 +17,6 @@ nothing is left.
 
 Code: `crates/agiworkforce-app-server/src/lib.rs:199-205`, `apps/web/lib/services/cloud-code-session-service.ts:2039-2041`
 
-## S99.14: Checkpoint manager.
-
-- Done when: A checkpoint manager snapshots code and conversation so either can be restored.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Checkpoints hold conversation messages only; there is no file snapshot, and the app-server reports checkpoints:false. | handler |
-
-Code: `apps/cli/src/agent/history.rs:14-26`, `apps/cli/src/app_server/developer_host.rs:375-375`
-
-## S99.16: Worktree manager.
-
-- Done when: A worktree manager creates, lists and removes worktrees for isolated sessions.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | The CLI can create/list/remove worktrees (agent tools, REPL /worktree), but sessions are not bound to them and the app-server reports worktrees:false. | handler |
-
-Code: `apps/cli/src/platform/runtime/worktree.rs:105-113`, `apps/cli/src/app_server/developer_host.rs:376-376`
-
 ## S99.17: Terminal/PTY manager.
 
 - Done when: A terminal/PTY manager runs interactive shells with a real pseudo-terminal.
@@ -71,17 +49,6 @@ Code: `apps/cli/src/shell_snapshot.rs:10-15`
 | platform | partial | GitHub check_run/workflow_run webhooks become routine triggers; a PR check-run status reader (getGitHubPullRequestStatus) exists but nothing calls it, and no client shows check status or CI logs. | handler |
 
 Code: `apps/web/lib/triggers/github-events.ts:52-62`, `apps/web/lib/github-app.ts:941-944`
-
-## S99.29: Host capability manifest.
-
-- Done when: Each host publishes an accurate manifest of what it can do.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Device profiles are published, but Electron hard-codes localModels:false and localMcp:false even though it has a local model chat path. | handler |
-
-Code: `apps/desktop/electron/runtime/dispatcher.ts:678-695`
 
 ## S99.30: Local-to-cloud handoff coordinator.
 

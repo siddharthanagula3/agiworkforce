@@ -85,6 +85,7 @@ export interface ChromeManagedChatRequest {
   attachments?: string[];
   fileAttachments?: ManagedChatFileAttachment[];
   extendedThinking?: boolean;
+  workMode?: 'chat' | 'agiwork';
   currentModelKey?: string | null;
   previousTaskType?: RoutingTaskType | null;
   idempotencyKey?: string;
@@ -446,6 +447,16 @@ export async function executeChromeManagedChat(
       message: 'Managed Cloud chat is not available for this AGI account.',
     };
   }
+  if (
+    request.workMode === 'agiwork' &&
+    !canUseBillingPlanCapability(access.subscriptionTier, 'agi_work')
+  ) {
+    return {
+      status: 'error',
+      code: 'plan_required',
+      message: 'AGI Work is not included in this plan. Turn it off to keep chatting.',
+    };
+  }
 
   const requestedSelection = request.modelSelection?.trim() || 'auto';
   const selection = request.quickMode === true ? 'auto-economy' : requestedSelection;
@@ -508,6 +519,7 @@ export async function executeChromeManagedChat(
 
   const effort =
     request.effort === undefined ? undefined : resolveModelEffort(routing.modelKey, request.effort);
+  const routedModelSearches = getModelMetadataById(routing.modelKey)?.capabilities.search === true;
 
   const routingResult: ChromeManagedRoutingResult = {
     modelKey: routing.modelKey,
@@ -522,7 +534,10 @@ export async function executeChromeManagedChat(
     idempotencyKey: request.idempotencyKey ?? (await managedChatIdempotencyKey('send', request.id)),
     ...(effort ? { effort } : {}),
     extendedThinking: request.extendedThinking,
-    workMode: 'chat',
+    workMode: request.workMode === 'agiwork' ? 'agiwork' : 'chat',
+    ...(routedModelSearches && request.workMode !== 'agiwork'
+      ? { webSearch: true, webFetch: true }
+      : {}),
     ...(request.conversationId ? { conversationId: request.conversationId } : {}),
     ...(request.assistantMessageId ? { assistantMessageId: request.assistantMessageId } : {}),
     signal: request.signal,

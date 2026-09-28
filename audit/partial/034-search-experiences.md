@@ -68,28 +68,25 @@ Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2257
 
 - Done when: The assistant can search the user's connected work sources (Drive, Slack, Notion...) during a chat once they are connected.
 - Wave: 3
-- Already works on: web, desktop, mobile, chrome
+- Already works on: web, desktop, mobile, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Only MCP servers you register yourself (`agi mcp add`) can be searched; the first-party connector catalogue (Drive, Slack, Notion) from web is not available. | handler |
 | vscode | partial | Only MCP servers configured for the local CLI runtime; the first-party web connectors are not offered. | handler |
 
-Code: `apps/cli/src/lib.rs:2453-2453`, `apps/extension-vscode/package.json:638-639`
+Code: `apps/extension-vscode/package.json:638-639`
 
 ## S34.07: Public web search.
 
 - Done when: A chat can search the public web and answer from the results.
 - Wave: 3
-- Already works on: web, desktop, mobile, api
+- Already works on: web, desktop, mobile, cli, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Web search works only after you set SEARCH_API_KEY (or BRAVE_SEARCH_API_KEY/TAVILY_API_KEY) in the environment; there is no in-product way to turn it on. | handler |
 | vscode | partial | The "search the web" option only prefixes the prompt; the search runs in the local CLI and needs SEARCH_API_KEY set in its environment. | handler |
-| chrome | partial | Chrome never asks for web search (its chat request carries no web_search flag), so the server offers no search tool; add a web-search toggle or send the flag. | ui |
 
-Code: `apps/cli/src/features/exec/tools/web/mod.rs:286-294`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:2407-2407`, `apps/extension/src/features/cloud-bridge/freeTrialClient.ts:834-850`, `apps/web/lib/web-search/required-search.ts:129-129`
+Code: `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:2407-2407`, `apps/cli/src/features/exec/tools/web/mod.rs:286-294`
 
 ## S34.15: Date-range filters.
 
@@ -148,16 +145,13 @@ Code: `apps/extension-vscode/src/core/commandSetup.ts:2265-2269`, `apps/extensio
 
 - Done when: When a search query is ambiguous the product offers clarification choices the user can pick before searching.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | The agent can ask a free-text question (ask_user) and wait for a typed answer, but it offers no choices to pick from. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/features/exec/tools/task_registry/mod.rs:471-493`
 
 ## S34.23: Result previews.
 
@@ -216,14 +210,13 @@ Code: `apps/extension/src/features/side-panel/bubbles.ts:406-432`
 
 - Done when: From a citation or source card the user can open the original page/document.
 - Wave: 3
-- Already works on: web, desktop, mobile, chrome
+- Already works on: web, desktop, mobile, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Links in answers are printed with their URL for the terminal to open, but web sources only exist after setting SEARCH_API_KEY and there is no source list. | ui |
 | vscode | partial | URLs in answers render as links (markdown-it linkify), but there are no citations or source cards to open from. | ui |
 
-Code: `apps/cli/src/markdown.rs:434-440`, `apps/cli/src/features/exec/tools/web/mod.rs:286-286`, `apps/extension-vscode/src/webview/render.ts:5-7`
+Code: `apps/extension-vscode/src/webview/render.ts:5-7`
 
 ## S34.31: Search-result freshness information.
 
@@ -241,11 +234,10 @@ Code: `apps/cli/src/markdown.rs:434-440`, `apps/cli/src/features/exec/tools/web/
 
 - Done when: Searches that find nothing, or whose source/provider is unavailable, show a clear empty or unavailable state instead of silence.
 - Wave: 3
-- Already works on: web, desktop, mobile, chrome
+- Already works on: web, desktop, mobile, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Only a "not configured" or request-failed message is printed; an empty result set is passed to the model silently. | states |
 | vscode | partial | Session search shows an empty notice, but web search has no no-results or unavailable state beyond the prompt telling the model to say so. | states |
 
-Code: `apps/cli/src/features/exec/tools/web/mod.rs:288-291`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:2407-2407`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:4162-4162`
+Code: `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:2407-2407`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:4162-4162`

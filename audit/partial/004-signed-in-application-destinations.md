@@ -459,17 +459,14 @@ Code: `apps/mobile/src/features/settings/index.tsx:451-456`, `apps/mobile/app/(a
 
 - Done when: A developer console lets the user create/revoke API keys, see API usage per key, read API docs and try requests.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | API keys (create with scopes, revoke, last-used date) sit inside Account settings and docs are a marketing page (/api-docs); there is no developer console with per-key usage, request logs or a playground. | ui |
-| desktop | partial | API keys (create with scopes, revoke, last-used date) sit inside Account settings and docs are a marketing page (/api-docs); there is no developer console with per-key usage, request logs or a playground. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/settings/sections/AccountSection.tsx:369-376`, `apps/web/features/settings/sections/AccountSection.tsx:411-416`, `apps/web/features/settings/hooks/use-settings-queries.ts:239-258`, `apps/web/features/settings/components/Settings/ApiKeys.tsx:350-385`
 
 ## S4.44: Help and feedback.
 

@@ -102,33 +102,29 @@ Code: `apps/cli/src/lib.rs:1428-1462`, `apps/cli/src/lib.rs:3984-4025`
 
 - Done when: Plugins are grouped into role or use-case categories a user can browse.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Directory entries carry a category and the directory query can filter by it, but the web UI offers no category browse or filter. | ui |
-| desktop | partial | Same as web. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/plugins/server/directory/query.ts:100-108`, `apps/web/features/plugins/server/directory/entries.ts:235-235`
-
 ## S54.12: Publisher detail.
 
 - Done when: A user can see details about a plugin's publisher.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Detail shows publisher name, a verified badge and homepage/repo links; there is no publisher page with the publisher's other plugins or identity details. | ui |
-| desktop | partial | Detail shows publisher name, a verified badge and homepage/repo links; there is no publisher page with the publisher's other plugins or identity details. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | agi plugin list shows a signature label naming the trusted publisher when signed; no publisher detail. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `packages/ui/ui/src/directory/PluginDetailView.tsx:456-462`, `packages/ui/ui/src/directory/PluginDetailView.tsx:456-478`, `apps/cli/src/lib.rs:3613-3652`, `apps/cli/src/lib.rs:3617-3634`
+Code: `apps/cli/src/lib.rs:3613-3652`, `apps/cli/src/lib.rs:3617-3634`
 
 ## S54.13: Plugin detail.
 
@@ -216,17 +212,14 @@ Code: `packages/ui/ui/src/directory/PluginDetailView.tsx:113-145`, `apps/web/fea
 
 - Done when: Before and after installing, a user sees the permissions a plugin requires.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Migration 0289 is now applied in production (2026-09-27). Still open: Permission sets are stored and a changed set must be acknowledged before an update applies, but no screen shows a plugin's permissions; the update path reads pending migration 0289 columns. | ui |
-| desktop | partial | Migration 0289 is now applied in production (2026-09-27). Still open: Permission sets are stored and a changed set must be acknowledged before an update applies, but no screen shows a plugin's permissions; the update path reads pending migration 0289 columns. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/lib/services/plugin-installation-service.ts:213-230`, `apps/web/app/api/plugins/updates/route.ts:26-64`, `apps/web/lib/services/plugin-lifecycle.ts:100-102`
 
 ## S54.20: Supported surfaces.
 
@@ -287,63 +280,71 @@ Code: `packages/ui/ui/src/directory/PluginDetailView.tsx:311-340`, `apps/web/fea
 
 - Done when: A user can turn an installed plugin off and on without uninstalling it.
 - Wave: 3
-- Already works on: web, desktop, vscode
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | The runtime can toggle a plugin through its app-server API, but no agi command or slash command does it; users must edit the disabled list by hand. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/app_server/surfaces.rs:194-201`, `apps/cli/src/tui/tui_app.rs:3762-3790`
 
 ## S54.25: Update.
 
 - Done when: A user can update an installed plugin to a newer version.
 - Wave: 3
-- Already works on: cli
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Migration 0289 is now applied in production (2026-09-27). Still open: An update-offer API exists but nothing in the product calls it, and it reads signature columns from pending migration 0289. | ui |
-| desktop | partial | Migration 0289 is now applied in production (2026-09-27). Still open: An update-offer API exists but nothing in the product calls it, and it reads signature columns from pending migration 0289. | ui |
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/api/plugins/updates/route.ts:26-64`, `apps/web/lib/services/plugin-lifecycle.ts:100-102`
 
 ## S54.26: Pin version.
 
 - Done when: A user can pin a plugin to a specific version.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Installs record installed_version and never auto-update, but a user cannot choose or hold a version. | ui |
-| desktop | partial | Installs record installed_version and never auto-update, but a user cannot choose or hold a version. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | --integrity sha256:<hex> pins the content on install, but there is no way to choose a version, and marketplace update moves every git plugin forward. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/services/plugin-installation-service.ts:185-202`, `packages/ui/ui/src/directory/PluginDetailView.tsx:568-577`, `apps/cli/src/lib.rs:1293-1326`, `apps/cli/src/lib.rs:3984-4025`
+Code: `apps/cli/src/lib.rs:1293-1326`, `apps/cli/src/lib.rs:3984-4025`
 
 ## S54.27: Customize installed plugin.
 
 - Done when: A user can customize an installed plugin (edit its skills or content).
-- Wave: 3
+- Wave: 2
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only per-skill switches; an installed plugin's skills or content cannot be edited. | ui |
-| desktop | partial | Only per-skill switches; an installed plugin's skills or content cannot be edited. | ui |
+| web | partial | partials/routines-voice 71dda8e8f: Customize makes an installed registry, directory, uploaded or marketplace plugin into your own editable copy with its skills and bundled files and opens it for editing; it sits behind the skill-authoring gate and stays off until the lead switches AGI_USER_SKILL_AUTHORING on | flag-off |
+| desktop | partial | partials/routines-voice 71dda8e8f: Customize makes an installed registry, directory, uploaded or marketplace plugin into your own editable copy with its skills and bundled files and opens it for editing; it sits behind the skill-authoring gate and stays off until the lead switches AGI_USER_SKILL_AUTHORING on | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | Installed plugins are local folders a user can edit by hand; the CLI offers no customization command. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `packages/ui/ui/src/directory/PluginDetailView.tsx:271-305`, `apps/web/features/directory/hooks/useDirectoryAdapter.ts:1276-1285`, `apps/cli/src/lib.rs:3613-3652`
+Code: `apps/web/features/plugins/server/directory/customize.ts:154-154`, `apps/web/app/api/plugins/customize/route.ts:25-25`, `packages/ui/ui/src/directory/DirectoryPanel.tsx:557-557`, `packages/ui/ui/src/directory/PluginDetailView.tsx:694-694`
+
+## S54.28: Fork plugin.
+
+- Done when: A user can fork a plugin into their own editable copy.
+- Wave: 2
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+| web | partial | partials/routines-voice 71dda8e8f: forking copies the plugin into a created plugin you own, turns the original off so chats use your copy, and reopens the existing copy on a second request; behind AGI_USER_SKILL_AUTHORING until the lead switches it on | flag-off |
+| desktop | partial | partials/routines-voice 71dda8e8f: forking copies the plugin into a created plugin you own, turns the original off so chats use your copy, and reopens the existing copy on a second request; behind AGI_USER_SKILL_AUTHORING until the lead switches it on | flag-off |
+| mobile | missing | Not built on this surface. |  |
+| cli | missing | Not built on this surface. |  |
+| vscode | missing | Not built on this surface. |  |
+| chrome | missing | Not built on this surface. |  |
+
+Code: `apps/web/features/plugins/server/directory/customize.ts:154-154`, `apps/web/features/plugins/server/directory/customize.ts:198-198`
 
 ## S54.29: Uninstall.
 
@@ -377,17 +378,14 @@ Code: `apps/web/features/workspace-console/components/WorkspaceConnectorPolicy.t
 
 - Done when: A user can see a plugin's security-scan result.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | A package scan runs on marketplace uploads and blocks install when it fails, but users only see a refusal message; findings are never shown. | ui |
-| desktop | partial | A package scan runs on marketplace uploads and blocks install when it fails, but users only see a refusal message; findings are never shown. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/lib/services/plugin-marketplace-service.ts:215-250`, `apps/web/lib/services/plugin-marketplace-service.ts:685-705`
 
 ## S54.33: Compatibility warning.
 
@@ -405,33 +403,30 @@ Code: `apps/web/lib/services/plugin-marketplace-service.ts:215-250`, `apps/web/l
 
 - Done when: When a plugin's dependency is missing, the product offers to fix it.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Missing required connectors get a Connect button; other missing requirements (unavailable skills, runtime) have no repair path. | handler |
-| desktop | partial | Missing required connectors get a Connect button; other missing requirements (unavailable skills, runtime) have no repair path. | handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `packages/ui/ui/src/directory/PluginDetailView.tsx:311-340`, `apps/web/features/directory/hooks/useDirectoryAdapter.ts:1342-1345`
 
 ## S54.35: Plugin-creation assistant.
 
 - Done when: The product helps a user build a plugin with an assistant.
-- Wave: 3
+- Wave: 2
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Create plugin is a plain form (name, description, skills); "Create with AGI" only pre-fills a chat prompt and nothing turns the reply into a plugin (R-r). | handler |
-| desktop | partial | Create plugin is a plain form (name, description, skills); "Create with AGI" only pre-fills a chat prompt and nothing turns the reply into a plugin (R-r). | handler |
+| web | partial | partials/routines-voice 71dda8e8f: asking to build or change a plugin or skill gives the model a draft_plugin tool whose validated draft renders as a card with Save plugin and Save as a skill; offered only where skill authoring is on, so it stays off until the lead switches AGI_USER_SKILL_AUTHORING on | flag-off |
+| desktop | partial | partials/routines-voice 71dda8e8f: asking to build or change a plugin or skill gives the model a draft_plugin tool whose validated draft renders as a card with Save plugin and Save as a skill; offered only where skill authoring is on, so it stays off until the lead switches AGI_USER_SKILL_AUTHORING on | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `packages/ui/ui/src/directory/DirectoryPanel.tsx:374-380`, `apps/web/features/directory/hooks/useDirectoryAdapter.ts:1208-1221`, `apps/web/features/directory/hooks/useDirectoryAdapter.ts:274-283`
+Code: `apps/web/lib/server/tools/plugin-draft-tool.ts:101-101`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4332-4332`, `apps/web/features/chat/components/messages/ToolTimeline.tsx:492-492`, `apps/web/features/chat/components/PluginDraftCard.tsx:35-35`
 
 ## S54.36: Submission and review workflow.
 

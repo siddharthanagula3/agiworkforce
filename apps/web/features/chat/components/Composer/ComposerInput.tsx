@@ -54,7 +54,10 @@ export const COMPOSER_INPUT_EMPTY_ROW_CLASS = 'min-h-[36px] py-1 sm:min-h-[40px]
 const INPUT_PLACEHOLDER_CLASS =
   'placeholder:overflow-hidden placeholder:text-ellipsis placeholder:whitespace-nowrap placeholder:text-muted-foreground';
 const INPUT_SHARED_CLASS =
-  'relative z-[var(--z-control)] block max-h-[240px] w-full resize-none overflow-y-auto border-0 bg-transparent px-2 text-foreground outline-none disabled:cursor-not-allowed disabled:opacity-50';
+  'relative z-[var(--z-control)] block w-full resize-none overflow-y-auto border-0 bg-transparent px-2 text-foreground outline-none disabled:cursor-not-allowed disabled:opacity-50';
+const INPUT_RESTING_HEIGHT_CLASS = 'max-h-[240px]';
+const INPUT_EXPANDED_HEIGHT_CLASS = 'h-[min(60dvh,40rem)] max-h-[min(60dvh,40rem)]';
+const INPUT_END_INSET_CLASS = 'pr-9';
 /** 16px/24px everywhere: home and chat, desktop and phone (parity target). */
 const INPUT_TEXT_SIZE_CLASS = 'text-base leading-6';
 const INPUT_EMPTY_TEXT_SIZE_CLASS = 'text-base leading-6';
@@ -65,7 +68,11 @@ const INPUT_EMPTY_TEXT_SIZE_CLASS = 'text-base leading-6';
  * contenteditable that the textarea gets from its own utilities.
  */
 const EDITOR_SHARED_CLASS =
-  'relative z-[var(--z-control)] [&_.ProseMirror]:max-h-[240px] [&_.composer-editor\\_\\_placeholder]:max-w-full [&_.composer-editor\\_\\_placeholder]:overflow-hidden [&_.composer-editor\\_\\_placeholder]:text-ellipsis [&_.composer-editor\\_\\_placeholder]:whitespace-nowrap';
+  'relative z-[var(--z-control)] [&_.composer-editor\\_\\_placeholder]:max-w-full [&_.composer-editor\\_\\_placeholder]:overflow-hidden [&_.composer-editor\\_\\_placeholder]:text-ellipsis [&_.composer-editor\\_\\_placeholder]:whitespace-nowrap';
+const EDITOR_RESTING_HEIGHT_CLASS = '[&_.ProseMirror]:max-h-[240px]';
+const EDITOR_EXPANDED_HEIGHT_CLASS =
+  '[&_.ProseMirror]:h-[min(60dvh,40rem)]! [&_.ProseMirror]:max-h-[min(60dvh,40rem)]!';
+const EDITOR_END_INSET_CLASS = '[&_.ProseMirror]:pr-9';
 const EDITOR_ROW_CLASS =
   '[&_.ProseMirror]:min-h-[36px] [&_.ProseMirror]:py-1 sm:[&_.ProseMirror]:min-h-[36px] sm:[&_.ProseMirror]:py-1.5';
 const EDITOR_EMPTY_ROW_CLASS =
@@ -104,6 +111,8 @@ export interface ComposerInputProps {
   maxLength: number;
   /** New-chat surface: a larger type size and a shorter resting height. */
   emptyState: boolean;
+  expanded: boolean;
+  reserveEndInset: boolean;
   ariaDescribedBy: string | undefined;
   existingFileNames: readonly string[];
   mention: ComposerMentionConfig;
@@ -122,6 +131,8 @@ function ComposerTextarea({
   disabled,
   maxLength,
   emptyState,
+  expanded,
+  reserveEndInset,
   ariaDescribedBy,
 }: ComposerInputProps) {
   return (
@@ -145,6 +156,8 @@ function ComposerTextarea({
         INPUT_PLACEHOLDER_CLASS,
         emptyState ? COMPOSER_INPUT_EMPTY_ROW_CLASS : COMPOSER_INPUT_ROW_CLASS,
         emptyState ? INPUT_EMPTY_TEXT_SIZE_CLASS : INPUT_TEXT_SIZE_CLASS,
+        expanded ? INPUT_EXPANDED_HEIGHT_CLASS : INPUT_RESTING_HEIGHT_CLASS,
+        reserveEndInset && INPUT_END_INSET_CLASS,
       )}
       rows={1}
       maxLength={maxLength}
@@ -167,6 +180,8 @@ function ComposerRichEditor({
   disabled,
   maxLength,
   emptyState,
+  expanded,
+  reserveEndInset,
   ariaDescribedBy,
   existingFileNames,
   mention,
@@ -211,6 +226,8 @@ function ComposerRichEditor({
         EDITOR_SHARED_CLASS,
         emptyState ? EDITOR_EMPTY_ROW_CLASS : EDITOR_ROW_CLASS,
         emptyState ? EDITOR_EMPTY_TEXT_SIZE_CLASS : EDITOR_TEXT_SIZE_CLASS,
+        expanded ? EDITOR_EXPANDED_HEIGHT_CLASS : EDITOR_RESTING_HEIGHT_CLASS,
+        reserveEndInset && EDITOR_END_INSET_CLASS,
       )}
       existingFileNames={existingFileNames}
       mention={mention}

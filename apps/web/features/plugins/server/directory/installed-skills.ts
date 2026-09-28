@@ -1,7 +1,7 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import { hashSkillContent, type Skill } from '@agiworkforce/skills';
+import { hashSkillContent, type Skill, type SkillWithFileAccess } from '@agiworkforce/skills';
 
 import { isMissingPluginMarketplaceSchema } from '@/lib/services/plugin-marketplace-service';
 import {
@@ -12,6 +12,7 @@ import { shaFromInstalledVersion } from './entries';
 import { findPluginDirectoryRecord } from './memory-cache';
 import type { DirectoryFetch } from './official-marketplace';
 import { fetchPluginSkillFiles, parseSkillFile } from './skill-files';
+import { ownedSkillFileAccess, repositorySkillFileAccess } from './skill-companions';
 import {
   installedSkillsCacheParams,
   readInstalledSkills,
@@ -127,14 +128,19 @@ interface SkillFetchPlan {
   skillPaths: readonly string[];
 }
 
-async function skillsForRow(
+interface PlannedSkills {
+  plan: SkillFetchPlan;
+  skills: readonly InstalledDirectorySkill[];
+}
+
+async function plannedSkillsForRow(
   row: InstalledEntryRow,
   repositoryUrl: string,
   fetchImpl: DirectoryFetch | undefined,
-): Promise<Skill[]> {
+): Promise<PlannedSkills | null> {
   const sha = shaFromInstalledVersion(row.installed_version);
   const plan = sha ? await directorySourcePlan(row, sha) : await ownSourcePlan(row, repositoryUrl);
-  if (!plan) return [];
+  if (!plan) return null;
   const params = installedSkillsCacheParams(
     repositoryUrl,
     row.plugin_key,
@@ -148,20 +154,34 @@ async function skillsForRow(
     cached = fetched;
   }
   const enabled = new Set(toStringArray(row.enabled_skills));
-  return cached
-    .filter((skill) => enabled.has(skill.name))
-    .map((skill) => toSkill(row.plugin_key, skill));
+  return { plan, skills: cached.filter((skill) => enabled.has(skill.name)) };
 }
 
-function storedSkills(row: InstalledEntryRow, files: readonly OwnedEntryFile[]): Skill[] {
+async function skillsForRow(
+  row: InstalledEntryRow,
+  repositoryUrl: string,
+  fetchImpl: DirectoryFetch | undefined,
+): Promise<Skill[]> {
+  const planned = await plannedSkillsForRow(row, repositoryUrl, fetchImpl);
+  return planned ? planned.skills.map((skill) => toSkill(row.plugin_key, skill)) : [];
+}
+
+function storedDirectorySkills(
+  row: InstalledEntryRow,
+  files: readonly OwnedEntryFile[],
+): InstalledDirectorySkill[] {
   const enabled = new Set(toStringArray(row.enabled_skills));
-  const skills: Skill[] = [];
+  const skills: InstalledDirectorySkill[] = [];
   for (const file of files) {
     const parsed = parseSkillFile(file.path, file.content);
     if (!parsed || !enabled.has(parsed.name)) continue;
-    skills.push(toSkill(row.plugin_key, parsed));
+    skills.push(parsed);
   }
   return skills;
+}
+
+function storedSkills(row: InstalledEntryRow, files: readonly OwnedEntryFile[]): Skill[] {
+  return storedDirectorySkills(row, files).map((skill) => toSkill(row.plugin_key, skill));
 }
 
 export async function listInstalledDirectorySkills(
@@ -192,6 +212,49 @@ export async function listInstalledDirectorySkills(
   return skills;
 }
 
+export async function findInstalledDirectorySkillWithFiles(
+  db: DatabaseAdapter,
+  userId: string,
+  name: string,
+  fetchImpl?: DirectoryFetch,
+): Promise<SkillWithFileAccess | null> {
+  const rows = await listInstalledEntries(db, userId);
+  const stored = await listOwnedEntryFiles(
+    db,
+    userId,
+    rows.filter((row) => row.repository_url === null).map((row) => row.entry_id),
+  );
+  for (const row of rows) {
+    const repositoryUrl = row.repository_url;
+    if (repositoryUrl === null) {
+      const found = storedDirectorySkills(row, stored.get(row.entry_id) ?? []).find(
+        (skill) => skill.name === name,
+      );
+      if (found) {
+        return {
+          skill: toSkill(row.plugin_key, found),
+          access: ownedSkillFileAccess(db, userId, row.entry_id, found.path),
+        };
+      }
+      continue;
+    }
+    const planned = await plannedSkillsForRow(row, repositoryUrl, fetchImpl);
+    const found = planned?.skills.find((skill) => skill.name === name);
+    if (planned && found) {
+      return {
+        skill: toSkill(row.plugin_key, found),
+        access: repositorySkillFileAccess(
+          planned.plan.location,
+          planned.plan.revision,
+          found.path,
+          fetchImpl,
+        ),
+      };
+    }
+  }
+  return null;
+}
+
 export async function findInstalledDirectorySkill(
   db: DatabaseAdapter,
   userId: string,
@@ -200,4 +263,41 @@ export async function findInstalledDirectorySkill(
 ): Promise<Skill | null> {
   const skills = await listInstalledDirectorySkills(db, userId, fetchImpl);
   return skills.find((skill) => skill.name === name) ?? null;
+}
+
+export type InstalledPluginMatch = { entryId: string } | { pluginKey: string };
+
+function matchesInstalledPlugin(row: InstalledEntryRow, match: InstalledPluginMatch): boolean {
+  return 'entryId' in match ? row.entry_id === match.entryId : row.plugin_key === match.pluginKey;
+}
+
+export async function listInstalledPluginSkillsWithFiles(
+  db: DatabaseAdapter,
+  userId: string,
+  match: InstalledPluginMatch,
+  fetchImpl?: DirectoryFetch,
+): Promise<SkillWithFileAccess[]> {
+  const row = (await listInstalledEntries(db, userId)).find((candidate) =>
+    matchesInstalledPlugin(candidate, match),
+  );
+  if (!row) return [];
+  const repositoryUrl = row.repository_url;
+  if (repositoryUrl === null) {
+    const stored = await listOwnedEntryFiles(db, userId, [row.entry_id]);
+    return storedDirectorySkills(row, stored.get(row.entry_id) ?? []).map((skill) => ({
+      skill: toSkill(row.plugin_key, skill),
+      access: ownedSkillFileAccess(db, userId, row.entry_id, skill.path),
+    }));
+  }
+  const planned = await plannedSkillsForRow(row, repositoryUrl, fetchImpl);
+  if (!planned) return [];
+  return planned.skills.map((skill) => ({
+    skill: toSkill(row.plugin_key, skill),
+    access: repositorySkillFileAccess(
+      planned.plan.location,
+      planned.plan.revision,
+      skill.path,
+      fetchImpl,
+    ),
+  }));
 }

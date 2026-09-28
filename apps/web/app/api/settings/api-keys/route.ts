@@ -14,6 +14,8 @@ import { ApiKeyService } from '@/lib/services/api-key-service';
 import { API_KEY_SCOPE_VALUES, resolveApiKeyScopes } from '@/lib/api-key-scopes';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { requireStepUp } from '@/lib/server/step-up-auth';
+import { readLiveDeveloperProject } from '@/lib/services/developer-project-service';
+import { queueDeveloperWebhookEvent } from '@/lib/services/developer-webhook-service';
 
 const CreateKeySchema = z.object({
   name: z.string().min(1, 'Name is required').max(100, 'Name must be at most 100 characters'),
@@ -23,6 +25,7 @@ const CreateKeySchema = z.object({
     .max(API_KEY_SCOPE_VALUES.length)
     .refine((scopes) => new Set(scopes).size === scopes.length, 'Scopes must be unique'),
   expiresAt: z.string().datetime().nullish(),
+  projectId: z.string().uuid().nullish(),
 });
 
 function maskRow(row: ApiKeyRow) {
@@ -31,6 +34,7 @@ function maskRow(row: ApiKeyRow) {
     name: row.name,
     key_prefix: row.key_prefix,
     scopes: resolveApiKeyScopes(row.scopes),
+    project_id: row.project_id ?? null,
     created_at: row.created_at,
     last_used_at: row.last_used_at ?? null,
     expires_at: row.expires_at ?? null,
@@ -44,7 +48,7 @@ async function handleList(request: NextRequest) {
   const { db, userId } = await getUserScopedDb(request);
 
   const rows = await db.query<ApiKeyRow>(
-    `select id, user_id, name, key_hash, key_prefix, scopes, last_used_at, expires_at, revoked_at, created_at
+    `select id, user_id, name, key_hash, key_prefix, scopes, project_id, last_used_at, expires_at, revoked_at, created_at
      from public.api_keys
      where user_id = $1
        and revoked_at is null
@@ -70,6 +74,10 @@ async function handleCreate(request: NextRequest) {
   const { name, scopes } = parsed.data;
 
   const expiresAt = parsed.data.expiresAt ? new Date(parsed.data.expiresAt) : null;
+  const projectId = parsed.data.projectId ?? null;
+  if (projectId && !(await readLiveDeveloperProject(db, userId, projectId))) {
+    throw createError.validation('That project does not exist or is archived.');
+  }
 
   const [countRow] = await db.query<{ count: string }>(
     `select count(*) as count from public.api_keys where user_id = $1 and revoked_at is null`,
@@ -97,6 +105,7 @@ async function handleCreate(request: NextRequest) {
     name,
     scopes,
     expiresAt,
+    projectId,
   );
 
   logger.info({ userId, keyId: row.id }, 'API key created');
@@ -111,7 +120,17 @@ async function handleCreate(request: NextRequest) {
       resourceName: name,
       scopes: resolveApiKeyScopes(row.scopes),
       ...(expiresAt ? { expiresAt: expiresAt.toISOString() } : {}),
+      ...(projectId ? { subjectRef: projectId } : {}),
     },
+  });
+
+  await queueDeveloperWebhookEvent(db, userId, 'api_key.created', {
+    id: row.id,
+    name,
+    key_prefix: row.key_prefix,
+    scopes: resolveApiKeyScopes(row.scopes),
+    project_id: projectId,
+    expires_at: expiresAt ? expiresAt.toISOString() : null,
   });
 
   return NextResponse.json(

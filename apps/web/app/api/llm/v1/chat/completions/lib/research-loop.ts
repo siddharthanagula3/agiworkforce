@@ -50,10 +50,12 @@ import type {
   ResearchDeliverableSpec,
   ResearchGap,
   ResearchReportStatus,
+  ResearchRunConfig,
+  ResearchSourceRequest,
   ResearchStep,
   ThinkingBlock,
 } from '@agiworkforce/types';
-import { DEFAULT_RESEARCH_DELIVERABLE } from '@agiworkforce/types';
+import { DEFAULT_RESEARCH_DELIVERABLE, RESEARCH_PAUSED_REASON } from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
 import { classifyError } from '@agiworkforce/provider-runtime';
 import { publisherFromTitle, rankSources } from '@agiworkforce/search';
@@ -96,9 +98,12 @@ import {
 } from './turn-completeness';
 import { executeUrlFetch, fenceFetchedPage, isUrlFetchTool } from '@/lib/url-fetch/url-fetch-tool';
 import {
+  researchConnectorOutcomeNote,
+  researchConnectorSourcesPrompt,
   researchDomainAllowed,
   researchDomainDirective,
   researchFileSourcesPrompt,
+  type ResearchConnectorRead,
   type ResearchDomainPolicy,
   type ResearchFileSource,
 } from './research-sources';
@@ -189,7 +194,7 @@ const CONTINUE_MARKER = 'CONTINUE_RESEARCH';
 export const DROP_MARKER = 'DROP';
 
 export type ResearchPhase =
-  'planning' | 'awaiting_approval' | 'searching' | 'synthesizing' | 'complete' | 'error';
+  'planning' | 'awaiting_approval' | 'searching' | 'synthesizing' | 'paused' | 'complete' | 'error';
 
 /** Planned search queries the planning turn may commit to. */
 const PLAN_MIN_STEPS = 3;
@@ -223,6 +228,7 @@ export interface ResearchRunReport {
   keyFindings: string[];
   gaps: ResearchGap[];
   deliverable: ResearchDeliverableSpec;
+  sourceSelection: ResearchSourceRequest;
   status: ResearchReportStatus;
   sourcesConsulted: number;
   durationMs: number;
@@ -305,6 +311,10 @@ export interface ResearchLoopOptions {
   deliverable?: ResearchDeliverableSpec;
   toolApprovalPolicy?: ToolApprovalPolicy;
   connectorPermissions?: ConnectorToolPermissions;
+  isPauseRequested?: () => Promise<boolean>;
+  guidance?: string;
+  sources?: ResearchSourceRequest;
+  readConnectorSources?: (queries: readonly string[]) => Promise<readonly ResearchConnectorRead[]>;
 }
 
 // ─── SSE helpers ──────────────────────────────────────────────────────────────
@@ -377,12 +387,27 @@ export function researchStatusEvent(
  * Additive by construction: a client that ignores unknown `x_` deltas sees the
  * run exactly as it did before this event existed.
  */
-export function researchPlanEvent(steps: ResearchStep[], responseModel: string): string {
+export function researchPlanEvent(
+  steps: ResearchStep[],
+  responseModel: string,
+  run?: ResearchRunConfig,
+): string {
   return sseData({
     choices: [
       {
         delta: {
           x_research_plan: {
+            ...(run
+              ? {
+                  run: {
+                    files: run.sources.files,
+                    allow_domains: run.sources.allowDomains,
+                    deny_domains: run.sources.denyDomains,
+                    connectors: run.sources.connectors,
+                    deliverable: run.deliverable,
+                  },
+                }
+              : {}),
             steps: steps.map((step) => ({
               id: step.id,
               type: step.type,
@@ -665,10 +690,15 @@ export class SourceAggregator {
    */
   constructor(private readonly domainPolicy: ResearchDomainPolicy | null = null) {}
 
-  add(entry: { url?: unknown; title?: unknown; snippet?: unknown; date?: unknown }): boolean {
+  add(
+    entry: { url?: unknown; title?: unknown; snippet?: unknown; date?: unknown },
+    chosenByReader = false,
+  ): boolean {
     const url = typeof entry.url === 'string' ? entry.url.trim() : '';
     if (!url) return false;
-    if (!url.startsWith('/') && !researchDomainAllowed(this.domainPolicy, url)) return false;
+    if (!url.startsWith('/') && !chosenByReader && !researchDomainAllowed(this.domainPolicy, url)) {
+      return false;
+    }
     const key = normalizeSourceUrlKey(url);
     const existing = this.byUrl.get(key);
     if (existing) {
@@ -1046,6 +1076,57 @@ function planningDirective(carriedQueries: string[]): string {
   );
 }
 
+function guidanceNote(guidance: string): string {
+  return (
+    'Guidance from the user, sent while this research was running. The rest of the research and the report must follow it:\n' +
+    guidance
+  );
+}
+
+function replanDirective(completedQueries: string[], pendingQueries: string[]): string {
+  const completed =
+    completedQueries.length > 0
+      ? `\n\nAlready searched, do NOT repeat:\n${completedQueries.map((query) => `- ${query}`).join('\n')}`
+      : '';
+  const pending =
+    pendingQueries.length > 0
+      ? `\n\nStill planned:\n${pendingQueries.map((query) => `- ${query}`).join('\n')}`
+      : '';
+  return (
+    'Revise the searches this research still has to run so that it follows the guidance above.' +
+    ' Keep a planned search only if it still serves the request and the guidance.' +
+    ` Reply with ONLY a JSON array of 1-${PLAN_MAX_STEPS} short search query strings for the searches still to run, e.g. ["query one", "query two"].` +
+    ' No prose, no markdown fences, no explanation. Do not search yet.' +
+    completed +
+    pending
+  );
+}
+
+const MAX_RESUME_SNIPPET_CHARS = 300;
+
+function resumeContextNote(completedQueries: string[], sources: SourceAggregator): string {
+  const searched =
+    completedQueries.length > 0
+      ? `\n\nThese searches already ran, do NOT repeat them:\n${completedQueries.map((query) => `- ${query}`).join('\n')}`
+      : '';
+  const found =
+    sources.size > 0
+      ? `\n\nWhat the research has gathered so far (cite as [n]):\n${sources
+          .list()
+          .map(
+            (source) =>
+              `[${source.position}] ${source.title}, ${source.url}${
+                source.snippet ? `: ${source.snippet.slice(0, MAX_RESUME_SNIPPET_CHARS)}` : ''
+              }`,
+          )
+          .join('\n')}`
+      : '';
+  return `This research stopped partway and is now resuming from where it stopped.${searched}${found}`.slice(
+    0,
+    MAX_NOTE_CHARS,
+  );
+}
+
 function gatheringDirective(
   round: number,
   maxRounds: number,
@@ -1054,13 +1135,14 @@ function gatheringDirective(
   runtimeSearch: boolean,
   plannedQueries: string[] = [],
   domainPolicy: ResearchDomainPolicy | null = null,
+  resumed = false,
 ): string {
   const planned =
     plannedQueries.length > 0
       ? `\n\nRun these planned searches now:\n${plannedQueries.map((query) => `- ${query}`).join('\n')}\n`
       : '';
   const base =
-    round === 1
+    round === 1 && !resumed
       ? plannedQueries.length > 0
         ? `Research phase, round 1: run the searches you planned.${planned}`
         : 'Research phase, round 1: break the request into 3-5 distinct, targeted web search queries covering different angles, then run those searches now.'
@@ -1110,6 +1192,17 @@ const DELIVERABLE_FORMAT_DIRECTIVE: Record<ResearchDeliverableSpec['format'], st
     ' Write it as bullets, one claim per bullet, each with its citation. No paragraphs.',
 };
 
+const MAX_REPORT_CHARTS = 3;
+
+const CHART_DIRECTIVE =
+  ' Where the sources give comparable figures, such as a trend over time or three or more options measured the same way,' +
+  ` add a chart of them as a mermaid code block, at most ${MAX_REPORT_CHARTS} in the report.` +
+  ' Use xychart-beta for bars or lines and pie for shares of a whole, in exactly this shape:' +
+  '\n```mermaid\nxychart-beta\n    title "Revenue by year"\n    x-axis ["2022", "2023", "2024"]\n    y-axis "USD billion"\n    bar [12.1, 15.4, 19.8]\n```\n' +
+  '```mermaid\npie title Market share, 2024\n    "Company A" : 41\n    "Company B" : 33\n    "Others" : 26\n```\n' +
+  'Chart only figures the report states and cites, keep their citations in the sentence that introduces the chart,' +
+  ' and never estimate or invent a value to complete one. Leave the chart out when the figures are not comparable.';
+
 function synthesisDirective(
   sources: SourceAggregator,
   cutShortReason: string | null,
@@ -1134,6 +1227,7 @@ function synthesisDirective(
     'Synthesis phase: write the final research report now, based on your research notes above.' +
     DELIVERABLE_DEPTH_DIRECTIVE[deliverable.depth] +
     DELIVERABLE_FORMAT_DIRECTIVE[deliverable.format] +
+    CHART_DIRECTIVE +
     ' Inline-cite every factual claim with a bracketed number, e.g. [1], matching the numbered source list below when present.' +
     ' Do not end with a Sources or References list and never paste a raw URL into the report:' +
     ' the app renders the numbered sources beside the report from the numbers you cite.' +
@@ -1301,6 +1395,22 @@ export function parseDroppedPlanSteps(
   return [...dropped].map(([id, reason]) => ({ id, reason }));
 }
 
+function nextPlanStepNumber(plan: readonly ResearchStep[]): number {
+  let highest = 0;
+  for (const step of plan) {
+    const match = /^plan-(\d+)$/.exec(step.id);
+    if (match) highest = Math.max(highest, Number(match[1]));
+  }
+  return highest + 1;
+}
+
+function uniqueStepId(plan: readonly ResearchStep[], base: string): string {
+  if (!plan.some((step) => step.id === base)) return base;
+  let suffix = 2;
+  while (plan.some((step) => step.id === `${base}-${suffix}`)) suffix += 1;
+  return `${base}-${suffix}`;
+}
+
 // ─── Main loop ────────────────────────────────────────────────────────────────
 
 /**
@@ -1429,6 +1539,7 @@ export async function* runResearchLoop(
   const plan: ResearchStep[] = (options.priorSteps ?? [])
     .filter((step) => step.status === 'completed')
     .map((step) => ({ ...step }));
+  const firstApprovedStepNumber = nextPlanStepNumber(plan);
   const approvedPlan = (options.approvedPlan ?? [])
     .filter(
       (step) =>
@@ -1441,11 +1552,22 @@ export async function* runResearchLoop(
     .slice(0, PLAN_MAX_STEPS)
     .map((step, index) => ({
       ...step,
-      id: `plan-${plan.length + index + 1}`,
+      id: `plan-${firstApprovedStepNumber + index}`,
       status: 'pending' as const,
     }));
   plan.push(...approvedPlan);
-  const planEvent = (): Uint8Array => encoder.encode(researchPlanEvent(plan, responseModel));
+  const continuingRun = approvedPlan.length > 0 || carriedQueries.length > 0;
+  const resumingRun = carriedQueries.length > 0 || (options.priorSources?.length ?? 0) > 0;
+  const sourceSelection: ResearchSourceRequest = options.sources ?? {
+    files: false,
+    allowDomains: [],
+    denyDomains: [],
+    connectors: [],
+  };
+  const planEvent = (): Uint8Array =>
+    encoder.encode(
+      researchPlanEvent(plan, responseModel, { sources: sourceSelection, deliverable }),
+    );
   const gapEvent = (content: string): Uint8Array =>
     encoder.encode(researchGapsEvent(deriveResearchGaps(plan, content), responseModel));
 
@@ -1517,6 +1639,7 @@ export async function* runResearchLoop(
         keyFindings: outline.keyFindings,
         gaps: deriveResearchGaps(plan, content),
         deliverable,
+        sourceSelection,
         status,
         sourcesConsulted: sources.size,
         durationMs: Math.max(0, now() - startedAt),
@@ -1562,6 +1685,32 @@ export async function* runResearchLoop(
     return true;
   }
 
+  async function pauseWasRequested(): Promise<boolean> {
+    if (!options.isPauseRequested) return false;
+    try {
+      return await options.isPauseRequested();
+    } catch (error) {
+      logger.warn(
+        { requestId: processed.requestId, error: error instanceof Error ? error.message : error },
+        '[research-loop] pause request could not be read; the run continues',
+      );
+      return false;
+    }
+  }
+
+  async function* pauseIfRequested(): AsyncGenerator<Uint8Array, boolean> {
+    if (!(await pauseWasRequested())) return false;
+    await persistRun('interrupted', '', RESEARCH_PAUSED_REASON);
+    yield planEvent();
+    const gathered = sources.toSearchResultsEvent(responseModel);
+    if (gathered) yield encoder.encode(gathered);
+    yield status('paused', 'Research paused');
+    yield encoder.encode(eventStream.emit({ type: 'lifecycle', phase: 'paused' }));
+    yield encoder.encode(eventStream.emit({ type: 'stop', reason: 'end-turn' }));
+    yield encoder.encode(sseDone());
+    return true;
+  }
+
   // Strip client-custom function tools EXCEPT the two platform tools this loop
   // executes itself, url_fetch and the runtime web_search fallback
   // (request-processor only offers either when the resolved model supports
@@ -1603,7 +1752,7 @@ export async function* runResearchLoop(
   const toolApprovalPolicy = options.toolApprovalPolicy ?? DEFAULT_TOOL_APPROVAL_POLICY;
   const connectorPermissions = options.connectorPermissions ?? EMPTY_CONNECTOR_TOOL_PERMISSIONS;
   const approvalMode = classifyToolLoopInputs([], researchTools, toolApprovalPolicy).approvalMode;
-  const sensitiveSourceAvailable =
+  let sensitiveSourceAvailable =
     hasPrivateContext(processed, messages) || (options.fileSources?.length ?? 0) > 0;
   let untrustedContentInContext = hasUntrustedContext(processed, messages);
   const approvedQueries = new Set(approvedPlan.map((step) => normalizedQuery(step.description)));
@@ -2010,6 +2159,150 @@ export async function* runResearchLoop(
     return false;
   }
 
+  async function* readConnectedApps(queries: readonly string[]): AsyncGenerator<Uint8Array, void> {
+    if (!options.readConnectorSources) return;
+    const placeholderId = uniqueStepId(plan, 'connected-apps');
+    const firstPending = plan.findIndex((step) => step.status === 'pending');
+    const insertAt = firstPending === -1 ? plan.length : firstPending;
+    plan.splice(insertAt, 0, {
+      id: placeholderId,
+      type: 'read',
+      description: 'Search your connected apps',
+      status: 'pending',
+    });
+    markPlanSteps([placeholderId], 'running');
+    yield planEvent();
+    yield status('searching', 'Searching your connected apps');
+
+    let reads: readonly ResearchConnectorRead[];
+    try {
+      reads = await options.readConnectorSources(queries);
+    } catch (error) {
+      logger.warn(
+        {
+          requestId: processed.requestId,
+          error: error instanceof Error ? error.message : String(error),
+        },
+        '[research-loop] connected apps could not be searched; the run continues on the web',
+      );
+      markPlanSteps([placeholderId], 'failed');
+      for (const step of plan) {
+        if (step.id === placeholderId) step.note = 'The connected apps could not be searched.';
+      }
+      messages.push({
+        role: 'user',
+        content:
+          'The connected apps the user chose as sources for this research could not be searched. Say so in the report rather than substituting a web result for them.',
+      });
+      yield planEvent();
+      return;
+    }
+
+    const completedAt = new Date(now()).toISOString();
+    const placeholder = plan.findIndex((step) => step.id === placeholderId);
+    const startedAt = plan[placeholder]?.startedAt ?? completedAt;
+    plan.splice(placeholder, 1);
+    const readSteps: ResearchStep[] = [];
+    for (const read of reads) {
+      let added = 0;
+      for (const source of read.sources) if (sources.add(source, true)) added += 1;
+      const note = researchConnectorOutcomeNote(read);
+      readSteps.push({
+        id: uniqueStepId([...plan, ...readSteps], `connector-${read.connectorId}`),
+        type: 'read',
+        description: `Search ${read.label}`,
+        status: read.outcome === 'read' ? 'completed' : 'failed',
+        startedAt,
+        completedAt,
+        durationMs: Math.max(0, Date.parse(completedAt) - Date.parse(startedAt)),
+        sourcesConsulted: added,
+        ...(note ? { note } : {}),
+      });
+    }
+    plan.splice(placeholder, 0, ...readSteps);
+
+    const prompt = researchConnectorSourcesPrompt(reads);
+    if (prompt) messages.push({ role: 'user', content: prompt });
+    if (reads.some((read) => read.sources.length > 0)) {
+      sensitiveSourceAvailable = true;
+      untrustedContentInContext = true;
+    }
+    yield planEvent();
+    const gathered = sources.toSearchResultsEvent(responseModel);
+    if (gathered) yield encoder.encode(gathered);
+  }
+
+  async function* applyGuidance(guidance: string): AsyncGenerator<Uint8Array, void> {
+    const stamp = new Date(now()).toISOString();
+    const firstPending = plan.findIndex((step) => step.status === 'pending');
+    plan.splice(firstPending === -1 ? plan.length : firstPending, 0, {
+      id: uniqueStepId(plan, 'guidance'),
+      type: 'analyze',
+      description: guidance.slice(0, MAX_PLAN_QUERY_CHARS),
+      status: 'completed',
+      startedAt: stamp,
+      completedAt: stamp,
+    });
+    messages.push({ role: 'user', content: guidanceNote(guidance) });
+    yield planEvent();
+    if (!planningTurnEnabled || !continuingRun) return;
+
+    iteration = 1;
+    yield status('planning', 'Updating the plan to follow your guidance');
+    try {
+      const completedQueries = plan
+        .filter((step) => step.type === 'search' && step.status === 'completed')
+        .map((step) => step.description);
+      const replanTurn = yield* runTurn(
+        [
+          ...messages,
+          {
+            role: 'user',
+            content: replanDirective(
+              completedQueries,
+              pendingPlannedQueries().map((step) => step.description),
+            ),
+          },
+        ],
+        false,
+        { withoutTools: true },
+      );
+      const queries = parsePlanQueries(replanTurn.canonicalText).filter(
+        (query) =>
+          !completedQueries.some((completed) => completed.toLowerCase() === query.toLowerCase()),
+      );
+      if (queries.length === 0) {
+        logger.warn(
+          { provider: processed.provider, requestId: processed.requestId },
+          '[research-loop] guidance produced no parseable queries; the plan is unchanged',
+        );
+        return;
+      }
+      const replaced = new Set(pendingPlannedQueries().map((step) => step.id));
+      const firstNumber = nextPlanStepNumber(plan);
+      for (let index = plan.length - 1; index >= 0; index--) {
+        if (replaced.has(plan[index]!.id)) plan.splice(index, 1);
+      }
+      plan.push(
+        ...queries.map((query, index) => ({
+          id: `plan-${firstNumber + index}`,
+          type: 'search' as const,
+          description: query,
+          status: 'pending' as const,
+        })),
+      );
+      yield planEvent();
+    } catch (err) {
+      logger.error(
+        {
+          provider: processed.provider,
+          error: err instanceof Error ? err.message : String(err),
+        },
+        '[research-loop] guidance could not re-plan the run; the plan is unchanged',
+      );
+    }
+  }
+
   try {
     if (yield* flushCancellationIfRequested()) return;
 
@@ -2036,12 +2329,26 @@ export async function* runResearchLoop(
 
     yield status('planning', 'Planning research');
 
+    for (const step of plan) {
+      if (step.type === 'analyze' && step.status === 'completed') {
+        messages.push({ role: 'user', content: guidanceNote(step.description) });
+      }
+    }
+    if (resumingRun) {
+      messages.push({ role: 'user', content: resumeContextNote(carriedQueries, sources) });
+    }
+    if (options.guidance?.trim()) {
+      if (yield* flushCancellationIfRequested()) return;
+      yield* applyGuidance(options.guidance.trim());
+      if (yield* flushCancellationIfRequested()) return;
+    }
+
     // ── Planning turn (CAP-045 slice 2) ──
     // One tool-free model call that commits to the searches this run will make.
     // Its output becomes the `x_research_plan` queue the user watches. A failed
     // or unparseable plan is NEVER fatal and is never guessed at: the run falls
     // back to showing the round it actually executes.
-    if (planningTurnEnabled && approvedPlan.length === 0) {
+    if (planningTurnEnabled && !continuingRun) {
       iteration = 1;
       try {
         if (yield* flushCancellationIfRequested()) return;
@@ -2055,9 +2362,10 @@ export async function* runResearchLoop(
           (query) =>
             !carriedQueries.some((carried) => carried.toLowerCase() === query.toLowerCase()),
         );
+        const firstNumber = nextPlanStepNumber(plan);
         for (const [index, query] of queries.entries()) {
           plan.push({
-            id: `plan-${plan.length + index + 1}`,
+            id: `plan-${firstNumber + index}`,
             type: 'search',
             description: query,
             status: 'pending',
@@ -2093,10 +2401,10 @@ export async function* runResearchLoop(
     //
     // When there is nothing to show, the run still stops and says so. The user
     // decides whether to proceed blind; the loop does not decide for them.
-    if (options.requirePlanApproval && approvedPlan.length === 0) {
+    if (options.requirePlanApproval && !continuingRun) {
       if (pendingPlanStepIds().length === 0) {
         plan.push({
-          id: `plan-${plan.length + 1}`,
+          id: `plan-${nextPlanStepNumber(plan)}`,
           type: 'search',
           description: 'Search for sources on this question',
           status: 'pending',
@@ -2132,7 +2440,13 @@ export async function* runResearchLoop(
 
     // ── Gathering rounds ──
     for (let round = 1; round <= maxGatherRounds; round++) {
+      if (yield* pauseIfRequested()) return;
       iteration = planningTurnEnabled ? round + 1 : round;
+      if (round === 1 && options.readConnectorSources) {
+        if (yield* flushCancellationIfRequested()) return;
+        const plannedQueries = pendingPlannedQueries().map((step) => step.description);
+        yield* readConnectedApps(plannedQueries.length > 0 ? plannedQueries : [userQuery]);
+      }
       const sourcesBeforeRound = sources.size;
 
       // Plan bookkeeping. Round 1 executes the planned queries as one batch:
@@ -2144,9 +2458,11 @@ export async function* runResearchLoop(
       if (round === 1) {
         if (plan.every((step) => step.status !== 'pending')) {
           plan.push({
-            id: `round-${round}`,
+            id: uniqueStepId(plan, `round-${round}`),
             type: 'search',
-            description: 'Initial web searches',
+            description: resumingRun
+              ? 'Follow-up searches to close remaining gaps'
+              : 'Initial web searches',
             status: 'pending',
           });
         }
@@ -2158,13 +2474,14 @@ export async function* runResearchLoop(
         // has been run or dropped on the record.
         roundStepIds = pendingPlannedQueries().map((step) => step.id);
       } else {
+        const followUpStepId = uniqueStepId(plan, `round-${round}`);
         plan.push({
-          id: `round-${round}`,
+          id: followUpStepId,
           type: 'search',
           description: `Follow-up searches to close remaining gaps (round ${round})`,
           status: 'pending',
         });
-        roundStepIds = [`round-${round}`];
+        roundStepIds = [followUpStepId];
       }
       markPlanSteps(roundStepIds, 'running');
       yield planEvent();
@@ -2198,6 +2515,7 @@ export async function* runResearchLoop(
                 .filter((step) => roundStepIds.includes(step.id) && step.id.startsWith('plan-'))
                 .map((step) => step.description),
               domainPolicy,
+              resumingRun,
             ),
           },
         ];
@@ -2364,7 +2682,7 @@ export async function* runResearchLoop(
     iteration = Math.min(iteration + 1, maxIterations);
     // Any plan step still pending never ran (the gathering phase was cut short
     // by a budget or the READY marker); leaving it pending is the honest state.
-    const synthesisStepId = 'synthesize';
+    const synthesisStepId = uniqueStepId(plan, 'synthesize');
     plan.push({
       id: synthesisStepId,
       type: 'synthesize',

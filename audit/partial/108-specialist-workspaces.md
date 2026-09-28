@@ -52,29 +52,21 @@ Code: `apps/web/lib/connectors/directory/sources/vendor-directory.json:2528-2528
 
 - Done when: A research workspace for financial questions (markets, instruments, filings) with sourced, cited output.
 - Wave: 3
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only general Deep Research (cited web research) exists. There is no finance workspace, no market or fundamentals data source built in, and no saved research space. | ui |
-| desktop | partial | Only general Deep Research (cited web research) exists. There is no finance workspace, no market or fundamentals data source built in, and no saved research space. | ui |
-| mobile | partial | Only general Deep Research (cited web research) exists. There is no finance workspace or built-in market data source. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:860-867`, `apps/web/app/api/llm/v1/chat/completions/lib/research-loop.ts:1-8`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:111-116`
 
 ## S108.10: Company research.
 
 - Done when: The user researches a company and gets a sourced profile (business, financials, news, competitors).
 - Wave: 3
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only general Deep Research (cited web research) exists. There is no company-profile view or company data source (financials, filings, org data). | ui |
-| desktop | partial | Only general Deep Research (cited web research) exists. There is no company-profile view or company data source (financials, filings, org data). | ui |
-| mobile | partial | Only general Deep Research (cited web research) exists. There is no company-profile view or company data source. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:860-867`, `apps/web/app/api/llm/v1/chat/completions/lib/research-loop.ts:1-8`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:111-116`
 
 ## S108.12: Health-record workspace.
 
@@ -94,43 +86,21 @@ Code: `apps/web/features/connectors/data/connectors.ts:1145-1154`, `apps/web/lib
 
 - Done when: A legal-research workspace searches case law and statutes and returns cited authorities.
 - Wave: 3
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only general Deep Research (cited web research) exists. There is no legal workspace or case-law/statute source built in. CourtListener and Midpage exist only as third-party directory listings. | ui |
-| desktop | partial | Only general Deep Research (cited web research) exists. There is no legal workspace or case-law/statute source built in. CourtListener and Midpage exist only as third-party directory listings. | ui |
-| mobile | partial | Only general Deep Research (cited web research) exists. There is no legal workspace or case-law source. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:860-867`, `apps/web/app/api/llm/v1/chat/completions/lib/research-loop.ts:1-8`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:111-116`
-
-## S108.19: Contract review.
-
-- Done when: A contract-review flow extracts clauses, flags risks and suggests redlines against a playbook.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Generic third-party connector (Definely) via the chat tool loop; no native workspace. | ui |
-| desktop | partial | Generic third-party connector (Definely) via the chat tool loop; no native workspace. | ui |
-| mobile | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/lib/connectors/directory/sources/vendor-directory.json:2108-2108`, `apps/web/features/connectors/hooks/use-connectors-settings-adapter.tsx:764-764`, `apps/web/lib/connectors/directory/connectable.ts:16-26`, `apps/web/app/api/connectors/custom/route.ts:130-150`
 
 ## S108.20: Scientific research workspace.
 
 - Done when: A scientific-research workspace searches literature/papers and produces cited syntheses.
 - Wave: 3
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only general Deep Research (cited web research) exists. There is no paper database, workspace or saved sources. Consensus and alphaXiv exist only as third-party directory listings. | ui |
-| desktop | partial | Only general Deep Research (cited web research) exists. There is no paper database, workspace or saved sources. Consensus and alphaXiv exist only as third-party directory listings. | ui |
-| mobile | partial | Only general Deep Research (cited web research) exists. There is no paper database or research workspace. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:860-867`, `apps/web/app/api/llm/v1/chat/completions/lib/research-loop.ts:1-8`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:111-116`
 
 ## S108.22: Reproducible research environments.
 
@@ -158,96 +128,54 @@ Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:860-867`,
 
 - Done when: The product generates curricula and lesson plans (objectives, activities, materials) as structured output.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Generic third-party connector (Coteach) via the chat tool loop; no native workspace. | ui |
-| desktop | partial | Generic third-party connector (Coteach) via the chat tool loop; no native workspace. | ui |
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/lib/connectors/directory/sources/vendor-directory.json:1728-1728`, `apps/web/features/connectors/hooks/use-connectors-settings-adapter.tsx:764-764`, `apps/web/lib/connectors/directory/connectable.ts:16-26`, `apps/web/app/api/connectors/custom/route.ts:130-150`
 
 ## S108.26: Sales and CRM workflows.
 
 - Done when: The user runs sales/CRM workflows (look up and update contacts, deals, pipelines) from the product.
 - Wave: 3
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | CRM work happens only as generic chat over the HubSpot connector (Salesforce also needs endpoint config). There is no sales workspace or prebuilt CRM workflows. | ui |
-| desktop | partial | CRM work happens only as generic chat over the HubSpot connector (Salesforce also needs endpoint config). There is no sales workspace or prebuilt CRM workflows. | ui |
-| mobile | partial | HubSpot can be connected on mobile and its tools reach mobile chat, but there is no sales workspace or prebuilt CRM workflow. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/connectors/data/connectors.ts:329-338`, `apps/web/lib/connectors/mcp-endpoints.ts:133-137`, `apps/mobile/src/features/settings/cloud-connectors/index.tsx:298-305`, `apps/mobile/src/features/settings/cloud-connectors/index.tsx:697-706`
-
-## S108.27: Customer-support workflows.
-
-- Done when: The user runs customer-support workflows (triage, reply, update tickets) from the product.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Support work is only generic chat over the Intercom connector. Zendesk and Freshdesk have no remote endpoint (not connectable). There is no support workspace or ticket workflow. | ui |
-| desktop | partial | Support work is only generic chat over the Intercom connector. Zendesk and Freshdesk have no remote endpoint (not connectable). There is no support workspace or ticket workflow. | ui |
-| mobile | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/connectors/data/connectors.ts:362-371`, `apps/web/lib/connectors/mcp-endpoints.ts:139-143`
-
-## S108.28: HR and recruiting workflows.
-
-- Done when: The user runs HR/recruiting workflows (job posts, candidate pipeline, interviews) from the product.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Generic third-party connector (Workable) via the chat tool loop; no native workspace. | ui |
-| desktop | partial | Generic third-party connector (Workable) via the chat tool loop; no native workspace. | ui |
-| mobile | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/lib/connectors/directory/sources/vendor-directory.json:7828-7828`, `apps/web/features/connectors/hooks/use-connectors-settings-adapter.tsx:764-764`, `apps/web/lib/connectors/directory/connectable.ts:16-26`, `apps/web/app/api/connectors/custom/route.ts:130-150`
 
 ## S108.29: Marketing and campaign workflows.
 
 - Done when: The user runs marketing/campaign workflows (audiences, campaigns, assets, analytics) from the product.
-- Wave: 2
+- Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Mailchimp works only if its endpoint is configured in CONNECTOR_OAUTH_PROVIDERS_JSON. Canva (pinned) covers only design assets. There is no campaign workspace or workflow. | ui, flag-off |
-| desktop | partial | Mailchimp works only if its endpoint is configured in CONNECTOR_OAUTH_PROVIDERS_JSON. Canva (pinned) covers only design assets. There is no campaign workspace or workflow. | ui, flag-off |
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/connectors/data/connectors.ts:385-394`, `apps/web/lib/connectors/oauth-setup.ts:166-181`, `apps/web/lib/connectors/mcp-endpoints.ts:17-21`
 
 ## S108.31: Shopping comparisons.
 
 - Done when: The user compares products for purchase (specs, prices, merchants) in a structured comparison.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | A generic two-item comparison card (pros, cons, winner) renders when an answer is written as "X vs Y". It has no product search, prices, merchants or buy links. | ui |
-| desktop | partial | A generic two-item comparison card (pros, cons, winner) renders when an answer is written as "X vs Y". It has no product search, prices, merchants or buy links. | ui |
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/cards/index.tsx:37-45`, `apps/web/features/chat/components/messages/MessageBubble.tsx:2089-2096`, `apps/web/features/chat/components/cards/ComparisonCard.tsx:15-28`
 
 ## S108.33: Travel planning and reservations.
 
 - Done when: The user plans a trip (itinerary, places, routes) and can make reservations from the product.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | search_maps renders place/route cards; reservations only via generic third-party connectors (Booking.com, Expedia) through the chat tool loop; itinerary.v1 never produced or rendered; no native workspace. | ui |
-| desktop | partial | search_maps renders place/route cards; reservations only via generic third-party connectors (Booking.com, Expedia) through the chat tool loop; itinerary.v1 never produced or rendered; no native workspace. | ui |
-| mobile | partial | Mobile renders search_maps place and route cards. There is no itinerary builder and no bookings or reservations. | ui |
-| chrome | partial | The side panel renders search_maps place and route cards. There is no itinerary builder and no bookings or reservations. | ui |
+| mobile | partial | billing/no-yearly fd41d3eda renders itinerary cards natively on mobile (synced cloud chats show them now); mobile turns produce them once post-codex/no-yearly-s108-33-mobile-itinerary.patch adds itinerary.v1 to x_interactive_cards.supported in apps/mobile/stores/chat/chatExecutionStore.ts, which Codex holds | handler |
+| chrome | partial | server offers plan_itinerary to chrome once the side panel declares itinerary.v1; p-chrome adds it to supported in apps/extension/src/features/cloud-bridge/freeTrialClient.ts and an itinerary.v1 builder in apps/extension/src/features/side-panel/bubbles.ts | ui |
 
-Code: `apps/web/features/chat/components/messages/InteractiveCardBlock.tsx:37-37`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:744-762`, `apps/web/lib/services/map-search-tool-service.ts:41-50`, `apps/web/lib/connectors/directory/sources/vendor-directory.json:908-908`
+Code: `apps/mobile/src/features/chat/components/InteractiveCardBlock.tsx:361-361`, `apps/mobile/src/features/chat/components/InteractiveCardBlock.tsx:554-554`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:950-950`

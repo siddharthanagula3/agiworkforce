@@ -40,12 +40,24 @@ export interface ManagedUsagePurchasedCredits {
   overage_enabled: boolean;
 }
 
+export interface ManagedUsageBonusCredits {
+  remaining: number;
+  next_expiry_at: string | null;
+}
+
+export interface ManagedUsagePurchaseExpiry {
+  expiring_credits: number;
+  next_expiry_at: string | null;
+}
+
 export interface ManagedUsageCredits {
   monthly: ManagedUsageCreditWindow;
   weekly: ManagedUsageCreditWindow;
   five_hour: ManagedUsageCreditWindow;
   flagship_weekly: ManagedUsageCreditWindow | null;
   purchased: ManagedUsagePurchasedCredits;
+  bonus?: ManagedUsageBonusCredits | null;
+  purchase_expiry?: ManagedUsagePurchaseExpiry | null;
 }
 
 export interface ManagedUsageSummaryResponse {
@@ -139,6 +151,30 @@ function readCreditWindow(value: unknown, key: string): ManagedUsageCreditWindow
   };
 }
 
+function readBonusCredits(value: unknown): ManagedUsageBonusCredits | null {
+  if (value === null) return null;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new TypeError('credits.bonus must be an object or null');
+  }
+  const record = value as Record<string, unknown>;
+  return {
+    remaining: readCredits(record, 'remaining'),
+    next_expiry_at: readNullableTimestamp(record, 'next_expiry_at'),
+  };
+}
+
+function readPurchaseExpiry(value: unknown): ManagedUsagePurchaseExpiry | null {
+  if (value === null) return null;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new TypeError('credits.purchase_expiry must be an object or null');
+  }
+  const record = value as Record<string, unknown>;
+  return {
+    expiring_credits: readCredits(record, 'expiring_credits'),
+    next_expiry_at: readNullableTimestamp(record, 'next_expiry_at'),
+  };
+}
+
 function readManagedUsageCredits(value: unknown): ManagedUsageCredits {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new TypeError('credits must be an object');
@@ -162,6 +198,10 @@ function readManagedUsageCredits(value: unknown): ManagedUsageCredits {
         purchasedRecord['remaining'] === null ? null : readCredits(purchasedRecord, 'remaining'),
       overage_enabled: purchasedRecord['overage_enabled'] === true,
     },
+    ...(record['bonus'] === undefined ? {} : { bonus: readBonusCredits(record['bonus']) }),
+    ...(record['purchase_expiry'] === undefined
+      ? {}
+      : { purchase_expiry: readPurchaseExpiry(record['purchase_expiry']) }),
   };
 }
 

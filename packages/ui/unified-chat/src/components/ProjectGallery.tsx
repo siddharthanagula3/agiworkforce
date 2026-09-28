@@ -385,10 +385,10 @@ export function ProjectGallery({
               type="submit"
               disabled={submitting || newName.trim().length === 0}
               className={cn(
-                'rounded-compact px-3 py-1 text-xs font-medium text-white',
+                'rounded-compact px-3 py-1 text-xs font-medium',
                 submitting || newName.trim().length === 0
                   ? 'cursor-not-allowed bg-[var(--chat-surface-hover)] text-[var(--chat-text-muted)]'
-                  : 'bg-[var(--chat-accent-primary)] hover:opacity-90',
+                  : 'bg-[var(--chat-accent-primary)] text-[var(--chat-accent-on-primary)] hover:opacity-90',
               )}
             >
               Create project

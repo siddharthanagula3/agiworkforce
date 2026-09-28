@@ -50,18 +50,14 @@ Code: `apps/mobile/src/features/chat/components/research/ResearchRunCard.tsx:263
 
 - Done when: A panel lets the user choose which sources (web, sites, files, connected apps) a research run may use.
 - Wave: 3
-- Already works on: api
+- Already works on: web, desktop, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The plan card lets you add sites and "My files", but the "Connected app" choice is never shown: the chat never passes connectorOptions, and the request has no connector field. | ui |
-| desktop | partial | Same as web (hosted): The plan card lets you add sites and "My files", but the "Connected app" choice is never shown: the chat never passes connectorOptions, and the request has no connector field. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/research/ResearchActivity.tsx:333-345`, `apps/web/features/chat/components/research/ResearchActivity.tsx:392-392`, `apps/web/features/chat/components/messages/MessageBubble.tsx:1834-1848`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:413-419`
 
 ## S35.06: Website restrictions.
 
@@ -93,17 +89,14 @@ Code: `apps/web/features/chat/components/research/ResearchActivity.tsx:333-345`,
 
 - Done when: The user can add connected work apps (Drive, Slack...) as sources for a research run.
 - Wave: 3
+- Already works on: web, desktop, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The "Connected app" source is coded in the plan card but never offered (no connectorOptions passed), and the research request schema has no connector field, so runs cannot read connected apps. | ui, handler |
-| desktop | partial | Same as web (hosted): The "Connected app" source is coded in the plan card but never offered (no connectorOptions passed), and the research request schema has no connector field, so runs cannot read connected apps. | ui, handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/research/ResearchActivity.tsx:149-149`, `apps/web/features/chat/components/research/ResearchActivity.tsx:392-392`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:413-419`
 
 ## S35.09: Research-progress view.
 
@@ -173,33 +166,29 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/research-loop.ts:412-412`
 
 - Done when: While research runs, the user can steer it (add guidance, change focus) and the run adapts.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Direction can be changed only before the run starts (editing the plan); once searching begins there is no way to steer it. | ui |
-| desktop | partial | Same as web (hosted): Direction can be changed only before the run starts (editing the plan); once searching begins there is no way to steer it. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/research/ResearchActivity.tsx:272-272`, `apps/web/features/chat/pages/WebChatPage.tsx:4695-4695`
-
 ## S35.17: Pause and resume.
 
 - Done when: The user can pause a running research task and resume it later from where it stopped.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The run only pauses on its own for plan approval, and a stopped or failed run resumes via Retry with its gathered sources; there is no user Pause/Resume while it runs. | ui |
-| desktop | partial | Same as web (hosted): The run only pauses on its own for plan approval, and a stopped or failed run resumes via Retry with its gathered sources; there is no user Pause/Resume while it runs. | ui |
-| mobile | partial | Mobile can Stop and later Retry (which resumes gathered sources and completed steps), but has no Pause. | ui |
+| mobile | partial | partials/privacy 38a12b33a: a paused run shows as paused on mobile and Resume continues it. The mobile Pause control is in post-codex/p-privacy-s35.17-mobile-pause.patch because its handler lives in held files (app/(app)/chat/[id].tsx, MessageBubble.tsx); apply after Codex finishes | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/research-loop.ts:2024-2026`, `apps/web/features/chat/pages/WebChatPage.tsx:4656-4660`, `apps/web/features/chat/components/research/ResearchActivity.tsx:327-327`, `apps/mobile/src/features/chat/components/research/ResearchRunCard.tsx:281-285`
+Code: `apps/mobile/src/features/chat/utils/researchRunState.ts:236-236`, `apps/mobile/src/features/chat/components/research/ResearchRunCard.tsx:265-265`, `apps/mobile/src/features/chat/components/research/ResearchRunCard.tsx:322-322`
 
 ## S35.18: Cancel research.
 
@@ -269,17 +258,13 @@ Code: `apps/mobile/src/features/chat/components/research/ResearchSourcesAppendix
 
 - Done when: Reports can include tables and charts that render in the reader.
 - Wave: 3
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Reports can ask for markdown tables and the reader renders them, but reports never contain charts. | ui |
-| desktop | partial | Same as web (hosted): Reports can ask for markdown tables and the reader renders them, but reports never contain charts. | ui |
-| mobile | partial | Markdown tables in a report render on mobile; reports never contain charts. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/research-loop.ts:1078-1079`, `packages/ui/unified-chat/src/components/markdown/MarkdownContent.tsx:458-465`, `apps/mobile/src/features/chat/components/MessageContentRenderer.tsx:332-338`
 
 ## S35.25: Research-history list.
 
@@ -329,14 +314,14 @@ Code: `apps/mobile/src/features/chat/components/research/ResearchRunCard.tsx:289
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | A report can be turned into a document artifact (static markdown), not an interactive page. | ui |
-| desktop | partial | Same as web (hosted): A report can be turned into a document artifact (static markdown), not an interactive page. | ui |
+| web | partial | partials/privacy 8b29e7304: a research turn now reaches later turns with its numbered sources, so asking in the same chat for an 'interactive artifact' or 'html artifact' builds an HTML artifact from the stored report with working links. The leaders' phrasing ('turn this report into a web page') still gets a plain html code block, because features/chat/lib/visual-intent.ts only attaches the artifact directive for 'html/web/interactive artifact' or 'artifact preview'; needs verb-anchored web-page phrases there (owner of visual-intent.ts) | ui |
+| desktop | partial | partials/privacy 8b29e7304: a research turn now reaches later turns with its numbered sources, so asking in the same chat for an 'interactive artifact' or 'html artifact' builds an HTML artifact from the stored report with working links. The leaders' phrasing ('turn this report into a web page') still gets a plain html code block, because features/chat/lib/visual-intent.ts only attaches the artifact directive for 'html/web/interactive artifact' or 'artifact preview'; needs verb-anchored web-page phrases there (owner of visual-intent.ts) | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/research/ResearchReportView.tsx:467-470`, `apps/web/features/chat/components/research/ResearchReportView.tsx:186-192`
+Code: `apps/web/lib/hooks/useChatStream.ts:3675-3675`, `apps/web/features/chat/utils/research-plan.ts:97-97`
 
 ## S35.33: Notify on completion.
 

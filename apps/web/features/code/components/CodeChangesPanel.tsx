@@ -11,6 +11,7 @@ import {
   Minimize2,
   MoreHorizontal,
   RefreshCw,
+  Undo2,
   X,
 } from '@agiworkforce/icons';
 import {
@@ -20,6 +21,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
   Spinner,
+  useConfirmAction,
 } from '@agiworkforce/ui';
 import {
   cloudCodePullRequestLabel,
@@ -35,7 +37,7 @@ import styles from '../CloudCodePage.module.css';
 const GLYPH_SIZE = 15;
 const EXIT_CODE_OK = 0;
 
-function DiffBody({ body }: { body: string }) {
+export function DiffBody({ body }: { body: string }) {
   return (
     <pre className={styles['diff']}>
       {body.split('\n').map((line, index) => (
@@ -50,39 +52,75 @@ function DiffBody({ body }: { body: string }) {
   );
 }
 
-function ChangedFile({ path, state, body }: { path: string; state: string; body?: string }) {
+function ChangedFile({
+  path,
+  state,
+  body,
+  included,
+  busy,
+  onIncludedChange,
+  onDiscard,
+}: {
+  path: string;
+  state: string;
+  body?: string;
+  included: boolean;
+  busy: boolean;
+  onIncludedChange: (included: boolean) => void;
+  onDiscard: () => void;
+}) {
   const [expanded, setExpanded] = useState(false);
   const regionId = useId();
 
-  if (!body) {
-    return (
-      <div className={styles['fileRow']}>
-        <span className={styles['fileStatus']}>{state}</span>
-        <span className={styles['fileName']}>{path}</span>
-      </div>
-    );
-  }
+  const label = (
+    <>
+      <span className={styles['fileStatus']}>{state}</span>
+      <span className={styles['fileName']}>{path}</span>
+    </>
+  );
 
   return (
     <div className={styles['fileBlock']}>
-      <button
-        type="button"
-        className={styles['fileRow']}
-        aria-expanded={expanded}
-        aria-controls={regionId}
-        onClick={() => setExpanded((open) => !open)}
-      >
-        <span className={styles['activityChevron']}>
-          {expanded ? (
-            <ChevronDown size={GLYPH_SIZE} aria-hidden="true" />
-          ) : (
-            <ChevronRight size={GLYPH_SIZE} aria-hidden="true" />
-          )}
-        </span>
-        <span className={styles['fileStatus']}>{state}</span>
-        <span className={styles['fileName']}>{path}</span>
-      </button>
-      {expanded && (
+      <div className={styles['fileSelectRow']}>
+        <input
+          type="checkbox"
+          className={styles['fileCheckbox']}
+          checked={included}
+          disabled={busy}
+          onChange={(event) => onIncludedChange(event.target.checked)}
+          aria-label={`${CODE_COPY.changesIncludeFile} ${path}`}
+        />
+        {body ? (
+          <button
+            type="button"
+            className={styles['fileRow']}
+            aria-expanded={expanded}
+            aria-controls={regionId}
+            onClick={() => setExpanded((open) => !open)}
+          >
+            <span className={styles['activityChevron']}>
+              {expanded ? (
+                <ChevronDown size={GLYPH_SIZE} aria-hidden="true" />
+              ) : (
+                <ChevronRight size={GLYPH_SIZE} aria-hidden="true" />
+              )}
+            </span>
+            {label}
+          </button>
+        ) : (
+          <div className={styles['fileRow']}>{label}</div>
+        )}
+        <button
+          type="button"
+          className={styles['headerButton']}
+          aria-label={`${CODE_COPY.changesDiscardFile} ${path}`}
+          disabled={busy}
+          onClick={onDiscard}
+        >
+          <Undo2 size={GLYPH_SIZE} aria-hidden="true" />
+        </button>
+      </div>
+      {body && expanded && (
         <div id={regionId}>
           <DiffBody body={body} />
         </div>
@@ -103,7 +141,8 @@ export interface CodeChangesPanelProps {
   changesLoading: boolean;
   pullRequestBusy: boolean;
   onToggleWide: () => void;
-  onCommit: (message: string) => void;
+  onCommit: (message: string, files: string[] | null) => void;
+  onDiscard: (files: string[]) => void;
   onRunCommand: (command: string) => void;
   onRefreshChanges: () => void;
   onCreatePullRequest: () => void;
@@ -219,6 +258,7 @@ export function CodeChangesPanel({
   pullRequestBusy,
   onToggleWide,
   onCommit,
+  onDiscard,
   onRunCommand,
   onRefreshChanges,
   onCreatePullRequest,
@@ -229,6 +269,8 @@ export function CodeChangesPanel({
   const [command, setCommand] = useState('');
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [showExitCodes, setShowExitCodes] = useState(true);
+  const [excluded, setExcluded] = useState<ReadonlySet<string>>(() => new Set());
+  const { confirm, dialog: confirmDialog } = useConfirmAction();
   const terminalRegionId = useId();
   const commandFieldId = useId();
   const endRef = useRef<HTMLDivElement>(null);
@@ -241,6 +283,10 @@ export function CodeChangesPanel({
   const closedOrArchived = session.state === 'closed' || session.archivedAt !== null;
   const committable = hasRepository && !closedOrArchived && session.state !== 'provisioning';
   const diffs = diffByPath(changes?.diff ?? '');
+  const changedPaths = changes?.files.map((file) => file.path) ?? [];
+  const includedPaths = changedPaths.filter((path) => !excluded.has(path));
+  const choosingFiles = includedPaths.length < changedPaths.length;
+  const nothingChosen = changedPaths.length > 0 && includedPaths.length === 0;
 
   const pullRequestBlocked = closedOrArchived
     ? CODE_COPY.pullRequestNeedsOpenSession
@@ -258,10 +304,32 @@ export function CodeChangesPanel({
     if (commitNotice) setCommitMessage('');
   }, [commitNotice]);
 
+  useEffect(() => {
+    setExcluded(new Set());
+  }, [session.id]);
+
   const submitCommit = (event: FormEvent) => {
     event.preventDefault();
-    if (!commitMessage.trim() || committing) return;
-    onCommit(commitMessage.trim());
+    if (!commitMessage.trim() || committing || nothingChosen) return;
+    onCommit(commitMessage.trim(), choosingFiles ? includedPaths : null);
+  };
+
+  const setIncluded = (path: string, included: boolean) => {
+    setExcluded((current) => {
+      const next = new Set(current);
+      if (included) next.delete(path);
+      else next.add(path);
+      return next;
+    });
+  };
+
+  const requestDiscard = (path: string) => {
+    confirm({
+      title: CODE_COPY.changesDiscardTitle,
+      description: `${CODE_COPY.changesDiscardDescription} ${path}`,
+      confirmLabel: CODE_COPY.changesDiscardConfirm,
+      onConfirm: () => onDiscard([path]),
+    });
   };
 
   const submitCommand = (event: FormEvent) => {
@@ -371,6 +439,10 @@ export function CodeChangesPanel({
                 path={file.path}
                 state={changeStateLabel(file.state)}
                 body={diffs.get(file.path)}
+                included={!excluded.has(file.path)}
+                busy={committing || !committable}
+                onIncludedChange={(included) => setIncluded(file.path, included)}
+                onDiscard={() => requestDiscard(file.path)}
               />
             ))}
           </div>
@@ -395,12 +467,19 @@ export function CodeChangesPanel({
               <button
                 type="submit"
                 className={styles['secondaryButton']}
-                disabled={committing || !commitMessage.trim()}
+                disabled={committing || !commitMessage.trim() || nothingChosen}
               >
                 {committing && <Spinner size="sm" aria-hidden="true" />}
                 {CODE_COPY.commitAction}
               </button>
             </div>
+            {choosingFiles && (
+              <span className={styles['formHelp']}>
+                {includedPaths.length === 0
+                  ? CODE_COPY.commitNoFilesChosen
+                  : `${CODE_COPY.commitChosenPrefix} ${includedPaths.length} ${CODE_COPY.commitChosenOf} ${changedPaths.length} ${CODE_COPY.commitChosenSuffix}`}
+              </span>
+            )}
             {commitNotice && <span className={styles['formHelp']}>{commitNotice}</span>}
           </form>
         )}
@@ -526,6 +605,7 @@ export function CodeChangesPanel({
           )}
         </div>
       </div>
+      {confirmDialog}
     </aside>
   );
 }

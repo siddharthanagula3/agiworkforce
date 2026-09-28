@@ -18,6 +18,7 @@ import {
   Button,
   Checkbox,
   Input,
+  Spinner,
 } from '@agiworkforce/ui';
 import {
   Form,
@@ -28,7 +29,7 @@ import {
   FormLabel,
   FormMessage,
 } from '@shared/ui/form';
-import { Plus, Key, Copy, Trash2, Loader2, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Plus, Key, Copy, Trash2, AlertTriangle, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   API_KEY_EXPIRY_CHOICES,
@@ -42,21 +43,52 @@ import {
   useDeleteAPIKey,
   type CreateAPIKeyResult,
 } from '@features/settings/hooks/use-settings-queries';
+import { formatCredits } from '@agiworkforce/types';
+import { useDeveloperProjects } from '@/features/developers/hooks/use-developer-projects';
+import { useDeveloperUsage } from '@/features/developers/hooks/use-developer-usage';
+import type { DeveloperUsageFigures } from '@/features/developers/types';
 import { API_KEY_SCOPE_OPTIONS, type ApiKeyScope } from '@/lib/api-key-scopes';
 import { toUserMessage } from '@/lib/user-error-message';
+
+const DEFAULT_PROJECT_LABEL = 'Default project';
+
+function keyUsageLabel(usage: DeveloperUsageFigures | undefined): string {
+  if (!usage || usage.requests + usage.unsettledRequests === 0) return 'No requests this month';
+  const requests =
+    usage.requests === 1 ? '1 request' : `${usage.requests.toLocaleString()} requests`;
+  return `This month: ${requests}, ${formatCredits(usage.credits, { maximumFractionDigits: 2 })}`;
+}
+
+function projectLabel(
+  projectId: string | null | undefined,
+  projects: readonly { id: string; name: string }[],
+): React.ReactNode {
+  const name = projectId
+    ? projects.find((project) => project.id === projectId)?.name
+    : DEFAULT_PROJECT_LABEL;
+  return name ? <p className="text-xs text-muted-foreground">{name}</p> : null;
+}
 
 interface ApiKey {
   id: string;
   name: string;
   key_prefix: string;
   scopes: ApiKeyScope[];
+  project_id?: string | null;
   created_at: string;
   last_used_at?: string | null;
   expires_at?: string | null;
 }
 
+interface ApiKeyProject {
+  id: string;
+  name: string;
+}
+
 interface ApiKeysPanelProps {
   apiKeys: ApiKey[];
+  projects?: readonly ApiKeyProject[];
+  usageByKey?: ReadonlyMap<string, DeveloperUsageFigures> | null;
   apiKeyForm: UseFormReturn<CreateApiKeyFormData>;
   showAPIKeyDialog: boolean;
   generatedAPIKey: string;
@@ -88,7 +120,7 @@ function ApiKeySubmitButton({ control, isCreatePending }: ApiKeySubmitButtonProp
       className="bg-success-fill text-success-on-fill hover:brightness-95"
     >
       {isCreatePending ? (
-        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+        <Spinner size="sm" className="mr-2" aria-hidden="true" />
       ) : (
         <Key className="mr-2 h-4 w-4" />
       )}
@@ -99,6 +131,8 @@ function ApiKeySubmitButton({ control, isCreatePending }: ApiKeySubmitButtonProp
 
 export const ApiKeysPanel: React.FC<ApiKeysPanelProps> = ({
   apiKeys,
+  projects = [],
+  usageByKey = null,
   apiKeyForm,
   showAPIKeyDialog,
   generatedAPIKey,
@@ -137,7 +171,7 @@ export const ApiKeysPanel: React.FC<ApiKeysPanelProps> = ({
         <div className="space-y-3">
           {isLoading ? (
             <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <Spinner size="sm" aria-hidden="true" />
               Loading API keys...
             </div>
           ) : loadError ? (
@@ -167,6 +201,12 @@ export const ApiKeysPanel: React.FC<ApiKeysPanelProps> = ({
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-medium text-foreground">{apiKey.name}</p>
                   <p className="font-mono text-sm text-muted-foreground">{apiKey.key_prefix}...</p>
+                  {projectLabel(apiKey.project_id, projects)}
+                  {usageByKey ? (
+                    <p className="text-xs text-muted-foreground">
+                      {keyUsageLabel(usageByKey.get(apiKey.id))}
+                    </p>
+                  ) : null}
                   <p className="text-xs text-muted-foreground">
                     {apiKey.scopes
                       .map(
@@ -294,6 +334,34 @@ export const ApiKeysPanel: React.FC<ApiKeysPanelProps> = ({
                     />
                     <FormField
                       control={apiKeyForm.control}
+                      name="projectId"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-foreground">Project</FormLabel>
+                          <FormControl>
+                            <select
+                              value={field.value ?? ''}
+                              onChange={(event) => field.onChange(event.target.value || null)}
+                              className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground"
+                            >
+                              <option value="">{DEFAULT_PROJECT_LABEL}</option>
+                              {projects.map((project) => (
+                                <option key={project.id} value={project.id}>
+                                  {project.name}
+                                </option>
+                              ))}
+                            </select>
+                          </FormControl>
+                          <FormDescription>
+                            The key&apos;s usage counts toward this project and its monthly limit. A
+                            key cannot move to another project later.
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={apiKeyForm.control}
                       name="expiresInDays"
                       render={({ field }) => (
                         <FormItem>
@@ -356,8 +424,8 @@ export const ApiKeysPanel: React.FC<ApiKeysPanelProps> = ({
         <AlertDialogHeader>
           <AlertDialogTitle className="text-foreground">Delete API Key</AlertDialogTitle>
           <AlertDialogDescription className="text-muted-foreground">
-            Are you sure you want to delete this API key? This action cannot be undone. Any
-            applications using this key will stop working.
+            Requests made with this key are refused from now on, so any application using it stops
+            working. A deleted key cannot be restored.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -380,10 +448,13 @@ const DEFAULT_API_KEY_FORM: CreateApiKeyFormData = {
   name: '',
   scopes: ['models:read', 'inference:write'],
   expiresInDays: 'never',
+  projectId: null,
 };
 
 export function ApiKeysManager() {
   const { data: apiKeys = [], isLoading, isError, error, refetch } = useAPIKeys();
+  const { data: projects = [] } = useDeveloperProjects();
+  const { data: usage } = useDeveloperUsage();
   const createMutation = useCreateAPIKey();
   const deleteMutation = useDeleteAPIKey();
   const apiKeyForm = useForm<CreateApiKeyFormData>({
@@ -430,6 +501,10 @@ export function ApiKeysManager() {
     <>
       <ApiKeysPanel
         apiKeys={apiKeys}
+        projects={projects.filter((project) => project.archivedAt === null)}
+        usageByKey={
+          usage ? new Map(usage.keys.map((entry) => [entry.apiKeyId, entry] as const)) : null
+        }
         apiKeyForm={apiKeyForm}
         showAPIKeyDialog={showAPIKeyDialog}
         generatedAPIKey={generatedAPIKey}
