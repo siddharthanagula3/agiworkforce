@@ -462,7 +462,9 @@
     "expand": "展开代码",
     "close": "关闭展开的代码",
     "codeTitle": "{{language}} 代码",
-    "codeBlockLabel": "{{language}} 代码块"
+    "codeBlockLabel": "{{language}} 代码块",
+    "edit": "编辑",
+    "editLabel": "在聊天旁编辑此代码"
   },
   "streaming": {
     "reconnecting": "正在重新连接…",

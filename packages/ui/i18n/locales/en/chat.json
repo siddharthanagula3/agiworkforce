@@ -462,7 +462,9 @@
     "expand": "Expand code",
     "close": "Close expanded code",
     "codeTitle": "{{language}} code",
-    "codeBlockLabel": "{{language}} code block"
+    "codeBlockLabel": "{{language}} code block",
+    "edit": "Edit",
+    "editLabel": "Edit this code beside the chat"
   },
   "streaming": {
     "reconnecting": "Reconnecting…",

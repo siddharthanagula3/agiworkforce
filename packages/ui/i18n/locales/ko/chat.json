@@ -462,7 +462,9 @@
     "expand": "코드 확대",
     "close": "확대한 코드 닫기",
     "codeTitle": "{{language}} 코드",
-    "codeBlockLabel": "{{language}} 코드 블록"
+    "codeBlockLabel": "{{language}} 코드 블록",
+    "edit": "편집",
+    "editLabel": "채팅 옆에서 이 코드 편집"
   },
   "streaming": {
     "reconnecting": "재연결 중…",

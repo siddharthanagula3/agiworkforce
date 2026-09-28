@@ -462,7 +462,9 @@
     "expand": "コードを拡大",
     "close": "拡大したコードを閉じる",
     "codeTitle": "{{language}} のコード",
-    "codeBlockLabel": "{{language}} のコードブロック"
+    "codeBlockLabel": "{{language}} のコードブロック",
+    "edit": "編集",
+    "editLabel": "このコードをチャットの横で編集"
   },
   "streaming": {
     "reconnecting": "再接続中…",
