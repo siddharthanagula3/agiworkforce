@@ -467,6 +467,8 @@ function handleNotification(server: RunningServer, method: string, rawParams: un
     outcome,
     response: readString(params, 'response') ?? '',
     failure: readFailure(params),
+    inputTokens: readNumber(params, 'inputTokens') ?? 0,
+    outputTokens: readNumber(params, 'outputTokens') ?? 0,
   });
 }
 

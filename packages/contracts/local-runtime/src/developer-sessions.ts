@@ -187,6 +187,8 @@ export type DeveloperSessionEvent =
       outcome: DeveloperTurnOutcome;
       response: string;
       failure: DeveloperTurnFailure | null;
+      inputTokens: number;
+      outputTokens: number;
     }
   | {
       type: 'tool-queued';

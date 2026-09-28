@@ -1027,7 +1027,7 @@ function AttachMenu() {
   );
 }
 
-function UsageRing({
+export function UsageRing({
   contextTokens,
   contextWindow,
 }: {

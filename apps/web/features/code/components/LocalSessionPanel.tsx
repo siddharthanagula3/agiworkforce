@@ -56,6 +56,8 @@ import {
 } from '../local-code';
 import { useLocalSession, type LocalSessionState } from '../hooks/use-local-session';
 import { useLocalTests } from '../hooks/use-local-tests';
+import { getModelMetadata } from '@shared/config/llm';
+import { UsageRing } from './CodeComposer';
 import { LocalChangesPanel } from './LocalChangesPanel';
 import { LocalModelChip } from './LocalModelChip';
 import { CodeTranscriptBody } from './CodeTranscript';
@@ -487,6 +489,10 @@ export function LocalSessionPanel({
                       onSelect={setModel}
                     />
                   )}
+                  <UsageRing
+                    contextTokens={state.contextTokens}
+                    contextWindow={getModelMetadata(activeModel)?.contextWindow ?? null}
+                  />
                 </div>
               </div>
             </div>
