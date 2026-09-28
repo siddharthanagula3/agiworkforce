@@ -108,17 +108,13 @@ Code: `apps/extension/src/features/side-panel/projectsDrawer.ts:239-245`, `apps/
 
 - Done when: A project memory view shows what has been remembered for that project, with scope controls, separately from account memory.
 - Wave: 3
-- Already works on: cli
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Project-scoped memory works (project settings choose the scope; Settings > Memory labels facts "Only in <project>"), but there is no memory view inside the project that lists just that project's memories. | ui |
-| desktop | partial | Project-scoped memory works (project settings choose the scope; Settings > Memory labels facts "Only in <project>"), but there is no memory view inside the project that lists just that project's memories. | ui |
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/projects/components/ProjectSettingsDialog.tsx:250-262`, `packages/ui/unified-chat/src/components/MemoryEditor.tsx:296-301`, `apps/web/lib/services/managed-memory-context-service.ts:956-970`
 
 ## S4.13: Work-task home.
 

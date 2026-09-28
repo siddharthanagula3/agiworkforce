@@ -161,17 +161,15 @@ Code: `apps/web/lib/releases/github-cli-releases.ts:157-157`
 
 - Done when: An assistant helps users move their data and settings from another product or a replaced feature, with a preview before changes.
 - Wave: 3
-- Already works on: cli
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only memory can be imported from another assistant; there is no guided move for conversations, projects or settings, or from a retired feature. | ui |
-| desktop | partial | Only memory can be imported from another assistant; there is no guided move for conversations, projects or settings, or from a retired feature. | ui |
 | mobile | partial | Mobile imports memory from an exported file only; no guided migration of other data or settings. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/settings/components/ImportMemoryDialog.tsx:19-21`, `apps/web/app/api/memory/import/route.ts:184-187`, `apps/mobile/app/(app)/settings/memory-import.tsx:5-8`
+Code: `apps/mobile/app/(app)/settings/memory-import.tsx:5-8`
 
 ## S88.16: Privacy-rights request portal.
 
