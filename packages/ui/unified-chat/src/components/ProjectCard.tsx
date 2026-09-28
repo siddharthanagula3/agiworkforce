@@ -318,7 +318,10 @@ export function ProjectCard({
                           setMenuOpen(false);
                           confirm({
                             title: `Delete "${project.name}"?`,
-                            description: 'This cannot be undone.',
+                            description:
+                              project.space === 'health'
+                                ? 'Its chats, files and memories are deleted with it. This cannot be undone.'
+                                : 'This cannot be undone.',
                             confirmLabel: 'Delete',
                             destructive: true,
                             onConfirm: () => onDelete(project),

@@ -12,6 +12,7 @@ export * from './generated-files';
 export * from './artifact-index';
 export * from './artifact-runtime';
 export * from './finance';
+export * from './health-space';
 export * from './library';
 export * from './managed-media';
 export * from './me';

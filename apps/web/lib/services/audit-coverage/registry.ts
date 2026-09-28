@@ -57,6 +57,7 @@ export const UNAUDITED_MUTATING_ROUTES: readonly UnauditedRoute[] = [
   { route: 'files/uploads/[uploadId]/route.ts', reason: 'own_content' },
   { route: 'files/uploads/route.ts', reason: 'own_content' },
   { route: 'github/issues/route.ts', reason: 'own_content' },
+  { route: 'health-space/route.ts', reason: 'own_content' },
   { route: 'interactive-cards/respond/route.ts', reason: 'own_content' },
   { route: 'library/route.ts', reason: 'own_content' },
   {

@@ -162,6 +162,7 @@ export async function recordManagedAutoMemoryTurn(
           userId: params.userId,
           organizationId: params.processed.organizationId ?? null,
           planTier: params.processed.subscriptionTier ?? 'free',
+          forceNoTraining: Boolean(params.processed.healthSpaceProjectId),
           requestId: params.processed.requestId,
         });
       } catch (error) {

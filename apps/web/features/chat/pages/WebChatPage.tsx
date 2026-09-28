@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo, useRef, useSyncExternalStore } from 'react';
+import { useHealthSpaceAvailable } from '@/features/health/hooks/use-health-space-available';
 import { retryableUserMessageId } from '@/features/chat/lib/retryable-turn';
 import { CHAT_OUTPUT_FORMAT_LABEL, type ChatOutputFormat } from '@/lib/chat-output-format';
 import { readPersistedRouteLane, readRouteLane } from '@/features/chat/lib/routeLane';
@@ -5779,6 +5780,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   // missing Tasks entirely, and hardcoded `isActive: true` for Chat so the
   // selection was wrong on /chat/[sessionId]). Add or reorder destinations there.
   const hiddenNavIds = useSettingsStore((state) => state.hiddenNavIds) ?? EMPTY_NAV_IDS;
+  const healthSpaceAvailable = useHealthSpaceAvailable();
 
   const sidebarNavItems = useMemo<SidebarNavItem[]>(
     () =>
@@ -5788,9 +5790,10 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         isAdmin: isWorkspaceAdmin,
         hiddenIds: hiddenNavIds,
         disabledFeatures,
+        healthSpaceAvailable,
         translate: (key, fallback) => t(`common:${key}`, { defaultValue: fallback }),
       }),
-    [disabledFeatures, hiddenNavIds, isWorkspaceAdmin, pathname, router, t],
+    [disabledFeatures, healthSpaceAvailable, hiddenNavIds, isWorkspaceAdmin, pathname, router, t],
   );
 
   const handleLogout = useCallback(async () => {

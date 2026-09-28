@@ -164,6 +164,7 @@ export interface Project {
    */
   isOrgShared?: boolean;
   sharedAccess?: 'read' | 'write' | null;
+  space?: 'health' | null;
 }
 
 export type ArtifactType = SharedArtifactType;

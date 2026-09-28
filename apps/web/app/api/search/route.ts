@@ -336,6 +336,7 @@ async function handleGet(request: NextRequest) {
     organizationId,
     semantic: true,
     residency,
+    includeHealthSpaces: true,
   }).search({
     text: q,
     kinds: requestedKinds.length > 0 ? requestedKinds : SEARCH_SOURCE_KINDS,
