@@ -603,6 +603,15 @@ const ar = {
   'webview.sources_few': '{count} مصادر',
   'webview.sources_many': '{count} مصدرًا',
   'webview.sources_other': '{count} مصدر',
+  'sessionSync.continuedIn': 'استمرت هذه الجلسة في {client}. تظهر هنا أحدث رسائلها.',
+  'sessionSync.continuedElsewhere': 'استمرت هذه الجلسة في تطبيق آخر. تظهر هنا أحدث رسائلها.',
+  'sessionSync.heldBy': 'يستخدم {client} هذه الجلسة.',
+  'sessionSync.takeOverDetail':
+    'تولَّ الجلسة لإرسال رسالتك من هنا. إذا كان {client} لا يزال يجيب، فأوقفه هناك أولًا: عندما يكتب تطبيقان في الوقت نفسه تبقى نسختان من الجلسة.',
+  'sessionSync.takeOver': 'تولَّ الجلسة وأرسل',
+  'sessionSync.notSent': 'لم تُرسل: يستخدم {client} هذه الجلسة. أرسل مرة أخرى لتتولاها من هنا.',
+  'sessionSync.takeOverFailed': 'تعذر تولي هذه الجلسة. أرسل مرة أخرى لإعادة المحاولة.',
+  'sessionSync.stopBeforeTerminal': 'أوقف الرد الجاري قبل متابعة هذه الجلسة في الطرفية.',
 };
 
 export default ar;

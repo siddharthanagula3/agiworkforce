@@ -455,6 +455,20 @@ const it = {
   'webview.sources_one': '{count} fonte',
   'webview.sources_many': '{count} di fonti',
   'webview.sources_other': '{count} fonti',
+  'sessionSync.continuedIn':
+    'Questa sessione è proseguita in {client}. Qui vedi i suoi messaggi più recenti.',
+  'sessionSync.continuedElsewhere':
+    "Questa sessione è proseguita in un'altra app. Qui vedi i suoi messaggi più recenti.",
+  'sessionSync.heldBy': '{client} sta usando questa sessione.',
+  'sessionSync.takeOverDetail':
+    'Prendine il controllo per inviare il messaggio da qui. Se {client} sta ancora rispondendo, fermalo prima lì: due app che scrivono insieme lasciano due copie della sessione.',
+  'sessionSync.takeOver': 'Prendi il controllo e invia',
+  'sessionSync.notSent':
+    'Non inviato: {client} sta usando questa sessione. Invia di nuovo per prenderne il controllo da qui.',
+  'sessionSync.takeOverFailed':
+    'Impossibile prendere il controllo di questa sessione. Invia di nuovo per riprovare.',
+  'sessionSync.stopBeforeTerminal':
+    'Interrompi la risposta in corso prima di continuare questa sessione nel terminale.',
 };
 
 export default it;

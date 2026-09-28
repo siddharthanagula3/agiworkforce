@@ -569,6 +569,28 @@
           "items": {
             "$ref": "#/definitions/requestParameter"
           }
+        },
+        "mediaInput": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "maxImagesPerRequest": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "documentMediaTypes": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z]+/[a-z0-9.+-]+$"
+              }
+            },
+            "maxDocumentPagesPerRequest": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
         }
       }
     },

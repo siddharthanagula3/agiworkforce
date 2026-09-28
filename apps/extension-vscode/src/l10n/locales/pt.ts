@@ -457,6 +457,20 @@ const pt = {
   'webview.sources_one': '{count} fonte',
   'webview.sources_many': '{count} de fontes',
   'webview.sources_other': '{count} fontes',
+  'sessionSync.continuedIn':
+    'Esta sessão continuou em {client}. As mensagens mais recentes aparecem aqui.',
+  'sessionSync.continuedElsewhere':
+    'Esta sessão continuou em outro aplicativo. As mensagens mais recentes aparecem aqui.',
+  'sessionSync.heldBy': '{client} está usando esta sessão.',
+  'sessionSync.takeOverDetail':
+    'Assuma o controle para enviar sua mensagem daqui. Se {client} ainda estiver respondendo, interrompa-o lá primeiro: dois aplicativos escrevendo ao mesmo tempo deixam duas cópias da sessão.',
+  'sessionSync.takeOver': 'Assumir o controle e enviar',
+  'sessionSync.notSent':
+    'Não enviado: {client} está usando esta sessão. Envie de novo para assumir o controle daqui.',
+  'sessionSync.takeOverFailed':
+    'Não foi possível assumir o controle desta sessão. Envie de novo para tentar outra vez.',
+  'sessionSync.stopBeforeTerminal':
+    'Interrompa a resposta em andamento antes de continuar esta sessão no terminal.',
 };
 
 export default pt;

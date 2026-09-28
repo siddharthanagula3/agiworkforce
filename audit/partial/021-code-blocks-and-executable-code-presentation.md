@@ -285,16 +285,12 @@ Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:668-668`
 
 - Done when: Before or when code runs, the user is told what permission it needs/what it can touch and why.
 - Wave: 3
-- Already works on: cli, vscode
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | the composer should say the sandbox reaches only GitHub, npm and PyPI and that attached files are copied in (p-contrast next batch). | ui |
-| desktop | partial | the composer should say the sandbox reaches only GitHub, npm and PyPI and that attached files are copied in (p-contrast next batch). | ui |
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:1376-1376`
 
 ## S21.30: Unsupported-runtime state.
 
