@@ -278,18 +278,6 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1756-1756`, `apps/web/app/a
 
 Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-metadata.ts:344-349`
 
-## S57.36: Large-result references.
-
-- Done when: An oversized tool result is stored in full and replaced in context by a reference the model or user can open later.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | Oversized tool output is truncated (capOutput, a history cap) with nothing kept to refer back to; add a stored reference the model and user can open. | handler |
-
-Code: `apps/extension/src/features/side-panel/bubbles.ts:400-400`
-
 ## S57.37: Tool receipt.
 
 - Done when: After tool calls run, the user can later review a record of which tool ran, with what input, and its outcome.

@@ -12,6 +12,7 @@ import { recordWorkspaceAuditEvent } from '@/lib/workspace-audit';
 import { setMarketplaceInstallationEnabled } from '@/lib/services/plugin-marketplace-installation-service';
 import { isMissingPluginMarketplaceSchema } from '@/lib/services/plugin-marketplace-service';
 import { uninstallDirectoryInstallation } from '@/features/plugins/server/directory/install';
+import { removePluginConnectors } from '@/lib/connectors/plugin-connectors';
 import { installsDisabledResponse } from '@/features/plugins/server/directory/install-responses';
 
 export const runtime = 'nodejs';
@@ -85,6 +86,7 @@ async function handleDelete(request: NextRequest, context: RouteContext): Promis
   try {
     const removed = await uninstallDirectoryInstallation(db, userId, params.data.id);
     if (!removed) return notInstalled();
+    await removePluginConnectors(request, removed);
     await recordWorkspaceAuditEvent(db, request, {
       userId: userId,
       eventType: 'plugin_removed',
