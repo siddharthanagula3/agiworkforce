@@ -186,7 +186,7 @@ import {
   replyToTicket,
   replyToTicketAsStaff,
 } from '../service';
-import { STAFF_QUEUE_PAGE_SIZE, STAFF_QUEUE_STATUSES } from '../types';
+import { STAFF_QUEUE_PAGE_SIZE, STAFF_QUEUE_STATUSES } from '@agiworkforce/cloud-contracts/support';
 
 const CUSTOMER = 'user_customer';
 const OPERATOR = 'user_operator';

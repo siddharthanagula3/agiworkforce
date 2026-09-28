@@ -23,7 +23,7 @@ vi.mock('@/lib/server/hosting', async (importOriginal) => ({
 }));
 
 import { createError } from '@/lib/errors';
-import { supportDiagnosticsSchema } from '@/lib/support/diagnostics/schema';
+import { supportDiagnosticsSchema } from '@agiworkforce/cloud-contracts/support';
 import { POST as exportDiagnostics } from '../route';
 
 function post(body: unknown): Request {
