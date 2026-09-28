@@ -267,3 +267,76 @@ fn validate(field: &Field, value: &str) -> Result<Value, String> {
         }
     }
 }
+
+const MEMORY_NAMESPACE: &str = "memory";
+const EXCLUDED_TERMS: &str = "excludedTerms";
+
+async fn excluded_terms(client: &CloudClient) -> Result<Vec<String>, CloudError> {
+    let preferences: Preferences = client
+        .call(
+            &preferences_route(),
+            &[("namespace", MEMORY_NAMESPACE.to_string())],
+            None,
+        )
+        .await?;
+    Ok(preferences
+        .settings
+        .get(EXCLUDED_TERMS)
+        .and_then(Value::as_array)
+        .map(|terms| {
+            terms
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default())
+}
+
+pub async fn never_remember(add: &[String], remove: &[String]) -> Result<String, CloudError> {
+    let client = CloudClient::connect_managed()?;
+    let mut terms = excluded_terms(&client).await?;
+    if add.is_empty() && remove.is_empty() {
+        return Ok(format_terms(&terms));
+    }
+    for term in remove {
+        let term = term.trim().to_lowercase();
+        terms.retain(|existing| existing != &term);
+    }
+    for term in add {
+        let term = term.trim().to_lowercase();
+        if !term.is_empty() && !terms.contains(&term) {
+            terms.push(term);
+        }
+    }
+    let body = json!({ "namespace": MEMORY_NAMESPACE, "patch": { EXCLUDED_TERMS: terms } });
+    let _: Value = client.call(&save_route(), &[], Some(&body)).await?;
+    let saved = excluded_terms(&client).await?;
+    let dropped: Vec<&String> = add
+        .iter()
+        .filter(|term| !saved.contains(&term.trim().to_lowercase()))
+        .collect();
+    let mut text = format_terms(&saved);
+    if !dropped.is_empty() {
+        text.push_str(&format!(
+            "\nNot kept (too short, or the list is full): {}",
+            dropped
+                .iter()
+                .map(|term| term.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
+    }
+    Ok(text)
+}
+
+fn format_terms(terms: &[String]) -> String {
+    if terms.is_empty() {
+        return "Nothing is on your never-remember list.".to_string();
+    }
+    format!(
+        "Never remember anything mentioning ({}): {}",
+        terms.len(),
+        terms.join(", ")
+    )
+}
