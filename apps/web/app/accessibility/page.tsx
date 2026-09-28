@@ -7,6 +7,7 @@ import { NoteList } from '@/features/marketing/components/pages/company/shared';
 import { Ledger, type LedgerRow } from '@/features/marketing/components/system';
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 import { ScanScope } from './ScanScope';
+import { PolicyVersionsLink } from '@shared/components/legal/PolicyVersionsLink';
 
 export const metadata = buildMetadata({
   title: 'Accessibility',
@@ -81,7 +82,7 @@ export default function AccessibilityPage() {
               We aim for WCAG 2.1 AA across the web app and the marketing site. Below is what
               we&rsquo;ve done, what is in flight, and the known gaps. If you hit a barrier, email
               contact@agiworkforce.com, and we treat it as a P0. Last updated:{' '}
-              {POLICY_LAST_UPDATED.accessibility}.
+              {POLICY_LAST_UPDATED.accessibility}. <PolicyVersionsLink policy="accessibility" />
             </>
           }
           ctas={[]}

@@ -2,12 +2,15 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { toUserMessage } from '@/lib/user-error-message';
-import type { ManagedUsageBucketReading, ManagedUsageCreditWindow } from '@agiworkforce/types';
-import { normalizeUsagePercentage } from '@agiworkforce/types';
-import type { AccountUsageSummaryResponse } from '@/app/api/usage/route';
+import type {
+  ManagedUsageBucketReading,
+  ManagedUsageCreditWindow,
+  ManagedUsageSummaryResponse,
+} from '@agiworkforce/types';
+import { normalizeUsagePercentage, parseManagedUsageSummaryResponse } from '@agiworkforce/types';
 
 export interface ManagedUsageSummaryState {
-  usage: AccountUsageSummaryResponse | null;
+  usage: ManagedUsageSummaryResponse | null;
   loading: boolean;
   error: string | null;
   lastUpdatedAt: Date | null;
@@ -30,7 +33,7 @@ const REVALIDATE_INTERVAL_MS = 300_000;
  * lives at: it is one account's usage, not one component's.
  */
 interface SharedUsageState {
-  usage: AccountUsageSummaryResponse | null;
+  usage: ManagedUsageSummaryResponse | null;
   loading: boolean;
   error: string | null;
   lastUpdatedAt: Date | null;
@@ -67,7 +70,7 @@ function loadUsage(background: boolean): Promise<void> {
     try {
       const response = await fetch('/api/usage', { credentials: 'include' });
       if (!response.ok) throw new Error('Could not load usage');
-      const usage = (await response.json()) as AccountUsageSummaryResponse;
+      const usage = parseManagedUsageSummaryResponse(await response.json());
       publish({ usage, lastUpdatedAt: new Date(), stale: false, error: null });
     } catch (err) {
       publish({
@@ -140,7 +143,7 @@ export function useManagedUsageSummary(): ManagedUsageSummaryState {
   };
 }
 
-export function getWorstUsagePercent(usage: AccountUsageSummaryResponse | null): number {
+export function getWorstUsagePercent(usage: ManagedUsageSummaryResponse | null): number {
   if (!usage) return 0;
   return Math.max(
     normalizeUsagePercentage(usage.usage_percentage),
@@ -150,7 +153,7 @@ export function getWorstUsagePercent(usage: AccountUsageSummaryResponse | null):
   );
 }
 
-export function spendableCreditsNow(usage: AccountUsageSummaryResponse | null): number | null {
+export function spendableCreditsNow(usage: ManagedUsageSummaryResponse | null): number | null {
   const credits = usage?.credits;
   if (!credits) return null;
   const planRemaining = Math.min(
@@ -162,7 +165,7 @@ export function spendableCreditsNow(usage: AccountUsageSummaryResponse | null): 
 }
 
 export function readManagedUsageBuckets(
-  usage: AccountUsageSummaryResponse | null,
+  usage: ManagedUsageSummaryResponse | null,
 ): ManagedUsageBucketReading[] {
   if (!usage) return [];
   const credits = usage.credits;

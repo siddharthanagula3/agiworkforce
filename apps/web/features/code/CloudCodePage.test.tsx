@@ -262,6 +262,7 @@ function createApi(overrides: Partial<CloudCodeApi> = {}): CloudCodeApi {
     setSharing: vi.fn(async () => session),
     openShared: vi.fn(async () => ({
       visibility: 'public' as const,
+      ownerName: null,
       title: session.title,
       repositoryUrl: null,
       workingBranch: null,

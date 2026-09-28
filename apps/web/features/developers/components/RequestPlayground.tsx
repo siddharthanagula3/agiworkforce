@@ -169,6 +169,13 @@ function useGatewayModels(): { list: ModelList; retry: () => void } {
   return { list, retry };
 }
 
+function gatewayErrorCopy(payload: CompletionPayload | null, status: number): string {
+  const copy = payload?.error?.message;
+  return typeof copy === 'string' && copy.trim().length > 0
+    ? copy
+    : `The gateway answered ${status}.`;
+}
+
 export function RequestPlayground() {
   const fieldId = useId();
   const origin = useBrowserOrigin();
@@ -206,10 +213,7 @@ export function RequestPlayground() {
       const payload = (await response.json().catch(() => null)) as CompletionPayload | null;
       if (!response.ok) {
         setResult(null);
-        setError({
-          status: response.status,
-          message: payload?.error?.message ?? `The gateway answered ${response.status}.`,
-        });
+        setError({ status: response.status, message: gatewayErrorCopy(payload, response.status) });
         return;
       }
       setResult({

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { AppError, createError } from '@/lib/errors';
 import { INSTALLS_DISABLED_MESSAGE, MARKETPLACE_UNAVAILABLE_MESSAGE } from './constants';
+import type { DirectoryInstallRefusal } from './install';
 
 const INSTALLS_DISABLED_CODE = 'PLUGIN_INSTALLS_DISABLED';
 const INSTALLS_DISABLED_STATUS = 503;
@@ -21,6 +22,40 @@ export function pluginNotPermittedResponse(reason: string): NextResponse {
     { error: { code: PLUGIN_NOT_PERMITTED_CODE, message: reason } },
     { status: PLUGIN_NOT_PERMITTED_STATUS },
   );
+}
+
+export function installRefusalResponse(result: DirectoryInstallRefusal): NextResponse {
+  switch (result.status) {
+    case 'not-permitted':
+      return pluginNotPermittedResponse(result.message);
+    case 'missing':
+      return NextResponse.json(
+        { error: { code: 'PLUGIN_NOT_FOUND', message: result.message } },
+        { status: 404 },
+      );
+    case 'builtin':
+      return NextResponse.json(
+        { error: { code: 'PLUGIN_IS_BUILTIN', message: result.message } },
+        { status: 409 },
+      );
+    case 'blocked':
+      return NextResponse.json(
+        {
+          error: {
+            code: 'PLUGIN_NOT_INSTALLABLE',
+            message: result.message,
+            installCommand: result.installCommand,
+          },
+        },
+        { status: 409 },
+      );
+    case 'skills-unavailable':
+    case 'source-unavailable':
+      return NextResponse.json(
+        { error: { code: 'PLUGIN_SOURCE_UNAVAILABLE', message: result.message } },
+        { status: 502 },
+      );
+  }
 }
 
 export function marketplaceUnavailableError(): AppError {

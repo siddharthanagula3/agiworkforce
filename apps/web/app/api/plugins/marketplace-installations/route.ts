@@ -25,8 +25,8 @@ import {
   refusePluginInstall,
 } from '@/features/plugins/server/directory/install-gate';
 import {
+  installRefusalResponse,
   installsDisabledResponse,
-  pluginNotPermittedResponse,
 } from '@/features/plugins/server/directory/install-responses';
 import type {
   PluginInstalledDependency,
@@ -104,35 +104,8 @@ async function respondToInstall(
         { status: 201 },
       );
     }
-    case 'not-permitted':
-      return pluginNotPermittedResponse(result.message);
-    case 'missing':
-      return NextResponse.json(
-        { error: { code: 'PLUGIN_NOT_FOUND', message: result.message } },
-        { status: 404 },
-      );
-    case 'builtin':
-      return NextResponse.json(
-        { error: { code: 'PLUGIN_IS_BUILTIN', message: result.message } },
-        { status: 409 },
-      );
-    case 'blocked':
-      return NextResponse.json(
-        {
-          error: {
-            code: 'PLUGIN_NOT_INSTALLABLE',
-            message: result.message,
-            installCommand: result.installCommand,
-          },
-        },
-        { status: 409 },
-      );
-    case 'skills-unavailable':
-    case 'source-unavailable':
-      return NextResponse.json(
-        { error: { code: 'PLUGIN_SOURCE_UNAVAILABLE', message: result.message } },
-        { status: 502 },
-      );
+    default:
+      return installRefusalResponse(result);
   }
 }
 
