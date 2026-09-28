@@ -111,10 +111,9 @@ Code: `apps/cli/src/app_server/developer_host.rs:375-375`, `apps/extension-vscod
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Cloud approvals persist server-side and reappear after reload in the web app, but no other client sees them. Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off, surface-only |
-| desktop | partial | Desktop relays a local session's pending approvals to the paired phone and either side can answer; CLI and VS Code processes keep approvals to themselves. | surface-only |
 | cli | partial | Approvals live in the process running the turn; another client on the same thread does not see them. | handler |
 
-Code: `apps/web/features/code/CloudCodePage.tsx:366-369`, `apps/web/features/code/components/CodeTranscript.tsx:388-392`, `apps/desktop/electron/remote/codeRemoteController.ts:51-51`, `apps/web/features/code/components/LocalSessionPanel.tsx:230-230`
+Code: `apps/web/features/code/CloudCodePage.tsx:366-369`, `apps/web/features/code/components/CodeTranscript.tsx:388-392`, `apps/cli/src/tui/widgets/approval_overlay.rs:335-335`
 
 ## S68.09: Same tool activity.
 
@@ -125,10 +124,9 @@ Code: `apps/web/features/code/CloudCodePage.tsx:366-369`, `apps/web/features/cod
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Cloud tool steps show only in the web app. Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off, surface-only |
-| desktop | partial | Desktop forwards a local turn's tool activity to the phone; CLI and VS Code turns stream only to their own window. | surface-only |
 | cli | partial | Tool cells stream only in the terminal running the turn. | handler |
 
-Code: `apps/web/features/code/components/CodeTranscript.tsx:217-225`, `apps/desktop/electron/remote/codeRemoteController.ts:52-52`, `apps/web/features/code/components/LocalSessionPanel.tsx:229-229`, `apps/cli/src/tui/tui_app.rs:4865-4870`
+Code: `apps/web/features/code/components/CodeTranscript.tsx:217-225`, `apps/cli/src/tui/tui_app.rs:4865-4870`
 
 ## S68.10: Read-only session attachment.
 
@@ -178,10 +176,9 @@ Code: `crates/agiworkforce-protocol/src/developer_session.rs:438-448`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Takes over steering of a desktop session; cannot hand work back or to other clients. | surface-only |
 | cli | partial | agi resume --cloud <id> explicitly pulls an account conversation from web or mobile into the CLI, but no CLI command hands a running local thread to another client. | ui |
 
-Code: `apps/mobile/src/features/companion/remote-code/service.ts:41-50`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:230-230`, `apps/cli/src/lib.rs:829-835`, `apps/cli/src/app_server/developer_host.rs:1203-1206`
+Code: `apps/cli/src/lib.rs:829-835`, `apps/cli/src/app_server/developer_host.rs:1203-1206`, `apps/cli/src/lib.rs:1645-1652`
 
 ## S68.15: Continue cloud execution from desktop.
 
@@ -386,7 +383,4 @@ Code: `apps/cli/src/lib.rs:836-837`, `apps/cli/src/tui/tui_app.rs:3562-3566`, `a
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Cloud and desktop-local sessions notify; CLI and VS Code local sessions send no activity yet. | handler |
 | cli | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/api/code/local-sessions/activity/route.ts:32-32`
