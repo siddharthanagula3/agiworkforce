@@ -50,6 +50,7 @@ import {
   taskStateTone,
   TASK_TONE_BADGE_CLASS,
   workModeLabel,
+  taskResultText,
 } from './task-display';
 
 // Below `lg` the list and this panel can no longer sit side by side, so
@@ -403,6 +404,8 @@ export function TaskDetailPanel({
     (entry): entry is AgentActivityErrorEntry => entry.kind === 'error',
   );
   const tone = taskStateTone(runWorkState(run));
+  const live = isLiveTaskState(runWorkState(run));
+  const resultText = taskResultText(events);
 
   return (
     <aside
@@ -526,6 +529,21 @@ export function TaskDetailPanel({
               </li>
             ))}
           </ol>
+        </section>
+      ) : null}
+
+      {resultText ? (
+        <section
+          data-testid="task-result"
+          aria-label={live ? 'Latest output' : 'Result'}
+          className="mx-4 mb-4 rounded-md border border-border/70 p-3"
+        >
+          <p className="text-caption font-semibold uppercase tracking-wide text-muted-foreground">
+            {live ? 'Latest output' : 'Result'}
+          </p>
+          <p className="mt-1.5 max-h-80 overflow-y-auto whitespace-pre-wrap break-words text-sm text-foreground">
+            {resultText}
+          </p>
         </section>
       ) : null}
 
