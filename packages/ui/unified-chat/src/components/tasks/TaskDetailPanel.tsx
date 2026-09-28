@@ -4,6 +4,7 @@ import {
   Brain,
   Download,
   ExternalLink,
+  Share2,
   FileOutput,
   Folder,
   Globe,
@@ -389,6 +390,7 @@ export interface TaskDetailPanelProps {
   onClose(): void;
   onOpenConversation(conversationId: string): void;
   onRerun?(goal: AgiWorkRerunGoal): void;
+  onShare?(conversationId: string): void;
 }
 
 export function TaskDetailPanel({
@@ -402,6 +404,7 @@ export function TaskDetailPanel({
   onClose,
   onOpenConversation,
   onRerun,
+  onShare,
 }: TaskDetailPanelProps) {
   const isMobileTakeover = useIsNarrowViewport(MOBILE_TAKEOVER_QUERY);
   const panelRef = useRef<HTMLElement | null>(null);
@@ -760,6 +763,17 @@ export function TaskDetailPanel({
               This historical run has no source-conversation reference.
             </p>
           )}
+          {run.conversationId && onShare && !live ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className="ml-2 mt-3 h-7 text-xs"
+              onClick={() => onShare(run.conversationId!)}
+            >
+              <Share2 className="mr-1.5 h-3 w-3" />
+              Share task
+            </Button>
+          ) : null}
         </details>
       </div>
 

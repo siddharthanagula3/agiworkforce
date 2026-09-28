@@ -34,6 +34,7 @@ export function TasksPage() {
     () => ({
       client,
       openConversation: (conversationId) => router.push(`/chat/${conversationId}`),
+      shareConversation: (conversationId) => router.push(`/chat/${conversationId}?share=true`),
       conversationTitle: (conversationId) => titleByConversationId.get(conversationId),
       notifyError: (message) => toast.error(message),
       startWork: () => {
