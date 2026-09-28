@@ -474,6 +474,15 @@ const scheduledTaskExportSchema = z.object({
   updated_at: timestampSchema,
 });
 
+const scheduledTaskShareExportSchema = z.object({
+  id: z.string(),
+  task_id: z.string().nullable(),
+  snapshot: z.unknown(),
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+  revoked_at: nullableTimestampSchema,
+});
+
 const supportTicketExportSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -2383,6 +2392,19 @@ async function collectUserData(
     values: [user.id],
     schema: scheduledTaskExportSchema,
     section: 'scheduled_tasks',
+    userId: user.id,
+    ledger,
+  });
+
+  exportData['scheduled_task_shares'] = await queryExportRows({
+    db,
+    sql: `select id, task_id, snapshot, created_at, updated_at, revoked_at
+          from scheduled_task_shares
+          where user_id = $1
+          order by created_at asc`,
+    values: [user.id],
+    schema: scheduledTaskShareExportSchema,
+    section: 'scheduled_task_shares',
     userId: user.id,
     ledger,
   });
