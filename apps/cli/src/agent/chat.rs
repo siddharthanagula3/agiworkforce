@@ -718,6 +718,9 @@ impl AgentSession {
         self.complete_pending_privacy_handoff(user_input)?;
         self.validate_privacy_boundary()?;
         self.claim_writer_lease();
+        if self.privacy_mode == super::PrivacyMode::Managed {
+            crate::cloud::workspace_policy::refresh_when_due().await;
+        }
 
         // Auto sessions: classify this turn and re-resolve the route before
         // anything downstream reads `self.model` (compaction limits, request
