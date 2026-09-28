@@ -25,6 +25,15 @@ const UNAVAILABLE_PATH = '/region-unavailable';
 
 const identityMiddleware = getIdentityProvider().middleware;
 
+const HOSTNAME_PATTERN = /^(?!-)[a-z0-9-]{1,63}(?:\.(?!-)[a-z0-9-]{1,63})+$/u;
+
+function signalingSocketOrigin(): string {
+  const configured = process.env['SIGNALING_HTTP_URL']?.trim();
+  if (!configured || !URL.canParse(configured)) return '';
+  const { protocol, hostname, host } = new URL(configured);
+  return protocol === 'https:' && HOSTNAME_PATTERN.test(hostname) ? ` wss://${host}` : '';
+}
+
 function buildCspWithNonce(nonce: string, frameAncestors: "'none'" | "'self'" = "'none'"): string {
   const sandboxOrigin = process.env['NEXT_PUBLIC_SANDBOX_ORIGIN']?.trim().replace(/\/+$/, '');
   const sandboxFrameSrc = sandboxOrigin ? ` ${sandboxOrigin}` : '';
@@ -45,7 +54,7 @@ function buildCspWithNonce(nonce: string, frameAncestors: "'none'" | "'self'" = 
     style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://js.stripe.com;
     img-src 'self' data: blob: https:;
     font-src 'self' https://fonts.gstatic.com https://js.stripe.com data:;
-    connect-src 'self'${storageUploadOrigins}${identityConnect}${plaidConnect} https://api.stripe.com https://vitals.vercel-insights.com https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com;
+    connect-src 'self'${storageUploadOrigins}${identityConnect}${plaidConnect}${signalingSocketOrigin()} https://api.stripe.com https://vitals.vercel-insights.com https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com;
     worker-src 'self' blob:;
     frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://challenges.cloudflare.com https://docs.google.com${sandboxFrameSrc}${plaidFrame};
     frame-ancestors ${frameAncestors};

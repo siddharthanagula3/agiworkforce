@@ -158,14 +158,13 @@ Code: `apps/cli/src/lib.rs:1053-1068`, `apps/cli/src/cloud/artifacts.rs:391-400`
 
 - Done when: The owner can download the app's source.
 - Wave: 3
-- Already works on: web, desktop, cli, vscode
+- Already works on: web, desktop, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Mobile saves the source as a text/markdown file with an added header, not the raw source file. | ui |
-| chrome | partial | The side panel can copy the source to the clipboard but not save a file. | surface-only |
 
-Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:426-436`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:236-241`, `apps/extension/src/features/side-panel/artifactsDrawer.ts:194-205`
+Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:426-436`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:236-241`
 
 ## S33.30: Deletion of app and associated data.
 

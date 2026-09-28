@@ -15,9 +15,6 @@ nothing is left.
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | The title is set only by the assistant office-file tool and written to the .pptx file properties; no deck view shows it or lets the user rename it. Chrome offers the tool only when the prompt names an Office file (no toggle). | ui |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:577-583`, `apps/extension/src/features/side-panel/bubbles.ts:434-456`, `apps/web/lib/services/managed-office-file-service.ts:513-526`, `apps/web/lib/services/managed-office-file-service.ts:513-520`
 
 ## S30.03: Add slide.
 
@@ -28,9 +25,6 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:577-583
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Slides can be added only when the assistant first creates a deck; nothing adds a slide to an existing deck (no edit tool, no deck editor). Chrome offers the tool only when the prompt names an Office file (no toggle). | ui |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:577-583`, `apps/extension/src/features/side-panel/bubbles.ts:434-456`, `apps/web/lib/services/managed-office-file-service.ts:513-526`, `apps/web/lib/services/managed-office-file-service.ts:59-63`
 
 ## S30.18: Slide notes.
 
@@ -41,9 +35,6 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:577-583
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Notes can be written only when the assistant creates the deck (speaker_notes per slide, stored in the .pptx notes pane); the product never shows or edits them. Chrome offers the tool only when the prompt names an Office file (no toggle). | ui |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:577-583`, `apps/extension/src/features/side-panel/bubbles.ts:434-456`, `apps/web/lib/services/managed-office-file-service.ts:513-526`, `apps/web/lib/services/managed-office-file-service.ts:59-63`
 
 ## S30.19: Presenter notes.
 
@@ -54,9 +45,6 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:577-583
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Presenter notes exist only inside the downloaded .pptx (from the assistant tool); the product has no presenter view that shows them while presenting. Chrome offers the tool only when the prompt names an Office file (no toggle). | ui |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:577-583`, `apps/extension/src/features/side-panel/bubbles.ts:434-456`, `apps/web/lib/services/managed-office-file-service.ts:513-526`, `apps/web/lib/services/managed-office-file-service.ts:59-63`
 
 ## S30.23: Whole-deck restructuring.
 
@@ -83,13 +71,12 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:577-583
 
 - Done when: The user can download the deck as a .pptx file.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | A .pptx is produced only by asking the assistant (office-file tool); a deck in the product has no Export to PPTX action. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | A .pptx is produced only by asking the assistant (office-file tool); a deck in the product has no Export to PPTX action. Chrome offers the tool only when the prompt names an Office file (no toggle). | ui |
 
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1756`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:195-203`, `apps/web/lib/services/managed-office-file-service.ts:513-526`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:577-583`
+Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1756`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:195-203`, `apps/web/lib/services/managed-office-file-service.ts:513-526`

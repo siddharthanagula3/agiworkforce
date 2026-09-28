@@ -48,16 +48,16 @@ Code: `apps/web/features/code/components/CodeComposer.tsx:532-552`, `apps/web/fe
 
 - Done when: The user can pick the branch a coding session starts from or works on from a list of the repository's branches.
 - Wave: 2
+- Already works on: desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The cloud branch is a free-text field, not a list of the repository's branches, and cloud sessions need AGI_E2B_EXECUTION=1, which ships off. | ui, flag-off |
-| desktop | partial | Local folders only display the checked-out branch with no way to switch it; the hosted cloud branch field is free text and gated. | ui |
+| web | partial | done once AGI_E2B_EXECUTION is switched on at the end of the run (decisions.md); the managed sandbox ships off | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | partial | The extension has no branch choice of its own; it works on whatever VS Code has checked out and can only switch to a cloud task's branch ("Bring the branch in"). | ui |
 
-Code: `apps/web/features/code/components/CodeComposer.tsx:688-708`, `apps/web/lib/e2b/gate.ts:16-18`, `apps/web/features/code/components/CodeComposer.tsx:1124-1130`, `apps/extension-vscode/src/features/context-handoff/index.ts:105-127`
+Code: `apps/web/app/api/code/repositories/branches/route.ts:89-89`, `apps/web/lib/github-app.ts:764-764`, `apps/web/features/code/hooks/use-code-branches.ts:15-15`, `apps/web/features/code/components/CodeComposer.tsx:706-706`
 
 ## S9.09: Device picker.
 
@@ -177,14 +177,13 @@ Code: `apps/mobile/src/features/tasks/CloudTasksScreen.tsx:448-458`
 
 - Done when: A guided setup runs as ordered steps that collect the user's choices (name, model, sign-in) and saves them when it finishes.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli
+- Already works on: web, desktop, mobile, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | vscode | partial | The intro and the Get Started walkthrough explain steps and link to commands but collect no choices; add steps that sign in, pick a model and set autonomy inside the flow. | handler |
-| chrome | partial | The five-step overlay is an informational tour; add steps that actually configure the extension (sign-in, site permissions, model) and save them. | handler |
 
-Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2283-2283`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2703-2703`, `apps/extension-vscode/package.json:673-673`, `apps/extension/src/side_panel.ts:5553-5553`
+Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2283-2283`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2703-2703`, `apps/extension-vscode/package.json:673-673`
 
 ## S9.24: Split-pane container.
 
@@ -331,11 +330,10 @@ Code: `apps/mobile/app/(app)/notifications/index.tsx:93-93`, `apps/mobile/app/(a
 
 - Done when: A keyboard shortcut opens a searchable list of commands and destinations; typing filters it and Enter runs the choice.
 - Wave: 3
-- Already works on: web, desktop, cli, vscode
+- Already works on: web, desktop, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Only a composer slash list (/image, /voice, /compare, /export); add a searchable palette for destinations and settings, reachable from a hardware keyboard. | ui |
-| chrome | partial | Only the composer "/" slash menu; add a shortcut-opened palette for views, history and settings. | ui |
 
-Code: `apps/mobile/src/features/chat/components/CommandPalette.tsx:9-9`, `apps/mobile/src/features/chat/components/ChatInput.tsx:784-784`, `apps/extension/src/side_panel.ts:9668-9668`, `apps/extension/src/side_panel.ts:9675-9675`
+Code: `apps/mobile/src/features/chat/components/CommandPalette.tsx:9-9`, `apps/mobile/src/features/chat/components/ChatInput.tsx:784-784`

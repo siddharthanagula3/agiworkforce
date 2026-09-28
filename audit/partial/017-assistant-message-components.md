@@ -207,7 +207,6 @@ Code: `apps/mobile/src/features/chat/components/MessageList.tsx:91-91`, `apps/mo
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Blind re-search: the store already implements forkConversation(sourceConversationId, { forkPointMessageId }) which copies history up to a chosen message into a new conversation, but no answer control calls it. That is "some links exist" (miss ui/mount), the same reading aud-shell gave the same store for S4.10 mobile (partial). remaining: wire a "Branch from here" action on answers to forkConversation. |  |
 | vscode | partial | 'Fork Conversation' copies a whole session from the command palette/tree; add branching from a chosen answer. | ui |
 | chrome | missing | Not built on this surface. |  |
 
@@ -318,10 +317,10 @@ Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:1101-1104`, `a
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | A provider refusal (finish_reason content_filter/refusal) is stored but rendered as an ordinary answer; only on-device Apple Intelligence refusals get their own message. Show a refusal notice for cloud answers. | states |
+| mobile | partial | A refused answer (finishReason refusal or content_filter, already stored) gets the web's refusal notice with a next step in post-codex/chat-gates-s16.09-s17.38-s17.39-s20.26-mobile-bubble.patch; applies once Codex releases MessageBubble. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1994-1994`, `apps/mobile/stores/chat/chatExecutionStore.ts:587-587`
+Code: `apps/mobile/stores/chat/chatExecutionStore.ts:2050-2050`
 
 ## S17.39: Interrupted state.
 
@@ -331,6 +330,6 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1994-1994`, `apps/mobile/st
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Stopping settles agent/research turns as 'Cancelled after …', but a plain answer stopped mid-stream shows no stopped marker and looks complete. | states |
+| mobile | partial | Stop now stamps finishReason 'stopped' (the web's marker, so it syncs) and the answer keeps what arrived with 'Response stopped.' and Try again, in post-codex/chat-gates-s16.09-s17.38-s17.39-s20.26-mobile-bubble.patch (chatExecutionStore and MessageBubble are held). | ui |
 
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:2840-2850`, `apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx:92-92`
+Code: `apps/mobile/stores/chat/chatExecutionStore.ts:2876-2876`
