@@ -29,6 +29,7 @@ import {
   type DeveloperTurnRequest,
   type ShellPolicy,
   type ShellRunResult,
+  type WorkingTreeChanges,
   type WorkspaceRoot,
   type WorkspaceRootKind,
 } from '@agiworkforce/local-runtime-contract';
@@ -448,6 +449,14 @@ export function startDeveloperSession(
 
 export function startDeveloperTurn(request: DeveloperTurnRequest): Promise<{ turnId: string }> {
   return invoke<{ turnId: string }>('developer_turn_start', { ...request });
+}
+
+export function readDeveloperSessionChanges(rootId: string): Promise<WorkingTreeChanges | null> {
+  return invoke<WorkingTreeChanges | null>('developer_session_changes', { rootId });
+}
+
+export function discardDeveloperSessionChanges(rootId: string, paths: string[]): Promise<string[]> {
+  return invoke<string[]>('developer_session_discard', { rootId, paths });
 }
 
 export function interruptDeveloperTurn(

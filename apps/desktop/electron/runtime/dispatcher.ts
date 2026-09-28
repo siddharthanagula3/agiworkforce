@@ -103,7 +103,7 @@ import {
   statPath,
   writeTextFile,
 } from './filesystemService';
-import { readWorkspaceGit } from './gitService';
+import { discardWorkingTreeChanges, readWorkingTreeChanges, readWorkspaceGit } from './gitService';
 import {
   DeveloperRuntimeUnavailableError,
   answerDeveloperApproval,
@@ -178,6 +178,21 @@ function optionalString(args: Args, key: string, fallback: string): string {
     throw new InvalidArguments(`"${key}" must be a string.`);
   }
   return value;
+}
+
+const MAX_DISCARD_PATHS = 500;
+
+function requirePathList(args: Args, key: string): string[] {
+  const value = args[key];
+  if (
+    !Array.isArray(value) ||
+    value.length === 0 ||
+    value.length > MAX_DISCARD_PATHS ||
+    value.some((entry) => typeof entry !== 'string' || entry.length === 0 || entry.includes('\0'))
+  ) {
+    throw new InvalidArguments(`"${key}" must list between 1 and ${MAX_DISCARD_PATHS} paths.`);
+  }
+  return value as string[];
 }
 
 function rendererAgentMode(raw: string): DeveloperAgentMode | null {
@@ -418,6 +433,14 @@ const CAPABILITY_BY_COMMAND: Record<string, { capability: DesktopCapability; rea
     capability: 'shell.execute',
     reason:
       'A coding session runs the AGI CLI agent in this folder. It can read and change files here and run programs with your account.',
+  },
+  developer_session_changes: {
+    capability: 'filesystem.read',
+    reason: 'Showing what a coding session changed reads the changed files in this folder.',
+  },
+  developer_session_discard: {
+    capability: 'filesystem.write',
+    reason: 'Discarding a change puts files in this folder back to their last committed version.',
   },
 };
 
@@ -931,6 +954,10 @@ async function execute(
         requestId: requireString(args, 'requestId'),
         approved: args['approved'] === true,
       });
+    case 'developer_session_changes':
+      return readWorkingTreeChanges(resolveRoot(args).path);
+    case 'developer_session_discard':
+      return discardWorkingTreeChanges(resolveRoot(args).path, requirePathList(args, 'paths'));
     case 'developer_account_report': {
       reportShellIdentity({
         signedIn: args['signedIn'] === true,

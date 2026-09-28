@@ -1,6 +1,11 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import type { WorkspaceGitState, WorkspaceRoot } from '@agiworkforce/local-runtime-contract';
+import {
+  parseWorkingTreeStatus,
+  type WorkingTreeChanges,
+  type WorkspaceGitState,
+  type WorkspaceRoot,
+} from '@agiworkforce/local-runtime-contract';
 import {
   countPorcelainStatus,
   describeGitHead,
@@ -13,6 +18,8 @@ const run = promisify(execFile);
 
 const GIT_TIMEOUT_MS = 15_000;
 const GIT_MAX_BUFFER = 8 * 1024 * 1024;
+const WORKING_TREE_DIFF_LIMIT = 200_000;
+const STATUS_ARGS = ['status', '--porcelain=v1', '--untracked-files=all'];
 
 /**
  * Runs git with an argument array.
@@ -120,4 +127,56 @@ export async function readWorkingTreeDiff(
 ): Promise<string | null> {
   if (paths.length === 0) return null;
   return gitOrNull(directory, ['diff', '--no-color', '--no-ext-diff', 'HEAD', '--', ...paths]);
+}
+
+export async function readWorkingTreeChanges(
+  directory: string,
+): Promise<WorkingTreeChanges | null> {
+  const root = await findRepositoryRoot(directory);
+  if (!root) return null;
+  const status = await git(root, STATUS_ARGS);
+  const diff = (await gitOrNull(root, ['diff', '--no-color', '--no-ext-diff', 'HEAD'])) ?? '';
+  return {
+    files: parseWorkingTreeStatus(status),
+    diff: diff.slice(0, WORKING_TREE_DIFF_LIMIT),
+    diffTruncated: diff.length > WORKING_TREE_DIFF_LIMIT,
+  };
+}
+
+export async function discardWorkingTreeChanges(
+  directory: string,
+  paths: readonly string[],
+): Promise<string[]> {
+  const root = await findRepositoryRoot(directory);
+  if (!root)
+    throw new Error('This folder is not a git repository, so there is nothing to discard.');
+  const changed = new Map(
+    parseWorkingTreeStatus(await git(root, STATUS_ARGS)).map((change) => [change.path, change]),
+  );
+  const chosen = paths.map((path) => {
+    const change = changed.get(path);
+    if (!change) throw new Error(`${path} has no changes to discard.`);
+    if (change.state === 'conflicted') {
+      throw new Error(`${path} has a merge conflict. Resolve it before discarding it.`);
+    }
+    return change;
+  });
+
+  const removed = chosen
+    .filter((change) => change.state === 'added' || change.state === 'renamed')
+    .map((change) => change.path);
+  const restored = chosen.flatMap((change) => {
+    if (change.state === 'modified' || change.state === 'deleted') return [change.path];
+    return change.state === 'renamed' && change.originalPath ? [change.originalPath] : [];
+  });
+  const cleaned = chosen
+    .filter((change) => change.state === 'untracked')
+    .map((change) => change.path);
+
+  if (removed.length > 0) await git(root, ['rm', '-f', '--quiet', '--', ...removed]);
+  if (restored.length > 0) {
+    await git(root, ['restore', '--source=HEAD', '--staged', '--worktree', '--', ...restored]);
+  }
+  if (cleaned.length > 0) await git(root, ['clean', '-f', '--quiet', '--', ...cleaned]);
+  return chosen.map((change) => change.path);
 }

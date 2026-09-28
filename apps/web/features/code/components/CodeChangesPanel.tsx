@@ -37,7 +37,7 @@ import styles from '../CloudCodePage.module.css';
 const GLYPH_SIZE = 15;
 const EXIT_CODE_OK = 0;
 
-function DiffBody({ body }: { body: string }) {
+export function DiffBody({ body }: { body: string }) {
   return (
     <pre className={styles['diff']}>
       {body.split('\n').map((line, index) => (
