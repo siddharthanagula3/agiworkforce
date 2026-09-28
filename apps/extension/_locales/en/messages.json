@@ -3252,5 +3252,19 @@
   "spConnectorInputSendFailed": {
     "message": "Your answer could not be sent. Try again.",
     "description": "The side panel could not hand the answer to a connector request to the background worker"
+  },
+  "spMediaViewerClose": {
+    "message": "Close",
+    "description": "Closes the full-size image viewer and returns to the chat"
+  },
+  "spMediaViewerOpen": {
+    "message": "View $NAME$ full size",
+    "description": "Opens an image from the chat in the full-size viewer",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "diagram.png"
+      }
+    }
   }
 }

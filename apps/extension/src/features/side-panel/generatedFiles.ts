@@ -11,6 +11,7 @@ import {
 } from '../../assets/icons';
 import { t } from '../../i18n';
 import { el } from './dom';
+import { buildImageViewerButton } from './mediaViewer';
 
 export interface AnswerFile {
   key: string;
@@ -217,7 +218,12 @@ function buildImageResult(file: AnswerFile, url: string, access: AnswerFileAcces
   figure.appendChild(caption);
   loadImageDataUrl(url, access)
     .then((dataUrl) => {
-      frame.replaceChildren(el('img', { src: dataUrl, alt: file.name }));
+      frame.replaceChildren(
+        buildImageViewerButton(
+          el('img', { src: dataUrl, alt: file.name }),
+          'sp-answer-image__open',
+        ),
+      );
     })
     .catch(() => {
       loading.replaceChildren(document.createTextNode(t('spAnswerImageFailed', [file.name])));

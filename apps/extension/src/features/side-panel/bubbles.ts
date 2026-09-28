@@ -61,6 +61,7 @@ import {
   buildProductComparisonCard,
 } from './interactiveCards';
 import { buildConnectorInputForm, type ConnectorInputBinding } from './connectorInputForm';
+import { buildImageViewerButton } from './mediaViewer';
 
 type ChatMessage = SidePanelChatMessage;
 export type ManagedApprovalDecision = 'approved' | 'rejected';
@@ -350,7 +351,10 @@ function buildUserContext(msg: ChatMessage, previews: readonly string[] = []): H
     if (preview) {
       item.classList.add('sp-msg-context__item--thumb');
       item.appendChild(
-        el('img', { class: 'sp-msg-context__thumb', src: preview, alt: attachment.name }),
+        buildImageViewerButton(
+          el('img', { class: 'sp-msg-context__thumb', src: preview, alt: attachment.name }),
+          'sp-msg-context__open',
+        ),
       );
     } else {
       item.appendChild(renderIcon(attachment.kind === 'image' ? FileImage : FileText, 14));
