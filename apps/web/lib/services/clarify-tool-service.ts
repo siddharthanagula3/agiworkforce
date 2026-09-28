@@ -53,7 +53,7 @@ export interface ClarifyOfferContext {
 }
 
 export function shouldOfferClarifyTool(context: ClarifyOfferContext): boolean {
-  if (context.webSearch || context.research) return false;
+  if (context.research) return false;
   const trimmed = context.userMessage.trim();
   if (trimmed.length === 0) return false;
   if (trimmed.length > CLARIFY_OFFER_MAX_MESSAGE_LENGTH) return false;
@@ -210,8 +210,7 @@ export function createClarifyToolDefinition() {
 }
 
 export type ClarifyToolOutcome =
-  | { ok: true; content: string; card: InteractiveCard }
-  | { ok: false; content: string };
+  { ok: true; content: string; card: InteractiveCard } | { ok: false; content: string };
 
 export function executeClarifyTool(
   args: Record<string, unknown>,
