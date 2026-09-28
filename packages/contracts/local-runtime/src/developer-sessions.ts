@@ -305,6 +305,7 @@ export interface WorkingTreeChanges {
   files: WorkingTreeChange[];
   diff: string;
   diffTruncated: boolean;
+  folderPrefix: string;
 }
 
 const PORCELAIN_PATH_INDEX = 3;

@@ -79,6 +79,10 @@ export function readWorkspaceText(rootId: string, path: string): Promise<FileTex
   return invoke<FileTextContent>('file_read_text', { rootId, path });
 }
 
+export function writeWorkspaceText(rootId: string, path: string, text: string): Promise<unknown> {
+  return invoke<unknown>('file_write_text', { rootId, path, text });
+}
+
 export function revokeWorkspaceRoot(rootId: string): Promise<boolean> {
   return invoke<boolean>('workspace_revoke_root', { rootId });
 }
