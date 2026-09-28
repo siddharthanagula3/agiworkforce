@@ -81,6 +81,8 @@ export const USER_SCOPED_TABLES: ReadonlyArray<{
   { table: 'feedback', column: 'user_id' },
   { table: 'api_keys', column: 'user_id' },
   { table: 'developer_projects', column: 'user_id' },
+  { table: 'developer_webhook_deliveries', column: 'user_id' },
+  { table: 'developer_webhook_endpoints', column: 'user_id' },
   { table: 'user_two_factor', column: 'user_id' },
   { table: 'account_sessions', column: 'user_id' },
   { table: 'account_lockout_attempts', column: 'user_id' },

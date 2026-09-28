@@ -16,6 +16,7 @@ import {
   archiveDeveloperProject,
   updateDeveloperProject,
 } from '@/lib/services/developer-project-service';
+import { queueDeveloperWebhookEvent } from '@/lib/services/developer-webhook-service';
 
 type ProjectContext = { params: Promise<{ projectId: string }> };
 
@@ -69,21 +70,24 @@ async function handleArchive(request: NextRequest, context: ProjectContext) {
   const { db, userId } = await getUserScopedDb(request);
   const { project, revokedKeyIds } = await archiveDeveloperProject(db, userId, projectId);
 
-  await Promise.all(
-    revokedKeyIds.map((keyId) =>
-      recordAuditEvent({
-        userId,
-        eventType: 'api_key_revoked',
-        request,
-        detail: {
-          resourceType: 'api_key',
-          resourceId: keyId,
-          reason: 'developer_project_archived',
-          subjectRef: projectId,
-        },
-      }),
-    ),
-  );
+  for (const keyId of revokedKeyIds) {
+    await recordAuditEvent({
+      userId,
+      eventType: 'api_key_revoked',
+      request,
+      detail: {
+        resourceType: 'api_key',
+        resourceId: keyId,
+        reason: 'developer_project_archived',
+        subjectRef: projectId,
+      },
+    });
+    await queueDeveloperWebhookEvent(db, userId, 'api_key.revoked', {
+      id: keyId,
+      project_id: projectId,
+      reason: 'project_archived',
+    });
+  }
 
   return NextResponse.json({ project, revokedKeys: revokedKeyIds.length });
 }

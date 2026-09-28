@@ -758,7 +758,12 @@
       "owner": "apps/web/app/api/llm/v1",
       "capabilities": [],
       "concepts": [],
-      "tables": ["api_keys", "developer_projects"]
+      "tables": [
+        "api_keys",
+        "developer_projects",
+        "developer_webhook_endpoints",
+        "developer_webhook_deliveries"
+      ]
     },
     {
       "name": "experiments",

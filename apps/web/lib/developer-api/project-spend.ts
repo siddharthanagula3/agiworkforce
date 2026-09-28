@@ -9,6 +9,7 @@ import {
   developerProjectSpendMicrousd,
   developerUsageMonth,
 } from '@/lib/services/developer-usage-service';
+import { queueDeveloperWebhookEvent } from '@/lib/services/developer-webhook-service';
 
 interface CappedProjectRow {
   id: string;
@@ -49,6 +50,25 @@ export async function developerProjectSpendRefusal(
   const window = developerUsageMonth();
   const spent = await developerProjectSpendMicrousd(db, credential.userId, project.id, window);
   if (spent < microusdFromCredits(limit)) return null;
+
+  const [announced] = await db.query<{ id: string }>(
+    `select id
+       from public.developer_webhook_deliveries
+      where user_id = $1
+        and event_type = 'project.spend_limit_reached'
+        and payload->'data'->>'project_id' = $2
+        and created_at >= $3
+      limit 1`,
+    [credential.userId, project.id, window.from],
+  );
+  if (!announced) {
+    await queueDeveloperWebhookEvent(db, credential.userId, 'project.spend_limit_reached', {
+      project_id: project.id,
+      name: project.name,
+      monthly_credit_limit: limit,
+      reset_at: window.to,
+    });
+  }
 
   return NextResponse.json(
     {
