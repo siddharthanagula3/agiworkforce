@@ -1,5 +1,9 @@
 import type { SavedShortcut, ExtensionResponse } from '../../types';
-import type { SaveShortcutMessage, DeleteShortcutMessage } from '../../types';
+import type {
+  SaveShortcutMessage,
+  DeleteShortcutMessage,
+  UpdateShortcutMessage,
+} from '../../types';
 import {
   ORIGIN_EXTENSION_PAGE,
   generateRecordId,
@@ -7,7 +11,7 @@ import {
 } from '../../background/policy';
 import { normalizeShortcutStartUrl } from '../shortcuts/origin';
 
-const SHORTCUTS_STORAGE_KEY = 'agi_saved_shortcuts';
+export const SHORTCUTS_STORAGE_KEY = 'agi_saved_shortcuts';
 const MAX_SHORTCUTS = 50;
 
 export function planShortcutReplay(
@@ -75,6 +79,31 @@ export async function handleSaveShortcut(message: SaveShortcutMessage): Promise<
     scheduled: message.scheduled,
   };
   shortcuts.push(shortcut);
+  await saveShortcuts(shortcuts);
+  return { success: true, shortcuts } as ExtensionResponse;
+}
+
+export async function handleUpdateShortcut(
+  message: UpdateShortcutMessage,
+): Promise<ExtensionResponse> {
+  const shortcuts = await loadShortcuts();
+  const index = shortcuts.findIndex((shortcut) => shortcut.id === message.shortcutId);
+  const current = shortcuts[index];
+  if (!current) {
+    return { success: false, error: 'Shortcut not found' } as ExtensionResponse;
+  }
+  if (planShortcutReplay(current).kind !== 'prompt') {
+    return {
+      success: false,
+      error: 'Recorded workflows cannot be edited. Record the workflow again instead.',
+    } as ExtensionResponse;
+  }
+  const name = typeof message.name === 'string' ? message.name.trim().slice(0, 100) : '';
+  const prompt = typeof message.prompt === 'string' ? message.prompt.trim() : '';
+  if (!name || !prompt) {
+    return { success: false, error: 'A shortcut needs a name and a prompt.' } as ExtensionResponse;
+  }
+  shortcuts[index] = { ...current, name, prompt };
   await saveShortcuts(shortcuts);
   return { success: true, shortcuts } as ExtensionResponse;
 }

@@ -10,14 +10,11 @@ nothing is left.
 
 - Done when: A request that cannot start yet (queued behind a running turn or a server queue) is shown as waiting/queued.
 - Wave: 3
-- Already works on: web, desktop, mobile, vscode, api
+- Already works on: web, desktop, mobile, vscode, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
-| chrome | partial | The chat never shows a queued state (the composer refuses a second send while a turn runs); only the separate Work runs panel labels queued runs. | ui |
-
-Code: `apps/extension/src/features/side-panel/cloudRunsPanel.ts:344-348`, `apps/extension/src/side_panel.ts:925-929`
 
 ## S19.03: Preparing context.
 
@@ -42,9 +39,9 @@ Code: `apps/mobile/src/features/chat/components/StreamingIndicator.tsx:4-18`, `a
 | --- | --- | --- | --- |
 | mobile | partial | Only Deep Research asks for plan confirmation mid-task (research card); other input requests are not shown. | ui |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | The chat now says "Needs your input" and the step names the connector request, but Chrome cannot render the connector form to answer it. The form model lives in apps/web/features/connectors/lib/connector-input-request.ts; it needs to move to a shared package before the side panel can render and resume it. | ui |
+| chrome | partial | Waiting for p-platform to move the connector input-request form model into a shared package (S101.22); the side panel form will be built on it. | ui |
 
-Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:777-790`, `apps/mobile/src/features/chat/components/MessageList.tsx:101-102`, `apps/extension/src/features/side-panel/bubbles.ts:830-830`, `apps/extension/src/features/side-panel/chat-state.ts:254-254`
+Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:777-790`, `apps/mobile/src/features/chat/components/MessageList.tsx:101-102`, `apps/extension/src/features/side-panel/bubbles.ts:847-847`
 
 ## S19.11: Streaming structured output.
 

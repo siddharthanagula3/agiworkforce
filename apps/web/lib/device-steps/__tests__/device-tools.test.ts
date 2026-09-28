@@ -20,8 +20,15 @@ const DECLARATION: DesktopHostDeclaration = {
 describe('device tool offering', () => {
   it('offers only the tools the declared capabilities cover', () => {
     const names = deviceStepToolDefs(DECLARATION).map((tool) => tool.function.name);
-    expect(names).toEqual(['device_read_file', 'device_list_folder', 'device_run_command']);
+    expect(names).toEqual([
+      'device_read_file',
+      'device_list_folder',
+      'device_find_files',
+      'device_search_text',
+      'device_run_command',
+    ]);
     expect(names).not.toContain('device_write_file');
+    expect(names).not.toContain('device_edit_file');
   });
 
   it('offers nothing when no folder is granted', () => {
