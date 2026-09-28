@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "release": {
-    "policyVersion": 16,
+    "policyVersion": 17,
     "records": [
       {
         "version": 1,
@@ -154,6 +154,14 @@
           "verdict": "held",
           "measuredOn": "2026-09-20"
         }
+      },
+      {
+        "version": 17,
+        "artifact": "prompt",
+        "id": "tool.url_fetch_description@2",
+        "channel": "internal",
+        "effectiveOn": "2026-09-27",
+        "reason": "names PDFs and Word, Excel and PowerPoint files, which url_fetch now reads as text; enters on internal and takes no traffic until a canary advance carries an eval quality signal"
       }
     ]
   },

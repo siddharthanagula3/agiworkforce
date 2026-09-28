@@ -171,10 +171,12 @@ set the named variables in production and locally.
   `https://calendarmcp.googleapis.com/mcp/v1`.
 - Scopes the allowlist permits (each prefixed `https://www.googleapis.com/auth/`
   unless bare): `openid`, `profile`, `email`, `userinfo.email`,
-  `userinfo.profile`, then per connector Gmail `gmail.readonly`, `gmail.send`;
+  `userinfo.profile`, then per connector Gmail `gmail.readonly`, `gmail.compose`
+  (drafts), `gmail.send`;
   Drive `drive.file`, `drive.metadata.readonly`; Calendar `calendar.readonly`,
   `calendar.events`. The full-mailbox, full-drive and full-calendar scopes are
-  forbidden and dropped.
+  forbidden and dropped. `gmail.modify`, which Gmail's label tools need, is left
+  out like Microsoft's `Mail.ReadWrite`; admitting it is an owner decision.
 - Variables: `CONNECTOR_OAUTH_GMAIL_CLIENT_ID`,
   `CONNECTOR_OAUTH_GMAIL_CLIENT_SECRET`, `CONNECTOR_OAUTH_GOOGLE_DRIVE_CLIENT_ID`,
   `CONNECTOR_OAUTH_GOOGLE_DRIVE_CLIENT_SECRET`,
