@@ -12,9 +12,11 @@ let stagedAttachments: File[] | null = null;
 
 const ASPECT_RATIO_TOLERANCE = 0.02;
 
-async function imageAspectRatio(file: File): Promise<ManagedMediaImageAspectRatio | null> {
+export async function readImageAspectRatio(
+  image: Blob,
+): Promise<ManagedMediaImageAspectRatio | null> {
   if (typeof createImageBitmap !== 'function') return null;
-  const bitmap = await createImageBitmap(file).catch(() => null);
+  const bitmap = await createImageBitmap(image).catch(() => null);
   if (!bitmap) return null;
   const ratio = bitmap.width / bitmap.height;
   bitmap.close();
@@ -57,7 +59,7 @@ export async function stageLibraryItemForImageRemix(item: LibraryItem): Promise<
       workMode: 'chat',
       imageMode: true,
       videoMode: false,
-      pendingImageSettings: { modelId: item.model, aspectRatio: await imageAspectRatio(file) },
+      pendingImageSettings: { modelId: item.model, aspectRatio: await readImageAspectRatio(file) },
     },
     PENDING_CONVERSATION_KEY,
   );

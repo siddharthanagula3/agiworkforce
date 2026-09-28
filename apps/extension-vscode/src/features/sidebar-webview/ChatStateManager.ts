@@ -7,6 +7,8 @@ import { type DiffDecorationProvider } from '../../providers/diffDecorationProvi
 import {
   normalizeConfiguredModelId,
   getModelProviderInfo,
+  registryEffortLevels,
+  supportedEffort,
   buildGroupedQuickPickItems,
   isModelReachableForTier,
   MODEL_CONTEXT_LIMITS,
@@ -141,6 +143,7 @@ const RUNTIME_SETUP_ERROR_MARKERS = [CLI_NOT_FOUND_MARKER, CLI_NOT_EXECUTABLE_MA
 const RUNTIME_SETUP_ERROR_MAX_LENGTH = 320;
 
 const RECENT_CONVERSATION_LIMIT = 5;
+const TEXT_ATTACHMENT_CHAR_LIMIT = 40_000;
 const MAX_QUEUED_SENDS = 20;
 const MAX_PRE_START_TURN_EVENTS = 1_024;
 const PRE_START_EVENT_OVERFLOW_MESSAGE =
@@ -255,6 +258,7 @@ export type WebviewToExtMessage =
   | { type: 'requestSlashCommands' }
   | { type: 'continueInCloud' }
   | { type: 'regenerate' }
+  | { type: 'cancelQueuedMessage'; payload: { clientMessageId: string } }
   | { type: 'openSuggestedProject'; payload: { projectId: string } }
   | { type: 'runSlashCommand'; payload: { name: string } };
 
@@ -353,7 +357,11 @@ export type ExtToWebviewMessage =
   | { type: 'modeChanged'; payload: { mode: AgentMode } }
   | {
       type: 'effortChanged';
-      payload: { effort: DeveloperReasoningEffort; supportsEffort: boolean };
+      payload: {
+        effort: DeveloperReasoningEffort;
+        supportsEffort: boolean;
+        efforts: DeveloperReasoningEffort[] | null;
+      };
     }
   | { type: 'usageMeter'; payload: UsageMeterWebviewPayload }
   | {
@@ -406,7 +414,7 @@ export type ExtToWebviewMessage =
   | {
       type: 'attachFilesAck';
       payload: {
-        added: Array<{ id: string; name: string }>;
+        added: Array<{ id: string; name: string; truncatedAt?: number }>;
         skipped: Array<{ name: string; reason: string }>;
       };
     }
@@ -729,8 +737,15 @@ export class ChatStateManager {
     return this._effort;
   }
 
+  modelEffortLevels(modelId: string): DeveloperReasoningEffort[] | null {
+    if (this._localModelProviders.has(modelId)) return null;
+    return registryEffortLevels(modelId);
+  }
+
   modelSupportsEffort(modelId: string): boolean {
     if (this._localModelProviders.has(modelId)) return false;
+    const levels = registryEffortLevels(modelId);
+    if (levels !== null) return levels.length > 0;
     const { providerId } = getModelProviderInfo(modelId);
     if (providerId === null) return false;
     return PROVIDER_DISPLAY[providerId]?.supportsEffort ?? false;
@@ -758,6 +773,7 @@ export class ChatStateManager {
           payload: {
             effort: this._effort ?? Config.agentEffort(),
             supportsEffort: this.modelSupportsEffort(model),
+            efforts: this.modelEffortLevels(model),
           },
         });
 
@@ -827,6 +843,7 @@ export class ChatStateManager {
           payload: {
             effort: this._effort ?? Config.agentEffort(),
             supportsEffort: this.modelSupportsEffort(model),
+            efforts: this.modelEffortLevels(model),
           },
         });
         break;
@@ -1021,6 +1038,16 @@ export class ChatStateManager {
         break;
       }
 
+      case 'cancelQueuedMessage': {
+        const index = this._queuedSends.findIndex(
+          (request) => request.clientMessageId === msg.payload.clientMessageId,
+        );
+        if (index === -1) break;
+        const [request] = this._queuedSends.splice(index, 1);
+        if (request !== undefined) this._dropSend(request, 'Queued follow-up cancelled.');
+        break;
+      }
+
       case 'regenerate': {
         await vscode.commands.executeCommand(RETRY_LAST_MESSAGE_COMMAND);
         break;
@@ -1144,6 +1171,7 @@ export class ChatStateManager {
           payload: {
             effort: this._effort ?? Config.agentEffort(),
             supportsEffort: this.modelSupportsEffort(model),
+            efforts: this.modelEffortLevels(model),
           },
         });
         break;
@@ -1319,6 +1347,7 @@ export class ChatStateManager {
           payload: {
             effort: this._effort ?? Config.agentEffort(),
             supportsEffort: this.modelSupportsEffort(normalized),
+            efforts: this.modelEffortLevels(normalized),
           },
         });
         await this._pushUsageMeterOnBoundaryChange();
@@ -1342,7 +1371,7 @@ export class ChatStateManager {
       }
 
       case 'attachFiles': {
-        const added: Array<{ id: string; name: string }> = [];
+        const added: Array<{ id: string; name: string; truncatedAt?: number }> = [];
         const skipped: Array<{ name: string; reason: string }> = [];
         for (const file of msg.payload.files) {
           const safeName = file.name.replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 200) || 'attachment';
@@ -1378,7 +1407,7 @@ export class ChatStateManager {
               id: imageId,
               input: { type: 'image', image_url: file.dataUrl },
             });
-            added.push({ id: imageId, name: safeName });
+            added.push({ id: imageId, name: file.name });
             continue;
           }
           const isText =
@@ -1388,8 +1417,15 @@ export class ChatStateManager {
             skipped.push({ name: file.name, reason: 'unsupported binary attachment' });
             continue;
           }
-          const textId = this._pushTextAttachment(safeName, new TextDecoder().decode(bytes));
-          added.push({ id: textId, name: safeName });
+          const text = new TextDecoder().decode(bytes);
+          const textId = this._pushTextAttachment(safeName, text);
+          added.push({
+            id: textId,
+            name: file.name,
+            ...(text.length > TEXT_ATTACHMENT_CHAR_LIMIT
+              ? { truncatedAt: TEXT_ATTACHMENT_CHAR_LIMIT }
+              : {}),
+          });
         }
 
         this._post({ type: 'attachFilesAck', payload: { added, skipped } });
@@ -1803,6 +1839,7 @@ export class ChatStateManager {
         payload: {
           effort: this._effort ?? Config.agentEffort(),
           supportsEffort: this.modelSupportsEffort(model),
+          efforts: this.modelEffortLevels(model),
         },
       });
       const committedEpoch = this._conversationEpoch;
@@ -1903,6 +1940,7 @@ export class ChatStateManager {
       payload: {
         effort: this._effort ?? Config.agentEffort(),
         supportsEffort: this.modelSupportsEffort(model),
+        efforts: this.modelEffortLevels(model),
       },
     });
   }
@@ -2065,8 +2103,15 @@ export class ChatStateManager {
     if (thread === undefined) return undefined;
     const read = await thread.runtime.readThread(thread.id);
     return {
+      id: read.thread.id,
       title: read.thread.title,
       cwd: thread.cwd,
+      model: read.thread.model ?? thread.model,
+      trustMode: thread.trustMode,
+      ...(read.thread.gitBranch === undefined ? {} : { branch: read.thread.gitBranch }),
+      createdAt: read.thread.createdAt,
+      updatedAt: read.thread.updatedAt,
+      createdBy: read.thread.createdBy,
       approvals: read.approvals ?? [],
       fileChanges: read.fileChanges ?? [],
     };
@@ -2109,7 +2154,11 @@ export class ChatStateManager {
     const model = normalizeConfiguredModelId(Config.model());
     this._post({
       type: 'effortChanged',
-      payload: { effort, supportsEffort: this.modelSupportsEffort(model) },
+      payload: {
+        effort,
+        supportsEffort: this.modelSupportsEffort(model),
+        efforts: this.modelEffortLevels(model),
+      },
     });
   }
 
@@ -2129,7 +2178,7 @@ export class ChatStateManager {
    * whether the text came from a dropped file or the composer context menu.
    */
   private _pushTextAttachment(name: string, raw: string): string {
-    const selected = raw.slice(0, 40_000);
+    const selected = raw.slice(0, TEXT_ATTACHMENT_CHAR_LIMIT);
     const escaped = selected.replace(/<\/?untrusted_attachment[^>]*>/gi, (value) =>
       value.replace(/</g, '&lt;').replace(/>/g, '&gt;'),
     );
@@ -2828,7 +2877,7 @@ export class ChatStateManager {
             ...attachmentInputs,
           ],
           agentMode: enforceAgentModeConsent(this._mode ?? Config.agentMode()),
-          reasoningEffort: this._effort ?? Config.agentEffort(),
+          reasoningEffort: supportedEffort(requestedModel, this._effort ?? Config.agentEffort()),
           ...(contextFiles.length === 0 ? {} : { contextFiles }),
           ...(isAutoRoutingModel(requestedModel)
             ? {

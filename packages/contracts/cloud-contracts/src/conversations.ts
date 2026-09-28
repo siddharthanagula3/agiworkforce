@@ -79,6 +79,7 @@ export const ManagedCloudConversationWireSchema = z.object({
   // conversation row: the mode a task was started in is what the badge names,
   // and a later turn switched to Chat must not erase it.
   work_mode: CloudAgentWorkModeSchema.nullable().optional(),
+  needs_you: z.boolean().optional(),
   /** The unsent composer text, so another device finds the message in progress. */
   draft: z.string().nullable().optional(),
   draft_updated_at: z.string().nullable().optional(),
@@ -340,6 +341,7 @@ export interface ManagedCloudConversation {
   isTemporary: boolean;
   activeLeafMessageId?: string | null;
   workMode?: CloudAgentWorkMode;
+  needsYou?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -376,6 +378,7 @@ export function normalizeManagedCloudConversation(
       ? { activeLeafMessageId: wire.active_leaf_message_id }
       : {}),
     ...(wire.work_mode ? { workMode: wire.work_mode } : {}),
+    ...(wire.needs_you ? { needsYou: true } : {}),
     createdAt: wire.created_at,
     updatedAt: wire.updated_at,
   };

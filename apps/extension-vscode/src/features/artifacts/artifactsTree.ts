@@ -28,8 +28,7 @@ export interface ArtifactListClient {
 }
 
 export type ArtifactListClientResolution =
-  | { status: 'ready'; client: ArtifactListClient }
-  | { status: 'signed-out' };
+  { status: 'ready'; client: ArtifactListClient } | { status: 'signed-out' };
 
 export class ArtifactTreeItem extends vscode.TreeItem {
   constructor(
@@ -39,12 +38,12 @@ export class ArtifactTreeItem extends vscode.TreeItem {
     super(artifactTitle(artifact), vscode.TreeItemCollapsibleState.None);
     const isPublished = published !== undefined;
     this.id = artifact.id;
-    this.description = artifactDescription(artifact, isPublished);
-    this.tooltip = artifactTooltipLines(artifact, isPublished).join('\n');
+    this.description = artifactDescription(artifact, published);
+    this.tooltip = artifactTooltipLines(artifact, published).join('\n');
     this.iconPath = new vscode.ThemeIcon(artifactIcon(artifact));
     this.contextValue = artifactContextValue(isPublished);
     this.accessibilityInformation = {
-      label: `${artifactTitle(artifact)}, ${artifactDescription(artifact, isPublished)}`,
+      label: `${artifactTitle(artifact)}, ${artifactDescription(artifact, published)}`,
       role: 'treeitem',
     };
     this.command = {

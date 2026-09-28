@@ -28,6 +28,7 @@ export interface SidebarSession {
   agiWork?: boolean;
   /** Marked unread from the row menu; renders the title with more weight. */
   unread?: boolean;
+  needsYou?: boolean;
 }
 
 export interface SidebarProject {
@@ -44,12 +45,7 @@ export interface SidebarProject {
 export type SidebarMode = 'local' | 'cloud';
 
 export type SidebarTemporalGroup =
-  | 'today'
-  | 'yesterday'
-  | 'thisWeek'
-  | 'last7Days'
-  | 'last30Days'
-  | 'older';
+  'today' | 'yesterday' | 'thisWeek' | 'last7Days' | 'last30Days' | 'older';
 
 export interface SidebarNavItem {
   id: string;
