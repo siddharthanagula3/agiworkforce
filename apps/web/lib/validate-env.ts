@@ -956,6 +956,20 @@ const CONFIG_KEY_DESCRIPTORS: readonly ConfigKeyDescriptor[] = [
     requiredIn: [],
     description: 'the OAuth client secret the install callback exchanges a code with',
   }),
+  published('SLACK_APP_CLIENT_ID', {
+    type: 'string',
+    owner: 'apps/web/lib/slack',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the OAuth client a Slack workspace installs the AGI Workforce app with',
+  }),
+  secret('SLACK_APP_CLIENT_SECRET', {
+    type: 'string',
+    owner: 'apps/web/lib/slack',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the OAuth client secret the Slack install callback exchanges a code with',
+  }),
   secret('GITHUB_APP_PRIVATE_KEY_BASE64', {
     type: 'string',
     owner: 'apps/web/lib',
