@@ -1271,6 +1271,11 @@ svg + .menuRowLabel {
   background: var(--chat-surface-hover);
 }
 
+.repositoryRow[aria-current='true'] {
+  background: var(--chat-surface-hover);
+  font-weight: 600;
+}
+
 .repositoryName {
   overflow: hidden;
   flex: 1 1 auto;

@@ -9,9 +9,11 @@ import type {
   RunCloudCodeCommandResponse,
 } from '@agiworkforce/types';
 import {
+  CLOUD_CODE_BRANCHES_PATH,
   CLOUD_CODE_REPOSITORIES_PATH,
   CLOUD_CODE_SESSIONS_PATH,
   CloudCodeAgentApprovalsSchema,
+  CloudCodeBranchListSchema,
   CloudCodeAgentTurnSchema,
   CloudCodeChangesSchema,
   CloudCodeCommandResponseSchema,
@@ -26,6 +28,7 @@ import {
   cloudCodeSessionPath,
   type CloudCodeAgentApproval,
   type CloudCodeAgentTurn,
+  type CloudCodeBranchList,
   type CloudCodeChanges,
   type CloudCodeCommitResult,
   type CloudCodePullRequest,
@@ -68,6 +71,10 @@ export interface CloudCodeApi {
     signal?: AbortSignal,
   ): Promise<CloudCodeSessionListResponse>;
   listRepositories(search?: string, signal?: AbortSignal): Promise<CloudCodeRepositoryList>;
+  listBranches(
+    repository: { installationId: number; fullName: string },
+    signal?: AbortSignal,
+  ): Promise<CloudCodeBranchList>;
   get(
     sessionId: string,
     signal?: AbortSignal,
@@ -202,6 +209,17 @@ export function createManagedCloudCodeApi(config: ManagedCloudCodeApiConfig): Cl
         `${CLOUD_CODE_REPOSITORIES_PATH}${query}`,
         { signal },
         CloudCodeRepositoryListSchema,
+      );
+    },
+    listBranches(repository, signal) {
+      const query = new URLSearchParams({
+        installationId: String(repository.installationId),
+        repository: repository.fullName,
+      });
+      return request(
+        `${CLOUD_CODE_BRANCHES_PATH}?${query.toString()}`,
+        { signal },
+        CloudCodeBranchListSchema,
       );
     },
     get(sessionId, signal) {
