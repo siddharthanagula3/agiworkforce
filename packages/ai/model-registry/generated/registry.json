@@ -14144,7 +14144,8 @@
         "outputPerMillion": 0.18,
         "cacheReadPerMillion": 0.018,
         "cacheWritePerMillion": 0.09
-      }
+      },
+      "responseFormats": ["json_object", "json_schema"]
     },
     "together/deepseek-v4-flash": {
       "modelKey": "deepseek-v4-flash",
@@ -14187,7 +14188,8 @@
         "outputPerMillion": 0.28,
         "cacheReadPerMillion": 0.028,
         "cacheWritePerMillion": 0.14
-      }
+      },
+      "responseFormats": ["json_schema"]
     },
     "experientiallabs/deepseek-v4-flash": {
       "modelKey": "deepseek-v4-flash",
@@ -14385,7 +14387,8 @@
         "outputPerMillion": 2.6,
         "cacheReadPerMillion": 0.1,
         "cacheWritePerMillion": 1.3
-      }
+      },
+      "responseFormats": ["json_object", "json_schema"]
     },
     "together/deepseek-v4-pro": {
       "modelKey": "deepseek-v4-pro",
@@ -14428,7 +14431,8 @@
         "outputPerMillion": 3.96,
         "cacheReadPerMillion": 0.132,
         "cacheWritePerMillion": 1.32
-      }
+      },
+      "responseFormats": ["json_schema"]
     },
     "experientiallabs/deepseek-v4-pro": {
       "modelKey": "deepseek-v4-pro",
@@ -14631,7 +14635,8 @@
         "outputPerMillion": 0.47,
         "cacheReadPerMillion": 0.016,
         "cacheWritePerMillion": 0.15
-      }
+      },
+      "responseFormats": ["json_schema"]
     },
     "perplexity/sonar": {
       "modelKey": "sonar",
@@ -15040,7 +15045,8 @@
         "outputPerMillion": 4,
         "cacheReadPerMillion": 0.12,
         "cacheWritePerMillion": 1.2
-      }
+      },
+      "responseFormats": ["json_object", "json_schema"]
     },
     "together/glm-5.3": {
       "modelKey": "glm-5.3",
@@ -15083,7 +15089,8 @@
         "outputPerMillion": 4.4,
         "cacheReadPerMillion": 0.26,
         "cacheWritePerMillion": 1.4
-      }
+      },
+      "responseFormats": ["json_schema"]
     },
     "experientiallabs/glm-5.3": {
       "modelKey": "glm-5.3",
@@ -15264,7 +15271,8 @@
         "outputPerMillion": 0.25,
         "cacheReadPerMillion": 0.015,
         "cacheWritePerMillion": 0.075
-      }
+      },
+      "responseFormats": ["json_object", "json_schema"]
     },
     "together/glm-5.3-flash": {
       "modelKey": "glm-5.3-flash",
@@ -15305,7 +15313,8 @@
         "outputPerMillion": 0.25,
         "cacheReadPerMillion": 0.015,
         "cacheWritePerMillion": 0.075
-      }
+      },
+      "responseFormats": ["json_schema"]
     },
     "experientiallabs/glm-5.3-flash": {
       "modelKey": "glm-5.3-flash",
@@ -15575,7 +15584,8 @@
         "outputPerMillion": 14.25,
         "cacheReadPerMillion": 0.285,
         "cacheWritePerMillion": 2.85
-      }
+      },
+      "responseFormats": ["json_object", "json_schema"]
     },
     "together/kimi-k3": {
       "modelKey": "kimi-k3",
@@ -15618,7 +15628,8 @@
         "outputPerMillion": 15,
         "cacheReadPerMillion": 0.3,
         "cacheWritePerMillion": 3
-      }
+      },
+      "responseFormats": ["json_schema"]
     },
     "experientiallabs/kimi-k3": {
       "modelKey": "kimi-k3",
@@ -16003,7 +16014,8 @@
         "outputPerMillion": 1.1,
         "cacheReadPerMillion": 0.056,
         "cacheWritePerMillion": 0.28
-      }
+      },
+      "responseFormats": ["json_object", "json_schema"]
     },
     "together/minimax-m3": {
       "modelKey": "minimax-m3",
@@ -16046,7 +16058,8 @@
         "outputPerMillion": 1.2,
         "cacheReadPerMillion": 0.06,
         "cacheWritePerMillion": 0.3
-      }
+      },
+      "responseFormats": ["json_schema"]
     },
     "minimax/minimax-m2.7": {
       "modelKey": "minimax-m2.7",
@@ -39463,6 +39476,13 @@
       "verifiedBy": "official-together-serverless-model-catalogue",
       "status": "ADDITION",
       "notes": "Structured output on the Together routes, read on 2026-09-28. docs.together.ai/docs/inference/chat/structured-outputs takes the OpenAI json_schema format (name and schema) and points to the serverless catalogue for which models support it; docs.together.ai/docs/serverless/models marks Structured outputs Yes for DeepSeek-V4-Flash-0731, DeepSeek V4 Pro 0813, GLM-5.3, GLM-5.3 Flash, Kimi K3 and MiniMax M3, and leaves Qwen3.8 Flash blank. Those six Together routes carry responseFormats json_schema, which overrides the harness list for that route alone; qwen-3.8-flash on Together keeps the directive. Checked and left on the directive: developers.cloudflare.com/workers-ai/features/json-mode lists no model the gateway routes there and does not stream JSON Mode; docs.deepinfra.com/chat/structured-outputs names no models ('many of our models'); the model list on docs.novita.ai/guides/llm-structured-outputs does not render outside a browser."
+    },
+    {
+      "id": "verification/2026-09-28/60",
+      "date": "2026-09-28",
+      "verifiedBy": "official-deepinfra-and-novita-model-catalogues",
+      "status": "ADDITION",
+      "notes": "Structured output on the DeepInfra and Novita routes, read on 2026-09-28. docs.deepinfra.com/chat/structured-outputs describes json_object and json_schema modes on the OpenAI-compatible API for the models its catalogue marks; the public catalogue at api.deepinfra.com/models/list tags deepseek-ai/DeepSeek-V4-Flash, deepseek-ai/DeepSeek-V4-Pro, zai-org/GLM-5.3, zai-org/GLM-5.3-Flash, moonshotai/Kimi-K3 and MiniMaxAI/MiniMax-M3 with both json and structured-output, so those six DeepInfra routes list json_object and json_schema. docs.novita.ai/guides/llm-structured-outputs uses the OpenAI json_schema format and renders its supported-model list from the public catalogue at api.novita.ai/v3/openai/models, which gives structured-outputs in the features of all seven routed models (deepseek/deepseek-v4-flash, deepseek/deepseek-v4-pro-0813, qwen/qwen3.8-flash, zai-org/glm-5.3, zai-org/glm-5.3-flash, moonshotai/kimi-k3, minimax/minimax-m3), so those Novita routes list json_schema."
     }
   ],
   "retiredModels": {
