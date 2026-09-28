@@ -14,6 +14,10 @@ import {
 } from '@agiworkforce/ui';
 import { TOOL_APPROVAL_ACTION_LABELS } from '@agiworkforce/types';
 import { cn } from '@shared/lib/utils';
+import {
+  connectorCategoryToolName,
+  type ConnectorToolCategory,
+} from '@shared/types/connectorToolCategories';
 import { getDeclaredConnectorActions } from '@/lib/connectors/catalog';
 import { describeConnectorActions } from '../data/connectors';
 import { ConnectorCallLog } from './ConnectorCallLog';
@@ -92,12 +96,16 @@ const PERMISSION_LEVELS: {
 interface ToolRowProps {
   connectorId: string;
   toolName: string;
+  category?: ConnectorToolCategory;
 }
 
-function ToolRow({ connectorId, toolName }: ToolRowProps) {
+function ToolRow({ connectorId, toolName, category }: ToolRowProps) {
   const setToolPermission = useToolPermissionsStore((s) => s.setToolPermission);
   const current = useToolPermissionsStore(
-    (s) => s.permissions[connectorId]?.[toolName] ?? DEFAULT_PERMISSION_LEVEL,
+    (s) =>
+      s.permissions[connectorId]?.[toolName] ??
+      (category ? s.permissions[connectorId]?.[connectorCategoryToolName(category)] : undefined) ??
+      DEFAULT_PERMISSION_LEVEL,
   );
   const saving = useToolPermissionsStore((s) => s.saving[connectorId]?.includes(toolName) ?? false);
 
@@ -133,6 +141,7 @@ function ToolRow({ connectorId, toolName }: ToolRowProps) {
 }
 
 interface ToolCategory {
+  id: ConnectorToolCategory;
   label: string;
   tools: readonly string[];
 }
@@ -140,7 +149,10 @@ interface ToolCategory {
 function CategoryRow({ connectorId, category }: { connectorId: string; category: ToolCategory }) {
   const setToolsPermission = useToolPermissionsStore((s) => s.setToolsPermission);
   const permissions = useToolPermissionsStore((s) => s.permissions[connectorId]);
-  const levels = category.tools.map((name) => permissions?.[name] ?? DEFAULT_PERMISSION_LEVEL);
+  const groupLevel = permissions?.[connectorCategoryToolName(category.id)];
+  const levels = category.tools.map(
+    (name) => permissions?.[name] ?? groupLevel ?? DEFAULT_PERMISSION_LEVEL,
+  );
   const shared = levels.every((level) => level === levels[0]) ? levels[0] : null;
 
   return (
@@ -157,7 +169,7 @@ function CategoryRow({ connectorId, category }: { connectorId: string; category:
           <button
             key={level}
             type="button"
-            onClick={() => setToolsPermission(connectorId, category.tools, level)}
+            onClick={() => setToolsPermission(connectorId, category.tools, level, category.id)}
             aria-pressed={shared === level}
             aria-label={`${label} all ${category.label.toLowerCase()}`}
             title={`${label} all ${category.label.toLowerCase()}`}
@@ -216,10 +228,12 @@ export function ToolPermissionsPanel({ connector, open, onOpenChange }: ToolPerm
   const categories: readonly ToolCategory[] = catalog
     ? [
         {
+          id: 'read_only' as const,
           label: READ_ONLY_CATEGORY,
           tools: catalog.tools.filter((tool) => tool.readOnly).map((tool) => tool.name),
         },
         {
+          id: 'write' as const,
           label: WRITE_CATEGORY,
           tools: catalog.tools.filter((tool) => !tool.readOnly).map((tool) => tool.name),
         },
@@ -297,6 +311,7 @@ export function ToolPermissionsPanel({ connector, open, onOpenChange }: ToolPerm
                             key={toolName}
                             connectorId={permissionConnectorId}
                             toolName={toolName}
+                            category={category.id}
                           />
                         ))}
                       </div>
