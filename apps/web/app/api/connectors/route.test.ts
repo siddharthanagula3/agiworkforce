@@ -44,6 +44,14 @@ vi.mock('@/lib/api-auth', () => ({
   getClerkAuthUser: vi.fn(async () => ({ userId: 'user-1' })),
 }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
+vi.mock('@/lib/services/connector-policy-gate', () => ({
+  evaluateConnectorPolicyForUser: vi.fn(async () => ({
+    allowed: true,
+    code: 'ungoverned',
+    reason: '',
+    organizationId: null,
+  })),
+}));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: vi.fn(() => ({
