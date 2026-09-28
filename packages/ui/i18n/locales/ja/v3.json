@@ -100,7 +100,10 @@
     "noArchived": "アーカイブ済みのチャットはありません",
     "noConversations": "まだ会話がありません",
     "showActive": "アクティブなチャットに戻る",
-    "showArchived": "アーカイブ済みのチャットを表示（{{count}}）"
+    "showArchived": "アーカイブ済みのチャットを表示（{{count}}）",
+    "archivedToast": "チャットをアーカイブしました",
+    "archivedUndo": "元に戻す",
+    "archivedView": "アーカイブを表示"
   },
   "emptyChat": {
     "neutralHeadline": "今日は何をお手伝いしましょうか？",

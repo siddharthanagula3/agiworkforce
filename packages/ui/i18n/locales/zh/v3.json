@@ -100,7 +100,10 @@
     "noArchived": "没有已归档的对话",
     "noConversations": "暂无对话",
     "showActive": "返回活跃对话",
-    "showArchived": "显示已归档对话（{{count}}）"
+    "showArchived": "显示已归档对话（{{count}}）",
+    "archivedToast": "对话已归档",
+    "archivedUndo": "撤销",
+    "archivedView": "查看已归档"
   },
   "emptyChat": {
     "neutralHeadline": "今天我能帮你做什么？",

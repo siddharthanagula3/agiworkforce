@@ -191,6 +191,7 @@ import {
   conversationShareHref,
   projectDeleteConfirm,
   runSessionRowAction,
+  toggleConversationArchive,
 } from '@shared/components/layout/sidebar-session-actions';
 import {
   copyProjectLink,
@@ -4322,9 +4323,13 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     (id: string) => {
       const convo = conversations.find((c) => c.id === id);
       if (!convo) return;
-      void updateConversation(id, { archived: !convo.isArchived });
+      void toggleConversationArchive(
+        convo.isArchived ?? false,
+        (archived) => updateConversation(id, { archived }),
+        () => openSettings('archived'),
+      );
     },
-    [conversations, updateConversation],
+    [conversations, openSettings, updateConversation],
   );
 
   const handleShareSession = useCallback(
