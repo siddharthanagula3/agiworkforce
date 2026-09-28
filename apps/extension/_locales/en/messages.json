@@ -2990,5 +2990,95 @@
   "spTemporaryChatUnavailable": {
     "message": "The temporary chat could not start, so nothing was sent. Check your connection and try again.",
     "description": "The temporary conversation could not be created"
+  },
+  "spSchedulesNew": {
+    "message": "New schedule",
+    "description": "Button that opens the new schedule form"
+  },
+  "spSchedulesFormLabel": {
+    "message": "New schedule",
+    "description": "Accessible name of the new schedule form"
+  },
+  "spSchedulesTemplatesLabel": {
+    "message": "Start from a template",
+    "description": "Accessible name of the schedule template buttons"
+  },
+  "spSchedulesNameLabel": {
+    "message": "Name",
+    "description": "Label of the schedule name field"
+  },
+  "spSchedulesPromptLabel": {
+    "message": "Instructions",
+    "description": "Label of the schedule prompt field"
+  },
+  "spSchedulesRepeatLabel": {
+    "message": "Repeat",
+    "description": "Label of the schedule recurrence field"
+  },
+  "spSchedulesRepeatDaily": {
+    "message": "Every day",
+    "description": "Daily schedule recurrence"
+  },
+  "spSchedulesRepeatWeekly": {
+    "message": "On chosen days of the week",
+    "description": "Weekly schedule recurrence"
+  },
+  "spSchedulesRepeatMonthly": {
+    "message": "Once a month",
+    "description": "Monthly schedule recurrence"
+  },
+  "spSchedulesDaysLabel": {
+    "message": "Days",
+    "description": "Label of the weekday choices of a weekly schedule"
+  },
+  "spSchedulesDayOfMonthLabel": {
+    "message": "Day of the month",
+    "description": "Label of the day of a monthly schedule"
+  },
+  "spSchedulesTimeLabel": {
+    "message": "Time",
+    "description": "Label of the time a schedule runs"
+  },
+  "spSchedulesTimeZoneLabel": {
+    "message": "Time zone",
+    "description": "Label of the time zone a schedule runs in"
+  },
+  "spSchedulesCreate": {
+    "message": "Create schedule",
+    "description": "Button that creates the schedule"
+  },
+  "spSchedulesCancel": {
+    "message": "Cancel",
+    "description": "Button that closes the new schedule form"
+  },
+  "spSchedulesNameRequired": {
+    "message": "Give the schedule a name.",
+    "description": "The schedule name is missing"
+  },
+  "spSchedulesPromptRequired": {
+    "message": "Say what the schedule should do.",
+    "description": "The schedule instructions are missing"
+  },
+  "spSchedulesDaysRequired": {
+    "message": "Choose at least one day.",
+    "description": "A weekly schedule has no days"
+  },
+  "spSchedulesDayOfMonthRequired": {
+    "message": "Choose a day from 1 to 31.",
+    "description": "A monthly schedule has no valid day"
+  },
+  "spSchedulesTimeRequired": {
+    "message": "Choose the time it runs.",
+    "description": "The schedule time is missing"
+  },
+  "spSchedulesCreated": {
+    "message": "Created $NAME$. It runs in the cloud even when this browser is closed.",
+    "description": "A schedule was created",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Daily briefing"
+      }
+    }
   }
 }
