@@ -197,7 +197,7 @@ export default function EconomicsSummaryPanel() {
 
           <div className={TABLE_WRAP_CLASS}>
             <table className="w-full min-w-[1100px] text-sm">
-              <thead className="bg-muted/40 text-left">
+              <thead className="bg-muted/40 text-start">
                 <tr>
                   <th className={HEADER_CELL_CLASS}>{GROUPING_LABEL[summary.groupBy]}</th>
                   <th className={HEADER_CELL_CLASS}>Events</th>
@@ -232,7 +232,7 @@ export default function EconomicsSummaryPanel() {
               reconciliation.gaps.length > 0 ? (
                 <div className={`${TABLE_WRAP_CLASS} mt-3`}>
                   <table className="w-full min-w-[560px] text-sm">
-                    <thead className="bg-muted/40 text-left">
+                    <thead className="bg-muted/40 text-start">
                       <tr>
                         <th className={HEADER_CELL_CLASS}>Provider</th>
                         <th className={HEADER_CELL_CLASS}>Day</th>

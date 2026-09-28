@@ -56,7 +56,7 @@ function ChoiceRow({
       type="button"
       onClick={onSelect}
       className={cn(
-        'flex w-full items-start gap-3 rounded-lg border border-border bg-card p-4 text-left transition-colors motion-reduce:transition-none hover:bg-muted',
+        'flex w-full items-start gap-3 rounded-lg border border-border bg-card p-4 text-start transition-colors motion-reduce:transition-none hover:bg-muted',
         DIRECTORY_FOCUS_RING,
       )}
     >

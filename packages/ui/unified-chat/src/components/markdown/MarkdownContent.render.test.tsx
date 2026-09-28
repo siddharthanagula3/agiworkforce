@@ -141,7 +141,7 @@ describe('MarkdownContent task lists', () => {
 });
 
 describe('MarkdownContent table alignment', () => {
-  it('preserves left, center, and right alignment on headers and cells', () => {
+  it('maps left, center and right alignment to start, center and end on headers and cells', () => {
     const markdown = [
       '| Label | Status | Amount |',
       '| :--- | :---: | ---: |',
@@ -153,14 +153,14 @@ describe('MarkdownContent table alignment', () => {
     const headers = Array.from(container.querySelectorAll('th'));
     const cells = Array.from(container.querySelectorAll('td'));
     expect(headers.map((header) => header.className)).toEqual([
-      expect.stringContaining('text-left'),
+      expect.stringContaining('text-start'),
       expect.stringContaining('text-center'),
-      expect.stringContaining('text-right'),
+      expect.stringContaining('text-end'),
     ]);
     expect(cells.map((cell) => cell.className)).toEqual([
-      expect.stringContaining('text-left'),
+      expect.stringContaining('text-start'),
       expect.stringContaining('text-center'),
-      expect.stringContaining('text-right'),
+      expect.stringContaining('text-end'),
     ]);
     expect(cells[2]?.textContent).toBe('1,234');
     const region = screen.getByRole('region', { name: 'Table' });

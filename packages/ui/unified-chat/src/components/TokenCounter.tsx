@@ -100,7 +100,7 @@ export const TokenCounter = ({
             {(showWarning || showDanger) && (
               <span
                 className={cn(
-                  'ml-0.5 rounded-compact px-1 py-0.5 text-caption font-semibold',
+                  'ms-0.5 rounded-compact px-1 py-0.5 text-caption font-semibold',
                   showWarning && 'bg-warning-fill/10 text-warning-text',
                   showDanger && 'bg-danger-fill/10 text-danger-text',
                 )}
@@ -165,7 +165,7 @@ export const TokenCounter = ({
           )}
           {budgetLimit && budgetRemaining !== null && budgetRemaining > 0 && (
             <div
-              className="absolute top-0 h-full border-r-2 border-warning-fill"
+              className="absolute top-0 h-full border-e-2 border-warning-fill"
               style={{ left: `${budgetPercentage}%` }}
             />
           )}
@@ -251,7 +251,7 @@ export const TokenCounter = ({
                   <button
                     type="button"
                     onClick={onCompact}
-                    className="ml-auto flex items-center gap-1 rounded-compact border border-warning-fill/40 px-1.5 py-0.5 text-caption font-medium transition-colors hover:border-warning-fill"
+                    className="ms-auto flex items-center gap-1 rounded-compact border border-warning-fill/40 px-1.5 py-0.5 text-caption font-medium transition-colors hover:border-warning-fill"
                   >
                     <Scissors className="h-2.5 w-2.5" />
                     Compact
@@ -270,7 +270,7 @@ export const TokenCounter = ({
                   <button
                     type="button"
                     onClick={onCompact}
-                    className="ml-auto flex items-center gap-1 rounded-compact border border-danger-fill/40 px-1.5 py-0.5 text-caption font-medium transition-colors hover:border-danger-fill"
+                    className="ms-auto flex items-center gap-1 rounded-compact border border-danger-fill/40 px-1.5 py-0.5 text-caption font-medium transition-colors hover:border-danger-fill"
                   >
                     <Scissors className="h-2.5 w-2.5" />
                     Compact now

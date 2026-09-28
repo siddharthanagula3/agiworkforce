@@ -51,7 +51,7 @@ export function DownloadCard({ artifact, onClick, onDownload }: DownloadCardProp
   const content = (
     <>
       <ArtifactIcon type={artifact.type} />
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5 text-left">
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5 text-start">
         <span className="truncate text-sm font-medium text-[var(--chat-text-primary)]">
           {artifact.title ?? 'Untitled artifact'}
         </span>

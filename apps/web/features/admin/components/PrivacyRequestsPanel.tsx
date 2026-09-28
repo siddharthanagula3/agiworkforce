@@ -171,7 +171,7 @@ export default function PrivacyRequestsPanel() {
       ) : (
         <div className={TABLE_WRAP_CLASS}>
           <table className="w-full min-w-[820px] text-sm">
-            <thead className="bg-card text-left">
+            <thead className="bg-card text-start">
               <tr>
                 <th className="p-3 font-medium">Reference</th>
                 <th className="p-3 font-medium">Kind</th>
@@ -272,7 +272,7 @@ export default function PrivacyRequestsPanel() {
             </p>
             <div className={`mt-3 ${TABLE_WRAP_CLASS}`}>
               <table className="w-full min-w-[560px] text-sm">
-                <thead className="bg-card text-left">
+                <thead className="bg-card text-start">
                   <tr>
                     <th className="p-3 font-medium">Table</th>
                     <th className="p-3 font-medium">Deleted</th>

@@ -147,7 +147,7 @@ export function AudioRoutePicker({ audioRef, className }: AudioRoutePickerProps)
                 aria-checked={selected}
                 onClick={() => select(device.deviceId)}
                 className={cn(
-                  'flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm',
+                  'flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-start text-sm',
                   'text-[var(--chat-text-primary)] hover:bg-[var(--chat-surface-hover)]',
                 )}
               >

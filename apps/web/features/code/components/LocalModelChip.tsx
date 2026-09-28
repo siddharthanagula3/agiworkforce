@@ -55,7 +55,7 @@ function ProviderSetupRow({ setup }: { setup: LocalProviderSetup }) {
 
   if (offer === null || offer.kind !== 'copy') {
     return (
-      <DropdownMenuItem className="pl-8" disabled>
+      <DropdownMenuItem className="ps-8" disabled>
         <span className={styles['menuItemStack']}>
           <span className={styles['menuItemTop']}>
             <span className={styles['menuItemLabel']}>{setup.label}</span>
@@ -68,7 +68,7 @@ function ProviderSetupRow({ setup }: { setup: LocalProviderSetup }) {
 
   return (
     <DropdownMenuItem
-      className="pl-8"
+      className="ps-8"
       onSelect={(event) => {
         event.preventDefault();
         void navigator.clipboard.writeText(offer.text).then(() => setCopied(true));

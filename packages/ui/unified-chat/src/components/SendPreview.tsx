@@ -98,7 +98,7 @@ export function SendPreview({
             data-testid="send-preview-details"
             className={cn(
               'absolute bottom-full left-1/2 z-[var(--z-dropdown)] mb-2 w-72 max-w-[calc(100vw-2rem)] -translate-x-1/2',
-              'rounded-md border p-3 text-left shadow-e4 backdrop-blur-xl',
+              'rounded-md border p-3 text-start shadow-e4 backdrop-blur-xl',
               'bg-[var(--chat-surface-overlay)]',
               accentClass,
             )}
@@ -165,7 +165,7 @@ export function SendPreview({
           {presentation.privacyShortLabel}
         </span>
         {presentation.modelLabel ? (
-          <span className="ml-auto shrink-0 text-caption text-[var(--chat-text-muted)]">
+          <span className="ms-auto shrink-0 text-caption text-[var(--chat-text-muted)]">
             {presentation.modelLabel}
           </span>
         ) : null}

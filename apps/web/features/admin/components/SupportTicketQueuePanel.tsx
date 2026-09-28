@@ -455,7 +455,7 @@ export default function SupportTicketQueuePanel() {
                 <button
                   type="button"
                   onClick={() => void openTicket(ticket.id)}
-                  className={`${CARD_CLASS} w-full text-left transition-colors hover:bg-muted`}
+                  className={`${CARD_CLASS} w-full text-start transition-colors hover:bg-muted`}
                 >
                   <span className="flex flex-wrap items-baseline justify-between gap-2">
                     <span className="text-sm font-medium">{ticket.subject}</span>

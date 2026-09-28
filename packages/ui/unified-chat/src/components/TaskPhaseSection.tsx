@@ -26,11 +26,11 @@ function formatDuration(ms: number): string {
 function borderAccent(status: TaskPhase['status']): string {
   switch (status) {
     case 'running':
-      return 'border-l-2 border-teal-500';
+      return 'border-s-2 border-teal-500';
     case 'completed':
-      return 'border-l-2 border-success-fill';
+      return 'border-s-2 border-success-fill';
     case 'failed':
-      return 'border-l-2 border-danger-fill';
+      return 'border-s-2 border-danger-fill';
   }
 }
 
@@ -104,7 +104,7 @@ export function TaskPhaseSection({ phase, defaultExpanded }: TaskPhaseSectionPro
         aria-expanded={isExpanded}
         className={cn(
           'w-full flex items-center gap-2 px-3 py-1.5 text-xs',
-          'hover:bg-muted/20 transition-colors text-left',
+          'hover:bg-muted/20 transition-colors text-start',
         )}
       >
         {isExpanded ? (

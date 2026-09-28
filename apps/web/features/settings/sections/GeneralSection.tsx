@@ -669,7 +669,7 @@ export function GeneralSection() {
               className="resize-y rounded-md border border-border bg-background px-3 py-2.5 text-[13px] leading-relaxed text-foreground placeholder:text-muted-foreground outline-none disabled:cursor-not-allowed disabled:opacity-60 focus:ring-1 focus:ring-ring"
               style={{ fontFamily: 'inherit' }}
             />
-            <span className="text-right text-caption text-muted-foreground">
+            <span className="text-end text-caption text-muted-foreground">
               {aboutYou.length} / {MAX_ABOUT_YOU_CHARS}
             </span>
           </div>
@@ -884,7 +884,7 @@ export function GeneralSection() {
               className="resize-y rounded-md border border-border bg-background px-3 py-2.5 text-[13px] leading-relaxed text-foreground placeholder:text-muted-foreground outline-none disabled:cursor-not-allowed disabled:opacity-60 focus:ring-1 focus:ring-ring"
               style={{ fontFamily: 'inherit' }}
             />
-            <span className="text-right text-caption text-muted-foreground">
+            <span className="text-end text-caption text-muted-foreground">
               {instructions.length} / 2000
             </span>
           </div>
@@ -1570,7 +1570,7 @@ function ReadAloudVoiceRow() {
   if (!isSupported || voices.length === 0) {
     return (
       <Row label="Backup read-aloud voice">
-        <span className="text-xs text-muted-foreground sm:text-right">
+        <span className="text-xs text-muted-foreground sm:text-end">
           This browser has no speech voices of its own, so read-aloud has no backup when the AGI
           voice is unavailable.
         </span>

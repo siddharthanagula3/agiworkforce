@@ -146,7 +146,7 @@ export function ToolApprovalDefaultsPanel() {
                 <span className="block text-sm font-medium text-foreground">
                   {option.label}
                   {option.policy === accountDefaultPolicy ? (
-                    <span className="ml-2 text-xs font-normal text-muted-foreground">Default</span>
+                    <span className="ms-2 text-xs font-normal text-muted-foreground">Default</span>
                   ) : null}
                 </span>
                 <span className="block text-xs text-muted-foreground">{option.description}</span>
