@@ -147,6 +147,12 @@
           "date": "2026-09-22",
           "digest": "ee9ba9957878071f",
           "note": "Re-baselines the copy fingerprint after the extractor began including semicolon-bearing JSX prose; this entry changes no published wording or effective date."
+        },
+        {
+          "date": "2026-09-28",
+          "digest": "16428e0e9e0b5ee1",
+          "note": "Adds the upload malware scanner to Fly.io's row: services/upload-scanner runs on Fly.io, every uploaded file passes through it, and it holds a file in memory only while it scans it.",
+          "summary": "Fly.io now also runs our malware scanner, which every uploaded file passes through and which keeps no copy."
         }
       ]
     },
