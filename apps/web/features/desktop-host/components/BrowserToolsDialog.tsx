@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   DesktopRuntimeError,
+  type BrowserActivityEntry,
   type BrowserPairingState,
 } from '@agiworkforce/local-runtime-contract';
 import type { BrowserCommand } from '@agiworkforce/types';
@@ -14,6 +15,8 @@ import {
   clickInPairedBrowser,
   downloadThroughPairedBrowser,
   navigatePairedBrowser,
+  openDownloadsFolder,
+  readBrowserActivity,
   readBrowserPairing,
   readPairedBrowserConsole,
   readPairedBrowserNetwork,
@@ -30,6 +33,12 @@ const NOT_PAIRED =
 const NOT_CONNECTED =
   'The paired browser is not answering. Open Chrome with the AGI Workforce extension enabled and try again.';
 const FAILED = 'That browser action did not run.';
+const ACTIVITY_HEADING = 'Recent activity';
+const NO_ACTIVITY = 'Nothing has used the paired browser since AGI Cloud opened.';
+const DOWNLOADS_HEADING = 'Downloads';
+const OPEN_DOWNLOADS_LABEL = 'Open Downloads folder';
+const SUB_HEADING_CLASS = 'text-xs font-medium text-muted-foreground';
+const ACTIVITY_TIME = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' });
 
 const BUTTON_CLASS =
   'min-h-[32px] rounded-md border border-border/60 px-3 py-1 text-xs text-foreground transition-colors hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-60';
@@ -71,6 +80,16 @@ export interface BrowserToolsDialogProps {
   open: boolean;
   onClose: () => void;
   onAttach: (files: File[]) => void;
+}
+
+function activityLabel(command: string): string {
+  return ACTIONS.find((entry) => entry.command === command)?.label ?? command;
+}
+
+function activityOutcome(entry: BrowserActivityEntry): string {
+  if (entry.outcome === 'running') return 'running';
+  if (entry.outcome === 'failed') return entry.error ? `failed: ${entry.error}` : 'failed';
+  return 'done';
 }
 
 function messageFor(error: unknown): string | null {
@@ -160,6 +179,13 @@ export function BrowserToolsDialog({ open, onClose, onAttach }: BrowserToolsDial
   const [result, setResult] = useState<{ transcript: string; files: File[] } | null>(null);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activity, setActivity] = useState<BrowserActivityEntry[]>([]);
+
+  const refreshActivity = useCallback(() => {
+    readBrowserActivity()
+      .then(setActivity)
+      .catch((cause: unknown) => setError(messageFor(cause)));
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -168,7 +194,8 @@ export function BrowserToolsDialog({ open, onClose, onAttach }: BrowserToolsDial
     readBrowserPairing()
       .then(setPairing)
       .catch((cause: unknown) => setError(messageFor(cause)));
-  }, [open]);
+    refreshActivity();
+  }, [open, refreshActivity]);
 
   useDialogKeyboard({ open, onClose, panelRef });
 
@@ -186,8 +213,9 @@ export function BrowserToolsDialog({ open, onClose, onAttach }: BrowserToolsDial
       setError(messageFor(cause));
     } finally {
       setRunning(false);
+      refreshActivity();
     }
-  }, [action, values]);
+  }, [action, values, refreshActivity]);
 
   const onAddToChat = useCallback(() => {
     if (!result || result.files.length === 0) return;
@@ -285,6 +313,63 @@ export function BrowserToolsDialog({ open, onClose, onAttach }: BrowserToolsDial
           >
             {result.transcript}
           </pre>
+        ) : null}
+
+        <section aria-label={ACTIVITY_HEADING} className="flex flex-col gap-2">
+          <h3 className={SUB_HEADING_CLASS}>{ACTIVITY_HEADING}</h3>
+          {activity.length === 0 ? (
+            <p className="text-xs text-muted-foreground">{NO_ACTIVITY}</p>
+          ) : (
+            <ol className="flex max-h-48 list-none flex-col gap-1 overflow-y-auto p-0">
+              {activity.map((entry, index) => (
+                <li
+                  key={`${entry.atMs}-${index}`}
+                  className="flex flex-wrap gap-x-2 text-xs text-muted-foreground"
+                >
+                  <span>{ACTIVITY_TIME.format(entry.atMs)}</span>
+                  <span className="text-foreground">{entry.client}</span>
+                  <span>{activityLabel(entry.command)}</span>
+                  {entry.target ? (
+                    <span className="min-w-0 truncate font-mono">{entry.target}</span>
+                  ) : null}
+                  <span className={entry.outcome === 'failed' ? 'text-danger' : undefined}>
+                    {activityOutcome(entry)}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          )}
+        </section>
+
+        {activity.some(
+          (entry) => entry.command === 'browser_download' && entry.outcome === 'ok',
+        ) ? (
+          <section aria-label={DOWNLOADS_HEADING} className="flex flex-col gap-2">
+            <h3 className={SUB_HEADING_CLASS}>{DOWNLOADS_HEADING}</h3>
+            <ul className="flex list-none flex-col gap-1 p-0">
+              {activity
+                .filter((entry) => entry.command === 'browser_download' && entry.outcome === 'ok')
+                .map((entry, index) => (
+                  <li
+                    key={`${entry.atMs}-${index}`}
+                    className="truncate font-mono text-xs text-muted-foreground"
+                  >
+                    {entry.target}
+                  </li>
+                ))}
+            </ul>
+            <div>
+              <button
+                type="button"
+                className={BUTTON_CLASS}
+                onClick={() =>
+                  void openDownloadsFolder().catch((cause: unknown) => setError(messageFor(cause)))
+                }
+              >
+                {OPEN_DOWNLOADS_LABEL}
+              </button>
+            </div>
+          </section>
         ) : null}
       </div>
     </div>,

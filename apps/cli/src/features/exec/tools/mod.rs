@@ -222,25 +222,53 @@ pub type ApprovalCallback = Arc<
     dyn Fn(ApprovalRequest) -> Pin<Box<dyn Future<Output = ApprovalDecision> + Send>> + Send + Sync,
 >;
 
+#[derive(Default)]
+struct ApprovalReplies {
+    notes: Vec<String>,
+    edit: Option<String>,
+}
+
 tokio::task_local! {
-    static APPROVAL_NOTES: std::cell::RefCell<Vec<String>>;
+    static APPROVAL_REPLIES: std::cell::RefCell<ApprovalReplies>;
 }
 
 static INTERACTIVE_QUESTIONS: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
 
 pub(crate) async fn collect_approval_notes<F: Future>(future: F) -> (F::Output, Vec<String>) {
-    APPROVAL_NOTES
-        .scope(std::cell::RefCell::new(Vec::new()), async move {
-            let output = future.await;
-            let notes = APPROVAL_NOTES.with(|notes| notes.take());
-            (output, notes)
-        })
+    APPROVAL_REPLIES
+        .scope(
+            std::cell::RefCell::new(ApprovalReplies::default()),
+            async move {
+                let output = future.await;
+                let notes = APPROVAL_REPLIES
+                    .with(|replies| std::mem::take(&mut replies.borrow_mut().notes));
+                (output, notes)
+            },
+        )
         .await
 }
 
 pub(crate) fn record_approval_note(note: String) {
-    let _ = APPROVAL_NOTES.try_with(|notes| notes.borrow_mut().push(note));
+    let _ = APPROVAL_REPLIES.try_with(|replies| replies.borrow_mut().notes.push(note));
+}
+
+pub(crate) fn record_approved_edit(content: String) {
+    let _ = APPROVAL_REPLIES.try_with(|replies| replies.borrow_mut().edit = Some(content));
+}
+
+pub(crate) fn take_approved_edit() -> Option<String> {
+    APPROVAL_REPLIES
+        .try_with(|replies| replies.borrow_mut().edit.take())
+        .ok()
+        .flatten()
+}
+
+pub(crate) fn edited_by_user_note(path: &str, content: &str) -> String {
+    format!(
+        "The user edited the change before approving it, so {path} now holds their version ({} lines), not the one you proposed. Read the file before changing it again.",
+        content.lines().count()
+    )
 }
 
 pub(crate) fn with_approval_notes(mut output: String, notes: &[String]) -> String {

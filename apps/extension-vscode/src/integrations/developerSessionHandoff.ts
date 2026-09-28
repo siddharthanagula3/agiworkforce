@@ -6,6 +6,7 @@ import type {
   HandoffAdmission,
   HandoffLocalResource,
 } from '@agiworkforce/types/protocol';
+import { t, tPlural, type MessageKey } from '../l10n';
 
 /**
  * How long a record stays admissible. A handoff carries the whole session, so
@@ -160,33 +161,41 @@ export function admitDeveloperSessionHandoff(
 export function describeHandoffRefusal(refusal: HandoffAdmissionRefusal): string {
   switch (refusal.reason) {
     case 'protocolVersionUnsupported':
-      return `That session speaks developer-session protocol ${refusal.requested}, and this extension speaks ${refusal.supported.join(', ')}. Update AGI for VS Code, or update the AGI CLI, so both sides speak the same one.`;
+      return t('sessionHandoff.protocolUnsupported', {
+        requested: refusal.requested,
+        supported: refusal.supported.join(', '),
+      });
     case 'wrongDestination':
-      return `That session was handed to the ${refusal.received} environment, not to this editor.`;
+      return t('sessionHandoff.wrongDestination', { destination: refusal.received });
     case 'trustModeUnknown':
-      return 'That session does not say whether it was running Local, BYOK or Managed, so this editor will not continue it.';
+      return t('sessionHandoff.trustModeUnknown');
     case 'issuedAtUnreadable':
-      return 'That session record does not say when it was issued, so this editor cannot tell whether it is current.';
+      return t('sessionHandoff.issuedAtUnreadable');
     case 'expired':
-      return `That session was handed over ${Math.round(refusal.ageMs / 60_000)} minutes ago and records expire after ${Math.round(refusal.maxAgeMs / 60_000)}. Hand it over again from the AGI CLI.`;
+      return tPlural('sessionHandoff.expired', Math.round(refusal.ageMs / 60_000), {
+        limit: tPlural('sessionHandoff.expiryLimit', Math.round(refusal.maxAgeMs / 60_000)),
+      });
     case 'notYetIssued':
-      return 'That session record is dated in the future. Check the clock on the machine that produced it.';
+      return t('sessionHandoff.notYetIssued');
     case 'alreadyAccepted':
-      return 'This editor has already taken that session. Open it from Sessions instead of handing it over twice.';
+      return t('sessionHandoff.alreadyAccepted');
     case 'wrongAccount':
-      return 'That session belongs to a different AGI account than the one this editor is signed in as.';
+      return t('sessionHandoff.wrongAccount');
     case 'wrongWorkspace':
-      return `That session was working in ${refusal.received}, and this window has ${refusal.expected} open. Open that folder first.`;
+      return t('sessionHandoff.wrongWorkspace', {
+        received: refusal.received,
+        expected: refusal.expected,
+      });
     case 'credentialInRecord':
-      return `That session record carries what looks like a credential in its ${refusal.field}, so this editor refused it. Report it rather than passing it on.`;
+      return t('sessionHandoff.credentialInRecord', { field: refusal.field });
   }
 }
 
-const SOURCE_LABELS: Record<DeveloperSessionSource, string> = {
-  cli: 'AGI CLI',
-  vscode: 'VS Code',
-  desktop: 'desktop app',
-  unknown: 'other AGI app',
+const SOURCE_LABELS: Record<DeveloperSessionSource, MessageKey> = {
+  cli: 'sessionHandoff.source.cli',
+  vscode: 'sessionHandoff.source.vscode',
+  desktop: 'sessionHandoff.source.desktop',
+  unknown: 'sessionHandoff.source.unknown',
 };
 
 const TRUST_LABELS: Record<DeveloperSessionTrustMode, string> = {
@@ -196,86 +205,90 @@ const TRUST_LABELS: Record<DeveloperSessionTrustMode, string> = {
   unknown: 'Unknown',
 };
 
-const LOCAL_RESOURCE_LABELS: Record<HandoffLocalResource, string> = {
-  background_shell: 'background shell',
-  dev_server: 'dev server',
-  mcp_server: 'MCP server',
-  sandbox: 'sandbox',
-  file_watcher: 'file watcher',
-  terminal: 'terminal',
+const LOCAL_RESOURCE_LABELS: Record<HandoffLocalResource, MessageKey> = {
+  background_shell: 'sessionHandoff.resource.backgroundShell',
+  dev_server: 'sessionHandoff.resource.devServer',
+  mcp_server: 'sessionHandoff.resource.mcpServer',
+  sandbox: 'sessionHandoff.resource.sandbox',
+  file_watcher: 'sessionHandoff.resource.fileWatcher',
+  terminal: 'sessionHandoff.resource.terminal',
 };
 
 const MAX_REVIEWED_FILES = 8;
 const SHORT_COMMIT_LENGTH = 12;
 
-function plural(count: number, noun: string): string {
-  return `${count} ${noun}${count === 1 ? '' : 's'}`;
-}
-
 export function describeHandoffReview(
   handoff: DeveloperSessionHandoff,
   admission: HandoffAdmission,
 ): { message: string; detail: string } {
-  const source = SOURCE_LABELS[handoff.issuedBy];
+  const source = t(SOURCE_LABELS[handoff.issuedBy]);
   const { workspace } = handoff;
   const lines: string[] = [];
 
   if (handoff.objective !== undefined && handoff.objective.trim() !== '') {
-    lines.push(`Goal: ${handoff.objective.trim()}`);
+    lines.push(t('sessionHandoff.goal', { goal: handoff.objective.trim() }));
   }
-  lines.push(`Folder: ${workspace.cwd}`);
+  lines.push(t('sessionHandoff.folder', { folder: workspace.cwd }));
   if (workspace.branch !== undefined) {
-    const commit =
-      workspace.headCommit !== undefined
-        ? ` at ${workspace.headCommit.slice(0, SHORT_COMMIT_LENGTH)}`
-        : '';
-    lines.push(`Branch: ${workspace.branch}${commit}`);
+    lines.push(
+      workspace.headCommit === undefined
+        ? t('sessionHandoff.branch', { branch: workspace.branch })
+        : t('sessionHandoff.branchAt', {
+            branch: workspace.branch,
+            commit: workspace.headCommit.slice(0, SHORT_COMMIT_LENGTH),
+          }),
+    );
   }
-  lines.push(`Runs as: ${TRUST_LABELS[handoff.posture.trustMode]}`);
+  lines.push(t('sessionHandoff.runsAs', { trust: TRUST_LABELS[handoff.posture.trustMode] }));
   if (workspace.uncommittedChanges === true) {
-    lines.push('The folder has uncommitted changes, which stay on disk as they are.');
+    lines.push(t('sessionHandoff.uncommittedStays'));
   }
 
   const moves: string[] = [
     admission.start.kind === 'resume'
-      ? 'The conversation, with its full history'
-      : 'A new session, started from that thread',
+      ? t('sessionHandoff.movesConversation')
+      : t('sessionHandoff.movesNewSession'),
   ];
   const files = handoff.modifiedFiles ?? [];
   if (files.length > 0) {
     const shown = files.slice(0, MAX_REVIEWED_FILES).map((file) => file.path);
     const rest = files.length - shown.length;
     moves.push(
-      `${plural(files.length, 'changed file')}: ${shown.join(', ')}${rest > 0 ? `, and ${rest} more` : ''}`,
+      tPlural('sessionHandoff.changedFiles', files.length, {
+        files: `${shown.join(', ')}${rest > 0 ? tPlural('sessionHandoff.andMore', rest) : ''}`,
+      }),
     );
   }
   const plan = handoff.plan ?? [];
-  if (plan.length > 0) moves.push(`A plan of ${plural(plan.length, 'step')}`);
+  if (plan.length > 0) moves.push(tPlural('sessionHandoff.planSteps', plan.length));
   const validations = handoff.validations ?? [];
-  if (validations.length > 0) moves.push(`${plural(validations.length, 'check')} already run`);
-  lines.push('', 'Moves with it:', ...moves.map((item) => `- ${item}`));
+  if (validations.length > 0) {
+    moves.push(tPlural('sessionHandoff.checksRun', validations.length));
+  }
+  lines.push('', t('sessionHandoff.movesWithIt'), ...moves.map((item) => `- ${item}`));
 
   if (admission.reask !== undefined) {
-    lines.push(
-      '',
-      `${plural(admission.reask.length, 'pending approval')} will be asked again here. No earlier answer carries over.`,
-    );
+    lines.push('', tPlural('sessionHandoff.reask', admission.reask.length));
   }
   if (admission.restart !== undefined) {
     lines.push(
       '',
-      `Restarted here, not moved: ${admission.restart.map((resource) => LOCAL_RESOURCE_LABELS[resource]).join(', ')}.`,
+      t('sessionHandoff.restarted', {
+        resources: admission.restart
+          .map((resource) => t(LOCAL_RESOURCE_LABELS[resource]))
+          .join(', '),
+      }),
     );
   }
   if (admission.interruptedTurn !== undefined) {
-    lines.push('', 'The last turn was interrupted and does not continue on its own.');
+    lines.push('', t('sessionHandoff.interrupted'));
   }
 
   return {
     message:
       admission.start.kind === 'resume'
-        ? `Continue the ${source} session in this window?`
-        : `Start a session in this window from the ${source} thread?`,
+        ? t('sessionHandoff.continueQuestion', { source })
+        : t('sessionHandoff.startQuestion', { source }),
     detail: lines.join('\n'),
   };
 }

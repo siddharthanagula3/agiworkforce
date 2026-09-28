@@ -1,4 +1,4 @@
-import type { BrowserWindow } from 'electron';
+import type { BrowserWindow, BrowserWindowConstructorOptions } from 'electron';
 import { shell } from 'electron';
 import { VSCODE_CONTEXT_HANDOFF_AUTHORITY } from '@agiworkforce/types';
 import { isAuthPath, isProductPath } from '@agiworkforce/types/product-routes';
@@ -88,8 +88,37 @@ export function decideRemoteNavigation(url: string, appOrigin: string): RemoteNa
   return matchesHost(parsed.hostname, IDENTITY_NAVIGATION_HOSTS) ? 'allow' : 'open-externally';
 }
 
+const DETACHED_PAGE_WINDOW: BrowserWindowConstructorOptions = {
+  width: 960,
+  height: 720,
+  autoHideMenuBar: true,
+  webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false },
+};
+
+export function isAppBlobUrl(url: string, appOrigin: string): boolean {
+  if (!url.startsWith('blob:')) return false;
+  try {
+    const origin = new URL(url).origin;
+    return origin !== 'null' && origin === new URL(appOrigin).origin;
+  } catch {
+    return false;
+  }
+}
+
+function lockDetachedPage(child: BrowserWindow): void {
+  child.webContents.setWindowOpenHandler(({ url }) => {
+    openExternally(url);
+    return { action: 'deny' };
+  });
+  child.webContents.on('will-navigate', (event, url) => {
+    event.preventDefault();
+    openExternally(url);
+  });
+}
+
 export function applyRemoteWindowPolicy(win: BrowserWindow): void {
   const isRemote = RENDERER_MODE === 'remote';
+  const appOrigin = isRemote ? CLOUD_APP_ORIGIN : RENDERER_ORIGIN;
 
   if (isRemote) {
     win.webContents.userAgent = win.webContents.userAgent
@@ -99,9 +128,13 @@ export function applyRemoteWindowPolicy(win: BrowserWindow): void {
   }
 
   win.webContents.setWindowOpenHandler(({ url }) => {
+    if (isAppBlobUrl(url, appOrigin)) {
+      return { action: 'allow', overrideBrowserWindowOptions: DETACHED_PAGE_WINDOW };
+    }
     openExternally(url);
     return { action: 'deny' };
   });
+  win.webContents.on('did-create-window', lockDetachedPage);
 
   win.webContents.on('will-navigate', (event, url) => {
     const allowed = isRemote

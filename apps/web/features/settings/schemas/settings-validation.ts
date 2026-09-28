@@ -64,6 +64,7 @@ export const createApiKeySchema = z.object({
     .max(API_KEY_SCOPE_VALUES.length)
     .refine((scopes) => new Set(scopes).size === scopes.length, 'Scopes must be unique'),
   expiresInDays: z.enum(API_KEY_EXPIRY_CHOICES).optional(),
+  projectId: z.string().uuid().nullable().optional(),
 });
 
 export type CreateApiKeyFormData = z.infer<typeof createApiKeySchema>;

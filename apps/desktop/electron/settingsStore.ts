@@ -36,6 +36,7 @@ export function getShortcuts(): GarnishShortcuts {
   return {
     quickAskShortcut: settings.quickAskShortcut,
     screenshotShortcut: settings.screenshotShortcut,
+    windowShotShortcut: settings.windowShotShortcut,
     voiceShortcut: settings.voiceShortcut,
   };
 }

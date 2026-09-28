@@ -2,6 +2,7 @@ import type {
   DirectoryBadgeKind,
   DirectoryConnectableMode,
   DirectoryManageColumn,
+  DirectoryPluginScanVerdict,
   DirectorySectionKey,
   DirectorySortKey,
 } from './types';
@@ -45,6 +46,8 @@ export const DIRECTORY_RETRY_LABEL = 'Try again';
 
 export const DIRECTORY_SOURCE_ALL_ID = 'all';
 export const DIRECTORY_SOURCE_ALL_LABEL = 'All';
+export const DIRECTORY_PUBLISHER_FILTER_ID = 'publisher';
+export const DIRECTORY_CATEGORY_FILTER_ID = 'category';
 
 export const FILTER_MENU_LABEL = 'Filter by';
 export const SORT_MENU_LABEL = 'Sort by';
@@ -52,7 +55,6 @@ export const CLEAR_FILTERS_LABEL = 'Clear filters';
 
 export const DIRECTORY_SORT_LABELS: Record<DirectorySortKey, string> = {
   popular: 'Most popular',
-  installs: 'Most installed',
   updated: 'Recently updated',
   name: 'Name A to Z',
 };
@@ -63,10 +65,13 @@ export const DIRECTORY_BADGE_LABELS: Record<DirectoryBadgeKind, string> = {
   verified: 'Verified',
   community: 'Community',
   custom: 'Custom',
+  update: 'Update available',
 };
 
 export const VERIFIED_GLYPH_BADGE: DirectoryBadgeKind = 'verified';
 export const CUSTOM_BADGE: DirectoryBadgeKind = 'custom';
+export const COMMUNITY_BADGE: DirectoryBadgeKind = 'community';
+export const UPDATE_BADGE: DirectoryBadgeKind = 'update';
 export const CONNECTED_GLYPH_LABEL = 'Connected';
 export const DIRECTORY_CUSTOM_HEADING = 'Your custom connectors';
 
@@ -106,9 +111,6 @@ export const CARD_INSTALL_LABELS: Record<DirectorySectionKey, string> = {
   connectors: ADD_LABEL,
   plugins: INSTALL_LABEL,
 };
-export const DIRECTORY_COUNT_SUFFIXES: Partial<Record<DirectorySectionKey, string>> = {
-  plugins: 'installs',
-};
 
 export const PLUGIN_PROMPTS_LABEL = 'Try asking';
 export const PLUGIN_COMPONENTS_HEADING = 'Includes';
@@ -143,7 +145,35 @@ export const PLUGIN_REPOSITORY_LABEL = 'Repository';
 export const PLUGIN_MARKETPLACE_LABEL = 'Marketplace';
 export const PLUGIN_WORKS_WITH_LABEL = 'Works with';
 export const PLUGIN_VERSION_LABEL = 'Version';
-export const PLUGIN_INSTALLS_SUFFIX = 'installs';
+export const PLUGIN_CATEGORY_LABEL = 'Category';
+export const PLUGIN_PUBLISHER_LABEL = 'Publisher';
+export const PLUGIN_PUBLISHER_MORE_PREFIX = 'More from';
+export const PLUGIN_PUBLISHER_WEBSITE_LABEL = 'Website';
+export const PLUGIN_COMMUNITY_NOTE =
+  'Built by its publisher, not by AGI Workforce. Check what it includes before you install it.';
+export const PLUGIN_PERMISSIONS_HEADING = 'Permissions';
+export const PLUGIN_PERMISSIONS_COPY =
+  'What this plugin says it needs. Installing it agrees to these; you can remove it at any time.';
+export const PLUGIN_SCAN_HEADING = 'Security scan';
+export const PLUGIN_SCAN_VERDICT_LABELS: Record<DirectoryPluginScanVerdict, string> = {
+  pass: 'Passed. No unsafe patterns were found.',
+  review: 'Needs your review. It may carry risk depending on where it came from.',
+  block: 'Blocked. It cannot be installed.',
+};
+export const PLUGIN_SCAN_DATE_PREFIX = 'Scanned';
+export const PLUGIN_SCAN_NONE_COPY =
+  'Not scanned. Scans run on plugins you upload or create and on registry versions.';
+export const PLUGIN_VERSION_INSTALLED_LABEL = 'Installed version';
+export const PLUGIN_VERSION_UPDATE_PREFIX = 'Update to';
+export const PLUGIN_VERSION_CHOOSE_LABEL = 'Choose a version';
+export const PLUGIN_VERSION_SWITCH_LABEL = 'Switch version';
+export const PLUGIN_VERSION_CURRENT_SUFFIX = '(installed)';
+export const PLUGIN_VERSION_CONFIRM_TITLE_PREFIX = 'Switch to version';
+export const PLUGIN_VERSION_CONFIRM_BODY =
+  'The plugin moves to this version for your account and stays on it until you choose another.';
+export const PLUGIN_VERSION_NEW_PERMISSIONS_PREFIX = 'It also asks for:';
+export const PLUGIN_VERSION_CHANGELOG_LABEL = 'What changed';
+export const PLUGIN_REPAIRS_HEADING = 'Needs attention';
 
 export const ADD_MARKETPLACE_LABEL = 'Add marketplace';
 export const ADD_MARKETPLACE_INTRO = 'Choose where these plugins come from.';
@@ -168,12 +198,6 @@ export const GENERIC_ERROR_COPY = 'Something went wrong. Try again.';
 export const MARKETPLACE_SYNC_FAILED_COPY = 'That marketplace could not be synced.';
 export const MARKETPLACE_REMOVE_FAILED_COPY =
   'That marketplace could not be removed. It is still listed.';
-
-export const INSTALL_COUNT_FLOOR = 10;
-
-export const THOUSAND = 1000;
-export const MILLION = 1_000_000;
-export const COUNT_PRECISION = 1;
 
 export const SKILL_NO_PREVIEW_COPY = 'No preview. This file type cannot be previewed.';
 export const SKILL_DOWNLOAD_FILE_LABEL = 'Download file';

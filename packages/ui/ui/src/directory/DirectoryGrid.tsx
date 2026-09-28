@@ -1,6 +1,6 @@
 'use client';
 
-import { CircleCheck, Download, Plus, Settings as SettingsIcon } from 'lucide-react';
+import { CircleCheck, Plus, Settings as SettingsIcon } from 'lucide-react';
 import { useState } from 'react';
 
 import { cn } from '../cn';
@@ -11,7 +11,6 @@ import {
   MANAGE_LABEL,
   CONNECTED_GLYPH_LABEL,
   CONNECTOR_CARD_ACTION_LABELS,
-  DIRECTORY_COUNT_SUFFIXES,
   DIRECTORY_EMPTY_COPY,
   DIRECTORY_LOADING_LABEL,
   DIRECTORY_RETRY_LABEL,
@@ -19,7 +18,6 @@ import {
   SETTINGS_LABEL,
 } from './constants';
 import { DirectoryBadges, splitDirectoryBadges } from './DirectoryBadges';
-import { formatInstallCount } from './filtering';
 import {
   DIRECTORY_ADD_BUTTON,
   DIRECTORY_CARD,
@@ -93,8 +91,6 @@ export function DirectoryCard({
   onInstall?: (id: string) => void;
   onOpenSettings?: (id: string) => void;
 }) {
-  const count = formatInstallCount(entry.installCount);
-  const countSuffix = DIRECTORY_COUNT_SUFFIXES[section];
   const publisher = entry.publisher === entry.name ? undefined : entry.publisher;
   const connectedGlyph = section === CONNECTED_GLYPH_SECTION && entry.installed === true;
   const editable = entry.editable === true && onOpenSettings !== undefined;
@@ -111,7 +107,7 @@ export function DirectoryCard({
       : onInstall;
   const TrailingIcon = entry.installed ? SettingsIcon : Plus;
   const { glyphs, pills } = splitDirectoryBadges(entry.badges);
-  const hasMeta = pills.length > 0 || publisher || count;
+  const hasMeta = pills.length > 0 || publisher;
 
   return (
     <div className={DIRECTORY_CARD}>
@@ -141,14 +137,6 @@ export function DirectoryCard({
             <p className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
               <DirectoryBadges badges={pills} />
               {publisher ? <span className="min-w-0 truncate">{publisher}</span> : null}
-              {publisher && count ? <span aria-hidden>&middot;</span> : null}
-              {count ? (
-                <span className="inline-flex items-center gap-1">
-                  {countSuffix ? null : <Download aria-hidden className="size-3" />}
-                  <span className="font-mono">{count}</span>
-                  {countSuffix ? <span>{countSuffix}</span> : null}
-                </span>
-              ) : null}
             </p>
           ) : null}
         </div>

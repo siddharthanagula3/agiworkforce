@@ -1,4 +1,4 @@
-import { BrowserWindow, screen } from 'electron';
+import { BrowserWindow, screen, type WebPreferences } from 'electron';
 import { CLOUD_APP_ORIGIN, REMOTE_SESSION_PARTITION, RENDERER_MODE } from './config';
 import { centeredUpperPosition } from './garnishCore';
 import { applyRemoteWindowPolicy } from './windowPolicy';
@@ -8,6 +8,13 @@ const PANEL_HEIGHT = 620;
 
 let panel: BrowserWindow | null = null;
 let creating = false;
+let bridge: Pick<WebPreferences, 'preload' | 'additionalArguments'> = {};
+
+export function configureQuickAskBridge(
+  preferences: Pick<WebPreferences, 'preload' | 'additionalArguments'>,
+): void {
+  bridge = preferences;
+}
 
 function createPanel(): BrowserWindow {
   const win = new BrowserWindow({
@@ -29,6 +36,7 @@ function createPanel(): BrowserWindow {
       sandbox: true,
       nodeIntegration: false,
       partition: REMOTE_SESSION_PARTITION,
+      ...bridge,
     },
   });
 

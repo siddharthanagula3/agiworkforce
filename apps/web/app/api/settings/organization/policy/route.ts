@@ -8,6 +8,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
+import { authenticatorEnrollmentAvailable } from '@/lib/authenticator-enrollment';
 import { getClientIp, recordAuditEvent } from '@/lib/security-audit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import {
@@ -256,6 +257,11 @@ async function handlePatch(request: NextRequest): Promise<NextResponse | Respons
     metadata: current.policy.metadata ?? {},
   };
 
+  if (next.requireMfa && !current.policy.requireMfa && !authenticatorEnrollmentAvailable()) {
+    throw createError.validation(
+      'Requiring multi-factor authentication is temporarily unavailable, because members cannot set up an authenticator app yet.',
+    );
+  }
   await assertPolicyChangeWontLockOutRequester(next, userId, request);
   assertPolicyCoherent(next);
 

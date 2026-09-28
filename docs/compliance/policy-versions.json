@@ -48,6 +48,11 @@
           "date": "2026-09-27",
           "digest": "364b3259e3db9d72",
           "note": "Adds the referral program checks and their lawful basis, and states the erasure list at 100 user-scoped tables."
+        },
+        {
+          "date": "2026-09-27",
+          "digest": "223728cc89c29c90",
+          "note": "The erasure table count moves from 100 to 103 as schedule share links, personal skill files and developer projects joined the list; no commitment changed, so the date stays."
         }
       ]
     },
@@ -103,6 +108,11 @@
           "date": "2026-09-23",
           "digest": "5d2ea7656cc0eada",
           "note": "Corrects the identity-provider source and removes an obsolete browser storage claim; includes the semicolon-bearing JSX fingerprint migration. The founder approved a new notice version and re-prompting visitors on 2026-09-23."
+        },
+        {
+          "date": "2026-09-23",
+          "digest": "d0fbb74d615c79a2",
+          "note": "The storage table drops agi.composer-pending-draft, which the composer stopped writing when new-chat drafts moved into the one draft store; nothing new is stored and no choice changed, so the date and the notice version stay."
         }
       ]
     },
@@ -143,6 +153,16 @@
           "date": "2026-08-14",
           "digest": "30c31f001ef6e8e3",
           "note": "The erasure table count moves from 95 to 100 as the billing tables joined the list; no security commitment changed, so the date stays."
+        },
+        {
+          "date": "2026-08-14",
+          "digest": "973f62e76c3b695f",
+          "note": "The protected route group list gains developers, the developer console, taking the count from fifteen to sixteen; no security commitment changed, so the date stays."
+        },
+        {
+          "date": "2026-08-14",
+          "digest": "c59af537262d6533",
+          "note": "The erasure table count moves from 100 to 103 as schedule share links, personal skill files and developer projects joined the list; no security commitment changed, so the date stays."
         }
       ]
     },
@@ -243,6 +263,16 @@
           "date": "2026-09-21",
           "digest": "d4b49134572c44e4",
           "note": "The row-level isolation figures were re-measured after the billing routes merged (191 of 303 database-backed routes); no commitment changed, so the date stays."
+        },
+        {
+          "date": "2026-09-21",
+          "digest": "1eb7dc94e82e26ac",
+          "note": "The protected route group count moves from fifteen to sixteen with the developer console, and the change record gains that 2026-09-27 entry; no commitment changed, so the date stays."
+        },
+        {
+          "date": "2026-09-21",
+          "digest": "300653ec2c867809",
+          "note": "The GDPR row states the erasure count of 103 tables and the change record gains its 2026-09-28 entry; no commitment changed, so the date stays."
         }
       ]
     },
