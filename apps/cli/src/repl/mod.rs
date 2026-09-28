@@ -673,6 +673,15 @@ pub async fn run_repl(
 }
 
 async fn run_prompt_turn(session: &mut AgentSession, config: &CliConfig, full_input: String) {
+    match session.reload_if_changed_on_disk() {
+        Ok(true) => output::print_info(
+            "This conversation continued in another app; your message continues from its saved version.",
+        ),
+        Ok(false) => {}
+        Err(error) => output::print_warn(&format!(
+            "This conversation changed in another app and could not be reloaded: {error:#}"
+        )),
+    }
     let spinner = output::create_spinner("Thinking...");
     let md = std::sync::Arc::new(std::sync::Mutex::new(MarkdownRenderer::new()));
     let md_cb = std::sync::Arc::clone(&md);
