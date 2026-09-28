@@ -1326,6 +1326,19 @@ async function ensureTabGroup(tabId: number): Promise<boolean> {
   }
 }
 
+async function markComputerUseTab(tabId: number): Promise<() => Promise<void>> {
+  const leaveAsIs = async (): Promise<void> => undefined;
+  if (!chrome.tabGroups) return leaveAsIs;
+  try {
+    const tab = await chrome.tabs.get(tabId);
+    if (typeof tab.groupId === 'number' && tab.groupId >= 0) return leaveAsIs;
+    if (!(await ensureTabGroup(tabId))) return leaveAsIs;
+    return () => chrome.tabs.ungroup(tabId).catch(() => undefined);
+  } catch {
+    return leaveAsIs;
+  }
+}
+
 async function handleReplayShortcut(
   message: import('./types').ReplayShortcutMessage,
   expectedOwner?: ManagedCloudOwner,
@@ -2625,7 +2638,7 @@ function cancelActiveRunUnlessOriginStillApproved(
     // Invalid stored intent is handled by the same fail-closed cancellation.
   }
   computerUseStartGeneration += 1;
-  cancelActiveComputerUseRun('tab_intent_changed', lease.runId);
+  cancelActiveComputerUseRun('site_access_withdrawn', lease.runId);
 }
 
 chrome.storage.onChanged.addListener((changes, area) => {
@@ -4170,7 +4183,9 @@ async function handleMessageAsync(
         },
       });
       computerUseRuns.trackCompletion(lease, completion);
+      const unmarkTab = markComputerUseTab(cuTabId);
       void completion.finally(() => flushAutomationAuditOutbox().catch(() => false));
+      void completion.finally(() => unmarkTab.then((unmark) => unmark()));
       void completion.then(
         () => {
           if (!computerUseRuns.finish(lease)) return;

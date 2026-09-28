@@ -89,6 +89,46 @@ export interface AgentLoopStep {
   toolResult?: string;
   finalMessage?: string;
   errorMessage?: string;
+  screenshotDataUrl?: string;
+}
+
+const SCREENSHOT_PREVIEW_WIDTH = 640;
+
+async function screenshotPreview(base64Png: string): Promise<string> {
+  const original = `data:image/png;base64,${base64Png}`;
+  if (typeof OffscreenCanvas !== 'function' || typeof createImageBitmap !== 'function') {
+    return original;
+  }
+  try {
+    const bitmap = await createImageBitmap(await (await fetch(original)).blob());
+    const scale = Math.min(1, SCREENSHOT_PREVIEW_WIDTH / bitmap.width);
+    const canvas = new OffscreenCanvas(
+      Math.max(1, Math.round(bitmap.width * scale)),
+      Math.max(1, Math.round(bitmap.height * scale)),
+    );
+    canvas.getContext('2d')?.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+    const preview = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.72 });
+    const bytes = new Uint8Array(await preview.arrayBuffer());
+    let binary = '';
+    for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+      binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+    }
+    return `data:image/jpeg;base64,${btoa(binary)}`;
+  } catch {
+    return original;
+  }
+}
+
+async function reportScreenshot(
+  options: AgentLoopOptions,
+  stepNumber: number,
+  base64Png: string,
+): Promise<void> {
+  if (!options.onProgress || !base64Png) return;
+  const screenshotDataUrl = await screenshotPreview(base64Png);
+  await assertRunOwnership(options);
+  options.onProgress({ kind: 'screenshot', stepNumber, screenshotDataUrl });
 }
 
 export interface AgentLoopResult {
@@ -180,6 +220,7 @@ interface ToolExecution {
   readonly result: string;
   readonly verification: AutomationVerification;
   readonly target: string | null;
+  readonly screenshotBase64?: string;
 }
 
 async function executeTool(
@@ -195,6 +236,7 @@ async function executeTool(
       );
       const base64 = await runOwnedOperation(options, () => cdp.screenshot(tabId, options.signal));
       return {
+        screenshotBase64: base64,
         result: JSON.stringify({ type: 'screenshot', base64, note: 'See image in next turn.' }),
         verification: {
           check: 'the tab returned a screenshot',
@@ -519,6 +561,7 @@ export async function runAgentLoop(
       ],
     };
     history.push(systemMessage, initialUserMessage);
+    await reportScreenshot(options, 0, initialScreenshot);
 
     while (stepNumber < maxSteps) {
       await assertRunOwnership(options);
@@ -865,8 +908,11 @@ async function dispatchToolCall(
     kind: 'tool_result',
     stepNumber,
     toolName,
-    toolResult: execution.result,
+    toolResult: execution.screenshotBase64 ? 'Captured the page.' : execution.result,
   });
+  if (execution.screenshotBase64) {
+    await reportScreenshot(options, stepNumber, execution.screenshotBase64);
+  }
 
   return {
     role: 'tool',
