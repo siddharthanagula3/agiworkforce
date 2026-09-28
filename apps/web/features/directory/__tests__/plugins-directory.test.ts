@@ -242,6 +242,8 @@ describe('toPluginRequest and pluginDirectoryHref', () => {
       search: 'front',
       source: 'marketplace',
       worksWith: 'web',
+      category: null,
+      publisher: null,
       sort: 'name',
       cursor: '100',
     });
@@ -250,15 +252,15 @@ describe('toPluginRequest and pluginDirectoryHref', () => {
     );
   });
 
-  it('defaults to the installs sort and treats a user marketplace id as no facet', () => {
+  it('defaults to the name sort and treats a user marketplace id as no facet', () => {
     const request = toPluginRequest({ ...DEFAULT_PLUGIN_QUERY, sourceId: 'source-9' });
     expect(request.source).toBeNull();
-    expect(pluginDirectoryHref(request)).toBe('/api/plugins?sort=installs&limit=100');
+    expect(pluginDirectoryHref(request)).toBe('/api/plugins?sort=name&limit=100');
   });
 
   it('always asks the server for the marketplace facet when the view is grouped', () => {
     expect(pluginDirectoryHref(marketplaceRequest(DEFAULT_PLUGIN_QUERY, '100'))).toBe(
-      '/api/plugins?source=marketplace&sort=installs&limit=100&cursor=100',
+      '/api/plugins?source=marketplace&sort=name&limit=100&cursor=100',
     );
     expect(marketplaceRequest({ ...DEFAULT_PLUGIN_QUERY, sourceId: 'builtin' }).source).toBe(
       'builtin',
@@ -267,13 +269,12 @@ describe('toPluginRequest and pluginDirectoryHref', () => {
 });
 
 describe('toPluginEntry', () => {
-  it('carries the publisher, the verified glyph, the real install count and the works-with facet', () => {
+  it('carries the publisher, the verified glyph and the works-with facet', () => {
     const entry = toPluginEntry(directoryEntry(), EMPTY_INSTALL_STATE);
     expect(entry).toMatchObject({
       id: 'frontend-design',
       publisher: 'Anthropic',
       badges: ['verified'],
-      installCount: 1_134_112,
       sourceId: 'marketplace',
       groupId: 'marketplace',
       installed: false,
@@ -331,7 +332,6 @@ describe('toPluginDetail', () => {
     expect(detail).toMatchObject({
       kind: 'plugin',
       verified: true,
-      installCount: 1_134_112,
       components: {
         skills: ['frontend-design'],
         commands: 2,
@@ -429,7 +429,7 @@ describe('toPluginSection', () => {
         { value: 'cowork', label: 'Cowork' },
       ],
     });
-    expect(result.sortOptions).toEqual(['installs', 'name']);
+    expect(result.sortOptions).toEqual(['name']);
   });
 
   it('narrows the local groups by search and works-with while the marketplace page stays as served', () => {
@@ -578,7 +578,7 @@ describe('installPlugin', () => {
     vi.stubGlobal('fetch', fetchMock);
     await expect(
       installPlugin({ kind: 'directory', pluginId: 'frontend-design' }, 'token'),
-    ).resolves.toEqual({ status: 'installed' });
+    ).resolves.toEqual({ status: 'installed', dependencies: [], connectors: null });
     expect(fetchMock).toHaveBeenCalledWith('/api/plugins/marketplace-installations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-csrf-token': 'token' },
