@@ -178,16 +178,12 @@ Code: `apps/mobile/src/features/skills/SkillsScreen.tsx:536-544`, `apps/mobile/a
 
 - Done when: Typing a mention in the composer can reference a file, whose contents are included with the message.
 - Wave: 3
-- Already works on: cli, vscode
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | ChatGPT's @ palette searches files (docs/research/leader-settings-and-directory-reference-2026-09-07.md:208, observed 2026-09-07), so this is not n/a: the @ menu needs Library files that attach on selection (p-contrast next batch). | ui |
-| desktop | partial | ChatGPT's @ palette searches files (docs/research/leader-settings-and-directory-reference-2026-09-07.md:208, observed 2026-09-07), so this is not n/a: the @ menu needs Library files that attach on selection (p-contrast next batch). | ui |
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:2457-2457`, `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:76-76`
 
 ## S13.27: Folder mention.
 
@@ -221,17 +217,16 @@ Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:5255-5259`
 
 - Done when: The user can reference a connected app (connector/MCP server) or one of its resources inline in the composer.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | ChatGPT's @ lists installed plugins (docs/research/leader-settings-and-directory-reference-2026-09-07.md:208, observed 2026-09-07), so this is not n/a: the @ menu needs connected connectors (p-contrast next batch). | ui |
-| desktop | partial | ChatGPT's @ lists installed plugins (docs/research/leader-settings-and-directory-reference-2026-09-07.md:208, observed 2026-09-07), so this is not n/a: the @ menu needs connected connectors (p-contrast next batch). | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | Needs McpManager::list_resources/read_resource in apps/cli/src/mcp (p-mcp-rust's files); the crate client already has both (crates/agiworkforce-mcp/src/client.rs:168,182). | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:2457-2457`, `apps/web/features/connectors/components/ConnectorCapabilitiesPanel.tsx:227-227`, `apps/cli/src/tui/tui_app.rs:2637-2650`, `apps/cli/src/tui/tui_app.rs:4086-4088`
+Code: `apps/cli/src/tui/tui_app.rs:2637-2650`, `apps/cli/src/tui/tui_app.rs:4086-4088`
 
 ## S13.32: Selected-source chips.
 
@@ -264,13 +259,13 @@ Code: `apps/mobile/src/features/chat/components/ChatInput.tsx:210-231`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Claude has an Output picker (Docs, Slides, Design; beta, paid); formats and plans are a product call before building. | ui |
-| desktop | partial | Claude has an Output picker (Docs, Slides, Design; beta, paid); formats and plans are a product call before building. | ui |
+| web | partial | product call: Claude's message box has Output then Docs, with Slides and Design templates, in beta on Pro, Max, Team and Enterprise (support.claude.com/en/articles/16923645 and /17153992, fetched 2026-09-28); our nearest outputs are the Office files tool (docx, pptx, xlsx) and artifacts. Which formats and plans to offer decides the build. | ui |
+| desktop | partial | product call: Claude's message box has Output then Docs, with Slides and Design templates, in beta on Pro, Max, Team and Enterprise (support.claude.com/en/articles/16923645 and /17153992, fetched 2026-09-28); our nearest outputs are the Office files tool (docx, pptx, xlsx) and artifacts. Which formats and plans to offer decides the build. | ui |
 | mobile | partial | Add an output-format choice; the style picker covers tone and length only (Normal, Concise, Detailed, Creative). | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:886-886`, `apps/web/features/chat/stores/style-store.ts:298-298`, `apps/mobile/src/features/chat/components/StyleSelector.tsx:16-19`
+Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:1003-1003`, `apps/mobile/src/features/chat/components/StyleSelector.tsx:16-19`
 
 ## S13.36: Dictation control.
 
@@ -332,11 +327,11 @@ Code: `apps/mobile/src/features/chat/components/ChatInput.tsx:871-887`, `apps/mo
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | steering a running turn from the composer needs p-chat-gates' steer route and tool-loop draining queued guidance at each tool boundary; the composer side follows once that call lands. | ui, handler |
-| desktop | partial | steering a running turn from the composer needs p-chat-gates' steer route and tool-loop draining queued guidance at each tool boundary; the composer side follows once that call lands. | ui, handler |
+| web | partial | no chat-turn steer route has landed (only Deep Research steering, 32d2184ae); once p-chat-gates adds it and the tool loop drains queued guidance at tool boundaries, the composer sends a queued message as steering instead of waiting. | ui, handler |
+| desktop | partial | no chat-turn steer route has landed (only Deep Research steering, 32d2184ae); once p-chat-gates adds it and the tool loop drains queued guidance at tool boundaries, the composer sends a queued message as steering instead of waiting. | ui, handler |
 | mobile | partial | Let users steer a running mobile chat; steering exists only for a paired desktop's code session ("Steer this run" in Remote), while mobile chats queue messages. | ui |
 
-Code: `apps/web/features/chat/components/approvals/ApprovalInbox.tsx:226-226`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:5247-5247`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:177-190`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:85-97`
+Code: `apps/web/features/chat/components/approvals/ApprovalInbox.tsx:121-121`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:809-809`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:177-190`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:85-97`
 
 ## S13.41: Separate side question that does not modify the main task.
 

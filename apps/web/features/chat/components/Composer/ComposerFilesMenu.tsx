@@ -30,16 +30,16 @@ export const COMPOSER_FILES_SEARCH_LABEL = 'Search library files';
 export const COMPOSER_FILES_BROWSE_LABEL = 'Browse all';
 export const COMPOSER_FILES_UPLOAD_LABEL = 'Upload from device';
 export const COMPOSER_FILES_EMPTY_COPY = 'No files in your library yet.';
+export const COMPOSER_FILES_LOADING_LABEL = 'Loading files';
+export const COMPOSER_FILES_UNAVAILABLE_COPY = 'The library could not be loaded.';
+export const COMPOSER_FILES_ATTACH_FAILED_COPY = 'That file could not be added. Try again.';
+export const COMPOSER_FILES_ATTACH_LABEL_PREFIX = 'Attach';
 export const LIBRARY_PATH = '/library';
 export const LIBRARY_API_PATH = '/api/library';
 export const LIBRARY_RECENT_LIMIT = 6;
 
 const MENU_LABEL = 'Files';
 const NO_MATCH_COPY = 'No library file matches that search.';
-const LOADING_LABEL = 'Loading files';
-const UNAVAILABLE_COPY = 'The library could not be loaded.';
-const ATTACH_FAILED_COPY = 'That file could not be added. Try again.';
-const ATTACH_LABEL_PREFIX = 'Attach';
 const SEARCH_DEBOUNCE_MS = 200;
 const QUERY_PARAM = 'q';
 const LIMIT_PARAM = 'limit';
@@ -121,34 +121,21 @@ function useDebouncedQuery(value: string): string {
   return debounced;
 }
 
-export function ComposerFilesMenu({
-  children,
-  disabled = false,
-  onAttach,
-  onUploadFromDevice,
-  open,
-  onOpenChange,
-}: ComposerFilesMenuProps) {
-  const [internalOpen, setInternalOpen] = useState(false);
-  const [query, setQuery] = useState('');
+export interface LibraryFiles {
+  items: LibraryItem[];
+  loading: boolean;
+  error: string | null;
+  query: string;
+}
+
+export function useLibraryFiles(enabled: boolean, query: string): LibraryFiles {
   const debouncedQuery = useDebouncedQuery(query);
   const [items, setItems] = useState<LibraryItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [attachingId, setAttachingId] = useState<string | null>(null);
-  const isOpen = open ?? internalOpen;
-
-  const setOpen = (next: boolean) => {
-    if (!next) {
-      setQuery('');
-      setError(null);
-    }
-    setInternalOpen(next);
-    onOpenChange?.(next);
-  };
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!enabled) return;
     const controller = new AbortController();
     setLoading(true);
     setError(null);
@@ -159,22 +146,55 @@ export function ComposerFilesMenu({
       .catch((caught: unknown) => {
         if (controller.signal.aborted) return;
         if (caught instanceof DOMException && caught.name === 'AbortError') return;
-        setError(UNAVAILABLE_COPY);
+        setError(COMPOSER_FILES_UNAVAILABLE_COPY);
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [isOpen, debouncedQuery]);
+  }, [enabled, debouncedQuery]);
+
+  return { items, loading, error, query: debouncedQuery };
+}
+
+export function ComposerFilesMenu({
+  children,
+  disabled = false,
+  onAttach,
+  onUploadFromDevice,
+  open,
+  onOpenChange,
+}: ComposerFilesMenuProps) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [attachError, setAttachError] = useState<string | null>(null);
+  const [attachingId, setAttachingId] = useState<string | null>(null);
+  const isOpen = open ?? internalOpen;
+  const {
+    items,
+    loading,
+    error: loadError,
+    query: debouncedQuery,
+  } = useLibraryFiles(isOpen, query);
+  const error = attachError ?? loadError;
+
+  const setOpen = (next: boolean) => {
+    if (!next) {
+      setQuery('');
+      setAttachError(null);
+    }
+    setInternalOpen(next);
+    onOpenChange?.(next);
+  };
 
   const attach = async (item: LibraryItem) => {
     setAttachingId(item.id);
-    setError(null);
+    setAttachError(null);
     try {
       onAttach(await libraryItemToFile(item));
       setOpen(false);
     } catch {
-      setError(ATTACH_FAILED_COPY);
+      setAttachError(COMPOSER_FILES_ATTACH_FAILED_COPY);
     } finally {
       setAttachingId(null);
     }
@@ -210,12 +230,12 @@ export function ComposerFilesMenu({
           />
         </div>
 
-        {error ? <p className={cn(NOTE_CLASS, 'text-danger')}>{error}</p> : null}
+        {error ? <p className={cn(NOTE_CLASS, 'text-danger-text')}>{error}</p> : null}
 
         {loading && items.length === 0 ? (
           <div className="flex items-center justify-center gap-2 px-2 py-3 text-xs text-muted-foreground">
-            <Spinner size="sm" aria-label={LOADING_LABEL} />
-            {LOADING_LABEL}
+            <Spinner size="sm" aria-label={COMPOSER_FILES_LOADING_LABEL} />
+            {COMPOSER_FILES_LOADING_LABEL}
           </div>
         ) : items.length === 0 && !error ? (
           <p className={NOTE_CLASS}>
@@ -232,7 +252,7 @@ export function ComposerFilesMenu({
                     type="button"
                     onClick={() => void attach(item)}
                     disabled={disabled || attachingId !== null}
-                    aria-label={`${ATTACH_LABEL_PREFIX} ${item.file_name}`}
+                    aria-label={`${COMPOSER_FILES_ATTACH_LABEL_PREFIX} ${item.file_name}`}
                     className={ROW_CLASS}
                   >
                     {attaching ? (

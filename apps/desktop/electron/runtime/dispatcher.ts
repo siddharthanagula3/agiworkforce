@@ -27,6 +27,7 @@ import {
   type WorkspaceSnapshot,
 } from '@agiworkforce/local-runtime-contract';
 import {
+  BROWSER_STEP_COMMAND,
   DEVICE_REGISTRY_PROFILE_COMMAND,
   type DeviceRegistryProfile,
   DEVICE_STEP_TOOLS,
@@ -40,14 +41,22 @@ import {
   type DeveloperAgentMode,
   normalizeDeveloperAgentMode,
 } from '@agiworkforce/local-runtime-contract';
-import { isBrowserCommand } from '@agiworkforce/types';
+import {
+  CLOUD_CODE_TURN_STEP_BOUNDS,
+  isBrowserCommand,
+  isCloudCodeTurnStepBound,
+} from '@agiworkforce/types';
 import {
   BrowserBridgeError,
   installHostForPairedExtension,
+  listBrowserActivity,
   pairingState,
+  recordBrowserActivity,
   removeHostAndPairing,
   sendBrowserCommand,
+  settleBrowserActivity,
 } from '../browser/bridgeServer';
+import { BrowserStepRefused, runBrowserStep } from '../browser/browserSteps';
 import {
   InvalidBrowserArguments,
   planBrowserCommand,
@@ -130,6 +139,7 @@ import {
 } from './gitService';
 import {
   DeveloperRuntimeUnavailableError,
+  addDeveloperMemory,
   answerDeveloperApproval,
   interruptDeveloperTurn,
   listDeveloperPlugins,
@@ -720,6 +730,9 @@ const BROWSER_OBJECT_PHRASES: Readonly<Record<string, string>> = Object.freeze({
   'browser.cdp': "read the paired browser's page internals",
 });
 
+const MANUAL_BROWSER_CLIENT = 'You';
+const FAILED_BROWSER_ACTION = 'The browser did not answer.';
+
 export async function runBrowserCommand(
   window: BrowserWindow | null,
   command: string,
@@ -767,7 +780,22 @@ export async function runBrowserCommand(
     return runtimeFailure('cancelled', 'That browser action was not run.');
   }
 
-  const value = await sendBrowserCommand(plan.command, plan.args);
+  const activity = caller
+    ? null
+    : recordBrowserActivity(MANUAL_BROWSER_CLIENT, plan.command, plan.args);
+  let value: unknown;
+  try {
+    value = await sendBrowserCommand(plan.command, plan.args);
+  } catch (error) {
+    if (activity) {
+      settleBrowserActivity(
+        activity,
+        error instanceof Error ? error.message : FAILED_BROWSER_ACTION,
+      );
+    }
+    throw error;
+  }
+  if (activity) settleBrowserActivity(activity, null);
   consumeSingleUse(plan.capability, scope);
   return runtimeSuccess(value);
 }
@@ -783,15 +811,19 @@ function declareDeviceHost(): DesktopHostDeclaration {
   const screenUsable = computerUseEnabled() && computerUseAvailability().supported;
   const capabilities = [
     ...new Set(
-      DEVICE_STEP_TOOLS.filter((tool) =>
-        deviceStepScope(tool) === 'screen'
-          ? screenUsable &&
-            getPermissionState(deviceStepCapability(tool), { kind: 'global' }) !== 'denied'
-          : roots.some(
-              (root) =>
-                getPermissionState(deviceStepCapability(tool), workspaceScope(root)) !== 'denied',
-            ),
-      ).map(deviceStepCapability),
+      DEVICE_STEP_TOOLS.filter((tool) => {
+        const scope = deviceStepScope(tool);
+        if (scope === 'workspace') {
+          return roots.some(
+            (root) =>
+              getPermissionState(deviceStepCapability(tool), workspaceScope(root)) !== 'denied',
+          );
+        }
+        const usable = scope === 'screen' ? screenUsable : pairingState().paired;
+        return (
+          usable && getPermissionState(deviceStepCapability(tool), { kind: 'global' }) !== 'denied'
+        );
+      }).map(deviceStepCapability),
     ),
   ];
   return {
@@ -804,13 +836,7 @@ function declareDeviceHost(): DesktopHostDeclaration {
   };
 }
 
-async function localModelsAvailable(): Promise<boolean> {
-  if (getPermissionState('local.inference', { kind: 'global' }) === 'denied') return false;
-  const servers = await listLocalServers();
-  return servers.some((server) => server.reachable && server.modelCount > 0);
-}
-
-async function describeDeviceForRegistry(): Promise<DeviceRegistryProfile> {
+function describeDeviceForRegistry(): DeviceRegistryProfile {
   const identity = deviceIdentity();
   return {
     installId: identity.deviceId,
@@ -822,7 +848,7 @@ async function describeDeviceForRegistry(): Promise<DeviceRegistryProfile> {
     capabilities: {
       browser: pairingState().paired,
       computerUse: computerUseEnabled() && computerUseAvailability().supported,
-      localModels: await localModelsAvailable(),
+      localModels: !localInferenceCommands.has('local_chat_start'),
       localMcp: false,
       remoteControl: remoteControlAvailable(),
     },
@@ -1042,6 +1068,15 @@ async function execute(
       return reviewPermissions();
     case 'permission_revoke':
       return revokeReviewedPermission(window, args);
+    case BROWSER_STEP_COMMAND:
+      return runBrowserStep(window, args);
+    case 'browser_activity':
+      return listBrowserActivity();
+    case 'browser_downloads_open': {
+      const failure = await shell.openPath(app.getPath('downloads'));
+      if (failure !== '') throw new InvalidArguments(failure);
+      return true;
+    }
     case 'background_activity':
       return readBackgroundActivity();
     case 'background_stop': {
@@ -1080,13 +1115,27 @@ async function execute(
     case 'developer_turn_start': {
       const model = optionalString(args, 'model', '');
       const agentMode = rendererAgentMode(optionalString(args, 'agentMode', ''));
+      const maxTurns = optionalNumber(args, 'maxTurns');
+      if (maxTurns !== undefined && !isCloudCodeTurnStepBound(maxTurns)) {
+        throw new InvalidArguments(
+          `"maxTurns" must be one of ${CLOUD_CODE_TURN_STEP_BOUNDS.join(', ')}.`,
+        );
+      }
       return startDeveloperTurn({
         rootId: requireString(args, 'rootId'),
         threadId: requireString(args, 'threadId'),
         text: requireString(args, 'text'),
         ...(model === '' ? {} : { model }),
         ...(agentMode ? { agentMode } : {}),
+        ...(maxTurns === undefined ? {} : { maxTurns }),
       });
+    }
+    case 'developer_memory_add': {
+      const scope = requireString(args, 'scope');
+      if (scope !== 'project' && scope !== 'user') {
+        throw new InvalidArguments('"scope" must be project or user.');
+      }
+      return addDeveloperMemory(requireString(args, 'rootId'), requireString(args, 'text'), scope);
     }
     case 'developer_turn_interrupt':
       return interruptDeveloperTurn(
@@ -1174,6 +1223,12 @@ function toFailure(error: unknown): DesktopRuntimeResponse<never> {
     return runtimeFailure('invalid-arguments', error.message);
   }
   if (error instanceof BrowserBridgeError) return runtimeFailure('io-error', error.message);
+  if (error instanceof BrowserStepRefused) {
+    return runtimeFailure(
+      error.reason === 'permission' ? 'permission-denied' : 'cancelled',
+      error.message,
+    );
+  }
   if (error instanceof UnknownWorkspace) return runtimeFailure('not-found', error.message);
   if (error instanceof DeveloperRuntimeUnavailableError) {
     return runtimeFailure('runtime-unavailable', `${error.message} ${error.hint}`);

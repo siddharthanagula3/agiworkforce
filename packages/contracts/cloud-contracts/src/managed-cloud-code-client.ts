@@ -4,6 +4,8 @@ import type {
   CloudCodeSession,
   CloudCodeSessionListResponse,
   CloudCodeSessionStatusFilter,
+  CloudCodeShareVisibility,
+  CloudCodeSharedSession,
   CloudCodeTerminalEntry,
   CreateCloudCodeSessionInput,
   RunCloudCodeCommandResponse,
@@ -12,6 +14,7 @@ import {
   CLOUD_CODE_BRANCHES_PATH,
   CLOUD_CODE_REPOSITORIES_PATH,
   CLOUD_CODE_SESSIONS_PATH,
+  CLOUD_CODE_SHARED_SESSIONS_PATH,
   CloudCodeAgentApprovalsSchema,
   CloudCodeBranchListSchema,
   CloudCodeAgentTurnSchema,
@@ -26,6 +29,7 @@ import {
   CloudCodeSessionDetailSchema,
   CloudCodeSessionListSchema,
   CloudCodeSessionResponseSchema,
+  CloudCodeSharedSessionSchema,
   CloudCodeTurnCancellationSchema,
   cloudCodeSessionPath,
   type CloudCodeAgentApproval,
@@ -107,6 +111,12 @@ export interface CloudCodeApi {
     archived: boolean,
     signal?: AbortSignal,
   ): Promise<CloudCodeSession>;
+  setSharing(
+    sessionId: string,
+    visibility: CloudCodeShareVisibility,
+    signal?: AbortSignal,
+  ): Promise<CloudCodeSession>;
+  openShared(token: string, signal?: AbortSignal): Promise<CloudCodeSharedSession>;
   deleteSession(sessionId: string, signal?: AbortSignal): Promise<void>;
   commit(
     sessionId: string,
@@ -318,6 +328,26 @@ export function createManagedCloudCodeApi(config: ManagedCloudCodeApiConfig): Cl
         CloudCodeSessionResponseSchema,
       );
       return body.session;
+    },
+    async setSharing(sessionId, visibility, signal) {
+      const body = await request(
+        cloudCodeSessionPath(sessionId),
+        {
+          method: 'PATCH',
+          headers: await mutationHeaders(),
+          body: JSON.stringify({ shareVisibility: visibility }),
+          signal,
+        },
+        CloudCodeSessionResponseSchema,
+      );
+      return body.session;
+    },
+    openShared(token, signal) {
+      return request(
+        `${CLOUD_CODE_SHARED_SESSIONS_PATH}/${encodeURIComponent(token)}`,
+        { signal },
+        CloudCodeSharedSessionSchema,
+      );
     },
     async deleteSession(sessionId, signal) {
       await request(

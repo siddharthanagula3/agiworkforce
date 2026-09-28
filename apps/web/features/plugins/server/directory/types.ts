@@ -64,6 +64,7 @@ export interface PluginDirectoryStats {
   verified: number;
   bySource: Record<PluginSourceFacet, number>;
   byWorksWith: Record<PluginWorksWith, number>;
+  byCategory: Record<string, number>;
 }
 
 export interface PluginDirectoryListResponse {

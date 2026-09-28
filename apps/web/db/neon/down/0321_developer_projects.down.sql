@@ -1,4 +1,4 @@
--- Reversal of 0319 : API keys are no longer grouped into developer projects.
+-- Reversal of 0321 : API keys are no longer grouped into developer projects.
 --
 -- WHAT THIS COSTS: every developer project and its monthly credit limit is
 -- deleted, keys lose the project they were in, and managed usage no longer
@@ -20,6 +20,6 @@ drop index if exists public.idx_developer_projects_user;
 drop table if exists public.developer_projects;
 
 delete from public.schema_migrations
- where filename = '0319_developer_projects.sql';
+ where filename = '0321_developer_projects.sql';
 
 commit;
