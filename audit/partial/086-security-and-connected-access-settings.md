@@ -200,10 +200,10 @@ Code: `apps/web/features/desktop-host/components/DesktopSettingsSection.tsx:47-5
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | desktop | partial | Connector approvals are reviewable through the hosted page, but desktop-native "Always allow" grants (clipboard, computer use, local models, commands) are saved with no screen to review or remove them: listPermissions() has no caller. | ui |
-| vscode | partial | Approvals can only be remembered for the current session (keyed per tool); nothing persists and there is no list to review. | ui, persistence |
+| vscode | partial | Waits on p-desktop-cli: approval/requested must say whether Always allow is saved for that request, ReviewDecision needs an always_allow answer, and the app-server needs permissions/list and permissions/remove over ~/.agiworkforce/permissions.toml and rules/user-approved.rules; VS Code then offers Always allow and a Saved approvals list | persistence, ui |
 | chrome | partial | The only remembered approval is the approved-sites list; per-action decisions are never saved, and sensitive actions always ask. | ui |
 
-Code: `apps/web/features/connectors/components/ToolPermissionsPanel.tsx:60-90`, `apps/desktop/electron/runtime/permissionManager.ts:300-335`, `apps/desktop/electron/runtime/permissionManager.ts:112-124`, `apps/extension-vscode/src/features/permissions/approvalScope.ts:28-40`
+Code: `apps/web/features/connectors/components/ToolPermissionsPanel.tsx:60-90`, `apps/desktop/electron/runtime/permissionManager.ts:300-335`, `apps/desktop/electron/runtime/permissionManager.ts:112-124`, `apps/extension-vscode/src/features/permissions/approvalScope.ts:35-35`
 
 ## S86.25: Revoke all optional grants.
 

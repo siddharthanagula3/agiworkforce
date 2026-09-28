@@ -335,6 +335,17 @@ export async function readFrontWindow(): Promise<FrontWindowReading> {
   };
 }
 
+export async function frontWindowIdOutside(pid: number): Promise<number | null> {
+  if (!computerUseSupport().supported) return null;
+  const payload = await sendToHelper({ action: 'front', excludePid: pid });
+  const front = payload['front'];
+  const windowId =
+    typeof front === 'object' && front !== null
+      ? (front as Record<string, unknown>)['windowId']
+      : undefined;
+  return typeof windowId === 'number' ? windowId : null;
+}
+
 async function frontOrNull(): Promise<DeviceFrontWindow | null> {
   try {
     return (await readFrontWindow()).front;
