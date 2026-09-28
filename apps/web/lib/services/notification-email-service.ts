@@ -134,3 +134,44 @@ export async function sendSpendAlertEmail(input: SpendAlertEmailInput): Promise<
   }
   return result;
 }
+
+export interface SecurityAlertEmailInput {
+  to: string;
+  title: string;
+  message: string;
+  settingsUrl: string;
+  idempotencyKey: string;
+}
+
+export async function sendSecurityAlertEmail(
+  input: SecurityAlertEmailInput,
+): Promise<SendEmailResult> {
+  const from = notificationsFromEmail();
+  if (!isNotificationEmailConfigured()) {
+    return {
+      delivered: false,
+      reason: 'not_configured',
+      detail: 'RESEND_API_KEY and AGI_NOTIFICATIONS_FROM_EMAIL are required',
+    };
+  }
+
+  const footer =
+    'Security alerts are sent even during quiet hours. You can stop the emails in Settings, Notifications; the alert still appears in the app.';
+  const result = await sendTransactionalEmail({
+    from,
+    to: input.to,
+    subject: input.title,
+    text: [input.message, '', `Review your account: ${input.settingsUrl}`, '', footer].join('\n'),
+    html: [
+      `<p>${escapeHtml(input.message)}</p>`,
+      `<p><a href="${escapeHtml(input.settingsUrl)}">Review your account</a></p>`,
+      `<p style="${TRANSACTIONAL_EMAIL_FOOTER_STYLE}">${escapeHtml(footer)}</p>`,
+    ].join(''),
+    idempotencyKey: input.idempotencyKey,
+  });
+
+  if (!result.delivered && result.reason !== 'not_configured') {
+    logger.warn({ reason: result.reason }, '[notifications] security alert email failed to send');
+  }
+  return result;
+}
