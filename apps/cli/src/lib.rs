@@ -1168,6 +1168,12 @@ enum ConnectorsSubcommand {
 enum ProjectsSubcommand {
     /// List the account's projects, refreshed from the account.
     List,
+    /// List the folders you worked in most recently, to start a session in one with agi -C.
+    Recent {
+        /// How many to list.
+        #[arg(long, default_value_t = 10)]
+        limit: usize,
+    },
     /// Create a project in the account.
     Create {
         /// Project name.
@@ -2378,6 +2384,45 @@ async fn handle_projects_command(
                 *json,
                 output,
             )
+        }
+        ProjectsSubcommand::Recent { limit } => {
+            let home = config::CliConfig::config_dir()?;
+            let registry = project_registry::ProjectRegistry::load(&home)?;
+            let linked = cloud::load_project_cache(&home);
+            let mut recent: Vec<(&String, &project_registry::ProjectEntry)> = registry
+                .projects
+                .iter()
+                .filter(|(path, _)| std::path::Path::new(path.as_str()).is_dir())
+                .collect();
+            recent.sort_by(|left, right| right.1.last_seen.cmp(&left.1.last_seen));
+            if recent.is_empty() {
+                println!("No recent project folders yet. Run agi inside a project to add it here.");
+                return Ok(());
+            }
+            println!("Recent project folders");
+            for (index, (path, entry)) in recent.iter().take(*limit).enumerate() {
+                let account = entry
+                    .cloud_project_id
+                    .as_deref()
+                    .and_then(|id| linked.find(id))
+                    .map(|project| {
+                        format!(
+                            "  linked to '{}'",
+                            terminal_text::sanitize_terminal_text(&project.name)
+                        )
+                    })
+                    .unwrap_or_default();
+                println!(
+                    "  {}. {}  last used {}{account}",
+                    index + 1,
+                    terminal_text::sanitize_terminal_text(path),
+                    terminal_text::sanitize_terminal_text(
+                        entry.last_seen.get(..10).unwrap_or(&entry.last_seen)
+                    )
+                );
+            }
+            println!("Start a session in one with: agi -C <folder>");
+            Ok(())
         }
         ProjectsSubcommand::List => {
             let cache = cloud::refresh_projects(privacy)
