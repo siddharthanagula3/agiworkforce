@@ -214,7 +214,11 @@ pub fn handle_shared_command(
         "/mobile" | "/ios" | "/android" => {
             ParityCommandResult::SystemMessage(render_companion("Mobile"))
         }
-        "/connectors" => ParityCommandResult::SystemMessage(connectors::render_policy()),
+        "/connectors" => ParityCommandResult::SystemMessage(format!(
+            "{}\n\n{}",
+            connectors::availability(session.privacy_mode),
+            connectors::render_policy()
+        )),
         "/install-github-app" => {
             ParityCommandResult::SystemMessage(render_install_app("GitHub"))
         }
@@ -1945,6 +1949,16 @@ pub mod connectors {
         };
         set_cached_policy(policy.clone());
         Ok(policy)
+    }
+
+    pub fn availability(privacy: PrivacyMode) -> String {
+        match privacy {
+            PrivacyMode::Managed => "Your account's connectors\n  Connectors you connected at https://agiworkforce.com/connectors, such as Google Drive, Slack and Notion, are offered to this session's turns. Each call asks first unless you allowed that tool there.".to_string(),
+            PrivacyMode::Byok | PrivacyMode::Local => format!(
+                "Your account's connectors\n  This {} session keeps your data out of AGI Workforce's cloud, so the connectors on your account are not offered to it. Use them from a Managed Cloud session, or add an MCP server here with agi mcp add.",
+                privacy.label()
+            ),
+        }
     }
 
     pub fn render_policy() -> String {

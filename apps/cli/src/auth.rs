@@ -987,6 +987,16 @@ const API_KEY_PROVIDERS: &[ApiKeyProvider] = &[
         label: "NVIDIA NIM",
         env_var: "NVIDIA_API_KEY",
     },
+    ApiKeyProvider {
+        id: "brave",
+        label: "Brave Search (web search)",
+        env_var: "BRAVE_SEARCH_API_KEY",
+    },
+    ApiKeyProvider {
+        id: "tavily",
+        label: "Tavily (web search)",
+        env_var: "TAVILY_API_KEY",
+    },
 ];
 
 fn normalize_api_key_provider_id(provider: &str) -> Option<&'static str> {
@@ -1004,6 +1014,8 @@ fn normalize_api_key_provider_id(provider: &str) -> Option<&'static str> {
         "ollama-cloud" | "ollama_cloud" | "ollamacloud" => Some("ollama-cloud"),
         "openrouter" | "open-router" | "open_router" => Some("openrouter"),
         "nvidia" | "nvidia-nim" | "nvidia_nim" | "nim" => Some("nvidia"),
+        "brave" | "brave-search" | "brave_search" => Some("brave"),
+        "tavily" => Some("tavily"),
         _ => None,
     }
 }
@@ -1066,7 +1078,7 @@ pub async fn interactive_login_for_provider(provider: Option<&str>) -> Result<()
                 interactive_api_key_login_for_provider(pid).await
             } else {
                 bail!(
-                    "Unknown provider '{}'. Available: agiworkforce, anthropic, openai, google, xai, deepseek, minimax, perplexity, qwen, moonshot, zhipu, ollama-cloud, openrouter, nvidia, copilot",
+                    "Unknown provider '{}'. Available: agiworkforce, anthropic, openai, google, xai, deepseek, minimax, perplexity, qwen, moonshot, zhipu, ollama-cloud, openrouter, nvidia, copilot, and brave or tavily for web search",
                     pid
                 )
             }
