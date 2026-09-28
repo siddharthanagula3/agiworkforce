@@ -42,21 +42,7 @@ Code: `infrastructure/sandbox/index.html:360-383`
 ## S96.21: Deployment history.
 
 - Done when: Each publication keeps a deployment history the owner can inspect.
-- Wave: 2
+- Wave: 3
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | published_artifact_versions records every publish and GET ?versionsOf= lists them, but no client ever calls the history or the restore. | mount |
-
-Code: `apps/web/app/api/artifacts/publish/route.ts:105-145`, `apps/web/app/api/artifacts/publish/route.ts:318-330`
-
-## S96.26: Unpublish/rollback controller.
-
-- Done when: A controller unpublishes a publication and restores earlier versions.
-- Wave: 2
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Unpublish is wired end to end (Settings, CLI, conversation deletion); the version-restore endpoint (PATCH /api/artifacts/publish) has no caller. | mount |
-
-Code: `apps/web/lib/services/published-artifact-service.ts:368-372`, `apps/web/lib/services/published-artifact-service.ts:386-392`, `apps/web/app/api/artifacts/publish/route.ts:318-330`

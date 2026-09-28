@@ -345,6 +345,7 @@ export type {
   RoutingProfileId,
   RoutingProfileWeights,
 } from './profiles';
+export { speedFirstSlots } from './speed-first-slots';
 export { applyTaskFamilyContinuity, decideTaskFamilyContinuity } from './task-family-continuity';
 export type {
   TaskFamilyContinuityAction,

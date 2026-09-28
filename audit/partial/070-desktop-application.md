@@ -28,17 +28,6 @@ Code: `apps/desktop/electron/quickAsk.ts:12-42`, `apps/desktop/electron/quickAsk
 
 Code: `apps/desktop/electron/main.ts:421-456`, `apps/desktop/electron/quickAsk.ts:35-35`
 
-## S70.12: Persistent folder access.
-
-- Done when: A folder the user approves stays approved across launches and can be reviewed and revoked.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| desktop | partial | Approved folders are saved and reused after relaunch, but in the Electron app no screen lists or revokes them: the Settings list (LocalAccessSection) renders only for the internal Tauri shell. | ui |
-
-Code: `apps/desktop/electron/runtime/workspaceStore.ts:56-70`, `apps/web/features/desktop-host/components/LocalFolderAttachDialog.tsx:225-229`, `apps/web/features/settings/sections/CapabilitiesSection.tsx:91-91`, `packages/contracts/local-runtime/src/host-bridge.ts:310-312`
-
 ## S70.13: Local filesystem search.
 
 - Done when: The user or assistant can search approved local folders by file name or content.
@@ -46,20 +35,9 @@ Code: `apps/desktop/electron/runtime/workspaceStore.ts:56-70`, `apps/web/feature
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| desktop | partial | The shell can glob and grep inside approved folders, but nothing calls it: there is no search box, and the assistant's device tools only list, read, write and run commands. | ui |
+| desktop | partial | The attach dialog now searches a granted folder by name and text; the assistant's device tools still cannot search (device_find_files and device_search_text land in the next p-electron batch). | handler |
 
-Code: `apps/desktop/electron/runtime/dispatcher.ts:736-747`, `packages/contracts/local-runtime/src/device-steps.ts:18-32`
-
-## S70.15: Local shell execution.
-
-- Done when: The user or assistant can run a program in an approved folder, with approval, sandboxing and streamed output.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| desktop | partial | Commands run after approval, but the prompt tells users to add a program to "the allowed list in Settings" and that list is not shown in the Electron app, so every command asks each time. | ui |
-
-Code: `apps/web/features/desktop-host/components/LocalCommandDialog.tsx:150-166`, `apps/desktop/electron/runtime/dispatcher.ts:748-763`, `apps/desktop/electron/runtime/dispatcher.ts:509-519`, `apps/web/features/settings/sections/CapabilitiesSection.tsx:91-91`
+Code: `apps/web/features/desktop-host/components/LocalFolderAttachDialog.tsx:367-367`, `apps/web/features/desktop-host/components/LocalFolderAttachDialog.tsx:167-167`, `apps/desktop/electron/runtime/filesystemService.ts:243-243`
 
 ## S70.16: Local agent daemon.
 
@@ -76,17 +54,6 @@ Code: `apps/web/features/desktop-host/components/LocalCommandDialog.tsx:150-166`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-
-## S70.21: Computer use.
-
-- Done when: The assistant can see the screen and move, click and type on the user's computer after permission, with stop and take-over.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| desktop | partial | Computer use works after a session grant, but stop and take-over exist only as the app-menu item 'Take Over Screen Control' (no shortcut or in-conversation control), and computer_stop, which also withdraws the grant, has no caller. | ui |
-
-Code: `apps/desktop/electron/appMenu.ts:115-116`, `apps/desktop/electron/runtime/dispatcher.ts:829-867`, `apps/web/features/desktop-host/lib/device-steps.ts:119-126`
 
 ## S70.25: Background-runtime controls.
 
@@ -109,14 +76,3 @@ Code: `apps/web/features/desktop-host/components/DesktopSettingsSection.tsx:215-
 | desktop | partial | The app checks for a new version daily and offers a link to download the installer, but never downloads or installs the update itself. | handler |
 
 Code: `apps/web/features/desktop-host/components/DesktopUpdateNotice.tsx:17-27`, `apps/desktop/electron/main.ts:562-570`
-
-## S70.31: OS-specific privacy settings.
-
-- Done when: The app shows which OS privacy permissions and in-app grants it holds, explains how to change them, and lets the user revoke grants.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| desktop | partial | "Always allow" answers are saved to disk with no screen to review or revoke them, and there is no view of which macOS permissions (screen, mic, accessibility) are granted; only a one-time Screen Recording explanation exists. | ui |
-
-Code: `apps/desktop/electron/screenshot.ts:35-49`, `apps/desktop/electron/runtime/permissionManager.ts:119-122`, `apps/desktop/electron/runtime/permissionManager.ts:302-306`
