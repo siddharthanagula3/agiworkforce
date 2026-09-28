@@ -74,6 +74,32 @@ pub fn process_writer(label: &str) -> &'static WriterIdentity {
     })
 }
 
+pub fn holder_summary(
+    lease: Option<&WriterLease>,
+    own: &WriterIdentity,
+    now: DateTime<Utc>,
+) -> String {
+    let at = |time: DateTime<Utc>| {
+        time.with_timezone(&chrono::Local)
+            .format("%H:%M")
+            .to_string()
+    };
+    match lease {
+        None => "no client right now; the next message sent from any client takes it".to_string(),
+        Some(lease) if lease.holder_id == own.id => format!(
+            "this terminal ({}), since {}",
+            lease.holder_label,
+            at(lease.acquired_at)
+        ),
+        Some(lease) if lease.is_stale(now) => format!(
+            "no client right now; {} stopped at {}",
+            lease.holder_label,
+            at(lease.renewed_at)
+        ),
+        Some(lease) => format!("{}, since {}", lease.holder_label, at(lease.acquired_at)),
+    }
+}
+
 pub fn lease_path(session_path: &Path) -> PathBuf {
     let mut path = session_path.as_os_str().to_os_string();
     path.push(".");
