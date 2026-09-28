@@ -65,6 +65,6 @@ Code: `apps/web/app/api/settings/organization/mcp/route.ts:132-142`, `apps/web/a
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | Versions can be put in review, published or suspended by hand, and packages get a static content scan, but no service runs quality or safety evaluations of an extension. | handler |
+| platform | partial | The package scan now covers every file of an uploaded plugin or skill with Pass, Warn (acknowledged) and Fail; organization-provisioned skills are scanned when org distribution lands (migration 0324, next batches) | handler |
 
-Code: `apps/web/lib/services/plugin-lifecycle.ts:371-376`, `apps/web/lib/services/plugin-lifecycle.ts:395-395`
+Code: `apps/web/lib/services/plugin-owned-source-service.ts:77-77`, `apps/web/lib/services/plugin-owned-source-service.ts:110-110`, `apps/web/lib/services/user-skill-service.ts:145-145`

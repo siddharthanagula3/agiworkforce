@@ -4,17 +4,28 @@ import { useEffect, useRef, useState } from 'react';
 import {
   ArrowRight,
   ArrowUp,
+  ChevronDown,
   ChevronLeft,
   Code2,
   ListChecks,
+  PanelsTopLeft,
   Square,
   TerminalSquare,
 } from '@agiworkforce/icons';
-import { Spinner } from '@agiworkforce/ui';
-import type {
-  DeveloperRuntimeModels,
-  LocalDeveloperSession,
-  DeveloperSessionGroup,
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+  Spinner,
+} from '@agiworkforce/ui';
+import {
+  DEVELOPER_AGENT_MODE_LABELS,
+  type DeveloperRuntimeModels,
+  type LocalDeveloperSession,
+  type DeveloperSessionGroup,
 } from '@agiworkforce/local-runtime-contract';
 import { openWorkspaceInEditor } from '@/features/desktop-host';
 import { toUserMessage } from '@/lib/user-error-message';
@@ -25,8 +36,11 @@ import {
   localSessionResumeCommand,
 } from '../code-surface';
 import {
+  LOCAL_AGENT_MODES,
+  LOCAL_AGENT_MODE_HINTS,
   LOCAL_CODE_COPY,
   LOCAL_FAILURE_ACTION_LABELS,
+  localAgentMode,
   localApprovalPrompts,
   localFailureAction,
   localModelChoices,
@@ -37,16 +51,22 @@ import {
   startingModelId,
   localTranscriptItems,
   localTurnIsRunning,
+  type LocalAgentMode,
   type LocalFailureAction,
 } from '../local-code';
 import { useLocalSession, type LocalSessionState } from '../hooks/use-local-session';
 import { useLocalTests } from '../hooks/use-local-tests';
+import { getModelMetadata } from '@shared/config/llm';
+import { UsageRing } from './CodeComposer';
+import { LocalChangesPanel } from './LocalChangesPanel';
+import { LocalExtensionsControl } from './LocalExtensionsControl';
 import { LocalModelChip } from './LocalModelChip';
 import { CodeTranscriptBody } from './CodeTranscript';
 import styles from '../CloudCodePage.module.css';
 
 const HEADER_GLYPH_SIZE = 16;
 const SEND_GLYPH_SIZE = 16;
+const MODE_GLYPH_SIZE = 14;
 const SUBMIT_KEY = 'Enter';
 
 export interface LocalSessionPanelProps {
@@ -58,6 +78,48 @@ export interface LocalSessionPanelProps {
   initialPrompt?: string;
   onPromptSent?: () => void;
   onClose: () => void;
+}
+
+function LocalModeControl({
+  mode,
+  disabled,
+  onChange,
+}: {
+  mode: LocalAgentMode;
+  disabled: boolean;
+  onChange: (mode: LocalAgentMode) => void;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className={`${styles['controlButton']} ${styles['controlButtonMode']}`}
+          aria-label={LOCAL_CODE_COPY.modeControl}
+          disabled={disabled}
+        >
+          <span>{DEVELOPER_AGENT_MODE_LABELS[mode]}</span>
+          <ChevronDown size={MODE_GLYPH_SIZE} aria-hidden="true" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" side="top" className="w-80">
+        <DropdownMenuLabel>{LOCAL_CODE_COPY.modeMenu}</DropdownMenuLabel>
+        <DropdownMenuRadioGroup
+          value={mode}
+          onValueChange={(value) => onChange(localAgentMode(value as LocalAgentMode))}
+        >
+          {LOCAL_AGENT_MODES.map((option) => (
+            <DropdownMenuRadioItem key={option} value={option}>
+              <span className={styles['menuRowLabel']}>
+                <span className={styles['optionLabel']}>{DEVELOPER_AGENT_MODE_LABELS[option]}</span>
+                <span className={styles['optionHint']}>{LOCAL_AGENT_MODE_HINTS[option]}</span>
+              </span>
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 }
 
 function FailureAction({
@@ -126,12 +188,15 @@ export function LocalSessionPanel({
   const tests = useLocalTests(session.rootId);
   const [editorError, setEditorError] = useState<string | null>(null);
   const [handoffOpen, setHandoffOpen] = useState(false);
+  const [changesOpen, setChangesOpen] = useState(false);
   const vsCodeHref = continueLocalSessionInVsCodeHref(session);
   const resumeCommand = localSessionResumeCommand(session.id);
   const testsRunning = tests.status === 'running';
   const [draft, setDraft] = useState('');
   const [focused, setFocused] = useState(false);
   const [model, setModel] = useState(session.model ?? '');
+  const [mode, setMode] = useState<LocalAgentMode | null>(null);
+  const activeMode = mode ?? localAgentMode(runtimeModels?.defaultAgentMode);
   const endRef = useRef<HTMLDivElement>(null);
   const choices = localModelChoices(runtimeModels, group.sessions);
   const setups = localProviderSetups(runtimeModels);
@@ -166,7 +231,7 @@ export function LocalSessionPanel({
     const text = draft.trim();
     if (text === '' || busy) return;
     setDraft('');
-    void state.send(text, model === '' || model === session.model ? undefined : model);
+    void state.send(text, model === '' || model === session.model ? undefined : model, activeMode);
   };
 
   return (
@@ -188,6 +253,17 @@ export function LocalSessionPanel({
           <span className={styles['headerChipText']}>{localSessionContext(session, group)}</span>
         </span>
         <div className={styles['headerActions']}>
+          <LocalExtensionsControl rootId={session.rootId} />
+          <button
+            type="button"
+            className={`${styles['headerButton']} ${changesOpen ? styles['headerButtonActive'] : ''}`}
+            aria-label={CODE_COPY.changes}
+            aria-pressed={changesOpen}
+            title={CODE_COPY.changes}
+            onClick={() => setChangesOpen((open) => !open)}
+          >
+            <PanelsTopLeft size={HEADER_GLYPH_SIZE} aria-hidden="true" />
+          </button>
           <button
             type="button"
             className={`${styles['headerButton']} ${testsRunning ? styles['headerButtonActive'] : ''}`}
@@ -402,8 +478,10 @@ export function LocalSessionPanel({
                   )}
                 </div>
 
-                {choices.length > 0 && (
-                  <div className={styles['controlRow']}>
+                <div className={styles['controlRow']}>
+                  <LocalModeControl mode={activeMode} disabled={busy} onChange={setMode} />
+                  <span className={styles['controlSpacer']} />
+                  {choices.length > 0 && (
                     <LocalModelChip
                       choices={choices}
                       setups={setups}
@@ -412,13 +490,24 @@ export function LocalSessionPanel({
                       disabled={busy}
                       onSelect={setModel}
                     />
-                    <span className={styles['controlSpacer']} />
-                  </div>
-                )}
+                  )}
+                  <UsageRing
+                    contextTokens={state.contextTokens}
+                    contextWindow={getModelMetadata(activeModel)?.contextWindow ?? null}
+                  />
+                </div>
               </div>
             </div>
           </div>
         </div>
+        {changesOpen && (
+          <LocalChangesPanel
+            rootId={session.rootId}
+            title={session.title}
+            refreshKey={state.messages.length}
+            onClose={() => setChangesOpen(false)}
+          />
+        )}
       </div>
     </>
   );

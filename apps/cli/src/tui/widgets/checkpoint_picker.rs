@@ -7,12 +7,15 @@ const VISIBLE_ROWS: usize = 10;
 const EMPTY: &str = "(no checkpoints yet: each prompt you send makes one)";
 const PICK_HINT: &str = "↑↓ choose a prompt   Enter pick   Esc close";
 const ACT_HINT: &str = "↑↓ choose   Enter apply   Esc back";
+const COMPACTED: &str =
+    "The conversation before this prompt was compacted or cleared, so only its code can come back.";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CheckpointEntry {
     pub steps: usize,
     pub label: String,
     pub tracked_files: usize,
+    pub conversation_available: bool,
 }
 
 enum Stage {
@@ -41,15 +44,16 @@ impl CheckpointPickerView {
     }
 
     fn actions_for(entry: &CheckpointEntry) -> Vec<(&'static str, &'static str)> {
-        if entry.tracked_files > 0 {
-            vec![
+        match (entry.conversation_available, entry.tracked_files > 0) {
+            (true, true) => vec![
                 ("Restore code and conversation", "both"),
                 ("Restore conversation", "conversation"),
                 ("Restore code", "code"),
                 ("Never mind", ""),
-            ]
-        } else {
-            vec![("Restore conversation", "conversation"), ("Never mind", "")]
+            ],
+            (true, false) => vec![("Restore conversation", "conversation"), ("Never mind", "")],
+            (false, true) => vec![("Restore code", "code"), ("Never mind", "")],
+            (false, false) => vec![("Never mind", "")],
         }
     }
 
@@ -103,6 +107,12 @@ impl InteractiveView for CheckpointPickerView {
                     &format!(" {}", entry.label),
                     POPUP_INNER_WIDTH,
                 )));
+                if !entry.conversation_available {
+                    out.push_str(&popup_row(&truncate_cols(
+                        &format!(" {COMPACTED}"),
+                        POPUP_INNER_WIDTH,
+                    )));
+                }
                 out.push_str(&popup_row(""));
                 for (row, (label, _)) in Self::actions_for(entry).iter().enumerate() {
                     let cursor = if row == self.actions.cursor() {

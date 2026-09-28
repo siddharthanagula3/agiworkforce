@@ -91,16 +91,16 @@ Code: `apps/web/lib/services/cloud-code-agent-service.ts:790-790`, `apps/web/lib
 
 - Done when: Every client shows the same task plan and the same checkpoints for the session.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | The agent keeps a todo plan and conversation checkpoints in its own process only; the app-server reports checkpoints:false, so no other client sees them. | handler |
 | vscode | partial | The webview shows plan updates for turns it runs, but plans and checkpoints are not shared with other clients (checkpoints:false). | handler |
 
-Code: `apps/cli/src/app_server/developer_host.rs:375-375`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:5091-5094`
+Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:5091-5094`
 
 ## S68.08: Same pending approvals.
 

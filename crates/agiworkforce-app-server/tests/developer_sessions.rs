@@ -160,6 +160,8 @@ impl DeveloperSessionHost for FakeHost {
             transcript_truncated: false,
             approvals: Vec::new(),
             file_changes: Vec::new(),
+            plan: Vec::new(),
+            todos: Vec::new(),
         })
     }
 
@@ -337,6 +339,7 @@ fn capabilities() -> AppServerCapabilities {
         prompt_commands: false,
         max_turns: false,
         memory: false,
+        plan: false,
     }
 }
 
@@ -1068,6 +1071,8 @@ impl DeveloperSessionHost for SurfaceHost {
             transcript_truncated: false,
             approvals: Vec::new(),
             file_changes: Vec::new(),
+            plan: Vec::new(),
+            todos: Vec::new(),
         })
     }
 
@@ -1829,6 +1834,8 @@ impl DeveloperSessionHost for HandoffHost {
             transcript_truncated: false,
             approvals: Vec::new(),
             file_changes: Vec::new(),
+            plan: Vec::new(),
+            todos: Vec::new(),
         })
     }
 
