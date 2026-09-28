@@ -329,14 +329,11 @@ Code: `apps/cli/src/models/streaming.rs:226-235`, `apps/web/lib/server/user-iden
 
 - Done when: For each project the user can choose which of their personal preferences and instructions apply there.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Project switches (migration 0310) and the preamble builder are done; request-processor.ts must pass the conversation's projectId to buildCustomInstructionsPreamble (spec sent to p-chat-gates). | handler |
-| desktop | partial | Project switches (migration 0310) and the preamble builder are done; request-processor.ts must pass the conversation's projectId to buildCustomInstructionsPreamble (spec sent to p-chat-gates). | handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/projects/components/ProjectSettingsDialog.tsx:263-263`, `apps/web/lib/server/user-identity.ts:259-259`
