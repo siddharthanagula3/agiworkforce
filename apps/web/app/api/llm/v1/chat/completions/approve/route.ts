@@ -20,7 +20,7 @@ import { logger } from '@/lib/logger';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { runAuthGate, type AuthGateSuccess } from '../lib/auth-gate';
-import { withManagedTurnSlot } from '../lib/turn-slot';
+import { withManagedTurnSlot, type ManagedTurnSlotHold } from '../lib/turn-slot';
 import { processRequest, type ProcessedRequest } from '../lib/request-processor';
 import { loadMcpToolDefs } from '../lib/tool-loop';
 import { connectorsAllowedForTurn } from '@/lib/connectors/connector-capability';
@@ -129,7 +129,11 @@ function checkpointError(error: unknown): NextResponse | null {
   return null;
 }
 
-async function handleToolApproval(request: NextRequest, authResult: AuthGateSuccess) {
+async function handleToolApproval(
+  request: NextRequest,
+  authResult: AuthGateSuccess,
+  slotHold: ManagedTurnSlotHold,
+) {
   const { userId, subscription } = authResult;
 
   const isFreeTierRequest =
@@ -461,14 +465,14 @@ async function handleToolApproval(request: NextRequest, authResult: AuthGateSucc
 
   if (resumeFields.detached && turn.transport === 'inline') {
     const [clientBranch, serverBranch] = body.tee();
-    after(() =>
-      serverBranch.pipeTo(new WritableStream()).catch((error: unknown) => {
-        logger.warn(
-          { error, userId, runId: claim.checkpoint.runId },
-          'Detached approval resume stream ended with an error',
-        );
-      }),
-    );
+    const drained = serverBranch.pipeTo(new WritableStream()).catch((error: unknown) => {
+      logger.warn(
+        { error, userId, runId: claim.checkpoint.runId },
+        'Detached approval resume stream ended with an error',
+      );
+    });
+    slotHold.holdUntil(drained);
+    after(() => drained);
     return new NextResponse(withSseHeartbeat(clientBranch), { headers: streamHeaders });
   }
   return new NextResponse(withSseHeartbeat(body), { headers: streamHeaders });
@@ -480,7 +484,7 @@ async function admitAndDispatchApproval(request: NextRequest): Promise<NextRespo
 
   return withManagedTurnSlot(
     { userId: authResult.userId, planTier: authResult.subscription.plan_tier },
-    () => handleToolApproval(request, authResult),
+    (slotHold) => handleToolApproval(request, authResult, slotHold),
   );
 }
 
