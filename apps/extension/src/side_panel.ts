@@ -2136,14 +2136,17 @@ function injectStyles(): void {
       margin: 4px 0;
     }
     .sp-bubble-assistant li { margin: 2px 0; }
-    .sp-bubble-assistant h1, .sp-bubble-assistant h2, .sp-bubble-assistant h3 {
+    .sp-bubble-assistant li > ul, .sp-bubble-assistant li > ol { margin: 2px 0; }
+    .sp-bubble-assistant h1, .sp-bubble-assistant h2, .sp-bubble-assistant h3,
+    .sp-bubble-assistant h4, .sp-bubble-assistant h5, .sp-bubble-assistant h6 {
       font-weight: 600;
       color: var(--agi-ext-text);
       margin: 6px 0 3px;
     }
     .sp-bubble-assistant h1 { font-size: var(--type-title-size); line-height: var(--type-title-height); }
     .sp-bubble-assistant h2 { font-size: var(--type-body-large-size); line-height: var(--type-body-large-height); }
-    .sp-bubble-assistant h3 { font-size: var(--type-body-size); line-height: var(--type-body-height); }
+    .sp-bubble-assistant h3, .sp-bubble-assistant h4 { font-size: var(--type-body-size); line-height: var(--type-body-height); }
+    .sp-bubble-assistant h5, .sp-bubble-assistant h6 { font-size: var(--type-label-size); line-height: var(--type-label-height); }
     .sp-bubble-assistant blockquote {
       border-left: 3px solid var(--agi-ext-accent);
       padding-left: 8px;

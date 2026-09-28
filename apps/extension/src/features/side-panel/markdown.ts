@@ -1,4 +1,5 @@
 import DOMPurify from 'dompurify';
+import markdownit from 'markdown-it';
 import { closeUnterminatedCodeFence } from '@agiworkforce/utils/markdown-source';
 
 let domPurifyHookInstalled = false;
@@ -7,14 +8,8 @@ export function ensureDomPurifyHook(): void {
   if (domPurifyHookInstalled) return;
   DOMPurify.addHook('afterSanitizeAttributes', (node) => {
     if (!(node instanceof HTMLAnchorElement)) return;
-    const hasTarget = node.hasAttribute('target');
-    if (!hasTarget) return;
-    const existing = (node.getAttribute('rel') ?? '').toLowerCase().split(/\s+/);
-    const required = ['noopener', 'noreferrer'];
-    for (const flag of required) {
-      if (!existing.includes(flag)) existing.push(flag);
-    }
-    node.setAttribute('rel', existing.filter(Boolean).join(' '));
+    node.setAttribute('target', '_blank');
+    node.setAttribute('rel', 'noopener noreferrer');
   });
   domPurifyHookInstalled = true;
 }
@@ -52,10 +47,12 @@ export function sanitizeHtml(dirty: string): string {
       'sup',
       'sub',
       'del',
+      's',
       'ins',
       'mark',
     ],
-    ALLOWED_ATTR: ['href', 'target', 'rel', 'title', 'colspan', 'rowspan'],
+    ALLOWED_ATTR: ['href', 'target', 'rel', 'title', 'colspan', 'rowspan', 'start'],
+    ADD_URI_SAFE_ATTR: ['colspan', 'rowspan', 'start'],
     FORBID_TAGS: [
       'script',
       'style',
@@ -85,115 +82,60 @@ export function sanitizeHtml(dirty: string): string {
   });
 }
 
-const TABLE_DELIMITER = /^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)*\|?\s*$/;
+const SAFE_HREF = /^(?:https?|mailto):/i;
 
-function tableCells(row: string): string[] {
-  let trimmed = row.trim();
-  if (trimmed.startsWith('|')) trimmed = trimmed.slice(1);
-  if (trimmed.endsWith('|')) trimmed = trimmed.slice(0, -1);
-  return trimmed.split('|').map((cell) => cell.trim());
-}
+const md = markdownit({
+  html: false,
+  linkify: true,
+  breaks: true,
+  typographer: false,
+});
 
-function renderTableBlocks(text: string): string {
-  const lines = text.split('\n');
-  const out: string[] = [];
-  let index = 0;
-  while (index < lines.length) {
-    const header = lines[index] ?? '';
-    const delimiter = lines[index + 1];
-    const headCells = tableCells(header);
-    if (
-      header.includes('|') &&
-      delimiter !== undefined &&
-      TABLE_DELIMITER.test(delimiter) &&
-      tableCells(delimiter).length === headCells.length
-    ) {
-      const rows: string[][] = [];
-      index += 2;
-      while (index < lines.length && (lines[index] ?? '').includes('|')) {
-        rows.push(tableCells(lines[index] ?? ''));
-        index += 1;
+md.validateLink = () => true;
+
+md.core.ruler.push('side_panel_links', (state) => {
+  for (const block of state.tokens) {
+    if (block.type !== 'inline' || !block.children) continue;
+    let droppedLink = false;
+    block.children = block.children.filter((token) => {
+      if (token.type === 'link_close' && droppedLink) {
+        droppedLink = false;
+        return false;
       }
-      const head = `<thead><tr>${headCells.map((cell) => `<th>${cell}</th>`).join('')}</tr></thead>`;
-      const body = rows.length
-        ? `<tbody>${rows
-            .map(
-              (row) =>
-                `<tr>${headCells.map((_cell, column) => `<td>${row[column] ?? ''}</td>`).join('')}</tr>`,
-            )
-            .join('')}</tbody>`
-        : '';
-      out.push('', `<table>${head}${body}</table>`, '');
-      continue;
-    }
-    out.push(header);
-    index += 1;
+      if (token.type !== 'link_open') return true;
+      const href = String(token.attrGet('href') ?? '');
+      if (!href) {
+        droppedLink = true;
+        return false;
+      }
+      token.attrSet('href', SAFE_HREF.test(href) ? href.replace(/'/g, '%27') : '#');
+      token.attrSet('target', '_blank');
+      token.attrSet('rel', 'noopener noreferrer');
+      return true;
+    });
   }
-  return out.join('\n');
-}
+});
 
-function renderTables(html: string): string {
-  return html
-    .split(/(<pre><code>[\s\S]*?<\/code><\/pre>)/)
-    .map((segment, position) => (position % 2 === 1 ? segment : renderTableBlocks(segment)))
-    .join('');
-}
+const escapeText = (text: string): string => md.utils.escapeHtml(text).replace(/'/g, '&#39;');
+
+md.renderer.rules['text'] = (tokens, index) => escapeText(tokens[index]?.content ?? '');
+
+const renderCode = (content: string): string =>
+  `<pre><code>${escapeText(content.replace(/\n$/, ''))}</code></pre>\n`;
+
+md.renderer.rules['fence'] = (tokens, index) => renderCode(tokens[index]?.content ?? '');
+
+md.renderer.rules['code_block'] = (tokens, index) => renderCode(tokens[index]?.content ?? '');
+
+md.renderer.rules['image'] = (tokens, index) => {
+  const token = tokens[index];
+  if (!token) return '';
+  const src = String(token.attrGet('src') ?? '');
+  const label = escapeText(token.content || src);
+  if (!SAFE_HREF.test(src)) return label;
+  return `<a href="${md.utils.escapeHtml(src)}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+};
 
 export function renderMarkdown(text: string): string {
-  let html = closeUnterminatedCodeFence(text)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-
-  html = html.replace(/```([^\n]*)\n?([\s\S]*?)```/g, (_m, _info, code: string) => {
-    return `<pre><code>${code.trimEnd()}</code></pre>`;
-  });
-
-  html = html.replace(/`([^`\n]+)`/g, '<code>$1</code>');
-
-  html = html.replace(/^ {0,3}### (.+)$/gm, '<h3>$1</h3>');
-  html = html.replace(/^ {0,3}## (.+)$/gm, '<h2>$1</h2>');
-  html = html.replace(/^ {0,3}# (.+)$/gm, '<h1>$1</h1>');
-
-  html = html.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
-
-  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-  html = html.replace(/__(.+?)__/g, '<strong>$1</strong>');
-
-  html = html.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>');
-  html = html.replace(/(?<!_)_(?!_)(.+?)(?<!_)_(?!_)/g, '<em>$1</em>');
-
-  html = html.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
-
-  html = html.replace(/^---+$/gm, '<hr>');
-
-  html = html.replace(/^[*-] (.+)$/gm, '<li>$1</li>');
-  html = html.replace(/(<li>[\s\S]*?<\/li>)(\n(?!<li>)|$)/g, '<ul>$1</ul>$2');
-
-  html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
-  html = html.replace(
-    /\[([^\]]+)\]\(((?:[^()]|\([^()]*\))+)\)/g,
-    (_match: string, text: string, url: string) => {
-      const rawUrl = url.trim();
-      const safeUrl = /^https?:\/\//i.test(rawUrl) ? rawUrl : '#';
-      // & < > are already entity-escaped by the first pass; only quotes can still break the attribute.
-      const encodedHref = safeUrl.replace(/"/g, '%22').replace(/'/g, '%27');
-      const encodedText = text.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-      return `<a href="${encodedHref}" target="_blank" rel="noopener noreferrer">${encodedText}</a>`;
-    },
-  );
-
-  html = renderTables(html);
-
-  html = html
-    .split(/\n{2,}/)
-    .map((block) => {
-      const trimmed = block.trim();
-      if (!trimmed) return '';
-      if (/^<(h[1-6]|ul|ol|li|pre|blockquote|hr|table)/.test(trimmed)) return trimmed;
-      return `<p>${trimmed.replace(/\n/g, '<br>')}</p>`;
-    })
-    .join('\n');
-
-  return html;
+  return md.render(closeUnterminatedCodeFence(text));
 }
