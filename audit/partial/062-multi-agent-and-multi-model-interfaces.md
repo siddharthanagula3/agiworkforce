@@ -129,18 +129,6 @@ Code: `apps/mobile/src/features/compare/index.tsx:575-589`, `apps/mobile/src/fea
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 
-## S62.12: Full-transcript drill-down.
-
-- Done when: From an overview the user can drill into the full transcript of a task.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | VS Code shows steps, errors and outputs natively but opens the full transcript only on the web. | surface-only |
-
-Code: `apps/extension-vscode/src/features/cloud-tasks/cloudRunDetail.ts:124-128`, `apps/extension-vscode/src/features/cloud-tasks/cloudRunDetail.ts:150-180`
-
 ## S62.14: Agent handoff.
 
 - Done when: Work can be handed from one agent to another, and the receiving agent continues it.

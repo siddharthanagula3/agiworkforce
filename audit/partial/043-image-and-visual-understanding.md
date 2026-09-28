@@ -182,7 +182,6 @@ Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:70-74`, `
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | Images are always resized to fit before sending; there is no high-detail option. | ui |
-| vscode | partial | The local app-server resizes local images to fit; no detail choice in the webview. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/cli/src/lib.rs:4695-4703`, `apps/cli/src/tui/tui_app.rs:3703-3710`, `apps/cli/src/app_server/developer_host.rs:855-861`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:4962-4967`
+Code: `apps/cli/src/lib.rs:4695-4703`, `apps/cli/src/tui/tui_app.rs:3703-3710`

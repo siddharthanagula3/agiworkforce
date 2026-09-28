@@ -10,17 +10,16 @@ nothing is left.
 
 - Done when: The user can view and edit their account profile (name, photo, email) on the surface, and the change is saved to the account.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | partials/auth 68949fe36: the Full Name field now saves to the account display name through PATCH /api/me; there is still no profile photo upload on mobile | ui |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | VS Code shows the signed-in name and email read-only in the account picker; changing name or photo requires the web app and there is no link to the profile page. | ui |
 | chrome | partial | The side panel shows the signed-in name, email and initials read-only; name and photo can only be changed on the web, and Chrome has no link to that page. | ui |
 | api | partial | GET /api/me (documented) returns the profile; updating the name or photo (PATCH /api/me) works for signed-in clients but is not part of the documented public API. | api |
 
-Code: `apps/mobile/src/features/settings/personalization/index.tsx:334-334`, `apps/extension-vscode/src/features/account-auth/accountPresentation.ts:42-57`, `apps/extension/src/side_panel.ts:8320-8325`, `apps/extension/src/features/cloud-bridge/clerkAuth.ts:215-228`
+Code: `apps/mobile/src/features/settings/personalization/index.tsx:334-334`, `apps/extension/src/side_panel.ts:8320-8325`, `apps/extension/src/features/cloud-bridge/clerkAuth.ts:215-228`, `apps/web/app/api/me/route.ts:347-347`
 
 ## S85.02: Custom instructions.
 
