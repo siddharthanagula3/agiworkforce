@@ -22,17 +22,23 @@
 
 import 'server-only';
 
-import { creditsFromMicrousd, type ResearchStep } from '@agiworkforce/types';
+import {
+  creditsFromMicrousd,
+  isPausedResearchReport,
+  type ResearchRunConfig,
+  type ResearchStep,
+} from '@agiworkforce/types';
 import type { PersistedResearchReport } from '@/lib/services/research-report-service';
 
 /** The `MessageResearchState` fields a reloaded run can be rebuilt from. */
 export interface PersistedTurnResearch {
-  phase: 'complete' | 'error' | 'interrupted';
+  phase: 'complete' | 'error' | 'interrupted' | 'paused';
   sources: number;
   steps?: ResearchStep[];
   elapsedMs?: number;
   credits?: number;
   error?: string;
+  runConfig?: ResearchRunConfig;
 }
 
 /** Well past the step count a bounded run plans, and still a bound on the row. */
@@ -45,6 +51,7 @@ export const MAX_PERSISTED_TURN_RESEARCH_STEPS = 50;
  */
 function phaseOf(report: PersistedResearchReport): PersistedTurnResearch['phase'] {
   if (report.status === 'completed') return 'complete';
+  if (isPausedResearchReport(report)) return 'paused';
   if (report.status === 'interrupted') return 'interrupted';
   return 'error';
 }
@@ -67,5 +74,8 @@ export function buildPersistedTurnResearch(
     research.credits = creditsFromMicrousd(Math.max(0, settledCostMicrousd));
   }
   if (report.error) research.error = report.error;
+  if (report.deliverable && report.sourceSelection) {
+    research.runConfig = { sources: report.sourceSelection, deliverable: report.deliverable };
+  }
   return research;
 }
