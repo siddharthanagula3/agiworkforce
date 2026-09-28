@@ -440,7 +440,9 @@
     "videoModeAttachments_one": "视频生成仅使用您的提示词。附加的文件不会发送给视频模型。如果您想将此文件发送给聊天模型，请先退出视频模式。",
     "videoModeAttachments_other": "视频生成仅使用您的提示词。附加的文件不会发送给视频模型。如果您想将此文件发送给聊天模型，请先退出视频模式。",
     "viewSources_one": "查看 {{count}} 个来源",
-    "viewSources_other": "查看 {{count}} 个来源"
+    "viewSources_other": "查看 {{count}} 个来源",
+    "folderFilesLeftOut_one": "{{folder}} 中有 {{count}} 个文件未附加。请从本地文件夹附加。",
+    "folderFilesLeftOut_other": "{{folder}} 中有 {{count}} 个文件未附加。请从本地文件夹附加。"
   },
   "markdownTable": {
     "label": "表格",

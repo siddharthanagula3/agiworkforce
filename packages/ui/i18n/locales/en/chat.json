@@ -440,7 +440,9 @@
     "discardedReplies_one": "The reply below it is deleted and cannot be recovered.",
     "discardedReplies_other": "The {{count}} messages below it are deleted and cannot be recovered.",
     "citationSources_one": "Source {{indices}}: {{sites}}",
-    "citationSources_other": "Sources {{indices}}: {{sites}}"
+    "citationSources_other": "Sources {{indices}}: {{sites}}",
+    "folderFilesLeftOut_one": "{{count}} file in {{folder}} was not attached. Attach it from a local folder.",
+    "folderFilesLeftOut_other": "{{count}} files in {{folder}} were not attached. Attach them from a local folder."
   },
   "markdownTable": {
     "label": "Table",
