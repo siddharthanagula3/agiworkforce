@@ -10,9 +10,10 @@ use agiworkforce_protocol::developer_session::{
     PluginSetEnabledParams, ProtocolVersionUnsupportedData, SettingsReadResponse,
     SettingsWriteParams, SkillConsentParams, SkillConsentResponse, SkillListResponse,
     SkillSetEnabledParams, SlashCommandListResponse, SlashCommandRunParams,
-    SlashCommandRunResponse, ThreadForkParams, ThreadHandoffAcceptParams, ThreadHandoffParams,
-    ThreadIdParams, ThreadListParams, ThreadListResponse, ThreadReadResponse,
-    ThreadReconnectResponse, ThreadSearchParams, ThreadSearchResponse, ThreadStartParams,
+    SlashCommandRunResponse, ThreadCheckpointsResponse, ThreadForkParams,
+    ThreadHandoffAcceptParams, ThreadHandoffParams, ThreadIdParams, ThreadListParams,
+    ThreadListResponse, ThreadReadResponse, ThreadReconnectResponse, ThreadRewindParams,
+    ThreadRewindResponse, ThreadSearchParams, ThreadSearchResponse, ThreadStartParams,
     ThreadStartResponse, ThreadSummary, ThreadWriterConflictData, TurnInterruptParams,
     TurnStartParams, TurnStartResponse, TurnSteerParams, TurnSummary,
     LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION, MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION,
@@ -122,6 +123,20 @@ pub trait DeveloperSessionHost: Send + Sync {
         _params: ThreadSearchParams,
     ) -> Result<ThreadSearchResponse, DeveloperSessionHostError> {
         Err(unsupported(method::THREAD_SEARCH))
+    }
+
+    async fn list_checkpoints(
+        &self,
+        _params: ThreadIdParams,
+    ) -> Result<ThreadCheckpointsResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::THREAD_CHECKPOINTS))
+    }
+
+    async fn rewind_thread(
+        &self,
+        _params: ThreadRewindParams,
+    ) -> Result<ThreadRewindResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::THREAD_REWIND))
     }
 
     /// Remove a thread and everything persisted with it. Irreversible, so a
@@ -584,6 +599,26 @@ impl DeveloperSessionProcessor {
                 };
                 self.host
                     .search_threads(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::THREAD_CHECKPOINTS => {
+                let params = match parse_params::<ThreadIdParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .list_checkpoints(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::THREAD_REWIND => {
+                let params = match parse_params::<ThreadRewindParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .rewind_thread(params)
                     .await
                     .map(serde_json::to_value)
             }
