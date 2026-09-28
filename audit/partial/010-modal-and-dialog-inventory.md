@@ -181,14 +181,13 @@ Code: `apps/extension/src/side_panel.ts:9843-9867`, `apps/extension/src/side_pan
 
 - Done when: An expired connection offers a reconnect dialog that re-runs authorization and keeps its settings.
 - Wave: 3
-- Already works on: mobile, cli
+- Already works on: desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Same as S55.20: detail offers Connect on an expired connection; browser verification against a real expired grant is still owed. | states |
-| desktop | partial | Settings marks an expired connector "Needs to be reconnected" but offers only Disconnect (which deletes its saved tool permissions); Reconnect exists only as the in-chat card after a tool call fails. | ui |
+| web | partial | partials/mcp-web 7eb7ec7c1: an expired connection's detail now offers Reconnect beside Disconnect, with a note that reconnecting signs in again and keeps its settings and tool permissions; a connector that is only not responding is not offered it. Still owed: a browser pass against a real expired grant. | states |
 
-Code: `packages/ui/ui/src/settings-modal/SettingsModal.tsx:281-281`, `apps/web/features/connectors/hooks/use-connectors-settings-adapter.tsx:513-518`, `packages/ui/ui/src/directory/ConnectorDetailView.tsx:295-298`, `apps/web/features/chat/components/messages/ToolTimeline.tsx:466-470`
+Code: `packages/ui/ui/src/directory/ConnectorDetailView.tsx:251-251`, `apps/web/features/directory/services/connectors-directory.ts:664-664`, `apps/web/features/directory/hooks/useDirectoryAdapter.ts:1101-1101`
 
 ## S10.21: Install Plugin.
 
@@ -360,7 +359,7 @@ Code: `apps/extension-vscode/src/core/outboundContentGuard.ts:10-10`, `apps/exte
 
 - Done when: A pairing dialog links a phone or another device to this machine by code or QR, bound to the signed-in account.
 - Wave: 3
-- Already works on: desktop
+- Already works on: desktop, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |

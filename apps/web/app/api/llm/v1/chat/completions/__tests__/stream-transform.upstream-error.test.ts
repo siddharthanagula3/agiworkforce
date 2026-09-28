@@ -154,7 +154,10 @@ describe('buildAdapterStreamResponse · upstream error copy', () => {
     expect(events.at(-1).choices[0].finish_reason).toBe('error');
     expect(markProviderDegraded).toHaveBeenCalledWith('anthropic', 'billing_exhausted');
     expect(finalizeManagedUsageRequest).toHaveBeenCalledWith(
-      expect.objectContaining({ outcome: 'failed' }),
+      expect.objectContaining({
+        outcome: 'failed',
+        attempt: { outcome: 'failed', errorClass: 'provider_billing_exhausted' },
+      }),
     );
   });
 
