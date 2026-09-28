@@ -100,7 +100,10 @@
     "noArchived": "لا توجد محادثات مؤرشفة",
     "noConversations": "لا توجد محادثات بعد",
     "showActive": "العودة إلى المحادثات النشطة",
-    "showArchived": "عرض المحادثات المؤرشفة ({{count}})"
+    "showArchived": "عرض المحادثات المؤرشفة ({{count}})",
+    "archivedToast": "تمت أرشفة المحادثة",
+    "archivedUndo": "تراجع",
+    "archivedView": "عرض المؤرشفة"
   },
   "emptyChat": {
     "neutralHeadline": "كيف يمكنني مساعدتك اليوم؟",

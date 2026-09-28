@@ -100,7 +100,10 @@
     "noArchived": "कोई संग्रहित चैट नहीं",
     "noConversations": "अभी कोई बातचीत नहीं",
     "showActive": "सक्रिय चैट पर लौटें",
-    "showArchived": "संग्रहित चैट दिखाएँ ({{count}})"
+    "showArchived": "संग्रहित चैट दिखाएँ ({{count}})",
+    "archivedToast": "चैट संग्रहित की गई",
+    "archivedUndo": "पूर्ववत करें",
+    "archivedView": "संग्रहित देखें"
   },
   "emptyChat": {
     "neutralHeadline": "आज मैं आपकी क्या मदद कर सकता हूँ?",

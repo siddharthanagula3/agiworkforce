@@ -128,12 +128,14 @@ export interface StreamingMarkdownContentProps {
   content: string;
   isStreaming?: boolean;
   citations?: readonly MarkdownCitation[];
+  announce?: boolean;
 }
 
 function StreamingMarkdownContentImpl({
   content,
   isStreaming = true,
   citations,
+  announce = true,
 }: StreamingMarkdownContentProps) {
   const splitterRef = useRef<MarkdownBlockSplitter | null>(null);
   const singleUnitFromRef = useRef<string | null>(null);
@@ -170,8 +172,8 @@ function StreamingMarkdownContentImpl({
 
   const tail = isStreaming ? completeInlineTokens(holdIncompleteGfmTable(view.tail)) : view.tail;
 
-  return (
-    <StreamAnnouncer text={content} isStreaming={isStreaming}>
+  const body = (
+    <>
       {view.settled.map((block) => (
         <React.Fragment key={block.key}>
           <MarkdownContent
@@ -190,7 +192,15 @@ function StreamingMarkdownContentImpl({
         citations={citations}
         linkifyNumericCitations={!isStreaming}
       />
+    </>
+  );
+
+  return announce ? (
+    <StreamAnnouncer text={content} isStreaming={isStreaming}>
+      {body}
     </StreamAnnouncer>
+  ) : (
+    body
   );
 }
 
