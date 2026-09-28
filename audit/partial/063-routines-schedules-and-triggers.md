@@ -10,16 +10,15 @@ nothing is left.
 
 - Done when: A browsable gallery of ready-made routines the user can start from at any time.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Templates show only while the account has no schedules; add a gallery that stays reachable once a schedule exists. | states |
-| desktop | partial | Templates show only while the account has no schedules; add a gallery that stays reachable once a schedule exists. | states |
-| mobile | partial | Templates appear only in the empty state; once any schedule exists there is no way back to them. | states |
+| mobile | partial | Codex holds apps/mobile/app/(app)/schedules/index.tsx; the templates entry point goes in with group 8 as a post-codex patch | states |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/schedules/components/SchedulesPage.tsx:742-742`, `apps/web/features/schedules/components/SchedulesPage.tsx:771-771`, `apps/web/features/schedules/components/SchedulesPage.tsx:321-321`, `apps/mobile/app/(app)/schedules/index.tsx:283-283`
+Code: `apps/mobile/app/(app)/schedules/index.tsx:420-420`
 
 ## S63.03: Create routine from a completed task.
 
@@ -176,17 +175,6 @@ Code: `apps/cli/src/features/hooks/hooks.rs:484-484`, `apps/cli/src/lib.rs:360-3
 
 Code: `apps/cli/src/features/hooks/hooks.rs:476-476`, `apps/cli/src/daemon.rs:675-675`, `apps/cli/src/lib.rs:360-360`
 
-## S63.18: API trigger.
-
-- Done when: A documented, token-authenticated API call starts a routine run.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| api | partial | Migration 0284 is now applied in production (2026-09-27). Still open: POST /api/schedules/{id}/runs with an Idempotency-Key works with bearer tokens but is not in openapi.json, and every run fails before the model call, because the executor writes a context manifest with nine columns that exist only in pending migration 0284. | api |
-
-Code: `apps/web/app/api/schedules/[id]/runs/route.ts:74-74`, `apps/web/app/api/schedules/[id]/runs/route.ts:94-94`, `apps/web/lib/services/scheduled-agent-executor.ts:593-593`
-
 ## S63.19: Manual run.
 
 - Done when: A "Run now" control starts the routine immediately and the run completes with a result.
@@ -277,16 +265,13 @@ Code: `apps/extension/src/side_panel.ts:10628-10628`, `apps/extension/src/featur
 
 - Done when: A routine (or its template) can be shared so another person can create their own copy.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | "Share" only copies a link to the sharer's own Schedules page; no endpoint shares a routine or template, so a recipient gets nothing to copy. | handler, api |
-| desktop | partial | "Share" only copies a link to the sharer's own Schedules page; no endpoint shares a routine or template, so a recipient gets nothing to copy. | handler, api |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/schedules/components/ScheduleCard.tsx:356-356`, `apps/web/features/schedules/components/SchedulesPage.tsx:550-550`
 
 ## S63.30: Notification preferences.
 
@@ -313,14 +298,13 @@ Code: `apps/web/features/schedules/components/ScheduleCard.tsx:356-356`, `apps/w
 
 - Done when: When a scheduled occurrence is missed or skipped, the run history says so and why.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Migration 0284 is now applied in production (2026-09-27). Still open: Skipped occurrences are recorded with a reason; with the default "run late" policy the late note rides only on a successful result, and every run fails before the model call, because the executor writes a context manifest with nine columns that exist only in pending migration 0284. | states |
-| desktop | partial | Migration 0284 is now applied in production (2026-09-27). Still open: Skipped occurrences are recorded with a reason; with the default "run late" policy the late note rides only on a successful result, and every run fails before the model call, because the executor writes a context manifest with nine columns that exist only in pending migration 0284. | states |
 | mobile | partial | Migration 0284 is now applied in production (2026-09-27). Still open: Skip reasons show as the run error; late-run notes never appear and runs fail until pending migration 0284 ships. | states |
 | cli | partial | Migration 0284 is now applied in production (2026-09-27). Still open: `agi schedules runs` prints skip reasons as the error; late-run notes are dropped and runs fail until pending migration 0284 ships. | states |
-| vscode | partial | Migration 0284 is now applied in production (2026-09-27). Still open: The runs quick pick shows skip reasons as the error; late-run notes never appear and runs fail until pending migration 0284 ships. | states |
+| vscode | partial | patch /private/tmp/claude-501/-Users-siddhartha-Desktop-agiworkforce/8f9d3a7a-39dd-4667-8b02-4d9e6e44cf4c/scratchpad/outside-set/p-routines-voice-S63.33-vscode.patch (p-sessions owns apps/extension-vscode) | states |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/schedules/components/ScheduleForm.tsx:533-533`, `apps/web/lib/services/schedule-service.ts:1596-1596`, `apps/web/features/schedules/components/ScheduleRunHistory.tsx:104-104`, `apps/web/lib/services/scheduled-agent-executor.ts:593-593`
+Code: `apps/mobile/src/features/schedules/components/ScheduleRunHistory.tsx:108-108`, `apps/cli/src/schedules.rs:371-371`, `apps/cli/src/lib.rs:2209-2209`, `apps/extension-vscode/src/features/schedules/schedulePresentation.ts:134-134`
