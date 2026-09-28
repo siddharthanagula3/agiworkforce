@@ -1,0 +1,1071 @@
+{
+  "key": "agentPermissions",
+  "route": "/agent-permissions",
+  "date": "2026-09-02",
+  "replacedOn": "2026-09-22",
+  "commit": "35750106cec1f72867a5086ecd53d173d17ba56c",
+  "committedAt": "2026-09-23T19:15:19-07:00",
+  "title": "What the agent may do, and what it must ask.",
+  "blocks": [
+    {
+      "type": "eyebrow",
+      "content": [
+        {
+          "text": "Approvals"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 1,
+      "anchor": "agi-perm-title",
+      "content": [
+        {
+          "text": "What the agent may do, and what it must ask."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "The exact default authority of the agent on each surface, the limits of the protections we ship, the connector scopes actually requested today, and every way to take access back. "
+        },
+        {
+          "text": "Some of this is less flattering than a marketing page would write it. That is the point. You cannot review a permission model you have to infer.",
+          "strong": true
+        },
+        {
+          "text": " The rules that govern how you use it are at "
+        },
+        {
+          "text": "/acceptable-use",
+          "href": "/acceptable-use"
+        },
+        {
+          "text": ". Last updated: 2026-09-02."
+        }
+      ]
+    },
+    {
+      "type": "eyebrow",
+      "content": [
+        {
+          "text": "Managed Cloud · default authority"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "default-authority",
+      "content": [
+        {
+          "text": "By default, the agent asks."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "One account-wide setting decides what may run without asking, and it governs our own built-in tools as well as connectors. A new account is set to “Ask before every action”, so in Managed Cloud every tool call waits for you, the built-in tools below included. A built-in tool runs with no prompt only once you choose one of the other two settings, or save “Always allow” for that one tool."
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "What each account default runs without asking",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "Ask before every action"
+            }
+          ],
+          "value": [
+            {
+              "text": "Every tool action waits for you, reads included. This is the default. No built-in tool runs without asking."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Run read-only actions without asking"
+            }
+          ],
+          "value": [
+            {
+              "text": "Reads, searches, page fetches and sandboxed code run on their own; writes still ask. Runs without asking: Web search, Map search, Fetch a page, Run code, List files, Read a file, Run a skill."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Skip approvals"
+            }
+          ],
+          "value": [
+            {
+              "text": "Tools run on their own. Destructive and unknown actions still ask. Runs without asking: Web search, Map search, Fetch a page, Run code, Create a folder, List files, Read a file, Create a document file, Run a skill."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "The built-in tools, and what each one does."
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "Built-in tools",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "Web search"
+            }
+          ],
+          "value": [
+            {
+              "text": "Runs a search and reads the results. Classified as a read that accepts untrusted content and creates an egress path, because a search query is a place secrets can leak and a result page is attacker-influenced text."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Map search"
+            }
+          ],
+          "value": [
+            {
+              "text": "Looks up a place or a route and renders a map card in the conversation. A search, not a verified place identity and not turn-by-turn navigation."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Fetch a page"
+            }
+          ],
+          "value": [
+            {
+              "text": "Fetches a single URL through an SSRF-guarded path. Same classification as search, for the same reasons."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Run code"
+            }
+          ],
+          "value": [
+            {
+              "text": "Executes model-authored code in an isolated cloud sandbox belonging to that conversation, not on your device. Classified as an irreversible execute action that creates an egress path."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Write a file"
+            }
+          ],
+          "value": [
+            {
+              "text": "Writes a file inside the conversation's own sandbox workspace. Not your filesystem, not your cloud storage. Classified as an irreversible write, so no account default runs it on its own."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Create a folder"
+            }
+          ],
+          "value": [
+            {
+              "text": "Creates a folder in that same sandbox workspace. Reversible, and no egress path."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "List files"
+            }
+          ],
+          "value": [
+            {
+              "text": "Lists what is in that sandbox workspace. Reads nothing outside it."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Read a file"
+            }
+          ],
+          "value": [
+            {
+              "text": "Reads a file back out of that sandbox workspace. Classified as accepting untrusted content, because whatever a previous step wrote there can be attacker-influenced."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Edit a file"
+            }
+          ],
+          "value": [
+            {
+              "text": "Edits a file already in that sandbox workspace. Classified as an irreversible write, so no account default runs it on its own."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Create a document file"
+            }
+          ],
+          "value": [
+            {
+              "text": "Generates a Word document (.docx), a PowerPoint deck (.pptx), an Excel workbook (.xlsx), a PDF (.pdf) or a CSV (.csv) on our servers and attaches it to the conversation for you to download. Those five formats are the whole of it, and it never edits a file you already have. Reversible, no egress path."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Run a skill"
+            }
+          ],
+          "value": [
+            {
+              "text": "Loads a skill's instructions into the turn. Skills act through the tools above and are gated by them."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "You can override the account default one tool at a time, in both directions: set a tool to “Always allow” and it stops asking, set it to “Needs approval” or “Blocked” and it asks or is refused whatever the default says. “Skip approvals” is also a workspace decision: where a workspace withholds it, the account falls back to asking before every action rather than to the middle setting nobody chose."
+        }
+      ]
+    },
+    {
+      "type": "eyebrow",
+      "content": [
+        {
+          "text": "Managed Cloud · approval required"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "always-ask",
+      "content": [
+        {
+          "text": "These always ask."
+        }
+      ]
+    },
+    {
+      "type": "eyebrow",
+      "content": [
+        {
+          "text": "Connectors"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "Every connector and MCP tool we do not know"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "A connector or MCP tool in the turn puts the whole turn into manual approval mode. A tool we have not classified is treated as an irreversible write that can move data out, which no account default runs on its own, so it asks under all three settings. The three GitHub tools are classified: reading a pull-request diff can run without asking, posting a comment or a review cannot."
+        }
+      ]
+    },
+    {
+      "type": "eyebrow",
+      "content": [
+        {
+          "text": "Your setting"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "Anything you marked \"Needs approval\""
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "A saved \"ask\" verdict outranks automatic mode and the account default alike, so you can pull any built-in tool back into the approval flow."
+        }
+      ]
+    },
+    {
+      "type": "eyebrow",
+      "content": [
+        {
+          "text": "Escalation"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "A tool call that trips the injection escalation"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "When untrusted content has entered the conversation, a private authenticated source is reachable, and the pending call can move data out of the boundary, a call that would otherwise run escalates to a human decision. On an unattended run there is nobody to ask, so it is refused. See the limits below."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "The precedence order, in full."
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "Approval precedence order",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "1. You blocked the tool"
+            }
+          ],
+          "value": [
+            {
+              "text": "Denied."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "2. A step your own device carries out, on a turn that is connected to that device"
+            }
+          ],
+          "value": [
+            {
+              "text": "Runs."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "3. You saved Always allow, and the injection escalation trips"
+            }
+          ],
+          "value": [
+            {
+              "text": "Asks. On an unattended run there is nobody to ask, so it is denied instead."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "4. You saved Always allow"
+            }
+          ],
+          "value": [
+            {
+              "text": "Runs."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "5. You saved Needs approval"
+            }
+          ],
+          "value": [
+            {
+              "text": "Asks."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "6. Something else in the turn needs approval, your account default covers this tool, and the escalation has not tripped"
+            }
+          ],
+          "value": [
+            {
+              "text": "Runs."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "7. Something in the turn needs approval and your account default does not cover this tool"
+            }
+          ],
+          "value": [
+            {
+              "text": "Asks."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "8. The injection escalation trips"
+            }
+          ],
+          "value": [
+            {
+              "text": "Asks. On an unattended run there is nobody to ask, so it is denied instead."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "9. Every tool offered in the turn runs under your account default"
+            }
+          ],
+          "value": [
+            {
+              "text": "Runs."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "eyebrow",
+      "content": [
+        {
+          "text": "Honest limits"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "honest-limits",
+      "content": [
+        {
+          "text": "What the injection escalation does not catch."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "The escalation is a mitigation, not a proof. We publish its gaps because a reviewer will find them anyway, and a mitigation you can reason about is worth more than a clean claim you cannot."
+        }
+      ]
+    },
+    {
+      "type": "eyebrow",
+      "content": [
+        {
+          "text": "Coverage"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "Pasted and attached content is not counted"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Untrusted content is recognised when a tool fetched it: a web page, a search result, a pull-request diff. Content you paste or attach yourself is not counted, and that is a real injection vector this check does not see."
+        }
+      ]
+    },
+    {
+      "type": "eyebrow",
+      "content": [
+        {
+          "text": "Bias"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "It over-triggers on purpose"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Whether a sensitive source is reachable is derived from which tools were offered, not from what was actually read. A connector merely being available counts. We would rather cost you a click than miss a case."
+        }
+      ]
+    },
+    {
+      "type": "eyebrow",
+      "content": [
+        {
+          "text": "Visibility"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "Undeclared exfiltration is invisible"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Whether a call can move data out is per-tool metadata. An MCP server that phones home during what it declares as a read is not visible to this check, which is exactly why any tool we have not classified is treated as creating an egress path."
+        }
+      ]
+    },
+    {
+      "type": "eyebrow",
+      "content": [
+        {
+          "text": "Override"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "It cannot stop you approving"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "The check turns a call that would have run into a call that asks. If it escalates and you approve, the call runs."
+        }
+      ]
+    },
+    {
+      "type": "eyebrow",
+      "content": [
+        {
+          "text": "Blocking"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "blocking",
+      "content": [
+        {
+          "text": "A Block is enforced on the server."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Blocking a tool is not a client-side preference. The verdict is stored against your account and checked on the server before any side effect, on the streaming tool loop and again when an approval is resumed. A modified client, or a request you write yourself against the API, cannot execute a tool you blocked; the model is told the tool is blocked and instructed not to retry it."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "What blocking does not do:",
+          "strong": true
+        },
+        {
+          "text": " it does not hide the tool from the model’s list of available tools. The model may still attempt the call. The call is refused before it runs, and nothing happens."
+        }
+      ]
+    },
+    {
+      "type": "eyebrow",
+      "content": [
+        {
+          "text": "In the browser"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "browser-permissions",
+      "content": [
+        {
+          "text": "Computer use in Chrome."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "The Chrome extension can drive a tab through the Chrome debugger, and read that tab’s console and network activity over the same attachment. Starting a session is always an explicit action: you type a goal and click. Once running:"
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "Browser computer-use permissions",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "Ask before acting"
+            }
+          ],
+          "value": [
+            {
+              "text": "On by default. An unset preference means ask; autopilot is an explicit opt-out you have to choose."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Unanswered approvals"
+            }
+          ],
+          "value": [
+            {
+              "text": "Denied after 30 seconds. The gate fails closed, not open."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Where it can go"
+            }
+          ],
+          "value": [
+            {
+              "text": "Navigation is confined to the site allowlist you maintain in extension options."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Text leaving the page"
+            }
+          ],
+          "value": [
+            {
+              "text": "Page-text summaries and field readbacks are redacted by the driver before they leave."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Screenshots"
+            }
+          ],
+          "value": [
+            {
+              "text": "Screenshots are not redacted and cannot be. You cannot scrub secrets out of a PNG.",
+              "strong": true
+            },
+            {
+              "text": " They reach the Managed Cloud gateway. If a page has a secret visibly rendered on it, a screenshot of that page carries it. This is a residual, accepted risk, bounded by the allowlist and the approval gate."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Console and network capture"
+            }
+          ],
+          "value": [
+            {
+              "text": "The extension reads a page's console messages and the requests it makes, but only while a run is active or you turn the watch on yourself, and only on a site carrying both grants. Message text passes the same redaction as page text. A request line keeps the URL, method, status, type and timing; it drops credentials in the URL and never reads a request body or a header."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Downloads"
+            }
+          ],
+          "value": [
+            {
+              "text": "A download starts only when you ask for one, saves to your own downloads folder, and must come from the page’s own origin or another origin already on your allowlist. Chrome picks the filename."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Where inference happens"
+            }
+          ],
+          "value": [
+            {
+              "text": "Computer use requires Managed Cloud sign-in and calls the Managed Cloud gateway directly from the extension."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "eyebrow",
+      "content": [
+        {
+          "text": "On Desktop"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "desktop-permissions",
+      "content": [
+        {
+          "text": "Local execution, local approval."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Desktop runs tools on your machine, so it carries its own gate: dangerous tools prompt in manual mode, per-tool approval policies are stored and reapplied, and connector settings expose a standing Always allow / Needs approval / Blocked control for each tool. Desktop is also the only surface today that completes a real OAuth flow. See the next section."
+        }
+      ]
+    },
+    {
+      "type": "eyebrow",
+      "content": [
+        {
+          "text": "Connectors"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "connectors",
+      "content": [
+        {
+          "text": "What is actually requested today."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "The connector directory is larger than what is connectable. This section describes the current state, not the roadmap."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "Managed Cloud connects exactly three kinds of thing."
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "What Managed Cloud connects",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "The GitHub App"
+            }
+          ],
+          "value": [
+            {
+              "text": "Three tools: read a pull-request diff, post an issue or pull-request comment, and post a pull-request review. Access comes from the GitHub App installation you authorize; its permission set is configured on GitHub during install and is shown to you there. We do not restate it here, because it is not declared in our own code and we will not guess at a permission list on your behalf."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Operator-configured MCP servers"
+            }
+          ],
+          "value": [
+            {
+              "text": "Remote MCP endpoints configured server-side by AGI. The endpoint and its credentials stay server-side; nothing you supply flows into them."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Your own remote MCP servers"
+            }
+          ],
+          "value": [
+            {
+              "text": "A server URL you provide, with an optional bearer token that is encrypted at rest and scoped to your account alone. Its tools are whatever that server advertises at runtime."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Every other connector in the directory is not connectable on the web today.",
+          "strong": true
+        },
+        {
+          "text": " Attempting to connect one returns an explicit “not implemented” response rather than a fake connected state. No OAuth token for Gmail, Drive, Slack, Notion, or any other branded catalog connector is stored in your AGI account, because no such flow exists on the web. The record we keep for a connector is an enablement flag: a connector id, an auth type, and whether it is active. It holds no tokens and no endpoint URLs."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "Desktop uses the managed connector service."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "The current Electron Desktop opens the same account-scoped connector authorization flow as the web app. It does not store connector OAuth tokens in a local SQLite database. The provider’s consent screen is the authoritative list of scopes for a configured connector, and authorization does not finish unless the managed service verifies that connection."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "A directory entry is not proof that a connector is available. The app asks the managed service which connectors are configured and reports an unavailable or incomplete setup explicitly instead of inventing a successful connection."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "A custom MCP server is your trust boundary."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "AGI does not vet the remote MCP servers you add. The operator of that server sees the conversation context you send to its tools, and any token you enter is transmitted to it. We validate that the URL resolves to a public host (private and link-local addresses are rejected), and we encrypt the token at rest and scope it to your account. That is infrastructure hygiene, not an endorsement of the server. Add servers you trust, the way you would add a dependency."
+        }
+      ]
+    },
+    {
+      "type": "eyebrow",
+      "content": [
+        {
+          "text": "Revocation"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "revocation",
+      "content": [
+        {
+          "text": "Every way to take access back."
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "Ways to revoke access",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "Disconnect a connector"
+            }
+          ],
+          "value": [
+            {
+              "text": "Removes the connection and also deletes every saved per-tool permission for that connector, so a past \"Always allow\" cannot survive a reconnect."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Reset one tool"
+            }
+          ],
+          "value": [
+            {
+              "text": "Set a single tool back to \"Needs approval\", or delete its saved verdict outright. This exists specifically so a one-time \"Always allow\" is not permanent."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Block one tool"
+            }
+          ],
+          "value": [
+            {
+              "text": "A blocked tool is refused server-side before it runs, on the normal tool loop and on the approval-resume path."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Unlink GitHub"
+            }
+          ],
+          "value": [
+            {
+              "text": "Disconnecting GitHub deletes your installation records so GitHub tools stop being offered. The GitHub App itself remains installed on your GitHub account until you remove it at github.com/settings/installations. Do both for full revocation."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Delete a custom MCP connector"
+            }
+          ],
+          "value": [
+            {
+              "text": "Removes the server and the encrypted bearer token you supplied with it. Rotate that token on the server side too if it was ever sensitive."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Browser: remove a site"
+            }
+          ],
+          "value": [
+            {
+              "text": "Take a site off the extension's allowlist and the browser agent can no longer navigate to it."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Browser: re-enable the gate"
+            }
+          ],
+          "value": [
+            {
+              "text": "Turn \"ask before acting\" back on if you previously opted into autopilot. Only an explicit opt-out disables it."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Desktop: per-tool policy"
+            }
+          ],
+          "value": [
+            {
+              "text": "Desktop connector settings carry a standing Always allow / Needs approval / Blocked control per tool."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "On the web today, per-tool permissions are set from the approval card shown in the conversation when a tool asks: that is where Always allow, Needs approval, and Blocked live. A standing per-tool settings panel exists on Desktop. Connecting and disconnecting a connector is recorded in your account’s security audit events."
+        }
+      ]
+    }
+  ]
+}

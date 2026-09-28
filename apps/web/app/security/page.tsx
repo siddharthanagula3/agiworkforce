@@ -20,6 +20,7 @@ import {
   contactMailto,
 } from '@/lib/legal-constants';
 import { BYOK_SURFACES, CLI_LOCAL_RUNTIMES } from '@/lib/marketing-constants';
+import { PolicyVersionsLink } from '@shared/components/legal/PolicyVersionsLink';
 
 export const metadata = buildMetadata({
   title: 'Security: three boundaries, three different answers',
@@ -465,7 +466,8 @@ export default function SecurityPage() {
               Reviewed {LAST_REVIEWED}.
             </h2>
             <Prose size="sm">
-              Managed Cloud is in public alpha. No certifications are claimed.
+              Managed Cloud is in public alpha. No certifications are claimed.{' '}
+              <PolicyVersionsLink policy="security" />
             </Prose>
           </Stack>
         </Section>
