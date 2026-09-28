@@ -172,6 +172,7 @@ import {
   type CloudCodeExecutionPolicy,
 } from '@/lib/server/code-execution-policy';
 import {
+  DEVICE_REVIEWED_STEP_TOOLS,
   DEVICE_STEP_TTL_MINUTES,
   DeviceStepRefused,
   describeDeviceStep,
@@ -2914,6 +2915,11 @@ function hasNonTextPart(message: ProcessedRequest['llmRequest']['messages'][numb
     : (message.multimodal_content ?? []);
   return parts.some((part) => (part as { type?: string })?.type !== 'text');
 }
+
+const DEVICE_STEPS_REVIEWED_AFTER_UNTRUSTED: ReadonlySet<string> = new Set([
+  ...DEVICE_REVIEWED_STEP_TOOLS,
+  'device_browser_navigate',
+]);
 
 export function hasUntrustedContext(
   processed: Pick<ProcessedRequest, 'untrustedContextPresent'>,
@@ -6337,10 +6343,17 @@ export async function* runToolLoop(
           let plan: (typeof planned)[number] | null = null;
           try {
             const step = planDeviceStep(tc.qualifiedName, tc.args, deviceHost.roots);
+            const summary = describeDeviceStep(step, deviceHost.roots);
             plan = {
               tc,
-              summary: describeDeviceStep(step, deviceHost.roots),
-              input: { ...step } as Record<string, unknown>,
+              summary,
+              input: {
+                ...step,
+                ...(untrustedContentInContext &&
+                DEVICE_STEPS_REVIEWED_AFTER_UNTRUSTED.has(step.tool)
+                  ? { review: summary }
+                  : {}),
+              } as Record<string, unknown>,
             };
           } catch (error) {
             refusal =
