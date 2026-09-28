@@ -962,6 +962,35 @@
       ]
     },
     {
+      "id": "account-authenticator-temporarily-unavailable",
+      "doc": "account-security",
+      "section": "Second factors",
+      "kind": "prose",
+      "sentence": "Authenticator apps (TOTP) and backup codes are temporarily unavailable: Settings, Security shows **Temporarily unavailable** where you would set one up or replace your backup codes, and a workspace cannot start requiring multi-factor authentication until they return.",
+      "implementation": [
+        "apps/web/lib/authenticator-enrollment.ts",
+        "apps/web/features/settings/components/Settings/TwoFactorEnrollment.tsx",
+        "apps/web/app/api/settings/organization/policy/route.ts"
+      ],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/lib/authenticator-enrollment.ts",
+          "text": "'Authenticator apps and backup codes are temporarily unavailable.'"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/settings/components/Settings/TwoFactorEnrollment.tsx",
+          "text": "Temporarily unavailable"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/app/api/settings/organization/policy/route.ts",
+          "text": "if (next.requireMfa && !current.policy.requireMfa && !authenticatorEnrollmentAvailable())"
+        }
+      ]
+    },
+    {
       "id": "sessions-are-listed-with-their-own-fields",
       "doc": "account-security",
       "section": "Active sessions",
@@ -2366,13 +2395,13 @@
       "doc": "troubleshooting",
       "section": "A model is missing from the picker",
       "kind": "prose",
-      "sentence": "The badge says which case it is: **Upgrade** (your plan), **Coming soon, not yet available** (not live yet), or **Unavailable right now** (live but not answering).",
+      "sentence": "The badge says which case it is: **Upgrade** (your plan), **Coming soon** (not live yet), or **Unavailable right now** (live but not answering).",
       "implementation": ["apps/web/features/chat/components/Composer/ComposerFooter.tsx"],
       "proof": [
         {
           "kind": "copy",
           "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
-          "text": "Coming soon, not yet available"
+          "text": "COMING_SOON_LOCK_LABEL = 'Coming soon'"
         },
         {
           "kind": "copy",
@@ -2579,31 +2608,6 @@
           "kind": "copy",
           "file": "apps/web/app/vscode-extension/page.tsx",
           "text": "No VSIX has been published yet"
-        }
-      ]
-    },
-    {
-      "id": "account-backup-codes-regenerate-replaces",
-      "doc": "account-security",
-      "section": "If you cannot sign in",
-      "kind": "prose",
-      "sentence": "**Running low on backup codes.** Settings, Security generates a new set after you confirm your second factor again, and the new set replaces the old one, so codes you printed earlier stop working.",
-      "implementation": ["apps/web/app/api/settings/2fa/backup-codes/route.ts"],
-      "proof": [
-        {
-          "kind": "test",
-          "file": "apps/web/app/api/settings/2fa/backup-codes/route.test.ts",
-          "name": "regenerates backup codes once the second factor has been re-verified"
-        },
-        {
-          "kind": "test",
-          "file": "apps/web/app/api/settings/2fa/backup-codes/route.test.ts",
-          "name": "refuses a session that has not re-authenticated, and replaces nothing"
-        },
-        {
-          "kind": "copy",
-          "file": "apps/web/app/api/settings/2fa/backup-codes/route.ts",
-          "text": "registerSecondFactor(userId, { backupCodes: newCodes })"
         }
       ]
     },
