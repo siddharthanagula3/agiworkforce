@@ -76,6 +76,7 @@ import {
   type ProjectAnswerSave,
 } from '@features/projects/components/project-answer-save';
 import { uploadProjectKnowledgeFile } from '@features/projects/services/project-knowledge-upload';
+import { useLocalPersonalContextPrefetch } from '@features/chat/lib/local-personal-context';
 import {
   EMPTY_VARIANT_INFO,
   resolveLeafForSibling,
@@ -1666,6 +1667,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     [conversations, displayedConversationId],
   );
   const conversationProjectId = displayedConversation?.projectId ?? null;
+  useLocalPersonalContextPrefetch(displayedConversation ? conversationProjectId : activeProjectId);
   const conversationProject = useProjectStore((state) =>
     conversationProjectId
       ? (state.projects.find((project) => project.id === conversationProjectId) ?? null)

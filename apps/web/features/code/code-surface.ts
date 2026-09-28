@@ -178,6 +178,8 @@ export const CODE_COPY = {
   runningSession: 'Running',
 
   modeMenu: 'Mode',
+  planMode: 'Plan',
+  planModeHint: 'Reads the code and proposes changes without making any',
   turnStepsMenu: 'Steps per task',
   turnStepsUnit: 'steps',
   turnBudgetPrefix: 'A task also stops after',

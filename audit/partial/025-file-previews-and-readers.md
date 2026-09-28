@@ -26,11 +26,10 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Artifacts in chat open full-screen with markdown/code rendering; uploaded Library files are only handed to the OS share sheet. | ui |
 | cli | partial | `agi artifacts show` prints an artifact's raw content in the terminal; uploaded or Library files cannot be opened. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:1206-1206`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:786-792`, `apps/cli/src/lib.rs:1914-1938`, `apps/cli/src/lib.rs:1918-1920`
+Code: `apps/cli/src/lib.rs:1914-1938`, `apps/cli/src/lib.rs:1918-1920`
 
 ## S25.03: Markdown reader.
 
@@ -40,11 +39,10 @@ Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:1206-1206`, `a
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Artifacts in chat open full-screen with markdown/code rendering; uploaded Library files are only handed to the OS share sheet. | ui |
 | cli | partial | `agi artifacts show` prints an artifact's raw content in the terminal; uploaded or Library files cannot be opened. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:1206-1206`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:786-792`, `apps/cli/src/lib.rs:1914-1938`, `apps/cli/src/lib.rs:1918-1920`
+Code: `apps/cli/src/lib.rs:1914-1938`, `apps/cli/src/lib.rs:1918-1920`
 
 ## S25.04: Source-code reader.
 
@@ -54,11 +52,10 @@ Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:1206-1206`, `a
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Artifacts in chat open full-screen with markdown/code rendering; uploaded Library files are only handed to the OS share sheet. | ui |
 | cli | partial | `agi artifacts show` prints an artifact's raw content in the terminal; uploaded or Library files cannot be opened. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:1206-1206`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:786-792`, `apps/cli/src/lib.rs:1914-1938`, `apps/cli/src/lib.rs:1918-1920`
+Code: `apps/cli/src/lib.rs:1914-1938`, `apps/cli/src/lib.rs:1918-1920`
 
 ## S25.05: Image viewer.
 
@@ -89,33 +86,27 @@ Code: `apps/mobile/src/features/chat/components/GeneratedVideo.tsx:1-21`, `apps/
 
 - Done when: Spreadsheets preview as a table.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Library shows uploaded csv/tsv as a table (ecc859282); project Sources preview still shows csv as plain text and .xlsx only as text. | ui |
-| desktop | partial | Library shows uploaded csv/tsv as a table (ecc859282); project Sources preview still shows csv as plain text and .xlsx only as text. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `packages/ui/unified-chat/src/components/library/LibraryView.tsx:1102-1102`, `apps/web/lib/server/file-text-preview.ts:20-20`
 
 ## S25.10: Document preview.
 
 - Done when: Word-processing documents (docx) preview in the product.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Library previews uploaded .docx as extracted text (ecc859282); project Sources preview still has no docx preview. | ui |
-| desktop | partial | Library previews uploaded .docx as extracted text (ecc859282); project Sources preview still has no docx preview. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `packages/ui/unified-chat/src/components/library/LibraryView.tsx:1102-1102`, `apps/web/app/api/files/[id]/text/route.ts:57-57`
 
 ## S25.13: Page navigation.
 

@@ -442,7 +442,11 @@
     "viewSources_one": "查看 {{count}} 个来源",
     "viewSources_other": "查看 {{count}} 个来源",
     "folderFilesLeftOut_one": "{{folder}} 中有 {{count}} 个文件未附加。请从本地文件夹附加。",
-    "folderFilesLeftOut_other": "{{folder}} 中有 {{count}} 个文件未附加。请从本地文件夹附加。"
+    "folderFilesLeftOut_other": "{{folder}} 中有 {{count}} 个文件未附加。请从本地文件夹附加。",
+    "savedMemoriesUsed_one": "使用了 {{count}} 条已保存的记忆",
+    "savedMemoriesUsed_other": "使用了 {{count}} 条已保存的记忆",
+    "moreSavedMemories_one": "还有 {{count}} 条",
+    "moreSavedMemories_other": "还有 {{count}} 条"
   },
   "markdownTable": {
     "label": "表格",

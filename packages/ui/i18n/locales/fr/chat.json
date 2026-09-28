@@ -442,7 +442,11 @@
     "viewSources_one": "Voir {{count}} source",
     "viewSources_other": "Voir {{count}} sources",
     "folderFilesLeftOut_one": "{{count}} fichier de {{folder}} n'a pas été joint. Joignez-le depuis un dossier local.",
-    "folderFilesLeftOut_other": "{{count}} fichiers de {{folder}} n'ont pas été joints. Joignez-les depuis un dossier local."
+    "folderFilesLeftOut_other": "{{count}} fichiers de {{folder}} n'ont pas été joints. Joignez-les depuis un dossier local.",
+    "savedMemoriesUsed_one": "{{count}} souvenir enregistré utilisé",
+    "savedMemoriesUsed_other": "{{count}} souvenirs enregistrés utilisés",
+    "moreSavedMemories_one": "Et {{count}} de plus",
+    "moreSavedMemories_other": "Et {{count}} de plus"
   },
   "markdownTable": {
     "label": "Tableau",

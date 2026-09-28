@@ -442,7 +442,11 @@
     "viewSources_one": "출처 {{count}}개 보기",
     "viewSources_other": "출처 {{count}}개 보기",
     "folderFilesLeftOut_one": "{{folder}}의 파일 {{count}}개가 첨부되지 않았습니다. 로컬 폴더에서 첨부하세요.",
-    "folderFilesLeftOut_other": "{{folder}}의 파일 {{count}}개가 첨부되지 않았습니다. 로컬 폴더에서 첨부하세요."
+    "folderFilesLeftOut_other": "{{folder}}의 파일 {{count}}개가 첨부되지 않았습니다. 로컬 폴더에서 첨부하세요.",
+    "savedMemoriesUsed_one": "저장된 메모리 {{count}}개 사용",
+    "savedMemoriesUsed_other": "저장된 메모리 {{count}}개 사용",
+    "moreSavedMemories_one": "외 {{count}}개",
+    "moreSavedMemories_other": "외 {{count}}개"
   },
   "markdownTable": {
     "label": "표",

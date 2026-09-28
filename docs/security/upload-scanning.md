@@ -66,25 +66,41 @@ contract; the parts that decide an upload are:
   clamd spools it in `/dev/shm`, which is memory on a Fly Machine.
 - It answers `{ "safe": true }` only for a clean verdict. Malware answers
   `{ "safe": false }` with the signature name; a missing token, an oversize
-  body, a clamd error, or no verdict within 14 seconds answers a non-2xx status.
-  The web rejects the upload in every one of those cases.
+  body, a clamd error, or no verdict within 14 seconds answers a non-2xx status,
+  the deadline's 503 even while the upload is still arriving. A clamd reply
+  that arrives before the end of the stream fails the scan whatever it says,
+  because clamd has not seen the whole file. The web rejects the upload in
+  every one of those cases.
 - A file clamd cannot scan to the end is refused, never passed on a partial
   scan: with `AlertExceedsMax` on, an archive nested more than 17 deep, more
   than 10,000 members, a member above 100 MB unpacked or more than 400 MB
   unpacked in total is reported as a `Heuristics.Limits.Exceeded` detection.
   The web's own office extraction already refuses documents that unpack past
   200 MB or 2,000 members.
+- A password-protected archive, PDF or Office document is refused for the same
+  reason: with `AlertEncrypted` on, clamd reports what it cannot open as a
+  `Heuristics.Encrypted.*` detection, the service adds `"reason": "encrypted"`,
+  and the web refuses the file with "This file is password protected, so its
+  contents could not be checked. Remove the password and upload it again."
 - Its size limit equals the largest file the web sends for scanning
   (`MAX_ATTACHMENT_BYTES`), pinned by `services/upload-scanner/__tests__/limits.test.ts`.
-- `GET /health` reports the signature version and age, and fails only while
-  clamd does not answer. Signatures more than seven days old are reported as
-  `stale` there without failing it, because Fly stops routing to a machine that
-  fails this check, and scanning on older signatures beats refusing every
-  upload. `GET /health/signatures` fails once they are stale; Fly runs it as the
-  `signatures` monitoring check, which never affects routing.
+- `GET /health` streams the EICAR test string through clamd and fails unless
+  clamd detects it, so a clamd that answers but no longer scans fails the
+  check. The string is assembled at runtime, so it never sits whole in the
+  source, and the result is cached for 30 seconds. Signatures more than seven
+  days old are reported as `stale` there without failing it, because Fly stops
+  routing to a machine that fails this check, and scanning on older signatures
+  beats refusing every upload. Fly does not restart a machine for a failing
+  check ([health checks](https://docs.fly.io/reference/health-checks/)), so the
+  service watches the same probe and exits once clamd has not detected the
+  test string for five minutes, and Fly's `on-failure` restart policy restarts
+  the machine. `GET /health/signatures` fails once the signatures are stale;
+  Fly runs it as the `signatures` monitoring check, which never affects
+  routing. Without the bearer token both answer only `{"status": …}`; the
+  engine and signature versions need the token.
 - `services/upload-scanner/__tests__/clamd-config.test.ts` pins the clamd
-  settings above: `AlertExceedsMax`, the in-memory spool and the loopback
-  address.
+  settings above: `AlertExceedsMax`, `AlertEncrypted`, the in-memory spool and
+  the loopback address.
 
 The machine is `shared-cpu-2x` with 4 GB. clamd holds about 1.2 GiB of
 signatures and briefly doubles that while it reloads them after an update,
@@ -99,10 +115,15 @@ $0.00000193 per GB-second, and the region's 1.19 multiplier. Deploys use the
 before it retires the old one, so a deploy never leaves the web without a
 scanner.
 
-clamd exiting stops the service, and Fly restarts the machine. freshclam
-exiting does not: it exits by design when the ClamAV CDN refuses it, so clamd
-keeps scanning with the signatures it has, freshclam starts again an hour
-later, and `/health` reports the growing signature age.
+clamd exiting stops the service, and so do five minutes without a detection
+of the test string. Either way the process exits non-zero, and `fly.toml` sets
+`[[restart]] policy = 'on-failure'`, which restarts a machine only on a
+non-zero exit and is Fly's default when unset
+([the restart section](https://docs.fly.io/reference/configuration/#the-restart-section),
+checked 2026-09-28). freshclam exiting does not: it exits by design when the
+ClamAV CDN refuses it, so clamd keeps scanning with the signatures it has,
+freshclam starts again an hour later, and `/health` reports the growing
+signature age.
 
 ## Runbook: running the scanner
 
@@ -132,20 +153,31 @@ token in the password manager; it is set on both sides and nowhere else.
 
 ```sh
 URL=https://agiworkforce-upload-scanner.fly.dev
-curl -sS "$URL/health/signatures"
+curl -sS "$URL/health"
+curl -sS "$URL/health/signatures" -H "Authorization: Bearer $TOKEN"
 printf 'hello' | curl -sS -X POST "$URL/scan" -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/octet-stream' --data-binary @-
 curl -fsS https://secure.eicar.org/eicar.com.txt | curl -sS -X POST "$URL/scan" \
   -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/octet-stream' --data-binary @-
+printf 'hello' | zip -q -P test - - | curl -sS -X POST "$URL/scan" \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/octet-stream' --data-binary @-
 curl -sS -o /dev/null -w '%{http_code}\n' -X POST "$URL/scan" --data-binary 'hello'
 ```
 
-Expect, in order: `"status":"ok"` with an `ageHours` under 168;
-`{"safe":true}`; `{"safe":false,"detail":"ClamAV detected ..."}` naming an
-EICAR test signature; and `401`. The EICAR file is the industry's harmless
-test sample, piped straight through so it never lands on disk. `fly logs --app
-agiworkforce-upload-scanner` shows a `scan_clean` and a `scan_infected` line
-for the two scans.
+Expect, in order:
+
+1. `{"status":"ok"}` and nothing else.
+2. `"status":"ok"` with an `ageHours` under 168.
+3. `{"safe":true}`.
+4. `{"safe":false,"detail":"ClamAV detected ..."}` naming an EICAR test
+   signature.
+5. `{"safe":false,"detail":"ClamAV detected Heuristics.Encrypted.Zip","reason":"encrypted"}`.
+6. `401`.
+
+The EICAR file is the industry's harmless test sample. It and the
+password-protected zip are piped straight through, so neither lands on disk.
+`fly logs --app agiworkforce-upload-scanner` shows a `scan_clean` line and two
+`scan_infected` lines for the three scans.
 
 ### Point the web at it
 
@@ -194,15 +226,20 @@ bluegreen swap, so the scanner never goes down in between.
 
 ### When it is unhealthy
 
-- `/health` answers `unavailable`: clamd is not up. `fly logs` shows why,
-  usually signatures still loading after a restart, or an out-of-memory exit.
+- `/health` answers `unavailable`: clamd is not up, or it answers but did not
+  detect the EICAR test string. `fly logs` shows why, usually signatures still
+  loading after a restart, or an out-of-memory exit. After five minutes without
+  a detection the service logs `clamd_unresponsive` and exits, and Fly restarts
+  the machine. If it keeps failing after restarts, the clamd lines in
+  `fly logs` name the cause.
+
 - `fly checks list --app agiworkforce-upload-scanner` shows the `signatures`
   check failing, and `/health` answers `status` `stale`: freshclam has not
-  updated for seven days. Scanning continues on the signatures on disk. The
-  freshclam lines in `fly logs` name the cause. The ClamAV CDN answers `429` to
-  a host that downloads too often, and freshclam waits out the cool-down on its
-  own; a `403` makes freshclam exit, logged as `freshclam_exited`, and it is
-  started again every hour.
+  updated for seven days, and `/health` with the token shows the age. Scanning
+  continues on the signatures on disk. The freshclam lines in `fly logs` name
+  the cause. The ClamAV CDN answers `429` to a host that downloads too often,
+  and freshclam waits out the cool-down on its own; a `403` makes freshclam
+  exit, logged as `freshclam_exited`, and it is started again every hour.
 - `fly logs` shows `scan_unauthorized`: the two sides hold different tokens.
   Set the same value on both. The scanner closes an unauthenticated connection
   without reading the upload, so the web logs either `Scanner returned 401` or,
@@ -245,8 +282,8 @@ text is assembled into a prompt.
 ## Verification
 
 - `apps/web/lib/security/upload-scan.test.ts`
-- `services/upload-scanner/__tests__/server.test.ts`, `config.test.ts` and
-  `limits.test.ts`
+- `services/upload-scanner/__tests__/server.test.ts`, `clamd-config.test.ts`,
+  `config.test.ts` and `limits.test.ts`
 - `apps/web/lib/security/__tests__/decompression-ratio.test.ts`
 - `apps/web/lib/redaction/__tests__/redaction.test.ts`
 - `scripts/check-client-bundle-secrets.mjs` and its `.test.mjs`

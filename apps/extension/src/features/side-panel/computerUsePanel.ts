@@ -6,6 +6,7 @@ import {
   BROWSER_CONTROL_CONSENT_HEADLINE,
 } from '../computer-use/browserControlConsent';
 import { getAuthToken } from '../computer-use/cloudAgentClient';
+import { buildImageViewerButton } from './mediaViewer';
 
 export const COMPUTER_USE_PANEL_CSS = `
   /* Computer Use tab panel */
@@ -378,7 +379,11 @@ export const COMPUTER_USE_PANEL_CSS = `
 
   /* Screenshot thumbnails */
   .sp-cu-screenshot {
+    display: block;
+    width: calc(100% - 28px);
     margin: 6px 14px;
+    padding: 0;
+    background: none;
     border: 1px solid var(--agi-ext-border);
     border-radius: var(--corner-control);
     overflow: hidden;
@@ -1324,25 +1329,11 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
       screenshotUrl &&
       /^data:image\/(?:png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(screenshotUrl)
     ) {
-      const thumb = document.createElement('div');
-      thumb.className = 'sp-cu-screenshot';
       const img = document.createElement('img');
       img.src = screenshotUrl;
       img.alt = 'Agent screenshot';
       img.loading = 'lazy';
-      thumb.appendChild(img);
-      thumb.addEventListener('click', () => {
-        const htmlContent =
-          `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">` +
-          `<title>AGI screenshot</title>` +
-          `<style>body{margin:0;background:black}img{max-width:100%;height:auto;display:block}</style>` +
-          `</head><body><img src="${screenshotUrl}" alt="Agent screenshot"></body></html>`;
-        const blob = new Blob([htmlContent], { type: 'text/html' });
-        const url = URL.createObjectURL(blob);
-        window.open(url, '_blank', 'noopener,noreferrer');
-        setTimeout(() => URL.revokeObjectURL(url), 10_000);
-      });
-      frag.appendChild(thumb);
+      frag.appendChild(buildImageViewerButton(img, 'sp-cu-screenshot'));
     }
 
     return frag;
