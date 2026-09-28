@@ -85,6 +85,8 @@ build it, and the audit cell is recorded as not applicable by this decision.
   Claude do (D-2026-09-15-03).
 - **Time zone picker and general settings resets (S84.02, S84.26, S85.25).**
   Both take the time zone from the device and offer no general reset.
+- **Attaching to a turn running in another process (S68.11 cli, VS Code,
+  desktop).** Neither Claude nor Codex does it; work moves by reviewed hand-off.
 - **Periodic usage recap (S42.20).** Neither delivers one; Reflect builds a recap
   on demand.
 - **Search domain, source-type and per-answer source controls (S34.08, S34.09,
