@@ -132,3 +132,5 @@ export const MapPinned = createIcon(
     <path d="M7 20h10" />
   </>,
 );
+
+export const Activity = createIcon('Activity', <path d="M3 12h4l2.5-6 4 12 2.5-6H21" />);

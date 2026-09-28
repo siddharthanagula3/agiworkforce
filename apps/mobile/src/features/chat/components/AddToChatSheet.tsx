@@ -22,6 +22,7 @@ import {
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import {
+  MICROUSD_PER_USD,
   canUseBillingPlanCapability,
   chargeCreditsForMicrousd,
   formatCredits,
@@ -29,7 +30,9 @@ import {
   getModelMetadataById,
   getVideoAspectOptionsForModel,
   getVideoQualityOptionsForModel,
+  providerLabels,
   videoGenerationCostMicrousd,
+  type ModelMetadata,
 } from '@agiworkforce/types';
 import {
   CHAT_OUTPUT_FORMATS,
@@ -1103,6 +1106,26 @@ function MediaModeRow({
   );
 }
 
+function unitCredits(usd: number): string {
+  const credits = chargeCreditsForMicrousd(Math.ceil(usd * MICROUSD_PER_USD));
+  return formatCredits(credits, { maximumFractionDigits: credits < 10 ? 1 : 0 });
+}
+
+function mediaCreditPrice(meta: ModelMetadata): string | null {
+  const byResolution = Object.values(meta.videoPerSecondCostByResolution ?? {}).filter(
+    (rate): rate is number => typeof rate === 'number' && Number.isFinite(rate),
+  );
+  const perSecond = byResolution.length > 0 ? Math.min(...byResolution) : meta.videoPerSecondCost;
+  if (perSecond !== undefined) {
+    const from = new Set(byResolution).size > 1 ? 'From ' : '';
+    return `${from}${unitCredits(perSecond)} per second`;
+  }
+  if (meta.imagePerImageCost !== undefined) {
+    return `${unitCredits(meta.imagePerImageCost)} per image`;
+  }
+  return null;
+}
+
 function MediaModelRow({
   modelId,
   selected,
@@ -1119,14 +1142,9 @@ function MediaModelRow({
   activeColor: string;
 }) {
   const meta = getModelMetadataById(modelId);
-  const perSecond = meta?.videoPerSecondCost;
-  const perImage = meta?.imagePerImageCost;
-  const price =
-    perSecond !== undefined
-      ? `$${perSecond}/sec`
-      : perImage !== undefined
-        ? `$${perImage}/image`
-        : (meta?.provider ?? '');
+  const price = meta
+    ? (mediaCreditPrice(meta) ?? providerLabels[meta.provider] ?? meta.provider)
+    : '';
 
   return (
     <Pressable

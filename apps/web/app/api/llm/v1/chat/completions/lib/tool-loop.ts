@@ -2042,6 +2042,7 @@ async function runMcpTool(
     conversationId?: string | null;
     latestAttachedImage?: () => string | null;
     sensitiveDataRead?: () => boolean;
+    healthSpaceProjectId?: string | null;
   },
 ): Promise<ToolLoopToolResult> {
   if (toolCall.qualifiedName === SKILL_TOOL_NAME) {
@@ -2139,6 +2140,7 @@ async function runMcpTool(
       userId: executionContext.userId,
       organizationId: executionContext.organizationId,
       temporaryChat: executionContext.temporaryChat === true,
+      healthSpaceProjectId: executionContext.healthSpaceProjectId ?? null,
     });
   }
 
@@ -2161,6 +2163,7 @@ async function runMcpTool(
       organizationId: executionContext.organizationId,
       source: memoryToolSource(executionContext.surface),
       temporaryChat: executionContext.temporaryChat === true,
+      projectId: executionContext.healthSpaceProjectId ?? null,
     });
   }
 
@@ -4707,6 +4710,7 @@ export async function* runToolLoop(
               ...(resumeInput ? { inputResponses: resumeInput.inputResponses } : {}),
               ...(resumeInput?.requestState ? { requestState: resumeInput.requestState } : {}),
               sensitiveDataRead: () => sensitiveDataRead,
+              healthSpaceProjectId: processed.healthSpaceProjectId ?? null,
             },
           );
           if (!result.isError && isSensitiveDataToolName(tc.qualifiedName)) {

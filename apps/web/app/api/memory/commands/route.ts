@@ -12,6 +12,7 @@ import {
   type ManagedMemoryCommandResponse,
 } from '@agiworkforce/types';
 import { readSurfaceHint } from '@/lib/free-chat-surface-policy';
+import { conversationHealthSpaceId } from '@/lib/services/health-space-service';
 
 export const runtime = 'nodejs';
 
@@ -45,13 +46,16 @@ async function handleMemoryCommand(request: NextRequest): Promise<Response> {
         [conversationId, userId],
       )
     : [];
+  const healthSpaceId = conversationId
+    ? await conversationHealthSpaceId(db, userId, conversationId)
+    : null;
 
   const result = await runMemoryCommand(
     db,
     {
       userId,
       organizationId,
-      projectId: parsed.request.projectId ?? null,
+      projectId: healthSpaceId ?? parsed.request.projectId ?? null,
       conversationId,
       temporaryChat: conversation?.is_temporary === true,
       source: memoryCommandSource(readSurfaceHint(request)),
