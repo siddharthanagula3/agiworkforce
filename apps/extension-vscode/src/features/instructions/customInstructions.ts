@@ -83,11 +83,18 @@ export function formatCustomInstructionPrelude(instructions: StoredCustomInstruc
   );
 }
 
+export interface TurnPreludeOptions {
+  projectAppliedByServer?: boolean;
+}
+
 export function buildTurnPrelude(
   context: Pick<vscode.ExtensionContext, 'globalState' | 'workspaceState'>,
+  options: TurnPreludeOptions = {},
 ): string {
   return [
-    formatActiveProjectPrelude(getActiveCloudProject(context.workspaceState)),
+    options.projectAppliedByServer === true
+      ? ''
+      : formatActiveProjectPrelude(getActiveCloudProject(context.workspaceState)),
     formatCustomInstructionPrelude(getStoredCustomInstructions(context)),
   ]
     .filter((section) => section !== '')
@@ -96,8 +103,9 @@ export function buildTurnPrelude(
 
 export function buildCustomInstructionInput(
   context: Pick<vscode.ExtensionContext, 'globalState' | 'workspaceState'>,
+  options: TurnPreludeOptions = {},
 ): UserInput | undefined {
-  const text = buildTurnPrelude(context);
+  const text = buildTurnPrelude(context, options);
   return text === '' ? undefined : { type: 'text', text, text_elements: [] };
 }
 

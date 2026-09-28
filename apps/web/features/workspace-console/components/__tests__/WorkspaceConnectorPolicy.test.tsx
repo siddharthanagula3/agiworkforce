@@ -37,6 +37,8 @@ function policy(overrides: Record<string, unknown> = {}, canManagePolicy = true)
         allowedPlugins: [],
         blockedPlugins: ['shadow-sync'],
         allowedMcpHosts: [],
+        allowedWebDomains: [],
+        blockedWebDomains: [],
         updatedAt: null,
         ...overrides,
       },
@@ -78,6 +80,8 @@ describe('WorkspaceConnectorPolicy plugin and MCP host lists', () => {
       allowedPlugins: ['acme-review', 'shadow-sync'],
       blockedPlugins: [],
       allowedMcpHosts: ['*.corp.example'],
+      allowedWebDomains: [],
+      blockedWebDomains: [],
     });
   });
 

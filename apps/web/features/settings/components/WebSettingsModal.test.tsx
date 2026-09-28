@@ -69,6 +69,7 @@ function stubFetch({
       webInstallable: false,
       publisher: { name: 'AGI' },
       declaredSkills: ['Code Review'],
+      permissions: [] as string[],
       distribution: null,
       updatedAt: '2026-08-01T00:00:00.000Z',
     },
@@ -135,6 +136,22 @@ function stubFetch({
     }
     if (url.includes('/api/plugins/installations')) {
       return { ok: true, json: async () => ({ installations: [] }) } as Response;
+    }
+    if (url.includes('/api/plugins/organization')) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ organizationId: null, organizationName: null, plugins: [] }),
+      } as Response;
+    }
+    if (url.includes('/api/plugins/community')) {
+      return { ok: true, status: 200, json: async () => ({ plugins: [] }) } as Response;
+    }
+    if (url.includes('/api/plugins/submissions')) {
+      return { ok: true, status: 200, json: async () => ({ submissions: [] }) } as Response;
+    }
+    if (url.includes('/api/plugins/updates')) {
+      return { ok: true, status: 200, json: async () => ({ updates: [] }) } as Response;
     }
     if (url.includes('/api/plugins')) {
       if (url.includes('source=marketplace')) {

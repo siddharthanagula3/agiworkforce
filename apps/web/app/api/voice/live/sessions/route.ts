@@ -22,6 +22,7 @@ import { getModelMetadataById, getRoutingSlotModel, isModelLive } from '@agiwork
 import { isManagedProviderId, providerApiUrl } from '@/lib/server/provider-endpoints';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
+import { readWorkspaceWebDomainPolicy } from '@/lib/services/connector-policy-service';
 import {
   ManagedUsageRequestError,
   fingerprintManagedUsageRequest,
@@ -47,6 +48,7 @@ import {
   describeLiveVoiceTools,
   formatLiveVoiceApprovalNotice,
   formatWithheldLiveVoiceTools,
+  LIVE_VOICE_SITE_RULES_NOTICE,
   resolveLiveVoiceDelegationTools,
   resolveLiveVoiceFunctionTools,
   type LiveVoiceFunctionTools,
@@ -366,15 +368,24 @@ async function handleCreateLiveSession(request: NextRequest) {
     );
   }
 
-  const toolApprovalPolicy = await loadToolApprovalPolicy(scoped.db, userId);
-  const delegation = resolveLiveVoiceDelegationTools(backendModel, toolApprovalPolicy);
+  const [toolApprovalPolicy, webDomainPolicy] = await Promise.all([
+    loadToolApprovalPolicy(scoped.db, userId),
+    readWorkspaceWebDomainPolicy(scoped.db, scoped.organizationId),
+  ]);
+  const delegation = resolveLiveVoiceDelegationTools(backendModel, toolApprovalPolicy, {
+    hostedSearch: webDomainPolicy === null,
+  });
   const hostedToolIds = describeDelegationTools(delegation.tools);
   const withheldNotice = formatWithheldLiveVoiceTools(delegation.withheld, toolApprovalPolicy);
   let functionTools = await functionToolsLoad;
 
   const requestProviderSession = (offered: LiveVoiceFunctionTools): Promise<Response> => {
     const toolNotice =
-      [withheldNotice, formatLiveVoiceApprovalNotice(offered.names)]
+      [
+        withheldNotice,
+        webDomainPolicy ? LIVE_VOICE_SITE_RULES_NOTICE : null,
+        formatLiveVoiceApprovalNotice(offered.names),
+      ]
         .filter((notice): notice is string => Boolean(notice))
         .join('\n\n') || null;
     return fetch(providerApiUrl(provider, 'live/sessions'), {

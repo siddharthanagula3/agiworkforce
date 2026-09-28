@@ -108,13 +108,11 @@ test('a client that re-reads the deployment flag the document folds in fails', (
 test('a gap that closes fails until it is recorded as a reader', () => {
   const root = fixture({
     added: {
-      'apps/extension-vscode/src/capabilities.ts':
-        'export const read = (me: { capability_handshake?: unknown }) => me.capability_handshake;\n',
+      'apps/cli/src/capabilities.rs':
+        'pub struct Me { pub capability_handshake: Option<String> }\n',
     },
   });
-  assert.ok(
-    checkCapabilityConsumption(root).some((entry) => /the vscode gap has closed/.test(entry)),
-  );
+  assert.ok(checkCapabilityConsumption(root).some((entry) => /the cli gap has closed/.test(entry)));
 });
 
 test('a recorded exception that is fixed fails until it is deleted', () => {

@@ -134,7 +134,7 @@ function makeApi(overrides: Partial<DesktopCloudSchedulesApi> = {}): DesktopClou
     resolveRunApproval: vi.fn(async () => run),
     listRecentRuns: vi.fn(async () => ({
       runs: [{ ...run, taskName: schedule.name }],
-      pagination: { limit: 20, offset: 0 },
+      nextCursor: null,
       hasMore: false,
     })),
     shareSchedule: vi.fn(async () => ({

@@ -229,12 +229,12 @@ Code: `apps/mobile/src/features/chat/components/research/ResearchRunCard.tsx:170
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile lists the report's sections, but they cannot be tapped to jump to that section. | ui |
+| mobile | partial | partials/slack f1e1d8113e: the renderer reports each section heading's position under the outline's own id. Left: the report screen's outline rows scroll to their section once post-codex/p-slack-mobile-research-citations-outline.patch lands (ReportsScreen.tsx held by Codex). | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/research/ReportsScreen.tsx:192-197`, `apps/mobile/src/features/research/reportSections.ts:16-16`
+Code: `apps/mobile/src/features/chat/components/MessageContentRenderer.tsx:306-306`, `apps/mobile/src/features/research/reportSections.ts:18-18`
 
 ## S35.22: Linked citations.
 
@@ -244,12 +244,12 @@ Code: `apps/mobile/src/features/research/ReportsScreen.tsx:192-197`, `apps/mobil
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile shows a numbered source list under the report, but [n] markers in the report text are not links. | ui |
+| mobile | partial | partials/slack f1e1d8113e: the renderer turns [n] into a tappable marker when it is given the sources. Left: the [n] markers in a research report link to its sources, in the chat card and on the report screen once post-codex/p-slack-mobile-research-citations-outline.patch passes them from MessageBubble and ReportsScreen (both held by Codex; git apply --check passes on the Codex working copy, and the patch typechecks on this branch). | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/chat/components/research/ResearchSourcesAppendix.tsx:30-34`
+Code: `apps/mobile/src/features/chat/components/MessageContentRenderer.tsx:195-195`, `apps/mobile/src/features/chat/components/MessageContentRenderer.tsx:203-203`, `apps/mobile/src/features/chat/components/CitationChip.tsx:30-30`
 
 ## S35.23: Tables and charts.
 

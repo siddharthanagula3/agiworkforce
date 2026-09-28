@@ -103,3 +103,5 @@ export {
   LocalFolderAttachDialog,
   type LocalFolderAttachDialogProps,
 } from './components/LocalFolderAttachDialog';
+export { PanelWindowPortal } from './components/PanelWindow';
+export { useDetachablePanels, type DetachablePanels } from './hooks/use-detachable-panels';

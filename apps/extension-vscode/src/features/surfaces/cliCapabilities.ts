@@ -35,6 +35,7 @@ export const CLI_CAPABILITY_METHODS = {
   savedPermissions: 'listSavedPermissions',
   savedPermissionsRemove: 'removeSavedPermission',
   mcpInspect: 'inspectMcpServer',
+  pluginsUpdate: 'updatePlugin',
 } as const;
 
 export type CliCapability = keyof typeof CLI_CAPABILITY_METHODS;
@@ -53,6 +54,7 @@ export type CliFamily = keyof Pick<
   | 'mcpTools'
   | 'savedPermissions'
   | 'mcpInspect'
+  | 'pluginUpdates'
 >;
 
 const CLI_CAPABILITY_FAMILIES: Record<CliCapability, CliFamily> = {
@@ -86,6 +88,7 @@ const CLI_CAPABILITY_FAMILIES: Record<CliCapability, CliFamily> = {
   savedPermissions: 'savedPermissions',
   savedPermissionsRemove: 'savedPermissions',
   mcpInspect: 'mcpInspect',
+  pluginsUpdate: 'pluginUpdates',
 };
 
 const CLI_FAMILY_LABELS: Record<CliFamily, string> = {
@@ -101,6 +104,7 @@ const CLI_FAMILY_LABELS: Record<CliFamily, string> = {
   mcpTools: 'MCP server tool lists',
   savedPermissions: 'saved approvals',
   mcpInspect: 'MCP server details',
+  pluginUpdates: 'updating plugins',
 };
 
 export function cliCapabilityNotOffered(capability: CliCapability): string {
@@ -118,10 +122,30 @@ export interface CliCapabilityEntry {
   detail?: string;
 }
 
+export interface CliWebSearchSetup {
+  key?: string;
+  logins: string[];
+}
+
 export interface CliAccountStatus {
   signedIn: boolean;
   email?: string;
   tier?: string;
+  webSearch?: CliWebSearchSetup;
+}
+
+const LOGIN_TARGET = /^[A-Za-z0-9_-]{1,64}$/u;
+
+function readWebSearchSetup(record: Record<string, unknown>): CliWebSearchSetup | undefined {
+  const logins = record['webSearchLogins'];
+  if (!Array.isArray(logins)) return undefined;
+  const key = readString(record, ['webSearchKey']);
+  return {
+    ...(key === undefined ? {} : { key }),
+    logins: logins.filter(
+      (login): login is string => typeof login === 'string' && LOGIN_TARGET.test(login),
+    ),
+  };
 }
 
 export interface CliLoginChallenge {
@@ -251,12 +275,14 @@ export class CliCapabilityAdapter {
         : {};
     const email = readString(record, ['email', 'account', 'user']);
     const tier = readString(record, ['tier', 'plan', 'planTier']);
+    const webSearch = readWebSearchSetup(record);
     return {
       status: 'ok',
       value: {
         signedIn: record['signedIn'] === true,
         ...(email === undefined ? {} : { email }),
         ...(tier === undefined ? {} : { tier }),
+        ...(webSearch === undefined ? {} : { webSearch }),
       },
     };
   }

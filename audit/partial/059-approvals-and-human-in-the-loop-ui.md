@@ -47,16 +47,15 @@ Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:4596
 
 - Done when: The user can allow or block specific websites/domains the agent may act on or fetch, and it is enforced.
 - Wave: 3
-- Already works on: cli, chrome
+- Already works on: web, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Domain allow/deny exists only for Deep Research sources; ordinary web search and url_fetch have no user-set domain permissions (only the private-network egress guard). | ui |
-| desktop | partial | Same as web: domain rules exist only for Deep Research; the native browser gate asks per command. | ui |
+| desktop | partial | Desktop cloud chats send web_search and web_fetch to the server, so the workspace site rules bind them. BYOK and local desktop turns attach the provider's hosted web_search and web_fetch in the Tauri client (server_tools.rs), which does not read the workspace lists; the client would have to withhold hosted search or pass the lists as allowed_domains or blocked_domains. The native browser gate still asks per command and reads no site rule. | local |
 | mobile | missing | Not built on this surface. |  |
 | vscode | partial | The runtime asks only for internal fetch destinations; no per-domain setting. | ui |
 
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/research-sources.ts:48-58`, `apps/cli/src/features/exec/tools/mod.rs:706-711`
+Code: `apps/desktop/src/api/cloudApi.ts:965-965`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4174-4176`, `apps/desktop/src-tauri/src/core/llm/server_tools.rs:207-207`, `apps/cli/src/features/exec/tools/mod.rs:706-711`
 
 ## S59.09: Read-only mode.
 

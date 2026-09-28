@@ -100,9 +100,9 @@ describe('trimToolResultHistoryKeepingReferences', () => {
 
   it('replaces older results with a reference that reads the original back', async () => {
     const messages = history();
-    await expect(trimToolResultHistoryKeepingReferences(messages, USER_ID, 2_500, 1)).resolves.toBe(
-      2,
-    );
+    await expect(
+      trimToolResultHistoryKeepingReferences(messages, { userId: USER_ID }, 2_500, 1),
+    ).resolves.toBe(2);
     expect(messages[1]!.content).toBe(trimmedToolResultNotice('call_a'));
     expect(messages[3]!.content).toBe('recent');
     const read = await readStoredToolResult(USER_ID, { reference: 'call_a', offset: 0 });
@@ -112,17 +112,17 @@ describe('trimToolResultHistoryKeepingReferences', () => {
 
   it('does not trim a reference notice again', async () => {
     const messages = history();
-    await trimToolResultHistoryKeepingReferences(messages, USER_ID, 100, 1);
+    await trimToolResultHistoryKeepingReferences(messages, { userId: USER_ID }, 100, 1);
     const once = messages.map((message) => message.content);
-    await expect(trimToolResultHistoryKeepingReferences(messages, USER_ID, 100, 1)).resolves.toBe(
-      0,
-    );
+    await expect(
+      trimToolResultHistoryKeepingReferences(messages, { userId: USER_ID }, 100, 1),
+    ).resolves.toBe(0);
     expect(messages.map((message) => message.content)).toEqual(once);
   });
 
   it('falls back to the plain marker when nothing can be kept', async () => {
     const messages = history();
-    await trimToolResultHistoryKeepingReferences(messages, undefined, 2_500, 1);
+    await trimToolResultHistoryKeepingReferences(messages, { userId: undefined }, 2_500, 1);
     expect(messages[1]!.content).toMatch(/^\[earlier tool result omitted/);
   });
 });
