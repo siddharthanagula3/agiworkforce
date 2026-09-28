@@ -28,6 +28,7 @@ import {
   ImagePlus,
   LibraryBig,
   ListChecks,
+  Monitor,
   MonitorPlay,
   Paperclip,
   Search,
@@ -109,6 +110,9 @@ const ROW_LABEL_CLIPBOARD = 'Attach clipboard';
 const ROW_LABEL_CLIPBOARD_BUSY = 'Reading clipboard…';
 const ROW_LABEL_LOCAL_COMMAND = 'Run a local command';
 const ROW_LABEL_BROWSER = 'Use the browser';
+const ROW_LABEL_DEVICE_STEPS = 'Use this computer';
+const DEVICE_STEPS_TITLE =
+  'When on, AGI can work in your approved folders, apps and browser on this computer during this chat. Turn it off to keep the chat in the cloud.';
 const ROW_LABEL_SKILLS = 'Skills';
 const ROW_LABEL_CONNECTORS = 'Connectors';
 const ROW_LABEL_PLUGINS = 'Plugins';
@@ -544,6 +548,8 @@ export interface ComposerPlusMenuProps {
   onAttachClipboard: () => void;
   onRunLocalCommand: () => void;
   onUseBrowser: () => void;
+  deviceStepsEnabled: boolean;
+  onToggleDeviceSteps: () => void;
 
   showWorkingFolderRow: boolean;
   canPickFolder: boolean;
@@ -1050,6 +1056,15 @@ function ChatMenu(props: ComposerPlusMenuProps) {
       {props.showDesktopActionRows && <ClipboardRow props={props} />}
       {props.showDesktopActionRows && <LocalCommandRow props={props} />}
       {props.showDesktopActionRows && <BrowserRow props={props} />}
+      {props.showDesktopActionRows && (
+        <MenuToggleRow
+          icon={Monitor}
+          label={ROW_LABEL_DEVICE_STEPS}
+          checked={props.deviceStepsEnabled}
+          onToggle={props.onToggleDeviceSteps}
+          title={DEVICE_STEPS_TITLE}
+        />
+      )}
 
       {props.hostCanGenerateImage && <ImageRow props={props} />}
       {props.hostCanGenerateVideo && <VideoRow props={props} />}
@@ -1404,6 +1419,17 @@ function WorkPalette(props: ComposerPlusMenuProps) {
     ),
     props.showDesktopActionRows && matches(ROW_LABEL_BROWSER) && (
       <BrowserRow key="use-browser" props={props} role="menuitem" />
+    ),
+    props.showDesktopActionRows && matches(ROW_LABEL_DEVICE_STEPS) && (
+      <MenuToggleRow
+        key="device-steps"
+        role="menuitem"
+        icon={Monitor}
+        label={ROW_LABEL_DEVICE_STEPS}
+        checked={props.deviceStepsEnabled}
+        onToggle={props.onToggleDeviceSteps}
+        title={DEVICE_STEPS_TITLE}
+      />
     ),
     props.hostCanGenerateImage && matches(ROW_LABEL_IMAGE) && (
       <ImageRow key="image" props={props} role="menuitem" />

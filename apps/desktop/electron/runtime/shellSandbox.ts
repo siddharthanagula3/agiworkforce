@@ -56,6 +56,7 @@ export interface SandboxedSpawnInput {
   writableRoots: readonly string[];
   readableRoots: readonly string[];
   network: SandboxNetwork;
+  terminal?: boolean;
 }
 
 export interface SandboxedSpawn {
@@ -129,10 +130,16 @@ function seatbeltPath(value: string): string {
   return `"${value}"`;
 }
 
+const SEATBELT_TERMINAL_RULES = [
+  '(allow file-ioctl (regex #"^/dev/ttys[0-9]+$"))',
+  '(allow file-write* (literal "/dev/tty"))',
+];
+
 export function seatbeltProfile(input: {
   writableRoots: readonly string[];
   readableRoots: readonly string[];
   network: SandboxNetwork;
+  terminal?: boolean;
 }): string {
   const subpaths = (paths: readonly string[]) =>
     paths.map((value) => `(subpath ${seatbeltPath(value)})`).join(' ');
@@ -146,6 +153,7 @@ export function seatbeltProfile(input: {
     '(allow file-write* (literal "/dev/null"))',
     `(allow file-write* ${subpaths(SEATBELT_SHARED_WRITE_PATHS)})`,
     `(allow file-write* ${subpaths(input.writableRoots)})`,
+    ...(input.terminal === true ? SEATBELT_TERMINAL_RULES : []),
   ];
   return `${lines.join('\n')}\n`;
 }

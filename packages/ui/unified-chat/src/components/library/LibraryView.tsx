@@ -879,7 +879,7 @@ export function LibraryView({
         ) : null}
       </header>
 
-      {transport.mediaJobs && !viewDeleted ? (
+      {transport.mediaJobs && isAuthReady && isSignedIn && !viewDeleted ? (
         <MediaJobsSection transport={transport.mediaJobs} />
       ) : null}
 

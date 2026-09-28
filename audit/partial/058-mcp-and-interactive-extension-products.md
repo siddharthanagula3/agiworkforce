@@ -97,27 +97,23 @@ Code: `apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx:85-85`
 
 - Done when: The user can inspect a server's capabilities (protocol, tools, resources, prompts, extensions).
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| vscode | partial | partials/desktop-cli 37322ae88e: mcp/inspect returns protocol, server info, capabilities, instructions, health and recent logs (from a thread's live connection or a fresh probe); the VS Code details panel is p-sessions'. | ui |
-
-Code: `apps/cli/src/app_server/developer_host.rs:3190-3190`, `apps/cli/src/app_server/surfaces.rs:659-659`
 
 ## S58.12: Server health and logs.
 
 - Done when: Each server shows its health and the user can read recent logs or call history.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Mobile marks only expired authorization; the server's "not-responding" health is ignored, so a failing connector still shows Connected. | ui |
-| vscode | partial | partials/desktop-cli 37322ae88e: mcp/inspect carries responding and logs; the VS Code health and logs view is p-sessions'. | ui |
 
-Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:430-444`, `apps/cli/src/app_server/developer_host.rs:3190-3190`
+Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:430-444`
 
 ## S58.13: Enable/disable server.
 

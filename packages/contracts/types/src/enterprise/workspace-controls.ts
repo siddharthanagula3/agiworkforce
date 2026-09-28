@@ -13,6 +13,7 @@ export const WORKSPACE_FEATURES = [
   'schedules',
   'event_triggers',
   'projects',
+  'artifact_connectors',
 ] as const;
 
 export type WorkspaceFeature = (typeof WORKSPACE_FEATURES)[number];
@@ -39,6 +40,7 @@ export const WORKSPACE_FEATURE_LABELS: Readonly<Record<WorkspaceFeature, string>
   schedules: 'Schedules',
   event_triggers: 'Event triggers',
   projects: 'Projects',
+  artifact_connectors: 'Connected apps in artifacts',
 });
 
 export const WORKSPACE_REASONING_EFFORTS = [
