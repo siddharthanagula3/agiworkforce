@@ -8,23 +8,21 @@ import { toUserMessage } from '@agiworkforce/unified-chat/network-error';
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import {
   useOrganizationSharedOverview,
-  useSetSharedProjectMemberAccess,
-  useSetSharedProjectMembersAccess,
   useShareConnectorWithOrganization,
   useShareProjectWithOrganization,
   useUnshareConnectorFromOrganization,
   useUnshareArtifactFromOrganization,
   useUnshareConversationFromOrganization,
   useUnshareProjectFromOrganization,
-  type OrgMemberProjectAccess,
   type OrgSharedOverview,
-  type OrgSharedProject,
+  type ProjectShareAudience,
 } from '../hooks/use-settings-queries';
 import {
-  MemberIdentity,
-  MemberPicker,
-  memberDisplayName,
-} from '@shared/components/people/MemberPicker';
+  ProjectAudienceSelect,
+  SharedProjectAudienceControl,
+  SharedProjectMemberAccessList,
+  memberProjectAccess,
+} from '@/features/projects/components/ProjectSharingControls';
 
 const cardStyle = {
   border: '1px solid var(--settings-border)',
@@ -161,166 +159,9 @@ async function fetchOwnConnectors(): Promise<OwnConnector[]> {
   return json.connectors ?? [];
 }
 
-const ACCESS_LABELS: Record<OrgMemberProjectAccess, string> = {
-  read: 'Can view',
-  write: 'Can edit',
-  none: 'No access',
-};
-
-const ROLE_LABELS: Record<OrgSharedOverview['members'][number]['role'], string> = {
-  owner: 'Workspace owner',
-  admin: 'Admin',
-  member: 'Member',
-  viewer: 'Viewer',
-};
-
-function ProjectPeopleAccess({
-  project,
-  overview,
-}: {
-  project: OrgSharedProject;
-  overview: OrgSharedOverview;
-}) {
-  const setAccess = useSetSharedProjectMemberAccess();
-  const setManyAccess = useSetSharedProjectMembersAccess();
-  const [picked, setPicked] = useState<string[]>([]);
-  const [pickedAccess, setPickedAccess] = useState<'write' | 'none'>('write');
-  const busy = setAccess.isPending || setManyAccess.isPending;
-
-  const roster = overview.members.map((member) => ({
-    ...member,
-    name: member.displayName?.trim() || member.email || '',
-    email: member.email ?? '',
-    avatarUrl: null,
-  }));
-  const grantByUser = new Map(project.memberGrants.map((grant) => [grant.userId, grant.access]));
-  const owner = roster.find((member) => member.userId === project.ownerUserId);
-  const specific = roster.filter(
-    (member) =>
-      member.userId !== project.ownerUserId &&
-      (grantByUser.get(member.userId) === 'write' || grantByUser.get(member.userId) === 'none'),
-  );
-  const candidates = roster.filter(
-    (member) => member.userId !== project.ownerUserId && !specific.includes(member),
-  );
-  const addId = `add-access-${project.projectId}`;
-
-  return (
-    <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
-      <ul
-        style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 'var(--space-1)' }}
-      >
-        {owner ? (
-          <li
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 'var(--space-2)',
-            }}
-          >
-            <MemberIdentity member={owner} detail={ROLE_LABELS[owner.role]} />
-            <span style={{ color: 'var(--text-3)', fontSize: 12, flexShrink: 0 }}>
-              Project owner
-            </span>
-          </li>
-        ) : null}
-        {specific.map((member) => {
-          const controlId = `access-${project.projectId}-${member.userId}`;
-          const name = memberDisplayName(member);
-          return (
-            <li
-              key={member.userId}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: 'var(--space-2)',
-              }}
-            >
-              <MemberIdentity member={member} detail={ROLE_LABELS[member.role]} />
-              <label htmlFor={controlId} style={{ position: 'absolute', left: -9999 }}>
-                Access for {name}
-              </label>
-              <select
-                id={controlId}
-                value={grantByUser.get(member.userId) ?? 'read'}
-                style={{ ...selectStyle, flexShrink: 0 }}
-                disabled={busy}
-                onChange={(event) => {
-                  const next = event.target.value as OrgMemberProjectAccess;
-                  setAccess.mutate({
-                    projectId: project.projectId,
-                    userId: member.userId,
-                    access: next === 'read' ? 'inherit' : next,
-                  });
-                }}
-              >
-                <option value="read">{ACCESS_LABELS.read}</option>
-                <option value="write">{ACCESS_LABELS.write}</option>
-                <option value="none">{ACCESS_LABELS.none}</option>
-              </select>
-            </li>
-          );
-        })}
-        <li style={{ color: 'var(--text-3)', fontSize: 12 }}>
-          {specific.length === 0
-            ? 'Everyone in this organization can view.'
-            : 'Everyone else in this organization can view.'}
-        </li>
-      </ul>
-      {candidates.length > 0 ? (
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'flex-end',
-            gap: 'var(--space-2)',
-            flexWrap: 'wrap',
-          }}
-        >
-          <div style={{ flex: '1 1 260px', minWidth: 0 }}>
-            <MemberPicker
-              label="Add people"
-              members={candidates}
-              selectedIds={picked}
-              onChange={setPicked}
-              disabled={busy}
-            />
-          </div>
-          <label htmlFor={addId} style={{ position: 'absolute', left: -9999 }}>
-            Access for the people you add
-          </label>
-          <select
-            id={addId}
-            value={pickedAccess}
-            style={{ ...selectStyle, minHeight: 36 }}
-            disabled={busy}
-            onChange={(event) => setPickedAccess(event.target.value === 'none' ? 'none' : 'write')}
-          >
-            <option value="write">{ACCESS_LABELS.write}</option>
-            <option value="none">{ACCESS_LABELS.none}</option>
-          </select>
-          <button
-            type="button"
-            style={{ ...buttonStyle, minHeight: 36 }}
-            disabled={picked.length === 0 || busy}
-            onClick={() =>
-              setManyAccess.mutate(
-                { projectId: project.projectId, userIds: picked, access: pickedAccess },
-                { onSuccess: () => setPicked([]) },
-              )
-            }
-          >
-            {setManyAccess.isPending ? 'Saving…' : 'Add'}
-          </button>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 function SharedProjects({ overview }: { overview: OrgSharedOverview }) {
   const [selected, setSelected] = useState('');
+  const [audience, setAudience] = useState<ProjectShareAudience>('invited');
   const shareProject = useShareProjectWithOrganization();
   const unshareProject = useUnshareProjectFromOrganization();
   const { confirm, dialog: confirmDialog } = useConfirmAction();
@@ -342,7 +183,7 @@ function SharedProjects({ overview }: { overview: OrgSharedOverview }) {
     <SectionCard
       icon={<FolderGit2 size={14} aria-hidden />}
       title="Shared projects"
-      description="Members can open a shared project and read its instructions and knowledge files. Give someone Can edit and they can also change its name, instructions, appearance and sources; archiving and deleting stay with the owner, and conversations stay private to each member."
+      description="Share a project with the people you invite, or with everyone in the workspace. Members with access read its instructions and knowledge files; give someone Can edit and they can also change its name, instructions, appearance and sources. Archiving and deleting stay with the owner, and conversations stay private to each member."
     >
       {overview.canManageSharing && ownProjects.isError ? (
         <LoadError
@@ -371,13 +212,20 @@ function SharedProjects({ overview }: { overview: OrgSharedOverview }) {
               </option>
             ))}
           </select>
+          <label htmlFor="org-share-audience" style={{ position: 'absolute', left: -9999 }}>
+            Who can open it
+          </label>
+          <ProjectAudienceSelect id="org-share-audience" value={audience} onChange={setAudience} />
           <button
             type="button"
             style={buttonStyle}
             disabled={!selected || shareProject.isPending}
             onClick={() => {
               if (!selected) return;
-              shareProject.mutate(selected, { onSuccess: () => setSelected('') });
+              shareProject.mutate(
+                { projectId: selected, audience },
+                { onSuccess: () => setSelected('') },
+              );
             }}
           >
             {shareProject.isPending ? 'Sharing…' : 'Share project with organization'}
@@ -398,12 +246,11 @@ function SharedProjects({ overview }: { overview: OrgSharedOverview }) {
           }}
         >
           {overview.sharedProjects.map((project) => {
-            const denied = new Set(
-              project.memberGrants
-                .filter((grant) => grant.access === 'none')
-                .map((grant) => grant.userId),
+            const visibleTo = overview.members.filter(
+              (member) =>
+                member.userId === project.ownerUserId ||
+                memberProjectAccess(project, member.userId) !== 'none',
             );
-            const visibleTo = overview.members.filter((member) => !denied.has(member.userId));
             const editorCount = project.memberGrants.filter(
               (grant) => grant.access === 'write',
             ).length;
@@ -453,7 +300,10 @@ function SharedProjects({ overview }: { overview: OrgSharedOverview }) {
                 </div>
 
                 {overview.canManageSharing ? (
-                  <ProjectPeopleAccess project={project} overview={overview} />
+                  <>
+                    <SharedProjectAudienceControl project={project} />
+                    <SharedProjectMemberAccessList project={project} members={overview.members} />
+                  </>
                 ) : null}
               </li>
             );
