@@ -43,6 +43,7 @@ import {
   type PlanLimitAlternativeKind,
 } from '@/lib/server/plan-limit-alternative';
 import { currentScheduleRun } from '@/lib/schedules/schedule-run-scope';
+import { attemptErrorClass, type GenerationAttempt } from '@/lib/services/generation-attempt';
 
 export const MANAGED_CHAT_CONTRACT_VERSION = '2026-07-15' as const;
 
@@ -211,15 +212,6 @@ function resolveServedRouteFromObservations(
       : buildRouteId(provider, modelId);
   return { provider, model: modelId, routeId };
 }
-
-export type ManagedUsageAttemptOutcome = 'completed' | 'failed' | 'cancelled';
-
-export interface ManagedUsageAttempt {
-  outcome: ManagedUsageAttemptOutcome;
-  errorClass?: string | undefined;
-}
-
-const ATTEMPT_ERROR_CLASS_PATTERN = /^[a-z][a-z0-9_]{0,63}$/;
 
 export interface ManagedUsageFinalization {
   requestStatus: 'completed' | 'released' | 'outcome_unknown';
@@ -608,14 +600,9 @@ async function attributeToConversation(
 
 async function recordAttemptOutcome(
   reservation: ManagedUsageRequestReservation,
-  attempt: ManagedUsageAttempt,
+  attempt: GenerationAttempt,
 ): Promise<void> {
-  const errorClass =
-    attempt.outcome === 'failed' &&
-    attempt.errorClass &&
-    ATTEMPT_ERROR_CLASS_PATTERN.test(attempt.errorClass)
-      ? attempt.errorClass
-      : null;
+  const errorClass = attemptErrorClass(attempt);
   try {
     await reservation.db.execute(
       `update public.managed_usage_requests
@@ -945,7 +932,7 @@ export async function finalizeManagedUsageRequest(
     providerCostMicrousd?: number;
     providerCostCents?: number;
     usage?: Record<string, unknown>;
-    attempt?: ManagedUsageAttempt | null;
+    attempt?: GenerationAttempt | null;
   },
 ): Promise<ManagedUsageFinalization> {
   const billedMicrousd =

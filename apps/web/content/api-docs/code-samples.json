@@ -1,0 +1,22 @@
+{
+  "hero": {
+    "curl": "curl {{GATEWAY_BASE_URL}}/chat/completions \\\n  -H \"Authorization: Bearer $AGI_API_KEY\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{ \"model\": \"auto\", \"messages\": [{ \"role\": \"user\", \"content\": \"hello\" }] }'",
+    "Python": "import os\nfrom openai import OpenAI\n\nclient = OpenAI(\n    base_url=\"{{GATEWAY_BASE_URL}}\",\n    api_key=os.environ[\"AGI_API_KEY\"],\n)\nreply = client.chat.completions.create(\n    model=\"auto\",\n    messages=[{\"role\": \"user\", \"content\": \"hello\"}],\n)\nprint(reply.choices[0].message.content)",
+    "TypeScript": "import OpenAI from 'openai';\n\nconst client = new OpenAI({\n  baseURL: '{{GATEWAY_BASE_URL}}',\n  apiKey: process.env.AGI_API_KEY,\n});\nconst reply = await client.chat.completions.create({\n  model: 'auto',\n  messages: [{ role: 'user', content: 'hello' }],\n});\nconsole.log(reply.choices[0]?.message.content);"
+  },
+  "sdk": {
+    "Python": "# pip install openai\n# export OPENAI_BASE_URL={{GATEWAY_BASE_URL}}\n# export OPENAI_API_KEY=sk_live_...\nimport uuid\nfrom openai import OpenAI\n\nclient = OpenAI()\n\nfor model in client.models.list():\n    print(model.id)\n\nstream = client.chat.completions.create(\n    model=\"auto\",\n    messages=[{\"role\": \"user\", \"content\": \"Summarise the attached notes\"}],\n    stream=True,\n    extra_headers={\"Idempotency-Key\": str(uuid.uuid4())},\n)\nfor chunk in stream:\n    if chunk.choices:\n        print(chunk.choices[0].delta.content or \"\", end=\"\")\n\nwith open(\"meeting.m4a\", \"rb\") as audio:\n    transcript = client.audio.transcriptions.create(file=audio, model=\"auto\")\nprint(transcript.text)",
+    "TypeScript": "// npm install openai\n// export OPENAI_BASE_URL={{GATEWAY_BASE_URL}}\n// export OPENAI_API_KEY=sk_live_...\nimport fs from 'node:fs';\nimport OpenAI from 'openai';\n\nconst client = new OpenAI();\n\nfor await (const model of client.models.list()) {\n  console.log(model.id);\n}\n\nconst stream = await client.chat.completions.create(\n  {\n    model: 'auto',\n    messages: [{ role: 'user', content: 'Summarise the attached notes' }],\n    stream: true,\n  },\n  { headers: { 'Idempotency-Key': crypto.randomUUID() } },\n);\nfor await (const chunk of stream) {\n  process.stdout.write(chunk.choices[0]?.delta.content ?? '');\n}\n\nconst transcript = await client.audio.transcriptions.create({\n  file: fs.createReadStream('meeting.m4a'),\n  model: 'auto',\n});\nconsole.log(transcript.text);"
+  },
+  "http": {
+    "Route preview": "curl {{GATEWAY_BASE_URL}}/route/preview \\\n  -H \"Authorization: Bearer $AGI_API_KEY\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{ \"selection\": \"auto\", \"taskType\": \"general\" }'",
+    "Credit balance": "curl {{GATEWAY_BASE_URL}}/credits/balance \\\n  -H \"Authorization: Bearer $AGI_API_KEY\"",
+    "Estimate": "curl {{API_BASE_URL}}/usage/estimate \\\n  -H \"Authorization: Bearer $AGI_API_KEY\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{ \"model\": \"<id from GET /models>\", \"messages\": [{ \"role\": \"user\", \"content\": \"hello\" }], \"max_tokens\": 500 }'",
+    "Settled cost": "curl {{API_BASE_URL}}/usage/turns/$IDEMPOTENCY_KEY \\\n  -H \"Authorization: Bearer $AGI_API_KEY\""
+  },
+  "webhook": {
+    "Payload": "{\n  \"object\": \"event\",\n  \"id\": \"4f2b1c9e-6a3d-4c8e-9b1f-2d7e5a0c3b18\",\n  \"type\": \"api_key.revoked\",\n  \"created_at\": 1790553600,\n  \"data\": {\n    \"id\": \"b7a0e2d4-1f3c-4e5a-8b6d-9c0f1e2a3b4c\",\n    \"name\": \"Production\",\n    \"project_id\": null,\n    \"reason\": \"deleted\"\n  }\n}",
+    "Python": "# pip install standardwebhooks\nimport os\nfrom standardwebhooks.webhooks import Webhook\n\nwebhook = Webhook(os.environ[\"AGI_WEBHOOK_SECRET\"])\n\ndef handle(request_body: bytes, headers: dict) -> None:\n    event = webhook.verify(request_body, headers)\n    print(event[\"type\"], event[\"data\"])",
+    "TypeScript": "// npm install standardwebhooks\nimport { Webhook } from 'standardwebhooks';\n\nconst webhook = new Webhook(process.env.AGI_WEBHOOK_SECRET!);\n\nexport async function POST(request: Request) {\n  const body = await request.text();\n  const event = webhook.verify(body, Object.fromEntries(request.headers)) as {\n    type: string;\n    data: unknown;\n  };\n  console.log(event.type, event.data);\n  return new Response(null, { status: 204 });\n}"
+  }
+}

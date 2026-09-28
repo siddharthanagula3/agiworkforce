@@ -10,26 +10,13 @@ nothing is left.
 
 - Done when: The user sets up a recurring daily briefing that is generated and delivered to them.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | No briefing setup: the user can only write a cron schedule with their own prompt (agi schedules create). | ui |
-| chrome | partial | No briefing setup: the user can only create a scheduled task with their own prompt and an hourly/daily/weekly/monthly cadence. | ui |
 
-Code: `apps/cli/src/lib.rs:1104-1104`, `apps/cli/src/schedules.rs:238-238`, `apps/extension/src/side_panel.ts:9307-9315`, `apps/extension/src/features/background/tasks.ts:173-173`
-
-## S42.04: Delivery time and timezone.
-
-- Done when: The user sets the delivery time and timezone of the briefing.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | Chrome scheduled tasks pick only a cadence (hourly/daily/weekly/monthly); there is no time of day or timezone. | ui |
-
-Code: `apps/extension/src/types.ts:787-787`, `apps/extension/src/side_panel.ts:9314-9314`
+Code: `apps/cli/src/lib.rs:1104-1104`, `apps/cli/src/schedules.rs:238-238`
 
 ## S42.10: Follow-up questions on a briefing item.
 
