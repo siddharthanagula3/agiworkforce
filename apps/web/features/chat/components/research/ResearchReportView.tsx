@@ -703,6 +703,30 @@ export function ResearchReportView({
             </section>
           )}
 
+          {report.gaps && report.gaps.length > 0 && (
+            <section className="mb-4" aria-labelledby="research-report-questions">
+              <h3
+                id="research-report-questions"
+                className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+              >
+                Planned questions
+              </h3>
+              <ul className="space-y-1 text-sm" data-testid="research-report-questions">
+                {report.gaps.map((gap) => (
+                  <li key={gap.id} className="text-foreground">
+                    <span className="font-medium">
+                      {gap.status === 'closed' ? 'Answered' : 'Not answered'}:
+                    </span>{' '}
+                    {gap.question}
+                    {gap.status === 'open' ? (
+                      <span className="block text-caption text-muted-foreground">{gap.reason}</span>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
           {headings.length >= 3 && (
             <nav
               className="mb-4 rounded-lg border border-border/30 bg-muted/20 p-3"
