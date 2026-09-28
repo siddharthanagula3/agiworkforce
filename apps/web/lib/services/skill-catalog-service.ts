@@ -20,6 +20,7 @@ import {
   type SkillToolFileAccess,
   type SkillToolResult,
   type SkillToolRuntimeContext,
+  type SkillWithFileAccess,
 } from '@agiworkforce/skills';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
@@ -488,6 +489,17 @@ export async function executeManagedSkillToolForPlugins(
     skillToolRuntimeContext(options),
     managedSkillFileAccess,
   );
+}
+
+export async function findManagedSkillWithFiles(
+  name: string,
+  enabledPluginIds: ReadonlySet<string> | null,
+): Promise<SkillWithFileAccess | null> {
+  const catalog = enabledPluginIds
+    ? await getManagedSkillCatalogForPlugins(enabledPluginIds)
+    : await getManagedSkillCatalog();
+  const skill = catalog.find((candidate) => candidate.name === name);
+  return skill ? { skill, access: managedSkillFileAccess } : null;
 }
 
 /**

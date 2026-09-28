@@ -99,3 +99,8 @@ export interface InstalledDirectorySkill {
   body: string;
   path: string;
 }
+
+export interface SkillCompanionFile {
+  path: string;
+  size: number;
+}
