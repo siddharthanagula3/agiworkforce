@@ -410,6 +410,7 @@ export interface LibraryAssetRow {
   metadata: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
+  deletedAt: string | null;
   conversationId: string | null;
 }
 
@@ -452,6 +453,7 @@ function mapLibraryRow(row: Record<string, unknown>): LibraryAssetRow {
     metadata: (row['metadata'] as Record<string, unknown> | null) ?? {},
     createdAt: new Date(row['created_at'] as string).toISOString(),
     updatedAt: new Date((row['updated_at'] ?? row['created_at']) as string).toISOString(),
+    deletedAt: row['deleted_at'] ? new Date(row['deleted_at'] as string).toISOString() : null,
     conversationId: (row['conversation_id'] as string | null) ?? null,
   };
 }

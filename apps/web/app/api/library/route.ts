@@ -11,6 +11,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { fileTextPreviewKind } from '@/lib/server/file-text-preview';
+import { RESOURCE_RECOVERY_WINDOW_DAYS } from '@/lib/resources/deletion-policies';
 import {
   listLibraryAssets,
   sumLibraryStorageBytes,
@@ -52,6 +53,12 @@ function previewableForRow(row: LibraryAssetRow): boolean {
   return row.metadata['previewable'] === true;
 }
 
+function eraseAfter(deletedAt: string): string {
+  return new Date(
+    Date.parse(deletedAt) + RESOURCE_RECOVERY_WINDOW_DAYS * 24 * 60 * 60 * 1000,
+  ).toISOString();
+}
+
 function toLibraryItem(row: LibraryAssetRow): LibraryItem {
   const surface = row.metadata['surface'];
   const origin = row.metadata['origin'];
@@ -72,6 +79,7 @@ function toLibraryItem(row: LibraryAssetRow): LibraryItem {
     created_at: row.createdAt,
     updated_at: row.updatedAt,
     conversation_id: row.conversationId,
+    ...(row.deletedAt ? { erase_after: eraseAfter(row.deletedAt) } : {}),
   };
 }
 

@@ -324,6 +324,11 @@ function formatModified(iso: string): string {
   return date.toLocaleDateString(undefined, MODIFIED_DATE_FORMAT);
 }
 
+function libraryItemMeta(item: LibraryItem, viewDeleted: boolean): string {
+  if (viewDeleted && item.erase_after) return `Kept until ${formatModified(item.erase_after)}`;
+  return formatModified(item.updated_at ?? item.created_at);
+}
+
 function formatSize(bytes: number | null): string {
   return bytes === null ? '' : formatBytes(bytes, 0);
 }
@@ -1499,7 +1504,7 @@ function LibraryGrid(props: LibraryListProps) {
             key={item.id}
             testId="library-tile"
             name={libraryItemDisplayName(item)}
-            meta={formatModified(item.updated_at ?? item.created_at)}
+            meta={libraryItemMeta(item, props.viewDeleted)}
             ariaLabel={`Open ${libraryItemDisplayName(item)}`}
             onOpen={() => props.actions.onOpen(item)}
             menu={
@@ -1659,7 +1664,7 @@ function LibraryList(props: LibraryListProps) {
                     ) : null}
                   </td>
                   <td className="whitespace-nowrap px-3 py-2 text-[var(--chat-text-muted)]">
-                    {formatModified(item.updated_at ?? item.created_at)}
+                    {libraryItemMeta(item, props.viewDeleted)}
                   </td>
                   <td className="hidden whitespace-nowrap px-3 py-2 text-[var(--chat-text-muted)] sm:table-cell">
                     {formatSize(item.byte_count)}
