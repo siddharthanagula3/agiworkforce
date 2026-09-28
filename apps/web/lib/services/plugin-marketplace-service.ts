@@ -56,6 +56,12 @@ import { AppError, ErrorCode } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { isKnownConnectorId } from '@/lib/connectors/catalog';
 
+import {
+  parseMarketplaceAllowlist,
+  parsePluginDependencies,
+  type PluginDependencyRef,
+} from './plugin-dependencies';
+
 const GITHUB_REPOSITORY_URL_PATTERN =
   /^https:\/\/github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+?)(?:\.git)?\/?$/;
 const MANIFEST_TOO_LARGE_MESSAGE = `The marketplace manifest is larger than ${PLUGIN_MARKETPLACE_MAX_MANIFEST_BYTES} bytes.`;
@@ -469,6 +475,12 @@ function standardManifestPlugin(plugin: ClaudeMarketplacePlugin): PluginMarketpl
     0,
     STANDARD_DESCRIPTION_MAX_CHARS,
   );
+  const dependencies = parsePluginDependencies(plugin['dependencies']);
+  if (!dependencies) {
+    throw new PluginMarketplaceValidationError([
+      `${plugin.name} declares dependencies that cannot be read.`,
+    ]);
+  }
   return {
     id: plugin.name,
     name: (plugin.displayName?.trim() || plugin.name).slice(0, STANDARD_NAME_MAX_CHARS),
@@ -479,7 +491,20 @@ function standardManifestPlugin(plugin: ClaudeMarketplacePlugin): PluginMarketpl
     agents: [],
     examplePrompts: [],
     permissions: [],
+    dependencies,
   };
+}
+
+export function manifestPluginDependencies(
+  plugin: PluginMarketplaceManifestPlugin,
+): PluginDependencyRef[] {
+  const dependencies = parsePluginDependencies(plugin.dependencies);
+  if (!dependencies) {
+    throw new PluginMarketplaceValidationError([
+      `${plugin.id} declares dependencies that cannot be read.`,
+    ]);
+  }
+  return dependencies;
 }
 
 export function declaredPluginCount(json: unknown): number {
@@ -492,6 +517,7 @@ export function standardManifestToInternal(json: unknown): PluginMarketplaceMani
   const parsed = parseClaudeMarketplaceManifest(json);
   return PluginMarketplaceManifestSchema.parse({
     name: parsed.name,
+    allowCrossMarketplaceDependenciesOn: parsed.allowCrossMarketplaceDependenciesOn,
     plugins: parsed.plugins.map(standardManifestPlugin),
   });
 }
@@ -582,6 +608,7 @@ export async function fetchMarketplaceManifest(
       error instanceof Error ? error.message : 'The marketplace manifest is not valid.',
     ]);
   }
+  for (const plugin of manifest.plugins) manifestPluginDependencies(plugin);
 
   const contentHash = sha256OfText(rawText);
   return { manifest, contentHash, resolvedRef, manifestPath, rawText };
@@ -654,6 +681,39 @@ async function replaceSourceEntries(
       sourceId,
     ]);
   }
+}
+
+async function writeDependencyDeclarations(
+  db: DatabaseAdapter,
+  sourceId: string,
+  manifest: PluginMarketplaceManifest,
+): Promise<void> {
+  await db.execute(
+    `update public.plugin_marketplace_sources
+        set allow_cross_marketplace_dependencies_on = $2::jsonb
+      where id = $1`,
+    [
+      sourceId,
+      JSON.stringify(parseMarketplaceAllowlist(manifest.allowCrossMarketplaceDependenciesOn)),
+    ],
+  );
+  await db.execute(
+    `update public.plugin_marketplace_entries entries
+        set dependencies = declared.dependencies
+       from jsonb_to_recordset($2::jsonb) as declared(plugin_key text, dependencies jsonb)
+      where entries.source_id = $1
+        and entries.plugin_key = declared.plugin_key
+        and entries.dependencies is distinct from declared.dependencies`,
+    [
+      sourceId,
+      JSON.stringify(
+        manifest.plugins.map((plugin) => ({
+          plugin_key: plugin.id,
+          dependencies: manifestPluginDependencies(plugin),
+        })),
+      ),
+    ],
+  );
 }
 
 /**
@@ -844,6 +904,7 @@ export async function registerMarketplaceSource(
       id = inserted.id;
     }
     await replaceSourceEntries(tx, id, manifest.plugins, contentHash);
+    await writeDependencyDeclarations(tx, id, manifest);
     await reviewPermissionChanges(tx, userId, id, manifest.plugins);
     return id;
   });
@@ -897,6 +958,7 @@ export async function refreshMarketplaceSource(
           where id = $1`,
         [sourceId],
       );
+      await writeDependencyDeclarations(db, sourceId, manifest);
     } else {
       await db.transaction(async (tx) => {
         await tx.execute(
@@ -907,6 +969,7 @@ export async function refreshMarketplaceSource(
           [sourceId, contentHash],
         );
         await replaceSourceEntries(tx, sourceId, manifest.plugins, contentHash);
+        await writeDependencyDeclarations(tx, sourceId, manifest);
         await reviewPermissionChanges(tx, userId, sourceId, manifest.plugins);
       });
     }
@@ -1046,4 +1109,79 @@ export async function getMarketplaceEntryForUser(
   );
   const row = rows[0];
   return row ? mapEntryRow(row) : null;
+}
+
+export interface MarketplaceSourceEntry {
+  entry: PluginMarketplaceEntry;
+  sourceName: string;
+  allowlist: string[];
+  dependencies: PluginDependencyRef[] | null;
+}
+
+interface MarketplaceSourceEntryRow extends PluginMarketplaceEntryRow {
+  dependencies: unknown;
+  source_name: string;
+  allow_cross_marketplace_dependencies_on: unknown;
+}
+
+const SOURCE_ENTRY_SELECT = `
+  select entries.*, sources.name as source_name,
+         sources.allow_cross_marketplace_dependencies_on
+    from public.plugin_marketplace_entries entries
+    join public.plugin_marketplace_sources sources on sources.id = entries.source_id
+`;
+
+function mapSourceEntryRow(row: MarketplaceSourceEntryRow): MarketplaceSourceEntry {
+  return {
+    entry: mapEntryRow(row),
+    sourceName: row.source_name,
+    allowlist: parseMarketplaceAllowlist(row.allow_cross_marketplace_dependencies_on),
+    dependencies: parsePluginDependencies(row.dependencies),
+  };
+}
+
+export async function getMarketplaceSourceEntry(
+  db: DatabaseAdapter,
+  userId: string,
+  entryId: string,
+): Promise<MarketplaceSourceEntry | null> {
+  const rows = await db.query<MarketplaceSourceEntryRow>(
+    `${SOURCE_ENTRY_SELECT}
+      where entries.id = $1 and sources.user_id = $2
+      limit 1`,
+    [entryId, userId],
+  );
+  const row = rows[0];
+  return row ? mapSourceEntryRow(row) : null;
+}
+
+export async function findMarketplaceSourceEntry(
+  db: DatabaseAdapter,
+  userId: string,
+  sourceName: string,
+  pluginKey: string,
+): Promise<MarketplaceSourceEntry | null> {
+  const rows = await db.query<MarketplaceSourceEntryRow>(
+    `${SOURCE_ENTRY_SELECT}
+      where sources.user_id = $1 and sources.name = $2 and entries.plugin_key = $3
+      order by sources.created_at asc
+      limit 1`,
+    [userId, sourceName, pluginKey],
+  );
+  const row = rows[0];
+  return row ? mapSourceEntryRow(row) : null;
+}
+
+export async function hasMarketplaceSourceNamed(
+  db: DatabaseAdapter,
+  userId: string,
+  sourceName: string,
+): Promise<boolean> {
+  const rows = await db.query<{ id: string }>(
+    `select id from public.plugin_marketplace_sources
+      where user_id = $1 and name = $2
+      limit 1`,
+    [userId, sourceName],
+  );
+  return rows.length > 0;
 }

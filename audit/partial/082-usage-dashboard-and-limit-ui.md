@@ -14,9 +14,9 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Add a by-model breakdown on mobile; it shows only the flagship-class weekly bar although /api/usage/history (callable with the mobile token) returns spend by model. | ui |
+| mobile | partial | post-codex/no-yearly-s82-mobile-usage.patch adds 'Where your usage went' with a By model breakdown from /api/usage/history; apply after Codex lands | ui |
 
-Code: `apps/mobile/src/features/settings/cloud-usage/index.tsx:353-358`, `apps/mobile/services/usage.ts:45-49`
+Code: `packages/contracts/types/src/account-usage-client.ts:91-91`
 
 ## S82.05: Per-feature usage.
 
@@ -26,9 +26,9 @@ Code: `apps/mobile/src/features/settings/cloud-usage/index.tsx:353-358`, `apps/m
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Add a by-product-area breakdown to the mobile Usage screen; the server already returns it (/api/usage/history accepts the mobile session token) but mobile only renders the window meters. | ui |
+| mobile | partial | post-codex/no-yearly-s82-mobile-usage.patch adds the By product area breakdown; apply after Codex lands | ui |
 
-Code: `apps/mobile/src/features/settings/cloud-usage/index.tsx:418-423`, `apps/mobile/services/usage.ts:45-49`
+Code: `packages/contracts/types/src/account-usage-client.ts:91-91`
 
 ## S82.06: Voice usage.
 
@@ -38,9 +38,9 @@ Code: `apps/mobile/src/features/settings/cloud-usage/index.tsx:418-423`, `apps/m
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Show voice minutes used on mobile; the server meters it but mobile shows only the window meters. | ui |
+| mobile | partial | post-codex/no-yearly-s82-mobile-usage.patch adds a This month card with voice minutes against the plan cap from /api/usage/limits; apply after Codex lands | ui |
 
-Code: `apps/mobile/src/features/settings/cloud-usage/index.tsx:418-423`, `apps/mobile/services/usage.ts:45-49`
+Code: `packages/contracts/types/src/account-usage-client.ts:120-120`, `packages/contracts/types/src/account-usage-client.ts:35-35`
 
 ## S82.07: Image usage.
 
@@ -50,9 +50,9 @@ Code: `apps/mobile/src/features/settings/cloud-usage/index.tsx:418-423`, `apps/m
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Show image usage on mobile; the server meters it but mobile shows only the window meters. | ui |
+| mobile | partial | post-codex/no-yearly-s82-mobile-usage.patch shows this month's images and their credits; apply after Codex lands | ui |
 
-Code: `apps/mobile/src/features/settings/cloud-usage/index.tsx:418-423`, `apps/mobile/services/usage.ts:45-49`
+Code: `packages/contracts/types/src/account-usage-client.ts:120-120`
 
 ## S82.08: Video usage.
 
@@ -62,9 +62,9 @@ Code: `apps/mobile/src/features/settings/cloud-usage/index.tsx:418-423`, `apps/m
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Show video seconds used on mobile; the server meters it but mobile shows only the window meters. | ui |
+| mobile | partial | post-codex/no-yearly-s82-mobile-usage.patch shows video seconds against the plan cap; apply after Codex lands | ui |
 
-Code: `apps/mobile/src/features/settings/cloud-usage/index.tsx:418-423`, `apps/mobile/services/usage.ts:45-49`
+Code: `packages/contracts/types/src/account-usage-client.ts:120-120`, `packages/contracts/types/src/account-usage-client.ts:35-35`
 
 ## S82.09: Research usage.
 
@@ -74,9 +74,9 @@ Code: `apps/mobile/src/features/settings/cloud-usage/index.tsx:418-423`, `apps/m
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Add the research share of usage to the mobile Usage screen; the server already returns it (/api/usage/history accepts the mobile session token) but mobile only renders the window meters. | ui |
+| mobile | partial | post-codex/no-yearly-s82-mobile-usage.patch shows the Deep Research share in By product area; apply after Codex lands | ui |
 
-Code: `apps/mobile/src/features/settings/cloud-usage/index.tsx:418-423`, `apps/mobile/services/usage.ts:45-49`
+Code: `packages/contracts/types/src/account-usage-client.ts:91-91`
 
 ## S82.10: Coding/work usage.
 
@@ -86,9 +86,9 @@ Code: `apps/mobile/src/features/settings/cloud-usage/index.tsx:418-423`, `apps/m
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Add the coding/work share of usage to the mobile Usage screen; the server already returns it (/api/usage/history accepts the mobile session token) but mobile only renders the window meters. | ui |
+| mobile | partial | post-codex/no-yearly-s82-mobile-usage.patch shows the AGI Code and AGI Work shares in By product area; apply after Codex lands | ui |
 
-Code: `apps/mobile/src/features/settings/cloud-usage/index.tsx:418-423`, `apps/mobile/services/usage.ts:45-49`
+Code: `packages/contracts/types/src/account-usage-client.ts:91-91`
 
 ## S82.11: Storage usage.
 
@@ -98,9 +98,9 @@ Code: `apps/mobile/src/features/settings/cloud-usage/index.tsx:418-423`, `apps/m
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Show cloud knowledge storage used vs the plan limit on mobile; mobile's Storage screen covers only on-device data, while the knowledge-files API already returns usedBytes/limitBytes. | ui |
+| mobile | partial | knowledge storage used and its limit are account-wide but only returned by the per-project knowledge-files route, which the shared mobile knowledge client does not parse, and the mobile project screens are Codex-held; left for after Codex lands | ui |
 
-Code: `apps/mobile/app/(app)/settings/storage.tsx:33-33`
+Code: `apps/web/app/api/projects/[id]/knowledge-files/route.ts:108-108`
 
 ## S82.12: Active-job count.
 
@@ -110,9 +110,9 @@ Code: `apps/mobile/app/(app)/settings/storage.tsx:33-33`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile Tasks has a 'Running' filter but no count and no limit. | ui |
+| mobile | partial | post-codex/no-yearly-s82-mobile-usage.patch shows 'Responses running now: X of Y at a time' on the Usage screen, as the web does; apply after Codex lands | ui |
 
-Code: `apps/mobile/src/features/tasks/runPresentation.ts:15-23`
+Code: `packages/contracts/types/src/account-usage-client.ts:120-120`
 
 ## S82.13: Remaining credits.
 
@@ -122,9 +122,9 @@ Code: `apps/mobile/src/features/tasks/runPresentation.ts:15-23`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Purchased balance card is in post-codex/no-yearly-s82-mobile-purchased-credits.patch; cloud-usage/index.tsx is Codex-held. | ui |
+| mobile | partial | post-codex/no-yearly-s82-mobile-usage.patch adds a Credit balances card (included left this month, bonus, purchased) to the Usage screen, reading the summary the shared contract now parses (a489b3d12); cloud-usage/index.tsx is Codex-held. Supersedes the lost no-yearly-s82-mobile-purchased-credits.patch | ui |
 
-Code: `apps/mobile/services/usage.ts:23-23`
+Code: `packages/contracts/types/src/managed-usage-balance.ts:59-59`, `packages/contracts/types/src/managed-usage-balance.ts:154-154`
 
 ## S82.14: Purchased versus included credits.
 
@@ -134,9 +134,9 @@ Code: `apps/mobile/services/usage.ts:23-23`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Purchased versus included shown by post-codex/no-yearly-s82-mobile-purchased-credits.patch; Codex-held file. | ui |
+| mobile | partial | post-codex/no-yearly-s82-mobile-usage.patch shows included and purchased credits side by side; apply after Codex lands | ui |
 
-Code: `apps/mobile/services/usage.ts:23-23`
+Code: `packages/contracts/types/src/managed-usage-balance.ts:59-59`
 
 ## S82.15: Promotional credits.
 
@@ -146,9 +146,9 @@ Code: `apps/mobile/services/usage.ts:23-23`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile has no credit history; /api/billing/credit-history (which labels bonus grants) is not called. | ui |
+| mobile | partial | post-codex/no-yearly-s82-mobile-usage.patch shows bonus credits from referrals and promotions with their next expiry; apply after Codex lands | ui |
 
-Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:298-300`
+Code: `packages/contracts/types/src/managed-usage-balance.ts:154-154`
 
 ## S82.16: Credit-expiry information.
 
@@ -158,9 +158,9 @@ Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:298-300`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile states the 12-month carry rule only inside the Stripe top-up info block and never shows an expiry date. | ui |
+| mobile | partial | post-codex/no-yearly-s82-mobile-usage.patch shows the bonus expiry date and purchased credits that expire where local law requires; the billing patch drops the stale 12-month carry claim; apply after Codex lands | ui |
 
-Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:391-395`
+Code: `packages/contracts/types/src/managed-usage-balance.ts:154-154`
 
 ## S82.18: Daily/weekly/monthly history.
 
@@ -170,9 +170,9 @@ Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:391-395`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Add a usage history (by day, week, month) to the mobile Usage screen; the server already returns it (/api/usage/history accepts the mobile session token) but mobile only renders the window meters. | ui |
+| mobile | partial | post-codex/no-yearly-s82-mobile-usage.patch adds Days, Weeks and Months history with a row per period; apply after Codex lands | ui |
 
-Code: `apps/mobile/src/features/settings/cloud-usage/index.tsx:418-423`, `apps/mobile/services/usage.ts:45-49`
+Code: `packages/contracts/types/src/account-usage-client.ts:91-91`
 
 ## S82.19: Usage by Project.
 
@@ -206,9 +206,9 @@ Code: `apps/web/lib/services/managed-usage-request-service.ts:106-111`, `apps/cl
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Warn mobile users in chat before a limit; today only the Usage screen bar changes colour at 90%. | ui |
+| mobile | partial | post-codex/no-yearly-s82-mobile-chat-usage.patch adds a dismissible usage warning above the composer from the shared selectUsageWarning, refreshed after each cloud turn, with Get more usage opening Usage; chat/[id].tsx is Codex-held | ui |
 
-Code: `apps/mobile/src/features/settings/cloud-usage/index.tsx:75-79`, `apps/mobile/services/usage.ts:45-49`
+Code: `packages/contracts/types/src/billing-catalog.ts:650-650`
 
 ## S82.26: Alternative eligible model suggestion.
 
@@ -218,9 +218,9 @@ Code: `apps/mobile/src/features/settings/cloud-usage/index.tsx:75-79`, `apps/mob
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile shows only the server reason text in the paywall sheet; it never proposes an eligible model. | ui |
+| mobile | partial | post-codex/no-yearly-s82-mobile-chat-usage.patch adds 'Choose a standard model' to the paywall sheet for refusals the catalog marks suggestStandardModel, opening the cloud model picker; apply after Codex lands and merges with integration | ui |
 
-Code: `apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx:77-88`
+Code: `packages/contracts/types/src/billing-catalog.ts:650-650`
 
 ## S82.27: Wait-until-reset option.
 
@@ -230,9 +230,9 @@ Code: `apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx:77-88`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile's paywall shows the server reason ('wait for earlier usage to leave the window') but no reset time; reset times appear only on the Usage screen. | ui |
+| mobile | partial | post-codex/no-yearly-s82-mobile-chat-usage.patch shows 'Resets in ...' in the paywall sheet from the window the refusal waits on (managedQuotaResetAt, shared with the web in 66bce5d64); apply after Codex lands and merges with integration | ui |
 
-Code: `apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx:77-88`, `apps/mobile/src/features/settings/cloud-usage/index.tsx:300-309`
+Code: `packages/contracts/types/src/billing-catalog.ts:650-650`
 
 ## S82.29: Extra-usage purchase.
 

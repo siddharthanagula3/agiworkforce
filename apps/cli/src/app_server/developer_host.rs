@@ -15,15 +15,19 @@ use agiworkforce_protocol::developer_session::{
     DeveloperSessionHandoff, DeveloperSessionSource, DeveloperSessionTrustMode,
     DeveloperSessionWriter, DeveloperSessionWriterChange, HandoffAdmission,
     HandoffAdmissionContext, HandoffEnvironment, HandoffLastTurn, HandoffLocalResource,
-    HandoffRefusal, HandoffTurnState, HookListResponse, HostModelSummary, LocalModelListResponse,
-    LocalModelProvider, LocalModelSummary, McpLoginParams, McpLoginResponse,
-    McpServerConfiguredStatus, McpServerListResponse, MemoryAddParams, MemoryAddResponse,
-    ModelListParams, PendingApprovalSnapshot, PluginListResponse, PluginSetEnabledParams,
+    HandoffRefusal, HandoffTurnState, HookAddParams, HookListResponse, HookRemoveParams,
+    HostModelSummary, LocalModelListResponse, LocalModelProvider, LocalModelSummary, McpAddParams,
+    McpLoginParams, McpLoginResponse, McpServerConfiguredStatus, McpServerListResponse,
+    McpServerParams, McpServerTestResponse, McpServerToolsResponse, MemoryAddParams,
+    MemoryAddResponse, ModelListParams, PendingApprovalSnapshot, PluginInstallParams,
+    PluginListResponse, PluginRemoveParams, PluginSetEnabledParams, RewindSkippedFile,
     SettingsReadResponse, SettingsWriteParams, SkillConsentParams, SkillConsentResponse,
-    SkillListResponse, SkillSetEnabledParams, SlashCommandListResponse, SlashCommandRunParams,
-    SlashCommandRunResponse, ThreadForkParams, ThreadHandoffAcceptParams, ThreadHandoffParams,
-    ThreadIdParams, ThreadListParams, ThreadListResponse, ThreadReadResponse,
-    ThreadReconnectResponse, ThreadSearchHit, ThreadSearchParams, ThreadSearchResponse,
+    SkillInstallParams, SkillListResponse, SkillRemoveParams, SkillSetEnabledParams,
+    SlashCommandListResponse, SlashCommandRunParams, SlashCommandRunResponse, ThreadCheckpoint,
+    ThreadCheckpointsResponse, ThreadForkParams, ThreadHandoffAcceptParams, ThreadHandoffParams,
+    ThreadIdParams, ThreadListParams, ThreadListResponse, ThreadPlanNotification,
+    ThreadReadResponse, ThreadReconnectResponse, ThreadRewindParams, ThreadRewindResponse,
+    ThreadRewindRestore, ThreadSearchHit, ThreadSearchParams, ThreadSearchResponse,
     ThreadStartParams, ThreadStatus, ThreadSummary, ThreadWriterChangedNotification,
     ThreadWriterConflictData, TurnEndedNotification, TurnFailure, TurnFailureCode,
     TurnInterruptParams, TurnModelNotification, TurnStartParams, TurnStatus, TurnSteerParams,
@@ -94,6 +98,8 @@ const SUBAGENT_SPAWN_TOOLS: [&str; 2] = ["task", "agent"];
 /// Ceiling on turns running at once across every thread this host owns.
 ///.
 const MAX_CONCURRENT_RUNNING_TURNS: usize = 8;
+const MAX_PROPOSED_CONTENT_BYTES: usize = 1_000_000;
+const MAX_APPROVAL_NOTE_CHARS: usize = 4_000;
 const DEFAULT_SEARCH_HITS: usize = 20;
 const MAX_SEARCH_HITS: usize = 50;
 const MAX_REMEMBERED_CLIENT_TURNS_PER_THREAD: usize = 32;
@@ -289,7 +295,24 @@ struct PendingApproval {
     thread_id: String,
     turn_id: String,
     snapshot: PendingApprovalSnapshot,
-    responder: oneshot::Sender<ApprovalDecision>,
+    responder: oneshot::Sender<ApprovalReply>,
+}
+
+#[derive(Debug)]
+struct ApprovalReply {
+    decision: ApprovalDecision,
+    note: Option<String>,
+    edited_content: Option<String>,
+}
+
+impl ApprovalReply {
+    fn decided(decision: ApprovalDecision) -> Self {
+        Self {
+            decision,
+            note: None,
+            edited_content: None,
+        }
+    }
 }
 
 /// Canonical local developer runtime shared by the CLI and VS Code.
@@ -380,7 +403,7 @@ impl CliDeveloperSessionHost {
             approvals: true,
             tools: true,
             mcp: self.load_integrations,
-            checkpoints: false,
+            checkpoints: true,
             worktrees: false,
             models: true,
             account: true,
@@ -399,6 +422,11 @@ impl CliDeveloperSessionHost {
             prompt_commands: true,
             max_turns: true,
             memory: true,
+            plan: true,
+            approval_notes: true,
+            approval_edits: true,
+            mcp_tools: self.load_integrations,
+            installs: true,
         }
     }
 
@@ -555,7 +583,15 @@ impl CliDeveloperSessionHost {
                         manager.shutdown_all().await;
                         return;
                     }
-                    session.lock().await.set_mcp_manager(manager);
+                    let previous = {
+                        let mut agent = session.lock().await;
+                        let previous = agent.take_mcp_manager();
+                        agent.set_mcp_manager(manager);
+                        previous
+                    };
+                    if let Some(mut previous) = previous {
+                        previous.shutdown_all().await;
+                    }
                     ("mcp/ready", None)
                 }
                 Ok(Ok(None)) => ("mcp/ready", None),
@@ -586,6 +622,19 @@ impl CliDeveloperSessionHost {
                 let _ = notifications.send(notification);
             }
         });
+    }
+
+    async fn reload_integrations(&self) {
+        let sessions: Vec<(String, Arc<Mutex<AgentSession>>)> = self
+            .sessions
+            .lock()
+            .await
+            .iter()
+            .map(|(thread_id, session)| (thread_id.clone(), session.clone()))
+            .collect();
+        for (thread_id, session) in sessions {
+            self.load_integrations_in_background(thread_id, session);
+        }
     }
 
     async fn load_agent(
@@ -1047,7 +1096,9 @@ impl CliDeveloperSessionHost {
             .collect();
         for id in ids {
             if let Some(approval) = pending.remove(&id) {
-                let _ = approval.responder.send(ApprovalDecision::Cancel);
+                let _ = approval
+                    .responder
+                    .send(ApprovalReply::decided(ApprovalDecision::Cancel));
             }
         }
     }
@@ -1551,6 +1602,14 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 .iter()
                 .map(file_change_record)
                 .collect(),
+            plan: session
+                .current_plan
+                .as_ref()
+                .map(threads::plan_steps)
+                .unwrap_or_default(),
+            todos: threads::todo_items(&crate::plan_mode::TodoList::load_for_workspace(
+                &self.workspace_root,
+            )),
         })
     }
 
@@ -1821,6 +1880,125 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             });
         }
         Ok(ThreadSearchResponse { hits })
+    }
+
+    async fn list_checkpoints(
+        &self,
+        params: ThreadIdParams,
+    ) -> Result<ThreadCheckpointsResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        let store = self.store.clone();
+        let thread_id = params.thread_id;
+        let (session, log, unreadable) = tokio::task::spawn_blocking(move || {
+            let reference = ManagedSessionReference::SessionId(thread_id);
+            let resolved = store.resolve(reference.clone())?;
+            let session = store.load(reference)?;
+            let mut log = crate::agent::CheckpointLog::beside(&resolved.path);
+            let unreadable = log.take_unsaved();
+            anyhow::Ok((session, log, unreadable))
+        })
+        .await
+        .map_err(internal_error)?
+        .map_err(not_found_error)?;
+        self.validate_session_workspace(&session)?;
+        if let Some(problem) = unreadable {
+            return Err(DeveloperSessionHostError::internal(format!(
+                "Rewind: {problem}"
+            )));
+        }
+        let checkpoints = log
+            .summaries(&session.messages)
+            .into_iter()
+            .map(|summary| ThreadCheckpoint {
+                checkpoint_index: u32::try_from(summary.index).unwrap_or(u32::MAX),
+                created_at: summary.created_at.to_rfc3339(),
+                message_index: summary
+                    .message_index
+                    .and_then(|index| u32::try_from(index).ok()),
+                tracked_files: u32::try_from(summary.tracked_files).unwrap_or(u32::MAX),
+                prompt: summary.prompt,
+            })
+            .collect();
+        Ok(ThreadCheckpointsResponse { checkpoints })
+    }
+
+    async fn rewind_thread(
+        &self,
+        params: ThreadRewindParams,
+    ) -> Result<ThreadRewindResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        let mode = match params.restore.unwrap_or(ThreadRewindRestore::Both) {
+            ThreadRewindRestore::Both => crate::agent::RewindMode::CodeAndConversation,
+            ThreadRewindRestore::Conversation => crate::agent::RewindMode::Conversation,
+            ThreadRewindRestore::Code => crate::agent::RewindMode::Code,
+        };
+        let running_turns = self.running_turns.lock().await;
+        if running_turns.contains_key(&params.thread_id) {
+            return Err(DeveloperSessionHostError::conflict(
+                "Interrupt the running turn before rewinding its thread",
+            ));
+        }
+        let session = self.load_agent(&params.thread_id).await?;
+        let session_path = session
+            .lock()
+            .await
+            .managed_session_path
+            .clone()
+            .ok_or_else(|| {
+                DeveloperSessionHostError::internal("This thread has no persisted session file")
+            })?;
+        self.claim_writer_for_turn(&params.thread_id, &session_path)
+            .await?;
+        let (outcome, persisted) = {
+            let mut agent = session.lock().await;
+            let outcome = match (params.checkpoint_index, params.message_index) {
+                (Some(index), None) => agent.rewind_to(index as usize, mode),
+                (None, Some(index)) => agent.rewind_to_message(index as usize, mode),
+                _ => {
+                    return Err(DeveloperSessionHostError::invalid_request(
+                        "thread/rewind takes exactly one of checkpointIndex and messageIndex",
+                    ))
+                }
+            }
+            .map_err(invalid_request)?;
+            let persisted = if outcome.conversation_restored {
+                agent.persist_managed_session()
+            } else {
+                Ok(())
+            };
+            (outcome, persisted)
+        };
+        drop(running_turns);
+        persisted.map_err(internal_error)?;
+        let files = outcome.files.unwrap_or_default();
+        let display = |paths: Vec<PathBuf>| {
+            paths
+                .into_iter()
+                .map(|path| path.display().to_string())
+                .collect::<Vec<_>>()
+        };
+        self.emit(
+            "thread/rewound",
+            serde_json::json!({
+                "threadId": params.thread_id,
+                "conversationRestored": outcome.conversation_restored,
+            }),
+        );
+        Ok(ThreadRewindResponse {
+            thread: self.resume_thread_summary(&params.thread_id).await?,
+            prompt: outcome.prompt,
+            conversation_restored: outcome.conversation_restored,
+            restored_files: display(files.restored),
+            removed_files: display(files.removed),
+            skipped_files: files
+                .skipped
+                .into_iter()
+                .map(|(path, reason)| RewindSkippedFile {
+                    path: path.display().to_string(),
+                    reason,
+                })
+                .collect(),
+        })
     }
 
     async fn delete_thread(&self, params: ThreadIdParams) -> Result<(), DeveloperSessionHostError> {
@@ -2246,12 +2424,17 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                     task_pending.clone(),
                     task_notifications.clone(),
                 )));
-                agent.on_tool_event = Some(ToolEventSink(tool_event_callback(
+                agent.on_tool_event = Some(ToolEventSink(plan_tracking(
+                    tool_event_callback(
+                        task_thread_id.clone(),
+                        task_turn_id.clone(),
+                        task_event_sequence.clone(),
+                        task_notifications.clone(),
+                        task_activity.clone(),
+                    ),
                     task_thread_id.clone(),
-                    task_turn_id.clone(),
-                    task_event_sequence.clone(),
+                    task_workspace_root.clone(),
                     task_notifications.clone(),
-                    task_activity.clone(),
                 )));
                 agent.on_fallback = Some(crate::agent::FallbackSink(fallback_callback(
                     turn_model.clone(),
@@ -2322,7 +2505,9 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             let mut pending = task_pending.lock().await;
             for id in pending_ids {
                 if let Some(approval) = pending.remove(&id) {
-                    let _ = approval.responder.send(ApprovalDecision::Cancel);
+                    let _ = approval
+                        .responder
+                        .send(ApprovalReply::decided(ApprovalDecision::Cancel));
                 }
             }
             drop(pending);
@@ -2646,13 +2831,39 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 "Approval response thread or turn does not match the pending request",
             ));
         }
+        let decision = review_to_approval_decision(params.decision);
+        if params.edited_content.is_some() {
+            if pending.snapshot.proposed_content.is_none() {
+                return Err(DeveloperSessionHostError::invalid_request(
+                    "This approval has no proposed content to edit",
+                ));
+            }
+            if !decision.is_allowing() {
+                return Err(DeveloperSessionHostError::invalid_request(
+                    "Edited content is sent with an approval, not a denial",
+                ));
+            }
+        }
+        if params
+            .note
+            .as_deref()
+            .is_some_and(|note| note.chars().count() > MAX_APPROVAL_NOTE_CHARS)
+        {
+            return Err(DeveloperSessionHostError::invalid_request(format!(
+                "An approval note can be at most {MAX_APPROVAL_NOTE_CHARS} characters"
+            )));
+        }
         let pending = approvals.remove(&params.request_id).ok_or_else(|| {
             DeveloperSessionHostError::not_found("Approval request is no longer pending")
         })?;
         drop(approvals);
         pending
             .responder
-            .send(review_to_approval_decision(params.decision))
+            .send(ApprovalReply {
+                decision,
+                note: params.note,
+                edited_content: params.edited_content,
+            })
             .map_err(|_| {
                 DeveloperSessionHostError::conflict(
                     "Approval request ended before the response was delivered",
@@ -2854,6 +3065,149 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         })
     }
 
+    async fn test_mcp_server(
+        &self,
+        params: McpServerParams,
+    ) -> Result<McpServerTestResponse, DeveloperSessionHostError> {
+        let _guard = self.admit_request().await?;
+        surfaces::test_mcp_server(
+            &self.workspace_root,
+            &params.name,
+            std::time::Duration::from_secs(MCP_LOAD_TIMEOUT_SECONDS),
+        )
+        .await
+    }
+
+    async fn list_mcp_server_tools(
+        &self,
+        params: McpServerParams,
+    ) -> Result<McpServerToolsResponse, DeveloperSessionHostError> {
+        let _guard = self.admit_request().await?;
+        surfaces::mcp_server_tools(
+            &self.workspace_root,
+            &params.name,
+            std::time::Duration::from_secs(MCP_LOAD_TIMEOUT_SECONDS),
+        )
+        .await
+    }
+
+    async fn install_skill(
+        &self,
+        params: SkillInstallParams,
+    ) -> Result<SkillListResponse, DeveloperSessionHostError> {
+        let _guard = self.admit_request().await?;
+        let workspace_root = self.workspace_root.clone();
+        let changed =
+            tokio::task::spawn_blocking(move || surfaces::install_skill(&workspace_root, params))
+                .await
+                .map_err(internal_error)??;
+        self.emit("skills/changed", serde_json::json!({}));
+        Ok(changed)
+    }
+
+    async fn remove_skill(
+        &self,
+        params: SkillRemoveParams,
+    ) -> Result<SkillListResponse, DeveloperSessionHostError> {
+        let _guard = self.admit_request().await?;
+        let workspace_root = self.workspace_root.clone();
+        let changed =
+            tokio::task::spawn_blocking(move || surfaces::remove_skill(&workspace_root, params))
+                .await
+                .map_err(internal_error)??;
+        self.emit("skills/changed", serde_json::json!({}));
+        Ok(changed)
+    }
+
+    async fn install_plugin(
+        &self,
+        params: PluginInstallParams,
+    ) -> Result<PluginListResponse, DeveloperSessionHostError> {
+        let _guard = self.admit_request().await?;
+        let workspace_root = self.workspace_root.clone();
+        let changed =
+            tokio::task::spawn_blocking(move || surfaces::install_plugin(&workspace_root, params))
+                .await
+                .map_err(internal_error)??;
+        self.emit("plugins/changed", serde_json::json!({}));
+        self.reload_integrations().await;
+        Ok(changed)
+    }
+
+    async fn remove_plugin(
+        &self,
+        params: PluginRemoveParams,
+    ) -> Result<PluginListResponse, DeveloperSessionHostError> {
+        let _guard = self.admit_request().await?;
+        let workspace_root = self.workspace_root.clone();
+        let changed =
+            tokio::task::spawn_blocking(move || surfaces::remove_plugin(&workspace_root, params))
+                .await
+                .map_err(internal_error)??;
+        self.emit("plugins/changed", serde_json::json!({}));
+        self.reload_integrations().await;
+        Ok(changed)
+    }
+
+    async fn add_mcp_server(
+        &self,
+        params: McpAddParams,
+    ) -> Result<McpServerListResponse, DeveloperSessionHostError> {
+        let _guard = self.admit_request().await?;
+        let workspace_root = self.workspace_root.clone();
+        let changed =
+            tokio::task::spawn_blocking(move || surfaces::add_mcp_server(&workspace_root, params))
+                .await
+                .map_err(internal_error)??;
+        self.emit("mcp/changed", serde_json::json!({}));
+        self.reload_integrations().await;
+        Ok(changed)
+    }
+
+    async fn remove_mcp_server(
+        &self,
+        params: McpServerParams,
+    ) -> Result<McpServerListResponse, DeveloperSessionHostError> {
+        let _guard = self.admit_request().await?;
+        let workspace_root = self.workspace_root.clone();
+        let changed = tokio::task::spawn_blocking(move || {
+            surfaces::remove_mcp_server(&workspace_root, params)
+        })
+        .await
+        .map_err(internal_error)??;
+        self.emit("mcp/changed", serde_json::json!({}));
+        self.reload_integrations().await;
+        Ok(changed)
+    }
+
+    async fn add_hook(
+        &self,
+        params: HookAddParams,
+    ) -> Result<HookListResponse, DeveloperSessionHostError> {
+        let _guard = self.admit_request().await?;
+        let workspace_root = self.workspace_root.clone();
+        let changed =
+            tokio::task::spawn_blocking(move || surfaces::add_hook(&workspace_root, params))
+                .await
+                .map_err(internal_error)??;
+        self.emit("hooks/changed", serde_json::json!({}));
+        Ok(changed)
+    }
+
+    async fn remove_hook(
+        &self,
+        params: HookRemoveParams,
+    ) -> Result<HookListResponse, DeveloperSessionHostError> {
+        let _guard = self.admit_request().await?;
+        let workspace_root = self.workspace_root.clone();
+        let changed =
+            tokio::task::spawn_blocking(move || surfaces::remove_hook(&workspace_root, params))
+                .await
+                .map_err(internal_error)??;
+        self.emit("hooks/changed", serde_json::json!({}));
+        Ok(changed)
+    }
+
     async fn list_hooks(&self) -> Result<HookListResponse, DeveloperSessionHostError> {
         let _guard = self.admit_request().await?;
         Ok(surfaces::list_hooks(&self.workspace_root))
@@ -2919,7 +3273,9 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             std::mem::take(&mut *pending)
         };
         for approval in pending_approvals.into_values() {
-            let _ = approval.responder.send(ApprovalDecision::Cancel);
+            let _ = approval
+                .responder
+                .send(ApprovalReply::decided(ApprovalDecision::Cancel));
         }
 
         let process_owners = running_turns
@@ -3186,6 +3542,10 @@ fn approval_callback(
                 detail: request.detail.join("\n"),
                 risk_level: Some(risk.level),
                 reversible: Some(risk.reversible),
+                proposed_content: request
+                    .proposal
+                    .clone()
+                    .filter(|content| content.len() <= MAX_PROPOSED_CONTENT_BYTES),
             };
             let (sender, receiver) = oneshot::channel();
             pending.lock().await.insert(
@@ -3216,21 +3576,30 @@ fn approval_callback(
                     "detail": snapshot.detail,
                     "riskLevel": snapshot.risk_level,
                     "reversible": snapshot.reversible,
+                    "proposedContent": snapshot.proposed_content,
+                    "editable": snapshot.proposed_content.is_some(),
                 }),
             ) {
                 let _ = notifications.send(notification);
             }
-            let decision = match tokio::time::timeout(
+            let reply = match tokio::time::timeout(
                 std::time::Duration::from_secs(APPROVAL_TIMEOUT_SECONDS),
                 receiver,
             )
             .await
             {
-                Ok(Ok(decision)) => decision,
-                Ok(Err(_)) => ApprovalDecision::Cancel,
-                Err(_) => ApprovalDecision::Timeout,
+                Ok(Ok(reply)) => reply,
+                Ok(Err(_)) => ApprovalReply::decided(ApprovalDecision::Cancel),
+                Err(_) => ApprovalReply::decided(ApprovalDecision::Timeout),
             };
             pending.lock().await.remove(&request_id);
+            if let Some(note) = reply.note.filter(|note| !note.trim().is_empty()) {
+                crate::tools::record_approval_note(note);
+            }
+            if let Some(content) = reply.edited_content {
+                crate::tools::record_approved_edit(content);
+            }
+            let decision = reply.decision;
             if let Ok(notification) = task_state_notification(
                 turn_id,
                 AgentTaskState::Running,
@@ -3362,6 +3731,78 @@ fn tool_event_callback(
                 &notifications,
                 AgentEvent::ArtifactProduced(artifact),
             );
+        }
+    })
+}
+
+fn plan_tracking(
+    inner: Arc<dyn Fn(crate::tui::app_event::TuiAppEvent) + Send + Sync>,
+    thread_id: String,
+    workspace_root: PathBuf,
+    notifications: broadcast::Sender<AppServerNotification>,
+) -> Arc<dyn Fn(crate::tui::app_event::TuiAppEvent) + Send + Sync> {
+    let proposed: Arc<StdMutex<HashMap<String, crate::plan_mode::Plan>>> =
+        Arc::new(StdMutex::new(HashMap::new()));
+    Arc::new(move |event| {
+        use crate::tui::app_event::{ToolStatus, TuiAppEvent};
+        let update = match &event {
+            TuiAppEvent::ToolStarted {
+                call_id,
+                name,
+                input,
+                ..
+            } => {
+                if crate::runtime::tool_catalog::canonical_tool_name(name) == "update_plan" {
+                    if let (Ok(plan), Ok(mut proposed)) = (
+                        serde_json::from_value::<crate::plan_mode::Plan>(input.clone()),
+                        proposed.lock(),
+                    ) {
+                        proposed.insert(call_id.clone(), plan);
+                    }
+                }
+                None
+            }
+            TuiAppEvent::ToolCompleted {
+                call_id,
+                name,
+                status,
+                ..
+            } => {
+                let plan = proposed
+                    .lock()
+                    .ok()
+                    .and_then(|mut proposed| proposed.remove(call_id));
+                match (
+                    crate::runtime::tool_catalog::canonical_tool_name(name),
+                    status,
+                ) {
+                    ("update_plan", ToolStatus::Succeeded) => {
+                        plan.map(|plan| ThreadPlanNotification {
+                            thread_id: thread_id.clone(),
+                            plan: Some(threads::plan_steps(&plan)),
+                            todos: None,
+                        })
+                    }
+                    ("todo_write", ToolStatus::Succeeded) => Some(ThreadPlanNotification {
+                        thread_id: thread_id.clone(),
+                        plan: None,
+                        todos: Some(threads::todo_items(
+                            &crate::plan_mode::TodoList::load_for_workspace(&workspace_root),
+                        )),
+                    }),
+                    _ => None,
+                }
+            }
+            _ => None,
+        };
+        inner(event);
+        if let Some(update) = update {
+            if let Ok(notification) = AppServerNotification::new(
+                agiworkforce_protocol::developer_session::method::THREAD_PLAN,
+                update,
+            ) {
+                let _ = notifications.send(notification);
+            }
         }
     })
 }
@@ -5655,7 +6096,7 @@ mod tests {
             .expect("pending approval");
         approval
             .responder
-            .send(ApprovalDecision::AllowOnce)
+            .send(ApprovalReply::decided(ApprovalDecision::AllowOnce))
             .expect("resume approval waiter");
         assert_eq!(
             waiter.await.expect("waiter task"),
@@ -7004,6 +7445,7 @@ mod tests {
                     detail: "cargo test".to_string(),
                     risk_level: Some(AgentEventApprovalRiskLevel::Medium),
                     reversible: Some(false),
+                    proposed_content: None,
                 },
                 responder,
             },

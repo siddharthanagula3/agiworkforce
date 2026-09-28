@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatComposerNew, type ComposerProjectPicker } from './ChatComposerNew';
+import { __resetComposerDraftStorageForTests } from './composer-draft-storage';
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn(), back: vi.fn() }),
@@ -54,6 +55,12 @@ function pasteText(target: HTMLElement, text: string, html = '') {
 }
 
 const SOURCE = ['export function add(a: number, b: number) {', '  return a + b;', '}'].join('\n');
+
+beforeEach(() => {
+  window.localStorage.clear();
+  window.sessionStorage.clear();
+  __resetComposerDraftStorageForTests();
+});
 
 describe('web composer code paste', () => {
   it('wraps pasted source in a fence instead of letting markdown mangle it', () => {

@@ -2,17 +2,22 @@ import {
   buildVsCodeCloudTaskHandoffUri,
   buildVsCodeDeveloperSessionHandoffUri,
   CLOUD_CODE_LIMITS,
+  CLOUD_CODE_PAGE_ROUTE,
   CLOUD_CODE_SESSION_STATUS_FILTERS,
   CLOUD_CODE_SESSION_COPY,
   cloudCodeRepositoryLabel,
+  cloudCodeSessionPagePath,
   type CloudCodeChangeState,
+  type CloudCodeGoalCommand,
   type CloudCodeNetworkAccess,
   type CloudCodeSession,
   type CloudCodeSessionStatusFilter,
+  type CloudCodeTurnStepBound,
 } from '@agiworkforce/types';
+import { CLOUD_CODE_AGENT_TURN_BUDGET_MS } from '@/lib/services/cloud-code-turn-budget';
 
 export const CODE_ROUTES = {
-  root: '/code',
+  root: CLOUD_CODE_PAGE_ROUTE,
   chat: '/chat',
   artifacts: '/chat/library?surface=artifact',
   customize: '/settings/capabilities',
@@ -31,7 +36,7 @@ export function codeHomeAfterMissingSession(): string {
 }
 
 export function codeSessionPath(sessionId: string): string {
-  return `${CODE_ROUTES.root}/${encodeURIComponent(sessionId)}`;
+  return cloudCodeSessionPagePath(sessionId);
 }
 
 export const CODE_LIMITS = {
@@ -127,6 +132,16 @@ export const CODE_COPY = {
   commitLabel: 'Commit message',
   commitAction: 'Commit and push',
   commitPushed: 'Pushed to the repository.',
+  commitNoFilesChosen: 'Choose at least one file to commit.',
+  commitChosenPrefix: 'Commits',
+  commitChosenOf: 'of',
+  commitChosenSuffix: 'changed files. The rest stay in the workspace.',
+  changesIncludeFile: 'Include in the commit:',
+  changesDiscardFile: 'Discard the changes to',
+  changesDiscardTitle: 'Discard these changes?',
+  changesDiscardDescription:
+    'The workspace goes back to the last committed version of this file, and a new file is deleted. This cannot be undone:',
+  changesDiscardConfirm: 'Discard changes',
   terminal: 'Terminal',
   terminalEmpty: 'No commands have run in this session.',
   commandLabel: 'Command',
@@ -163,6 +178,10 @@ export const CODE_COPY = {
   runningSession: 'Running',
 
   modeMenu: 'Mode',
+  turnStepsMenu: 'Steps per task',
+  turnStepsUnit: 'steps',
+  turnBudgetPrefix: 'A task also stops after',
+  turnBudgetUnit: 'minutes.',
   attachMenu: 'Add to this session',
   addConnectors: 'Add connectors',
   microphoneMenu: 'Microphone',
@@ -183,6 +202,18 @@ export const CODE_COPY = {
   repositoryChange: 'Change repository',
   branchEdit: 'Change the branch',
   branchApply: 'Use this branch',
+  branchListLabel: 'Branches',
+  branchLoading: 'Loading branches',
+  branchLoadFailed: 'Branches could not be loaded.',
+  branchNoMatches: 'This repository has no branches yet.',
+  branchProtected: 'Protected',
+  branchSearchLabel: 'Search branches',
+  branchSearchPlaceholder: 'Search or type a branch name',
+  branchTruncated: 'Some branches are not listed. Type the full name to use one.',
+  branchUseTyped: 'Use branch',
+  branchSwitchFailed: 'That branch could not be checked out.',
+  branchSwitchHelp:
+    'Switching checks the branch out in this folder. Uncommitted changes come along when git allows it.',
 
   repositorySearchLabel: 'Search repositories',
   repositorySearchPlaceholder: 'Search repositories',
@@ -221,6 +252,35 @@ export const CODE_COPY = {
   copyLink: 'Copy link',
   copiedLink: 'Link copied',
   copyLinkFailed: 'Could not copy the link',
+  share: 'Share',
+  shareTitle: 'Share session',
+  shareAudience: 'Who can open this session',
+  sharePrivate: 'Private',
+  sharePrivateHint: 'Only you can open this session.',
+  shareTeam: 'Team',
+  shareTeamHint: 'Members of your workspace can open it with the link.',
+  sharePublic: 'Public',
+  sharePublicHint: 'Anyone signed in to AGI Workforce can open it with the link.',
+  shareWarning:
+    'Check this session for sensitive content before you share it. It can contain code and credentials from private repositories.',
+  shareSnapshotNote: 'People who open the link see the session as it is when they open it.',
+  shareRepositoryNote: 'Teammates also need GitHub access to the repository to open it.',
+  shareLinkLabel: 'Session link',
+  shareFailed: 'Could not change who can open this session.',
+  shareSaving: 'Saving who can open this session',
+  shareDone: 'Done',
+  stopSharingTitle: 'Stop sharing this session?',
+  stopSharingDescription:
+    'Everyone who has the link loses access right away. Sharing it again makes a new link, and the old one stays closed.',
+  stopSharingConfirm: 'Stop sharing',
+  sharedTeam: 'Shared with your team',
+  sharedPublic: 'Shared by link',
+  sharedLoading: 'Opening the shared session',
+  sharedUnavailable: 'This shared session is not available.',
+  sharedEmpty: 'Nothing has run in this session yet.',
+  sharedSnapshot: 'You are viewing a shared session as it was when you opened it.',
+  sharedUpdated: 'Updated',
+  sharedOpenCode: 'Open AGI Code',
   editEnvironment: 'Edit environment',
   rename: 'Rename',
   renameLabel: 'Session title',
@@ -266,6 +326,24 @@ export const CODE_COPY = {
   changesNoRepository: 'This session has no repository, so there is nothing to push.',
   showExitCodes: 'Show exit codes',
 } as const;
+
+export const CODE_GOAL_COMMAND_DESCRIPTIONS: Record<CloudCodeGoalCommand, string> = {
+  '/review': 'Review the changes in this session for bugs',
+  '/security-review': 'Check the changes in this session for security problems',
+};
+
+export const CODE_TURN_STEP_HINTS: Record<CloudCodeTurnStepBound, string> = {
+  12: 'Quick fixes and questions',
+  24: 'Most tasks',
+  48: 'Larger changes that take longer and use more',
+};
+
+export function turnBudgetNote(): string {
+  const minutes = Math.round(
+    CLOUD_CODE_AGENT_TURN_BUDGET_MS / (CODE_TIMING.msPerSecond * CODE_TIMING.secondsPerMinute),
+  );
+  return `${CODE_COPY.turnBudgetPrefix} ${minutes} ${CODE_COPY.turnBudgetUnit}`;
+}
 
 export const CODE_NETWORK_OPTIONS: ReadonlyArray<{
   id: CloudCodeNetworkAccess;

@@ -1,4 +1,5 @@
 import type { BrowserPairingState } from './browser-bridge';
+import type { ComputerUseStatus } from './computer-use';
 import type { DeveloperSessionEvent } from './developer-sessions';
 import type { RemoteControlState } from './remote-control';
 import type { DesktopCapability, PermissionRequest, PermissionScope } from './capabilities';
@@ -86,4 +87,6 @@ export type DesktopRuntimeEvent =
   | { kind: 'browser-pairing-changed'; state: BrowserPairingState }
   | { kind: 'local-chat-delta'; runId: string; channel: 'text' | 'thinking'; delta: string }
   | { kind: 'developer-session'; rootId: string; event: DeveloperSessionEvent }
-  | { kind: 'remote-control-changed'; state: RemoteControlState };
+  | { kind: 'remote-control-changed'; state: RemoteControlState }
+  | { kind: 'computer-use-changed'; status: ComputerUseStatus }
+  | { kind: 'update-ready'; version: string };

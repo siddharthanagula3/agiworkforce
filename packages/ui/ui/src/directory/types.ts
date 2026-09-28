@@ -361,7 +361,7 @@ export interface DirectoryAdapter {
   queryEntries?: (section: DirectorySectionKey, query: DirectoryQuery) => Promise<void> | void;
   loadMore?: (section: DirectorySectionKey) => Promise<void> | void;
   loadDetail?: (section: DirectorySectionKey, id: string) => Promise<DirectoryDetail | null>;
-  install?: (section: DirectorySectionKey, id: string) => Promise<void> | void;
+  install?: (section: DirectorySectionKey, id: string) => Promise<string | void> | void;
   uninstall?: (section: DirectorySectionKey, id: string) => Promise<void> | void;
   deleteEntry?: (section: DirectorySectionKey, id: string) => Promise<void> | void;
   openSettings?: (section: DirectorySectionKey, id: string) => Promise<void> | void;

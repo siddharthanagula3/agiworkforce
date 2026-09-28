@@ -5,6 +5,7 @@ import {
   PLUGIN_MARKETPLACE_MAX_MANIFEST_BYTES,
   PLUGIN_MARKETPLACE_MAX_PLUGINS,
 } from '@agiworkforce/cloud-contracts';
+import { parseMarketplaceAllowlist } from '@/lib/services/plugin-dependencies';
 import {
   AGI_CLI_PLUGIN_INSTALL_COMMAND,
   CLAUDE_MARKETPLACE_MANIFEST_PATH,
@@ -83,6 +84,7 @@ export interface ClaudeMarketplaceManifest {
   description: string | null;
   ownerName: string | null;
   renames: Record<string, string>;
+  allowCrossMarketplaceDependenciesOn: string[];
   plugins: ClaudeMarketplacePlugin[];
   skipped: string[];
 }
@@ -226,6 +228,9 @@ export function parseClaudeMarketplaceManifest(json: unknown): ClaudeMarketplace
     description: parsed.description ?? null,
     ownerName: parsed.owner?.name ?? null,
     renames: parsed.renames ?? {},
+    allowCrossMarketplaceDependenciesOn: parseMarketplaceAllowlist(
+      parsed['allowCrossMarketplaceDependenciesOn'],
+    ),
     plugins,
     skipped,
   };

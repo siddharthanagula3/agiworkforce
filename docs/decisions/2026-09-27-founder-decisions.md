@@ -106,6 +106,13 @@ build it, and the audit cell is recorded as not applicable by this decision.
   file tree, editor, terminal, task or test panel inside VS Code, and publisher
   identity checked in the owner's review of each submission, as ChatGPT's app
   review does.
+- **Chat surface extras (S12.08, S14.08 and S14.12 on web and desktop, S15.27 on
+  web, S15.28, S16.14, S16.22, S17.23-25, S17.33, S17.35, S18.14, S19.14).** No
+  skill picks on the new-chat screen, attach-a-link or attach-a-folder control,
+  on-device or own-key model in the consumer web app, pending mark on the user
+  bubble, link to one message, one-step shorten, expand or change-tone action,
+  save-answer-to-knowledge, single-answer export, turn outline or saved state
+  on a finished answer: neither ChatGPT's nor Claude's chat offers them.
 - **VS Code artifacts (S26.14, S26.29, S26.31 in VS Code).** Neither Claude Code
   nor Codex in VS Code previews, exports or publishes artifacts; VS Code lists
   them and opens a published artifact's link.
@@ -205,3 +212,14 @@ whether the FTC Health Breach Notification Rule or the GLBA Safeguards Rule
 applies before either is switched on. The BigQuery server Google hosts is not
 pinned, because it requires the full BigQuery scope and the Google ceiling stays
 read-only; Snowflake and Databricks are added by account URL.
+
+## D-2026-09-28-09 Signed-out chat follows ChatGPT
+
+ChatGPT lets people chat without an account and Claude does not; where the two
+differ, Gemini and Perplexity decide, and both allow it. A signed-out visitor
+can therefore chat on the web and desktop, as in ChatGPT's logged-out
+experience: text only, on the default free model, with no files, images, voice,
+tools, memory or saved history, and a line saying that messaging means
+accepting the Terms and Privacy Policy. Per-device, per-IP and global daily
+caps come from configuration, bot protection applies, and a kill switch keeps
+it off until it is switched on after the final checks.

@@ -52,29 +52,21 @@ Code: `apps/web/lib/connectors/directory/sources/vendor-directory.json:2528-2528
 
 - Done when: A research workspace for financial questions (markets, instruments, filings) with sourced, cited output.
 - Wave: 3
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only general Deep Research (cited web research) exists. There is no finance workspace, no market or fundamentals data source built in, and no saved research space. | ui |
-| desktop | partial | Only general Deep Research (cited web research) exists. There is no finance workspace, no market or fundamentals data source built in, and no saved research space. | ui |
-| mobile | partial | Only general Deep Research (cited web research) exists. There is no finance workspace or built-in market data source. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:860-867`, `apps/web/app/api/llm/v1/chat/completions/lib/research-loop.ts:1-8`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:111-116`
 
 ## S108.10: Company research.
 
 - Done when: The user researches a company and gets a sourced profile (business, financials, news, competitors).
 - Wave: 3
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only general Deep Research (cited web research) exists. There is no company-profile view or company data source (financials, filings, org data). | ui |
-| desktop | partial | Only general Deep Research (cited web research) exists. There is no company-profile view or company data source (financials, filings, org data). | ui |
-| mobile | partial | Only general Deep Research (cited web research) exists. There is no company-profile view or company data source. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:860-867`, `apps/web/app/api/llm/v1/chat/completions/lib/research-loop.ts:1-8`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:111-116`
 
 ## S108.12: Health-record workspace.
 
@@ -94,29 +86,21 @@ Code: `apps/web/features/connectors/data/connectors.ts:1145-1154`, `apps/web/lib
 
 - Done when: A legal-research workspace searches case law and statutes and returns cited authorities.
 - Wave: 3
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only general Deep Research (cited web research) exists. There is no legal workspace or case-law/statute source built in. CourtListener and Midpage exist only as third-party directory listings. | ui |
-| desktop | partial | Only general Deep Research (cited web research) exists. There is no legal workspace or case-law/statute source built in. CourtListener and Midpage exist only as third-party directory listings. | ui |
-| mobile | partial | Only general Deep Research (cited web research) exists. There is no legal workspace or case-law source. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:860-867`, `apps/web/app/api/llm/v1/chat/completions/lib/research-loop.ts:1-8`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:111-116`
 
 ## S108.20: Scientific research workspace.
 
 - Done when: A scientific-research workspace searches literature/papers and produces cited syntheses.
 - Wave: 3
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only general Deep Research (cited web research) exists. There is no paper database, workspace or saved sources. Consensus and alphaXiv exist only as third-party directory listings. | ui |
-| desktop | partial | Only general Deep Research (cited web research) exists. There is no paper database, workspace or saved sources. Consensus and alphaXiv exist only as third-party directory listings. | ui |
-| mobile | partial | Only general Deep Research (cited web research) exists. There is no paper database or research workspace. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:860-867`, `apps/web/app/api/llm/v1/chat/completions/lib/research-loop.ts:1-8`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:111-116`
 
 ## S108.22: Reproducible research environments.
 
@@ -144,15 +128,12 @@ Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:860-867`,
 
 - Done when: The product generates curricula and lesson plans (objectives, activities, materials) as structured output.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Generic third-party connector (Coteach) via the chat tool loop; no native workspace. | ui |
-| desktop | partial | Generic third-party connector (Coteach) via the chat tool loop; no native workspace. | ui |
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/lib/connectors/directory/sources/vendor-directory.json:1728-1728`, `apps/web/features/connectors/hooks/use-connectors-settings-adapter.tsx:764-764`, `apps/web/lib/connectors/directory/connectable.ts:16-26`, `apps/web/app/api/connectors/custom/route.ts:130-150`
 
 ## S108.26: Sales and CRM workflows.
 
@@ -167,30 +148,24 @@ Code: `apps/web/lib/connectors/directory/sources/vendor-directory.json:1728-1728
 ## S108.29: Marketing and campaign workflows.
 
 - Done when: The user runs marketing/campaign workflows (audiences, campaigns, assets, analytics) from the product.
-- Wave: 2
+- Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Mailchimp works only if its endpoint is configured in CONNECTOR_OAUTH_PROVIDERS_JSON. Canva (pinned) covers only design assets. There is no campaign workspace or workflow. | ui, flag-off |
-| desktop | partial | Mailchimp works only if its endpoint is configured in CONNECTOR_OAUTH_PROVIDERS_JSON. Canva (pinned) covers only design assets. There is no campaign workspace or workflow. | ui, flag-off |
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/connectors/data/connectors.ts:385-394`, `apps/web/lib/connectors/oauth-setup.ts:166-181`, `apps/web/lib/connectors/mcp-endpoints.ts:17-21`
 
 ## S108.31: Shopping comparisons.
 
 - Done when: The user compares products for purchase (specs, prices, merchants) in a structured comparison.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | A generic two-item comparison card (pros, cons, winner) renders when an answer is written as "X vs Y". It has no product search, prices, merchants or buy links. | ui |
-| desktop | partial | A generic two-item comparison card (pros, cons, winner) renders when an answer is written as "X vs Y". It has no product search, prices, merchants or buy links. | ui |
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/cards/index.tsx:37-45`, `apps/web/features/chat/components/messages/MessageBubble.tsx:2089-2096`, `apps/web/features/chat/components/cards/ComparisonCard.tsx:15-28`
 
 ## S108.33: Travel planning and reservations.
 

@@ -240,14 +240,6 @@ const STORAGE: StorageRow[] = [
     source: 'features/teams/components/TeamInvitationAcceptance.tsx',
   },
   {
-    key: 'agi.composer-pending-draft',
-    store: 'Session storage',
-    holds:
-      'A message you typed into a new chat and navigated away from, held so pressing back gives it to you rather than losing it. It is the text you wrote, so it is named here rather than counted as a preference.',
-    clearedBy: 'Closing the tab, sending the message, or clearing site data.',
-    source: 'features/chat/lib/pending-composer-draft.ts',
-  },
-  {
     key: '__storage_test__',
     store: 'Local storage',
     holds:

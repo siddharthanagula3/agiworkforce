@@ -656,7 +656,8 @@ pub(super) async fn execute_write_file(
                         },
                         "Allow this file write?",
                         file_write_detail(&shown_path, content, file_path, line_count),
-                    ),
+                    )
+                    .with_proposal(content.clone()),
                 )
                 .await
                 {
@@ -749,6 +750,8 @@ pub(super) async fn execute_write_file(
         }
     }
 
+    let edited = crate::tools::take_approved_edit();
+    let content = edited.as_deref().unwrap_or(content.as_str());
     match tokio::fs::write(file_path, content).await {
         Ok(()) => {
             crate::file_state::record_file_write(file_path, content);
@@ -756,12 +759,15 @@ pub(super) async fn execute_write_file(
             Ok(ToolResult {
                 tool_name: "write_file".to_string(),
                 success: true,
-                output: format!(
-                    "Successfully wrote {} lines ({} bytes) to {}",
-                    line_count,
-                    content.len(),
-                    path
-                ),
+                output: match edited {
+                    Some(_) => crate::tools::edited_by_user_note(path, content),
+                    None => format!(
+                        "Successfully wrote {} lines ({} bytes) to {}",
+                        line_count,
+                        content.len(),
+                        path
+                    ),
+                },
             })
         }
         Err(e) => Ok(ToolResult {
@@ -908,6 +914,8 @@ pub(super) async fn execute_edit_file(
         });
     }
 
+    let new_contents = contents.replacen(old_string, new_string, 1);
+
     if require_confirmation {
         let old_preview = preview_string(old_string, 3);
         let new_preview = preview_string(new_string, 3);
@@ -931,7 +939,8 @@ pub(super) async fn execute_edit_file(
                         },
                         "Allow this edit?",
                         vec![format!("- {}", old_preview), format!("+ {}", new_preview)],
-                    ),
+                    )
+                    .with_proposal(new_contents.clone()),
                 )
                 .await
                 {
@@ -980,7 +989,8 @@ pub(super) async fn execute_edit_file(
         }
     }
 
-    let new_contents = contents.replacen(old_string, new_string, 1);
+    let edited = crate::tools::take_approved_edit();
+    let new_contents = edited.clone().unwrap_or(new_contents);
 
     match tokio::fs::write(file_path, &new_contents).await {
         Ok(()) => {
@@ -988,7 +998,10 @@ pub(super) async fn execute_edit_file(
             Ok(ToolResult {
                 tool_name: "edit_file".to_string(),
                 success: true,
-                output: format!("Successfully edited {}", path),
+                output: match edited {
+                    Some(_) => crate::tools::edited_by_user_note(path, &new_contents),
+                    None => format!("Successfully edited {}", path),
+                },
             })
         }
         Err(e) => Ok(ToolResult {
@@ -1230,7 +1243,8 @@ pub(super) async fn execute_multiedit(
                         },
                         "Allow these edits?",
                         diff.lines().take(40).map(str::to_string).collect(),
-                    ),
+                    )
+                    .with_proposal(updated.clone()),
                 )
                 .await
                 {
@@ -1279,6 +1293,8 @@ pub(super) async fn execute_multiedit(
         }
     }
 
+    let edited = crate::tools::take_approved_edit();
+    let updated = edited.clone().unwrap_or(updated);
     if let Err(e) = tokio::fs::write(file_path, &updated).await {
         return Ok(ToolResult {
             tool_name: "multiedit".into(),
@@ -1291,7 +1307,10 @@ pub(super) async fn execute_multiedit(
     Ok(ToolResult {
         tool_name: "multiedit".into(),
         success: true,
-        output: format!("Applied {}/{} edits to {}", edits.len(), edits.len(), path),
+        output: match edited {
+            Some(_) => crate::tools::edited_by_user_note(&path, &updated),
+            None => format!("Applied {}/{} edits to {}", edits.len(), edits.len(), path),
+        },
     })
 }
 

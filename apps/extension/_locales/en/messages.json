@@ -1276,7 +1276,7 @@
     }
   },
   "spQuickModeDescription": {
-    "message": "Answer faster on a cheaper route",
+    "message": "Answers faster on a cheaper route, good for summaries and quick lookups",
     "description": "One-line description of the Quick mode toggle"
   },
   "spThinking": {
@@ -1284,7 +1284,7 @@
     "description": "Label of the extended-thinking toggle in the model menu"
   },
   "spThinkingDescription": {
-    "message": "Let the model reason before it answers",
+    "message": "Reasons before it answers, good for math, logic and planning",
     "description": "One-line description of the extended-thinking toggle"
   },
   "spContextItem": {
@@ -1356,7 +1356,7 @@
     "description": "Accessible label of the recent-chats close button"
   },
   "spModelAutoDescription": {
-    "message": "Route each turn to the model that fits it",
+    "message": "Picks a model for each turn: a quick one for a summary, a stronger one for code",
     "description": "One-line description of the automatic model choice"
   },
   "spPlansHeading": {
@@ -2084,5 +2084,377 @@
   "spReconnecting": {
     "message": "Reconnecting…",
     "description": "Status while the panel reattaches to an answer after the connection dropped"
+  },
+  "spSuggestionsLabel": {
+    "message": "Suggestions for this page",
+    "description": "Accessible name of the prompt suggestions on an empty chat"
+  },
+  "spSuggestionSummarize": {
+    "message": "Summarize this page",
+    "description": "Suggested prompt on an empty chat that summarizes the open page"
+  },
+  "spSuggestionExplain": {
+    "message": "Explain this page in simple terms",
+    "description": "Suggested prompt on an empty chat that explains the open page"
+  },
+  "spSuggestionExtract": {
+    "message": "Pull out the names, dates and numbers",
+    "description": "Suggested prompt on an empty chat that extracts structured data from the open page"
+  },
+  "spSuggestionTranslate": {
+    "message": "Translate this page",
+    "description": "Suggested prompt on an empty chat that translates the open page"
+  },
+  "spRecentProjectsTitle": {
+    "message": "Start in a project",
+    "description": "Heading above recent projects a new chat can start in"
+  },
+  "spShortcutPromptPlaceholder": {
+    "message": "Summarize the following in 3 bullet points:\n\n$INPUT$",
+    "description": "Example prompt in the shortcut dialog; the placeholder marks where the user's own text goes",
+    "placeholders": {
+      "input": {
+        "content": "$1",
+        "example": "{{input}}"
+      }
+    }
+  },
+  "spShortcutInputHint": {
+    "message": "Put $INPUT$ where the text you type after the command should go. Without it, your text is added at the end.",
+    "description": "Help under the prompt field of the shortcut dialog",
+    "placeholders": {
+      "input": {
+        "content": "$1",
+        "example": "{{input}}"
+      }
+    }
+  },
+  "spShortcutCommandHint": {
+    "message": "Type $COMMAND$ in chat to use it.",
+    "description": "Shows the slash command a prompt shortcut will get from its name",
+    "placeholders": {
+      "command": {
+        "content": "$1",
+        "example": "/daily-research"
+      }
+    }
+  },
+  "spShortcutEditTitle": {
+    "message": "Edit shortcut",
+    "description": "Title of the shortcut dialog when editing a saved prompt shortcut"
+  },
+  "spShortcutSaveChanges": {
+    "message": "Save changes",
+    "description": "Save button of the shortcut dialog when editing"
+  },
+  "spShortcutNameUnusable": {
+    "message": "Give the shortcut a name with letters or numbers, so you can type it after /.",
+    "description": "Shortcut dialog error when the name cannot become a slash command"
+  },
+  "spShortcutNameTaken": {
+    "message": "$COMMAND$ is already a command or another shortcut. Choose a different name.",
+    "description": "Shortcut dialog error when the name's slash command is already used",
+    "placeholders": {
+      "command": {
+        "content": "$1",
+        "example": "/summarize"
+      }
+    }
+  },
+  "spShortcutPromptMissing": {
+    "message": "Write the prompt this shortcut sends.",
+    "description": "Shortcut dialog error when the prompt is empty"
+  },
+  "spShortcutUpdated": {
+    "message": "$NAME$ updated.",
+    "description": "Workflows status after a prompt shortcut is edited",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Daily research"
+      }
+    }
+  },
+  "spShortcutEdit": {
+    "message": "Edit $NAME$",
+    "description": "Accessible name of the edit button on a prompt shortcut",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Daily research"
+      }
+    }
+  },
+  "spShortcutDeleteAgain": {
+    "message": "Select again to delete",
+    "description": "Accessible name of a shortcut's delete button while it waits for confirmation"
+  },
+  "spShortcutDeleteConfirm": {
+    "message": "Select delete again to remove $NAME$. $COMMAND$ stops working in chat, and the shortcut cannot be recovered.",
+    "description": "Confirmation shown after the first press of delete on a prompt shortcut",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Daily research"
+      },
+      "command": {
+        "content": "$2",
+        "example": "/daily-research"
+      }
+    }
+  },
+  "spWorkflowDeleteConfirm": {
+    "message": "Select delete again to remove $NAME$. Its recorded steps cannot be recovered.",
+    "description": "Confirmation shown after the first press of delete on a recorded workflow or unnamed prompt shortcut",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Checkout flow"
+      }
+    }
+  },
+  "spModelsRecommended": {
+    "message": "Recommended",
+    "description": "Heading above the short list of models recommended for this plan in the model menu"
+  },
+  "spModelSpeedVeryFast": {
+    "message": "Fastest",
+    "description": "Relative speed of a model in the model menu"
+  },
+  "spModelSpeedFast": {
+    "message": "Fast",
+    "description": "Relative speed of a model in the model menu"
+  },
+  "spModelSpeedMedium": {
+    "message": "Medium speed",
+    "description": "Relative speed of a model in the model menu"
+  },
+  "spModelSpeedSlow": {
+    "message": "Slower",
+    "description": "Relative speed of a model in the model menu"
+  },
+  "spModelLockedAria": {
+    "message": "$MODEL$, available on $PLAN$. Opens plans in a new tab.",
+    "description": "Accessible name of a model the current plan cannot use",
+    "placeholders": {
+      "model": {
+        "content": "$1",
+        "example": "A model name"
+      },
+      "plan": {
+        "content": "$2",
+        "example": "Pro"
+      }
+    }
+  },
+  "spComposerPlaceholderQueue": {
+    "message": "Reply to send it after this answer",
+    "description": "Composer placeholder while an answer is streaming; pressing Enter queues the message"
+  },
+  "spQueuedListLabel": {
+    "message": "Queued messages",
+    "description": "Accessible name of the list of messages waiting to be sent after the current answer"
+  },
+  "spQueuedLead": {
+    "message": "Queued",
+    "description": "Label before a message that will be sent after the current answer"
+  },
+  "spQueuedLeadNumbered": {
+    "message": "Queued $INDEX$ of $TOTAL$",
+    "description": "Label before one of several messages waiting to be sent after the current answer",
+    "placeholders": {
+      "index": {
+        "content": "$1",
+        "example": "1"
+      },
+      "total": {
+        "content": "$2",
+        "example": "2"
+      }
+    }
+  },
+  "spQueuedEdit": {
+    "message": "Edit",
+    "description": "Button that moves a queued message back into the composer"
+  },
+  "spQueuedEditAria": {
+    "message": "Edit queued message: $TEXT$",
+    "description": "Accessible name of the edit button on a queued message",
+    "placeholders": {
+      "text": {
+        "content": "$1",
+        "example": "And the second one?"
+      }
+    }
+  },
+  "spQueuedCancel": {
+    "message": "Cancel",
+    "description": "Button that removes a queued message without sending it"
+  },
+  "spQueuedCancelAria": {
+    "message": "Cancel queued message: $TEXT$",
+    "description": "Accessible name of the cancel button on a queued message",
+    "placeholders": {
+      "text": {
+        "content": "$1",
+        "example": "And the second one?"
+      }
+    }
+  },
+  "spQueuedReturned": {
+    "message": "Your queued message was not sent because the chat changed. It is back in the composer.",
+    "description": "Notice when queued messages are returned to the composer instead of being sent"
+  },
+  "spQueuedFull": {
+    "message": "You can queue up to $COUNT$ messages. Wait for the answer, or cancel one.",
+    "description": "Notice when the queue of messages waiting for the current answer is full",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "100"
+      }
+    }
+  },
+  "spMapPreviewLabel": {
+    "message": "Map of $PLACE$",
+    "description": "Accessible name of the map drawn in a map search card",
+    "placeholders": {
+      "place": {
+        "content": "$1",
+        "example": "Blue Bottle Coffee, Oakland"
+      }
+    }
+  },
+  "spMapPreviewLoading": {
+    "message": "Loading map…",
+    "description": "Shown while the tiles of a map search card load"
+  },
+  "spMapPreviewUnavailable": {
+    "message": "The map could not be loaded. You can still open these places in Maps.",
+    "description": "Shown when a map search card cannot draw its map"
+  },
+  "spMentionMenuLabel": {
+    "message": "Tabs and projects",
+    "description": "Accessible name of the menu that opens when @ is typed in the composer"
+  },
+  "spMentionTabs": {
+    "message": "Tabs",
+    "description": "Heading above open browser tabs in the @ menu"
+  },
+  "spMentionProjects": {
+    "message": "Projects",
+    "description": "Heading above the user's projects in the @ menu"
+  },
+  "spMentionProjectDetail": {
+    "message": "Start the chat in this project",
+    "description": "Second line of a project in the @ menu"
+  },
+  "spSiteAccessRefused": {
+    "message": "AGI can read $SITE$ only after you allow it. Nothing from that page was attached.",
+    "description": "Notice when Chrome's permission to read a chosen tab or link was not granted",
+    "placeholders": {
+      "site": {
+        "content": "$1",
+        "example": "example.com"
+      }
+    }
+  },
+  "spLinkItem": {
+    "message": "Add a web page by link",
+    "description": "Attach menu item that opens a field for a link whose page text is attached"
+  },
+  "spLinkFormLabel": {
+    "message": "Add a web page by link",
+    "description": "Accessible name of the link form above the composer"
+  },
+  "spLinkInputLabel": {
+    "message": "Link to the page",
+    "description": "Accessible name of the link field"
+  },
+  "spLinkAdd": {
+    "message": "Add",
+    "description": "Button that reads the linked page and attaches its text"
+  },
+  "spLinkCancel": {
+    "message": "Cancel",
+    "description": "Button that closes the link form"
+  },
+  "spLinkInvalid": {
+    "message": "Enter a link that starts with https:// or http://.",
+    "description": "Link form error for an unusable link"
+  },
+  "spLinkReading": {
+    "message": "Reading the page…",
+    "description": "Link form status while the linked page is read"
+  },
+  "spLinkUnreachable": {
+    "message": "$SITE$ could not be reached. Check the link and try again.",
+    "description": "Link form error when the page could not be fetched",
+    "placeholders": {
+      "site": {
+        "content": "$1",
+        "example": "example.com"
+      }
+    }
+  },
+  "spLinkStatus": {
+    "message": "$SITE$ answered with error $STATUS$, so nothing was attached.",
+    "description": "Link form error when the site returned an error status",
+    "placeholders": {
+      "site": {
+        "content": "$1",
+        "example": "example.com"
+      },
+      "status": {
+        "content": "$2",
+        "example": "404"
+      }
+    }
+  },
+  "spLinkNotText": {
+    "message": "The link on $SITE$ is not a web page or text, so it cannot be attached this way. Upload the file instead.",
+    "description": "Link form error when the link points to a file that is not HTML or text",
+    "placeholders": {
+      "site": {
+        "content": "$1",
+        "example": "example.com"
+      }
+    }
+  },
+  "spAgiWork": {
+    "message": "AGI Work",
+    "description": "Name of the mode in which the assistant plans and runs multi-step tasks with tools"
+  },
+  "spAgiWorkDescription": {
+    "message": "Plans and runs multi-step tasks with tools and files, for example researching a topic and building a report. Later messages in this chat use it until you turn it off.",
+    "description": "Description of the AGI Work toggle in the model menu"
+  },
+  "spAgiWorkGated": {
+    "message": "Multi-step tasks with tools and files, available on $PLAN$",
+    "description": "Description of the AGI Work row for a plan that does not include it",
+    "placeholders": {
+      "plan": {
+        "content": "$1",
+        "example": "Pro"
+      }
+    }
+  },
+  "spModelMenuAriaWork": {
+    "message": "Model $MODEL$, effort $EFFORT$, AGI Work on",
+    "description": "Accessible name of the model menu button while AGI Work is on",
+    "placeholders": {
+      "model": {
+        "content": "$1",
+        "example": "Auto"
+      },
+      "effort": {
+        "content": "$2",
+        "example": "Medium"
+      }
+    }
+  },
+  "spShortcutDelete": {
+    "message": "Delete",
+    "description": "Accessible name of the delete button on a saved shortcut or recorded workflow"
   }
 }

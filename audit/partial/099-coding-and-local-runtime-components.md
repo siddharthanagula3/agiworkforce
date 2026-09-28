@@ -17,17 +17,6 @@ nothing is left.
 
 Code: `crates/agiworkforce-app-server/src/lib.rs:199-205`, `apps/web/lib/services/cloud-code-session-service.ts:2039-2041`
 
-## S99.14: Checkpoint manager.
-
-- Done when: A checkpoint manager snapshots code and conversation so either can be restored.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Checkpoints hold conversation messages only; there is no file snapshot, and the app-server reports checkpoints:false. | handler |
-
-Code: `apps/cli/src/agent/history.rs:14-26`, `apps/cli/src/app_server/developer_host.rs:375-375`
-
 ## S99.16: Worktree manager.
 
 - Done when: A worktree manager creates, lists and removes worktrees for isolated sessions.

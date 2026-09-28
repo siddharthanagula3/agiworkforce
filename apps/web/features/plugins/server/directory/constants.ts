@@ -125,9 +125,13 @@ export const MARKETPLACE_UNAVAILABLE_MESSAGE =
   'The plugin marketplace is not available yet. Please try again later.';
 export const INSTALL_SKILLS_UNAVAILABLE_MESSAGE =
   'None of this plugin skills could be fetched from its repository right now, so it was not installed.';
+export const INSTALL_MANIFEST_UNAVAILABLE_MESSAGE =
+  "This plugin's manifest could not be read from its repository right now, so it was not installed.";
 export const INSTALL_BUILTIN_MESSAGE =
   'This plugin is a built-in pack; install it through the plugin installations route.';
 export const INSTALL_UNKNOWN_MESSAGE = 'This plugin is not in the directory.';
+export const INSTALL_ENTRY_UNAVAILABLE_MESSAGE =
+  'This marketplace plugin is not available for installation.';
 
 export const SNAPSHOT_CACHE_METHOD = 'plugins.directory.snapshot';
 export const SYNC_STATE_CACHE_METHOD = 'plugins.directory.sync-state';

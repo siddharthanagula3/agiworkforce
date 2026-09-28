@@ -15,9 +15,12 @@ import type {
   CloudCodeAvailability,
   CloudCodeRuntime,
   CloudCodeSession,
+  CloudCodeShareVisibility,
   CloudCodeTerminalEntry,
+  CloudCodeTurnStepBound,
 } from '@agiworkforce/types';
 import {
+  CLOUD_CODE_DEFAULT_TURN_STEPS,
   cloudCodeStopReasonIsRetryable,
   normalizeBillingPlanTier,
   NOTEBOOK_TEMPLATE_ID,
@@ -80,6 +83,7 @@ import {
 import { CodeTranscript } from './components/CodeTranscript';
 import { CodeChangesPanel } from './components/CodeChangesPanel';
 import { CodeSessionMenu } from './components/CodeSessionMenu';
+import { CodeShareDialog } from './components/CodeShareDialog';
 import styles from './CloudCodePage.module.css';
 
 const HEADER_GLYPH_SIZE = 16;
@@ -131,6 +135,8 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
   const [routeNotice, setRouteNotice] = useState<string | null>(null);
   const [draft, setDraft] = useState<CodeDraft>(EMPTY_CODE_DRAFT);
   const [task, setTask] = useState('');
+  const [turnSteps, setTurnSteps] = useState<CloudCodeTurnStepBound>(CLOUD_CODE_DEFAULT_TURN_STEPS);
+  const [shareOpen, setShareOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [running, setRunning] = useState(false);
   const [committing, setCommitting] = useState(false);
@@ -293,6 +299,14 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
   const selectedSession = useMemo(
     () => sessions.find((session) => session.id === selectedId) ?? null,
     [selectedId, sessions],
+  );
+  const runtimeRunsOwnAgent = useCallback(
+    (runtimeId: string | null) =>
+      runtimes.some((runtime) => runtime.id === runtimeId && runtime.runsOwnAgent === true),
+    [runtimes],
+  );
+  const turnControls = !runtimeRunsOwnAgent(
+    selectedSession ? selectedSession.runtimeId : draft.runtimeId || null,
   );
 
   const canCreate =
@@ -458,6 +472,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
           goal,
           model: agentModel,
           idempotencyKey: makeRequestId(),
+          ...(runtimeRunsOwnAgent(session.runtimeId) ? {} : { maxSteps: turnSteps }),
         });
         applyTurn(recordId, turn, goal);
         void loadSessions(statusFilter);
@@ -486,7 +501,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
         setStopping(false);
       }
     },
-    [agentModel, api, applyTurn, loadSessions, statusFilter],
+    [agentModel, api, applyTurn, loadSessions, runtimeRunsOwnAgent, statusFilter, turnSteps],
   );
 
   const createSession = useCallback(
@@ -675,18 +690,40 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
   );
 
   const handleCommit = useCallback(
-    async (message: string) => {
+    async (message: string, files: string[] | null) => {
       if (!selectedSession || committing) return;
       setCommitting(true);
       setError(null);
       setCommitNotice(null);
       try {
-        const result = await api.commit(selectedSession.id, message);
+        const result = await api.commit(selectedSession.id, {
+          message,
+          ...(files ? { files } : {}),
+        });
         replaceSession(result.session);
         setCommitNotice(result.push.ok ? CODE_COPY.commitPushed : result.push.output);
         void loadChanges(selectedSession.id);
       } catch (commitError) {
         setError(friendlyError(commitError));
+      } finally {
+        setCommitting(false);
+      }
+    },
+    [api, committing, loadChanges, replaceSession, selectedSession],
+  );
+
+  const handleDiscard = useCallback(
+    async (files: string[]) => {
+      if (!selectedSession || committing || files.length === 0) return;
+      setCommitting(true);
+      setError(null);
+      setCommitNotice(null);
+      try {
+        const result = await api.discardChanges(selectedSession.id, files);
+        replaceSession(result.session);
+        void loadChanges(selectedSession.id);
+      } catch (discardError) {
+        setError(friendlyError(discardError));
       } finally {
         setCommitting(false);
       }
@@ -727,6 +764,15 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
       } catch (archiveError) {
         setError(friendlyError(archiveError));
       }
+    },
+    [api, replaceSession, selectedSession],
+  );
+
+  const handleChangeSharing = useCallback(
+    async (visibility: CloudCodeShareVisibility) => {
+      const session = selectedSession;
+      if (!session) return;
+      replaceSession(await api.setSharing(session.id, visibility));
     },
     [api, replaceSession, selectedSession],
   );
@@ -853,6 +899,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
     adding: local.adding,
     onAddFolder: () => void local.addFolder(),
     onModelChange: (modelId) => handleDraftChange({ localModelId: modelId }),
+    onBranchSwitched: local.refresh,
   };
 
   const unavailableNotice = availability
@@ -1068,9 +1115,16 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
                             setTitleDraft(selectedSession.title);
                             setRenaming(true);
                           }}
+                          onShare={() => setShareOpen(true)}
                           onSetArchived={(next) => void handleSetArchived(next)}
                           onDeleteSession={requestDelete}
                           onCloseSession={requestClose}
+                        />
+                        <CodeShareDialog
+                          session={selectedSession}
+                          open={shareOpen}
+                          onOpenChange={setShareOpen}
+                          onChangeVisibility={handleChangeSharing}
                         />
                       </div>
                     </>
@@ -1202,6 +1256,9 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
                           : null
                       }
                       contextWindow={agentContextWindow}
+                      turnControls={turnControls}
+                      turnSteps={turnSteps}
+                      onTurnStepsChange={setTurnSteps}
                     />
                   )}
                 </div>
@@ -1219,7 +1276,8 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
                     changesLoading={changesLoading}
                     pullRequestBusy={pullRequestBusy}
                     onToggleWide={() => setChangesWide((open) => !open)}
-                    onCommit={(message) => void handleCommit(message)}
+                    onCommit={(message, files) => void handleCommit(message, files)}
+                    onDiscard={(files) => void handleDiscard(files)}
                     onRunCommand={(command) => void handleRunCommand(command)}
                     onRefreshChanges={() => void loadChanges(selectedSession.id)}
                     onCreatePullRequest={() => void handleCreatePullRequest()}

@@ -606,6 +606,8 @@ export interface ManagedChatStreamOptions {
   effort?: Effort;
   extendedThinking?: boolean;
   workMode?: 'chat' | 'agiwork';
+  webSearch?: boolean;
+  webFetch?: boolean;
   approvalResume?: ToolApprovalResumeRequest;
   idempotencyKey?: string;
   conversationId?: string;
@@ -1132,6 +1134,8 @@ export async function* streamFreeChat(
               canRespond: false,
             },
             ...(options.workMode ? { work_mode: options.workMode } : {}),
+            ...(options.webSearch ? { web_search: true } : {}),
+            ...(options.webFetch ? { web_fetch: true } : {}),
             ...(options.extendedThinking ? { thinking_mode: true } : {}),
             ...(options.effort ? { effort: options.effort } : {}),
             ...(options.conversationId ? { conversation_id: options.conversationId } : {}),

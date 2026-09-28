@@ -34,14 +34,15 @@ export interface SearchResult {
   contextAfter?: string;
 }
 
-export function globalSearchResultHref(result: SearchResult): string {
+export function globalSearchResultHref(result: SearchResult, query?: string): string {
   if (result.href) return result.href;
   if (result.type === 'project') return `/chat/projects/${encodeURIComponent(result.sessionId)}`;
   if (result.type === 'file') return '/chat/library';
   const conversation = `/chat/${encodeURIComponent(result.sessionId)}`;
-  return result.messageId
-    ? `${conversation}?highlightMessage=${encodeURIComponent(result.messageId)}`
-    : conversation;
+  if (!result.messageId) return conversation;
+  const message = `${conversation}?highlightMessage=${encodeURIComponent(result.messageId)}`;
+  const needle = query?.trim();
+  return needle ? `${message}&highlightQuery=${encodeURIComponent(needle)}` : message;
 }
 
 export interface SearchFilters {

@@ -216,14 +216,6 @@ export function clearPersistedDraft(conversationId: string | null): void {
   currentStorage()?.clear(conversationId);
 }
 
-let reloadedPendingDraftClaimed = false;
-
-export function claimReloadedPendingDraft(): string {
-  if (reloadedPendingDraftClaimed) return '';
-  reloadedPendingDraftClaimed = true;
-  return readPersistedDraft(null);
-}
-
 export function __resetComposerDraftStorageForTests(): void {
   activeStorage = undefined;
 }
