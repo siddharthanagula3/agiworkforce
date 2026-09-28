@@ -259,6 +259,10 @@ export function toCsv(data: TabularData): string {
   return toDelimited(data, ',');
 }
 
+export function toTsv(data: TabularData): string {
+  return toDelimited(data, '\t');
+}
+
 function collectGuards(text: string, start: number, separator: string, guards: Set<number>): void {
   let fieldStart = start;
   let value = '';

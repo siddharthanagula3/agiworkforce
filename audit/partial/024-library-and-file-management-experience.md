@@ -266,17 +266,14 @@ Code: `apps/mobile/src/features/library/index.tsx:155-175`
 
 - Done when: Expired or no-longer-available files are clearly marked in the Library.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | A missing file is flagged ("The stored bytes are gone") only after a download or thumbnail fetch fails with 404/410; no expiry date or expiring state is shown up front. | ui |
-| desktop | partial | A missing file is flagged ("The stored bytes are gone") only after a download or thumbnail fetch fails with 404/410; no expiry date or expiring state is shown up front. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `packages/ui/unified-chat/src/components/library/LibraryView.tsx:1438-1446`, `packages/ui/unified-chat/src/components/library/LibraryView.tsx:478-487`
 
 ## S24.36: Processing-status display.
 

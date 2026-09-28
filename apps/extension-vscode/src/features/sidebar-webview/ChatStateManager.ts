@@ -110,6 +110,7 @@ import { buildCustomInstructionInput } from '../instructions';
 import { clearActiveCloudProject, getActiveCloudProject } from '../projects/activeProject';
 import { OPEN_PROJECT_COMMAND } from '../projects/projectsTree';
 import { resolveStartSuggestions, type StartSuggestions } from './startSuggestions';
+import type { SessionReceipt } from './sessionReceipt';
 import {
   buildWorkspaceReferenceInputs,
   isWorkspaceFileReference,
@@ -2035,6 +2036,18 @@ export class ChatStateManager {
   /** The CLI session this chat is running in, when one has been opened. */
   activeThreadId(): string | undefined {
     return this._thread?.id;
+  }
+
+  async activeThreadReceipt(): Promise<SessionReceipt | undefined> {
+    const thread = this._thread;
+    if (thread === undefined) return undefined;
+    const read = await thread.runtime.readThread(thread.id);
+    return {
+      title: read.thread.title,
+      cwd: thread.cwd,
+      approvals: read.approvals ?? [],
+      fileChanges: read.fileChanges ?? [],
+    };
   }
 
   chatTranscript(): readonly ChatTurn[] {
