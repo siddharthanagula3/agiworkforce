@@ -990,6 +990,21 @@ export default function ProjectDetailPage() {
                 {canEditProject ? 'Shared with you · you can edit' : 'Shared with you'}
               </span>
             ) : null}
+            {isSharedProject ? (
+              <p
+                data-testid="project-shared-explanation"
+                style={{
+                  margin: 'var(--space-2) 0 0',
+                  maxWidth: 540,
+                  fontSize: 13,
+                  lineHeight: 1.5,
+                  color: 'var(--agi-ink-2)',
+                }}
+              >
+                This project&rsquo;s instructions and files are shared with you. Your chats and
+                memories here stay private to you.
+              </p>
+            ) : null}
 
             {/* Optional project description / instructions summary */}
             {headerPresentation && (
