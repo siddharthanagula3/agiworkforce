@@ -6,17 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S104.T03: Tiptap (Rich document editor)
-
-- Done when: Rich documents are edited in an embedded rich-text editor engine (Tiptap or equivalent).
-- Wave: 2
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Tiptap is used only for the chat composer, and even that is off by default (NEXT_PUBLIC_COMPOSER_EDITOR defaults to the plain textarea). No rich document editor exists; build one or turn the composer editor on. | ui, flag-off |
-
-Code: `packages/ui/unified-chat/src/composer-editor/extensions/index.ts:18-29`, `apps/web/features/chat/lib/composer-editor-gate.ts:43-47`
-
 ## S104.T09: xterm.js (Browser/desktop terminal UI)
 
 - Done when: A terminal UI (xterm.js or equivalent) is shown inside the browser or desktop product.
@@ -25,17 +14,6 @@ Code: `packages/ui/unified-chat/src/composer-editor/extensions/index.ts:18-29`, 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 
-## S104.01: Code editor engine.
-
-- Done when: Users edit code in the product through a code editor engine.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Code editing happens only in VS Code, through its own editor (diffs and WorkspaceEdit). Web and Electron desktop embed no code editor; Monaco ships only in the internal Tauri app. | surface-only |
-
-Code: `apps/extension-vscode/src/providers/diffDecorationProvider.ts:346-348`
-
 ## S104.05: Spreadsheet grid engine.
 
 - Done when: Tabular data opens in an interactive spreadsheet grid that supports editing and formulas.
@@ -43,17 +21,6 @@ Code: `apps/extension-vscode/src/providers/diffDecorationProvider.ts:346-348`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-
-## S104.07: Image editor/canvas engine.
-
-- Done when: Users edit images in an in-product canvas editor (mask, crop, annotate) as well as by prompt.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Image edits are prompt-driven (edit, variation, mask edit via the provider). The mask must be uploaded as a second image; there is no canvas to paint a mask, crop or annotate. | ui |
-
-Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:187-196`, `apps/web/app/api/media/image/lib/image-generation-provider.ts:478-478`
 
 ## S104.08: Video playback and editing engine.
 
