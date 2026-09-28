@@ -299,23 +299,162 @@ export async function promotePendingRecoveryKeys(
   return row ? toMsOrNull(row.enrolled_at) : null;
 }
 
+const CLEARED_ENROLLMENT = `
+  enrolled_at = null,
+  recovery_key_hashes = '{}',
+  pending_recovery_key_hashes = null,
+  pending_recovery_keys_expire_at = null,
+  recovery_started_at = null,
+  recovery_unlocks_at = null,
+  recovery_session_id = null,
+  enrolled_session_id = null,
+  undo_token_hash = null,
+  undo_expires_at = null`;
+
 export async function clearEnrollment(db: DatabaseAdapter, userId: string): Promise<boolean> {
   return db.transaction(async (tx) => {
     const cleared = await tx.execute(
       `update public.account_security_enrollments
-          set enrolled_at = null,
-              recovery_key_hashes = '{}',
-              pending_recovery_key_hashes = null,
-              pending_recovery_keys_expire_at = null,
-              recovery_started_at = null,
-              recovery_unlocks_at = null,
-              recovery_session_id = null
+          set ${CLEARED_ENROLLMENT}
         where user_id = $1 and enrolled_at is not null`,
       [userId],
     );
     await tx.execute(`delete from public.account_security_sessions where user_id = $1`, [userId]);
     return cleared > 0;
   });
+}
+
+export async function armEnrollmentUndo(
+  db: DatabaseAdapter,
+  input: { userId: string; sessionId: string; tokenHash: string; ttlHours: number },
+): Promise<number | null> {
+  const [row] = await db.query<{ undo_expires_at: Timestamp }>(
+    `update public.account_security_enrollments
+        set enrolled_session_id = $2,
+            undo_token_hash = $3,
+            undo_expires_at = now() + make_interval(hours => $4::integer)
+      where user_id = $1 and enrolled_at is not null
+      returning undo_expires_at`,
+    [input.userId, input.sessionId, input.tokenHash, input.ttlHours],
+  );
+  return row ? toMs(row.undo_expires_at) : null;
+}
+
+export interface OpenEnrollmentUndo {
+  userId: string;
+  enrolledSessionId: string | null;
+}
+
+export async function readEnrollmentUndo(
+  ownerDb: DatabaseAdapter,
+  tokenHash: string,
+): Promise<OpenEnrollmentUndo | null> {
+  const [row] = await ownerDb.query<{ user_id: string; enrolled_session_id: string | null }>(
+    `select user_id, enrolled_session_id
+       from public.account_security_enrollments
+      where undo_token_hash = $1
+        and undo_expires_at > now()
+        and enrolled_at is not null`,
+    [tokenHash],
+  );
+  return row ? { userId: row.user_id, enrolledSessionId: row.enrolled_session_id } : null;
+}
+
+export async function undoEnrollment(
+  ownerDb: DatabaseAdapter,
+  input: { userId: string; tokenHash: string },
+): Promise<boolean> {
+  return ownerDb.transaction(async (tx) => {
+    const cleared = await tx.execute(
+      `update public.account_security_enrollments
+          set ${CLEARED_ENROLLMENT}
+        where user_id = $1
+          and undo_token_hash = $2
+          and undo_expires_at > now()
+          and enrolled_at is not null`,
+      [input.userId, input.tokenHash],
+    );
+    if (cleared === 0) return false;
+    await tx.execute(`delete from public.account_security_sessions where user_id = $1`, [
+      input.userId,
+    ]);
+    await tx.execute(`delete from public.account_security_credentials where user_id = $1`, [
+      input.userId,
+    ]);
+    await tx.execute(`delete from public.account_security_challenges where user_id = $1`, [
+      input.userId,
+    ]);
+    return true;
+  });
+}
+
+export async function replaceEnrollmentCode(
+  db: DatabaseAdapter,
+  input: { userId: string; sessionId: string; codeHash: string; ttlMinutes: number },
+): Promise<number> {
+  return db.transaction(async (tx) => {
+    await tx.execute(
+      `delete from public.account_security_challenges
+        where user_id = $1
+          and (purpose = 'enrollment_email' or expires_at < now())`,
+      [input.userId],
+    );
+    const [row] = await tx.query<{ expires_at: Timestamp }>(
+      `insert into public.account_security_challenges
+         (user_id, purpose, session_id, code_hash, expires_at)
+       values ($1, 'enrollment_email', $2, $3, now() + make_interval(mins => $4::integer))
+       returning expires_at`,
+      [input.userId, input.sessionId, input.codeHash, input.ttlMinutes],
+    );
+    if (!row) throw new Error('enrollment code was not stored');
+    return toMs(row.expires_at);
+  });
+}
+
+export async function takeEnrollmentCode(
+  db: DatabaseAdapter,
+  input: { userId: string; sessionId: string; codeHash: string; maxAttempts: number },
+): Promise<boolean> {
+  const [taken] = await db.query<{ id: string }>(
+    `delete from public.account_security_challenges
+      where user_id = $1
+        and session_id = $2
+        and purpose = 'enrollment_email'
+        and code_hash = $3
+        and attempts < $4
+        and expires_at > now()
+      returning id::text as id`,
+    [input.userId, input.sessionId, input.codeHash, input.maxAttempts],
+  );
+  if (taken) return true;
+  await db.execute(
+    `update public.account_security_challenges
+        set attempts = attempts + 1
+      where user_id = $1
+        and session_id = $2
+        and purpose = 'enrollment_email'
+        and attempts < $3`,
+    [input.userId, input.sessionId, input.maxAttempts],
+  );
+  return false;
+}
+
+export async function signInAddressChangedSince(
+  db: DatabaseAdapter,
+  userId: string,
+  days: number,
+): Promise<boolean> {
+  const [row] = await db.query<{ changed: boolean }>(
+    `select exists (
+              select 1 from public.identity_risk_observations
+               where user_id = $1
+                 and event_key = 'email_changed'
+                 and outcome = 'success'
+                 and observed_at > now() - make_interval(days => $2::integer)
+            ) as changed`,
+    [userId, days],
+  );
+  return row?.changed === true;
 }
 
 export async function startRecoveryWithKey(

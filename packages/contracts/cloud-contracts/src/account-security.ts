@@ -4,6 +4,8 @@ export const ACCOUNT_SECURITY_PATH = '/api/account-security';
 export const ACCOUNT_SECURITY_CREDENTIALS_PATH = '/api/account-security/credentials';
 export const ACCOUNT_SECURITY_CREDENTIAL_OPTIONS_PATH = '/api/account-security/credentials/options';
 export const ACCOUNT_SECURITY_ENROLLMENT_PATH = '/api/account-security/enrollment';
+export const ACCOUNT_SECURITY_ENROLLMENT_CODE_PATH = '/api/account-security/enrollment/code';
+export const ACCOUNT_SECURITY_ENROLLMENT_UNDO_PATH = '/api/account-security/enrollment/undo';
 export const ACCOUNT_SECURITY_RECOVERY_KEYS_PATH = '/api/account-security/recovery-keys';
 export const ACCOUNT_SECURITY_VERIFICATION_PATH = '/api/account-security/verification';
 export const ACCOUNT_SECURITY_VERIFICATION_OPTIONS_PATH =
@@ -16,6 +18,7 @@ export const ACCOUNT_SECURITY_HANDOFF_VERIFICATION_PATH =
 export const ACCOUNT_SECURITY_HANDOFF_COMPLETION_PATH = '/api/account-security/handoff/completion';
 
 export const ACCOUNT_SECURITY_VERIFY_PAGE_PATH = '/login/verify';
+export const ACCOUNT_SECURITY_UNDO_PAGE_PATH = '/login/not-me';
 export const ACCOUNT_SECURITY_SETTINGS_PATH = '/settings?section=security';
 
 export function accountSecurityCredentialPath(credentialId: string): string {
@@ -30,6 +33,10 @@ export function accountSecurityHandoffPageHref(handoff: string): string {
   return `${ACCOUNT_SECURITY_VERIFY_PAGE_PATH}?handoff=${encodeURIComponent(handoff)}`;
 }
 
+export function accountSecurityUndoPageHref(token: string): string {
+  return `${ACCOUNT_SECURITY_UNDO_PAGE_PATH}#${encodeURIComponent(token)}`;
+}
+
 export const PASSKEY_REQUIRED_REASON = 'passkey_required';
 
 export const ACCOUNT_SECURITY_POLICY = {
@@ -40,7 +47,13 @@ export const ACCOUNT_SECURITY_POLICY = {
   pendingRecoveryKeysMinutes: 30,
   ceremonyMinutes: 5,
   handoffMinutes: 10,
+  enrollmentCodeMinutes: 10,
+  enrollmentCodeAttempts: 5,
+  undoHours: 48,
+  emailChangeCooldownDays: 7,
 } as const;
+
+export const ACCOUNT_SECURITY_ENROLLMENT_CODE_LENGTH = 6;
 
 export const ACCOUNT_SECURITY_CREDENTIAL_NAME_MAX_LENGTH = 64;
 
@@ -87,10 +100,20 @@ export interface AccountSecurityRecoveryKeysResponse {
   expiresAt: string;
 }
 
+export interface AccountSecurityEnrollmentCodeResponse {
+  sentTo: string;
+  expiresAt: string;
+}
+
 export interface AccountSecurityEnrollmentResponse {
   enrolledAt: string;
+  verifiedUntil: string;
   sessionsSignedOut: number;
   devicesSignedOut: number;
+}
+
+export interface AccountSecurityUndoResponse {
+  sessionsSignedOut: number;
 }
 
 export interface AccountSecurityVerificationResponse {
@@ -129,6 +152,16 @@ export const AccountSecurityRecoveryKeysSavedSchema = z
   .object({ recoveryKeysSaved: z.literal(true) })
   .strict();
 
+export const AccountSecurityEnrollmentRequestSchema = z
+  .object({
+    recoveryKeysSaved: z.literal(true),
+    emailCode: z.string().length(ACCOUNT_SECURITY_ENROLLMENT_CODE_LENGTH).regex(/^\d+$/),
+    response: webAuthnResponseSchema,
+  })
+  .strict();
+
+export const AccountSecurityUndoRequestSchema = z.object({ token: handoffTokenSchema }).strict();
+
 export const AccountSecurityRecoveryStartRequestSchema = z
   .object({ recoveryKey: z.string().trim().min(1).max(64) })
   .strict();
@@ -158,6 +191,9 @@ export const AccountSecurityHandoffCompletionRequestSchema = z
 
 export type AccountSecurityRegistrationRequest = z.infer<
   typeof AccountSecurityRegistrationRequestSchema
+>;
+export type AccountSecurityEnrollmentRequest = z.infer<
+  typeof AccountSecurityEnrollmentRequestSchema
 >;
 export type AccountSecurityHandoffRequest = z.infer<typeof AccountSecurityHandoffRequestSchema>;
 export type AccountSecurityHandoffCompletionRequest = z.infer<

@@ -7,9 +7,12 @@ import type {
   PublicKeyCredentialRequestOptionsJSON,
 } from '@simplewebauthn/server';
 import {
+  ACCOUNT_SECURITY_ENROLLMENT_CODE_LENGTH,
   ACCOUNT_SECURITY_POLICY,
   accountSecurityHandoffPageHref,
+  accountSecurityUndoPageHref,
   type AccountSecurityCredential,
+  type AccountSecurityEnrollmentCodeResponse,
   type AccountSecurityEnrollmentResponse,
   type AccountSecurityHandoffClient,
   type AccountSecurityHandoffResponse,
@@ -25,6 +28,7 @@ import { SITE_URL } from '@/lib/seo/site';
 import { recordAuditEvent } from '@/lib/security-audit';
 import {
   getIdentityProvider,
+  getIdentityUser,
   getRequestIdentity,
   verifyIdentitySessionToken,
 } from '@/lib/server/identity';
@@ -34,6 +38,10 @@ import type { UserScopedDb } from '@/lib/server/rls-db';
 import { revokeEveryOtherSession } from '@/lib/server/session-revocation';
 import { emitIdentitySecurityEvent } from '@/lib/services/identity-events';
 import {
+  sendAccountSecurityCodeEmail,
+  sendAccountSecurityEnabledEmail,
+} from '@/lib/services/notification-email-service';
+import {
   forgetSessionVerification,
   rememberEnrollment,
   sessionVerifiedUntil,
@@ -41,15 +49,19 @@ import {
 } from './gate';
 import {
   codeChallengeFor,
+  generateEnrollmentCode,
   generateRecoveryKeys,
+  hashEnrollmentCode,
   hashHandoffCode,
   hashHandoffToken,
   hashRecoveryKey,
+  hashUndoToken,
   newOpaqueToken,
   normalizeRecoveryKey,
   sameSecret,
 } from './secrets';
 import {
+  armEnrollmentUndo,
   cancelRecovery,
   clearEnrollment,
   createHandoff,
@@ -63,10 +75,13 @@ import {
   recordCredentialUse,
   recordSessionVerification,
   replaceChallenge,
+  replaceEnrollmentCode,
+  signInAddressChangedSince,
   startRecoveryWithKey,
   storePendingRecoveryKeys,
   takeChallenge,
   takeCompletedHandoff,
+  takeEnrollmentCode,
   type EnrollmentState,
   type RecoveryHoldState,
   type StoredCredential,
@@ -355,26 +370,171 @@ export async function confirmReplacementRecoveryKeys(
   });
 }
 
-export async function enrollAccountSecurity(
+async function requireEnrollmentMethods(
   caller: AccountSecurityCaller,
-  ownerDb: DatabaseAdapter,
-  request: NextRequest,
-): Promise<AccountSecurityEnrollmentResponse> {
-  await requireAvailable(caller.userId);
+): Promise<StoredCredential[]> {
   const credentials = await listCredentials(caller.db, caller.userId);
   if (!meetsEnrollmentRequirement(credentials)) {
     throw createError.validation(
       `Add at least ${ACCOUNT_SECURITY_POLICY.minimumSignInMethods} passkeys or security keys, including one that works across devices, before you turn this on.`,
     );
   }
+  return credentials;
+}
 
-  const enrolledAt = await promotePendingRecoveryKeys(caller.db, caller.userId, 'enroll');
-  if (enrolledAt === null) {
+interface AccountEmailAddresses {
+  primary: string | null;
+  verified: string[];
+}
+
+async function accountEmailAddresses(userId: string): Promise<AccountEmailAddresses> {
+  const user = await getIdentityUser(userId);
+  if (!user) return { primary: null, verified: [] };
+  const seen = new Set<string>();
+  const verified: string[] = [];
+  for (const address of user.emailAddresses) {
+    const value = address.emailAddress.trim();
+    if (!address.verified || !value || seen.has(value.toLowerCase())) continue;
+    seen.add(value.toLowerCase());
+    verified.push(value);
+  }
+  const primary =
+    user.primaryEmailVerification === 'verified' ? user.primaryEmail?.trim() || null : null;
+  return { primary, verified };
+}
+
+async function requireSettledAddress(caller: AccountSecurityCaller): Promise<string> {
+  const days = ACCOUNT_SECURITY_POLICY.emailChangeCooldownDays;
+  if (await signInAddressChangedSince(caller.db, caller.userId, days)) {
+    throw createError.conflict(
+      `The email address on your account changed in the last ${days} days. For your security, Advanced Account Security can be turned on ${days} days after that change.`,
+    );
+  }
+  const { primary } = await accountEmailAddresses(caller.userId);
+  if (!primary) {
+    throw createError.conflict(
+      'Verify the email address on your account before you turn on Advanced Account Security.',
+    );
+  }
+  return primary;
+}
+
+export async function sendEnrollmentCode(
+  caller: AccountSecurityCaller,
+): Promise<AccountSecurityEnrollmentCodeResponse> {
+  await requireAvailable(caller.userId);
+  if (await callerIsEnrolled(caller)) {
+    throw createError.conflict('Advanced Account Security is already on.');
+  }
+  await requireEnrollmentMethods(caller);
+  const address = await requireSettledAddress(caller);
+  const code = generateEnrollmentCode(ACCOUNT_SECURITY_ENROLLMENT_CODE_LENGTH);
+  const expiresAt = await replaceEnrollmentCode(caller.db, {
+    userId: caller.userId,
+    sessionId: caller.sessionId,
+    codeHash: hashEnrollmentCode(caller.userId, code),
+    ttlMinutes: ACCOUNT_SECURITY_POLICY.enrollmentCodeMinutes,
+  });
+  const sent = await sendAccountSecurityCodeEmail({
+    to: address,
+    code,
+    expiresMinutes: ACCOUNT_SECURITY_POLICY.enrollmentCodeMinutes,
+    idempotencyKey: `account-security-code:${caller.userId}:${expiresAt}`,
+  });
+  if (!sent.delivered) {
+    throw createError
+      .serviceUnavailable(
+        'The code could not be emailed. Nothing changed. Try again in a few minutes.',
+      )
+      .asUserSafe();
+  }
+  return { sentTo: address, expiresAt: iso(expiresAt) };
+}
+
+function utcMinute(ms: number): string {
+  return `${new Date(ms).toISOString().slice(0, 16).replace('T', ' ')} UTC`;
+}
+
+async function emailUndoLink(userId: string, token: string, expiresAt: number): Promise<void> {
+  const { verified } = await accountEmailAddresses(userId).catch((error: unknown) => {
+    logger.error(
+      { userId, error },
+      '[account-security] email addresses unreadable after enrollment',
+    );
+    return { primary: null, verified: [] } satisfies AccountEmailAddresses;
+  });
+  if (verified.length === 0) {
+    logger.error(
+      { userId },
+      '[account-security] no verified address to email the link that turns it off',
+    );
+    return;
+  }
+  const undoUrl = new URL(accountSecurityUndoPageHref(token), SITE_URL).toString();
+  for (const [index, address] of verified.entries()) {
+    const sent = await sendAccountSecurityEnabledEmail({
+      to: address,
+      undoUrl,
+      undoExpiresAt: utcMinute(expiresAt),
+      idempotencyKey: `account-security-undo:${userId}:${expiresAt}:${index}`,
+    });
+    if (!sent.delivered) {
+      logger.error(
+        { userId, reason: sent.reason },
+        '[account-security] the link that turns it off was not emailed',
+      );
+    }
+  }
+}
+
+export async function enrollAccountSecurity(
+  caller: AccountSecurityCaller,
+  ownerDb: DatabaseAdapter,
+  input: { emailCode: string; response: unknown },
+  request: NextRequest,
+): Promise<AccountSecurityEnrollmentResponse> {
+  await requireAvailable(caller.userId);
+  const credentials = await requireEnrollmentMethods(caller);
+  const credential = await consumeAssertion(caller, input.response, request);
+  const codeAccepted = await takeEnrollmentCode(caller.db, {
+    userId: caller.userId,
+    sessionId: caller.sessionId,
+    codeHash: hashEnrollmentCode(caller.userId, input.emailCode),
+    maxAttempts: ACCOUNT_SECURITY_POLICY.enrollmentCodeAttempts,
+  });
+  if (!codeAccepted) {
+    await recordAuditEvent({
+      userId: caller.userId,
+      eventType: 'account_security_verification_failed',
+      outcome: 'failure',
+      severity: 'warning',
+      request,
+      detail: { resourceType: 'account_security', resourceId: 'enrollment_code' },
+    });
+    throw createError.validation(
+      'That code is wrong or expired. Enter the latest code we emailed you, or send a new one.',
+    );
+  }
+
+  const undoToken = newOpaqueToken();
+  const enrolled = await caller.db.transaction(async (tx) => {
+    const enrolledAt = await promotePendingRecoveryKeys(tx, caller.userId, 'enroll');
+    if (enrolledAt === null) return null;
+    const undoExpiresAt = await armEnrollmentUndo(tx, {
+      userId: caller.userId,
+      sessionId: caller.sessionId,
+      tokenHash: hashUndoToken(undoToken),
+      ttlHours: ACCOUNT_SECURITY_POLICY.undoHours,
+    });
+    if (undoExpiresAt === null) throw new Error('the link that turns it off was not armed');
+    return { enrolledAt, undoExpiresAt };
+  });
+  if (!enrolled) {
     throw createError.conflict(
       'Your recovery keys expired, or Advanced Account Security is already on. Generate new recovery keys and try again.',
     );
   }
-  await rememberEnrollment(caller.userId, enrolledAt);
+  await rememberEnrollment(caller.userId, enrolled.enrolledAt);
 
   const devicesSignedOut = await revokeEveryDeviceRefreshCredential(ownerDb, caller.userId);
   await ownerDb.execute(
@@ -400,10 +560,19 @@ export async function enrollAccountSecurity(
   }
   const sessionsSignedOut = sweep.ended.length + sweep.alreadyGone.length;
 
+  const verifiedUntil = await markSessionVerified(caller.db, {
+    userId: caller.userId,
+    sessionId: caller.sessionId,
+    method: 'passkey',
+    credentialRowId: credential.id,
+    request,
+  });
+  await emailUndoLink(caller.userId, undoToken, enrolled.undoExpiresAt);
+
   await emitIdentitySecurityEvent(caller.db, {
     userId: caller.userId,
     event: 'advanced_security_enabled',
-    subjectRef: iso(enrolledAt),
+    subjectRef: iso(enrolled.enrolledAt),
     request,
     detail: {
       count: credentials.length,
@@ -412,7 +581,12 @@ export async function enrollAccountSecurity(
     },
   });
 
-  return { enrolledAt: iso(enrolledAt), sessionsSignedOut, devicesSignedOut };
+  return {
+    enrolledAt: iso(enrolled.enrolledAt),
+    verifiedUntil,
+    sessionsSignedOut,
+    devicesSignedOut,
+  };
 }
 
 async function consumeAssertion(

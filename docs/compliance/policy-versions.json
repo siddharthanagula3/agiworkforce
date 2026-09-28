@@ -350,6 +350,11 @@
           "date": "2026-09-21",
           "digest": "f7232e73d879bce3",
           "note": "The GDPR row's erasure count and the row-level-isolation row's route counts are now read from the erasure list and measured from the route files when the page is built instead of being typed, so neither can fall behind; the figures and commitments are unchanged, so the date stays."
+        },
+        {
+          "date": "2026-09-21",
+          "digest": "49e07e8852b881e1",
+          "note": "The Advanced Account Security change record counts the two routes its enrollment fix adds, the emailed code and the emailed link that turns it off, making fifteen; no commitment changed, so the date stays."
         }
       ]
     },

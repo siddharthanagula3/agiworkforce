@@ -1,6 +1,7 @@
 {
   "$comment": "Which API routes do not reach the account and tenant gate, and why. scripts/check-route-account-gate.mjs resolves every route's authentication through the import graph and fails on an entry that no longer matches, on an undeclared route that skips the gate, and on any route that authenticates a user without it.",
   "public": {
+    "apps/web/app/api/account-security/enrollment/undo/route.ts": "the owner who opens the link emailed when Advanced Account Security was turned on may have no session left; the unguessable 48-hour token is the capability, and it can only turn the mode off and sign every session out",
     "apps/web/app/api/account-security/handoff/options/route.ts": "the browser a desktop or mobile app opened to confirm a sign-in holds no session; the unguessable handoff token is the capability, and the answer is only a WebAuthn challenge for that token's account",
     "apps/web/app/api/account-security/handoff/verification/route.ts": "the same signed-out browser proves possession of the account's passkey or security key; a valid assertion arms a one-time code that only the app holding the matching PKCE verifier and the original session can redeem",
     "apps/web/app/api/agents/execute/route.ts": "a retired managed-execution endpoint that answers every caller the same way",
