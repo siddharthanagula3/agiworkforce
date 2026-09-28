@@ -38,6 +38,8 @@ pub(crate) fn shared_runtime_command_names() -> &'static [&'static str] {
         "mcp",
         "output-style",
         "tools",
+        "budget",
+        "continue",
         "fallback",
         "replay",
         "insights",
@@ -125,6 +127,11 @@ pub fn handle_shared_command(
         "/mcp" => ParityCommandResult::SystemMessage(render_mcp(session)),
         "/output-style" => ParityCommandResult::SystemMessage(handle_output_style(session, arg)),
         "/tools" => handle_tools(session, arg),
+        "/budget" => ParityCommandResult::SystemMessage(handle_budget(session, arg)),
+        "/continue" => ParityCommandResult::Prompt(
+            "Continue exactly where your last answer stopped. Do not repeat what you already wrote."
+                .to_string(),
+        ),
         "/fallback" => ParityCommandResult::SystemMessage(render_fallback(session)),
         "/replay" => ParityCommandResult::SystemMessage(render_replay()),
         "/insights" => ParityCommandResult::SystemMessage(render_insights(session)),
@@ -976,6 +983,36 @@ fn output_style_overview(session: &AgentSession) -> String {
             .to_string(),
     );
     lines.join("\n")
+}
+
+pub fn handle_budget(session: &mut AgentSession, arg: &str) -> String {
+    let arg = arg.trim();
+    let usd_per_credit = crate::cost_ledger::MICROUSD_PER_CREDIT / 1_000_000.0;
+    match arg {
+        "" => match session.max_budget_usd {
+            Some(usd) => format!(
+                "Each turn stops once it has spent {} credits. /budget off removes the cap.",
+                crate::cost_ledger::credit_amount(crate::cost_ledger::credits_for_usd(usd))
+            ),
+            None => {
+                "No spend cap for this session. /budget <credits> sets one per turn.".to_string()
+            }
+        },
+        "off" | "none" => {
+            session.max_budget_usd = None;
+            "Spend cap removed.".to_string()
+        }
+        value => match value.parse::<f64>() {
+            Ok(credits) if credits.is_finite() && credits > 0.0 => {
+                session.max_budget_usd = Some(credits * usd_per_credit);
+                format!(
+                    "Each turn now stops once it has spent {} credits.",
+                    crate::cost_ledger::credit_amount(credits)
+                )
+            }
+            _ => "Usage: /budget <credits> | /budget off".to_string(),
+        },
+    }
 }
 
 struct ToolRun {
