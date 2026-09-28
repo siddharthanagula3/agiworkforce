@@ -6,6 +6,7 @@ import {
   savePreferenceNamespace,
 } from '@/app/settings/_lib/preferences-client';
 import { RESPONSE_STYLE_GUIDANCE } from '@/lib/preferences/response-style-preferences';
+import { safeLocalStorage } from '@shared/utils/browser-utils';
 
 export type PresetStyle = 'default' | 'concise' | 'explanatory' | 'formal';
 
@@ -230,7 +231,7 @@ export const useStyleStore = create<StyleState>()(
     {
       name: 'agi-response-style',
       version: 6,
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => safeLocalStorage),
       partialize: (state) => ({
         customStyles: state.customStyles,
         selectionsByConversation: state.selectionsByConversation,
