@@ -25,7 +25,7 @@
         "revoke session",
         "api keys"
       ],
-      "updated": "2026-09-27",
+      "updated": "2026-09-28",
       "source": "content/support/account-security.md",
       "chunks": [
         {
@@ -40,7 +40,7 @@
           "ordinal": 1,
           "heading": "Second factors",
           "headingPath": "Passkeys, two-factor and active sessions › Second factors",
-          "text": "Settings, Security manages passkeys and two-factor authentication. Passkeys sign\nyou in; an authenticator app code (TOTP) with recovery backup codes is the\nsupported second factor. Hardware security keys, SMS MFA and trusted-device\nlists are not part of the current account contract, so they are not offered\nrather than silently ignored.\n\nKeep the backup codes somewhere separate from the phone holding the\nauthenticator. At sign-in the second-factor screen accepts either the\nauthenticator code or one of your backup codes."
+          "text": "Settings, Security manages passkeys and two-factor authentication. Passkeys sign\nyou in. Authenticator apps (TOTP) and backup codes are temporarily unavailable:\nSettings, Security shows **Temporarily unavailable** where you would set one up\nor replace your backup codes, and a workspace cannot start requiring\nmulti-factor authentication until they return. Hardware security keys, SMS MFA\nand trusted-device lists are not part of the current account contract, so they\nare not offered rather than silently ignored."
         },
         {
           "id": "account-security#2",
@@ -68,7 +68,7 @@
           "ordinal": 5,
           "heading": "If you cannot sign in",
           "headingPath": "Passkeys, two-factor and active sessions › If you cannot sign in",
-          "text": "- **Forgotten password.** Reset it from the sign-in screen with **Forgot\n  password?**.\n- **Lost the phone with your authenticator.** Enter one of your backup codes at\n  the second-factor screen, then set the authenticator up again in Settings,\n  Security. Each backup code works once.\n- **Running low on backup codes.** Settings, Security generates a new set after\n  you confirm your second factor again, and the new set replaces the old one, so\n  codes you printed earlier stop working.\n- **Lost the authenticator and every backup code.** There is no self-serve way\n  back in, and there is no screen from which support can remove a second factor.\n  Email contact@agiworkforce.com from the address on the account, with your\n  **User ID** if you have it."
+          "text": "- **Forgotten password.** Reset it from the sign-in screen with **Forgot\n  password?**.\n- **Lost the phone with your authenticator.** Enter one of your backup codes at\n  the second-factor screen. Each backup code works once.\n- **Lost the authenticator and every backup code.** There is no self-serve way\n  back in, and there is no screen from which support can remove a second factor.\n  Email contact@agiworkforce.com from the address on the account, with your\n  **User ID** if you have it."
         },
         {
           "id": "account-security#6",
@@ -89,7 +89,7 @@
           "ordinal": 8,
           "heading": "API keys",
           "headingPath": "Passkeys, two-factor and active sessions › API keys",
-          "text": "API keys are managed from Settings, Account under **API keys**. Regenerating a\nkey invalidates the previous one immediately, so update anything using it."
+          "text": "API keys are managed in the developer console at /developers, and from Settings,\nAccount under **API keys**. Regenerating a key invalidates the previous one\nimmediately, so update anything using it."
         }
       ]
     },
@@ -2164,7 +2164,7 @@
           "ordinal": 5,
           "heading": "A model is missing from the picker",
           "headingPath": "Troubleshooting: when something does not work › A model is missing from the picker",
-          "text": "The badge says which case it is: **Upgrade** (your plan), **Coming soon, not yet\navailable** (not live yet), or **Unavailable right now** (live but not\nanswering). A workspace model policy can also remove models entirely, in which\ncase they do not appear at all."
+          "text": "The badge says which case it is: **Upgrade** (your plan), **Coming soon** (not\nlive yet), or **Unavailable right now** (live but not answering). A workspace model policy can also remove models entirely, in which\ncase they do not appear at all."
         },
         {
           "id": "troubleshooting#6",
