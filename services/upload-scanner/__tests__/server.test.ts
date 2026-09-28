@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import type { AddressInfo } from 'node:net';
+import { connect, type AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import type { ClamdAddress } from '../src/clamd.ts';
@@ -47,6 +47,18 @@ async function listen(clamd: ClamdAddress, options: Partial<ScannerOptions> = {}
   );
   const { port } = server.address() as AddressInfo;
   return `http://127.0.0.1:${port}`;
+}
+
+function rawStatusLine(port: number, request: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let received = '';
+    const socket = connect(port, '127.0.0.1', () => socket.write(request));
+    socket.on('data', (data) => {
+      received += data.toString('latin1');
+    });
+    socket.on('error', reject);
+    socket.on('close', () => resolve(received.split('\r\n', 1)[0] ?? ''));
+  });
 }
 
 function scan(url: string, body: Uint8Array, token: string | null = TOKEN): Promise<Response> {
@@ -200,6 +212,19 @@ describe('POST /scan', () => {
 
     expect(response.status).toBe(404);
     expect(await response.json()).toMatchObject({ safe: false });
+  });
+
+  it('keeps serving after a request target that is not a valid URL', async () => {
+    const clamd = await fakeClamd();
+    const url = await listen(clamd.address);
+
+    const statusLine = await rawStatusLine(
+      Number(new URL(url).port),
+      'GET http://[ HTTP/1.1\r\nHost: scanner\r\nConnection: close\r\n\r\n',
+    );
+
+    expect(statusLine).toBe('HTTP/1.1 404 Not Found');
+    expect((await fetch(`${url}/health`)).status).toBe(200);
   });
 });
 
