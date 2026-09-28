@@ -100,6 +100,7 @@ import { getAccountMemoryStore } from '../memory/accountMemoryStore';
 import { ChatEditorPanel } from '../providers/chatEditorPanel';
 import { type LocalRuntimePool } from '../integrations/localRuntimePool';
 import { installCli } from '../integrations/cliInstaller';
+import { submitFeedback, type FeedbackKind } from '../features/feedback/submitFeedback';
 import { managePersonalization } from '../features/personalization/personalization';
 import { manageMemoryExclusions } from '../memory/memoryExclusions';
 import {
@@ -1417,22 +1418,35 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
 
       if (feedbackText === undefined) return;
 
-      const feedbackType = picked.label.includes('Bug')
+      const feedbackType: FeedbackKind = picked.label.includes('Bug')
         ? 'bug'
         : picked.label.includes('Feature')
           ? 'feature'
           : 'general';
 
-      const encoded = encodeURIComponent(
-        `**Type**: ${feedbackType}\n**VS Code**: ${vscode.version}\n**Extension**: ${getExtensionVersion()}\n**Platform**: ${process.platform}\n\n${feedbackText.trim()}`,
+      const outcome = await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: 'AGI Workforce: sending feedback',
+        },
+        () => submitFeedback(context.secrets, feedbackType, feedbackText),
       );
-      void vscode.env.openExternal(
-        vscode.Uri.parse(
-          `https://github.com/agiworkforce/agiworkforce/issues/new?title=${encodeURIComponent(`[VS Code Extension] ${feedbackType}: ${feedbackText.trim().slice(0, 60)}`)}&body=${encoded}`,
-        ),
-      );
-      vscode.window.showInformationMessage(
-        'AGI Workforce: Opening GitHub to submit your feedback. Thank you!',
+      if (outcome.status === 'sent') {
+        void vscode.window.showInformationMessage(
+          'AGI Workforce: thanks, your feedback reached the team.',
+        );
+        return;
+      }
+      if (outcome.status === 'signed-out') {
+        const choice = await vscode.window.showWarningMessage(
+          'AGI Workforce: sign in to AGI Cloud to send feedback from VS Code.',
+          'Sign in',
+        );
+        if (choice === 'Sign in') await vscode.commands.executeCommand('agi-workforce.signIn');
+        return;
+      }
+      void vscode.window.showErrorMessage(
+        `AGI Workforce: your feedback was not sent, ${outcome.reason}. Try again in a moment.`,
       );
     }),
 
