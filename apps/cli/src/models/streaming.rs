@@ -52,6 +52,24 @@ fn search_turn() -> bool {
     SEARCH_TURN.try_with(|_| ()).is_ok()
 }
 
+tokio::task_local! {
+    static ROUTING_PROFILE: &'static str;
+}
+
+pub(crate) async fn routed<F: std::future::Future>(
+    profile: Option<&'static str>,
+    future: F,
+) -> F::Output {
+    match profile {
+        Some(profile) => ROUTING_PROFILE.scope(profile, future).await,
+        None => future.await,
+    }
+}
+
+fn routing_profile() -> Option<&'static str> {
+    ROUTING_PROFILE.try_with(|profile| *profile).ok()
+}
+
 fn with_search_nudge(messages: &[Message]) -> Vec<Message> {
     let mut nudged = messages.to_vec();
     if let Some(last_user) = nudged
@@ -441,6 +459,12 @@ fn managed_cloud_spec_for_base(jwt: &str, raw_base: &str) -> Result<ProviderSpec
                     .into_iter()
                     .flatten(),
             )
+            .chain(routing_profile().map(|profile| {
+                (
+                    "routing_profile".to_string(),
+                    serde_json::Value::String(profile.to_string()),
+                )
+            }))
             .collect(),
     })
 }
