@@ -25,10 +25,14 @@ import {
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
-import { listInstalledDirectorySkills } from '@/features/plugins/server/directory/installed-skills';
+import {
+  findInstalledDirectorySkillWithFiles,
+  listInstalledDirectorySkills,
+} from '@/features/plugins/server/directory/installed-skills';
 import { logger } from '@/lib/logger';
 import {
   findUserSkillByName,
+  findUserSkillWithFiles,
   listUserSkillsAsManagedSkills,
   toManagedSkillFromUserSkill,
 } from './user-skill-service';
@@ -599,6 +603,32 @@ export async function findSelectableSkillByName(
     findUserSkillByName(params.db, params.userId, params.name),
   );
   return authored ? toManagedSkillFromUserSkill(authored) : null;
+}
+
+export interface SelectableSkillWithFiles extends SkillWithFileAccess {
+  managed: boolean;
+}
+
+export async function findSelectableSkillWithFiles(
+  params: SkillDetailLookupParams,
+): Promise<SelectableSkillWithFiles | null> {
+  const enabledPluginIds = await readOptionalSkillSource(
+    'enabled-plugin-ids',
+    EMPTY_PLUGIN_IDS,
+    () => params.loadEnabledPluginIds(),
+  );
+  const managed = (await getManagedSkillDirectoryForPlugins(enabledPluginIds)).find(
+    (skill) => skill.name === params.name,
+  );
+  if (managed) return { skill: managed, access: managedSkillFileAccess, managed: true };
+  const owned =
+    (await readOptionalSkillSource('directory-skills', null, () =>
+      findInstalledDirectorySkillWithFiles(params.db, params.userId, params.name),
+    )) ??
+    (await readOptionalSkillSource('user-skills', null, () =>
+      findUserSkillWithFiles(params.db, params.userId, params.name),
+    ));
+  return owned ? { ...owned, managed: false } : null;
 }
 
 export function memoizeAsync<T>(load: () => Promise<T>): () => Promise<T> {

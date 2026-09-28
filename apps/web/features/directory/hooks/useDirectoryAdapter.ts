@@ -1247,17 +1247,25 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
   );
 
   const uploadSkillFile = useCallback(
-    async (file: File): Promise<DirectoryUploadResult> => {
-      const response = await postFile(SKILLS_PATH, file);
+    async (file: File, acknowledgedScans?: readonly string[]): Promise<DirectoryUploadResult> => {
+      const response = await postFile(SKILLS_PATH, file, acknowledgedScans);
       const body = (await response.json().catch(() => ({}))) as {
         skill?: { name: string };
+        omittedFiles?: readonly string[];
         error?: { message?: string };
       };
       if (!response.ok || !body.skill) {
-        throw new Error(body.error?.message ?? SKILL_UPLOAD_FAILED_COPY);
+        const message = body.error?.message ?? SKILL_UPLOAD_FAILED_COPY;
+        throw scanCautionFrom(body, message) ?? new Error(message);
       }
       await loadSection('skills');
-      return { title: UPLOAD_SKILL_DONE_TITLE, lines: [`/${body.skill.name}`] };
+      return {
+        title: UPLOAD_SKILL_DONE_TITLE,
+        lines: [
+          `/${body.skill.name}`,
+          ...(body.omittedFiles?.length ? [uploadOmittedFilesLine(body.omittedFiles)] : []),
+        ],
+      };
     },
     [loadSection, postFile],
   );

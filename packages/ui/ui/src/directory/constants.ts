@@ -329,7 +329,7 @@ export const UPLOAD_PLUGIN_FAILED_COPY = 'The plugin could not be uploaded.';
 
 export const UPLOAD_SKILL_LABEL = 'Upload skill';
 export const UPLOAD_SKILL_INTRO =
-  'Choose a SKILL.md, or a zip holding one. It needs a name and a description in its frontmatter.';
+  'Choose a SKILL.md, or a zip of the skill folder with its references and scripts. SKILL.md needs a name and a description in its frontmatter.';
 export const UPLOAD_SKILL_ACCEPT = '.md,.zip,text/markdown,application/zip';
 export const UPLOAD_SKILL_FAILED_COPY = 'The skill could not be uploaded.';
 

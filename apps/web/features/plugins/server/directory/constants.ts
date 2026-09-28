@@ -199,6 +199,10 @@ export function uploadTooManySkillsMessage(pluginName: string, limit: number): s
   return `"${pluginName}" declares more than ${limit} skills.`;
 }
 
+export function uploadTooManySkillFilesMessage(skillPath: string, limit: number): string {
+  return `The skill at ${skillPath} bundles more than ${limit} files.`;
+}
+
 export function uploadTooManyPluginsMessage(limit: number): string {
   return `The archive declares more than ${limit} plugins.`;
 }
