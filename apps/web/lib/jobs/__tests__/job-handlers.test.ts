@@ -24,6 +24,7 @@ vi.mock('@/lib/services/schedule-notification-service', () => ({
 }));
 vi.mock('@/lib/services/notification-email-service', () => ({
   sendScheduleCompletionEmail: mocks.sendScheduleCompletionEmail,
+  sendDataExportReadyEmail: vi.fn(),
 }));
 vi.mock('@/lib/services/audit-streaming-service', () => ({
   drainAuditDestination: mocks.drainAuditDestination,
@@ -34,6 +35,7 @@ vi.mock('@/lib/server/scheduled-account-erasure', () => ({
 }));
 vi.mock('@/lib/server/project-knowledge-object-storage', () => ({
   deleteProjectKnowledgeObject: mocks.deleteProjectKnowledgeObject,
+  getProjectKnowledgeObject: vi.fn(),
 }));
 vi.mock('@/lib/services/research-report-service', () => ({
   recordResearchReportSettledCost: mocks.recordResearchReportSettledCost,
@@ -304,6 +306,9 @@ describe('the registry', () => {
     expect(Object.keys(BACKGROUND_JOB_HANDLERS).sort()).toEqual(
       [
         'data-deletion.scheduled-account-erasure',
+        'data-export.build-archive',
+        'data-export.expire-archive',
+        'email.data-export-ready',
         'email.schedule-completed',
         'event-triggers.fire',
         'file-processing.purge-upload-object',

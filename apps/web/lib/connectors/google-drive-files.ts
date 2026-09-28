@@ -35,6 +35,8 @@ export interface GoogleDriveFile {
   fileName: string;
   mimeType: string;
   data: Buffer;
+  version: string | null;
+  webViewLink: string | null;
 }
 
 async function driveRequest(url: URL, accessToken: string): Promise<Response> {
@@ -63,12 +65,14 @@ export async function downloadGoogleDriveFile(
   maxBytes: number,
 ): Promise<GoogleDriveFile> {
   const metadataUrl = new URL(`${DRIVE_FILES_ENDPOINT}/${encodeURIComponent(fileId)}`);
-  metadataUrl.searchParams.set('fields', 'id,name,mimeType,size');
+  metadataUrl.searchParams.set('fields', 'id,name,mimeType,size,version,webViewLink');
   metadataUrl.searchParams.set('supportsAllDrives', 'true');
   const metadata = (await (await driveRequest(metadataUrl, accessToken)).json()) as {
     name?: string;
     mimeType?: string;
     size?: string;
+    version?: string;
+    webViewLink?: string;
   };
   const name = metadata.name?.trim() || 'Google Drive file';
   const sourceMime = metadata.mimeType ?? 'application/octet-stream';
@@ -98,5 +102,7 @@ export async function downloadGoogleDriveFile(
     fileName: exported ? withExtension(name, exported.extension) : name,
     mimeType: exported ? exported.mimeType : sourceMime,
     data,
+    version: metadata.version ?? null,
+    webViewLink: metadata.webViewLink ?? null,
   };
 }

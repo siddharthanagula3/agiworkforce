@@ -2,6 +2,11 @@ import 'server-only';
 
 import { driveImageGenerationJob } from '@/app/api/media/image/lib/image-job-drain';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
+import {
+  buildDataExportArchiveVolume,
+  expireDataExportArchive,
+  sendDataExportReadyEmailJob,
+} from '@/lib/server/data-export-archive';
 import { deleteProjectKnowledgeObject } from '@/lib/server/project-knowledge-object-storage';
 import {
   eraseScheduledAccount,
@@ -220,4 +225,7 @@ export const BACKGROUND_JOB_HANDLERS: JobHandlerRegistry = {
   'research.settle-report-cost': settleResearchReportCost,
   'event-triggers.fire': fireEventTriggerJob,
   'media-generation.image-attempt': driveImageGenerationJob,
+  'data-export.build-archive': buildDataExportArchiveVolume,
+  'data-export.expire-archive': expireDataExportArchive,
+  'email.data-export-ready': sendDataExportReadyEmailJob,
 };

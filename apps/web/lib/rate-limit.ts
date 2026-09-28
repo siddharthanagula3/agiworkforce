@@ -1,6 +1,10 @@
 import { readUpstashCredentials } from '@agiworkforce/key-value';
 import { NextRequest, NextResponse } from 'next/server';
-import { BILLING_PLAN_PRODUCT_LIMITS, getPlanMaxConcurrentTurns } from '@agiworkforce/types';
+import {
+  BILLING_PLAN_PRODUCT_LIMITS,
+  getPlanMaxConcurrentTurns,
+  type ManagedTurnSlotReading,
+} from '@agiworkforce/types';
 import { logger } from './logger';
 import { recordAdmittedRateLimit } from './rate-limit-headers';
 import { deployEnvironment } from './server/hosting';
@@ -409,6 +413,11 @@ export const rateLimitConfigs = {
   'share-view': {
     limit: 60,
     window: '1 m', // 60 share views per minute (public read endpoint)
+    failClosed: false,
+  },
+  'artifact-storage': {
+    limit: 120,
+    window: '1 m',
     failClosed: false,
   },
   'map-tile': {
@@ -1332,11 +1341,6 @@ export async function acquireManagedTurnSlot(input: {
     }
     return unavailableTurnSlot(input.userId, limit, 'redis-error');
   }
-}
-
-export interface ManagedTurnSlotReading {
-  limit: number;
-  active: number;
 }
 
 export async function readManagedTurnSlots(input: {

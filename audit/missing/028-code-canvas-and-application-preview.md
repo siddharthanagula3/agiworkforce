@@ -52,13 +52,13 @@ nothing is left.
 
 - Done when: An app can call AI through a brokered product API instead of embedding keys.
 - Wave: 4
-- Build on: web, desktop, mobile, chrome
+- Build on: desktop, mobile, chrome
 
 ## S28.23: App-local storage or database configuration.
 
 - Done when: An app can be given persistent local storage or a database, configured by the user.
 - Wave: 4
-- Build on: web, desktop, mobile, chrome
+- Build on: desktop, mobile, chrome
 
 ## S28.29: Version comparison.
 

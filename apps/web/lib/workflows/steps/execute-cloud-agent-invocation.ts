@@ -402,6 +402,7 @@ export async function executeCloudAgentWorkflowInvocation(
   let inputCheckpointSaved = false;
   let pauseCheckpointSaved = false;
   let reportedFailure = false;
+  let reportedFailureCode: string | undefined;
   let lastTaskState: AgentTaskState | undefined;
   const cancellation = new AbortController();
   let serving: ProcessedRequest = processed;
@@ -485,7 +486,11 @@ export async function executeCloudAgentWorkflowInvocation(
     isPauseRequested: () =>
       isCloudAgentRunPauseRequested(db, { userId: input.userId, runId: input.runId }),
     takeSteerMessages: () =>
-      takeCloudAgentRunSteers(db, { userId: input.userId, runId: input.runId }),
+      takeCloudAgentRunSteers(db, {
+        userId: input.userId,
+        organizationId: input.processed.organizationId ?? null,
+        runId: input.runId,
+      }),
     onPauseCheckpoint: async (checkpoint) => {
       await saveCloudAgentPauseCheckpoint(db, {
         userId: input.userId,
@@ -576,7 +581,10 @@ export async function executeCloudAgentWorkflowInvocation(
       for (const projected of projectCloudAgentWorkflowChunk(chunk)) {
         if (projected.envelope) {
           await journal.append(projected.envelope);
-          if (projected.envelope.event.type === 'error') reportedFailure = true;
+          if (projected.envelope.event.type === 'error') {
+            reportedFailure = true;
+            reportedFailureCode ??= projected.envelope.event.code;
+          }
           if (projected.envelope.event.type === 'task-state-changed') {
             lastTaskState = projected.envelope.event.state;
           }
@@ -606,6 +614,6 @@ export async function executeCloudAgentWorkflowInvocation(
         : reportedFailure || lastTaskState === 'failed'
           ? 'failed'
           : 'completed';
-  await settleWorkflowInvocation(input, outcome, serving);
+  await settleWorkflowInvocation(input, outcome, serving, reportedFailureCode);
   return { kind: 'terminal', outcome };
 }

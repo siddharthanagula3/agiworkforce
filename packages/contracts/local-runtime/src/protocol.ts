@@ -74,6 +74,36 @@ export class DesktopRuntimeError extends Error {
   }
 }
 
+export const DISPATCH_TASK_RUNNER_READY = 'dispatch_task_runner_ready';
+export const DISPATCH_TASK_REPORT = 'dispatch_task_report';
+
+export const DISPATCH_TASK_REPORT_STATUSES = [
+  'running',
+  'awaiting_input',
+  'completed',
+  'failed',
+  'cancelled',
+] as const;
+
+export type DispatchTaskReportStatus = (typeof DISPATCH_TASK_REPORT_STATUSES)[number];
+
+export interface DispatchTaskAssignment {
+  requestId: string;
+  prompt: string;
+  title?: string;
+  sentAt: string;
+  phoneName: string | null;
+}
+
+export interface DispatchTaskReport {
+  requestId: string;
+  status: DispatchTaskReportStatus;
+  conversationId?: string;
+  message?: string;
+  result?: string;
+  error?: string;
+}
+
 export type DesktopRuntimeEvent =
   | { kind: 'workspace-changed'; rootId: string }
   | {
@@ -89,4 +119,7 @@ export type DesktopRuntimeEvent =
   | { kind: 'developer-session'; rootId: string; event: DeveloperSessionEvent }
   | { kind: 'remote-control-changed'; state: RemoteControlState }
   | { kind: 'computer-use-changed'; status: ComputerUseStatus }
-  | { kind: 'update-ready'; version: string };
+  | { kind: 'update-ready'; version: string }
+  | { kind: 'dispatch-task'; task: DispatchTaskAssignment }
+  | { kind: 'dispatch-task-cancel'; requestId: string }
+  | { kind: 'device-prompt-changed'; open: boolean };

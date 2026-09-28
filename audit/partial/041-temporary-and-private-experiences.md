@@ -205,11 +205,10 @@ Code: `apps/mobile/src/features/memory/services/ragIndex.ts:118-125`
 
 - Done when: History, model training and data retention each have their own clearly separate control or statement.
 - Wave: 3
-- Already works on: web, desktop, mobile, vscode
+- Already works on: web, desktop, mobile, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | /privacy-settings lists privacy mode, sync and telemetry, but says nothing about training or retention. | ui |
-| chrome | partial | Mirroring (history) has a switch, but training and retention are not stated or controllable. | ui |
 
-Code: `apps/cli/src/claude_parity.rs:146-146`, `apps/cli/src/claude_parity.rs:325-345`, `apps/extension/src/features/options/data-handling-section.ts:147-157`
+Code: `apps/cli/src/claude_parity.rs:146-146`, `apps/cli/src/claude_parity.rs:325-345`

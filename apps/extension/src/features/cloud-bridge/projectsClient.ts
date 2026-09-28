@@ -7,6 +7,7 @@ import {
   type ManagedCloudProject,
   type ManagedCloudProjectCreateRequest,
   type ManagedCloudProjectsClient,
+  PROJECT_DESCRIPTION_MAX_LENGTH,
 } from '@agiworkforce/cloud-contracts';
 import { FREE_TRIAL_GATEWAY, getAuthToken } from './freeTrialClient';
 import { platformRequestHeaders } from '../../platformHeaders';
@@ -157,6 +158,28 @@ export async function createChromeProject(
   };
   const result = await withProjectsClient(dependencies, input.signal, (client) =>
     client.createProject(body, input.signal ? { signal: input.signal } : {}),
+  );
+  if (result.status === 'error') return result;
+  return { status: 'success', project: result.value };
+}
+
+export async function updateChromeProject(
+  projectId: string,
+  input: { name: string; description: string; instructions: string; signal?: AbortSignal },
+  dependencies: Partial<ChromeProjectsDependencies> = {},
+): Promise<ChromeProjectResult> {
+  const name = input.name.trim().slice(0, CHROME_PROJECT_NAME_MAX_CHARS);
+  if (!projectId.trim() || !name) {
+    return { status: 'error', code: 'invalid_request', message: 'A project needs a name.' };
+  }
+  const description = input.description.trim().slice(0, PROJECT_DESCRIPTION_MAX_LENGTH);
+  const instructions = input.instructions.trim().slice(0, CHROME_PROJECT_INSTRUCTIONS_MAX_CHARS);
+  const result = await withProjectsClient(dependencies, input.signal, (client) =>
+    client.updateProject(
+      projectId,
+      { name, description: description || null, instructions: instructions || null },
+      input.signal ? { signal: input.signal } : {},
+    ),
   );
   if (result.status === 'error') return result;
   return { status: 'success', project: result.value };
