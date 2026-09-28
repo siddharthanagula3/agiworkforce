@@ -1,0 +1,179 @@
+{
+  "key": "refunds",
+  "route": "/refund-policy",
+  "date": "2026-08-13",
+  "replacedOn": "2026-09-27",
+  "commit": "a2330f51eddc7543d0ebd1e43dfda10f57ba939d",
+  "committedAt": "2026-09-27T08:58:26-05:00",
+  "title": "Refunds.",
+  "blocks": [
+    {
+      "type": "eyebrow",
+      "content": [
+        {
+          "text": "Legal"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 1,
+      "anchor": "agi-refund-title",
+      "content": [
+        {
+          "text": "Refunds."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "We review billing problems promptly. Eligibility depends on the type of charge, account usage, applicable law, and any contract-specific terms. Last updated: 2026-08-13."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "when",
+      "content": [
+        {
+          "text": "When we refund."
+        }
+      ]
+    },
+    {
+      "type": "rows",
+      "caption": "Refund eligibility",
+      "rows": [
+        {
+          "label": [
+            {
+              "text": "Paid subscriptions"
+            }
+          ],
+          "value": [
+            {
+              "text": "Cancellation stops the next renewal and access continues through the paid term. Current-period charges are not automatically refunded, except where required by law or when we confirm a duplicate, unauthorized, or billing-error charge."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Plan upgrades"
+            }
+          ],
+          "value": [
+            {
+              "text": "Immediate upgrades preserve the renewal date and charge the exact prorated price difference Stripe previews for the time remaining in the current period. This is an invoice adjustment, not a reset or refund of already-consumed usage."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Purchased usage add-ons"
+            }
+          ],
+          "value": [
+            {
+              "text": "Used add-ons are not refundable. Contact support about an unused, duplicate, or mistaken purchase; statutory rights still apply."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "App Store and Play purchases"
+            }
+          ],
+          "value": [
+            {
+              "text": "Subscriptions bought inside the mobile apps are charged by Apple or Google, not by us. We cannot refund them. Request those through the store that took the payment; its own refund rules and windows apply."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "Enterprise contracts"
+            }
+          ],
+          "value": [
+            {
+              "text": "Refund terms are part of the MSA negotiated with each customer."
+            }
+          ]
+        },
+        {
+          "label": [
+            {
+              "text": "BYOK usage"
+            }
+          ],
+          "value": [
+            {
+              "text": "Provider charges (Anthropic, OpenAI, Google, etc.) are billed directly by the provider. Refunds for those go through the provider, not us."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "statutory",
+      "content": [
+        {
+          "text": "Statutory withdrawal rights."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "EU, UK and other consumers with a statutory cooling-off right:",
+          "strong": true
+        },
+        {
+          "text": " where the law gives you a right to withdraw from a distance contract within 14 days, that right applies and this policy does not reduce it. Note that when you ask us to start the service immediately, that right can be lost or reduced in proportion to what you have already used, which is what the law provides for. Tell us within the window and we will apply the statutory outcome, not the commercial one above."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "how",
+      "content": [
+        {
+          "text": "How to request."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Email "
+        },
+        {
+          "text": "contact@agiworkforce.com",
+          "href": "mailto:contact@agiworkforce.com?subject=Refund%20request"
+        },
+        {
+          "text": " with the email on your account, the charge date, and a brief reason. We aim to respond within the support response target for your plan, published at "
+        },
+        {
+          "text": "/sla",
+          "href": "/sla"
+        },
+        {
+          "text": ". This page used to promise one business day for everyone, which did not match those targets. Approved refunds are returned through the original payment method on the payment processor’s timeline."
+        }
+      ]
+    }
+  ]
+}
