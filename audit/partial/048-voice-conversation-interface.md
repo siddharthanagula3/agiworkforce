@@ -309,18 +309,6 @@ Code: `apps/mobile/src/features/voice/components/VoiceInlineBar.tsx:64-64`, `app
 
 Code: `apps/web/features/chat/components/Voice/VoiceModeSurface.tsx:445-445`
 
-## S48.36: Reconnection state.
-
-- Done when: When the voice connection drops, a reconnecting state is shown and the session reconnects (or says it could not).
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | A dropped live session shows an error with Try again, but there is no reconnecting state or automatic reconnect (the mobile hook passes no onConnectionLost). | handler |
-
-Code: `apps/mobile/src/features/voice/components/LiveVoiceBar.tsx:132-132`, `apps/mobile/src/features/voice/hooks/useLiveVoiceSession.ts:218-218`
-
 ## S48.38: Continue unfinished work in text.
 
 - Done when: The user can leave voice and continue the same unfinished conversation by typing.

@@ -10,15 +10,14 @@ nothing is left.
 
 - Done when: A project has a name and an optional description that the user can set at creation and edit later.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | The CLI sets a name and --description only when creating; there is no rename or description edit command. | ui |
-| vscode | partial | VS Code asks for a name at creation but never a description, and renaming or describing a project is left to the web app. | ui |
 | chrome | partial | The side panel names a project at creation only; it cannot rename it, set a description, or edit either afterwards. | ui |
 
-Code: `apps/cli/src/lib.rs:983-993`, `apps/extension-vscode/src/features/projects/projectActions.ts:235-239`, `apps/extension-vscode/src/features/projects/projectActions.ts:114-117`, `apps/extension/src/features/side-panel/projectsDrawer.ts:531-533`
+Code: `apps/cli/src/lib.rs:983-993`, `apps/extension/src/features/side-panel/projectsDrawer.ts:531-533`
 
 ## S23.03: Project icon and color.
 
@@ -56,10 +55,10 @@ Code: `apps/mobile/app/(app)/projects/[id].tsx:82-84`, `apps/mobile/app/(app)/pr
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | Sessions run in a directory linked with `agi projects link` are filed under that project in the account, but the CLI cannot list or open a project's conversations. | ui |
-| vscode | partial | The project detail lists recent conversation titles, but they cannot be opened, and VS Code turns are not filed under the project (only its instructions are prepended). | ui |
+| vscode | partial | Project conversations now open (f6f8c2f2a). VS Code turns are still not filed under the project: the CLI app-server's thread/start takes no project id (p-desktop-cli). | handler |
 | chrome | partial | Chrome files its chats under the active project and shows recent chat titles per project, but the titles are plain text that cannot be opened. | ui |
 
-Code: `apps/cli/src/agent/mod.rs:1627-1627`, `apps/cli/src/agent/mod.rs:1924-1929`, `apps/extension-vscode/src/features/projects/projectActions.ts:92-104`, `apps/extension-vscode/src/features/projects/projectActions.ts:140-140`
+Code: `apps/cli/src/agent/mod.rs:1627-1627`, `apps/cli/src/agent/mod.rs:1924-1929`, `apps/extension-vscode/src/features/projects/projectActions.ts:120-120`, `apps/extension/src/side_panel.ts:6419-6425`
 
 ## S23.07: Project files.
 
@@ -70,10 +69,7 @@ Code: `apps/cli/src/agent/mod.rs:1627-1627`, `apps/cli/src/agent/mod.rs:1924-192
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | VS Code lists a project's knowledge files read-only; uploading, previewing and removing them happen on the web. | surface-only |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/extension-vscode/src/features/projects/projectActions.ts:78-90`, `apps/extension-vscode/src/features/projects/projectsClient.ts:48-53`
 
 ## S23.08: Project sources.
 
@@ -86,7 +82,6 @@ Code: `apps/extension-vscode/src/features/projects/projectActions.ts:78-90`, `ap
 | desktop | partial | Sources are uploaded files and pasted text only: Google Drive and Slack just open connector setup and nothing is imported from them. And every source upload hits the knowledge-storage cap defect (0 bytes for never-paid Free users and Team seat members). | handler, api |
 | mobile | partial | Mobile adds picked files as sources, but has no text or connected-service sources, and uploads hit the same 0-byte cap for never-paid Free users and Team seat members. | handler, ui |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | VS Code lists a project's knowledge files read-only; adding or removing sources is web-only. | surface-only |
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/web/features/projects/components/SourcesPanel.tsx:590-596`, `apps/web/features/projects/components/AddSourcesModal.tsx:277-283`, `apps/web/features/projects/components/SourcesPanel.tsx:149-155`, `apps/web/app/api/projects/[id]/knowledge-files/route.ts:381-384`
@@ -95,15 +90,14 @@ Code: `apps/web/features/projects/components/SourcesPanel.tsx:590-596`, `apps/we
 
 - Done when: Instructions saved on a project are applied to every chat in that project.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | Workspace instruction files (AGENTS.md/CLAUDE.md) apply to every session in a directory, but a directory linked to an account project never receives that project's own instructions: the cached project has no instructions field. | handler |
-| vscode | partial | Instructions can be typed when creating a project and are prepended to VS Code turns while the project is in use, but they cannot be edited in VS Code afterwards (web only). | ui |
 | chrome | partial | Chrome can set instructions only while creating a project and shows them read-only; they apply server-side once the chat is synced under the project, and there is no way to edit them in the side panel. | ui |
 
-Code: `apps/cli/src/agent/prompt.rs:502-507`, `apps/cli/src/cloud/projects.rs:138-148`, `apps/extension-vscode/src/features/projects/projectActions.ts:252-256`, `apps/extension-vscode/src/features/projects/activeProject.ts:51-62`
+Code: `apps/cli/src/agent/prompt.rs:502-507`, `apps/cli/src/cloud/projects.rs:138-148`, `apps/extension/src/features/side-panel/projectsDrawer.ts:531-533`, `apps/extension/src/side_panel.ts:6419-6425`
 
 ## S23.11: Project Memory.
 
