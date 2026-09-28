@@ -400,6 +400,11 @@ export const rateLimitConfigs = {
     window: '1 m', // 60 share views per minute (public read endpoint)
     failClosed: false,
   },
+  'artifact-storage': {
+    limit: 120,
+    window: '1 m',
+    failClosed: false,
+  },
   'map-tile': {
     limit: 600,
     window: '1 m',

@@ -615,6 +615,14 @@ const publishedArtifactExportSchema = z.object({
   updated_at: timestampSchema,
 });
 
+const publishedArtifactStorageExportSchema = z.object({
+  published_artifact_id: z.string(),
+  storage_key: z.string(),
+  value: z.string(),
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+
 const consentRecordExportSchema = z.object({
   id: z.string(),
   subject_email_sha256: z.string().nullable(),
@@ -1395,6 +1403,15 @@ const ADDITIONAL_EXPORT_SECTIONS: ReadonlyArray<{
           where user_id = $1
           order by created_at asc`,
     schema: bonusCreditGrantExportSchema,
+  },
+  {
+    section: 'published_app_saved_data',
+    table: 'published_artifact_storage',
+    sql: `select published_artifact_id, storage_key, value, created_at, updated_at
+          from published_artifact_storage
+          where owner_user_id = $1
+          order by published_artifact_id asc, storage_key asc`,
+    schema: publishedArtifactStorageExportSchema,
   },
   {
     section: 'expiring_credit_purchases',
