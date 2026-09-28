@@ -123,18 +123,6 @@ Code: `apps/extension/src/side_panel.ts:2387-2395`
 
 Code: `apps/extension-vscode/src/features/settings/settingsWebviewContent.ts:2029-2031`, `apps/extension/src/features/cloud-bridge/freeTrialClient.ts:918-919`
 
-## S78.18: Disabled but discoverable restricted controls.
-
-- Done when: Restricted controls stay visible but disabled, with the reason, so users can discover them.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | Models the plan does not include are left out of the picker instead of shown locked; only the managed-chat paid-plan state is visible. | ui |
-
-Code: `apps/extension/src/features/cloud-bridge/managedModelPicker.ts:52-54`
-
 ## S78.20: Connect-account explanation.
 
 - Done when: When a feature needs an account connection, the user is told which account to connect and given a way to connect it.
@@ -147,18 +135,6 @@ Code: `apps/extension/src/features/cloud-bridge/managedModelPicker.ts:52-54`
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | Upgrade to partial (miss ui, handler; surface-only per R-a): the cloud-runs panel names the connector a paused run is waiting on (call.connectorId) and the side panel links out to the web connectors page, so part of the explanation exists natively. Remaining: Chrome never tells the user which account to connect for a feature before it runs and cannot connect one itself; the link opens agiworkforce.com/connectors. |  |
-
-## S78.22: Use-another-model explanation.
-
-- Done when: When the selected model cannot do what was asked, the user is told to use another model (ideally which one).
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | When the chosen model is no longer allowed Chrome silently falls back to Auto; only a cloud outage says "choose another model". | ui |
-
-Code: `apps/extension/src/features/cloud-bridge/managedModelPicker.ts:94-106`
 
 ## S78.23: Continue-on-another-device action.
 
@@ -185,15 +161,3 @@ Code: `apps/mobile/src/features/companion/components/ConnectionStateViews.tsx:69
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-## S78.28: Live updates after a plan, policy, connection, or device change.
-
-- Done when: After a plan, policy, connection or device change, gated controls update without reinstalling or restarting.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | Plan and model access refresh on sign-in change, invite redemption or a quota error only; an upgrade or policy change made elsewhere is not picked up until one of those happens. | handler |
-
-Code: `apps/extension/src/side_panel.ts:8446-8450`

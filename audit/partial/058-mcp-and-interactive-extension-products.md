@@ -239,25 +239,21 @@ Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:430-444`
 
 - Done when: Tools a website provides (e.g. WebMCP) appear to the assistant as their own category, distinct from connectors.
 - Wave: 3
+- Already works on: chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
-| chrome | partial | WebMCP tools are discovered and classified per tab, but they are never offered to the assistant: runAgentLoop is called without siteTools. | handler |
-
-Code: `apps/extension/src/webmcp.ts:51-61`, `apps/extension/src/background.ts:3586-3600`, `apps/extension/src/features/computer-use/agentLoop.ts:48-48`, `apps/extension/src/background.ts:4148-4166`
 
 ## S58.25: Tool availability changing with site state.
 
 - Done when: When the page state changes, the set of site-provided tools available to the assistant updates.
 - Wave: 3
+- Already works on: chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
-| chrome | partial | Discovery refreshes on navigation and on tool changes (WEBMCP_TOOLS_CHANGED), but the refreshed set never reaches the assistant. | handler |
-
-Code: `apps/extension/src/webmcp.ts:51-61`, `apps/extension/src/background.ts:3586-3600`, `apps/extension/src/features/computer-use/agentLoop.ts:48-48`, `apps/extension/src/background.ts:4148-4166`
 
 ## S58.26: Extension debugging console.
 
