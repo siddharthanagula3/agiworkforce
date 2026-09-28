@@ -28,7 +28,7 @@ describe('a header title that does not fit', () => {
   it('clips the conversation title with an ellipsis and keeps the whole of it on hover', () => {
     seedConversation(LONG_TITLE);
     render(<ConversationHeader />);
-    const heading = screen.getByRole('heading', { level: 2 });
+    const heading = screen.getByRole('heading', { level: 1 });
     expectTruncatedWithFullTitle(heading, LONG_TITLE);
     expect(heading.className.split(/\s+/)).toContain('min-w-0');
   });
@@ -36,7 +36,7 @@ describe('a header title that does not fit', () => {
   it('offers the fallback title on hover too, not an empty tooltip', () => {
     seedConversation('');
     render(<ConversationHeader />);
-    expectTruncatedWithFullTitle(screen.getByRole('heading', { level: 2 }), 'New Conversation');
+    expectTruncatedWithFullTitle(screen.getByRole('heading', { level: 1 }), 'New Conversation');
   });
 
   it('clips the project title with an ellipsis and keeps the whole of it on hover', () => {

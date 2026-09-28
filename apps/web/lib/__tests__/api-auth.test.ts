@@ -987,7 +987,8 @@ describe('getClerkAuthUser · the identity bridge resolves an internal account i
 
     await expect(getClerkAuthUser(cookieRequest())).rejects.toMatchObject({
       statusCode: 403,
-      message: 'Your account has been suspended. Please contact support.',
+      message:
+        'Your account has been suspended under section 11 of our Terms of Service. You can appeal, and a person reviews every appeal and tells you what triggered it.',
     });
   });
 

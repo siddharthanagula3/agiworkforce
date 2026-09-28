@@ -64,6 +64,7 @@ export interface AgentActivityTimelineProps {
   className?: string;
   defaultExpanded?: boolean;
   onApprove?: (toolCallId: string) => void;
+  onApproveForChat?: (toolCallId: string) => void;
   onReject?: (toolCallId: string) => void;
   onCancel?: (toolCallId: string) => void;
   onResend?: (toolCallId: string) => void;
@@ -780,6 +781,7 @@ export function AgentActivityTimeline({
   className,
   defaultExpanded = false,
   onApprove,
+  onApproveForChat,
   onReject,
   onCancel,
   onResend,
@@ -1068,6 +1070,7 @@ export function AgentActivityTimeline({
                     }
                     expired={isApprovalExpired?.(entry.toolCallId) ?? false}
                     onApprove={onApprove}
+                    onApproveForChat={onApproveForChat}
                     onReject={onReject}
                     onCancel={onCancel}
                     onResend={onResend}

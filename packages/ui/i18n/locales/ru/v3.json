@@ -100,7 +100,10 @@
     "noArchived": "Архивных чатов нет",
     "noConversations": "Бесед пока нет",
     "showActive": "Вернуться к активным чатам",
-    "showArchived": "Показать архивные чаты ({{count}})"
+    "showArchived": "Показать архивные чаты ({{count}})",
+    "archivedToast": "Чат перемещён в архив",
+    "archivedUndo": "Отменить",
+    "archivedView": "Открыть архив"
   },
   "emptyChat": {
     "neutralHeadline": "Чем я могу помочь сегодня?",
@@ -381,6 +384,9 @@
       "constraintsPlaceholder": "Границы, чего избегать, предпочтительные источники…",
       "deliverableLabel": "Результат",
       "deliverablePlaceholder": "Конкретный ожидаемый результат (файл, таблица, сводка…)",
+      "toolsLabel": "Инструменты для этой задачи",
+      "toolWebSearch": "Веб-поиск и просмотр страниц",
+      "toolCodeExecution": "Выполнение кода",
       "palette": {
         "label": "Инструменты AGI Work",
         "searchPlaceholder": "Поиск плагинов, папок и навыков",

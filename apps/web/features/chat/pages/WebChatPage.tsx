@@ -61,6 +61,7 @@ import {
   parkUnsentDraft,
   readMessageArrayPatch,
 } from '@shared/stores/web-chat-store';
+import { useStyleStore } from '@features/chat/stores/style-store';
 import {
   EMPTY_VARIANT_INFO,
   resolveLeafForSibling,
@@ -191,6 +192,7 @@ import {
   conversationShareHref,
   projectDeleteConfirm,
   runSessionRowAction,
+  toggleConversationArchive,
 } from '@shared/components/layout/sidebar-session-actions';
 import {
   copyProjectLink,
@@ -1465,6 +1467,8 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   const messages = useChatStore((s) => s.messages);
   const activeConversationId = useChatStore((s) => s.activeConversationId);
   const pendingTemporaryChat = useChatStore((s) => s.pendingTemporaryChat);
+  const temporaryChatPersonalized = useChatStore((s) => s.temporaryChatPersonalized);
+  const setTemporaryChatPersonalized = useChatStore((s) => s.setTemporaryChatPersonalized);
   const newChatsTemporary = useSettingsStore((s) => s.newChatsTemporary);
   const addMessage = useChatStore((s) => s.addMessage);
   const updateMessage = useChatStore((s) => s.updateMessage);
@@ -1533,7 +1537,14 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     setActiveConversation,
   } = useConversations();
   useConversationDraftSync();
-  const adoptPendingComposerToggles = useChatStore((s) => s.adoptPendingComposerToggles);
+  const adoptPendingChatToggles = useChatStore((s) => s.adoptPendingComposerToggles);
+  const adoptPendingComposerToggles = useCallback(
+    (conversationId: string) => {
+      adoptPendingChatToggles(conversationId);
+      useStyleStore.getState().adoptSelection(PENDING_CONVERSATION_KEY, conversationId);
+    },
+    [adoptPendingChatToggles],
+  );
   const parkBlockedSend = useChatStore((s) => s.parkBlockedSend);
   const {
     groupsByMessageId: branchGroupsByMessageId,
@@ -2054,12 +2065,13 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           ? useChatStore.getState().conversations.find((c) => c.id === existingConvId)
               ?.isTemporary === true
           : temporaryIntent;
-        if (!conversationIsTemporary && localModelSelection === null) {
-          runExplicitMemoryCommand(content, {
-            conversationId: existingConvId || null,
-            projectId: sendProjectId ?? null,
-          });
-        }
+        const memoryCommandReport =
+          !conversationIsTemporary && localModelSelection === null
+            ? runExplicitMemoryCommand(content, {
+                conversationId: existingConvId || null,
+                projectId: sendProjectId ?? null,
+              })
+            : null;
         if (clientConvId) {
           // Register the placeholder itself, not just `sendGuardKey` above: the
           // two lines below make `bareChatSessionId` (hence a racing second
@@ -2110,6 +2122,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             })
           : undefined;
         attachmentsUploaded = Boolean(options.attachments?.length);
+        const memoryCommand = memoryCommandReport ? await memoryCommandReport : null;
         if (options.attachmentUploadAttemptId) {
           setAttachmentUploadAttempts((current) =>
             current.filter((attempt) => attempt.id !== options.attachmentUploadAttemptId),
@@ -2152,6 +2165,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             disabledConnectorIds: options.meta?.disabledConnectorIds,
             connectorToolsEnabled: options.meta?.connectorToolsEnabled,
             memoryEnabled: options.meta?.memoryEnabled,
+            ...(memoryCommand ? { memoryCommand } : {}),
           });
 
         const announceDesktopCompletion = () => {
@@ -4376,9 +4390,13 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     (id: string) => {
       const convo = conversations.find((c) => c.id === id);
       if (!convo) return;
-      void updateConversation(id, { archived: !convo.isArchived });
+      void toggleConversationArchive(
+        convo.isArchived ?? false,
+        (archived) => updateConversation(id, { archived }),
+        () => openSettings('archived'),
+      );
     },
-    [conversations, updateConversation],
+    [conversations, openSettings, updateConversation],
   );
 
   const handleShareSession = useCallback(
@@ -5632,6 +5650,21 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                     <span className="shrink-0">{t('chat:header.temporaryChat')}</span>
                   </span>
                 )}
+                {!voiceModeActive && temporaryChatActive && (
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={temporaryChatPersonalized}
+                    aria-label={t('chat:header.temporaryChatPersonalized')}
+                    title={t('chat:header.temporaryChatPersonalizationHint')}
+                    onClick={() => setTemporaryChatPersonalized(!temporaryChatPersonalized)}
+                    className="ml-1 inline-flex h-7 min-w-[24px] shrink-0 items-center rounded-md border border-border px-2 text-caption font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    {temporaryChatPersonalized
+                      ? t('chat:header.temporaryChatPersonalized')
+                      : t('chat:header.temporaryChatUnpersonalized')}
+                  </button>
+                )}
                 {!voiceModeActive &&
                   !temporaryChatActive &&
                   !hasMessages &&
@@ -5840,7 +5873,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                 {/* Empty state: greeting banner + centered composer. */}
                 <div className="flex min-h-full w-full flex-col items-center justify-center-safe gap-6">
                   {!compact && !voiceModeActive && <GreetingBanner />}
-                  <div className="mx-auto w-full max-w-3xl px-4">
+                  <div className="mx-auto w-full max-w-3xl px-gutter-compact">
                     {usageBanner}
                     {unavailableModelNotice}
                     <FreePlanTrainingNotice />
@@ -5951,7 +5984,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                 </div>
 
                 <div className="shrink-0 pb-4">
-                  <div className="mx-auto w-full max-w-3xl px-4">
+                  <div className="mx-auto w-full max-w-3xl px-gutter-compact">
                     {usageBanner}
                     {unavailableModelNotice}
                     <FreePlanTrainingNotice />

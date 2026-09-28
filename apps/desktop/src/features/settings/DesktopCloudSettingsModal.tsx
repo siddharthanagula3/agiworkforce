@@ -70,6 +70,9 @@ import {
   createCustomConnector as apiCreateCustomConnector,
   deleteCustomConnector as apiDeleteCustomConnector,
   disconnectConnector as apiDisconnectConnector,
+  customConnectorShortId,
+  customConnectorSignInUrl,
+  getCustomConnectorOAuthRedirectUri,
   type CloudConnectorEntry,
 } from '../../api/cloudConnectors';
 import { completeDesktopCloudConnectorInstall } from '../../services/desktopCloudConnectorInstall';
@@ -710,6 +713,18 @@ function toDisplayConnectorId(connector: CloudConnectorEntry): string {
     : toDesktopConnectorId(connector.connectorId);
 }
 
+const CUSTOM_CONNECTOR_SIGN_IN_COPY = 'Sign-in required';
+const CUSTOM_CONNECTOR_OAUTH_CLIENT_HINT =
+  'If the server gave you an OAuth client, add it again with its Client ID and Secret under Advanced settings.';
+
+function customSignInPending(connector: CloudConnectorEntry): boolean {
+  return (
+    connector.source === 'custom' &&
+    connector.needsReauthorization === true &&
+    customConnectorShortId(connector) !== null
+  );
+}
+
 function toSettingsConnectors(
   availableIds: ReadonlySet<string>,
   connectedIds: ReadonlySet<string>,
@@ -772,12 +787,15 @@ export function DesktopCloudSettingsModal({
     return connectors;
   }, []);
 
+  const [customOAuthRedirectUri, setCustomOAuthRedirectUri] = useState<string | null>(null);
+
   const loadCloudConnectors = useCallback(async () => {
     const generation = connectorsRequestGeneration.current + 1;
     setConnectorsLoading(true);
     setConnectorsError(null);
     try {
       await refreshCloudConnectors();
+      setCustomOAuthRedirectUri(await getCustomConnectorOAuthRedirectUri().catch(() => null));
     } catch (error) {
       if (connectorsRequestGeneration.current === generation) {
         setHasLoadedConnectors(true);
@@ -804,13 +822,41 @@ export function DesktopCloudSettingsModal({
       cloudConnectors?.map((c) => ({
         connectorId: toDisplayConnectorId(c),
         connectedAt: c.connectedAt || undefined,
-        status: 'connected' as const,
+        ...(customSignInPending(c)
+          ? { status: 'warning' as const, warningLabel: CUSTOM_CONNECTOR_SIGN_IN_COPY }
+          : { status: 'connected' as const }),
       })),
     [cloudConnectors],
   );
 
+  const signInCustomConnector = useCallback(
+    async (shortId: string, name: string) => {
+      await completeDesktopCloudConnectorInstall(customConnectorSignInUrl(shortId), {
+        title: `Connect ${name}`,
+        isConnected: async () => {
+          const connectors = await refreshCloudConnectors();
+          return connectors.some(
+            (connector) =>
+              customConnectorShortId(connector) === shortId && !customSignInPending(connector),
+          );
+        },
+      });
+      await refreshCloudConnectors();
+    },
+    [refreshCloudConnectors],
+  );
+
   const connectConnector = useCallback(
     async (id: string) => {
+      if (id.startsWith('custom-')) {
+        const custom = cloudConnectors?.find(
+          (connector) => connector.source === 'custom' && toDisplayConnectorId(connector) === id,
+        );
+        const shortId = custom ? customConnectorShortId(custom) : null;
+        if (!custom || !shortId) throw new Error('This custom connector could not be found.');
+        await signInCustomConnector(shortId, custom.name ?? 'Custom MCP');
+        return;
+      }
       const serverId = toServerConnectorId(id);
       const authType = CONNECTORS.find((connector) => connector.id === id)?.authType;
       const result = await apiConnectConnector(serverId, authType);
@@ -836,7 +882,7 @@ export function DesktopCloudSettingsModal({
       }
       throw new Error(result.message);
     },
-    [refreshCloudConnectors],
+    [cloudConnectors, refreshCloudConnectors, signInCustomConnector],
   );
 
   const disconnectConnector = useCallback(
@@ -861,10 +907,20 @@ export function DesktopCloudSettingsModal({
 
   const addCustomConnector = useCallback(
     async (input: CustomConnectorInput) => {
-      await apiCreateCustomConnector(input);
+      const created = await apiCreateCustomConnector(input);
       await refreshCloudConnectors();
+      if (!created.signInRequired || !created.shortId) return;
+      try {
+        await signInCustomConnector(created.shortId, input.name);
+      } catch (error) {
+        if (input.oauthClientId || !created.id) throw error;
+        await apiDeleteCustomConnector(created.id);
+        await refreshCloudConnectors();
+        const reason = error instanceof Error ? error.message : `Could not connect ${input.name}.`;
+        throw new Error(`${reason} ${CUSTOM_CONNECTOR_OAUTH_CLIENT_HINT}`);
+      }
     },
-    [refreshCloudConnectors],
+    [refreshCloudConnectors, signInCustomConnector],
   );
 
   const [skills, setSkills] = useState<SettingsSkill[] | undefined>(undefined);
@@ -943,7 +999,7 @@ export function DesktopCloudSettingsModal({
         phase: 1,
         iconBg: CONNECTOR_FALLBACK_THEME,
         iconText: 'MCP',
-        canConnect: false,
+        canConnect: customSignInPending(connector),
       }));
     const connectedCatalogIds = new Set(
       cloudConnectors
@@ -964,6 +1020,10 @@ export function DesktopCloudSettingsModal({
       disconnectConnector,
       addCustomConnector,
       customConnectorAuthTokenSupported: true,
+      customConnectorOAuthClientSupported: true,
+      ...(customOAuthRedirectUri
+        ? { customConnectorOAuthRedirectUri: customOAuthRedirectUri }
+        : {}),
       openHref: (href) => {
         const url = new URL(href, WEB_APP_URL);
         if (url.protocol !== 'https:' && url.protocol !== 'http:') {
@@ -985,6 +1045,7 @@ export function DesktopCloudSettingsModal({
       connectConnector,
       disconnectConnector,
       addCustomConnector,
+      customOAuthRedirectUri,
       skills,
       skillsLoading,
       skillsError,

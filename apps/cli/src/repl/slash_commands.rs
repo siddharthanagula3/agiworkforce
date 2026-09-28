@@ -216,6 +216,10 @@ pub(super) async fn handle_slash_command(
             let agents = crate::agents::discover_agents();
             output::print_block(&crate::agents::format_subagents(&agents));
         }
+        "/personalize" => match crate::cloud::personalization::run(arg).await {
+            Ok(text) => output::print_block(&text),
+            Err(reason) => output::print_warn(&reason),
+        },
         "/task" | "/tasks" => {
             registry::tasks_for_display(session.subagent_manager.as_ref(), arg)
                 .await
@@ -575,6 +579,14 @@ pub(super) async fn handle_slash_command(
             if let Some(prompt) = crate::custom_commands::expand_custom_slash_invocation(input) {
                 return SlashResult::Prompt(prompt);
             }
+            match crate::skills::skill_command_prompt(cmd.trim_start_matches('/'), arg) {
+                Some(Ok(prompt)) => return SlashResult::Prompt(prompt),
+                Some(Err(reason)) => {
+                    output::print_warn(&reason);
+                    return SlashResult::Handled;
+                }
+                None => {}
+            }
             if input.trim_start().starts_with("/mcp:") {
                 return SlashResult::McpPrompt(input.to_string());
             }
@@ -677,7 +689,7 @@ fn repl_runtime_command_names() -> std::collections::BTreeSet<&'static str> {
 
 fn persist_shared_ui_config(cmd: &str, arg: &str, session: &AgentSession, config: &mut CliConfig) {
     match cmd {
-        "/output-style" if !arg.trim().is_empty() => {
+        "/output-style" if crate::claude_parity::output_style_arg_persists(arg) => {
             if let Err(err) = config.persist_output_style_project(&session.output_style) {
                 output::print_warn(&format!("Failed to persist output style: {err}"));
             }

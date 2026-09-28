@@ -77,7 +77,11 @@ import {
   type SessionSource,
 } from '../surfaces';
 import { resolveProjectsWorkspace } from '../projects/projectsClient';
-import { OPEN_CLOUD_CODE_SESSION_COMMAND, resolveCloudCodeApi } from '../cloud-tasks';
+import {
+  CONTINUE_IN_CLOUD_COMMAND,
+  OPEN_CLOUD_CODE_SESSION_COMMAND,
+  resolveCloudCodeApi,
+} from '../cloud-tasks';
 import { githubRepositoryName, workspaceGitHubRepositories } from '../context-handoff';
 import { resolveAccountPresence } from '../surfaces/accountAccess';
 import { buildMemoryContextInput } from '../../memory/memoryStore';
@@ -239,6 +243,7 @@ export type WebviewToExtMessage =
   | { type: 'requestSessions'; payload: { source: SessionListSource } }
   | { type: 'openSessionRow'; payload: { id: string; source: SessionSource } }
   | { type: 'requestSlashCommands' }
+  | { type: 'continueInCloud' }
   | { type: 'runSlashCommand'; payload: { name: string } };
 
 export type ExtToWebviewMessage =
@@ -985,6 +990,11 @@ export class ChatStateManager {
 
       case 'requestSlashCommands': {
         await this._pushSlashCommands();
+        break;
+      }
+
+      case 'continueInCloud': {
+        await vscode.commands.executeCommand(CONTINUE_IN_CLOUD_COMMAND);
         break;
       }
 

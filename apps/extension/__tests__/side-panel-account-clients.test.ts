@@ -113,6 +113,8 @@ function schedulesClient(
     listRuns: vi.fn(),
     runNow: vi.fn(),
     resolveRunApproval: vi.fn(),
+    shareSchedule: vi.fn(),
+    unshareSchedule: vi.fn(),
     ...overrides,
   };
 }

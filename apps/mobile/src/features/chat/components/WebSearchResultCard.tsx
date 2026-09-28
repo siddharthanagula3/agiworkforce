@@ -22,9 +22,18 @@ function badgeColorFor(hostname: string, colors: ColorScheme): string {
   return palette[hash % palette.length]!;
 }
 
+function publishedLabel(raw: string | undefined): string | null {
+  const value = raw?.trim();
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value.length > 32 ? null : value;
+  return parsed.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
 export function WebSearchResultCard({ result }: { result: ToolSearchResult }) {
   const colors = useThemeColors();
   const hostname = hostnameOf(result.url);
+  const published = publishedLabel(result.publishedDate);
 
   const handlePress = async () => {
     if (isValidExternalHttpUrl(result.url)) {
@@ -39,7 +48,7 @@ export function WebSearchResultCard({ result }: { result: ToolSearchResult }) {
     <Pressable
       onPress={handlePress}
       accessibilityRole="link"
-      accessibilityLabel={`${result.title}, ${hostname}`}
+      accessibilityLabel={[result.title, hostname, published].filter(Boolean).join(', ')}
     >
       {({ pressed }) => (
         <View
@@ -80,9 +89,16 @@ export function WebSearchResultCard({ result }: { result: ToolSearchResult }) {
               </Text>
             ) : null}
           </View>
-          <Text numberOfLines={1} style={{ fontSize: 11, color: colors.textMuted, flexShrink: 0 }}>
-            {hostname}
-          </Text>
+          <View style={{ alignItems: 'flex-end', flexShrink: 0 }}>
+            <Text numberOfLines={1} style={{ fontSize: 11, color: colors.textMuted }}>
+              {hostname}
+            </Text>
+            {published ? (
+              <Text numberOfLines={1} style={{ fontSize: 11, color: colors.textMuted }}>
+                {published}
+              </Text>
+            ) : null}
+          </View>
         </View>
       )}
     </Pressable>

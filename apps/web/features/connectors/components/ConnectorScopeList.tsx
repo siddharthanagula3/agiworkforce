@@ -2,6 +2,7 @@
 
 import { cn } from '@shared/lib/utils';
 import {
+  describeGrantedConnectorScopes,
   getConnectorScopeDescriptions,
   summarizeConnectorScopes,
 } from '@/lib/connectors/scope-descriptions';
@@ -52,6 +53,33 @@ export function ConnectorScopeList({ connectorId }: { connectorId: string }) {
       {summary ? <p className="text-xs text-muted-foreground">{summary.sentence}</p> : null}
       <ul className="space-y-1.5">
         {descriptions.entries.map((entry) => (
+          <li key={entry.scope} className="flex items-start justify-between gap-2 text-xs">
+            <span className="text-muted-foreground">{entry.sentence}</span>
+            <span
+              className={cn(
+                'shrink-0 rounded-full border px-2 py-0.5 text-xs font-medium',
+                ACCESS_BADGE_CLASS[entry.access],
+              )}
+            >
+              {ACCESS_BADGE_LABEL[entry.access]}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+export function ConnectorGrantedScopeList({ scopes }: { scopes: readonly string[] }) {
+  if (scopes.length === 0) return null;
+  return (
+    <div
+      className="space-y-1.5 rounded-lg border border-border/80 p-3"
+      aria-label="Permissions granted"
+    >
+      <h4 className="text-xs font-semibold text-foreground">Permissions granted</h4>
+      <ul className="space-y-1.5">
+        {describeGrantedConnectorScopes(scopes).map((entry) => (
           <li key={entry.scope} className="flex items-start justify-between gap-2 text-xs">
             <span className="text-muted-foreground">{entry.sentence}</span>
             <span

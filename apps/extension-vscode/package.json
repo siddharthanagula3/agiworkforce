@@ -499,6 +499,11 @@
         "icon": "$(cloud-download)"
       },
       {
+        "command": "agi-workforce.continueInCloud",
+        "title": "AGI Workforce: Continue in the Cloud",
+        "icon": "$(cloud-upload)"
+      },
+      {
         "command": "agi-workforce.openCloudCodeSession",
         "title": "AGI Workforce: Open AGI Code Session",
         "icon": "$(cloud)"

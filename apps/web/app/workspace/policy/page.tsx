@@ -11,6 +11,7 @@ export const metadata: Metadata = {
 export default function WorkspacePolicyPage() {
   return (
     <ConsolePage
+      help={{ docId: 'workspace-policy', label: 'How workspace policy works' }}
       title="Policy"
       description="What members of this workspace may run, where their chats may sync, and how long records are kept."
     >

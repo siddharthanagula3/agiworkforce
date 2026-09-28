@@ -12,6 +12,7 @@ const { mockAuth, mockOptionalUser, mockQuery, mockRateLimit, mockCsrf } = vi.ho
 
 vi.mock('@clerk/nextjs/server', () => ({ auth: mockAuth }));
 vi.mock('@/lib/api-auth', () => ({
+  getSuspendedAccountUser: vi.fn(async () => null),
   getOptionalAuthUser: mockOptionalUser,
   getClerkAuthUser: vi.fn(),
   assertAccountActive: vi.fn(),

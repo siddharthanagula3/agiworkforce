@@ -20,22 +20,6 @@ nothing is left.
 
 Code: `apps/extension/src/side_panel.ts:8120-8122`
 
-## S84.02: Timezone.
-
-- Done when: The user can see and set the timezone used for schedules, reminders and quiet hours.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Time focus and Reflect use the browser timezone automatically; there is no control to choose a different timezone. | ui |
-| desktop | partial | Same as web: browser timezone only, no picker. | ui |
-| mobile | partial | Quiet hours use the device timezone (deviceTimezone); no timezone picker. | ui |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/settings/sections/TimeFocusSection.tsx:35-42`, `apps/mobile/stores/notificationPrefsStore.ts:22-25`
-
 ## S84.03: Theme.
 
 - Done when: The user can choose light, dark or system theme and it applies and persists.
@@ -170,19 +154,3 @@ Code: `apps/extension/src/options.ts:1012-1016`, `apps/extension/src/options.ts:
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/cli/src/lib.rs:853-854`
-
-## S84.26: Restore defaults.
-
-- Done when: Settings offer a restore-defaults action that resets preferences.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Only keyboard shortcuts have Restore defaults; no general reset for appearance or other preferences. | ui |
-| desktop | partial | Same as web: only shortcut defaults can be restored. | ui |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/dialogs/KeyboardShortcutsDialog.tsx:153-165`, `apps/web/features/chat/components/dialogs/KeyboardShortcutsDialog.tsx:34-37`

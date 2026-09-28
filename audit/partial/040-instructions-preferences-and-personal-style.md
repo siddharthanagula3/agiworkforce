@@ -10,11 +10,10 @@ nothing is left.
 
 - Done when: The user can tell the assistant what to call them, and replies address them that way.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Set a preferred name on web; the CLI has no control for it, and it applies only to CLI chats on the AGI Cloud provider. | ui |
 | vscode | partial | Set a preferred name on web; VS Code has no control for it, and it applies only when the local runtime uses the AGI Cloud provider. | ui |
 | chrome | partial | Set a preferred name on web; the side panel has no control or link for it, though side-panel chats follow the web setting. | ui |
 
@@ -24,11 +23,10 @@ Code: `apps/cli/src/models/streaming.rs:226-235`, `apps/web/lib/server/user-iden
 
 - Done when: The user can give the assistant background about themselves that it keeps in mind.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Set the role and instructions on web; the CLI has no control for it, and it applies only to CLI chats on the AGI Cloud provider. | ui |
 | vscode | partial | Set the role and instructions on web; VS Code has no control for it, and it applies only when the local runtime uses the AGI Cloud provider. | ui |
 | chrome | partial | Set the role and instructions on web; the side panel has no control or link for it, though side-panel chats follow the web setting. | ui |
 
@@ -38,11 +36,10 @@ Code: `apps/cli/src/models/streaming.rs:226-235`, `apps/web/lib/server/user-iden
 
 - Done when: The user can state their role or profession and replies are tailored to it.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Set a role on web; the CLI has no control for it, and it applies only to CLI chats on the AGI Cloud provider. | ui |
 | vscode | partial | Set a role on web; VS Code has no control for it, and it applies only when the local runtime uses the AGI Cloud provider. | ui |
 | chrome | partial | Set a role on web; the side panel has no control or link for it, though side-panel chats follow the web setting. | ui |
 
@@ -77,11 +74,10 @@ Code: `apps/cli/src/models/streaming.rs:226-235`, `apps/web/lib/server/user-iden
 
 - Done when: The user can choose a more or less formal register and replies follow it.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Set a formal style on web; the CLI has no control for it, and it applies only to CLI chats on the AGI Cloud provider. | ui |
 | vscode | partial | Set a formal style on web; VS Code has no control for it, and it applies only when the local runtime uses the AGI Cloud provider. | ui |
 | chrome | partial | Set a formal style on web; the side panel has no control or link for it, though side-panel chats follow the web setting. | ui |
 
@@ -104,11 +100,10 @@ Code: `apps/cli/src/models/streaming.rs:226-235`, `apps/web/lib/server/user-iden
 
 - Done when: The user can ask for warmer or cooler tone and replies follow it.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Set the warmth level on web; the CLI has no control for it, and it applies only to CLI chats on the AGI Cloud provider. | ui |
 | vscode | partial | Set the warmth level on web; VS Code has no control for it, and it applies only when the local runtime uses the AGI Cloud provider. | ui |
 | chrome | partial | Set the warmth level on web; the side panel has no control or link for it, though side-panel chats follow the web setting. | ui |
 
@@ -118,11 +113,10 @@ Code: `apps/cli/src/models/streaming.rs:226-235`, `apps/web/lib/server/user-iden
 
 - Done when: The user can ask for more or less enthusiasm and replies follow it.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Set the enthusiasm level on web; the CLI has no control for it, and it applies only to CLI chats on the AGI Cloud provider. | ui |
 | vscode | partial | Set the enthusiasm level on web; VS Code has no control for it, and it applies only when the local runtime uses the AGI Cloud provider. | ui |
 | chrome | partial | Set the enthusiasm level on web; the side panel has no control or link for it, though side-panel chats follow the web setting. | ui |
 
@@ -132,11 +126,10 @@ Code: `apps/cli/src/models/streaming.rs:226-235`, `apps/web/lib/server/user-iden
 
 - Done when: The user can say whether replies should use headings and lists or prose, and replies follow it.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Set heading/list preference on web; the CLI has no control for it, and it applies only to CLI chats on the AGI Cloud provider. | ui |
 | vscode | partial | Set heading/list preference on web; VS Code has no control for it, and it applies only when the local runtime uses the AGI Cloud provider. | ui |
 | chrome | partial | Set heading/list preference on web; the side panel has no control or link for it, though side-panel chats follow the web setting. | ui |
 
@@ -146,11 +139,10 @@ Code: `apps/cli/src/models/streaming.rs:226-235`, `apps/web/lib/server/user-iden
 
 - Done when: The user can ask for more or less emoji and replies follow it.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Set the emoji level on web; the CLI has no control for it, and it applies only to CLI chats on the AGI Cloud provider. | ui |
 | vscode | partial | Set the emoji level on web; VS Code has no control for it, and it applies only when the local runtime uses the AGI Cloud provider. | ui |
 | chrome | partial | Set the emoji level on web; the side panel has no control or link for it, though side-panel chats follow the web setting. | ui |
 
@@ -160,11 +152,10 @@ Code: `apps/cli/src/models/streaming.rs:226-235`, `apps/web/lib/server/user-iden
 
 - Done when: The user can set how technical replies should be, and replies follow it.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Set a technical level on web; the CLI has no control for it, and it applies only to CLI chats on the AGI Cloud provider. | ui |
 | vscode | partial | Set a technical level on web; VS Code has no control for it, and it applies only when the local runtime uses the AGI Cloud provider. | ui |
 | chrome | partial | Set a technical level on web; the side panel has no control or link for it, though side-panel chats follow the web setting. | ui |
 
@@ -174,11 +165,10 @@ Code: `apps/cli/src/models/streaming.rs:226-235`, `apps/web/lib/server/user-iden
 
 - Done when: The user can set the language replies are written in (separate from the interface language), and replies follow it.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Set a response language on web; the CLI has no control for it, and it applies only to CLI chats on the AGI Cloud provider. | ui |
 | vscode | partial | Set a response language on web; VS Code has no control for it, and it applies only when the local runtime uses the AGI Cloud provider. | ui |
 | chrome | partial | Set a response language on web; the side panel has no control or link for it, though side-panel chats follow the web setting. | ui |
 
@@ -224,17 +214,15 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2234-22
 
 - Done when: For one conversation the user can override their standing style/instructions without changing their defaults.
 - Wave: 3
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The composer's style and length picker overrides Settings for the next messages, but it is one global choice kept across every chat, not saved per conversation. | persistence |
-| desktop | partial | The composer's style and length picker overrides Settings for the next messages, but it is one global choice kept across every chat, not saved per conversation. | persistence |
 | mobile | partial | The chat Style sheet changes style for the next messages, but it is one global setting, not saved per conversation. | persistence |
-| cli | partial | /output-style switches the current session, but it is also written as the project's default, so it is not a one-conversation override. | persistence |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/Composer/StyleSelector.tsx:253-253`, `apps/web/features/chat/components/Composer/ComposerFooter.tsx:1274-1277`, `apps/web/features/chat/stores/style-store.ts:150-166`, `apps/web/lib/hooks/useChatStream.ts:3444-3446`
+Code: `apps/mobile/app/(app)/chat/[id].tsx:771-775`, `apps/mobile/stores/chat/chatExecutionStore.ts:388-393`
 
 ## S40.20: Writing-style examples.
 
@@ -289,46 +277,39 @@ Code: `apps/cli/src/models/streaming.rs:226-235`, `apps/web/lib/server/user-iden
 
 - Done when: The user can choose a concise style and replies are short and direct.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Add a concise style; the default is described as concise but adds no instruction, and only default/explanatory/learning ship. | handler |
 | vscode | partial | Set the Concise style on web; VS Code has no control for it, and it applies only when the local runtime uses the AGI Cloud provider. | ui |
 | chrome | partial | Set the Concise style on web; the side panel has no control or link for it, though side-panel chats follow the web setting. | ui |
 
-Code: `apps/cli/src/output_styles.rs:31-38`, `apps/cli/src/models/streaming.rs:226-235`, `apps/web/lib/server/user-identity.ts:205-227`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4460-4476`
+Code: `apps/cli/src/models/streaming.rs:226-235`, `apps/web/lib/server/user-identity.ts:205-227`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4460-4476`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2234-2234`
 
 ## S40.27: Custom output-style creation.
 
 - Done when: The user can create, name, edit and delete their own output style and use it in chats.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Add a command to create a style; users must hand-write ~/.agiworkforce/output-styles/<name>.md, and a file not starting with '## Output style:' is never removed when switching away. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/output_styles.rs:80-96`, `apps/cli/src/agent/mod.rs:1270-1272`
 
 ## S40.28: Effective-instruction explanation where useful.
 
 - Done when: The user can see which instructions and preferences are currently in effect and where each comes from.
 - Wave: 3
-- Already works on: vscode
+- Already works on: cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | /memory shows which instruction files load (global, project, local) but not the active output style source, agent overrides or account instructions together. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/repl/registry.rs:1460-1476`, `apps/cli/src/tui/tui_app.rs:3791-3794`
 
 ## S40.29: Import preferences from another assistant.
 
@@ -348,14 +329,11 @@ Code: `apps/cli/src/repl/registry.rs:1460-1476`, `apps/cli/src/tui/tui_app.rs:37
 
 - Done when: For each project the user can choose which of their personal preferences and instructions apply there.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | A project can opt out of account memory, but there is no choice over which account instructions or style preferences a project uses; they always apply. | ui, handler |
-| desktop | partial | A project can opt out of account memory, but there is no choice over which account instructions or style preferences a project uses; they always apply. | ui, handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/projects/components/ProjectSettingsDialog.tsx:255-264`, `apps/web/lib/server/user-identity.ts:205-227`

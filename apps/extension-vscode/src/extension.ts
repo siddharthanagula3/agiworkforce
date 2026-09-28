@@ -1,19 +1,26 @@
 import * as vscode from 'vscode';
 import {
   continueCloudWorkHere,
+  openDeveloperSessionLink,
   PULL_CLOUD_TASK_COMMAND,
   parseCloudTaskHandoffQuery,
   pullCloudResultIntoCheckout,
+  readWorkspaceCloudSource,
   registerContextHandoffUriHandler,
   resolveGitCheckoutHost,
+  resumePendingDeveloperSession,
   type ContextHandoffTarget,
 } from './features/context-handoff';
 import {
+  CONTINUE_IN_CLOUD_COMMAND,
+  continueInCloud,
   OPEN_CLOUD_CODE_SESSION_COMMAND,
   resolveCloudCodeApi,
   showCloudCodeSession,
 } from './features/cloud-tasks';
 import { getCloudWebOrigin } from './utils/api';
+import { resolveCloudCodeAgentModel } from '@agiworkforce/types';
+import { resolveTierSync } from './integrations/tierResolver';
 import { Config } from './platform/config';
 import { initModelMetrics } from './features/model-picker/modelMetrics';
 import { startVscodeHeartbeat } from './features/device-registry';
@@ -141,7 +148,11 @@ export function activate(context: vscode.ExtensionContext): void {
       },
     };
   };
-  context.subscriptions.push(registerContextHandoffUriHandler(resolveChatTarget));
+  context.subscriptions.push(
+    registerContextHandoffUriHandler(resolveChatTarget, resolveGitCheckoutHost, (link) =>
+      openDeveloperSessionLink(link, context.globalState),
+    ),
+  );
 
   runBoot('cloud-task-pull', () => {
     context.subscriptions.push(
@@ -189,6 +200,20 @@ export function activate(context: vscode.ExtensionContext): void {
             },
           });
         },
+      ),
+      vscode.commands.registerCommand(CONTINUE_IN_CLOUD_COMMAND, () =>
+        continueInCloud({
+          readSource: readWorkspaceCloudSource,
+          resolveApi: async () => {
+            const code = await resolveCloudCodeApi(context.secrets);
+            return code.status === 'ready' ? code.api : null;
+          },
+          modelId: () =>
+            resolveCloudCodeAgentModel(
+              normalizeConfiguredModelId(Config.model()),
+              resolveTierSync(context),
+            ),
+        }),
       ),
     );
   });
@@ -255,6 +280,7 @@ export function activate(context: vscode.ExtensionContext): void {
         diagnosticsProvider: providers.diagnosticsProvider,
         nativeChatAvailable: chat.nativeChatAvailable,
       });
+      void resumePendingDeveloperSession(context.globalState);
     } catch (err) {
       reportBootFailure('commands', err, 'Some AGI Workforce commands could not be registered');
     }

@@ -170,6 +170,10 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   const redirectUri = getConnectorOAuthRedirectUri();
   const endpoint = provider ? null : getMcpEndpoint(connectorId);
   const directory = provider || endpoint ? null : await resolveDirectoryTarget(connectorId);
+  const custom =
+    provider || endpoint || directory
+      ? null
+      : await findUserCustomConnectorByServerId(userId, connectorId);
   const discovered: DiscoveredServer | null = endpoint
     ? { mcpUrl: endpoint.url, name: connectorId, documentationUrl: null }
     : directory
@@ -178,7 +182,9 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
           name: directory.name,
           documentationUrl: directory.documentationUrl,
         }
-      : null;
+      : custom
+        ? { mcpUrl: custom.url, name: custom.name, documentationUrl: null }
+        : null;
 
   const fail = (status: string, httpStatus: number, message: string): NextResponse => {
     if (wantsJson) {

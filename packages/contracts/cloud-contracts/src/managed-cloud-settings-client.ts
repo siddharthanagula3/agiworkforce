@@ -14,6 +14,8 @@ export const MANAGED_CLOUD_SETTINGS_SYNC_PATH = '/api/settings/sync';
 
 export const MANAGED_CLOUD_SETTINGS_PREFERENCES_PATH = '/api/settings/preferences';
 
+export const MANAGED_CLOUD_APPROVAL_HISTORY_PATH = '/api/settings/approvals';
+
 /**
  * Read one namespace of the account settings document.
  *

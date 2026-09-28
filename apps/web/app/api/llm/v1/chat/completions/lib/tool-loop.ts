@@ -146,6 +146,13 @@ import {
 } from './tool-schema-loader';
 import { stageTurnAttachments } from '@/lib/e2b/attachment-staging';
 import {
+  STORED_RESULT_NOTICE_MARKER,
+  TOOL_RESULT_READER_TOOL_NAME,
+  readStoredToolResult,
+  referenceOversizedToolResult,
+  toolResultReaderToolDef,
+} from './tool-result-store';
+import {
   EXECUTE_CODE_TOOL,
   isExecutionTool,
   routeExecutionTool,
@@ -218,6 +225,9 @@ import { persistGeneratedFileBytes } from '@/lib/server/generated-file-persist';
 import {
   type AgiWorkPlanStep,
   advanceAgiWorkPlan,
+  advanceAgiWorkPlanToStep,
+  agiWorkExecutionDirective,
+  agiWorkPlanStepMarker,
   agiWorkGoalProgressEvent,
   agiWorkPlanEvent,
   agiWorkPlanProgressEvents,
@@ -978,11 +988,13 @@ export function toolStatusEvent(
   status: 'running' | 'completed' | 'failed',
   responseModel: string,
   args?: Record<string, unknown>,
+  parallelGroup?: string,
 ): SseLine {
   const statusPayload: Record<string, unknown> = {
     type: 'mcp_tool_use',
     name: toolName,
     status,
+    ...(parallelGroup ? { parallel_group: parallelGroup } : {}),
   };
   if (status === 'running') {
     const phrase =
@@ -2159,7 +2171,14 @@ async function runMcpTool(
       );
       if (connectorResult.handled) {
         return {
-          content: capOutput(connectorResult.content),
+          content: connectorResult.isError
+            ? capOutput(connectorResult.content)
+            : ((await referenceOversizedToolResult({
+                userId: executionContext?.userId,
+                toolCallId: toolCall.id,
+                toolName: toolCall.qualifiedName,
+                content: connectorResult.content,
+              })) ?? capOutput(connectorResult.content)),
           isError: connectorResult.isError,
           ...(connectorResult.interactiveCard
             ? { interactiveCard: connectorResult.interactiveCard }
@@ -2239,10 +2258,18 @@ async function runMcpTool(
         };
       }
     }
+    const output =
+      text || (result.task ? `MCP task started: ${result.task.taskId}` : '(no output)');
     return {
-      content: capOutput(
-        text || (result.task ? `MCP task started: ${result.task.taskId}` : '(no output)'),
-      ),
+      content:
+        (result.isError === true
+          ? null
+          : await referenceOversizedToolResult({
+              userId: executionContext?.userId,
+              toolCallId: toolCall.id,
+              toolName: toolCall.qualifiedName,
+              content: output,
+            })) ?? capOutput(output),
       isError: result.isError === true,
       ...(interactiveCard ? { interactiveCard } : {}),
     };
@@ -3048,7 +3075,17 @@ export async function* runToolLoop(
   const offeredMcpToolDefs = (): WebMcpToolDef[] => {
     const loaded = mcpTools.filter((tool) => loadedToolNames.has(tool.qualifiedName));
     const directory = toolDirectoryToolDef(deferredToolSchemas);
-    return directory ? [...loaded, directory] : loaded;
+    const storedResults = messages.some(
+      (message) =>
+        message.role === 'tool' &&
+        typeof message.content === 'string' &&
+        message.content.includes(STORED_RESULT_NOTICE_MARKER),
+    );
+    return [
+      ...loaded,
+      ...(directory ? [directory] : []),
+      ...(storedResults ? [toolResultReaderToolDef()] : []),
+    ];
   };
   const loadDeferredToolSchemas = (args: Record<string, unknown>): ToolLoopToolResult => {
     const raw = args['names'];
@@ -3988,9 +4025,14 @@ export async function* runToolLoop(
           ? 'cancel'
           : reason === 'error' || reason === 'refusal'
             ? 'fail'
-            : 'complete';
+            : stoppedShort
+              ? 'stop'
+              : 'complete';
       agiWorkPlan = advanceAgiWorkPlan(agiWorkPlan, transition);
       yield encoder.encode(agiWorkPlanEvent(agiWorkPlan, responseModel));
+      for (const planEvent of agiWorkPlanProgressEvents(agiWorkPlan)) {
+        yield encoder.encode(eventStream.emit(planEvent));
+      }
     }
     if (reason === 'cancelled') {
       yield encoder.encode(taskStateEvent('cancelled', 'Agent work was cancelled.'));
@@ -4128,13 +4170,25 @@ export async function* runToolLoop(
     const mutating = calls.filter((tc) => !isReadOnlyTool(tc.qualifiedName));
 
     const toolStartedAt = new Map<string, number>();
+    const parallelGroup =
+      readOnly.length > 1
+        ? `parallel:${suspendContext.completedSteps}:${readOnly[0]!.id}`
+        : undefined;
     for (const tc of calls) {
       if (!isServerOwnedSearchCall(tc, suspendContext.completedSteps)) {
         if (tc.argsMalformed) toolCapabilityEvidence.malformedCalls += 1;
         else toolCapabilityEvidence.wellFormedCalls += 1;
       }
       if (isExecutionTool(tc.qualifiedName)) executionToolCalled = true;
-      yield encoder.encode(toolStatusEvent(tc.qualifiedName, 'running', responseModel, tc.args));
+      yield encoder.encode(
+        toolStatusEvent(
+          tc.qualifiedName,
+          'running',
+          responseModel,
+          tc.args,
+          parallelGroup && isReadOnlyTool(tc.qualifiedName) ? parallelGroup : undefined,
+        ),
+      );
       const category = canonicalToolCategory(tc.qualifiedName, mcpTools);
       toolStartedAt.set(tc.id, Date.now());
       yield encoder.encode(
@@ -4174,6 +4228,9 @@ export async function* runToolLoop(
       }
       if (tc.qualifiedName === TOOL_DIRECTORY_TOOL_NAME) {
         return Promise.resolve(loadDeferredToolSchemas(tc.args));
+      }
+      if (tc.qualifiedName === TOOL_RESULT_READER_TOOL_NAME) {
+        return readStoredToolResult(options.userId, tc.args);
       }
       const argumentProblem = toolArgumentProblem(tc, externalToolSchemas.get(tc.qualifiedName));
       if (argumentProblem) {
@@ -4693,6 +4750,13 @@ export async function* runToolLoop(
           yield encoder.encode(agiWorkPlanEvent(agiWorkPlan, responseModel));
           for (const planEvent of agiWorkPlanProgressEvents(agiWorkPlan)) {
             yield encoder.encode(eventStream.emit(planEvent));
+          }
+          const directive = agiWorkExecutionDirective(agiWorkPlan);
+          const last = messages.at(-1);
+          if (last?.role === 'user' && typeof last.content === 'string') {
+            messages[messages.length - 1] = { ...last, content: `${last.content}\n\n${directive}` };
+          } else {
+            messages.push({ role: 'user', content: directive });
           }
         } else {
           logger.warn(
@@ -5262,6 +5326,20 @@ export async function* runToolLoop(
         }
         providerStep = await stepPromise;
         mergeObservedProviderUsage(observedUsage, providerStep.usage);
+        if (agiWorkPlan.length > 0) {
+          const marker = agiWorkPlanStepMarker(
+            providerStep.canonicalText || providerStep.textContent,
+          );
+          const advanced =
+            marker === null ? agiWorkPlan : advanceAgiWorkPlanToStep(agiWorkPlan, marker);
+          if (JSON.stringify(advanced) !== JSON.stringify(agiWorkPlan)) {
+            agiWorkPlan = advanced;
+            yield encoder.encode(agiWorkPlanEvent(agiWorkPlan, responseModel));
+            for (const planEvent of agiWorkPlanProgressEvents(agiWorkPlan)) {
+              yield encoder.encode(eventStream.emit(planEvent));
+            }
+          }
+        }
         for (const ref of providerStep.generatedFileRefs ?? []) {
           if (ref.fileId) providerGeneratedFileRefs.set(`${ref.provider}:${ref.fileId}`, ref);
         }

@@ -68,6 +68,11 @@
           "date": "2026-09-22",
           "digest": "d03a2be0d91b4997",
           "note": "Re-baselines the copy fingerprint after the extractor began including semicolon-bearing JSX prose; this entry changes no published wording or effective date."
+        },
+        {
+          "date": "2026-09-27",
+          "digest": "f5fa55928ecda09e",
+          "note": "Appeals point to the in-product appeal and the /appeal form, each with a reference, beside the email route; effective date moved to the day it ships."
         }
       ]
     },
@@ -203,6 +208,11 @@
           "date": "2026-08-05",
           "digest": "4b97930441a18d89",
           "note": "Re-baselines the copy fingerprint after the extractor began including semicolon-bearing JSX prose; this entry changes no published wording or effective date."
+        },
+        {
+          "date": "2026-09-27",
+          "digest": "ad2044fbd196d614",
+          "note": "Adds the in-product Report an accessibility barrier ticket beside the email address; effective date moved to the day it ships."
         }
       ]
     },
@@ -298,6 +308,11 @@
           "date": "2026-08-06",
           "digest": "98d82c8636dca659",
           "note": "Re-baselines the copy fingerprint after the extractor began including semicolon-bearing JSX prose; this entry changes no published wording or effective date."
+        },
+        {
+          "date": "2026-09-27",
+          "digest": "ccab8bac49fdd94a",
+          "note": "Adds the Impersonation section and the report form's impersonation option; effective date moved to the day it ships."
         }
       ]
     },
