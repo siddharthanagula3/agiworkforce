@@ -47,16 +47,14 @@ Code: `apps/mobile/app/(app)/(tabs)/chat.tsx:97-103`, `apps/mobile/app/(app)/(ta
 
 - Done when: The new-chat screen offers one-tap task-category shortcuts (e.g. write, research, image) that set up the next message.
 - Wave: 3
-- Already works on: mobile, chrome
+- Already works on: web, desktop, mobile, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | topic and AGI Work chips are on the new-chat screen; image, video and Deep Research chips need the composer to run its existing plus-menu handlers from a chip (p-contrast next batch). | ui, handler |
-| desktop | partial | topic and AGI Work chips are on the new-chat screen; image, video and Deep Research chips need the composer to run its existing plus-menu handlers from a chip (p-contrast next batch). | ui, handler |
 | cli | partial | Add task commands for research and writing and list them on the welcome screen; today only /image (and /review for code) set up a task type, found by typing "/". | ui, handler |
 | vscode | partial | Inconsistent with CLI S12.05, credited partial for /image and /review behind '/': VS Code's registered @agi participant has the same task commands, each mapped to a task prompt by the handler. |  |
 
-Code: `apps/web/features/chat/components/NewChat/NewChatStarters.tsx:170-170`, `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:869-869`, `crates/agiworkforce-command-registry/src/lib.rs:393-399`, `crates/agiworkforce-command-registry/src/lib.rs:193-199`
+Code: `crates/agiworkforce-command-registry/src/lib.rs:393-399`, `crates/agiworkforce-command-registry/src/lib.rs:193-199`, `apps/cli/src/tui/tui_app.rs:4676-4690`
 
 ## S12.06: Recent Project shortcuts.
 
@@ -70,19 +68,6 @@ Code: `apps/web/features/chat/components/NewChat/NewChatStarters.tsx:170-170`, `
 | cli | partial | Add a way to start a session in a recent project from the terminal; today `agiworkforce projects list` lists account projects and `projects link` binds the current directory, with no recent-project shortcut. | ui |
 
 Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:752-763`, `apps/mobile/src/features/drawer/components/DrawerContent.tsx:328-337`, `apps/cli/src/lib.rs:984-996`, `apps/cli/src/lib.rs:1866-1884`
-
-## S12.07: Recent-file suggestions.
-
-- Done when: When starting a chat the user is offered their recently used files to attach in one step.
-- Wave: 3
-- Already works on: mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | recent Library files are offered only in the AGI Work Files menu; the Chat-mode composer needs the same recent-files entry (p-contrast next batch). | ui |
-| desktop | partial | recent Library files are offered only in the AGI Work Files menu; the Chat-mode composer needs the same recent-files entry (p-contrast next batch). | ui |
-
-Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:5594-5594`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:5640-5640`
 
 ## S12.08: Recommended Skills.
 
@@ -267,7 +252,7 @@ Code: `apps/mobile/app/(app)/(tabs)/chat.tsx:200-203`, `apps/cli/src/tui/tui_app
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | signed-out visitors are redirected to sign-in; a guest path needs a founder decision on limits and an anonymous request path in request-processor (p-chat-gates). | ui, handler |
-| desktop | partial | signed-out visitors are redirected to sign-in; a guest path needs a founder decision on limits and an anonymous request path in request-processor (p-chat-gates). | ui, handler |
+| web | partial | founder decision needed: Claude requires an account, 18 or older (support.claude.com/en/articles/8114491, fetched 2026-09-28); Gemini allows some features signed out (support.google.com/gemini/answer/13278668, fetched 2026-09-28); help.openai.com returned 403, so ChatGPT's allowance is unverified. A guest path needs stated limits, a cost cap and an anonymous request path in request-processor (p-chat-gates). | ui, handler |
+| desktop | partial | founder decision needed: Claude requires an account, 18 or older (support.claude.com/en/articles/8114491, fetched 2026-09-28); Gemini allows some features signed out (support.google.com/gemini/answer/13278668, fetched 2026-09-28); help.openai.com returned 403, so ChatGPT's allowance is unverified. A guest path needs stated limits, a cost cap and an anonymous request path in request-processor (p-chat-gates). | ui, handler |
 
 Code: `apps/web/app/chat/layout.tsx:16-16`, `apps/web/app/chat/layout.tsx:19-19`
