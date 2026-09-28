@@ -1,5 +1,5 @@
 -- =============================================================================
--- Migration 0330: every Free generation attempt records how it ended
+-- Migration 0331: every Free generation attempt records how it ended
 --
 -- Why    : 0329 made each managed turn record its conversation, how it ended
 --          and why it failed. A Free turn settles in free_daily_usage_reservations
@@ -48,7 +48,7 @@ create index if not exists idx_free_daily_usage_reservations_conversation
 comment on column public.free_daily_usage_reservations.conversation_id is
   'The conversation this Free generation attempt answered, set when the turn is reserved for a conversation the caller owns. Cleared when the conversation is deleted.';
 comment on column public.free_daily_usage_reservations.attempt_outcome is
-  'How the Free generation attempt ended: completed, failed or cancelled. Null for a turn that paused for input, never settled, or predates 0330.';
+  'How the Free generation attempt ended: completed, failed or cancelled. Null for a turn that paused for input, never settled, or predates 0331.';
 comment on column public.free_daily_usage_reservations.attempt_error_class is
   'The failure class of a failed Free attempt, such as rate_limit or free_trial_token_budget_reached. Null when the attempt did not fail or its failure carried no class.';
 
