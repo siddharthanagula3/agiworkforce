@@ -38,6 +38,8 @@ pub struct ProjectDelta {
     #[serde(default)]
     pub description: Option<String>,
     #[serde(default)]
+    pub instructions: Option<String>,
+    #[serde(default)]
     pub is_archived: bool,
     pub updated_at: String,
     #[serde(default)]
@@ -93,6 +95,8 @@ pub struct CachedProject {
     #[serde(default)]
     pub description: Option<String>,
     #[serde(default)]
+    pub instructions: Option<String>,
+    #[serde(default)]
     pub is_archived: bool,
     pub updated_at: String,
 }
@@ -111,6 +115,7 @@ impl ProjectCache {
                 id: delta.id.clone(),
                 name: delta.name.clone(),
                 description: delta.description.clone(),
+                instructions: delta.instructions.clone(),
                 is_archived: delta.is_archived,
                 updated_at: delta.updated_at.clone(),
             });
@@ -234,6 +239,7 @@ mod tests {
             id: id.to_string(),
             name: name.to_string(),
             description: None,
+            instructions: None,
             is_archived: false,
             updated_at: format!("2026-09-13T00:00:{version:0>2}Z"),
             deleted_at: deleted.then(|| "2026-09-13T02:00:00Z".to_string()),
