@@ -20,7 +20,6 @@ const PAGE_SORT_KEY_FORMAT = `'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'`;
 
 const QuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(50),
-  offset: z.coerce.number().int().min(0).default(0),
 });
 
 const CursorSchema = z.object({
@@ -63,12 +62,11 @@ async function handleGetApprovals(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const parsed = QuerySchema.safeParse({
     limit: searchParams.get('limit') ?? undefined,
-    offset: searchParams.get('offset') ?? undefined,
   });
   if (!parsed.success) {
     throw createError.validation('Invalid query parameters', parsed.error.issues);
   }
-  const { limit, offset } = parsed.data;
+  const { limit } = parsed.data;
   const cursorParam = searchParams.get('cursor');
   const cursor = cursorParam ? CursorSchema.safeParse(decodeKeysetCursor(cursorParam)) : null;
   if (cursor && !cursor.success) {
@@ -95,8 +93,8 @@ async function handleGetApprovals(request: NextRequest) {
        ) approvals
        ${keyset.where ? `where ${keyset.where}` : ''}
        ${keyset.orderBy}
-       limit $2 ${cursor ? '' : 'offset $3'}`,
-      cursor ? [userId, limit + 1, ...keyset.params] : [userId, limit + 1, offset],
+       limit $2`,
+      [userId, limit + 1, ...keyset.params],
     );
     const page = buildPage(rows, limit, (row) => ({ sortValue: row.page_sort_key, id: row.id }));
     const approvals = page.items.flatMap((row): ApprovalHistoryEntry[] =>
