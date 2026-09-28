@@ -20,9 +20,10 @@ export default function AccountSecurityUndoPage() {
         detail={
           <p className="text-center">
             Advanced Account Security was turned on for your account. If you did not do it, turn it
-            off here without a passkey. Every session and linked device is signed out, and the
-            passkeys, security keys and recovery keys that were added are removed. This link works
-            for {ACCOUNT_SECURITY_POLICY.undoHours} hours after it was sent.
+            off here without a passkey. Every session and linked device is signed out, your password
+            is reset, and the passkeys, security keys and recovery keys added when it was turned on
+            are removed. This link works for {ACCOUNT_SECURITY_POLICY.undoHours} hours after it was
+            sent.
           </p>
         }
       >

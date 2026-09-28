@@ -386,25 +386,10 @@ async function requireEnrollmentMethods(
   return credentials;
 }
 
-interface AccountEmailAddresses {
-  primary: string | null;
-  verified: string[];
-}
-
-async function accountEmailAddresses(userId: string): Promise<AccountEmailAddresses> {
+async function verifiedPrimaryAddress(userId: string): Promise<string | null> {
   const user = await getIdentityUser(userId);
-  if (!user) return { primary: null, verified: [] };
-  const seen = new Set<string>();
-  const verified: string[] = [];
-  for (const address of user.emailAddresses) {
-    const value = address.emailAddress.trim();
-    if (!address.verified || !value || seen.has(value.toLowerCase())) continue;
-    seen.add(value.toLowerCase());
-    verified.push(value);
-  }
-  const primary =
-    user.primaryEmailVerification === 'verified' ? user.primaryEmail?.trim() || null : null;
-  return { primary, verified };
+  if (user?.primaryEmailVerification !== 'verified') return null;
+  return user.primaryEmail?.trim() || null;
 }
 
 async function requireSettledAddress(caller: AccountSecurityCaller): Promise<string> {
@@ -414,7 +399,7 @@ async function requireSettledAddress(caller: AccountSecurityCaller): Promise<str
       `The email address on your account changed in the last ${days} days. For your security, Advanced Account Security can be turned on ${days} days after that change.`,
     );
   }
-  const { primary } = await accountEmailAddresses(caller.userId);
+  const primary = await verifiedPrimaryAddress(caller.userId);
   if (!primary) {
     throw createError.conflict(
       'Verify the email address on your account before you turn on Advanced Account Security.',
@@ -465,35 +450,23 @@ function utcMinute(ms: number): string {
   return `${new Date(ms).toISOString().slice(0, 16).replace('T', ' ')} UTC`;
 }
 
-async function emailUndoLink(userId: string, token: string, expiresAt: number): Promise<void> {
-  const { verified } = await accountEmailAddresses(userId).catch((error: unknown) => {
-    logger.error(
-      { userId, error },
-      '[account-security] email addresses unreadable after enrollment',
-    );
-    return { primary: null, verified: [] } satisfies AccountEmailAddresses;
+async function emailUndoLink(input: {
+  userId: string;
+  address: string;
+  token: string;
+  expiresAt: number;
+}): Promise<void> {
+  const sent = await sendAccountSecurityEnabledEmail({
+    to: input.address,
+    undoUrl: new URL(accountSecurityUndoPageHref(input.token), SITE_URL).toString(),
+    undoExpiresAt: utcMinute(input.expiresAt),
+    idempotencyKey: `account-security-undo:${input.userId}:${input.expiresAt}`,
   });
-  if (verified.length === 0) {
+  if (!sent.delivered) {
     logger.error(
-      { userId },
-      '[account-security] no verified address to email the link that turns it off',
+      { userId: input.userId, reason: sent.reason },
+      '[account-security] the link that turns it off was not emailed',
     );
-    return;
-  }
-  const undoUrl = new URL(accountSecurityUndoPageHref(token), SITE_URL).toString();
-  for (const [index, address] of verified.entries()) {
-    const sent = await sendAccountSecurityEnabledEmail({
-      to: address,
-      undoUrl,
-      undoExpiresAt: utcMinute(expiresAt),
-      idempotencyKey: `account-security-undo:${userId}:${expiresAt}:${index}`,
-    });
-    if (!sent.delivered) {
-      logger.error(
-        { userId, reason: sent.reason },
-        '[account-security] the link that turns it off was not emailed',
-      );
-    }
   }
 }
 
@@ -505,7 +478,7 @@ export async function enrollAccountSecurity(
 ): Promise<AccountSecurityEnrollmentResponse> {
   await requireAvailable(caller.userId);
   const credentials = await requireEnrollmentMethods(caller);
-  await requireSettledAddress(caller);
+  const address = await requireSettledAddress(caller);
   const credential = await consumeAssertion(caller, input.response, request);
   const codeAccepted = await takeEnrollmentCode(caller.db, {
     userId: caller.userId,
@@ -578,7 +551,12 @@ export async function enrollAccountSecurity(
     credentialRowId: credential.id,
     request,
   });
-  await emailUndoLink(caller.userId, undoToken, enrolled.undoExpiresAt);
+  await emailUndoLink({
+    userId: caller.userId,
+    address,
+    token: undoToken,
+    expiresAt: enrolled.undoExpiresAt,
+  });
 
   await emitIdentitySecurityEvent(caller.db, {
     userId: caller.userId,

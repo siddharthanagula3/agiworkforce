@@ -7,11 +7,12 @@ import type { AccountSecurityUndoResponse } from '@agiworkforce/cloud-contracts/
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getIdentityProvider } from '@/lib/server/identity';
-import { revokeEveryDeviceRefreshCredential } from '@/lib/server/refresh-token-family';
-import { revokeEveryOtherSession } from '@/lib/server/session-revocation';
-import { emitIdentitySecurityEvent } from '@/lib/services/identity-events';
+import {
+  emitIdentitySecurityEvent,
+  respondToAccountCompromise,
+} from '@/lib/services/identity-events';
 import { rememberEnrollment } from './gate';
-import { hashUndoToken } from './secrets';
+import { hashUndoToken, newUnusablePassword } from './secrets';
 import { readEnrollmentUndo, undoEnrollment } from './store';
 
 const LINK_EXPIRED =
@@ -42,27 +43,40 @@ export async function turnOffFromEmailLink(
       );
     }
   }
-  const devicesSignedOut = await revokeEveryDeviceRefreshCredential(ownerDb, open.userId);
-  const sweep = await revokeEveryOtherSession(identity, open.userId, null);
-  if (sweep.failed.length > 0 || sweep.incomplete) {
+
+  let passwordReset = false;
+  try {
+    const user = await identity.getUser(open.userId);
+    if (user?.passwordEnabled) {
+      await identity.setPassword(open.userId, newUnusablePassword());
+      passwordReset = true;
+    }
+  } catch (error) {
     logger.error(
-      { userId: open.userId, failedCount: sweep.failed.length, incomplete: sweep.incomplete },
-      '[account-security] some sessions were not ended after the emailed link turned it off',
+      { userId: open.userId, error },
+      '[account-security] the password was not reset after the emailed link turned it off',
     );
   }
+
+  const contained = await respondToAccountCompromise(ownerDb, identity, {
+    userId: open.userId,
+    trigger: 'reported',
+    request,
+  });
 
   await emitIdentitySecurityEvent(ownerDb, {
     userId: open.userId,
     event: 'advanced_security_disabled',
     subjectRef: new Date().toISOString(),
-    context:
-      'It was turned off from the link emailed when it was turned on, and every session was signed out. Change your password now.',
+    context: passwordReset
+      ? 'It was turned off from the link emailed when it was turned on, every session was signed out and the password was reset. Choose a new one with Forgot password on the sign-in screen.'
+      : 'It was turned off from the link emailed when it was turned on, and every session was signed out. Change your password now.',
     request,
-    detail: { source: 'email_link', deleted: devicesSignedOut },
+    detail: { source: 'email_link', deleted: contained.deviceCredentialsRevoked },
   });
 
   return {
-    sessionsSignedOut:
-      sweep.ended.length + sweep.alreadyGone.length + (enrollingSessionEnded ? 1 : 0),
+    sessionsSignedOut: contained.sessionsRevoked + (enrollingSessionEnded ? 1 : 0),
+    passwordReset,
   };
 }

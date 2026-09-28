@@ -114,6 +114,7 @@ export interface AccountSecurityEnrollmentResponse {
 
 export interface AccountSecurityUndoResponse {
   sessionsSignedOut: number;
+  passwordReset: boolean;
 }
 
 export interface AccountSecurityVerificationResponse {
