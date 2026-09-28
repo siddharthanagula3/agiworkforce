@@ -106,7 +106,7 @@ const COMPLIANCE: { label: string; value: string }[] = [
   {
     label: 'GDPR: data subject rights',
     value:
-      'Implemented. Self-service export returns your account data as a JSON download, and account deletion runs an enumerated erasure across 106 user-scoped tables plus stored objects, on a daily scheduled job. Mechanism is documented on /security; the deletion window is stated in the privacy policy. The figure is derived from the implementation by a test so changes to the erasure list cannot silently leave this claim behind. As of 2026-09-28.',
+      'Implemented. Self-service export returns your account data as a JSON download, and account deletion runs an enumerated erasure across 113 user-scoped tables plus stored objects, on a daily scheduled job. Mechanism is documented on /security; the deletion window is stated in the privacy policy. The figure is derived from the implementation by a test so changes to the erasure list cannot silently leave this claim behind. As of 2026-09-28.',
   },
   {
     label: 'GDPR: Article 27 EU representative',
@@ -199,7 +199,7 @@ const POSTURE: { label: string; value: string }[] = [
   {
     label: 'Database row-level isolation',
     value:
-      'Partial: 223 of 347 database-backed hosted API route files. Counted against the 347 route files that reach the database; the other 128 hosted routes touch no database at all and are excluded from both sides rather than used to flatter the ratio. A route that reaches for the owner connection at all is counted against us, even where it also reads under policy. Where bound, queries run under a role that cannot bypass policy with the caller identity set per transaction, and both reads and writes are constrained. The remaining 124 connect as the database owner, which bypasses row-level security by design, and enforce ownership in application code only. The rules those routes must satisfy instead are on /security. As of 2026-09-28.',
+      'Partial: 249 of 383 database-backed hosted API route files. Counted against the 383 route files that reach the database; the other 129 hosted routes touch no database at all and are excluded from both sides rather than used to flatter the ratio. A route that reaches for the owner connection at all is counted against us, even where it also reads under policy. Where bound, queries run under a role that cannot bypass policy with the caller identity set per transaction, and both reads and writes are constrained. The remaining 134 connect as the database owner, which bypasses row-level security by design, and enforce ownership in application code only. The rules those routes must satisfy instead are on /security. As of 2026-09-28.',
   },
   {
     label: 'Authentication and CSRF',
@@ -384,6 +384,11 @@ export default function TrustPage() {
                   <Ledger
                     caption="Change record"
                     rows={[
+                      {
+                        label: '2026-09-28',
+                        value:
+                          'Advanced Account Security shipped. Its four tables, the enrollment, the passkeys and security keys, the session checks and the sign-in challenges, cascade from the profile row, so they are deleted with the account without joining the enumerated erasure list. Seven tables from the day\u2019s other work did join it, taking it from 106 to 113 user-scoped tables: the storage a published app keeps for its viewers, Slack account links and assistant runs, workspace plugin membership, and community plugin submissions with their files and installs. Each is deleted with the account. Re-measured with the day\u2019s other hosted routes: the row-level-isolation count moved from 223 to 249 of 383 database-backed routes, the owner-connection remainder from 124 to 134, and the routes that touch no database from 128 to 129. Thirteen of those routes are Advanced Account Security: ten read as the caller, while turning it on and the two routes a browser uses to confirm an app\u2019s sign-in without a session connect as the owner. Each figure is derived from the deciding source by a test, not maintained by hand.',
+                      },
                       {
                         label: '2026-09-28',
                         value:

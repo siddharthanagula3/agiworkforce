@@ -244,7 +244,7 @@
       "owner": "Legal/compliance",
       "reviewedOn": "2026-09-28",
       "asOf": "2026-09-28",
-      "digest": "2d18a7586ef12be7",
+      "digest": "7080f3d08eda6c46",
       "jurisdiction": "European Union, EEA and United Kingdom (GDPR and UK GDPR)",
       "scope": "Every account on the hosted service, wherever the account holder is",
       "implementation": [
@@ -645,7 +645,7 @@
       "owner": "Security",
       "reviewedOn": "2026-09-28",
       "asOf": "2026-09-28",
-      "digest": "82975c484473512c",
+      "digest": "7a4e59fdc2acbb49",
       "implementation": ["apps/web/app/api"],
       "proof": [
         {

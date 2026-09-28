@@ -156,6 +156,11 @@ const AT_REST: { label: string; value: string }[] = [
     value:
       'TOTP secrets are stored encrypted and backup codes are stored hashed. Disabling two-factor authentication requires a valid current code.',
   },
+  {
+    label: 'Advanced Account Security',
+    value:
+      'Passkeys and security keys registered for Advanced Account Security are stored as public keys with their signature counters, so no private key reaches the server. Recovery keys are stored as SHA-256 hashes and each works once. While it is on, every signed-in session is refused until it passes a passkey or security key check, or completes a recovery after its 48-hour hold.',
+  },
 ];
 
 const ACCESS: { label: string; value: string }[] = [
@@ -294,7 +299,7 @@ const DELETION: { label: string; value: string }[] = [
   {
     label: 'The list is enumerated, not implied',
     value:
-      'Erasure walks a hardcoded, foreign-key-ordered list of 106 user-scoped tables covering conversations, artifacts, folders, tags, branches, bookmarks, reactions, shares, memories, settings, projects, shortcuts, search history, schedules, work plans, connectors, connector permissions, notifications, feedback, support tickets and their replies, API keys, two-factor enrolment, sessions, voice sessions, automation audit events, credits, redemptions, usage and billing records, mobile store transactions, video generation jobs, image generation jobs, consent records, data-rights requests, beta applications, email preferences, device registrations, connector call logs, sync data, routing decision traces, product analytics events, workspace membership, subscriptions, and finally the profile row. Child tables that cascade are deliberately left out of the list so there is one source of truth, not two.',
+      'Erasure walks a hardcoded, foreign-key-ordered list of 113 user-scoped tables covering conversations, artifacts, folders, tags, branches, bookmarks, reactions, shares, memories, settings, projects, shortcuts, search history, schedules, work plans, connectors, connector permissions, notifications, feedback, support tickets and their replies, API keys, two-factor enrolment, sessions, voice sessions, automation audit events, credits, redemptions, usage and billing records, mobile store transactions, video generation jobs, image generation jobs, consent records, data-rights requests, beta applications, email preferences, device registrations, connector call logs, sync data, routing decision traces, product analytics events, workspace membership, subscriptions, and finally the profile row. Child tables that cascade are deliberately left out of the list so there is one source of truth, not two.',
   },
   {
     label: 'Bytes before rows',
