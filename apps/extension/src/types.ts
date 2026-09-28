@@ -48,6 +48,9 @@ export type NativeMessageType =
   | 'RESOLVE_CHAT_APPROVAL'
   | 'CANCEL_COMPUTER_USE'
   | 'GET_COMPUTER_USE_STATE'
+  | 'PAUSE_COMPUTER_USE'
+  | 'RESUME_COMPUTER_USE'
+  | 'AGI_CU_USER_INPUT'
   | 'IN_PAGE_PROMPT'
   | 'OPEN_SIDE_PANEL'
   | 'GET_ACCESSIBILITY_TREE'
@@ -909,11 +912,18 @@ export interface GetComputerUseStateMessage extends BaseMessage {
   type: 'GET_COMPUTER_USE_STATE';
 }
 
+export interface ComputerUseTakeoverMessage extends BaseMessage {
+  type: 'PAUSE_COMPUTER_USE' | 'RESUME_COMPUTER_USE';
+  runId: string;
+}
+
 export interface ComputerUseCommandResponse {
   success: boolean;
   runId?: string;
   runGeneration?: number;
   running?: boolean;
+  paused?: boolean;
+  pauseReason?: string;
   tabId?: number;
   error?: string;
 }
@@ -1077,6 +1087,7 @@ export type ExtensionMessage =
   | StartComputerUseMessage
   | CancelComputerUseMessage
   | GetComputerUseStateMessage
+  | ComputerUseTakeoverMessage
   | ApproveContextHandoffMessage
   | CancelContextHandoffMessage
   | StartDownloadMessage

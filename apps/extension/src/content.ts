@@ -23,6 +23,7 @@ import type {
   AutoFillJobApplicationMessage,
 } from './types';
 import { logger, domUtils, formUtils, validators, sleep } from './utils';
+import { getExtensionTokensCssAuto } from './tokens';
 import { redactSecrets } from '@agiworkforce/utils/logger';
 import { runPlatformJobAutofill } from './jobAutofill';
 import { detectJobApplication } from './features/content/autofill/detector';
@@ -275,6 +276,18 @@ async function handleMessageAsync(message: ExtensionMessage): Promise<ExtensionR
 
     case 'AGI_RUN_AUTOFILL' as ExtensionMessage['type']:
       return handleRunAutofill();
+
+    case 'AGI_CU_SHOW_ACTION' as ExtensionMessage['type']: {
+      const point = message as unknown as { x?: unknown; y?: unknown };
+      if (typeof point.x === 'number' && typeof point.y === 'number') {
+        showActionPoint(point.x, point.y);
+      }
+      return { success: true } as ExtensionResponse;
+    }
+
+    case 'AGI_CU_WATCH_INPUT' as ExtensionMessage['type']:
+      watchUserInput((message as unknown as { watching?: unknown }).watching === true);
+      return { success: true } as ExtensionResponse;
 
     default:
       return { success: false, error: 'Unknown message type' } as ExtensionResponse;
@@ -1824,7 +1837,59 @@ const VALID_MESSAGE_TYPES = new Set([
   'WEBMCP_DISCOVER_TOOLS',
   'WEBMCP_CALL_TOOL',
   'AGI_RUN_AUTOFILL',
+  'AGI_CU_WATCH_INPUT',
+  'AGI_CU_SHOW_ACTION',
 ]);
+
+const ACTION_POINT_VISIBLE_MS = 900;
+
+function showActionPoint(x: number, y: number): void {
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+  const host = document.createElement('div');
+  host.style.cssText =
+    'position:fixed;left:0;top:0;width:0;height:0;z-index:2147483647;pointer-events:none;';
+  host.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
+  const root = host.attachShadow({ mode: 'closed' });
+  const style = document.createElement('style');
+  style.textContent = `
+    ${getExtensionTokensCssAuto(':host')}
+    .ring {
+      position:absolute; left:-14px; top:-14px; width:28px; height:28px;
+      box-sizing:border-box; border-radius:50%;
+      border:3px solid var(--agi-ext-accent);
+      background:color-mix(in srgb, var(--agi-ext-accent) 22%, transparent);
+      animation:agi-action-ring ${ACTION_POINT_VISIBLE_MS}ms ease-out forwards;
+    }
+    @keyframes agi-action-ring { from { transform:scale(0.5); opacity:1; } to { transform:scale(1.4); opacity:0; } }
+    @media (prefers-reduced-motion: reduce) { .ring { animation:none; } }
+  `;
+  const ring = document.createElement('span');
+  ring.className = 'ring';
+  root.append(style, ring);
+  document.documentElement.appendChild(host);
+  setTimeout(() => host.remove(), ACTION_POINT_VISIBLE_MS);
+}
+
+const USER_INPUT_REPORT_INTERVAL_MS = 1_000;
+const USER_INPUT_EVENTS = ['pointerdown', 'keydown'] as const;
+let userInputWatcher: ((event: Event) => void) | null = null;
+
+function watchUserInput(watching: boolean): void {
+  if (userInputWatcher) {
+    for (const type of USER_INPUT_EVENTS) window.removeEventListener(type, userInputWatcher, true);
+    userInputWatcher = null;
+  }
+  if (!watching) return;
+  let lastReportAt = 0;
+  userInputWatcher = (event: Event) => {
+    if (!event.isTrusted) return;
+    const now = Date.now();
+    if (now - lastReportAt < USER_INPUT_REPORT_INTERVAL_MS) return;
+    lastReportAt = now;
+    void chrome.runtime.sendMessage({ type: 'AGI_CU_USER_INPUT' }).catch(() => undefined);
+  };
+  for (const type of USER_INPUT_EVENTS) window.addEventListener(type, userInputWatcher, true);
+}
 
 function isValidMessage(message: unknown): message is ExtensionMessage {
   if (typeof message !== 'object' || message === null) {

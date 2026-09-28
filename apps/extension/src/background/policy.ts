@@ -60,6 +60,8 @@ export const MESSAGE_POLICY: Record<string, MessageTypePolicy> = {
   AGI_START_COMPUTER_USE: { senderClass: 'extension-page-only', allowsCrossTab: true },
   CANCEL_COMPUTER_USE: { senderClass: 'extension-page-only', allowsCrossTab: true },
   GET_COMPUTER_USE_STATE: { senderClass: 'extension-page-only', allowsCrossTab: true },
+  PAUSE_COMPUTER_USE: { senderClass: 'extension-page-only', allowsCrossTab: true },
+  RESUME_COMPUTER_USE: { senderClass: 'extension-page-only', allowsCrossTab: true },
   START_DOWNLOAD: { senderClass: 'extension-page-only', allowsCrossTab: true },
   LIST_DOWNLOADS: { senderClass: 'extension-page-only', allowsCrossTab: true },
   REVEAL_DOWNLOAD: { senderClass: 'extension-page-only', allowsCrossTab: true },
@@ -101,6 +103,7 @@ export const MESSAGE_POLICY: Record<string, MessageTypePolicy> = {
   STOP_RECORDING: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
   GET_RECORDED_ACTIONS: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
   LIST_SHORTCUTS: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
+  AGI_CU_USER_INPUT: { senderClass: 'allowlisted-tab', allowsCrossTab: false },
   LIST_SCHEDULED_TASKS: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
   BRIDGE_URL_CHANGED: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
 };

@@ -603,13 +603,14 @@ describe('computer-use agent loop, one round-trip', () => {
     });
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledOnce(), { timeout: 3_000 });
     const cdpCallsAtStop = chromeMock.debugger.sendCommand.mock.calls.length;
+    const progressAtStop = progress.mock.calls.length;
 
     controller.abort(new Error('Computer-use run cancelled: user stopped'));
 
     await expect(run).rejects.toThrow(/user stopped/);
     expect(fetchMock).toHaveBeenCalledOnce();
     expect(chromeMock.debugger.sendCommand).toHaveBeenCalledTimes(cdpCallsAtStop);
-    expect(progress).not.toHaveBeenCalled();
+    expect(progress).toHaveBeenCalledTimes(progressAtStop);
   });
 
   it('a deferred A credential resolution cannot egress with B after an auth switch', async () => {
