@@ -152,9 +152,11 @@ import type { ResearchDomainPolicy } from './research-sources';
 import {
   STORED_RESULT_NOTICE_MARKER,
   TOOL_RESULT_READER_TOOL_NAME,
+  keepTrimmedToolResult,
   readStoredToolResult,
   referenceOversizedToolResult,
   toolResultReaderToolDef,
+  trimmedToolResultNotice,
 } from './tool-result-store';
 import {
   EXECUTE_CODE_TOOL,
@@ -1400,6 +1402,35 @@ export async function mapWithConcurrency<T, R>(
   return results;
 }
 
+function toolResultsToTrim(
+  messages: ReadonlyArray<{ role: string; content?: unknown; tool_call_id?: string }>,
+  maxChars: number,
+  keepRecent: number,
+  replacementFor: (message: { tool_call_id?: string }) => string,
+): Map<number, string> {
+  const toolIdx: number[] = [];
+  for (let i = 0; i < messages.length; i++) {
+    if (messages[i]?.role === 'tool') toolIdx.push(i);
+  }
+  const len = (i: number): number =>
+    typeof messages[i]?.content === 'string' ? (messages[i]!.content as string).length : 0;
+  let total = 0;
+  for (const i of toolIdx) total += len(i);
+  const selected = new Map<number, string>();
+  if (total <= maxChars) return selected;
+
+  const truncatable = toolIdx.slice(0, Math.max(0, toolIdx.length - keepRecent));
+  for (const i of truncatable) {
+    if (total <= maxChars) break;
+    const before = len(i);
+    const replacement = replacementFor(messages[i]!);
+    if (before <= replacement.length) continue;
+    selected.set(i, replacement);
+    total -= before - replacement.length;
+  }
+  return selected;
+}
+
 /**
  * Bound the total size of accumulated tool-RESULT content in-place so a long agentic loop
  * can't overflow the model context window mid-run. Preserves EVERY message, dropping a
@@ -1414,27 +1445,43 @@ export function trimToolResultHistory(
   maxChars: number = MAX_TOOL_RESULT_HISTORY_CHARS,
   keepRecent: number = KEEP_RECENT_TOOL_RESULTS,
 ): number {
-  const toolIdx: number[] = [];
-  for (let i = 0; i < messages.length; i++) {
-    if (messages[i]?.role === 'tool') toolIdx.push(i);
-  }
-  const len = (i: number): number =>
-    typeof messages[i]?.content === 'string' ? (messages[i]!.content as string).length : 0;
-  let total = 0;
-  for (const i of toolIdx) total += len(i);
-  if (total <= maxChars) return 0;
+  const selected = toolResultsToTrim(
+    messages,
+    maxChars,
+    keepRecent,
+    () => TRUNCATED_TOOL_RESULT_MARKER,
+  );
+  for (const [i, replacement] of selected) messages[i]!.content = replacement;
+  return selected.size;
+}
 
-  const truncatable = toolIdx.slice(0, Math.max(0, toolIdx.length - keepRecent));
-  let truncated = 0;
-  for (const i of truncatable) {
-    if (total <= maxChars) break;
-    const before = len(i);
-    if (before <= TRUNCATED_TOOL_RESULT_MARKER.length) continue;
-    messages[i]!.content = TRUNCATED_TOOL_RESULT_MARKER;
-    total -= before - TRUNCATED_TOOL_RESULT_MARKER.length;
-    truncated++;
-  }
-  return truncated;
+export async function trimToolResultHistoryKeepingReferences(
+  messages: Array<{ role: string; content?: unknown; tool_call_id?: string }>,
+  userId: string | undefined,
+  maxChars: number = MAX_TOOL_RESULT_HISTORY_CHARS,
+  keepRecent: number = KEEP_RECENT_TOOL_RESULTS,
+): Promise<number> {
+  const selected = toolResultsToTrim(
+    messages,
+    maxChars,
+    keepRecent,
+    (message) => trimmedToolResultNotice(message.tool_call_id) ?? TRUNCATED_TOOL_RESULT_MARKER,
+  );
+  await Promise.all(
+    [...selected].map(async ([i, notice]) => {
+      const message = messages[i]!;
+      const kept =
+        notice !== TRUNCATED_TOOL_RESULT_MARKER &&
+        message.tool_call_id !== undefined &&
+        (await keepTrimmedToolResult({
+          userId,
+          toolCallId: message.tool_call_id,
+          content: String(message.content),
+        }));
+      message.content = kept ? notice : TRUNCATED_TOOL_RESULT_MARKER;
+    }),
+  );
+  return selected.size;
 }
 
 export function withToolTimeout(
@@ -2365,9 +2412,19 @@ async function runMcpTool(
       undefined,
       cause,
     );
+    const referenced =
+      result.ok && result.overflow
+        ? await referenceOversizedToolResult({
+            userId: executionContext?.userId,
+            toolCallId: toolCall.id,
+            toolName: toolCall.qualifiedName,
+            content: result.overflow.kept,
+            totalChars: result.overflow.totalChars,
+          })
+        : null;
     return {
       content: result.ok
-        ? result.output || '(no output)'
+        ? (referenced ?? (result.output || '(no output)'))
         : toolCall.qualifiedName === EXECUTE_CODE_TOOL && !result.unavailable
           ? `Notebook cell failed. No process exit code is available for a notebook cell. An exception traceback is a cell error, not stderr.\n${result.error ?? 'Execution error'}`
           : (result.error ?? 'Execution error'),
@@ -5522,7 +5579,7 @@ export async function* runToolLoop(
       }
       step++;
 
-      const trimmedResults = trimToolResultHistory(messages);
+      const trimmedResults = await trimToolResultHistoryKeepingReferences(messages, options.userId);
       if (trimmedResults > 0) {
         logger.info(
           { trimmedResults, step, provider: processed.provider },
