@@ -297,6 +297,16 @@ export const WORKSPACE_SWITCH_SURFACES: readonly WorkspaceSwitchSurface[] = [
     copyable: false,
     exportable: false,
   },
+  {
+    surface: 'slack',
+    effect: 'account-wide',
+    tables: ['slack_account_links', 'slack_assistant_runs'],
+    why: 'a Slack account is linked to the account, and Settings lists every link and every Slack answer waiting for approval whichever workspace is active; organization_id only records the workspace a link answers in and an answer ran in, and no read filters by it',
+    workspaceColumnRecordsProvenance: true,
+    transferable: false,
+    copyable: false,
+    exportable: true,
+  },
 ];
 
 export function workspaceSwitchSurface(name: string): WorkspaceSwitchSurface | null {
