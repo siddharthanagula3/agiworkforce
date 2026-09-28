@@ -2476,6 +2476,14 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
           >
             <span class="codicon codicon-settings-gear" aria-hidden="true"></span>
             <span>Settings</span>
+          </button><button
+            type="button"
+            class="actions-menu-item"
+            role="menuitem"
+            data-surface="help"
+          >
+            <span class="codicon codicon-question" aria-hidden="true"></span>
+            <span>Help</span>
           </button>
           <div class="actions-menu-separator" role="separator"></div>
           <div class="actions-menu-account">
@@ -9389,6 +9397,14 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
           >
             <span class="codicon codicon-settings-gear" aria-hidden="true"></span>
             <span>Settings</span>
+          </button><button
+            type="button"
+            class="actions-menu-item"
+            role="menuitem"
+            data-surface="help"
+          >
+            <span class="codicon codicon-question" aria-hidden="true"></span>
+            <span>Help</span>
           </button>
           <div class="actions-menu-separator" role="separator"></div>
           <div class="actions-menu-account">
@@ -16302,6 +16318,14 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
           >
             <span class="codicon codicon-settings-gear" aria-hidden="true"></span>
             <span>Settings</span>
+          </button><button
+            type="button"
+            class="actions-menu-item"
+            role="menuitem"
+            data-surface="help"
+          >
+            <span class="codicon codicon-question" aria-hidden="true"></span>
+            <span>Help</span>
           </button>
           <div class="actions-menu-separator" role="separator"></div>
           <div class="actions-menu-account">
