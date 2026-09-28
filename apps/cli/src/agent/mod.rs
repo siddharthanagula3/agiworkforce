@@ -948,6 +948,46 @@ impl AgentSession {
         })
     }
 
+    pub fn remove_context_dir(&mut self, raw_path: &str) -> Result<PathBuf> {
+        let expanded = crate::path_security::expand_home(raw_path.trim());
+        let path = PathBuf::from(expanded);
+        let absolute = if path.is_absolute() {
+            path
+        } else {
+            std::env::current_dir()?.join(path)
+        };
+        let resolved = absolute.canonicalize().unwrap_or(absolute);
+        let registered = crate::path_security::registered_additional_workspace_roots();
+        let Some(root) = registered
+            .iter()
+            .chain(self.additional_context_dirs.iter())
+            .find(|root| **root == resolved)
+            .cloned()
+        else {
+            anyhow::bail!(
+                "{} was not added with /add-dir or --add-dir",
+                resolved.display()
+            );
+        };
+        crate::path_security::unregister_additional_workspace_roots(std::slice::from_ref(&root));
+        self.additional_context_dirs.retain(|path| path != &root);
+        let opening = format!(
+            "<additional_directory_context path=\"{}\">",
+            escape_attr(&root)
+        );
+        self.messages.retain(|message| {
+            !(message.role == "system" && message.text_content().starts_with(&opening))
+        });
+        self.messages.push(Message::text(
+            "system",
+            format!(
+                "<additional_directory_removed path=\"{}\">\nThe user removed this directory from the workspace. Do not read or change files in it unless the user adds it again.\n</additional_directory_removed>",
+                escape_attr(&root)
+            ),
+        ));
+        Ok(root)
+    }
+
     /// Activate any glob-scoped rules that match files entering the live turn
     /// context. The returned fragment is empty when every applicable rule is
     /// already active.
