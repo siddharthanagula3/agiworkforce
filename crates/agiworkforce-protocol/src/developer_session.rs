@@ -2282,6 +2282,8 @@ pub struct SlashCommandSummary {
     /// True when [`method::COMMANDS_RUN`] can execute this command outside a
     /// terminal. A client must not offer the others as buttons.
     pub runnable: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub prompt: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
