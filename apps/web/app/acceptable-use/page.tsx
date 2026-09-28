@@ -24,6 +24,7 @@ import {
   POLICY_LAST_UPDATED,
   contactMailto,
 } from '@/lib/legal-constants';
+import { PolicyVersionsLink } from '@shared/components/legal/PolicyVersionsLink';
 
 export const metadata = buildMetadata({
   title: 'Acceptable use policy',
@@ -207,7 +208,8 @@ export default function AcceptableUsePage() {
               <Link href="/terms" className="agi-ds-link">
                 terms of service
               </Link>
-              ; where they overlap, both apply. Last updated: {POLICY_LAST_UPDATED.acceptableUse}.
+              ; where they overlap, both apply. Last updated: {POLICY_LAST_UPDATED.acceptableUse}.{' '}
+              <PolicyVersionsLink policy="acceptableUse" />
             </>
           }
           ctas={[]}

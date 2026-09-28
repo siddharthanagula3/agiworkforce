@@ -8,6 +8,8 @@ import {
   type PermissionScope,
 } from '@agiworkforce/local-runtime-contract';
 import { TOOL_APPROVAL_ACTION_LABELS } from '@agiworkforce/types';
+import { gateApplications } from './applicationControl';
+import { showDevicePrompt } from './devicePrompts';
 import { ComputerUseRefused, readFrontWindow } from './computerUseService';
 import {
   askUserDuringRun,
@@ -97,9 +99,7 @@ async function reviewScreenStep(
       'AGI is using your computer and stopped to check with you first. This step runs only if you allow it.',
     noLink: true,
   };
-  const result = await askUserDuringRun(window, () =>
-    window ? dialog.showMessageBox(window, options) : dialog.showMessageBox(options),
-  );
+  const result = await askUserDuringRun(window, () => showDevicePrompt(window, options));
   await confirmScreenStepStillWanted(command);
   if (result.response !== 1) {
     throw new ComputerUseRefused(
@@ -123,6 +123,7 @@ export async function runScreenAction(
   args: StepArgs,
   action: () => Promise<unknown>,
 ): Promise<{ front: DeviceFrontWindow | null }> {
+  await gateApplications(window, command, args);
   await reviewScreenStep(window, command, args);
   await gateClipboardKeys(window, command, args);
   try {

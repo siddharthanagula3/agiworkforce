@@ -229,7 +229,7 @@ impl CloudClient {
         )
     }
 
-    async fn send<T: DeserializeOwned>(builder: reqwest::RequestBuilder) -> Result<T, CloudError> {
+    async fn exchange(builder: reqwest::RequestBuilder) -> Result<Reply, CloudError> {
         let response = builder
             .send()
             .await
@@ -249,13 +249,18 @@ impl CloudClient {
             tier_cache::invalidate_tier_cache();
             return Err(CloudError::SessionExpired);
         }
-        if !(200..300).contains(&status) {
+        Ok(Reply { status, body })
+    }
+
+    async fn send<T: DeserializeOwned>(builder: reqwest::RequestBuilder) -> Result<T, CloudError> {
+        let reply = Self::exchange(builder).await?;
+        if !reply.is_success() {
             return Err(CloudError::Api {
-                status,
-                message: api_error_message(&body),
+                status: reply.status,
+                message: api_error_message(&reply.body),
             });
         }
-        serde_json::from_str(&body).map_err(|error| CloudError::Decode(error.to_string()))
+        serde_json::from_str(&reply.body).map_err(|error| CloudError::Decode(error.to_string()))
     }
 
     pub async fn get<T: DeserializeOwned>(
@@ -310,10 +315,37 @@ impl CloudClient {
         .await
     }
 
+    pub async fn post_reply<B: Serialize>(
+        &self,
+        path: &str,
+        idempotency_key: Option<&str>,
+        body: &B,
+        timeout: Duration,
+    ) -> Result<Reply, CloudError> {
+        let mut builder = self
+            .request(reqwest::Method::POST, path)
+            .timeout(timeout)
+            .json(body);
+        if let Some(key) = idempotency_key {
+            builder = builder.header("Idempotency-Key", key);
+        }
+        Self::exchange(builder).await
+    }
+
     /// Read a hosted file the account owns. Media the account stores is served
     /// behind the same credential as the JSON APIs, so a generated image is not
     /// reachable by URL alone.
     pub async fn get_bytes(&self, path: &str) -> Result<Vec<u8>, CloudError> {
+        self.get_bytes_with_header(path, None)
+            .await
+            .map(|(bytes, _)| bytes)
+    }
+
+    pub async fn get_bytes_with_header(
+        &self,
+        path: &str,
+        header: Option<&str>,
+    ) -> Result<(Vec<u8>, Option<String>), CloudError> {
         let response = self
             .request(reqwest::Method::GET, path)
             .header("Accept", "*/*")
@@ -332,11 +364,27 @@ impl CloudClient {
                 message: api_error_message(&body),
             });
         }
+        let value = header
+            .and_then(|name| response.headers().get(name))
+            .and_then(|value| value.to_str().ok())
+            .map(str::to_string);
         response
             .bytes()
             .await
-            .map(|bytes| bytes.to_vec())
+            .map(|bytes| (bytes.to_vec(), value))
             .map_err(|error| CloudError::Transport(error.to_string()))
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Reply {
+    pub status: u16,
+    pub body: String,
+}
+
+impl Reply {
+    pub fn is_success(&self) -> bool {
+        (200..300).contains(&self.status)
     }
 }
 

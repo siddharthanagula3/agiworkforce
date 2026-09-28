@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import type { UsageTurnResponse } from '@/app/api/usage/turns/[requestId]/route';
+import { parseManagedUsageTurnCost } from '@agiworkforce/types';
 
 const SETTLE_POLL_MS = 2_000;
 const SETTLE_POLL_ATTEMPTS = 5;
@@ -13,19 +13,6 @@ export type SettledTurnCredits =
   | { status: 'settled'; credits: number }
   | { status: 'unmetered' }
   | { status: 'unavailable' };
-
-function parseTurn(value: unknown): UsageTurnResponse | null {
-  if (!value || typeof value !== 'object') return null;
-  const record = value as Record<string, unknown>;
-  const credits = record['credits'];
-  if (record['status'] === 'pending') {
-    return { requestId: String(record['requestId'] ?? ''), status: 'pending', credits: null };
-  }
-  if (record['status'] === 'settled' && typeof credits === 'number' && Number.isFinite(credits)) {
-    return { requestId: String(record['requestId'] ?? ''), status: 'settled', credits };
-  }
-  return null;
-}
 
 function wait(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve) => {
@@ -59,7 +46,7 @@ export function useSettledTurnCredits(requestId: string | undefined): SettledTur
             return;
           }
           if (!response.ok) throw new Error(String(response.status));
-          const turn = parseTurn(await response.json());
+          const turn = parseManagedUsageTurnCost(await response.json());
           if (!turn) throw new Error('unrecognised turn cost');
           if (turn.status === 'settled' && turn.credits !== null) {
             setState({ status: 'settled', credits: turn.credits });

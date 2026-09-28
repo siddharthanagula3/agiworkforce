@@ -287,3 +287,16 @@ export async function getPresignedPrivateUploadUrl(
 ): Promise<{ uploadUrl: string }> {
   return { uploadUrl: await presignUploadForBucket(privateBucketName(), params) };
 }
+
+export function getPresignedPrivateDownloadUrl(params: {
+  key: string;
+  fileName: string;
+  expiresInSeconds: number;
+}): Promise<string> {
+  return getObjectStore().presignGet({
+    bucket: privateBucketName(),
+    key: params.key,
+    downloadFileName: params.fileName,
+    expiresInSeconds: params.expiresInSeconds,
+  });
+}

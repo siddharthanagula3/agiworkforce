@@ -106,9 +106,6 @@ Code: `apps/mobile/src/features/companion/components/CodeSessionView.tsx:335-336
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | partial | Several conversations can each have their own window (New Window, Move Conversation to New Window), but there is no in-app tiled layout; the user arranges the windows with the operating system. | ui |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
 
 Code: `apps/desktop/electron/appMenu.ts:210-212`, `apps/desktop/electron/main.ts:1081-1082`
 
@@ -122,9 +119,6 @@ Code: `apps/desktop/electron/appMenu.ts:210-212`, `apps/desktop/electron/main.ts
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | partial | Several conversations can each have their own window (New Window, Move Conversation to New Window), but there is no in-app stacked layout; the user arranges the windows with the operating system. | ui |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
 
 Code: `apps/desktop/electron/appMenu.ts:210-212`, `apps/desktop/electron/main.ts:1081-1082`
 

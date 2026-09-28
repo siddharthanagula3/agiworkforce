@@ -55,6 +55,13 @@ export interface PresignPutInput {
   expiresInSeconds: number;
 }
 
+export interface PresignGetInput {
+  bucket: string;
+  key: string;
+  expiresInSeconds: number;
+  downloadFileName?: string;
+}
+
 export interface PresignUploadPartInput {
   bucket: string;
   key: string;
@@ -130,6 +137,8 @@ export interface ObjectStore {
   copyIfMatch(input: CopyObjectIfMatchInput): Promise<boolean>;
 
   presignPut(input: PresignPutInput): Promise<string>;
+
+  presignGet(input: PresignGetInput): Promise<string>;
 
   /**
    * Multipart is optional because a host may not offer it; every consumer goes

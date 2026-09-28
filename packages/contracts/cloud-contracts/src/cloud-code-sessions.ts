@@ -139,6 +139,7 @@ export const CloudCodeSessionResponseSchema = z.object({ session: CloudCodeSessi
 
 export const CloudCodeSharedSessionSchema = z.object({
   visibility: z.enum(['team', 'public']),
+  ownerName: z.string().nullable(),
   title: z.string(),
   repositoryUrl: z.string().nullable(),
   workingBranch: z.string().nullable(),

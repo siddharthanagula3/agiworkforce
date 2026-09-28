@@ -13,9 +13,9 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | Shared zod schemas cover chat, projects, knowledge, attachments, agent runs and settings, but /api/usage, /api/support and /api/connectors routes import no shared contract, and no guard requires one. | surface-only |
+| platform | partial | check:route-shared-contracts now requires every client-called route to import a shared contract, with 251 predating routes baselined (including the usage, support and connectors families the cell names); each family still has to move its body shapes into cloud-contracts and leave the baseline | surface-only |
 
-Code: `packages/contracts/cloud-contracts/src/conversations.ts:119-126`, `apps/web/lib/validations/chat.ts:54-62`, `apps/mobile/services/managedCloudChat.ts:1-6`
+Code: `scripts/check-route-shared-contracts.mjs:30-30`, `scripts/lib/route-shared-contracts.mjs:100-100`, `scripts/lib/route-shared-contracts.mjs:109-109`, `package.json:129-129`
 
 ## S101.02: Shared event schemas.
 

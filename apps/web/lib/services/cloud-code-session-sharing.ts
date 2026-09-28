@@ -26,6 +26,7 @@ import {
 
 const SHARE_TOKEN_BYTES = 18;
 const SHARE_PERMISSION = 'content.share';
+const MAX_OWNER_NAME_LENGTH = 120;
 
 export class CloudCodeSharingForbiddenError extends Error {
   constructor() {
@@ -103,6 +104,15 @@ export async function setCloudCodeSessionSharing(
   return mapCloudCodeSession(row);
 }
 
+async function readOwnerName(db: DatabaseAdapter, ownerUserId: string): Promise<string | null> {
+  const [row] = await db.query<{ display_name: string | null }>(
+    'select display_name from profiles where id = $1 limit 1',
+    [ownerUserId],
+  );
+  const name = row?.display_name?.trim() ?? '';
+  return name === '' ? null : name.slice(0, MAX_OWNER_NAME_LENGTH);
+}
+
 async function viewerCanOpenRepository(viewerId: string, repositoryUrl: string): Promise<boolean> {
   const repository = cloudCodeRepositoryLabel(repositoryUrl).toLowerCase();
   const installations = await getUserGithubInstallations(viewerId);
@@ -138,12 +148,14 @@ export async function openSharedCloudCodeSession(
   ) {
     throw new CloudCodeSharedRepositoryError(cloudCodeRepositoryLabel(session.repositoryUrl));
   }
-  const [terminalEntries, turns] = await Promise.all([
+  const [terminalEntries, turns, ownerName] = await Promise.all([
     listCloudCodeTerminalEntries(ownerDb, owner, grant.session_id),
     listCloudCodeAgentTurns(ownerDb, owner, grant.session_id),
+    readOwnerName(ownerDb, grant.owner_user_id),
   ]);
   return {
     visibility: grant.share_visibility,
+    ownerName,
     title: session.title,
     repositoryUrl: session.repositoryUrl,
     workingBranch: session.workingBranch,

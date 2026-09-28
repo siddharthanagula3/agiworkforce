@@ -20,6 +20,7 @@ import {
   isProjectKnowledgeObjectStorageConfigured,
 } from '@/lib/server/project-knowledge-object-storage';
 import { deleteE2BSessionsForUser } from '@/lib/e2b/session-store';
+import { eraseUserDataExportArchives } from '@/lib/server/data-export-archive';
 import { isWorkspaceScopedContentTable } from '@/lib/server/workspace-scope';
 import {
   mcpAuthorizationContext,
@@ -39,6 +40,7 @@ export const USER_SCOPED_TABLES: ReadonlyArray<{
   { table: 'web_artifacts', column: 'user_id' },
   { table: 'web_artifact_index', column: 'user_id' },
   { table: 'research_reports', column: 'user_id' },
+  { table: 'published_artifact_storage', column: 'owner_user_id' },
   { table: 'published_artifacts', column: 'user_id' },
   { table: 'conversations', column: 'user_id' },
   { table: 'chat_messages', column: 'user_id' },
@@ -75,6 +77,10 @@ export const USER_SCOPED_TABLES: ReadonlyArray<{
   { table: 'plugin_installations', column: 'user_id' },
   { table: 'plugin_marketplace_sources', column: 'user_id' },
   { table: 'plugin_marketplace_installations', column: 'user_id' },
+  { table: 'organization_plugin_members', column: 'user_id' },
+  { table: 'plugin_submission_installs', column: 'user_id' },
+  { table: 'plugin_submission_files', column: 'user_id' },
+  { table: 'plugin_submissions', column: 'user_id' },
   { table: 'agent_tool_executions', column: 'user_id' },
   { table: 'agent_tools', column: 'user_id' },
   { table: 'agent_approval_requests', column: 'user_id' },
@@ -375,6 +381,12 @@ export const UNDELETED_USER_TABLES: Readonly<Record<string, string>> = {
     'Cascades from profiles (0256) on delegate_user_id and on granted_by_user_id. A delegation this user granted to somebody else is workspace configuration, and revoking it when the grantor leaves would drop the other member’s admin access.',
   legal_hold_custodians:
     'Legal preservation scope (0261). Active custodians block erasure; released-hold rows remain matter history, and added_by_user_id is legal provenance.',
+  organization_plugins:
+    'published_by is ON DELETE SET NULL (0326) and created_by is provenance: a workspace plugin belongs to the workspace and outlives the administrator who published it.',
+  organization_plugin_files:
+    'Cascades from organization_plugins (0326); created_by is provenance of workspace configuration.',
+  organization_plugin_group_settings:
+    'Workspace configuration (0327): who gets a workspace plugin belongs to the workspace, and created_by is provenance.',
   plugin_registry_lifecycle_events:
     'Global extension audit history (0259). actor_user_id identifies the operator behind a lifecycle change affecting other accounts.',
   cloud_waitlist:
@@ -396,6 +408,8 @@ export interface AccountErasureReport {
   backupObjectsFailed: number;
   knowledgeObjectsDeleted: number;
   knowledgeObjectsFailed: number;
+  exportObjectsDeleted: number;
+  exportObjectsFailed: number;
   avatarObjectsDeleted: number;
   avatarObjectsFailed: number;
   cacheKeysDeleted: number;
@@ -855,6 +869,8 @@ function heldReport(userId: string, error: string | undefined): AccountErasureRe
     backupObjectsFailed: 0,
     knowledgeObjectsDeleted: 0,
     knowledgeObjectsFailed: 0,
+    exportObjectsDeleted: 0,
+    exportObjectsFailed: 0,
     avatarObjectsDeleted: 0,
     avatarObjectsFailed: 0,
     cacheKeysDeleted: 0,
@@ -899,6 +915,8 @@ export async function eraseUserAccountData(
       backupObjectsFailed: 0,
       knowledgeObjectsDeleted: 0,
       knowledgeObjectsFailed: 0,
+      exportObjectsDeleted: 0,
+      exportObjectsFailed: 0,
       avatarObjectsDeleted: 0,
       avatarObjectsFailed: 0,
       cacheKeysDeleted: 0,
@@ -919,6 +937,7 @@ export async function eraseUserAccountData(
   try {
     const media = await eraseUserMedia(userId);
     const knowledge = await eraseUserKnowledgeObjects(userId);
+    const exportArchives = await eraseUserDataExportArchives(db, userId);
     const avatar = await eraseUserAvatarObject(userId);
     const cache = await deleteE2BSessionsForUser(userId);
     const tables: AccountErasureReport['tables'] = {};
@@ -994,6 +1013,7 @@ export async function eraseUserAccountData(
     const dataDisposed =
       media.mediaObjectsFailed === 0 &&
       knowledge.failed === 0 &&
+      exportArchives.failed === 0 &&
       avatar.failed === 0 &&
       cache.failed === 0 &&
       Object.values(tables).every((result) => result.deleted || result.skipped === true) &&
@@ -1028,6 +1048,8 @@ export async function eraseUserAccountData(
       ...media,
       knowledgeObjectsDeleted: knowledge.deleted,
       knowledgeObjectsFailed: knowledge.failed,
+      exportObjectsDeleted: exportArchives.deleted,
+      exportObjectsFailed: exportArchives.failed,
       avatarObjectsDeleted: avatar.deleted,
       avatarObjectsFailed: avatar.failed,
       cacheKeysDeleted: cache.deleted,

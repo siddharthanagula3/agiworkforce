@@ -2,6 +2,8 @@ import os from 'node:os';
 import { app, dialog, shell, type BrowserWindow } from 'electron';
 import {
   DESKTOP_RUNTIME_EVENT_CHANNEL,
+  DISPATCH_TASK_REPORT,
+  DISPATCH_TASK_RUNNER_READY,
   LOCAL_INFERENCE_COMMANDS,
   LocalInferenceRefused,
   ShellCommandRefused,
@@ -89,6 +91,7 @@ import {
   takeOverComputerUse,
 } from './computerUseSession';
 import { confirmHandBack, runScreenAction } from './computerUseSteps';
+import { showDevicePrompt } from './devicePrompts';
 import { readBackgroundActivity, stopBackgroundWork } from './backgroundActivity';
 import { openSystemPermission } from './systemPermissions';
 import {
@@ -97,10 +100,12 @@ import {
   stepSignature,
 } from './computerUseLoop';
 import { deviceIdentity } from './deviceIdentity';
-import { RemoteControlRefused } from '../remote/remoteControlHost';
+import { RemoteControlRefused } from '@agiworkforce/utils/remote-control';
 import {
   remoteControlAvailable,
   remoteControlState,
+  reportDispatchTask,
+  setDispatchTaskRunner,
   startRemoteControl,
   stopRemoteControl,
 } from '../remote/remoteControlService';
@@ -666,9 +671,7 @@ async function approveShellCommand(
         detail: `${command}\n\nThis computer has no sandbox for local commands, so ${verdict.program} would run with your full account. It can read, change or delete any file you can reach, including files outside this folder, and send data over the network. What it changes cannot be undone from here. You are asked every time, even for allowed programs.`,
         noLink: true,
       };
-  const result = window
-    ? await dialog.showMessageBox(window, options)
-    : await dialog.showMessageBox(options);
+  const result = await showDevicePrompt(window, options);
   return result.response === 1;
 }
 
@@ -690,9 +693,7 @@ async function approveBrowserCommand(
     detail: plan.detail,
     noLink: true,
   };
-  const result = window
-    ? await dialog.showMessageBox(window, options)
-    : await dialog.showMessageBox(options);
+  const result = await showDevicePrompt(window, options);
   return result.response === 1;
 }
 
@@ -848,7 +849,7 @@ function describeDeviceForRegistry(): DeviceRegistryProfile {
     capabilities: {
       browser: pairingState().paired,
       computerUse: computerUseEnabled() && computerUseAvailability().supported,
-      localModels: !localInferenceCommands.has('local_chat_start'),
+      localModels: false,
       localMcp: false,
       remoteControl: remoteControlAvailable(),
     },
@@ -1098,6 +1099,10 @@ async function execute(
       return startRemoteControl(args);
     case 'remote_control_stop':
       return stopRemoteControl();
+    case DISPATCH_TASK_RUNNER_READY:
+      return setDispatchTaskRunner(window, requireBoolean(args, 'ready'));
+    case DISPATCH_TASK_REPORT:
+      return reportDispatchTask(window, args);
     case 'developer_runtime_status':
       return readDeveloperRuntimeStatus();
     case 'developer_model_list':
