@@ -10,14 +10,13 @@ nothing is left.
 
 - Done when: The assistant can call a web-search tool during a turn and the searches and their sources are shown to the user.
 - Wave: 3
-- Already works on: web, desktop, mobile, chrome, api
+- Already works on: web, desktop, mobile, vscode, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | Hosted search needs the gateway web_search flag carried on the shared agiworkforce-llm ChatRequest (desktop also constructs it) or a hosted search endpoint; BYOK/Local still need SEARCH_API_KEY. | handler |
-| vscode | partial | The VS Code chat runs the local CLI, whose web_search needs a SEARCH_API_KEY environment variable the user must set outside the product. | handler |
 
-Code: `apps/cli/src/features/exec/tools/web/mod.rs:286-286`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:2836-2845`, `apps/cli/src/features/exec/tools/web/mod.rs:286-293`
+Code: `apps/cli/src/features/exec/tools/web/mod.rs:286-286`
 
 ## S57.03: Source-reader tool.
 
