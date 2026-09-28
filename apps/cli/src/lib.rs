@@ -936,6 +936,9 @@ enum Command {
         /// Emit the diagnostic report as JSON.
         #[arg(long)]
         json: bool,
+        /// Write a redacted diagnostics file to review and attach to a support request.
+        #[arg(long)]
+        export: bool,
     },
     /// Browse and install marketplace plugins.
     Marketplace {
@@ -5185,7 +5188,23 @@ async fn run_cli(cli: Cli) -> Result<()> {
             }
 
             // --- Doctor ---
-            Command::Doctor { json } => doctor::run_doctor(&app_config, *json),
+            Command::Doctor { json, export } => {
+                if !*export {
+                    return doctor::run_doctor(&app_config, *json);
+                }
+                let report = doctor::collect_doctor_report(&app_config);
+                let exported = diagnostics_bundle::export(&report)
+                    .await
+                    .map_err(|error| anyhow::anyhow!("{error}"))?;
+                let path = std::env::current_dir()?.join(&exported.filename);
+                std::fs::write(&path, serde_json::to_string_pretty(&exported.diagnostics)?)?;
+                println!(
+                    "{}\nWrote {}. Read it before you attach it to a support request; it holds only what is listed above.",
+                    terminal_text::sanitize_terminal_text(&exported.summary),
+                    path.display()
+                );
+                Ok(())
+            }
 
             // --- Marketplace ---
             Command::Marketplace { action } => {
