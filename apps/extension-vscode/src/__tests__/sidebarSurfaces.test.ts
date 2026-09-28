@@ -74,6 +74,7 @@ describe('the overflow menu', () => {
       'instructions',
       'settings',
       'account',
+      'help',
     ]);
   });
 });
