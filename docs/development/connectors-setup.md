@@ -148,7 +148,8 @@ set the named variables in production and locally.
   authorization (OAuth) during installation" so an installation can be tied to
   the signed-in account.
 - Permissions the three declared tools need: pull requests read and write,
-  issues read and write, contents read.
+  issues read and write, contents read. Add checks read so a Cloud Code
+  session can show the CI status of the pull request it opened.
 - Generate a private key and base64-encode the PEM file for
   `GITHUB_APP_PRIVATE_KEY_BASE64`.
 - Variables: `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY_BASE64`,
