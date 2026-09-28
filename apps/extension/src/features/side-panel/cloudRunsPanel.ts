@@ -48,6 +48,8 @@ import {
   type SchedulesSectionDependencies,
 } from './schedulesSection';
 import { el } from './dom';
+import { buildHelpArticleLink } from './helpLinks';
+import { t } from '../../i18n';
 
 export const CLOUD_RUNS_PANEL_CSS =
   `
@@ -612,6 +614,10 @@ export const CLOUD_RUNS_PANEL_CSS =
 
   .sp-run-approval .sp-connector-input {
     margin: 6px 0 0;
+  }
+
+  .sp-runs-help {
+    padding: 8px 14px;
   }
 ` + SCHEDULES_SECTION_CSS;
 
@@ -1762,6 +1768,9 @@ export function buildCloudRunsPanel(
         fragment.appendChild(moreBtn);
       }
     }
+    fragment.appendChild(
+      el('div', { class: 'sp-runs-help' }, buildHelpArticleLink('agi-work', t('spHelpLinkRuns'))),
+    );
     listEl.replaceChildren(fragment);
   }
 

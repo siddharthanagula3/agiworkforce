@@ -241,6 +241,7 @@ import {
   pendingAgiWorkPlanSteps,
   type AgiWorkPlanReviewBinding,
 } from './features/side-panel/agiWorkPlanReview';
+import { buildHelpArticleLink, HELP_LINK_CSS } from './features/side-panel/helpLinks';
 import {
   beginPairing,
   loadPairingState,
@@ -6082,7 +6083,9 @@ function injectStyles(): void {
         '\n' +
         COMMAND_PALETTE_CSS +
         '\n' +
-        AGIWORK_PLAN_REVIEW_CSS,
+        AGIWORK_PLAN_REVIEW_CSS +
+        '\n' +
+        HELP_LINK_CSS,
     );
     document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
   } else {
@@ -10082,6 +10085,7 @@ function buildUI(): void {
         });
     });
     confirmRow.appendChild(question);
+    confirmRow.appendChild(buildHelpArticleLink('sharing-conversations', t('spHelpLinkSharing')));
     const actions = el('div', { class: 'sp-drawer-history-edit' });
     actions.appendChild(createBtn);
     actions.appendChild(cancelBtn);
@@ -11137,6 +11141,7 @@ function buildUI(): void {
       'Saved facts and preferences reused across sessions, shared with the AGI web and mobile apps on your account.',
     ),
   );
+  memorySection.appendChild(buildHelpArticleLink('memory', t('spHelpLinkMemory')));
   const memoryScope = el('p', { class: 'sp-drawer-memory-help', hidden: '' });
   memorySection.appendChild(memoryScope);
 
@@ -11954,6 +11959,7 @@ function buildUI(): void {
   quotaWrap.appendChild(quotaLabelEl);
   const quotaWindowsEl = el('div', { class: 'sp-quota-windows', id: 'sp-quota-windows' });
   quotaWrap.appendChild(quotaWindowsEl);
+  quotaWrap.appendChild(buildHelpArticleLink('usage-and-credits', t('spHelpLinkUsage')));
   const quotaNoticeEl = el('div', {
     class: 'sp-quota-notice',
     id: 'sp-quota-notice',
@@ -12129,6 +12135,9 @@ function buildUI(): void {
     void chrome.tabs.create({ url: 'chrome://extensions/shortcuts' });
   });
   helpShortcutsSection.appendChild(helpShortcutsChangeBtn);
+  helpShortcutsSection.appendChild(
+    buildHelpArticleLink('keyboard-shortcuts', t('spHelpLinkShortcuts')),
+  );
   helpGroupBody.appendChild(helpShortcutsSection);
 
   async function renderHelpShortcuts(): Promise<void> {
@@ -15091,7 +15100,11 @@ function buildUI(): void {
     temporaryEndPending = false;
     renderTemporaryChatState();
   });
-  temporaryNotice.append(temporaryEnd, temporaryKeep);
+  temporaryNotice.append(
+    temporaryEnd,
+    temporaryKeep,
+    buildHelpArticleLink('temporary-chats', t('spHelpLinkTemporary')),
+  );
 
   inputArea.appendChild(usageWarningBanner);
   inputArea.appendChild(modelNotice);
