@@ -69,7 +69,8 @@ import {
 import { FileKindIcon } from './FileKindIcon';
 
 export type SurfaceFilter = 'all' | 'artifact' | 'file';
-export type LibraryTab = 'all' | 'images' | 'videos' | 'documents' | 'artifacts' | 'generated';
+export type LibraryTab =
+  'all' | 'images' | 'videos' | 'documents' | 'artifacts' | 'uploaded' | 'generated';
 export type LibraryViewMode = 'grid' | 'list';
 
 export interface LibraryFolder {
@@ -85,6 +86,7 @@ const TABS: ReadonlyArray<{ id: LibraryTab; label: string }> = [
   { id: 'videos', label: 'Videos' },
   { id: 'documents', label: 'Documents' },
   { id: 'artifacts', label: 'Artifacts' },
+  { id: 'uploaded', label: 'Uploads' },
   { id: 'generated', label: 'Generated files' },
 ];
 
@@ -100,6 +102,7 @@ const QUERY_BY_TAB: Readonly<Record<LibraryTab, TabQuery>> = {
   videos: { kind: 'video' },
   documents: { kind: 'file', surface: 'file' },
   artifacts: { surface: 'artifact' },
+  uploaded: { origin: 'uploaded' },
   generated: { kind: 'file', origin: 'generated' },
 };
 
