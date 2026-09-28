@@ -8,8 +8,8 @@ import {
 import {
   createCodeRemoteController,
   type CodeRemoteDependencies,
-} from '../remote/codeRemoteController';
-import type { DeveloperSessionActivity } from '../runtime/developerSessionService';
+  type DeveloperSessionActivity,
+} from '@agiworkforce/utils/remote-control';
 
 const NOW = Date.parse('2026-09-17T12:00:00.000Z');
 const SENT_AT = new Date(NOW).toISOString();

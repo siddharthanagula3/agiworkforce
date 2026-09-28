@@ -1,5 +1,6 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import type { HostBridge } from '@agiworkforce/local-runtime-contract';
 import { useComputerUseRunEnd } from '../hooks/use-computer-use';
 import { useDesktopAccount } from '../hooks/use-desktop-account';
@@ -14,6 +15,11 @@ import { ComputerUseControlBar } from './ComputerUseControlBar';
 import { DesktopTitleStrip } from './DesktopTitleStrip';
 import { DesktopUpdateNotice } from './DesktopUpdateNotice';
 
+const DispatchTaskRunner = dynamic(
+  () => import('./DispatchTaskRunner').then((module) => module.DispatchTaskRunner),
+  { ssr: false },
+);
+
 function DesktopHostBehaviour({ host }: { host: HostBridge }) {
   useDesktopAccount(host);
   useDeviceHeartbeat(host);
@@ -26,6 +32,7 @@ function DesktopHostBehaviour({ host }: { host: HostBridge }) {
   return (
     <>
       <DesktopTitleStrip />
+      {host.shell === 'electron' ? <DispatchTaskRunner host={host} /> : null}
       <div className="pointer-events-none fixed left-1/2 top-3 z-[var(--z-popover)] flex w-[min(92vw,560px)] -translate-x-1/2 flex-col gap-2">
         <ComputerUseControlBar />
         <DesktopUpdateNotice host={host} />

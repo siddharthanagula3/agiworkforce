@@ -160,14 +160,13 @@ Code: `apps/mobile/src/features/schedules/components/ScheduleForm.tsx:83-83`
 
 - Done when: A time zone picker (searchable list of zones, defaulting to the device zone) is used where schedules take a zone.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The schedule form takes the time zone as a free-text "IANA Time Zone" field; replace it with a searchable zone list defaulting to the browser zone. | ui |
-| desktop | partial | The schedule form takes the time zone as a free-text "IANA Time Zone" field; replace it with a searchable zone list defaulting to the browser zone. | ui |
 | mobile | partial | The time zone defaults to the device zone but is edited as free text validated against Intl; add a zone picker. | ui |
 
-Code: `apps/web/features/schedules/components/ScheduleForm.tsx:428-435`, `apps/mobile/src/features/schedules/components/ScheduleForm.tsx:95-97`, `apps/mobile/src/features/schedules/components/ScheduleForm.tsx:29-29`
+Code: `apps/mobile/src/features/schedules/components/ScheduleForm.tsx:95-97`, `apps/mobile/src/features/schedules/components/ScheduleForm.tsx:29-29`
 
 ## S8.28: Color pickers.
 

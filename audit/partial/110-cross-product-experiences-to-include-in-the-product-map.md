@@ -176,13 +176,12 @@ Code: `apps/cli/src/features/exec/tools/task_registry/mod.rs:136-136`
 
 - Done when: From the phone the user sends a new request that runs on their paired computer under that computer's approvals, and sees the result on the phone.
 - Wave: 3
-- Already works on: desktop
+- Already works on: desktop, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | The request now runs on the paired computer, but the phone never shows the result (the task list shows status only, dispatch.task.status has no notification action, and the session view clears the reply text when the turn finishes), and it always runs in the first approved folder. | handler |
 | cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
 
 Code: `apps/mobile/src/features/companion/components/DispatchTaskComposer.tsx:41-41`, `apps/mobile/services/companion.ts:115-115`, `apps/mobile/services/companionNotifications.ts:26-26`
 
