@@ -47,7 +47,7 @@ export interface WorkspaceDirectoryGroup {
   memberCount: number;
   roleIds: string[];
   managerUserIds: string[];
-  source?: { kind: 'directory'; connectionName: string | null };
+  source?: { kind: 'directory'; connectionName: string | null } | { kind: 'workspace' };
 }
 
 export interface WorkspaceGroupsResult {
@@ -192,6 +192,61 @@ export function useSetGroupRoles() {
       request(`/api/settings/organization/groups/${groupId}/roles`, {
         method: 'PUT',
         body: JSON.stringify({ roleIds }),
+      }),
+    [WORKSPACE_GROUPS_QUERY_KEY, WORKSPACE_ROLES_QUERY_KEY],
+  );
+}
+
+export function useCreateWorkspaceGroup() {
+  return useInvalidatingMutation(
+    ({ name }: { name: string }) =>
+      request<{ groupId: string }>('/api/settings/organization/groups', {
+        method: 'POST',
+        body: JSON.stringify({ name }),
+      }),
+    [WORKSPACE_GROUPS_QUERY_KEY],
+  );
+}
+
+export function useRenameWorkspaceGroup() {
+  return useInvalidatingMutation(
+    ({ groupId, name }: { groupId: string; name: string }) =>
+      request(`/api/settings/organization/groups/${groupId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ name }),
+      }),
+    [WORKSPACE_GROUPS_QUERY_KEY],
+  );
+}
+
+export function useDeleteWorkspaceGroup() {
+  return useInvalidatingMutation(
+    ({ groupId }: { groupId: string }) =>
+      request(`/api/settings/organization/groups/${groupId}`, { method: 'DELETE' }),
+    [WORKSPACE_GROUPS_QUERY_KEY, WORKSPACE_ROLES_QUERY_KEY, WORKSPACE_OVERRIDES_QUERY_KEY],
+  );
+}
+
+export function useWorkspaceGroupMembers(
+  groupId: string,
+  enabled: boolean,
+): UseQueryResult<{ userIds: string[] }, Error> {
+  return useQuery({
+    queryKey: [...WORKSPACE_GROUPS_QUERY_KEY, groupId, 'members'],
+    queryFn: () =>
+      request<{ userIds: string[] }>(`/api/settings/organization/groups/${groupId}/members`),
+    enabled,
+    staleTime: 60 * 1000,
+    meta: { errorMessage: 'Failed to load group members' },
+  });
+}
+
+export function useSetWorkspaceGroupMembers() {
+  return useInvalidatingMutation(
+    ({ groupId, userIds }: { groupId: string; userIds: string[] }) =>
+      request(`/api/settings/organization/groups/${groupId}/members`, {
+        method: 'PUT',
+        body: JSON.stringify({ userIds }),
       }),
     [WORKSPACE_GROUPS_QUERY_KEY, WORKSPACE_ROLES_QUERY_KEY],
   );
