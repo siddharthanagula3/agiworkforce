@@ -82,6 +82,10 @@ export const MAX_CLOUD_AGENT_CONVERSATION_PREVIEW_LENGTH = 200;
 export const MAX_CLOUD_AGENT_RUN_STEER_LENGTH = 4_000;
 export const MAX_CLOUD_AGENT_PENDING_STEERS = 10;
 
+export const MAX_AGIWORK_GOAL_CHARS = 2_000;
+export const AGIWORK_PLAN_MAX_STEPS = 6;
+export const MAX_AGIWORK_PLAN_STEP_CHARS = 300;
+
 const STEER_PROGRESS_ID_PREFIX = 'steer:';
 
 export function cloudAgentRunSteerProgressId(steerId: string): string {

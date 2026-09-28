@@ -87,7 +87,7 @@ describe('Chrome side-panel interaction accessibility', () => {
     expect(source).toContain('document.body.appendChild(pagePanel.panelEl)');
     expect(source).toContain('buildBrowserToolsPanel()');
     expect(source).toContain('BROWSER_TOOLS_PANEL_CSS');
-    expect(source).toContain('buildCloudRunsPanel()');
+    expect(source).toContain('buildCloudRunsPanel({ fileAccess: answerFileAccess })');
     expect(source).toContain('CLOUD_RUNS_PANEL_CSS');
     expect(source).toContain("runsPanel.setActive(tab === 'cloud-runs')");
   });

@@ -4,8 +4,16 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button, Spinner } from '@agiworkforce/ui';
+import { z } from 'zod';
+import { computeDerivedArtifactId } from '@agiworkforce/artifacts';
+import { ManagedCloudMessageWireSchema } from '@agiworkforce/cloud-contracts';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
+import { useArtifactsStore } from '@features/chat/stores/artifacts-store';
+import {
+  readSnapshotMessages,
+  type SnapshotMessage,
+} from '@features/chat/lib/shared-conversation-snapshot';
 
 const TOKEN_REGEX = /^[A-Za-z0-9_-]{24}$/;
 const MESSAGE_BATCH_SIZE = 200;
@@ -17,25 +25,49 @@ interface SharedSessionResponse {
   messages?: unknown;
 }
 
-interface ClonedMessage {
-  role: 'user' | 'assistant' | 'system';
-  content: string;
+function forkedMessage(message: SnapshotMessage) {
+  const metadata = {
+    ...(message.artifactDerivation ? { artifactDerivation: message.artifactDerivation } : {}),
+    ...(message.attachments.length > 0 ? { sharedAttachments: message.attachments } : {}),
+  };
+  return {
+    role: message.role,
+    content: message.content,
+    ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
+  };
 }
 
-function sanitizeMessages(raw: unknown): ClonedMessage[] {
-  if (!Array.isArray(raw)) return [];
-  const out: ClonedMessage[] = [];
-  for (const item of raw) {
-    if (!item || typeof item !== 'object') continue;
-    const role = (item as Record<string, unknown>)['role'];
-    const content = (item as Record<string, unknown>)['content'];
-    if (role !== 'user' && role !== 'assistant' && role !== 'system') continue;
-    if (typeof content !== 'string') continue;
-    const trimmed = content.trim().slice(0, MAX_MESSAGE_LENGTH);
-    if (!trimmed) continue;
-    out.push({ role, content: trimmed });
-  }
-  return out;
+function keepArtifacts(
+  conversationId: string,
+  batch: readonly SnapshotMessage[],
+  savedIds: readonly string[],
+): void {
+  const store = useArtifactsStore.getState();
+  batch.forEach((message, index) => {
+    const messageId = savedIds[index];
+    if (!messageId) return;
+    for (const artifact of message.artifacts) {
+      store.upsertArtifact({
+        id:
+          artifact.ordinal === null
+            ? crypto.randomUUID()
+            : computeDerivedArtifactId(conversationId, messageId, artifact.ordinal),
+        type: artifact.type,
+        title: artifact.title,
+        language: artifact.language,
+        content: artifact.content,
+        messageId,
+        conversationId,
+      });
+    }
+  });
+}
+
+const SavedMessagesSchema = z.object({ messages: z.array(ManagedCloudMessageWireSchema) });
+
+function readSavedIds(body: unknown): string[] {
+  const parsed = SavedMessagesSchema.safeParse(body);
+  return parsed.success ? parsed.data.messages.map((message) => message.id) : [];
 }
 
 async function createConversation(title: string, model?: string): Promise<Response> {
@@ -106,7 +138,7 @@ export default function ContinueSharedSessionPage() {
             ? share.title.trim().slice(0, 500)
             : 'Shared Session';
         const modelId = typeof share.model_id === 'string' ? share.model_id : undefined;
-        const messages = sanitizeMessages(share.messages);
+        const messages = readSnapshotMessages(share.messages, MAX_MESSAGE_LENGTH);
         if (messages.length === 0) {
           setStatus('empty');
           return;
@@ -130,9 +162,10 @@ export default function ContinueSharedSessionPage() {
             method: 'POST',
             headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
             credentials: 'include',
-            body: JSON.stringify({ messages: batch }),
+            body: JSON.stringify({ messages: batch.map(forkedMessage) }),
           });
           if (!bulkRes.ok) throw new Error('The shared messages could not be copied.');
+          keepArtifacts(conversation.id, batch, readSavedIds(await bulkRes.json()));
         }
 
         router.replace(`/chat/${conversation.id}`);

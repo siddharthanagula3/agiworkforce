@@ -286,13 +286,14 @@ export interface LiveVoiceDelegationTools {
 export function resolveLiveVoiceDelegationTools(
   backendModel: ModelMetadata,
   toolApprovalPolicy: ToolApprovalPolicy,
+  options: { hostedSearch: boolean } = { hostedSearch: true },
 ): LiveVoiceDelegationTools {
   const provider = String(backendModel.provider).toLowerCase();
   const capabilities = backendModel.capabilities;
   if (capabilities?.tools === false) return { tools: [], withheld: [] };
 
   const hosted = [
-    ...(appendWebSearchTool(provider, undefined, capabilities) ?? []),
+    ...(options.hostedSearch ? (appendWebSearchTool(provider, undefined, capabilities) ?? []) : []),
     ...(capabilities?.codeExecution === true && !e2bProvisioningReady()
       ? resolveCodeExecutionTools(provider)
       : []),
@@ -383,6 +384,12 @@ export async function resolveLiveVoiceFunctionTools(input: {
   }
   return { tools, names };
 }
+
+export const LIVE_VOICE_SITE_RULES_NOTICE =
+  'Searching the web is off in this voice session because the workspace limits which sites ' +
+  'can be read, and a voice search cannot keep to that limit. If the user asks for a search, ' +
+  'say so in one sentence and suggest typing the request in the chat. Never answer as if a ' +
+  'search had run.';
 
 export function formatLiveVoiceApprovalNotice(functionTools: readonly string[]): string | null {
   if (functionTools.length === 0) return null;

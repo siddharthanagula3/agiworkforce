@@ -3,6 +3,7 @@ import {
   CONNECTOR_HEALTH_STATES,
   CONNECTOR_SOURCES,
   CONNECTOR_TOOL_PERMISSION_LEVELS,
+  type OrganizationRole,
 } from '@agiworkforce/types';
 
 export {
@@ -551,5 +552,90 @@ export const DeleteConnectorToolPermissionsResponseSchema = z.object({
 export type DeleteConnectorToolPermissionsResponse = z.infer<
   typeof DeleteConnectorToolPermissionsResponseSchema
 >;
+
+export const CONNECTOR_POLICY_PATH = '/api/settings/organization/connector-policy';
+export const CONNECTOR_POLICY_LIST_LIMIT = 512;
+export const CONNECTOR_POLICY_PLUGIN_KEY_PATTERN = /^[a-z0-9][a-z0-9._-]{0,127}$/i;
+export const CONNECTOR_POLICY_MCP_HOST_PATTERN =
+  /^(\*\.)?(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/i;
+
+const WEB_DOMAIN_PATTERN = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/;
+
+export function normalizeWebDomain(raw: string): string | null {
+  let value = raw.trim().toLowerCase();
+  if (!value) return null;
+  if (value.includes('://')) {
+    try {
+      value = new URL(value).hostname;
+    } catch {
+      return null;
+    }
+  }
+  value = value.replace(/^\*\./, '').replace(/^\./, '').replace(/\/.*$/, '').replace(/:\d+$/, '');
+  if (value.startsWith('www.')) value = value.slice(4);
+  return WEB_DOMAIN_PATTERN.test(value) ? value : null;
+}
+
+const WORKSPACE_MEMBER_ROLES = [
+  'owner',
+  'admin',
+  'member',
+  'viewer',
+] as const satisfies readonly OrganizationRole[];
+
+export const ConnectorPolicyListsSchema = z.object({
+  allowedConnectors: z.array(z.string()),
+  blockedConnectors: z.array(z.string()),
+  allowCustomConnectors: z.boolean(),
+  allowedPlugins: z.array(z.string()),
+  blockedPlugins: z.array(z.string()),
+  allowedMcpHosts: z.array(z.string()),
+  allowedWebDomains: z.array(z.string()),
+  blockedWebDomains: z.array(z.string()),
+});
+export type ConnectorPolicyLists = z.infer<typeof ConnectorPolicyListsSchema>;
+
+export const ConnectorPolicyResponseSchema = z.object({
+  organizationId: z.string(),
+  configured: z.boolean(),
+  canManagePolicy: z.boolean(),
+  currentUserRole: z.enum(WORKSPACE_MEMBER_ROLES),
+  policy: ConnectorPolicyListsSchema.extend({ updatedAt: z.string().nullable() }),
+  catalog: z.array(z.string()),
+});
+export type ConnectorPolicyResponse = z.infer<typeof ConnectorPolicyResponseSchema>;
+
+const ConnectorPolicyIdListSchema = z
+  .array(z.string().min(1).max(200))
+  .max(CONNECTOR_POLICY_LIST_LIMIT);
+const PluginKeyListSchema = z
+  .array(z.string().trim().regex(CONNECTOR_POLICY_PLUGIN_KEY_PATTERN))
+  .max(CONNECTOR_POLICY_LIST_LIMIT);
+const WebDomainListSchema = z
+  .array(
+    z
+      .string()
+      .max(2048)
+      .refine((value) => normalizeWebDomain(value) !== null, {
+        message: 'Each site must be a domain such as example.com.',
+      }),
+  )
+  .max(CONNECTOR_POLICY_LIST_LIMIT);
+
+export const UpdateConnectorPolicyRequestSchema = z
+  .object({
+    allowedConnectors: ConnectorPolicyIdListSchema,
+    blockedConnectors: ConnectorPolicyIdListSchema,
+    allowCustomConnectors: z.boolean(),
+    allowedPlugins: PluginKeyListSchema,
+    blockedPlugins: PluginKeyListSchema,
+    allowedMcpHosts: z
+      .array(z.string().trim().regex(CONNECTOR_POLICY_MCP_HOST_PATTERN))
+      .max(CONNECTOR_POLICY_LIST_LIMIT),
+    allowedWebDomains: WebDomainListSchema,
+    blockedWebDomains: WebDomainListSchema,
+  })
+  .strict();
+export type UpdateConnectorPolicyRequest = z.infer<typeof UpdateConnectorPolicyRequestSchema>;
 
 export const MCP_CLIENT_METADATA_PATH = '/.well-known/oauth-client-metadata';

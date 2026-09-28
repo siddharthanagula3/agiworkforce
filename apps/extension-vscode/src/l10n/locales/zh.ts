@@ -392,6 +392,36 @@ const zh = {
   'mcpDetails.expired':
     '这些详情已不再保留。请运行 AGI Workforce: Show MCP Servers 并选择“服务器详情”，以再次检查 {name}。',
   'mcpDetails.field': '{label}：{value}',
+  'chatNotice.webSearchDenied':
+    '此会话无法使用网页搜索。{reason} 如需不搜索直接发送，请关闭 Browse the web。',
+  'webSearchSetup.title': '设置网页搜索',
+  'webSearchSetup.placeholder': '选择你拥有 API 密钥的搜索服务',
+  'webSearchSetup.detail':
+    '在终端中输入其 API 密钥。使用你自己密钥的会话和本地会话会用它搜索；托管会话不需要。',
+  'webSearchSetup.unavailable':
+    'AGI Workforce：此 AGI CLI 未说明可以保存哪些搜索密钥。请更新 AGI CLI，以便在 VS Code 中设置网页搜索。',
+  'pluginUpdate.action': '更新',
+  'pluginUpdate.progress': 'AGI Workforce：正在更新 {name}',
+  'pluginUpdate.upToDate': 'AGI Workforce：{name} 已是最新版本。',
+  'pluginUpdate.updated': 'AGI Workforce：{name} 已更新。',
+  'pluginUpdate.updatedTo': 'AGI Workforce：{name} 已更新到 {to}。',
+  'pluginUpdate.updatedFromTo': 'AGI Workforce：{name} 已从 {from} 更新到 {to}。',
+  'chatError.usageLimitResetsAt': '你的账户已达到使用上限，将于 {time} 重置。',
+  'chatError.continueWith': '改用 {model} 继续',
+  'chatError.addCredits': '添加额度',
+  'chatError.comparePlans': '比较方案',
+  'chatError.seeUsage': '查看用量',
+  'chatError.seeOptions': '查看选项',
+  'webview.mcpAuthRequired': '{server} 需要你重新登录。AGI 在这一步无法使用它。',
+  'webview.mcpReconnect': '登录并继续',
+  'webview.mcpReconnecting': '正在登录…',
+  'webview.mcpReconnected': '已登录 {server}，AGI 正在继续。',
+  'mcpReconnect.progress': 'AGI Workforce：正在登录 {server}',
+  'mcpReconnect.notFinished':
+    'AGI Workforce：{server} 登录未完成，因此 AGI 没有继续。准备好后请再试一次。',
+  'mcpReconnect.failed': 'AGI Workforce：登录 {server} 失败：{reason}',
+  'mcpReconnect.noSession': 'AGI Workforce：登录 {server} 后，这里没有可继续的会话。',
+  'mcpReconnect.continue': '继续',
 };
 
 export default zh;

@@ -1,5 +1,15 @@
 import * as vscode from 'vscode';
-import { type UIPlanTier, tierAtLeast } from '@agiworkforce/types';
+import {
+  EffectiveCapabilityDocumentSchema,
+  type EffectiveCapabilityDocumentWire,
+} from '@agiworkforce/cloud-contracts';
+import {
+  resolveCapabilityDocumentDecision,
+  type CapabilityDecision,
+  type PlatformCapability,
+  type UIPlanTier,
+  tierAtLeast,
+} from '@agiworkforce/types';
 import { fetchTierInfo, type TierInfo } from '../utils/api';
 import { onAccountTierMayHaveChanged } from './tierRevalidation';
 
@@ -57,6 +67,7 @@ function coerceTier(raw: string | undefined): Tier | undefined {
 
 const CACHED_TIER_KEY = 'tierStatus.cachedTier';
 const CACHED_AT_KEY = 'tierStatus.cachedAtMs';
+const CAPABILITY_DOCUMENT_KEY = 'tierStatus.capabilityDocument';
 
 /**
  * Matches the CLI's own tier cache (`apps/cli/src/tier_cache.rs`), so a plan
@@ -143,11 +154,30 @@ async function writeAccountTier(context: vscode.ExtensionContext, tier: Tier): P
 export async function recordAccountIdentityTier(
   context: vscode.ExtensionContext,
   rawTier: string | undefined,
+  capabilityDocument?: EffectiveCapabilityDocumentWire | null,
 ): Promise<Tier | undefined> {
+  if (capabilityDocument !== undefined) {
+    await context.globalState.update(CAPABILITY_DOCUMENT_KEY, capabilityDocument ?? undefined);
+  }
   const tier = coerceTier(rawTier);
   if (tier === undefined) return undefined;
   await writeAccountTier(context, tier);
   return tier;
+}
+
+/**
+ * What the server decided this account may do, from the capability document
+ * the last `GET /api/me` carried. `null` when no document is held, and the
+ * caller keeps its own behaviour.
+ */
+export function accountCapabilityDecision(
+  context: vscode.ExtensionContext,
+  capability: PlatformCapability,
+): CapabilityDecision | null {
+  const stored = EffectiveCapabilityDocumentSchema.safeParse(
+    context.globalState.get<unknown>(CAPABILITY_DOCUMENT_KEY),
+  );
+  return stored.success ? resolveCapabilityDocumentDecision(stored.data, capability) : null;
 }
 
 export async function clearAccountTierCache(context: vscode.ExtensionContext): Promise<void> {
@@ -155,6 +185,9 @@ export async function clearAccountTierCache(context: vscode.ExtensionContext): P
   const updates: Thenable<void>[] = [];
   if (context.globalState.get<string>(CACHED_TIER_KEY) !== undefined) {
     updates.push(context.globalState.update(CACHED_TIER_KEY, undefined));
+  }
+  if (context.globalState.get<unknown>(CAPABILITY_DOCUMENT_KEY) !== undefined) {
+    updates.push(context.globalState.update(CAPABILITY_DOCUMENT_KEY, undefined));
   }
   if (cachedAtMs(context) !== 0) updates.push(context.globalState.update(CACHED_AT_KEY, undefined));
   if (configuration.inspect<string>('currentTier')?.globalValue !== 'unknown') {

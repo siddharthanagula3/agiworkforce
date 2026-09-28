@@ -58,12 +58,9 @@ nothing is left.
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
-| mobile | partial | Write a profile summary; the Memory summary screen only lists every saved fact grouped by origin, it does not describe the user. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/app/(app)/settings/memory-summary.tsx:36-60`, `apps/mobile/src/features/memory/services/consolidation.ts:72-109`
 
 ## S39.09: Ongoing-work summary.
 
