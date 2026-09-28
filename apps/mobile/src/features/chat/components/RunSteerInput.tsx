@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Pressable, TextInput, View } from 'react-native';
+import { TextInput, View } from 'react-native';
 import { MAX_CLOUD_AGENT_RUN_STEER_LENGTH } from '@agiworkforce/cloud-contracts';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { useThemeColors } from '@/src/ui/theme';
 import { describeCloudRunSteerError, steerCloudRun } from '@/src/features/tasks/cloudRunSteer';
 
@@ -33,7 +34,7 @@ export function RunSteerInput({ runId }: { runId: string }) {
 
   if (!open) {
     return (
-      <Pressable
+      <PressableBox
         onPress={() => setOpen(true)}
         accessibilityRole="button"
         accessibilityHint="Sends guidance the agent reads at its next step, without stopping it"
@@ -42,7 +43,7 @@ export function RunSteerInput({ runId }: { runId: string }) {
         <Text style={{ color: colors.textSecondary, fontSize: 13, fontWeight: '600' }}>
           Message the agent
         </Text>
-      </Pressable>
+      </PressableBox>
     );
   }
 
