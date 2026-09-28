@@ -332,5 +332,14 @@
     "runningTools_other": "{{count}} Tools werden ausgeführt",
     "runningToolsOf_one": "{{running}}/{{count}} Tool wird ausgeführt: {{name}}",
     "runningToolsOf_other": "{{running}}/{{count}} Tools werden ausgeführt: {{name}}"
+  },
+  "markdownTable": {
+    "label": "Tabelle",
+    "expand": "Tabelle vergrößern",
+    "copy": "Tabelle kopieren",
+    "copied": "Tabelle kopiert",
+    "copyFailed": "Kopieren fehlgeschlagen, Zwischenablage nicht verfügbar",
+    "download": "Als CSV herunterladen",
+    "close": "Vergrößerte Tabelle schließen"
   }
 }

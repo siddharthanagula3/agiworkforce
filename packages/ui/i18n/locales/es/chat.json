@@ -332,5 +332,14 @@
     "runningTools_other": "Ejecutando {{count}} herramientas",
     "runningToolsOf_one": "Ejecutando {{running}}/{{count}} herramienta: {{name}}",
     "runningToolsOf_other": "Ejecutando {{running}}/{{count}} herramientas: {{name}}"
+  },
+  "markdownTable": {
+    "label": "Tabla",
+    "expand": "Ampliar tabla",
+    "copy": "Copiar tabla",
+    "copied": "Tabla copiada",
+    "copyFailed": "No se pudo copiar, el portapapeles no está disponible",
+    "download": "Descargar como CSV",
+    "close": "Cerrar tabla ampliada"
   }
 }

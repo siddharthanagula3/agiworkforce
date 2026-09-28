@@ -332,5 +332,14 @@
     "runningTools_other": "{{count}} 個のツールを実行中",
     "runningToolsOf_one": "ツールを実行中 {{running}}/{{count}}: {{name}}",
     "runningToolsOf_other": "ツールを実行中 {{running}}/{{count}}: {{name}}"
+  },
+  "markdownTable": {
+    "label": "表",
+    "expand": "表を拡大",
+    "copy": "表をコピー",
+    "copied": "表をコピーしました",
+    "copyFailed": "コピーできませんでした。クリップボードを利用できません",
+    "download": "CSV としてダウンロード",
+    "close": "拡大した表を閉じる"
   }
 }
