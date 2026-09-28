@@ -474,6 +474,17 @@ const LIVE_RUN_STATES: ReadonlySet<CloudAgentRun['state']> = new Set([
   'paused',
 ]);
 
+const NEEDS_YOU_STATES: ReadonlySet<CloudAgentRun['state']> = new Set([
+  'awaiting_input',
+  'awaiting_approval',
+  'paused',
+]);
+
+function needsYouFirst(runs: readonly CloudAgentRun[]): CloudAgentRun[] {
+  const needsYou = (run: CloudAgentRun) => NEEDS_YOU_STATES.has(run.workState ?? run.state);
+  return [...runs.filter(needsYou), ...runs.filter((run) => !needsYou(run))];
+}
+
 const RELATIVE_TIME_FORMAT = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
 const RELATIVE_TIME_STEPS: ReadonlyArray<{ unit: Intl.RelativeTimeFormatUnit; ms: number }> = [
   { unit: 'day', ms: 86_400_000 },
@@ -1054,7 +1065,7 @@ export function buildCloudRunsPanel(
       );
     } else {
       if (layout === 'board') fragment.appendChild(buildBoard(now));
-      else for (const run of runs) fragment.appendChild(buildRunRow(run, now));
+      else for (const run of needsYouFirst(runs)) fragment.appendChild(buildRunRow(run, now));
       if (nextCursor) {
         const moreBtn = el(
           'button',
