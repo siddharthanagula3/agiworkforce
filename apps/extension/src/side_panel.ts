@@ -1,4 +1,9 @@
-import { QueueFullError, type AgentActivityToolEntry } from '@agiworkforce/client-runtime';
+import {
+  createMessageQueue,
+  LANE_CAP,
+  QueueFullError,
+  type AgentActivityToolEntry,
+} from '@agiworkforce/client-runtime';
 import {
   createManagedCloudChatAttachmentsClient,
   MAX_CHAT_ATTACHMENT_BYTES,
@@ -37,6 +42,7 @@ import {
   type Effort,
   type InteractiveCard,
   type ManagedUsageWarning,
+  type ModelSpeed,
   type RoutingTaskType,
 } from '@agiworkforce/types';
 import { getExtensionSendQueue } from './features/native-bridge/sendQueue';
@@ -70,6 +76,7 @@ import {
   resolveBrowserConversationScope,
 } from './features/background/conversation-session';
 import {
+  normalizeApprovedSiteOrigin,
   removeApprovedSiteHostPermission,
   requestApprovedSiteHostPermission,
 } from './features/options/site-allowlist';
@@ -106,6 +113,20 @@ import {
   type SidePanelPageReference,
 } from './features/side-panel/chat-state';
 import { buildMicrophoneNotice, setupVoiceInput } from './features/side-panel/voice';
+import { replaceComposerRange, replaceComposerText } from './features/side-panel/composerText';
+import {
+  expandPromptShortcut,
+  expandSlashCommand,
+  matchSlashCommands,
+  promptShortcutsFromSaved,
+  shortcutCommand,
+  shortcutCommandConflict,
+  SHORTCUT_INPUT_PLACEHOLDER,
+  SLASH_COMMANDS,
+  type PromptShortcut,
+  type SlashCommandMeta,
+} from './features/side-panel/pageCommands';
+import { SHORTCUTS_STORAGE_KEY } from './features/background/shortcuts';
 import {
   dictationLanguageChoices,
   readDictationLanguage,
@@ -148,6 +169,7 @@ import {
   FileText,
   Zap,
   FileEdit,
+  SquarePen,
   Square,
   Settings,
   Shield,
@@ -181,6 +203,7 @@ import {
   type ActiveProjectSelection,
   type ProjectsDrawerAPI,
 } from './features/side-panel/projectsDrawer';
+import { listChromeProjects } from './features/cloud-bridge/projectsClient';
 import {
   buildArtifactsDrawerSection,
   ARTIFACTS_DRAWER_CSS,
@@ -247,6 +270,8 @@ import {
   signOutClerk,
 } from './features/cloud-bridge/clerkAuth';
 import {
+  agiWorkUnlockPlanLabel,
+  buildManagedModelPickerView,
   formatManagedTierLabel,
   getManagedCapabilityLabel,
   getManagedModelBadgeLabel,
@@ -530,7 +555,11 @@ function setManagedCloudChatState(
     else input.placeholder = t('spComposerPlaceholder');
   }
   updateSendButton();
-  if (becameReady) checkPendingChat();
+  updateEmptyStateActions();
+  if (becameReady) {
+    void refreshRecentProjects();
+    checkPendingChat();
+  }
 }
 
 interface UsageBanner {
@@ -680,6 +709,7 @@ export interface SharedSidePanelContext {
   isConnected: boolean;
   thinkingEnabled: boolean;
   quickMode: boolean;
+  workMode: 'chat' | 'agiwork';
   conversationId: string;
   conversationScope: string | null;
   conversationGeneration: number;
@@ -705,6 +735,7 @@ function createSharedSidePanelContext(): SharedSidePanelContext {
     isConnected: false,
     thinkingEnabled: false,
     quickMode: false,
+    workMode: 'chat',
     conversationId: createBrowserConversationId(),
     conversationScope: null,
     conversationGeneration: 0,
@@ -872,6 +903,19 @@ const UNKNOWN_PROVIDER_KEY = 'unknown-provider';
 function modelGroupHeading(providerKey: string): string {
   if (providerKey === UNKNOWN_PROVIDER_KEY) return t('spModelsOtherProvider');
   return getProviderDisplayLabel(providerKey);
+}
+
+function modelSpeedLabel(speed: ModelSpeed): string {
+  switch (speed) {
+    case 'very-fast':
+      return t('spModelSpeedVeryFast');
+    case 'fast':
+      return t('spModelSpeedFast');
+    case 'medium':
+      return t('spModelSpeedMedium');
+    case 'slow':
+      return t('spModelSpeedSlow');
+  }
 }
 
 const CONNECTORS_URL = 'https://agiworkforce.com/connectors?from=chrome-extension';
@@ -1177,6 +1221,8 @@ function resumeLatestStoredManagedRun(expectedGeneration: number): void {
   }
 }
 
+let newChatModelSelection = 'auto';
+
 function clearStoredMessages(): void {
   historyRestoreToken += 1;
   _ctx.conversationGeneration += 1;
@@ -1184,6 +1230,8 @@ function clearStoredMessages(): void {
   _ctx.pendingProjectBinding = _ctx.activeProject?.id ?? null;
   clearActivePersistenceState();
   persistCurrentConversationOwner();
+  _ctx.selectedModel = newChatModelSelection;
+  _ctx.workMode = 'chat';
   _ctx.currentModelKey = undefined;
   _ctx.previousTaskType = undefined;
   _ctx.reasoningEffort = undefined;
@@ -1202,8 +1250,10 @@ function clearPendingPageContext(): void {
 }
 
 function resetConversationView(): void {
+  returnFollowUpsToComposer();
   _ctx.messages.length = 0;
   turnPayloadByMessageId.clear();
+  void refreshRecentProjects();
   _ctx.lastRenderedCount = 0;
   _ctx.needsMessageRebuild = true;
   clearPendingPageContext();
@@ -1236,6 +1286,8 @@ async function transitionManagedCloudOwner(nextOwner: ManagedCloudOwner | null):
     _ctx.streamTimeoutHandle = null;
   }
   _ctx.managedCloudOwner = nextOwner ? { ...nextOwner } : null;
+  followUpQueue.clear();
+  _ctx.workMode = 'chat';
   _ctx.messages.length = 0;
   turnPayloadByMessageId.clear();
   streamStartedAtById.clear();
@@ -1249,8 +1301,12 @@ async function transitionManagedCloudOwner(nextOwner: ManagedCloudOwner | null):
   _ctx.activeProject = null;
   delete _ctx.pendingProjectBinding;
   refreshProjectChip();
+  recentProjects = [];
+  recentProjectsGeneration += 1;
+  renderRecentProjects();
   if (previousOwner) {
     _ctx.selectedModel = 'auto';
+    newChatModelSelection = 'auto';
     chrome.storage.local.remove(SELECTED_MODEL_STORAGE_KEY).catch(() => {});
   }
   _ctx.currentModelKey = undefined;
@@ -1593,6 +1649,48 @@ function injectStyles(): void {
       text-align: center;
     }
     #sp-empty.hidden { display: none; }
+    .sp-empty-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      width: min(100%, 360px);
+      margin-top: 6px;
+      text-align: left;
+    }
+    .sp-empty-actions[hidden] { display: none; }
+    .sp-empty-actions-title {
+      margin: 8px 0 0;
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      font-weight: 500;
+    }
+    .sp-empty-actions-list { display: flex; flex-direction: column; gap: 6px; }
+    .sp-empty-action {
+      display: flex;
+      width: 100%;
+      min-height: 40px;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-menu);
+      background: var(--agi-ext-surface);
+      color: var(--agi-ext-text);
+      font: inherit;
+      font-size: var(--type-label-size);
+      line-height: var(--type-label-height);
+      text-align: left;
+      cursor: pointer;
+    }
+    .sp-empty-action:hover { background: var(--agi-ext-hover); }
+    .sp-empty-action:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
+    .sp-empty-action > .agi-icon { color: var(--agi-ext-text-muted); }
+    .sp-empty-action[aria-pressed='true'] { border-color: var(--agi-ext-focus); }
+    .sp-empty-action-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    @media (pointer: coarse) {
+      .sp-empty-action { min-height: 44px; }
+    }
     #sp-empty-icon {
       display: none;
       align-items: center;
@@ -2053,14 +2151,17 @@ function injectStyles(): void {
       margin: 4px 0;
     }
     .sp-bubble-assistant li { margin: 2px 0; }
-    .sp-bubble-assistant h1, .sp-bubble-assistant h2, .sp-bubble-assistant h3 {
+    .sp-bubble-assistant li > ul, .sp-bubble-assistant li > ol { margin: 2px 0; }
+    .sp-bubble-assistant h1, .sp-bubble-assistant h2, .sp-bubble-assistant h3,
+    .sp-bubble-assistant h4, .sp-bubble-assistant h5, .sp-bubble-assistant h6 {
       font-weight: 600;
       color: var(--agi-ext-text);
       margin: 6px 0 3px;
     }
     .sp-bubble-assistant h1 { font-size: var(--type-title-size); line-height: var(--type-title-height); }
     .sp-bubble-assistant h2 { font-size: var(--type-body-large-size); line-height: var(--type-body-large-height); }
-    .sp-bubble-assistant h3 { font-size: var(--type-body-size); line-height: var(--type-body-height); }
+    .sp-bubble-assistant h3, .sp-bubble-assistant h4 { font-size: var(--type-body-size); line-height: var(--type-body-height); }
+    .sp-bubble-assistant h5, .sp-bubble-assistant h6 { font-size: var(--type-label-size); line-height: var(--type-label-height); }
     .sp-bubble-assistant blockquote {
       border-left: 3px solid var(--agi-ext-accent);
       padding-left: 8px;
@@ -2178,6 +2279,76 @@ function injectStyles(): void {
       line-height: var(--type-caption-height);
       text-transform: capitalize;
     }
+    .sp-map-preview {
+      position: relative;
+      height: 200px;
+      margin-top: 9px;
+      overflow: hidden;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-control);
+      background: var(--agi-ext-overlay);
+    }
+    .sp-map-preview__canvas { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
+    .sp-map-preview__tile {
+      position: absolute;
+      width: 256px;
+      max-width: none;
+      height: 256px;
+      user-select: none;
+      pointer-events: none;
+    }
+    .sp-map-preview--dimmed .sp-map-preview__tile {
+      filter: invert(1) hue-rotate(180deg) saturate(0.22) sepia(0.16) brightness(1.04) contrast(0.88);
+    }
+    .sp-map-preview__marker {
+      position: absolute;
+      display: grid;
+      width: 22px;
+      height: 22px;
+      margin: -11px 0 0 -11px;
+      place-items: center;
+      border: 2px solid var(--agi-ext-surface);
+      border-radius: var(--corner-pill);
+      background: var(--agi-ext-accent);
+      color: var(--agi-ext-on-accent);
+      font-size: var(--type-caption-size);
+      font-weight: 600;
+      line-height: 1;
+      box-shadow: var(--agi-ext-elevation-2);
+    }
+    .sp-map-preview__marker--unconfirmed {
+      border-color: var(--agi-ext-warning-text);
+      background: var(--agi-ext-surface);
+      color: var(--agi-ext-warning-text);
+    }
+    .sp-map-preview__attribution {
+      position: absolute;
+      right: 4px;
+      bottom: 4px;
+      max-width: calc(100% - 8px);
+      overflow: hidden;
+      padding: 1px 5px;
+      border-radius: var(--corner-compact);
+      background: var(--agi-ext-surface);
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .sp-map-preview__status {
+      display: flex;
+      height: 100%;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 0 16px;
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      text-align: center;
+    }
+    .sp-map-preview[aria-busy='true'] .sp-map-preview__spinner svg { animation: sp-spin var(--duration-spin) linear infinite; }
     .sp-interactive-card__actions {
       display: flex;
       flex-direction: column;
@@ -2758,7 +2929,7 @@ function injectStyles(): void {
     #sp-input::placeholder { color: var(--agi-ext-text-placeholder); }
     /* Slash-command autocomplete. Anchored above the composer because the panel
        is short and a downward menu would fall outside the viewport. */
-    #sp-slash-menu {
+    #sp-slash-menu, #sp-mention-menu {
       display: none;
       flex-direction: column;
       gap: 1px;
@@ -2771,7 +2942,85 @@ function injectStyles(): void {
       max-height: 214px;
       overflow-y: auto;
     }
-    #sp-slash-menu.visible { display: flex; }
+    #sp-slash-menu.visible, #sp-mention-menu.visible { display: flex; }
+    .sp-mention-heading {
+      padding: 6px 9px 2px;
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      font-weight: 600;
+    }
+    .sp-slash-item .sp-slash-name, .sp-slash-item .sp-slash-hint {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    #sp-link-form { display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px; }
+    #sp-link-form[hidden] { display: none; }
+    .sp-link-row { display: flex; gap: 6px; align-items: center; }
+    #sp-link-input {
+      flex: 1;
+      min-width: 0;
+      min-height: 32px;
+      padding: 5px 9px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-control);
+      background: var(--agi-ext-bg);
+      color: var(--agi-ext-text);
+      font: inherit;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
+    #sp-link-input:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
+    .sp-link-submit, .sp-link-cancel {
+      min-height: 32px;
+      padding: 5px 10px;
+      border-radius: var(--corner-control);
+      font: inherit;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      cursor: pointer;
+    }
+    .sp-link-submit { border: 0; background: var(--agi-ext-accent); color: var(--agi-ext-on-accent); }
+    .sp-link-submit:disabled { cursor: wait; opacity: 0.6; }
+    .sp-link-cancel { border: 1px solid var(--agi-ext-border); background: transparent; color: var(--agi-ext-text-muted); }
+    .sp-link-cancel:hover { color: var(--agi-ext-text); }
+    .sp-link-submit:focus-visible, .sp-link-cancel:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
+    .sp-link-error { min-height: 0; color: var(--agi-ext-text-muted); font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
+    .sp-link-error:empty { display: none; }
+    @media (pointer: coarse) {
+      #sp-link-input, .sp-link-submit, .sp-link-cancel { min-height: 44px; }
+    }
+    #sp-queued-list { display: flex; flex-direction: column; gap: 4px; margin: 0 0 6px; padding: 0; list-style: none; }
+    #sp-queued-list[hidden] { display: none; }
+    .sp-queued-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 8px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-control);
+      background: var(--agi-ext-bg);
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
+    .sp-queued-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sp-queued-action {
+      flex-shrink: 0;
+      padding: 2px 6px;
+      border: 0;
+      border-radius: var(--corner-compact);
+      background: transparent;
+      color: var(--agi-ext-text-muted);
+      font: inherit;
+      cursor: pointer;
+    }
+    .sp-queued-action:hover { background: var(--agi-ext-hover); color: var(--agi-ext-text); }
+    .sp-queued-action:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 1px; }
+    @media (pointer: coarse) {
+      .sp-queued-action { min-height: 44px; min-width: 44px; }
+    }
     .sp-slash-item {
       display: flex;
       flex-direction: column;
@@ -3202,6 +3451,7 @@ function injectStyles(): void {
     .sp-wf-btn-delete { background: none; border: 1px solid var(--agi-ext-border); color: var(--agi-ext-danger-text); font-size: var(--type-caption-size); line-height: var(--type-caption-height); padding: 3px 7px; border-radius: var(--corner-control); cursor: pointer; transition: color var(--duration-instant), border-color var(--duration-instant); }
     .sp-wf-btn-delete:hover { color: var(--agi-ext-danger-text); border-color: var(--agi-ext-danger-border); }
     .sp-wf-btn-delete:disabled, .sp-wf-task-delete:disabled { cursor: wait; opacity: 0.55; }
+    .sp-wf-btn-delete.is-confirm { color: var(--agi-ext-on-danger); background: var(--agi-ext-danger); border-color: var(--agi-ext-danger); }
     .sp-wf-tasks-list { display: flex; flex-direction: column; gap: 6px; }
     .sp-wf-task-item { display: flex; align-items: center; gap: 8px; padding: 7px 9px; background: var(--agi-ext-bg); border: 1px solid var(--agi-ext-border); border-radius: var(--corner-control); }
     .sp-wf-task-info { flex: 1; min-width: 0; }
@@ -3263,6 +3513,9 @@ function injectStyles(): void {
     .sp-create-shortcut-textarea:focus { border-color: var(--agi-ext-focus); }
     .sp-create-shortcut-textarea:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
     .sp-create-shortcut-textarea::placeholder { color: var(--agi-ext-text-placeholder); }
+    .sp-create-shortcut-input[aria-invalid='true'], .sp-create-shortcut-textarea[aria-invalid='true'] { border-color: var(--agi-ext-danger); }
+    .sp-create-shortcut-hint { color: var(--agi-ext-text-muted); font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
+    .sp-create-shortcut-hint:empty { display: none; }
     .sp-create-shortcut-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 2px; }
     .sp-create-shortcut-cancel { background: none; border: 1px solid var(--agi-ext-border); color: var(--agi-ext-text-muted); border-radius: var(--corner-control); padding: 6px 14px; font-size: var(--type-caption-size); line-height: var(--type-caption-height); cursor: pointer; transition: color var(--duration-instant); }
     .sp-create-shortcut-cancel:hover { color: var(--agi-ext-text); }
@@ -3345,11 +3598,20 @@ function injectStyles(): void {
       white-space: nowrap;
     }
     .sp-model-option.selected .sp-model-option-sublabel { color: var(--agi-ext-accent-text); opacity: 0.7; }
+    .sp-model-option-auto .sp-model-option-sublabel { white-space: normal; }
     .sp-model-option:hover .sp-model-option-sublabel { color: var(--agi-ext-text-muted); }
 
     /* ── Free-tier model gating: Upgrade badge on premium models ── */
-    .sp-model-option.premium-gated { opacity: 0.75; }
-    .sp-model-option.premium-gated:hover { background: var(--agi-ext-hover); color: var(--agi-ext-text); opacity: 1; cursor: pointer; }
+    .sp-model-option-lock {
+      padding: 1px 6px;
+      border-radius: var(--corner-control);
+      background: var(--agi-ext-overlay);
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
     .sp-model-upgrade-tag {
       font-size: var(--type-caption-size);
       line-height: var(--type-caption-height);
@@ -4700,6 +4962,7 @@ function injectStyles(): void {
     }#sp-model-dropdown,
 #sp-attach-menu,
 #sp-slash-menu,
+#sp-mention-menu,
 #sp-shortcuts-dropdown {
       padding: 6px;
       border-color: var(--agi-ext-border-strong);
@@ -4818,6 +5081,16 @@ function injectStyles(): void {
       line-height: var(--type-body-height);
       white-space: nowrap;
     }
+    #sp-model-mode-badge {
+      padding: 0 6px;
+      border-radius: var(--corner-control);
+      background: var(--agi-ext-overlay);
+      color: var(--agi-ext-text);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      white-space: nowrap;
+    }
+    #sp-model-mode-badge[hidden] { display: none; }
 
     .sp-autonomy-chip {
       justify-content: center;
@@ -5225,12 +5498,88 @@ function iconButton(attrs: Record<string, string>, icon: string): HTMLElement {
   return button;
 }
 
+let promptShortcuts: PromptShortcut[] = [];
+let editPromptShortcut: (shortcut: PromptShortcut) => void = () => {};
+
+function loadPromptShortcuts(): void {
+  chrome.storage.local.get(SHORTCUTS_STORAGE_KEY, (items) => {
+    if (chrome.runtime.lastError) {
+      console.warn('[SidePanel] Could not read saved shortcuts:', chrome.runtime.lastError.message);
+      return;
+    }
+    promptShortcuts = promptShortcutsFromSaved(items[SHORTCUTS_STORAGE_KEY]);
+  });
+}
+
+const RECENT_PROJECT_LIMIT = 3;
+let recentProjects: ActiveProjectSelection[] = [];
+let recentProjectsGeneration = 0;
+let chooseChatProject: (project: ActiveProjectSelection | null) => void = () => {};
+
+function updateEmptyStateActions(): void {
+  const ready = managedCloudChatState === 'ready' && _ctx.managedCloudOwner !== null;
+  const pageBlocked = document.getElementById('sp-blocked')?.classList.contains('visible') === true;
+  const suggestions = document.getElementById('sp-empty-suggestions');
+  if (suggestions) suggestions.hidden = !ready || pageBlocked;
+  const projects = document.getElementById('sp-empty-projects');
+  if (projects) projects.hidden = !ready || recentProjects.length === 0;
+}
+
+function renderRecentProjects(): void {
+  const list = document.getElementById('sp-empty-projects-list');
+  if (!list) return;
+  clearChildren(list);
+  for (const project of recentProjects) {
+    const button = el('button', {
+      class: 'sp-empty-action',
+      type: 'button',
+      'aria-pressed': String(_ctx.activeProject?.id === project.id),
+    });
+    button.appendChild(renderIcon(Folder, 15));
+    button.appendChild(el('span', { class: 'sp-empty-action-label' }, project.name));
+    button.addEventListener('click', () => {
+      chooseChatProject(_ctx.activeProject?.id === project.id ? null : project);
+      document.getElementById('sp-input')?.focus();
+    });
+    list.appendChild(button);
+  }
+  updateEmptyStateActions();
+}
+
+async function refreshRecentProjects(): Promise<void> {
+  const owner = _ctx.managedCloudOwner;
+  const generation = ++recentProjectsGeneration;
+  if (!owner || managedCloudChatState !== 'ready') {
+    recentProjects = [];
+    renderRecentProjects();
+    return;
+  }
+  const result = await listChromeProjects();
+  if (
+    generation !== recentProjectsGeneration ||
+    !sameManagedCloudOwner(owner, _ctx.managedCloudOwner)
+  ) {
+    return;
+  }
+  recentProjects =
+    result.status === 'success'
+      ? [...result.projects]
+          .sort((left, right) =>
+            (right.lastUsedAt ?? right.updatedAt).localeCompare(left.lastUsedAt ?? left.updatedAt),
+          )
+          .slice(0, RECENT_PROJECT_LIMIT)
+          .map((project) => ({ id: project.id, name: project.name }))
+      : [];
+  renderRecentProjects();
+}
+
 function renderMessages(): void {
   const container = document.getElementById('sp-messages')!;
   const emptyEl = document.getElementById('sp-empty');
 
   if (_ctx.messages.length === 0) {
     if (emptyEl) emptyEl.classList.remove('hidden');
+    updateEmptyStateActions();
     container.querySelectorAll('.sp-msg, .sp-thinking-wrap').forEach((n) => n.remove());
     _ctx.lastRenderedCount = 0;
     _ctx.needsMessageRebuild = false;
@@ -5309,6 +5658,7 @@ function applyModelSelection(value: string): void {
         : resolveModelEffort(value, _ctx.reasoningEffort);
   }
   _ctx.selectedModel = value;
+  newChatModelSelection = value;
   renderModelNotice(null);
   chrome.storage.local.set({ [SELECTED_MODEL_STORAGE_KEY]: value }).catch(() => {});
   refreshModelPickerUI();
@@ -5433,118 +5783,87 @@ async function capturePageContext(): Promise<PageContextCapture> {
         resolve({ ok: false, reason: 'No page is open in the active tab.' });
         return;
       }
-      chrome.scripting.executeScript(
-        {
-          target: { tabId: tab.id },
-          func: () => {
-            const main = document.querySelector('main, article, [role="main"]');
-            const mainText = main instanceof HTMLElement ? main.innerText.trim() : '';
-            const text = mainText.length >= 200 ? mainText : (document.body?.innerText ?? '');
-            return text.slice(0, 5000);
-          },
-        },
-        (results) => {
-          const scriptFailure = chrome.runtime.lastError?.message;
-          if (scriptFailure) {
-            resolve({ ok: false, reason: describePageContextFailure(scriptFailure) });
-            return;
-          }
-          const raw = typeof results?.[0]?.result === 'string' ? results[0].result : '';
-          const text = sanitizePageText(raw).slice(0, PAGE_CONTEXT_MAX_CHARS);
-          resolve(
-            text.trim()
-              ? {
-                  ok: true,
-                  text,
-                  source: {
-                    tabId: tab.id!,
-                    url: tab.url ?? '',
-                    ...(tab.title ? { title: tab.title } : {}),
-                  },
-                }
-              : { ok: false, reason: PAGE_CONTEXT_EMPTY_REASON },
-          );
-        },
-      );
+      void readTabText(tab).then(resolve);
     });
   });
 }
 
-interface SlashCommandMeta {
-  display: string;
-  prompt: string;
-  captureContext: boolean;
-  hint: string;
-}
-
-const SLASH_COMMANDS: Record<string, SlashCommandMeta> = {
-  '/summarize': {
-    display: '/summarize',
-    prompt:
-      'Summarize this page concisely. Include key points, main arguments, and any important details.',
-    captureContext: true,
-    hint: 'Key points and main arguments of this page',
-  },
-  '/tldr': {
-    display: '/tldr',
-    prompt: 'Give me a TL;DR of this page in 2-3 sentences.',
-    captureContext: true,
-    hint: 'Two or three sentences, nothing more',
-  },
-  '/explain': {
-    display: '/explain',
-    prompt: 'Explain the content of this page in simple terms. Break down any complex concepts.',
-    captureContext: true,
-    hint: 'Plain-language explanation of this page',
-  },
-  '/translate': {
-    display: '/translate',
-    prompt:
-      'Translate the main content of this page to English. If already in English, translate to Spanish.',
-    captureContext: true,
-    hint: 'Translate the page, add a language to choose',
-  },
-  '/extract': {
-    display: '/extract',
-    prompt:
-      'Extract the key structured data from this page: names, dates, numbers, prices, and any tabular information.',
-    captureContext: true,
-    hint: 'Pull out names, dates, numbers and tables',
-  },
-  '/code': {
-    display: '/code',
-    prompt:
-      'Extract and explain all code snippets on this page. For each snippet, describe what it does and suggest improvements.',
-    captureContext: true,
-    hint: 'Find and explain code on this page',
-  },
-};
-
-function matchSlashCommands(fragment: string): Array<[string, SlashCommandMeta]> {
-  const q = fragment.trim().toLowerCase();
-  if (!q.startsWith('/') || q.includes(' ')) return [];
-  return Object.entries(SLASH_COMMANDS).filter(([name]) => name.startsWith(q));
-}
-
-function expandSlashCommand(
-  raw: string,
-): { display: string; prompt: string; captureContext: boolean } | null {
-  const trimmed = raw.trim();
-  const exact = SLASH_COMMANDS[trimmed];
-  if (exact) return exact;
-
-  for (const [cmd, meta] of Object.entries(SLASH_COMMANDS)) {
-    if (trimmed.startsWith(cmd + ' ')) {
-      const extra = trimmed.slice(cmd.length + 1).trim();
-      return {
-        display: trimmed,
-        prompt: `${meta.prompt}\n\nAdditional instruction: ${extra}`,
-        captureContext: meta.captureContext,
-      };
+function readTabText(tab: chrome.tabs.Tab, chosen = false): Promise<PageContextCapture> {
+  return new Promise((resolve) => {
+    if (!tab.id) {
+      resolve({ ok: false, reason: 'That tab has no page to read.' });
+      return;
     }
-  }
+    chrome.scripting.executeScript(
+      {
+        target: { tabId: tab.id },
+        func: () => {
+          const main = document.querySelector('main, article, [role="main"]');
+          const mainText = main instanceof HTMLElement ? main.innerText.trim() : '';
+          const text = mainText.length >= 200 ? mainText : (document.body?.innerText ?? '');
+          return text.slice(0, 5000);
+        },
+      },
+      (results) => {
+        const scriptFailure = chrome.runtime.lastError?.message;
+        if (scriptFailure) {
+          resolve({ ok: false, reason: describePageContextFailure(scriptFailure) });
+          return;
+        }
+        const raw = typeof results?.[0]?.result === 'string' ? results[0].result : '';
+        const text = sanitizePageText(raw).slice(0, PAGE_CONTEXT_MAX_CHARS);
+        resolve(
+          text.trim()
+            ? {
+                ok: true,
+                text,
+                source: {
+                  tabId: tab.id!,
+                  url: tab.url ?? '',
+                  ...(tab.title ? { title: tab.title } : {}),
+                  ...(chosen ? { chosen: true } : {}),
+                },
+              }
+            : { ok: false, reason: PAGE_CONTEXT_EMPTY_REASON },
+        );
+      },
+    );
+  });
+}
 
-  return null;
+async function readLinkedPage(url: string): Promise<PageContextCapture> {
+  let response: Response;
+  try {
+    response = await fetch(url, { credentials: 'omit', redirect: 'follow' });
+  } catch {
+    return { ok: false, reason: t('spLinkUnreachable', [pageChipLabel(url)]) };
+  }
+  if (!response.ok) {
+    return { ok: false, reason: t('spLinkStatus', [pageChipLabel(url), String(response.status)]) };
+  }
+  const contentType = response.headers.get('content-type') ?? '';
+  if (!/^text\/(html|plain)|application\/xhtml\+xml/i.test(contentType)) {
+    return { ok: false, reason: t('spLinkNotText', [pageChipLabel(url)]) };
+  }
+  const body = await response.text();
+  const page = /^text\/plain/i.test(contentType)
+    ? null
+    : new DOMParser().parseFromString(body, 'text/html');
+  page?.querySelectorAll('script, style, noscript, template, svg').forEach((node) => node.remove());
+  const main = page?.querySelector('main, article, [role="main"]');
+  const mainText = main?.textContent?.trim() ?? '';
+  const raw = page ? (mainText.length >= 200 ? mainText : (page.body?.textContent ?? '')) : body;
+  const text = sanitizePageText(raw.replace(/\s+\n/g, '\n').replace(/[ \t]{2,}/g, ' ')).slice(
+    0,
+    PAGE_CONTEXT_MAX_CHARS,
+  );
+  if (!text.trim()) return { ok: false, reason: PAGE_CONTEXT_EMPTY_REASON };
+  const title = page?.title.trim();
+  return {
+    ok: true,
+    text,
+    source: { url: response.url || url, ...(title ? { title } : {}), chosen: true },
+  };
 }
 
 function requestStreamCancellation(streamId: string): Promise<void> {
@@ -5718,6 +6037,7 @@ function cancelCurrentManagedStream(preservePartialOutput: boolean): void {
         _ctx.needsMessageRebuild = true;
         renderMessages();
       }
+      if (preservePartialOutput) sendNextFollowUp();
     });
   }
   stopManagedChatKeepalive();
@@ -5768,13 +6088,67 @@ function pageReference(source: PageContextSource): SidePanelPageReference {
   return { url: source.url, title: source.title || pageChipLabel(source.url) };
 }
 
-function sendMessage(text: string): void {
+const followUpQueue = createMessageQueue();
+
+function canQueueFollowUp(text: string): boolean {
+  return (
+    managedCloudChatState === 'ready' &&
+    _ctx.managedCloudOwner !== null &&
+    (_ctx.isStreaming || stoppingStreamId !== null) &&
+    !historyRestoreInProgress &&
+    text.trim().length > 0
+  );
+}
+
+function submitComposerText(text: string): boolean {
+  if (canAdmitComposerMessage(text)) {
+    sendMessage(text);
+    return true;
+  }
+  if (!canQueueFollowUp(text)) return false;
+  try {
+    followUpQueue.enqueue({ value: text.trim(), mode: 'prompt' });
+  } catch (err) {
+    if (!(err instanceof QueueFullError)) throw err;
+    composerContextNotice = t('spQueuedFull', [String(LANE_CAP)]);
+    updateAttachmentPreview();
+    return false;
+  }
+  return true;
+}
+
+function sendNextFollowUp(): void {
+  const next = followUpQueue.peek();
+  if (!next || typeof next.value !== 'string' || !canAdmitComposerMessage(next.value)) return;
+  followUpQueue.dequeueIf(next.id);
+  sendMessage(next.value);
+}
+
+function returnFollowUpsToComposer(): void {
+  const parked = followUpQueue
+    .dequeueAll()
+    .flatMap((command) => (typeof command.value === 'string' ? [command.value] : []));
+  if (parked.length === 0) return;
+  const input = document.getElementById('sp-input') as HTMLTextAreaElement | null;
+  if (!input) return;
+  const current = input.value.trim();
+  replaceComposerText(input, [...parked, ...(current ? [current] : [])].join('\n\n'));
+  autoResizeInput(input);
+  composerContextNotice = t('spQueuedReturned');
+  updateAttachmentPreview();
+  updateSendButton();
+}
+
+function sendMessage(text: string, displayText?: string): void {
   if (!canAdmitComposerMessage(text)) return;
-  const prompt = resolveComposerPrompt(
-    text,
-    pendingAttachmentCount(),
-    pendingDocuments.length > 0 ? 'file' : 'image',
-  )!;
+  const prompt = expandPromptShortcut(
+    resolveComposerPrompt(
+      text,
+      pendingAttachmentCount(),
+      pendingDocuments.length > 0 ? 'file' : 'image',
+    )!,
+    promptShortcuts,
+  );
   _ctx.conversationGeneration += 1;
   renderModelNotice(null);
 
@@ -5809,7 +6183,7 @@ function sendMessage(text: string): void {
   const userMsg: ChatMessage = {
     id: `u-${Date.now()}`,
     role: 'user',
-    content: capturePage && slashCmd ? slashCmd.display : prompt,
+    content: displayText ?? (capturePage && slashCmd ? slashCmd.display : prompt),
     timestamp: Date.now(),
     runtime: 'managed-cloud',
     ...(attachments.length > 0 ? { attachments } : {}),
@@ -5905,6 +6279,7 @@ function postTurn(
       extendedThinking: _ctx.thinkingEnabled || undefined,
       modelSelection: _ctx.selectedModel,
       quickMode: quickMode || undefined,
+      ...(_ctx.workMode === 'agiwork' ? { workMode: 'agiwork' } : {}),
       ...managedOutboundRoutingPayload(quickMode),
       ...managedTurnPersistencePayload(streamId),
     },
@@ -5943,11 +6318,10 @@ function replayableTurnPayload(userMsg: ChatMessage): TurnPayload | null {
 function restoreTurnToComposer(userMsg: ChatMessage): void {
   const input = document.getElementById('sp-input') as HTMLTextAreaElement | null;
   if (!input) return;
-  input.value = userMsg.content;
+  replaceComposerText(input, userMsg.content);
   autoResizeInput(input);
   composerContextNotice = t('spRetryNeedsAttachments');
   updateAttachmentPreview();
-  input.focus();
 }
 
 function canReplayTurn(): boolean {
@@ -6068,6 +6442,7 @@ function handleStreamError(
   _ctx.needsMessageRebuild = true;
   saveMessages();
   renderMessages();
+  sendNextFollowUp();
 }
 
 function ensureStreamingAssistant(streamId: string, streamUsedQuick: boolean): ChatMessage {
@@ -6146,6 +6521,12 @@ function updateModelBadge(modelId: string): void {
 
 function updateSendButton(): void {
   document.getElementById('sp-messages')?.classList.toggle('sp-messages--busy', _ctx.isStreaming);
+  const composer = document.getElementById('sp-input') as HTMLTextAreaElement | null;
+  if (composer && managedCloudChatState === 'ready') {
+    composer.placeholder = _ctx.isStreaming
+      ? t('spComposerPlaceholderQueue')
+      : t('spComposerPlaceholder');
+  }
   const btn = document.getElementById('sp-send-btn') as HTMLButtonElement | null;
   if (!btn) return;
   if (_ctx.isStreaming) {
@@ -6736,6 +7117,7 @@ function setBlockedState(blocked: boolean): void {
       : t('spContextBtnUnavailable');
   }
   updateSendButton();
+  updateEmptyStateActions();
 }
 
 function refreshPageHostname(): void {
@@ -7240,7 +7622,11 @@ function buildUI(): void {
   modelBadge.textContent = t('spModelBadgeDefault');
   const modelEffortBadge = document.createElement('span');
   modelEffortBadge.id = 'sp-model-effort-badge';
-  modelSelectorBtn.replaceChildren(modelBadge, modelEffortBadge);
+  const modelModeBadge = document.createElement('span');
+  modelModeBadge.id = 'sp-model-mode-badge';
+  modelModeBadge.textContent = t('spAgiWork');
+  modelModeBadge.hidden = true;
+  modelSelectorBtn.replaceChildren(modelBadge, modelEffortBadge, modelModeBadge);
   const modelDropdownEl = el('div', {
     id: 'sp-model-dropdown',
     role: 'menu',
@@ -7283,21 +7669,33 @@ function buildUI(): void {
 
   function buildModelOptionRow(m: ManagedModelPickerOption, isSelected: boolean): HTMLElement {
     const isAuto = m.value === 'auto';
+    const lockLabel = m.lockLabel;
 
     const classes = [
       'sp-model-option',
       isSelected ? 'selected' : '',
       isAuto ? 'sp-model-option-auto' : '',
+      lockLabel ? 'sp-model-option-locked' : '',
     ]
       .filter(Boolean)
       .join(' ');
 
-    const opt = el('button', {
-      class: classes,
-      type: 'button',
-      role: 'menuitemradio',
-      'aria-checked': String(isSelected),
-    });
+    const opt = el(
+      'button',
+      lockLabel
+        ? {
+            class: classes,
+            type: 'button',
+            role: 'menuitem',
+            'aria-label': t('spModelLockedAria', [m.label, lockLabel]),
+          }
+        : {
+            class: classes,
+            type: 'button',
+            role: 'menuitemradio',
+            'aria-checked': String(isSelected),
+          },
+    );
 
     if (isAuto) {
       opt.appendChild(el('div', { class: 'sp-model-auto-dot' }));
@@ -7332,24 +7730,44 @@ function buildUI(): void {
     textBlock.appendChild(el('span', { class: 'sp-model-option-name' }, m.label));
     const sublabel = isAuto
       ? t('spModelAutoDescription')
-      : (m.description ?? getManagedCapabilityLabel(m));
+      : [
+          m.speed ? modelSpeedLabel(m.speed) : undefined,
+          m.description ?? getManagedCapabilityLabel(m),
+        ]
+          .filter(Boolean)
+          .join(' · ');
     if (sublabel) {
       textBlock.appendChild(el('span', { class: 'sp-model-option-sublabel' }, sublabel));
     }
     opt.appendChild(textBlock);
+
+    if (lockLabel) {
+      opt.appendChild(
+        el('span', { class: 'sp-model-option-lock', 'aria-hidden': 'true' }, lockLabel),
+      );
+      opt.addEventListener('click', () => {
+        closeModelDropdown();
+        chrome.tabs.create({ url: agiWebUrl('/pricing') }).catch(() => {});
+      });
+      return opt;
+    }
 
     const checkCell = el('span', { class: 'sp-model-option-check' });
     if (isSelected) checkCell.appendChild(renderIcon(Check, 12));
     opt.appendChild(checkCell);
     opt.addEventListener('click', () => {
       applyModelSelection(m.value);
-      modelDropdownEl.classList.remove('open');
-      modelSelectorBtn.classList.remove('open');
-      modelSelectorBtn.setAttribute('aria-expanded', 'false');
+      closeModelDropdown();
       modelSelectorBtn.focus();
     });
 
     return opt;
+  }
+
+  function closeModelDropdown(): void {
+    modelDropdownEl.classList.remove('open');
+    modelSelectorBtn.classList.remove('open');
+    modelSelectorBtn.setAttribute('aria-expanded', 'false');
   }
 
   function currentEffortState() {
@@ -7444,6 +7862,38 @@ function buildUI(): void {
     modelDropdownEl.appendChild(row);
   }
 
+  function appendWorkModeRow(): void {
+    if (!managedModelAccess) return;
+    if (canUseBillingPlanCapability(managedModelAccess.subscriptionTier, 'agi_work')) {
+      appendToggleRow(
+        'sp-agi-work-toggle',
+        t('spAgiWork'),
+        t('spAgiWorkDescription'),
+        _ctx.workMode === 'agiwork',
+        (next) => {
+          _ctx.workMode = next ? 'agiwork' : 'chat';
+          renderModelDropdown();
+          renderModelTrigger();
+        },
+      );
+      return;
+    }
+    const unlockPlanLabel = agiWorkUnlockPlanLabel();
+    if (!unlockPlanLabel) return;
+    const gatedCopy = t('spAgiWorkGated', [unlockPlanLabel]);
+    const row = el('div', {
+      class: 'sp-menu-toggle-row',
+      'aria-disabled': 'true',
+      title: gatedCopy,
+    });
+    const copy = el('div', { class: 'sp-menu-toggle-copy' });
+    copy.appendChild(el('span', { class: 'sp-menu-toggle-label' }, t('spAgiWork')));
+    copy.appendChild(el('span', { class: 'sp-menu-toggle-desc' }, gatedCopy));
+    row.appendChild(copy);
+    row.appendChild(el('span', { class: 'sp-effort-option-badge' }, unlockPlanLabel));
+    modelDropdownEl.appendChild(row);
+  }
+
   function applyQuickMode(next: boolean): void {
     const previous = _ctx.quickMode;
     _ctx.quickMode = next;
@@ -7466,14 +7916,21 @@ function buildUI(): void {
 
   function renderModelDropdown(): void {
     clearChildren(modelDropdownEl);
-    const modelOptions = getManagedModelPickerOptions(managedModelAccess);
-
-    const autoOption = modelOptions.find((option) => option.value === 'auto');
+    const autoOption = getManagedModelPickerOptions(null)[0];
     if (autoOption) {
       modelDropdownEl.appendChild(buildModelOptionRow(autoOption, _ctx.selectedModel === 'auto'));
     }
-    const { primary, more } = partitionManagedModelOptions(modelOptions);
-    appendModelRows(primary);
+    const view = managedModelAccess
+      ? buildManagedModelPickerView(managedModelAccess, _ctx.selectedModel)
+      : null;
+    const more = view?.more ?? [];
+    if (view?.current) appendModelRows([view.current]);
+    if (view && view.recommended.length > 0) {
+      modelDropdownEl.appendChild(
+        el('div', { class: 'sp-model-group-header' }, t('spModelsRecommended')),
+      );
+      appendModelRows(view.recommended);
+    }
     if (managedModelAccess === null) {
       modelDropdownEl.appendChild(el('div', { class: 'sp-menu-note' }, t('spModelsSignedOut')));
     }
@@ -7497,6 +7954,7 @@ function buildUI(): void {
         renderModelDropdown();
       },
     );
+    appendWorkModeRow();
 
     if (more.length === 0) return;
     modelDropdownEl.appendChild(el('div', { class: 'sp-menu-heading' }, t('spMoreModels')));
@@ -7536,10 +7994,14 @@ function buildUI(): void {
         : t('spEffortAuto');
     modelEffortBadge.textContent = state.status === 'ready' ? effortLabel : '';
     modelEffortBadge.hidden = state.status !== 'ready';
+    modelModeBadge.hidden = _ctx.workMode !== 'agiwork';
     modelSelectorBtn.title = state.description;
+    const menuLabelArgs = [getModelBadgeLabel(_ctx.selectedModel), effortLabel];
     modelSelectorBtn.setAttribute(
       'aria-label',
-      t('spModelMenuAria', [getModelBadgeLabel(_ctx.selectedModel), effortLabel]),
+      _ctx.workMode === 'agiwork'
+        ? t('spModelMenuAriaWork', menuLabelArgs)
+        : t('spModelMenuAria', menuLabelArgs),
     );
   }
   refreshEffortUI = renderModelTrigger;
@@ -7636,6 +8098,7 @@ function buildUI(): void {
     const storedModel = result[SELECTED_MODEL_STORAGE_KEY] as string | undefined;
     if (storedModel) {
       _ctx.selectedModel = storedModel;
+      newChatModelSelection = storedModel;
     }
     renderModelDropdown();
     renderModelTrigger();
@@ -7700,6 +8163,7 @@ function buildUI(): void {
 
   function renderProjectChip(): void {
     const project = _ctx.activeProject;
+    renderRecentProjects();
     if (!project) {
       projectChip.hidden = true;
       return;
@@ -7788,6 +8252,8 @@ function buildUI(): void {
         clearTimeout(_ctx.streamTimeoutHandle);
         _ctx.streamTimeoutHandle = null;
       }
+      returnFollowUpsToComposer();
+      _ctx.workMode = 'chat';
       _ctx.messages.length = 0;
       turnPayloadByMessageId.clear();
       _ctx.lastRenderedCount = 0;
@@ -9808,6 +10274,7 @@ function buildUI(): void {
 
     managedModelAccess = access;
     signInAwaitingCompletion = false;
+    if (!canUseBillingPlanCapability(access.subscriptionTier, 'agi_work')) _ctx.workMode = 'chat';
     const reconciledSelection = reconcileManagedModelSelection(_ctx.selectedModel, access);
     const unavailableSelection =
       reconciledSelection !== _ctx.selectedModel ? _ctx.selectedModel : null;
@@ -10197,6 +10664,46 @@ function buildUI(): void {
   </svg>`;
   appendSvgString(emptyIcon, emptyIconSvg);
   emptyState.appendChild(emptyIcon);
+  const suggestionGroup = el('div', {
+    id: 'sp-empty-suggestions',
+    class: 'sp-empty-actions',
+    role: 'group',
+    'aria-label': t('spSuggestionsLabel'),
+    hidden: '',
+  });
+  const suggestions: Array<[string, string]> = [
+    ['/summarize', t('spSuggestionSummarize')],
+    ['/explain', t('spSuggestionExplain')],
+    ['/extract', t('spSuggestionExtract')],
+    ['/translate', t('spSuggestionTranslate')],
+  ];
+  for (const [command, label] of suggestions) {
+    const suggestion = el('button', { class: 'sp-empty-action', type: 'button' });
+    suggestion.appendChild(renderIcon(FileText, 15));
+    suggestion.appendChild(el('span', { class: 'sp-empty-action-label' }, label));
+    suggestion.addEventListener('click', () => sendMessage(command, label));
+    suggestionGroup.appendChild(suggestion);
+  }
+  emptyState.appendChild(suggestionGroup);
+  const recentProjectsGroup = el('div', {
+    id: 'sp-empty-projects',
+    class: 'sp-empty-actions',
+    role: 'group',
+    'aria-labelledby': 'sp-empty-projects-title',
+    hidden: '',
+  });
+  recentProjectsGroup.appendChild(
+    el(
+      'h2',
+      { class: 'sp-empty-actions-title', id: 'sp-empty-projects-title' },
+      t('spRecentProjectsTitle'),
+    ),
+  );
+  recentProjectsGroup.appendChild(
+    el('div', { id: 'sp-empty-projects-list', class: 'sp-empty-actions-list' }),
+  );
+  emptyState.appendChild(recentProjectsGroup);
+  chooseChatProject = (project) => selectActiveProject(project);
   msgsArea.appendChild(emptyState);
 
   const blockedState = el('div', {
@@ -10543,20 +11050,19 @@ function buildUI(): void {
     'aria-labelledby': 'sp-create-shortcut-title',
   });
   const modalHeader = el('div', { class: 'sp-create-shortcut-header' });
-  modalHeader.appendChild(
-    el(
-      'div',
-      { class: 'sp-create-shortcut-title', id: 'sp-create-shortcut-title' },
-      'Create shortcut',
-    ),
+  const modalTitle = el(
+    'div',
+    { class: 'sp-create-shortcut-title', id: 'sp-create-shortcut-title' },
+    t('spShortcutCreate'),
   );
+  modalHeader.appendChild(modalTitle);
   const modalCloseBtn = el(
     'button',
     {
       class: 'sp-create-shortcut-close',
       type: 'button',
       title: 'Close',
-      'aria-label': 'Close create shortcut dialog',
+      'aria-label': 'Close shortcut dialog',
     },
     '×',
   );
@@ -10564,28 +11070,50 @@ function buildUI(): void {
   createShortcutModal.appendChild(modalHeader);
 
   const nameField = el('div', { class: 'sp-create-shortcut-field' });
-  nameField.appendChild(el('div', { class: 'sp-create-shortcut-label' }, 'Name'));
+  nameField.appendChild(
+    el('label', { class: 'sp-create-shortcut-label', for: 'sp-sc-name' }, 'Name'),
+  );
   const scNameInput = el('input', {
     class: 'sp-create-shortcut-input',
     placeholder: 'e.g. Daily research',
     id: 'sp-sc-name',
+    'aria-describedby': 'sp-sc-command',
   }) as HTMLInputElement;
   nameField.appendChild(scNameInput);
+  const scCommandHint = el('div', { class: 'sp-create-shortcut-hint', id: 'sp-sc-command' });
+  nameField.appendChild(scCommandHint);
   createShortcutModal.appendChild(nameField);
 
   const promptField = el('div', { class: 'sp-create-shortcut-field' });
-  promptField.appendChild(el('div', { class: 'sp-create-shortcut-label' }, 'Prompt'));
+  promptField.appendChild(
+    el('label', { class: 'sp-create-shortcut-label', for: 'sp-sc-prompt' }, 'Prompt'),
+  );
   const scPromptInput = el('textarea', {
     class: 'sp-create-shortcut-textarea',
-    placeholder: 'Enter your prompt text...',
+    placeholder: t('spShortcutPromptPlaceholder', [SHORTCUT_INPUT_PLACEHOLDER]),
     id: 'sp-sc-prompt',
+    'aria-describedby': 'sp-sc-prompt-hint',
   }) as HTMLTextAreaElement;
   promptField.appendChild(scPromptInput);
+  promptField.appendChild(
+    el(
+      'div',
+      { class: 'sp-create-shortcut-hint', id: 'sp-sc-prompt-hint' },
+      t('spShortcutInputHint', [SHORTCUT_INPUT_PLACEHOLDER]),
+    ),
+  );
   createShortcutModal.appendChild(promptField);
+
+  const scError = el('div', { class: 'sp-wf-form-error', role: 'status', 'aria-live': 'polite' });
+  createShortcutModal.appendChild(scError);
 
   const modalActions = el('div', { class: 'sp-create-shortcut-actions' });
   const scCancelBtn = el('button', { class: 'sp-create-shortcut-cancel' }, 'Cancel');
-  const scSaveBtn = el('button', { class: 'sp-create-shortcut-save' }, 'Create shortcut');
+  const scSaveBtn = el(
+    'button',
+    { class: 'sp-create-shortcut-save' },
+    t('spShortcutCreate'),
+  ) as HTMLButtonElement;
   modalActions.appendChild(scCancelBtn);
   modalActions.appendChild(scSaveBtn);
   createShortcutModal.appendChild(modalActions);
@@ -10593,10 +11121,34 @@ function buildUI(): void {
   document.body.appendChild(createShortcutOverlay);
 
   let createShortcutReturnFocus: HTMLElement = createShortcutBtn;
+  let editingShortcutId: string | null = null;
 
-  function openCreateShortcutModal(): void {
-    scNameInput.value = '';
-    scPromptInput.value = '';
+  function renderShortcutCommandHint(): void {
+    const command = shortcutCommand(scNameInput.value);
+    scCommandHint.textContent = command ? t('spShortcutCommandHint', [command]) : '';
+  }
+
+  function showShortcutProblem(
+    field: HTMLInputElement | HTMLTextAreaElement,
+    message: string,
+  ): void {
+    scNameInput.removeAttribute('aria-invalid');
+    scPromptInput.removeAttribute('aria-invalid');
+    field.setAttribute('aria-invalid', 'true');
+    scError.textContent = message;
+    field.focus();
+  }
+
+  function openShortcutModal(shortcut: PromptShortcut | null): void {
+    editingShortcutId = shortcut?.id ?? null;
+    scNameInput.value = shortcut?.name ?? '';
+    scPromptInput.value = shortcut?.prompt ?? '';
+    scNameInput.removeAttribute('aria-invalid');
+    scPromptInput.removeAttribute('aria-invalid');
+    scError.textContent = '';
+    modalTitle.textContent = shortcut ? t('spShortcutEditTitle') : t('spShortcutCreate');
+    scSaveBtn.textContent = shortcut ? t('spShortcutSaveChanges') : t('spShortcutCreate');
+    renderShortcutCommandHint();
     if (document.activeElement instanceof HTMLElement) {
       createShortcutReturnFocus = document.activeElement;
     }
@@ -10609,8 +11161,10 @@ function buildUI(): void {
     createShortcutOverlay.setAttribute('aria-hidden', 'true');
     createShortcutReturnFocus.focus();
   }
+  editPromptShortcut = openShortcutModal;
 
-  createShortcutBtn.addEventListener('click', openCreateShortcutModal);
+  createShortcutBtn.addEventListener('click', () => openShortcutModal(null));
+  scNameInput.addEventListener('input', renderShortcutCommandHint);
   modalCloseBtn.addEventListener('click', closeCreateShortcutModal);
   scCancelBtn.addEventListener('click', closeCreateShortcutModal);
   createShortcutOverlay.addEventListener('click', (e: MouseEvent) => {
@@ -10643,41 +11197,43 @@ function buildUI(): void {
   scSaveBtn.addEventListener('click', () => {
     const name = scNameInput.value.trim();
     const prompt = scPromptInput.value.trim();
-    if (!name) {
-      scNameInput.style.borderColor = 'var(--agi-ext-danger)';
-      setTimeout(() => {
-        scNameInput.style.borderColor = '';
-      }, 1500);
+    const editing = editingShortcutId;
+    const conflict = shortcutCommandConflict(name, promptShortcuts, editing ?? undefined);
+    if (conflict === 'unnamed') {
+      showShortcutProblem(scNameInput, t('spShortcutNameUnusable'));
       return;
     }
-    if (!prompt) {
-      scPromptInput.style.borderColor = 'var(--agi-ext-danger)';
-      setTimeout(() => {
-        scPromptInput.style.borderColor = '';
-      }, 1500);
+    if (conflict === 'taken') {
+      showShortcutProblem(scNameInput, t('spShortcutNameTaken', [shortcutCommand(name)]));
       return;
     }
-    (scSaveBtn as HTMLButtonElement).disabled = true;
+    if (!prompt.split(SHORTCUT_INPUT_PLACEHOLDER).join('').trim()) {
+      showShortcutProblem(scPromptInput, t('spShortcutPromptMissing'));
+      return;
+    }
+    scNameInput.removeAttribute('aria-invalid');
+    scPromptInput.removeAttribute('aria-invalid');
+    scError.textContent = '';
+    scSaveBtn.disabled = true;
     scSaveBtn.textContent = t('spShortcutSaving');
     chrome.runtime.sendMessage(
-      { type: 'SAVE_SHORTCUT', name, actions: [], prompt },
+      editing
+        ? { type: 'UPDATE_SHORTCUT', shortcutId: editing, name, prompt }
+        : { type: 'SAVE_SHORTCUT', name, actions: [], prompt },
       (response: { success?: boolean; error?: string } | undefined) => {
-        (scSaveBtn as HTMLButtonElement).disabled = false;
-        scSaveBtn.textContent = t('spShortcutCreate');
+        scSaveBtn.disabled = false;
+        scSaveBtn.textContent = editing ? t('spShortcutSaveChanges') : t('spShortcutCreate');
         const runtimeError = chrome.runtime.lastError;
         if (runtimeError || !response?.success) {
-          scNameInput.style.borderColor = 'var(--agi-ext-danger)';
-          announceWorkflowMutation(
-            response?.error ?? runtimeError?.message ?? t('spShortcutSaveFailed'),
-            'error',
-          );
-          setTimeout(() => {
-            scNameInput.style.borderColor = '';
-          }, 2000);
+          scError.textContent =
+            response?.error ?? runtimeError?.message ?? t('spShortcutSaveFailed');
           return;
         }
         closeCreateShortcutModal();
-        announceWorkflowMutation(`Shortcut "${name}" created.`, 'success');
+        announceWorkflowMutation(
+          editing ? t('spShortcutUpdated', [name]) : `Shortcut "${name}" created.`,
+          'success',
+        );
         refreshWorkflowsShortcuts();
       },
     );
@@ -11206,6 +11762,9 @@ function buildUI(): void {
     });
     slashMenu.classList.add('visible');
     inputEl.setAttribute('aria-activedescendant', `sp-slash-opt-${slashActive}`);
+    slashMenu.querySelector<HTMLElement>('.sp-slash-item.active')?.scrollIntoView({
+      block: 'nearest',
+    });
   }
 
   function closeSlashMenu(): void {
@@ -11217,15 +11776,14 @@ function buildUI(): void {
   function acceptSlash(index: number): void {
     const picked = slashMatches[index];
     if (!picked) return;
-    inputEl.value = `${picked[0]} `;
+    replaceComposerText(inputEl, `${picked[0]} `);
     closeSlashMenu();
-    inputEl.focus();
     autoResizeInput(inputEl);
     updateSendButton();
   }
 
   function refreshSlashMenu(): void {
-    slashMatches = matchSlashCommands(inputEl.value);
+    slashMatches = matchSlashCommands(inputEl.value, promptShortcuts);
     if (slashActive >= slashMatches.length) slashActive = 0;
     renderSlashMenu();
   }
@@ -11252,6 +11810,211 @@ function buildUI(): void {
     }
   });
 
+  function approveSiteForReading(url: string): Promise<boolean> {
+    const origin = normalizeApprovedSiteOrigin(url);
+    if (!origin) return Promise.resolve(false);
+    return requestApprovedSiteHostPermission(origin).then(async (granted) => {
+      if (!granted) return false;
+      const list = await drawerReadAllowlist();
+      if (!list.includes(origin)) await drawerWriteAllowlist([...list, origin]);
+      return true;
+    });
+  }
+
+  function attachPageCapture(capture: PageContextCapture): void {
+    if (capture.ok) {
+      _ctx.pendingPageContext = capture.text;
+      _ctx.pendingPageContextSource = capture.source;
+      composerContextNotice = null;
+    } else {
+      composerContextNotice = capture.reason;
+    }
+    updateAttachmentPreview();
+    updateContextButton();
+  }
+
+  async function attachChosenTab(tab: chrome.tabs.Tab, approval: Promise<boolean>): Promise<void> {
+    if (!(await approval)) {
+      attachPageCapture({
+        ok: false,
+        reason: t('spSiteAccessRefused', [pageChipLabel(tab.url ?? '')]),
+      });
+      return;
+    }
+    attachPageCapture(await readTabText(tab, true));
+  }
+
+  const mentionMenu = el('div', {
+    id: 'sp-mention-menu',
+    role: 'listbox',
+    'aria-label': t('spMentionMenuLabel'),
+  });
+  type MentionOption =
+    | { kind: 'tab'; tab: chrome.tabs.Tab; label: string; detail: string }
+    | { kind: 'project'; project: ActiveProjectSelection; label: string; detail: string };
+  let mentionOptions: MentionOption[] = [];
+  let mentionActive = 0;
+  let mentionStart = -1;
+  let mentionGeneration = 0;
+  let mentionTabs: chrome.tabs.Tab[] = [];
+  let mentionProjects: ActiveProjectSelection[] = [];
+
+  const mentionOpen = (): boolean => mentionOptions.length > 0;
+
+  function mentionAtCaret(): { start: number; end: number; query: string } | null {
+    const end = inputEl.selectionStart ?? inputEl.value.length;
+    if (end !== (inputEl.selectionEnd ?? end)) return null;
+    const match = /(?:^|\s)@([^\s@]*)$/.exec(inputEl.value.slice(0, end));
+    if (!match) return null;
+    const query = match[1] ?? '';
+    return { start: end - query.length - 1, end, query: query.toLowerCase() };
+  }
+
+  function renderMentionMenu(): void {
+    mentionMenu.textContent = '';
+    if (!mentionOpen()) {
+      mentionMenu.classList.remove('visible');
+      if (!slashOpen()) inputEl.removeAttribute('aria-activedescendant');
+      return;
+    }
+    let group: MentionOption['kind'] | null = null;
+    mentionOptions.forEach((option, index) => {
+      if (option.kind !== group) {
+        group = option.kind;
+        mentionMenu.appendChild(
+          el(
+            'div',
+            { class: 'sp-mention-heading', role: 'presentation' },
+            option.kind === 'tab' ? t('spMentionTabs') : t('spMentionProjects'),
+          ),
+        );
+      }
+      const item = el('button', {
+        class: `sp-slash-item${index === mentionActive ? ' active' : ''}`,
+        type: 'button',
+        role: 'option',
+        id: `sp-mention-opt-${index}`,
+        'aria-selected': String(index === mentionActive),
+        tabindex: '-1',
+      });
+      item.appendChild(el('span', { class: 'sp-slash-name' }, option.label));
+      item.appendChild(el('span', { class: 'sp-slash-hint' }, option.detail));
+      item.addEventListener('mousedown', (event: Event) => {
+        event.preventDefault();
+        acceptMention(index);
+      });
+      mentionMenu.appendChild(item);
+    });
+    mentionMenu.classList.add('visible');
+    inputEl.setAttribute('aria-activedescendant', `sp-mention-opt-${mentionActive}`);
+    mentionMenu.querySelector<HTMLElement>('.sp-slash-item.active')?.scrollIntoView({
+      block: 'nearest',
+    });
+  }
+
+  function closeMentionMenu(): void {
+    mentionGeneration += 1;
+    mentionOptions = [];
+    mentionActive = 0;
+    mentionStart = -1;
+    renderMentionMenu();
+  }
+
+  function recomputeMentionOptions(): void {
+    const mention = mentionAtCaret();
+    if (!mention || mentionStart === -1) return;
+    const matchesQuery = (...texts: string[]): boolean =>
+      texts.some((text) => text.toLowerCase().includes(mention.query));
+    const tabOptions = mentionTabs.flatMap((tab): MentionOption[] => {
+      const url = tab.url ?? '';
+      const label = tab.title || pageChipLabel(url);
+      const detail = pageChipLabel(url);
+      return matchesQuery(label, url) ? [{ kind: 'tab', tab, label, detail }] : [];
+    });
+    const projectOptions = mentionProjects.flatMap((project): MentionOption[] =>
+      matchesQuery(project.name)
+        ? [{ kind: 'project', project, label: project.name, detail: t('spMentionProjectDetail') }]
+        : [],
+    );
+    mentionOptions = [...tabOptions, ...projectOptions];
+    if (mentionActive >= mentionOptions.length) mentionActive = 0;
+    renderMentionMenu();
+  }
+
+  function refreshMentionMenu(): void {
+    const mention =
+      managedCloudChatState === 'ready' && _ctx.managedCloudOwner !== null
+        ? mentionAtCaret()
+        : null;
+    if (!mention) {
+      if (mentionStart !== -1) closeMentionMenu();
+      return;
+    }
+    const opening = mentionStart === -1;
+    mentionStart = mention.start;
+    if (!opening) {
+      recomputeMentionOptions();
+      return;
+    }
+    const generation = ++mentionGeneration;
+    chrome.tabs.query({ currentWindow: true }, (tabs) => {
+      if (generation !== mentionGeneration) return;
+      mentionTabs = chrome.runtime.lastError
+        ? []
+        : tabs.filter((tab) => tab.id !== undefined && !!tab.url && !isRestrictedPageUrl(tab.url));
+      recomputeMentionOptions();
+    });
+    void listChromeProjects().then((result) => {
+      if (generation !== mentionGeneration) return;
+      mentionProjects =
+        result.status === 'success'
+          ? result.projects.map((project) => ({ id: project.id, name: project.name }))
+          : [];
+      recomputeMentionOptions();
+    });
+  }
+
+  function acceptMention(index: number): void {
+    const option = mentionOptions[index];
+    const mention = mentionAtCaret();
+    if (!option || !mention) return;
+    const approval =
+      option.kind === 'tab' && option.tab.id !== activePageSource?.tabId
+        ? approveSiteForReading(option.tab.url ?? '')
+        : Promise.resolve(true);
+    closeMentionMenu();
+    replaceComposerRange(inputEl, mention.start, mention.end, '');
+    autoResizeInput(inputEl);
+    updateSendButton();
+    if (option.kind === 'project') {
+      chooseChatProject(option.project);
+      return;
+    }
+    void attachChosenTab(option.tab, approval);
+  }
+
+  inputEl.addEventListener('input', refreshMentionMenu);
+  inputEl.addEventListener('blur', () => closeMentionMenu());
+  inputEl.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (!mentionOpen()) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      mentionActive = (mentionActive + 1) % mentionOptions.length;
+      renderMentionMenu();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      mentionActive = (mentionActive - 1 + mentionOptions.length) % mentionOptions.length;
+      renderMentionMenu();
+    } else if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      acceptMention(mentionActive);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      closeMentionMenu();
+    }
+  });
+
   inputEl.addEventListener('input', () => {
     autoResizeInput(inputEl);
     updateSendButton();
@@ -11260,10 +12023,10 @@ function buildUI(): void {
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229) {
       e.preventDefault();
       const text = inputEl.value;
-      if (!canAdmitComposerMessage(text)) return;
+      if (!submitComposerText(text)) return;
       inputEl.value = '';
       autoResizeInput(inputEl);
-      sendMessage(text);
+      updateSendButton();
     }
   });
 
@@ -11427,7 +12190,90 @@ function buildUI(): void {
     void chrome.tabs.create({ url: CONNECTORS_URL });
   });
 
-  const attachMenuItems = [fileItem, screenshotItem, contextBtn, connectorsItem];
+  const linkItem = el('button', {
+    class: 'sp-attach-menu-item',
+    type: 'button',
+    role: 'menuitem',
+  });
+  linkItem.appendChild(renderIcon(Globe, 16));
+  linkItem.appendChild(el('span', { class: 'sp-attach-menu-label' }, t('spLinkItem')));
+  linkItem.addEventListener('click', () => {
+    attachMenu.classList.remove('open');
+    attachBtn.setAttribute('aria-expanded', 'false');
+    linkError.textContent = '';
+    linkForm.hidden = false;
+    linkInput.focus();
+  });
+
+  const linkForm = el('form', {
+    id: 'sp-link-form',
+    'aria-label': t('spLinkFormLabel'),
+    hidden: '',
+  }) as HTMLFormElement;
+  linkForm.noValidate = true;
+  const linkInput = el('input', {
+    id: 'sp-link-input',
+    type: 'url',
+    inputmode: 'url',
+    autocomplete: 'off',
+    placeholder: 'https://',
+    'aria-label': t('spLinkInputLabel'),
+    'aria-describedby': 'sp-link-error',
+  }) as HTMLInputElement;
+  const linkSubmit = el(
+    'button',
+    { type: 'submit', class: 'sp-link-submit' },
+    t('spLinkAdd'),
+  ) as HTMLButtonElement;
+  const linkCancel = el('button', { type: 'button', class: 'sp-link-cancel' }, t('spLinkCancel'));
+  const linkError = el('div', { id: 'sp-link-error', class: 'sp-link-error', role: 'status' });
+  const linkRow = el('div', { class: 'sp-link-row' });
+  linkRow.append(linkInput, linkSubmit, linkCancel);
+  linkForm.append(linkRow, linkError);
+  const closeLinkForm = (): void => {
+    linkForm.hidden = true;
+    linkInput.value = '';
+    linkError.textContent = '';
+    inputEl.focus();
+  };
+  linkCancel.addEventListener('click', closeLinkForm);
+  linkForm.addEventListener('keydown', (event: KeyboardEvent) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeLinkForm();
+    }
+  });
+  linkForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const url = linkInput.value.trim();
+    if (!normalizeApprovedSiteOrigin(url)) {
+      linkError.textContent = t('spLinkInvalid');
+      linkInput.focus();
+      return;
+    }
+    const approval = approveSiteForReading(url);
+    linkSubmit.disabled = true;
+    linkError.textContent = t('spLinkReading');
+    void approval
+      .then(async (granted) => {
+        if (!granted) {
+          linkError.textContent = t('spSiteAccessRefused', [pageChipLabel(url)]);
+          return;
+        }
+        const capture = await readLinkedPage(url);
+        if (!capture.ok) {
+          linkError.textContent = capture.reason;
+          return;
+        }
+        attachPageCapture(capture);
+        closeLinkForm();
+      })
+      .finally(() => {
+        linkSubmit.disabled = false;
+      });
+  });
+
+  const attachMenuItems = [fileItem, screenshotItem, contextBtn, linkItem, connectorsItem];
   for (const item of attachMenuItems) attachMenu.appendChild(item);
   attachWrapper.appendChild(attachMenu);
   attachWrapper.appendChild(attachBtn);
@@ -11478,7 +12324,65 @@ function buildUI(): void {
 
   inputRow.appendChild(inputEl);
 
+  const queuedList = el('ul', {
+    id: 'sp-queued-list',
+    'aria-label': t('spQueuedListLabel'),
+    hidden: '',
+  });
+  function renderQueuedFollowUps(): void {
+    const queued = followUpQueue
+      .getSnapshot()
+      .flatMap((command) =>
+        typeof command.value === 'string' ? [{ id: command.id, text: command.value }] : [],
+      );
+    clearChildren(queuedList);
+    queuedList.hidden = queued.length === 0;
+    queued.forEach(({ id, text }, index) => {
+      const item = el('li', { class: 'sp-queued-item' });
+      item.appendChild(renderIcon(Clock, 14));
+      const lead =
+        queued.length > 1
+          ? t('spQueuedLeadNumbered', [String(index + 1), String(queued.length)])
+          : t('spQueuedLead');
+      item.appendChild(el('span', { class: 'sp-queued-text' }, `${lead}: ${text}`));
+      const removeQueued = (): void => {
+        followUpQueue.dequeueAllMatching((command) => command.id === id);
+      };
+      const edit = el(
+        'button',
+        { type: 'button', class: 'sp-queued-action', 'aria-label': t('spQueuedEditAria', [text]) },
+        t('spQueuedEdit'),
+      );
+      edit.addEventListener('click', () => {
+        removeQueued();
+        replaceComposerText(inputEl, text);
+        autoResizeInput(inputEl);
+        updateSendButton();
+      });
+      const cancel = el(
+        'button',
+        {
+          type: 'button',
+          class: 'sp-queued-action',
+          'aria-label': t('spQueuedCancelAria', [text]),
+        },
+        t('spQueuedCancel'),
+      );
+      cancel.addEventListener('click', () => {
+        removeQueued();
+        inputEl.focus();
+      });
+      item.appendChild(edit);
+      item.appendChild(cancel);
+      queuedList.appendChild(item);
+    });
+  }
+  followUpQueue.subscribe(renderQueuedFollowUps);
+
+  composerShell.appendChild(queuedList);
   composerShell.appendChild(slashMenu);
+  composerShell.appendChild(mentionMenu);
+  composerShell.appendChild(linkForm);
   composerShell.appendChild(inputRow);
 
   const composerBar = el('div', { id: 'sp-composer-bar' });
@@ -11878,14 +12782,19 @@ function refreshShortcuts(): void {
   );
 }
 
+let workflowAnnouncements = 0;
+
 function announceWorkflowMutation(
   message: string,
   kind: 'info' | 'success' | 'error' = 'info',
-): void {
+): number {
+  workflowAnnouncements += 1;
   const status = document.getElementById('sp-wf-mutation-status');
-  if (!status) return;
-  status.textContent = message;
-  status.setAttribute('data-kind', kind);
+  if (status) {
+    status.textContent = message;
+    status.setAttribute('data-kind', kind);
+  }
+  return workflowAnnouncements;
 }
 
 function refreshWorkflowsShortcuts(): void {
@@ -11947,9 +12856,11 @@ function renderShortcutRows(
   storedConversationIds: ReadonlySet<string>,
 ): void {
   clearChildren(list);
+  const savedPromptShortcuts = promptShortcutsFromSaved(shortcuts);
   for (const sc of shortcuts) {
     const item = el('div', { class: 'sp-wf-shortcut-item' });
-    const isPromptBased = sc.prompt && Array.isArray(sc.actions) && sc.actions.length === 0;
+    const promptShortcut = savedPromptShortcuts.find((candidate) => candidate.id === sc.id);
+    const isPromptBased = promptShortcut !== undefined;
     const shortcutIcon = el('div', { class: 'sp-wf-shortcut-icon' });
     if (isPromptBased) {
       shortcutIcon.textContent = '/';
@@ -11964,8 +12875,13 @@ function renderShortcutRows(
       month: 'short',
       day: 'numeric',
     });
+    const command =
+      promptShortcut &&
+      shortcutCommandConflict(promptShortcut.name, savedPromptShortcuts, promptShortcut.id) === null
+        ? shortcutCommand(promptShortcut.name)
+        : '';
     const metaText = isPromptBased
-      ? `prompt shortcut · ${dateStr}`
+      ? `${command || 'prompt shortcut'} · ${dateStr}`
       : `${actionsCount} actions · ${dateStr}`;
     info.appendChild(el('div', { class: 'sp-wf-shortcut-meta' }, metaText));
     item.appendChild(info);
@@ -12017,11 +12933,38 @@ function renderShortcutRows(
       });
       btns.appendChild(resultBtn);
     }
+    if (promptShortcut) {
+      const editBtn = iconButton(
+        { class: 'sp-wf-task-result', title: t('spShortcutEdit', [sc.name]) },
+        SquarePen,
+      ) as HTMLButtonElement;
+      editBtn.addEventListener('click', () => editPromptShortcut(promptShortcut));
+      btns.appendChild(editBtn);
+    }
     const delBtn = iconButton(
-      { class: 'sp-wf-btn-delete', title: 'Delete' },
+      { class: 'sp-wf-btn-delete', title: t('spShortcutDelete') },
       Trash2,
     ) as HTMLButtonElement;
+    let deleteConfirmTimer: ReturnType<typeof setTimeout> | null = null;
     delBtn.addEventListener('click', () => {
+      if (!delBtn.classList.contains('is-confirm')) {
+        delBtn.classList.add('is-confirm');
+        delBtn.title = t('spShortcutDeleteAgain');
+        const confirmText = command
+          ? t('spShortcutDeleteConfirm', [sc.name, command])
+          : t('spWorkflowDeleteConfirm', [sc.name]);
+        const confirmation = announceWorkflowMutation(confirmText);
+        deleteConfirmTimer = setTimeout(() => {
+          delBtn.classList.remove('is-confirm');
+          delBtn.title = t('spShortcutDelete');
+          if (confirmation === workflowAnnouncements) announceWorkflowMutation('');
+          deleteConfirmTimer = null;
+        }, DRAWER_DELETE_CONFIRM_MS);
+        return;
+      }
+      if (deleteConfirmTimer !== null) clearTimeout(deleteConfirmTimer);
+      deleteConfirmTimer = null;
+      delBtn.classList.remove('is-confirm');
       delBtn.disabled = true;
       announceWorkflowMutation(t('spWorkflowDeleting', [sc.name]));
       chrome.runtime.sendMessage(
@@ -12451,6 +13394,7 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
     _ctx.needsMessageRebuild = true;
     saveMessages();
     renderMessages();
+    sendNextFollowUp();
   }
 });
 
@@ -12459,6 +13403,7 @@ followThemePreference();
 watchCloudMirroringEnabled();
 void readCloudMirroringEnabled().then(() => refreshActivePersistenceState());
 buildUI();
+loadPromptShortcuts();
 chrome.tabs.onActivated?.addListener(() => {
   refreshPageHostname();
 });
@@ -12556,7 +13501,10 @@ function checkPendingChat(): void {
     if (!canAdmitComposerMessage(admissionProbe)) {
       const input = document.getElementById('sp-input') as HTMLTextAreaElement | null;
       if (input && !input.value.trim()) {
-        input.value = pending.type === 'summarize' ? '/summarize' : pendingChatPrompt(pending);
+        replaceComposerText(
+          input,
+          pending.type === 'summarize' ? '/summarize' : pendingChatPrompt(pending),
+        );
         autoResizeInput(input);
         updateSendButton();
         chrome.storage.session.remove('agi_pending_chat').catch(() => {});
@@ -12700,6 +13648,9 @@ async function releaseContextHandoffTo(
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && changes[BROWSER_STORE_KEY]) {
     void refreshActivePersistenceState();
+  }
+  if (area === 'local' && changes[SHORTCUTS_STORAGE_KEY]) {
+    promptShortcuts = promptShortcutsFromSaved(changes[SHORTCUTS_STORAGE_KEY].newValue);
   }
   if (area === 'session' && changes['agi_pending_chat']?.newValue) {
     checkPendingChat();

@@ -137,6 +137,7 @@ impl DeveloperSessionHost for FakeHost {
                 provider: LocalModelProvider::Ollama,
             }],
             host_models: Vec::new(),
+            local_servers: Vec::new(),
         })
     }
 
@@ -159,6 +160,8 @@ impl DeveloperSessionHost for FakeHost {
             transcript_truncated: false,
             approvals: Vec::new(),
             file_changes: Vec::new(),
+            plan: Vec::new(),
+            todos: Vec::new(),
         })
     }
 
@@ -219,6 +222,7 @@ impl DeveloperSessionHost for FakeHost {
                     detail: "cargo test".to_string(),
                     risk_level: Some(AgentEventApprovalRiskLevel::Medium),
                     reversible: Some(true),
+                    proposed_content: None,
                 }],
             }),
         })
@@ -330,6 +334,17 @@ fn capabilities() -> AppServerCapabilities {
         thread_delete: false,
         reconnect: false,
         writer_lease: false,
+        thread_unarchive: false,
+        thread_search: false,
+        fork_at_message: false,
+        prompt_commands: false,
+        max_turns: false,
+        memory: false,
+        plan: false,
+        approval_notes: false,
+        approval_edits: false,
+        mcp_tools: false,
+        installs: false,
     }
 }
 
@@ -693,6 +708,7 @@ async fn routes_thread_turn_and_control_methods_to_one_host() {
             ThreadForkParams {
                 thread_id: "thread-1".to_string(),
                 title: None,
+                through_message_index: None,
             },
         ))
         .await;
@@ -965,6 +981,8 @@ async fn websocket_transport_carries_typed_approval_round_trips() {
         turn_id: "turn-1".to_string(),
         request_id: "approval-1".to_string(),
         decision: ReviewDecision::ApprovedForSession,
+        note: None,
+        edited_content: None,
     };
     websocket
         .send(Message::text(
@@ -1039,6 +1057,7 @@ impl DeveloperSessionHost for SurfaceHost {
         Ok(LocalModelListResponse {
             models: Vec::new(),
             host_models: Vec::new(),
+            local_servers: Vec::new(),
         })
     }
 
@@ -1059,6 +1078,8 @@ impl DeveloperSessionHost for SurfaceHost {
             transcript_truncated: false,
             approvals: Vec::new(),
             file_changes: Vec::new(),
+            plan: Vec::new(),
+            todos: Vec::new(),
         })
     }
 
@@ -1248,6 +1269,7 @@ impl DeveloperSessionHost for SurfaceHost {
                 scope: HookConfigScope::User,
                 trusted: true,
                 source: Some("/home/dev/.agiworkforce/hooks.json".to_string()),
+                position: Some(1),
             }],
         })
     }
@@ -1760,6 +1782,7 @@ fn handoff_record(to: HandoffEnvironment) -> DeveloperSessionHandoff {
             detail: "cargo test".to_string(),
             risk_level: Some(AgentEventApprovalRiskLevel::Medium),
             reversible: Some(true),
+            proposed_content: None,
         }],
         last_turn: Some(HandoffLastTurn {
             turn_id: "turn-9".to_string(),
@@ -1799,6 +1822,7 @@ impl DeveloperSessionHost for HandoffHost {
         Ok(LocalModelListResponse {
             models: Vec::new(),
             host_models: Vec::new(),
+            local_servers: Vec::new(),
         })
     }
 
@@ -1819,6 +1843,8 @@ impl DeveloperSessionHost for HandoffHost {
             transcript_truncated: false,
             approvals: Vec::new(),
             file_changes: Vec::new(),
+            plan: Vec::new(),
+            todos: Vec::new(),
         })
     }
 

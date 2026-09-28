@@ -39,12 +39,12 @@ Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:115-121`, `a
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Every install path, including self-authored plugins, now goes through one gate (install-gate.ts:21-45) that enforces AGI_USER_SKILL_AUTHORING, the workspace plugins gate and organization policy. Personal skills stay off until the lead switches AGI_USER_SKILL_AUTHORING on at the end of the run. | flag-off |
-| desktop | partial | Every install path, including self-authored plugins, now goes through one gate (install-gate.ts:21-45) that enforces AGI_USER_SKILL_AUTHORING, the workspace plugins gate and organization policy. Personal skills stay off until the lead switches AGI_USER_SKILL_AUTHORING on at the end of the run. | flag-off |
+| web | partial | Personal skills (authored, uploaded with bundled files, or uploaded as a plugin) are built end to end and stay off until the lead switches AGI_USER_SKILL_AUTHORING on at the end of the run | flag-off |
+| desktop | partial | Personal skills (authored, uploaded with bundled files, or uploaded as a plugin) are built end to end and stay off until the lead switches AGI_USER_SKILL_AUTHORING on at the end of the run | flag-off |
 | mobile | partial | Mobile would list personal skills the server returns but cannot create one; web creation is itself flag-off. | ui, flag-off |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/services/user-skill-authoring.ts:3-7`, `apps/web/lib/services/user-skill-service.ts:68-72`, `apps/web/features/skills/hooks/use-skills-settings-adapter.tsx:160-163`, `packages/ui/ui/src/directory/CreatePluginDialog.tsx:179-210`
+Code: `apps/web/lib/services/user-skill-service.ts:255-255`, `apps/web/features/plugins/server/directory/install-gate.ts:26-26`, `apps/mobile/src/features/skills/service.ts:19-26`, `apps/mobile/src/features/skills/SkillsScreen.tsx:240-275`
 
 ## S53.04: Project Skills.
 
@@ -113,33 +113,29 @@ Code: `apps/web/features/skills/components/SkillEditorDialog.tsx:185-200`, `apps
 
 - Done when: A skill can bundle reference files that the model reads when the skill runs.
 - Wave: 3
-- Already works on: cli
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Built-in skills carry reference files the model can read; skills users create or upload hold only SKILL.md, and plugin-directory skills run without their extra files. | handler |
-| desktop | partial | Built-in skills carry reference files the model can read; skills users create or upload hold only SKILL.md, and plugin-directory skills run without their extra files. | handler |
 | mobile | missing | Not built on this surface. |  |
 | vscode | partial | Runs through the local CLI runtime, which has the same gap: package files are hashed but their location is not given to the model. | handler |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `packages/ui/ui/src/directory/SkillDetailView.tsx:147-190`, `packages/tools/skills/src/tool.ts:237-250`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:1831-1856`, `apps/cli/src/skills.rs:61-64`
+Code: `apps/cli/src/skills.rs:61-64`, `apps/cli/src/skills.rs:931-980`
 
 ## S53.11: Script bundle.
 
 - Done when: A skill can bundle scripts that run when the skill is used.
 - Wave: 3
-- Already works on: cli
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Bundled scripts can be read by the model but no skill path executes them (code execution is a separate, default-off sandbox). | handler |
-| desktop | partial | Same as web: scripts readable, never executed by the skill path. | handler |
 | mobile | missing | Not built on this surface. |  |
 | vscode | partial | Same CLI-runtime gap as the CLI cell. | handler |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `packages/ui/ui/src/directory/SkillDetailView.tsx:147-190`, `packages/tools/skills/src/tool.ts:237-250`, `apps/cli/src/skills.rs:61-64`, `apps/cli/src/skills.rs:931-980`
+Code: `apps/cli/src/skills.rs:61-64`, `apps/cli/src/skills.rs:931-980`
 
 ## S53.14: Required tools.
 
@@ -214,13 +210,13 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:639-639
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Upload skill and Import a SKILL.md create a personal skill, which fails unless AGI_USER_SKILL_AUTHORING=1 (default 0) though the Upload button is always shown; uploading a plugin zip works as the unflagged route. | flag-off |
-| desktop | partial | Upload skill and Import a SKILL.md create a personal skill, which fails unless AGI_USER_SKILL_AUTHORING=1 (default 0) though the Upload button is always shown; uploading a plugin zip works as the unflagged route. | flag-off |
+| web | partial | Upload skill (SKILL.md or a zipped skill folder with its files, migration 0322) and Upload plugin work end to end, and both now sit behind AGI_USER_SKILL_AUTHORING and the skills workspace gate; they stay off until the lead switches AGI_USER_SKILL_AUTHORING on at the end of the run | flag-off |
+| desktop | partial | Upload skill (SKILL.md or a zipped skill folder with its files, migration 0322) and Upload plugin work end to end, and both now sit behind AGI_USER_SKILL_AUTHORING and the skills workspace gate; they stay off until the lead switches AGI_USER_SKILL_AUTHORING on at the end of the run | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `packages/ui/ui/src/directory/DirectoryPanel.tsx:381-387`, `apps/web/features/directory/hooks/useDirectoryAdapter.ts:1223-1238`, `apps/web/app/api/skills/route.ts:161-179`, `apps/web/lib/services/user-skill-service.ts:68-72`
+Code: `apps/web/app/api/skills/route.ts:194-194`, `apps/web/features/plugins/server/directory/archive.ts:430-430`, `apps/web/lib/services/user-skill-service.ts:255-255`, `apps/web/app/api/plugins/uploads/route.ts:120-120`
 
 ## S53.22: Export.
 

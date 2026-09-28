@@ -1,6 +1,8 @@
 import 'server-only';
 
+import { createAgentEventStreamEmitter } from '@/app/api/llm/v1/chat/completions/lib/agent-event-stream';
 import { logger } from '@/lib/logger';
+import { appendCloudAgentEvent, getCloudAgentRun } from '@/lib/services/cloud-agent-run-service';
 import { getNeonDb } from '@/lib/server/neon-db';
 import {
   clearDeviceForRemoteSteps,
@@ -11,6 +13,7 @@ import {
   parseCloudAgentWorkflowInput,
   type CloudAgentWorkflowInput,
 } from '@/lib/workflows/cloud-agent-workflow-input';
+import { writeDurableFrames } from '@/lib/workflows/steps/durable-stream-frames';
 
 export interface CloudAgentDeviceClearance {
   decision: DeviceStepClearance['decision'] | 'none';
@@ -89,4 +92,68 @@ export async function clearCloudAgentDevice(
     retryInMs: 0,
     input: withoutDeviceHost(input),
   };
+}
+
+export type DeviceClearanceNotice = 'waiting' | 'back' | 'withdrawn';
+
+function deviceClearanceCopy(
+  notice: DeviceClearanceNotice,
+  deviceName: string,
+  reason: string | null,
+  waitMinutes: number,
+): { summary: string; detail?: string; status: 'running' | 'completed' | 'failed' } {
+  switch (notice) {
+    case 'waiting':
+      return {
+        summary: `Waiting for ${deviceName} to come online`,
+        detail: `${reason ? `${reason} ` : ''}Open AGI Cloud on that computer to let the task carry on. If it is still offline after ${waitMinutes} minutes, the task continues without it.`,
+        status: 'running',
+      };
+    case 'back':
+      return { summary: `${deviceName} is online again`, status: 'completed' };
+    case 'withdrawn':
+      return {
+        summary: `Continuing without ${deviceName}`,
+        ...(reason ? { detail: reason } : {}),
+        status: 'failed',
+      };
+  }
+}
+
+export async function reportCloudAgentDeviceClearance(
+  rawInput: CloudAgentWorkflowInput,
+  notice: DeviceClearanceNotice,
+  reason: string | null,
+  waitMinutes: number,
+): Promise<void> {
+  'use step';
+
+  const input = parseCloudAgentWorkflowInput(rawInput);
+  const declaration = input.processed.deviceHost;
+  if (!declaration) return;
+  const db = getNeonDb();
+  const snapshot = await getCloudAgentRun(db, {
+    userId: input.userId,
+    runId: input.runId,
+    afterSequence: Number.MAX_SAFE_INTEGER,
+    limit: 1,
+  });
+  const turnId = input.continuation?.eventTurnId ?? input.processed.requestId;
+  const emitter = createAgentEventStreamEmitter({
+    sessionId: input.continuation?.eventSessionId ?? input.processed.conversationId ?? turnId,
+    turnId,
+    responseModel: input.processed.requestedModel,
+    initialSequence: (snapshot?.run.lastEventSequence ?? -1) + 1,
+  });
+  const emitted = emitter.emitWithEnvelope({
+    type: 'progress-update',
+    progressId: `device-clearance:${input.runId}:${declaration.deviceId}`,
+    ...deviceClearanceCopy(notice, declaration.deviceName, reason, waitMinutes),
+  });
+  await appendCloudAgentEvent(db, {
+    userId: input.userId,
+    runId: input.runId,
+    envelope: emitted.envelope,
+  });
+  await writeDurableFrames(input.runId, 'device-clearance', [emitted.sse]);
 }

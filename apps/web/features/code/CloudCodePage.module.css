@@ -168,6 +168,10 @@ svg + .menuRowLabel {
   font-size: 12px;
 }
 
+.railRowStateQuiet {
+  color: var(--chat-text-muted);
+}
+
 .railSectionHeader {
   display: flex;
   align-items: center;
@@ -763,6 +767,8 @@ svg + .menuRowLabel {
   font-size: 13px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+  max-height: 320px;
+  overflow-y: auto;
 }
 
 .approvalActions {
@@ -950,6 +956,7 @@ svg + .menuRowLabel {
 }
 
 .field {
+  position: relative;
   border: 1px solid var(--chat-border-strong);
   border-radius: var(--chat-radius-2xl);
   background: var(--chat-input-bg);
@@ -1149,6 +1156,14 @@ svg + .menuRowLabel {
   white-space: nowrap;
 }
 
+.menuNote {
+  margin: 0;
+  padding: 6px 8px;
+  color: var(--chat-text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .formField {
   display: grid;
   gap: 6px;
@@ -1164,6 +1179,57 @@ svg + .menuRowLabel {
   color: var(--chat-text-muted);
   font-size: 12px;
   line-height: 1.45;
+}
+
+.shareOption {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 44px;
+  padding: 8px 10px;
+  border-radius: var(--chat-radius-md);
+  cursor: pointer;
+}
+
+.shareOption:hover {
+  background: var(--chat-surface-hover);
+}
+
+.memoryInput {
+  min-height: 88px;
+  padding: 8px 10px;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.shareLinkRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.shareWarning {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--chat-warning-border);
+  border-radius: var(--chat-radius-md);
+  background: var(--chat-warning-bg);
+  color: var(--chat-warning-fg);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.shareWarning svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.shareActions {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .textInput,
@@ -1276,6 +1342,11 @@ svg + .menuRowLabel {
 
 .repositoryRow:hover {
   background: var(--chat-surface-hover);
+}
+
+.repositoryRow[aria-current='true'] {
+  background: var(--chat-surface-hover);
+  font-weight: 600;
 }
 
 .repositoryName {
@@ -1459,6 +1530,62 @@ svg + .menuRowLabel {
 .fileBlock {
   display: flex;
   flex-direction: column;
+}
+
+.fileEditor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 0;
+}
+
+.fileEditorHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.fileEditorInput {
+  min-height: 320px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--chat-border-strong);
+  border-radius: var(--chat-radius-md);
+  background: var(--chat-code-bg);
+  color: var(--chat-code-text);
+  font-family: var(--chat-font-mono);
+  font-size: 13px;
+  line-height: 20px;
+  resize: vertical;
+  tab-size: 2;
+}
+
+.extensionRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+}
+
+.fileSelectRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.fileSelectRow .fileRow {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.fileCheckbox {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin: 0 0 0 8px;
+  accent-color: var(--chat-accent-primary);
 }
 
 .diff {

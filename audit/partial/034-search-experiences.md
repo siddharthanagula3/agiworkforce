@@ -81,15 +81,14 @@ Code: `apps/cli/src/lib.rs:2453-2453`, `apps/extension-vscode/package.json:638-6
 
 - Done when: A chat can search the public web and answer from the results.
 - Wave: 3
-- Already works on: web, desktop, mobile, api
+- Already works on: web, desktop, mobile, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | Web search works only after you set SEARCH_API_KEY (or BRAVE_SEARCH_API_KEY/TAVILY_API_KEY) in the environment; there is no in-product way to turn it on. | handler |
 | vscode | partial | The "search the web" option only prefixes the prompt; the search runs in the local CLI and needs SEARCH_API_KEY set in its environment. | handler |
-| chrome | partial | Chrome never asks for web search (its chat request carries no web_search flag), so the server offers no search tool; add a web-search toggle or send the flag. | ui |
 
-Code: `apps/cli/src/features/exec/tools/web/mod.rs:286-294`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:2407-2407`, `apps/extension/src/features/cloud-bridge/freeTrialClient.ts:834-850`, `apps/web/lib/web-search/required-search.ts:129-129`
+Code: `apps/cli/src/features/exec/tools/web/mod.rs:286-294`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:2407-2407`
 
 ## S34.15: Date-range filters.
 
@@ -148,16 +147,13 @@ Code: `apps/extension-vscode/src/core/commandSetup.ts:2265-2269`, `apps/extensio
 
 - Done when: When a search query is ambiguous the product offers clarification choices the user can pick before searching.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | The agent can ask a free-text question (ask_user) and wait for a typed answer, but it offers no choices to pick from. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/features/exec/tools/task_registry/mod.rs:471-493`
 
 ## S34.23: Result previews.
 

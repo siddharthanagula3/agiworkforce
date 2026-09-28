@@ -915,7 +915,7 @@ interface ResultCardProps {
   modelId?: string;
   aspectRatio?: ImageAspectRatio;
   version?: { index: number; total: number; onPrevious: () => void; onNext: () => void };
-  onEdit: () => void;
+  onEdit?: () => void;
   onShare: () => void;
   onKeep?: () => void;
 }
@@ -1006,21 +1006,23 @@ function ResultCard({
             {/* Overlay button row */}
             <div className="relative flex items-center justify-between px-3 pb-3">
               {/* Bottom-left: new-version pill */}
-              <button
-                type="button"
-                onClick={onEdit}
-                className="flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-xs font-medium text-white backdrop-blur-sm transition-colors hover:bg-white/25"
-                title="Revise this image"
-              >
-                <Pencil className="h-3 w-3" />
-                New version
-              </button>
+              {onEdit ? (
+                <button
+                  type="button"
+                  onClick={onEdit}
+                  className="flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-xs font-medium text-white backdrop-blur-sm transition-colors hover:bg-white/25"
+                  title="Revise this image"
+                >
+                  <Pencil className="h-3 w-3" />
+                  New version
+                </button>
+              ) : null}
 
               {/* Bottom-right: Share circular button */}
               <button
                 type="button"
                 onClick={onShare}
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-white/15 text-white backdrop-blur-sm transition-colors hover:bg-white/25"
+                className="ml-auto flex h-8 w-8 items-center justify-center rounded-full bg-white/15 text-white backdrop-blur-sm transition-colors hover:bg-white/25"
                 aria-label="Share image"
               >
                 <Share2 className="h-4 w-4" />
@@ -1313,7 +1315,7 @@ export function ImageGenerationCard({
               },
             }
           : {})}
-        onEdit={() => setShowEdit(true)}
+        {...(onRegenerate ? { onEdit: () => setShowEdit(true) } : {})}
         onShare={() => setShowShare(true)}
         {...(keepableAssetId
           ? {

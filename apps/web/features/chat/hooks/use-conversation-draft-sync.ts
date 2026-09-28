@@ -133,18 +133,23 @@ export function useConversationDraftSync(): DraftConflictControls {
                 DRAFT_RETRY_DELAY_MS * 2 ** (attempt - 1),
               );
             } else {
-              toast.error("This draft couldn't sync to your other devices. Retry when ready.", {
-                id: `draft-sync-${conversationId}`,
-                duration: Infinity,
-                action: {
-                  label: 'Retry',
-                  onClick: () => {
-                    if (useChatStore.getState().getDraftContent(conversationId) !== draft) return;
-                    delete retryAttemptsRef.current[conversationId];
-                    setRetryTick((current) => current + 1);
+              toast.error(
+                isDraftOnScreen(conversationId)
+                  ? "This draft couldn't sync to your other devices. Retry when ready."
+                  : `Your draft in "${conversationTitle(conversationId)}" couldn't sync to your other devices. Retry when ready.`,
+                {
+                  id: `draft-sync-${conversationId}`,
+                  duration: Infinity,
+                  action: {
+                    label: 'Retry',
+                    onClick: () => {
+                      if (useChatStore.getState().getDraftContent(conversationId) !== draft) return;
+                      delete retryAttemptsRef.current[conversationId];
+                      setRetryTick((current) => current + 1);
+                    },
                   },
                 },
-              });
+              );
             }
           }
           if (typeof result === 'object') {
@@ -159,7 +164,9 @@ export function useConversationDraftSync(): DraftConflictControls {
               current?.conversationId === conversationId ? conflict : current,
             );
             toast.error(
-              'This draft changed elsewhere. Your text is still here, but has not synced.',
+              isDraftOnScreen(conversationId)
+                ? 'This draft changed elsewhere. Your text is still here, but has not synced.'
+                : `Your draft in "${conversationTitle(conversationId)}" changed elsewhere and has not synced.`,
               {
                 id: `draft-conflict-${conversationId}`,
                 duration: Infinity,
@@ -244,4 +251,16 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-
 
 function isSavedConversationId(value: string): boolean {
   return UUID_RE.test(value);
+}
+
+function isDraftOnScreen(conversationId: string): boolean {
+  return useChatStore.getState().activeConversationId === conversationId;
+}
+
+function conversationTitle(conversationId: string): string {
+  const title = useChatStore
+    .getState()
+    .conversations.find((candidate) => candidate.id === conversationId)
+    ?.title?.trim();
+  return title || 'another chat';
 }

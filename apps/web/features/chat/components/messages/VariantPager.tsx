@@ -8,6 +8,24 @@ import { ACTION_BUTTON_SIZE } from './messageActionRow';
 
 const CHEVRON_SIZE = 'h-3.5 w-3.5';
 
+export type VariantPagerKind = 'response' | 'edit';
+
+const VARIANT_PAGER_LABELS: Record<
+  VariantPagerKind,
+  { previous: string; next: string; position: (position: number, total: number) => string }
+> = {
+  response: {
+    previous: 'Previous response',
+    next: 'Next response',
+    position: (position, total) => `Response ${position} of ${total}`,
+  },
+  edit: {
+    previous: 'Previous version',
+    next: 'Next version',
+    position: (position, total) => `Edited message, version ${position} of ${total}`,
+  },
+};
+
 export interface VariantPagerProps {
   /** Zero-based position of the rendered message within its sibling group. */
   index: number;
@@ -16,6 +34,7 @@ export interface VariantPagerProps {
   onNext: () => void;
   /** True while the conversation streams: paging mid-turn is not offered. */
   disabled?: boolean;
+  kind?: VariantPagerKind;
 }
 
 /**
@@ -26,9 +45,17 @@ export interface VariantPagerProps {
  * props are branch/conversation ids, and its `h-4` chevrons are a 16px target
  * in a row where every other control is 44px on touch.
  */
-function VariantPagerComponent({ index, total, onPrevious, onNext, disabled }: VariantPagerProps) {
+function VariantPagerComponent({
+  index,
+  total,
+  onPrevious,
+  onNext,
+  disabled,
+  kind = 'response',
+}: VariantPagerProps) {
   if (total <= 1) return null;
 
+  const labels = VARIANT_PAGER_LABELS[kind];
   const position = index + 1;
   const atStart = index <= 0;
   const atEnd = index >= total - 1;
@@ -41,7 +68,7 @@ function VariantPagerComponent({ index, total, onPrevious, onNext, disabled }: V
         className={ACTION_BUTTON_SIZE}
         disabled={disabled || atStart}
         onClick={onPrevious}
-        aria-label="Previous response"
+        aria-label={labels.previous}
       >
         <ChevronLeft className={CHEVRON_SIZE} aria-hidden="true" />
       </Button>
@@ -49,6 +76,7 @@ function VariantPagerComponent({ index, total, onPrevious, onNext, disabled }: V
           sentence rather than the two characters either side of a slash. */}
       <span
         aria-hidden="true"
+        title={labels.position(position, total)}
         className={cn(
           'min-w-[2.5rem] px-0.5 text-center font-mono text-caption tabular-nums',
           'text-muted-foreground',
@@ -62,12 +90,12 @@ function VariantPagerComponent({ index, total, onPrevious, onNext, disabled }: V
         className={ACTION_BUTTON_SIZE}
         disabled={disabled || atEnd}
         onClick={onNext}
-        aria-label="Next response"
+        aria-label={labels.next}
       >
         <ChevronRight className={CHEVRON_SIZE} aria-hidden="true" />
       </Button>
       <span role="status" aria-live="polite" aria-atomic="true" className="sr-only">
-        Response {position} of {total}
+        {labels.position(position, total)}
       </span>
     </div>
   );

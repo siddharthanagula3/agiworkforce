@@ -3,7 +3,9 @@ import {
   MAX_DEVICE_CLICK_COUNT,
   MAX_DEVICE_COORDINATE,
   MAX_DEVICE_DISPLAY_ID,
+  MAX_DEVICE_REVIEW_LENGTH,
   MAX_DEVICE_SCROLL_DELTA,
+  MAX_DEVICE_SEARCH_LENGTH,
   MAX_DEVICE_TYPE_LENGTH,
   MAX_DEVICE_WAIT_MS,
   DEVICE_KEY_MODIFIERS,
@@ -37,6 +39,13 @@ function rootChoices(declaration: DesktopHostDeclaration): {
 }
 
 const COORDINATE_RANGE = { type: 'integer', minimum: 0, maximum: MAX_DEVICE_COORDINATE } as const;
+
+const REVIEW = {
+  type: 'string',
+  maxLength: MAX_DEVICE_REVIEW_LENGTH,
+  description:
+    'Set this when the step pays or buys something, sends a message or a post, submits personal or account details, deletes something, changes a security or privacy setting, or enters a password: one short sentence saying what it will do. The user is asked before the step runs.',
+} as const;
 
 function coordinate(axis: 'x' | 'y', what: string): Record<string, unknown> {
   return {
@@ -86,6 +95,63 @@ function parametersFor(
           text: { type: 'string', description: 'The complete new contents of the file.' },
         },
         required: ['rootId', 'path', 'text'],
+      };
+    case 'device_edit_file':
+      return {
+        type: 'object',
+        properties: {
+          rootId,
+          path: { type: 'string', description: 'Path to the file, relative to the folder.' },
+          oldText: {
+            type: 'string',
+            description: 'The exact passage to replace, copied from the file as it is now.',
+          },
+          newText: { type: 'string', description: 'The text to put in its place.' },
+          replaceAll: {
+            type: 'boolean',
+            description: 'Replace every occurrence instead of requiring exactly one.',
+          },
+        },
+        required: ['rootId', 'path', 'oldText', 'newText'],
+      };
+    case 'device_find_files':
+      return {
+        type: 'object',
+        properties: {
+          rootId,
+          pattern: {
+            type: 'string',
+            maxLength: MAX_DEVICE_SEARCH_LENGTH,
+            description:
+              'Glob pattern relative to the folder: * matches within one name and ** matches across folders.',
+          },
+          path: {
+            type: 'string',
+            description: 'Subfolder to search, relative to the folder. Omit to search all of it.',
+          },
+        },
+        required: ['rootId', 'pattern'],
+      };
+    case 'device_search_text':
+      return {
+        type: 'object',
+        properties: {
+          rootId,
+          query: {
+            type: 'string',
+            maxLength: MAX_DEVICE_SEARCH_LENGTH,
+            description: 'The text to look for, matched literally.',
+          },
+          ignoreCase: {
+            type: 'boolean',
+            description: 'Match regardless of upper and lower case.',
+          },
+          path: {
+            type: 'string',
+            description: 'Subfolder to search, relative to the folder. Omit to search all of it.',
+          },
+        },
+        required: ['rootId', 'query'],
       };
     case 'device_run_command':
       return {
@@ -158,6 +224,7 @@ function parametersFor(
             maximum: MAX_DEVICE_CLICK_COUNT,
             description: '1 for a single click, 2 to open something, 3 to select a line.',
           },
+          review: REVIEW,
         },
         required: ['x', 'y'],
       };
@@ -169,6 +236,7 @@ function parametersFor(
           y: coordinate('y', 'where the drag starts'),
           toX: coordinate('x', 'where the drag ends'),
           toY: coordinate('y', 'where the drag ends'),
+          review: REVIEW,
         },
         required: ['x', 'y', 'toX', 'toY'],
       };
@@ -202,6 +270,7 @@ function parametersFor(
             maxLength: MAX_DEVICE_TYPE_LENGTH,
             description: 'The text to type where the keyboard focus already is.',
           },
+          review: REVIEW,
         },
         required: ['text'],
       };
@@ -218,8 +287,60 @@ function parametersFor(
             items: { type: 'string', enum: [...DEVICE_KEY_MODIFIERS] },
             description: 'Modifiers held while the key is pressed.',
           },
+          review: REVIEW,
         },
         required: ['key'],
+      };
+    case 'device_browser_read_page':
+    case 'device_browser_screenshot':
+      return { type: 'object', properties: {}, required: [] };
+    case 'device_browser_navigate':
+    case 'device_browser_download':
+      return {
+        type: 'object',
+        properties: {
+          url: {
+            type: 'string',
+            description:
+              tool === 'device_browser_navigate'
+                ? 'The http or https address to open.'
+                : 'The http or https address of the file to download.',
+          },
+        },
+        required: ['url'],
+      };
+    case 'device_browser_click':
+      return {
+        type: 'object',
+        properties: {
+          selector: {
+            type: 'string',
+            description: 'CSS selector of the element to click, taken from the page you read.',
+          },
+          review: REVIEW,
+        },
+        required: ['selector'],
+      };
+    case 'device_browser_type':
+      return {
+        type: 'object',
+        properties: {
+          selector: {
+            type: 'string',
+            description: 'CSS selector of the field to type into, taken from the page you read.',
+          },
+          text: {
+            type: 'string',
+            maxLength: MAX_DEVICE_TYPE_LENGTH,
+            description: 'The text to type.',
+          },
+          clear: {
+            type: 'boolean',
+            description: 'Empty the field before typing.',
+          },
+          review: REVIEW,
+        },
+        required: ['selector', 'text'],
       };
     case 'device_wait':
       return {

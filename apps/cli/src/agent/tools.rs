@@ -119,24 +119,13 @@ async fn request_mcp_tool_approval(
     tool_name: &str,
     arguments: &serde_json::Value,
 ) -> bool {
-    let mut argument_preview = serde_json::to_string_pretty(arguments)
-        .unwrap_or_else(|_| "<arguments unavailable>".to_string());
-    const MAX_ARGUMENT_PREVIEW_CHARS: usize = 4_000;
-    if argument_preview.chars().count() > MAX_ARGUMENT_PREVIEW_CHARS {
-        argument_preview = argument_preview
-            .chars()
-            .take(MAX_ARGUMENT_PREVIEW_CHARS)
-            .collect::<String>();
-        argument_preview.push_str("\n… truncated");
-    }
-
     let request = crate::tui::approval_broker::ApprovalRequest::new(
         crate::tui::approval_broker::ApprovalRequestKind::McpTool {
             server_name: server_name.to_string(),
             tool_name: tool_name.to_string(),
         },
         format!("Allow MCP tool '{tool_name}' from server '{server_name}'?"),
-        vec![argument_preview],
+        crate::approval_details::approval_detail(arguments),
     );
 
     if let Some(decision) = tools::request_approval(approval_callback, request).await {
