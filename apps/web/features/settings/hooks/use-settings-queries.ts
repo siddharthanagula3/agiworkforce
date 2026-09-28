@@ -1651,6 +1651,7 @@ export interface OrgSharedOverview {
   currentUserId: string;
   currentUserRole: OrgSharingRole;
   canManageSharing: boolean;
+  canShareOwnProjects: boolean;
   members: OrgSharingMember[];
   sharedProjects: OrgSharedProject[];
   sharedConnectors: OrgSharedConnector[];

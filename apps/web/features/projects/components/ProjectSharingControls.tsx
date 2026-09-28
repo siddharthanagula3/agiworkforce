@@ -1,7 +1,14 @@
 'use client';
 
+import { useState } from 'react';
+import {
+  MemberIdentity,
+  MemberPicker,
+  type PickerMember,
+} from '@shared/components/people/MemberPicker';
 import {
   useSetSharedProjectMemberAccess,
+  useSetSharedProjectMembersAccess,
   useShareProjectWithOrganization,
   type OrgMemberProjectAccess,
   type OrgSharedOverview,
@@ -19,6 +26,25 @@ const selectStyle = {
   padding: 'var(--space-1) var(--space-2)',
 } as const;
 
+const buttonStyle = {
+  minHeight: 32,
+  border: '1px solid var(--settings-border)',
+  borderRadius: 'var(--radius-md)',
+  background: 'var(--bg-base)',
+  color: 'var(--text-1)',
+  fontSize: 12,
+  padding: 'var(--space-1) var(--space-3)',
+  cursor: 'pointer',
+} as const;
+
+const ACCESS_LABELS: Readonly<Record<OrgMemberProjectAccess, string>> = {
+  read: 'Can view',
+  write: 'Can edit',
+  none: 'No access',
+};
+
+type OverviewMember = OrgSharedOverview['members'][number];
+
 export function projectShareAudience(project: OrgSharedProject): ProjectShareAudience {
   return project.defaultAccess === 'none' ? 'invited' : 'workspace';
 }
@@ -30,6 +56,19 @@ export function memberProjectAccess(
   const grant = project.memberGrants.find((entry) => entry.userId === userId);
   if (grant) return grant.access;
   return project.defaultAccess === 'none' ? 'none' : 'read';
+}
+
+export function sharingMemberName(member: OverviewMember): string {
+  return member.displayName || member.email || member.userId;
+}
+
+function toPickerMember(member: OverviewMember): PickerMember {
+  return {
+    userId: member.userId,
+    name: member.displayName ?? '',
+    email: member.email ?? '',
+    avatarUrl: null,
+  };
 }
 
 export function ProjectAudienceSelect({
@@ -59,70 +98,171 @@ export function ProjectAudienceSelect({
 
 export function SharedProjectAudienceControl({ project }: { project: OrgSharedProject }) {
   const shareProject = useShareProjectWithOrganization();
+  const id = `audience-${project.projectId}`;
   return (
-    <ProjectAudienceSelect
-      id={`audience-${project.projectId}`}
-      value={projectShareAudience(project)}
-      disabled={shareProject.isPending}
-      onChange={(audience) => shareProject.mutate({ projectId: project.projectId, audience })}
-    />
+    <div style={{ display: 'grid', gap: 'var(--space-1)' }}>
+      <label htmlFor={id} style={{ color: 'var(--text-2)', fontSize: 12 }}>
+        Who can open it
+      </label>
+      <ProjectAudienceSelect
+        id={id}
+        value={projectShareAudience(project)}
+        disabled={shareProject.isPending}
+        onChange={(audience) => shareProject.mutate({ projectId: project.projectId, audience })}
+      />
+    </div>
   );
 }
 
+/**
+ * The people on a shared project: who has access now, and a way to add more by
+ * name or email. On a whole-workspace project everyone can already view it, so
+ * adding someone means making them an editor or taking their access away.
+ */
 export function SharedProjectMemberAccessList({
   project,
   members,
+  canManage,
 }: {
   project: OrgSharedProject;
   members: OrgSharedOverview['members'];
+  canManage: boolean;
 }) {
   const setAccess = useSetSharedProjectMemberAccess();
-  const defaultAccess: OrgMemberProjectAccess = project.defaultAccess === 'none' ? 'none' : 'read';
+  const addPeople = useSetSharedProjectMembersAccess();
+  const invitedOnly = projectShareAudience(project) === 'invited';
+  const defaultAccess: OrgMemberProjectAccess = invitedOnly ? 'none' : 'read';
+  const addChoices: readonly OrgMemberProjectAccess[] = invitedOnly
+    ? ['read', 'write']
+    : ['write', 'none'];
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [addAccess, setAddAccess] = useState<OrgMemberProjectAccess>(addChoices[0]!);
+
+  const owner = members.find((member) => member.userId === project.ownerUserId);
+  const explicit = new Set(project.memberGrants.map((grant) => grant.userId));
+  const listed = members.filter(
+    (member) =>
+      member.userId !== project.ownerUserId &&
+      (explicit.has(member.userId) || memberProjectAccess(project, member.userId) !== 'none'),
+  );
+  const addable = members
+    .filter((member) => member.userId !== project.ownerUserId && !explicit.has(member.userId))
+    .map(toPickerMember);
+  const accessFieldId = `add-access-${project.projectId}`;
+  const chosenAddAccess = addChoices.includes(addAccess) ? addAccess : addChoices[0]!;
+
   return (
-    <div style={{ display: 'grid', gap: 'var(--space-1)' }}>
-      {members.map((member) => {
-        const controlId = `access-${project.projectId}-${member.userId}`;
-        const isOwner = member.userId === project.ownerUserId;
-        return (
-          <div
-            key={member.userId}
-            style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 12 }}
-          >
-            <label
-              htmlFor={controlId}
-              style={{ flex: 1, color: 'var(--text-2)', wordBreak: 'break-all' }}
+    <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
+      <ul
+        aria-label={`People with access to ${project.name}`}
+        style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 'var(--space-1)' }}
+      >
+        {owner ? (
+          <li style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <MemberIdentity member={toPickerMember(owner)} detail="Owner" />
+            </span>
+          </li>
+        ) : null}
+        {listed.map((member) => {
+          const controlId = `access-${project.projectId}-${member.userId}`;
+          const name = sharingMemberName(member);
+          return (
+            <li
+              key={member.userId}
+              style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}
             >
-              {member.displayName ?? member.email ?? member.userId}
-              {isOwner ? ' · owner' : ''}
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <MemberIdentity member={toPickerMember(member)} />
+              </span>
+              {canManage ? (
+                <>
+                  <label htmlFor={controlId} className="sr-only">
+                    Access for {name}
+                  </label>
+                  <select
+                    id={controlId}
+                    value={memberProjectAccess(project, member.userId)}
+                    style={selectStyle}
+                    disabled={setAccess.isPending}
+                    onChange={(event) => {
+                      const next: OrgMemberProjectAccess =
+                        event.target.value === 'write'
+                          ? 'write'
+                          : event.target.value === 'none'
+                            ? 'none'
+                            : 'read';
+                      setAccess.mutate({
+                        projectId: project.projectId,
+                        userId: member.userId,
+                        access: next === defaultAccess ? 'inherit' : next,
+                      });
+                    }}
+                  >
+                    <option value="read">{ACCESS_LABELS.read}</option>
+                    <option value="write">{ACCESS_LABELS.write}</option>
+                    <option value="none">{ACCESS_LABELS.none}</option>
+                  </select>
+                </>
+              ) : (
+                <span style={{ color: 'var(--text-3)', fontSize: 12 }}>
+                  {ACCESS_LABELS[memberProjectAccess(project, member.userId)]}
+                </span>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      {invitedOnly ? null : (
+        <p style={{ margin: 0, color: 'var(--text-3)', fontSize: 12 }}>
+          Everyone else in the workspace can view this project.
+        </p>
+      )}
+      {canManage && addable.length > 0 ? (
+        <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
+          <MemberPicker
+            label="Add people"
+            members={addable}
+            selectedIds={selectedIds}
+            onChange={setSelectedIds}
+            disabled={addPeople.isPending}
+          />
+          <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
+            <label htmlFor={accessFieldId} className="sr-only">
+              Access for the people you add
             </label>
-            {isOwner ? null : (
-              <select
-                id={controlId}
-                value={memberProjectAccess(project, member.userId)}
-                style={selectStyle}
-                disabled={setAccess.isPending}
-                onChange={(event) => {
-                  const next: OrgMemberProjectAccess =
-                    event.target.value === 'write'
-                      ? 'write'
-                      : event.target.value === 'none'
-                        ? 'none'
-                        : 'read';
-                  setAccess.mutate({
-                    projectId: project.projectId,
-                    userId: member.userId,
-                    access: next === defaultAccess ? 'inherit' : next,
-                  });
-                }}
-              >
-                <option value="read">Can view</option>
-                <option value="write">Can edit</option>
-                <option value="none">No access</option>
-              </select>
-            )}
+            <select
+              id={accessFieldId}
+              value={chosenAddAccess}
+              style={selectStyle}
+              onChange={(event) =>
+                setAddAccess(
+                  addChoices.find((choice) => choice === event.target.value) ?? addChoices[0]!,
+                )
+              }
+            >
+              {addChoices.map((choice) => (
+                <option key={choice} value={choice}>
+                  {ACCESS_LABELS[choice]}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              style={buttonStyle}
+              disabled={selectedIds.length === 0 || addPeople.isPending}
+              onClick={() =>
+                addPeople.mutate(
+                  { projectId: project.projectId, userIds: selectedIds, access: chosenAddAccess },
+                  { onSuccess: () => setSelectedIds([]) },
+                )
+              }
+            >
+              Add
+            </button>
           </div>
-        );
-      })}
+        </div>
+      ) : null}
     </div>
   );
 }
