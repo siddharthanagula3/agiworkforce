@@ -28,6 +28,7 @@ import {
   List,
   Maximize2,
   Minimize2,
+  RefreshCw,
   SendHorizontal,
   Telescope,
   TriangleAlert,
@@ -209,6 +210,30 @@ export function researchReportFilename(report: ResearchReport): string {
 // Citation row
 // ============================================================================
 
+const CITATION_DATE_FORMAT: Intl.DateTimeFormatOptions = {
+  year: 'numeric',
+  month: 'short',
+  day: 'numeric',
+};
+
+function formatCitationDate(value: string | undefined): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? null
+    : date.toLocaleDateString(undefined, CITATION_DATE_FORMAT);
+}
+
+function citationDateLabel(citation: Citation): string | null {
+  const published = formatCitationDate(citation.publishedDate);
+  const retrieved = formatCitationDate(citation.accessedAt);
+  return (
+    [published ? `Published ${published}` : null, retrieved ? `Retrieved ${retrieved}` : null]
+      .filter(Boolean)
+      .join(' · ') || null
+  );
+}
+
 function CitationRow({ citation, index }: { citation: Citation; index: number }) {
   const [faviconError, setFaviconError] = useState(false);
   const anchorId = citationAnchorId(index + 1);
@@ -259,7 +284,9 @@ function CitationRow({ citation, index }: { citation: Citation; index: number })
           <span className="block truncate text-[13px] font-medium text-foreground group-hover:text-primary">
             {citation.title || host}
           </span>
-          <span className="block truncate text-caption text-muted-foreground">{host}</span>
+          <span className="block truncate text-caption text-muted-foreground">
+            {[host, citationDateLabel(citation)].filter(Boolean).join(' · ')}
+          </span>
         </span>
         <ExternalLink
           className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground group-hover:text-muted-foreground"
@@ -304,6 +331,12 @@ interface ResearchReportViewProps {
    */
   onAskFollowUp?: (prompt: string) => void;
   /**
+   * Host-injected start of a new Deep Research run on the same question, so a
+   * finished report can be refreshed. Supplied only by hosts that can start a
+   * research turn.
+   */
+  onRunAgain?: (query: string) => void;
+  /**
    * Host-injected save into the account's library, which is a different place
    * from the artifacts panel and from a project's sources: the report becomes
    * a file of its own that outlives this conversation. Supplied only by hosts
@@ -324,6 +357,7 @@ export function ResearchReportView({
   exportService,
   onCreateArtifact,
   onAskFollowUp,
+  onRunAgain,
   onSaveToLibrary,
   saveToProject,
 }: ResearchReportViewProps) {
@@ -483,6 +517,19 @@ export function ResearchReportView({
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1">
+          {onRunAgain && report.query ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1 px-2 text-xs"
+              onClick={() => onRunAgain(report.query!)}
+              data-testid="research-report-run-again"
+              aria-label="Run this research again for current sources"
+            >
+              <RefreshCw className="h-3 w-3" aria-hidden="true" />
+              Run again
+            </Button>
+          ) : null}
           {onCreateArtifact && (
             <Button
               variant="ghost"
@@ -651,6 +698,30 @@ export function ResearchReportView({
               <ul className="list-disc space-y-1 pl-5 text-sm text-foreground">
                 {report.keyFindings.map((finding, index) => (
                   <li key={`${index}-${finding.slice(0, 24)}`}>{finding}</li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {report.gaps && report.gaps.length > 0 && (
+            <section className="mb-4" aria-labelledby="research-report-questions">
+              <h3
+                id="research-report-questions"
+                className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+              >
+                Planned questions
+              </h3>
+              <ul className="space-y-1 text-sm" data-testid="research-report-questions">
+                {report.gaps.map((gap) => (
+                  <li key={gap.id} className="text-foreground">
+                    <span className="font-medium">
+                      {gap.status === 'closed' ? 'Answered' : 'Not answered'}:
+                    </span>{' '}
+                    {gap.question}
+                    {gap.status === 'open' ? (
+                      <span className="block text-caption text-muted-foreground">{gap.reason}</span>
+                    ) : null}
+                  </li>
                 ))}
               </ul>
             </section>
