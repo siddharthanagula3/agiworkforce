@@ -125,12 +125,12 @@ Code: `apps/mobile/app/(app)/(tabs)/chat.tsx:635-635`, `apps/mobile/app/(app)/ch
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | image thumbnails show name and size only as a tooltip while document rows show them as text; a visible caption departs from the leaders' bare thumbnails (observed, undocumented), owner call. | ui |
-| desktop | partial | image thumbnails show name and size only as a tooltip while document rows show them as text; a visible caption departs from the leaders' bare thumbnails (observed, undocumented), owner call. | ui |
+| web | partial | unchanged: image thumbnails show name and size as a tooltip, document rows as text. Both leaders show bare image thumbnails (observed, undocumented), so p-contrast proposes recording it done by parity; needs the lead's ruling. | owner call |
+| desktop | partial | unchanged: image thumbnails show name and size as a tooltip, document rows as text. Both leaders show bare image thumbnails (observed, undocumented), so p-contrast proposes recording it done by parity; needs the lead's ruling. | owner call |
 | mobile | partial | As on web: documents show name and size as text; a photo thumbnail stays bare like ChatGPT's and Claude's and carries its name and size as its accessibility label. A visible caption on photos departs from both leaders (observed, undocumented), owner call. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/Composer/AttachmentPreview.tsx:200-200`, `apps/web/features/chat/components/Composer/AttachmentPreview.tsx:267-267`, `apps/mobile/src/features/chat/components/AttachmentPreview.tsx:169-169`
+Code: `apps/web/features/chat/components/Composer/AttachmentPreview.tsx:200-200`, `apps/mobile/src/features/chat/components/AttachmentPreview.tsx:169-169`
 
 ## S14.21: Indexing progress.
 
