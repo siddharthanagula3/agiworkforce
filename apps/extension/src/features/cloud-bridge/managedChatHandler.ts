@@ -32,6 +32,7 @@ import {
 } from './freeTrialClient';
 import { resolveChromeManagedChatRoute } from './managedChatRouting';
 import { MEMORY_COMMAND_KINDS, MEMORY_COMMAND_STATUSES } from './memoryClient';
+import { imageLimitMessage, managedModelImageLimit } from './managedModelLimits';
 import type { ChromeManagedRoutingMetadata } from '../../types';
 
 const MAX_MESSAGE_CHARS = 32_000;
@@ -526,6 +527,17 @@ export async function executeChromeManagedChat(
       status: 'error',
       code: 'model_not_admitted',
       message: 'The routed model is not available for this account.',
+    };
+  }
+  const imageLimit = managedModelImageLimit(routing.modelKey);
+  const imageCount =
+    (request.attachments?.length ?? 0) +
+    (request.fileAttachments ?? []).filter((file) => file.mimeType.startsWith('image/')).length;
+  if (imageLimit !== null && imageCount > imageLimit) {
+    return {
+      status: 'error',
+      code: 'invalid_request',
+      message: imageLimitMessage(routing.modelKey, imageLimit),
     };
   }
 

@@ -3130,5 +3130,33 @@
         "example": "3"
       }
     }
+  },
+  "spAttachmentModelImageLimit_one": {
+    "message": "$MODEL$ accepts one image in a message. Remove the others to send.",
+    "description": "The chosen model accepts fewer images than are attached, one plural form",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
+      },
+      "model": {
+        "content": "$2",
+        "example": "Claude Haiku 4.5"
+      }
+    }
+  },
+  "spAttachmentModelImageLimit_other": {
+    "message": "$MODEL$ accepts up to $COUNT$ images in a message. Remove some to send.",
+    "description": "The chosen model accepts fewer images than are attached, every other plural form",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "100"
+      },
+      "model": {
+        "content": "$2",
+        "example": "Claude Haiku 4.5"
+      }
+    }
   }
 }
