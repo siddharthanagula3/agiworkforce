@@ -1697,8 +1697,9 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
         ui_accent, ui_brand, ui_cloud, ui_danger, ui_muted, ui_success,
     };
     let mut lines: Vec<Line> = Vec::new();
+    let start_view = ctx.chat_messages.is_empty() && !ctx.is_loading;
 
-    if ctx.chat_messages.is_empty() && !ctx.is_loading {
+    if start_view {
         use crate::design_system::AccessMode;
         // Access-mode colors match the status-bar chip so the visual identity is
         // consistent across the app. The word is the same "Local" / "Your key" /
@@ -1732,15 +1733,26 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
         )));
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled(
-            "  Type a message and press Enter to send.",
+            "  Type a message and press Enter to send, for example:",
+            Style::default().fg(ui_muted()),
+        )));
+        for example in [
+            "explain how this project is organised",
+            "find the failing test and fix it",
+            "/search what changed in the latest release of a library you use",
+        ] {
+            lines.push(Line::from(Span::styled(
+                format!("    {example}"),
+                Style::default().fg(ui_accent()),
+            )));
+        }
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled(
+            "  Type / for commands. Shift+Tab cycles how much AGI may do on its own: ask before each action, plan only (reads, no edits), accept edits, then no prompts.",
             Style::default().fg(ui_muted()),
         )));
         lines.push(Line::from(Span::styled(
-            "  Type / for commands · Shift+Tab to switch modes.",
-            Style::default().fg(ui_muted()),
-        )));
-        lines.push(Line::from(Span::styled(
-            "  Esc closes a panel or clears the composer; press it twice on an empty composer to quit.",
+            "  Esc closes a panel or clears the composer; twice on an empty composer, it rewinds. Ctrl+D twice quits.",
             Style::default().fg(ui_muted()),
         )));
     } else {
@@ -1865,10 +1877,20 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
     // Wrap here rather than with `Wrap`, which restarts a continuation row at
     // column 0 and puts the text hard against the left border. Wrapping first
     // also makes the scroll maths count rendered rows, not logical lines.
-    let lines = super::wrap_styled_lines(lines, area.width.saturating_sub(2) as usize, 2);
+    let mut lines = super::wrap_styled_lines(lines, area.width.saturating_sub(2) as usize, 2);
 
     // Scroll
     let visible_height = area.height.saturating_sub(1) as usize;
+    if start_view && ctx.tool_cells.is_empty() {
+        let inner_width = area.width.saturating_sub(2) as usize;
+        let block_width = lines.iter().map(Line::width).max().unwrap_or(0);
+        let left = " ".repeat(inner_width.saturating_sub(block_width) / 2);
+        for line in &mut lines {
+            line.spans.insert(0, Span::raw(left.clone()));
+        }
+        let top = visible_height.saturating_sub(lines.len()) / 2;
+        lines.splice(0..0, std::iter::repeat_with(|| Line::from("")).take(top));
+    }
     let total_lines = lines.len();
     let max_scroll = total_lines.saturating_sub(visible_height) as u16;
     let effective_scroll = ctx.scroll_offset.min(max_scroll);
