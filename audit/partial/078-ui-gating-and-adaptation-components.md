@@ -212,19 +212,6 @@ Code: `apps/extension/src/features/cloud-bridge/managedModelPicker.ts:94-106`
 
 Code: `apps/web/app/api/code/sessions/route.ts:132-135`, `apps/mobile/src/features/companion/components/ConnectionStateViews.tsx:69-71`, `apps/cli/src/context_handoff.rs:1-5`
 
-## S78.24: Explicit processing-path selection.
-
-- Done when: The user can explicitly choose where a request is processed (local model, own key, managed cloud).
-- Wave: 3
-- Already works on: desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | In a normal browser the web app offers only the managed cloud path; the Local path appears in the picker only when the page runs inside the desktop app. | ui |
-| chrome | partial | Side-panel chat always takes the managed cloud path; there is no in-panel choice of Local or BYOK. | ui |
-
-Code: `apps/web/features/chat/components/Composer/ComposerFooter.tsx:167-167`, `apps/web/features/desktop-host/lib/runtime-client.ts:386-389`, `apps/extension/src/features/cloud-bridge/managedChatRouting.ts:28-30`
-
 ## S78.25: Attachment-preservation choice after model change.
 
 - Done when: After switching to a model that cannot use the current attachments, the user chooses to keep them (by switching model) or remove them.
