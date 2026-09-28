@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useConfirmAction } from '@agiworkforce/ui';
+import { useConfirmAction, useUnsavedChangesGuard } from '@agiworkforce/ui';
 import {
   WORKSPACE_FEATURE_LABELS,
   WORKSPACE_POLICY_OVERRIDE_SUBJECT_LABELS,
@@ -131,6 +131,11 @@ function WorkspaceDefaults({
 
   const next: WorkspaceControls = { ...draft, allowedCountries: parseCountries(countries) };
   const dirty = JSON.stringify(next) !== JSON.stringify(controls);
+  const { dialog: discardDialog } = useUnsavedChangesGuard({
+    dirty: dirty && !update.isPending,
+    description:
+      'Your changes to the workspace features and defaults have not been saved. If you leave now, they will be lost.',
+  });
   const liveModels = (models.data?.catalog.models ?? []).filter((model) => model.live);
 
   return (
@@ -253,6 +258,7 @@ function WorkspaceDefaults({
           </button>
         </div>
       ) : null}
+      {discardDialog}
     </section>
   );
 }
