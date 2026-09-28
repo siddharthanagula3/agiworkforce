@@ -1,28 +1,7 @@
 import { modelRegistry } from '@agiworkforce/model-registry';
-import {
-  getAutoRoutingProfileTiers,
-  getModelMetadataById,
-  type AutoModeModelId,
-  type ModelSpeed,
-  type RoutingProfileChoice,
-} from '@agiworkforce/types';
-
-const PROFILE_BAND: Readonly<Record<Exclude<RoutingProfileChoice, 'auto'>, string>> = {
-  speed: 'economy',
-  quality: 'premium',
-  cost: 'economy',
-};
+import { getModelMetadataById, type ModelSpeed } from '@agiworkforce/types';
 
 const SPEED_ORDER: readonly ModelSpeed[] = ['very-fast', 'fast'];
-
-export function autoAliasForRoutingProfile(
-  choice: RoutingProfileChoice | undefined,
-): AutoModeModelId | null {
-  if (!choice || choice === 'auto') return null;
-  return (
-    getAutoRoutingProfileTiers().find((tier) => tier.profile === PROFILE_BAND[choice])?.id ?? null
-  );
-}
 
 export function speedFirstSlots(): string[] {
   const slots = modelRegistry.policies.auto.slots as Readonly<
