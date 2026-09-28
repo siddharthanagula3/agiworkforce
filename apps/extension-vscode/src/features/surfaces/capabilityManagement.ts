@@ -4,6 +4,7 @@ import type {
   PluginListResponse,
   SkillListResponse,
 } from '@agiworkforce/types/protocol';
+import { createSkill } from './skillAuthoring';
 import {
   CLI_CAPABILITY_REQUIREMENT,
   type CliCapabilityAdapter,
@@ -83,7 +84,16 @@ export function manageSkills(adapter: CliCapabilityAdapter): Promise<void> {
       load: async () => {
         const result = await adapter.call<SkillListResponse>('skills');
         if (result.status !== 'ok') return result;
-        const items: ManagedItem[] = [];
+        const items: ManagedItem[] = [
+          {
+            label: '$(add) Create a skill',
+            detail: 'Write a new personal or project skill and open it to edit',
+            run: async () => {
+              await createSkill();
+              return { status: 'ok', value: undefined };
+            },
+          },
+        ];
         if (result.value.skills.some((skill) => !skill.consented)) {
           items.push({
             label: '$(shield) Allow this folder’s project skills',
