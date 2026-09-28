@@ -128,6 +128,8 @@ export interface CatalogueEntry extends ModelCatalogueEntry {
   providerLabel: string;
 }
 
+export type UpgradeablePlanTier = 'basic' | 'pro' | 'max';
+
 export interface ModelCatalogueEntry {
   id: string;
   displayName: string;
@@ -162,6 +164,7 @@ export interface ModelCatalogueEntry {
   /** Selectable only because an event promotion is active, not by plan. */
   eventAccess: boolean;
   minimumPlanLabel: string | null;
+  minimumPlan: UpgradeablePlanTier | null;
   availability: ModelAvailability;
   requiresEnvironment: ModelEnvironment | null;
   /**
@@ -236,6 +239,7 @@ function toCatalogueEntry(
     // picker can say "Free during event" instead of implying it is included.
     eventAccess: eventAllowed && !permanentlyAllowed,
     minimumPlanLabel: admitted || !minimumTier ? null : PLAN_LABEL[minimumTier],
+    minimumPlan: admitted || !minimumTier || minimumTier === 'free' ? null : minimumTier,
     availability: getModelAvailability(model),
     requiresEnvironment: model.requiresEnvironment ?? null,
     deprecatedOn: model.deprecation_date ?? null,

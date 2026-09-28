@@ -4994,6 +4994,12 @@ async function handleChatMessage(
               done: false,
               interactiveCard: chunk.card,
             }),
+          onSources: (chunk) =>
+            publishManagedChatChunk(streamKey, activeStream, id, {
+              text: '',
+              done: false,
+              sources: { citations: chunk.citations, results: chunk.results },
+            }),
           onRunReference: async (cloudRun) => {
             if (activeChatStreams.get(streamKey) !== activeStream) return;
             activeStream.cloudRun = { ...cloudRun };
@@ -5277,6 +5283,12 @@ async function handleResolveChatApproval(
                 text: '',
                 done: false,
                 interactiveCard: chunk.card,
+              }),
+            onSources: (chunk) =>
+              publishManagedChatChunk(streamKey, activeStream, id, {
+                text: '',
+                done: false,
+                sources: { citations: chunk.citations, results: chunk.results },
               }),
             onRunReference: (cloudRun) => {
               if (activeChatStreams.get(streamKey) !== activeStream) return;

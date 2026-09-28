@@ -10,16 +10,13 @@ nothing is left.
 
 - Done when: Inside an open conversation the user can type a query and jump between the messages that match it.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | The TUI has no way to search the transcript; only the --no-tui REPL offers Ctrl-R, which searches your own earlier prompts, not the replies. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/command_registry.rs:209-209`
 
 ## S34.02: Search conversation history.
 

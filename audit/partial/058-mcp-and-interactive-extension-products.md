@@ -127,16 +127,12 @@ Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:430-444`, `a
 
 - Done when: The user can disable a configured server without removing it, and re-enable it.
 - Wave: 3
-- Already works on: cli
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Personal servers can only be switched off per chat or removed; only workspace admins can unpublish a shared server. | ui |
-| desktop | partial | Personal servers can only be switched off per chat or removed; only workspace admins can unpublish a shared server. | ui |
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/ComposerPluginsMenu.tsx:155-155`, `apps/web/app/api/settings/organization/mcp/route.ts:254-254`
 
 ## S58.14: Per-Project server configuration.
 

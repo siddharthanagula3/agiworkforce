@@ -68,9 +68,6 @@ Code: `apps/web/features/desktop-host/components/LocalCommandDialog.tsx:150-166`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| desktop | partial | Local coding sessions start the separately installed AGI CLI as a child process only while the app is open; there is no background agent service that keeps working after the app quits. | handler |
-
-Code: `apps/desktop/electron/runtime/developerSessionService.ts:684-690`, `apps/desktop/electron/main.ts:1394-1401`, `apps/web/features/desktop-host/components/DesktopSettingsSection.tsx:196-213`
 
 ## S70.20: Cross-application dictation.
 
@@ -79,9 +76,6 @@ Code: `apps/desktop/electron/runtime/developerSessionService.ts:684-690`, `apps/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| desktop | partial | The dictation shortcut works from any app, but the words go into the AGI chat box, not the app the user was in; and with the main window hidden it targets Quick Ask, which has no desktop bridge, so nothing starts. | handler |
-
-Code: `apps/desktop/electron/voiceDictation.ts:32-43`, `apps/desktop/electron/voiceDictation.ts:54-70`, `apps/desktop/electron/quickAsk.ts:27-32`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:1653-1656`
 
 ## S70.21: Computer use.
 

@@ -293,9 +293,6 @@ Code: `apps/web/app/workspace/data/page.tsx:24-24`, `apps/web/features/workspace
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| vscode | partial | The extension contributes no VS Code policy settings; only the local CLI runtime it drives honours the machine-wide managed-settings.json. | surface-only |
-
-Code: `apps/cli/src/features/hooks/managed.rs:137-156`
 
 ## S87.28: Audit-log viewer.
 

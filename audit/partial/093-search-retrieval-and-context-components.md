@@ -27,14 +27,3 @@ Code: `packages/contracts/context/src/context-source.ts:1-17`, `packages/platfor
 | platform | partial | Migration 0284 is now applied in production (2026-09-27). Still open: A manifest builder and store exist but are used only by scheduled runs, and the store writes columns (manifest_id, assembler_version, token_estimate, budget_tokens) that only exist in pending migration 0284. | handler |
 
 Code: `packages/platform/context-engine/src/manifest-store.ts:56-60`, `apps/web/lib/services/scheduled-agent-executor.ts:317-317`, `apps/web/db/neon/0252_context_manifests_and_source_policy.sql:30-30`
-
-## S93.25: Source locator registry.
-
-- Done when: A registry of locator types (page, heading, line, cell, slide, timestamp, message) lets any citation point inside its source.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Only page and heading-path locators (project files), chunk offsets and message ids exist; line, cell, slide and timestamp locators are not modelled. | handler |
-
-Code: `packages/contracts/types/src/project-file-citations.ts:10-15`, `apps/web/lib/services/retrieval-search-service.ts:61-62`

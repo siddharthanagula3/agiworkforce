@@ -148,7 +148,8 @@ set the named variables in production and locally.
   authorization (OAuth) during installation" so an installation can be tied to
   the signed-in account.
 - Permissions the three declared tools need: pull requests read and write,
-  issues read and write, contents read.
+  issues read and write, contents read. Add checks read so a Cloud Code
+  session can show the CI status of the pull request it opened.
 - Generate a private key and base64-encode the PEM file for
   `GITHUB_APP_PRIVATE_KEY_BASE64`.
 - Variables: `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY_BASE64`,
@@ -176,7 +177,15 @@ set the named variables in production and locally.
   `userinfo.profile`, then per connector Gmail `gmail.readonly`, `gmail.compose`
   (drafts), `gmail.send`;
   Drive `drive.file`, `drive.metadata.readonly`; Calendar `calendar.readonly`,
-  `calendar.events`. The full-mailbox, full-drive and full-calendar scopes are
+  `calendar.events`. AGI adds two Gmail tools beside Google's server, both
+  calling the Gmail API with the same grant: `send_draft` sends a draft the
+  user has seen (`drafts.send`, which needs `gmail.compose`) and
+  `read_attachments` reads a message's attachments as text
+  (`messages.attachments.get`, which needs `gmail.readonly`), and
+  `create_draft_with_attachments` builds a draft with up to five of the
+  account's own files attached (`drafts.create`, which needs `gmail.compose`).
+  The full-mailbox,
+  full-drive and full-calendar scopes are
   forbidden and dropped. `gmail.modify`, which Gmail's label tools need, is left
   out like Microsoft's `Mail.ReadWrite`; admitting it is an owner decision.
 - Variables: `CONNECTOR_OAUTH_GMAIL_CLIENT_ID`,
@@ -274,6 +283,31 @@ through `https://mcp.svc.cloud.microsoft/enterprise`, not mail or files
 
 - Variables: `CONNECTOR_OAUTH_MICROSOFT_365_CLIENT_ID`,
   `CONNECTOR_OAUTH_MICROSOFT_365_CLIENT_SECRET`.
+
+### BigQuery
+
+Google hosts a BigQuery MCP server at `https://bigquery.googleapis.com/mcp`
+(https://docs.cloud.google.com/bigquery/docs/use-bigquery-mcp). Its protected
+resource metadata, read on 2026-09-27, names `https://accounts.google.com/` as
+the authorization server and `https://www.googleapis.com/auth/bigquery` as the
+only supported scope, which views and manages all BigQuery data. The ceiling
+admits `bigquery.readonly` and `devstorage.read_only` only, so a `bigquery`
+descriptor pointing at that server cannot be granted the scope the server
+asks for. Admitting the manage scope is an owner decision, like `gmail.modify`
+and Box's `root_readwrite`.
+
+Snowflake and Databricks host MCP servers per account, so there is no single
+endpoint to pin; a user adds one by URL as a custom connector, with the OAuth
+client they registered at the vendor under Advanced settings. Neither page says
+whether the server publishes MCP authorization metadata, which the custom
+connector sign-in needs, so that part is unverified. Snowflake-managed
+servers (GA) live at
+`https://<account_url>/api/v2/databases/<db>/schemas/<schema>/mcp-servers/<name>`
+and use Snowflake OAuth
+(https://docs.snowflake.com/en/user-guide/snowflake-cortex/cortex-agents-mcp).
+Databricks managed servers (Public Preview) live on the workspace host, for
+example `https://<workspace-hostname>/api/2.0/mcp/sql`, with a scope per server
+(https://docs.databricks.com/aws/en/generative-ai/mcp/managed-mcp).
 
 ### Notion
 

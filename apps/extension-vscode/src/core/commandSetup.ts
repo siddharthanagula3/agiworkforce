@@ -79,6 +79,8 @@ import {
   OPEN_ARTIFACT_ON_WEB_COMMAND,
   REFRESH_ARTIFACTS_COMMAND,
   SAVE_ARTIFACT_COMMAND,
+  COPY_ARTIFACT_COMMAND,
+  copyArtifactContent,
   artifactsWebUrl,
   describeArtifactFailure,
   openArtifactReadOnly,
@@ -98,6 +100,7 @@ import { getAccountMemoryStore } from '../memory/accountMemoryStore';
 import { ChatEditorPanel } from '../providers/chatEditorPanel';
 import { type LocalRuntimePool } from '../integrations/localRuntimePool';
 import { installCli } from '../integrations/cliInstaller';
+import { submitFeedback, type FeedbackKind } from '../features/feedback/submitFeedback';
 import { managePersonalization } from '../features/personalization/personalization';
 import { manageMemoryExclusions } from '../memory/memoryExclusions';
 import {
@@ -1112,7 +1115,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         title: 'AGI Workforce, Set API Key',
         prompt:
           'Enter your AGI Workforce API key. It will be stored in VS Code SecretStorage (encrypted).',
-        placeHolder: placeholder !== '' ? placeholder : 'sk-agi-…',
+        placeHolder: placeholder !== '' ? placeholder : 'sk_live_…',
         password: true,
         ignoreFocusOut: true,
         validateInput: (value) => {
@@ -1415,22 +1418,35 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
 
       if (feedbackText === undefined) return;
 
-      const feedbackType = picked.label.includes('Bug')
+      const feedbackType: FeedbackKind = picked.label.includes('Bug')
         ? 'bug'
         : picked.label.includes('Feature')
           ? 'feature'
           : 'general';
 
-      const encoded = encodeURIComponent(
-        `**Type**: ${feedbackType}\n**VS Code**: ${vscode.version}\n**Extension**: ${getExtensionVersion()}\n**Platform**: ${process.platform}\n\n${feedbackText.trim()}`,
+      const outcome = await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: 'AGI Workforce: sending feedback',
+        },
+        () => submitFeedback(context.secrets, feedbackType, feedbackText),
       );
-      void vscode.env.openExternal(
-        vscode.Uri.parse(
-          `https://github.com/agiworkforce/agiworkforce/issues/new?title=${encodeURIComponent(`[VS Code Extension] ${feedbackType}: ${feedbackText.trim().slice(0, 60)}`)}&body=${encoded}`,
-        ),
-      );
-      vscode.window.showInformationMessage(
-        'AGI Workforce: Opening GitHub to submit your feedback. Thank you!',
+      if (outcome.status === 'sent') {
+        void vscode.window.showInformationMessage(
+          'AGI Workforce: thanks, your feedback reached the team.',
+        );
+        return;
+      }
+      if (outcome.status === 'signed-out') {
+        const choice = await vscode.window.showWarningMessage(
+          'AGI Workforce: sign in to AGI Cloud to send feedback from VS Code.',
+          'Sign in',
+        );
+        if (choice === 'Sign in') await vscode.commands.executeCommand('agi-workforce.signIn');
+        return;
+      }
+      void vscode.window.showErrorMessage(
+        `AGI Workforce: your feedback was not sent, ${outcome.reason}. Try again in a moment.`,
       );
     }),
 
@@ -2129,7 +2145,8 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         | 'connectors'
         | 'teams'
         | 'permission-docs'
-        | 'privacy-settings';
+        | 'privacy-settings'
+        | 'edit-profile';
       type AccountItem = vscode.QuickPickItem & { action?: AccountAction };
       const items: AccountItem[] = buildAccountIdentityItems(
         accountToken !== undefined,
@@ -2256,6 +2273,11 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
             : 'Browser-approved device session',
         });
         items.push({
+          label: '$(person) Edit your profile on Web',
+          description: 'Name, photo and email',
+          action: 'edit-profile',
+        });
+        items.push({
           label: '$(sign-out) Sign out of AGI Cloud',
           description: 'Remove this editor session',
           action: 'sign-out',
@@ -2362,6 +2384,10 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       } else if (pick?.action === 'permission-docs') {
         await vscode.env.openExternal(
           vscode.Uri.parse('https://agiworkforce.com/docs?topic=permissions&from=vscode-extension'),
+        );
+      } else if (pick?.action === 'edit-profile') {
+        await vscode.env.openExternal(
+          vscode.Uri.parse(`${getCloudWebOrigin()}/settings/profile?from=vscode-extension`),
         );
       } else if (pick?.action === 'privacy-settings') {
         await vscode.env.openExternal(
@@ -2486,6 +2512,11 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       const artifact = readArtifactCommandArgument(item);
       if (artifact === undefined) return;
       await withArtifactsWorkspace((workspace) => saveArtifactToWorkspace(workspace, artifact));
+    }),
+    register(COPY_ARTIFACT_COMMAND, async (item: unknown) => {
+      const artifact = readArtifactCommandArgument(item);
+      if (artifact === undefined) return;
+      await withArtifactsWorkspace((workspace) => copyArtifactContent(workspace, artifact));
     }),
     register(OPEN_ARTIFACT_ON_WEB_COMMAND, async (item: unknown) => {
       const published = (item as { published?: unknown } | null)?.published;
