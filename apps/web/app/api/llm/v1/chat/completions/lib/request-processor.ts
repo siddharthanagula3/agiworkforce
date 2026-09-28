@@ -54,6 +54,7 @@ import {
 import { peekGroundingPool } from '@/lib/web-search/grounding-pool';
 import {
   REQUIRED_SEARCH_SYSTEM_NUDGE,
+  classifyAttachedSearchTool,
   resolveRequiredSearchEnforcement,
   resolveWebSearchRequirement,
   shouldOfferWebSearchForTurn,
@@ -79,6 +80,11 @@ import {
   isItineraryTool,
   itineraryToolDefinition,
 } from '@/lib/places/itinerary-tool';
+import {
+  PRODUCT_COMPARISON_CARD_KIND,
+  asksForProductComparison,
+  productComparisonToolDefinition,
+} from '@/lib/services/product-comparison-tool-service';
 import { placesSearchMicrousdPerCall } from '@/lib/places/places-config';
 import {
   PLACES_UNAVAILABLE_SYSTEM_NOTICE,
@@ -945,7 +951,7 @@ export function applyMapSearchCardCapability(
   }
 }
 
-const ITINERARY_CARD_SURFACES: ReadonlySet<CloudChatSurface> = new Set<CloudChatSurface>([
+const CARD_TOOL_SURFACES: ReadonlySet<CloudChatSurface> = new Set<CloudChatSurface>([
   'web',
   'desktop',
   'mobile',
@@ -962,7 +968,7 @@ export function applyItineraryToolCapability(
   },
 ): boolean {
   if (
-    !ITINERARY_CARD_SURFACES.has(params.surface) ||
+    !CARD_TOOL_SURFACES.has(params.surface) ||
     !params.toolsCapable ||
     !request.stream ||
     !params.placesAvailable ||
@@ -976,6 +982,25 @@ export function applyItineraryToolCapability(
     itineraryToolDefinition(),
   ];
   return true;
+}
+
+export function shouldOfferProductComparison(
+  request: ChatCompletionRequest,
+  params: {
+    surface: CloudChatSurface;
+    toolsCapable: boolean;
+    userMessage: string;
+    tools: readonly unknown[] | undefined;
+  },
+): boolean {
+  return (
+    CARD_TOOL_SURFACES.has(params.surface) &&
+    params.toolsCapable &&
+    request.stream === true &&
+    classifyAttachedSearchTool(params.tools) !== null &&
+    asksForProductComparison(params.userMessage) &&
+    request.x_interactive_cards?.supported.includes(PRODUCT_COMPARISON_CARD_KIND) === true
+  );
 }
 
 export function validationRefusalMessage(error: z.ZodError): string {
@@ -4957,6 +4982,17 @@ export async function processRequest(
 
   if (placesRequirement.offered) {
     resolvedTools = [...(resolvedTools ?? []), placesSearchToolDef()];
+  }
+
+  if (
+    shouldOfferProductComparison(chatRequest, {
+      surface: chatSurface,
+      toolsCapable: resolvedModelCaps?.tools ?? true,
+      userMessage: lastUserText,
+      tools: resolvedTools,
+    })
+  ) {
+    resolvedTools = [...(resolvedTools ?? []), productComparisonToolDefinition()];
   }
 
   if (deviceHost) {
