@@ -927,12 +927,10 @@ const ChatComposerNewComponent = ({
   const billingPolicyReady = useBillingStore(isBillingPolicyReady);
   const billingPolicyError = useBillingStore((s) => s.error);
   const refreshBillingPolicy = useBillingStore((s) => s.refreshUser);
+  const canUseImages = useCapability('canUseImages');
   const canUseAgiWork =
     billingPolicyReady && !isFreeTrial && canUseBillingPlanCapability(subscriptionTier, 'agi_work');
-  const canUseImageGeneration =
-    billingPolicyReady &&
-    !isFreeTrial &&
-    canUseBillingPlanCapability(subscriptionTier, 'image_generation');
+  const canUseImageGeneration = billingPolicyReady && !isFreeTrial && canUseImages;
   const canUseVideoGeneration =
     billingPolicyReady &&
     !isFreeTrial &&
@@ -1374,11 +1372,13 @@ const ChatComposerNewComponent = ({
   const genericWebSearchConfigured = useBillingStore(
     (s) => s.featureFlags?.generic_web_search ?? false,
   );
+  const canUseWebSearch = useCapability('canUseWebSearch');
   // Auto is a routing alias, not a catalog model, so it has no provider or
   // capability row until the server resolves the turn. The configured generic
   // backend is the route-independent guarantee that every Auto candidate can
   // still receive the platform web_search tool.
   const modelSupportsSearch =
+    canUseWebSearch &&
     !promotionalTextOnlyChat &&
     (isAutoModeModelId(composerSelectedModelId)
       ? genericWebSearchConfigured
@@ -1392,7 +1392,8 @@ const ChatComposerNewComponent = ({
     !promotionalTextOnlyChat &&
     (isAutoSelected || modelSupportsResearch(selectedModelCaps, selectedModelMeta?.contextWindow));
   const modelSupportsThinkingCap = selectedModelCaps?.thinking ?? false;
-  const deploymentCodeExecution = useBillingStore((s) => s.featureFlags?.code_execution ?? false);
+  const canUseCloudExecution = useCapability('canUseCloudExecution');
+  const deploymentCodeExecution = billingPolicyReady && canUseCloudExecution;
   // Whether this model can run code is a registry capability
   // (selectedModelCaps.codeExecution, curated per-model in models.curation.json),
   // never a provider-name allowlist: request-processor.ts gates the server turn
@@ -1749,6 +1750,7 @@ const ChatComposerNewComponent = ({
     () => askForMicrophone(microphoneOwner, dictation.start),
     [askForMicrophone, microphoneOwner, dictation.start],
   );
+  const canUseVoice = useCapability('canUseVoice');
   const enterVoiceMode = useCallback(() => {
     if (onEnterVoiceMode) askForMicrophone(microphoneOwner, onEnterVoiceMode);
   }, [askForMicrophone, microphoneOwner, onEnterVoiceMode]);
@@ -5732,7 +5734,7 @@ const ChatComposerNewComponent = ({
 
               {/* Trailing slot: voice entry while the field is empty, send once
                 it has text, Stop while a turn is running. */}
-              {onEnterVoiceMode && sendButtonMode !== 'stop' && !hasContent ? (
+              {onEnterVoiceMode && canUseVoice && sendButtonMode !== 'stop' && !hasContent ? (
                 <VoiceEntryButton onStart={enterVoiceMode} disabled={composerDisabled} />
               ) : (
                 <SendButton
