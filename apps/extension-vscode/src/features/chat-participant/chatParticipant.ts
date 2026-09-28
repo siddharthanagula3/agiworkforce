@@ -16,6 +16,7 @@ import { buildMemoryContextInput } from '../../memory/memoryStore';
 import { getAccountMemoryStore } from '../../memory/accountMemoryStore';
 import { buildCustomInstructionInput } from '../instructions';
 import { buildPromptReferenceInputs } from './promptReferences';
+import { rateParticipantAnswer } from '../feedback/answerRating';
 import { parsePlanVisualization, renderPlanMarkdown } from '../../integrations/planVisualization';
 import { assertRunnableStartedThread } from '../../integrations/developerSessionValidation';
 
@@ -237,6 +238,7 @@ function assertRequestedThreadAuthority(
 function threadResultMetadata(
   command: string,
   authority: LocalThreadAuthorityMetadata | undefined,
+  turnId?: string,
 ): Record<string, unknown> {
   return {
     command,
@@ -249,6 +251,7 @@ function threadResultMetadata(
           ...(authority.provider === undefined ? {} : { localThreadProvider: authority.provider }),
           localThreadTrustMode: authority.trustMode,
         }),
+    ...(turnId === undefined ? {} : { localTurnId: turnId }),
   };
 }
 
@@ -569,7 +572,7 @@ export function createChatHandler(
     }
 
     return {
-      metadata: threadResultMetadata(request.command ?? 'chat', threadAuthority),
+      metadata: threadResultMetadata(request.command ?? 'chat', threadAuthority, turnId),
     };
   };
 }
@@ -611,6 +614,11 @@ export function registerChatParticipant(
   }
 
   participant.iconPath = vscode.Uri.joinPath(context.extensionUri, 'media', 'icon-chat.png');
+  context.subscriptions.push(
+    participant.onDidReceiveFeedback((feedback) => {
+      void rateParticipantAnswer(context.secrets, feedback);
+    }),
+  );
 
   participant.followupProvider = {
     provideFollowups(

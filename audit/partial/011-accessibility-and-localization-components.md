@@ -175,30 +175,27 @@ Code: `apps/web/features/billing/components/Billing/types.ts:77-77`, `apps/mobil
 
 - Done when: Counted phrases follow each language's plural rules rather than an English "s" suffix.
 - Wave: 3
+- Already works on: vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | 56cd1c51f: ~20 files on _one/_other with full Arabic forms; remaining sites are in schedules, connectors, privacy, billing, MCP folders, ChatComposerNew, ProjectSettingsDialog, WorkspaceRoles and server copy | ~60 sites in other lanes' folders, compactToolSummary |
 | desktop | partial | 56cd1c51f: ~20 files on _one/_other with full Arabic forms; remaining sites are in schedules, connectors, privacy, billing, MCP folders, ChatComposerNew, ProjectSettingsDialog, WorkspaceRoles and server copy | ~60 sites in other lanes' folders, compactToolSummary |
 | mobile | partial | Counts use English-only "=== 1 ? '' : 's'" suffixes; use the i18n plural rules (one/few/many) so translated counts read correctly. | ui |
-| vscode | partial | Counts use English-only "=== 1 ? '' : 's'" suffixes; use the i18n plural rules (one/few/many) so translated counts read correctly. | ui |
 | chrome | partial | 56cd1c51f: tPlural over Intl.PluralRules in place; adding locales is outside this item | only an English locale ships |
 
-Code: `apps/web/features/chat/components/dialogs/KeyboardShortcutsDialog.tsx:158-158`, `packages/ui/i18n/locales/ar/errors.json:295-295`, `apps/mobile/app/(app)/notifications/index.tsx:307-307`, `apps/extension-vscode/src/core/commandSetup.ts:276-276`
+Code: `apps/web/features/chat/components/dialogs/KeyboardShortcutsDialog.tsx:158-158`, `packages/ui/i18n/locales/ar/errors.json:295-295`, `apps/mobile/app/(app)/notifications/index.tsx:307-307`, `apps/extension/src/i18n.ts:13-13`
 
 ## S11.25: Translated error messages.
 
 - Done when: Error messages appear in the user's chosen language.
 - Wave: 3
-- Already works on: web, desktop, chrome
+- Already works on: web, desktop, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | Host notifications are translated (l10n in 12 locales), but errors inside the chat webview are English only. | ui |
-
-Code: `apps/extension-vscode/src/l10n/index.ts:45-45`, `apps/extension-vscode/src/platform/applyEdit.ts:43-43`
 
 ## S11.27: Long-label and translated-copy layouts.
 

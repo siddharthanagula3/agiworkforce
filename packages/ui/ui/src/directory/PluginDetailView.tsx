@@ -1,7 +1,7 @@
 'use client';
 
 import { Check, Copy, Terminal } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
 import { cn } from '../cn';
@@ -39,7 +39,23 @@ import {
   PLUGIN_HOMEPAGE_LABEL,
   PLUGIN_HOOKS_LABEL,
   PLUGIN_HOOKS_VALUE,
-  PLUGIN_INSTALLS_SUFFIX,
+  PLUGIN_CATEGORY_LABEL,
+  PLUGIN_COMMUNITY_NOTE,
+  PLUGIN_PERMISSIONS_COPY,
+  PLUGIN_PERMISSIONS_HEADING,
+  PLUGIN_PUBLISHER_LABEL,
+  PLUGIN_PUBLISHER_MORE_PREFIX,
+  PLUGIN_PUBLISHER_WEBSITE_LABEL,
+  PLUGIN_REPAIRS_HEADING,
+  PLUGIN_SCAN_DATE_PREFIX,
+  PLUGIN_SCAN_HEADING,
+  PLUGIN_SCAN_NONE_COPY,
+  PLUGIN_SCAN_VERDICT_LABELS,
+  PLUGIN_VERSION_CHOOSE_LABEL,
+  PLUGIN_VERSION_CURRENT_SUFFIX,
+  PLUGIN_VERSION_INSTALLED_LABEL,
+  PLUGIN_VERSION_SWITCH_LABEL,
+  PLUGIN_VERSION_UPDATE_PREFIX,
   PLUGIN_INSTALL_COMMAND_COPY_LABEL,
   PLUGIN_INSTALL_COMMAND_LABEL,
   PLUGIN_LSP_SERVERS_LABEL,
@@ -54,6 +70,7 @@ import {
   PLUGIN_WORKS_WITH_LABEL,
   UNINSTALL_LABEL,
   VERIFIED_GLYPH_BADGE,
+  COMMUNITY_BADGE,
 } from './constants';
 import { DirectoryBadge } from './DirectoryBadges';
 import {
@@ -62,11 +79,11 @@ import {
   DirectoryDetailHeader,
   OutboundLink,
 } from './DirectoryDetailHeader';
-import { formatInstallCount } from './filtering';
 import {
   DETAIL_HEADER_BAND,
   DETAIL_HEADING,
   DETAIL_LABEL,
+  DETAIL_NOTICE,
   DIRECTORY_CREATE_BUTTON,
   DIRECTORY_FOCUS_RING,
   DIRECTORY_ICON_BUTTON,
@@ -74,7 +91,12 @@ import {
 import type {
   DirectoryPluginComponents,
   DirectoryPluginDetail,
+  DirectoryPluginRepair,
+  DirectoryPluginScan,
+  DirectoryPluginScanVerdict,
   DirectoryPluginSettings,
+  DirectoryPluginVersionOption,
+  DirectoryPluginVersions,
 } from './types';
 
 const EMPTY_VALUES: readonly string[] = [];
@@ -235,6 +257,155 @@ function InstallFromCli({
 
 const SETTINGS_ROW_CLASS =
   'flex items-center gap-3 rounded-lg border border-border bg-card px-3 py-2.5';
+
+const SCAN_VERDICT_TONE: Record<DirectoryPluginScanVerdict, string> = {
+  pass: 'text-success-text',
+  review: 'text-warning-text',
+  block: 'text-danger',
+};
+
+function PermissionsSection({ permissions }: { permissions: readonly string[] }) {
+  if (permissions.length === 0) return null;
+  return (
+    <section className="flex flex-col gap-3">
+      <h4 className={DETAIL_HEADING}>{PLUGIN_PERMISSIONS_HEADING}</h4>
+      <p className="text-xs text-muted-foreground">{PLUGIN_PERMISSIONS_COPY}</p>
+      <MonoList values={permissions} />
+    </section>
+  );
+}
+
+function ScanSection({ scan }: { scan: DirectoryPluginScan | null }) {
+  const scannedOn = scan ? formatUpdatedAt(scan.scannedAt) : '';
+  return (
+    <section className="flex flex-col gap-2">
+      <h4 className={DETAIL_HEADING}>{PLUGIN_SCAN_HEADING}</h4>
+      {scan ? (
+        <>
+          <p className={cn('text-sm', SCAN_VERDICT_TONE[scan.verdict])}>
+            {PLUGIN_SCAN_VERDICT_LABELS[scan.verdict]}
+          </p>
+          {scan.findings.length > 0 ? (
+            <ul className="flex list-disc flex-col gap-1 pl-4 text-xs text-foreground">
+              {scan.findings.map((finding) => (
+                <li key={finding} className="break-words">
+                  {finding}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {scannedOn ? (
+            <p className="text-xs text-muted-foreground">{`${PLUGIN_SCAN_DATE_PREFIX} ${scannedOn}`}</p>
+          ) : null}
+        </>
+      ) : (
+        <p className="text-xs text-muted-foreground">{PLUGIN_SCAN_NONE_COPY}</p>
+      )}
+    </section>
+  );
+}
+
+function RepairList({
+  repairs,
+  busy,
+  onRepair,
+}: {
+  repairs: readonly DirectoryPluginRepair[];
+  busy: boolean;
+  onRepair: (repair: DirectoryPluginRepair) => void;
+}) {
+  if (repairs.length === 0) return null;
+  return (
+    <section className="flex flex-col gap-2">
+      <h4 className={DETAIL_HEADING}>{PLUGIN_REPAIRS_HEADING}</h4>
+      <ul className="flex flex-col gap-2">
+        {repairs.map((repair) => (
+          <li key={repair.id} className={SETTINGS_ROW_CLASS}>
+            <span className="min-w-0 flex-1 text-sm text-foreground">{repair.label}</span>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onRepair(repair)}
+              className={cn(DIRECTORY_CREATE_BUTTON, 'shrink-0 disabled:opacity-60')}
+            >
+              {repair.actionLabel}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function VersionControl({
+  versions,
+  busy,
+  onChangeVersion,
+}: {
+  versions: DirectoryPluginVersions;
+  busy: boolean;
+  onChangeVersion: (option: DirectoryPluginVersionOption) => void;
+}) {
+  const selectId = useId();
+  const [choice, setChoice] = useState(versions.latest ?? versions.installed);
+  const chosen = versions.options.find((option) => option.version === choice);
+  const latest = versions.latest
+    ? versions.options.find((option) => option.version === versions.latest)
+    : undefined;
+  return (
+    <section className="flex flex-col gap-3">
+      <h4 className={DETAIL_HEADING}>{PLUGIN_VERSION_LABEL}</h4>
+      <p className="text-sm text-foreground">
+        {PLUGIN_VERSION_INSTALLED_LABEL}{' '}
+        <span className="font-mono text-xs">{versions.installed}</span>
+      </p>
+      {latest ? (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => onChangeVersion(latest)}
+          className={cn(DIRECTORY_CREATE_BUTTON, 'self-start disabled:opacity-60')}
+        >
+          {`${PLUGIN_VERSION_UPDATE_PREFIX} ${latest.version}`}
+        </button>
+      ) : null}
+      {versions.options.length > 1 ? (
+        <div className="flex flex-wrap items-end gap-2">
+          <label htmlFor={selectId} className="flex flex-col gap-1 text-xs text-muted-foreground">
+            {PLUGIN_VERSION_CHOOSE_LABEL}
+            <select
+              id={selectId}
+              value={choice}
+              onChange={(event) => setChoice(event.target.value)}
+              className={cn(
+                'min-h-8 rounded-lg border border-border bg-background px-2 font-mono text-xs text-foreground pointer-coarse:min-h-11',
+                DIRECTORY_FOCUS_RING,
+              )}
+            >
+              {versions.options.map((option) => (
+                <option key={option.version} value={option.version}>
+                  {option.version === versions.installed
+                    ? `${option.version} ${PLUGIN_VERSION_CURRENT_SUFFIX}`
+                    : option.version}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            disabled={busy || !chosen || chosen.version === versions.installed}
+            onClick={() => {
+              if (chosen) onChangeVersion(chosen);
+            }}
+            className={cn(DIRECTORY_CREATE_BUTTON, 'disabled:opacity-60')}
+          >
+            {PLUGIN_VERSION_SWITCH_LABEL}
+          </button>
+        </div>
+      ) : null}
+    </section>
+  );
+}
 
 function EnabledRow({
   id,
@@ -403,6 +574,9 @@ export function PluginDetailView({
   onSetEnabled,
   onSetSkillEnabled,
   onOpenConnector,
+  onShowPublisher,
+  onChangeVersion,
+  onRepair,
   busy,
 }: {
   detail: DirectoryPluginDetail;
@@ -416,6 +590,9 @@ export function PluginDetailView({
   onSetEnabled?: (enabled: boolean) => Promise<void> | void;
   onSetSkillEnabled?: (skill: string, enabled: boolean) => Promise<void> | void;
   onOpenConnector?: (connectorId: string) => void;
+  onShowPublisher?: () => void;
+  onChangeVersion?: (option: DirectoryPluginVersionOption) => void;
+  onRepair?: (repair: DirectoryPluginRepair) => void;
   busy?: boolean;
 }) {
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -428,7 +605,7 @@ export function PluginDetailView({
 
   const installed = detail.installed === true;
   const installable = detail.installable !== false;
-  const count = formatInstallCount(detail.installCount);
+  const publisherProfile = detail.publisherProfile;
   const worksWith = detail.worksWith ?? EMPTY_VALUES;
   const moreInfo: { label: string; href: string }[] = [
     { label: PLUGIN_HOMEPAGE_LABEL, href: detail.homepageUrl ?? '' },
@@ -444,6 +621,10 @@ export function PluginDetailView({
   const showCli = !installed && !installable;
   const updated = formatUpdatedAt(detail.updatedAt);
   const showsTabs = installed && settings !== undefined;
+  const versionControl =
+    installed && detail.versions !== undefined && onChangeVersion !== undefined
+      ? { versions: detail.versions, onChangeVersion }
+      : null;
 
   return (
     <div ref={rootRef} className="flex flex-col gap-5">
@@ -453,17 +634,19 @@ export function PluginDetailView({
           title={detail.name}
           name={detail.name}
           icon={<DetailMonogram monogram={detail.name.slice(0, 1).toUpperCase()} />}
-          badge={detail.verified ? <DirectoryBadge badge={VERIFIED_GLYPH_BADGE} /> : null}
+          badge={
+            detail.verified ? (
+              <DirectoryBadge badge={VERIFIED_GLYPH_BADGE} />
+            ) : detail.community ? (
+              <DirectoryBadge badge={COMMUNITY_BADGE} />
+            ) : null
+          }
           subtitle={
-            detail.publisher || count ? (
+            detail.publisher || detail.category ? (
               <span className="flex flex-wrap items-center gap-x-1.5">
                 {detail.publisher ? <span>{detail.publisher}</span> : null}
-                {detail.publisher && count ? <span aria-hidden>&middot;</span> : null}
-                {count ? (
-                  <span>
-                    <span className="font-mono">{count}</span> {PLUGIN_INSTALLS_SUFFIX}
-                  </span>
-                ) : null}
+                {detail.publisher && detail.category ? <span aria-hidden>&middot;</span> : null}
+                {detail.category ? <span>{detail.category}</span> : null}
               </span>
             ) : undefined
           }
@@ -478,6 +661,12 @@ export function PluginDetailView({
           busy={busy}
         />
       </div>
+
+      {detail.community ? <p className={DETAIL_NOTICE}>{PLUGIN_COMMUNITY_NOTE}</p> : null}
+
+      {installed && settings?.repairs && onRepair ? (
+        <RepairList repairs={settings.repairs} busy={busy === true} onRepair={onRepair} />
+      ) : null}
 
       {showCli ? (
         <InstallFromCli
@@ -526,6 +715,19 @@ export function PluginDetailView({
         <ComponentsSummary components={detail.components} skillsListedElsewhere={showsTabs} />
       ) : null}
 
+      {versionControl ? (
+        <VersionControl
+          key={versionControl.versions.installed}
+          versions={versionControl.versions}
+          busy={busy === true}
+          onChangeVersion={versionControl.onChangeVersion}
+        />
+      ) : null}
+
+      {detail.permissions ? <PermissionsSection permissions={detail.permissions} /> : null}
+
+      {detail.scan !== undefined ? <ScanSection scan={detail.scan} /> : null}
+
       {detail.examplePrompts.length > 0 ? (
         <section className="flex flex-col gap-3">
           <h4 className={DETAIL_HEADING}>{PLUGIN_PROMPTS_LABEL}</h4>
@@ -542,10 +744,47 @@ export function PluginDetailView({
       {worksWith.length > 0 ||
       detail.version ||
       detail.sourceLabel ||
+      publisherProfile ||
+      detail.category ||
       updated ||
       moreInfo.length > 0 ? (
         <dl className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
           <div className="flex min-w-0 flex-col gap-4">
+            {publisherProfile ? (
+              <DetailRow label={PLUGIN_PUBLISHER_LABEL}>
+                <div className="flex flex-col items-start gap-1.5">
+                  <span className="flex flex-wrap items-center gap-x-1.5">
+                    <span>{publisherProfile.name}</span>
+                    {publisherProfile.kindLabel ? (
+                      <>
+                        <span aria-hidden>&middot;</span>
+                        <span className="text-muted-foreground">{publisherProfile.kindLabel}</span>
+                      </>
+                    ) : null}
+                  </span>
+                  {publisherProfile.url ? (
+                    <OutboundLink href={publisherProfile.url} onOpenHref={onOpenHref}>
+                      {PLUGIN_PUBLISHER_WEBSITE_LABEL}
+                    </OutboundLink>
+                  ) : null}
+                  {onShowPublisher ? (
+                    <button
+                      type="button"
+                      onClick={onShowPublisher}
+                      className={cn(
+                        'inline-flex min-h-8 items-center text-sm text-foreground underline underline-offset-4',
+                        DIRECTORY_FOCUS_RING,
+                      )}
+                    >
+                      {`${PLUGIN_PUBLISHER_MORE_PREFIX} ${publisherProfile.name}`}
+                    </button>
+                  ) : null}
+                </div>
+              </DetailRow>
+            ) : null}
+            {detail.category ? (
+              <DetailRow label={PLUGIN_CATEGORY_LABEL}>{detail.category}</DetailRow>
+            ) : null}
             {detail.sourceLabel ? (
               <DetailRow label={PLUGIN_SOURCE_LABEL}>
                 {detail.sourceUrl ? (
@@ -568,7 +807,7 @@ export function PluginDetailView({
                 </ul>
               </DetailRow>
             ) : null}
-            {detail.version ? (
+            {detail.version && !versionControl ? (
               <DetailRow label={PLUGIN_VERSION_LABEL}>
                 <span className="font-mono text-xs">{detail.version}</span>
               </DetailRow>

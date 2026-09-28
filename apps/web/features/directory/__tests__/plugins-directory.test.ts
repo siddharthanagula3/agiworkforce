@@ -40,6 +40,7 @@ const STATS = {
   verified: 319,
   bySource: { builtin: 8, partner: 23, marketplace: 314 },
   byWorksWith: { 'claude-code': 314, cowork: 32, web: 60 },
+  byCategory: { development: 120, productivity: 40 },
 };
 
 function directoryEntry(patch: Partial<PluginDirectoryEntry> = {}): PluginDirectoryEntry {

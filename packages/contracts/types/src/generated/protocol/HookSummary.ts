@@ -11,4 +11,5 @@ export type HookSummary = {
    */
   trusted: boolean;
   source?: string;
+  position?: number;
 };

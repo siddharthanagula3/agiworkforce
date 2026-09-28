@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { contextSource } from '@agiworkforce/context';
 import { resolveContext, OPEN_ORGANIZATION_CONTEXT_POLICY } from '@agiworkforce/context-engine';
-import { projectContextLoaders } from '../scheduled-agent-executor';
-import type { LoadedProjectContext } from '../project-context-service';
+import { projectContextLoaders, type LoadedProjectContext } from '../project-context-service';
 
 const PROJECT_ID = 'project-1';
 

@@ -856,7 +856,7 @@ function pluginsAdapter(patch: Partial<DirectoryAdapter> = {}): DirectoryAdapter
           ],
         },
       ],
-      sortOptions: ['installs', 'name'],
+      sortOptions: ['name'],
       countLabel: '345 plugins',
       total: 345,
       hasMore: true,
@@ -884,11 +884,11 @@ describe('DirectoryPanel plugin groups', () => {
     expect(screen.getByText('Install', { selector: 'p' })).toBeTruthy();
   });
 
-  it('starts from the installs sort and sends the facet tab through the query', async () => {
+  it('starts from the name sort and sends the facet tab through the query', async () => {
     const queryEntries = vi.fn();
     render(<DirectoryPanel section="plugins" adapter={pluginsAdapter({ queryEntries })} />);
     await waitFor(() => expect(queryEntries).toHaveBeenCalledTimes(1));
-    expect(queryEntries.mock.calls[0]?.[1]).toMatchObject({ sort: 'installs', sourceId: null });
+    expect(queryEntries.mock.calls[0]?.[1]).toMatchObject({ sort: 'name', sourceId: null });
     fireEvent.click(screen.getByRole('tab', { name: 'Marketplace' }));
     await waitFor(() =>
       expect(queryEntries).toHaveBeenLastCalledWith(
