@@ -3959,7 +3959,7 @@
     "placeholders": {
       "model": {
         "content": "$1",
-        "example": "Claude Sonnet"
+        "example": "the faster model"
       }
     }
   },
@@ -3969,7 +3969,7 @@
     "placeholders": {
       "model": {
         "content": "$1",
-        "example": "Claude Sonnet"
+        "example": "the faster model"
       },
       "reason": {
         "content": "$2",
