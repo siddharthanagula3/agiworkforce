@@ -23,11 +23,13 @@ import { interactiveCardNeedsResume } from '@/app/api/interactive-cards/response
 import { useChatStreamRuntime } from '../components/ChatStreamRuntimeProvider';
 import { useConversations } from '@/lib/hooks/useConversations';
 import {
+  ManagedCloudAgentRunHttpError,
   createManagedCloudAgentRunClient,
   managedCloudConversationPath,
   managedCloudMessagePath,
   type ManagedCloudChatAttachmentUploadStatus,
 } from '@agiworkforce/cloud-contracts';
+import { takeConversationSend } from '@/features/chat/lib/conversation-send-handoff';
 // GOV-19: remaining managed quota, shared with Settings > Usage.
 import {
   getWorstUsagePercent,
@@ -68,6 +70,12 @@ import {
   ProjectSourcesPanel,
   ProjectSourcesToggleButton,
 } from '@features/projects/components/ProjectSourcesPanel';
+import {
+  ProjectAnswerSaveProvider,
+  projectAnswerFileName,
+  type ProjectAnswerSave,
+} from '@features/projects/components/project-answer-save';
+import { uploadProjectKnowledgeFile } from '@features/projects/services/project-knowledge-upload';
 import {
   EMPTY_VARIANT_INFO,
   resolveLeafForSibling,
@@ -5033,6 +5041,8 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     [displayedMessages, getToken],
   );
 
+  const researchSteerIdsRef = useRef(new Map<string, string[]>());
+
   const steerResearchRun = useCallback(
     async (id: string, guidance: string): Promise<boolean> => {
       const runId = displayedMessages.find((m) => m.id === id)?.metadata?.cloudAgentRun?.runId;
@@ -5041,10 +5051,14 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         return false;
       }
       try {
-        await createManagedCloudAgentRunClient({
+        const { steer } = await createManagedCloudAgentRunClient({
           getAuthToken: getToken,
           decorateMutationHeaders: addCsrfHeaders,
         }).steerRun(runId, guidance);
+        researchSteerIdsRef.current.set(id, [
+          ...(researchSteerIdsRef.current.get(id) ?? []),
+          steer.id,
+        ]);
         return true;
       } catch (error) {
         toast.error(
@@ -5056,14 +5070,43 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     [displayedMessages, getToken],
   );
 
+  const sendResearchGuidanceAsMessage = useCallback(
+    async (id: string, guidance: string): Promise<boolean> => {
+      const runId = displayedMessages.find((m) => m.id === id)?.metadata?.cloudAgentRun?.runId;
+      const steerIds = researchSteerIdsRef.current.get(id) ?? [];
+      if (runId && steerIds.length > 0) {
+        const client = createManagedCloudAgentRunClient({
+          getAuthToken: getToken,
+          decorateMutationHeaders: addCsrfHeaders,
+        });
+        try {
+          for (const steerId of steerIds) {
+            await client.withdrawSteer(runId, steerId).catch((error: unknown) => {
+              if (error instanceof ManagedCloudAgentRunHttpError && error.status === 404) return;
+              throw error;
+            });
+          }
+        } catch (error) {
+          toast.error(toUserMessage(error, 'Your guidance was not sent. Try again.'));
+          return false;
+        }
+        researchSteerIdsRef.current.delete(id);
+      }
+      const outcome = handleSend(guidance);
+      return outcome !== false && outcome !== SEND_GUARD_BLOCKED;
+    },
+    [displayedMessages, getToken, handleSend],
+  );
+
   const handleResearchRunAction = useCallback<ResearchRunActionHandler>(
     async (id, action) => {
       if (action.kind === 'pause') return pauseResearchRun(id);
       if (action.kind === 'steer') return steerResearchRun(id, action.guidance);
+      if (action.kind === 'sendAsNew') return sendResearchGuidanceAsMessage(id, action.guidance);
       await handleRetryResearch(id, action.guidance);
       return true;
     },
-    [handleRetryResearch, pauseResearchRun, steerResearchRun],
+    [handleRetryResearch, pauseResearchRun, sendResearchGuidanceAsMessage, steerResearchRun],
   );
 
   const {
@@ -5077,6 +5120,23 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       ? s.disabledConnectorIdsByConversation[displayedConversationId]
       : undefined,
   );
+  const conversationTitle = displayedConversation?.title ?? null;
+  const projectAnswerSave = useMemo<ProjectAnswerSave | null>(() => {
+    if (!conversationProject) return null;
+    if (conversationProject.isOrgShared === true && conversationProject.sharedAccess !== 'write') {
+      return null;
+    }
+    return {
+      projectName: conversationProject.name,
+      save: async (content) => {
+        const file = new File([content], projectAnswerFileName(conversationTitle), {
+          type: 'text/markdown',
+        });
+        await uploadProjectKnowledgeFile({ projectId: conversationProject.id, file });
+      },
+    };
+  }, [conversationProject, conversationTitle]);
+
   const researchRunControls = useMemo<ResearchRunControls>(
     () => ({
       act: handleResearchRunAction,
@@ -5466,6 +5526,22 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   const isEmptyChat =
     !displayedConversationId ||
     (chatMessages.length === 0 && !isLoading && !isConversationTranscriptPending);
+
+  useEffect(() => {
+    if (!urlConversationId || activeConversationId !== urlConversationId) return;
+    if (isConversationTranscriptPending || isLoading || isStreaming) return;
+    const handedOff = takeConversationSend(urlConversationId);
+    if (!handedOff) return;
+    const outcome = handleSend(handedOff);
+    if (outcome === false || outcome === SEND_GUARD_BLOCKED) setComposerPrefill(handedOff);
+  }, [
+    activeConversationId,
+    handleSend,
+    isConversationTranscriptPending,
+    isLoading,
+    isStreaming,
+    urlConversationId,
+  ]);
 
   const voiceModeActive = useVoiceModeActive();
   useEffect(() => () => releaseVoiceSessionOnPageExit(), []);
@@ -6319,45 +6395,47 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                       <MessageInlineEditProvider value={messageInlineEdit}>
                         <InteractiveCardResumeProvider value={resumeInteractiveCardTurn}>
                           <ResearchRunControlsProvider value={researchRunControls}>
-                            <ChatMessageList
-                              messages={chatMessages}
-                              transcriptPatch={chatMessageProjection.patch}
-                              currentTier={currentTier}
-                              conversationId={displayedConversationId}
-                              isLoading={isLoading && !isStreaming}
-                              isUserTyping={isUserTyping}
-                              onRegenerate={handleRegenerateMessage}
-                              onRetryResearch={handleRetryResearch}
-                              onResearchPlanDecision={handleResearchPlanDecision}
-                              onAgiWorkPlanDecision={handleAgiWorkPlanDecision}
-                              retryingResearchMessageId={retryingResearchMessageId}
-                              onContinue={handleContinueMessage}
-                              onEdit={handleEditMessage}
-                              onDelete={handleDeleteMessage}
-                              onDeleteVariant={handleDeleteVariant}
-                              countVariantFollowers={countVariantFollowers}
-                              onReact={handleReactMessage}
-                              onPin={handlePinMessage}
-                              branchGroupsByMessageId={branchGroupsByMessageId}
-                              branchingMessageId={branchingMessageId}
-                              onBranch={createBranch}
-                              onSwitchBranch={switchBranch}
-                              variantInfoByMessageId={variantInfoByMessageId}
-                              onSelectVariant={handleSelectVariant}
-                              activeLeafId={activeLeafId}
-                              variantAnchorMessageId={variantAnchorMessageId}
-                              isConversationStreaming={isStreaming}
-                              onRegenerateImage={handleRegenerateImageInPlace}
-                              onResumeVideo={handleResumeVideo}
-                              onRetryVideo={handleRetryVideo}
-                              onSendMessage={setComposerPrefill}
-                              onPaywallUpgrade={handlePaywallRecovery}
-                              onPaywallDismiss={handlePaywallDismiss}
-                              onRegenerateWithModel={handleRegenerateWithModel}
-                              regenerateModelOptions={regenerateModelOptions}
-                              turnErrorActive={turnErrorNotice !== null}
-                              temporaryChat={temporaryChatActive}
-                            />
+                            <ProjectAnswerSaveProvider value={projectAnswerSave}>
+                              <ChatMessageList
+                                messages={chatMessages}
+                                transcriptPatch={chatMessageProjection.patch}
+                                currentTier={currentTier}
+                                conversationId={displayedConversationId}
+                                isLoading={isLoading && !isStreaming}
+                                isUserTyping={isUserTyping}
+                                onRegenerate={handleRegenerateMessage}
+                                onRetryResearch={handleRetryResearch}
+                                onResearchPlanDecision={handleResearchPlanDecision}
+                                onAgiWorkPlanDecision={handleAgiWorkPlanDecision}
+                                retryingResearchMessageId={retryingResearchMessageId}
+                                onContinue={handleContinueMessage}
+                                onEdit={handleEditMessage}
+                                onDelete={handleDeleteMessage}
+                                onDeleteVariant={handleDeleteVariant}
+                                countVariantFollowers={countVariantFollowers}
+                                onReact={handleReactMessage}
+                                onPin={handlePinMessage}
+                                branchGroupsByMessageId={branchGroupsByMessageId}
+                                branchingMessageId={branchingMessageId}
+                                onBranch={createBranch}
+                                onSwitchBranch={switchBranch}
+                                variantInfoByMessageId={variantInfoByMessageId}
+                                onSelectVariant={handleSelectVariant}
+                                activeLeafId={activeLeafId}
+                                variantAnchorMessageId={variantAnchorMessageId}
+                                isConversationStreaming={isStreaming}
+                                onRegenerateImage={handleRegenerateImageInPlace}
+                                onResumeVideo={handleResumeVideo}
+                                onRetryVideo={handleRetryVideo}
+                                onSendMessage={setComposerPrefill}
+                                onPaywallUpgrade={handlePaywallRecovery}
+                                onPaywallDismiss={handlePaywallDismiss}
+                                onRegenerateWithModel={handleRegenerateWithModel}
+                                regenerateModelOptions={regenerateModelOptions}
+                                turnErrorActive={turnErrorNotice !== null}
+                                temporaryChat={temporaryChatActive}
+                              />
+                            </ProjectAnswerSaveProvider>
                           </ResearchRunControlsProvider>
                         </InteractiveCardResumeProvider>
                       </MessageInlineEditProvider>

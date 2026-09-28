@@ -1486,11 +1486,83 @@ pub async fn mcp_for_display(arg: &str, session: &mut AgentSession) -> CommandOu
                 Err(e) => CommandOutcome::Error(format!("MCP restart failed: {e:#}")),
             }
         }
+        "info" | "inspect" | "logs" => {
+            let Some(name) = rest.first().copied() else {
+                return CommandOutcome::Warn(format!("Usage: /mcp {sub} <server>"));
+            };
+            let Some(connection) = session
+                .mcp_manager
+                .as_mut()
+                .and_then(|manager| manager.connection_mut(name))
+            else {
+                return CommandOutcome::Warn(format!(
+                    "'{name}' is not connected in this session. /mcp list shows the configured servers and /mcp restart connects them."
+                ));
+            };
+            let report =
+                crate::app_server::surfaces::inspect_connection(name, connection, true).await;
+            CommandOutcome::Block(
+                sanitize_terminal_text(&render_mcp_report(&report, sub == "logs")).into_owned(),
+            )
+        }
         other => CommandOutcome::Warn(format!(
-            "Unknown /mcp subcommand '{other}'. Use: list | tools [server] | add <name> <url> | \
-             remove <name> | enable <name> | disable <name> | reconfigure <name> <spec> | restart"
+            "Unknown /mcp subcommand '{other}'. Use: list | tools [server] | info <server> | \
+             logs <server> | add <name> <url> | remove <name> | enable <name> | disable <name> | \
+             reconfigure <name> <spec> | restart"
         )),
     }
+}
+
+fn render_mcp_report(
+    report: &agiworkforce_protocol::developer_session::McpServerInspectResponse,
+    logs: bool,
+) -> String {
+    let mut lines = vec![format!(
+        "{}: {}",
+        report.name,
+        if report.responding {
+            "responding"
+        } else {
+            "not responding"
+        }
+    )];
+    if logs {
+        if report.logs.is_empty() {
+            lines.push("No output from this server yet.".to_string());
+        } else {
+            lines.push(format!("Recent output ({} lines):", report.logs.len()));
+            lines.extend(report.logs.iter().map(|line| format!("  {line}")));
+        }
+        return lines.join("\n");
+    }
+    let server = match (&report.server_name, &report.server_version) {
+        (Some(name), Some(version)) => format!(", server {name} {version}"),
+        (Some(name), None) => format!(", server {name}"),
+        _ => String::new(),
+    };
+    lines.push(format!(
+        "Protocol {}{server}",
+        report.protocol_version.as_deref().unwrap_or("unknown")
+    ));
+    lines.push(if report.capabilities.is_empty() {
+        "Capabilities: none advertised".to_string()
+    } else {
+        format!("Capabilities: {}", report.capabilities.join(", "))
+    });
+    if let Some(instructions) = report
+        .instructions
+        .as_deref()
+        .map(str::trim)
+        .filter(|instructions| !instructions.is_empty())
+    {
+        lines.push(format!("Instructions: {instructions}"));
+    }
+    lines.push(format!(
+        "{} lines of recent output; /mcp logs {} shows them.",
+        report.logs.len(),
+        report.name
+    ));
+    lines.join("\n")
 }
 
 fn mutate_registry<F>(op: F, success: &str) -> CommandOutcome

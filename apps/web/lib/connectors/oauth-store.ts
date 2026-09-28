@@ -1,5 +1,6 @@
 import 'server-only';
 
+import type { ConnectorAccount, ConnectorAccountScope } from '@agiworkforce/cloud-contracts';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
@@ -8,8 +9,6 @@ import { hashOAuthState } from '@/lib/connectors/pkce';
 import {
   DEFAULT_CONNECTOR_ACCOUNT_KEY,
   normalizeConnectorAccountKey,
-  type ConnectorAccount,
-  type ConnectorAccountScope,
 } from '@/lib/connectors/accounts';
 
 const PG_UNDEFINED_TABLE = '42P01';

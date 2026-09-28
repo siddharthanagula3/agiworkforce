@@ -42,7 +42,8 @@ async fn worktree_approval_denial(
                     },
                     prompt,
                     vec![describe_command(permission_command)],
-                ),
+                )
+                .saving_always_allow(true),
             )
             .await
             {

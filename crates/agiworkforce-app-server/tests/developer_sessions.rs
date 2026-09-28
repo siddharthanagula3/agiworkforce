@@ -223,6 +223,7 @@ impl DeveloperSessionHost for FakeHost {
                     risk_level: Some(AgentEventApprovalRiskLevel::Medium),
                     reversible: Some(true),
                     proposed_content: None,
+                    always_allow_saved: false,
                 }],
             }),
         })
@@ -345,6 +346,8 @@ fn capabilities() -> AppServerCapabilities {
         approval_edits: false,
         mcp_tools: false,
         installs: false,
+        saved_permissions: false,
+        mcp_inspect: false,
     }
 }
 
@@ -1138,6 +1141,8 @@ impl DeveloperSessionHost for SurfaceHost {
             purchased_credits: None,
             cached: !params.refresh,
             source: AccountSource::Cli,
+            web_search_key: None,
+            web_search_logins: Vec::new(),
         })
     }
 
@@ -1303,6 +1308,7 @@ impl DeveloperSessionHost for SurfaceHost {
                 source: CommandSourceKind::Builtin,
                 aliases: Vec::new(),
                 runnable: true,
+                prompt: false,
             }],
         })
     }
@@ -1783,6 +1789,7 @@ fn handoff_record(to: HandoffEnvironment) -> DeveloperSessionHandoff {
             risk_level: Some(AgentEventApprovalRiskLevel::Medium),
             reversible: Some(true),
             proposed_content: None,
+            always_allow_saved: false,
         }],
         last_turn: Some(HandoffLastTurn {
             turn_id: "turn-9".to_string(),

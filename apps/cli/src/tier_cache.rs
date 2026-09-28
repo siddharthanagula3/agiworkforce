@@ -483,6 +483,19 @@ pub fn reconcile_fetched_tier(fetched: &UserTier, cached: &UserTier) -> UserTier
 /// # Arguments
 /// * `jwt`, AGI Workforce JWT (Bearer token).  If `None`, we skip
 ///   the network call and return only what's in the cache.
+pub async fn managed_auto_routing_tier() -> &'static str {
+    let jwt = load_jwt();
+    tokio::time::timeout(
+        std::time::Duration::from_secs(3),
+        resolve_user_tier(jwt.as_deref()),
+    )
+    .await
+    .unwrap_or_default()
+    .cached
+    .map(|cached| cached.tier.managed_auto_routing_tier())
+    .unwrap_or("free")
+}
+
 pub async fn resolve_user_tier(jwt: Option<&str>) -> TierResolution {
     // Fast path: return fresh cache without touching the network.
     if let Some(cached) = read_tier_cache() {

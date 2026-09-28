@@ -3,7 +3,12 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { FileCode2, FolderGit2, MessagesSquare, Plug, Share2, Users } from 'lucide-react';
-import { useConfirmAction, translateUiPlural } from '@agiworkforce/ui';
+import { z } from 'zod';
+import {
+  CUSTOM_CONNECTORS_PATH,
+  CustomConnectorSummarySchema,
+} from '@agiworkforce/cloud-contracts';
+import { translateUiPlural, useConfirmAction } from '@agiworkforce/ui';
 import { toUserMessage } from '@agiworkforce/unified-chat/network-error';
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import {
@@ -135,10 +140,11 @@ interface OwnProject {
   isOrgShared: boolean;
 }
 
-interface OwnConnector {
-  id: string;
-  name: string;
-}
+const OwnConnectorSchema = CustomConnectorSummarySchema.pick({ id: true, name: true });
+
+const OwnConnectorsSchema = z.object({ connectors: z.array(OwnConnectorSchema) });
+
+type OwnConnector = z.infer<typeof OwnConnectorSchema>;
 
 async function fetchOwnProjects(): Promise<OwnProject[]> {
   const token = await getAuthToken();
@@ -154,12 +160,11 @@ async function fetchOwnProjects(): Promise<OwnProject[]> {
 async function fetchOwnConnectors(): Promise<OwnConnector[]> {
   const token = await getAuthToken();
   if (!token) throw new Error('User not authenticated');
-  const res = await fetch('/api/connectors/custom', {
+  const res = await fetch(CUSTOM_CONNECTORS_PATH, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const json = (await res.json()) as { connectors: OwnConnector[] };
-  return json.connectors ?? [];
+  return OwnConnectorsSchema.parse(await res.json()).connectors;
 }
 
 function SharedProjects({ overview }: { overview: OrgSharedOverview }) {

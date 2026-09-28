@@ -24,6 +24,12 @@ import {
 } from '../services/conversation-data-service';
 import { SettingsPageLink, SettingsSectionLink } from '../components/SettingsSectionLink';
 import { toUserMessage } from '@/lib/user-error-message';
+import {
+  DATA_EXPORT_DOWNLOAD_HOURS,
+  DataExportArchiveResponseSchema,
+  MANAGED_CLOUD_DATA_EXPORT_PATH,
+} from '@agiworkforce/cloud-contracts';
+import { addCsrfHeaders } from '@/lib/client/csrf';
 import { SaveStatusLine } from '../components/SaveStatusLine';
 import { UsOnlyRoutingPanel } from '../components/UsOnlyRoutingPanel';
 import { HelpArticleLink } from '@/features/support/components/HelpArticleLink';
@@ -297,23 +303,15 @@ export function PrivacySection() {
     setExportError(null);
     setExportNotice(null);
     try {
-      const res = await fetch('/api/user/data?download=true', { method: 'GET' });
+      const res = await fetch(MANAGED_CLOUD_DATA_EXPORT_PATH, {
+        method: 'POST',
+        headers: await addCsrfHeaders(),
+      });
       if (!res.ok) throw new Error('Export failed');
-      const status = res.headers.get('X-Export-Status');
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `agi-export-${new Date().toISOString().slice(0, 10)}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      if (status === 'partial') {
-        setExportNotice(
-          'Your export downloaded, but some account data was unavailable. Try again later for a complete copy.',
-        );
-      }
+      DataExportArchiveResponseSchema.parse(await res.json());
+      setExportNotice(
+        `We're preparing your export. We'll email you a download link that works for ${DATA_EXPORT_DOWNLOAD_HOURS} hours.`,
+      );
     } catch (err) {
       setExportError(toUserMessage(err, 'Export failed. Please try again.'));
     } finally {
@@ -976,7 +974,8 @@ export function PrivacySection() {
           <div>
             <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)' }}>Export data</div>
             <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
-              Download a copy of your account data as JSON. Store it somewhere private.
+              Get a copy of your account data and the files you stored. We email you a download
+              link.
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>

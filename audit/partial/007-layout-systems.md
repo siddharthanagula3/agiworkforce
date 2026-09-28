@@ -18,18 +18,6 @@ nothing is left.
 
 Code: `apps/cli/src/tui/tui_app.rs:1460-1463`, `apps/cli/src/tui/tui_app.rs:1448-1448`
 
-## S7.02: Reading-width conversation layout.
-
-- Done when: Message text is constrained to a readable column width that stays centred when the window is wide.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | b21db27be: messages in a centred 768px column; composer still full panel width | composer width |
-
-Code: `apps/extension/src/side_panel.ts:1237-1237`, `apps/extension/src/side_panel.ts:4138-4138`
-
 ## S7.03: Full-width data-analysis layout.
 
 - Done when: Data work (tables, charts, spreadsheets) can be viewed in a layout that uses the full window width instead of the reading column.

@@ -106,7 +106,7 @@ Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:773-781`, `cr
 | --- | --- | --- | --- |
 | mobile | partial | Make the "Search the web" chip actually request a search; today it only adds a research-style instruction, and whether a search runs depends on the ambient web-search setting and model. | handler |
 | cli | partial | No explicit search entry (for example /search): web_search is only a tool the model may choose, and it works only when the user sets their own SEARCH_API_KEY (or BRAVE_SEARCH_API_KEY) environment variable. | ui |
-| vscode | partial | The toggle only prepends an instruction; the search itself is the CLI web_search tool, which is env-gated on SEARCH_API_KEY with no setting or command to supply it (grep finds no other reader), so by default the turn states the limitation instead of searching. |  |
+| vscode | partial | partials/desktop-cli baeaa70f5a: account/status reports webSearchKey and webSearchLogins; VS Code offers Set up web search from them (p-sessions). | ui |
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/mobile/src/features/chat/components/TaskChips.tsx:36-36`, `apps/mobile/src/features/chat/components/TaskChips.tsx:19-23`, `apps/mobile/stores/chat/chatExecutionStore.ts:1678-1687`, `apps/cli/src/features/exec/tools/web/mod.rs:284-292`
