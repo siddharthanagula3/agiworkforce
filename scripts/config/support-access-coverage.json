@@ -60,6 +60,14 @@
       "serves": "platform_only",
       "reason": "Route cache and latency counters."
     },
+    "apps/web/app/api/admin/plugin-submissions/[id]/route.ts": {
+      "serves": "submitted_to_platform",
+      "reason": "One plugin its developer submitted to the community directory for review, with the files they submitted, and the review decision."
+    },
+    "apps/web/app/api/admin/plugin-submissions/route.ts": {
+      "serves": "submitted_to_platform",
+      "reason": "The queue of plugins developers submitted to the community directory, each row raised by the developer it names."
+    },
     "apps/web/app/api/admin/plugins/route.ts": {
       "serves": "platform_only",
       "reason": "The plugin registry catalogue and the review state of its versions. No tenant row is read."

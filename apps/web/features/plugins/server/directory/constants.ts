@@ -212,6 +212,10 @@ export function uploadTooManyPluginsMessage(limit: number): string {
   return `The archive declares more than ${limit} plugins.`;
 }
 
+export function uploadUnreadableDependenciesMessage(pluginName: string): string {
+  return `"${pluginName}" declares dependencies that cannot be read. List each one as "name", "name@marketplace" or an object with a name.`;
+}
+
 export function uploadUnusableNameMessage(name: string): string {
   return `"${name}" cannot be used as a plugin identifier. Use letters, numbers, dots, dashes or underscores.`;
 }

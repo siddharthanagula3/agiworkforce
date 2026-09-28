@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic';
 export const metadata: Metadata = {
   title: 'Plugin moderation',
   description:
-    'Review registry plugins and publish, deprecate, suspend or roll back their versions.',
+    'Review community plugin submissions and registry plugins, and publish, deprecate, suspend or roll back their versions.',
 };
 
 export default async function AdminPluginsPage() {
