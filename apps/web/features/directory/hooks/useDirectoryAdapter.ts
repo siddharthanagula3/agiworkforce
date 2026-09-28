@@ -86,6 +86,11 @@ import {
   PLUGIN_REPAIR_RELOAD_ID,
   PLUGIN_REPAIR_RELOAD_LABEL,
   PLUGIN_UPDATE_FAILED_COPY,
+  PLUGIN_CUSTOMIZE_FAILED_COPY,
+  PLUGIN_CUSTOMIZE_PATH,
+  PLUGIN_EDIT_FAILED_COPY,
+  PLUGIN_EDIT_LOAD_FAILED_COPY,
+  EDIT_PLUGIN_DONE_TITLE,
   UPLOAD_PLUGIN_DONE_TITLE,
   UPLOAD_SKILL_DONE_TITLE,
   uploadOmittedFilesLine,
@@ -1295,6 +1300,64 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
     [readInstallResponse, refreshPluginInstalls, refreshUserMarketplaces],
   );
 
+  const loadPluginDraft = useCallback(async (id: string): Promise<DirectoryPluginDraft> => {
+    const response = await fetch(`${PLUGIN_AUTHORED_PATH}/${encodeURIComponent(id)}`, {
+      cache: 'no-store',
+    });
+    const body = (await response.json().catch(() => ({}))) as {
+      draft?: DirectoryPluginDraft;
+      error?: { message?: string };
+    };
+    if (!response.ok || !body.draft) {
+      throw new Error(body.error?.message ?? PLUGIN_EDIT_LOAD_FAILED_COPY);
+    }
+    return body.draft;
+  }, []);
+
+  const updatePlugin = useCallback(
+    async (id: string, draft: DirectoryPluginDraft): Promise<DirectoryUploadResult> => {
+      const csrfToken = await getCsrfToken();
+      const response = await fetch(`${PLUGIN_AUTHORED_PATH}/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': JSON_CONTENT_TYPE, [CSRF_HEADER]: csrfToken },
+        body: JSON.stringify(draft),
+      });
+      const result = await readInstallResponse(
+        response,
+        PLUGIN_EDIT_FAILED_COPY,
+        EDIT_PLUGIN_DONE_TITLE,
+      );
+      invalidateSkillsCatalog();
+      announceSkillCatalogChanged();
+      await refreshUserMarketplaces();
+      await refreshPluginInstalls();
+      return result;
+    },
+    [readInstallResponse, refreshPluginInstalls, refreshUserMarketplaces],
+  );
+
+  const customizePlugin = useCallback(
+    async (id: string): Promise<string> => {
+      const response = await postJson(
+        PLUGIN_CUSTOMIZE_PATH,
+        findPluginRecord(id) ? { pluginId: id } : { entryId: id },
+      );
+      const body = (await response.json().catch(() => ({}))) as {
+        entryId?: string;
+        error?: { message?: string };
+      };
+      if (!response.ok || !body.entryId) {
+        throw new Error(body.error?.message ?? PLUGIN_CUSTOMIZE_FAILED_COPY);
+      }
+      invalidateSkillsCatalog();
+      announceSkillCatalogChanged();
+      await refreshUserMarketplaces();
+      await refreshPluginInstalls();
+      return body.entryId;
+    },
+    [findPluginRecord, refreshPluginInstalls, refreshUserMarketplaces],
+  );
+
   const uploadSkillFile = useCallback(
     async (file: File, acknowledgedScans?: readonly string[]): Promise<DirectoryUploadResult> => {
       const response = await postFile(SKILLS_PATH, file, acknowledgedScans);
@@ -1338,7 +1401,9 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
           id: PLUGIN_REPAIR_RELOAD_ID,
           label: `${PLUGIN_REPAIR_MISSING_SKILLS_COPY} ${missing.join(', ')}`,
           actionLabel: PLUGIN_REPAIR_RELOAD_LABEL,
-          run: () => installPlugin(pluginId),
+          run: async () => {
+            await installPlugin(pluginId);
+          },
         });
       }
       const needed = new Set(
@@ -1533,7 +1598,16 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       addMarketplace,
       removeMarketplace,
       refreshMarketplace,
-      ...(onCreateSkill ? { uploadPluginArchive, createPlugin, uploadSkillFile } : {}),
+      ...(onCreateSkill
+        ? {
+            uploadPluginArchive,
+            createPlugin,
+            uploadSkillFile,
+            loadPluginDraft,
+            updatePlugin,
+            customizePlugin,
+          }
+        : {}),
       ...(pluginSettings ? { pluginSettings } : {}),
       setPluginEnabled,
       setPluginVersion,
@@ -1571,6 +1645,9 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       uploadPluginArchive,
       createPlugin,
       uploadSkillFile,
+      loadPluginDraft,
+      updatePlugin,
+      customizePlugin,
       pluginSettings,
       setPluginEnabled,
       setPluginVersion,

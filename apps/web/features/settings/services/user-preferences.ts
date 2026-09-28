@@ -21,6 +21,7 @@ const BASE32_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 export interface TwoFactorStatus {
   enabled: boolean;
   backupCodesReady: boolean;
+  enrollmentAvailable: boolean;
 }
 
 async function readTwoFactorError(res: Response): Promise<string> {
@@ -489,17 +490,25 @@ class SettingsService {
       const res = await fetch('/api/settings/2fa', { headers });
       if (!res.ok) {
         return {
-          data: { enabled: false, backupCodesReady: false },
+          data: { enabled: false, backupCodesReady: false, enrollmentAvailable: false },
           error: await readTwoFactorError(res),
         };
       }
-      const json = (await res.json()) as { enabled: boolean; backup_codes_ready?: boolean };
+      const json = (await res.json()) as {
+        enabled: boolean;
+        backup_codes_ready?: boolean;
+        enrollment_available?: boolean;
+      };
       return {
-        data: { enabled: json.enabled, backupCodesReady: json.backup_codes_ready === true },
+        data: {
+          enabled: json.enabled,
+          backupCodesReady: json.backup_codes_ready === true,
+          enrollmentAvailable: json.enrollment_available === true,
+        },
       };
     } catch (error) {
       return {
-        data: { enabled: false, backupCodesReady: false },
+        data: { enabled: false, backupCodesReady: false, enrollmentAvailable: false },
         error: toUserMessage(error, 'Something went wrong. Try again.'),
       };
     }

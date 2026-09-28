@@ -388,3 +388,15 @@ export const CREATE_PLUGIN_ADD_SKILL_LABEL = 'Add another skill';
 export const CREATE_PLUGIN_REMOVE_SKILL_LABEL = 'Remove this skill';
 export const CREATE_PLUGIN_SUBMIT_LABEL = 'Create plugin';
 export const CREATE_PLUGIN_FAILED_COPY = 'The plugin could not be created.';
+export const EDIT_PLUGIN_LABEL = 'Edit plugin';
+export const EDIT_PLUGIN_INTRO =
+  'Change the plugin name, description and skills. Your chats use the saved version.';
+export const EDIT_PLUGIN_SUBMIT_LABEL = 'Save changes';
+export const EDIT_PLUGIN_FAILED_COPY = 'The plugin could not be saved.';
+export const EDIT_PLUGIN_LOADING_LABEL = 'Loading plugin';
+export const CUSTOMIZE_PLUGIN_LABEL = 'Customize';
+export const CUSTOMIZE_PLUGIN_HINT = 'Make your own copy of this plugin and edit its skills.';
+export const CUSTOMIZE_CONFIRM_TITLE_PREFIX = 'Customize';
+export const CUSTOMIZE_CONFIRM_BODY =
+  'You get your own copy with the same skills and files, which you can edit. The original is turned off so your chats use your copy; you can turn it back on from its page.';
+export const CUSTOMIZE_CONFIRM_LABEL = 'Make my copy';

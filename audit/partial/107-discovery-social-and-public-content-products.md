@@ -23,10 +23,7 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The public gallery shows only 6 built-in examples plus the visitor's own artifacts; artifacts users publish (/shared-artifact links) are never listed, so there is no browsable public gallery. | handler, persistence |
 | mobile | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/gallery/GalleryClient.tsx:1120-1120`, `apps/web/app/gallery/GalleryClient.tsx:1321-1329`
 
 ## S107.11: Remix/fork.
 
@@ -42,13 +39,11 @@ Code: `apps/web/app/gallery/GalleryClient.tsx:1120-1120`, `apps/web/app/gallery/
 
 - Done when: From a public example a visitor reuses its prompt: the prompt lands in their composer ready to send.
 - Wave: 3
+- Already works on: web
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The gallery build wizard sends its prompt as /chat?prompt=, which the chat page never reads (it reads starterPrompt), so users land on an empty composer; Inspiration cards have no "use this prompt". | handler |
 | mobile | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/gallery/GalleryClient.tsx:1245-1248`, `apps/web/features/chat/pages/WebChatPage.tsx:897-901`
 
 ## S107.13: Attribution and source lineage.
 
@@ -87,15 +82,3 @@ Code: `apps/web/app/plugins/[id]/page.tsx:176-178`, `packages/ui/ui/src/director
 | cli | partial | Plugins install from any git URL and search one fixed registry, but the TUI "+ Add Marketplace" row is static text with no handler and there is no submission path. | handler |
 
 Code: `packages/ui/ui/src/directory/DirectoryPanel.tsx:761-768`, `apps/web/features/directory/hooks/useDirectoryAdapter.ts:1142-1147`, `apps/web/app/partners/page.tsx:57-59`, `apps/cli/src/tui/widgets/screen_renderers.rs:560-564`
-
-## S107.23: Public-content moderation dashboard.
-
-- Done when: Platform staff review reported public content in a dashboard, decide on it, and take content down.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | The admin console lists answer reports and removes public content by pasting its token, but notices filed from public share pages (copyright_notices) are never listed: listCopyrightNotices has no caller, so staff see them only in the operator alert. | ui |
-| desktop | partial | Same as web: /admin renders in the app window; public-page notices are not listed. | ui |
-
-Code: `apps/web/features/admin/pages/AdminConsolePage.tsx:286-288`, `apps/web/app/api/admin/content-reports/route.ts:57-63`, `apps/web/app/api/admin/takedown/route.ts:86-94`, `apps/web/lib/server/copyright-notices.ts:103-107`
