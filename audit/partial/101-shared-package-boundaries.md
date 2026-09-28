@@ -46,9 +46,9 @@ Code: `crates/agiworkforce-model-registry/src/generated/model_registry.rs:2-2`, 
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | partials/platform 09897761b4, b83d89b1fd: check:capability-consumption (in check:llm-operability) requires each surface to name where it reads the capability document, records Chrome, VS Code and the CLI as owned gaps that fail once closed, and bans client imports of the static matrix and re-reads of feature_flags.code_execution; web and desktop read it, mobile reads it for requests. Remaining: Chrome, VS Code and CLI adoption (sent to the lead), and the mobile provider and code-execution flag (post-codex/p-platform-S78.01-mobile-capability-document.patch) | surface-only |
+| platform | partial | The cli gap is closed (034deed768: capability_handshake read and cached with the tier, check-capability-consumption records cli as a reader); Chrome and VS Code remain recorded gaps | handler |
 
-Code: `scripts/check-capability-consumption.mjs:22-22`, `scripts/check-capability-consumption.mjs:70-70`, `scripts/check-capability-consumption.mjs:223-223`, `package.json:130-130`
+Code: `scripts/check-capability-consumption.mjs:69-69`, `apps/cli/src/tier_cache.rs:384-384`
 
 ## S101.09: Shared policy contracts.
 
@@ -170,17 +170,6 @@ Code: `packages/contracts/types/src/tool-primitive.ts:4-7`, `scripts/check-tool-
 | platform | partial | Approval policy and resume contracts are used by web and mobile; Chrome and VS Code import neither. | surface-only |
 
 Code: `packages/contracts/cloud-contracts/src/tool-events.ts:18-24`
-
-## S101.22: Shared connector interfaces.
-
-- Done when: Connectors expose one shared interface (connection, health, policy) to server and clients.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | partials/mcp-web 78fa04806 and 0e1680af5, with p-platform ee4cbfb7b2: the connection and health bodies now have one definition. client-runtime (mobile and desktop) and the desktop cloud client parse /api/connectors, custom connectors, tool permissions and the OAuth start with the cloud-contracts schemas, and the vocabulary lives once in @agiworkforce/types. Still owed for policy: /api/settings/organization/connector-policy has no cloud-contracts schema, so client-runtime parseConnectorPolicy (parse.ts:72) and the web use-connector-policy hook still read it by hand. | surface-only |
-
-Code: `packages/client/client-runtime/src/connectors/parse.ts:51-51`, `packages/client/client-runtime/src/connectors/parse.ts:62-62`, `packages/client/client-runtime/src/connectors/parse.ts:122-122`, `apps/desktop/src/api/cloudConnectors.ts:47-47`
 
 ## S101.23: Shared Skill/Plugin manifests.
 

@@ -507,6 +507,7 @@ pub fn list_commands(workspace_root: &Path) -> SlashCommandListResponse {
                 runnable: RUNNABLE_COMMANDS.contains(&command.name.as_str()),
                 prompt: source == CommandSourceKind::Skill
                     || custom.contains(&command.name.to_ascii_lowercase())
+                    || command.name == SEARCH_COMMAND
                     || BUILTIN_PROMPTS
                         .iter()
                         .any(|(name, _)| *name == command.name.as_str()),
@@ -1131,6 +1132,23 @@ fn file_operation_label(operation: &str) -> &str {
         "patch" => "Patch",
         other => other,
     }
+}
+
+pub const SEARCH_COMMAND: &str = "search";
+
+pub fn search_command(text: &str) -> Result<Option<String>, DeveloperSessionHostError> {
+    let invocation = text.trim_start();
+    let (command, question) = invocation
+        .split_once(char::is_whitespace)
+        .unwrap_or((invocation, ""));
+    if command.strip_prefix('/') != Some(SEARCH_COMMAND) {
+        return Ok(None);
+    }
+    let question = question.trim();
+    if question.is_empty() {
+        return Err(invalid("Usage: /search <question>"));
+    }
+    Ok(Some(question.to_string()))
 }
 
 pub fn expand_prompt_command(text: &str) -> Result<Option<String>, DeveloperSessionHostError> {

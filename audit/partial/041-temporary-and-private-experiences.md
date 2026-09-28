@@ -74,7 +74,7 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Patch parked at scratchpad/post-codex/privacy-s41.06.patch (settingsStore, TemporaryChatBanner switch, streaming.ts, chatExecutionStore held by Codex). | handler, ui |
+| mobile | partial | post-codex/p-slack-s41.06-mobile-personalization.patch replaces privacy-s41.06.patch: the held hunks (services/streaming.ts, stores/chat/chatExecutionStore.ts) are rebased on the Codex working copy and the free hunks (TemporaryChatBanner.tsx, settingsStore.ts) on integration, each half checked with git apply --check. The Personalized switch ships only with the request field it sets, so nothing lands before Codex. | handler, ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |

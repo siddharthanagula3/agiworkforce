@@ -1,4 +1,5 @@
 import {
+  CONNECTOR_POLICY_PATH,
   ConnectConflictResponseSchema,
   type ConnectRequest,
   type CreateCustomConnectorRequest,
@@ -33,8 +34,7 @@ import type {
   CustomConnectorResult,
 } from './types';
 
-/** What the administrator permits, separate from what the member connected. */
-export const CONNECTOR_POLICY_PATH = '/api/settings/organization/connector-policy';
+export { CONNECTOR_POLICY_PATH };
 
 export interface ConnectorEndpoints {
   connectors: string;
