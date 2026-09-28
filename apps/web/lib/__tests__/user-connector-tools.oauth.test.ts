@@ -145,7 +145,7 @@ describe('OAuth connector catalog gating', () => {
     expect(mockBuildMcpToolCatalog).not.toHaveBeenCalled();
   });
 
-  it('offers no tools when a grant exists but its token can no longer be resolved', async () => {
+  it('offers only the reconnect tool when a grant exists but its token can no longer be resolved', async () => {
     mockResolveAccessToken.mockResolvedValue({
       status: 'reauthorization-required',
       reason: 'refresh-failed',
@@ -153,7 +153,7 @@ describe('OAuth connector catalog gating', () => {
 
     const defs = await loadUserConnectorToolDefs('user-1');
 
-    expect(defs).toEqual([]);
+    expect(defs.map((d) => d.qualifiedName)).toEqual(['mcp__linear__agi_reconnect']);
     expect(mockBuildMcpToolCatalog).not.toHaveBeenCalled();
   });
 
