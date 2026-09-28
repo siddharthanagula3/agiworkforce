@@ -50,6 +50,7 @@ export interface LiveVoiceController {
   approvals: readonly LiveVoicePendingApproval[];
   decideToolApproval: (callId: string, decision: LiveVoiceToolDecision) => void;
   toggleMute: () => void;
+  cancelBackendWork: () => void;
   retry: () => void;
 }
 
@@ -236,6 +237,10 @@ export function useLiveVoiceSession({
 
   const retry = useCallback(() => setAttempt((value) => value + 1), []);
 
+  const cancelBackendWork = useCallback(() => {
+    sessionRef.current?.cancelBackendWork();
+  }, []);
+
   const decideToolApproval = useCallback((callId: string, decision: LiveVoiceToolDecision) => {
     void sessionRef.current?.decideToolApproval(callId, decision);
   }, []);
@@ -251,6 +256,7 @@ export function useLiveVoiceSession({
     approvals,
     decideToolApproval,
     toggleMute,
+    cancelBackendWork,
     retry,
   };
 }
