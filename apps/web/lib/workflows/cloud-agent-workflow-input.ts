@@ -74,6 +74,18 @@ const promptCacheScopeSchemaCoversScope: SameKeys<
 > = true;
 void promptCacheScopeSchemaCoversScope;
 
+const ResponseFormatSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('json_object') }).strict(),
+  z
+    .object({
+      type: z.literal('json_schema'),
+      name: z.string(),
+      schema: z.record(z.string(), z.unknown()),
+      strict: z.boolean(),
+    })
+    .strict(),
+]);
+
 const LlmRequestSchema = z
   .object({
     model: z.string().min(1),
@@ -87,6 +99,7 @@ const LlmRequestSchema = z
     thinking: ThinkingConfigSchema.optional(),
     effort: z.string().optional(),
     usePromptCache: z.boolean().optional(),
+    responseFormat: ResponseFormatSchema.optional(),
     promptCacheScope: PromptCacheScopeSchema.optional(),
   })
   .strict();
