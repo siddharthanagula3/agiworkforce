@@ -279,11 +279,7 @@ import {
   isRequiredExecutionToolChoice,
   resolveCodeExecutionRequirement,
 } from '@/lib/code-execution/required-execution';
-import {
-  extractTextContent,
-  toManagedSkillFromUserSkill,
-  type ProcessedRequest,
-} from './request-processor';
+import { extractTextContent, type ProcessedRequest } from './request-processor';
 import {
   addToolSpend,
   createObservedProviderUsage,
@@ -298,7 +294,6 @@ import {
   toAgentEventJson,
 } from './agent-event-stream';
 import {
-  executeSkillTool,
   executeSkillToolWithFiles,
   SKILL_TOOL_NAME,
   type SkillToolResult,
@@ -333,7 +328,7 @@ import {
 } from '@/lib/services/skill-catalog-service';
 import { getSkillInstallOverrides } from '@/lib/services/skill-install-service';
 import { listEnabledPluginIds } from '@/lib/services/plugin-installation-service';
-import { findUserSkillByName } from '@/lib/services/user-skill-service';
+import { findUserSkillWithFiles } from '@/lib/services/user-skill-service';
 import { findInstalledDirectorySkillWithFiles } from '@/features/plugins/server/directory/installed-skills';
 import {
   stageSkillScripts,
@@ -2002,12 +1997,19 @@ async function runMcpTool(
           queueSandboxFiles,
         );
       }
-      const userSkill = await findUserSkillByName(getNeonDb(), userId, requestedSkillName);
+      const userSkill = await findUserSkillWithFiles(getNeonDb(), userId, requestedSkillName);
       if (userSkill) {
-        const fallback = executeSkillTool([toManagedSkillFromUserSkill(userSkill)], toolCall.args, {
+        return withSkillSandboxNote(
+          await executeSkillToolWithFiles(
+            [userSkill.skill],
+            toolCall.args,
+            { availableTools },
+            userSkill.access,
+          ),
+          userSkill,
           availableTools,
-        });
-        return { content: fallback.content, isError: fallback.isError };
+          queueSandboxFiles,
+        );
       }
     }
     return { content: result.content, isError: result.isError };

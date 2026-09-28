@@ -6,6 +6,7 @@ import {
   PLUGIN_UPLOAD_MAX_MEMBERS,
   PLUGIN_UPLOAD_MAX_PATH_CHARS,
   PLUGIN_UPLOAD_MAX_TOTAL_BYTES,
+  SKILL_COMPANION_MAX_FILES,
   UNIX_FILE_TYPE_MASK,
   UNIX_FILE_TYPE_SYMLINK,
   UPLOAD_EMPTY_MESSAGE,
@@ -20,6 +21,7 @@ import {
   uploadNotUtf8Message,
   uploadSymlinkMessage,
   uploadTooManyPluginsMessage,
+  uploadTooManySkillFilesMessage,
   uploadTooManySkillsMessage,
   uploadUnsafePathMessage,
   uploadUnusableNameMessage,
@@ -283,18 +285,30 @@ async function readCompanionText(member: ArchiveMember): Promise<string | null> 
   }
 }
 
+function skillFolderPrefix(skillFilePath: string): string {
+  return skillFilePath === CLAUDE_SKILL_FILE_NAME
+    ? ''
+    : `${skillFilePath.slice(0, -SKILL_FILE_SUFFIX.length)}${PATH_SEPARATOR}`;
+}
+
 async function readCompanionFiles(
   members: Map<string, ArchiveMember>,
   skillFilePath: string,
 ): Promise<{ files: UploadedSkillFile[]; omitted: string[] }> {
-  const prefix = `${skillFilePath.slice(0, -SKILL_FILE_SUFFIX.length)}${PATH_SEPARATOR}`;
+  const prefix = skillFolderPrefix(skillFilePath);
+  const paths = [...members.keys()]
+    .filter((path) => path.startsWith(prefix) && path !== skillFilePath)
+    .filter((path) => (members.get(path)?.size ?? 0) > 0)
+    .sort();
+  if (paths.length > SKILL_COMPANION_MAX_FILES) {
+    throw new PluginArchiveError([
+      uploadTooManySkillFilesMessage(skillFilePath, SKILL_COMPANION_MAX_FILES),
+    ]);
+  }
   const files: UploadedSkillFile[] = [];
   const omitted: string[] = [];
-  for (const path of [...members.keys()].sort()) {
-    if (!path.startsWith(prefix) || path === skillFilePath) continue;
-    const member = members.get(path);
-    if (!member || member.size === 0) continue;
-    const content = await readCompanionText(member);
+  for (const path of paths) {
+    const content = await readCompanionText(members.get(path)!);
     if (content === null) omitted.push(path);
     else files.push({ path, content });
   }
@@ -406,9 +420,16 @@ function lastSegmentPath(declaredSkill: string): string {
   return `${CLAUDE_PLUGIN_SKILLS_DIRECTORY}${PATH_SEPARATOR}${lastSegment(cleaned)}${SKILL_FILE_SUFFIX}`;
 }
 
+export interface UploadedSingleSkill {
+  path: string;
+  content: string;
+  files: UploadedSkillFile[];
+  omittedFiles: string[];
+}
+
 export async function readSingleSkillFromArchive(
   archive: Uint8Array,
-): Promise<{ path: string; content: string }> {
+): Promise<UploadedSingleSkill> {
   const members = await readMembers(archive);
   const paths = [...members.keys()]
     .filter((path) => path === CLAUDE_SKILL_FILE_NAME || path.endsWith(SKILL_FILE_SUFFIX))
@@ -416,7 +437,17 @@ export async function readSingleSkillFromArchive(
   if (paths.length === 0) throw new PluginArchiveError([UPLOAD_NO_SKILL_FILE_MESSAGE]);
   if (paths.length > 1) throw new PluginArchiveError([UPLOAD_MANY_SKILL_FILES_MESSAGE]);
   const path = paths[0]!;
-  return { path, content: await readText(members.get(path)!) };
+  const prefix = skillFolderPrefix(path);
+  const companions = await readCompanionFiles(members, path);
+  return {
+    path,
+    content: await readText(members.get(path)!),
+    files: companions.files.map((file) => ({
+      path: file.path.slice(prefix.length),
+      content: file.content,
+    })),
+    omittedFiles: companions.omitted.map((omitted) => omitted.slice(prefix.length)),
+  };
 }
 
 export async function readPluginArchive(
