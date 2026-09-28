@@ -154,11 +154,6 @@ Code: `apps/mobile/src/features/companion/components/CodeSessionView.tsx:57-60`,
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | The auditor's terms (Take control\|attachSession\|thread/attach) can never match the cloud implementation, and the same auditor credited the mechanism elsewhere (S68.08 web: approvals persist server-side and reappear on reload; S68.15 web: the rail reopens a running session). Any signed-in browser reopens a running cloud session from the rail (CodeRail.tsx:292), re-reads its pending approvals so a half-finished turn stays answerable (CloudCodePage.tsx:362-369), and can stop the turn (l.1212) and send the next one. That is attach-with-control for cloud sessions, capped like the sibling cells: partial, miss ['flag-off','surface-only'], remaining: 'Cloud sessions can be reopened with full control from any browser, but only the web client can attach and creation needs AGI_E2B_EXECUTION=1 (gate.ts:22-27).' |  |
-| desktop | partial | Desktop is the host the phone controls; it cannot itself attach to a turn running in CLI or VS Code. | surface-only |
-| cli | missing | Not built on this surface. |  |
-| vscode | partial | VS Code can now stop and approve a cloud session turn; it still cannot attach to a turn running in another local CLI process. | handler |
-
-Code: `apps/desktop/electron/remote/codeRemoteController.ts:267-272`, `apps/desktop/electron/runtime/dispatcher.ts:874-875`, `apps/extension-vscode/src/features/cloud-tasks/cloudCodeSessions.ts:273-273`, `apps/extension-vscode/src/features/cloud-tasks/cloudCodeSessions.ts:204-204`
 
 ## S68.12: Execution-owner indicator.
 
