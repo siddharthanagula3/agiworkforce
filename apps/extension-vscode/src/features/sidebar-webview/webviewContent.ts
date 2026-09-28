@@ -5311,6 +5311,20 @@ export function getWebviewContent(
 
       var actions = document.createElement('div');
       actions.className = 'approval-card__actions';
+      if (payload.reviewable) {
+        var review = document.createElement('button');
+        review.type = 'button';
+        review.className = 'approval-card__action';
+        review.textContent = 'Review change';
+        review.title = 'Open the proposed file in a diff. Edit it or revert parts, then approve to write your version.';
+        review.addEventListener('click', function () {
+          vscode.postMessage({
+            type: 'reviewApprovalChange',
+            payload: { requestId: payload.requestId },
+          });
+        });
+        actions.appendChild(review);
+      }
       for (var i = 0; i < APPROVAL_ACTIONS.length; i++) {
         (function (action) {
           var button = document.createElement('button');
