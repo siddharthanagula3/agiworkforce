@@ -77,7 +77,11 @@ import {
 } from '../lib/message-variants-gate';
 import { useThinkingStore } from '@shared/stores/thinking-store';
 import { addCsrfHeaders } from '@/lib/client/csrf';
-import { resolveSelectableModelId, useModelStore } from '@shared/stores/model-store';
+import {
+  isSelectableModelId,
+  resolveSelectableModelId,
+  useModelStore,
+} from '@shared/stores/model-store';
 import { useNotificationStore } from '@shared/stores/notification-store';
 import { useMediaStore } from '@shared/stores/media-store';
 import { TimeoutPresets } from '@shared/lib/error-utils';
@@ -1681,6 +1685,24 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     setSelectedModelId(resolveSelectableModelId(persistedModel));
     setModelSubstitution(describeModelSubstitution(persistedModel));
   }, [displayedConversation?.model, displayedConversationId, setSelectedModelId]);
+
+  const projectDefaultModelAppliedRef = useRef<string | null>(null);
+  const activeProjectDefaultModelId = activeProjectId
+    ? (storeProjects.find((project) => project.id === activeProjectId)?.defaultModelId ?? null)
+    : null;
+  useEffect(() => {
+    if (displayedConversationId) {
+      projectDefaultModelAppliedRef.current = null;
+      return;
+    }
+    if (!activeProjectId || !activeProjectDefaultModelId) return;
+    const key = `${activeProjectId}:${activeProjectDefaultModelId}`;
+    if (projectDefaultModelAppliedRef.current === key) return;
+    projectDefaultModelAppliedRef.current = key;
+    if (isSelectableModelId(activeProjectDefaultModelId)) {
+      setSelectedModelId(resolveSelectableModelId(activeProjectDefaultModelId));
+    }
+  }, [activeProjectDefaultModelId, activeProjectId, displayedConversationId, setSelectedModelId]);
 
   const handleConversationModelChange = useCallback(
     async (nextModelId: string): Promise<boolean> => {
