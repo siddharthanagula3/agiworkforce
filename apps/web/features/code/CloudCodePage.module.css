@@ -943,6 +943,7 @@ svg + .menuRowLabel {
 }
 
 .field {
+  position: relative;
   border: 1px solid var(--chat-border-strong);
   border-radius: var(--chat-radius-2xl);
   background: var(--chat-input-bg);

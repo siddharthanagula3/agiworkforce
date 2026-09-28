@@ -40,12 +40,14 @@ import {
   Spinner,
 } from '@agiworkforce/ui';
 import {
+  CLOUD_CODE_GOAL_COMMANDS,
   cloudCodeRepositoryLabel,
   type CloudCodeNetworkAccess,
   type CloudCodeRepositoryReference,
   type CloudCodeRuntime,
 } from '@agiworkforce/types';
 import Link from 'next/link';
+import { SlashCommandMenu, type CommandSuggestion } from '@agiworkforce/unified-chat';
 import { ComposerFooter } from '@features/chat/components/Composer/ComposerFooter';
 import { DictationStrip } from '@features/chat/components/Composer/DictationStrip';
 import { useDictation } from '@features/chat/hooks/use-dictation';
@@ -67,6 +69,7 @@ import {
 } from '@shared/types/toolApprovalPolicy';
 import {
   CODE_COPY,
+  CODE_GOAL_COMMAND_DESCRIPTIONS,
   CODE_LIMITS,
   CODE_NETWORK_OPTIONS,
   CODE_ROUTES,
@@ -98,6 +101,7 @@ const SEND_GLYPH_SIZE = 16;
 const POPOVER_WIDTH = 320;
 const POPOVER_OFFSET = 8;
 const ENTER_KEY = 'Enter';
+const COMMAND_QUERY = /^\/[a-z-]*$/i;
 const FIRST_SHORTCUT = 1;
 const USAGE_RING_SIZE = 16;
 const USAGE_RING_STROKE = 3;
@@ -1209,8 +1213,45 @@ export function CodeComposer({
   );
 
   const sendable = value.trim().length > 0 && !disabled && !busy;
+  const [commandIndex, setCommandIndex] = useState(0);
+  const [dismissedCommandQuery, setDismissedCommandQuery] = useState<string | null>(null);
+  const cloudTurn = !showChips || draft.environment === 'cloud';
+  const commandQuery = cloudTurn && COMMAND_QUERY.test(value) ? value.toLowerCase() : null;
+  const commandSuggestions: CommandSuggestion[] =
+    commandQuery === null || commandQuery === dismissedCommandQuery
+      ? []
+      : CLOUD_CODE_GOAL_COMMANDS.filter((command) => command.startsWith(commandQuery)).map(
+          (command) => ({
+            id: command,
+            command,
+            description: CODE_GOAL_COMMAND_DESCRIPTIONS[command],
+          }),
+        );
+  const commandsOpen = focused && commandSuggestions.length > 0;
+
+  useEffect(() => setCommandIndex(0), [commandQuery]);
+
+  const chooseCommand = (suggestion: CommandSuggestion) => {
+    onChange(`${suggestion.command} `);
+    setDismissedCommandQuery(null);
+  };
+
+  const handleCommandKey = (event: KeyboardEvent<HTMLTextAreaElement>): boolean => {
+    if (!commandsOpen) return false;
+    const count = commandSuggestions.length;
+    if (event.key === 'ArrowDown') setCommandIndex((index) => (index + 1) % count);
+    else if (event.key === 'ArrowUp') setCommandIndex((index) => (index - 1 + count) % count);
+    else if (event.key === ENTER_KEY || event.key === 'Tab') {
+      const suggestion = commandSuggestions[commandIndex];
+      if (suggestion) chooseCommand(suggestion);
+    } else if (event.key === 'Escape') setDismissedCommandQuery(commandQuery);
+    else return false;
+    event.preventDefault();
+    return true;
+  };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (handleCommandKey(event)) return;
     if (event.key !== ENTER_KEY || event.shiftKey) return;
     event.preventDefault();
     if (sendable) onSubmit(value.trim());
@@ -1260,6 +1301,13 @@ export function CodeComposer({
         )}
 
         <div className={`${styles['field']} ${focused ? styles['fieldFocused'] : ''}`}>
+          <SlashCommandMenu
+            show={commandsOpen}
+            suggestions={commandSuggestions}
+            selectedIndex={commandIndex}
+            onSelect={chooseCommand}
+            onHover={setCommandIndex}
+          />
           <div className={styles['fieldRow']}>
             <textarea
               ref={inputRef}

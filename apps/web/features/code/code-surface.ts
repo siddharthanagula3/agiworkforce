@@ -6,6 +6,7 @@ import {
   CLOUD_CODE_SESSION_COPY,
   cloudCodeRepositoryLabel,
   type CloudCodeChangeState,
+  type CloudCodeGoalCommand,
   type CloudCodeNetworkAccess,
   type CloudCodeSession,
   type CloudCodeSessionStatusFilter,
@@ -274,6 +275,11 @@ export const CODE_COPY = {
   changesNoRepository: 'This session has no repository, so there is nothing to push.',
   showExitCodes: 'Show exit codes',
 } as const;
+
+export const CODE_GOAL_COMMAND_DESCRIPTIONS: Record<CloudCodeGoalCommand, string> = {
+  '/review': 'Review the changes in this session for bugs',
+  '/security-review': 'Check the changes in this session for security problems',
+};
 
 export const CODE_NETWORK_OPTIONS: ReadonlyArray<{
   id: CloudCodeNetworkAccess;

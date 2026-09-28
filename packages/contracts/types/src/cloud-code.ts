@@ -237,6 +237,9 @@ export interface CloudCodeAgentTurnRecord {
   steps: CloudCodeAgentStep[];
 }
 
+export const CLOUD_CODE_GOAL_COMMANDS = ['/review', '/security-review'] as const;
+export type CloudCodeGoalCommand = (typeof CLOUD_CODE_GOAL_COMMANDS)[number];
+
 export const CLOUD_CODE_CHANGE_STATES = [
   'added',
   'modified',
