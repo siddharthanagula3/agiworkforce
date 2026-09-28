@@ -6,6 +6,7 @@ import { useHandoffThread } from '../hooks/useHandoffThread';
 import { fetchHandoffMessages, sendHandoffMessage } from '../lib/support-client';
 import { SupportHandoffThread } from './SupportHandoffThread';
 import styles from './SupportWidget.module.css';
+import { useUiTranslation } from '@agiworkforce/ui';
 
 const WAITING_COMPOSER_REASON = 'You can write once someone joins. Nobody has picked this up yet.';
 
@@ -49,6 +50,7 @@ function secondsUntil(iso: string, now: number): number {
 }
 
 function WaitCountdown({ waitExpiresAt }: { waitExpiresAt: string }) {
+  const { plural } = useUiTranslation('common');
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -63,7 +65,10 @@ function WaitCountdown({ waitExpiresAt }: { waitExpiresAt: string }) {
   const remaining = secondsUntil(waitExpiresAt, now);
   return (
     <p className={styles['cardBody']} data-support-wait-remaining={String(remaining)}>
-      I will wait {remaining} more second{remaining === 1 ? '' : 's'}, then email this instead.
+      {plural('support.waitRemaining', remaining, {
+        one: 'I will wait {{count}} more second, then email this instead.',
+        other: 'I will wait {{count}} more seconds, then email this instead.',
+      })}
     </p>
   );
 }

@@ -166,8 +166,12 @@
     "provenance": "Provenance is preserved",
     "provenanceDesc": "Recipients see which model generated this, no spoofing.",
     "htmlPreview": "HTML preview",
-    "fileCount_one": "{{count}} file",
-    "fileCount_other": "{{count}} files",
+    "fileCount_zero": "لا ملفات",
+    "fileCount_one": "ملف واحد",
+    "fileCount_two": "ملفان",
+    "fileCount_few": "{{count}} ملفات",
+    "fileCount_many": "{{count}} ملفاً",
+    "fileCount_other": "{{count}} ملف",
     "mcpManage": "Manage",
     "mcpConnected": "Connected:"
   },
@@ -407,6 +411,12 @@
     "weeksAgo": "{{count}} weeks ago"
   },
   "canvas": {
-    "sessionOnlyNotice": "الرسومات مؤقتة لهذه الجلسة فقط, إغلاق التطبيق يمسح اللوحة."
+    "sessionOnlyNotice": "الرسومات مؤقتة لهذه الجلسة فقط, إغلاق التطبيق يمسح اللوحة.",
+    "elementCount_zero": "لا عناصر",
+    "elementCount_one": "عنصر واحد",
+    "elementCount_two": "عنصران",
+    "elementCount_few": "{{count}} عناصر",
+    "elementCount_many": "{{count}} عنصراً",
+    "elementCount_other": "{{count}} عنصر"
   }
 }

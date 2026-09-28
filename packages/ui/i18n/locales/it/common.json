@@ -122,5 +122,40 @@
   "previous": "Indietro",
   "previousSlide": "Diapositiva precedente",
   "rowsPerPage": "Righe per pagina",
-  "rowsSelected": "{{selected}} di {{total}} riga/e selezionata/e."
+  "rowsSelected": "{{selected}} di {{total}} riga/e selezionata/e.",
+  "support": {
+    "waitRemaining_one": "Aspetterò ancora {{count}} secondo, poi lo invierò via email.",
+    "waitRemaining_other": "Aspetterò ancora {{count}} secondi, poi lo invierò via email."
+  },
+  "counts": {
+    "results_one": "{{count}} risultato",
+    "results_other": "{{count}} risultati",
+    "messages_one": "{{count}} messaggio",
+    "messages_other": "{{count}} messaggi",
+    "agentsConfigured_one": "{{count}} agente configurato",
+    "agentsConfigured_other": "{{count}} agenti configurati",
+    "skills_one": "{{count}} skill",
+    "skills_other": "{{count}} skill",
+    "agents_one": "{{count}} agente",
+    "agents_other": "{{count}} agenti"
+  },
+  "relative": {
+    "minutesAgo_one": "{{count}} minuto fa",
+    "minutesAgo_other": "{{count}} minuti fa",
+    "hoursAgo_one": "{{count}} ora fa",
+    "hoursAgo_other": "{{count}} ore fa",
+    "daysAgo_one": "{{count}} giorno fa",
+    "daysAgo_other": "{{count}} giorni fa"
+  },
+  "unsavedChanges": {
+    "title": "Scartare le modifiche non salvate?",
+    "description": "Le modifiche non sono state salvate. Se esci ora, andranno perse.",
+    "discard": "Scarta",
+    "keepEditing": "Continua a modificare"
+  },
+  "chipInput": {
+    "full": "Questo elenco contiene al massimo {{count}} voci.",
+    "rejected": "{{value}} non è stato aggiunto. {{reason}}",
+    "remove": "Rimuovi {{value}}"
+  }
 }

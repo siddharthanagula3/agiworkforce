@@ -7,7 +7,10 @@
  *
  * @vitest-environment jsdom
  */
-import { describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildBubbleWithTools } from '../src/features/side-panel/bubbles';
 import {
   applyStreamFailure,
@@ -15,6 +18,30 @@ import {
   streamFailureText,
   type SidePanelChatMessage,
 } from '../src/features/side-panel/chat-state';
+
+const catalog = JSON.parse(
+  readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), '..', '_locales', 'en', 'messages.json'),
+    'utf8',
+  ),
+) as Record<string, { message: string; placeholders?: Record<string, { content: string }> }>;
+
+function getMessage(key: string, substitutions: string[] = []): string {
+  const entry = catalog[key];
+  if (!entry) return '';
+  return entry.message.replace(/\$([A-Za-z0-9_]+)\$/g, (_match, name: string) =>
+    (entry.placeholders?.[name.toLowerCase()]?.content ?? '').replace(
+      /\$(\d)/g,
+      (_digit, index: string) => substitutions[Number(index) - 1] ?? '',
+    ),
+  );
+}
+
+const i18n = { getMessage, getUILanguage: () => 'en' };
+
+beforeEach(() => {
+  (globalThis as { chrome?: unknown }).chrome = { i18n };
+});
 
 function failedMessage(overrides: Partial<SidePanelChatMessage> = {}): SidePanelChatMessage {
   return {
