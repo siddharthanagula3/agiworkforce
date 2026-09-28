@@ -581,6 +581,42 @@
       "symbol": "COMPAT_CAPABILITY_SOURCES",
       "why": "The admin panel restates imageInput, reasoning, imageOutput and videoOutput to label route economics, so a capability added to the catalogue is missing from the panel with no failure.",
       "fix": "Read the capability names from COMPAT_CAPABILITY_SOURCES."
+    },
+    {
+      "file": "apps/desktop/src/stores/chat/types.ts",
+      "symbol": "AgentEventSource",
+      "family": "source records",
+      "why": "The Tauri app's chat store keeps its own citation row (index, timestamp) with the url, title and snippet fields; extend AgentEventSource when that store next changes."
+    },
+    {
+      "file": "apps/mobile/services/streaming.ts",
+      "symbol": "AgentEventSource",
+      "family": "source records",
+      "why": "Held by the Codex mobile release; the stream's sources field becomes AgentEventSource[] in the post-codex pass."
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/CitationChip.tsx",
+      "symbol": "AgentEventSource",
+      "family": "source records",
+      "why": "The chip's props spell out index, title, url and snippet one by one; take an AgentEventSource prop plus the index instead."
+    },
+    {
+      "file": "apps/web/features/chat/utils/research-plan.ts",
+      "symbol": "AgentEventSource",
+      "family": "source records",
+      "why": "Research resume sources may arrive without a title, where the URL stands in, so ResumeSource keeps title optional; extend AgentEventSource once the server always sends one."
+    },
+    {
+      "file": "apps/web/features/support/lib/contract.ts",
+      "symbol": "AgentEventSource",
+      "family": "source records",
+      "why": "SupportCitation is a help-center passage the support assistant cites (id, title, url, snippet); give it AgentEventSource's fields by extension when the support contract next changes."
+    },
+    {
+      "file": "apps/web/shared/types/common.ts",
+      "symbol": "AgentEventSource",
+      "family": "source records",
+      "why": "The legacy shared Citation type carries id, description, favicon and timestamp beside the source fields; extend AgentEventSource where it is still read."
     }
   ]
 }
