@@ -1,4 +1,4 @@
--- Reversal of 0330 : the desktop app can no longer finish a sign-in that was
+-- Reversal of 0334 : the desktop app can no longer finish a sign-in that was
 -- made in the system browser.
 --
 -- WHAT THIS COSTS: grants waiting to be redeemed are deleted, so a sign-in in
@@ -12,6 +12,6 @@ drop index if exists public.idx_desktop_sign_in_grants_expiry;
 drop index if exists public.idx_desktop_sign_in_grants_user;
 drop table if exists public.desktop_sign_in_grants;
 
-delete from public.schema_migrations where filename = '0330_desktop_sign_in_grants.sql';
+delete from public.schema_migrations where filename = '0334_desktop_sign_in_grants.sql';
 
 commit;

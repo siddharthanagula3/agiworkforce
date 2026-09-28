@@ -18,22 +18,23 @@ use agiworkforce_protocol::developer_session::{
     HandoffAdmission, HandoffAdmissionContext, HandoffEnvironment, HandoffLastTurn,
     HandoffLocalResource, HandoffRefusal, HandoffTurnState, HookAddParams, HookListResponse,
     HookRemoveParams, HostModelSummary, LocalModelListResponse, LocalModelProvider,
-    LocalModelSummary, McpAddParams, McpLoginParams, McpLoginResponse, McpServerConfiguredStatus,
-    McpServerInspectResponse, McpServerListResponse, McpServerParams, McpServerTestResponse,
-    McpServerToolsResponse, MemoryAddParams, MemoryAddResponse, ModelListParams,
-    PendingApprovalSnapshot, PermissionsListResponse, PermissionsRemoveParams, PluginInstallParams,
-    PluginListResponse, PluginRemoveParams, PluginSetEnabledParams, RewindSkippedFile,
-    SettingsReadResponse, SettingsWriteParams, SkillConsentParams, SkillConsentResponse,
-    SkillInstallParams, SkillListResponse, SkillRemoveParams, SkillSetEnabledParams,
-    SlashCommandListResponse, SlashCommandRunParams, SlashCommandRunResponse, ThreadCheckpoint,
-    ThreadCheckpointsResponse, ThreadForkParams, ThreadHandoffAcceptParams, ThreadHandoffParams,
-    ThreadIdParams, ThreadListParams, ThreadListResponse, ThreadPlanNotification,
-    ThreadReadResponse, ThreadReconnectResponse, ThreadRewindParams, ThreadRewindResponse,
-    ThreadRewindRestore, ThreadSearchHit, ThreadSearchParams, ThreadSearchResponse,
-    ThreadStartParams, ThreadStatus, ThreadSummary, ThreadWriterChangedNotification,
-    ThreadWriterConflictData, TurnEndedNotification, TurnFailure, TurnFailureCode,
-    TurnInterruptParams, TurnModelNotification, TurnStartParams, TurnStatus, TurnSteerParams,
-    TurnSummary, WorktreeCreateParams, WorktreeListResponse, WorktreeRemoveParams, WorktreeSummary,
+    LocalModelSummary, McpAddParams, McpAuthRequiredNotification, McpLoginParams, McpLoginResponse,
+    McpServerConfiguredStatus, McpServerInspectResponse, McpServerListResponse, McpServerParams,
+    McpServerTestResponse, McpServerToolsResponse, MemoryAddParams, MemoryAddResponse,
+    ModelListParams, PendingApprovalSnapshot, PermissionsListResponse, PermissionsRemoveParams,
+    PluginInstallParams, PluginListResponse, PluginRemoveParams, PluginSetEnabledParams,
+    PluginUpdateResponse, RewindSkippedFile, SettingsReadResponse, SettingsWriteParams,
+    SkillConsentParams, SkillConsentResponse, SkillInstallParams, SkillListResponse,
+    SkillRemoveParams, SkillSetEnabledParams, SlashCommandListResponse, SlashCommandRunParams,
+    SlashCommandRunResponse, ThreadCheckpoint, ThreadCheckpointsResponse, ThreadForkParams,
+    ThreadHandoffAcceptParams, ThreadHandoffParams, ThreadIdParams, ThreadListParams,
+    ThreadListResponse, ThreadPlanNotification, ThreadReadResponse, ThreadReconnectResponse,
+    ThreadRewindParams, ThreadRewindResponse, ThreadRewindRestore, ThreadSearchHit,
+    ThreadSearchParams, ThreadSearchResponse, ThreadStartParams, ThreadStatus, ThreadSummary,
+    ThreadWriterChangedNotification, ThreadWriterConflictData, TurnEndedNotification, TurnFailure,
+    TurnFailureCode, TurnInterruptParams, TurnModelNotification, TurnStartParams, TurnStatus,
+    TurnSteerParams, TurnSummary, WorktreeCreateParams, WorktreeListResponse, WorktreeRemoveParams,
+    WorktreeSummary,
 };
 use agiworkforce_protocol::protocol::{NetworkPolicyRuleAction, ReviewDecision};
 use agiworkforce_protocol::task_state::AgentTaskState;
@@ -436,6 +437,7 @@ impl CliDeveloperSessionHost {
             installs: true,
             saved_permissions: true,
             mcp_inspect: self.load_integrations,
+            plugin_updates: true,
         }
     }
 
@@ -2512,16 +2514,21 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                     task_pending.clone(),
                     task_notifications.clone(),
                 )));
-                agent.on_tool_event = Some(ToolEventSink(plan_tracking(
-                    tool_event_callback(
+                agent.on_tool_event = Some(ToolEventSink(mcp_sign_in_tracking(
+                    plan_tracking(
+                        tool_event_callback(
+                            task_thread_id.clone(),
+                            task_turn_id.clone(),
+                            task_event_sequence.clone(),
+                            task_notifications.clone(),
+                            task_activity.clone(),
+                        ),
                         task_thread_id.clone(),
-                        task_turn_id.clone(),
-                        task_event_sequence.clone(),
+                        task_workspace_root.clone(),
                         task_notifications.clone(),
-                        task_activity.clone(),
                     ),
                     task_thread_id.clone(),
-                    task_workspace_root.clone(),
+                    task_turn_id.clone(),
                     task_notifications.clone(),
                 )));
                 agent.on_fallback = Some(crate::agent::FallbackSink(fallback_callback(
@@ -2539,7 +2546,12 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                     ),
                 );
                 let turn_config = turn_config_pinned_to_session_route(&task_config, &agent);
-                let result = agent.send(&turn_config, &input.text, on_chunk).await;
+                let result = crate::mcp::collect_sign_in_required(agent.send(
+                    &turn_config,
+                    &input.text,
+                    on_chunk,
+                ))
+                .await;
                 agent.on_tool_approval = None;
                 agent.on_tool_event = None;
                 agent.on_continuation_chunk = None;
@@ -3261,10 +3273,22 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
     ) -> Result<PluginListResponse, DeveloperSessionHostError> {
         let _guard = self.admit_request().await?;
         let workspace_root = self.workspace_root.clone();
-        let changed =
+        let root = crate::features::plugins::plugins::derive_plugin_install_name(
+            params.source.trim(),
+            params.name.as_deref(),
+        )
+        .ok();
+        let mut changed =
             tokio::task::spawn_blocking(move || surfaces::install_plugin(&workspace_root, params))
                 .await
                 .map_err(internal_error)??;
+        if let Some(root) = root {
+            let setup = crate::installs::install_dependencies(&root).await;
+            if !setup.installed.is_empty() || !setup.enabled.is_empty() {
+                changed = surfaces::list_plugins(&self.workspace_root);
+            }
+            changed.notices = setup.notices(&root);
+        }
         self.emit("plugins/changed", serde_json::json!({}));
         self.reload_integrations().await;
         Ok(changed)
@@ -3283,6 +3307,23 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         self.emit("plugins/changed", serde_json::json!({}));
         self.reload_integrations().await;
         Ok(changed)
+    }
+
+    async fn update_plugin(
+        &self,
+        params: PluginRemoveParams,
+    ) -> Result<PluginUpdateResponse, DeveloperSessionHostError> {
+        let _guard = self.admit_request().await?;
+        let workspace_root = self.workspace_root.clone();
+        let updated =
+            tokio::task::spawn_blocking(move || surfaces::update_plugin(&workspace_root, params))
+                .await
+                .map_err(internal_error)??;
+        if updated.updated {
+            self.emit("plugins/changed", serde_json::json!({}));
+            self.reload_integrations().await;
+        }
+        Ok(updated)
     }
 
     async fn add_mcp_server(
@@ -3992,6 +4033,43 @@ fn tool_event_callback(
                 &notifications,
                 AgentEvent::ArtifactProduced(artifact),
             );
+        }
+    })
+}
+
+fn mcp_sign_in_tracking(
+    inner: Arc<dyn Fn(crate::tui::app_event::TuiAppEvent) + Send + Sync>,
+    thread_id: String,
+    turn_id: String,
+    notifications: broadcast::Sender<AppServerNotification>,
+) -> Arc<dyn Fn(crate::tui::app_event::TuiAppEvent) + Send + Sync> {
+    Arc::new(move |event| {
+        use crate::tui::app_event::{ToolStatus, TuiAppEvent};
+        let required = match &event {
+            TuiAppEvent::ToolCompleted {
+                call_id,
+                name,
+                status: ToolStatus::Failed,
+                ..
+            } => crate::mcp::take_sign_in_required(name).map(|required| {
+                McpAuthRequiredNotification {
+                    thread_id: thread_id.clone(),
+                    turn_id: turn_id.clone(),
+                    tool_call_id: call_id.clone(),
+                    server: required.server,
+                    scope: required.scope,
+                }
+            }),
+            _ => None,
+        };
+        inner(event);
+        if let Some(required) = required {
+            if let Ok(notification) = AppServerNotification::new(
+                agiworkforce_protocol::developer_session::method::MCP_AUTH_REQUIRED,
+                required,
+            ) {
+                let _ = notifications.send(notification);
+            }
         }
     })
 }

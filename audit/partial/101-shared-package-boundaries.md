@@ -17,17 +17,6 @@ nothing is left.
 
 Code: `packages/contracts/cloud-contracts/src/connectors.ts:89-89`, `packages/contracts/cloud-contracts/src/connectors.ts:125-125`, `packages/contracts/cloud-contracts/src/connectors.ts:270-270`, `packages/contracts/cloud-contracts/src/connectors.ts:436-436`
 
-## S101.02: Shared event schemas.
-
-- Done when: Streamed and domain events are declared once and parsed through the same schema on every surface.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Agent events are one Rust-generated schema parsed by web, mobile, Chrome and VS Code, but the domain-event naming contract (DOMAIN_EVENT_VERBS, domainEventName) has no emitter in any app. | surface-only |
-
-Code: `packages/contracts/cloud-contracts/src/agent-events.ts:1-4`, `packages/contracts/cloud-contracts/src/agent-events.ts:310-313`, `apps/mobile/services/streaming.ts:134-138`, `packages/contracts/cloud-contracts/src/domain-events.ts:20-26`
-
 ## S101.03: Shared content-block schemas.
 
 - Done when: Message content blocks come from one vocabulary that every client renders or degrades explicitly.
@@ -35,20 +24,9 @@ Code: `packages/contracts/cloud-contracts/src/agent-events.ts:1-4`, `packages/co
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | MESSAGE_KINDS and the degradation manifest (readClientCapabilityManifest) exist, but no app reads them; the guard scans only the types package and unified-chat, so mobile, Chrome, VS Code and CLI render their own message shapes. | surface-only |
+| platform | partial | partials/platform 4ca59ace1b: check:content-blocks now scans every package and client source root for a private copy of MESSAGE_KINDS. None exists, apart from the recorded Library item kinds. Still open: the chat wire carries no block kinds, so no renderer can publish renderableBlocks and nothing consumes the manifest. That needs a decision on putting a block kind on the wire (shared with S101.33) | surface-only |
 
-Code: `packages/contracts/types/src/conversation.ts:17-25`, `scripts/check-content-blocks.mjs:12-15`, `packages/contracts/types/src/client-capability-manifest.ts:96-100`
-
-## S101.04: Shared error definitions.
-
-- Done when: Error codes, classes and retryability are defined once and every client maps them rather than inferring its own.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Registry and taxonomy are guarded, but web error-utils.ts still infers retryability from message text (baselined), and only VS Code and web local-code are held to the protocol failure codes; mobile and Chrome are not. | surface-only |
-
-Code: `scripts/check-error-model.mjs:18-22`, `scripts/check-error-model.baseline.json:4-7`, `scripts/config/error-contract-parity.json:4-16`
+Code: `scripts/check-content-blocks.mjs:12-12`, `scripts/check-content-blocks.mjs:38-38`
 
 ## S101.06: Shared model metadata.
 
@@ -72,17 +50,6 @@ Code: `crates/agiworkforce-model-registry/src/generated/model_registry.rs:2-2`, 
 
 Code: `scripts/check-capability-consumption.mjs:22-22`, `scripts/check-capability-consumption.mjs:70-70`, `scripts/check-capability-consumption.mjs:223-223`, `package.json:130-130`
 
-## S101.08: Shared entitlement resolution.
-
-- Done when: Plan entitlements are resolved through one server entry point from one shared plan vocabulary.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | resolveEntitlementBundle is declared the single entry point, but org-entitlements.ts and scim-auth.ts resolve plans separately, and no guard routes callers through one resolver. | handler |
-
-Code: `apps/web/lib/services/entitlement-resolution.ts:253-261`, `apps/web/lib/services/org-entitlements.ts:67-71`, `apps/web/lib/server/scim/scim-auth.ts:135-139`
-
 ## S101.09: Shared policy contracts.
 
 - Done when: Workspace policy keys are declared once and every declared key is enforced by the server.
@@ -90,9 +57,9 @@ Code: `apps/web/lib/services/entitlement-resolution.ts:253-261`, `apps/web/lib/s
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | Policy keys are enumerated and guarded, but the two cloud-Code MCP-server keys (allowMcpServers, allowedMcpServers) are declared and not enforced (baselined). | handler |
+| platform | partial | allowMcpServers and allowedMcpServers have no server path to guard. The cloud Code agent loop offers no MCP tools and the sandbox configures no MCP servers, while the effective policy route already serves the code controls to clients. Either the CLI, VS Code and desktop local sessions honour them when they start MCP servers (then the baseline moves to servedToClients), or the two controls come out of the console. Product call sent to the lead | handler |
 
-Code: `scripts/check-workspace-policy-enforcement.mjs:3-9`, `scripts/config/workspace-policy-enforcement-baseline.json:3-7`
+Code: `scripts/config/workspace-policy-enforcement-baseline.json:3-3`, `apps/web/lib/services/organization-policy-code-gate.ts:53-53`
 
 ## S101.10: Shared authentication client.
 
@@ -145,9 +112,9 @@ Code: `packages/client/client-runtime/src/index.ts:29-38`, `apps/extension/src/f
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | @agiworkforce/sync drives mobile sync only (web uses one cursor helper); Chrome, VS Code and CLI sync with their own code, and chat pull omits starred/archived state. | surface-only |
+| platform | partial | partials/platform f503558796: the chat pull and conflict projection now carry starred and archived, and the shared sync package copies them onto the stored record. Still open: Chrome, VS Code and the CLI sync with their own code, and mobile's conversation store has no starred or archived field to receive the state | surface-only |
 
-Code: `apps/mobile/services/cloudSyncEngine.ts:62-66`, `apps/web/features/chat/services/artifact-cloud-sync.ts:9-10`, `apps/cli/src/cloud/projects.rs:30-34`
+Code: `packages/contracts/cloud-contracts/src/sync.ts:110-110`, `apps/web/app/api/chat/sync/route.ts:89-89`, `apps/web/app/api/chat/sync/route.ts:597-597`, `packages/client/sync/src/conversations.ts:66-66`
 
 ## S101.15: Shared Project models.
 
@@ -233,9 +200,9 @@ Code: `packages/contracts/cloud-contracts/src/tool-events.ts:18-24`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | partials/mcp-web df03cba4d and b17126b7f: the /api/connectors routes now import cloud-contracts for connection, health and policy bodies, and the connector input-request form model is shared from client-runtime for Chrome. Still two connector contracts: client-runtime keeps its own connector types and hand parsers (parse.ts) for mobile and desktop instead of the cloud-contracts schemas. | surface-only |
+| platform | partial | partials/platform ee4cbfb7b2, with p-mcp-web df03cba4d: connector sources, health states and permission levels are declared once in @agiworkforce/types. cloud-contracts and client-runtime re-export them, and the fifteen /api/connectors routes take their bodies from cloud-contracts. Still open: the Chrome side panel answering input requests (routed to p-chrome), and desktop cloudConnectors.ts and the client-runtime parsers (p-mcp-web) | surface-only |
 
-Code: `packages/contracts/cloud-contracts/src/connectors.ts:89-89`, `apps/web/app/api/connectors/route.ts:376-376`, `packages/client/client-runtime/src/connectors/index.ts:66-66`
+Code: `packages/contracts/types/src/connector-vocabulary.ts:1-1`, `packages/contracts/types/src/connector-vocabulary.ts:4-4`, `packages/contracts/types/src/connector-vocabulary.ts:14-14`, `packages/contracts/cloud-contracts/src/connectors.ts:6-6`
 
 ## S101.23: Shared Skill/Plugin manifests.
 

@@ -22,6 +22,9 @@ interface CollapsibleSourcesProps {
   sources: Source[];
 }
 
+const SOURCE_ROW_HEIGHT = 64;
+const SOURCE_ROW_WITH_SNIPPET_HEIGHT = 104;
+
 function getDomain(url: string): string {
   try {
     const hostname = new URL(url).hostname;
@@ -48,9 +51,14 @@ export function CollapsibleSources({ sources }: CollapsibleSourcesProps) {
     });
   }, [expanded, animatedHeight]);
 
+  const listHeight = sources.reduce(
+    (height, source) =>
+      height + (source.snippet ? SOURCE_ROW_WITH_SNIPPET_HEIGHT : SOURCE_ROW_HEIGHT),
+    8,
+  );
   const listStyle = useAnimatedStyle(() => ({
     opacity: animatedHeight.value,
-    maxHeight: animatedHeight.value * (sources.length * 64 + 8),
+    maxHeight: animatedHeight.value * listHeight,
     overflow: 'hidden' as const,
   }));
 
@@ -181,6 +189,14 @@ export function CollapsibleSources({ sources }: CollapsibleSourcesProps) {
                         {source.title}
                       </Text>
                     )}
+                    {source.snippet ? (
+                      <Text
+                        style={{ fontSize: 12, lineHeight: 17, color: themeColors.textMuted }}
+                        numberOfLines={2}
+                      >
+                        {source.snippet}
+                      </Text>
+                    ) : null}
                   </View>
 
                   {/* External link indicator */}

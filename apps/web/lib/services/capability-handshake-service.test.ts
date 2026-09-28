@@ -76,13 +76,13 @@ describe('buildMeCapabilityHandshake, tier-layer honesty (the required property)
     expect(document.granted).toContain('canUseCloudModels');
   });
 
-  it('pro tier: grants search, voice, and connectors, but still denies deep research (max/enterprise-only)', () => {
+  it('pro tier: grants search, voice, connectors and deep research (D-2026-09-28-11)', () => {
     const document = buildMeCapabilityHandshake({ ...BASE_INPUT, tier: 'pro' });
     expect(document.granted).toContain('canUseWebSearch');
     expect(document.granted).toContain('canUseVoice');
     expect(document.granted).toContain('canUseConnectors');
-    expect(document.granted).not.toContain('canUseDeepResearch');
-    expect(document.deniedBy.canUseDeepResearch).toEqual(['tier']);
+    expect(document.granted).toContain('canUseDeepResearch');
+    expect(document.deniedBy.canUseDeepResearch).toBeUndefined();
   });
 
   it('max tier: grants deep research too', () => {
@@ -271,10 +271,10 @@ describe('BILL-15, effective-entitlement limits on the existing /api/me handshak
   });
 
   it('resolves a decision with the deniedBy layer sourceId as policySource', () => {
-    const document = buildMeCapabilityHandshake({ ...BASE_INPUT, tier: 'pro', resets: RESETS });
+    const document = buildMeCapabilityHandshake({ ...BASE_INPUT, tier: 'free', resets: RESETS });
     const denied = resolveCapabilityDecision(document, 'canUseDeepResearch');
     expect(denied.allowed).toBe(false);
-    expect(denied.policySource).toBe('tier:pro');
+    expect(denied.policySource).toBe('tier:free');
 
     const allowed = resolveCapabilityDecision(document, 'canUseWebSearch');
     expect(allowed.allowed).toBe(true);

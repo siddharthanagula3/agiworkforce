@@ -14,13 +14,13 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | partials/platform 86d1f2aeeb to 2c38d6c7fc: the web runtime provider now holds the /api/me capability document and useCapability resolves every capability through it, so web search, cloud code execution, image generation (composer and Image Studio), voice mode, slash commands and the desktop-only affordances follow the server's model, plan, surface and operator-switch decision; the document now denies image generation to plans without it. Still open: the Research toggle reads only the model catalogue because TierPolicy, and so the document, allows Research only on Max and Enterprise while the chat route runs it on every plan (ruling requested); video generation and AGI Work stay plan checks because the capability vocabulary has no id for them | ui |
-| desktop | partial | partials/platform 86d1f2aeeb to 2c38d6c7fc: the web runtime provider now holds the /api/me capability document and useCapability resolves every capability through it, so web search, cloud code execution, image generation (composer and Image Studio), voice mode, slash commands and the desktop-only affordances follow the server's model, plan, surface and operator-switch decision; the document now denies image generation to plans without it. Still open: the Research toggle reads only the model catalogue because TierPolicy, and so the document, allows Research only on Max and Enterprise while the chat route runs it on every plan (ruling requested); video generation and AGI Work stay plan checks because the capability vocabulary has no id for them | ui |
-| cli | partial | Upgrade to partial (miss handler) for consistency with the web cell, which is partial for per-control checks: the CLI resolves per-model availability in one place (model_verdict combines trust mode, configured keys and the cached plan tier) and the picker and request path read it. Remaining: no feature-level resolver, and operator kill switches / the server capability document are never read by the CLI. |  |
+| web | partial | partials/platform 3e5bc8cefb, 73b0a361d8, 2fa001551f: Research now follows D-2026-09-28-11. The Pro tier policy allows it, the document grants it to every paid plan, and the composer toggle reads the canUseDeepResearch decision, with the upgrade title for a plan denial and the shared denial sentence for an operator switch, which the document now names temporarily_unavailable. Still open: video generation and AGI Work are gated by the billing capability table, because the capability vocabulary has no id for either | ui |
+| desktop | partial | partials/platform 3e5bc8cefb, 73b0a361d8, 2fa001551f: Research now follows D-2026-09-28-11. The Pro tier policy allows it, the document grants it to every paid plan, and the composer toggle reads the canUseDeepResearch decision, with the upgrade title for a plan denial and the shared denial sentence for an operator switch, which the document now names temporarily_unavailable. Still open: video generation and AGI Work are gated by the billing capability table, because the capability vocabulary has no id for either | ui |
+| cli | partial | Commands and indicators are now gated per model and privacy mode, but there is still no single feature resolver, and the CLI reads operator kill switches only indirectly through the managed model list. | handler |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `packages/contracts/types/src/capability-handshake/evaluator.ts:120-120`, `packages/ui/unified-chat/src/lib/capabilities.tsx:36-36`, `packages/ui/unified-chat/src/lib/capabilities.tsx:56-56`, `apps/web/shared/stores/web-auth-store.ts:138-138`
+Code: `packages/contracts/types/src/model-catalog.ts:1217-1217`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:1398-1398`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:4996-4996`, `apps/web/lib/services/capability-handshake-service.ts:134-134`
 
 ## S78.03: Model-dependent accepted-file types.
 
@@ -44,11 +44,11 @@ Code: `apps/mobile/src/features/model-picker/localModelRuntime.ts:60-62`, `apps/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | `agi image` takes size and quality flags, but they are not narrowed to what the chosen image model supports; the CLI has no video generation. | ui |
+| cli | partial | agi image refuses transparency for a model that cannot do it and prints a model's ratios when it refuses one, but /api/media/availability does not publish each model's ratios and sizes, so they cannot be narrowed before the request (server change). | handler |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/cli/src/lib.rs:943-951`
+Code: `apps/cli/src/cloud/image.rs:446-446`
 
 ## S78.10: Role restrictions.
 
@@ -70,11 +70,11 @@ Code: `apps/mobile/app/(app)/settings/workspace.tsx:269-269`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Server routing applies the workspace residency region to this surface's requests, but the surface never shows or explains a regional restriction. | ui |
+| cli | partial | No member-readable endpoint names the workspace's residency region (only /api/admin/data-region, platform admin), so the CLI cannot show or explain a regional restriction. | ui |
 | vscode | partial | Server routing applies the workspace residency region to this surface's requests, but the surface never shows or explains a regional restriction. | ui |
 | chrome | partial | Server routing applies the workspace residency region to this surface's requests, but the surface never shows or explains a regional restriction. | ui |
 
-Code: `apps/cli/src/provider.rs:260-267`, `apps/cli/src/models/streaming.rs:234-234`, `packages/ai/routing/src/auto.ts:1024-1034`, `apps/extension-vscode/src/features/model-picker/modelConstants.ts:239-249`
+Code: `apps/cli/src/provider.rs:341-341`, `apps/extension-vscode/src/features/model-picker/modelConstants.ts:239-249`, `apps/extension-vscode/src/utils/api.ts:581-586`, `packages/ai/routing/src/auto.ts:1024-1034`
 
 ## S78.13: Required-connection detection.
 
@@ -116,40 +116,26 @@ Code: `apps/extension/src/side_panel.ts:2387-2395`
 
 - Done when: The surface tells apart a feature that is unsupported here from one that is only temporarily unavailable.
 - Wave: 3
-- Already works on: web, desktop, mobile, api
+- Already works on: web, desktop, mobile, cli, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Errors distinguish an outage on our side, but `agi models list` omits temporarily unavailable models without saying so. | ui |
 | vscode | partial | Settings says account details or plan usage are temporarily unavailable, but the model picker does not distinguish a temporarily unavailable model from an unsupported one. | ui |
 | chrome | partial | A failed send says AGI Cloud is temporarily unavailable, but models the server marks temporarily unavailable simply vanish from the picker like unsupported ones. | ui |
 
-Code: `apps/cli/src/errors.rs:1320-1323`, `apps/extension-vscode/src/features/settings/settingsWebviewContent.ts:2029-2031`, `apps/extension/src/features/cloud-bridge/freeTrialClient.ts:918-919`
-
-## S78.17: Hidden irrelevant controls.
-
-- Done when: Controls that cannot apply in the current context (model, host, platform) are hidden instead of shown broken.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | The TUI shows the same commands and effort picker whatever the model, plan or mode; nothing is hidden when irrelevant. | ui |
-
-Code: `apps/cli/src/models/streaming.rs:347-352`
+Code: `apps/extension-vscode/src/features/settings/settingsWebviewContent.ts:2029-2031`, `apps/extension/src/features/cloud-bridge/freeTrialClient.ts:918-919`
 
 ## S78.18: Disabled but discoverable restricted controls.
 
 - Done when: Restricted controls stay visible but disabled, with the reason, so users can discover them.
 - Wave: 3
-- Already works on: web, desktop, mobile, vscode
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | `agi models list` lists only models the account tier can use; restricted models are not shown locked. | ui |
 | chrome | partial | Models the plan does not include are left out of the picker instead of shown locked; only the managed-chat paid-plan state is visible. | ui |
 
-Code: `apps/cli/src/provider.rs:315-318`, `apps/extension/src/features/cloud-bridge/managedModelPicker.ts:52-54`
+Code: `apps/extension/src/features/cloud-bridge/managedModelPicker.ts:52-54`
 
 ## S78.20: Connect-account explanation.
 

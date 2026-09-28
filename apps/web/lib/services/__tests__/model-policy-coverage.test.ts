@@ -52,6 +52,18 @@ const GATE_CALLERS: Record<string, string> = {
     'app/api/llm/v1/chat/completions/lib/request-processor.ts',
 };
 
+/**
+ * Image generation hands the gate a callback, and the shared generation module
+ * builds the provider and model it asks about once the catalog model resolves,
+ * for the route and the chat image tool alike.
+ */
+const MODEL_ARGUMENT_BUILDERS: Record<string, { file: string; needle: string }> = {
+  'app/api/media/image/generate/route.ts': {
+    file: 'app/api/media/image/lib/managed-image-generation.ts',
+    needle: 'input.modelPolicyRefusal({',
+  },
+};
+
 function source(relative: string): string {
   const full = join(ROOT, relative);
   expect(existsSync(full), `${relative} does not exist`).toBe(true);
@@ -118,13 +130,18 @@ describe('workspace model policy covers every model-serving route', () => {
 
   it('every gate call sends a provider and a model, not a placeholder', () => {
     for (const route of MODEL_SERVING_ROUTES) {
-      const file = GATE_CALLERS[route] ?? route;
+      const builder = MODEL_ARGUMENT_BUILDERS[route];
+      const file = builder?.file ?? GATE_CALLERS[route] ?? route;
       const text = source(file);
-      const index = [
-        'ModelPolicyGateResponse(',
-        'evaluateModelAccessForOrganization(',
-        'const modelAccess = evaluateModelAccess(',
-      ]
+      const index = (
+        builder
+          ? [builder.needle]
+          : [
+              'ModelPolicyGateResponse(',
+              'evaluateModelAccessForOrganization(',
+              'const modelAccess = evaluateModelAccess(',
+            ]
+      )
         .map((needle) => text.indexOf(needle))
         .find((at) => at >= 0);
 

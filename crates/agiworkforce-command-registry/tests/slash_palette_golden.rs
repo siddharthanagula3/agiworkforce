@@ -52,8 +52,8 @@ fn slash_palette_matches_golden() {
 fn slash_palette_has_90_commands() {
     let count = builtin_slash_registry_commands().len();
     assert_eq!(
-        count, 91,
-        "Expected 91 implemented built-in slash commands after removing unimplemented placeholders; got {count}"
+        count, 95,
+        "Expected 95 implemented built-in slash commands after removing unimplemented placeholders; got {count}"
     );
 }
 
@@ -118,7 +118,6 @@ fn unimplemented_background_command_is_not_advertised() {
 
     assert!(registry.find("background").is_none());
     assert!(registry.find("bg").is_none());
-    assert!(registry.find("tasks").is_none());
 }
 
 #[test]

@@ -142,11 +142,8 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:3181-3186`, `apps/mobile/ap
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The "queued" badge is the only pending marker and it is set solely by the offline queue (isOnline false and cloud mode). An online send appends the user row with no pending/sending state; the auditor's own note admits "online sends show only the streaming indicator", which is the case the criterion names ("not yet accepted by the service"). Partial with miss states; remaining: show a sending state on online user rows until the server accepts the turn. Same standard the auditor applied to web (partial). |  |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:684-700`, `apps/mobile/app/(app)/chat/[id].tsx:478-490`, `apps/mobile/app/(app)/chat/[id].tsx:1434-1434`, `apps/mobile/src/features/chat/components/MessageList.tsx:92-92`
 
 ## S16.16: Retry-send action.
 
