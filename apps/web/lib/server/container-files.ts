@@ -173,8 +173,9 @@ export async function persistGeneratedFile(params: {
   ref: GeneratedFileRef;
   prompt?: string;
   model?: string;
+  conversationId?: string | null;
 }): Promise<PersistedGeneratedFile | null> {
-  const { userId, organizationId, ref, prompt, model } = params;
+  const { userId, organizationId, ref, prompt, model, conversationId } = params;
   if (!isGeneratedMediaStorageConfigured()) return null;
   if (!ref.fileId) return null;
 
@@ -203,6 +204,7 @@ export async function persistGeneratedFile(params: {
       origin: 'code-execution',
       prompt,
       model,
+      ...(conversationId ? { conversationId } : {}),
       extraMetadata: { providerFileId: ref.fileId },
     });
     if (!outcome.ok) return null;
@@ -238,6 +240,7 @@ export async function persistGeneratedFiles(params: {
   refs: GeneratedFileRef[];
   prompt?: string;
   model?: string;
+  conversationId?: string | null;
 }): Promise<PersistGeneratedFilesResult> {
   const results = await Promise.all(
     params.refs.map((ref) =>
@@ -247,6 +250,7 @@ export async function persistGeneratedFiles(params: {
         ref,
         prompt: params.prompt,
         model: params.model,
+        conversationId: params.conversationId,
       }),
     ),
   );

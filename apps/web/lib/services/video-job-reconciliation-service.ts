@@ -279,6 +279,7 @@ async function persistCompletedVideo(
           provider: job.provider,
           model: job.model,
           sourceSurface: job.sourceSurface,
+          conversationId: job.conversationId,
           metadata: {
             origin: 'generated',
             surface: 'file',

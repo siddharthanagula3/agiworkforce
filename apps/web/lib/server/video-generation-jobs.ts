@@ -367,8 +367,21 @@ export async function createVideoGenerationJob(input: {
 
     const conversationId = input.conversationId ?? null;
     const assistantMessageId = input.assistantMessageId ?? null;
-    if ((conversationId === null) !== (assistantMessageId === null)) {
+    if (assistantMessageId !== null && conversationId === null) {
       throw new Error('Video chat generation requires both conversation and assistant message.');
+    }
+    if (conversationId && !assistantMessageId) {
+      const conversationRows = await tx.query<{ id: string }>(
+        `select id
+           from public.web_conversations
+          where id = $1
+            and user_id = $2
+            and deleted_at is null`,
+        [conversationId, input.userId],
+      );
+      if (!conversationRows[0]) {
+        throw new Error('Video chat conversation is missing or belongs to another account.');
+      }
     }
     if (conversationId && assistantMessageId) {
       const transcriptRows = await tx.query<{ id: string }>(
