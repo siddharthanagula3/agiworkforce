@@ -23,6 +23,7 @@ import {
   uploadTooManyPluginsMessage,
   uploadTooManySkillFilesMessage,
   uploadTooManySkillsMessage,
+  uploadUnreadableDependenciesMessage,
   uploadUnsafePathMessage,
   uploadUnusableNameMessage,
   CLAUDE_MARKETPLACE_MANIFEST_PATH,
@@ -34,6 +35,12 @@ import {
   PLUGIN_MARKETPLACE_MAX_MANIFEST_BYTES,
   PLUGIN_MARKETPLACE_MAX_PLUGINS,
 } from '@agiworkforce/cloud-contracts';
+
+import {
+  mergePluginDependencies,
+  parsePluginDependencies,
+  type PluginDependencyRef,
+} from '@/lib/services/plugin-dependencies';
 
 import { displayVersion, lastSegment, neutralizeCopy } from './entries';
 import { parsePluginMetadata } from './inspection';
@@ -72,11 +79,13 @@ export interface UploadedPlugin {
   version: string;
   skills: UploadedSkill[];
   omittedFiles: string[];
+  dependencies: PluginDependencyRef[];
 }
 
 export interface UploadedPluginArchive {
   sourceName: string;
   plugins: UploadedPlugin[];
+  allowlist: string[];
 }
 
 export class PluginArchiveError extends Error {
@@ -350,6 +359,22 @@ async function readSkills(
   return { skills, omittedFiles };
 }
 
+function declaredDependencies(json: unknown): unknown {
+  return json && typeof json === 'object' && !Array.isArray(json)
+    ? (json as Record<string, unknown>)['dependencies']
+    : undefined;
+}
+
+function readableDependencies(
+  pluginName: string,
+  ...lists: ReadonlyArray<PluginDependencyRef[] | null>
+): PluginDependencyRef[] {
+  const dependencies = mergePluginDependencies(...lists);
+  if (!dependencies)
+    throw new PluginArchiveError([uploadUnreadableDependenciesMessage(pluginName)]);
+  return dependencies;
+}
+
 function pluginDirectoryFor(source: unknown, fallback: string): string {
   if (typeof source !== 'string') return fallback;
   const trimmed = source.trim().replace(RELATIVE_SOURCE_PREFIX, '').replace(/\/+$/, '');
@@ -360,7 +385,8 @@ async function singlePlugin(
   members: Map<string, ArchiveMember>,
   fallbackName: string,
 ): Promise<UploadedPlugin> {
-  const metadata = parsePluginMetadata(await readJson(members.get(CLAUDE_PLUGIN_METADATA_PATH)));
+  const metadataJson = await readJson(members.get(CLAUDE_PLUGIN_METADATA_PATH));
+  const metadata = parsePluginMetadata(metadataJson);
   const declared = metadata.skills
     .map((skill) => `${skill.replace(RELATIVE_SOURCE_PREFIX, '')}${SKILL_FILE_SUFFIX}`)
     .filter((path) => members.has(path));
@@ -368,6 +394,10 @@ async function singlePlugin(
   const name = neutralizeCopy(fallbackName) || fallbackName;
   const key = pluginKeyFrom(name);
   if (!key) throw new PluginArchiveError([uploadUnusableNameMessage(name)]);
+  const dependencies = readableDependencies(
+    name,
+    parsePluginDependencies(declaredDependencies(metadataJson)),
+  );
   const { skills, omittedFiles } = await readSkills(members, paths, name);
   if (skills.length === 0) throw new PluginArchiveError([UPLOAD_NO_SKILLS_MESSAGE]);
   return {
@@ -377,6 +407,7 @@ async function singlePlugin(
     version: displayVersion(metadata.version, null),
     skills,
     omittedFiles,
+    dependencies,
   };
 }
 
@@ -401,6 +432,9 @@ async function marketplacePlugins(
     const resolved = paths.length > 0 ? paths : skillPathsUnder(members, directory);
     const { skills, omittedFiles } = await readSkills(members, resolved, name);
     if (skills.length === 0) continue;
+    const pluginJson = await readJson(
+      members.get(`${directory}${PATH_SEPARATOR}${CLAUDE_PLUGIN_METADATA_PATH}`),
+    );
     claimed.add(key);
     plugins.push({
       key,
@@ -409,10 +443,19 @@ async function marketplacePlugins(
       version: displayVersion(declared.version, null),
       skills,
       omittedFiles,
+      dependencies: readableDependencies(
+        name,
+        parsePluginDependencies(declared['dependencies']),
+        parsePluginDependencies(declaredDependencies(pluginJson)),
+      ),
     });
   }
   if (plugins.length === 0) throw new PluginArchiveError([UPLOAD_NO_SKILLS_MESSAGE]);
-  return { sourceName: neutralizeCopy(manifest.name) || manifest.name, plugins };
+  return {
+    sourceName: neutralizeCopy(manifest.name) || manifest.name,
+    plugins,
+    allowlist: manifest.allowCrossMarketplaceDependenciesOn,
+  };
 }
 
 function lastSegmentPath(declaredSkill: string): string {
@@ -473,5 +516,5 @@ export async function readPluginArchive(
   if (!hasMetadata && !hasSkills) throw new PluginArchiveError([UPLOAD_NO_PLUGIN_MESSAGE]);
 
   const plugin = await singlePlugin(members, fallbackName);
-  return { sourceName: plugin.name, plugins: [plugin] };
+  return { sourceName: plugin.name, plugins: [plugin], allowlist: [] };
 }
