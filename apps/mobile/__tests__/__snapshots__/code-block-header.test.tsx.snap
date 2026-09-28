@@ -222,7 +222,7 @@ exports[`code-card header row labels a fence that declares its language 1`] = `
             className="text-sm text-white "
             style={
               {
-                "color": "rgb(16, 121, 95)",
+                "color": "#0c755c",
               }
             }
           >

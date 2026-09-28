@@ -1,6 +1,11 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import {
+  CONNECTOR_OAUTH_RESULT_CONNECTOR_PARAM,
+  CONNECTOR_OAUTH_RESULT_STATUS_PARAM,
+  type ConnectorOAuthCallbackStatus,
+} from '@agiworkforce/cloud-contracts';
 
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { unauthorizedResponseFor } from '@/lib/api-auth-response';
@@ -30,11 +35,13 @@ import { authorizationResponseIssuerMatches } from '@/lib/connectors/authorizati
 import { canonicalResourceUri } from '@/lib/connectors/registry-authorization';
 
 const MAX_CODE_LENGTH = 2048;
-const COMPLETION_FAILURE_STATUS: Partial<Record<McpAuthorizationFailure, string>> = {
+const COMPLETION_FAILURE_STATUS: Partial<
+  Record<McpAuthorizationFailure, ConnectorOAuthCallbackStatus>
+> = {
   'authorization-server-changed': 'reauthorize',
   'registration-rejected': 'registration_rejected',
 };
-const DEFAULT_COMPLETION_FAILURE_STATUS = 'failed';
+const DEFAULT_COMPLETION_FAILURE_STATUS: ConnectorOAuthCallbackStatus = 'failed';
 
 async function handleGet(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'default');
@@ -45,10 +52,14 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   const code = url.searchParams.get('code');
   const providerError = url.searchParams.get('error');
 
-  const redirectTo = (returnPath: string, connectorId: string, status: string): NextResponse => {
+  const redirectTo = (
+    returnPath: string,
+    connectorId: string,
+    status: ConnectorOAuthCallbackStatus,
+  ): NextResponse => {
     const target = new URL(sanitizeConnectorReturnPath(returnPath), request.url);
-    if (connectorId) target.searchParams.set('connector', connectorId);
-    target.searchParams.set('status', status);
+    if (connectorId) target.searchParams.set(CONNECTOR_OAUTH_RESULT_CONNECTOR_PARAM, connectorId);
+    target.searchParams.set(CONNECTOR_OAUTH_RESULT_STATUS_PARAM, status);
     return NextResponse.redirect(target);
   };
 

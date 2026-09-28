@@ -1,3 +1,4 @@
+import { CONNECTOR_OAUTH_START_PATH } from '@agiworkforce/cloud-contracts';
 import { CLOUD_API_BASE_URL } from './cloudApi';
 import { WEB_APP_URL } from './config';
 import { createManagedCloudRequestContext } from '../services/managedCloudRequestContext';
@@ -119,7 +120,7 @@ export function customConnectorShortId(entry: CloudConnectorEntry): string | nul
 
 export function customConnectorSignInUrl(shortId: string): string {
   const connectorId = `${CUSTOM_CONNECTOR_ID_PREFIX}${shortId}`;
-  return `${WEB_APP_URL}/api/connectors/oauth/start?connectorId=${encodeURIComponent(connectorId)}`;
+  return `${WEB_APP_URL}${CONNECTOR_OAUTH_START_PATH}?connectorId=${encodeURIComponent(connectorId)}`;
 }
 
 export async function getCustomConnectorOAuthRedirectUri(): Promise<string | null> {

@@ -16,6 +16,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  translateUiPlural,
 } from '@agiworkforce/ui';
 import { cn } from '../lib/utils';
 
@@ -183,9 +184,10 @@ export function LocalByokHandoffDialog({
                   </div>
                   {unscannedContextCount > 0 && (
                     <div className="mt-1 text-xs text-warning-text">
-                      {unscannedContextCount}{' '}
-                      {unscannedContextCount === 1 ? 'selected file was' : 'selected files were'}{' '}
-                      not content-scanned
+                      {translateUiPlural('chat', 'counts.unscannedFiles', unscannedContextCount, {
+                        one: '{{count}} selected file was not content-scanned',
+                        other: '{{count}} selected files were not content-scanned',
+                      })}
                     </div>
                   )}
                 </div>

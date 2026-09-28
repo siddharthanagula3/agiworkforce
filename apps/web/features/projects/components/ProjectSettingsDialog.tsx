@@ -13,7 +13,7 @@ import {
   useConfirmAction,
   useUnsavedChangesGuard,
 } from '@agiworkforce/ui';
-import { Label } from '@agiworkforce/ui';
+import { Label, translateUiPlural } from '@agiworkforce/ui';
 import { Copy, Download, Smile, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { addCsrfHeaders } from '@/lib/client/csrf';
@@ -127,7 +127,10 @@ export function ProjectSettingsDialog({
       };
       toast.success(
         copiedKnowledgeFiles
-          ? `Project duplicated with ${copiedKnowledgeFiles} file${copiedKnowledgeFiles === 1 ? '' : 's'}.`
+          ? translateUiPlural('common', 'counts.projectDuplicatedFiles', copiedKnowledgeFiles, {
+              one: 'Project duplicated with {{count}} file.',
+              other: 'Project duplicated with {{count}} files.',
+            })
           : 'Project duplicated.',
       );
       onDuplicated?.();

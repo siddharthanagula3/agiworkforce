@@ -16,7 +16,7 @@ import {
   MANAGED_MEDIA_MAX_IMAGE_REFERENCES,
   type LibraryItem,
 } from '@agiworkforce/cloud-contracts';
-import { canUseBillingPlanCapability, normalizeBillingPlanTier } from '@agiworkforce/types';
+import { useCapability } from '@agiworkforce/unified-chat/capabilities';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import { isBillingPolicyReady } from '@shared/stores/billing-policy';
 import { PENDING_CONVERSATION_KEY, useChatStore } from '@shared/stores/web-chat-store';
@@ -76,7 +76,7 @@ export function ImageStudio() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { generateImage } = useMediaGeneration();
   const { status: availabilityStatus, admissionFor } = useMediaModelAvailability();
-  const subscriptionTier = useBillingStore((s) => normalizeBillingPlanTier(s.subscription?.tier));
+  const canUseImages = useCapability('canUseImages');
   const billingReady = useBillingStore(isBillingPolicyReady);
   const setComposerToggles = useChatStore((s) => s.setComposerToggles);
 
@@ -93,8 +93,7 @@ export function ImageStudio() {
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyError, setHistoryError] = useState<string | null>(null);
 
-  const canGenerate =
-    billingReady && canUseBillingPlanCapability(subscriptionTier, 'image_generation');
+  const canGenerate = billingReady && canUseImages;
   const models = useMemo(
     () =>
       availabilityStatus === 'ready'

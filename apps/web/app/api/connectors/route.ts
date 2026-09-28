@@ -1,4 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
+import {
+  ConnectRequestSchema,
+  connectorCredentialsPath,
+  type ConnectConflictResponse,
+  type ConnectSuccessResponse,
+  type ConnectorConnection,
+  type ConnectorProbeFailureResponse,
+  type ConnectorSetupEntry,
+  type DisconnectFailureResponse,
+  type DisconnectResponse,
+  type ListConnectorsResponse,
+} from '@agiworkforce/cloud-contracts';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -36,7 +48,6 @@ import {
   isDeviceLocalConnector,
   isKnownConnectorId,
   resolveConnectorHealth,
-  type ConnectorHealth,
 } from '@/lib/connectors/catalog';
 import { readConnectorsNotResponding } from '@/lib/services/connector-call-log-service';
 import {
@@ -55,7 +66,7 @@ import {
 import {
   describeConnectorSetup,
   regionRequirement,
-  type ConnectorSetupKind,
+  type ConnectorSetupRequirement,
 } from '@/lib/connectors/oauth-setup';
 import {
   BANK_ACCOUNTS_CONNECTOR_ID,
@@ -103,8 +114,6 @@ const CUSTOM_AUTH_TYPE = 'custom_mcp';
 const OAUTH_AUTH_TYPE = 'oauth';
 const DIRECTORY_AUDIT_SOURCE = 'directory';
 const CUSTOM_AUDIT_RESOURCE_TYPE = 'custom_mcp_connector';
-const CREDENTIALS_ROUTE_SEGMENT = 'credentials';
-const CONNECTORS_API_PATH = '/api/connectors';
 const AUTH_TYPES = ['local', 'oauth', 'api_key', 'connection_string', 'pat'] as const;
 
 const CONNECTOR_SCOPE = { resolveOrganization: false } as const;
@@ -119,47 +128,33 @@ type UserConnectorRow = {
   updated_at: string;
 };
 
-type ConnectorSource = 'user' | 'github-app' | 'custom' | 'oauth';
-
-interface ConnectorEntry {
-  id: string;
-  connectorId: string;
-  authType: string;
-  connectedAt: string;
-  updatedAt: string;
-  source: ConnectorSource;
-  name?: string;
-  toolConnectorId?: string;
-  directoryId?: string;
-  scopes?: string[];
-  grantedPermissions?: { scope: string; sentence: string; access: 'read' | 'write' }[];
-  needsReauthorization?: boolean;
-  health?: ConnectorHealth;
-}
-
-interface ConnectorSetupEntry {
-  kind: ConnectorSetupKind;
-  missingEnv: readonly string[];
-  message: string;
-}
-
 function unreachableResponse(serverName: string, error: McpProbeError): NextResponse {
   if (error.edgeBlocked) {
     const message = edgeBlockedMessage(serverName);
     return NextResponse.json(
-      { error: { code: CONNECTOR_BLOCKED_CODE, message }, message },
+      {
+        error: { code: CONNECTOR_BLOCKED_CODE, message },
+        message,
+      } satisfies ConnectorProbeFailureResponse,
       { status: 502 },
     );
   }
   const message = `${serverName} could not be reached: ${error.message}`;
   return NextResponse.json(
-    { error: { code: CONNECTOR_UNREACHABLE_CODE, message }, message },
+    {
+      error: { code: CONNECTOR_UNREACHABLE_CODE, message },
+      message,
+    } satisfies ConnectorProbeFailureResponse,
     { status: 502 },
   );
 }
 
-export function credentialsPathFor(connectorId: string): string {
-  return `${CONNECTORS_API_PATH}/${encodeURIComponent(connectorId)}/${CREDENTIALS_ROUTE_SEGMENT}`;
+function setupEntry(requirement: ConnectorSetupRequirement): ConnectorSetupEntry {
+  return {
+    kind: requirement.kind,
+    missingEnv: [...requirement.missingEnv],
+    message: requirement.message,
+  };
 }
 
 function getAvailableConnectorIds(): string[] {
@@ -195,11 +190,7 @@ function describeCuratedSetup(available: ReadonlySet<string>): Record<string, Co
     if (available.has(connector.id)) continue;
     const requirement = describeConnectorSetup(connector.id, connector.name);
     if (!requirement) continue;
-    setup[connector.id] = {
-      kind: requirement.kind,
-      missingEnv: requirement.missingEnv,
-      message: requirement.message,
-    };
+    setup[connector.id] = setupEntry(requirement);
   }
   return setup;
 }
@@ -215,9 +206,8 @@ function withRegionRestrictions(
     if (!available.includes(connectorId)) continue;
     const refusal = sensitiveDataRegionRefusal(connectorId, request);
     if (!refusal) continue;
-    const { kind, missingEnv, message } = regionRequirement(connectorId, refusal);
     restricted.add(connectorId);
-    restrictedSetup[connectorId] = { kind, missingEnv, message };
+    restrictedSetup[connectorId] = setupEntry(regionRequirement(connectorId, refusal));
   }
   return {
     available: available.filter((connectorId) => !restricted.has(connectorId)),
@@ -258,7 +248,7 @@ async function handleGetConnectors(request: NextRequest) {
   }
 
   const operatorMappedIds = getOperatorMappedConnectorIds();
-  const connectors: ConnectorEntry[] = rows
+  const connectors: ConnectorConnection[] = rows
     .filter((c) => operatorMappedIds.has(c.connector_id))
     .map((c) => ({
       id: c.id,
@@ -341,18 +331,19 @@ async function handleGetConnectors(request: NextRequest) {
   const notResponding = await readConnectorsNotResponding(db, userId).catch(
     () => new Set<string>(),
   );
-  const isDown = (entry: ConnectorEntry): boolean =>
+  const isDown = (entry: ConnectorConnection): boolean =>
     notResponding.has(entry.connectorId) ||
     (entry.toolConnectorId !== undefined && notResponding.has(entry.toolConnectorId));
-  const withHealth: ConnectorEntry[] = connectors.map((entry) =>
+  const withHealth = connectors.map((entry): ConnectorConnection =>
     entry.source === 'custom'
       ? {
           ...entry,
-          health: (entry.needsReauthorization === true
-            ? 'needs-reauthorization'
-            : isDown(entry)
-              ? 'not-responding'
-              : 'connected') as ConnectorHealth,
+          health:
+            entry.needsReauthorization === true
+              ? 'needs-reauthorization'
+              : isDown(entry)
+                ? 'not-responding'
+                : 'connected',
         }
       : {
           ...entry,
@@ -382,14 +373,14 @@ async function handleGetConnectors(request: NextRequest) {
     available: offered.available,
     setup: offered.setup,
     pending,
-  });
+  } satisfies ListConnectorsResponse);
 }
 
 function directoryConnectorEntry(
   target: DirectoryConnectTarget,
   row: { id: string; shortId: string; name: string; url: string; transport: string },
   timestamps: { connectedAt: string; updatedAt: string },
-): ConnectorEntry {
+): ConnectorConnection {
   return {
     id: row.id,
     connectorId: target.connectorId,
@@ -415,7 +406,10 @@ async function connectDirectoryTarget(
 
   if (authMode === 'unknown') {
     const message = `${target.name} does not say how it authenticates and did not answer a discovery probe, so it cannot be connected from the browser yet.`;
-    return NextResponse.json({ error: message, message, connectorId }, { status: 501 });
+    return NextResponse.json(
+      { error: message, message, connectorId } satisfies ConnectConflictResponse,
+      { status: 501 },
+    );
   }
 
   if (authMode !== 'none' && !isConnectorTokenStorageAvailable()) {
@@ -424,7 +418,7 @@ async function connectDirectoryTarget(
         error: CONNECTOR_TOKEN_STORAGE_UNAVAILABLE,
         message: CONNECTOR_TOKEN_STORAGE_UNAVAILABLE,
         connectorId,
-      },
+      } satisfies ConnectConflictResponse,
       { status: 503 },
     );
   }
@@ -439,7 +433,7 @@ async function connectDirectoryTarget(
         connectorId,
         oauthStartPath: startPath,
         installStartPath: startPath,
-      },
+      } satisfies ConnectConflictResponse,
       { status: 409 },
     );
   }
@@ -447,7 +441,12 @@ async function connectDirectoryTarget(
   if (authMode === 'api-key') {
     const message = `${target.name} needs an API key before it can connect.`;
     return NextResponse.json(
-      { error: message, message, connectorId, credentialsPath: credentialsPathFor(connectorId) },
+      {
+        error: message,
+        message,
+        connectorId,
+        credentialsPath: connectorCredentialsPath(connectorId),
+      } satisfies ConnectConflictResponse,
       { status: 409 },
     );
   }
@@ -458,7 +457,7 @@ async function connectDirectoryTarget(
     return NextResponse.json({
       connector: directoryConnectorEntry(target, existing, { connectedAt: now, updatedAt: now }),
       alreadyConnected: true,
-    });
+    } satisfies ConnectSuccessResponse);
   }
 
   const capacity = await assertCustomConnectorCapacity(db, userId);
@@ -523,7 +522,7 @@ async function connectDirectoryTarget(
       toolNames: probe.toolNames,
       capabilityCounts: probe.capabilityCounts,
       protocolEra: probe.protocolEra,
-    },
+    } satisfies ConnectSuccessResponse,
     { status: 201 },
   );
 }
@@ -537,16 +536,18 @@ async function handleCreateConnector(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, RATE_LIMIT_BUCKET);
   if (rateLimitResponse) return rateLimitResponse;
 
-  let body: { connectorId?: string; authType?: string };
+  let raw: unknown;
   try {
-    body = await request.json();
+    raw = await request.json();
   } catch {
     throw createError.validation('Invalid request body');
   }
 
-  if (!body.connectorId || typeof body.connectorId !== 'string') {
+  const parsedBody = ConnectRequestSchema.safeParse(raw);
+  if (!parsedBody.success) {
     throw createError.validation('connectorId is required');
   }
+  const body = parsedBody.data;
 
   const operatorMappedIds = getOperatorMappedConnectorIds();
   if (!isCuratedOrConfiguredId(body.connectorId)) {
@@ -561,7 +562,7 @@ async function handleCreateConnector(request: NextRequest) {
       {
         error: 'This connector is device-local. Connect it from the released CLI instead.',
         connectorId: body.connectorId,
-      },
+      } satisfies ConnectConflictResponse,
       { status: 501 },
     );
   }
@@ -573,13 +574,17 @@ async function handleCreateConnector(request: NextRequest) {
 
   if (body.connectorId === GITHUB_CONNECTOR_ID) {
     if (!isGitHubInstallationLinkingAvailable()) {
+      const setup = describeConnectorSetup(
+        body.connectorId,
+        connectorDisplayName(body.connectorId),
+      );
       return NextResponse.json(
         {
           error:
             'GitHub installation ownership verification is not available in this deployment. The connector stays disabled until the GitHub user authorization flow is configured.',
           connectorId: body.connectorId,
-          setup: describeConnectorSetup(body.connectorId, connectorDisplayName(body.connectorId)),
-        },
+          setup: setup ? setupEntry(setup) : null,
+        } satisfies ConnectConflictResponse,
         { status: 501 },
       );
     }
@@ -589,7 +594,7 @@ async function handleCreateConnector(request: NextRequest) {
         error: 'GitHub connects through the GitHub App install flow, not a directory toggle.',
         connectorId: body.connectorId,
         ...(installUrl ? { installStartPath: GITHUB_INSTALL_START_PATH } : {}),
-      },
+      } satisfies ConnectConflictResponse,
       { status: installUrl ? 409 : 501 },
     );
   }
@@ -597,7 +602,11 @@ async function handleCreateConnector(request: NextRequest) {
   const regionRefusal = sensitiveDataRegionRefusal(body.connectorId, request);
   if (regionRefusal) {
     return NextResponse.json(
-      { error: regionRefusal, message: regionRefusal, connectorId: body.connectorId },
+      {
+        error: regionRefusal,
+        message: regionRefusal,
+        connectorId: body.connectorId,
+      } satisfies ConnectConflictResponse,
       { status: 403 },
     );
   }
@@ -607,7 +616,12 @@ async function handleCreateConnector(request: NextRequest) {
     const setup = describeConnectorSetup(body.connectorId, byAccountUrl.name);
     if (setup) {
       return NextResponse.json(
-        { error: setup.message, message: setup.message, connectorId: body.connectorId, setup },
+        {
+          error: setup.message,
+          message: setup.message,
+          connectorId: body.connectorId,
+          setup: setupEntry(setup),
+        } satisfies ConnectConflictResponse,
         { status: 501 },
       );
     }
@@ -618,7 +632,7 @@ async function handleCreateConnector(request: NextRequest) {
         message,
         connectorId: body.connectorId,
         accountUrlConnector: byAccountUrl.connectorId,
-      },
+      } satisfies ConnectConflictResponse,
       { status: 409 },
     );
   }
@@ -627,7 +641,12 @@ async function handleCreateConnector(request: NextRequest) {
     const setup = describeConnectorSetup(body.connectorId, connectorDisplayName(body.connectorId));
     if (setup) {
       return NextResponse.json(
-        { error: setup.message, message: setup.message, connectorId: body.connectorId, setup },
+        {
+          error: setup.message,
+          message: setup.message,
+          connectorId: body.connectorId,
+          setup: setupEntry(setup),
+        } satisfies ConnectConflictResponse,
         { status: 501 },
       );
     }
@@ -639,7 +658,7 @@ async function handleCreateConnector(request: NextRequest) {
         connectorId: body.connectorId,
         plaidLinkPath: BANK_ACCOUNTS_LINK_PATH,
         plaidExchangePath: BANK_ACCOUNTS_EXCHANGE_PATH,
-      },
+      } satisfies ConnectConflictResponse,
       { status: 409 },
     );
   }
@@ -647,14 +666,22 @@ async function handleCreateConnector(request: NextRequest) {
   if (!operatorMappedIds.has(body.connectorId) && isConnectorOAuthSupported(body.connectorId)) {
     if (!isConnectorTokenStorageAvailable()) {
       return NextResponse.json(
-        { error: CONNECTOR_TOKEN_STORAGE_UNAVAILABLE, connectorId: body.connectorId },
+        {
+          error: CONNECTOR_TOKEN_STORAGE_UNAVAILABLE,
+          connectorId: body.connectorId,
+        } satisfies ConnectConflictResponse,
         { status: 503 },
       );
     }
     const setup = describeConnectorSetup(body.connectorId, connectorDisplayName(body.connectorId));
     if (setup) {
       return NextResponse.json(
-        { error: setup.message, message: setup.message, connectorId: body.connectorId, setup },
+        {
+          error: setup.message,
+          message: setup.message,
+          connectorId: body.connectorId,
+          setup: setupEntry(setup),
+        } satisfies ConnectConflictResponse,
         { status: 501 },
       );
     }
@@ -665,7 +692,7 @@ async function handleCreateConnector(request: NextRequest) {
         connectorId: body.connectorId,
         oauthStartPath: startPath,
         installStartPath: startPath,
-      },
+      } satisfies ConnectConflictResponse,
       { status: 409 },
     );
   }
@@ -677,10 +704,10 @@ async function handleCreateConnector(request: NextRequest) {
       {
         error:
           'Connector authorization is not implemented for this provider. Start the provider-specific OAuth or credential flow instead of marking it active.',
-        ...(setup ? { message: setup.message, setup } : {}),
+        ...(setup ? { message: setup.message, setup: setupEntry(setup) } : {}),
         connectorId: body.connectorId,
         authType,
-      },
+      } satisfies ConnectConflictResponse,
       { status: 501 },
     );
   }
@@ -738,9 +765,9 @@ async function handleCreateConnector(request: NextRequest) {
         authType: data.auth_type,
         connectedAt: data.connected_at,
         updatedAt: data.updated_at,
-        source: 'user' as const,
+        source: 'user',
       },
-    },
+    } satisfies ConnectSuccessResponse,
     { status: 201 },
   );
 }
@@ -804,7 +831,7 @@ async function disconnectDirectoryTarget(
     });
   }
 
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ success: true } satisfies DisconnectResponse);
 }
 
 async function handleDeleteConnector(request: NextRequest) {
@@ -842,7 +869,7 @@ async function handleDeleteConnector(request: NextRequest) {
       detail: { resourceType: 'connector', connectorId, source: 'oauth' },
     });
     if (connectorId !== GITHUB_CONNECTOR_ID && !getOperatorMappedConnectorIds().has(connectorId)) {
-      return NextResponse.json({ success: true });
+      return NextResponse.json({ success: true } satisfies DisconnectResponse);
     }
   }
 
@@ -889,7 +916,7 @@ async function handleDeleteConnector(request: NextRequest) {
                 : 'The GitHub App is still installed on your account, so nothing was disconnected. Try again, or remove it from GitHub under Settings then Applications.',
             reason: revocation.reason,
             retryable: revocation.status === 'failed',
-          },
+          } satisfies DisconnectFailureResponse,
           { status: revocation.status === 'unavailable' ? 503 : 502 },
         );
       }
@@ -911,7 +938,7 @@ async function handleDeleteConnector(request: NextRequest) {
         source: 'github_installation',
       },
     });
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true } satisfies DisconnectResponse);
   }
 
   try {
@@ -938,7 +965,7 @@ async function handleDeleteConnector(request: NextRequest) {
     detail: { resourceType: 'connector', connectorId, source: 'catalog' },
   });
 
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ success: true } satisfies DisconnectResponse);
 }
 
 export const GET = withCorsRoute(withErrorHandler(handleGetConnectors));

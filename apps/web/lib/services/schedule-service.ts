@@ -392,6 +392,7 @@ export function mapScheduleRun(row: RunRow): ScheduleRun {
     completedAt: row.completed_at,
     durationMs: row.duration_ms,
     result: row.result,
+    output: typeof row.result?.['text'] === 'string' ? row.result['text'] : null,
     error: row.error,
     idempotencyKey: row.idempotency_key,
     leaseExpiresAt: row.lease_expires_at,

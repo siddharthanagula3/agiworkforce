@@ -3,7 +3,12 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { FileCode2, FolderGit2, MessagesSquare, Plug, Share2, Users } from 'lucide-react';
-import { useConfirmAction } from '@agiworkforce/ui';
+import { z } from 'zod';
+import {
+  CUSTOM_CONNECTORS_PATH,
+  CustomConnectorSummarySchema,
+} from '@agiworkforce/cloud-contracts';
+import { translateUiPlural, useConfirmAction } from '@agiworkforce/ui';
 import { toUserMessage } from '@agiworkforce/unified-chat/network-error';
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import {
@@ -105,7 +110,10 @@ function SectionCard({
 }
 
 function everyoneHere(total: number): string {
-  return `Everyone in this organization (${total} ${total === 1 ? 'member' : 'members'})`;
+  return translateUiPlural('settings', 'counts.everyoneInOrganization', total, {
+    one: 'Everyone in this organization ({{count}} member)',
+    other: 'Everyone in this organization ({{count}} members)',
+  });
 }
 
 function Empty({ children }: { children: React.ReactNode }) {
@@ -132,10 +140,11 @@ interface OwnProject {
   isOrgShared: boolean;
 }
 
-interface OwnConnector {
-  id: string;
-  name: string;
-}
+const OwnConnectorSchema = CustomConnectorSummarySchema.pick({ id: true, name: true });
+
+const OwnConnectorsSchema = z.object({ connectors: z.array(OwnConnectorSchema) });
+
+type OwnConnector = z.infer<typeof OwnConnectorSchema>;
 
 async function fetchOwnProjects(): Promise<OwnProject[]> {
   const token = await getAuthToken();
@@ -151,12 +160,11 @@ async function fetchOwnProjects(): Promise<OwnProject[]> {
 async function fetchOwnConnectors(): Promise<OwnConnector[]> {
   const token = await getAuthToken();
   if (!token) throw new Error('User not authenticated');
-  const res = await fetch('/api/connectors/custom', {
+  const res = await fetch(CUSTOM_CONNECTORS_PATH, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const json = (await res.json()) as { connectors: OwnConnector[] };
-  return json.connectors ?? [];
+  return OwnConnectorsSchema.parse(await res.json()).connectors;
 }
 
 function SharedProjects({ overview }: { overview: OrgSharedOverview }) {
@@ -367,7 +375,7 @@ function SharedArtifacts({ overview }: { overview: OrgSharedOverview }) {
                   <div style={{ fontSize: 12, color: 'var(--text-3)' }}>
                     {artifact.kind} ·{' '}
                     {artifact.visibility === 'organization'
-                      ? `Workspace only · ${overview.members.length} ${overview.members.length === 1 ? 'member' : 'members'}`
+                      ? `Workspace only · ${translateUiPlural('settings', 'counts.members', overview.members.length, { one: '{{count}} member', other: '{{count}} members' })}`
                       : 'Also reachable by public link'}
                   </div>
                 </div>
@@ -451,10 +459,13 @@ function SharedConversations({ overview }: { overview: OrgSharedOverview }) {
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: 13, color: 'var(--text-1)' }}>{name}</div>
                   <div style={{ fontSize: 12, color: 'var(--text-3)' }}>
-                    {conversation.messageCount}{' '}
-                    {conversation.messageCount === 1 ? 'message' : 'messages'} ·{' '}
+                    {translateUiPlural('common', 'counts.messages', conversation.messageCount, {
+                      one: '{{count}} message',
+                      other: '{{count}} messages',
+                    })}{' '}
+                    ·{' '}
                     {conversation.visibility === 'organization'
-                      ? `Workspace only · ${overview.members.length} ${overview.members.length === 1 ? 'member' : 'members'}`
+                      ? `Workspace only · ${translateUiPlural('settings', 'counts.members', overview.members.length, { one: '{{count}} member', other: '{{count}} members' })}`
                       : 'Also reachable by public link'}{' '}
                     · {expired ? 'Expired' : `Expires ${formatExpiry(conversation.expiresAt)}`}
                   </div>
@@ -680,8 +691,11 @@ export function OrganizationSharingSection() {
         }
       >
         <Empty>
-          {overview.members.length} {overview.members.length === 1 ? 'member' : 'members'} · you are
-          a {overview.currentUserRole}
+          {translateUiPlural('settings', 'counts.members', overview.members.length, {
+            one: '{{count}} member',
+            other: '{{count}} members',
+          })}{' '}
+          · you are a {overview.currentUserRole}
         </Empty>
       </SectionCard>
 

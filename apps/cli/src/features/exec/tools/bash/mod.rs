@@ -484,6 +484,9 @@ pub(super) async fn approve_command(
                             },
                             prompt_msg,
                             details,
+                        )
+                        .saving_always_allow(
+                            crate::features::exec::exec_policy::can_persist_allow_command(command),
                         ),
                     )
                     .await

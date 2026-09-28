@@ -11,7 +11,16 @@ import {
   DialogTitle,
   Spinner,
   cn,
+  translateUiPlural,
 } from '@agiworkforce/ui';
+import {
+  parseManagedMemoryImportCommitResponse,
+  parseManagedMemoryImportPreviewResponse,
+  type ManagedMemoryImportCommitResponse,
+  type ManagedMemoryImportPreviewResponse,
+  type ManagedMemoryImportRequest,
+  type ManagedMemoryRecord,
+} from '@agiworkforce/types';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
 import { MAX_IMPORT_ITEMS, MAX_IMPORT_TEXT_CHARS } from '@/lib/memory/import-parser';
@@ -21,48 +30,12 @@ const IMPORT_FILE_ACCEPT = '.txt,.json,text/plain,application/json';
 const IMPORT_SOURCE_PRESETS = ['ChatGPT', 'Claude', 'Gemini', 'Copilot', 'Other'] as const;
 type ImportSourcePreset = (typeof IMPORT_SOURCE_PRESETS)[number];
 
-interface ImportPreviewItem {
-  content: string;
-  normalizedKey: string;
-  duplicate: boolean;
-}
-
-interface DryRunResponse {
-  mode: 'dry-run';
-  sourceName: string;
-  sourceValue: string;
-  format: 'json' | 'text';
-  items: ImportPreviewItem[];
-  totalCandidates: number;
-  itemsTruncated: boolean;
-}
-
-export interface ImportedMemory {
-  id: string;
-  content: string;
-  category: string | null;
-  source: string;
-  pinned: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface CommitResponse {
-  mode: 'commit';
-  sourceName: string;
-  sourceValue: string;
-  insertedCount: number;
-  skippedDuplicateCount: number;
-  excludedCount: number;
-  memories: ImportedMemory[];
-}
-
 type DialogStep = 'compose' | 'preview' | 'done';
 
 export interface ImportMemoryDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onImported?: (memories: ImportedMemory[]) => void;
+  onImported?: (memories: ManagedMemoryRecord[]) => void;
 }
 
 export function useImportMemoryDialog() {
@@ -79,14 +52,14 @@ interface RequestErrorPayload {
 }
 
 async function requestImport<T>(
-  mode: 'dry-run' | 'commit',
-  payload: Record<string, unknown>,
+  request: ManagedMemoryImportRequest,
+  parse: (value: unknown) => T | null,
 ): Promise<T> {
   const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
   const response = await fetch(IMPORT_ENDPOINT, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ mode, ...payload }),
+    body: JSON.stringify(request),
   });
   const data: unknown = await response.json().catch(() => null);
   if (!response.ok) {
@@ -95,7 +68,9 @@ async function requestImport<T>(
     error.status = response.status;
     throw error;
   }
-  return data as T;
+  const parsed = parse(data);
+  if (parsed === null) throw new Error(`HTTP ${response.status}`);
+  return parsed;
 }
 
 export function ImportMemoryDialog({ open, onOpenChange, onImported }: ImportMemoryDialogProps) {
@@ -106,11 +81,11 @@ export function ImportMemoryDialog({ open, onOpenChange, onImported }: ImportMem
   const [fileError, setFileError] = useState<string | null>(null);
   const [previewing, setPreviewing] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
-  const [preview, setPreview] = useState<DryRunResponse | null>(null);
+  const [preview, setPreview] = useState<ManagedMemoryImportPreviewResponse | null>(null);
   const [selected, setSelected] = useState<ReadonlySet<number>>(new Set());
   const [committing, setCommitting] = useState(false);
   const [commitError, setCommitError] = useState<string | null>(null);
-  const [commitResult, setCommitResult] = useState<CommitResponse | null>(null);
+  const [commitResult, setCommitResult] = useState<ManagedMemoryImportCommitResponse | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const selectAllRef = useRef<HTMLInputElement | null>(null);
@@ -164,10 +139,10 @@ export function ImportMemoryDialog({ open, onOpenChange, onImported }: ImportMem
     setPreviewError(null);
     setPreviewing(true);
     try {
-      const result = await requestImport<DryRunResponse>('dry-run', {
-        text: trimmed,
-        sourceName: resolvedSourceName,
-      });
+      const result = await requestImport(
+        { mode: 'dry-run', text: trimmed, sourceName: resolvedSourceName },
+        parseManagedMemoryImportPreviewResponse,
+      );
       setPreview(result);
       setSelected(
         new Set(
@@ -212,10 +187,10 @@ export function ImportMemoryDialog({ open, onOpenChange, onImported }: ImportMem
     setCommitError(null);
     setCommitting(true);
     try {
-      const result = await requestImport<CommitResponse>('commit', {
-        items,
-        sourceName: preview.sourceName,
-      });
+      const result = await requestImport(
+        { mode: 'commit', items, sourceName: preview.sourceName },
+        parseManagedMemoryImportCommitResponse,
+      );
       setCommitResult(result);
       setStep('done');
       onImported?.(result.memories);
@@ -231,17 +206,25 @@ export function ImportMemoryDialog({ open, onOpenChange, onImported }: ImportMem
 
   const doneSummary = useMemo(() => {
     if (!commitResult) return '';
-    const count = commitResult.insertedCount;
-    const noun = count === 1 ? 'memory' : 'memories';
-    return `Imported ${count} ${noun} from ${commitResult.sourceName}.`;
+    return translateUiPlural(
+      'settings',
+      'counts.importedMemories',
+      commitResult.insertedCount,
+      {
+        one: 'Imported {{count}} memory from {{source}}.',
+        other: 'Imported {{count}} memories from {{source}}.',
+      },
+      { source: commitResult.sourceName },
+    );
   }, [commitResult]);
 
   const excludedSummary = useMemo(() => {
     const count = commitResult?.excludedCount ?? 0;
     if (count === 0) return null;
-    const noun = count === 1 ? 'memory' : 'memories';
-    const verb = count === 1 ? 'was' : 'were';
-    return `${count} ${noun} matched a term on your never remember list and ${verb} not saved.`;
+    return translateUiPlural('settings', 'counts.excludedMemories', count, {
+      one: '{{count}} memory matched a term on your never remember list and was not saved.',
+      other: '{{count}} memories matched a term on your never remember list and were not saved.',
+    });
   }, [commitResult]);
 
   return (

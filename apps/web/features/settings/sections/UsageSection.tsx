@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, type CSSProperties, type FormEvent } from 'react';
 import { RefreshCw } from 'lucide-react';
-import { Progress, SegmentedControl, Spinner } from '@agiworkforce/ui';
+import { Progress, SegmentedControl, Spinner, translateUiPlural } from '@agiworkforce/ui';
 import { getUsageUrgency } from '@agiworkforce/unified-chat';
 import {
   formatCreditWindowUsage,
@@ -13,6 +13,7 @@ import {
   getBillingPlanPricing,
   getModelMetadataById,
   MONTHLY_METERED_UNIT_COPY,
+  type MonthlyMeteredUnit,
   isBillingPlanTier,
   isContractPricedPlan,
   isFreeBillingPlanTier,
@@ -120,8 +121,20 @@ function formatCreditAmount(value: number): string {
   return formatCredits(value, { maximumFractionDigits: value > 0 && value < 10 ? 2 : 1 });
 }
 
-function formatCount(value: number, one: string, many: string): string {
-  return `${value.toLocaleString()} ${value === 1 ? one : many}`;
+const UNIT_COUNT_KEYS: Readonly<Record<MonthlyMeteredUnit, string>> = {
+  voice_minutes: 'counts.usageMinutes',
+  video_seconds: 'counts.usageSeconds',
+  computer_use_requests: 'counts.usageRequests',
+};
+
+function formatCount(value: number, key: string, one: string, many: string): string {
+  return translateUiPlural(
+    'settings',
+    key,
+    value,
+    { one: `{{value}} ${one}`, other: `{{value}} ${many}` },
+    { value: value.toLocaleString() },
+  );
 }
 
 function formatUtcDate(value: string): string {
@@ -353,7 +366,8 @@ function CreditBalancesCard({ credits }: { credits: AccountCredits }) {
 function AllowanceRow({ unit }: { unit: TierUnitUsage }) {
   const copy = MONTHLY_METERED_UNIT_COPY[unit.unit];
   const limit = unit.hardLimit;
-  const used = formatCount(unit.consumed, copy.one, copy.many);
+  const countKey = UNIT_COUNT_KEYS[unit.unit];
+  const used = formatCount(unit.consumed, countKey, copy.one, copy.many);
   if (limit === null) {
     return (
       <div style={ROW}>
@@ -367,7 +381,7 @@ function AllowanceRow({ unit }: { unit: TierUnitUsage }) {
     <UsageBar
       label={copy.label}
       percent={percent}
-      detail={`${unit.consumed.toLocaleString()} of ${formatCount(limit, copy.one, copy.many)} used`}
+      detail={`${unit.consumed.toLocaleString()} of ${formatCount(limit, countKey, copy.one, copy.many)} used`}
     />
   );
 }
@@ -417,7 +431,7 @@ function MonthlyAllowancesCard({ resource }: { resource: Loadable<AccountUsageLi
                   Images
                 </span>
                 <span style={DETAIL}>
-                  {`${formatCount(data.images.images, 'image', 'images')} · ${formatCreditAmount(data.images.credits)}`}
+                  {`${formatCount(data.images.images, 'counts.usageImages', 'image', 'images')} · ${formatCreditAmount(data.images.credits)}`}
                 </span>
               </div>
             )}
@@ -451,7 +465,7 @@ function HistoryRows({
             {labelFor(row)}
           </span>
           <span style={{ flexShrink: 0 }}>
-            {`${formatCount(row.requests, 'request', 'requests')} · ${formatCreditAmount(row.credits)}`}
+            {`${formatCount(row.requests, 'counts.usageRequests', 'request', 'requests')} · ${formatCreditAmount(row.credits)}`}
           </span>
         </div>
       ))}
@@ -688,7 +702,7 @@ function UsageHistorySection({ enabled }: { enabled: boolean }) {
         {shown && shown.totals.requests > 0 && (
           <>
             <span style={{ fontSize: 13, color: 'var(--text-2)' }}>
-              {`${formatCount(shown.totals.requests, 'request', 'requests')} · ${formatCreditAmount(shown.totals.credits)}`}
+              {`${formatCount(shown.totals.requests, 'counts.usageRequests', 'request', 'requests')} · ${formatCreditAmount(shown.totals.credits)}`}
             </span>
             <HistoryRows
               caption={GRANULARITY_CAPTION[shown.granularity]}
@@ -713,7 +727,16 @@ function UsageHistorySection({ enabled }: { enabled: boolean }) {
             />
             {shown.freshness.unsettledRequests > 0 && (
               <span role="status" style={DETAIL}>
-                {`${formatCount(shown.freshness.unsettledRequests, 'request is', 'requests are')} still settling and not counted above.`}
+                {translateUiPlural(
+                  'settings',
+                  'counts.usageRequestsSettling',
+                  shown.freshness.unsettledRequests,
+                  {
+                    one: '{{value}} request is still settling and not counted above.',
+                    other: '{{value}} requests are still settling and not counted above.',
+                  },
+                  { value: shown.freshness.unsettledRequests.toLocaleString() },
+                )}
               </span>
             )}
           </>

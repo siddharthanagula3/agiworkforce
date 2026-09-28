@@ -281,6 +281,16 @@ impl SearchBackend {
     }
 }
 
+pub(crate) const SEARCH_KEY_PROVIDERS: [&str; 2] = ["brave", "tavily"];
+
+pub(crate) fn search_key_provider() -> Option<&'static str> {
+    match search_backend() {
+        Ok(Some(SearchBackend::Brave(_))) => Some("brave"),
+        Ok(Some(SearchBackend::Tavily(_))) => Some("tavily"),
+        Ok(None) | Err(_) => None,
+    }
+}
+
 fn search_backend() -> std::result::Result<Option<SearchBackend>, String> {
     let env = |name: &str| {
         std::env::var(name)

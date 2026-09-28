@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Globe, ChevronDown } from 'lucide-react';
+import { translateUiPlural } from '@agiworkforce/ui';
 import { cn } from '../lib/utils';
 import type { WebSearchResultItem } from '../lib/types';
 
@@ -56,7 +57,10 @@ export function WebSearchCard({
         </span>
         {/* Result count badge */}
         <span className="web-search-card__count shrink-0 text-caption text-[color:var(--chat-text-muted,#8b8680)] tabular-nums">
-          {resultCount} {resultCount === 1 ? 'result' : 'results'}
+          {translateUiPlural('common', 'counts.results', resultCount, {
+            one: '{{count}} result',
+            other: '{{count}} results',
+          })}
         </span>
         <ChevronDown
           size={13}
