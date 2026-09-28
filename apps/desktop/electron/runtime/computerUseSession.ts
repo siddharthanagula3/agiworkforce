@@ -35,6 +35,7 @@ const CURSOR_TOLERANCE = 3;
 const QUIET_RUN_LIMIT_MS = 2 * 60_000;
 const HELD_STEP_LIMIT_MS = 10 * 60_000;
 const APP_SWITCH_SETTLE_MS = 250;
+const USER_LET_GO_MS = 3_000;
 
 const OBSERVING_COMMANDS: ReadonlySet<string> = new Set(
   (['device_screenshot', 'device_zoom', 'device_wait'] as const).map(deviceStepCommand),
@@ -67,6 +68,7 @@ let quietTimer: ReturnType<typeof setTimeout> | null = null;
 let inputWatch: ReturnType<typeof setInterval> | null = null;
 let busy = 0;
 let lastSyntheticInputAt = 0;
+let inputWatchResumesAt = 0;
 let cursorBaseline: Electron.Point | null = null;
 const held = new Set<(outcome: HeldOutcome) => void>();
 
@@ -136,8 +138,12 @@ function stopWatchingInput(): void {
 
 function watchForUserInput(): void {
   if (phase !== 'active' || busy > 0) return;
-  const quietFor = Date.now() - lastSyntheticInputAt;
-  if (quietFor < SYNTHETIC_INPUT_SETTLE_MS) {
+  const now = Date.now();
+  const watchingSince = Math.max(
+    lastSyntheticInputAt + SYNTHETIC_INPUT_SETTLE_MS,
+    inputWatchResumesAt,
+  );
+  if (now < watchingSince) {
     cursorBaseline = null;
     return;
   }
@@ -150,8 +156,7 @@ function watchForUserInput(): void {
     Math.abs(cursor.x - cursorBaseline.x) > CURSOR_TOLERANCE ||
     Math.abs(cursor.y - cursorBaseline.y) > CURSOR_TOLERANCE;
   const touched =
-    quietFor >= SYNTHETIC_INPUT_SETTLE_MS + IDLE_CLOCK_RESOLUTION_MS &&
-    powerMonitor.getSystemIdleTime() === 0;
+    now - watchingSince >= IDLE_CLOCK_RESOLUTION_MS && powerMonitor.getSystemIdleTime() === 0;
   if (moved || touched) pause('user-input');
 }
 
@@ -192,6 +197,7 @@ function beginRun(window: BrowserWindow | null): void {
   driver = window && !window.isDestroyed() ? window : null;
   driver?.once('closed', onDriverClosed);
   lastSyntheticInputAt = Date.now();
+  inputWatchResumesAt = lastSyntheticInputAt + USER_LET_GO_MS;
   cursorBaseline = null;
   claimStopShortcut();
   inputWatch = setInterval(watchForUserInput, INPUT_WATCH_INTERVAL_MS);
@@ -341,6 +347,7 @@ export function handBackComputerUse(): ComputerUseStatus {
   pausedBy = null;
   forgetLastFrame();
   lastSyntheticInputAt = Date.now();
+  inputWatchResumesAt = lastSyntheticInputAt + USER_LET_GO_MS;
   cursorBaseline = null;
   claimStopShortcut();
   settleHeld('resume');
