@@ -3,6 +3,8 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
+import { ManagedCloudSlackAccountUnlinkedSchema } from '@agiworkforce/cloud-contracts';
+
 import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
@@ -46,7 +48,7 @@ async function handleUnlink(request: NextRequest, context: RouteContext) {
     },
   });
 
-  return NextResponse.json({ removed: linkId });
+  return NextResponse.json(ManagedCloudSlackAccountUnlinkedSchema.parse({ removed: linkId }));
 }
 
 export const DELETE = withErrorHandler(handleUnlink);
