@@ -450,8 +450,8 @@
           },
           "tier": {
             "type": "string",
-            "enum": ["basic", "pro", "max"],
-            "description": "Lowest paid tier that may select this model."
+            "enum": ["free", "basic", "pro", "max"],
+            "description": "Lowest plan that may select this model."
           },
           "context_window": {
             "type": "integer"
@@ -488,6 +488,12 @@
                 "nullable": true
               }
             }
+          },
+          "deprecation_date": {
+            "type": "string",
+            "format": "date",
+            "nullable": true,
+            "description": "The day this model stops being served, published while it is still listed so callers can move before then. `null` when no retirement is scheduled."
           }
         }
       },
