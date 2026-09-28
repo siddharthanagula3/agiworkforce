@@ -13,7 +13,7 @@ const buildOptions = {
   platform: 'node',
   target: 'node18',
   format: 'cjs',
-  external: ['vscode'],
+  external: ['vscode', 'bufferutil', 'utf-8-validate'],
   sourcemap: !isProduction,
   minify: isProduction,
   treeShaking: true,

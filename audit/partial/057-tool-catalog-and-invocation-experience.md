@@ -282,16 +282,13 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-metadata.ts:344-349`
 
 - Done when: An oversized tool result is stored in full and replaced in context by a reference the model or user can open later.
 - Wave: 3
-- Already works on: cli, vscode
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Oversized tool output is truncated (capOutput, a history cap) with nothing kept to refer back to; add a stored reference the model and user can open. | handler |
-| desktop | partial | Oversized tool output is truncated (capOutput, a history cap) with nothing kept to refer back to; add a stored reference the model and user can open. | handler |
-| mobile | partial | Oversized tool output is truncated (capOutput, a history cap) with nothing kept to refer back to; add a stored reference the model and user can open. | handler |
 | chrome | partial | Oversized tool output is truncated (capOutput, a history cap) with nothing kept to refer back to; add a stored reference the model and user can open. | handler |
 
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:353-353`, `apps/web/lib/e2b/execution-tools.ts:261-265`, `apps/extension/src/features/side-panel/bubbles.ts:400-400`
+Code: `apps/extension/src/features/side-panel/bubbles.ts:400-400`
 
 ## S57.37: Tool receipt.
 

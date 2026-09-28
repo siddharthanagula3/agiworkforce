@@ -346,6 +346,45 @@ export async function frontWindowIdOutside(pid: number): Promise<number | null> 
   return typeof windowId === 'number' ? windowId : null;
 }
 
+export interface ScreenApplication {
+  name: string;
+  bundleId: string | null;
+  pid: number | null;
+}
+
+const MENU_BAR_OWNER = 'Window Server';
+
+const DESKTOP_OWNER: ScreenApplication = {
+  name: 'Finder',
+  bundleId: 'com.apple.finder',
+  pid: null,
+};
+
+function readScreenApplication(raw: unknown): ScreenApplication | null {
+  if (typeof raw !== 'object' || raw === null) return null;
+  const record = raw as Record<string, unknown>;
+  const name = typeof record['app'] === 'string' ? record['app'].trim() : '';
+  if (!name) return null;
+  return {
+    name,
+    bundleId: typeof record['bundleId'] === 'string' ? record['bundleId'] : null,
+    pid: typeof record['pid'] === 'number' ? record['pid'] : null,
+  };
+}
+
+export async function applicationInFront(): Promise<ScreenApplication | null> {
+  requireAvailable();
+  return readScreenApplication((await sendToHelper({ action: 'front' }))['front']);
+}
+
+export async function applicationAt(x: number, y: number): Promise<ScreenApplication | null> {
+  requireAvailable();
+  const payload = await sendToHelper({ action: 'at', ...toDisplayPoint(x, y) });
+  const hit = readScreenApplication(payload['at']);
+  if (!hit) return DESKTOP_OWNER;
+  return hit.name === MENU_BAR_OWNER ? applicationInFront() : hit;
+}
+
 async function frontOrNull(): Promise<DeviceFrontWindow | null> {
   try {
     return (await readFrontWindow()).front;

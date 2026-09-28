@@ -8,7 +8,7 @@
  */
 import type { E2BExecutor, ExecutionResult } from './types';
 import { codeExecutionUnavailableMessage, type E2BUnavailableCause } from './unavailability';
-import { MAX_EXECUTION_OUTPUT_BYTES } from './types';
+import { MAX_EXECUTION_OUTPUT_BYTES, MAX_KEPT_TOOL_OUTPUT_CHARS } from './types';
 
 export const EXECUTE_CODE_TOOL = 'execute_code';
 export const WRITE_FILE_TOOL = 'write_file';
@@ -383,9 +383,18 @@ export async function routeExecutionTool(
     // Capped before redaction, not after: runCode returns the sandbox's stdout
     // untruncated, so redacting first ran four regexes over however much the
     // executed code chose to print.
+    const output = capOutput(result.output);
     return {
       ...result,
-      output: redactSandboxVendor(capOutput(result.output)),
+      output: redactSandboxVendor(output),
+      ...(output === result.output
+        ? {}
+        : {
+            overflow: {
+              kept: redactSandboxVendor(result.output.slice(0, MAX_KEPT_TOOL_OUTPUT_CHARS)),
+              totalChars: result.output.length,
+            },
+          }),
       error: result.error ? redactSandboxVendor(capOutput(result.error)) : result.error,
     };
   } catch (err) {

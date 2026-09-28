@@ -2,6 +2,8 @@
 
 import {
   DEVICE_REGISTRY_PROFILE_COMMAND,
+  DISPATCH_TASK_REPORT,
+  DISPATCH_TASK_RUNNER_READY,
   DesktopRuntimeError,
   assertLocalTurnCarriesNoAttachments,
   getHostBridge,
@@ -14,6 +16,7 @@ import {
   type ComputerUseStatus,
   type DesktopPermissionsReview,
   type DeviceRegistryProfile,
+  type DispatchTaskReport,
   type PermissionDecision,
   type SystemPermissionKind,
   type RemoteControlStartRequest,
@@ -635,4 +638,12 @@ export function onDeveloperSessionEvent(
   return host.onRuntimeEvent((event) => {
     if (event.kind === 'developer-session') listener(event.rootId, event.event);
   });
+}
+
+export function setDispatchTaskRunnerReady(ready: boolean): Promise<{ ready: boolean }> {
+  return invoke<{ ready: boolean }>(DISPATCH_TASK_RUNNER_READY, { ready });
+}
+
+export function reportDispatchTask(report: DispatchTaskReport): Promise<{ accepted: boolean }> {
+  return invoke<{ accepted: boolean }>(DISPATCH_TASK_REPORT, { ...report });
 }

@@ -241,8 +241,11 @@ interface HarnessRecord {
   gatewayId?: string;
   requestParameters?: readonly RequestParameter[];
   mediaInput?: HarnessMediaInput;
+  responseFormats?: readonly HarnessResponseFormat[];
   features?: Readonly<Record<string, HarnessFeatureRecord>>;
 }
+
+export type HarnessResponseFormat = 'json_object' | 'json_schema';
 
 interface HarnessFeatureRecord {
   providerSupport: string;
@@ -285,6 +288,10 @@ export function getHarnessRequestParameters(harnessId: string): readonly Request
 
 export function getHarnessMediaInput(harnessId: string): HarnessMediaInput {
   return harnessRecords[harnessId]?.mediaInput ?? {};
+}
+
+export function getHarnessResponseFormats(harnessId: string): readonly HarnessResponseFormat[] {
+  return harnessRecords[harnessId]?.responseFormats ?? [];
 }
 
 export function harnessFeatureImplemented(harnessId: string, feature: string): boolean {

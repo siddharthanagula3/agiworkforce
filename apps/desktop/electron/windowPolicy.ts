@@ -1,4 +1,10 @@
-import type { BrowserWindow, BrowserWindowConstructorOptions } from 'electron';
+import type {
+  BrowserWindow,
+  BrowserWindowConstructorOptions,
+  DownloadItem,
+  Event,
+  WebContents,
+} from 'electron';
 import { shell } from 'electron';
 import { VSCODE_CONTEXT_HANDOFF_AUTHORITY } from '@agiworkforce/types';
 import { isAuthPath, isProductPath } from '@agiworkforce/types/product-routes';
@@ -95,6 +101,13 @@ const DETACHED_PAGE_WINDOW: BrowserWindowConstructorOptions = {
   webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false },
 };
 
+const DETACHED_FILE_WINDOW: BrowserWindowConstructorOptions = {
+  ...DETACHED_PAGE_WINDOW,
+  webPreferences: { ...DETACHED_PAGE_WINDOW.webPreferences, plugins: true },
+};
+
+const APP_FILE_PATH = /^\/api\/files\/[A-Za-z0-9_-]+$/;
+
 export function isAppBlobUrl(url: string, appOrigin: string): boolean {
   if (!url.startsWith('blob:')) return false;
   try {
@@ -103,6 +116,28 @@ export function isAppBlobUrl(url: string, appOrigin: string): boolean {
   } catch {
     return false;
   }
+}
+
+export function isAppFileUrl(url: string, appOrigin: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.origin === new URL(appOrigin).origin && APP_FILE_PATH.test(parsed.pathname);
+  } catch {
+    return false;
+  }
+}
+
+function closeWhenDownloaded(child: BrowserWindow): void {
+  const contents = child.webContents;
+  const session = contents.session;
+  const onDownload = (_event: Event, item: DownloadItem, source: WebContents) => {
+    if (source !== contents || contents.getURL() !== '') return;
+    item.once('done', () => {
+      if (!child.isDestroyed()) child.close();
+    });
+  };
+  session.on('will-download', onDownload);
+  child.once('closed', () => session.removeListener('will-download', onDownload));
 }
 
 function lockDetachedPage(child: BrowserWindow): void {
@@ -131,10 +166,16 @@ export function applyRemoteWindowPolicy(win: BrowserWindow): void {
     if (isAppBlobUrl(url, appOrigin)) {
       return { action: 'allow', overrideBrowserWindowOptions: DETACHED_PAGE_WINDOW };
     }
+    if (isAppFileUrl(url, appOrigin)) {
+      return { action: 'allow', overrideBrowserWindowOptions: DETACHED_FILE_WINDOW };
+    }
     openExternally(url);
     return { action: 'deny' };
   });
-  win.webContents.on('did-create-window', lockDetachedPage);
+  win.webContents.on('did-create-window', (child, { url }) => {
+    lockDetachedPage(child);
+    if (isAppFileUrl(url, appOrigin)) closeWhenDownloaded(child);
+  });
 
   win.webContents.on('will-navigate', (event, url) => {
     const allowed = isRemote

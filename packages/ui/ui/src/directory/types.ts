@@ -195,6 +195,7 @@ export interface DirectoryConnectorDetail {
   connected?: boolean;
   /** An authorization was started for this connector and never finished. */
   authorizationPending?: boolean;
+  needsReauthorization?: boolean;
   /** Names the actual connection path when it is not a plain Connect. */
   connectLabel?: string;
   /** Installed plugins that declare this connector in their requirements. */
@@ -254,6 +255,8 @@ export interface DirectoryPluginVersionOption {
   publishedAt: string | null;
   changelog: string;
   newPermissions: readonly string[];
+  addedSkills: readonly string[];
+  removedSkills: readonly string[];
 }
 
 export interface DirectoryPluginVersions {
@@ -307,8 +310,19 @@ export interface DirectoryPluginDetail {
   worksWith?: readonly string[];
   installed?: boolean;
   installable?: boolean;
+  removable?: boolean;
+  locked?: boolean;
+  managedNote?: string;
+  submittable?: boolean;
+  submission?: DirectoryPluginSubmission;
   availabilityNote?: string;
   href?: string;
+}
+
+export interface DirectoryPluginSubmission {
+  statusLabel: string;
+  note: string | null;
+  withdrawable: boolean;
 }
 
 export type DirectoryDetail =
@@ -396,6 +410,8 @@ export interface DirectoryAdapter {
   loadPluginDraft?: (id: string) => Promise<DirectoryPluginDraft>;
   updatePlugin?: (id: string, draft: DirectoryPluginDraft) => Promise<DirectoryUploadResult>;
   customizePlugin?: (id: string) => Promise<string>;
+  submitPlugin?: (id: string) => Promise<string | void>;
+  withdrawPluginSubmission?: (id: string) => Promise<string | void>;
   pluginSettings?: DirectoryPluginSettings;
   setPluginEnabled?: (id: string, enabled: boolean) => Promise<void> | void;
   setPluginVersion?: (

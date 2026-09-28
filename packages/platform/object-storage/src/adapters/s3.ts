@@ -15,7 +15,7 @@ import {
   type GetObjectCommandOutput,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { bindPresignedUpload, bindPresignedUploadPart } from '../presign';
+import { bindPresignedDownload, bindPresignedUpload, bindPresignedUploadPart } from '../presign';
 import { type ObjectStorageConfig } from '../config';
 import {
   ObjectStorageConfigError,
@@ -27,6 +27,7 @@ import {
   type ObjectEncryption,
   type ObjectStore,
   type PendingMultipartUpload,
+  type PresignGetInput,
   type PresignPutInput,
   type PresignUploadPartInput,
   type PutObjectInput,
@@ -264,6 +265,21 @@ export function createS3ObjectStore(options: S3ObjectStoreOptions): ObjectStore 
           expiresIn: bound.expiresInSeconds,
           signableHeaders: new Set(SIGNABLE_UPLOAD_HEADERS),
         },
+      );
+    },
+
+    async presignGet(input: PresignGetInput): Promise<string> {
+      const bound = bindPresignedDownload(input);
+      return getSignedUrl(
+        client,
+        new GetObjectCommand({
+          Bucket: input.bucket,
+          Key: input.key,
+          ...(bound.contentDisposition
+            ? { ResponseContentDisposition: bound.contentDisposition }
+            : {}),
+        }),
+        { expiresIn: bound.expiresInSeconds },
       );
     },
 

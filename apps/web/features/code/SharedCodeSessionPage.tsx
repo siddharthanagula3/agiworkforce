@@ -116,7 +116,15 @@ export function SharedCodeSessionPage({ token, api = cloudCodeApi }: SharedCodeS
                   {shared && (
                     <>
                       <p className={styles['statusLine']}>
-                        {`${CODE_COPY.sharedSnapshot} ${CODE_COPY.sharedUpdated} ${formatRelativeTime(shared.updatedAt)}.`}
+                        {[
+                          shared.ownerName
+                            ? `${CODE_COPY.sharedByPrefix} ${shared.ownerName}.`
+                            : null,
+                          CODE_COPY.sharedSnapshot,
+                          `${CODE_COPY.sharedUpdated} ${formatRelativeTime(shared.updatedAt)}.`,
+                        ]
+                          .filter(Boolean)
+                          .join(' ')}
                       </p>
                       {items.length === 0 ? (
                         <p className={styles['statusLine']}>{CODE_COPY.sharedEmpty}</p>

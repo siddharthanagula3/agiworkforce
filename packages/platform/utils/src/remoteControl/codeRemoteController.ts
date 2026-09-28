@@ -24,9 +24,21 @@ import type {
   DeveloperApprovalAnswer,
   DeveloperSessionEvent,
   DeveloperSessionList,
+  DeveloperSessionTranscript,
   DeveloperTurnRequest,
 } from '@agiworkforce/local-runtime-contract';
-import type { DeveloperSessionActivity } from '../runtime/developerSessionService';
+import type { DeveloperSessionFileChange } from '@agiworkforce/types/protocol';
+
+export interface DeveloperSessionActivity {
+  transcript: DeveloperSessionTranscript;
+  branch: string | null;
+  fileChanges: DeveloperSessionFileChange[];
+  activeTurn: {
+    turnId: string;
+    partialResponse: string;
+    pendingApprovals: Array<{ requestId: string; summary: string; detail: string }>;
+  } | null;
+}
 
 export interface CodeRemoteDependencies {
   send: (action: string, payload: Record<string, unknown>) => Promise<boolean>;
@@ -98,7 +110,10 @@ function boundedText(value: unknown, maxLength?: number): string | null {
   return maxLength === undefined || trimmed.length <= maxLength ? trimmed : null;
 }
 
-function parseDispatchTask(action: string, payload: unknown): DispatchTaskControlRequest | null {
+export function parseDispatchTask(
+  action: string,
+  payload: unknown,
+): DispatchTaskControlRequest | null {
   if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) return null;
   const record = payload as Record<string, unknown>;
   if (record['version'] !== 1) return null;

@@ -292,17 +292,16 @@ Code: `apps/web/features/images/components/ImageStudio.tsx:73-73`
 
 - Done when: A media job history lists image/video generation jobs with their status (queued, running, failed, done) and links to results.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Finished generations are browsable in Library, but queued/running/failed generation jobs are held only in the open tab (media-store.ts:29-41); add a persistent job history with status. | ui |
-| desktop | partial | Finished generations are browsable in Library, but queued/running/failed generation jobs are held only in the open tab (media-store.ts:29-41); add a persistent job history with status. | ui |
-| mobile | partial | Finished images/videos appear in Library, but generation jobs show only as in-chat progress cards; there is no job history with status. | ui |
+| mobile | partial | GET /api/media/jobs serves mobile too, but the mobile Library has no Generations section yet; the mobile app is in the Codex release. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/shared/stores/media-store.ts:29-41`, `packages/ui/unified-chat/src/components/library/LibraryView.tsx:82-87`, `apps/mobile/src/features/library/index.tsx:95-104`, `apps/mobile/src/features/video/services/videogen.ts:45-75`
+Code: `apps/web/app/api/media/jobs/route.ts:20-20`
 
 ## S4.31: Notebook workspace.
 
@@ -447,19 +446,6 @@ Code: `apps/web/app/settings/billing/page.tsx:1-7`, `apps/web/features/settings/
 | vscode | missing | Not built on this surface. |  |
 
 Code: `apps/mobile/src/features/settings/index.tsx:451-456`, `apps/mobile/app/(app)/settings/workspace.tsx:27-35`, `apps/mobile/app/(app)/settings/workspace.tsx:145-152`
-
-## S4.43: Developer console.
-
-- Done when: A developer console lets the user create/revoke API keys, see API usage per key, read API docs and try requests.
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
 
 ## S4.44: Help and feedback.
 

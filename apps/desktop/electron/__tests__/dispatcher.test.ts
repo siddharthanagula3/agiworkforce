@@ -60,6 +60,16 @@ vi.mock('../runtime/permissionManager', () => ({
 
 vi.mock('../runtime/computerUseService', () => ({
   ComputerUseRefused: class extends Error {},
+  applicationAt: vi.fn(async () => ({
+    name: 'TextEdit',
+    bundleId: 'com.apple.TextEdit',
+    pid: 4242,
+  })),
+  applicationInFront: vi.fn(async () => ({
+    name: 'TextEdit',
+    bundleId: 'com.apple.TextEdit',
+    pid: 4242,
+  })),
   captureRegion: vi.fn(),
   captureScreen,
   clickPointer: vi.fn(),

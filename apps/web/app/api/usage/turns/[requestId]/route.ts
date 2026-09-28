@@ -14,14 +14,10 @@ import {
   ManagedUsageRequestError,
   parseManagedUsageIdempotencyKey,
 } from '@/lib/services/managed-usage-request-service';
-import {
-  readManagedUsageTurnCost,
-  type ManagedUsageTurnCost,
-} from '@/lib/services/account-usage-history-service';
+import type { ManagedUsageTurnCost } from '@agiworkforce/types';
+import { readManagedUsageTurnCost } from '@/lib/services/account-usage-history-service';
 
 export const runtime = 'nodejs';
-
-export type UsageTurnResponse = ManagedUsageTurnCost;
 
 type RouteContext = { params: Promise<{ requestId: string }> };
 
@@ -51,7 +47,7 @@ async function handler(request: NextRequest, context: RouteContext) {
 
   const requestId = parseRequestId((await context.params).requestId);
 
-  let turn: UsageTurnResponse | null;
+  let turn: ManagedUsageTurnCost | null;
   try {
     turn = await readManagedUsageTurnCost(scoped.db, scoped.userId, requestId);
   } catch (error) {
