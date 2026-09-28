@@ -551,6 +551,7 @@ export interface ProjectKnowledgeFile {
   retentionExpiresAt?: string | null;
   deletedAt?: string | null;
   storageUri: string;
+  textPreview?: boolean;
   indexing?: ProjectKnowledgeIndexState | null;
 }
 

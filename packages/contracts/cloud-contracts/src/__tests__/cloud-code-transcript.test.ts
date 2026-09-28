@@ -21,6 +21,7 @@ function turn(id: string, at: string, overrides: Partial<CodeTurnRecord> = {}): 
     turnId: id,
     at,
     goal: 'run the tests',
+    mode: 'agent',
     stopReason: 'done',
     finalMessage: 'Done.',
     errorMessage: null,

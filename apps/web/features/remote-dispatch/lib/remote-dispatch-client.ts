@@ -1,0 +1,176 @@
+import { SignalingClient } from '@agiworkforce/utils/signaling';
+import type { DispatchTaskLifecycleStatus, SignalingEvent } from '@agiworkforce/types';
+import { addCsrfHeaders } from '@/lib/client/csrf';
+import type { BrowserPairing } from './browser-pairing';
+import {
+  createDispatchSession,
+  newDispatchSalt,
+  openDispatchEnvelope,
+  signDispatchEnvelope,
+} from './dispatch-envelope';
+
+const CLAIM_PATH = '/api/pair/claim';
+const HEARTBEAT_INTERVAL_MS = 25_000;
+const BROWSER_METADATA = { deviceType: 'web', app: 'agiworkforce-web', deviceName: 'Web browser' };
+
+const CLAIM_FAILURES: Readonly<Record<string, string>> = {
+  pairing_not_found: 'This link has expired or was already used. Make a new one on your computer.',
+  pairing_role_in_use:
+    'Another device is already connected to this computer. Disconnect it there first.',
+  pairing_belongs_to_another_account: 'That computer is signed in to a different account.',
+};
+const CLAIM_FAILED =
+  'This browser could not connect to your computer. Make a new link and try again.';
+const CONNECTION_LOST = 'The connection to your computer ended. Make a new link to connect again.';
+
+export interface RemoteTaskStatus {
+  requestId: string;
+  status: DispatchTaskLifecycleStatus;
+  taskId?: string;
+  message?: string;
+  result?: string;
+  error?: string;
+}
+
+interface RemoteDispatchHandlers {
+  onReady: (computerName: string | null) => void;
+  onAway: () => void;
+  onTaskStatus: (status: RemoteTaskStatus) => void;
+  onClosed: (message: string) => void;
+}
+
+export interface RemoteDispatchConnection {
+  sendTask: (prompt: string, title: string) => Promise<string | null>;
+  cancelTask: (requestId: string, taskId?: string) => Promise<boolean>;
+  close: () => void;
+}
+
+interface ClaimedPairing {
+  pairToken: string;
+  wsUrl: string;
+}
+
+async function claimPairing(code: string): Promise<ClaimedPairing> {
+  const response = await fetch(CLAIM_PATH, {
+    method: 'POST',
+    credentials: 'include',
+    headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ code }),
+  });
+  const body: unknown = await response.json().catch(() => null);
+  const record = body && typeof body === 'object' ? (body as Record<string, unknown>) : {};
+  if (!response.ok) {
+    const reason = typeof record['error'] === 'string' ? record['error'] : '';
+    throw new Error(CLAIM_FAILURES[reason] ?? CLAIM_FAILED);
+  }
+  const { pairToken, wsUrl } = record;
+  if (typeof pairToken !== 'string' || typeof wsUrl !== 'string') throw new Error(CLAIM_FAILED);
+  return { pairToken, wsUrl };
+}
+
+function readTaskStatus(payload: unknown): RemoteTaskStatus | null {
+  if (!payload || typeof payload !== 'object') return null;
+  const record = payload as Record<string, unknown>;
+  if (record['action'] !== 'dispatch.task.status') return null;
+  const { requestId, status, taskId, message, result, error } = record;
+  if (typeof requestId !== 'string' || typeof status !== 'string') return null;
+  return {
+    requestId,
+    status: status as DispatchTaskLifecycleStatus,
+    ...(typeof taskId === 'string' ? { taskId } : {}),
+    ...(typeof message === 'string' ? { message } : {}),
+    ...(typeof result === 'string' ? { result } : {}),
+    ...(typeof error === 'string' ? { error } : {}),
+  };
+}
+
+function controlEnvelope(payload: unknown): unknown {
+  if (!payload || typeof payload !== 'object') return payload;
+  const data = (payload as Record<string, unknown>)['data'];
+  return data && typeof data === 'object' ? data : payload;
+}
+
+export async function connectRemoteDispatch(
+  pairing: BrowserPairing,
+  handlers: RemoteDispatchHandlers,
+): Promise<RemoteDispatchConnection> {
+  const claimed = await claimPairing(pairing.code);
+  const dispatchSalt = newDispatchSalt();
+  const session = await createDispatchSession(pairing.code, dispatchSalt, pairing.secret);
+  let ended = false;
+
+  const end = (message: string) => {
+    if (ended) return;
+    ended = true;
+    client.close();
+    handlers.onClosed(message);
+  };
+
+  const onEvent = (event: SignalingEvent) => {
+    switch (event.type) {
+      case 'peer_ready': {
+        const name = event.metadata?.['deviceName'];
+        handlers.onReady(typeof name === 'string' ? name : null);
+        return;
+      }
+      case 'signal':
+        if (event.kind !== 'control') return;
+        void openDispatchEnvelope(session, controlEnvelope(event.payload)).then((opened) => {
+          const status = readTaskStatus(opened);
+          if (status) handlers.onTaskStatus(status);
+        });
+        return;
+      case 'peer_left':
+        handlers.onAway();
+        return;
+      case 'session_expired':
+      case 'terminated':
+      case 'close':
+        end(CONNECTION_LOST);
+        return;
+      default:
+        return;
+    }
+  };
+
+  const client = new SignalingClient({
+    wsUrl: claimed.wsUrl,
+    code: pairing.code,
+    role: 'mobile',
+    pairToken: claimed.pairToken,
+    metadata: { ...BROWSER_METADATA, dispatchSalt },
+    heartbeatIntervalMs: HEARTBEAT_INTERVAL_MS,
+    onEvent,
+  });
+
+  const send = async (action: string, payload: Record<string, unknown>): Promise<boolean> => {
+    if (ended) return false;
+    const envelope = await signDispatchEnvelope(session, action, { ...payload, action });
+    return client.sendSignal('control', { action, data: envelope });
+  };
+
+  return {
+    sendTask: async (prompt, title) => {
+      const requestId = crypto.randomUUID();
+      const sent = await send('dispatch.task.create', {
+        version: 1,
+        requestId,
+        prompt,
+        title,
+        sentAt: new Date().toISOString(),
+      });
+      return sent ? requestId : null;
+    },
+    cancelTask: (requestId, taskId) =>
+      send('dispatch.task.cancel', {
+        version: 1,
+        requestId,
+        ...(taskId ? { taskId } : {}),
+        sentAt: new Date().toISOString(),
+      }),
+    close: () => {
+      ended = true;
+      client.close({ endPairing: true });
+    },
+  };
+}

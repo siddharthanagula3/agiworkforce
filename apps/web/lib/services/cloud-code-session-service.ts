@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   CLOUD_CODE_AGENT_STOP_REASONS,
+  CLOUD_CODE_DEFAULT_TURN_MODE,
   CLOUD_CODE_LIMITS,
   CLOUD_CODE_NETWORK_ACCESS,
   CLOUD_CODE_SESSION_STATUS_FILTERS,
@@ -11,6 +12,7 @@ import {
   getPlanMaxSandboxes,
   cloudCodeShareVisibilityFor,
   isCloudCodeShareVisibility,
+  isCloudCodeTurnMode,
   type CloudCodeAgentStep,
   type CloudCodeAgentStopReason,
   type CloudCodeAgentTurnRecord,
@@ -331,6 +333,7 @@ interface TerminalEntryRow extends Record<string, unknown> {
 interface AgentTurnRow extends Record<string, unknown> {
   id: string;
   goal: string;
+  mode?: string | null;
   state: string;
   stop_reason: string | null;
   steps_used: number;
@@ -489,7 +492,7 @@ export async function listCloudCodeAgentTurns(
   validateCloudCodeSessionId(sessionId);
   const scoped = ownerSql(owner, 2);
   const turnRows = await db.query<AgentTurnRow>(
-    `select id, goal, state, stop_reason, steps_used, input_tokens, output_tokens,
+    `select id, goal, mode, state, stop_reason, steps_used, input_tokens, output_tokens,
             cancel_requested_at, final_message, error_message, created_at
        from cloud_code_agent_turns
       where session_id = $1 and ${scoped.clause}
@@ -526,6 +529,7 @@ export async function listCloudCodeAgentTurns(
   return turnRows.map((row) => ({
     turnId: row.id,
     goal: row.goal,
+    mode: isCloudCodeTurnMode(row.mode) ? row.mode : CLOUD_CODE_DEFAULT_TURN_MODE,
     stopReason: asStopReason(row.stop_reason, row.state),
     stepsUsed: row.steps_used,
     inputTokens: countValue(row.input_tokens),
