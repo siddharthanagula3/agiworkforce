@@ -11,8 +11,10 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { ManagedCloudProjectUpdateRequestSchema } from '@agiworkforce/cloud-contracts';
 import { SYNCED_APP_SURFACES } from '@agiworkforce/types';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
-import { objectKeyFromStorageUri } from '@/lib/server/object-storage';
-import { deleteProjectKnowledgeObject } from '@/lib/server/project-knowledge-object-storage';
+import {
+  deleteDeletedProjectObjects,
+  releaseDeletedProjectContents,
+} from '@/lib/server/project-deletion';
 import {
   ProjectConversationMembershipError,
   replaceProjectConversationMembership,
@@ -329,6 +331,7 @@ async function handleDeleteProject(request: NextRequest, context: RouteContext) 
 
   const { id } = await context.params;
 
+  const scope = { projectId: id, userId, organizationId };
   const runDelete = (purgeKnowledgeFiles: boolean) =>
     db.transaction(async (tx) => {
       const deleted = await tx.execute(
@@ -341,32 +344,9 @@ async function handleDeleteProject(request: NextRequest, context: RouteContext) 
         [id, userId, organizationId],
       );
       if (deleted === 0) return { deleted, storageUris: [] as string[] };
-
-      await tx.execute(
-        `update web_conversations
-            set project_id = null, updated_at = now()
-          where project_id = $1
-            and user_id = $2
-            and organization_id is not distinct from $3::uuid
-            and deleted_at is null`,
-        [id, userId, organizationId],
-      );
-
-      if (!purgeKnowledgeFiles) return { deleted, storageUris: [] as string[] };
-
-      const purged = await tx.query<{ storage_uri: string | null }>(
-        `update project_knowledge_files
-            set deleted_at = now(), updated_at = now()
-          where project_id = $1::uuid
-            and deleted_at is null
-        returning storage_uri`,
-        [id],
-      );
       return {
         deleted,
-        storageUris: purged
-          .map((row) => row.storage_uri)
-          .filter((uri): uri is string => typeof uri === 'string' && uri.length > 0),
+        storageUris: await releaseDeletedProjectContents(tx, scope, { purgeKnowledgeFiles }),
       };
     });
 
@@ -391,18 +371,7 @@ async function handleDeleteProject(request: NextRequest, context: RouteContext) 
     throw createError.notFound('Project not found');
   }
 
-  for (const storageUri of outcome.storageUris) {
-    const objectKey = objectKeyFromStorageUri(storageUri);
-    if (!objectKey) continue;
-    try {
-      await deleteProjectKnowledgeObject(objectKey);
-    } catch (error) {
-      logger.error(
-        { error, projectId: id, userId, objectKey },
-        'Failed to delete a project knowledge object after project deletion',
-      );
-    }
-  }
+  await deleteDeletedProjectObjects(outcome.storageUris, scope);
 
   return NextResponse.json({ success: true });
 }
