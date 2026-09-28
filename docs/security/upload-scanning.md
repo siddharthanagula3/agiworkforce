@@ -68,6 +68,12 @@ contract; the parts that decide an upload are:
   `{ "safe": false }` with the signature name; a missing token, an oversize
   body, a clamd error, or no verdict within 14 seconds answers a non-2xx status.
   The web rejects the upload in every one of those cases.
+- A file clamd cannot scan to the end is refused, never passed on a partial
+  scan: with `AlertExceedsMax` on, an archive nested more than 17 deep, more
+  than 10,000 members, a member above 100 MB unpacked or more than 400 MB
+  unpacked in total is reported as a `Heuristics.Limits.Exceeded` detection.
+  The web's own office extraction already refuses documents that unpack past
+  200 MB or 2,000 members.
 - Its size limit equals the largest file the web sends for scanning
   (`MAX_ATTACHMENT_BYTES`), pinned by `services/upload-scanner/__tests__/limits.test.ts`.
 - `GET /health` reports the signature version and age, and fails once the
@@ -76,16 +82,27 @@ contract; the parts that decide an upload are:
 The machine is `shared-cpu-2x` with 4 GB. clamd holds about 1.2 GiB of
 signatures and briefly doubles that while it reloads them after an update,
 which is why ClamAV's Docker documentation gives 3 GiB as the minimum and 4 GiB
-as the recommendation. There is no swap: swapping would page upload bytes to
-disk. Deploys use the `bluegreen` strategy, which starts the new machine and
-waits for `/health` before it retires the old one, so a deploy never leaves the
-web without a scanner.
+as the recommendation; the headroom is what lets a reload happen without
+refusing uploads. There is no swap: swapping would page upload bytes to disk.
+At Fly's published rates for `sjc` (checked 2026-09-28) the machine costs
+about $25.51 per 30 days before bandwidth: two shared vCPUs at $0.00000075 a
+second each, 3.5 GB of memory beyond the 0.25 GB each shared vCPU includes at
+$0.00000193 per GB-second, and the region's 1.19 multiplier. Deploys use the
+`bluegreen` strategy, which starts the new machine and waits for `/health`
+before it retires the old one, so a deploy never leaves the web without a
+scanner.
+
+clamd exiting stops the service, and Fly restarts the machine. freshclam
+exiting does not: it exits by design when the ClamAV CDN refuses it, so clamd
+keeps scanning with the signatures it has, freshclam starts again an hour
+later, and `/health` reports the growing signature age.
 
 ## Runbook: running the scanner
 
-Every command below runs from `services/upload-scanner`, and needs an owner
-logged in with `fly auth login` and `vercel login`. Keep the token in the
-password manager; it is set on both sides and nowhere else.
+The `fly` commands run from `services/upload-scanner`; the `vercel` commands
+run from the repository root, where the web's Vercel project is linked. Both
+need an owner logged in with `fly auth login` and `vercel login`. Keep the
+token in the password manager; it is set on both sides and nowhere else.
 
 ### First deploy
 
@@ -98,9 +115,10 @@ password manager; it is set on both sides and nowhere else.
    fly secrets set UPLOAD_SCAN_WEBHOOK_TOKEN="$TOKEN" --app agiworkforce-upload-scanner --stage
    ```
 
-3. Deploy one machine: `fly deploy --ha=false`. The build downloads the
-   current signatures, and the first boot takes a minute or two while clamd
-   loads them; `/health` has a 180 second grace period.
+3. Deploy one machine: `fly deploy --ha=false`. The first build downloads the
+   signatures into the image (a later build may reuse that layer from cache;
+   every start refreshes them), and the first boot takes a minute or two while
+   clamd loads them; `/health` has a 180 second grace period.
 
 ### Verify before the web uses it
 
@@ -122,6 +140,8 @@ agiworkforce-upload-scanner` shows a `scan_clean` and a `scan_infected` line
 for the two scans.
 
 ### Point the web at it
+
+From the repository root:
 
 ```sh
 printf '%s' "$URL/scan" | vercel env add UPLOAD_SCAN_WEBHOOK_URL production
@@ -145,6 +165,11 @@ NEW_TOKEN="$(openssl rand -hex 32)"
 fly secrets set UPLOAD_SCAN_WEBHOOK_TOKEN="$NEW_TOKEN" UPLOAD_SCAN_WEBHOOK_TOKEN_PREVIOUS="$TOKEN" \
   --app agiworkforce-upload-scanner --stage
 fly deploy
+```
+
+Then, from the repository root:
+
+```sh
 printf '%s' "$NEW_TOKEN" | vercel env add UPLOAD_SCAN_WEBHOOK_TOKEN production --sensitive --force
 ```
 
@@ -164,12 +189,17 @@ bluegreen swap, so the scanner never goes down in between.
 - `/health` answers `unavailable`: clamd is not up. `fly logs` shows why,
   usually signatures still loading after a restart, or an out-of-memory exit.
 - `/health` answers `stale`: freshclam has not updated for seven days. Its log
-  lines name the cause; the ClamAV CDN answers `429` to a host that downloads
-  too often and freshclam waits out the cool-down on its own.
-- The web logs `Scanner returned 401`: the two sides hold different tokens.
-  Set the same value on both.
-- The web logs `Scanner returned 413`: the web now sends larger files than
-  `MAX_SCAN_BYTES`. `limits.test.ts` fails in CI before this can ship.
+  lines name the cause. The ClamAV CDN answers `429` to a host that downloads
+  too often, and freshclam waits out the cool-down on its own; a `403` makes
+  freshclam exit, logged as `freshclam_exited`, and it is started again every
+  hour while clamd keeps scanning.
+- `fly logs` shows `scan_unauthorized`: the two sides hold different tokens.
+  Set the same value on both. The scanner closes an unauthenticated connection
+  without reading the upload, so the web logs either `Scanner returned 401` or,
+  for a larger file, `Scanner unreachable`.
+- The web logs `Scanner returned 413`, or `Scanner unreachable` for the same
+  reason: the web now sends larger files than `MAX_SCAN_BYTES`.
+  `limits.test.ts` fails in CI before this can ship.
 
 ## Decompression bounds
 
