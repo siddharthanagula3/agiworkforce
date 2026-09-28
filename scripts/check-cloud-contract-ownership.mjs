@@ -33,6 +33,7 @@ const cloudModules = [
   'managed-cloud-chat-client',
   'chat-attachments',
   'chat-attachment-truncation',
+  'chat-code-runs',
   'managed-cloud-chat-attachments-client',
   'project-knowledge',
   'managed-cloud-project-knowledge-client',

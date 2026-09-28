@@ -28,6 +28,7 @@ export * from './interactive-cards';
 export * from './managed-cloud-chat-client';
 export * from './chat-attachments';
 export * from './chat-attachment-truncation';
+export * from './chat-code-runs';
 export * from './managed-cloud-chat-attachments-client';
 export * from './project-knowledge';
 export * from './managed-cloud-project-knowledge-client';

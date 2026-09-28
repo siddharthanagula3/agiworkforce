@@ -1018,6 +1018,8 @@ const MessageBubbleComponent = function MessageBubble({
   // on it left artifacts with conversationId=undefined → filtered out of every
   // panel. Falls back to message.sessionId when there's no active conversation.
   const activeConversationId = useChatStore((s) => s.activeConversationId);
+  const codeRunConversationId = message.sessionId ?? activeConversationId;
+  const codeRunConversation = !isUser && codeRunConversationId ? { codeRunConversationId } : {};
   const animateEntrance = useRef(consumeMessageEntranceAnimation(message.id)).current;
   const isAgiWorkTurn = useChatStore(
     selectIsAgiWorkConversation(message.sessionId ?? activeConversationId),
@@ -2008,6 +2010,7 @@ const MessageBubbleComponent = function MessageBubble({
           {...approvalHandlers}
           renderInputRequest={renderToolInputRequest}
           {...connectRetryHandler}
+          {...codeRunConversation}
         />
       </div>
     ) : null;
@@ -2190,6 +2193,7 @@ const MessageBubbleComponent = function MessageBubble({
                           {...approvalHandlers}
                           renderInputRequest={renderToolInputRequest}
                           {...connectRetryHandler}
+                          {...codeRunConversation}
                         />
                       </div>,
                     );
@@ -2208,6 +2212,7 @@ const MessageBubbleComponent = function MessageBubble({
                         {...approvalHandlers}
                         renderInputRequest={renderToolInputRequest}
                         {...connectRetryHandler}
+                        {...codeRunConversation}
                       />
                     </div>,
                   );
