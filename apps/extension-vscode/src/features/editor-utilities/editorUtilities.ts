@@ -164,3 +164,29 @@ function severityLabel(severity: vscode.DiagnosticSeverity): string {
       return 'Diagnostic';
   }
 }
+
+const PULL_REQUEST_REF_RE = /^(?:#?\d+|[A-Za-z0-9._\-/]{1,255})$/u;
+
+export function buildPullRequestReviewPrompt(reference: string): EditorUtilityPrompt {
+  const ref = reference.trim();
+  if (!PULL_REQUEST_REF_RE.test(ref)) {
+    return { ok: false, message: 'Name a pull request number or a branch.' };
+  }
+  const number = /^#?\d+$/u.test(ref) ? ref.replace('#', '') : undefined;
+  const readDiff =
+    number === undefined
+      ? `Read the change with \`git diff $(git merge-base HEAD ${ref})...${ref}\`.`
+      : `Read it with \`gh pr view ${number}\` and \`gh pr diff ${number}\`.`;
+  return {
+    ok: true,
+    prompt: `Review ${number === undefined ? `the branch ${ref}` : `pull request #${number}`} in this repository. ${readDiff} Report bugs, risky changes and missing tests file by file, cite the lines, and say what you would change before merging. Do not edit files.`,
+  };
+}
+
+export function buildSecurityReviewPrompt(): EditorUtilityPrompt {
+  return {
+    ok: true,
+    prompt:
+      'Do a security review of the pending changes on the current branch. Read them with `git status` and `git diff HEAD`, and against the default branch with `git diff $(git merge-base HEAD origin/HEAD)`. Look for injection, broken authentication or authorization, secrets in code, unsafe deserialization, path traversal, SSRF and missing input validation. For each finding give the file and line, why it is exploitable, its severity and the fix. Say plainly if you find nothing. Do not edit files.',
+  };
+}
