@@ -15,11 +15,13 @@ import {
   ChevronDown,
   ChevronRight,
   Download,
+  FileDown,
   Folder,
   FolderPlus,
   LayoutGrid,
   Link2,
   List,
+  MessageSquare,
   MessageSquarePlus,
   Mic,
   MoreHorizontal,
@@ -37,6 +39,7 @@ import {
   ZoomOut,
 } from 'lucide-react';
 import { SEARCH_INPUT_DEBOUNCE_MS, formatBytes } from '@agiworkforce/utils';
+import { parseTabular } from '../../lib/tabular';
 import {
   LibraryListResponseSchema,
   LIBRARY_DEFAULT_PAGE_SIZE,
@@ -69,7 +72,8 @@ import {
 import { FileKindIcon } from './FileKindIcon';
 
 export type SurfaceFilter = 'all' | 'artifact' | 'file';
-export type LibraryTab = 'all' | 'images' | 'videos' | 'documents' | 'artifacts' | 'generated';
+export type LibraryTab =
+  'all' | 'images' | 'videos' | 'documents' | 'artifacts' | 'uploaded' | 'generated';
 export type LibraryViewMode = 'grid' | 'list';
 
 export interface LibraryFolder {
@@ -85,6 +89,7 @@ const TABS: ReadonlyArray<{ id: LibraryTab; label: string }> = [
   { id: 'videos', label: 'Videos' },
   { id: 'documents', label: 'Documents' },
   { id: 'artifacts', label: 'Artifacts' },
+  { id: 'uploaded', label: 'Uploads' },
   { id: 'generated', label: 'Generated files' },
 ];
 
@@ -100,6 +105,7 @@ const QUERY_BY_TAB: Readonly<Record<LibraryTab, TabQuery>> = {
   videos: { kind: 'video' },
   documents: { kind: 'file', surface: 'file' },
   artifacts: { surface: 'artifact' },
+  uploaded: { origin: 'uploaded' },
   generated: { kind: 'file', origin: 'generated' },
 };
 
@@ -113,6 +119,7 @@ const SORT_OPTIONS: ReadonlyArray<{ id: LibrarySort; label: string }> = [
   { id: 'modified', label: 'Modified' },
   { id: 'name', label: 'Name' },
   { id: 'size', label: 'Size' },
+  { id: 'type', label: 'Type' },
 ];
 
 const VIEW_MODE_STORAGE_KEY = 'agi-library-view-mode';
@@ -248,6 +255,7 @@ export interface LibraryTransport {
   restoreItem(id: string): Promise<Response>;
   openPreview(uri: string): void;
   inlinePreviewUri?: (uri: string) => string;
+  textPreviewUri?: (uri: string) => string;
   startChat?: () => void;
   /** Starts a chat seeded with `message`, opened from the file viewer's "Ask
    *  about this file" composer for `item`. */
@@ -268,6 +276,7 @@ export interface LibraryTransport {
   ) => Promise<void>;
   nativeExportFormats?: readonly NativeExportFormat[];
   addToChat?: (item: LibraryItem) => Promise<void>;
+  openConversation?: (conversationId: string) => void;
   addToWork?: (item: LibraryItem) => Promise<void>;
   /** Starts a new image generation from a saved image, seeded with its prompt.
    *  Hosts with no image composer omit it and no Remix row is rendered. */
@@ -296,6 +305,14 @@ function isVideoItem(item: LibraryItem): boolean {
   return item.mime_type.toLowerCase().startsWith('video/');
 }
 
+function isPdfItem(item: LibraryItem): boolean {
+  return item.mime_type.toLowerCase() === 'application/pdf';
+}
+
+function pdfPreviewUri(uri: string): string {
+  return `${uri}${uri.includes('?') ? '&' : '?'}preview=pdf`;
+}
+
 const MODIFIED_DATE_FORMAT: Intl.DateTimeFormatOptions = {
   year: 'numeric',
   month: 'short',
@@ -306,6 +323,11 @@ function formatModified(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '';
   return date.toLocaleDateString(undefined, MODIFIED_DATE_FORMAT);
+}
+
+function libraryItemMeta(item: LibraryItem, viewDeleted: boolean): string {
+  if (viewDeleted && item.erase_after) return `Kept until ${formatModified(item.erase_after)}`;
+  return formatModified(item.updated_at ?? item.created_at);
 }
 
 function formatSize(bytes: number | null): string {
@@ -347,6 +369,7 @@ export function LibraryView({
   const [searchInput, setSearchInput] = useState(initialQuery);
   const [query, setQuery] = useState(initialQuery.trim());
   const [page, setPage] = useState<PageState>({ items: [], hasMore: false, nextOffset: null });
+  const [storageUsedBytes, setStorageUsedBytes] = useState<number | null>(null);
   const [folders, setFolders] = useState<LibraryFolder[]>([]);
   const [loading, setLoading] = useState(false);
   const [hasResolvedPage, setHasResolvedPage] = useState(false);
@@ -420,6 +443,9 @@ export function LibraryView({
           hasMore: parsed.data.has_more,
           nextOffset: parsed.data.next_offset,
         }));
+        if (parsed.data.storage_used_bytes !== undefined) {
+          setStorageUsedBytes(parsed.data.storage_used_bytes);
+        }
       } catch (err) {
         if (seq !== requestSeq.current) return;
         setError(toUserMessageWithStatus(err, 'Something went wrong.'));
@@ -554,7 +580,23 @@ export function LibraryView({
     [setRowError],
   );
 
-  const { addToChat, addToWork, addToProject, remixItem, shareArtifact } = transport;
+  const { addToChat, addToWork, addToProject, remixItem, shareArtifact, openConversation } =
+    transport;
+
+  const loadTextPreview = useMemo(() => {
+    const { textPreviewUri, fetchAsset } = transport;
+    return textPreviewUri ? (uri: string) => fetchAsset(textPreviewUri(uri)) : undefined;
+  }, [transport]);
+
+  const handleOpenConversation = useMemo(
+    () =>
+      openConversation
+        ? (item: LibraryItem) => {
+            if (item.conversation_id) openConversation(item.conversation_id);
+          }
+        : undefined,
+    [openConversation],
+  );
 
   const handleAddToChat = useMemo(
     () =>
@@ -736,6 +778,7 @@ export function LibraryView({
       onPermanentDelete: confirmPermanentDelete,
       onAddToChat: handleAddToChat,
       onAddToWork: handleAddToWork,
+      onOpenConversation: handleOpenConversation,
       onAddToProject: handleChooseProject,
       onRemix: handleRemix,
       onShare: confirmShare,
@@ -748,6 +791,7 @@ export function LibraryView({
       confirmPermanentDelete,
       handleAddToChat,
       handleAddToWork,
+      handleOpenConversation,
       handleChooseProject,
       handleRemix,
       confirmShare,
@@ -801,14 +845,25 @@ export function LibraryView({
           onClose={() => setViewerItem(null)}
           onDownload={handleDownload}
           inlinePreviewUri={transport.inlinePreviewUri}
+          loadTextPreview={loadTextPreview}
           askAboutFile={transport.askAboutFile}
           containerId={overlayContainerId}
         />
       ) : null}
       <header className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="font-[var(--chat-font-sans)] text-display text-[var(--chat-text-primary)]">
-          Library
-        </h1>
+        <div className="flex flex-col gap-1">
+          <h1 className="font-[var(--chat-font-sans)] text-display text-[var(--chat-text-primary)]">
+            Library
+          </h1>
+          {storageUsedBytes !== null ? (
+            <p
+              data-testid="library-storage-used"
+              className="text-xs text-[var(--chat-text-secondary)]"
+            >
+              {formatBytes(storageUsedBytes, 1)} of files stored
+            </p>
+          ) : null}
+        </div>
         {uploadFiles || transport.createFolder ? (
           <NewMenu
             onUpload={uploadFiles ? requestUpload : undefined}
@@ -971,6 +1026,125 @@ export function LibraryView({
   );
 }
 
+interface FileTextPreviewData {
+  kind: 'table' | 'text';
+  text: string;
+  truncated: boolean;
+}
+
+type FileTextPreviewState =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'ready'; preview: FileTextPreviewData }
+  | { status: 'failed' };
+
+const TEXT_PREVIEW_ROW_CAP = 500;
+
+function downloadText(fileName: string, text: string): void {
+  const base = fileName.replace(/\.[^.]+$/, '') || 'file';
+  const url = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `${base}.txt`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
+function useFileTextPreview(
+  uri: string | null,
+  load: ((uri: string) => Promise<Response>) | undefined,
+): FileTextPreviewState {
+  const [state, setState] = useState<FileTextPreviewState>({ status: 'idle' });
+  useEffect(() => {
+    if (!uri || !load) {
+      setState({ status: 'idle' });
+      return;
+    }
+    let cancelled = false;
+    setState({ status: 'loading' });
+    void load(uri)
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const body = (await response.json()) as Partial<FileTextPreviewData>;
+        if (typeof body.text !== 'string') throw new Error('Unexpected preview');
+        if (!cancelled) {
+          setState({
+            status: 'ready',
+            preview: {
+              kind: body.kind === 'table' ? 'table' : 'text',
+              text: body.text,
+              truncated: body.truncated === true,
+            },
+          });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setState({ status: 'failed' });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [uri, load]);
+  return state;
+}
+
+function FileTextPreview({ preview }: { preview: FileTextPreviewData }) {
+  const table = useMemo(
+    () => (preview.kind === 'table' ? parseTabular(preview.text) : null),
+    [preview.kind, preview.text],
+  );
+  const rows = table ? table.rows.slice(0, TEXT_PREVIEW_ROW_CAP) : [];
+  const cut = preview.truncated || (table !== null && table.rows.length > rows.length);
+  return (
+    <div
+      data-testid="library-text-preview"
+      className="flex max-h-full w-full max-w-4xl flex-col gap-2 self-start overflow-auto rounded-lg bg-[var(--chat-surface-base)] p-4 text-sm text-[var(--chat-text-primary)]"
+    >
+      {table ? (
+        <table className="w-full border-collapse text-left text-xs">
+          <thead>
+            <tr>
+              {table.columns.map((header, index) => (
+                <th
+                  key={index}
+                  className="border-b border-[var(--chat-border)] px-2 py-1 font-semibold"
+                >
+                  {header}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, rowIndex) => (
+              <tr key={rowIndex}>
+                {row.map((cell, cellIndex) => (
+                  <td
+                    key={cellIndex}
+                    className="border-b border-[var(--chat-border)] px-2 py-1 align-top"
+                  >
+                    {cell}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <pre className="whitespace-pre-wrap break-words font-[var(--chat-font-mono)] text-xs">
+          {preview.text}
+        </pre>
+      )}
+      {cut ? (
+        <p className="text-xs text-[var(--chat-text-secondary)]">
+          Showing the start of this file. Download it to see all of it.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 const VIEWER_ZOOM_MIN = 25;
 const VIEWER_ZOOM_MAX = 400;
 const VIEWER_ZOOM_STEP = 25;
@@ -981,6 +1155,7 @@ interface FileViewerOverlayProps {
   onClose: () => void;
   onDownload: (item: LibraryItem) => Promise<void>;
   inlinePreviewUri?: (uri: string) => string;
+  loadTextPreview?: (uri: string) => Promise<Response>;
   askAboutFile?: (item: LibraryItem, message: string) => void;
   containerId?: string;
 }
@@ -990,6 +1165,7 @@ function FileViewerOverlay({
   onClose,
   onDownload,
   inlinePreviewUri,
+  loadTextPreview,
   askAboutFile,
   containerId,
 }: FileViewerOverlayProps) {
@@ -998,6 +1174,12 @@ function FileViewerOverlay({
   const [container, setContainer] = useState<HTMLElement | null>(null);
   const previewUri = isImageItem(item) ? inlinePreviewUri?.(item.uri) : undefined;
   const playbackUri = isVideoItem(item) ? (inlinePreviewUri?.(item.uri) ?? item.uri) : undefined;
+  const documentUri = isPdfItem(item)
+    ? pdfPreviewUri(inlinePreviewUri?.(item.uri) ?? item.uri)
+    : undefined;
+  const wantsTextPreview =
+    !previewUri && !playbackUri && !documentUri && item.previewable && Boolean(loadTextPreview);
+  const textPreview = useFileTextPreview(wantsTextPreview ? item.uri : null, loadTextPreview);
 
   useEffect(() => {
     setContainer(containerId ? document.getElementById(containerId) : null);
@@ -1075,6 +1257,17 @@ function FileViewerOverlay({
               </button>
             </div>
           ) : null}
+          {textPreview.status === 'ready' && !item.mime_type.toLowerCase().startsWith('text/') ? (
+            <button
+              type="button"
+              aria-label={`Download the text of ${item.file_name}`}
+              title="Download as text"
+              onClick={() => downloadText(item.file_name, textPreview.preview.text)}
+              className={MENU_TRIGGER_CLASS}
+            >
+              <FileDown className="h-4 w-4" aria-hidden />
+            </button>
+          ) : null}
           <button
             type="button"
             aria-label={`Download ${item.file_name}`}
@@ -1112,6 +1305,23 @@ function FileViewerOverlay({
             aria-label={item.file_name}
             className="max-h-full max-w-full object-contain"
           />
+        ) : documentUri ? (
+          <object
+            data={documentUri}
+            type="application/pdf"
+            data-testid="library-pdf-reader"
+            aria-label={item.file_name}
+            className="h-full min-h-[70vh] w-full rounded-md bg-white"
+          >
+            <Button size="sm" onClick={() => void onDownload(item)}>
+              <Download className="mr-1.5 h-4 w-4" aria-hidden />
+              Download to view
+            </Button>
+          </object>
+        ) : textPreview.status === 'loading' ? (
+          <Spinner size="md" />
+        ) : textPreview.status === 'ready' ? (
+          <FileTextPreview preview={textPreview.preview} />
         ) : (
           <div className="flex flex-col items-center gap-3 rounded-lg bg-[var(--chat-surface-base)] p-8 text-center text-sm text-[var(--chat-text-secondary)]">
             <FileKindIcon
@@ -1191,6 +1401,7 @@ interface RowActions {
   onPermanentDelete: (item: LibraryItem) => void;
   onAddToChat?: (item: LibraryItem) => void;
   onAddToWork?: (item: LibraryItem) => void;
+  onOpenConversation?: (item: LibraryItem) => void;
   onAddToProject?: (item: LibraryItem) => void;
   onRemix?: (item: LibraryItem) => void;
   onShare?: (item: LibraryItem) => void;
@@ -1294,7 +1505,7 @@ function LibraryGrid(props: LibraryListProps) {
             key={item.id}
             testId="library-tile"
             name={libraryItemDisplayName(item)}
-            meta={formatModified(item.created_at)}
+            meta={libraryItemMeta(item, props.viewDeleted)}
             ariaLabel={`Open ${libraryItemDisplayName(item)}`}
             onOpen={() => props.actions.onOpen(item)}
             menu={
@@ -1454,7 +1665,7 @@ function LibraryList(props: LibraryListProps) {
                     ) : null}
                   </td>
                   <td className="whitespace-nowrap px-3 py-2 text-[var(--chat-text-muted)]">
-                    {formatModified(item.created_at)}
+                    {libraryItemMeta(item, props.viewDeleted)}
                   </td>
                   <td className="hidden whitespace-nowrap px-3 py-2 text-[var(--chat-text-muted)] sm:table-cell">
                     {formatSize(item.byte_count)}
@@ -1615,6 +1826,17 @@ function ItemMenu({
                 >
                   <Briefcase className="h-4 w-4" aria-hidden />
                   Add to AGI Work
+                </button>
+              ) : null}
+              {actions.onOpenConversation && item.conversation_id ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={MENU_ITEM_CLASS}
+                  onClick={choose(() => actions.onOpenConversation?.(item))}
+                >
+                  <MessageSquare className="h-4 w-4" aria-hidden />
+                  Open chat
                 </button>
               ) : null}
               {actions.onRemix && isImageItem(item) ? (
