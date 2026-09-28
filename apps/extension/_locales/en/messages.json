@@ -3864,5 +3864,53 @@
         "example": "Daily brief"
       }
     }
+  },
+  "spPlanReviewHeading": {
+    "message": "Plan",
+    "description": "Heading of the AGI Work plan a person reviews before the work starts"
+  },
+  "spPlanReviewHelp": {
+    "message": "Edit any step before the work starts. The agent follows the plan you start here.",
+    "description": "Explanation under the AGI Work plan review heading"
+  },
+  "spPlanReviewStep": {
+    "message": "Step $NUMBER$",
+    "description": "Accessible name of one editable step in the AGI Work plan review",
+    "placeholders": {
+      "number": {
+        "content": "$1",
+        "example": "2"
+      }
+    }
+  },
+  "spPlanReviewRemoveStep": {
+    "message": "Remove step $NUMBER$",
+    "description": "Accessible name of the button that removes one step from the AGI Work plan",
+    "placeholders": {
+      "number": {
+        "content": "$1",
+        "example": "2"
+      }
+    }
+  },
+  "spPlanReviewAddStep": {
+    "message": "Add a step",
+    "description": "Button that adds an empty step to the AGI Work plan review"
+  },
+  "spPlanReviewStart": {
+    "message": "Start work",
+    "description": "Button that approves the reviewed AGI Work plan and starts the work"
+  },
+  "spPlanReviewCancel": {
+    "message": "Cancel",
+    "description": "Button that rejects the proposed AGI Work plan"
+  },
+  "spPlanReviewEmpty": {
+    "message": "Add at least one step, or cancel.",
+    "description": "Hint shown when every step of the AGI Work plan review is empty"
+  },
+  "spPlanReviewDeclined": {
+    "message": "You cancelled this plan. Nothing was run.",
+    "description": "Note left on an AGI Work turn whose plan the person cancelled"
   }
 }

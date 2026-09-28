@@ -62,6 +62,7 @@ import {
   buildProductComparisonCard,
 } from './interactiveCards';
 import { buildConnectorInputForm, type ConnectorInputBinding } from './connectorInputForm';
+import { buildAgiWorkPlanReview, type AgiWorkPlanReviewBinding } from './agiWorkPlanReview';
 import { buildImageViewerButton } from './mediaViewer';
 
 type ChatMessage = SidePanelChatMessage;
@@ -85,6 +86,7 @@ export interface BubbleInteractionOptions {
   onApproveForChat?: (toolCallId: string, toolName: string) => void;
   onApprovalGuidanceChange?: (toolCallId: string, guidance: string) => void;
   connectorInput?: ConnectorInputBinding;
+  planReview?: AgiWorkPlanReviewBinding;
   onRetry?: (messageId: string) => void;
   onSwitchModel?: () => void;
   quotaRecovery?: QuotaRecoveryControl;
@@ -1141,6 +1143,8 @@ export function buildBubbleWithTools(
       wrapper.appendChild(stack);
     }
   }
+
+  if (options.planReview) wrapper.appendChild(buildAgiWorkPlanReview(msg.id, options.planReview));
 
   appendAnswerExtras(wrapper, msg, options, all);
 
