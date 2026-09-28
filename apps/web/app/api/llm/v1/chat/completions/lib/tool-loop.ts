@@ -335,6 +335,7 @@ import {
   isManagedOfficeFileTool,
   MANAGED_OFFICE_FILE_TOOL_NAME,
 } from '@/lib/services/managed-office-file-service';
+import { searchToolsByKeyword } from '@/lib/connectors/tool-search';
 import { executeMemoryTool, isMemoryTool, memoryToolSource } from '@/lib/server/tools/memory-tools';
 import { executeMapSearchTool, isMapSearchTool } from '@/lib/services/map-search-tool-service';
 import { buildPlacesCard } from '@/lib/places/places-card';
@@ -3115,7 +3116,12 @@ export async function* runToolLoop(
   };
   const loadDeferredToolSchemas = (args: Record<string, unknown>): ToolLoopToolResult => {
     const raw = args['names'];
-    const requested = Array.isArray(raw) ? raw.filter((name) => typeof name === 'string') : [];
+    const query = typeof args['query'] === 'string' ? args['query'] : '';
+    const matched = query ? searchToolsByKeyword(mcpTools, query) : [];
+    const requested = [
+      ...(Array.isArray(raw) ? raw.filter((name) => typeof name === 'string') : []),
+      ...matched.map((tool) => tool.qualifiedName),
+    ];
     const loaded = expandDeferredToolSchemas(mcpTools, requested);
     for (const tool of loaded) loadedToolNames.add(tool.qualifiedName);
     deferredToolSchemas = deferredToolSchemas.filter(
@@ -3123,9 +3129,18 @@ export async function* runToolLoop(
     );
     if (loaded.length === 0) {
       return {
-        content:
-          'No connected tool matched those names. Use the exact qualified names from the list on this tool.',
+        content: query
+          ? `No connected tool matched "${query}". Try other keywords, or use an exact qualified name from the list on this tool.`
+          : 'No connected tool matched those names. Use the exact qualified names from the list on this tool.',
         isError: true,
+      };
+    }
+    if (matched.length > 0) {
+      return {
+        content: `Loaded ${loaded.length} tool schema(s). Matches for "${query}":\n${matched
+          .map((tool) => `- ${tool.qualifiedName}: ${tool.description ?? tool.toolName}`)
+          .join('\n')}\nCall them on the next step.`,
+        isError: false,
       };
     }
     return {
