@@ -244,6 +244,7 @@
       "provider": "qwen",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-qwen",
+      "responseFormats": ["json_object"],
       "requestParameters": ["top_p", "stop", "seed", "presence_penalty"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {
@@ -261,6 +262,7 @@
       "provider": "moonshot",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-moonshot",
+      "responseFormats": ["json_object"],
       "requestParameters": ["stop"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {}
@@ -277,6 +279,7 @@
       "provider": "zhipu",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-zhipu",
+      "responseFormats": ["json_object"],
       "requestParameters": ["top_p", "stop"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {}
@@ -285,6 +288,7 @@
       "provider": "perplexity",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-perplexity",
+      "responseFormats": ["json_schema"],
       "requestParameters": ["top_p", "stop"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {
@@ -298,6 +302,7 @@
       "provider": "groq",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-groq",
+      "responseFormats": ["json_object"],
       "requestParameters": ["top_p", "stop", "seed", "user"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {}
@@ -306,6 +311,7 @@
       "provider": "open_router",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-openrouter",
+      "responseFormats": ["json_object", "json_schema"],
       "requestParameters": [
         "top_p",
         "stop",
@@ -327,6 +333,7 @@
       "provider": "open_router",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-openrouter",
+      "responseFormats": ["json_object", "json_schema"],
       "requestParameters": [
         "top_p",
         "stop",
@@ -355,6 +362,7 @@
       "provider": "vercel_gateway",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-vercel-gateway",
+      "responseFormats": ["json_schema"],
       "requestParameters": ["top_p", "stop", "frequency_penalty", "presence_penalty"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {
@@ -487,6 +495,7 @@
       "provider": "experientiallabs",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-openai",
+      "responseFormats": ["json_schema"],
       "requestParameters": ["top_p"],
       "trustModes": ["managed_cloud"],
       "features": {},

@@ -10,7 +10,11 @@
     "webhooks": {
       "why": "A provider retries until it gets a 2xx, so a handler that is not fenced applies the same subscription change on every retry.",
       "enforcedBy": "apps/web/app/api/stripe-webhook/lib/idempotency.ts",
-      "tables": ["processed_stripe_events", "organization_subscription_state_transitions"]
+      "tables": [
+        "processed_stripe_events",
+        "organization_subscription_state_transitions",
+        "slack_assistant_runs"
+      ]
     },
     "tool-actions": {
       "why": "A tool call replayed after a lost response sends the message, files the ticket or makes the commit a second time.",

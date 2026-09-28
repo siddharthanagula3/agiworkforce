@@ -463,6 +463,13 @@
         },
         "discount": {
           "$ref": "#/definitions/routeDiscount"
+        },
+        "responseFormats": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": ["json_object", "json_schema"]
+          }
         }
       }
     },

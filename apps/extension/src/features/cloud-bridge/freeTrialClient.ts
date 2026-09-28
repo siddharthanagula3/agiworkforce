@@ -36,6 +36,7 @@ import type { ManagedCloudOwner } from './managedCloudAuthority';
 import { configuredAgiWebOrigin, DEFAULT_AGI_WEB_ORIGIN } from '../../lib/webOrigin';
 import { platformRequestHeaders } from '../../platformHeaders';
 import { logger } from '../../utils';
+import type { MemoryCommandKind, MemoryCommandStatus } from './memoryClient';
 
 // The plan default the server derives, so the extension never names a model free cannot reach.
 export const FREE_TRIAL_MODEL: string = getDefaultModelFor(normalizeBillingPlanTier(null), 'chat');
@@ -612,8 +613,14 @@ export type FreeTrialChunk =
       quota?: ManagedQuotaBlock;
     };
 
+export interface ManagedMemoryCommandTurn {
+  kind: MemoryCommandKind;
+  status: MemoryCommandStatus;
+}
+
 export interface ManagedChatStreamOptions {
   model?: string;
+  memoryCommand?: ManagedMemoryCommandTurn;
   effort?: Effort;
   extendedThinking?: boolean;
   workMode?: 'chat' | 'agiwork';
@@ -1183,6 +1190,7 @@ export async function* streamFreeChat(
               canRespond: true,
             },
             ...(options.workMode ? { work_mode: options.workMode } : {}),
+            ...(options.memoryCommand ? { memory_command: options.memoryCommand } : {}),
             ...(options.webSearch ? { web_search: true } : {}),
             ...(options.webFetch ? { web_fetch: true } : {}),
             ...(options.extendedThinking ? { thinking_mode: true } : {}),

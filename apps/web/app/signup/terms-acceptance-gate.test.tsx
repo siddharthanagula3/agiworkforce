@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
+import { ACCOUNT_AGE_CONFIRMATION_LABEL } from '@agiworkforce/types';
+
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 import { TERMS_GATE_STORAGE_KEY } from './TermsGate';
 
@@ -63,6 +65,11 @@ function renderSignup() {
   render(<AuthFlow mode="signup" providers={PROVIDERS} redirects={REDIRECTS} />);
 }
 
+async function renderConfirmedSignup() {
+  renderSignup();
+  await userEvent.click(screen.getByRole('checkbox', { name: ACCOUNT_AGE_CONFIRMATION_LABEL }));
+}
+
 /**
  * Founder decision 2026-09-06, replacing the 2026-08-17 clickwrap: signing up
  * is the agreement. The form says so in one sentence under the button, no box
@@ -77,15 +84,17 @@ describe('/signup agreement', () => {
     signUpState.sso.mockReset().mockResolvedValue({ error: null });
   });
 
-  it('shows the agreement sentence and no checkbox', () => {
+  it('shows the agreement sentence and no terms box, only the age question', () => {
     renderSignup();
 
-    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('checkbox')).toEqual([
+      screen.getByRole('checkbox', { name: ACCOUNT_AGE_CONFIRMATION_LABEL }),
+    ]);
     expect(screen.getByTestId('auth-legal-footer')).toHaveTextContent('By signing up, you agree');
   });
 
   it('creates the account with the agreement recorded when the email is submitted', async () => {
-    renderSignup();
+    await renderConfirmedSignup();
 
     await userEvent.type(screen.getByLabelText('Email address'), 'person@example.com');
     await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
@@ -100,7 +109,7 @@ describe('/signup agreement', () => {
   });
 
   it('hands a provider sign-up over with the agreement recorded', async () => {
-    renderSignup();
+    await renderConfirmedSignup();
 
     await userEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
 
@@ -117,7 +126,7 @@ describe('/signup agreement', () => {
     signUpState.create.mockResolvedValue({
       error: { errors: [{ code: 'form_identifier_exists' }] },
     });
-    renderSignup();
+    await renderConfirmedSignup();
 
     await userEvent.type(screen.getByLabelText('Email address'), 'existing@example.com');
     await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
@@ -128,7 +137,7 @@ describe('/signup agreement', () => {
 
   it('recovers from a rejected email signup request without claiming agreement was recorded', async () => {
     signUpState.create.mockRejectedValue(new TypeError('Failed to fetch'));
-    renderSignup();
+    await renderConfirmedSignup();
 
     await userEvent.type(screen.getByLabelText('Email address'), 'person@example.com');
     await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
@@ -146,7 +155,7 @@ describe('/signup agreement', () => {
     signUpState.sso.mockResolvedValue({
       error: { errors: [{ code: 'oauth_access_denied' }] },
     });
-    renderSignup();
+    await renderConfirmedSignup();
 
     await userEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
 
@@ -156,7 +165,7 @@ describe('/signup agreement', () => {
 
   it('clears the signup marker and offers a retry when the provider handoff throws', async () => {
     signUpState.sso.mockRejectedValue(new TypeError('Failed to fetch'));
-    renderSignup();
+    await renderConfirmedSignup();
 
     await userEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
 
