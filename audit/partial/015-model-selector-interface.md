@@ -10,16 +10,14 @@ nothing is left.
 
 - Done when: Models are grouped by family (e.g. all versions of one model line together) so related models sit side by side.
 - Wave: 3
+- Already works on: web, desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Group models by family; the catalogue groups by developer and shows the family only on the model's About card. | ui |
-| desktop | partial | Group models by family; the catalogue groups by developer and shows the family only on the About card. | ui |
 | mobile | partial | Group models by family; the sheet groups cloud models by routing tier and puts on-device models in their own section. | ui |
 | cli | partial | Group models by family; the picker groups by access mode and provider. | ui |
-| chrome | partial | Group models by family; "More models" groups by provider only. | ui |
 
-Code: `apps/web/features/chat/components/Composer/ModelCatalogue.tsx:357-357`, `apps/web/features/chat/components/Composer/ModelCatalogue.tsx:166-167`, `apps/web/features/chat/components/Composer/ComposerFooter.tsx:1379-1389`, `apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx:63-89`
+Code: `apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx:63-89`, `apps/cli/src/tui/widgets/model_picker.rs:123-135`
 
 ## S15.04: Searchable model list.
 
@@ -59,30 +57,26 @@ Code: `apps/web/features/chat/components/Composer/ModelCatalogue.tsx:357-357`, `
 
 - Done when: The selector highlights a short list of recommended models for the user.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Mark recommended models; the sheet leads with Auto profiles but labels no model as recommended. | ui |
 | cli | missing | Not built on this surface. |  |
-| chrome | partial | Label the short list as recommended; the dropdown shows a primary list then "More models" without saying why. | ui |
 
-Code: `apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx:670-678`, `apps/extension/src/side_panel.ts:6168-6208`
+Code: `apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx:670-678`
 
 ## S15.09: Default-profile option.
 
 - Done when: The user can set which model or profile new chats start with, as a lasting default.
 - Wave: 3
-- Already works on: cli, vscode
+- Already works on: web, desktop, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Make "Default model" an account setting limited to models the plan can run; today Settings lists every model, including plan-locked ones, and writes the same browser-only selection as the composer. | handler |
-| desktop | partial | Make "Default model" an account setting limited to models the plan can run; today it lists plan-locked models and is stored only in this browser profile. | handler |
 | mobile | partial | Add an explicit default model setting; today the last model picked carries over (persisted model-store) and there is no separate default. | ui |
-| chrome | partial | Add an explicit default model setting; today the last pick is remembered in extension storage and there is no separate default. | ui |
 
-Code: `apps/web/features/settings/sections/GeneralSection.tsx:917-939`, `apps/web/shared/stores/model-store.ts:385-387`, `apps/mobile/src/features/model-picker/store.ts:189-203`, `apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx:383-393`
+Code: `apps/mobile/src/features/model-picker/store.ts:189-203`, `apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx:383-393`
 
 ## S15.12: Input-modality badges.
 
@@ -139,16 +133,13 @@ Code: `apps/mobile/src/features/model-picker/service.ts:171-175`
 
 - Done when: The selector tells the user which models are faster or slower.
 - Wave: 3
-- Already works on: cli, vscode
+- Already works on: web, desktop, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Show relative speed per model; today only the guidance line hints at it ("For quick answers"). | ui |
-| desktop | partial | Show relative speed per model; today only the guidance line hints at it ("For quick answers"). | ui |
 | mobile | partial | Show relative speed per model; only the effort choices describe speed ("Faster and cheaper than the default"). | ui |
-| chrome | partial | Show speed on every row; "Fastest/Balanced/Most capable" appears only for models without a description. | ui |
 
-Code: `apps/web/features/chat/components/Composer/ComposerFooter.tsx:660-660`, `packages/ui/unified-chat/src/lib/modelPicker.ts:53-57`, `apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx:48-48`, `apps/extension/src/side_panel.ts:6035-6041`
+Code: `apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx:48-48`
 
 ## S15.17: Relative usage or cost information.
 
@@ -165,30 +156,25 @@ Code: `apps/web/features/chat/components/Composer/ComposerFooter.tsx:660-660`, `
 
 - Done when: Models the user's plan cannot use are marked with the plan that unlocks them.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli, api
+- Already works on: web, desktop, mobile, cli, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | vscode | partial | Tell signed-in Free and Basic users which plan unlocks a model; the popover labels every cloud group "Unavailable" with "Sign in or add a provider key", even when they are signed in. | ui |
-| chrome | partial | Show models the plan cannot use with the plan that unlocks them; today they are left out of the list (the premium-gated style is never applied), and only signed-out users see "Sign in for models". | ui |
 
-Code: `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:1163-1180`, `apps/extension/src/side_panel.ts:2627-2627`, `apps/extension/src/side_panel.ts:6177-6179`
+Code: `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:1163-1180`
 
 ## S15.19: Preview or experimental badge.
 
 - Done when: Preview or experimental models carry a visible badge in the selector.
 - Wave: 3
-- Already works on: cli
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Badge preview/experimental models in the list; the lifecycle stage appears only on the model's About card ("Beta" in the list means an environment lock). | ui |
-| desktop | partial | Badge preview/experimental models in the list; the stage is only on the About card. | ui |
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/ModelCatalogue.tsx:193-194`, `apps/web/features/chat/components/Composer/ComposerFooter.tsx:1379-1389`
 
 ## S15.20: Deprecated-model notice.
 
@@ -229,10 +215,9 @@ Code: `apps/mobile/src/features/model-picker/components/ModelRow.tsx:187-187`, `
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | /fast toggles between the session model and a fast model (original_model is restored on the way back); it does not enable a faster tier of the chosen model. Same reading as the Chrome cell. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | The criterion is a faster serving tier for the model in use. Quick mode changes the route to a cheaper model, as the copy says; the auditor's note admits it. A model swap is a partial answer to the item. |  |
 | api | missing | Not built on this surface. |  |
 
-Code: `apps/cli/src/tui/tui_app.rs:3431-3443`, `apps/cli/src/agent/mod.rs:1779-1783`, `apps/cli/src/tui/tui_app.rs:3433-3439`, `apps/extension/src/side_panel.ts:6182-6188`
+Code: `apps/cli/src/tui/tui_app.rs:3431-3443`, `apps/cli/src/agent/mod.rs:1779-1783`, `apps/cli/src/tui/tui_app.rs:3433-3439`
 
 ## S15.24: Response-length preference.
 
@@ -277,15 +262,12 @@ Code: `apps/cli/src/tui/tui_app.rs:3431-3443`, `apps/cli/src/agent/mod.rs:1779-1
 ## S15.27: Local-model selection.
 
 - Done when: The user can pick a model that runs on their own device.
-- Wave: 2
+- Wave: 3
 - Already works on: desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Local models show only inside the desktop app; in a browser the "On this device" section never renders (no desktop host). | mount |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/ComposerFooter.tsx:1487-1491`, `apps/web/features/chat/components/Composer/ComposerFooter.tsx:512-512`
 
 ## S15.28: BYOK route selection.
 
@@ -295,12 +277,10 @@ Code: `apps/web/features/chat/components/Composer/ComposerFooter.tsx:1487-1491`,
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Let users add their own provider key on web and pick that route; today only a hand-off ceremony exists for BYOK model ids, with nowhere to enter a key. | ui |
-| desktop | partial | Let users add their own provider key and pick that route; only the hand-off for BYOK model ids exists. | ui |
 | vscode | partial | Let users enter a provider key in VS Code; the "Your providers" route appears only for keys already set up in the CLI (Set API Key stores the AGI key, not a provider key). | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/lib/localByokHandoff.ts:23-23`, `apps/web/features/chat/pages/WebChatPage.tsx:3428-3434`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:1172-1180`, `apps/extension-vscode/src/core/commandSetup.ts:1062-1062`
+Code: `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:1172-1180`, `apps/extension-vscode/src/core/commandSetup.ts:1062-1062`
 
 ## S15.30: Conversation-specific override.
 
@@ -318,18 +298,14 @@ Code: `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:12
 
 - Done when: The user can run a single turn with a different model without changing the conversation's model.
 - Wave: 3
-- Already works on: api
+- Already works on: web, desktop, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The criterion is a single turn on another model without changing the conversation's model. handleRegenerateWithModel calls handleConversationModelChange first, which persists the model on the conversation and sets it as the selected model, then regenerates. The control exists but the defining property is the opposite of what is claimed. |  |
-| desktop | partial | The criterion is a single turn on another model without changing the conversation's model. handleRegenerateWithModel calls handleConversationModelChange first, which persists the model on the conversation and sets it as the selected model, then regenerates. The control exists but the defining property is the opposite of what is claimed. Desktop renders the same hosted web code. |  |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/messages/MessageBubble.tsx:2957-2967`, `apps/web/features/chat/pages/WebChatPage.tsx:5750-5750`
 
 ## S15.32: Actual-serving-model disclosure.
 

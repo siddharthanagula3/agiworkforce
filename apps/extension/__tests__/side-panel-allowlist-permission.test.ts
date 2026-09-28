@@ -11,7 +11,7 @@ const source = readFileSync(
 describe('side panel Site Allowlist control requests real Chrome access', () => {
   it('imports the host-permission helpers rather than reimplementing them', () => {
     expect(source).toContain(
-      "import {\n  removeApprovedSiteHostPermission,\n  requestApprovedSiteHostPermission,\n} from './features/options/site-allowlist';",
+      "import {\n  normalizeApprovedSiteOrigin,\n  removeApprovedSiteHostPermission,\n  requestApprovedSiteHostPermission,\n} from './features/options/site-allowlist';",
     );
   });
 

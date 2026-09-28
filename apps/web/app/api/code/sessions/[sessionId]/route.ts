@@ -20,7 +20,12 @@ import {
   renameCloudCodeSession,
   setCloudCodeSessionArchived,
 } from '@/lib/services/cloud-code-session-service';
+import {
+  CloudCodeSharingForbiddenError,
+  setCloudCodeSessionSharing,
+} from '@/lib/services/cloud-code-session-sharing';
 import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
+import { CLOUD_CODE_SHARE_VISIBILITIES, isCloudCodeShareVisibility } from '@agiworkforce/types';
 
 export const runtime = 'nodejs';
 
@@ -28,6 +33,7 @@ type RouteContext = { params: Promise<{ sessionId: string }> };
 
 function rethrowCloudCodeError(error: unknown): never {
   if (error instanceof CloudCodeValidationError) throw createError.validation(error.message);
+  if (error instanceof CloudCodeSharingForbiddenError) throw createError.forbidden(error.message);
   if (error instanceof CloudCodeNotFoundError) throw createError.notFound(error.message);
   if (error instanceof CloudCodeConflictError) throw createError.conflict(error.message);
   if (error instanceof CloudCodeUnavailableError) {
@@ -84,11 +90,20 @@ async function handlePatch(request: NextRequest, context: RouteContext) {
   const owner = { userId, organizationId };
   const hasTitle = body['title'] !== undefined;
   const hasArchived = body['archived'] !== undefined;
-  if (!hasTitle && !hasArchived) {
-    throw createError.validation('Send a "title" to rename, or "archived" to archive or unarchive');
+  const shareVisibility = body['shareVisibility'];
+  const hasShare = shareVisibility !== undefined;
+  if (!hasTitle && !hasArchived && !hasShare) {
+    throw createError.validation(
+      'Send a "title" to rename, "archived" to archive or unarchive, or "shareVisibility" to share',
+    );
   }
   if (hasArchived && typeof body['archived'] !== 'boolean') {
     throw createError.validation('"archived" must be true or false');
+  }
+  if (hasShare && !isCloudCodeShareVisibility(shareVisibility)) {
+    throw createError.validation(
+      `"shareVisibility" must be one of ${CLOUD_CODE_SHARE_VISIBILITIES.join(', ')}`,
+    );
   }
 
   try {
@@ -98,6 +113,9 @@ async function handlePatch(request: NextRequest, context: RouteContext) {
     if (hasArchived) {
       session = await setCloudCodeSessionArchived(db, owner, sessionId, body['archived'] === true);
     }
+    if (hasShare && isCloudCodeShareVisibility(shareVisibility)) {
+      session = await setCloudCodeSessionSharing(db, owner, sessionId, shareVisibility);
+    }
     await recordAuditEvent({
       userId,
       organizationId,
@@ -106,10 +124,20 @@ async function handlePatch(request: NextRequest, context: RouteContext) {
       detail: {
         resourceType: 'code_session',
         resourceId: sessionId,
-        status: hasArchived ? (body['archived'] === true ? 'archived' : 'active') : 'renamed',
-        changedKeys: [hasTitle ? 'title' : null, hasArchived ? 'archived' : null].filter(
-          (key): key is string => key !== null,
-        ),
+        status: hasShare
+          ? shareVisibility === 'private'
+            ? 'unshared'
+            : `shared_${String(shareVisibility)}`
+          : hasArchived
+            ? body['archived'] === true
+              ? 'archived'
+              : 'active'
+            : 'renamed',
+        changedKeys: [
+          hasTitle ? 'title' : null,
+          hasArchived ? 'archived' : null,
+          hasShare ? 'shareVisibility' : null,
+        ].filter((key): key is string => key !== null),
       },
     });
     return NextResponse.json({ session });

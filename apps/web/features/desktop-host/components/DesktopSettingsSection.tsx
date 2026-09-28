@@ -22,6 +22,7 @@ import { Switch } from '@agiworkforce/ui';
 import { toUserMessage } from '@/lib/user-error-message';
 import { useDesktopHost } from '../lib/host';
 import { readDeveloperRuntimeStatus } from '../lib/runtime-client';
+import { BackgroundActivitySection } from './BackgroundActivitySection';
 import { ComputerUseSettings } from './ComputerUseSettings';
 import { DesktopPermissionsSection } from './DesktopPermissionsSection';
 import { DesktopSettingsHeading, DesktopSettingsRow as Row } from './DesktopSettingsRow';
@@ -269,6 +270,7 @@ export function DesktopSettingsSection() {
       </section>
 
       <ComputerUseSettings />
+      <BackgroundActivitySection />
       <DesktopPermissionsSection />
     </div>
   );

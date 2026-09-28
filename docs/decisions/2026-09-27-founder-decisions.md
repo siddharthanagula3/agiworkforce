@@ -106,6 +106,13 @@ build it, and the audit cell is recorded as not applicable by this decision.
   file tree, editor, terminal, task or test panel inside VS Code, and publisher
   identity checked in the owner's review of each submission, as ChatGPT's app
   review does.
+- **Chat surface extras (S12.08, S14.08 and S14.12 on web and desktop, S15.27 on
+  web, S15.28, S16.14, S16.22, S17.23-25, S17.33, S17.35, S18.14, S19.14).** No
+  skill picks on the new-chat screen, attach-a-link or attach-a-folder control,
+  on-device or own-key model in the consumer web app, pending mark on the user
+  bubble, link to one message, one-step shorten, expand or change-tone action,
+  save-answer-to-knowledge, single-answer export, turn outline or saved state
+  on a finished answer: neither ChatGPT's nor Claude's chat offers them.
 - **VS Code artifacts (S26.14, S26.29, S26.31 in VS Code).** Neither Claude Code
   nor Codex in VS Code previews, exports or publishes artifacts; VS Code lists
   them and opens a published artifact's link.

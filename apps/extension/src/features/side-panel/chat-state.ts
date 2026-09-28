@@ -421,9 +421,10 @@ export function shouldRenderTextBubble(input: {
 
 /** Which page the composer's attached text was read from. */
 export interface PageContextSource {
-  tabId: number;
+  tabId?: number;
   url: string;
   title?: string;
+  chosen?: boolean;
 }
 
 /**
@@ -439,7 +440,7 @@ export function pageContextStillDescribes(
   tabId: number | undefined,
   url: string,
 ): boolean {
-  if (!source) return true;
+  if (!source || source.chosen) return true;
   if (typeof tabId !== 'number') return false;
   return source.tabId === tabId && source.url === url;
 }

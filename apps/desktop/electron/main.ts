@@ -24,8 +24,16 @@ import {
   desktopCloudInstallerDownloadUrl,
   desktopUpdatePrompt,
   type DesktopCloudMacArchitecture,
+  type DesktopCloudUpdateAvailability,
   type DesktopUpdatePrompt,
 } from './desktopCloudUpdate';
+import {
+  autoUpdateSupported,
+  checkForAutoUpdate,
+  downloadedUpdate,
+  installDownloadedUpdate,
+  startAutoUpdate,
+} from './desktopAutoUpdate';
 import {
   ELECTRON_IPC_CHANNELS,
   isElectronBridgeCommand,
@@ -73,6 +81,10 @@ import {
   readShellIdentity,
 } from './shellIdentity';
 import { createCodeSessionActivity } from './runtime/codeSessionActivity';
+import {
+  noteDeveloperSessionEvent,
+  spawnTrackedDeveloperRuntime,
+} from './runtime/backgroundActivity';
 import {
   computerUsePhase,
   computerUseStatus,
@@ -584,11 +596,12 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle(ELECTRON_IPC_CHANNELS.checkUpdate, async (event) => {
     if (!isTrustedSender(event)) throw new Error('Untrusted bridge caller.');
-    return checkDesktopCloudUpdate(app.getVersion(), installedMacArchitecture());
+    return cloudUpdateAvailability();
   });
 
   ipcMain.handle(ELECTRON_IPC_CHANNELS.openUpdateInstaller, async (event) => {
     if (!isTrustedSender(event)) throw new Error('Untrusted bridge caller.');
+    if (installDownloadedUpdate()) return;
     await shell.openExternal(desktopCloudInstallerDownloadUrl(installedMacArchitecture()));
   });
 
@@ -1130,6 +1143,16 @@ function openFocusedConversationInNewWindow(): void {
   createShellWindow({ primary: false, route });
 }
 
+function frontShellWindow(): BrowserWindow | null {
+  const focused = BrowserWindow.getFocusedWindow();
+  return focused && shellWindows.has(focused.id) ? focused : null;
+}
+
+function setFrontWindowOnTop(onTop: boolean): void {
+  frontShellWindow()?.setAlwaysOnTop(onTop, 'floating');
+  installMenu();
+}
+
 function openSettings(): void {
   showMainWindow();
   if (RENDERER_MODE !== 'remote') return;
@@ -1298,14 +1321,37 @@ function stepZoomLevel(steps: number): void {
   applyZoomLevel(getPreferences().zoomLevel + steps * ZOOM_LEVEL_STEP);
 }
 
+async function cloudUpdateAvailability(): Promise<DesktopCloudUpdateAvailability> {
+  const update = await checkDesktopCloudUpdate(app.getVersion(), installedMacArchitecture());
+  if (update.available) checkForAutoUpdate();
+  return {
+    ...update,
+    installsAutomatically: autoUpdateSupported(),
+    readyToInstall: update.available && downloadedUpdate() === update.version,
+  };
+}
+
+function announceUpdateReady(version: string): void {
+  sendRuntimeEvent({ kind: 'update-ready', version });
+  if (!Notification.isSupported()) return;
+  const notification = new Notification({
+    title: `AGI Cloud ${version} is ready`,
+    body: 'Restart AGI Cloud to finish updating.',
+  });
+  notification.on('click', showMainWindow);
+  notification.show();
+}
+
 async function checkForCloudUpdate(): Promise<void> {
   let prompt: DesktopUpdatePrompt;
   try {
-    const update = await checkDesktopCloudUpdate(app.getVersion(), installedMacArchitecture());
+    const update = await cloudUpdateAvailability();
     recordDesktopEvent({ domain: 'updater', outcome: 'ok' });
     prompt = desktopUpdatePrompt(update);
     const chosen = await showUpdatePrompt(prompt);
-    if (prompt.downloadButton !== null && chosen === prompt.downloadButton) {
+    if (prompt.installButton !== null && chosen === prompt.installButton) {
+      installDownloadedUpdate();
+    } else if (prompt.downloadButton !== null && chosen === prompt.downloadButton) {
       await shell.openExternal(update.downloadUrl);
     }
     return;
@@ -1341,6 +1387,8 @@ function installMenu(): void {
       newWindow: openNewWindow,
       openConversationInNewWindow: openFocusedConversationInNewWindow,
       hasFocusedConversation: () => focusedConversationRoute() !== null,
+      isFrontWindowOnTop: () => frontShellWindow()?.isAlwaysOnTop() ?? null,
+      setFrontWindowOnTop,
       toggleQuickAsk: garnishHandlers.onQuickAsk,
       captureScreenshot: garnishHandlers.onScreenshot,
       openSettings,
@@ -1453,6 +1501,7 @@ if (!hasSingleInstanceLock) {
     });
     configureDeveloperSessions({
       emit: (rootId, event) => {
+        noteDeveloperSessionEvent(rootId, event);
         sendRuntimeEvent({ kind: 'developer-session', rootId, event });
         relayDeveloperSessionEvent(rootId, event);
         codeSessionActivity(rootId, event).catch((error: unknown) =>
@@ -1461,9 +1510,11 @@ if (!hasSingleInstanceLock) {
       },
       resolveBinary: () => getPreferences().cliPath,
       accountBridge: { readShellIdentity, approveDeviceCode },
+      spawn: spawnTrackedDeveloperRuntime,
     });
 
     setTimeout(warmUpQuickAsk, QUICK_ASK_WARMUP_MS).unref?.();
+    if (autoUpdateSupported()) startAutoUpdate(installedMacArchitecture(), announceUpdateReady);
     void startPairingBridge();
     recordDesktopEvent({ domain: 'launch', outcome: 'ok' });
 

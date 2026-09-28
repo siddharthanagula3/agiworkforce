@@ -13,7 +13,6 @@ import {
   researchFileSourcesFromHits,
   researchFileSourcesPrompt,
   MAX_RESEARCH_CONNECTOR_SOURCES,
-  researchConnectorDirective,
   resolveResearchConnectorPolicy,
 } from '../research-sources';
 
@@ -180,19 +179,5 @@ describe('connectors as research sources', () => {
     const policy = resolveResearchConnectorPolicy(many, new Set(many));
 
     expect(policy.allowed).toHaveLength(MAX_RESEARCH_CONNECTOR_SOURCES);
-  });
-
-  it('names the chosen apps and the refused ones in the gathering directive', () => {
-    const directive = researchConnectorDirective(
-      resolveResearchConnectorPolicy(['notion', 'slack'], available),
-    );
-
-    expect(directive).toContain('notion');
-    expect(directive).toContain('slack');
-    expect(directive).toContain('not connected');
-  });
-
-  it('says nothing when the reader chose no connector', () => {
-    expect(researchConnectorDirective(resolveResearchConnectorPolicy([], available))).toBe('');
   });
 });

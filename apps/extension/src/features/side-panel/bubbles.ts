@@ -47,6 +47,7 @@ import { FREE_TRIAL_GATEWAY, type ManagedQuotaRecovery } from '../cloud-bridge/f
 import { answerFiles, buildAnswerFiles, type AnswerFileAccess } from './generatedFiles';
 import { wirePopupMenu } from './menu';
 import { buildSourcesFooter, decorateCitations, sourceHost } from './sources';
+import { buildMapPreview } from './mapPreview';
 
 type ChatMessage = SidePanelChatMessage;
 export type ManagedApprovalDecision = 'approved' | 'rejected';
@@ -105,6 +106,7 @@ function buildInteractiveCardFallback(card: InteractiveCard): HTMLElement {
 function buildMapSearchCard(
   body: MapSearchCardBody,
   ctx: InteractiveCardRenderContext,
+  access: AnswerFileAccess | undefined,
 ): HTMLElement {
   const section = el('section', {
     class: 'sp-interactive-card sp-interactive-card--map-search',
@@ -116,6 +118,8 @@ function buildMapSearchCard(
   heading.appendChild(el('div', { class: 'sp-interactive-card__headline' }, body.title));
   section.appendChild(heading);
   section.appendChild(el('div', { class: 'sp-interactive-card__text' }, body.query));
+  const map = buildMapPreview(body, access);
+  if (map) section.appendChild(map);
 
   if (body.places?.length) {
     const places = el('ol', {
@@ -152,12 +156,19 @@ function buildMapSearchCard(
   return section;
 }
 
-const CHROME_INTERACTIVE_CARD_REGISTRY: InteractiveCardRegistry<HTMLElement> = {
-  'map-search.v1': ({ body, ctx }) => buildMapSearchCard(body, ctx),
-};
+function interactiveCardRegistry(
+  access: AnswerFileAccess | undefined,
+): InteractiveCardRegistry<HTMLElement> {
+  return {
+    'map-search.v1': ({ body, ctx }) => buildMapSearchCard(body, ctx, access),
+  };
+}
 
-export function buildInteractiveCardEl(card: InteractiveCard): HTMLElement {
-  const renderer = resolveInteractiveCardRenderer(CHROME_INTERACTIVE_CARD_REGISTRY, card);
+export function buildInteractiveCardEl(
+  card: InteractiveCard,
+  access?: AnswerFileAccess,
+): HTMLElement {
+  const renderer = resolveInteractiveCardRenderer(interactiveCardRegistry(access), card);
   if (!renderer || !card.recognized) return buildInteractiveCardFallback(card);
   return renderer({
     card,
@@ -166,10 +177,16 @@ export function buildInteractiveCardEl(card: InteractiveCard): HTMLElement {
   });
 }
 
-function appendInteractiveCards(parent: HTMLElement, message: ChatMessage): void {
+function appendInteractiveCards(
+  parent: HTMLElement,
+  message: ChatMessage,
+  access: AnswerFileAccess | undefined,
+): void {
   if (message.role !== 'assistant' || !message.interactiveCards?.length) return;
   const cards = el('div', { class: 'sp-interactive-card-stack' });
-  for (const card of message.interactiveCards) cards.appendChild(buildInteractiveCardEl(card));
+  for (const card of message.interactiveCards) {
+    cards.appendChild(buildInteractiveCardEl(card, access));
+  }
   parent.appendChild(cards);
 }
 
@@ -457,7 +474,7 @@ function appendAnswerExtras(
     options.fileAccess,
   );
   if (files) wrapper.appendChild(files);
-  appendInteractiveCards(wrapper, msg);
+  appendInteractiveCards(wrapper, msg, options.fileAccess);
   if (!msg.streaming) {
     const footer = buildSourcesFooter(sources);
     if (footer) wrapper.appendChild(footer);

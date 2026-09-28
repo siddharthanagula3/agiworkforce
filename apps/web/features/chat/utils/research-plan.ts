@@ -4,6 +4,7 @@ import {
   type ResearchRunConfig,
   type ResearchStep,
 } from '@agiworkforce/types';
+import type { Message } from '@shared/stores/web-chat-store';
 import type { WebSearchResults } from '../types/message-metadata';
 
 export function parseResearchPlanEvent(payload: unknown): ResearchStep[] | null {
@@ -83,6 +84,28 @@ export function completedResearchSteps(steps: ResearchStep[] | undefined): Resea
 
 export function isResearchGuidanceStep(step: ResearchStep): boolean {
   return step.type === 'analyze';
+}
+
+const MAX_CONTEXT_SOURCES = 100;
+
+function searchResultList(
+  searchResults: WebSearchResults | undefined,
+): Array<{ url: string; title?: string }> {
+  return Array.isArray(searchResults) ? searchResults : (searchResults?.results ?? []);
+}
+
+export function researchTurnHistoryContent(
+  message: Pick<Message, 'role' | 'content' | 'metadata'>,
+): string | null {
+  const research = message.metadata?.research;
+  if (message.role !== 'assistant' || !research || !message.content.trim()) return null;
+  const sources = (research.sourcesForRetry ?? searchResultList(message.metadata?.searchResults))
+    .filter((source) => source.url)
+    .slice(0, MAX_CONTEXT_SOURCES);
+  if (sources.length === 0) return null;
+  return `${message.content}\n\nSources for the numbered citations above:\n${sources
+    .map((source, index) => `[${index + 1}] ${source.title || source.url}, ${source.url}`)
+    .join('\n')}`;
 }
 
 function isAbsoluteWebUrl(url: string): boolean {

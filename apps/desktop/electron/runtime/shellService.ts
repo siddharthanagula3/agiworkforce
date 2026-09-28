@@ -13,6 +13,7 @@ import {
   parseCommandLine,
   type ShellPolicy,
   type ShellPolicyVerdict,
+  type BackgroundCommandRun,
   type ShellRunResult,
   type WorkspaceRoot,
 } from '@agiworkforce/local-runtime-contract';
@@ -62,7 +63,23 @@ export interface RunShellCommandInput {
 
 const KILL_GRACE_MS = 2_000;
 
-const running = new Map<string, ChildProcessWithoutNullStreams>();
+interface RunningCommand {
+  child: ChildProcessWithoutNullStreams;
+  command: string;
+  rootName: string;
+  startedAtMs: number;
+}
+
+const running = new Map<string, RunningCommand>();
+
+export function listShellRuns(): BackgroundCommandRun[] {
+  return [...running.entries()].map(([runId, run]) => ({
+    runId,
+    command: run.command,
+    rootName: run.rootName,
+    startedAtMs: run.startedAtMs,
+  }));
+}
 
 /**
  * The PATH a login shell would have.
@@ -145,7 +162,7 @@ function removeScratch(directory: string | null): void {
 }
 
 export function cancelShellRun(runId: string): boolean {
-  const child = running.get(runId);
+  const child = running.get(runId)?.child;
   if (!child) return false;
   child.kill('SIGTERM');
   setTimeout(() => {
@@ -266,7 +283,7 @@ export async function runShellCommand(input: RunShellCommandInput): Promise<Shel
       return;
     }
 
-    running.set(runId, child);
+    running.set(runId, { child, command, rootName: input.root.name, startedAtMs });
 
     let stdout = '';
     let stderr = '';
