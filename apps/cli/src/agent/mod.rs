@@ -27,6 +27,7 @@ pub use crate::runtime::session::PrivacyMode;
 pub use chat::SideQuery;
 pub use checkpoints::{CheckpointSummary, RestoreReport, RewindMode, RewindOutcome};
 pub use executor::ToolCall;
+pub(crate) use history::close_orphaned_tool_calls;
 pub(crate) use executor::value_to_legacy_args;
 pub use prompt::assemble_system_prompt;
 pub(crate) use prompt::encode_untrusted_context;
