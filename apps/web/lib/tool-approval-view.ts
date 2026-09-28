@@ -114,10 +114,45 @@ const TOOL_COPY: Readonly<Record<string, { label: string; description: string }>
     description:
       'Makes a new version of an image you attached or one made earlier in the conversation, through the same pipeline as Image mode. The original is kept. Classified as a reversible write with no egress path.',
   },
+  read_tool_result: {
+    label: 'Read a stored tool result',
+    description:
+      'Reads back a tool result that was too long to show in full, or that was trimmed from earlier in the conversation, from the copy kept under your account. Classified as accepting untrusted content, because that result came from a page, a file or a sandbox run.',
+  },
   skill: {
     label: 'Run a skill',
     description:
       "Loads a skill's instructions into the turn. Skills act through the tools above and are gated by them.",
+  },
+  save_memory: {
+    label: 'Save a memory',
+    description:
+      'Saves one lasting fact about you to your Memory when you ask it to remember something or state a preference you would want used later. You can review and delete it in Memory settings. Reversible, no egress path.',
+  },
+  search_memory: {
+    label: 'Search memories',
+    description:
+      'Searches the facts saved in your Memory for ones relevant to the current question. Reads only your own Memory and has no egress path.',
+  },
+  forget_memory: {
+    label: 'Forget memories',
+    description:
+      'Deletes the saved memories whose text contains the subject you asked it to forget. Classified as an irreversible delete, so no account default runs it on its own.',
+  },
+  search_files: {
+    label: 'Search your files',
+    description:
+      "Searches the files you uploaded and your project's knowledge for passages about a topic and returns the best excerpts. Classified as accepting untrusted content, because a document can carry attacker-written text.",
+  },
+  create_schedule: {
+    label: 'Create a scheduled task',
+    description:
+      'Creates a task that runs a prompt on its own at a set time, once or on a repeating cadence, and lists it in Schedules, where you can pause or delete it. Reversible, no egress path.',
+  },
+  draft_plugin: {
+    label: 'Draft a plugin',
+    description:
+      'Checks a plugin written in the chat the way the create form does and shows it as a draft card. Nothing is saved until you press Save plugin or Save as a skill.',
   },
 };
 

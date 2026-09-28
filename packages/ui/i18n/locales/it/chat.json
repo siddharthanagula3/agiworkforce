@@ -440,7 +440,11 @@
     "videoModeAttachments_one": "La generazione video usa solo il tuo prompt. I file allegati non vengono inviati al modello video. Esci prima dalla modalità video se vuoi inviare questo file al modello di chat.",
     "videoModeAttachments_other": "La generazione video usa solo il tuo prompt. I file allegati non vengono inviati al modello video. Esci prima dalla modalità video se vuoi inviare questi file al modello di chat.",
     "viewSources_one": "Visualizza {{count}} fonte",
-    "viewSources_other": "Visualizza {{count}} fonti"
+    "viewSources_other": "Visualizza {{count}} fonti",
+    "savedMemoriesUsed_one": "Usato {{count}} ricordo salvato",
+    "savedMemoriesUsed_other": "Usati {{count}} ricordi salvati",
+    "moreSavedMemories_one": "E un altro",
+    "moreSavedMemories_other": "E altri {{count}}"
   },
   "markdownTable": {
     "label": "Tabella",

@@ -440,7 +440,11 @@
     "videoModeAttachments_one": "동영상 생성은 프롬프트만 사용합니다. 첨부된 파일은 동영상 모델로 전송되지 않습니다. 이 파일을 채팅 모델로 보내려면 먼저 동영상 모드를 종료하세요.",
     "videoModeAttachments_other": "동영상 생성은 프롬프트만 사용합니다. 첨부된 파일은 동영상 모델로 전송되지 않습니다. 이 파일을 채팅 모델로 보내려면 먼저 동영상 모드를 종료하세요.",
     "viewSources_one": "출처 {{count}}개 보기",
-    "viewSources_other": "출처 {{count}}개 보기"
+    "viewSources_other": "출처 {{count}}개 보기",
+    "savedMemoriesUsed_one": "저장된 메모리 {{count}}개 사용",
+    "savedMemoriesUsed_other": "저장된 메모리 {{count}}개 사용",
+    "moreSavedMemories_one": "외 {{count}}개",
+    "moreSavedMemories_other": "외 {{count}}개"
   },
   "markdownTable": {
     "label": "표",

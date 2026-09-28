@@ -1493,6 +1493,13 @@ if (!hasSingleInstanceLock) {
         installMenu();
       },
       onNotificationClick: showMainWindow,
+      onResumeOwed: (driver) => {
+        if (driver && !driver.isDestroyed()) {
+          driver.webContents.send(DESKTOP_RUNTIME_EVENT_CHANNEL, {
+            kind: 'computer-use-handed-back',
+          });
+        }
+      },
     });
     configureDevicePrompts((open) => sendRuntimeEvent({ kind: 'device-prompt-changed', open }));
     const codeSessionActivity = createCodeSessionActivity({
