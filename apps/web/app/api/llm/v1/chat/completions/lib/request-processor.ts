@@ -204,6 +204,7 @@ import {
   observedRouteHealthFromSnapshots,
   planResponseBudget,
   buildRoutingDecisionTrace,
+  modelsPastDeprecationDate,
   resolveAutoRoute,
   speedFirstSlots,
   taskFamilyRoutingStageEnabled,
@@ -2000,6 +2001,7 @@ export function buildWebCloudAutoRoutingRequest(
     subscriptionTier,
     trustMode: MANAGED_WEB_CLOUD_TRUST_MODE,
     runtimeProfileId: 'web/cloud-chat',
+    retiredModelKeys: modelsPastDeprecationDate(),
     ...(gatewayFlagHarnessIds ? { allowedHarnessIds: gatewayFlagHarnessIds } : {}),
     ...(preferSlots !== undefined && preferSlots.length > 0 ? { preferSlots } : {}),
     ...(usage?.budgetRemainingCents !== undefined
