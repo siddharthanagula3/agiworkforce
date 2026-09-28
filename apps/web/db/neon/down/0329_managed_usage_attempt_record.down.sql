@@ -1,4 +1,4 @@
--- Reversal of 0325 : managed usage rows stop recording the attempt's
+-- Reversal of 0329 : managed usage rows stop recording the attempt's
 -- conversation and how it ended.
 --
 -- WHAT THIS COSTS: every recorded conversation link, attempt outcome and error
@@ -15,6 +15,6 @@ alter table public.managed_usage_requests
   drop column if exists conversation_id;
 
 delete from public.schema_migrations
- where filename = '0325_managed_usage_attempt_record.sql';
+ where filename = '0329_managed_usage_attempt_record.sql';
 
 commit;
