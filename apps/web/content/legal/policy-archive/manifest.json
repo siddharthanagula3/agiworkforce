@@ -87,12 +87,17 @@
     "subprocessors": {
       "route": "/subprocessors",
       "slug": "subprocessors",
-      "current": "2026-09-22",
+      "current": "2026-09-28",
       "versions": [
+        {
+          "date": "2026-09-28",
+          "summary": "Fly.io now also runs our malware scanner, which every uploaded file passes through and which keeps no copy.",
+          "status": "current"
+        },
         {
           "date": "2026-09-22",
           "summary": "Corrects the Experiential Labs entry against its current privacy and data-controls documents and records the Free-plan promotional route.",
-          "status": "current"
+          "status": "archived"
         },
         {
           "date": "2026-09-21",

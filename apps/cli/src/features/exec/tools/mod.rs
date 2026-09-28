@@ -641,6 +641,7 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
         }
         "web_search" => execute_web_search_with_opts(&call.args, opts.quiet).await,
         "web_fetch" => execute_web_fetch_with_opts(&call.args, opts.quiet).await,
+        "generate_image" => execute_generate_image(&call.args, opts).await,
         "apply_patch" => {
             execute_apply_patch(&call.args, require_confirm, opts.approval_callback.as_ref()).await
         }
@@ -744,6 +745,83 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
     };
 
     result
+}
+
+async fn execute_generate_image(
+    args: &HashMap<String, String>,
+    opts: &ToolExecOptions,
+) -> Result<ToolResult> {
+    use crate::cloud::image::{self, ImageCommand, ImageRun, ImageSettings};
+
+    let result = |success: bool, output: String| ToolResult {
+        tool_name: "generate_image".to_string(),
+        success,
+        output,
+    };
+    if opts.privacy_mode != crate::agent::PrivacyMode::Managed {
+        return Ok(result(
+            false,
+            "generate_image runs on the user's AGI Workforce account, so it is available only in Managed sessions.".to_string(),
+        ));
+    }
+    let aspect_ratio = match args
+        .get("aspect_ratio")
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+        .map(image::parse_aspect_ratio)
+        .transpose()
+    {
+        Ok(aspect_ratio) => aspect_ratio,
+        Err(reason) => return Ok(result(false, reason)),
+    };
+    let command = ImageCommand {
+        prompt: args.get("prompt").cloned(),
+        settings: ImageSettings {
+            aspect_ratio,
+            transparent_background: args
+                .get("transparent_background")
+                .map(|value| matches!(value.trim(), "true" | "1" | "yes")),
+            ..ImageSettings::default()
+        },
+        ..ImageCommand::default()
+    };
+    let options = match image::prepare(&command) {
+        Ok(options) => options,
+        Err(reason) => return Ok(result(false, reason)),
+    };
+    print_tool_status("generate_image", &options.prompt);
+    let cwd = opts
+        .workspace_root
+        .clone()
+        .or_else(|| std::env::current_dir().ok())
+        .unwrap_or_else(|| std::path::PathBuf::from("."));
+    Ok(
+        match image::generate(
+            crate::agent::PrivacyMode::Managed,
+            &options,
+            &cwd,
+            std::future::pending::<()>(),
+        )
+        .await
+        {
+            Ok(ImageRun::Saved(generation)) => result(
+                true,
+                format!(
+                    "Saved {}.\n{}",
+                    generation
+                        .paths()
+                        .iter()
+                        .map(|path| path.display().to_string())
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                    generation.summary()
+                ),
+            ),
+            Ok(ImageRun::Stopped(message)) => result(false, message),
+            Ok(ImageRun::Failed(failure)) => result(false, failure.message),
+            Err(error) => result(false, format!("The image could not be made: {error}")),
+        },
+    )
 }
 
 fn domain_rule_refusal(tool_name: &str, args: &HashMap<String, String>) -> Option<String> {

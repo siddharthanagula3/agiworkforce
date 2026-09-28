@@ -269,11 +269,12 @@ describe('uninstallDirectoryInstallation', () => {
           entry_id: 'entry-1',
           source_id: 'source-1',
           repository_url: 'https://github.com/anthropics/claude-plugins-official',
+          plugin_key: 'adobe-for-creativity',
         },
       ];
     });
     await expect(uninstallDirectoryInstallation(db, 'user-1', 'installation-1')).resolves.toBe(
-      true,
+      'adobe-for-creativity',
     );
     expect(db.execute).toHaveBeenCalledTimes(2);
     expect(db.execute.mock.calls[0]![0]).toContain('delete from public.plugin_marketplace_entries');
@@ -287,17 +288,18 @@ describe('uninstallDirectoryInstallation', () => {
         entry_id: 'entry-9',
         source_id: 'source-9',
         repository_url: 'https://github.com/acme/marketplace',
+        plugin_key: 'acme-tools',
       },
     ]);
     await expect(uninstallDirectoryInstallation(db, 'user-1', 'installation-9')).resolves.toBe(
-      true,
+      'acme-tools',
     );
     expect(db.execute).not.toHaveBeenCalled();
   });
 
-  it('answers false when nothing was installed', async () => {
+  it('answers null when nothing was installed', async () => {
     await expect(uninstallDirectoryInstallation(database(), 'user-1', 'missing')).resolves.toBe(
-      false,
+      null,
     );
   });
 });

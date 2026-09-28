@@ -4,6 +4,7 @@ import {
   type CloudCodeAgentStopReason,
   type CloudCodeAgentTurnRecord,
   type CloudCodeTerminalEntry,
+  type CloudCodeTurnMode,
 } from '@agiworkforce/types';
 
 export interface CodeApprovalPrompt {
@@ -20,6 +21,7 @@ export interface CodeTurnRecord {
   turnId: string | null;
   at: string;
   goal: string;
+  mode: CloudCodeTurnMode;
   stopReason: CloudCodeAgentStopReason | null;
   finalMessage: string;
   errorMessage: string | null;
@@ -34,6 +36,7 @@ export function toCodeTurnRecord(record: CloudCodeAgentTurnRecord): CodeTurnReco
     turnId: record.turnId,
     at: record.createdAt,
     goal: record.goal,
+    mode: record.mode,
     stopReason: record.stopReason,
     finalMessage: record.finalMessage,
     errorMessage: record.errorMessage,
@@ -44,7 +47,7 @@ export function toCodeTurnRecord(record: CloudCodeAgentTurnRecord): CodeTurnReco
 
 export type CodeTranscriptItem =
   | { kind: 'commands'; id: string; at: string; entries: CloudCodeTerminalEntry[] }
-  | { kind: 'task'; id: string; at: string; text: string }
+  | { kind: 'task'; id: string; at: string; text: string; mode: CloudCodeTurnMode }
   | { kind: 'steps'; id: string; at: string; steps: CloudCodeAgentStep[] }
   | {
       kind: 'reply';
@@ -54,6 +57,7 @@ export type CodeTranscriptItem =
       /** Null where the source records what was said but not how the turn ended. */
       stopReason: CloudCodeAgentStopReason | null;
       retryGoal: string | null;
+      retryMode: CloudCodeTurnMode;
     };
 
 /**
@@ -80,7 +84,13 @@ export function buildCodeTranscript(
   }
 
   for (const turn of turns) {
-    items.push({ kind: 'task', id: `${turn.id}-task`, at: turn.at, text: turn.goal });
+    items.push({
+      kind: 'task',
+      id: `${turn.id}-task`,
+      at: turn.at,
+      text: turn.goal,
+      mode: turn.mode,
+    });
     if (turn.steps.length > 0) {
       items.push({ kind: 'steps', id: `${turn.id}-steps`, at: turn.at, steps: turn.steps });
     }
@@ -93,6 +103,7 @@ export function buildCodeTranscript(
       text,
       stopReason: turn.stopReason,
       retryGoal: turn.retryable ? turn.goal : null,
+      retryMode: turn.mode,
     });
   }
 

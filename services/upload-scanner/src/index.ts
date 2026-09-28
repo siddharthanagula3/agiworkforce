@@ -1,14 +1,21 @@
 import { LOCAL_CLAMD } from './clamd.ts';
 import { loadConfig } from './config.ts';
-import { refreshSignatures, startClamd, startFreshclam, type Daemon } from './daemons.ts';
+import {
+  refreshSignatures,
+  startClamd,
+  startFreshclam,
+  watchClamd,
+  type Daemon,
+} from './daemons.ts';
 import { log } from './log.ts';
-import { createScannerServer } from './server.ts';
+import { clamdProbe, createScannerServer } from './server.ts';
 
 const LISTEN_HOST = '0.0.0.0';
 const SHUTDOWN_GRACE_MS = 15_000;
 
 const config = loadConfig(process.env);
-const server = createScannerServer({ tokens: config.tokens, clamd: LOCAL_CLAMD });
+const probe = clamdProbe(LOCAL_CLAMD);
+const server = createScannerServer({ tokens: config.tokens, clamd: LOCAL_CLAMD, probe });
 const daemons: Daemon[] = [];
 let stopping = false;
 
@@ -32,5 +39,9 @@ if (!stopping) {
   daemons.push(
     startClamd(() => stop(1)),
     startFreshclam(),
+    watchClamd(
+      async () => (await probe()).scanning,
+      () => stop(1),
+    ),
   );
 }

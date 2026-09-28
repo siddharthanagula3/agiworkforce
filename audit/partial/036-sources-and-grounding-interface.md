@@ -25,29 +25,23 @@ Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:1008-1013`, `a
 
 - Done when: Each cited source shows its title.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Chrome shows source titles only for sources inside agent activity steps; plain chat answers carry no citations. | ui |
-
-Code: `apps/extension/src/features/side-panel/bubbles.ts:406-432`
 
 ## S36.03: Publisher or provider.
 
 - Done when: Each cited source shows its publisher or provider (site name/domain).
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Chrome falls back to the hostname only for activity-step source links; plain chat answers carry no citations. | ui |
-
-Code: `apps/extension/src/features/side-panel/bubbles.ts:406-432`
 
 ## S36.04: Source URL or resource identifier.
 
@@ -69,12 +63,12 @@ Code: `apps/cli/src/markdown.rs:434-440`, `apps/cli/src/features/exec/tools/web/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The server sends a publication date, but mobile's ToolSearchResult type has no date field, so cards never show it. | ui |
+| mobile | partial | partials/slack 9e4c9f336f: live search cards and report source chips show a source's publication date. Left: the report detail screen forwards it in post-codex/p-slack-s36.05-mobile-report-published-date.patch (ReportsScreen.tsx held; git apply --check passes on the Codex working copy); the source list under an answer shows none because message citations are AgentEventSource (p-privacy S101.18), which carries no date. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/types/chat.ts:35-39`, `apps/mobile/src/features/chat/components/WebSearchResultCard.tsx:42-42`
+Code: `apps/mobile/src/features/chat/utils/toolCallAccumulator.ts:142-142`, `apps/mobile/src/features/chat/components/WebSearchResultCard.tsx:29-29`, `apps/mobile/src/features/chat/components/CitationChip.tsx:40-40`, `apps/mobile/src/features/chat/components/research/ResearchSourcesAppendix.tsx:36-36`
 
 ## S36.06: Retrieval date.
 
@@ -84,7 +78,7 @@ Code: `apps/mobile/types/chat.ts:35-39`, `apps/mobile/src/features/chat/componen
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The report detail's 'Sources retrieved <date>' line is post-codex/p-privacy-s36.06-mobile-report-retrieved.patch, because ReportsScreen.tsx is held by Codex; apply after Codex finishes | ui |
+| mobile | partial | post-codex/p-privacy-s36.06-mobile-report-retrieved.patch (Sources retrieved <date> on the report detail) still applies to the Codex working copy on 2026-09-28, together with p-slack-s36.05-mobile-report-published-date.patch; ReportsScreen.tsx is held by Codex. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |

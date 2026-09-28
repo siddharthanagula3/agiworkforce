@@ -19,7 +19,11 @@ import {
   StoredObjectTooLargeError,
   type BoundedStoredObject,
 } from '@/lib/server/object-storage';
-import { scanUploadBytes, uploadFindingRejects } from '@/lib/security/upload-scan';
+import {
+  scanUploadBytes,
+  uploadFindingRejects,
+  uploadRefusalMessage,
+} from '@/lib/security/upload-scan';
 import {
   inspectOutboundContent,
   type OutboundFinding,
@@ -287,7 +291,7 @@ export async function completeChatAttachmentUpload(
       '[uploads] rejected an attachment that failed content inspection',
     );
     await purgeChatAttachmentUpload(userId, storageKey);
-    throw createError.validation(SAFETY_CHECK_REFUSAL_MESSAGE);
+    throw createError.validation(uploadRefusalMessage(scan.findings, SAFETY_CHECK_REFUSAL_MESSAGE));
   }
 
   const dlp = await inspectOutboundContent({

@@ -92,11 +92,13 @@ pub mod method {
     pub const PLUGINS_SET_ENABLED: &str = "plugins/setEnabled";
     pub const PLUGINS_INSTALL: &str = "plugins/install";
     pub const PLUGINS_REMOVE: &str = "plugins/remove";
+    pub const PLUGINS_UPDATE: &str = "plugins/update";
     pub const MCP_LIST: &str = "mcp/list";
     pub const MCP_LOGIN: &str = "mcp/login";
     pub const MCP_TEST: &str = "mcp/test";
     pub const MCP_TOOLS: &str = "mcp/tools";
     pub const MCP_INSPECT: &str = "mcp/inspect";
+    pub const MCP_AUTH_REQUIRED: &str = "mcp/authRequired";
     pub const MCP_ADD: &str = "mcp/add";
     pub const MCP_REMOVE: &str = "mcp/remove";
     pub const HOOKS_LIST: &str = "hooks/list";
@@ -380,6 +382,8 @@ pub struct AppServerCapabilities {
     pub saved_permissions: bool,
     #[serde(default, skip_serializing_if = "is_false")]
     pub mcp_inspect: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub plugin_updates: bool,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -626,6 +630,22 @@ pub struct DeveloperTodo {
     pub content: String,
     pub status: DeveloperStepStatus,
     pub priority: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct McpAuthRequiredNotification {
+    pub thread_id: String,
+    pub turn_id: String,
+    pub tool_call_id: String,
+    pub server: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub scope: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub connect_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -1472,6 +1492,15 @@ pub struct TurnFailure {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub request_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub alternative_model: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub resets_at: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub recovery_href: Option<String>,
 }
 
 /// A day is the longest wait worth stating. Past it the figure is a provider's
@@ -1489,7 +1518,22 @@ impl TurnFailure {
             action: code.default_action(),
             retry_after_seconds: None,
             request_id: None,
+            alternative_model: None,
+            resets_at: None,
+            recovery_href: None,
         }
+    }
+
+    pub fn with_limit_recovery(
+        mut self,
+        alternative_model: Option<String>,
+        resets_at: Option<String>,
+        recovery_href: Option<String>,
+    ) -> Self {
+        self.alternative_model = alternative_model.filter(|model| !model.trim().is_empty());
+        self.resets_at = resets_at.filter(|at| !at.trim().is_empty());
+        self.recovery_href = recovery_href.filter(|href| !href.trim().is_empty());
+        self
     }
 
     pub fn with_provider(mut self, provider: impl Into<String>) -> Self {
@@ -1919,6 +1963,8 @@ pub struct PluginSummary {
 #[ts(rename_all = "camelCase")]
 pub struct PluginListResponse {
     pub plugins: Vec<PluginSummary>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub notices: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -2167,6 +2213,23 @@ pub struct PluginInstallParams {
 #[ts(rename_all = "camelCase")]
 pub struct PluginRemoveParams {
     pub id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct PluginUpdateResponse {
+    pub id: String,
+    pub updated: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub previous_version: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub version: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub changed_files: Vec<String>,
+    pub plugins: Vec<PluginSummary>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]

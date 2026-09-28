@@ -311,6 +311,10 @@ struct SharedModelMetadata {
     model_type: String,
     #[serde(default, rename = "inputModalities")]
     input_modalities: Vec<String>,
+    #[serde(default, rename = "imageInput")]
+    image_input: Option<SharedImageInput>,
+    #[serde(default, rename = "providerCompatibility")]
+    provider_compatibility: SharedProviderCompatibility,
     /// Prompt-consuming models must publish this. Media APIs may omit it
     /// because token context is inapplicable; those entries are parsed so the
     /// shared catalog remains readable, then excluded by the CLI model-type
@@ -359,6 +363,12 @@ struct SharedModelMetadata {
     /// Backward-compatible singular tier while generated catalogs migrate.
     #[serde(default, rename = "longContext")]
     long_context: Option<SharedLongContextPricing>,
+}
+
+#[derive(Debug, Deserialize)]
+struct SharedImageInput {
+    #[serde(default, rename = "maxImagesPerRequest")]
+    max_images_per_request: Option<u64>,
 }
 
 /// Whether a band's threshold token count is billed at the band's rates or at
@@ -432,6 +442,14 @@ struct SharedModelCapabilities {
     tools: bool,
     vision: bool,
     thinking: bool,
+    #[serde(default)]
+    search: bool,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct SharedProviderCompatibility {
+    #[serde(default, rename = "forcedToolChoice")]
+    forced_tool_choice: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -629,6 +647,31 @@ pub fn resolve_auto_model_with_context(
     current_model_key: Option<&str>,
     previous_task_type: Option<RoutingTaskType>,
 ) -> Result<CliAutoModelSelection, String> {
+    resolve_auto_model_with_speed(
+        selection,
+        task_type,
+        tier,
+        trust_mode,
+        current_model_key,
+        previous_task_type,
+        false,
+    )
+}
+
+pub fn resolve_auto_model_with_speed(
+    selection: &str,
+    task_type: RoutingTaskType,
+    tier: &str,
+    trust_mode: TrustMode,
+    current_model_key: Option<&str>,
+    previous_task_type: Option<RoutingTaskType>,
+    speed_first: bool,
+) -> Result<CliAutoModelSelection, String> {
+    let prefer_slots = if speed_first {
+        agiworkforce_model_registry::speed_first_slots().map_err(|error| error.to_string())?
+    } else {
+        Vec::new()
+    };
     let runtime_profile_id = match trust_mode {
         TrustMode::ManagedCloud => "cli/managed-chat",
         TrustMode::Byok => "cli/byok-chat",
@@ -642,6 +685,7 @@ pub fn resolve_auto_model_with_context(
         current_model_key,
         previous_task_type,
         runtime_profile_id: Some(runtime_profile_id),
+        prefer_slots: &prefer_slots,
         ..AutoRoutingRequest::default()
     };
 
@@ -1797,6 +1841,27 @@ pub fn nearest_supported_effort<'a>(requested: &str, levels: &'a [String]) -> Op
         .filter_map(|level| rank(level).map(|position| (level, position)))
         .min_by_key(|(_, position)| (position.abs_diff(wanted), usize::MAX - position))
         .map(|(level, _)| level.as_str())
+}
+
+pub fn supports_web_search(model_id: &str) -> bool {
+    shared_catalog()
+        .and_then(|catalog| shared_model_for_any(catalog, model_id))
+        .is_some_and(|model| model.capabilities.search || model.capabilities.tools)
+}
+
+pub fn accepts_forced_tool_choice(model_id: &str) -> bool {
+    shared_catalog()
+        .and_then(|catalog| shared_model_for_any(catalog, model_id))
+        .and_then(|model| model.provider_compatibility.forced_tool_choice)
+        != Some(false)
+}
+
+pub fn max_images_per_request(model_id: &str) -> Option<u64> {
+    let catalog = shared_catalog()?;
+    shared_model_for_any(catalog, model_id)?
+        .image_input
+        .as_ref()?
+        .max_images_per_request
 }
 
 pub fn model_rejects_sampling_parameters(model_id: &str) -> bool {

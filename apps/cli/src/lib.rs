@@ -1141,6 +1141,15 @@ enum ProjectsSubcommand {
         /// Project id or name.
         project: String,
     },
+    /// Add a file to a project's knowledge, where its chats can search it.
+    AddFile {
+        /// Project id or name.
+        project: String,
+        /// The file to add.
+        path: std::path::PathBuf,
+        #[arg(long)]
+        json: bool,
+    },
     /// Delete a project from the account by id or name.
     Delete {
         /// Project id or name.
@@ -1601,6 +1610,8 @@ enum PluginSubcommand {
     Enable { name: String },
     /// Turn an installed plugin off without removing it.
     Disable { name: String },
+    /// Update a plugin installed from git to its latest commit.
+    Update { name: String },
     /// Sign a plugin directory with a publisher's Ed25519 key.
     Sign {
         /// Plugin directory containing its manifest.
@@ -2628,6 +2639,31 @@ async fn handle_projects_command(
                 "Created '{}' in your account ({}).",
                 project.name, project.id
             );
+            Ok(())
+        }
+        ProjectsSubcommand::AddFile {
+            project,
+            path,
+            json,
+        } => {
+            let cache = cloud::refresh_projects(privacy)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            let found = cache
+                .find(project)
+                .with_context(|| format!("No project '{project}' in your AGI Workforce account"))?;
+            let file = cloud::knowledge::add_file(privacy, &found.id, path)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            if *json {
+                println!("{}", serde_json::to_string_pretty(&file)?);
+            } else {
+                println!(
+                    "Added {} to '{}'. Chats in the project, and managed turns in a directory linked to it, can search it.",
+                    terminal_text::sanitize_terminal_text(&file.file_name),
+                    found.name
+                );
+            }
             Ok(())
         }
         ProjectsSubcommand::Link { project } => {
@@ -5036,6 +5072,16 @@ async fn run_cli(cli: Cli) -> Result<()> {
                                     fmt_tag,
                                     terminal_text::sanitize_terminal_text(&signature.label())
                                 );
+                                let root = path
+                                    .file_name()
+                                    .and_then(|name| name.to_str())
+                                    .unwrap_or_default()
+                                    .to_string();
+                                for notice in
+                                    installs::install_dependencies(&root).await.notices(&root)
+                                {
+                                    println!("{}", terminal_text::sanitize_terminal_text(&notice));
+                                }
                                 Ok(())
                             }
                             plugins::PluginInstallOutcome::AlreadyInstalled { path } => {
@@ -5055,6 +5101,16 @@ async fn run_cli(cli: Cli) -> Result<()> {
                     }
                     PluginSubcommand::Disable { name } => {
                         println!("{}", installs::set_plugin_enabled(name, false)?);
+                        Ok(())
+                    }
+                    PluginSubcommand::Update { name } => {
+                        let updated = installs::update_plugin(name)?;
+                        println!(
+                            "{}",
+                            terminal_text::sanitize_terminal_text(&installs::describe_update(
+                                name, &updated
+                            ))
+                        );
                         Ok(())
                     }
                     PluginSubcommand::Remove { name } => {
@@ -5947,6 +6003,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
                     model_key: route.model_key.clone(),
                     task_type: routing::classify::developer_task_type(*task),
                     trust_mode: agiworkforce_model_registry::TrustMode::ManagedCloud,
+                    speed_first: false,
                 },
                 tier: tier.clone(),
             });

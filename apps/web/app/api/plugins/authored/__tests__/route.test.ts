@@ -21,6 +21,7 @@ vi.mock('@/lib/rate-limit', () => ({ withRateLimit: rateLimitMock }));
 vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: userScopedDbMock }));
 vi.mock('@/lib/services/plugin-owned-source-service', () => ({
   storeOwnedPluginSource: storeOwnedPluginSourceMock,
+  findOwnedPluginEntryByKey: async () => null,
 }));
 vi.mock('@/lib/managed-compute-gate', () => ({
   buildWorkspaceFeatureGateResponse: (...args: unknown[]) => featureGateMock(...args),

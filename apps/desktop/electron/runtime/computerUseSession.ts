@@ -56,9 +56,14 @@ type HeldOutcome = 'resume' | 'stopped' | 'finished' | 'expired';
 export interface ComputerUseHooks {
   onChange: () => void;
   onNotificationClick: () => void;
+  onResumeOwed: (driver: BrowserWindow | null) => void;
 }
 
-let hooks: ComputerUseHooks = { onChange: () => undefined, onNotificationClick: () => undefined };
+let hooks: ComputerUseHooks = {
+  onChange: () => undefined,
+  onNotificationClick: () => undefined,
+  onResumeOwed: () => undefined,
+};
 let phase: ComputerUsePhase = 'idle';
 let pausedBy: ComputerUsePauseCause | null = null;
 let stopped = false;
@@ -70,6 +75,7 @@ let busy = 0;
 let lastSyntheticInputAt = 0;
 let inputWatchResumesAt = 0;
 let cursorBaseline: Electron.Point | null = null;
+let resumeOwed = false;
 const held = new Set<(outcome: HeldOutcome) => void>();
 
 export function configureComputerUse(next: ComputerUseHooks): void {
@@ -164,7 +170,7 @@ function touchQuietTimer(): void {
   if (quietTimer) clearTimeout(quietTimer);
   quietTimer = setTimeout(() => {
     quietTimer = null;
-    if (held.size > 0) touchQuietTimer();
+    if (held.size > 0 || phase === 'paused') touchQuietTimer();
     else endRun('finished');
   }, QUIET_RUN_LIMIT_MS);
   quietTimer.unref?.();
@@ -222,6 +228,7 @@ function endRun(reason: 'finished' | 'stopped'): void {
   settleHeld(reason);
   phase = 'idle';
   pausedBy = null;
+  resumeOwed = false;
   stopped = reason === 'stopped';
   if (stopped) {
     touchQuietTimer();
@@ -263,7 +270,10 @@ async function awaitHandBack(command: string): Promise<void> {
   touchQuietTimer();
   if (outcome === 'stopped') throw new ComputerUseRefused('paused', STOPPED_MESSAGE);
   if (outcome === 'finished') throw new ComputerUseRefused('paused', FINISHED_MESSAGE);
-  if (outcome === 'expired') throw new ComputerUseRefused('paused', EXPIRED_MESSAGE);
+  if (outcome === 'expired') {
+    resumeOwed = true;
+    throw new ComputerUseRefused('paused', EXPIRED_MESSAGE);
+  }
   if (!OBSERVING_COMMANDS.has(command)) throw new ComputerUseRefused('paused', RESUMED_MESSAGE);
 }
 
@@ -343,6 +353,8 @@ export function takeOverComputerUse(): ComputerUseStatus {
 
 export function handBackComputerUse(): ComputerUseStatus {
   if (phase !== 'paused') return computerUseStatus();
+  const owed = resumeOwed && held.size === 0;
+  resumeOwed = false;
   phase = 'active';
   pausedBy = null;
   forgetLastFrame();
@@ -351,12 +363,15 @@ export function handBackComputerUse(): ComputerUseStatus {
   cursorBaseline = null;
   claimStopShortcut();
   settleHeld('resume');
+  touchQuietTimer();
   hooks.onChange();
+  if (owed) hooks.onResumeOwed(driver);
   return computerUseStatus();
 }
 
 export function finishComputerUse(window: BrowserWindow | null): ComputerUseStatus {
   if (driver && window && driver !== window) return computerUseStatus();
+  if (phase === 'paused') return computerUseStatus();
   if (phase !== 'idle' || stopped) endRun('finished');
   return computerUseStatus();
 }

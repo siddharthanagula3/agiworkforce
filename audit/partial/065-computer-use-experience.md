@@ -252,11 +252,10 @@ Code: `apps/mobile/src/features/companion/components/StatusBanners.tsx:38-45`
 
 - Done when: From another device the user directs work on their own permitted computer.
 - Wave: 3
-- Already works on: desktop
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The Dispatch runner mounts only inside the Electron window (DesktopHostMount.tsx:35, useDesktopHost is null in a browser), so a web chat still cannot send a task to a permitted computer or offer device tools; only runs started on the desktop or phone reach it (refutation check 2026-09-28) | handler |
 | mobile | partial | The phone steers desktop code sessions, but its Dispatch tasks go unanswered by the Electron app and it cannot use the screen. | handler |
 
-Code: `apps/web/features/desktop-host/components/DesktopHostMount.tsx:35-35`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`, `apps/mobile/services/companion.ts:134-140`
+Code: `apps/mobile/src/features/companion/remote-code/service.ts:49-49`, `apps/mobile/services/companion.ts:134-140`

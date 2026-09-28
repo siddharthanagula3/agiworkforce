@@ -136,19 +136,6 @@ nothing is left.
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 
-## S87.14: Feature-access policy.
-
-- Done when: An administrator switches product features on or off for the workspace (with exceptions) and each switched-off feature is refused wherever it runs.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | The Hooks switch is saved but nothing enforces it: no server gate or desktop/CLI client reads it, although the panel says a switched-off feature is refused on every surface. | handler |
-| desktop | partial | The Hooks switch is saved but nothing enforces it: no server gate or desktop/CLI client reads it, although the panel says a switched-off feature is refused on every surface. | handler |
-| cli | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/workspace/policy/page.tsx:19-20`, `apps/web/features/workspace-console/components/WorkspaceFeatureControls.tsx:141-149`, `apps/web/features/workspace-console/components/WorkspaceFeatureControls.tsx:46-58`, `apps/web/app/api/settings/organization/policy/route.ts:258-264`
-
 ## S87.15: Tool policy.
 
 - Done when: An administrator decides which individual tools members and agents may use (allow, block or require approval) and the tool loop enforces it.
