@@ -616,6 +616,79 @@ impl AgentSession {
         }));
     }
 
+    fn serving_harness_id(&self) -> Option<String> {
+        let trust_mode = match self.privacy_mode {
+            super::PrivacyMode::Managed => agiworkforce_model_registry::TrustMode::ManagedCloud,
+            super::PrivacyMode::Byok => agiworkforce_model_registry::TrustMode::Byok,
+            super::PrivacyMode::Local => agiworkforce_model_registry::TrustMode::Local,
+        };
+        agiworkforce_model_registry::serving_harness_id(
+            trust_mode,
+            models::provider_name(&self.provider),
+            &self.model,
+        )
+        .ok()
+        .flatten()
+    }
+
+    fn parallel_tool_calls_supported(&self) -> bool {
+        self.serving_harness_id().is_some_and(|harness| {
+            agiworkforce_model_registry::harness_feature_implemented(&harness, "parallelToolCalls")
+                .unwrap_or(false)
+        })
+    }
+
+    fn image_limit_refusal(&self) -> Option<String> {
+        let is_image = |block: &&ContentBlock| matches!(block, ContentBlock::Image { .. });
+        let attached = self.pending_image_blocks.iter().filter(is_image).count() as u64;
+        let held = self
+            .messages
+            .iter()
+            .map(|message| match &message.content {
+                models::MessageContent::Blocks(blocks) => blocks.iter().filter(is_image).count(),
+                models::MessageContent::Text(_) => 0,
+            })
+            .sum::<usize>() as u64;
+        if attached + held == 0 {
+            return None;
+        }
+        let limit = crate::model_catalog::max_images_per_request(&self.model).or_else(|| {
+            self.serving_harness_id().and_then(|harness| {
+                agiworkforce_model_registry::harness_max_images_per_request(&harness)
+                    .ok()
+                    .flatten()
+            })
+        })?;
+        let excess = (attached + held)
+            .checked_sub(limit)
+            .filter(|excess| *excess > 0)?;
+        let images = |count: u64| {
+            if count == 1 {
+                "1 image".to_string()
+            } else {
+                format!("{count} images")
+            }
+        };
+        let model = crate::model_catalog::display_name(&self.model);
+        Some(if held == 0 {
+            format!(
+                "{model} can read up to {limit} images in one message. Remove {} to send it.",
+                images(excess)
+            )
+        } else if excess <= attached {
+            format!(
+                "{model} can read up to {limit} images in one request, and this conversation already holds {}. Remove {} to send it.",
+                images(held),
+                images(excess)
+            )
+        } else {
+            format!(
+                "{model} can read up to {limit} images in one request, and this conversation holds {}. Start a new conversation or choose a model that reads more images.",
+                images(held)
+            )
+        })
+    }
+
     async fn project_conversation(&self) -> Option<String> {
         if self.privacy_mode != super::PrivacyMode::Managed {
             return None;
@@ -726,6 +799,11 @@ impl AgentSession {
         // anything downstream reads `self.model` (compaction limits, request
         // construction, cost attribution).
         self.re_resolve_auto_route_for_turn(user_input);
+
+        if let Some(refusal) = self.image_limit_refusal() {
+            self.pending_image_blocks.clear();
+            anyhow::bail!(refusal);
+        }
 
         self.fire_turn_hook(hooks::HookEvent::TurnStart, Some(user_input.to_string()))
             .await;
@@ -928,9 +1006,10 @@ message -- revise and call `update_plan` again.\n\n",
             .iter()
             .map(|tool_definition| tool_definition.name.clone())
             .collect::<HashSet<_>>();
+        let parallel_tool_calls = self.parallel_tool_calls_supported();
         let concurrency_safe_names: HashSet<String> = callable_tool_defs
             .iter()
-            .filter(|t| t.is_concurrency_safe)
+            .filter(|t| parallel_tool_calls && t.is_concurrency_safe)
             .map(|t| t.name.clone())
             .collect();
         let plan_mode_mutating_names: HashSet<String> = callable_tool_defs
