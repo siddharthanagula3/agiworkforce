@@ -21,9 +21,13 @@ Settings, Security manages passkeys and two-factor authentication. Passkeys sign
 you in. Authenticator apps (TOTP) and backup codes are temporarily unavailable:
 Settings, Security shows **Temporarily unavailable** where you would set one up
 or replace your backup codes, and a workspace cannot start requiring
-multi-factor authentication until they return. Hardware security keys, SMS MFA
-and trusted-device lists are not part of the current account contract, so they
-are not offered rather than silently ignored.
+multi-factor authentication until they return. Hardware security keys and SMS
+MFA are not part of the current account contract, so they are not offered rather
+than silently ignored.
+
+No device skips the sign-in checks. Devices you linked, such as the CLI, VS
+Code, the Chrome extension or the desktop app, are listed in Settings, Account
+under **Linked devices**, where you can unlink each one.
 
 ## Password
 

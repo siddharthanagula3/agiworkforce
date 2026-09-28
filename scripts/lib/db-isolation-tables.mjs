@@ -20,6 +20,8 @@ export const USER_OWNED_TABLES = new Set([
   'connector_tool_permissions',
   'api_keys',
   'developer_projects',
+  'developer_webhook_endpoints',
+  'developer_webhook_deliveries',
   'managed_usage_requests',
   'managed_usage_request_extensions',
   'usage_events',

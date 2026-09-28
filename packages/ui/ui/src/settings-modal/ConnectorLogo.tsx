@@ -195,9 +195,13 @@ const CONNECTOR_LOGO_URLS: Record<string, string> = {
   monday: 'https://upload.wikimedia.org/wikipedia/commons/c/c6/Monday_logo.svg',
 
   plaid: 'https://www.google.com/s2/favicons?domain=plaid.com&sz=64',
+  'bank-accounts': 'https://www.google.com/s2/favicons?domain=plaid.com&sz=64',
+
+  'google-contacts': 'https://www.google.com/s2/favicons?domain=contacts.google.com&sz=64',
 
   'epic-fhir': 'https://www.google.com/s2/favicons?domain=epic.com&sz=64',
   cerner: 'https://www.google.com/s2/favicons?domain=oracle.com&sz=64',
+  healthex: 'https://www.google.com/s2/favicons?domain=healthex.io&sz=64',
 };
 
 function getIcon(id: string): SimpleIconData | null {

@@ -30,6 +30,7 @@ import { readGlobalPrivacyControlHeader } from '@/lib/consent-signals';
 
 import { ConsentCentre } from './ConsentCentre';
 import { RightsRequestsPortal } from './RightsRequestsPortal';
+import { PolicyVersionsLink } from '@shared/components/legal/PolicyVersionsLink';
 
 export const metadata = buildMetadata({
   title: 'Data rights and consent',
@@ -87,7 +88,7 @@ export default async function DataRightsPage() {
               <Link href={CANONICAL_POLICY_ROUTES.privacy} className="agi-ds-link">
                 /privacy
               </Link>{' '}
-              generally.
+              generally. <PolicyVersionsLink policy="dataRights" />
             </>
           }
           ctas={[]}

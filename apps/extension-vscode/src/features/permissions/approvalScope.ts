@@ -43,6 +43,14 @@ export function approvalToolIdentity(kind: string): string {
   return variant;
 }
 
+const FILE_CHANGE_VARIANTS: ReadonlySet<string> = new Set(['FileWrite', 'FileEdit']);
+
+export function approvalFilePath(kind: string): string | undefined {
+  if (!FILE_CHANGE_VARIANTS.has(variantOf(kind))) return undefined;
+  const raw = field(kind, 'path');
+  return raw === '' ? undefined : raw.replace(/\\(.)/gu, '$1');
+}
+
 /** What to call that tool in a sentence the user reads. */
 export function approvalToolLabel(kind: string): string {
   const variant = variantOf(kind);

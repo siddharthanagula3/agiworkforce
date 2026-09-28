@@ -17,39 +17,6 @@ nothing is left.
 
 Code: `crates/agiworkforce-app-server/src/lib.rs:199-205`, `apps/web/lib/services/cloud-code-session-service.ts:2039-2041`
 
-## S99.16: Worktree manager.
-
-- Done when: A worktree manager creates, lists and removes worktrees for isolated sessions.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | The CLI can create/list/remove worktrees (agent tools, REPL /worktree), but sessions are not bound to them and the app-server reports worktrees:false. | handler |
-
-Code: `apps/cli/src/platform/runtime/worktree.rs:105-113`, `apps/cli/src/app_server/developer_host.rs:376-376`
-
-## S99.17: Terminal/PTY manager.
-
-- Done when: A terminal/PTY manager runs interactive shells with a real pseudo-terminal.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Commands run through a cancellation-safe process supervisor without a pseudo-terminal, so interactive programs cannot run; no PTY library is used. | handler |
-
-Code: `apps/cli/src/process_tree.rs:1-10`
-
-## S99.19: Environment manager.
-
-- Done when: An environment manager captures and applies the shell environment (with secrets redacted).
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | The criterion is 'captures and applies'. ShellSnapshot has exactly two public functions, capture and cleanup_stale (shell_snapshot.rs:12,147), and the only callers are agent/mod.rs:553-554 at session start; searched ShellSnapshot::\|shell_snapshot::\|shell_snapshots across apps/cli/src: no load/apply/read of the snapshot anywhere (init.rs:17 creates the directory, sync.rs:10 lists it in a comment). Redaction is real (l.46-50) but the snapshot is written and never consumed, so no command ever runs under the captured environment. partial, miss ['handler'], remaining: 'The shell environment is captured with secrets redacted at session start, but nothing reads the snapshot back to run commands under it.' |  |
-
-Code: `apps/cli/src/shell_snapshot.rs:10-15`
-
 ## S99.27: CI integration.
 
 - Done when: CI integration: read check/workflow status and logs for a branch or PR.

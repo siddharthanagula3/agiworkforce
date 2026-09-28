@@ -25,6 +25,7 @@ import {
   contactMailto,
 } from '@/lib/legal-constants';
 import { CONSENT_PURPOSES } from '@/lib/consent-purposes';
+import { PolicyVersionsLink } from '@shared/components/legal/PolicyVersionsLink';
 
 export const metadata = buildMetadata({
   title: 'India: DPDP notice',
@@ -262,7 +263,8 @@ export default function IndiaDpdpNoticePage() {
               </Link>
               , which describes the same processing in more detail;{' '}
               <strong>where the two differ on your rights in India, this page governs.</strong> Last
-              updated: {POLICY_LAST_UPDATED.indiaPrivacy}. Managed Cloud is in public alpha.
+              updated: {POLICY_LAST_UPDATED.indiaPrivacy}. Managed Cloud is in public alpha.{' '}
+              <PolicyVersionsLink policy="indiaPrivacy" />
             </Prose>
           </Stack>
         </Section>

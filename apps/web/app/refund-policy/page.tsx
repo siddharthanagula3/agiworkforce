@@ -18,6 +18,7 @@ import {
   WITHDRAWAL_CONSENT_VERSION,
 } from '@/lib/billing/withdrawal-consent';
 import { RefundRequestForm } from './RefundRequestForm';
+import { PolicyVersionsLink } from '@shared/components/legal/PolicyVersionsLink';
 
 export const metadata = buildMetadata({
   title: 'Refund policy',
@@ -75,7 +76,7 @@ export default function RefundPolicyPage() {
             <>
               We review billing problems promptly. Eligibility depends on the type of charge,
               account usage, applicable law, and any contract-specific terms. Last updated:{' '}
-              {POLICY_LAST_UPDATED.refunds}.
+              {POLICY_LAST_UPDATED.refunds}. <PolicyVersionsLink policy="refunds" />
             </>
           }
           ctas={[]}
