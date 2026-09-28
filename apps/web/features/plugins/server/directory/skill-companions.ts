@@ -5,9 +5,17 @@ import type { SkillFileReadOutcome, SkillToolFileAccess } from '@agiworkforce/sk
 
 import { logger } from '@/lib/logger';
 import {
+  listOrganizationSkillCompanions,
+  readOrganizationPluginFile,
+} from '@/lib/services/organization-plugin-service';
+import {
   listOwnedSkillCompanions,
   readOwnedEntryFile,
 } from '@/lib/services/plugin-owned-source-service';
+import {
+  listCommunitySkillCompanions,
+  readCommunityPluginFile,
+} from '@/lib/services/plugin-submission-service';
 import {
   GITHUB_API_USER_AGENT,
   GITHUB_TOKEN_ENV_VAR,
@@ -59,17 +67,18 @@ function lazyListing(
   return () => (listing ??= load());
 }
 
-export function ownedSkillFileAccess(
-  db: DatabaseAdapter,
-  userId: string,
-  entryId: string,
+interface StoredSkillFiles {
+  list: (directory: string, limit: number) => Promise<SkillCompanionFile[]>;
+  read: (path: string) => Promise<string | null>;
+}
+
+function storedSkillFileAccess(
   skillFilePath: string,
+  files: StoredSkillFiles,
 ): SkillToolFileAccess {
   const directory = skillDirectoryOf(skillFilePath);
   const list = lazyListing(async () =>
-    directory
-      ? listOwnedSkillCompanions(db, userId, entryId, directory, SKILL_COMPANION_MAX_FILES)
-      : [],
+    directory ? files.list(directory, SKILL_COMPANION_MAX_FILES) : [],
   );
   return {
     async listFiles() {
@@ -79,10 +88,46 @@ export function ownedSkillFileAccess(
       const file = (await list()).find((candidate) => candidate.path === path);
       if (!file) return NOT_FOUND;
       if (file.size > SKILL_COMPANION_MAX_BYTES) return TOO_LARGE;
-      const content = await readOwnedEntryFile(db, userId, entryId, `${directory}/${file.path}`);
+      const content = await files.read(`${directory}/${file.path}`);
       return content === null ? NOT_FOUND : { ok: true, path: file.path, content };
     },
   };
+}
+
+export function ownedSkillFileAccess(
+  db: DatabaseAdapter,
+  userId: string,
+  entryId: string,
+  skillFilePath: string,
+): SkillToolFileAccess {
+  return storedSkillFileAccess(skillFilePath, {
+    list: (directory, limit) => listOwnedSkillCompanions(db, userId, entryId, directory, limit),
+    read: (path) => readOwnedEntryFile(db, userId, entryId, path),
+  });
+}
+
+export function organizationSkillFileAccess(
+  db: DatabaseAdapter,
+  organizationId: string,
+  pluginId: string,
+  skillFilePath: string,
+): SkillToolFileAccess {
+  return storedSkillFileAccess(skillFilePath, {
+    list: (directory, limit) =>
+      listOrganizationSkillCompanions(db, organizationId, pluginId, directory, limit),
+    read: (path) => readOrganizationPluginFile(db, organizationId, pluginId, path),
+  });
+}
+
+export function communitySkillFileAccess(
+  db: DatabaseAdapter,
+  submissionId: string,
+  skillFilePath: string,
+): SkillToolFileAccess {
+  return storedSkillFileAccess(skillFilePath, {
+    list: (directory, limit) => listCommunitySkillCompanions(db, submissionId, directory, limit),
+    read: (path) => readCommunityPluginFile(db, submissionId, path),
+  });
 }
 
 async function listRepositoryCompanions(

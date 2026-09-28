@@ -516,6 +516,20 @@ const ru = {
   'webview.sources_few': '{count} источника',
   'webview.sources_many': '{count} источников',
   'webview.sources_other': '{count} источника',
+  'sessionSync.continuedIn':
+    'Эта сессия продолжилась в {client}. Здесь показаны её последние сообщения.',
+  'sessionSync.continuedElsewhere':
+    'Эта сессия продолжилась в другом приложении. Здесь показаны её последние сообщения.',
+  'sessionSync.heldBy': '{client} использует эту сессию.',
+  'sessionSync.takeOverDetail':
+    'Перехватите её, чтобы отправить сообщение отсюда. Если {client} ещё отвечает, сначала остановите его там: когда два приложения пишут одновременно, остаются две копии сессии.',
+  'sessionSync.takeOver': 'Перехватить и отправить',
+  'sessionSync.notSent':
+    'Не отправлено: {client} использует эту сессию. Отправьте снова, чтобы перехватить её здесь.',
+  'sessionSync.takeOverFailed':
+    'Не удалось перехватить сессию. Отправьте снова, чтобы повторить попытку.',
+  'sessionSync.stopBeforeTerminal':
+    'Остановите текущий ответ, прежде чем продолжить эту сессию в терминале.',
 };
 
 export default ru;

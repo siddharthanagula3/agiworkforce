@@ -14,6 +14,7 @@ import {
   canAccessModelForSubscriptionTier,
   canUseBillingPlanCapability,
   compareManagedUsage,
+  currencyMinorUnitDigits,
   formatPrivacyModeLabel,
   getAllowedModelsForTier,
   getBillingPlanProductLimits,
@@ -42,6 +43,7 @@ import {
   type SelfServePaidPlanTier,
 } from '@agiworkforce/types';
 import { useAuthStore } from '@shared/stores/authentication-store';
+import { useMounted } from '@shared/hooks/useMounted';
 import {
   upgradeToBasicPlan,
   upgradeToProPlan,
@@ -112,20 +114,32 @@ const localizedPricingCatalogSchema = z.object({
 
 type LocalizedPricingCatalog = z.infer<typeof localizedPricingCatalogSchema>;
 
-function formatLocalizedAmount(
-  entry: z.infer<typeof localizedPriceEntrySchema> | undefined,
-  fallbackUsd: number,
-  divisor = 1,
-  multiplier = 1,
-): string {
-  if (!entry) return `$${((fallbackUsd * multiplier) / divisor).toFixed(2).replace(/\.00$/, '')}`;
-  return new Intl.NumberFormat(undefined, {
+const SERVER_RENDER_PRICE_LOCALE = 'en-US';
+
+function formatPlanAmount(amount: number, currency: string, locale: string | undefined): string {
+  return new Intl.NumberFormat(locale, {
     style: 'currency',
-    currency: entry.currency.toUpperCase(),
+    currency: currency.toUpperCase(),
     currencyDisplay: 'narrowSymbol',
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
-  }).format((entry.amountMinor * multiplier) / 100 / divisor);
+  }).format(amount);
+}
+
+function formatLocalizedAmount(
+  entry: z.infer<typeof localizedPriceEntrySchema> | undefined,
+  fallbackUsd: number,
+  locale: string | undefined,
+  divisor = 1,
+  multiplier = 1,
+): string {
+  if (!entry) return formatPlanAmount((fallbackUsd * multiplier) / divisor, 'USD', locale);
+  const minorPerUnit = 10 ** currencyMinorUnitDigits(entry.currency);
+  return formatPlanAmount(
+    (entry.amountMinor * multiplier) / minorPerUnit / divisor,
+    entry.currency,
+    locale,
+  );
 }
 
 /**
@@ -368,6 +382,7 @@ export default function PricingPage() {
   const [maxVariant, setMaxVariant] = useState<'max' | 'max_15x'>('max');
   const [localizedPricing, setLocalizedPricing] = useState<LocalizedPricingCatalog | null>(null);
   const [pricingStatus, setPricingStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const priceLocale = useMounted() ? undefined : SERVER_RENDER_PRICE_LOCALE;
   const [pendingPlan, setPendingPlan] = useState<CheckoutPlan | null>(null);
   const [portalPending, setPortalPending] = useState(false);
   const [upgradeConfirm, setUpgradeConfirm] = useState<UpgradeConfirmRequest | null>(null);
@@ -444,18 +459,36 @@ export default function PricingPage() {
   const team = BILLING_PLAN_PRICING.team;
 
   const localizedPlans = localizedPricing?.plans;
-  const proPrice = formatLocalizedAmount(localizedPlans?.pro.monthly, pro.monthlyPriceUsd);
-  const basicPrice = formatLocalizedAmount(localizedPlans?.basic.monthly, basic.monthlyPriceUsd);
-  const maxPrice = formatLocalizedAmount(localizedPlans?.max.monthly, max.monthlyPriceUsd);
+  const proPrice = formatLocalizedAmount(
+    localizedPlans?.pro.monthly,
+    pro.monthlyPriceUsd,
+    priceLocale,
+  );
+  const basicPrice = formatLocalizedAmount(
+    localizedPlans?.basic.monthly,
+    basic.monthlyPriceUsd,
+    priceLocale,
+  );
+  const maxPrice = formatLocalizedAmount(
+    localizedPlans?.max.monthly,
+    max.monthlyPriceUsd,
+    priceLocale,
+  );
   const max15xPrice = formatLocalizedAmount(
     localizedPlans?.max_15x.monthly,
     max15x.monthlyPriceUsd,
+    priceLocale,
   );
   // Per-seat unit price, and the total for the seats currently selected.
-  const teamSeatPrice = formatLocalizedAmount(localizedPlans?.team.monthly, team.monthlyPriceUsd);
+  const teamSeatPrice = formatLocalizedAmount(
+    localizedPlans?.team.monthly,
+    team.monthlyPriceUsd,
+    priceLocale,
+  );
   const teamTotalPrice = formatLocalizedAmount(
     localizedPlans?.team.monthly,
     team.monthlyPriceUsd,
+    priceLocale,
     1,
     teamSeats,
   );
@@ -495,11 +528,13 @@ export default function PricingPage() {
   const teamYearlySeatPricePerMonth = formatLocalizedAmount(
     localizedPlans?.team.yearly,
     team.yearlyPriceUsd,
+    priceLocale,
     12,
   );
   const teamYearlyTotalPrice = formatLocalizedAmount(
     localizedPlans?.team.yearly,
     team.yearlyPriceUsd,
+    priceLocale,
     1,
     teamSeats,
   );

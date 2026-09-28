@@ -5,8 +5,12 @@ import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import {
   getSandboxOrigin,
   isFromSandbox,
+  parseArtifactRuntimeRequest,
+  parseRuntimeRequestId,
   postRenderToSandbox,
+  postRuntimeResponseToSandbox,
   type ArtifactRenderPayload,
+  type ArtifactRuntimeHost,
   type SandboxIncomingMessage,
 } from '@/lib/artifact-sandbox';
 
@@ -14,6 +18,11 @@ const SANDBOX_CONNECT_TIMEOUT_MS = 3000;
 
 export const ARTIFACT_RENDER_FAILURE_MESSAGE =
   'The preview could not start. Review the source or try again.';
+
+const RUNTIME_UNAVAILABLE_MESSAGE =
+  'AI and saved data are available once this app is published and opened by a signed-in viewer.';
+const RUNTIME_REQUEST_UNSUPPORTED_MESSAGE = 'This app sent a request the page cannot run.';
+const RUNTIME_REQUEST_FAILED_MESSAGE = 'The request failed. Try again.';
 
 const FALLBACK_MESSAGE_MARKER = '__agiArtifactSandbox';
 
@@ -98,6 +107,7 @@ export interface SandboxedIframeProps {
   style?: React.CSSProperties;
   refreshKey?: number;
   onRenderError?: (error: string) => void;
+  runtime?: ArtifactRuntimeHost;
 }
 
 export function SandboxedIframe({
@@ -108,9 +118,14 @@ export function SandboxedIframe({
   style,
   refreshKey = 0,
   onRenderError,
+  runtime,
 }: SandboxedIframeProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const sandboxOrigin = getSandboxOrigin();
+  const renderPayload = useMemo<ArtifactRenderPayload>(
+    () => (runtime ? { ...payload, runtime: true } : payload),
+    [payload, runtime],
+  );
   const [, setRenderError] = useState<string | null>(null);
   const fallbackDocument = useMemo(
     () => withFallbackErrorReporter(fallbackSrcDoc),
@@ -156,7 +171,7 @@ export function SandboxedIframe({
           connectTimeoutRef.current = null;
         }
         try {
-          postRenderToSandbox(iframeRef.current, payload);
+          postRenderToSandbox(iframeRef.current, renderPayload);
         } catch {
           // ignore · payload re-posts on the onLoad path below
         }
@@ -165,20 +180,42 @@ export function SandboxedIframe({
         setRenderError(message);
         console.error('[artifact-preview] render failed', message);
         onRenderError?.(ARTIFACT_RENDER_FAILURE_MESSAGE);
+      } else if (data.type === 'runtime-request') {
+        const id = parseRuntimeRequestId(data.id);
+        const frame = iframeRef.current;
+        if (!id || !frame) return;
+        const request = parseArtifactRuntimeRequest(data.request);
+        if (!runtime || !request) {
+          postRuntimeResponseToSandbox(frame, {
+            id,
+            ok: false,
+            error: runtime ? RUNTIME_REQUEST_UNSUPPORTED_MESSAGE : RUNTIME_UNAVAILABLE_MESSAGE,
+          });
+          return;
+        }
+        runtime.handle(request).then(
+          (value) => postRuntimeResponseToSandbox(frame, { id, ok: true, value: value ?? null }),
+          (error: unknown) =>
+            postRuntimeResponseToSandbox(frame, {
+              id,
+              ok: false,
+              error: error instanceof Error ? error.message : RUNTIME_REQUEST_FAILED_MESSAGE,
+            }),
+        );
       }
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [sandboxOrigin, payload, onRenderError]);
+  }, [sandboxOrigin, renderPayload, onRenderError, runtime]);
 
   const onLoad = useCallback(() => {
     if (!sandboxOrigin || !iframeRef.current) return;
     try {
-      postRenderToSandbox(iframeRef.current, payload);
+      postRenderToSandbox(iframeRef.current, renderPayload);
     } catch {
       // ignore
     }
-  }, [sandboxOrigin, payload]);
+  }, [sandboxOrigin, renderPayload]);
 
   const onError = useCallback(() => {
     activateFallback();

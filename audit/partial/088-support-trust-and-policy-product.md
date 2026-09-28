@@ -161,17 +161,15 @@ Code: `apps/web/lib/releases/github-cli-releases.ts:157-157`
 
 - Done when: An assistant helps users move their data and settings from another product or a replaced feature, with a preview before changes.
 - Wave: 3
-- Already works on: cli
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only memory can be imported from another assistant; there is no guided move for conversations, projects or settings, or from a retired feature. | ui |
-| desktop | partial | Only memory can be imported from another assistant; there is no guided move for conversations, projects or settings, or from a retired feature. | ui |
 | mobile | partial | Mobile imports memory from an exported file only; no guided migration of other data or settings. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/settings/components/ImportMemoryDialog.tsx:19-21`, `apps/web/app/api/memory/import/route.ts:184-187`, `apps/mobile/app/(app)/settings/memory-import.tsx:5-8`
+Code: `apps/mobile/app/(app)/settings/memory-import.tsx:5-8`
 
 ## S88.16: Privacy-rights request portal.
 
@@ -234,18 +232,6 @@ Code: `apps/web/features/settings/components/ImportMemoryDialog.tsx:19-21`, `app
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S88.24: Policy-version history.
-
-- Done when: Users can see earlier versions of the terms and policies and what changed between them.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Policies show the current revision date and material changes are listed on /changelog, but earlier versions of the policy text are not published. | ui |
-| desktop | partial | Policies show the current revision date and material changes are listed on /changelog, but earlier versions of the policy text are not published. | ui |
-
-Code: `apps/web/app/privacy/page.tsx:1249-1253`, `apps/web/app/signup/TermsGate.tsx:108-110`, `apps/web/lib/server/terms.ts:7-7`
-
 ## S88.26: Security/compliance evidence portal.
 
 - Done when: Customers can review security and compliance evidence (reports, certifications, questionnaires) in a trust portal.
@@ -254,7 +240,7 @@ Code: `apps/web/app/privacy/page.tsx:1249-1253`, `apps/web/app/signup/TermsGate.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The trust page is a posture ledger; there are no audit reports or evidence documents to request or download (none exist yet, as the page says). | ui, handler |
-| desktop | partial | The trust page is a posture ledger; there are no audit reports or evidence documents to request or download (none exist yet, as the page says). | ui, handler |
+| web | partial | Owner: no SOC 2 report, ISO 27001 certificate or penetration test report exists to publish. What the trust page honestly offers is in place: a dated posture ledger, the documents behind each row, the audit-report row saying none exists, and questionnaires answered on request (enterprise security guide) | owner |
+| desktop | partial | Owner: no SOC 2 report, ISO 27001 certificate or penetration test report exists to publish. What the trust page honestly offers is in place: a dated posture ledger, the documents behind each row, the audit-report row saying none exists, and questionnaires answered on request (enterprise security guide) | owner |
 
-Code: `apps/web/app/trust/page.tsx:78-82`, `apps/web/app/trust/page.tsx:277-283`
+Code: `apps/web/app/trust/page.tsx:79-79`, `apps/web/app/trust/page.tsx:42-42`, `apps/web/content/support/enterprise-security.md:21-21`

@@ -153,6 +153,19 @@ async function handleImport(request: NextRequest, context: RouteContext): Promis
           sourceSurface: 'web',
           storageUri: key,
         },
+        {
+          kind: 'connector_item',
+          provider: 'google_drive',
+          uri:
+            drive.webViewLink ??
+            `https://drive.google.com/file/d/${encodeURIComponent(fileId)}/view`,
+          externalId: fileId,
+          title: drive.fileName,
+          version: drive.version ? { kind: 'revision', value: drive.version } : null,
+          access: 'connector',
+          connectorId: GOOGLE_DRIVE_CONNECTOR_ID,
+          accountKey: access.accountKey,
+        },
       );
       if (registration.status === 'unavailable') {
         throw createError.capabilityUnavailable('Project sources are not available yet.');

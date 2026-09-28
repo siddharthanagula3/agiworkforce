@@ -119,5 +119,6 @@ export const LibraryListResponseSchema = z.object({
   has_more: z.boolean(),
   next_offset: z.number().int().nonnegative().nullable(),
   storage_used_bytes: z.number().nonnegative().optional(),
+  storage_limit_bytes: z.number().nonnegative().optional(),
 });
 export type LibraryListResponse = z.infer<typeof LibraryListResponseSchema>;

@@ -30,12 +30,6 @@ nothing is left.
 - Wave: 5
 - Build on: platform
 
-## S96.17: Artifact data store.
-
-- Done when: Generated apps can persist data in a backend store provided by the platform.
-- Wave: 5
-- Build on: platform
-
 ## S96.18: Connected-data proxy.
 
 - Done when: A proxy lets artifacts read connected-service data without exposing credentials.

@@ -234,6 +234,9 @@ export function parseManagedUsageSummaryResponse(value: unknown): ManagedUsageSu
     ...(record['overage_enabled'] === undefined
       ? {}
       : { overage_enabled: record['overage_enabled'] === true }),
+    ...(record['usage_allocation'] === 'provisioned' || record['usage_allocation'] === 'pending'
+      ? { usage_allocation: record['usage_allocation'] }
+      : {}),
     ...(record['credits'] === undefined || record['credits'] === null
       ? {}
       : { credits: readManagedUsageCredits(record['credits']) }),

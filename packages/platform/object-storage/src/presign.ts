@@ -1,4 +1,4 @@
-import { type PresignPutInput, type PresignUploadPartInput } from './types';
+import { type PresignGetInput, type PresignPutInput, type PresignUploadPartInput } from './types';
 
 export const PRESIGNED_URL_MAX_TTL_SECONDS = 3_600;
 export const MAX_MULTIPART_PART_NUMBER = 10_000;
@@ -44,6 +44,28 @@ export function bindPresignedUpload(input: PresignPutInput): BoundPresignUpload 
     throw new Error('A presigned upload must bind a content type.');
   }
   return { contentType, contentLength, expiresInSeconds: boundLifetime(input.expiresInSeconds) };
+}
+
+export interface BoundPresignDownload {
+  expiresInSeconds: number;
+  contentDisposition: string | undefined;
+}
+
+function attachmentDisposition(fileName: string): string {
+  const fallback = fileName.replace(/[^\x20-\x7e]|["\\]/g, '_');
+  const encoded = encodeURIComponent(fileName).replace(
+    /['()*]/g,
+    (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+  return `attachment; filename="${fallback}"; filename*=UTF-8''${encoded}`;
+}
+
+export function bindPresignedDownload(input: PresignGetInput): BoundPresignDownload {
+  const fileName = input.downloadFileName?.trim();
+  return {
+    expiresInSeconds: boundLifetime(input.expiresInSeconds),
+    contentDisposition: fileName ? attachmentDisposition(fileName) : undefined,
+  };
 }
 
 export interface BoundPresignUploadPart {

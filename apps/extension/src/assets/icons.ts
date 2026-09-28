@@ -123,6 +123,20 @@ export const CircleAlert = svg(
   '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>',
 );
 
+export const Scale = svg(
+  '<path d="M12 5v16M8 21h8"/><path d="M6 7h12M6 7v4M18 7v4"/><path d="M3 11h6l-2 3H5z"/><path d="M15 11h6l-2 3h-2z"/>',
+);
+
+export const MapPinned = svg(
+  '<path d="M12 3 6 7.5V12l6 5 6-5V7.5z"/><circle cx="12" cy="10" r="1.75"/><path d="M7 20h10"/>',
+);
+
+export const Navigation = svg('<path d="M4 11 20 4l-7 16-2.5-6.5z"/>');
+
+export const Code2 = svg(
+  '<path d="m9 7-5 5 5 5"/><path d="m15 7 5 5-5 5"/><path d="m13.5 4-3 16"/>',
+);
+
 export const AppWindow = svg(
   '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="M10 4v4"/><path d="M2 8h20"/><path d="M6 4v4"/>',
 );
