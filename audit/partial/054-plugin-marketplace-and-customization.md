@@ -380,14 +380,14 @@ Code: `apps/web/features/workspace-console/components/WorkspaceConnectorPolicy.t
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | A package scan runs on marketplace uploads and blocks install when it fails, but users only see a refusal message; findings are never shown. | ui |
-| desktop | partial | A package scan runs on marketplace uploads and blocks install when it fails, but users only see a refusal message; findings are never shown. | ui |
+| web | partial | An upload or install now shows what the scanner found (blocked: the reasons; warning: the findings with Continue anyway, as Claude's scan does); an installed plugin's detail does not yet show its scan result (next batch) | ui |
+| desktop | partial | An upload or install now shows what the scanner found (blocked: the reasons; warning: the findings with Continue anyway, as Claude's scan does); an installed plugin's detail does not yet show its scan result (next batch) | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/services/plugin-marketplace-service.ts:215-250`, `apps/web/lib/services/plugin-marketplace-service.ts:685-705`
+Code: `apps/web/lib/services/plugin-owned-source-service.ts:77-77`, `packages/ui/ui/src/directory/UploadFileDialog.tsx:128-128`, `apps/web/lib/services/user-skill-service.ts:145-145`
 
 ## S54.33: Compatibility warning.
 

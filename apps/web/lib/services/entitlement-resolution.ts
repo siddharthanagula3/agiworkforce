@@ -110,10 +110,24 @@ async function isSeatEntitled(row: SeatCandidateRow, orgTier: string): Promise<b
   return isEntitledSubscriptionStatusForTier(orgTier, status, collectionReadOnly);
 }
 
-async function resolveSeatSubscription(userId: string): Promise<SubscriptionInfo | null> {
+function workspaceFirst(
+  rows: readonly SeatCandidateRow[],
+  workspaceOrganizationId: string | null,
+): SeatCandidateRow[] {
+  if (!workspaceOrganizationId) return [...rows];
+  return [
+    ...rows.filter((row) => row.organization_id === workspaceOrganizationId),
+    ...rows.filter((row) => row.organization_id !== workspaceOrganizationId),
+  ];
+}
+
+async function resolveSeatSubscription(
+  userId: string,
+  workspaceOrganizationId: string | null,
+): Promise<SubscriptionInfo | null> {
   const rows = await getNeonDb().query<SeatCandidateRow>(SEAT_CANDIDATES_SQL, [userId]);
 
-  for (const row of rows) {
+  for (const row of workspaceFirst(rows, workspaceOrganizationId)) {
     const orgTier = normalizeBillingPlanTier(row.billing_plan_tier);
     if (!isSeatBearingBillingPlan(orgTier)) continue;
     if (!(await isSeatEntitled(row, orgTier))) continue;
@@ -206,6 +220,7 @@ export interface EntitlementResolutionOptions {
    * over would otherwise entitle them to receive it.
    */
   includeSeats?: boolean;
+  workspaceOrganizationId?: string | null;
 }
 
 function bundleFrom(
@@ -294,9 +309,11 @@ async function isOwnSubscriptionEntitled(
 
 /**
  * The one entitlement-resolution entry point. A team member holds no
- * `subscriptions` row of their own, so precedence is: the user's own row, then
- * the earliest-joined organization that has a seat-bearing plan, an entitled
- * owner subscription and a seat for them within `licensed_seats`, then none.
+ * `subscriptions` row of their own, so precedence is: the user's own entitled
+ * paid row, then a seat (the active workspace's first, then the earliest-joined
+ * organization) that has a seat-bearing plan, an entitled owner subscription
+ * and a seat for them within `licensed_seats`, then the user's own lapsed or
+ * free row, then none.
  */
 export async function resolveEntitlementBundle(
   db: DatabaseAdapter,
@@ -304,20 +321,25 @@ export async function resolveEntitlementBundle(
   options: EntitlementResolutionOptions = {},
 ): Promise<EntitlementBundle> {
   const own = await SubscriptionService.getSubscription(db, userId);
-  if (own) {
-    return bundleFrom(userId, own, 'subscription', await isOwnSubscriptionEntitled(userId, own));
+  const ownEntitled = own ? await isOwnSubscriptionEntitled(userId, own) : false;
+  const settleOnOwn = (): EntitlementBundle =>
+    own
+      ? bundleFrom(userId, own, 'subscription', ownEntitled)
+      : bundleFrom(userId, null, 'none', false);
+  if (own && ownEntitled && normalizeBillingPlanTier(own.plan_tier) !== 'free') {
+    return settleOnOwn();
   }
-  if (options.includeSeats === false) return bundleFrom(userId, null, 'none', false);
+  if (options.includeSeats === false) return settleOnOwn();
 
   let seat: SubscriptionInfo | null = null;
   try {
-    seat = await resolveSeatSubscription(userId);
+    seat = await resolveSeatSubscription(userId, options.workspaceOrganizationId ?? null);
   } catch (error) {
     logger.error({ error, userId }, 'Seat entitlement lookup failed; falling back to no seat');
-    return bundleFrom(userId, null, 'none', false);
+    return settleOnOwn();
   }
 
-  if (!seat) return bundleFrom(userId, null, 'none', false);
+  if (!seat) return settleOnOwn();
   await ensureSeatMemberCreditAccount(db, seat);
   return bundleFrom(userId, seat, 'seat', true);
 }

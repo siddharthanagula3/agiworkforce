@@ -4,6 +4,7 @@ import {
   type PluginPublisher,
   type PluginRegistryEntry,
 } from '@agiworkforce/types';
+import { parsePluginDependencies } from '@/lib/services/plugin-dependencies';
 import {
   BRAND_NAME_PATTERN,
   BRAND_NAME_REPLACEMENT,
@@ -255,10 +256,12 @@ export function marketplaceDirectoryEntry(input: MarketplaceEntryInput): PluginD
       repositoryUrl: marketplace.source.repositoryUrl,
       manifestUrl: marketplace.manifestUrl,
       contentHash: marketplace.contentHash,
+      allowCrossMarketplaceDependenciesOn: marketplace.manifest.allowCrossMarketplaceDependenciesOn,
     },
     installCommand: marketplaceInstallCommand(plugin.name, marketplace.source.name),
     runtime,
     sourceLocation,
+    dependencies: parsePluginDependencies(plugin['dependencies']),
   };
 }
 

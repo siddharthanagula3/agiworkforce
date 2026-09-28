@@ -751,6 +751,61 @@ export async function getGitHubRepositoryDefaultBranch(
   return parsed.data.default_branch;
 }
 
+const gitHubBranchSchema = z.object({
+  name: z.string().min(1).max(255),
+  protected: z.boolean().optional(),
+});
+
+export interface GitHubRepositoryBranch {
+  name: string;
+  isProtected: boolean;
+}
+
+export async function listGitHubRepositoryBranches(
+  token: string,
+  owner: string,
+  repo: string,
+  limits: { maxItems: number; maxPages: number; perPage: number },
+): Promise<{ branches: GitHubRepositoryBranch[]; truncated: boolean }> {
+  validateGitHubPathSegment(owner, 'owner');
+  validateGitHubPathSegment(repo, 'repo');
+  const collected = await collectGitHubRestPages({
+    perPage: limits.perPage,
+    maxPages: limits.maxPages,
+    maxItems: limits.maxItems,
+    loadPage: async (page) => {
+      const response = await fetch(
+        buildGitHubApiUrl(
+          `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/branches?per_page=${limits.perPage}&page=${page}`,
+        ),
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/vnd.github+json',
+            'X-GitHub-Api-Version': GITHUB_API_VERSION,
+          },
+          signal: AbortSignal.timeout(GITHUB_REQUEST_TIMEOUT_MS),
+        },
+      );
+      if (!response.ok) {
+        throw new Error(`Failed to list the repository branches: ${response.status}`);
+      }
+      const parsed = z.array(gitHubBranchSchema).safeParse(await response.json());
+      if (!parsed.success) {
+        throw new Error('GitHub branch listing response was invalid');
+      }
+      return { items: parsed.data, linkHeader: response.headers.get('link') };
+    },
+  });
+  return {
+    truncated: collected.truncated,
+    branches: collected.items.map((branch) => ({
+      name: branch.name,
+      isProtected: branch.protected ?? false,
+    })),
+  };
+}
+
 /**
  * The pull request already open from `head`, if there is one. GitHub refuses a
  * second pull request for the same head with a 422 that carries no id, so this
@@ -1032,6 +1087,164 @@ async function readGitHubJson(token: string, path: string, label: string): Promi
     throw new Error(`Failed to ${label}: ${response.status}`);
   }
   return response.json();
+}
+
+const gitHubTaskPullRequestSchema = z.object({
+  number: z.number().int().positive(),
+  title: z.string(),
+  body: z.string().nullish(),
+  head: z.object({
+    ref: z.string().min(1).max(255),
+    sha: z.string().min(1).max(64),
+    repo: z.object({ full_name: z.string().min(1).max(512) }).nullish(),
+  }),
+});
+
+export interface GitHubTaskPullRequest {
+  number: number;
+  title: string;
+  body: string;
+  headRef: string;
+  headSha: string;
+  headRepository: string | null;
+}
+
+export async function getGitHubPullRequestForTask(
+  token: string,
+  owner: string,
+  repo: string,
+  prNumber: number,
+): Promise<GitHubTaskPullRequest> {
+  validateGitHubPathSegment(owner, 'owner');
+  validateGitHubPathSegment(repo, 'repo');
+  const number = githubNumberSegment(prNumber, 'pull request number');
+  const parsed = gitHubTaskPullRequestSchema.safeParse(
+    await readGitHubJson(
+      token,
+      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls/${number}`,
+      'read the pull request',
+    ),
+  );
+  if (!parsed.success) throw new Error('GitHub pull request response was invalid');
+  return {
+    number: parsed.data.number,
+    title: parsed.data.title,
+    body: (parsed.data.body ?? '').slice(0, MAX_GITHUB_ISSUE_BODY_LENGTH),
+    headRef: parsed.data.head.ref,
+    headSha: parsed.data.head.sha,
+    headRepository: parsed.data.head.repo?.full_name ?? null,
+  };
+}
+
+const gitHubFailedCheckRunsSchema = z.object({
+  check_runs: z.array(
+    z.object({
+      id: z.number().int().positive(),
+      name: z.string().min(1).max(255),
+      conclusion: z.string().nullish(),
+      app: z.object({ slug: z.string().nullish() }).nullish(),
+      output: z
+        .object({
+          title: z.string().nullish(),
+          summary: z.string().nullish(),
+          text: z.string().nullish(),
+        })
+        .nullish(),
+    }),
+  ),
+});
+
+const gitHubAnnotationsSchema = z.array(
+  z.object({
+    path: z.string(),
+    start_line: z.number().int().nullish(),
+    annotation_level: z.string().nullish(),
+    title: z.string().nullish(),
+    message: z.string(),
+  }),
+);
+
+const PASSING_CHECK_CONCLUSIONS: ReadonlySet<string> = new Set(['success', 'neutral', 'skipped']);
+const ACTIONS_APP_SLUG = 'github-actions';
+const MAX_FAILED_CHECKS = 5;
+const MAX_CHECK_ANNOTATIONS = 20;
+const MAX_CHECK_OUTPUT_LENGTH = 4_000;
+const MAX_CHECK_LOG_TAIL_LENGTH = 12_000;
+
+export interface GitHubFailedCheck {
+  name: string;
+  output: string;
+  annotations: string[];
+  logTail: string | null;
+}
+
+async function readActionsJobLogTail(
+  token: string,
+  base: string,
+  jobId: number,
+): Promise<string | null> {
+  const response = await fetch(buildGitHubApiUrl(`${base}/actions/jobs/${jobId}/logs`), {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/vnd.github+json',
+      'X-GitHub-Api-Version': GITHUB_API_VERSION,
+    },
+    signal: AbortSignal.timeout(GITHUB_REQUEST_TIMEOUT_MS),
+  });
+  if (!response.ok) return null;
+  const log = await response.text();
+  return log.slice(-MAX_CHECK_LOG_TAIL_LENGTH);
+}
+
+export async function listGitHubFailedChecks(
+  token: string,
+  owner: string,
+  repo: string,
+  sha: string,
+): Promise<GitHubFailedCheck[]> {
+  validateGitHubPathSegment(owner, 'owner');
+  validateGitHubPathSegment(repo, 'repo');
+  const base = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`;
+  const parsed = gitHubFailedCheckRunsSchema.safeParse(
+    await readGitHubJson(
+      token,
+      `${base}/commits/${encodeURIComponent(sha)}/check-runs?per_page=100`,
+      'list check runs',
+    ),
+  );
+  if (!parsed.success) throw new Error('GitHub check run response was invalid');
+  const failed = parsed.data.check_runs
+    .filter((run) => run.conclusion && !PASSING_CHECK_CONCLUSIONS.has(run.conclusion))
+    .slice(0, MAX_FAILED_CHECKS);
+
+  return Promise.all(
+    failed.map(async (run) => {
+      const annotations = await readGitHubJson(
+        token,
+        `${base}/check-runs/${run.id}/annotations?per_page=${MAX_CHECK_ANNOTATIONS}`,
+        'list check annotations',
+      )
+        .then((raw) => gitHubAnnotationsSchema.safeParse(raw))
+        .then((result) => (result.success ? result.data : []))
+        .catch(() => []);
+      const output = [run.output?.title, run.output?.summary, run.output?.text]
+        .filter((part): part is string => Boolean(part))
+        .join('\n\n')
+        .slice(0, MAX_CHECK_OUTPUT_LENGTH);
+      return {
+        name: run.name,
+        output,
+        annotations: annotations.map(
+          (annotation) =>
+            `${annotation.path}${annotation.start_line ? `:${annotation.start_line}` : ''} ${annotation.annotation_level ?? 'failure'}: ${annotation.title ? `${annotation.title}: ` : ''}${annotation.message}`,
+        ),
+        logTail:
+          run.app?.slug === ACTIONS_APP_SLUG
+            ? await readActionsJobLogTail(token, base, run.id).catch(() => null)
+            : null,
+      };
+    }),
+  );
 }
 
 /**

@@ -173,33 +173,29 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/research-loop.ts:412-412`
 
 - Done when: While research runs, the user can steer it (add guidance, change focus) and the run adapts.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Direction can be changed only before the run starts (editing the plan); once searching begins there is no way to steer it. | ui |
-| desktop | partial | Same as web (hosted): Direction can be changed only before the run starts (editing the plan); once searching begins there is no way to steer it. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/research/ResearchActivity.tsx:272-272`, `apps/web/features/chat/pages/WebChatPage.tsx:4695-4695`
-
 ## S35.17: Pause and resume.
 
 - Done when: The user can pause a running research task and resume it later from where it stopped.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The run only pauses on its own for plan approval, and a stopped or failed run resumes via Retry with its gathered sources; there is no user Pause/Resume while it runs. | ui |
-| desktop | partial | Same as web (hosted): The run only pauses on its own for plan approval, and a stopped or failed run resumes via Retry with its gathered sources; there is no user Pause/Resume while it runs. | ui |
-| mobile | partial | Mobile can Stop and later Retry (which resumes gathered sources and completed steps), but has no Pause. | ui |
+| mobile | partial | partials/privacy 38a12b33a: a paused run shows as paused on mobile and Resume continues it. The mobile Pause control is in post-codex/p-privacy-s35.17-mobile-pause.patch because its handler lives in held files (app/(app)/chat/[id].tsx, MessageBubble.tsx); apply after Codex finishes | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/research-loop.ts:2024-2026`, `apps/web/features/chat/pages/WebChatPage.tsx:4656-4660`, `apps/web/features/chat/components/research/ResearchActivity.tsx:327-327`, `apps/mobile/src/features/chat/components/research/ResearchRunCard.tsx:281-285`
+Code: `apps/mobile/src/features/chat/utils/researchRunState.ts:236-236`, `apps/mobile/src/features/chat/components/research/ResearchRunCard.tsx:265-265`, `apps/mobile/src/features/chat/components/research/ResearchRunCard.tsx:322-322`
 
 ## S35.18: Cancel research.
 

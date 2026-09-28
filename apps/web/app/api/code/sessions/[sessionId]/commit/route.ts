@@ -94,6 +94,7 @@ async function handleCommit(request: NextRequest, context: RouteContext) {
       sessionId,
       planTier,
       body['message'],
+      body['files'],
     );
     // What the pushed branch can actually prove, so no caller has to take a
     // "done" from the model's own words.

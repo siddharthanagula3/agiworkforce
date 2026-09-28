@@ -21,7 +21,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { ChevronLeft, Telescope, TriangleAlert } from 'lucide-react';
-import type { ResearchReport } from '@agiworkforce/types';
+import { isPausedResearchReport, type ResearchReport } from '@agiworkforce/types';
 import { cn } from '@shared/lib/utils';
 import { ResearchReportView } from './ResearchReportView';
 import { toUserMessage } from '@/lib/user-error-message';
@@ -80,7 +80,7 @@ function ReportRow({ report, onOpen }: { report: GalleryReport; onOpen: () => vo
             title={report.error ?? undefined}
           >
             <TriangleAlert className="h-2.5 w-2.5" aria-hidden="true" />
-            {report.status}
+            {isPausedResearchReport(report) ? 'paused' : report.status}
           </span>
         )}
       </button>

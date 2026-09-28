@@ -33,6 +33,7 @@ function actions() {
     stepZoomLevel: vi.fn(),
     takeOverScreen: vi.fn(),
     handBackScreen: vi.fn(),
+    stopScreenControl: vi.fn(),
   };
 }
 

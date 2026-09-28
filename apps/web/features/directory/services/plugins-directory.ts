@@ -1,4 +1,5 @@
 import type {
+  PluginInstalledDependency,
   PluginMarketplaceEntry,
   PluginMarketplaceInstallation,
   PluginMarketplaceSourceSummary,
@@ -767,13 +768,20 @@ export type PluginInstallTarget =
   | { kind: 'user'; entryId: string };
 
 export type PluginInstallOutcome =
-  | { status: 'installed' }
+  | { status: 'installed'; dependencies: PluginInstalledDependency[] }
   | { status: 'disabled'; message: string }
   | { status: 'blocked'; message: string; installCommand: string | null };
 
 function messageFor(status: number, body: ErrorBody, fallback: string): string {
   const message = body.error?.message;
   return PLUGIN_MESSAGE_STATUSES.includes(status) && message ? message : fallback;
+}
+
+async function readInstalledDependencies(response: Response): Promise<PluginInstalledDependency[]> {
+  const body = (await response.json().catch(() => ({}))) as {
+    dependencies?: PluginInstalledDependency[];
+  };
+  return Array.isArray(body.dependencies) ? body.dependencies : [];
 }
 
 export async function installPlugin(
@@ -788,7 +796,9 @@ export async function installPlugin(
     headers: { 'Content-Type': JSON_CONTENT_TYPE, [CSRF_HEADER]: csrfToken },
     body: JSON.stringify(body),
   });
-  if (response.ok) return { status: 'installed' };
+  if (response.ok) {
+    return { status: 'installed', dependencies: await readInstalledDependencies(response) };
+  }
   const payload = await readErrorBody(response);
   const code = payload.error?.code;
   if (

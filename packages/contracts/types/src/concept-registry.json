@@ -253,7 +253,7 @@
       "label": "Skill",
       "schema": "packages/contracts/cloud-contracts/src/skills.ts",
       "symbol": "ManagedSkillSummary",
-      "tables": ["user_skills"],
+      "tables": ["user_skills", "user_skill_files"],
       "writeFunctions": [],
       "mutators": ["apps/web/lib/services/user-skill-service.ts"],
       "projections": [],
