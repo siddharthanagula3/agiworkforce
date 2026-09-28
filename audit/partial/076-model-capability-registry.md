@@ -29,14 +29,9 @@ Code: `apps/web/features/chat/components/Composer/ModelCatalogue.tsx:64-64`, `ap
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | detailValues (low/high/original) is recorded for three models but nothing reads it; images are always sent without a detail level, so high-resolution inspection is never requested. | handler, ui |
-| desktop | partial | detailValues (low/high/original) is recorded for three models but nothing reads it; images are always sent without a detail level, so high-resolution inspection is never requested. | handler, ui |
-| mobile | partial | detailValues (low/high/original) is recorded for three models but nothing reads it; images are always sent without a detail level, so high-resolution inspection is never requested. | handler, ui |
-| cli | partial | detailValues (low/high/original) is recorded for three models but nothing reads it; images are always sent without a detail level, so high-resolution inspection is never requested. | handler, ui |
-| chrome | partial | detailValues (low/high/original) is recorded for three models but nothing reads it; images are always sent without a detail level, so high-resolution inspection is never requested. | handler, ui |
 | api | partial | detailValues (low/high/original) is recorded for three models but nothing reads it; images are always sent without a detail level, so high-resolution inspection is never requested. | handler, ui |
 
-Code: `apps/web/features/chat/components/Composer/ComposerFooter.tsx:1379-1383`, `apps/web/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration.ts:440-445`, `packages/contracts/types/src/model-catalog.ts:676-676`, `apps/mobile/src/features/model-picker/components/ModelRow.tsx:166-170`
+Code: `apps/web/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration.ts:440-445`
 
 ## S76.06: Native PDF/document input.
 
