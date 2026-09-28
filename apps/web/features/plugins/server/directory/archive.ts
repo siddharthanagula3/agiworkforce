@@ -50,11 +50,17 @@ const PLUGIN_KEY_EDGE_TRIM = /^[^a-z0-9]+|[^a-z0-9._-]+$/g;
 const SKILL_FILE_SUFFIX = `${PATH_SEPARATOR}${CLAUDE_SKILL_FILE_NAME}`;
 const RELATIVE_SOURCE_PREFIX = /^\.\/+/;
 
+export interface UploadedSkillFile {
+  path: string;
+  content: string;
+}
+
 export interface UploadedSkill {
   name: string;
   description: string;
   path: string;
   content: string;
+  files: UploadedSkillFile[];
 }
 
 export interface UploadedPlugin {
@@ -63,6 +69,7 @@ export interface UploadedPlugin {
   description: string;
   version: string;
   skills: UploadedSkill[];
+  omittedFiles: string[];
 }
 
 export interface UploadedPluginArchive {
@@ -266,17 +273,46 @@ function skillPathsUnder(members: Map<string, ArchiveMember>, directory: string)
     .sort();
 }
 
+async function readCompanionText(member: ArchiveMember): Promise<string | null> {
+  const bytes = await member.read();
+  if (bytes.byteLength === 0 || bytes.includes(0)) return null;
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    return null;
+  }
+}
+
+async function readCompanionFiles(
+  members: Map<string, ArchiveMember>,
+  skillFilePath: string,
+): Promise<{ files: UploadedSkillFile[]; omitted: string[] }> {
+  const prefix = `${skillFilePath.slice(0, -SKILL_FILE_SUFFIX.length)}${PATH_SEPARATOR}`;
+  const files: UploadedSkillFile[] = [];
+  const omitted: string[] = [];
+  for (const path of [...members.keys()].sort()) {
+    if (!path.startsWith(prefix) || path === skillFilePath) continue;
+    const member = members.get(path);
+    if (!member || member.size === 0) continue;
+    const content = await readCompanionText(member);
+    if (content === null) omitted.push(path);
+    else files.push({ path, content });
+  }
+  return { files, omitted };
+}
+
 async function readSkills(
   members: Map<string, ArchiveMember>,
   paths: readonly string[],
   pluginName: string,
-): Promise<UploadedSkill[]> {
+): Promise<{ skills: UploadedSkill[]; omittedFiles: string[] }> {
   if (paths.length > PLUGIN_DIRECTORY_MAX_SKILLS_PER_INSTALL) {
     throw new PluginArchiveError([
       uploadTooManySkillsMessage(pluginName, PLUGIN_DIRECTORY_MAX_SKILLS_PER_INSTALL),
     ]);
   }
   const skills: UploadedSkill[] = [];
+  const omittedFiles: string[] = [];
   const seen = new Set<string>();
   for (const path of paths) {
     const member = members.get(path);
@@ -285,9 +321,19 @@ async function readSkills(
     const skill = parseSkillFile(path, content);
     if (!skill || seen.has(skill.name)) continue;
     seen.add(skill.name);
-    skills.push({ name: skill.name, description: skill.description, path: skill.path, content });
+    const companions = path.endsWith(SKILL_FILE_SUFFIX)
+      ? await readCompanionFiles(members, path)
+      : { files: [], omitted: [] };
+    omittedFiles.push(...companions.omitted);
+    skills.push({
+      name: skill.name,
+      description: skill.description,
+      path: skill.path,
+      content,
+      files: companions.files,
+    });
   }
-  return skills;
+  return { skills, omittedFiles };
 }
 
 function pluginDirectoryFor(source: unknown, fallback: string): string {
@@ -308,7 +354,7 @@ async function singlePlugin(
   const name = neutralizeCopy(fallbackName) || fallbackName;
   const key = pluginKeyFrom(name);
   if (!key) throw new PluginArchiveError([uploadUnusableNameMessage(name)]);
-  const skills = await readSkills(members, paths, name);
+  const { skills, omittedFiles } = await readSkills(members, paths, name);
   if (skills.length === 0) throw new PluginArchiveError([UPLOAD_NO_SKILLS_MESSAGE]);
   return {
     key,
@@ -316,6 +362,7 @@ async function singlePlugin(
     description: neutralizeCopy(metadata.description ?? '') || name,
     version: displayVersion(metadata.version, null),
     skills,
+    omittedFiles,
   };
 }
 
@@ -338,7 +385,7 @@ async function marketplacePlugins(
       .map((skill) => `${directory}${PATH_SEPARATOR}${lastSegmentPath(skill)}`)
       .filter((path) => members.has(path));
     const resolved = paths.length > 0 ? paths : skillPathsUnder(members, directory);
-    const skills = await readSkills(members, resolved, name);
+    const { skills, omittedFiles } = await readSkills(members, resolved, name);
     if (skills.length === 0) continue;
     claimed.add(key);
     plugins.push({
@@ -347,6 +394,7 @@ async function marketplacePlugins(
       description: neutralizeCopy(declared.description ?? '') || name,
       version: displayVersion(declared.version, null),
       skills,
+      omittedFiles,
     });
   }
   if (plugins.length === 0) throw new PluginArchiveError([UPLOAD_NO_SKILLS_MESSAGE]);

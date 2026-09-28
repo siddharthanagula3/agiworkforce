@@ -162,7 +162,27 @@ export interface PluginSourceInstallResponse {
   sourceName: string;
   kind: PluginMarketplaceSourceKind;
   plugins: PluginSourceInstalledPlugin[];
+  omittedFiles?: string[];
 }
+
+export const PLUGIN_UPLOAD_ACKNOWLEDGED_SCAN_FIELD = 'acknowledged_scan';
+export const PLUGIN_SCAN_REVIEW_REFUSAL = 'scan_review_required';
+
+export const PluginScanFindingSummarySchema = z.object({
+  path: z.string(),
+  line: z.number().int(),
+  message: z.string(),
+  severity: z.enum(['block', 'review']),
+});
+
+export const PluginPackageRefusalDetailsSchema = z.object({
+  refusal: z.string(),
+  findings: z.array(PluginScanFindingSummarySchema).optional(),
+  acknowledgements: z.array(z.string()).optional(),
+});
+
+export type PluginScanFindingSummary = z.infer<typeof PluginScanFindingSummarySchema>;
+export type PluginPackageRefusalDetails = z.infer<typeof PluginPackageRefusalDetailsSchema>;
 
 export interface PluginConnectorRequirementState {
   connectorId: string;
