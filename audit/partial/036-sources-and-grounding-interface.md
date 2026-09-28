@@ -53,14 +53,13 @@ Code: `apps/extension/src/features/side-panel/bubbles.ts:406-432`
 
 - Done when: Each cited source exposes its URL or resource identifier and can be opened.
 - Wave: 3
-- Already works on: web, desktop, mobile, chrome
+- Already works on: web, desktop, mobile, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | URLs appear as text in answers (link text plus URL); web sources exist only when SEARCH_API_KEY is set. | ui |
-| vscode | partial | URLs in answers are clickable (markdown-it linkify) but there is no per-source citation. | ui |
 
-Code: `apps/cli/src/markdown.rs:434-440`, `apps/cli/src/features/exec/tools/web/mod.rs:286-286`, `apps/extension-vscode/src/webview/render.ts:5-7`
+Code: `apps/cli/src/markdown.rs:434-440`, `apps/cli/src/features/exec/tools/web/mod.rs:286-286`
 
 ## S36.05: Publication date.
 

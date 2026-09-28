@@ -4,6 +4,7 @@ import JSZip from 'jszip';
 import mammoth from 'mammoth';
 
 import { MAX_FILE_TEXT_CHARS } from '@agiworkforce/types';
+import { truncateExtractedText } from '@/lib/server/extraction-truncation';
 
 import {
   DecompressionLimitError,
@@ -91,8 +92,7 @@ function boundText(value: string): string {
     .replace(/\r\n?/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
-  if (normalized.length <= MAX_OFFICE_TEXT_CHARS) return normalized;
-  return `${normalized.slice(0, MAX_OFFICE_TEXT_CHARS)}\n\n[Content truncated during extraction.]`;
+  return truncateExtractedText(normalized, MAX_OFFICE_TEXT_CHARS);
 }
 
 function decodeXmlEntities(value: string): string {

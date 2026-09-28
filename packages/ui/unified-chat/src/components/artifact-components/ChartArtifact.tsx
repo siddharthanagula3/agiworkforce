@@ -1,6 +1,7 @@
 import { type AgiThemeMode } from '@agiworkforce/design-tokens';
 import { BarChart3, Download } from 'lucide-react';
 import React, { Suspense, lazy, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { toUserMessage } from '../../lib/network-error';
 import { cn } from '../../lib/utils';
 import type { Artifact } from '../../lib/types';
 import {
@@ -241,9 +242,7 @@ export function ChartArtifact({ artifact, className, isDark }: ChartArtifactProp
             setExportError(null);
             downloadChartPng(canvasRef.current, chrome.surface, chartFileName(chartName)).catch(
               (error: unknown) =>
-                setExportError(
-                  error instanceof Error ? error.message : 'The chart could not be downloaded.',
-                ),
+                setExportError(toUserMessage(error, 'The chart could not be downloaded.')),
             );
           }}
           className="flex h-7 items-center gap-1.5 rounded-compact px-2 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground pointer-coarse:h-11"

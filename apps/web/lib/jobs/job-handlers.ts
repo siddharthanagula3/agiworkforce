@@ -2,12 +2,21 @@ import 'server-only';
 
 import { driveImageGenerationJob } from '@/app/api/media/image/lib/image-job-drain';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
+import {
+  buildDataExportArchiveVolume,
+  expireDataExportArchive,
+  sendDataExportReadyEmailJob,
+} from '@/lib/server/data-export-archive';
 import { deleteProjectKnowledgeObject } from '@/lib/server/project-knowledge-object-storage';
 import {
   eraseScheduledAccount,
   reEraseTombstonedAccount,
 } from '@/lib/server/scheduled-account-erasure';
 import { drainAuditDestination } from '@/lib/services/audit-streaming-service';
+import {
+  deliverDeveloperWebhookJob,
+  queueDeveloperWebhookEvent,
+} from '@/lib/services/developer-webhook-service';
 import { sendScheduleCompletionEmail } from '@/lib/services/notification-email-service';
 import { recordResearchReportSettledCost } from '@/lib/services/research-report-service';
 import {
@@ -107,6 +116,23 @@ async function announceScheduleCompletion(
     { userId, ...notice },
     { email: false },
   );
+  await queueDeveloperWebhookEvent(
+    scopedDb,
+    userId,
+    notice.status === 'awaiting_approval'
+      ? 'task_run.needs_approval'
+      : notice.status === 'success'
+        ? 'task_run.completed'
+        : 'task_run.failed',
+    {
+      task_id: notice.taskId,
+      task_name: notice.taskName,
+      run_id: notice.runId,
+      status: notice.status,
+      ...(notice.approvalSummary ? { approval_summary: notice.approvalSummary } : {}),
+    },
+    { attemptAfterResponse: false },
+  );
   return { pushed: delivered.pushed, emailQueued };
 }
 
@@ -193,9 +219,13 @@ export const BACKGROUND_JOB_HANDLERS: JobHandlerRegistry = {
   'notifications.schedule-completed': announceScheduleCompletion,
   'email.schedule-completed': sendScheduleCompletionEmailJob,
   'webhooks.audit-stream-delivery': deliverAuditStream,
+  'webhooks.developer-delivery': deliverDeveloperWebhookJob,
   'data-deletion.scheduled-account-erasure': eraseAccountOnSchedule,
   'file-processing.purge-upload-object': purgeUploadObject,
   'research.settle-report-cost': settleResearchReportCost,
   'event-triggers.fire': fireEventTriggerJob,
   'media-generation.image-attempt': driveImageGenerationJob,
+  'data-export.build-archive': buildDataExportArchiveVolume,
+  'data-export.expire-archive': expireDataExportArchive,
+  'email.data-export-ready': sendDataExportReadyEmailJob,
 };

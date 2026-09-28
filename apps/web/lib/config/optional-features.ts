@@ -121,6 +121,14 @@ export const OPTIONAL_FEATURES: readonly OptionalFeature[] = [
     decisionOnly: true,
   },
   {
+    id: 'bank_accounts',
+    label: 'Bank accounts through Plaid',
+    requires: [all('PLAID_CLIENT_ID', 'PLAID_SECRET', 'PLAID_ENV')],
+    whenDisabled:
+      'the Bank accounts connector cannot be connected and its balance and transaction tools are not offered',
+    productionExpectation: 'optional',
+  },
+  {
     id: 'auth_social_providers',
     label: 'Social sign-in providers',
     requires: [all('AGI_AUTH_PROVIDERS')],

@@ -16,11 +16,16 @@ import {
 } from '@/lib/custom-connector-crypto';
 import { missingGitHubInstallationLinkingVars } from '@/lib/github-app';
 
+import { accountUrlConnector } from './account-url-connectors';
+import { BANK_ACCOUNTS_CONNECTOR_ID, missingPlaidEnv } from './plaid-config';
+
 export type ConnectorSetupKind =
   | 'github-app'
   | 'oauth-client-pair'
   | 'oauth-redirect-base'
   | 'token-storage'
+  | 'vendor-credentials'
+  | 'region'
   | 'no-remote'
   | 'device-local';
 
@@ -131,6 +136,23 @@ function githubRequirement(displayName: string): ConnectorSetupRequirement | nul
   );
 }
 
+function plaidRequirement(displayName: string): ConnectorSetupRequirement | null {
+  const missingEnv = missingPlaidEnv();
+  if (missingEnv.length > 0) {
+    return requirement(
+      BANK_ACCOUNTS_CONNECTOR_ID,
+      'vendor-credentials',
+      missingEnv,
+      needsEnvMessage(displayName, missingEnv),
+    );
+  }
+  return tokenStorageRequirement(BANK_ACCOUNTS_CONNECTOR_ID, displayName);
+}
+
+export function regionRequirement(connectorId: string, message: string): ConnectorSetupRequirement {
+  return requirement(connectorId, 'region', [], message);
+}
+
 function noRemoteRequirement(connectorId: string, displayName: string): ConnectorSetupRequirement {
   return requirement(
     connectorId,
@@ -169,6 +191,8 @@ export function describeConnectorSetup(
 ): ConnectorSetupRequirement | null {
   if (isDeviceLocalConnector(connectorId)) return deviceLocalRequirement(connectorId, displayName);
   if (connectorId === GITHUB_CONNECTOR_ID) return githubRequirement(displayName);
+  if (connectorId === BANK_ACCOUNTS_CONNECTOR_ID) return plaidRequirement(displayName);
+  if (accountUrlConnector(connectorId)) return tokenStorageRequirement(connectorId, displayName);
   if (getMcpEndpoint(connectorId)) {
     return isSelfServiceConnector(connectorId)
       ? selfServiceRequirement(connectorId, displayName)

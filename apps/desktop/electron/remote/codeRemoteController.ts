@@ -98,7 +98,10 @@ function boundedText(value: unknown, maxLength?: number): string | null {
   return maxLength === undefined || trimmed.length <= maxLength ? trimmed : null;
 }
 
-function parseDispatchTask(action: string, payload: unknown): DispatchTaskControlRequest | null {
+export function parseDispatchTask(
+  action: string,
+  payload: unknown,
+): DispatchTaskControlRequest | null {
   if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) return null;
   const record = payload as Record<string, unknown>;
   if (record['version'] !== 1) return null;
