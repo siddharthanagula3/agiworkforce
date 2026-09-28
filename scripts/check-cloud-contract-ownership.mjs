@@ -32,6 +32,7 @@ const cloudModules = [
   'interactive-cards',
   'managed-cloud-chat-client',
   'chat-attachments',
+  'chat-attachment-truncation',
   'managed-cloud-chat-attachments-client',
   'project-knowledge',
   'managed-cloud-project-knowledge-client',

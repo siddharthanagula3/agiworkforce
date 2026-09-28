@@ -12,6 +12,8 @@ export type PlatformCapability =
   // ── Web + Desktop (cloud tools) ─────────────────────────────────────────────
   | 'canUseWebSearch'
   | 'canUseDeepResearch'
+  | 'canUseAgiWork'
+  | 'canUseVideoGeneration'
   | 'canUseConnectors'
   | 'canUsePlugins'
   | 'canUseSkills'
@@ -46,6 +48,8 @@ const WEB: CapabilityRow = {
   canUseCloudExecution: true,
   canUseWebSearch: true,
   canUseDeepResearch: true,
+  canUseAgiWork: true,
+  canUseVideoGeneration: true,
   canUseConnectors: true,
   canUsePlugins: true,
   canUseSkills: true,
@@ -77,6 +81,8 @@ const DESKTOP: CapabilityRow = {
   canUseCloudExecution: true,
   canUseWebSearch: true,
   canUseDeepResearch: true,
+  canUseAgiWork: true,
+  canUseVideoGeneration: true,
   canUseConnectors: true,
   canUsePlugins: true,
   canUseSkills: true,
@@ -108,6 +114,8 @@ const MOBILE: CapabilityRow = {
   canUseCloudExecution: true,
   canUseWebSearch: true,
   canUseDeepResearch: true,
+  canUseAgiWork: true,
+  canUseVideoGeneration: true,
   canUseConnectors: true,
   canUsePlugins: false, // SPEC-SILENT · current: not surfaced in mobile composer
   canUseSkills: false, // SPEC-SILENT · current: not surfaced in mobile composer
@@ -222,6 +230,14 @@ export const CAPABILITY_METADATA: Readonly<Record<PlatformCapability, Capability
     canUseWebSearch: { domain: 'networking' },
     canUseDeepResearch: {
       domain: 'networking',
+      permissions: { longRunning: true, backgroundExecution: true },
+    },
+    canUseAgiWork: {
+      domain: 'execution',
+      permissions: { longRunning: true, backgroundExecution: true },
+    },
+    canUseVideoGeneration: {
+      domain: 'media',
       permissions: { longRunning: true, backgroundExecution: true },
     },
     canUseConnectors: { domain: 'networking' },

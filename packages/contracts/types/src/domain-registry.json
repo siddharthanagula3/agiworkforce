@@ -328,7 +328,7 @@
       "name": "work",
       "label": "Work",
       "owner": "apps/web/lib/services/work-plan-service.ts",
-      "capabilities": [],
+      "capabilities": ["canUseAgiWork"],
       "concepts": [],
       "tables": ["background_jobs", "work_plan_revisions", "work_plan_steps", "work_plans"]
     },
@@ -424,7 +424,7 @@
       "name": "video-generation",
       "label": "Video Generation",
       "owner": "apps/web/lib/server/video-generation-jobs.ts",
-      "capabilities": [],
+      "capabilities": ["canUseVideoGeneration"],
       "concepts": [],
       "tables": ["video_generation_jobs"]
     },

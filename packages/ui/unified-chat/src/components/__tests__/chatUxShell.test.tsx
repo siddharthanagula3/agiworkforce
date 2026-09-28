@@ -6,7 +6,7 @@ import * as _React from 'react';
 import { act } from 'react';
 
 import { BrandedGreeting } from '../BrandedGreeting';
-import { resolveGreetingHeadline } from '../../lib/greeting';
+import { resolveGreetingHeadline } from '@agiworkforce/utils/greeting';
 import { AdvancedEmptyState } from '../AdvancedEmptyState';
 import { ChatInterface } from '../ChatInterface';
 import { EmptyState } from '../EmptyState';

@@ -1,4 +1,4 @@
-import { normalizeDisplayName } from '@agiworkforce/utils/display-name';
+import { normalizeDisplayName } from './displayName';
 
 export type GreetingTimeBand =
   'earlyMorning' | 'morning' | 'afternoon' | 'evening' | 'night' | 'lateNight';

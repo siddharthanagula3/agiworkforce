@@ -962,7 +962,7 @@ interface ChatState {
    * parking the same fingerprint is a no-op, so a repeated block never
    * multiplies the slot.
    */
-  parkBlockedSend: (fingerprint: string, content: string) => void;
+  parkBlockedSend: (fingerprint: string, content: string, temporary?: boolean) => void;
   /**
    * Drop one parked send. Matching on the fingerprint is what makes this
    * exactly-once: a composer clearing the message it restored can never
@@ -1910,21 +1910,22 @@ export const useChatStore = create<ChatState>()(
           ),
 
         // Blocked sends
-        parkBlockedSend: (fingerprint, content) =>
+        parkBlockedSend: (fingerprint, content, temporary = false) =>
           set(
-            (state) =>
-              state.parkedSendsByFingerprint[fingerprint] === content
-                ? state
-                : {
-                    parkedSendsByFingerprint: {
-                      ...state.parkedSendsByFingerprint,
-                      [fingerprint]: content,
-                    },
-                    parkedSendCreatedAtByFingerprint: {
-                      ...state.parkedSendCreatedAtByFingerprint,
-                      [fingerprint]: Date.now(),
-                    },
-                  },
+            (state) => {
+              if (state.parkedSendsByFingerprint[fingerprint] === content) return state;
+              const { [fingerprint]: _replacedCreatedAt, ...parkedSendCreatedAtByFingerprint } =
+                state.parkedSendCreatedAtByFingerprint;
+              return {
+                parkedSendsByFingerprint: {
+                  ...state.parkedSendsByFingerprint,
+                  [fingerprint]: content,
+                },
+                parkedSendCreatedAtByFingerprint: temporary
+                  ? parkedSendCreatedAtByFingerprint
+                  : { ...parkedSendCreatedAtByFingerprint, [fingerprint]: Date.now() },
+              };
+            },
             undefined,
             'chat/parkBlockedSend',
           ),

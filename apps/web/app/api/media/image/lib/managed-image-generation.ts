@@ -113,6 +113,7 @@ export interface ManagedImageGenerationInput {
   readBody: () => Promise<unknown>;
   idempotencyKey: string | null;
   modelPolicyRefusal: (model: ManagedImageModelAsk) => Promise<NextResponse | null>;
+  assertCapabilityOpen?: (plan: string) => Promise<void>;
 }
 
 export async function generateManagedImage(
@@ -179,6 +180,7 @@ export async function generateManagedImage(
       },
     );
   }
+  await input.assertCapabilityOpen?.(userTier);
 
   let body: unknown;
   try {
