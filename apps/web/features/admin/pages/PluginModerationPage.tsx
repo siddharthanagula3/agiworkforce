@@ -1,7 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState, type SubmitEvent } from 'react';
-import { Spinner, useConfirmAction, type ConfirmActionRequest } from '@agiworkforce/ui';
+import {
+  Spinner,
+  useConfirmAction,
+  type ConfirmActionRequest,
+  translateUiPlural,
+} from '@agiworkforce/ui';
 import { isPluginRegistryStatus, type PluginRegistryStatus } from '@agiworkforce/types';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
@@ -162,7 +167,10 @@ function LoadingLine({ label }: { label: string }) {
 }
 
 function installations(count: number): string {
-  return `${count} ${count === 1 ? 'installation' : 'installations'}`;
+  return translateUiPlural('settings', 'counts.installations', count, {
+    one: '{{count}} installation',
+    other: '{{count}} installations',
+  });
 }
 
 function statusChange(event: PluginLifecycleEvent): string {
@@ -724,7 +732,10 @@ function SubmissionReviewPanel({
       ) : review ? (
         <div className="space-y-2">
           <p className="text-xs font-medium text-foreground">
-            {`${review.files.length} ${review.files.length === 1 ? 'file' : 'files'} as submitted`}
+            {translateUiPlural('settings', 'counts.filesAsSubmitted', review.files.length, {
+              one: '{{count}} file as submitted',
+              other: '{{count}} files as submitted',
+            })}
           </p>
           {review.files.map((file) => (
             <details key={file.path} className="rounded-lg border border-border">
@@ -1081,8 +1092,25 @@ export default function PluginModerationPage() {
                       {total > plugins.length
                         ? `Showing the first ${plugins.length} of ${total} plugins. Search to narrow the list.`
                         : activeQuery
-                          ? `${plugins.length} ${plugins.length === 1 ? 'plugin matches' : 'plugins match'} “${activeQuery}”.`
-                          : `${plugins.length} ${plugins.length === 1 ? 'plugin' : 'plugins'} in the registry.`}
+                          ? translateUiPlural(
+                              'settings',
+                              'counts.pluginsMatch',
+                              plugins.length,
+                              {
+                                one: '{{count}} plugin matches “{{query}}”.',
+                                other: '{{count}} plugins match “{{query}}”.',
+                              },
+                              { query: activeQuery },
+                            )
+                          : translateUiPlural(
+                              'settings',
+                              'counts.pluginsInRegistry',
+                              plugins.length,
+                              {
+                                one: '{{count}} plugin in the registry.',
+                                other: '{{count}} plugins in the registry.',
+                              },
+                            )}
                     </p>
                     {activeQuery ? (
                       <button

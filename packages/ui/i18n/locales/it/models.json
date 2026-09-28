@@ -83,5 +83,9 @@
     "thinkingState": "Pensiero: {{state}}",
     "unavailable": "Non disponibile",
     "visionCapability": "Visione"
+  },
+  "counts": {
+    "concurrentAnswers_one": "Il tuo piano esegue {{count}} risposta alla volta, quindi le altre iniziano non appena una finisce.",
+    "concurrentAnswers_other": "Il tuo piano esegue {{count}} risposte alla volta, quindi le altre iniziano non appena una finisce."
   }
 }

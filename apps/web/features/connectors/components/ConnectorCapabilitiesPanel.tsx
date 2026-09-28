@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { AlertTriangle, Boxes, FileText, MessageSquareText, Wrench } from 'lucide-react';
 
 import type { ConnectorCapabilityCatalog } from '@agiworkforce/cloud-contracts';
-import { Spinner } from '@agiworkforce/ui';
+import { Spinner, translateUiPlural } from '@agiworkforce/ui';
 
 import { useConnectorCapabilities } from '../hooks/use-connector-capabilities';
 import { publishMcpContextSelection } from '../lib/mcp-context-selection';
@@ -197,7 +197,10 @@ export function ConnectorCapabilitiesPanel({
         ) : null}
         {catalog.apps.length > 0 ? (
           <span className="rounded-full border border-border px-2 py-0.5">
-            {catalog.apps.length} {catalog.apps.length === 1 ? 'App' : 'Apps'}
+            {translateUiPlural('settings', 'counts.connectorApps', catalog.apps.length, {
+              one: '{{count}} App',
+              other: '{{count}} Apps',
+            })}
           </span>
         ) : null}
       </div>

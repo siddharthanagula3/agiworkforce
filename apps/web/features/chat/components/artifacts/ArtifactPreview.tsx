@@ -15,6 +15,7 @@ import {
   ScrollArea,
   Alert,
   AlertDescription,
+  translateUiPlural,
 } from '@agiworkforce/ui';
 import {
   Code,
@@ -967,7 +968,10 @@ if (__AgiApp) {
     (next: 'public' | 'organization') => {
       if (!artifactAudience || isChangingAudience || next === artifactAudience.current) return;
       const members = artifactAudience.memberCount;
-      const memberLabel = `${members} ${members === 1 ? 'member' : 'members'}`;
+      const memberLabel = translateUiPlural('settings', 'counts.members', members, {
+        one: '{{count}} member',
+        other: '{{count}} members',
+      });
       const apply = async () => {
         setIsChangingAudience(true);
         try {

@@ -83,5 +83,9 @@
     "thinkingState": "Denken: {{state}}",
     "unavailable": "Nicht verfügbar",
     "visionCapability": "Vision"
+  },
+  "counts": {
+    "concurrentAnswers_one": "Ihr Tarif führt {{count}} Antwort gleichzeitig aus, die übrigen starten, sobald eine davon fertig ist.",
+    "concurrentAnswers_other": "Ihr Tarif führt {{count}} Antworten gleichzeitig aus, die übrigen starten, sobald eine davon fertig ist."
   }
 }
