@@ -325,6 +325,7 @@ export async function callCloud(
   gatewayBase: string = DEFAULT_GATEWAY_BASE,
   signal?: AbortSignal,
   model: string = COMPUTER_USE_MODEL,
+  extraTools: readonly ToolDefinition[] = [],
 ): Promise<CloudAgentResponse> {
   const validatedBase = validateGatewayUrl(gatewayBase);
   if (!validatedBase) {
@@ -336,7 +337,7 @@ export async function callCloud(
   const body = JSON.stringify({
     model,
     messages,
-    tools: BROWSER_TOOL_DEFINITIONS,
+    tools: [...BROWSER_TOOL_DEFINITIONS, ...extraTools],
     tool_choice: 'auto',
     stream: true,
     max_tokens: 2048,
