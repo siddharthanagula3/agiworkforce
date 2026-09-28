@@ -31,6 +31,7 @@ import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-ser
 import { assertTenantNotLockedDown } from '@/lib/feature-flags/tenant-lockdown';
 import { getCachedAccountStatus, setCachedAccountStatus } from '@/lib/server/request-context-cache';
 import { bindSurfaceFromClaims, type BoundSurface } from '@/lib/free-chat-surface-policy';
+import { noteSessionSighting } from '@/lib/server/session-sightings';
 
 export { getClerkAuthorizedParties } from '@/lib/clerk-authorized-parties';
 
@@ -345,6 +346,7 @@ export async function getClerkAuthUser(
         options.mfaEnrollment,
       );
       await assertIpAllowList(auth.userId, request);
+      noteSessionSighting(auth.userId, sessionId, request);
       return auth;
     }
 
@@ -364,6 +366,7 @@ export async function getClerkAuthUser(
       options.mfaEnrollment,
     );
     await assertIpAllowList(userId, request);
+    noteSessionSighting(userId, sessionId, request);
     return authResultFor(account);
   }
 
