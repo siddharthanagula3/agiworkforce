@@ -1,8 +1,9 @@
-import { useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { useRef, useState, type RefObject } from 'react';
+import { Alert, Pressable, ScrollView, View } from 'react-native';
 import Svg, { Circle, G, Line, Path, Polyline, Rect, Text as SvgText } from 'react-native-svg';
 import { Text } from '@/components/ui/text';
 import type { ColorScheme } from '@/src/ui/theme';
+import { exportPngImage, shareFile } from '@/services/fileCreation';
 import {
   describeChart,
   formatChartValue,
@@ -140,16 +141,20 @@ function Legend({
   );
 }
 
+const EXPORT_SCALE = 3;
+
 function XyChartView({
   chart,
   colors,
   selected,
   onSelect,
+  svgRef,
 }: {
   chart: XyChart;
   colors: ColorScheme;
   selected: number | null;
   onSelect: (index: number) => void;
+  svgRef: RefObject<Svg | null>;
 }) {
   const palette = seriesPalette(colors);
   const values = chart.series.flatMap((series) => series.values);
@@ -175,7 +180,8 @@ function XyChartView({
   return (
     <>
       <View style={{ width: '100%', aspectRatio: XY_WIDTH / XY_HEIGHT }}>
-        <Svg width="100%" height="100%" viewBox={`0 0 ${XY_WIDTH} ${XY_HEIGHT}`}>
+        <Svg ref={svgRef} width="100%" height="100%" viewBox={`0 0 ${XY_WIDTH} ${XY_HEIGHT}`}>
+          <Rect x={0} y={0} width={XY_WIDTH} height={XY_HEIGHT} fill={colors.surfaceBase} />
           {selected !== null ? (
             <Rect
               x={PLOT_LEFT + band * selected}
@@ -314,11 +320,13 @@ function PieChartView({
   colors,
   selected,
   onSelect,
+  svgRef,
 }: {
   chart: PieChart;
   colors: ColorScheme;
   selected: number | null;
   onSelect: (index: number) => void;
+  svgRef: RefObject<Svg | null>;
 }) {
   const palette = seriesPalette(colors);
   const total = chart.slices.reduce((sum, slice) => sum + slice.value, 0);
@@ -333,7 +341,8 @@ function PieChartView({
   return (
     <>
       <View style={{ width: '60%', aspectRatio: 1, alignSelf: 'center' }}>
-        <Svg width="100%" height="100%" viewBox={`0 0 ${PIE_SIZE} ${PIE_SIZE}`}>
+        <Svg ref={svgRef} width="100%" height="100%" viewBox={`0 0 ${PIE_SIZE} ${PIE_SIZE}`}>
+          <Rect x={0} y={0} width={PIE_SIZE} height={PIE_SIZE} fill={colors.surfaceBase} />
           {arcs.length === 1 ? (
             <Circle
               cx={PIE_SIZE / 2}
@@ -367,11 +376,34 @@ function PieChartView({
   );
 }
 
+function chartImageSize(chart: MermaidChart): { width: number; height: number } {
+  return chart.kind === 'pie'
+    ? { width: PIE_SIZE * EXPORT_SCALE, height: PIE_SIZE * EXPORT_SCALE }
+    : { width: XY_WIDTH * EXPORT_SCALE, height: XY_HEIGHT * EXPORT_SCALE };
+}
+
 export function ReportChart({ chart, colors }: { chart: MermaidChart; colors: ColorScheme }) {
   const [selected, setSelected] = useState<number | null>(null);
   const [showData, setShowData] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const svgRef = useRef<Svg>(null);
   const select = (index: number) => setSelected((current) => (current === index ? null : index));
   const readout = selected === null ? null : selectionReadout(chart, selected);
+  const chartName = chart.title || 'Chart';
+
+  const saveImage = () => {
+    const svg = svgRef.current;
+    if (!svg || saving) return;
+    setSaving(true);
+    svg.toDataURL((base64) => {
+      void exportPngImage(base64, chartName)
+        .then((uri) => shareFile(uri))
+        .catch(() => {
+          Alert.alert('Could not save the chart', 'Try again in a moment.');
+        })
+        .finally(() => setSaving(false));
+    }, chartImageSize(chart));
+  };
 
   return (
     <View
@@ -394,9 +426,21 @@ export function ReportChart({ chart, colors }: { chart: MermaidChart; colors: Co
           </Text>
         ) : null}
         {chart.kind === 'pie' ? (
-          <PieChartView chart={chart} colors={colors} selected={selected} onSelect={select} />
+          <PieChartView
+            chart={chart}
+            colors={colors}
+            selected={selected}
+            onSelect={select}
+            svgRef={svgRef}
+          />
         ) : (
-          <XyChartView chart={chart} colors={colors} selected={selected} onSelect={select} />
+          <XyChartView
+            chart={chart}
+            colors={colors}
+            selected={selected}
+            onSelect={select}
+            svgRef={svgRef}
+          />
         )}
       </View>
       {readout ? (
@@ -407,16 +451,30 @@ export function ReportChart({ chart, colors }: { chart: MermaidChart; colors: Co
           {readout}
         </Text>
       ) : null}
-      <Pressable
-        onPress={() => setShowData((shown) => !shown)}
-        accessibilityRole="button"
-        accessibilityState={{ expanded: showData }}
-        style={{ minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' }}
-      >
-        <Text style={{ fontSize: 13, fontWeight: '500', color: colors.textSecondary }}>
-          {showData ? 'Hide data' : 'Show data'}
-        </Text>
-      </Pressable>
+      <View style={{ flexDirection: 'row', gap: 16 }}>
+        <Pressable
+          onPress={() => setShowData((shown) => !shown)}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: showData }}
+          style={{ minHeight: 44, justifyContent: 'center' }}
+        >
+          <Text style={{ fontSize: 13, fontWeight: '500', color: colors.textSecondary }}>
+            {showData ? 'Hide data' : 'Show data'}
+          </Text>
+        </Pressable>
+        <Pressable
+          onPress={saveImage}
+          disabled={saving}
+          accessibilityRole="button"
+          accessibilityLabel={`Save ${chartName} as an image`}
+          accessibilityState={{ disabled: saving, busy: saving }}
+          style={{ minHeight: 44, justifyContent: 'center', opacity: saving ? 0.55 : 1 }}
+        >
+          <Text style={{ fontSize: 13, fontWeight: '500', color: colors.textSecondary }}>
+            {saving ? 'Saving…' : 'Save image'}
+          </Text>
+        </Pressable>
+      </View>
       {showData ? <ChartDataTable chart={chart} colors={colors} /> : null}
     </View>
   );

@@ -237,6 +237,11 @@ import {
   type PaletteCommand,
 } from './features/side-panel/commandPalette';
 import {
+  AGIWORK_PLAN_REVIEW_CSS,
+  pendingAgiWorkPlanSteps,
+  type AgiWorkPlanReviewBinding,
+} from './features/side-panel/agiWorkPlanReview';
+import {
   beginPairing,
   loadPairingState,
   storeBridgeSecret,
@@ -541,6 +546,7 @@ let refreshTabGroupUI: () => void = () => {
 let resetScheduledTaskDraftForOwnerTransition: () => void = () => {
   /* no-op until buildUI() creates the Workflows form */
 };
+let openScheduledTaskEditor: (task: ScheduledTaskRow) => void = () => undefined;
 let initialCloudAccountRefresh: Promise<void> = Promise.resolve();
 type ManagedCloudChatState = 'loading' | 'ready' | 'signed_out' | 'unavailable';
 type ManagedCloudGateAction =
@@ -1029,6 +1035,7 @@ interface TurnPayload {
   capturePage: boolean;
   images: ComposerImage[];
   files: ComposerFile[];
+  agiWorkPlan?: string[];
 }
 
 const pendingAttachments: ComposerImage[] = [];
@@ -1105,6 +1112,9 @@ function serializeMessagesForHistory() {
       ? { cloudApprovalError: message.cloudApprovalError }
       : {}),
     ...(message.role === 'assistant' && message.managedQuickMode ? { managedQuickMode: true } : {}),
+    ...(message.role === 'assistant' && message.agiWorkPlanDeclined
+      ? { agiWorkPlanDeclined: true }
+      : {}),
     ...(message.role === 'assistant' && message.model ? { model: message.model } : {}),
     ...(message.role === 'assistant' && message.provider ? { provider: message.provider } : {}),
     ...(message.role === 'assistant' && message.generatedFiles
@@ -3890,11 +3900,13 @@ function injectStyles(): void {
     .sp-wf-btn-delete { background: none; border: 1px solid var(--agi-ext-border); color: var(--agi-ext-danger-text); font-size: var(--type-caption-size); line-height: var(--type-caption-height); padding: 3px 7px; border-radius: var(--corner-control); cursor: pointer; transition: color var(--duration-instant), border-color var(--duration-instant); }
     .sp-wf-btn-delete:hover { color: var(--agi-ext-danger-text); border-color: var(--agi-ext-danger-border); }
     .sp-wf-btn-delete:disabled, .sp-wf-task-delete:disabled { cursor: wait; opacity: 0.55; }
-    .sp-wf-btn-delete.is-confirm { color: var(--agi-ext-on-danger); background: var(--agi-ext-danger); border-color: var(--agi-ext-danger); }
+    .sp-wf-btn-delete.is-confirm,
+    .sp-wf-task-delete.is-confirm { color: var(--agi-ext-on-danger); background: var(--agi-ext-danger); border-color: var(--agi-ext-danger); }
     .sp-wf-tasks-list { display: flex; flex-direction: column; gap: 6px; }
     .sp-wf-task-item { display: flex; align-items: center; gap: 8px; padding: 7px 9px; background: var(--agi-ext-bg); border: 1px solid var(--agi-ext-border); border-radius: var(--corner-control); }
     .sp-wf-task-info { flex: 1; min-width: 0; }
     .sp-wf-task-name { font-size: var(--type-caption-size); line-height: var(--type-caption-height); font-weight: 500; color: var(--agi-ext-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sp-wf-task-description { font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--agi-ext-text-muted); overflow-wrap: anywhere; }
     .sp-wf-task-schedule-badge { display: inline-block; font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--agi-ext-accent-text); background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent); border-radius: var(--corner-compact); padding: 1px 5px; margin-top: 2px; }
     .sp-wf-task-toggle { appearance: none; width: 30px; height: 16px; border-radius: var(--corner-pill); background: var(--agi-ext-hover); position: relative; cursor: pointer; transition: background var(--duration-quick); flex-shrink: 0; }
     .sp-wf-task-toggle:checked { background: var(--agi-ext-accent); }
@@ -3914,6 +3926,7 @@ function injectStyles(): void {
     .sp-wf-form-input:focus { border-color: var(--agi-ext-focus); }
     .sp-wf-form-input:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
     .sp-wf-form-input::placeholder { color: var(--agi-ext-text-placeholder); }
+    .sp-wf-form-textarea { resize: vertical; min-height: 72px; box-sizing: border-box; }
     .sp-wf-form-select { background: var(--agi-ext-surface); border: 1px solid var(--agi-ext-border); border-radius: var(--corner-control); color: var(--agi-ext-text); font-size: var(--type-caption-size); line-height: var(--type-caption-height); padding: 5px 8px; outline: none; font-family: inherit; width: 100%; }
     .sp-wf-form-select:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
     .sp-wf-form-save-btn { background: var(--agi-ext-accent); color: var(--agi-ext-on-accent); border: none; border-radius: var(--corner-control); padding: 6px 14px; font-size: var(--type-caption-size); line-height: var(--type-caption-height); cursor: pointer; align-self: flex-end; transition: background var(--duration-instant); }
@@ -6067,7 +6080,9 @@ function injectStyles(): void {
         '\n' +
         ARTIFACTS_DRAWER_CSS +
         '\n' +
-        COMMAND_PALETTE_CSS,
+        COMMAND_PALETTE_CSS +
+        '\n' +
+        AGIWORK_PLAN_REVIEW_CSS,
     );
     document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
   } else {
@@ -6497,6 +6512,7 @@ function renderMessages(): void {
           onApproveForChat: (_toolCallId, toolName) => approveToolForChat(msg.id, toolName),
           onApprovalGuidanceChange: setApprovalGuidanceDraft,
           connectorInput: connectorInputBinding(msg),
+          ...agiWorkPlanReviewOption(msg, i),
           onRetry: (messageId) => retryFailedMessage(messageId),
           onSwitchModel: () => document.getElementById('sp-model-selector-btn')?.click(),
           quotaRecovery: { label: quotaRecoveryLabel, open: openQuotaRecovery },
@@ -7352,7 +7368,8 @@ function postTurn(
       extendedThinking: _ctx.thinkingEnabled || undefined,
       modelSelection: _ctx.selectedModel,
       quickMode: quickMode || undefined,
-      ...(_ctx.workMode === 'agiwork' ? { workMode: 'agiwork' } : {}),
+      ...(_ctx.workMode === 'agiwork' || payload.agiWorkPlan ? { workMode: 'agiwork' } : {}),
+      ...(payload.agiWorkPlan ? { agiWorkPlan: payload.agiWorkPlan } : {}),
       ...(capabilityAllowed(capabilityDocument, 'canUseWebSearch') ? {} : { webSearch: false }),
       ...(memoryCommand ? { memoryCommand } : {}),
       ...managedOutboundRoutingPayload(quickMode),
@@ -7440,6 +7457,63 @@ function regenerateTurn(messageId: string, modelSelection?: string): void {
 
 function retryFailedMessage(messageId: string): void {
   regenerateTurn(messageId);
+}
+
+function startAgiWorkPlan(messageId: string, steps: string[]): void {
+  if (!canReplayTurn()) return;
+  const index = _ctx.messages.findIndex((message) => message.id === messageId);
+  const userIndex = lastUserMessageIndex();
+  if (index < 0 || index !== _ctx.messages.length - 1 || userIndex < 0 || userIndex > index) {
+    return;
+  }
+  const userMsg = _ctx.messages[userIndex]!;
+  const payload = replayableTurnPayload(userMsg);
+  if (!payload) {
+    restoreTurnToComposer(userMsg);
+    return;
+  }
+  _ctx.messages.splice(userIndex + 1);
+  turnPayloadByMessageId.set(userMsg.id, payload);
+  _ctx.conversationGeneration += 1;
+  _ctx.needsMessageRebuild = true;
+  renderModelNotice(null);
+  saveMessages();
+  renderMessages();
+  dispatchTurn(userMsg, { ...payload, agiWorkPlan: steps }, _ctx.quickMode);
+}
+
+function declineAgiWorkPlan(messageId: string): void {
+  const message = _ctx.messages.find((candidate) => candidate.id === messageId);
+  if (message?.role !== 'assistant') return;
+  message.agiWorkPlanDeclined = true;
+  _ctx.needsMessageRebuild = true;
+  saveMessages();
+  renderMessages();
+}
+
+function agiWorkPlanReviewOption(
+  message: ChatMessage,
+  index: number,
+): { planReview?: AgiWorkPlanReviewBinding } {
+  if (message.role !== 'assistant' || message.streaming || index !== _ctx.messages.length - 1) {
+    return {};
+  }
+  const steps = pendingAgiWorkPlanSteps(message.agentActivity);
+  if (!steps) return {};
+  const busy = !canReplayTurn();
+  return {
+    planReview: {
+      steps,
+      declined: message.agiWorkPlanDeclined === true,
+      busy,
+      ...(busy
+        ? {}
+        : {
+            onStart: (planSteps: string[]) => startAgiWorkPlan(message.id, planSteps),
+            onCancel: () => declineAgiWorkPlan(message.id),
+          }),
+    },
+  };
 }
 
 function handleStreamError(
@@ -12660,7 +12734,7 @@ function buildUI(): void {
   cuPanel.panelEl.setAttribute('aria-labelledby', 'sp-tab-computer-use');
   cuPanel.panelEl.setAttribute('aria-hidden', 'true');
 
-  const runsPanel: CloudRunsPanelAPI = buildCloudRunsPanel();
+  const runsPanel: CloudRunsPanelAPI = buildCloudRunsPanel({ fileAccess: answerFileAccess });
   runsPanel.panelEl.setAttribute('role', 'tabpanel');
   runsPanel.panelEl.setAttribute('aria-labelledby', 'sp-tab-cloud-runs');
   runsPanel.panelEl.setAttribute('aria-hidden', 'true');
@@ -13436,21 +13510,41 @@ function buildUI(): void {
   tasksSection.appendChild(wfTasksList);
 
   const newTaskForm = el('div', { class: 'sp-wf-new-task-form', id: 'sp-wf-new-task-form' });
-  newTaskForm.appendChild(el('div', { class: 'sp-wf-form-label' }, 'Task Name'));
+  newTaskForm.appendChild(
+    el('label', { class: 'sp-wf-form-label', for: 'sp-wf-nt-name' }, 'Task Name'),
+  );
   const ntNameInput = el('input', {
     class: 'sp-wf-form-input',
     placeholder: 'e.g. Check news',
     id: 'sp-wf-nt-name',
   }) as HTMLInputElement;
   newTaskForm.appendChild(ntNameInput);
-  newTaskForm.appendChild(el('div', { class: 'sp-wf-form-label' }, 'Prompt'));
-  const ntPromptInput = el('input', {
+  newTaskForm.appendChild(
+    el(
+      'label',
+      { class: 'sp-wf-form-label', for: 'sp-wf-nt-description' },
+      t('spTaskDescriptionLabel'),
+    ),
+  );
+  const ntDescriptionInput = el('input', {
     class: 'sp-wf-form-input',
+    placeholder: t('spTaskDescriptionPlaceholder'),
+    id: 'sp-wf-nt-description',
+  }) as HTMLInputElement;
+  newTaskForm.appendChild(ntDescriptionInput);
+  newTaskForm.appendChild(
+    el('label', { class: 'sp-wf-form-label', for: 'sp-wf-nt-prompt' }, 'Prompt'),
+  );
+  const ntPromptInput = el('textarea', {
+    class: 'sp-wf-form-input sp-wf-form-textarea',
     placeholder: 'What should the AI do?',
     id: 'sp-wf-nt-prompt',
-  }) as HTMLInputElement;
+    rows: '4',
+  }) as HTMLTextAreaElement;
   newTaskForm.appendChild(ntPromptInput);
-  newTaskForm.appendChild(el('div', { class: 'sp-wf-form-label' }, 'Schedule'));
+  newTaskForm.appendChild(
+    el('label', { class: 'sp-wf-form-label', for: 'sp-wf-nt-schedule' }, 'Schedule'),
+  );
   const ntScheduleSelect = el('select', {
     class: 'sp-wf-form-select',
     id: 'sp-wf-nt-schedule',
@@ -13484,10 +13578,16 @@ function buildUI(): void {
   tasksSection.appendChild(newTaskForm);
   workflowsPanel.appendChild(tasksSection);
 
+  let editingTask: ScheduledTaskRow | null = null;
+  const idleSaveLabel = (): string => (editingTask ? t('spTaskSaveChanges') : t('spTaskCreate'));
+
   const resetNewTaskForm = (): void => {
     newTaskForm.classList.remove('open');
+    editingTask = null;
     ntNameInput.value = '';
+    ntDescriptionInput.value = '';
     ntPromptInput.value = '';
+    ntScheduleSelect.value = 'daily';
     ntNameInput.style.borderColor = '';
     ntPromptInput.style.borderColor = '';
     ntFormError.textContent = '';
@@ -13495,9 +13595,26 @@ function buildUI(): void {
     ntSaveBtn.textContent = t('spTaskCreate');
   };
   resetScheduledTaskDraftForOwnerTransition = resetNewTaskForm;
+  openScheduledTaskEditor = (task) => {
+    resetNewTaskForm();
+    editingTask = task;
+    ntNameInput.value = task.name;
+    ntDescriptionInput.value = task.description ?? '';
+    ntPromptInput.value = task.prompt ?? '';
+    ntScheduleSelect.value = task.scheduleType;
+    ntSaveBtn.textContent = idleSaveLabel();
+    newTaskForm.classList.add('open');
+    newTaskForm.scrollIntoView?.({ block: 'nearest' });
+    ntNameInput.focus();
+  };
 
   newTaskBtn.addEventListener('click', () => {
-    newTaskForm.classList.toggle('open');
+    if (editingTask) {
+      resetNewTaskForm();
+      newTaskForm.classList.add('open');
+    } else {
+      newTaskForm.classList.toggle('open');
+    }
     ntFormError.textContent = '';
     if (newTaskForm.classList.contains('open')) ntNameInput.focus();
   });
@@ -13507,6 +13624,7 @@ function buildUI(): void {
   });
   ntSaveBtn.addEventListener('click', () => {
     const name = ntNameInput.value.trim();
+    const description = ntDescriptionInput.value.trim();
     const prompt = ntPromptInput.value.trim();
     if (!name || !prompt) {
       if (!name) {
@@ -13523,34 +13641,53 @@ function buildUI(): void {
       }
       return;
     }
+    const editing = editingTask;
     ntFormError.textContent = '';
     ntSaveBtn.setAttribute('disabled', 'true');
-    ntSaveBtn.textContent = t('spTaskCreating');
+    ntSaveBtn.textContent = editing ? t('spTaskSaving') : t('spTaskCreating');
     const createRequest = scheduledTaskCreateRequestFence.begin(_ctx.managedCloudOwner);
+    const owner = createRequest.owner ? { owner: createRequest.owner } : {};
     chrome.runtime.sendMessage(
-      {
-        type: 'CREATE_SCHEDULED_TASK',
-        ...(createRequest.owner ? { owner: createRequest.owner } : {}),
-        task: {
-          name,
-          prompt,
-          enabled: true,
-          scheduleType: ntScheduleSelect.value,
-          scheduleValue: '',
-        },
-      },
+      editing
+        ? {
+            type: 'UPDATE_SCHEDULED_TASK',
+            ...owner,
+            taskId: editing.id,
+            updates: {
+              name,
+              description,
+              prompt,
+              scheduleType: ntScheduleSelect.value,
+            },
+          }
+        : {
+            type: 'CREATE_SCHEDULED_TASK',
+            ...owner,
+            task: {
+              name,
+              ...(description ? { description } : {}),
+              prompt,
+              enabled: true,
+              scheduleType: ntScheduleSelect.value,
+              scheduleValue: '',
+            },
+          },
       (response: { success?: boolean; error?: string } | undefined) => {
         if (!scheduledTaskCreateRequestFence.isCurrent(createRequest, _ctx.managedCloudOwner)) {
           return;
         }
         ntSaveBtn.removeAttribute('disabled');
-        ntSaveBtn.textContent = t('spTaskCreate');
+        ntSaveBtn.textContent = idleSaveLabel();
         const runtimeError = chrome.runtime.lastError?.message;
         if (runtimeError || response?.success !== true) {
-          ntFormError.textContent = runtimeError || response?.error || t('spTaskCreateFailed');
+          ntFormError.textContent =
+            runtimeError ||
+            response?.error ||
+            (editing ? t('spTaskSaveFailed') : t('spTaskCreateFailed'));
           return;
         }
         resetNewTaskForm();
+        if (editing) announceWorkflowMutation(t('spTaskUpdated', [name]), 'success');
         refreshWorkflowsTasks();
       },
     );
@@ -15368,14 +15505,7 @@ function refreshWorkflowsTasks(): void {
       response:
         | {
             success?: boolean;
-            tasks?: Array<{
-              id: string;
-              name: string;
-              enabled: boolean;
-              scheduleType: string;
-              scheduleValue: string;
-              lastRun?: number;
-            }>;
+            tasks?: ScheduledTaskRow[];
           }
         | undefined,
     ) => {
@@ -15414,16 +15544,20 @@ function clearWorkflowsTaskRows(): void {
   }
 }
 
+interface ScheduledTaskRow {
+  id: string;
+  name: string;
+  description?: string;
+  prompt?: string;
+  enabled: boolean;
+  scheduleType: string;
+  scheduleValue: string;
+  lastRun?: number;
+}
+
 function renderTaskRows(
   list: HTMLElement,
-  tasks: Array<{
-    id: string;
-    name: string;
-    enabled: boolean;
-    scheduleType: string;
-    scheduleValue: string;
-    lastRun?: number;
-  }>,
+  tasks: ScheduledTaskRow[],
   storedConversationIds: ReadonlySet<string>,
   owner: ManagedCloudOwner | null,
 ): void {
@@ -15478,6 +15612,9 @@ function renderTaskRows(
     item.appendChild(toggle);
     const info = el('div', { class: 'sp-wf-task-info' });
     info.appendChild(el('div', { class: 'sp-wf-task-name' }, task.name));
+    if (task.description) {
+      info.appendChild(el('div', { class: 'sp-wf-task-description' }, task.description));
+    }
     info.appendChild(el('span', { class: 'sp-wf-task-schedule-badge' }, task.scheduleType));
     item.appendChild(info);
     const resultConversationId = backgroundConversationId('task', task.id);
@@ -15493,11 +15630,34 @@ function renderTaskRows(
       });
       item.appendChild(resultBtn);
     }
+    const editBtn = iconButton(
+      { class: 'sp-wf-task-result', title: t('spTaskEdit', [task.name]) },
+      SquarePen,
+    ) as HTMLButtonElement;
+    editBtn.addEventListener('click', () => openScheduledTaskEditor(task));
+    item.appendChild(editBtn);
+    const deleteTitle = `Delete task ${task.name}`;
     const delBtn = iconButton(
-      { class: 'sp-wf-task-delete', title: `Delete task ${task.name}` },
+      { class: 'sp-wf-task-delete', title: deleteTitle },
       Trash2,
     ) as HTMLButtonElement;
+    let deleteConfirmTimer: ReturnType<typeof setTimeout> | null = null;
     delBtn.addEventListener('click', () => {
+      if (!delBtn.classList.contains('is-confirm')) {
+        delBtn.classList.add('is-confirm');
+        delBtn.title = t('spShortcutDeleteAgain');
+        const confirmation = announceWorkflowMutation(t('spTaskDeleteConfirm', [task.name]));
+        deleteConfirmTimer = setTimeout(() => {
+          delBtn.classList.remove('is-confirm');
+          delBtn.title = deleteTitle;
+          if (confirmation === workflowAnnouncements) announceWorkflowMutation('');
+          deleteConfirmTimer = null;
+        }, DRAWER_DELETE_CONFIRM_MS);
+        return;
+      }
+      if (deleteConfirmTimer !== null) clearTimeout(deleteConfirmTimer);
+      deleteConfirmTimer = null;
+      delBtn.classList.remove('is-confirm');
       delBtn.disabled = true;
       announceWorkflowMutation(t('spWorkflowDeleting', [task.name]));
       chrome.runtime.sendMessage(

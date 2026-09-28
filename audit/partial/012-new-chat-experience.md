@@ -99,15 +99,14 @@ Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:773-781`, `cr
 
 - Done when: From the new-chat screen the user can explicitly start a web search for the next message.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | The Search the web chip now sends search_requested with web_search, the flag the web's /search sends, so the next message requests a search; in post-codex/chat-gates-s12.10-mobile-requested-search.patch (TaskChips and the store are held). | ui |
-| vscode | partial | The app-server lists /search as a prompt command and runs it from turn text (e9fd089e09); VS Code has to offer it and Set up web search from webSearchKey (p-sessions) | handler |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:531-531`, `apps/cli/src/app_server/surfaces.rs:510-510`, `apps/cli/src/app_server/developer_host.rs:2548-2548`
+Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:531-531`
 
 ## S12.11: Research entry.
 

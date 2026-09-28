@@ -82,6 +82,7 @@ export interface HistoryMessage {
   cloudApprovalDecisions?: Record<string, 'approved' | 'rejected'>;
   cloudApprovalError?: string;
   managedQuickMode?: boolean;
+  agiWorkPlanDeclined?: boolean;
   model?: string;
   provider?: string;
   generatedFiles?: GeneratedFileWire[];
@@ -364,6 +365,7 @@ function normalizeHistoryMessage(
       normalized.cloudApprovalError = message['cloudApprovalError'];
     }
     if (message['managedQuickMode'] === true) normalized.managedQuickMode = true;
+    if (message['agiWorkPlanDeclined'] === true) normalized.agiWorkPlanDeclined = true;
     if (message['streaming'] === true) normalized.streaming = true;
     if (isSafeModelReference(message['model'])) {
       const modelMetadata = getModelMetadataById(message['model']);

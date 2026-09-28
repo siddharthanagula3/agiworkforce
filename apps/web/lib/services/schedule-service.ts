@@ -61,6 +61,7 @@ import {
   ownerIsActiveWorkspaceMemberSql,
 } from '@/lib/server/workspace-scope';
 import { enqueueJob } from '@/lib/jobs/job-service';
+import { buildPage, keysetSql, type KeysetCursor } from '@/lib/identity/pagination';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { executeScheduledAgent } from './scheduled-agent-executor';
 import { runWithinScheduleRun } from '@/lib/schedules/schedule-run-scope';
@@ -1314,29 +1315,45 @@ export async function claimDueScheduleRuns(
 
 export type RecentScheduleRun = ScheduleRun & { taskName: string };
 
+const RECENT_RUN_SORT_COLUMN = 'page_sort_key';
+const RECENT_RUN_SORT_KEY_FORMAT = `'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'`;
+
 export async function listRecentScheduleRuns(
   db: DatabaseAdapter,
   userId: string,
-  page: { limit: number; offset: number },
-): Promise<RecentScheduleRun[]> {
+  page: { limit: number; cursor: KeysetCursor | null },
+): Promise<{ runs: RecentScheduleRun[]; nextCursor: string | null }> {
   const limit = clampInteger(page.limit, 1, MAX_PAGE_SIZE);
-  const offset = clampInteger(page.offset, 0, 10_000);
-  const rows = await db.query<RunRow & { task_name: string }>(
-    `select run.*, task.name as task_name,
-            (select sum(charge.actual_cost_microusd)
-               from public.managed_usage_requests charge
-              where charge.user_id = $1
-                and charge.scheduled_task_id = run.task_id
-                and charge.scheduled_task_run_id = run.id
-                and charge.status = 'completed') as credits_used_microusd
-       from scheduled_task_runs as run
-       join scheduled_tasks as task on task.id = run.task_id
-      where task.user_id = $1
-      order by run.started_at desc, run.id desc
-      limit $2 offset $3`,
-    [userId, limit, offset],
+  const keyset = keysetSql({
+    sortColumn: RECENT_RUN_SORT_COLUMN,
+    cursor: page.cursor,
+    firstParamIndex: 3,
+  });
+  const rows = await db.query<RunRow & { task_name: string; page_sort_key: string }>(
+    `select * from (
+       select run.*, task.name as task_name,
+              to_char(run.started_at at time zone 'utc', ${RECENT_RUN_SORT_KEY_FORMAT})
+                as ${RECENT_RUN_SORT_COLUMN},
+              (select sum(charge.actual_cost_microusd)
+                 from public.managed_usage_requests charge
+                where charge.user_id = $1
+                  and charge.scheduled_task_id = run.task_id
+                  and charge.scheduled_task_run_id = run.id
+                  and charge.status = 'completed') as credits_used_microusd
+         from scheduled_task_runs as run
+         join scheduled_tasks as task on task.id = run.task_id
+        where task.user_id = $1
+     ) runs
+     ${keyset.where ? `where ${keyset.where}` : ''}
+     ${keyset.orderBy}
+     limit $2`,
+    [userId, limit + 1, ...keyset.params],
   );
-  return rows.map((row) => ({ ...mapScheduleRun(row), taskName: row.task_name }));
+  const built = buildPage(rows, limit, (row) => ({ sortValue: row.page_sort_key, id: row.id }));
+  return {
+    runs: built.items.map((row) => ({ ...mapScheduleRun(row), taskName: row.task_name })),
+    nextCursor: built.nextCursor,
+  };
 }
 
 export async function listScheduleRuns(

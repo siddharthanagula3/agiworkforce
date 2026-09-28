@@ -1,7 +1,11 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+
+import {
+  PluginCustomizeRequestSchema,
+  type PluginCustomizeResponse,
+} from '@agiworkforce/cloud-contracts';
 
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -18,18 +22,6 @@ import { installsDisabledResponse } from '@/features/plugins/server/directory/in
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const CustomizeBodySchema = z.union([
-  z.object({ entryId: z.string().uuid() }).strict(),
-  z
-    .object({
-      pluginId: z
-        .string()
-        .trim()
-        .regex(/^[a-z0-9][a-z0-9._-]{0,127}$/),
-    })
-    .strict(),
-]);
-
 async function handlePost(request: NextRequest): Promise<NextResponse> {
   const csrf = await requireCsrfToken(request);
   if (csrf) return csrf as NextResponse;
@@ -38,7 +30,7 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
   const limited = await withRateLimit(request, 'plugin-installation-write', `user:${userId}`);
   if (limited) return limited;
 
-  const parsed = CustomizeBodySchema.safeParse(await readJsonBody(request));
+  const parsed = PluginCustomizeRequestSchema.safeParse(await readJsonBody(request));
   if (!parsed.success) {
     return NextResponse.json(
       { error: { code: 'INVALID_PLUGIN', message: 'Choose an installed plugin to customize.' } },
@@ -71,7 +63,10 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
           { status: 422 },
         );
       case 'existing':
-        return NextResponse.json({ entryId: result.entryId, created: false });
+        return NextResponse.json<PluginCustomizeResponse>({
+          entryId: result.entryId,
+          created: false,
+        });
       case 'created':
         await recordAuditEvent({
           userId,
@@ -80,7 +75,10 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
           request,
           detail: { resourceId: result.entryId, resourceName: result.name, status: 'customized' },
         });
-        return NextResponse.json({ entryId: result.entryId, created: true }, { status: 201 });
+        return NextResponse.json<PluginCustomizeResponse>(
+          { entryId: result.entryId, created: true },
+          { status: 201 },
+        );
     }
   } catch (error) {
     if (isMissingPluginMarketplaceSchema(error)) return installsDisabledResponse();

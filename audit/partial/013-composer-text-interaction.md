@@ -128,14 +128,11 @@ Code: `apps/web/features/chat/components/messages/ChatMessageList.tsx:1396-1396`
 
 - Done when: The user can insert a saved prompt template (e.g. a custom command) into the composer, filling in their own text.
 - Wave: 3
-- Already works on: web, desktop, cli, chrome
+- Already works on: web, desktop, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| vscode | partial | partials/desktop-cli d13900eba6: the first typed text part starting with a slash expands on its own and commands/list marks prompt commands; the VS Code / menu inserting /name is p-sessions'. | ui |
-
-Code: `apps/cli/src/app_server/developer_host.rs:890-890`, `apps/cli/src/app_server/surfaces.rs:504-504`
 
 ## S13.23: Skill invocation.
 

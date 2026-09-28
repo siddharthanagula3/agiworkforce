@@ -26,7 +26,10 @@ import {
   type ManagedUsageCredits,
 } from '@agiworkforce/types';
 import { MeResponseSchema } from '@agiworkforce/cloud-contracts/me';
-import { MINIMUM_API_VERSION_RESPONSE_HEADER } from '@agiworkforce/cloud-contracts';
+import {
+  MINIMUM_API_VERSION_RESPONSE_HEADER,
+  type EffectiveCapabilityDocumentWire,
+} from '@agiworkforce/cloud-contracts';
 import { Config } from '../platform/config';
 import { platformRequestHeaders } from '../platform/platformHeaders';
 
@@ -775,6 +778,12 @@ export interface AccountIdentity {
   currentPeriodEnd?: string;
   cancelAtPeriodEnd?: boolean;
   subscriptionSource?: 'none' | 'stripe' | 'apple' | 'google' | 'manual';
+  capabilityDocument?: EffectiveCapabilityDocumentWire;
+}
+
+export function accountIdentityForDisplay(identity: AccountIdentity): AccountIdentity {
+  const { capabilityDocument: _capabilityDocument, ...shown } = identity;
+  return shown;
 }
 
 function unixSecondsToIso(value: number | null): string | undefined {
@@ -811,6 +820,9 @@ export function parseAccountIdentityResponse(raw: unknown): AccountIdentity | un
     ...(currentPeriodEnd === undefined ? {} : { currentPeriodEnd }),
     cancelAtPeriodEnd: parsed.data.plan.cancel_at_period_end === true,
     subscriptionSource: parsed.data.plan.subscription_source ?? 'none',
+    ...(parsed.data.capability_handshake === undefined
+      ? {}
+      : { capabilityDocument: parsed.data.capability_handshake }),
   };
 }
 
