@@ -31,20 +31,6 @@ Code: `apps/extension/src/side_panel.ts:6699-6707`, `apps/extension/src/side_pan
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S9.04: Connected-account picker.
-
-- Done when: When a connector has more than one linked account, the user can pick which account a task or chat uses.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | The accounts list and default switch exist, but both OAuth callbacks store every grant as the one default account, so a second account can never be added and there is nothing to pick between. | handler |
-| desktop | partial | The accounts list and default switch exist, but both OAuth callbacks store every grant as the one default account, so a second account can never be added and there is nothing to pick between. | handler |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/connectors/components/ConnectorAccountSelector.tsx:158-165`, `apps/web/features/connectors/hooks/use-connectors-settings-adapter.tsx:785-785`, `apps/web/app/api/connectors/oauth/callback/route.ts:153-158`
-
 ## S9.05: Workspace picker.
 
 - Done when: The user can see their personal and team workspaces in a list and switch the active one.

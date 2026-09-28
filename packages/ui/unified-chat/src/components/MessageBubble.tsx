@@ -456,7 +456,7 @@ function ToolCallRow({ toolCall }: { toolCall: ToolCall }) {
               ? 'bg-danger-fill/10 text-danger-text'
               : toolCall.status === 'completed'
                 ? 'bg-success-fill/10 text-success-text'
-                : 'bg-blue-500/10 text-blue-700 dark:text-blue-300',
+                : 'bg-info-fill/10 text-info-text',
           )}
         >
           {toolCall.status ?? 'running'}

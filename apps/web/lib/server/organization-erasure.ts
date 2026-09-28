@@ -56,6 +56,7 @@ export const ORGANIZATION_SCOPED_TABLES: ReadonlyArray<{ table: string; column: 
   { table: 'web_artifacts', column: 'organization_id' },
   { table: 'user_memories', column: 'organization_id' },
   { table: 'media_assets', column: 'organization_id' },
+  { table: 'external_resource_references', column: 'organization_id' },
   { table: 'scheduled_tasks', column: 'organization_id' },
   { table: 'cloud_agent_runs', column: 'organization_id' },
   { table: 'cloud_code_terminal_entries', column: 'organization_id' },
