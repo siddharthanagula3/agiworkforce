@@ -82,6 +82,7 @@ export interface ResponsesCreateParams {
   stream: true;
   stream_options?: { include_obfuscation?: boolean };
   metadata?: Record<string, string>;
+  user?: string;
   include?: Array<'web_search_call.action.sources'>;
   prompt_cache_key?: string;
   text?: {

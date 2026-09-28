@@ -77,22 +77,6 @@ Code: `apps/mobile/app/(app)/settings/workspace.tsx:269-269`
 
 Code: `apps/mobile/src/features/auth/services/ageGate.ts:128-135`, `apps/mobile/src/features/auth/services/rootRouting.ts:28-28`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:1904-1912`, `apps/cli/src/provider.rs:260-267`
 
-## S78.12: Age or account eligibility restrictions.
-
-- Done when: Age or account-eligibility rules gate access, with a check at sign-up or first run and restricted behaviour for ineligible users.
-- Wave: 3
-- Already works on: mobile
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Web sign-up has no age check (age appears only in Terms); account eligibility is enforced only for paid upgrades (invite code or waitlist). | ui, handler |
-| desktop | partial | Web sign-up has no age check (age appears only in Terms); account eligibility is enforced only for paid upgrades (invite code or waitlist). | ui, handler |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:1690-1691`
-
 ## S78.13: Required-connection detection.
 
 - Done when: The product detects when a feature needs an account connection that is missing and says which one.

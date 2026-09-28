@@ -101,6 +101,12 @@ const INTERACTIVE_SIGNALS = [
   'interactive visualization',
   'clickable prototype',
   'wireframe',
+  'into a web page',
+  'into a webpage',
+  'as a web page',
+  'interactive web page',
+  'interactive page',
+  'into a website',
 ] as const;
 
 const EXPLICIT_ARTIFACT_DESTINATION_SIGNALS = [
@@ -108,6 +114,12 @@ const EXPLICIT_ARTIFACT_DESTINATION_SIGNALS = [
   'web artifact',
   'artifact preview',
   'interactive artifact',
+  'into a web page',
+  'into a webpage',
+  'as a web page',
+  'interactive web page',
+  'interactive page',
+  'into a website',
 ] as const;
 
 /**

@@ -565,7 +565,9 @@ function normalizeScheduleSources(value: unknown): ManagedCloudScheduleSources {
   if (value === undefined || value === null) return { ...MANAGED_CLOUD_SCHEDULE_DEFAULT_SOURCES };
   const parsed = ManagedCloudScheduleSourcesSchema.safeParse(value);
   if (!parsed.success) {
-    throw new ScheduleValidationError('sources must say true or false for project, memory and web');
+    throw new ScheduleValidationError(
+      'sources must say true or false for project, memory and web, and for recentChats when it is sent',
+    );
   }
   return parsed.data;
 }
