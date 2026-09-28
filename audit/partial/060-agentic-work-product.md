@@ -148,16 +148,13 @@ Code: `apps/mobile/src/features/tasks/runPresentation.ts:227-237`, `apps/mobile/
 
 - Done when: When the agent works on several things at once, the view shows the parallel work.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Subagents can run, but the TUI has no subagent or parallel indicator (TranscriptCellKind::Subagent is never used). | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/subagent.rs:247-253`, `apps/cli/src/tui/transcript_cell.rs:19-25`
 
 ## S60.18: Clarification request.
 
@@ -236,17 +233,15 @@ Code: `apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx:252-265
 
 - Done when: From a finished task the user can save its procedure as a reusable Skill.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Skills are only auto-generated from tool patterns repeated across 3+ sessions; the user cannot save the current task as a skill. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/agent/chat.rs:1047-1057`
 
 ## S60.30: Generated deliverables.
 

@@ -62,14 +62,13 @@ Code: `crates/agiworkforce-command-registry/src/lib.rs:393-399`, `crates/agiwork
 
 - Done when: The new-chat screen offers shortcuts to the user's recent projects that open the project or start a chat in it.
 - Wave: 3
-- Already works on: web, desktop, vscode, chrome
+- Already works on: web, desktop, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Cloud projects in the drawer are ordered most recently updated first in post-codex/chat-gates-s12.06-mobile-recent-projects.patch (DrawerContent is held), matching the web sidebar's project shortcuts. | ui |
-| cli | partial | Add a way to start a session in a recent project from the terminal; today `agiworkforce projects list` lists account projects and `projects link` binds the current directory, with no recent-project shortcut. | ui |
 
-Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:334-334`, `apps/cli/src/lib.rs:984-996`, `apps/cli/src/lib.rs:1866-1884`
+Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:334-334`
 
 ## S12.08: Recommended Skills.
 
@@ -223,14 +222,13 @@ Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2448
 
 - Done when: The new-chat screen explains the available modes and gives examples of what each is for.
 - Wave: 3
-- Already works on: web, desktop, vscode, chrome
+- Already works on: web, desktop, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | In AGI Work mode the new-chat screen shows the web's AGI Work intro and four examples (shared i18n) that fill the composer, in post-codex/chat-gates-s12.19-s12.21-s14.15-mobile-new-chat.patch. | ui |
-| cli | partial | Add examples; the welcome names the access modes and the Shift+Tab mode switch only. | ui |
 
-Code: `apps/mobile/app/(app)/(tabs)/chat.tsx:200-200`, `apps/cli/src/tui/tui_app.rs:1476-1488`
+Code: `apps/mobile/app/(app)/(tabs)/chat.tsx:200-200`
 
 ## S12.23: Resumption of an unsent draft.
 

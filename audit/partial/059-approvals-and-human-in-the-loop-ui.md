@@ -81,18 +81,6 @@ Code: `apps/mobile/app/(app)/settings/auto-approve.tsx:47-55`
 
 Code: `apps/mobile/src/features/chat/components/CloudToolApprovalControls.tsx:114-114`
 
-## S59.23: Approval expiration.
-
-- Done when: A pending approval expires after a set time, the UI shows it expired, and the action cannot run from it.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Only the app-server runtime (used by VS Code) times approvals out, after 10 minutes; the terminal prompt waits indefinitely. | handler |
-
-Code: `apps/cli/src/app_server/developer_host.rs:68-68`
-
 ## S59.26: Approval from another device.
 
 - Done when: An approval raised on one device can be answered from another signed-in device, and the first device sees the result.

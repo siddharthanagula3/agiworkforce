@@ -20,14 +20,13 @@ nothing is left.
 
 - Done when: Before the model answers, the surface shows it is preparing (reading context/attachments/memory).
 - Wave: 3
-- Already works on: web, desktop, vscode, chrome
+- Already works on: web, desktop, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | A turn with no text, tools or thinking yet reads 'Preparing' beside the spinner, as the web does; the indicator takes the label now (5799eb1bf8) and MessageBubble passes it in post-codex/chat-gates-s19.03-s19.19-mobile-turn-phases.patch. | ui |
-| cli | partial | The spinner says 'Thinking…' from the start; context preparation (memory, files) is not shown as its own state. | states |
 
-Code: `apps/mobile/src/features/chat/components/StreamingIndicator.tsx:22-22`, `apps/cli/src/tui/tui_app.rs:1272-1276`
+Code: `apps/mobile/src/features/chat/components/StreamingIndicator.tsx:22-22`
 
 ## S19.08: Waiting for user input.
 
@@ -95,14 +94,13 @@ Code: `apps/cli/src/tui/tui_app.rs:169-180`, `apps/cli/src/tui/tui_app.rs:4865-4
 
 - Done when: After the user presses stop, the surface shows the stop is in progress until it takes effect.
 - Wave: 3
-- Already works on: web, desktop, vscode, chrome, api
+- Already works on: web, desktop, cli, vscode, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Stopping a Cloud run now waits for the cancel to land and shows 'Stopping…' on the turn meanwhile; a failed cancel leaves the turn running with the error. In post-codex/chat-gates-s19.17-mobile-stopping-state.patch. | ui |
-| cli | partial | Esc/Ctrl-C cancels immediately and prints '⊘ Stopped'; there is no stopping-in-progress state. | states |
 
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:2876-2876`, `apps/cli/src/tui/tui_app.rs:5240-5256`
+Code: `apps/mobile/stores/chat/chatExecutionStore.ts:2876-2876`
 
 ## S19.18: Cancelled.
 

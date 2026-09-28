@@ -281,15 +281,12 @@ Code: `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:11
 
 - Done when: Each answer shows which model actually produced it.
 - Wave: 3
-- Already works on: web, desktop, mobile, api
+- Already works on: web, desktop, mobile, cli, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Name the model on each answer; the status line shows the session model and a banner appears only when a turn falls back. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/tui/tui_app.rs:1847-1859`
 
 ## S15.33: Fallback disclosure.
 

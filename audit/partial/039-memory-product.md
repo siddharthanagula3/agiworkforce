@@ -96,18 +96,6 @@ nothing is left.
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S39.17: Memory source/provenance.
-
-- Done when: Each saved memory shows where it came from (typed by the user, imported, or learned from a named conversation).
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Migration 0285 is now applied in production (2026-09-27). Still open: Show which chat a memory came from; agi memory list prints only the writer label (web, mobile, auto...), and the chat link needs pending migration 0285. | ui |
-
-Code: `apps/cli/src/lib.rs:2070-2074`
-
 ## S39.19: Correction of stale information.
 
 - Done when: When the user states a newer fact that contradicts a stored memory, the outdated memory stops being used without a manual edit.
@@ -156,6 +144,7 @@ Code: `apps/cli/src/lib.rs:2070-2074`
 
 - Done when: Where memory has a limit, the user can see how much of it is used and which memories fall outside it.
 - Wave: 3
+- Already works on: cli
 - Needs a founder decision: true
 
 | Surface | Status | What is left | Gap |
@@ -163,11 +152,8 @@ Code: `apps/cli/src/lib.rs:2070-2074`
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Show how many learned facts are stored against the cap; the /memories overlay shows and sets only the max-facts limit (default 500). | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/tui/tui_app.rs:3914-3928`, `apps/cli/src/memory_pipeline.rs:90-90`
 
 ## S39.24: Project-scoped Memory.
 

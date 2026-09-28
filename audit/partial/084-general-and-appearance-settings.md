@@ -24,14 +24,13 @@ Code: `apps/extension/src/side_panel.ts:8120-8122`
 
 - Done when: The user can choose light, dark or system theme and it applies and persists.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | TUI /theme changes the theme for the session only; saving it needs the --no-tui REPL /theme or editing ui.theme in config.toml. | ui |
 | chrome | partial | The side panel follows the system/Chrome color scheme (prefers-color-scheme); no theme choice. | ui |
 
-Code: `apps/cli/src/tui/tui_app.rs:3818-3825`, `apps/cli/src/config.rs:821-826`, `apps/extension/src/side_panel.ts:3673-3673`
+Code: `apps/extension/src/side_panel.ts:3673-3673`
 
 ## S84.04: Accent color where offered.
 

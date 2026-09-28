@@ -122,15 +122,14 @@ nothing is left.
 
 - Done when: Standard error is shown separately (and visibly distinguished) from stdout.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Only a single preview line is shown; stderr is not shown separately. | ui |
 | vscode | partial | Command output is shown as one body; stderr is not separated or styled differently. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/cli/src/tui/tui_app.rs:206-206`, `apps/cli/src/tui/tui_app.rs:1530-1530`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:5788-5788`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:5787-5787`
+Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:5788-5788`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:5787-5787`
 
 ## S21.17: Execution-duration display.
 
@@ -149,14 +148,11 @@ Code: `apps/cli/src/tui/tui_app.rs:206-206`, `apps/cli/src/tui/tui_app.rs:1530-1
 
 - Done when: Each execution shows its outcome/exit status (success, failure with code).
 - Wave: 3
-- Already works on: web, desktop, mobile, vscode
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | A pass/fail glyph (✔/✗) is shown but not the exit code. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/tui/tui_app.rs:176-176`, `apps/cli/src/tui/tui_app.rs:1530-1530`
 
 ## S21.20: Plot output.
 
