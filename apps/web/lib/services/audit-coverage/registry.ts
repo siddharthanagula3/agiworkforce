@@ -126,6 +126,12 @@ export const UNAUDITED_MUTATING_ROUTES: readonly UnauditedRoute[] = [
   { route: 'webhooks/gmail/route.ts', reason: 'inbound_callback' },
   { route: 'webhooks/google-calendar/route.ts', reason: 'inbound_callback' },
   { route: 'webhooks/slack/route.ts', reason: 'inbound_callback' },
+  {
+    route: 'developers/webhooks/[endpointId]/deliveries/[deliveryId]/redeliver/route.ts',
+    reason: 'dedicated_record',
+  },
+  { route: 'developers/webhooks/[endpointId]/test/route.ts', reason: 'dedicated_record' },
+  { route: 'llm/v1/chat/completions/guest/route.ts', reason: 'pre_account' },
 ] as const;
 
 export interface RequiredRouteAuditEvents {

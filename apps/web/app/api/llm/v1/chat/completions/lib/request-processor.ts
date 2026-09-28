@@ -143,6 +143,7 @@ import {
 import { CreditService, ledgerCentsFromMicrousd } from '@/lib/services/credit-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import {
+  FREE_BUDGET_REACHED_ERROR_CLASS,
   FREE_TRIAL_MODEL,
   applyFreeTrialProviderBudget,
   beginFreeTrialRequest,
@@ -5324,6 +5325,7 @@ export async function processRequest(
       leaseSeconds: resolveManagedUsageLeaseSeconds(chatRequest),
       provider,
       model: chatRequest.model,
+      ...(chatRequest.conversation_id ? { conversationId: chatRequest.conversation_id } : {}),
     });
     if (!trialReservationResult.ok) {
       return freeTrialBudgetReachedResponse(subscription, {
@@ -5340,7 +5342,11 @@ export async function processRequest(
       priorCostMicrousd: codeExecutionHoldMicrousd,
     });
     if (!fitted.ok) {
-      await settleFreeTrialRequest({ reservation: freeTrial, outcome: 'failed' });
+      await settleFreeTrialRequest({
+        reservation: freeTrial,
+        outcome: 'failed',
+        attempt: { outcome: 'failed', errorClass: FREE_BUDGET_REACHED_ERROR_CLASS },
+      });
       return freeTrialBudgetReachedResponse(subscription, {
         model: chatRequest.model,
         resetsAt: await freeTrialResetAt(userId),

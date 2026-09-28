@@ -6,10 +6,8 @@ import {
   observedTurnCost,
   type ObservedProviderUsage,
 } from '@/lib/services/managed-usage-accounting-service';
-import {
-  markManagedUsageClientDelivered,
-  type ManagedUsageAttempt,
-} from '@/lib/services/managed-usage-request-service';
+import { markManagedUsageClientDelivered } from '@/lib/services/managed-usage-request-service';
+import type { GenerationAttempt } from '@/lib/services/generation-attempt';
 import { classifyError } from '@agiworkforce/provider-runtime';
 import { buildCpstUsageFields } from '@/lib/cpst-telemetry';
 import { settleFreeTrialRequest } from '@/lib/services/free-trial-service';
@@ -325,7 +323,7 @@ export function buildManagedAgentStream(
   const settle = async (
     reason: string,
     outcome: 'completed' | 'failed' | 'cancelled',
-    attempt: ManagedUsageAttempt | null = { outcome },
+    attempt: GenerationAttempt | null = { outcome },
   ) => {
     if (settled) return;
     const serving = servingRequest();
@@ -355,6 +353,7 @@ export function buildManagedAgentStream(
       await settleFreeTrialRequest({
         reservation: input.processed.freeTrial,
         outcome,
+        attempt,
         provider: serving.provider,
         model: serving.chatRequest.model,
         cost: observedTurnCost(input.usage, {
