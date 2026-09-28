@@ -101,4 +101,5 @@ build it, and the audit cell is recorded as not applicable by this decision.
   S45.20-21, S45.25-27, S46.10-13, S47.11). ChatGPT and Gemini edit and generate
   by prompt; Claude has no image generation. The select-an-area edit tool is
   built, because ChatGPT has one. Per-image cost and remaining image counts
-  (S44.14, S44.15) and adding videos to projects (S46.34) are declined too.
+  (S44.14, S44.15), negative prompts (S44.13), a generation queue view (S44.16,
+  S46.25), external image sharing (S44.31) and adding videos to projects (S46.34) are declined too.

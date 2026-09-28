@@ -10,14 +10,13 @@ nothing is left.
 
 - Done when: With an email account connected, the assistant can search the mailbox (e.g. by sender or subject) and return matching messages.
 - Wave: 2
-- Already works on: cli
+- Already works on: cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Gmail. | flag-off |
 | desktop | partial | Available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Gmail. | flag-off |
 | mobile | partial | Available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Gmail. | flag-off |
-| vscode | partial | Ruling 2 (lead): VS Code sidebar chat drives the local CLI runtime (turn/start), whose managed-cloud provider posts the account JWT to /api/llm/v1/chat/completions; the route loads the signed-in user's connector tools for every caller (connector_tools_enabled defaults true, no platform gate) and merges them into the turn, so a connector the user connected on web is offered to the model on this surface. In manual mode the loop suspends on x_tool_approval_request, which neither the CLI nor VS Code consumes (q: 0 hits), so only tools pre-set to Always allow on web run. partial, miss [ui, states], remaining: "only connector tools pre-set to Always allow on web run; approval requests are not shown in this client"; notes: needs-local-cli: VS Code chat drives the local CLI runtime, whose managed-cloud provider carries the turn. |  |
 | chrome | partial | Available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Gmail. | flag-off |
 
 Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `packages/ui/ui/src/settings-modal/SettingsModal.tsx:1967-1969`, `apps/web/app/api/llm/v1/chat/completions/route.ts:735-741`, `apps/web/lib/user-connector-tools.ts:2269-2289`
@@ -26,6 +25,7 @@ Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `pa
 
 - Done when: The assistant can open and read the full content of a specific email or thread from a connected mailbox.
 - Wave: 2
+- Already works on: vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -33,7 +33,6 @@ Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `pa
 | desktop | partial | Available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Gmail. | flag-off |
 | mobile | partial | Available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Gmail. | flag-off |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | Ruling 2 (lead): VS Code sidebar chat drives the local CLI runtime (turn/start), whose managed-cloud provider posts the account JWT to /api/llm/v1/chat/completions; the route loads the signed-in user's connector tools for every caller (connector_tools_enabled defaults true, no platform gate) and merges them into the turn, so a connector the user connected on web is offered to the model on this surface. In manual mode the loop suspends on x_tool_approval_request, which neither the CLI nor VS Code consumes (q: 0 hits), so only tools pre-set to Always allow on web run. partial, miss [ui, states], remaining: "only connector tools pre-set to Always allow on web run; approval requests are not shown in this client"; notes: needs-local-cli: VS Code chat drives the local CLI runtime, whose managed-cloud provider carries the turn. |  |
 | chrome | partial | Available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Gmail. | flag-off |
 
 Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `packages/ui/ui/src/settings-modal/SettingsModal.tsx:1967-1969`, `apps/web/app/api/llm/v1/chat/completions/route.ts:735-741`, `apps/web/lib/user-connector-tools.ts:2269-2289`
@@ -42,14 +41,13 @@ Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `pa
 
 - Done when: The assistant can create a draft email (new or reply) in the connected mailbox for the user to review.
 - Wave: 2
-- Already works on: cli
+- Already works on: cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | gmail.compose is now in the Gmail ceiling (7759c304c), so create_draft works once the owner adds the gmail CONNECTOR_OAUTH_PROVIDERS_JSON descriptor and client pair. | flag-off |
 | desktop | partial | gmail.compose is now in the Gmail ceiling (7759c304c), so create_draft works once the owner adds the gmail CONNECTOR_OAUTH_PROVIDERS_JSON descriptor and client pair. | flag-off |
 | mobile | partial | gmail.compose is now in the Gmail ceiling (7759c304c), so create_draft works once the owner adds the gmail CONNECTOR_OAUTH_PROVIDERS_JSON descriptor and client pair. | flag-off |
-| vscode | partial | Ruling 2 (lead): VS Code sidebar chat drives the local CLI runtime (turn/start), whose managed-cloud provider posts the account JWT to /api/llm/v1/chat/completions; the route loads the signed-in user's connector tools for every caller (connector_tools_enabled defaults true, no platform gate) and merges them into the turn, so a connector the user connected on web is offered to the model on this surface. In manual mode the loop suspends on x_tool_approval_request, which neither the CLI nor VS Code consumes (q: 0 hits), so only tools pre-set to Always allow on web run. partial, miss [ui, states], remaining: "only connector tools pre-set to Always allow on web run; approval requests are not shown in this client"; notes: needs-local-cli: VS Code chat drives the local CLI runtime, whose managed-cloud provider carries the turn. |  |
 | chrome | partial | Gmail's create_draft tool needs gmail.compose or gmail.modify, but the scope ceiling admits only gmail.readonly and gmail.send; widen the ceiling (or add another drafting connector); also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Gmail. | handler, flag-off |
 
 Code: `apps/web/lib/connectors/oauth-scope-allowlist.ts:41-41`, `apps/extension/src/features/side-panel/bubbles.ts:388-388`, `apps/extension/src/features/cloud-bridge/freeTrialClient.ts:55-56`, `apps/web/app/api/llm/v1/chat/completions/route.ts:735-741`
@@ -90,14 +88,13 @@ Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `pa
 
 - Done when: The assistant can search the connected calendar for events by text or date range.
 - Wave: 2
-- Already works on: cli
+- Already works on: cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Google Calendar. | flag-off |
 | desktop | partial | Available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Google Calendar. | flag-off |
 | mobile | partial | Available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Google Calendar. | flag-off |
-| vscode | partial | Ruling 2 (lead): VS Code sidebar chat drives the local CLI runtime (turn/start), whose managed-cloud provider posts the account JWT to /api/llm/v1/chat/completions; the route loads the signed-in user's connector tools for every caller (connector_tools_enabled defaults true, no platform gate) and merges them into the turn, so a connector the user connected on web is offered to the model on this surface. In manual mode the loop suspends on x_tool_approval_request, which neither the CLI nor VS Code consumes (q: 0 hits), so only tools pre-set to Always allow on web run. partial, miss [ui, states], remaining: "only connector tools pre-set to Always allow on web run; approval requests are not shown in this client"; notes: needs-local-cli: VS Code chat drives the local CLI runtime, whose managed-cloud provider carries the turn. |  |
 | chrome | partial | Available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Google Calendar. | flag-off |
 
 Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `packages/ui/ui/src/settings-modal/SettingsModal.tsx:1967-1969`, `apps/web/app/api/llm/v1/chat/completions/route.ts:735-741`, `apps/web/lib/user-connector-tools.ts:2269-2289`
@@ -182,56 +179,26 @@ Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `pa
 
 Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `packages/ui/ui/src/settings-modal/SettingsModal.tsx:1967-1969`, `apps/web/app/api/llm/v1/chat/completions/route.ts:735-741`, `apps/web/lib/user-connector-tools.ts:2269-2289`
 
-## S56.13: Cloud-file search.
-
-- Done when: The assistant can search files in a connected cloud drive.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Ruling 2 (lead): VS Code sidebar chat drives the local CLI runtime (turn/start), whose managed-cloud provider posts the account JWT to /api/llm/v1/chat/completions; the route loads the signed-in user's connector tools for every caller (connector_tools_enabled defaults true, no platform gate) and merges them into the turn, so a connector the user connected on web is offered to the model on this surface. In manual mode the loop suspends on x_tool_approval_request, which neither the CLI nor VS Code consumes (q: 0 hits), so only tools pre-set to Always allow on web run. partial, miss [ui, states], remaining: "only connector tools pre-set to Always allow on web run; approval requests are not shown in this client"; notes: needs-local-cli: VS Code chat drives the local CLI runtime, whose managed-cloud provider carries the turn. |  |
-
-## S56.14: Cloud-file download.
-
-- Done when: The assistant can download/read the content of a file from a connected cloud drive.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Ruling 2 (lead): VS Code sidebar chat drives the local CLI runtime (turn/start), whose managed-cloud provider posts the account JWT to /api/llm/v1/chat/completions; the route loads the signed-in user's connector tools for every caller (connector_tools_enabled defaults true, no platform gate) and merges them into the turn, so a connector the user connected on web is offered to the model on this surface. In manual mode the loop suspends on x_tool_approval_request, which neither the CLI nor VS Code consumes (q: 0 hits), so only tools pre-set to Always allow on web run. partial, miss [ui, states], remaining: "only connector tools pre-set to Always allow on web run; approval requests are not shown in this client"; notes: needs-local-cli: VS Code chat drives the local CLI runtime, whose managed-cloud provider carries the turn. |  |
-
 ## S56.15: Cloud-file creation.
 
 - Done when: The assistant can create a new file in a connected cloud drive, after approval.
 - Wave: 2
-- Already works on: cli
+- Already works on: cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Google Drive. | flag-off |
 | desktop | partial | Available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Google Drive. | flag-off |
 | mobile | partial | Available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Google Drive. | flag-off |
-| vscode | partial | Ruling 2 (lead): VS Code sidebar chat drives the local CLI runtime (turn/start), whose managed-cloud provider posts the account JWT to /api/llm/v1/chat/completions; the route loads the signed-in user's connector tools for every caller (connector_tools_enabled defaults true, no platform gate) and merges them into the turn, so a connector the user connected on web is offered to the model on this surface. In manual mode the loop suspends on x_tool_approval_request, which neither the CLI nor VS Code consumes (q: 0 hits), so only tools pre-set to Always allow on web run. partial, miss [ui, states], remaining: "only connector tools pre-set to Always allow on web run; approval requests are not shown in this client"; notes: needs-local-cli: VS Code chat drives the local CLI runtime, whose managed-cloud provider carries the turn. |  |
 | chrome | partial | Available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Google Drive. | flag-off |
 
 Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `packages/ui/ui/src/settings-modal/SettingsModal.tsx:1967-1969`, `apps/web/app/api/llm/v1/chat/completions/route.ts:735-741`, `apps/web/lib/user-connector-tools.ts:2269-2289`
-
-## S56.16: Cloud-file editing.
-
-- Done when: The assistant can modify an existing file in a connected cloud drive.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Ruling 2 (lead): VS Code sidebar chat drives the local CLI runtime (turn/start), whose managed-cloud provider posts the account JWT to /api/llm/v1/chat/completions; the route loads the signed-in user's connector tools for every caller (connector_tools_enabled defaults true, no platform gate) and merges them into the turn, so a connector the user connected on web is offered to the model on this surface. In manual mode the loop suspends on x_tool_approval_request, which neither the CLI nor VS Code consumes (q: 0 hits), so only tools pre-set to Always allow on web run. partial, miss [ui, states], remaining: "only connector tools pre-set to Always allow on web run; approval requests are not shown in this client"; notes: needs-local-cli: VS Code chat drives the local CLI runtime, whose managed-cloud provider carries the turn. |  |
 
 ## S56.17: Folder and sharing management.
 
 - Done when: The assistant can create folders and manage sharing (links, collaborators) in a connected cloud drive.
 - Wave: 2
+- Already works on: vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -239,7 +206,6 @@ Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `pa
 | desktop | partial | Box's folder and share-link tools need write scope (root_readwrite), but the ceiling admits root_readonly and item_upload only; Drive (drive.file) cannot share arbitrary files; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Google Drive. | handler, flag-off |
 | mobile | partial | Box's folder and share-link tools need write scope (root_readwrite), but the ceiling admits root_readonly and item_upload only; Drive (drive.file) cannot share arbitrary files; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Google Drive. | handler, flag-off |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | Ruling 2 (lead): VS Code sidebar chat drives the local CLI runtime (turn/start), whose managed-cloud provider posts the account JWT to /api/llm/v1/chat/completions; the route loads the signed-in user's connector tools for every caller (connector_tools_enabled defaults true, no platform gate) and merges them into the turn, so a connector the user connected on web is offered to the model on this surface. In manual mode the loop suspends on x_tool_approval_request, which neither the CLI nor VS Code consumes (q: 0 hits), so only tools pre-set to Always allow on web run. partial, miss [ui, states], remaining: "only connector tools pre-set to Always allow on web run; approval requests are not shown in this client"; notes: needs-local-cli: VS Code chat drives the local CLI runtime, whose managed-cloud provider carries the turn. |  |
 | chrome | partial | Box's folder and share-link tools need write scope (root_readwrite), but the ceiling admits root_readonly and item_upload only; Drive (drive.file) cannot share arbitrary files; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Google Drive. | handler, flag-off |
 
 Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `packages/ui/ui/src/settings-modal/SettingsModal.tsx:1967-1969`, `apps/web/app/api/llm/v1/chat/completions/route.ts:735-741`, `apps/web/lib/user-connector-tools.ts:2269-2289`
@@ -312,22 +278,20 @@ Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `pa
 
 - Done when: The assistant can draft and post a message to a team chat channel, after approval.
 - Wave: 3
-- Already works on: cli
+- Already works on: cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| vscode | partial | Ruling 2 (lead): VS Code sidebar chat drives the local CLI runtime (turn/start), whose managed-cloud provider posts the account JWT to /api/llm/v1/chat/completions; the route loads the signed-in user's connector tools for every caller (connector_tools_enabled defaults true, no platform gate) and merges them into the turn, so a connector the user connected on web is offered to the model on this surface. In manual mode the loop suspends on x_tool_approval_request, which neither the CLI nor VS Code consumes (q: 0 hits), so only tools pre-set to Always allow on web run. partial, miss [ui, states], remaining: "only connector tools pre-set to Always allow on web run; approval requests are not shown in this client"; notes: needs-local-cli: VS Code chat drives the local CLI runtime, whose managed-cloud provider carries the turn. |  |
 
 ## S56.23: Knowledge-base search.
 
 - Done when: The assistant can search a connected knowledge base (e.g. Notion, Confluence).
 - Wave: 3
-- Already works on: web, desktop, mobile, chrome
+- Already works on: web, desktop, mobile, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | Ruling 2 (lead): VS Code sidebar chat drives the local CLI runtime (turn/start), whose managed-cloud provider posts the account JWT to /api/llm/v1/chat/completions; the route loads the signed-in user's connector tools for every caller (connector_tools_enabled defaults true, no platform gate) and merges them into the turn, so a connector the user connected on web is offered to the model on this surface. In manual mode the loop suspends on x_tool_approval_request, which neither the CLI nor VS Code consumes (q: 0 hits), so only tools pre-set to Always allow on web run. partial, miss [ui, states], remaining: "only connector tools pre-set to Always allow on web run; approval requests are not shown in this client"; notes: needs-local-cli: VS Code chat drives the local CLI runtime, whose managed-cloud provider carries the turn. |  |
 
 ## S56.24: Wiki/page editing.
 
@@ -350,16 +314,6 @@ Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `pa
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-## S56.26: Issue status updates.
-
-- Done when: The assistant can update an issue's status or fields in a connected tracker.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Ruling 2 (lead): VS Code sidebar chat drives the local CLI runtime (turn/start), whose managed-cloud provider posts the account JWT to /api/llm/v1/chat/completions; the route loads the signed-in user's connector tools for every caller (connector_tools_enabled defaults true, no platform gate) and merges them into the turn, so a connector the user connected on web is offered to the model on this surface. In manual mode the loop suspends on x_tool_approval_request, which neither the CLI nor VS Code consumes (q: 0 hits), so only tools pre-set to Always allow on web run. partial, miss [ui, states], remaining: "only connector tools pre-set to Always allow on web run; approval requests are not shown in this client"; notes: needs-local-cli: VS Code chat drives the local CLI runtime, whose managed-cloud provider carries the turn. |  |
-
 ## S56.27: Project-management boards.
 
 - Done when: The assistant can view and work with project boards in a connected project-management tool.
@@ -370,16 +324,6 @@ Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `pa
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-## S56.28: CRM account/contact lookup.
-
-- Done when: The assistant can look up CRM accounts and contacts in a connected CRM.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Ruling 2 (lead): VS Code sidebar chat drives the local CLI runtime (turn/start), whose managed-cloud provider posts the account JWT to /api/llm/v1/chat/completions; the route loads the signed-in user's connector tools for every caller (connector_tools_enabled defaults true, no platform gate) and merges them into the turn, so a connector the user connected on web is offered to the model on this surface. In manual mode the loop suspends on x_tool_approval_request, which neither the CLI nor VS Code consumes (q: 0 hits), so only tools pre-set to Always allow on web run. partial, miss [ui, states], remaining: "only connector tools pre-set to Always allow on web run; approval requests are not shown in this client"; notes: needs-local-cli: VS Code chat drives the local CLI runtime, whose managed-cloud provider carries the turn. |  |
 
 ## S56.29: CRM opportunity updates.
 
@@ -417,16 +361,6 @@ Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `pa
 
 Code: `apps/web/lib/connectors/directory/sources/first-party.json:550-550`, `apps/web/lib/connectors/catalog.ts:163-163`, `apps/web/lib/connectors/oauth-scope-allowlist.ts:169-169`, `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`
 
-## S56.32: Pull-request workflows.
-
-- Done when: The assistant can read a pull request, review it and post review comments on the hosted repository.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Ruling 2 (lead): VS Code sidebar chat drives the local CLI runtime (turn/start), whose managed-cloud provider posts the account JWT to /api/llm/v1/chat/completions; the route loads the signed-in user's connector tools for every caller (connector_tools_enabled defaults true, no platform gate) and merges them into the turn, so a connector the user connected on web is offered to the model on this surface. In manual mode the loop suspends on x_tool_approval_request, which neither the CLI nor VS Code consumes (q: 0 hits), so only tools pre-set to Always allow on web run. partial, miss [ui, states], remaining: "only connector tools pre-set to Always allow on web run; approval requests are not shown in this client"; notes: needs-local-cli: VS Code chat drives the local CLI runtime, whose managed-cloud provider carries the turn. |  |
-
 ## S56.33: CI status and logs.
 
 - Done when: The assistant can report CI pipeline status and show build logs from a connected CI provider.
@@ -454,20 +388,11 @@ Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `pa
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-## S56.35: Design-to-code references.
-
-- Done when: The assistant can pull design-to-code references (code context, dev resources) from a connected design file.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Ruling 2 (lead): VS Code sidebar chat drives the local CLI runtime (turn/start), whose managed-cloud provider posts the account JWT to /api/llm/v1/chat/completions; the route loads the signed-in user's connector tools for every caller (connector_tools_enabled defaults true, no platform gate) and merges them into the turn, so a connector the user connected on web is offered to the model on this surface. In manual mode the loop suspends on x_tool_approval_request, which neither the CLI nor VS Code consumes (q: 0 hits), so only tools pre-set to Always allow on web run. partial, miss [ui, states], remaining: "only connector tools pre-set to Always allow on web run; approval requests are not shown in this client"; notes: needs-local-cli: VS Code chat drives the local CLI runtime, whose managed-cloud provider carries the turn. |  |
-
 ## S56.36: Database querying.
 
 - Done when: The assistant can run queries against a connected database.
 - Wave: 3
+- Already works on: vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -475,7 +400,6 @@ Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `pa
 | desktop | partial | Postgres, MongoDB and Redis connectors have no remote server (shown unavailable); only hosted Supabase/Neon servers connect, with tools discovered at connect. | handler |
 | mobile | partial | Postgres, MongoDB and Redis connectors have no remote server (shown unavailable); only hosted Supabase/Neon servers connect, with tools discovered at connect. | handler |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | Ruling 2 (lead): VS Code sidebar chat drives the local CLI runtime (turn/start), whose managed-cloud provider posts the account JWT to /api/llm/v1/chat/completions; the route loads the signed-in user's connector tools for every caller (connector_tools_enabled defaults true, no platform gate) and merges them into the turn, so a connector the user connected on web is offered to the model on this surface. In manual mode the loop suspends on x_tool_approval_request, which neither the CLI nor VS Code consumes (q: 0 hits), so only tools pre-set to Always allow on web run. partial, miss [ui, states], remaining: "only connector tools pre-set to Always allow on web run; approval requests are not shown in this client"; notes: needs-local-cli: VS Code chat drives the local CLI runtime, whose managed-cloud provider carries the turn. |  |
 | chrome | partial | Postgres, MongoDB and Redis connectors have no remote server (shown unavailable); only hosted Supabase/Neon servers connect, with tools discovered at connect. | handler |
 
 Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `packages/ui/ui/src/settings-modal/SettingsModal.tsx:1967-1969`, `apps/web/app/api/llm/v1/chat/completions/route.ts:735-741`, `apps/web/lib/user-connector-tools.ts:2269-2289`
@@ -590,6 +514,7 @@ Code: `apps/mobile/app/(app)/settings/integrations.tsx:182-182`, `apps/mobile/sr
 
 - Done when: The assistant can read the user's health records through a connected provider account.
 - Wave: 2
+- Already works on: vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -597,7 +522,6 @@ Code: `apps/mobile/app/(app)/settings/integrations.tsx:182-182`, `apps/mobile/sr
 | desktop | partial | Epic and Cerner have SMART-on-FHIR read scopes but no pinned server; the operator must supply an MCP server before they can connect; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Epic and Cerner. | handler, flag-off |
 | mobile | partial | Epic and Cerner have SMART-on-FHIR read scopes but no pinned server; the operator must supply an MCP server before they can connect; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Epic and Cerner. | handler, flag-off |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | Ruling 2 (lead): VS Code sidebar chat drives the local CLI runtime (turn/start), whose managed-cloud provider posts the account JWT to /api/llm/v1/chat/completions; the route loads the signed-in user's connector tools for every caller (connector_tools_enabled defaults true, no platform gate) and merges them into the turn, so a connector the user connected on web is offered to the model on this surface. In manual mode the loop suspends on x_tool_approval_request, which neither the CLI nor VS Code consumes (q: 0 hits), so only tools pre-set to Always allow on web run. partial, miss [ui, states], remaining: "only connector tools pre-set to Always allow on web run; approval requests are not shown in this client"; notes: needs-local-cli: VS Code chat drives the local CLI runtime, whose managed-cloud provider carries the turn. |  |
 | chrome | partial | Epic and Cerner have SMART-on-FHIR read scopes but no pinned server; the operator must supply an MCP server before they can connect; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Epic and Cerner. | handler, flag-off |
 
 Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `packages/ui/ui/src/settings-modal/SettingsModal.tsx:1967-1969`, `apps/web/app/api/llm/v1/chat/completions/route.ts:735-741`, `apps/web/lib/user-connector-tools.ts:2269-2289`

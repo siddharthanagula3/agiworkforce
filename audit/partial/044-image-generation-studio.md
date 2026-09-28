@@ -42,16 +42,15 @@ nothing is left.
 
 - Done when: User attaches one or more reference images in dedicated slots that guide the generation.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | One reference image (plus an optional mask) per request; no multiple reference slots. | ui |
-| desktop | partial | One reference image (plus an optional mask) per request; no multiple reference slots. | ui |
 | mobile | partial | Exactly one reference photo, only with an edit-capable model; no slots. | ui |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:1116-1119`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:2862-2878`, `packages/contracts/cloud-contracts/src/managed-media.ts:97-99`, `apps/mobile/src/features/chat/actions/resolveMobileImageGenerationRequest.ts:163-169`
+Code: `apps/mobile/src/features/chat/actions/resolveMobileImageGenerationRequest.ts:163-169`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:376-380`
 
 ## S44.06: Prompt enhancement with user control.
 
@@ -85,46 +84,15 @@ Code: `apps/cli/src/lib.rs:950-953`, `apps/cli/src/cloud/image.rs:277-283`
 
 - Done when: User asks for a transparent background on the generated image.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Transparent toggle appears only when editing an attached image with an edit-capable model; plain text-to-image has no option. | ui |
-| desktop | partial | Hosted web: edit-only transparent toggle. | ui |
 | mobile | partial | Route supports transparent_background on OpenAI edits; mobile never sends it. | ui |
 | cli | partial | No flag; the CLI request has no transparent_background field. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:4776-4790`, `apps/web/app/api/media/image/lib/image-generation-provider.ts:463-465`, `packages/contracts/cloud-contracts/src/managed-media.ts:99-101`, `apps/cli/src/cloud/image.rs:27-38`
-
-## S44.13: Supported negative-prompt control.
-
-- Done when: User enters a negative prompt (what to avoid) on models that support it.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Route accepts negative_prompt (used only by Imagen) but no web control sends it. | ui |
-| desktop | partial | Hosted web: no negative prompt control. | ui |
-| mobile | partial | Route accepts negative_prompt; mobile offers no control. | ui |
-| cli | partial | No --negative flag; the CLI request omits negative_prompt. | ui |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `packages/contracts/cloud-contracts/src/managed-media.ts:95-97`, `apps/web/app/api/media/image/lib/image-generation-provider.ts:563-567`, `apps/cli/src/cloud/image.rs:27-38`
-
-## S44.16: Generation queue.
-
-- Done when: User can queue several image generations and see their status in a queue view.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Durable image jobs exist server-side, but web runs one image turn per conversation and has no queue view. | ui |
-| desktop | partial | Hosted web: no queue view. | ui |
-| mobile | partial | Durable jobs server-side; mobile has no queue view. | ui |
-| cli | partial | One blocking generation per command; no queue. | ui |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/api/media/image/lib/image-job-drive-queue.ts:8-15`, `apps/web/features/chat/pages/WebChatPage.tsx:2473-2477`
+Code: `packages/contracts/cloud-contracts/src/managed-media.ts:99-101`, `apps/cli/src/cloud/image.rs:27-38`
 
 ## S44.18: Cancel generation.
 
@@ -275,21 +243,6 @@ Code: `apps/mobile/src/features/chat/components/ImageFullScreen.tsx:175-183`, `a
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/mobile/services/fileCreation.ts:395-408`, `apps/mobile/src/features/chat/components/ImageFullScreen.tsx:175-183`
-
-## S44.31: Share image.
-
-- Done when: User shares a generated image with someone else (link or file to another app).
-- Wave: 3
-- Already works on: mobile
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Share copies a workspace-only link (and offers download); there is no public or external share. | ui, handler |
-| desktop | partial | Hosted web: workspace-only link. | ui, handler |
-| cli | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/ImageGenerationCard.tsx:336-340`, `apps/web/features/chat/components/ImageGenerationCard.tsx:247-252`
 
 ## S44.33: Edit image.
 

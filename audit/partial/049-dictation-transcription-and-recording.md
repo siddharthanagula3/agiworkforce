@@ -79,17 +79,17 @@ Code: `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`, `a
 
 - Done when: After a failed transcription the user can retry without starting over.
 - Wave: 2
+- Already works on: web
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | "Try again" starts a brand-new recording; the failed audio is not kept, so it cannot be re-submitted. | handler |
 | desktop | partial | "Try again" starts a brand-new recording; the failed audio is not kept, so it cannot be re-submitted. | handler |
 | mobile | partial | A failure is shown as an alert and the recording is dropped; the user must tap the mic and speak again. | ui, handler |
 | cli | partial | A failed transcription prints an error and returns to the SPACE prompt to record again; the audio is not retried. Works only in builds compiled with the off-by-default `voice` cargo feature, and needs the user's own OPENAI_API_KEY or a local whisper binary for transcription. | flag-off |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | Errors show a message; the user clicks the mic and speaks again. No retry of the same audio. | ui, handler |
 
-Code: `apps/web/features/chat/components/Composer/DictationStrip.tsx:147-147`, `apps/web/features/chat/hooks/use-dictation.ts:158-158`, `apps/mobile/src/features/chat/components/ChatInput.tsx:607-607`, `apps/cli/Cargo.toml:118-118`
+Code: `apps/web/features/chat/hooks/use-dictation.ts:158-158`, `apps/mobile/src/features/chat/components/ChatInput.tsx:607-607`, `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`
 
 ## S49.07: Discard recording.
 
