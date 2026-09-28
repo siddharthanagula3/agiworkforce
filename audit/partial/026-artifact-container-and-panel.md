@@ -215,14 +215,13 @@ Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:421-435`,
 
 - Done when: A copy control puts the artifact's own content on the clipboard and confirms it.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| vscode | partial | No Copy command on an artifact; its content can only be copied by selecting it in the read-only editor it opens in. | ui |
 | chrome | partial | Copy puts the whole assistant message on the clipboard, not just the artifact: readChromeArtifactSource returns the message content without deriving the artifact block (VS Code derives it with deriveArtifacts). | handler |
 
-Code: `apps/extension-vscode/src/features/artifacts/artifactActions.ts:99-102`, `apps/extension-vscode/src/features/artifacts/artifactActions.ts:32-45`, `apps/extension/src/features/side-panel/artifactsDrawer.ts:198-221`, `apps/extension/src/features/cloud-bridge/artifactsClient.ts:197-203`
+Code: `apps/extension/src/features/side-panel/artifactsDrawer.ts:198-221`, `apps/extension/src/features/cloud-bridge/artifactsClient.ts:197-203`
 
 ## S26.31: Share controls.
 
@@ -241,14 +240,13 @@ Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:405-418`,
 
 - Done when: Wherever an artifact is shown, the user can see whether it is private, published to anyone, or shared with the workspace.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | The public link appears only right after publishing in the open viewer (component state); reopening shows no published state and the audience is never shown. | states |
-| vscode | partial | The tree marks an artifact "published" and says it "has a public link" even when its audience is the workspace only; the published row's visibility is ignored. | states |
 
-Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:139-143`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:265-271`, `apps/extension-vscode/src/features/artifacts/artifactPresentation.ts:107-130`, `apps/extension-vscode/src/features/artifacts/artifactsTree.ts:137-145`
+Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:139-143`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:265-271`
 
 ## S26.35: Runtime error panel.
 
@@ -286,12 +284,11 @@ Code: `apps/mobile/src/features/chat/components/sandboxedArtifactHtml.ts:32-35`,
 ## S26.39: Live updates from ongoing work.
 
 - Done when: While a reply or run is still producing an artifact, the artifact view updates live as content arrives.
-- Wave: 2
-- Already works on: web, desktop
+- Wave: 3
+- Already works on: web, desktop, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Artifacts are derived only when the turn finishes, so the card and viewer appear after completion; while streaming the code only shows as message text. | states |
-| vscode | partial | The Artifacts tree has a 60-second auto-refresh that nothing turns on (setAutoRefreshEnabled is never called with true), and an open artifact document is a static snapshot. | mount |
 
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1951-1973`, `apps/mobile/src/features/chat/components/MessageBubble.tsx:336-341`, `apps/extension-vscode/src/features/artifacts/artifactsTree.ts:84-92`, `apps/extension-vscode/src/core/commandSetup.ts:2286-2288`
+Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1951-1973`, `apps/mobile/src/features/chat/components/MessageBubble.tsx:336-341`
