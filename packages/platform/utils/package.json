@@ -10,6 +10,7 @@
     "./circuit-breaker": "./src/circuitBreaker.ts",
     "./composer-paste": "./src/composerPaste.ts",
     "./control-receipts": "./src/remoteControl/controlReceipts.ts",
+    "./cron": "./src/cron.ts",
     "./crypto": "./src/crypto.ts",
     "./display-name": "./src/displayName.ts",
     "./fence": "./src/fence.ts",
@@ -42,6 +43,9 @@
       ],
       "control-receipts": [
         "./src/remoteControl/controlReceipts.ts"
+      ],
+      "cron": [
+        "./src/cron.ts"
       ],
       "crypto": [
         "./src/crypto.ts"

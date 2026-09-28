@@ -158,6 +158,7 @@ const capabilitiesSchema = z.object({
   plan: z.boolean().optional(),
   savedPermissions: z.boolean().optional(),
   mcpInspect: z.boolean().optional(),
+  pluginUpdates: z.boolean().optional(),
 });
 
 const initializeResponseSchema = z.object({
@@ -480,6 +481,8 @@ const accountStatusResponseSchema = z.object({
   purchasedCredits: z.number().optional(),
   cached: z.boolean(),
   source: z.literal('cli'),
+  webSearchKey: z.string().max(64).optional(),
+  webSearchLogins: z.array(z.string().max(64)).max(20).optional(),
 });
 const accountLoginResponseSchema = z.object({
   loginId: z.string().min(1).max(200),
@@ -543,6 +546,31 @@ const pluginListResponseSchema = z.object({
     )
     .max(2_000),
 });
+const mcpAuthRequiredSchema = z.object({
+  threadId: z.string().min(1).max(200),
+  turnId: z.string().min(1).max(200),
+  toolCallId: z.string().min(1).max(200),
+  server: z.string().min(1).max(200),
+  scope: z.string().max(2_000).optional(),
+});
+
+export type McpAuthRequired = z.infer<typeof mcpAuthRequiredSchema>;
+
+export function readMcpAuthRequired(params: unknown): McpAuthRequired | undefined {
+  const parsed = mcpAuthRequiredSchema.safeParse(params);
+  return parsed.success ? parsed.data : undefined;
+}
+
+const pluginUpdateResponseSchema = pluginListResponseSchema.extend({
+  id: z.string().min(1).max(200),
+  updated: z.boolean(),
+  previousVersion: z.string().max(200).optional(),
+  version: z.string().max(200).optional(),
+  changedFiles: z.array(z.string().max(16_384)).max(10_000).default([]),
+});
+
+export type PluginUpdate = z.infer<typeof pluginUpdateResponseSchema>;
+
 const mcpServerStatusSchema = z.enum(['configured', 'authorized', 'needs_auth']);
 const mcpServerListResponseSchema = z.object({
   servers: z
@@ -647,6 +675,7 @@ const slashCommandListResponseSchema = z.object({
         source: z.enum(['builtin', 'skill', 'prompt', 'plugin', 'mcp']),
         aliases: z.array(z.string().max(200)).max(50),
         runnable: z.boolean(),
+        prompt: z.boolean().optional(),
       }),
     )
     .max(5_000),
@@ -720,6 +749,9 @@ const turnFailureSchema = z.object({
   // decided once, where the failure becomes words, not twice.
   retryAfterSeconds: z.number().int().positive().optional().catch(undefined),
   requestId: z.string().min(1).max(200).optional().catch(undefined),
+  alternativeModel: z.string().min(1).max(200).optional().catch(undefined),
+  resetsAt: z.string().min(1).max(64).optional().catch(undefined),
+  recoveryHref: z.string().min(1).max(2_048).optional().catch(undefined),
 });
 const turnTerminalEventSchema = z.object({
   threadId: z.string().min(1),
@@ -1497,6 +1529,13 @@ export class LocalRuntimeClient {
     return pluginListResponseSchema.parse(
       await connection.request('plugins/install', params, INSTALL_TIMEOUT_MS),
     ) as PluginListResponse;
+  }
+
+  async updatePlugin(id: string): Promise<PluginUpdate> {
+    const connection = await this.readyConnection();
+    return pluginUpdateResponseSchema.parse(
+      await connection.request('plugins/update', { id }, INSTALL_TIMEOUT_MS),
+    );
   }
 
   async removePlugin(id: string): Promise<PluginListResponse> {

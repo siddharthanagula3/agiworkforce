@@ -508,6 +508,7 @@ export interface ChatMessageMessage extends BaseMessage {
   modelSelection?: string;
   quickMode?: boolean;
   workMode?: 'chat' | 'agiwork';
+  agiWorkPlan?: string[];
   webSearch?: boolean;
   effort?: Effort;
   currentModelKey?: string;
@@ -827,6 +828,7 @@ export type ScheduleType = 'hourly' | 'daily' | 'weekly' | 'monthly';
 export interface ScheduledTask {
   id: string;
   name: string;
+  description?: string;
   enabled: boolean;
   scheduleType: ScheduleType;
   scheduleValue: string;
@@ -856,7 +858,13 @@ export interface UpdateScheduledTaskMessage extends BaseMessage {
   updates: Partial<
     Pick<
       ScheduledTask,
-      'name' | 'enabled' | 'scheduleType' | 'scheduleValue' | 'shortcutId' | 'prompt'
+      | 'name'
+      | 'description'
+      | 'enabled'
+      | 'scheduleType'
+      | 'scheduleValue'
+      | 'shortcutId'
+      | 'prompt'
     >
   >;
 }

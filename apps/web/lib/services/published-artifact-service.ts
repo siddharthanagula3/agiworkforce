@@ -464,3 +464,162 @@ export async function getPublishedArtifactByToken(
   const row = rows[0];
   return row ? rowToPublishedArtifact(row) : null;
 }
+
+interface PublishedVersionRow {
+  id: string;
+  version: number | string;
+  title: string;
+  kind: string;
+  language: string | null;
+  content: string;
+  created_at: string | Date;
+}
+
+function toVersionNumber(value: number | string | null | undefined): number {
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 0;
+}
+
+/**
+ * Append this publish to the artifact's history, unless it says exactly what
+ * the newest version already says. Republishing an unchanged artifact is what
+ * the Publish button does on every second click, and a history full of
+ * identical versions is not a history.
+ */
+export async function recordPublishedVersion(
+  db: DatabaseAdapter,
+  input: {
+    publishedArtifactId: string;
+    userId: string;
+    title: string;
+    kind: string;
+    language: string | null;
+    content: string;
+  },
+): Promise<number> {
+  const [newest] = await db.query<PublishedVersionRow>(
+    `select id, version, title, kind, language, content, created_at
+       from public.published_artifact_versions
+      where published_artifact_id = $1 and user_id = $2
+      order by version desc
+      limit 1`,
+    [input.publishedArtifactId, input.userId],
+  );
+
+  if (
+    newest &&
+    newest.content === input.content &&
+    newest.title === input.title &&
+    newest.kind === input.kind &&
+    (newest.language ?? null) === input.language
+  ) {
+    return toVersionNumber(newest.version);
+  }
+
+  const [inserted] = await db.query<{ version: number | string }>(
+    `insert into public.published_artifact_versions
+       (published_artifact_id, user_id, version, title, kind, language, content, parent_version_id)
+     values ($1, $2, $3, $4, $5, $6, $7, $8)
+     returning version`,
+    [
+      input.publishedArtifactId,
+      input.userId,
+      toVersionNumber(newest?.version) + 1,
+      input.title,
+      input.kind,
+      input.language,
+      input.content,
+      newest?.id ?? null,
+    ],
+  );
+
+  const version = toVersionNumber(inserted?.version);
+  await db.execute(
+    `update public.published_artifacts
+        set version = $2
+      where id = $1 and user_id = $3`,
+    [input.publishedArtifactId, version, input.userId],
+  );
+  return version;
+}
+
+export interface PublishedArtifactVersionSummary {
+  version: number;
+  title: string;
+  kind: string;
+  createdAt: string;
+  live: boolean;
+}
+
+interface OwnedPublicationRow {
+  id: string;
+  version: number | string | null;
+}
+
+async function readOwnedPublication(
+  db: DatabaseAdapter,
+  userId: string,
+  token: string,
+): Promise<OwnedPublicationRow | null> {
+  if (!userId || !PUBLISHED_TOKEN_REGEX.test(token)) return null;
+  const [row] = await db.query<OwnedPublicationRow>(
+    `select id, version from public.published_artifacts where token = $1 and user_id = $2 limit 1`,
+    [token, userId],
+  );
+  return row ?? null;
+}
+
+export async function listPublishedArtifactVersions(
+  db: DatabaseAdapter,
+  input: { userId: string; token: string },
+): Promise<PublishedArtifactVersionSummary[] | null> {
+  const publication = await readOwnedPublication(db, input.userId.trim(), input.token.trim());
+  if (!publication) return null;
+  const live = toVersionNumber(publication.version);
+  const rows = await db.query<Omit<PublishedVersionRow, 'content' | 'language' | 'id'>>(
+    `select version, title, kind, created_at
+       from public.published_artifact_versions
+      where published_artifact_id = $1 and user_id = $2
+      order by version desc`,
+    [publication.id, input.userId.trim()],
+  );
+  return rows.map((row) => ({
+    version: toVersionNumber(row.version),
+    title: row.title,
+    kind: row.kind,
+    createdAt: toIso(row.created_at),
+    live: toVersionNumber(row.version) === live,
+  }));
+}
+
+export interface PublishedArtifactVersionDetail {
+  version: number;
+  title: string;
+  kind: string;
+  language: string | null;
+  content: string;
+}
+
+export async function readPublishedArtifactVersion(
+  db: DatabaseAdapter,
+  input: { userId: string; token: string; version: number },
+): Promise<PublishedArtifactVersionDetail | null> {
+  const userId = input.userId.trim();
+  const publication = await readOwnedPublication(db, userId, input.token.trim());
+  if (!publication) return null;
+  const [row] = await db.query<PublishedVersionRow>(
+    `select id, version, title, kind, language, content, created_at
+       from public.published_artifact_versions
+      where published_artifact_id = $1 and user_id = $2 and version = $3
+      limit 1`,
+    [publication.id, userId, input.version],
+  );
+  if (!row) return null;
+  return {
+    version: toVersionNumber(row.version),
+    title: row.title,
+    kind: row.kind,
+    language: row.language,
+    content: row.content,
+  };
+}

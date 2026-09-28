@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toUserMessage } from '@/lib/user-error-message';
 import { useChatStore } from '@shared/stores/web-chat-store';
+import { useArtifactsStore } from '@features/chat/stores/artifacts-store';
+import { snapshotArtifacts } from '@features/chat/lib/shared-conversation-snapshot';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { TEMPORARY_CHAT_SHARE_REFUSAL } from '@/lib/temporary-chat-policy';
 import { SHARE_CONVERSATION_CLIENT_DEADLINE_MS } from '@/lib/deadline-policy';
@@ -159,20 +161,35 @@ export function useShareConversation(
           title: conversationTitle || 'Shared Session',
           model_id: modelId,
           expires_in_days: expiresInDays,
-          messages: messages.map((m) => ({
-            role: m.role,
-            content: m.content,
-            created_at: m.createdAt,
-            ...(m.attachments && m.attachments.length > 0
-              ? {
-                  attachments: m.attachments.map((a) => ({
-                    name: a.name,
-                    type: a.type,
-                    mimeType: a.mimeType,
-                  })),
-                }
-              : {}),
-          })),
+          messages: messages.map((m) => {
+            const artifacts =
+              m.role === 'assistant'
+                ? snapshotArtifacts(
+                    conversationId,
+                    m.id,
+                    m.content,
+                    useArtifactsStore.getState().getMessageArtifacts(m.id),
+                  )
+                : [];
+            return {
+              role: m.role,
+              content: m.content,
+              created_at: m.createdAt,
+              ...(m.metadata?.artifactDerivation
+                ? { artifact_derivation: m.metadata.artifactDerivation }
+                : {}),
+              ...(artifacts.length > 0 ? { artifacts } : {}),
+              ...(m.attachments && m.attachments.length > 0
+                ? {
+                    attachments: m.attachments.map((a) => ({
+                      name: a.name,
+                      type: a.type,
+                      mimeType: a.mimeType,
+                    })),
+                  }
+                : {}),
+            };
+          }),
         };
         const res = await fetch('/api/share', {
           method: 'POST',

@@ -62,6 +62,7 @@ import { peekGroundingPool } from '@/lib/web-search/grounding-pool';
 import {
   REQUIRED_SEARCH_SYSTEM_NUDGE,
   classifyAttachedSearchTool,
+  replaceNativeWebSearchTool,
   resolveRequiredSearchEnforcement,
   resolveWebSearchRequirement,
   shouldOfferWebSearchForTurn,
@@ -165,6 +166,7 @@ import {
 } from '@/lib/services/provider-adapter-service';
 import { admittedHarnessIds } from '@/lib/services/gateway-routing';
 import { readModelPolicy } from '@/lib/services/model-policy-service';
+import { readWorkspaceWebDomainPolicy } from '@/lib/services/connector-policy-service';
 import { modelPolicyRefusalInit } from '@/lib/services/model-policy-gate';
 import { resolveZeroDataRetentionPolicy } from '@/lib/services/organization-policy-gate';
 import { scheduleMemoryRelevanceShadow } from '@/lib/services/semantic-decisions/consumers/memory-relevance';
@@ -330,6 +332,7 @@ import {
 import {
   createResearchDomainPolicy,
   MAX_RESEARCH_CONNECTOR_SOURCES,
+  narrowResearchDomainPolicy,
   type ResearchDomainPolicy,
 } from './research-sources';
 import {
@@ -4182,12 +4185,35 @@ export async function processRequest(
   if (researchMode) {
     applyResearchMode(chatRequest, dynamicSystemMessageRefs, rolloutInputs.promptVariants);
   }
-  const webSearchDomainPolicy = researchMode
-    ? null
-    : createResearchDomainPolicy({
-        allow: chatRequest.research_sources?.allow_domains,
-        deny: chatRequest.research_sources?.deny_domains,
-      });
+  const workspaceWebDomainPolicy =
+    chatRequest.web_search || chatRequest.web_fetch || researchMode
+      ? await scopedDbPromise.then((scoped) =>
+          readWorkspaceWebDomainPolicy(scoped.db, scoped.organizationId),
+        )
+      : null;
+  const narrowedDomainPolicy = narrowResearchDomainPolicy(
+    workspaceWebDomainPolicy,
+    createResearchDomainPolicy({
+      allow: chatRequest.research_sources?.allow_domains,
+      deny: chatRequest.research_sources?.deny_domains,
+    }),
+  );
+  if (!narrowedDomainPolicy.ok) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          error: {
+            message: `Your workspace only allows reading ${narrowedDomainPolicy.allowed.join(', ')}, and none of the sites chosen for this chat are among them.`,
+            type: 'invalid_request_error',
+            code: 'sites_outside_workspace_policy',
+          },
+        },
+        { status: 403 },
+      ),
+    };
+  }
+  const webSearchDomainPolicy = narrowedDomainPolicy.policy;
   // The user asked for Deep Research and the routed model cannot do it, so the
   // research loop will not run. Previously this was silent: the toggle stayed
   // lit, `runResearchLoop` never executed, and the user received an ordinary
@@ -5097,6 +5123,12 @@ export async function processRequest(
     ) {
       resolvedTools = [...(resolvedTools ?? []), webSearchToolDef()];
     }
+    if (workspaceWebDomainPolicy) {
+      resolvedTools = replaceNativeWebSearchTool(
+        resolvedTools,
+        chatRequest.stream === true && webSearchBackendConfigured(),
+      );
+    }
   }
 
   if (placesRequirement.offered) {
@@ -5177,7 +5209,7 @@ export async function processRequest(
       tools: resolvedTools,
       toolsCapable: resolvedModelCaps?.tools ?? true,
       stream: chatRequest.stream,
-      nativeFetchPermitted: nativeToolPermitted(URL_FETCH_TOOL),
+      nativeFetchPermitted: nativeToolPermitted(URL_FETCH_TOOL) && !workspaceWebDomainPolicy,
     });
   }
 
@@ -5505,7 +5537,7 @@ export async function processRequest(
     quotaWarningHeader,
     isFlagshipRequest,
     researchMode,
-    ...(!researchMode && webSearchDomainPolicy ? { webSearchDomainPolicy } : {}),
+    ...(webSearchDomainPolicy ? { webSearchDomainPolicy } : {}),
     ...(researchMode && chatRequest.research_sources
       ? {
           researchSources: {
