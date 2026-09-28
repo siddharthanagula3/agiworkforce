@@ -337,7 +337,10 @@ import {
   findManagedSkillWithFiles,
 } from '@/lib/services/skill-catalog-service';
 import { getSkillInstallOverrides } from '@/lib/services/skill-install-service';
-import { listEnabledPluginIds } from '@/lib/services/plugin-installation-service';
+import {
+  listPermittedPluginIds,
+  workspaceAllowsPlugins,
+} from '@/lib/services/workspace-plugin-access';
 import { findUserSkillWithFiles } from '@/lib/services/user-skill-service';
 import { findInstalledDirectorySkillWithFiles } from '@/features/plugins/server/directory/installed-skills';
 import {
@@ -2053,7 +2056,7 @@ async function runMcpTool(
     const queueSandboxFiles = executionContext?.queueSandboxFiles;
     const requestedSkillName = skillRequestedName(toolCall.args);
     const enabledPluginIds = userId
-      ? await listEnabledPluginIds(callerScopedDb(executionContext, userId), userId)
+      ? await listPermittedPluginIds(callerScopedDb(executionContext, userId), userId)
       : null;
     const result = enabledPluginIds
       ? await executeManagedSkillToolForPlugins(enabledPluginIds, toolCall.args, {
@@ -2070,11 +2073,13 @@ async function runMcpTool(
       );
     }
     if (result.code === 'skill_not_found' && userId && requestedSkillName) {
-      const directorySkill = await findInstalledDirectorySkillWithFiles(
-        getNeonDb(),
+      const pluginsAllowed = await workspaceAllowsPlugins(
+        callerScopedDb(executionContext, userId),
         userId,
-        requestedSkillName,
       );
+      const directorySkill =
+        pluginsAllowed &&
+        (await findInstalledDirectorySkillWithFiles(getNeonDb(), userId, requestedSkillName));
       if (directorySkill) {
         return withSkillSandboxNote(
           await executeSkillToolWithFiles(
