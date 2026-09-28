@@ -96,6 +96,8 @@ pub(crate) fn shared_runtime_command_names() -> &'static [&'static str] {
         "stickers",
         "thinkback-play",
         "recap",
+        "save-skill",
+        "save-routine",
         "security-review",
         "pr-comments",
         "ultrareview",
@@ -250,6 +252,8 @@ pub fn handle_shared_command(
         "/debug" => ParityCommandResult::SystemMessage(handle_debug(session)),
         "/tui" => ParityCommandResult::SystemMessage(handle_tui(session, arg)),
         "/powerup" => ParityCommandResult::Prompt(powerup_prompt(arg)),
+        "/save-skill" => ParityCommandResult::Prompt(save_skill_prompt(arg)),
+        "/save-routine" => ParityCommandResult::Prompt(save_routine_prompt(arg)),
         _ => ParityCommandResult::NotHandled,
     }
 }
@@ -757,6 +761,26 @@ pub fn review_prompt(arg: &str) -> String {
     };
     format!(
         "Please review {review_scope}. Inspect the actual source files, manifests, config, routes, prompts, tools, and wiring. Look for LLM-generated failure modes: hallucinated APIs/imports/packages, fake or partial implementations, stubs/TODOs/mock leakage, dead UI handlers, architecture drift, requirement drift, unsafe assumptions, swallowed errors, state races, schema/date/pagination bugs, auth/BOLA/IDOR/tenant isolation issues, prompt injection/tool poisoning/RAG poisoning, excessive agency, secret/PII leakage, dependency confusion, false-green tests, config drift, and platform-specific web/mobile/desktop/CLI/extension risks. Return high-confidence findings with file/line evidence and proposed fixes."
+    )
+}
+
+pub fn save_skill_prompt(arg: &str) -> String {
+    let name = match arg.trim() {
+        "" => "a short name that says what it does".to_string(),
+        name => format!("the name \"{name}\""),
+    };
+    format!(
+        "Turn the task we just finished in this conversation into a reusable skill with {name}. Write it to .agiworkforce/skills/<name>/SKILL.md: YAML frontmatter with name and a one-line description of when to use it, then the steps, commands and checks that worked here, written for the next task like this one rather than for this run. Leave out secrets, tokens and personal data. Show me the file when it is written."
+    )
+}
+
+pub fn save_routine_prompt(arg: &str) -> String {
+    let schedule = match arg.trim() {
+        "" => "Ask me how often it should run before you create it.".to_string(),
+        schedule => format!("Run it on this schedule: {schedule}."),
+    };
+    format!(
+        "Turn the task we just finished in this conversation into a routine that runs on its own. Write a prompt that repeats the task without relying on this conversation, then create the routine with cron_create. {schedule} Tell me the schedule and what each run will do."
     )
 }
 

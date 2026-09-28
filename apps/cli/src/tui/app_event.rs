@@ -93,6 +93,7 @@ pub enum TuiAppEvent {
         message: String,
     },
     RequestFrame,
+    ModelRequested,
 }
 
 #[derive(Clone)]

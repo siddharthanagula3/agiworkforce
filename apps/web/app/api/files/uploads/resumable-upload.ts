@@ -8,6 +8,7 @@ import {
   type UploadedPart,
 } from '@agiworkforce/object-storage';
 import {
+  ManagedCloudProjectKnowledgeRegisterRequestSchema,
   RESUMABLE_UPLOAD_KINDS,
   RESUMABLE_UPLOAD_MAX_BYTES,
   resumableUploadPartCount,
@@ -21,7 +22,8 @@ import { readSignedUploadClaims, signUploadClaims } from '@/lib/server/upload-si
 
 const SESSION_VERSION = 1;
 const SESSION_PURPOSE = `agi-resumable-upload-session-v${SESSION_VERSION}`;
-const SESSION_SURFACES = ['web', 'desktop', 'mobile'] as const;
+const SESSION_SURFACES =
+  ManagedCloudProjectKnowledgeRegisterRequestSchema.shape.sourceSurface.options;
 const SHA256_HEX = /^[a-f0-9]{64}$/;
 
 export const RESUMABLE_UPLOAD_SESSION_TTL_MS = DEFAULT_ORPHAN_MULTIPART_AGE_MS;

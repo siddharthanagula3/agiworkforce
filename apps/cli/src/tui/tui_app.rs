@@ -33,6 +33,8 @@ use super::{clip_cols, display_width, pad_to_cols, truncate_cols};
 // Constants
 // ---------------------------------------------------------------------------
 
+const APPROVAL_EXPIRY: Duration = Duration::from_secs(600);
+
 /// Duration the mode-cycle banner is shown after Shift+Tab.
 const MODE_BANNER_TTL: Duration = Duration::from_secs(2);
 
@@ -156,6 +158,7 @@ enum ChatRole {
     System,
     Tool,
     Error,
+    Detail,
 }
 
 /// A live tool-call row in the transcript. Populated from the agent's tool
@@ -172,6 +175,8 @@ struct ToolCell {
     timing: ToolTiming,
     full_output: Option<String>,
     accent: Option<Color>,
+    exit_code: Option<i32>,
+    stderr: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -282,6 +287,12 @@ fn tool_cell_lines(cell: &ToolCell, spinner_char: &str) -> Vec<Line<'static>> {
             Style::default().fg(ui_muted()),
         ));
     }
+    if let Some(code) = cell.exit_code {
+        spans.push(Span::styled(
+            format!("  exit {code}"),
+            Style::default().fg(if code == 0 { ui_success() } else { ui_danger() }),
+        ));
+    }
     let mut lines = vec![Line::from(spans)];
     let expanded = EXPAND_TOOL_OUTPUT.load(std::sync::atomic::Ordering::Relaxed);
     match (&cell.full_output, &cell.output_preview) {
@@ -305,6 +316,35 @@ fn tool_cell_lines(cell: &ToolCell, spinner_char: &str) -> Vec<Line<'static>> {
             Span::styled(preview.clone(), Style::default().fg(ui_muted())),
         ])),
         _ => {}
+    }
+    if let Some(stderr) = &cell.stderr {
+        let shown = if expanded {
+            EXPANDED_TOOL_OUTPUT_LINES
+        } else {
+            1
+        };
+        for (index, line) in stderr.lines().take(shown).enumerate() {
+            lines.push(Line::from(vec![
+                Span::styled(
+                    if index == 0 {
+                        "    stderr "
+                    } else {
+                        "           "
+                    },
+                    Style::default()
+                        .fg(ui_danger())
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(line.to_string(), Style::default().fg(ui_danger())),
+            ]));
+        }
+        let total = stderr.lines().count();
+        if total > shown {
+            lines.push(Line::from(Span::styled(
+                format!("           … {} more stderr lines", total - shown),
+                Style::default().fg(ui_muted()),
+            )));
+        }
     }
     lines
 }
@@ -383,6 +423,7 @@ struct TuiApp {
     /// derived from them because a `ContentBlock::Image` carries base64 bytes
     /// and no provenance, so the composer would have nothing to name in a chip.
     staged_images: Vec<String>,
+    turn_context: Vec<String>,
     /// Images `/image` generated this session, newest last. Held as paths so
     /// the chip can name a real file and `/image open` can hand it to the
     /// user's default viewer.
@@ -562,6 +603,7 @@ impl TuiApp {
             tool_cells: Vec::new(),
             mcp_elicitation_handler: Arc::new(crate::mcp::tui_handler::TuiElicitationHandler::new()),
             staged_images: Vec::new(),
+            turn_context: Vec::new(),
             generated_images: Vec::new(),
             mention_candidates: None,
             mention_anchor: None,
@@ -581,6 +623,14 @@ impl TuiApp {
     /// Stage one image file on the next turn, as `--file` does at launch.
     /// Returns the label the composer chip shows.
     fn stage_image_path(&mut self, path: &str) -> Result<String, String> {
+        self.stage_image_path_with(path, agiworkforce_utils_image::PromptImageMode::ResizeToFit)
+    }
+
+    fn stage_image_path_with(
+        &mut self,
+        path: &str,
+        mode: agiworkforce_utils_image::PromptImageMode,
+    ) -> Result<String, String> {
         let root = self.workspace_root();
         let resolved = crate::path_security::validate_workspace_path_with_cwd(path, &root)?;
         if !resolved.is_file() {
@@ -597,7 +647,7 @@ impl TuiApp {
                 crate::model_catalog::display_name(&self.session.model)
             ));
         }
-        let attachment = crate::load_image_attachment(&resolved.to_string_lossy())
+        let attachment = crate::load_image_attachment_with(&resolved.to_string_lossy(), mode)
             .map_err(|error| format!("{error:#}"))?;
         let path_label = resolved
             .strip_prefix(&root)
@@ -607,7 +657,15 @@ impl TuiApp {
         let size = std::fs::metadata(&resolved)
             .map(|meta| meta.len())
             .unwrap_or(0);
-        let label = format!("{path_label} ({})", crate::tools::format_size(size));
+        let label = match mode {
+            agiworkforce_utils_image::PromptImageMode::Original => format!(
+                "{path_label} ({}, full resolution)",
+                crate::tools::format_size(size)
+            ),
+            agiworkforce_utils_image::PromptImageMode::ResizeToFit => {
+                format!("{path_label} ({})", crate::tools::format_size(size))
+            }
+        };
         if self.staged_images.contains(&label) {
             return Err(format!("{path_label} is already attached"));
         }
@@ -1088,16 +1146,25 @@ fn run_tui_approval_modal(
     terminal: &mut Terminal<CrosstermBackend<Stdout>>,
     ctx: &FrameCtx,
     request: &crate::tui::approval_broker::ApprovalRequest,
-) -> Result<(
-    crate::tui::widgets::approval_overlay::ApprovalChoice,
-    Option<String>,
-)> {
+) -> Result<
+    Option<(
+        crate::tui::widgets::approval_overlay::ApprovalChoice,
+        Option<String>,
+    )>,
+> {
     use crate::tui::widgets::approval_overlay::ApprovalChoice;
     use crate::tui::widgets::interactive::{InteractiveView, ViewAction};
 
     let mut overlay = approval_overlay_for(request);
+    let expires_at = Instant::now() + APPROVAL_EXPIRY;
 
     loop {
+        if Instant::now() >= expires_at {
+            terminal.draw(|frame| {
+                draw_turn_chrome(frame, ctx);
+            })?;
+            return Ok(None);
+        }
         terminal.draw(|frame| {
             let chat_area = draw_turn_chrome(frame, ctx);
             // Drawn last within the same closure so it composites on top of
@@ -1116,7 +1183,7 @@ fn run_tui_approval_modal(
                             draw_turn_chrome(frame, ctx);
                         })?;
                         let note = overlay.note();
-                        return Ok((overlay.result.unwrap_or(ApprovalChoice::No), note));
+                        return Ok(Some((overlay.result.unwrap_or(ApprovalChoice::No), note)));
                     }
                     ViewAction::Continue | ViewAction::SideAction(_) => {}
                 },
@@ -1516,6 +1583,26 @@ fn spinner_frame(tick: u8) -> &'static str {
     FRAMES[(tick as usize) % FRAMES.len()]
 }
 
+fn answer_details(
+    model: &str,
+    turn: &crate::agent::TurnResult,
+    elapsed: std::time::Duration,
+) -> String {
+    let mut parts = vec![
+        crate::model_catalog::display_name(model),
+        format!(
+            "{} in · {} out",
+            crate::output::format_tokens(turn.input_tokens),
+            crate::output::format_tokens(turn.output_tokens)
+        ),
+    ];
+    if turn.cost_usd > 0.0 && !turn.via_subscription {
+        parts.push(crate::output::format_session_credits(turn.cost_usd));
+    }
+    parts.push(crate::output::format_duration_ms(elapsed.as_millis() as u64));
+    parts.join(" · ")
+}
+
 /// AGI loading verb shown beside the spinner: one plain, steady word, the same
 /// register Claude Code and Codex use, not a rotating vocabulary.
 fn loading_verb_for(_turn_count: u32) -> &'static str {
@@ -1681,8 +1768,9 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
         ui_accent, ui_brand, ui_cloud, ui_danger, ui_muted, ui_success,
     };
     let mut lines: Vec<Line> = Vec::new();
+    let start_view = ctx.chat_messages.is_empty() && !ctx.is_loading;
 
-    if ctx.chat_messages.is_empty() && !ctx.is_loading {
+    if start_view {
         use crate::design_system::AccessMode;
         // Access-mode colors match the status-bar chip so the visual identity is
         // consistent across the app. The word is the same "Local" / "Your key" /
@@ -1716,19 +1804,37 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
         )));
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled(
-            "  Type a message and press Enter to send.",
+            "  Type a message and press Enter to send, for example:",
+            Style::default().fg(ui_muted()),
+        )));
+        for example in [
+            "explain how this project is organised",
+            "find the failing test and fix it",
+            "/search what changed in the latest release of a library you use",
+        ] {
+            lines.push(Line::from(Span::styled(
+                format!("    {example}"),
+                Style::default().fg(ui_accent()),
+            )));
+        }
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled(
+            "  Type / for commands. Shift+Tab cycles how much AGI may do on its own: ask before each action, plan only (reads, no edits), accept edits, then no prompts.",
             Style::default().fg(ui_muted()),
         )));
         lines.push(Line::from(Span::styled(
-            "  Type / for commands · Shift+Tab to switch modes.",
-            Style::default().fg(ui_muted()),
-        )));
-        lines.push(Line::from(Span::styled(
-            "  Esc closes a panel or clears the composer; press it twice on an empty composer to quit.",
+            "  Esc closes a panel or clears the composer; twice on an empty composer, it rewinds. Ctrl+D twice quits.",
             Style::default().fg(ui_muted()),
         )));
     } else {
         for msg in ctx.chat_messages {
+            if msg.role == ChatRole::Detail {
+                lines.push(Line::from(Span::styled(
+                    format!("    ↳ {}", msg.text),
+                    Style::default().fg(ui_muted()),
+                )));
+                continue;
+            }
             if !lines.is_empty() {
                 lines.push(Line::from(""));
             }
@@ -1757,6 +1863,7 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
                         .fg(ui_danger())
                         .add_modifier(Modifier::BOLD),
                 ),
+                ChatRole::Detail => ("  ↳ ", Style::default().fg(ui_muted())),
             };
 
             // Render prefix line
@@ -1773,7 +1880,7 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
                         ChatRole::User => Style::default(),
                         ChatRole::System => Style::default(),
                         ChatRole::Error => Style::default(),
-                        ChatRole::Tool => Style::default().fg(ui_muted()),
+                        ChatRole::Tool | ChatRole::Detail => Style::default().fg(ui_muted()),
                         // Assistant is handled by the outer if-branch; reaching
                         // here would be a logic error but we render it as plain
                         // default foreground rather than panicking so the TUI stays responsive.
@@ -1790,6 +1897,25 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
     // (running → succeeded/failed), instead of vanishing into swallowed stderr.
     if !ctx.tool_cells.is_empty() {
         lines.push(Line::from(""));
+        let running: Vec<&ToolCell> = ctx
+            .tool_cells
+            .iter()
+            .filter(|cell| cell.state == crate::tui::transcript_cell::TranscriptCellState::Running)
+            .collect();
+        if running.len() > 1 {
+            let what = if running
+                .iter()
+                .all(|cell| matches!(cell.name.as_str(), "task" | "agent"))
+            {
+                "subagents"
+            } else {
+                "tools"
+            };
+            lines.push(Line::from(Span::styled(
+                format!("  ⧉ {} {what} working at once", running.len()),
+                Style::default().fg(ui_accent()),
+            )));
+        }
         for cell in ctx.tool_cells {
             lines.extend(tool_cell_lines(cell, ctx.spinner_char));
         }
@@ -1849,10 +1975,20 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
     // Wrap here rather than with `Wrap`, which restarts a continuation row at
     // column 0 and puts the text hard against the left border. Wrapping first
     // also makes the scroll maths count rendered rows, not logical lines.
-    let lines = super::wrap_styled_lines(lines, area.width.saturating_sub(2) as usize, 2);
+    let mut lines = super::wrap_styled_lines(lines, area.width.saturating_sub(2) as usize, 2);
 
     // Scroll
     let visible_height = area.height.saturating_sub(1) as usize;
+    if start_view && ctx.tool_cells.is_empty() {
+        let inner_width = area.width.saturating_sub(2) as usize;
+        let block_width = lines.iter().map(Line::width).max().unwrap_or(0);
+        let left = " ".repeat(inner_width.saturating_sub(block_width) / 2);
+        for line in &mut lines {
+            line.spans.insert(0, Span::raw(left.clone()));
+        }
+        let top = visible_height.saturating_sub(lines.len()) / 2;
+        lines.splice(0..0, std::iter::repeat_with(|| Line::from("")).take(top));
+    }
     let total_lines = lines.len();
     let max_scroll = total_lines.saturating_sub(visible_height) as u16;
     let effective_scroll = ctx.scroll_offset.min(max_scroll);
@@ -3202,6 +3338,7 @@ fn resolve_composer_mentions(app: &mut TuiApp, text: &str) -> String {
     let root = app.workspace_root();
     let trusted = app.workspace_is_trusted();
     let expansion = crate::mentions::expand_mentions(text, &root, trusted);
+    app.turn_context = expansion.inlined.clone();
     let known_agents: Vec<String> = crate::agents::discover_agents()
         .into_iter()
         .map(|agent| agent.name)
@@ -3347,7 +3484,7 @@ fn find_in_transcript(messages: &[ChatMessage], query: &str) -> String {
         let who = match message.role {
             ChatRole::User => "you",
             ChatRole::Assistant => "assistant",
-            ChatRole::System | ChatRole::Tool | ChatRole::Error => continue,
+            ChatRole::System | ChatRole::Tool | ChatRole::Error | ChatRole::Detail => continue,
         };
         for line in message.text.lines() {
             if line.to_lowercase().contains(&needle) {
@@ -3579,6 +3716,24 @@ fn handle_effort_picker_key(app: &mut TuiApp, key: KeyEvent) -> InputAction {
     }
 }
 
+fn theme_set_message(
+    choice: super::widgets::theme_picker::ThemeChoice,
+    saved: Result<std::path::PathBuf>,
+) -> String {
+    match saved {
+        Ok(path) => format!(
+            "Theme set to {}, saved in {}.",
+            choice.label(),
+            path.display()
+        ),
+        Err(error) => format!(
+            "Theme set to {} for this session; it could not be saved: {}",
+            choice.label(),
+            sanitize_terminal_text(&format!("{error:#}"))
+        ),
+    }
+}
+
 fn handle_theme_picker_key(app: &mut TuiApp, key: KeyEvent) -> InputAction {
     use super::widgets::theme_picker::{handle_key, PickerAction};
 
@@ -3597,12 +3752,12 @@ fn handle_theme_picker_key(app: &mut TuiApp, key: KeyEvent) -> InputAction {
             // TUI recolors on the next frame.
             crate::tui::terminal_palette::set_active_theme(choice.applied() as u8);
             // Persist so the choice survives a restart.
-            let _ = app.config.persist_theme_project(choice.slug());
+            let text = theme_set_message(choice, app.config.persist_theme_project(choice.slug()));
             app.input.clear();
             app.cursor = 0;
             app.chat_messages.push(ChatMessage {
                 role: ChatRole::System,
-                text: format!("Theme set to {}", choice.label()),
+                text,
             });
             InputAction::None
         }
@@ -3786,6 +3941,7 @@ const ADD_CONTEXT_MENU: &str = "Ways to add context to your next message:
   @path            Inline a file, or list a folder with @dir/
   @agent-<name>    Hand the message to one of your agents
   /attach <image>  Attach an image file (png, jpg, gif, webp)
+  /attach --full <image>  Attach it without scaling it down, for fine detail
   /attach <url>    Fetch a web page and add its text to the conversation
   Ctrl+V           Attach the image on the clipboard
   Paste            Long pastes collapse to [Pasted text #N]; the full text is sent
@@ -4436,6 +4592,18 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                         Err(reason) => SlashResult::SystemMessage(reason),
                     }
                 }
+                "--full" => match app.stage_image_path_with(
+                    rest.trim(),
+                    agiworkforce_utils_image::PromptImageMode::Original,
+                ) {
+                    Ok(label) => SlashResult::SystemMessage(format!(
+                        "Attached {label}. It is sent without being scaled down, so it costs more input; /attach remove drops it."
+                    )),
+                    Err(reason) => SlashResult::SystemMessage(format!(
+                        "Could not attach {}: {reason}",
+                        rest.trim()
+                    )),
+                },
                 "clipboard" => match app.stage_clipboard_image() {
                     Ok(label) => SlashResult::SystemMessage(format!("Attached {label}.")),
                     Err(reason) => SlashResult::SystemMessage(format!("Could not attach: {reason}")),
@@ -4535,8 +4703,10 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                     Some(choice) => {
                         app.theme_choice = choice;
                         crate::tui::terminal_palette::set_active_theme(choice.applied() as u8);
-                        let _ = app.config.persist_theme_project(choice.slug());
-                        SlashResult::SystemMessage(format!("Theme set to {}", choice.label()))
+                        SlashResult::SystemMessage(theme_set_message(
+                            choice,
+                            app.config.persist_theme_project(choice.slug()),
+                        ))
                     }
                     None => SlashResult::SystemMessage(format!(
                         "Unknown theme: '{arg}'. Available: {}",
@@ -4640,15 +4810,19 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         "/memories" => {
             use crate::tui::widgets::memories_settings::{MemoriesSettingsView, MemorySettings};
             // Seed from the persisted settings; save commits back via take_result.
-            let (auto_memory, decay_threshold_days, max_facts) =
-                crate::config::CliConfig::config_dir()
-                    .map(|home| crate::memory_pipeline::load_memory_settings(&home))
-                    .unwrap_or((true, 30, 500));
-            let view = MemoriesSettingsView::new(MemorySettings {
+            let home = crate::config::CliConfig::config_dir().ok();
+            let (auto_memory, decay_threshold_days, max_facts) = home
+                .as_deref()
+                .map(crate::memory_pipeline::load_memory_settings)
+                .unwrap_or((true, 30, 500));
+            let mut view = MemoriesSettingsView::new(MemorySettings {
                 auto_memory,
                 decay_threshold_days,
                 max_facts,
             });
+            if let Some(home) = home.as_deref() {
+                view = view.with_stored_facts(crate::memory_pipeline::stored_fact_count(home));
+            }
             app.open_overlay(Box::new(view));
             SlashResult::SystemMessage(
                 "Memory settings (\u{2191}\u{2193} navigate \u{00b7} Enter toggle \u{00b7} Esc close)".into(),
@@ -5837,6 +6011,8 @@ fn apply_tool_event(cells: &mut Vec<ToolCell>, ev: crate::tui::app_event::TuiApp
                 timing: ToolTiming::Running(Instant::now()),
                 full_output: None,
                 accent,
+                exit_code: None,
+                stderr: None,
             });
         }
         TuiAppEvent::ToolCompleted {
@@ -5852,13 +6028,42 @@ fn apply_tool_event(cells: &mut Vec<ToolCell>, ev: crate::tui::app_event::TuiApp
                     ToolStatus::Cancelled => TranscriptCellState::Cancelled,
                     _ => TranscriptCellState::Complete,
                 };
-                cell.output_preview = compact_tool_output_preview(&output);
+                let (exit_code, output, stderr) = if tool_type_icon(&cell.name) == "$" {
+                    split_command_output(&output)
+                } else {
+                    (None, output.as_str(), None)
+                };
+                cell.exit_code = exit_code;
+                cell.stderr = stderr
+                    .map(|stderr| sanitize_terminal_text(stderr.trim_end()).into_owned())
+                    .filter(|stderr| !stderr.is_empty());
+                cell.output_preview = compact_tool_output_preview(output);
                 cell.timing = ToolTiming::Finished(duration_ms);
                 cell.full_output = Some(sanitize_terminal_text(output.trim_end()).into_owned())
                     .filter(|output| !output.is_empty());
             }
         }
         _ => {}
+    }
+}
+
+fn split_command_output(output: &str) -> (Option<i32>, &str, Option<&str>) {
+    let (exit_code, rest) = match output.split_once('\n') {
+        Some((first, rest)) => match first
+            .strip_prefix("Exit code: ")
+            .and_then(|code| code.trim().parse().ok())
+        {
+            Some(code) => (Some(code), rest),
+            None => (None, output),
+        },
+        None => (None, output),
+    };
+    if let Some(stderr) = rest.strip_prefix("[stderr]\n") {
+        return (exit_code, "", Some(stderr));
+    }
+    match rest.split_once("\n[stderr]\n") {
+        Some((stdout, stderr)) => (exit_code, stdout, Some(stderr)),
+        None => (exit_code, rest, None),
     }
 }
 
@@ -5930,15 +6135,20 @@ async fn send_message_with_prompt(
             ),
         }),
     }
-    let attachments = if app.staged_images.is_empty() {
-        String::new()
-    } else {
-        format!("\n[attached: {}]", app.staged_images.join(", "))
-    };
+    let context: Vec<String> = std::mem::take(&mut app.turn_context)
+        .into_iter()
+        .chain(app.staged_images.iter().cloned())
+        .collect();
     app.chat_messages.push(ChatMessage {
         role: ChatRole::User,
-        text: format!("{transcript_text}{attachments}"),
+        text: transcript_text.to_string(),
     });
+    if !context.is_empty() {
+        app.chat_messages.push(ChatMessage {
+            role: ChatRole::Detail,
+            text: format!("with {}", context.join(" · ")),
+        });
+    }
 
     // The session drains `pending_image_blocks` into this turn, so the chips
     // that named them go with it.
@@ -6004,6 +6214,7 @@ async fn send_message_with_prompt(
         app.session.on_tool_event = Some(crate::agent::ToolEventSink(sink));
     }
     let mut tool_cells: Vec<ToolCell> = Vec::new();
+    let mut preparing = true;
 
     // Drive the agent turn while staying responsive to approval requests. The
     // event loop is otherwise parked inside this `.await`, so without the
@@ -6100,7 +6311,23 @@ async fn send_message_with_prompt(
                             broker.complete_with_note(req.id, decision, answer).await;
                             continue;
                         }
-                        let (choice, note) = run_tui_approval_modal(terminal, &approval_ctx, &req)?;
+                        let Some((choice, note)) =
+                            run_tui_approval_modal(terminal, &approval_ctx, &req)?
+                        else {
+                            terminal.clear()?;
+                            broker
+                                .complete(req.id, crate::tui::approval_broker::ApprovalDecision::Timeout)
+                                .await;
+                            app.chat_messages.push(ChatMessage {
+                                role: ChatRole::System,
+                                text: format!(
+                                    "The approval for {} expired after {} minutes without an answer, so it did not run.",
+                                    sanitize_terminal_text(&req.summary),
+                                    APPROVAL_EXPIRY.as_secs() / 60
+                                ),
+                            });
+                            continue;
+                        };
                         // The modal ran its own key loop over frames ratatui
                         // drew; force the next frame to repaint every cell so
                         // nothing the prompt covered survives it.
@@ -6120,6 +6347,9 @@ async fn send_message_with_prompt(
                     }
                 }
                 Some(ev) = tool_rx.recv() => {
+                    if ev == crate::tui::app_event::TuiAppEvent::ModelRequested {
+                        preparing = false;
+                    }
                     apply_tool_event(&mut tool_cells, ev);
                 }
                 _ = tokio::time::sleep(std::time::Duration::from_millis(80)) => {
@@ -6178,7 +6408,7 @@ async fn send_message_with_prompt(
                     }
                     if cancelled {
                         app.status_notice =
-                            Some(("interrupted the turn".to_string(), Instant::now()));
+                            Some(("stopping the turn…".to_string(), Instant::now()));
                         break None;
                     }
                     while let Ok(text) = app.side_answers.1.try_recv() {
@@ -6211,7 +6441,11 @@ async fn send_message_with_prompt(
                         stream_start: app.stream_start,
                         stream_buffer: &app.stream_buffer,
                         spinner_char: spinner_frame(app.spinner_tick),
-                        loading_verb: loading_verb_for(turn_count),
+                        loading_verb: if preparing {
+                            "Preparing context"
+                        } else {
+                            loading_verb_for(turn_count)
+                        },
                         awaiting_approval: false,
                         scroll_offset: app.scroll_offset,
                         access_mode: turn_access_mode,
@@ -6288,6 +6522,10 @@ async fn send_message_with_prompt(
                 role: ChatRole::Assistant,
                 text: response_text,
             });
+            app.chat_messages.push(ChatMessage {
+                role: ChatRole::Detail,
+                text: answer_details(&app.session.model, &turn, turn_started.elapsed()),
+            });
 
             app.sync_stats();
 
@@ -6352,7 +6590,9 @@ async fn send_message_with_prompt(
             // and reconcile session history so the next turn stays a valid
             // user→assistant sequence.
             let partial = app.stream_buffer.clone();
+            render(terminal, app)?;
             app.session.cancel_turn(&partial).await;
+            app.status_notice = Some(("stopped the turn".to_string(), Instant::now()));
             if !partial.is_empty() {
                 app.chat_messages.push(ChatMessage {
                     role: ChatRole::Assistant,
@@ -6486,6 +6726,8 @@ mod tests {
             timing: ToolTiming::default(),
             full_output: None,
             accent: None,
+            exit_code: None,
+            stderr: None,
         };
         let t = line0(&edit);
         assert!(
@@ -6503,6 +6745,8 @@ mod tests {
             timing: ToolTiming::default(),
             full_output: None,
             accent: None,
+            exit_code: None,
+            stderr: None,
         };
         assert!(
             line0(&cmd).contains("$ ls -la"),
@@ -6520,6 +6764,8 @@ mod tests {
             timing: ToolTiming::default(),
             full_output: None,
             accent: None,
+            exit_code: None,
+            stderr: None,
         };
         let f = line0(&fail);
         assert!(f.contains('✗') && f.contains('▤'), "got: {f}");
@@ -8601,6 +8847,8 @@ mod tests {
             timing: ToolTiming::default(),
             full_output: None,
             accent: None,
+            exit_code: None,
+            stderr: None,
         }];
         let stream_buffer = format!("streaming {ESCAPE_PAYLOAD}tokens");
         let statusline_cfg = crate::tui::widgets::statusline_setup::StatusLineConfig::default();
