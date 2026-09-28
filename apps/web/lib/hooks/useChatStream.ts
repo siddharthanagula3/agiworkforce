@@ -126,7 +126,7 @@ import { SECRET_REDACTION_COUNT_HEADER } from '@/lib/chat-secret-redaction-notic
 import {
   ATTACHMENTS_TRUNCATED_HEADER,
   readAttachmentTruncationHeader,
-} from '@/lib/chat-attachment-truncation-notice';
+} from '@agiworkforce/cloud-contracts';
 import {
   PAST_CHAT_CITATIONS_HEADER,
   PROJECT_FILE_CITATIONS_HEADER,

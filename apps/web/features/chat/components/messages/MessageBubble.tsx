@@ -87,7 +87,7 @@ import {
 } from '@agiworkforce/types';
 import { describeFallbackReason } from '@/lib/chat-fallback-reason';
 import { describeSecretRedactionNotice } from '@/lib/chat-secret-redaction-notice';
-import { describeAttachmentTruncation } from '@/lib/chat-attachment-truncation-notice';
+import { describeAttachmentTruncation } from '@agiworkforce/cloud-contracts';
 import { isFreeRouteLane } from '@/features/chat/lib/routeLane';
 import { VoiceActivityAffordance } from '@/features/chat/components/Voice/VoiceActivityAffordance';
 import {
