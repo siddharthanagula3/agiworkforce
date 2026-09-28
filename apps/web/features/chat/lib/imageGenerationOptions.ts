@@ -142,6 +142,7 @@ export interface ResolvedImageGenerationRequestOptions {
   operation?: ManagedMediaImageOperation;
   sourceImageBase64?: string;
   maskImageBase64?: string;
+  referenceImagesBase64?: string[];
   transparentBackground?: boolean;
 }
 
@@ -149,6 +150,7 @@ export interface ImageEditRequest {
   operation: ManagedMediaImageOperation;
   sourceImageBase64: string;
   maskImageBase64?: string;
+  referenceImagesBase64?: string[];
   transparentBackground?: boolean;
 }
 
@@ -163,6 +165,7 @@ export function resolveImageGenerationRequestOptions(
   aspectRatio: ImageAspectRatio,
   modelId?: string,
   edit?: ImageEditRequest,
+  transparentBackground?: boolean,
 ): ResolvedImageGenerationRequestOptions {
   const model = resolveImageModel(modelId);
   if (!model) return {};
@@ -176,8 +179,13 @@ export function resolveImageGenerationRequestOptions(
           operation: edit.operation,
           sourceImageBase64: edit.sourceImageBase64,
           ...(edit.maskImageBase64 ? { maskImageBase64: edit.maskImageBase64 } : {}),
-          ...(edit.transparentBackground ? { transparentBackground: true } : {}),
+          ...(edit.referenceImagesBase64?.length
+            ? { referenceImagesBase64: edit.referenceImagesBase64 }
+            : {}),
         }
+      : {}),
+    ...(transparentBackground || edit?.transparentBackground
+      ? { transparentBackground: true }
       : {}),
   };
 }
@@ -204,6 +212,87 @@ export function readImageFileAsBase64(file: Blob): Promise<string> {
     };
     reader.readAsDataURL(file);
   });
+}
+
+const REFERENCE_IMAGE_MAX_EDGE = 1024;
+const REFERENCE_IMAGE_QUALITY = 0.9;
+
+export async function readReferenceImageAsBase64(file: Blob): Promise<string> {
+  if (typeof createImageBitmap !== 'function') return readImageFileAsBase64(file);
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, REFERENCE_IMAGE_MAX_EDGE / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(bitmap.width * scale);
+  canvas.height = Math.round(bitmap.height * scale);
+  const context = canvas.getContext('2d');
+  if (!context) {
+    bitmap.close();
+    return readImageFileAsBase64(file);
+  }
+  context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+  const blob = await new Promise<Blob | null>((resolve) =>
+    canvas.toBlob(resolve, 'image/jpeg', REFERENCE_IMAGE_QUALITY),
+  );
+  return readImageFileAsBase64(blob ?? file);
+}
+
+const REFRAME_RATIO_TOLERANCE = 0.01;
+
+function canvasPngBase64(canvas: HTMLCanvasElement): Promise<string> {
+  return new Promise((resolve, reject) =>
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        reject(new Error('The image could not be prepared for reframing.'));
+        return;
+      }
+      readImageFileAsBase64(blob).then(resolve, reject);
+    }, 'image/png'),
+  );
+}
+
+export async function buildReframeEdit(
+  imageUrl: string,
+  aspectRatio: ManagedMediaImageAspectRatio,
+): Promise<ImageEditRequest | null> {
+  if (typeof createImageBitmap !== 'function') return null;
+  const response = await fetch(imageUrl, { credentials: 'same-origin' });
+  if (!response.ok) throw new Error('The generated image could not be read for reframing.');
+  const bitmap = await createImageBitmap(await response.blob());
+  const [ratioWidth, ratioHeight] = aspectRatio.split(':').map(Number);
+  const target = ratioWidth! / ratioHeight!;
+  const current = bitmap.width / bitmap.height;
+  if (Math.abs(target - current) <= REFRAME_RATIO_TOLERANCE) {
+    bitmap.close();
+    return null;
+  }
+  const width = target > current ? Math.round(bitmap.height * target) : bitmap.width;
+  const height = target > current ? bitmap.height : Math.round(bitmap.width / target);
+  const left = Math.round((width - bitmap.width) / 2);
+  const top = Math.round((height - bitmap.height) / 2);
+
+  const source = document.createElement('canvas');
+  source.width = width;
+  source.height = height;
+  const mask = document.createElement('canvas');
+  mask.width = width;
+  mask.height = height;
+  const sourceContext = source.getContext('2d');
+  const maskContext = mask.getContext('2d');
+  if (!sourceContext || !maskContext) {
+    bitmap.close();
+    return null;
+  }
+  sourceContext.drawImage(bitmap, left, top);
+  maskContext.fillStyle = 'black';
+  maskContext.fillRect(left, top, bitmap.width, bitmap.height);
+  bitmap.close();
+
+  const [sourceImageBase64, maskImageBase64] = await Promise.all([
+    canvasPngBase64(source),
+    canvasPngBase64(mask),
+  ]);
+  return { operation: 'outpaint', sourceImageBase64, maskImageBase64 };
 }
 
 export async function readImageUrlAsBase64(url: string): Promise<string> {

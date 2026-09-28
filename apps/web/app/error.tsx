@@ -4,12 +4,14 @@ import { useEffect } from 'react';
 import Link from 'next/link';
 import { RefreshCw, Home, AlertTriangle } from 'lucide-react';
 import { getFriendlyError } from '@agiworkforce/utils';
+import { useUiTranslation } from '@agiworkforce/ui/i18n';
 import { AgiMark } from '@agiworkforce/ui/agi-mark';
 import { logger } from '@shared/lib/logger';
 import { PRODUCT_HOME_PATH } from '@/features/desktop-host/lib/deep-links';
 import { useHomeHref } from '@/features/desktop-host/hooks/use-home-href';
+import { useFriendlyErrorCopy } from '@/shared/hooks/use-friendly-error-copy';
 
-const SIGN_IN_ACTION = { label: 'Sign in', href: '/login' } as const;
+const SIGN_IN_HREF = '/login';
 
 export default function Error({
   error,
@@ -25,9 +27,11 @@ export default function Error({
     });
   }, [error]);
 
-  const friendly = getFriendlyError(error);
+  const { t } = useUiTranslation('errors');
+  const friendlyError = getFriendlyError(error);
+  const friendly = useFriendlyErrorCopy(friendlyError);
   const homeHref = useHomeHref();
-  const signInAction = friendly.icon === 'auth' && friendly.title === 'Sign In Required';
+  const signInAction = friendlyError.icon === 'auth' && friendlyError.title === 'Sign In Required';
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
@@ -47,7 +51,9 @@ export default function Error({
             )}
             {error.digest && (
               <p className="text-muted-foreground text-sm mb-8">
-                Reference for support: {error.digest}
+                {t('boundary.supportReference', 'Reference for support: {{reference}}', {
+                  reference: error.digest,
+                })}
               </p>
             )}
           </div>
@@ -58,30 +64,32 @@ export default function Error({
               className="inline-flex h-12 items-center justify-center rounded-full bg-primary px-8 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
             >
               <RefreshCw className="h-4 w-4 me-2" aria-hidden="true" />
-              Try again
+              {t('boundary.tryAgain', 'Try again')}
             </button>
             <Link
               href={homeHref}
               className="inline-flex h-12 items-center justify-center rounded-full border border-border bg-card px-8 text-sm font-medium text-foreground no-underline hover:bg-muted transition-colors"
             >
               <Home className="h-4 w-4 me-2" aria-hidden="true" />
-              {homeHref === PRODUCT_HOME_PATH ? 'Go to chat' : 'Go home'}
+              {homeHref === PRODUCT_HOME_PATH
+                ? t('boundary.goToChat', 'Go to chat')
+                : t('boundary.goHome', 'Go home')}
             </Link>
             {signInAction && (
               <Link
-                href={SIGN_IN_ACTION.href}
+                href={SIGN_IN_HREF}
                 className="inline-flex h-12 items-center justify-center rounded-full bg-secondary px-8 text-sm font-medium text-secondary-foreground no-underline hover:bg-secondary/80 transition-colors"
               >
-                {SIGN_IN_ACTION.label}
+                {t('boundary.signIn', 'Sign in')}
               </Link>
             )}
           </div>
 
           <div className="mt-16 pt-8 border-t border-border">
             <p className="text-muted-foreground text-sm">
-              If this keeps happening,{' '}
+              {t('boundary.keepsHappening', 'If this keeps happening,')}{' '}
               <Link href="/contact" className="text-primary hover:opacity-80">
-                contact support
+                {t('boundary.contactSupport', 'contact support')}
               </Link>
               .
             </p>

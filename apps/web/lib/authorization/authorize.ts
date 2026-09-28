@@ -73,7 +73,15 @@ const GRANT_SOURCES = `
     join public.organization_group_roles gr
       on gr.group_id = gm.group_id and gr.organization_id = $1
     join public.organization_roles r on r.id = gr.role_id
-   where su.organization_id = $1 and su.linked_user_id = $2 and su.active`;
+   where su.organization_id = $1 and su.linked_user_id = $2 and su.active
+  union all
+  select 'group:' || g.display_name || ':' || r.key, r.permissions
+    from public.organization_group_members wm
+    join public.scim_groups g on g.id = wm.group_id
+    join public.organization_group_roles gr
+      on gr.group_id = wm.group_id and gr.organization_id = $1
+    join public.organization_roles r on r.id = gr.role_id
+   where wm.organization_id = $1 and wm.user_id = $2`;
 
 export async function readPermissionGrants(
   db: DatabaseAdapter,

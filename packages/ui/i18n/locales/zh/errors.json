@@ -151,5 +151,156 @@
       "查看错误日志以了解详情",
       "如果问题持续存在，请报告此问题"
     ]
+  },
+  "network": {
+    "offline": "您似乎处于离线状态。请检查网络连接。",
+    "unreachable": "无法连接到服务器。"
+  },
+  "http": {
+    "sessionExpired": "您的会话已过期。请重新登录以继续。",
+    "forbidden": "您无权访问此内容。",
+    "notFound": "该内容已不可用。",
+    "timeout": "服务器响应时间过长。请重试。",
+    "rateLimited": "操作过于频繁。请稍候再试。",
+    "server": "我们这边出了点问题。请稍后重试。"
+  },
+  "boundary": {
+    "title": "出了点问题",
+    "message": "抱歉，发生了意外情况。",
+    "sectionFailed": "{{name}} 加载失败",
+    "tryAgain": "重试",
+    "goHome": "返回首页",
+    "goToChat": "前往对话",
+    "signIn": "登录",
+    "supportReference": "支持参考编号：{{reference}}",
+    "errorId": "错误 ID：{{reference}}",
+    "errorIdLabel": "错误 ID：",
+    "includeId": "联系支持团队时请提供此 ID。",
+    "keepsHappening": "如果问题持续出现，请",
+    "contactSupport": "联系支持团队",
+    "reload": "重新加载页面",
+    "reloadLabel": "重新加载整个页面",
+    "desktopMessage": "应用程序遇到意外错误。您可以重新加载页面或重置视图。",
+    "reportSent": "错误报告已发送。感谢您帮助我们改进！",
+    "recoveryActions": "错误恢复操作",
+    "resetView": "重置视图",
+    "resetViewLabel": "重置当前视图以从错误中恢复",
+    "copy": "复制错误",
+    "copied": "已复制",
+    "copyLabel": "将错误详情复制到剪贴板",
+    "copiedLabel": "错误详情已复制到剪贴板",
+    "report": "报告错误",
+    "reportLabel": "发送错误报告以帮助改进应用程序",
+    "chatTitle": "对话出错",
+    "chatMessage": "对话界面出错。您的对话记录是安全的。请重新启动对话以继续。",
+    "restartChat": "重新启动对话"
+  },
+  "chatFailure": {
+    "offlineTitle": "您已离线",
+    "title": "无法显示对话",
+    "offlineDescription": "网络断开时无法加载此对话。您的消息已保存，请重新连接后再试。",
+    "networkDescription": "{{network}} 您的消息已保存，请重试或打开其他对话。",
+    "description": "显示此对话时出错。您的消息已保存，请重试或打开其他对话。",
+    "backToChat": "返回对话"
+  },
+  "toast": {
+    "dismiss": "关闭",
+    "retry": "重试",
+    "learnMore": "了解详情",
+    "showDetails": "显示详情（仅限开发）"
+  },
+  "turn": {
+    "cause": {
+      "rateLimit": "此模型当前请求过多。请稍候重试，或切换到您的套餐包含的其他模型。",
+      "providerOutage": "模型提供商暂时无法访问。请重试，或切换到您的套餐包含的其他模型。",
+      "timeout": "模型响应时间过长。请重试，或在模型选择器中选择更快的模型。",
+      "modelRestriction": "所选模型无法完成此请求。请重试，或选择其他模型。",
+      "contextLength": "此对话对于所选模型来说过长。请开始新对话、移除部分附件，或选择上下文窗口更大的模型。",
+      "outputLimit": "回答已达到此模型的最大长度并在此停止。请要求更简短的回答，或拆分请求。",
+      "attachment": "此模型无法读取其中一个附件。请将其移除，或选择支持该文件类型的模型。",
+      "toolCall": "模型生成了此请求无法接受的工具调用。请重试，或关闭本轮不需要的工具。",
+      "contentFiltered": "安全系统已停止此回答。请换一种说法，或尝试其他模型。",
+      "planRestriction": "所选模型不在您的套餐内。请选择您的套餐包含的模型。",
+      "workspacePolicy": "您的工作区管理员已为您的账户关闭此功能。如有需要，请联系管理员。",
+      "twoFactorRequired": "您的工作区要求启用双重身份验证。请在设置中开启后重试。",
+      "sessionExpired": "您的会话在本轮完成前已结束。请重新登录后重试。",
+      "accountLimit": "您的账户已达到使用上限。请打开“用量”查看重置时间，然后重试。",
+      "sharedFreeAllowance": "免费模型已用完 Free 套餐所有用户共享的额度，因此这不是您账户的限制。额度会按提供商的时间表重置。请稍后再试，或使用您自己的提供商密钥。",
+      "interrupted": "回答在中途停止。已收到的部分保留在上方。请重试以获取完整回答。",
+      "emptyResponse": "模型本轮未返回任何回答。请重试，或换一种方式表述您的消息。"
+    },
+    "rateLimitWait": "此模型当前请求过多。请在{{wait}}后重试，或切换到您的套餐包含的其他模型。",
+    "incomplete": "本轮未完成。未收到任何回答。",
+    "reference": "{{text}} 参考编号：{{reference}}",
+    "reason": {
+      "connection": "与模型的连接已中断。",
+      "rateLimit": "此模型当前请求过多。",
+      "providerOutage": "由于我们这边的原因，此模型当前不可用。",
+      "timeout": "模型响应时间过长。",
+      "modelRestriction": "所选模型无法完成此请求。",
+      "contextLength": "此对话对于所选模型来说过长。",
+      "outputLimit": "回答已达到此模型的最大长度并在此停止。",
+      "attachment": "此模型无法读取其中一个附件。",
+      "toolCall": "模型生成了此请求无法接受的工具调用。",
+      "contentFiltered": "安全系统已停止此回答。",
+      "planRestriction": "所选模型不在您的套餐内。",
+      "workspacePolicy": "您的工作区管理员已为您的账户关闭此功能。",
+      "twoFactorRequired": "您的工作区要求启用双重身份验证。",
+      "sessionExpired": "您的会话在本轮完成前已结束。",
+      "accountLimit": "您的账户已达到使用上限。",
+      "interrupted": "回答在中途停止；已收到的部分保留在上方。",
+      "sharedFreeAllowance": "免费模型已用完 Free 套餐所有用户共享的额度，这不是您账户的限制。",
+      "emptyResponse": "未返回任何回答。"
+    },
+    "wait": {
+      "seconds_one": "约 {{count}} 秒",
+      "seconds_other": "约 {{count}} 秒",
+      "minutes_one": "约 {{count}} 分钟",
+      "minutes_other": "约 {{count}} 分钟",
+      "hours_one": "约 {{count}} 小时",
+      "hours_other": "约 {{count}} 小时"
+    }
+  },
+  "friendly": {
+    "server": {
+      "title": "出了点问题",
+      "message": "我们遇到了技术问题。",
+      "suggestion": "我们的团队已收到通知。请几分钟后重试。"
+    },
+    "rateLimit": {
+      "title": "请放慢速度",
+      "message": "您发送请求的速度过快。",
+      "suggestion": "请稍候再试。"
+    },
+    "fallback": {
+      "title": "出了点问题",
+      "message": "我们无法完成您的请求。",
+      "suggestion": "请重试。如果问题持续出现，请联系支持团队。"
+    },
+    "apiKey": {
+      "title": "API 密钥问题",
+      "message": "您的 API 密钥配置有问题。",
+      "suggestion": "请在设置中检查您的 API 密钥，然后重试。"
+    },
+    "network": {
+      "title": "连接问题",
+      "message": "无法连接到服务器。",
+      "suggestion": "请检查您的网络连接，然后重试。"
+    },
+    "timeout": {
+      "title": "耗时过长",
+      "message": "请求耗时超出预期。",
+      "suggestion": "请稍后重试。如果问题持续，请联系支持团队。"
+    },
+    "accessDenied": {
+      "title": "拒绝访问",
+      "message": "您的账户无权执行此操作。未做任何更改。",
+      "suggestion": "请向工作区管理员申请访问权限。重试无济于事。"
+    },
+    "signIn": {
+      "title": "需要登录",
+      "message": "您的会话已过期。已保存的内容不受影响。",
+      "suggestion": "请重新登录以继续。"
+    }
   }
 }

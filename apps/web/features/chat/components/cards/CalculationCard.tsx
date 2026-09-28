@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useCallback } from 'react';
 import { Calculator, Copy, Check, ChevronDown, ChevronRight } from 'lucide-react';
-import { Badge, Card, CardContent, CardHeader, Button } from '@agiworkforce/ui';
+import { Badge, Card, CardContent, CardHeader, Button, useUiTranslation } from '@agiworkforce/ui';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 import DOMPurify from 'dompurify';
@@ -197,6 +197,7 @@ interface CalculationCardProps {
 }
 
 export function CalculationCard({ content }: CalculationCardProps) {
+  const { plural } = useUiTranslation('chat');
   const calc = useMemo(() => parseCalculation(content), [content]);
   const [copied, setCopied] = useState(false);
   const [showSteps, setShowSteps] = useState(false);
@@ -265,7 +266,10 @@ export function CalculationCard({ content }: CalculationCardProps) {
                 ) : (
                   <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
                 )}
-                {calc.steps.length} intermediate step{calc.steps.length !== 1 ? 's' : ''}
+                {plural('counts.intermediateSteps', calc.steps.length, {
+                  one: '{{count}} intermediate step',
+                  other: '{{count}} intermediate steps',
+                })}
               </button>
             </CollapsibleTrigger>
             <CollapsibleContent>

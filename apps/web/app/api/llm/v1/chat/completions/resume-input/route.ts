@@ -15,7 +15,7 @@ import {
   buildOrganizationPolicyGateResponse,
   buildSpendLimitGateResponse,
 } from '@/lib/managed-compute-gate';
-import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
+import { resolveAuthenticatedSurface } from '../lib/request-surface';
 import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { runAuthGate, type AuthGateSuccess } from '../lib/auth-gate';
@@ -158,7 +158,7 @@ async function handleToolInputResume(request: NextRequest, authResult: AuthGateS
       model: 'chat-completions',
       feature: 'llm_v1_chat_completions',
       isFreeTrial: isFreeTierRequest,
-      surface: resolveCloudChatSurface(request),
+      surface: resolveAuthenticatedSurface(request, authResult),
     },
     getSecurityHeaders(),
   );

@@ -6,17 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S73.07: Unsaved-buffer context.
-
-- Done when: Unsaved edits in open buffers (including untitled files) reach the model rather than the stale saved file.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Selections and @-mentions read the live buffer, but the auto-attached active file is sent as a disk path the CLI reads, so unsaved edits in it are ignored and untitled buffers never attach; send the buffer text when the document is dirty. | handler |
-
-Code: `apps/extension-vscode/src/data/composerContext.ts:168-176`, `apps/extension-vscode/src/features/chat-participant/promptReferences.ts:94-96`
-
 ## S73.14: Hunk acceptance.
 
 - Done when: Individual hunks of a proposed change can be accepted or rejected separately.
@@ -24,20 +13,9 @@ Code: `apps/extension-vscode/src/data/composerContext.ts:168-176`, `apps/extensi
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| vscode | partial | Per-region accept/reject exists only for code blocks applied from chat (one region each); agent-mode file edits are approved or refused whole before writing, with no per-hunk choice. | handler |
+| vscode | partial | Claude's VS Code reviews a proposed edit one change at a time (Accept/Reject this change, code.claude.com/docs/en/vs-code, 2026-09-27) and tells the model when the user edited the proposal. Our approval/respond carries only a ReviewDecision, so the runtime cannot receive a partially accepted edit. Needs an approval decision with edited content in the CLI app-server protocol (p-desktop-cli) before VS Code can offer per-change review. | handler |
 
-Code: `apps/extension-vscode/src/providers/diffDecorationProvider.ts:434-445`, `apps/extension-vscode/package.json:1178-1184`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:973-976`
-
-## S73.22: Project instructions.
-
-- Done when: Project instruction files (AGENTS.md, CLAUDE.md, .agiworkforce/instructions.md) apply to turns in the session folder and can be viewed from the extension.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | The CLI applies the session folder's instruction files, but the extension's Instructions view always reads workspace folder 0, so in multi-root workspaces it shows a different folder's instructions than the ones in use. | handler |
-
-Code: `apps/cli/src/agent/prompt.rs:563-572`, `apps/extension-vscode/src/data/projectInstructions.ts:13-24`, `apps/extension-vscode/src/core/commandSetup.ts:2315-2316`
+Code: `packages/contracts/types/src/generated/protocol/ApprovalResponseParams.ts:1-1`
 
 ## S73.23: MCP/Skill/Plugin settings.
 
@@ -46,28 +24,6 @@ Code: `apps/cli/src/agent/prompt.rs:563-572`, `apps/extension-vscode/src/data/pr
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| vscode | partial | Skills, plugins, MCP servers and hooks are shown as read-only quick-pick lists; adding, removing or enabling any of them needs the CLI or hand-edited files. | ui, handler |
+| vscode | partial | Skills and plugins toggle on and off, project skills can be allowed, and MCP servers that need it can be signed in to (bc346586d). Adding or removing an MCP server, plugin or hook still needs the agi CLI; Claude's VS Code has add dialogs. The app-server has no add/remove calls, so this needs CLI protocol work (p-desktop-cli). | ui |
 
-Code: `apps/extension-vscode/src/core/commandSetup.ts:2309-2314`, `apps/extension-vscode/src/features/surfaces/treeQuickPick.ts:181-201`
-
-## S73.29: Extension update flow.
-
-- Done when: The extension tells users when an update is needed or available and what changed, and lets them update.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Updates rely on the Marketplace host; the extension only shows an "update the extension" error when the server returns 426 or the CLI protocol mismatches, with no update action and no what's-new notice. | ui |
-
-Code: `apps/extension-vscode/src/utils/api.ts:406-412`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:1215-1218`
-
-## S73.30: IDE-version compatibility messaging.
-
-- Done when: Users on an unsupported VS Code version (or a fork without needed APIs) are told what is incompatible.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Only the host's engines check (VS Code ^1.100) warns at install; when the native Chat API is missing the extension falls back silently (console only) and never tells the user. | ui |
-
-Code: `apps/extension-vscode/package.json:16-18`, `apps/extension-vscode/src/features/chat-participant/chatParticipant.ts:591-610`
+Code: `apps/extension-vscode/src/features/surfaces/capabilityManagement.ts:99-99`, `apps/extension-vscode/src/features/surfaces/capabilityManagement.ts:149-149`, `apps/extension-vscode/src/core/commandSetup.ts:2471-2471`

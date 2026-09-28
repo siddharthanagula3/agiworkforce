@@ -1,4 +1,3 @@
-
 import {
   Circle,
   Download,
@@ -820,7 +819,7 @@ export function CanvasWorkspace({ className }: CanvasWorkspaceProps) {
             <Palette className="h-4 w-4 text-primary" />
             <span className="text-sm font-medium">Canvas</span>
             <span className="text-xs text-muted-foreground">
-              {state.elements.length} element{state.elements.length !== 1 ? 's' : ''}
+              {t('canvas.elementCount', { count: state.elements.length })}
             </span>
           </div>
 

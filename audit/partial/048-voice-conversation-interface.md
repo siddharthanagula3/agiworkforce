@@ -74,15 +74,14 @@ Code: `apps/cli/src/voice.rs:254-254`, `apps/cli/src/voice.rs:320-320`, `apps/cl
 
 - Done when: A waveform or amplitude visual follows the live microphone or reply audio level during voice.
 - Wave: 2
-- Already works on: mobile
+- Already works on: web, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The voice-mode orb animates by state only; wire the microphone and reply audio level into it (only composer dictation has a live waveform). | ui |
 | desktop | partial | Same as web: the voice-mode orb is state-driven, not amplitude-driven. | ui |
 | cli | partial | Code done; cell stays flag-off until the lead enables the `voice` cargo feature for release builds (apps/cli/Cargo.toml:118), per decisions.md. | flag-off |
 
-Code: `packages/ui/unified-chat/src/components/VoiceOrb.tsx:119-119`, `apps/web/features/chat/components/Composer/DictationStrip.tsx:111-111`, `apps/cli/src/voice.rs:684-684`, `apps/cli/src/voice.rs:764-764`
+Code: `packages/ui/unified-chat/src/components/VoiceOrb.tsx:119-119`, `apps/cli/src/voice.rs:684-684`, `apps/cli/src/voice.rs:764-764`, `apps/cli/src/voice.rs:320-320`
 
 ## S48.10: End conversation.
 
@@ -162,14 +161,13 @@ Code: `apps/web/features/chat/components/Voice/VoiceSettingsModal.tsx:256-256`, 
 
 - Done when: The user can choose the spoken language of the voice conversation, and it is applied to recognition.
 - Wave: 2
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The speech language setting drives on-device recognition (companion, inline voice), but live voice never sends a language, so it auto-detects. | handler |
 | cli | partial | Code done; cell stays flag-off until the lead enables the `voice` cargo feature for release builds (apps/cli/Cargo.toml:118), per decisions.md. | flag-off |
 
-Code: `apps/mobile/app/(app)/voice.tsx:192-192`, `apps/mobile/src/features/voice/services/liveVoiceSession.ts:216-216`, `apps/cli/src/voice.rs:89-89`, `apps/cli/src/voice.rs:320-320`
+Code: `apps/cli/src/voice.rs:89-89`, `apps/cli/src/voice.rs:320-320`, `apps/cli/src/voice.rs:882-882`
 
 ## S48.18: Input-device selection.
 
@@ -263,15 +261,15 @@ Code: `apps/web/features/chat/components/Voice/VoiceComposer.tsx:114-114`, `apps
 
 - Done when: Tool activity and results from a voice turn are viewable during the conversation.
 - Wave: 2
+- Already works on: web
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Voice shows only a generic busy state: the per-tool labels the session computes are never wired (onToolActivity unset) and tool results are folded into speech. The Activity panel only covers typed turns. | ui, handler |
 | desktop | partial | Voice shows only a generic busy state: the per-tool labels the session computes are never wired (onToolActivity unset) and tool results are folded into speech; the Activity panel only covers typed turns. | ui, handler |
 | mobile | partial | Only "Working on your request" is shown while a delegated tool runs; no tool name or result. | ui |
 | cli | partial | Code done; cell stays flag-off until the lead enables the `voice` cargo feature for release builds (apps/cli/Cargo.toml:118), per decisions.md. | flag-off |
 
-Code: `apps/web/features/chat/lib/live-voice-session.ts:649-649`, `apps/web/features/chat/hooks/use-voice-session.ts:272-272`, `apps/mobile/src/features/voice/components/LiveVoiceBar.tsx:193-193`, `apps/cli/src/voice.rs:254-254`
+Code: `apps/web/features/chat/hooks/use-voice-session.ts:272-272`, `apps/mobile/src/features/voice/components/LiveVoiceBar.tsx:193-193`, `apps/cli/src/voice.rs:254-254`, `apps/cli/src/voice.rs:320-320`
 
 ## S48.27: Approve an action during Voice.
 
@@ -289,15 +287,15 @@ Code: `apps/cli/src/voice.rs:254-254`, `apps/cli/src/voice.rs:320-320`, `apps/cl
 
 - Done when: A document generated during voice can be opened from the voice view.
 - Wave: 2
+- Already works on: web
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Voice turns cannot generate documents (only web_search and code_interpreter are reachable); the dock only links to the Library, which navigates away from the chat. | handler |
 | desktop | partial | Same as web. | handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | Code done; cell stays flag-off until the lead enables the `voice` cargo feature for release builds (apps/cli/Cargo.toml:118), per decisions.md. | flag-off |
 
-Code: `apps/web/features/chat/components/Voice/VoiceChatDock.tsx:78-78`, `apps/web/lib/voice/live-voice-tools.ts:111-111`, `apps/cli/src/voice.rs:254-254`, `apps/cli/src/voice.rs:320-320`
+Code: `apps/web/features/chat/components/Voice/VoiceChatDock.tsx:78-78`, `apps/cli/src/voice.rs:254-254`, `apps/cli/src/voice.rs:320-320`, `apps/cli/src/voice.rs:882-882`
 
 ## S48.29: Attach image during Voice.
 
@@ -379,11 +377,11 @@ Code: `apps/web/features/code/components/CodeComposer.tsx:1201-1201`, `apps/cli/
 
 - Done when: The user can stop the spoken reply without cancelling the underlying task, and cancel the task separately.
 - Wave: 3
+- Already works on: web
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The session can cancel a delegated tool turn (cancelBackendWork) but no control calls it; the only stop is leaving voice, which ends both. | ui |
 | desktop | partial | The session can cancel a delegated tool turn (cancelBackendWork) but no control calls it; the only stop is leaving voice, which ends both. | ui |
 | mobile | partial | In the companion, tapping the orb while it speaks stops only the speech; a turn still thinking cannot be cancelled from voice, and the live bar has neither control. | ui |
 
-Code: `apps/web/features/chat/hooks/use-voice-session.ts:459-459`, `apps/web/features/chat/components/Voice/VoiceComposer.tsx:162-162`, `apps/mobile/src/features/voice/hooks/useVoiceConversation.ts:231-231`, `apps/mobile/app/(app)/voice.tsx:267-267`
+Code: `apps/web/features/chat/hooks/use-voice-session.ts:459-459`, `apps/mobile/src/features/voice/hooks/useVoiceConversation.ts:231-231`, `apps/mobile/app/(app)/voice.tsx:267-267`

@@ -307,5 +307,33 @@
     "morningNamed": "{{name}}，早上好",
     "afternoonNamed": "{{name}}，下午好",
     "eveningNamed": "{{name}}，晚上好"
+  },
+  "counts": {
+    "shortcutsOff_one": "已关闭 {{count}} 个快捷键",
+    "shortcutsOff_other": "已关闭 {{count}} 个快捷键",
+    "searchHistoryCleared_one": "已从历史记录中清除 {{count}} 条搜索",
+    "searchHistoryCleared_other": "已从历史记录中清除 {{count}} 条搜索",
+    "searches_one": "{{count}} 次搜索",
+    "searches_other": "{{count}} 次搜索",
+    "searchesOf_one": "{{count}}/{{max}} 次搜索",
+    "searchesOf_other": "{{count}}/{{max}} 次搜索",
+    "sources_one": "{{count}} 个来源",
+    "sources_other": "{{count}} 个来源",
+    "intermediateSteps_one": "{{count}} 个中间步骤",
+    "intermediateSteps_other": "{{count}} 个中间步骤",
+    "conversations_one": "{{count}} 个对话",
+    "conversations_other": "{{count}} 个对话",
+    "tools_one": "{{count}} 个工具",
+    "tools_other": "{{count}} 个工具",
+    "citations_one": "{{count}} 条引用",
+    "citations_other": "{{count}} 条引用",
+    "checkpoints_one": "{{count}} 个检查点",
+    "checkpoints_other": "{{count}} 个检查点",
+    "usedTools_one": "已使用 {{count}} 个工具",
+    "usedTools_other": "已使用 {{count}} 个工具",
+    "runningTools_one": "正在运行 {{count}} 个工具",
+    "runningTools_other": "正在运行 {{count}} 个工具",
+    "runningToolsOf_one": "正在运行工具 {{running}}/{{count}}：{{name}}",
+    "runningToolsOf_other": "正在运行工具 {{running}}/{{count}}：{{name}}"
   }
 }

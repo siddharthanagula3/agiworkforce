@@ -13,7 +13,10 @@ export const IMAGE_JOB_DRIVE_KIND = 'media-generation.image-attempt';
  * sender can retry it and an unattended drive would burn the attempt.
  */
 export function isImageGenerationJobDrivable(job: ImageGenerationJob): boolean {
-  return job.operation === 'generate' || job.plan.sourceAssetId !== undefined;
+  return (
+    job.operation === 'generate' ||
+    (job.plan.sourceAssetId !== undefined && job.plan.referencesInline !== true)
+  );
 }
 
 /**

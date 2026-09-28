@@ -1,11 +1,16 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { useSession } from '@/lib/identity/client';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { clearPendingDraftClear } from '../lib/pending-draft-clear';
 import {
+  clearPersistedDraft,
+  writePersistedDraft,
+} from '../components/Composer/composer-draft-storage';
+import {
+  adoptConversationDraftRevision,
   clearObservedConversationDraftRevisions,
   saveConversationDraft,
 } from '../services/conversation-draft';
@@ -13,6 +18,26 @@ import {
 const DRAFT_SAVE_DEBOUNCE_MS = 1_500;
 const DRAFT_RETRY_DELAY_MS = 3_000;
 const MAX_AUTOMATIC_DRAFT_SAVE_ATTEMPTS = 3;
+
+export interface OpenDraftConflict {
+  conversationId: string;
+  theirs: string;
+  theirsRevision: string | null;
+}
+
+export interface DraftReplacement {
+  conversationId: string;
+  content: string;
+  nonce: number;
+}
+
+export interface DraftConflictControls {
+  conflict: OpenDraftConflict | null;
+  replacement: DraftReplacement | null;
+  resolveConflict: (keep: 'mine' | 'theirs') => void;
+  closeConflict: () => void;
+  consumeReplacement: () => void;
+}
 
 /**
  * Carries the composer's live and parked drafts to the server (§11 Draft persistence).
@@ -25,10 +50,14 @@ const MAX_AUTOMATIC_DRAFT_SAVE_ATTEMPTS = 3;
  * hold one and keeps its per-tab copy. A temporary chat is refused by the
  * route, so nothing here has to remember that rule twice.
  */
-export function useConversationDraftSync(): void {
+export function useConversationDraftSync(): DraftConflictControls {
   const { getToken, isLoaded, isSignedIn } = useSession();
   const draftsByConversation = useChatStore((state) => state.draftsByConversation);
   const [retryTick, setRetryTick] = useState(0);
+  const [openConflict, setOpenConflict] = useState<OpenDraftConflict | null>(null);
+  const [replacement, setReplacement] = useState<DraftReplacement | null>(null);
+  const conflictsRef = useRef<Record<string, OpenDraftConflict>>({});
+  const replacementNonceRef = useRef(0);
   const lastSavedRef = useRef<Record<string, string>>({});
   const saveQueueRef = useRef<Record<string, Promise<void>>>({});
   const retryAttemptsRef = useRef<Record<string, { draft: string; count: number }>>({});
@@ -118,18 +147,35 @@ export function useConversationDraftSync(): void {
               });
             }
           }
-          if (result === 'conflict') {
+          if (typeof result === 'object') {
             delete retryAttemptsRef.current[conversationId];
+            const conflict: OpenDraftConflict = {
+              conversationId,
+              theirs: result.theirs,
+              theirsRevision: result.theirsRevision,
+            };
+            conflictsRef.current[conversationId] = conflict;
+            setOpenConflict((current) =>
+              current?.conversationId === conversationId ? conflict : current,
+            );
             toast.error(
               'This draft changed elsewhere. Your text is still here, but has not synced.',
               {
                 id: `draft-conflict-${conversationId}`,
                 duration: Infinity,
+                action: {
+                  label: 'Compare',
+                  onClick: () => {
+                    const latest = conflictsRef.current[conversationId];
+                    if (latest) setOpenConflict(latest);
+                  },
+                },
               },
             );
           }
           if (result === 'saved') {
             delete retryAttemptsRef.current[conversationId];
+            delete conflictsRef.current[conversationId];
             toast.dismiss(`draft-conflict-${conversationId}`);
             toast.dismiss(`draft-sync-${conversationId}`);
           }
@@ -152,6 +198,46 @@ export function useConversationDraftSync(): void {
 
     return () => clearTimeout(timer);
   }, [draftsByConversation, isLoaded, isSignedIn, retryTick]);
+
+  const closeConflict = useCallback(() => setOpenConflict(null), []);
+  const consumeReplacement = useCallback(() => setReplacement(null), []);
+
+  const resolveConflict = useCallback(
+    (keep: 'mine' | 'theirs') => {
+      if (!openConflict) return;
+      const { conversationId, theirs, theirsRevision } = openConflict;
+      delete conflictsRef.current[conversationId];
+      delete retryAttemptsRef.current[conversationId];
+      adoptConversationDraftRevision(conversationId, theirsRevision);
+      toast.dismiss(`draft-conflict-${conversationId}`);
+      setOpenConflict(null);
+      if (keep === 'mine') {
+        delete lastSavedRef.current[conversationId];
+        setRetryTick((current) => current + 1);
+        return;
+      }
+      lastSavedRef.current[conversationId] = theirs;
+      const store = useChatStore.getState();
+      if (theirs) {
+        store.setDraftContent(theirs, conversationId);
+        writePersistedDraft(conversationId, theirs);
+      } else {
+        store.clearDraftContent(conversationId);
+        clearPersistedDraft(conversationId);
+      }
+      replacementNonceRef.current += 1;
+      setReplacement({ conversationId, content: theirs, nonce: replacementNonceRef.current });
+    },
+    [openConflict],
+  );
+
+  return {
+    conflict: openConflict,
+    replacement,
+    resolveConflict,
+    closeConflict,
+    consumeReplacement,
+  };
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;

@@ -166,6 +166,7 @@ vi.mock('@/features/chat/components/dialogs/GlobalSearchDialog', () => ({
 vi.mock('@agiworkforce/ui', async () => {
   const React = await import('react');
   return {
+    confirmNavigation: (proceed: () => void) => proceed(),
     MOBILE_NAV_DRAWER_WIDTH: 280,
     OPEN_SEARCH_SHORTCUT: { key: 'F', ctrl: true, meta: true, shift: true },
     Sidebar: (props: {

@@ -98,6 +98,8 @@ import { getAccountMemoryStore } from '../memory/accountMemoryStore';
 import { ChatEditorPanel } from '../providers/chatEditorPanel';
 import { type LocalRuntimePool } from '../integrations/localRuntimePool';
 import { installCli } from '../integrations/cliInstaller';
+import { managePersonalization } from '../features/personalization/personalization';
+import { manageMemoryExclusions } from '../memory/memoryExclusions';
 import {
   admitDeveloperSessionHandoff,
   describeHandoffRefusal,
@@ -108,6 +110,9 @@ import {
   CliCapabilityAdapter,
   openArtifactsSurface,
   openCapabilitySurface,
+  manageMcpServers,
+  managePlugins,
+  manageSkills,
   openCloudTasksSurface,
   openConnectorsSurface,
   openContextSurface,
@@ -184,14 +189,6 @@ import { exportVsCodeDiagnostics } from '../features/diagnostics';
 const execFileAsync = promisify(execFile);
 
 const UPGRADE_URL = 'https://agiworkforce.com/pricing';
-
-function requireWorkspaceMemoryScope(): boolean {
-  if ((vscode.workspace.workspaceFolders?.length ?? 0) > 0) return true;
-  void vscode.window.showWarningMessage(
-    'AGI Workforce: Open a workspace folder before managing workspace memory.',
-  );
-  return false;
-}
 
 const MEMORY_TURN_ON_ACTION = 'Turn memory on';
 
@@ -1832,7 +1829,6 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     }),
 
     register('agi-workforce.memory', async () => {
-      if (!requireWorkspaceMemoryScope()) return;
       const enabled = Config.memoryEnabled();
       const action = await vscode.window.showQuickPick(
         [
@@ -1842,6 +1838,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
           },
           { label: '$(add) Add a memory fact', detail: 'add' },
           { label: '$(list-unordered) List & remove facts', detail: 'list' },
+          { label: '$(eye-closed) Never remember…', detail: 'exclusions' },
           { label: '$(trash) Forget everything', detail: 'clear' },
         ],
         {
@@ -1869,6 +1866,11 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         return;
       }
 
+      if (action.detail === 'exclusions') {
+        await manageMemoryExclusions(context.secrets);
+        return;
+      }
+
       if (action.detail === 'clear') {
         const store = getAccountMemoryStore();
         if (store === undefined) {
@@ -1881,7 +1883,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
           );
           return;
         }
-        const facts = store.cachedFacts();
+        const facts = (await store.refresh()).facts;
         if (facts.length === 0) {
           vscode.window.showInformationMessage('No memory facts to forget.');
           return;
@@ -1917,13 +1919,19 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       await memoryTreeProvider.refresh();
     }),
 
-    register('agi-workforce.memory.create', async () => {
-      if (!requireWorkspaceMemoryScope()) return;
+    register('agi-workforce.memory.rememberSelection', async () => {
+      const editor = vscode.window.activeTextEditor;
+      const selected = editor?.document.getText(editor.selection).trim() ?? '';
+      await vscode.commands.executeCommand('agi-workforce.memory.create', selected);
+    }),
+
+    register('agi-workforce.memory.create', async (prefill?: unknown) => {
       if (!(await requireMemoryEnabledForCapture(context))) return;
       const text = await vscode.window.showInputBox({
         title: 'AGI Workforce, Add Memory Fact',
+        value: typeof prefill === 'string' ? prefill : '',
         prompt:
-          'A short fact included with future developer turns. Stored locally; sent only to the model/provider you choose for that turn.',
+          'A short fact saved to your AGI Cloud account. Every AGI client uses it, and it is sent with turns only while memory is on.',
         placeHolder: 'Example: I prefer Python over JavaScript for data work.',
         ignoreFocusOut: true,
         validateInput: (value) => {
@@ -1959,12 +1967,10 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     }),
 
     register('agi-workforce.memory.edit', async (item: MemoryFactItem) => {
-      if (!requireWorkspaceMemoryScope()) return;
       const newText = await vscode.window.showInputBox({
         title: 'AGI Workforce, Edit Memory Fact',
         value: item.fact.text,
-        prompt:
-          'Update this locally stored fact. It is included only with turns sent to your selected model/provider.',
+        prompt: 'Update this fact in your AGI Cloud account. The change reaches every AGI client.',
         ignoreFocusOut: true,
         validateInput: (value) => {
           const trimmed = value.trim();
@@ -1990,7 +1996,6 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     }),
 
     register('agi-workforce.memory.delete', async (item: MemoryFactItem) => {
-      if (!requireWorkspaceMemoryScope()) return;
       const confirm = await vscode.window.showWarningMessage(
         `Delete this memory from your AGI Cloud account? It disappears from the web app, the CLI and mobile too, and cannot be recovered.\n\n"${item.fact.text.slice(0, 80)}${item.fact.text.length > 80 ? '…' : ''}"`,
         { modal: true },
@@ -2465,11 +2470,10 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     }),
     register('agi-workforce.showConnectors', () => openConnectorsSurface(connectorsTreeProvider)),
     register('agi-workforce.showContextFiles', () => openContextSurface(contextPanelProvider)),
-    register('agi-workforce.showSkills', () => openCapabilitySurface(cliCapabilities, 'skills')),
-    register('agi-workforce.showPlugins', () => openCapabilitySurface(cliCapabilities, 'plugins')),
-    register('agi-workforce.showMcpServers', () =>
-      openCapabilitySurface(cliCapabilities, 'mcpServers'),
-    ),
+    register('agi-workforce.personalize', () => managePersonalization(context.secrets)),
+    register('agi-workforce.showSkills', () => manageSkills(cliCapabilities)),
+    register('agi-workforce.showPlugins', () => managePlugins(cliCapabilities)),
+    register('agi-workforce.showMcpServers', () => manageMcpServers(cliCapabilities)),
     register('agi-workforce.showHooks', () => openCapabilitySurface(cliCapabilities, 'hooks')),
     register('agi-workforce.showInstructions', () =>
       openCapabilitySurface(cliCapabilities, 'instructions'),

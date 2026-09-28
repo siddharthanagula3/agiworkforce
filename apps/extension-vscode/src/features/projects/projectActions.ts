@@ -36,10 +36,15 @@ export interface ProjectActionHost {
   onChanged: () => void;
 }
 
-export type ProjectDetailAction = 'use-in-chat' | 'open-web' | 'delete';
+export type ProjectDetailAction = 'use-in-chat' | 'open-web' | 'open-conversation' | 'delete';
 
 export interface ProjectDetailItem extends vscode.QuickPickItem {
   action?: ProjectDetailAction;
+  conversationId?: string;
+}
+
+export function projectConversationWebUrl(conversationId: string, webOrigin: string): string {
+  return `${webOrigin}/chat/${encodeURIComponent(conversationId)}?from=vscode-extension`;
 }
 
 export function projectWebUrl(projectId: string, webOrigin: string): string {
@@ -99,6 +104,8 @@ export function buildProjectDetailItems(input: {
       items.push({
         label: `$(comment-discussion) ${conversation.title.trim() || 'Untitled conversation'}`,
         description: formatTimestamp(conversation.updatedAt),
+        action: 'open-conversation',
+        conversationId: conversation.id,
       });
     }
   }
@@ -188,6 +195,15 @@ export async function showProjectDetail(
     await vscode.env.openExternal(
       vscode.Uri.parse(projectWebUrl(detail.project.id, host.webOrigin)),
     );
+    return;
+  }
+
+  if (picked.action === 'open-conversation') {
+    if (picked.conversationId !== undefined) {
+      await vscode.env.openExternal(
+        vscode.Uri.parse(projectConversationWebUrl(picked.conversationId, host.webOrigin)),
+      );
+    }
     return;
   }
 

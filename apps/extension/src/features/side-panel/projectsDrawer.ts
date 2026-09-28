@@ -9,7 +9,7 @@ import {
   CHROME_PROJECT_NAME_MAX_CHARS,
   type ChromeProjectConversation,
 } from '../cloud-bridge/projectsClient';
-import { t } from '../../i18n';
+import { t, tPlural } from '../../i18n';
 import { el } from './dom';
 
 export const PROJECTS_DRAWER_CSS = `
@@ -211,7 +211,7 @@ const DEFAULT_DEPENDENCIES: Omit<
 
 function formatChatCount(project: ManagedCloudProject): string {
   const count = project.conversationCount ?? 0;
-  return t('spProjectsCount', [String(count)]);
+  return tPlural('spProjectsCount', count);
 }
 
 export function buildProjectsDrawerSection(

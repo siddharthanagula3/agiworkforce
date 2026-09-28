@@ -155,6 +155,7 @@ const OPERATIONAL_RECORD = [
   'organization_domain_retention_policies',
   'organization_encryption_keys',
   'organization_group_managers',
+  'organization_group_members',
   'organization_group_roles',
   'organization_invitations',
   'organization_key_rewrap_runs',

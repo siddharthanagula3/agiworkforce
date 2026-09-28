@@ -127,3 +127,25 @@ export function selectConnectorAccount(
     message: `${label} has more than one connected account and none is the default: ${listNames(candidates)}. Choose one before running this.`,
   };
 }
+
+const IDENTITY_CLAIMS = ['email', 'preferred_username', 'upn'] as const;
+const MAX_ACCOUNT_LABEL_LENGTH = 200;
+
+export function accountLabelFromIdToken(idToken: string | null | undefined): string | null {
+  const payload = idToken?.split('.')[1];
+  if (!payload) return null;
+  let claims: unknown;
+  try {
+    claims = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+  } catch {
+    return null;
+  }
+  if (!claims || typeof claims !== 'object') return null;
+  for (const claim of IDENTITY_CLAIMS) {
+    const value = (claims as Record<string, unknown>)[claim];
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim().slice(0, MAX_ACCOUNT_LABEL_LENGTH);
+    }
+  }
+  return null;
+}
