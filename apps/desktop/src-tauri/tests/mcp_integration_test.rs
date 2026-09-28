@@ -407,6 +407,7 @@ mod mcp_integration_tests {
             headers: HashMap::new(),
             timeout_secs: 60,
             verify_ssl: true,
+            ..Default::default()
         };
 
         let json = serde_json::to_string(&http_config).unwrap();

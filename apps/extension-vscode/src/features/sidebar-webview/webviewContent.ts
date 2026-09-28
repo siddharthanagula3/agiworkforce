@@ -555,7 +555,27 @@ export function getWebviewContent(
       line-height: var(--type-caption-height);
       text-align: right;
     }
+    .message.user[data-delivery-state='sending']::after { content: 'Sending'; }
     .message.user[data-delivery-state='queued']::after { content: 'Queued'; }
+    .message-attachments {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 6px;
+    }
+    .message-attachment {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      max-width: 100%;
+      padding: 1px 6px;
+      border: 1px solid var(--border);
+      border-radius: var(--corner-pill);
+      color: var(--text-secondary);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      overflow-wrap: anywhere;
+    }
     .message.user[data-delivery-state='running']::after { content: 'Running'; }
     .message.user[data-delivery-state='steered']::after { content: 'Steered'; }
     .message.user[data-delivery-state='failed'] {
@@ -750,6 +770,13 @@ export function getWebviewContent(
       gap: 6px;
       margin-top: 10px;
     }
+    .approval-card__highlight {
+      margin-top: 6px;
+      color: var(--text-primary);
+      font-weight: 600;
+      overflow-wrap: anywhere;
+    }
+    .approval-card__highlight-label { color: var(--text-secondary); font-weight: 400; }
     .approval-card__guidance {
       width: 100%;
       margin-top: 8px;
@@ -2289,6 +2316,18 @@ export function getWebviewContent(
       overflow: hidden;
       text-overflow: ellipsis;
       flex: 1 1 auto;
+    }
+    .attachment-chip__thumb {
+      width: 16px;
+      height: 16px;
+      object-fit: cover;
+      border-radius: 3px;
+      flex-shrink: 0;
+    }
+    .attachment-chip__size {
+      color: var(--text-secondary);
+      font-size: var(--type-caption-size);
+      white-space: nowrap;
     }
     .attachment-chip__remove {
       background: none;
@@ -4150,6 +4189,55 @@ export function getWebviewContent(
     }
 
     // ── Send ──────────────────────────────────────────────────────────────────
+    var sendingClientMessageId = null;
+
+    function settleSending(state) {
+      if (!sendingClientMessageId) return;
+      setUserMessageState(sendingClientMessageId, state || '');
+      sendingClientMessageId = null;
+    }
+
+    function sentContextEntries() {
+      var entries = [];
+      var strips = [attachmentStrip, editorContextStrip];
+      for (var s = 0; s < strips.length; s++) {
+        if (!strips[s]) continue;
+        var chips = strips[s].querySelectorAll('.attachment-chip:not(.failed)');
+        for (var c = 0; c < chips.length; c++) {
+          var chipName = chips[c].querySelector('.attachment-chip__name');
+          var chipIcon = chips[c].querySelector('.codicon');
+          if (!chipName || !chipName.textContent) continue;
+          entries.push({
+            label: chipName.textContent,
+            icon: chipIcon ? chipIcon.className : 'codicon codicon-file-media',
+          });
+        }
+      }
+      if (browseWebEnabled) entries.push({ label: 'Browse the web', icon: 'codicon codicon-globe' });
+      return entries;
+    }
+
+    function appendSentContext(messageEl) {
+      var entries = sentContextEntries();
+      if (entries.length === 0) return;
+      var row = document.createElement('div');
+      row.className = 'message-attachments';
+      row.setAttribute('aria-label', 'Sent with ' + entries.map(function (e) { return e.label; }).join(', '));
+      for (var i = 0; i < entries.length; i++) {
+        var item = document.createElement('span');
+        item.className = 'message-attachment';
+        var icon = document.createElement('span');
+        icon.className = entries[i].icon;
+        icon.setAttribute('aria-hidden', 'true');
+        var label = document.createElement('span');
+        label.textContent = entries[i].label;
+        item.appendChild(icon);
+        item.appendChild(label);
+        row.appendChild(item);
+      }
+      messageEl.appendChild(row);
+    }
+
     function sendMessage(oneTurnBehavior) {
       if (runtimeBlock !== null) return;
       const isFollowUp = streaming;
@@ -4166,7 +4254,14 @@ export function getWebviewContent(
       var clientMessageId = 'msg-' + Date.now() + '-' + (++clientMessageSeq);
       var userMessageEl = addMessage('user', text);
       userMessageEl.setAttribute('data-client-message-id', clientMessageId);
-      if (isFollowUp) userMessageEl.setAttribute('data-delivery-state', 'queued');
+      userMessageEl.setAttribute('aria-label', 'You said: ' + text);
+      appendSentContext(userMessageEl);
+      if (isFollowUp) {
+        userMessageEl.setAttribute('data-delivery-state', 'queued');
+      } else {
+        userMessageEl.setAttribute('data-delivery-state', 'sending');
+        sendingClientMessageId = clientMessageId;
+      }
       userInput.value = '';
       userInput.style.height = 'auto';
       saveComposerDraft();
@@ -4916,6 +5011,49 @@ export function getWebviewContent(
       };
     }
 
+    var APPROVAL_RECIPIENT_KEYS = ['to', 'cc', 'bcc', 'recipient', 'recipients', 'email', 'emails', 'channel', 'channel_id', 'user', 'users', 'phone', 'phone_number'];
+    var APPROVAL_AMOUNT_KEYS = ['amount', 'price', 'total', 'cost', 'value'];
+    var APPROVAL_ITEM_KEYS = ['item', 'product', 'sku', 'description', 'quantity'];
+
+    function approvalArguments(detail) {
+      if (!detail) return null;
+      try {
+        var parsed = JSON.parse(detail);
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+      } catch (error) {
+        return null;
+      }
+    }
+
+    function approvalValues(args, keys) {
+      var values = [];
+      for (var i = 0; i < keys.length; i++) {
+        var value = args[keys[i]];
+        if (value === undefined || value === null || value === '') continue;
+        var list = Array.isArray(value) ? value : [value];
+        for (var j = 0; j < list.length; j++) {
+          if (typeof list[j] === 'string' || typeof list[j] === 'number') values.push(String(list[j]));
+        }
+      }
+      return values;
+    }
+
+    function approvalHighlights(detail) {
+      var args = approvalArguments(detail);
+      if (!args) return [];
+      var lines = [];
+      var recipients = approvalValues(args, APPROVAL_RECIPIENT_KEYS);
+      if (recipients.length > 0) lines.push({ label: 'Sends to', value: recipients.join(', ') });
+      var amounts = approvalValues(args, APPROVAL_AMOUNT_KEYS);
+      if (amounts.length > 0) {
+        var currency = approvalValues(args, ['currency'])[0];
+        lines.push({ label: 'Amount', value: amounts.join(', ') + (currency ? ' ' + currency : '') });
+      }
+      var items = approvalValues(args, APPROVAL_ITEM_KEYS);
+      if (items.length > 0 && amounts.length > 0) lines.push({ label: 'For', value: items.join(', ') });
+      return lines;
+    }
+
     function renderApprovalCard(payload) {
       hideEmptyState();
       var card = document.createElement('section');
@@ -4957,6 +5095,20 @@ export function getWebviewContent(
         }
         card.appendChild(verdictEl);
         card.setAttribute('aria-label', 'Approval needed, ' + verdict.spoken + ' ' + payload.summary);
+      }
+
+      var highlights = approvalHighlights(payload.detail);
+      for (var h = 0; h < highlights.length; h++) {
+        var highlight = document.createElement('div');
+        highlight.className = 'approval-card__highlight';
+        var highlightLabel = document.createElement('span');
+        highlightLabel.className = 'approval-card__highlight-label';
+        highlightLabel.textContent = highlights[h].label + ': ';
+        var highlightValue = document.createElement('span');
+        highlightValue.textContent = highlights[h].value;
+        highlight.appendChild(highlightLabel);
+        highlight.appendChild(highlightValue);
+        card.appendChild(highlight);
       }
 
       if (payload.detail) {
@@ -5156,18 +5308,53 @@ export function getWebviewContent(
       renderAttachmentStrip();
     }
 
-    function makeAttachmentChip(name, state) {
+    var FILE_ICON_BY_EXTENSION = {
+      png: 'file-media', jpg: 'file-media', jpeg: 'file-media', gif: 'file-media', webp: 'file-media', svg: 'file-media',
+      pdf: 'file-pdf',
+      zip: 'file-zip', gz: 'file-zip', tar: 'file-zip',
+      md: 'markdown', txt: 'file-text',
+      json: 'json', yaml: 'file-code', yml: 'file-code', toml: 'file-code', xml: 'file-code',
+      ts: 'file-code', tsx: 'file-code', js: 'file-code', jsx: 'file-code', py: 'file-code', rs: 'file-code',
+      go: 'file-code', java: 'file-code', rb: 'file-code', c: 'file-code', cpp: 'file-code', cs: 'file-code',
+      css: 'file-code', html: 'file-code', sh: 'terminal', csv: 'table',
+    };
+
+    function fileIconFor(name) {
+      var dot = name.lastIndexOf('.');
+      var extension = dot === -1 ? '' : name.slice(dot + 1).toLowerCase();
+      return FILE_ICON_BY_EXTENSION[extension] || 'file';
+    }
+
+    function formatFileSize(bytes) {
+      if (!bytes) return '';
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    function makeAttachmentChip(name, state, file) {
       var chip = document.createElement('span');
       chip.className = 'attachment-chip' + (state ? ' ' + state : '');
       chip.setAttribute('role', 'listitem');
+      chip.setAttribute('data-source-name', name);
 
-      var icon = document.createElement('span');
-      icon.className = 'codicon codicon-file';
-      icon.setAttribute('aria-hidden', 'true');
+      var icon;
+      if (file && file.type && file.type.indexOf('image/') === 0 && typeof URL.createObjectURL === 'function') {
+        icon = document.createElement('img');
+        icon.className = 'attachment-chip__thumb';
+        icon.alt = '';
+        icon.src = URL.createObjectURL(file);
+      } else {
+        icon = document.createElement('span');
+        icon.className = 'codicon codicon-' + fileIconFor(name);
+        icon.setAttribute('aria-hidden', 'true');
+      }
 
       var label = document.createElement('span');
       label.className = 'attachment-chip__name';
       label.textContent = name;
+      var size = file ? formatFileSize(file.size) : '';
+      if (size) chip.title = name + ', ' + size;
 
       var removeBtn = document.createElement('button');
       removeBtn.type = 'button';
@@ -5193,6 +5380,12 @@ export function getWebviewContent(
 
       chip.appendChild(icon);
       chip.appendChild(label);
+      if (size) {
+        var sizeEl = document.createElement('span');
+        sizeEl.className = 'attachment-chip__size';
+        sizeEl.textContent = size;
+        chip.appendChild(sizeEl);
+      }
       chip.appendChild(removeBtn);
       return chip;
     }
@@ -5222,7 +5415,7 @@ export function getWebviewContent(
           if (attachmentStrip) attachmentStrip.appendChild(failChip);
           continue;
         }
-        var chip = makeAttachmentChip(f.name, 'uploading');
+        var chip = makeAttachmentChip(f.name, 'uploading', f);
         if (attachmentStrip) attachmentStrip.appendChild(chip);
         pendingAttachmentChips[batchKey].push({ name: f.name, chip: chip });
       }
@@ -5338,6 +5531,7 @@ export function getWebviewContent(
 
       else if (msg.type === 'token') {
         removeTyping();
+        settleSending('');
         if (!currentAssistantEl) {
           currentAssistantEl = addMessage('assistant', '');
           accumulatedContent = '';
@@ -5353,6 +5547,7 @@ export function getWebviewContent(
 
       else if (msg.type === 'done') {
         removeTyping();
+        settleSending('');
         if (currentAssistantEl && accumulatedContent) {
           // Content is already rendered; re-render once to ensure the final
           // token is flushed, then bind actions on any code blocks.
@@ -5394,6 +5589,7 @@ export function getWebviewContent(
 
       else if (msg.type === 'toolCallStart') {
         removeTyping();
+        settleSending('');
         createToolCallEl(
           msg.payload.toolUseId,
           msg.payload.name,
@@ -5429,6 +5625,7 @@ export function getWebviewContent(
           finalizeToolCallStack();
         }
         addErrorMessage(msg.payload);
+        settleSending('failed');
         setStreaming(false);
         if (activeQueuedClientMessageId) {
           setUserMessageState(activeQueuedClientMessageId, 'failed');
@@ -5746,13 +5943,13 @@ export function getWebviewContent(
         for (var a = 0; a < (ack.added || []).length; a++) {
           var addedEntry = ack.added[a] || {};
           if (!addedIdsByName[addedEntry.name]) addedIdsByName[addedEntry.name] = [];
-          addedIdsByName[addedEntry.name].push(addedEntry.id);
+          addedIdsByName[addedEntry.name].push(addedEntry);
         }
         var allChips = attachmentStrip ? attachmentStrip.querySelectorAll('.attachment-chip.uploading') : [];
         for (var c = 0; c < allChips.length; c++) {
           var chipEl = allChips[c];
           var nameEl = chipEl.querySelector('.attachment-chip__name');
-          var attachName = nameEl ? (nameEl.textContent || '') : '';
+          var attachName = chipEl.getAttribute('data-source-name') || (nameEl ? (nameEl.textContent || '') : '');
           if (skippedByName[attachName]) {
             chipEl.classList.remove('uploading');
             chipEl.classList.add('failed');
@@ -5760,7 +5957,15 @@ export function getWebviewContent(
           } else {
             chipEl.classList.remove('uploading');
             var idQueue = addedIdsByName[attachName];
-            var attachId = idQueue && idQueue.length > 0 ? idQueue.shift() : '';
+            var addedAck = idQueue && idQueue.length > 0 ? idQueue.shift() : null;
+            var attachId = addedAck ? addedAck.id : '';
+            if (addedAck && addedAck.truncatedAt && nameEl) {
+              var truncatedNote = document.createElement('span');
+              truncatedNote.className = 'attachment-chip__size';
+              truncatedNote.textContent = 'first ' + addedAck.truncatedAt.toLocaleString() + ' characters';
+              nameEl.parentNode.insertBefore(truncatedNote, nameEl.nextSibling);
+              chipEl.title = attachName + ': only the first ' + addedAck.truncatedAt.toLocaleString() + ' characters are sent';
+            }
             if (attachId && chipEl.getAttribute('data-remove-requested') === '1') {
               // The user dismissed this chip while it was still uploading:
               // honour it now that the host id exists.

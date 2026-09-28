@@ -503,6 +503,16 @@
         "icon": "$(cloud-download)"
       },
       {
+        "command": "agi-workforce.reviewPullRequest",
+        "title": "AGI Workforce: Review a Pull Request",
+        "icon": "$(git-pull-request)"
+      },
+      {
+        "command": "agi-workforce.securityReview",
+        "title": "AGI Workforce: Security Review of Pending Changes",
+        "icon": "$(shield)"
+      },
+      {
         "command": "agi-workforce.showApprovalHistory",
         "title": "AGI Workforce: Show Approval History",
         "icon": "$(checklist)"
@@ -627,6 +637,11 @@
       {
         "command": "agi-workforce.openArtifact",
         "title": "AGI Workforce: Open Artifact"
+      },
+      {
+        "command": "agi-workforce.copyArtifact",
+        "title": "AGI Workforce: Copy Artifact Content",
+        "icon": "$(copy)"
       },
       {
         "command": "agi-workforce.saveArtifactToWorkspace",
@@ -1042,6 +1057,10 @@
         },
         {
           "command": "agi-workforce.saveArtifactToWorkspace",
+          "when": "false"
+        },
+        {
+          "command": "agi-workforce.copyArtifact",
           "when": "false"
         },
         {

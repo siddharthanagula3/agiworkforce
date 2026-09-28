@@ -10,17 +10,15 @@ nothing is left.
 
 - Done when: A project can set a default model that new chats in the project use.
 - Wave: 3
-- Already works on: vscode
+- Already works on: web, desktop, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Projects store a default model (API field default_model_id) but no control sets it and chats in the project do not use it; only a workspace-wide default model is applied. | ui, handler |
-| desktop | partial | Projects store a default model (API field default_model_id) but no control sets it and chats in the project do not use it; only a workspace-wide default model is applied. | ui, handler |
 | mobile | partial | The project header shows the project's default model, but chats in the project do not use it. | handler |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/app/api/projects/[id]/route.ts:200-200`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2242-2244`, `apps/mobile/src/features/projects/components/ProjectHeader.tsx:126-126`
+Code: `apps/mobile/src/features/projects/components/ProjectHeader.tsx:126-126`
 
 ## S79.05: Speed-first profile.
 
@@ -173,11 +171,11 @@ Code: `apps/web/features/models/components/ModelCatalogueBrowser.tsx:305-309`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The routing reason is stored with each Auto message but never shown. | ui |
+| mobile | partial | 'Auto chose <model>' on assistant turns is in post-codex/chat-gates-s79.26-mobile-routing-receipt.patch (MessageBubble.tsx is Codex-held). | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | Routing metadata (model and reason) is validated and stored, but the panel shows only the model name, not why it was chosen. | ui |
 
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1093-1093`, `apps/extension/src/side_panel.ts:587-590`
+Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1124-1124`, `apps/extension/src/side_panel.ts:587-590`
 
 ## S79.27: Actual-model attribution.
 
@@ -193,14 +191,11 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1093-1093`, `apps/extension
 
 - Done when: Routing policies are versioned and each decision can be traced to the policy version that made it.
 - Wave: 3
+- Already works on: web, desktop, mobile, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The routing policy is versioned in an append-only release ledger (policy version 16), but routing decisions do not record which version served them. | handler |
-| desktop | partial | The routing policy is versioned in an append-only release ledger (policy version 16), but routing decisions do not record which version served them. | handler |
-| mobile | partial | The routing policy is versioned in an append-only release ledger (policy version 16), but routing decisions do not record which version served them. | handler |
 | cli | partial | The routing policy is versioned in an append-only release ledger (policy version 16), but routing decisions do not record which version served them. | handler |
 | chrome | partial | The routing policy is versioned in an append-only release ledger (policy version 16), but routing decisions do not record which version served them. | handler |
-| api | partial | The routing policy is versioned in an append-only release ledger (policy version 16), but routing decisions do not record which version served them. | handler |
 
-Code: `apps/web/features/chat/components/Composer/ComposerFooter.tsx:278-281`, `packages/ai/routing/src/promotion/release-ledger.ts:65-69`, `apps/mobile/src/features/model-picker/components/ModelRow.tsx:166-170`, `apps/mobile/services/streaming.ts:167-167`
+Code: `apps/cli/src/provider.rs:260-267`, `apps/cli/src/models/streaming.rs:234-234`, `packages/ai/routing/src/promotion/release-ledger.ts:65-69`, `apps/extension/src/side_panel.ts:6168-6173`

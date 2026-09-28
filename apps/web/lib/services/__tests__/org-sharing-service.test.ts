@@ -191,12 +191,12 @@ describe('listSharedProjects', () => {
 });
 
 describe('listReadableSharedProjectIds', () => {
-  it('excludes a project the member is explicitly denied', async () => {
+  it('excludes a project the member is denied, by their grant or the share default', async () => {
     const { db, issued } = makeDb(() => [{ project_id: PROJECT }]);
     const ids = await listReadableSharedProjectIds(db, ORG, 'member-1');
     expect(ids).toEqual([PROJECT]);
     expect(issued[0]!.sql).toMatch(/organization_project_access/);
-    expect(issued[0]!.sql).toMatch(/a\.access = 'none'/);
+    expect(issued[0]!.sql).toMatch(/s\.default_access\s*\)\s*<> 'none'/);
     expect(issued[0]!.params).toEqual([ORG, 'member-1']);
   });
 });
