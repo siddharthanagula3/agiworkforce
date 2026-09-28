@@ -184,6 +184,27 @@ export function cloudRunStepIcon(status: CloudRunStep['status']): string {
   return status === 'failed' ? 'error' : 'loading~spin';
 }
 
+export function cloudRunResultText(events: readonly AgentEventEnvelope[]): string {
+  let text = '';
+  for (const envelope of events) {
+    if (envelope.event.type === 'text-delta') text += envelope.event.delta;
+  }
+  return text.trim();
+}
+
+export function cloudRunOutcomeSummary(
+  run: Pick<CloudAgentRun, 'state' | 'workState'>,
+  steps: readonly CloudRunStep[],
+): string | undefined {
+  const state = run.workState ?? run.state;
+  if (!['partial', 'failed', 'cancelled', 'timed_out'].includes(state) || steps.length === 0) {
+    return undefined;
+  }
+  const done = steps.filter((step) => step.status === 'completed').length;
+  const remaining = steps.length - done;
+  return `${done} of ${steps.length} steps done, ${remaining} not finished`;
+}
+
 export function cloudRunLatestError(events: readonly AgentEventEnvelope[]): string | undefined {
   for (let index = events.length - 1; index >= 0; index -= 1) {
     const event = events[index]?.event;
