@@ -972,7 +972,7 @@ export function useConnectorsSettingsAdapter({
               onClick={() =>
                 setToolPermissionsConnector(toolPermissionsTargetFor(connectorId, detail))
               }
-              className="w-full rounded-lg border border-border px-3 py-2 text-left text-xs text-foreground transition-colors hover:bg-muted"
+              className="w-full rounded-lg border border-border px-3 py-2 text-start text-xs text-foreground transition-colors hover:bg-muted"
             >
               <span className="font-medium">{TOOL_PERMISSIONS_LABEL}</span>
               <span className="mt-0.5 block text-muted-foreground">{TOOL_PERMISSIONS_HINT}</span>

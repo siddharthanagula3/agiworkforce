@@ -247,6 +247,12 @@
     "provider_cost_reconciliation_days": {
       "createdAt": "fetched_at"
     },
+    "published_artifact_storage": {
+      "parent": {
+        "column": "published_artifact_id",
+        "table": "published_artifacts"
+      }
+    },
     "published_artifacts": {
       "version": "version"
     },

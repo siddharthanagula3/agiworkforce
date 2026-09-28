@@ -267,14 +267,11 @@ Code: `apps/mobile/src/features/chat/components/MessageContentRenderer.tsx:195-1
 
 - Done when: The user can browse a list of past research reports and reopen one.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
-| chrome | partial | Research runs appear in the cloud-run list, but their reports cannot be opened or read in Chrome. | ui |
-
-Code: `apps/extension/src/features/side-panel/cloudRunsPanel.ts:372-376`
 
 ## S35.26: Refresh or rerun research.
 

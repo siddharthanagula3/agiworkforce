@@ -67,7 +67,7 @@ function Row({ label, value }: { label: string; value: string }) {
         {label}
       </span>
       <span
-        className="text-sm font-medium tabular-nums break-all text-right"
+        className="text-sm font-medium tabular-nums break-all text-end"
         style={{ color: 'var(--text-1)' }}
       >
         {value}
@@ -106,7 +106,7 @@ function InvoiceTable({ invoices }: { invoices: EnterpriseInvoiceSummary[] }) {
   return (
     <div className="overflow-x-auto">
       <table
-        className="w-full text-left text-xs"
+        className="w-full text-start text-xs"
         style={{ borderCollapse: 'collapse' }}
         aria-labelledby="enterprise-invoices-heading"
       >
@@ -128,10 +128,10 @@ function InvoiceTable({ invoices }: { invoices: EnterpriseInvoiceSummary[] }) {
             <th scope="col" className="px-5 py-2 font-medium">
               Status
             </th>
-            <th scope="col" className="px-5 py-2 text-right font-medium">
+            <th scope="col" className="px-5 py-2 text-end font-medium">
               Amount
             </th>
-            <th scope="col" className="px-5 py-2 text-right font-medium">
+            <th scope="col" className="px-5 py-2 text-end font-medium">
               <span className="sr-only">Links</span>
             </th>
           </tr>
@@ -158,13 +158,10 @@ function InvoiceTable({ invoices }: { invoices: EnterpriseInvoiceSummary[] }) {
               <td className="px-5 py-2.5 capitalize" style={{ color: 'var(--text-2)' }}>
                 {invoice.status}
               </td>
-              <td
-                className="px-5 py-2.5 text-right tabular-nums"
-                style={{ color: 'var(--text-1)' }}
-              >
+              <td className="px-5 py-2.5 text-end tabular-nums" style={{ color: 'var(--text-1)' }}>
                 {formatAmount(invoice.amountDueCents, invoice.currency)}
               </td>
-              <td className="whitespace-nowrap px-5 py-2.5 text-right">
+              <td className="whitespace-nowrap px-5 py-2.5 text-end">
                 {invoice.hostedInvoiceUrl ? (
                   <a
                     href={invoice.hostedInvoiceUrl}
@@ -183,7 +180,7 @@ function InvoiceTable({ invoices }: { invoices: EnterpriseInvoiceSummary[] }) {
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label={`Download ${invoiceLabel(invoice)} as PDF, opens in a new tab`}
-                    className="ml-3 underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="ms-3 underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     style={{ color: 'var(--text-1)' }}
                   >
                     PDF

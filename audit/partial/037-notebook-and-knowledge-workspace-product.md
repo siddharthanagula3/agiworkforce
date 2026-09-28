@@ -62,14 +62,13 @@ Code: `apps/web/features/projects/components/AddSourcesModal.tsx:279-279`, `apps
 
 - Done when: Chats in the notebook answer from its sources.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | L4: the code settles it. Mobile's completions payload (InitialStreamRequest) has no conversation_id, and the server loads project sources only inside the `chatRequest.conversation_id ?` leg, so project knowledge never reaches a mobile turn; only the locally prepended instructions apply. partial, miss [handler]; remaining: 'Mobile turns send no conversation_id, so the server never retrieves project knowledge; only the project's instructions (prepended locally) apply.' |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | L4: settle-able from code. managedTurnPersistencePayload adds conversation_id only once the conversation is bound server-side (cloudSync.conversationId); the first turn of a new chat is sent without it and is answered without project sources. The project binding travels with the synced conversation entry (projectId in the stored entry, synced by the background SYNC_CONVERSATION to /api/chat/conversations), so from the next turn the server finds the row and loadProjectContext runs. partial, miss [handler]; remaining: 'Project sources ground a chrome chat only from the turn after the conversation is first synced and bound; the first turn of a new chat is sent without conversation_id.' |  |
 
 ## S37.16: Saved chat responses.
 
@@ -216,14 +215,13 @@ Code: `apps/web/features/projects/components/AddSourcesModal.tsx:279-279`, `apps
 
 - Done when: From the main chat the user can bring a notebook's context into the conversation.
 - Wave: 3
-- Already works on: web, desktop, cli, vscode
+- Already works on: web, desktop, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | The chat project selector applies only the project's instructions (local system message); its sources are not brought in on mobile. | handler |
-| chrome | partial | Selecting a project binds the chat to it and project instructions and sources apply from the next turn, but the first turn of a new chat is sent before the binding and is answered without project context. | handler |
 
-Code: `apps/mobile/src/features/chat/components/ProjectSelectorBar.tsx:38-38`, `apps/mobile/stores/chat/chatExecutionStore.ts:1348-1348`, `apps/extension/src/side_panel.ts:6421-6421`
+Code: `apps/mobile/src/features/chat/components/ProjectSelectorBar.tsx:38-38`, `apps/mobile/stores/chat/chatExecutionStore.ts:1348-1348`
 
 ## S37.38: Cross-application notebook synchronization.
 

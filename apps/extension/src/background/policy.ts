@@ -76,6 +76,7 @@ export const MESSAGE_POLICY: Record<string, MessageTypePolicy> = {
   GET_CLOUD_AUTH_TOKEN: { senderClass: 'extension-page-only', allowsCrossTab: true },
 
   SYNC_CONVERSATION: { senderClass: 'extension-page-only', allowsCrossTab: true },
+  ENSURE_CLOUD_CONVERSATION: { senderClass: 'extension-page-only', allowsCrossTab: true },
   DELETE_CLOUD_CONVERSATION: { senderClass: 'extension-page-only', allowsCrossTab: true },
 
   LIST_MEMORIES: { senderClass: 'extension-page-only', allowsCrossTab: true },
@@ -181,6 +182,8 @@ export const SITE_ALLOWLIST_STORAGE_KEY = 'agi_site_allowlist';
  * account switch, in transitionManagedCloudOwner, not on every new chat.
  */
 export const SELECTED_MODEL_STORAGE_KEY = 'agi_model';
+
+export const SELECTED_EFFORT_STORAGE_KEY = 'agi_reasoning_effort';
 
 export const MAX_CONTEXT_HTML_CHARS = 100_000;
 

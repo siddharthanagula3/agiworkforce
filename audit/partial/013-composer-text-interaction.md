@@ -186,16 +186,13 @@ Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:959-959`, `ap
 
 - Done when: Typing a mention in the composer can reference a folder, whose contents are made available to the message.
 - Wave: 3
-- Already works on: cli
+- Already works on: desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
-| desktop | partial | Let the composer mention a folder; in the desktop app a granted local folder can be browsed to attach files ("Attach from local folder"), but not referenced as a folder. | ui |
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:691-708`, `apps/desktop/electron/runtime/dispatcher.ts:704-720`
 
 ## S13.29: Browser-tab mention.
 

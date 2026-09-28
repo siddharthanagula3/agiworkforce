@@ -191,7 +191,7 @@ function SkeletonChatMessage({
       <div className={cn('max-w-[70%] space-y-2', isUser && 'items-end')}>
         <Skeleton
           animation={animation}
-          className={cn('rounded-2xl p-4', isUser ? 'rounded-br-sm' : 'rounded-bl-sm')}
+          className={cn('rounded-2xl p-4', isUser ? 'rounded-ee-sm' : 'rounded-es-sm')}
           style={{ width: '100%', minWidth: '200px', height: `${lines * 20 + 32}px` }}
         />
       </div>

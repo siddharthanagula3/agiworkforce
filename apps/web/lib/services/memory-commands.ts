@@ -134,10 +134,11 @@ export function createMemoryCommandPorts(
           where user_id = $1
             and ${activeMemoryPredicate()}
             and ${workspaceMemoryPredicate(3)}
+            and (project_id is null or project_id = $4::uuid)
             and content ilike $2 escape '\\'
           order by pinned desc, updated_at desc
           limit ${MAX_FORGET_MATCHES}`,
-        [scope.userId, likePattern(trimmed), scope.organizationId],
+        [scope.userId, likePattern(trimmed), scope.organizationId, scope.projectId ?? null],
       );
     },
 
@@ -156,8 +157,9 @@ export function createMemoryCommandPorts(
             and id = any($2::uuid[])
             and is_deleted = false
             and ${workspaceMemoryPredicate(3)}
+            and (project_id is null or project_id = $4::uuid)
         returning id::text as id, content`,
-        [scope.userId, ids, scope.organizationId],
+        [scope.userId, ids, scope.organizationId, scope.projectId ?? null],
       );
     },
   };

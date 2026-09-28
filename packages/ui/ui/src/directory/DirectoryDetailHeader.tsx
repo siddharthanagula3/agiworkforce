@@ -58,7 +58,7 @@ export function DirectoryBackLink({ onBack }: { onBack: () => void }) {
       type="button"
       onClick={onBack}
       className={cn(
-        'inline-flex min-h-8 items-center gap-1 rounded-md pr-2 text-sm text-muted-foreground transition-colors motion-reduce:transition-none hover:text-foreground',
+        'inline-flex min-h-8 items-center gap-1 rounded-md pe-2 text-sm text-muted-foreground transition-colors motion-reduce:transition-none hover:text-foreground',
         DIRECTORY_FOCUS_RING,
       )}
     >

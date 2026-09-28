@@ -121,7 +121,7 @@ function DialogContent({
         {!hideCloseButton && (
           <DialogPrimitive.Close
             aria-label={closeLabel}
-            className="absolute right-4 top-4 inline-flex h-8 w-8 items-center justify-center rounded-full border border-transparent text-muted-foreground transition-colors hover:border-border/70 hover:bg-accent hover:text-foreground focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background disabled:pointer-events-none"
+            className="absolute end-4 top-4 inline-flex h-8 w-8 items-center justify-center rounded-full border border-transparent text-muted-foreground transition-colors hover:border-border/70 hover:bg-accent hover:text-foreground focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background disabled:pointer-events-none"
           >
             <X className="h-4 w-4" aria-hidden="true" />
             <span className="sr-only">{closeLabel}</span>
@@ -136,7 +136,7 @@ DialogContent.displayName = DialogPrimitive.Content.displayName;
 function DialogHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn('flex flex-col space-y-1.5 pr-10 text-center sm:text-left', className)}
+      className={cn('flex flex-col space-y-1.5 pe-10 text-center sm:text-start', className)}
       {...props}
     />
   );

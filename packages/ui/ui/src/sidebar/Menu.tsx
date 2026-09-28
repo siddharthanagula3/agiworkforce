@@ -298,7 +298,7 @@ export function MenuItem({
         onSelect();
       }}
       className={cn(
-        'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm transition-colors',
+        'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-start text-sm transition-colors',
         'hover:bg-accent focus-visible:bg-accent focus-visible:outline-none',
         destructive ? 'text-danger-text' : 'text-popover-foreground',
         active && 'bg-accent',
@@ -308,7 +308,7 @@ export function MenuItem({
       {icon && <span className="flex h-4 w-4 shrink-0 items-center justify-center">{icon}</span>}
       <span className="min-w-0 flex-1 truncate">{children}</span>
       {trailing && (
-        <span className="ml-auto shrink-0 text-xs text-muted-foreground">{trailing}</span>
+        <span className="ms-auto shrink-0 text-xs text-muted-foreground">{trailing}</span>
       )}
     </button>
   );
@@ -437,7 +437,7 @@ export function MenuSubmenu({ label, icon, children }: MenuSubmenuProps) {
             openNow();
           }
         }}
-        className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm text-popover-foreground transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
+        className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-start text-sm text-popover-foreground transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
       >
         {icon && <span className="flex h-4 w-4 shrink-0 items-center justify-center">{icon}</span>}
         <span className="min-w-0 flex-1 truncate">{label}</span>

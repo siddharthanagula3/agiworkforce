@@ -368,6 +368,7 @@ async function loadSemanticPastChatExcerpts(
     userId: params.userId,
     organizationId: params.organizationId ?? null,
     semantic: true,
+    healthSpaceProjectId: scope.projectId,
   }).search({
     text: params.query,
     kinds: ['conversation'],

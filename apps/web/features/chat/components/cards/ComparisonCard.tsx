@@ -310,23 +310,23 @@ export function ComparisonCard({ content }: ComparisonCardProps) {
             <table className="w-full text-sm" role="table">
               <thead>
                 <tr className="bg-muted/50">
-                  <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">
+                  <th className="px-4 py-2.5 text-start font-medium text-muted-foreground">
                     Feature
                   </th>
-                  <th className="px-4 py-2.5 text-left font-medium">
+                  <th className="px-4 py-2.5 text-start font-medium">
                     {items[0].name}
                     {winner === items[0].name && (
                       <Trophy
-                        className="ml-1.5 inline h-3 w-3 text-warning-text"
+                        className="ms-1.5 inline h-3 w-3 text-warning-text"
                         aria-label="Winner"
                       />
                     )}
                   </th>
-                  <th className="px-4 py-2.5 text-left font-medium">
+                  <th className="px-4 py-2.5 text-start font-medium">
                     {items[1].name}
                     {winner === items[1].name && (
                       <Trophy
-                        className="ml-1.5 inline h-3 w-3 text-warning-text"
+                        className="ms-1.5 inline h-3 w-3 text-warning-text"
                         aria-label="Winner"
                       />
                     )}

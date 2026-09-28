@@ -444,6 +444,8 @@
     "videoModeAttachments_other": "La generazione video usa solo il tuo prompt. I file allegati non vengono inviati al modello video. Esci prima dalla modalità video se vuoi inviare questi file al modello di chat.",
     "viewSources_one": "Visualizza {{count}} fonte",
     "viewSources_other": "Visualizza {{count}} fonti",
+    "folderFilesLeftOut_one": "{{count}} file in {{folder}} non è stato allegato. Allegalo da una cartella locale.",
+    "folderFilesLeftOut_other": "{{count}} file in {{folder}} non sono stati allegati. Allegali da una cartella locale.",
     "savedMemoriesUsed_one": "Usato {{count}} ricordo salvato",
     "savedMemoriesUsed_other": "Usati {{count}} ricordi salvati",
     "moreSavedMemories_one": "E un altro",
@@ -469,7 +471,9 @@
     "expand": "Espandi codice",
     "close": "Chiudi codice espanso",
     "codeTitle": "Codice {{language}}",
-    "codeBlockLabel": "Blocco di codice {{language}}"
+    "codeBlockLabel": "Blocco di codice {{language}}",
+    "edit": "Modifica",
+    "editLabel": "Modifica questo codice accanto alla chat"
   },
   "streaming": {
     "reconnecting": "Riconnessione…",

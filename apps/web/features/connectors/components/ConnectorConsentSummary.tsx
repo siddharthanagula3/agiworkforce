@@ -33,7 +33,7 @@ export function ConnectorConsentSummary({ className }: { className?: string }) {
   return (
     <div
       className={
-        className ?? 'rounded-xl border border-warning-fill/20 bg-warning-fill/5 p-3.5 text-left'
+        className ?? 'rounded-xl border border-warning-fill/20 bg-warning-fill/5 p-3.5 text-start'
       }
     >
       <div className="mb-2 flex items-center gap-2">

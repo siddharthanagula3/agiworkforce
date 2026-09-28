@@ -22,17 +22,25 @@ import {
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import {
+  MICROUSD_PER_USD,
   canUseBillingPlanCapability,
+  chargeCreditsForMicrousd,
+  formatCredits,
   getImageAspectOptionsForModel,
   getModelMetadataById,
   getVideoAspectOptionsForModel,
   getVideoQualityOptionsForModel,
+  providerLabels,
+  videoGenerationCostMicrousd,
+  type ModelMetadata,
 } from '@agiworkforce/types';
 import {
   CHAT_OUTPUT_FORMATS,
   CHAT_OUTPUT_FORMAT_LABEL,
+  ManagedMediaVideoGenerationRequestSchema,
   supportsManagedMediaImageEdit,
 } from '@agiworkforce/cloud-contracts';
+import { supportedVideoDurationSecs } from '@/src/features/video/services/videogen';
 import { Text } from '@/components/ui/text';
 import { Switch } from '@/components/ui/switch';
 import { useChatStore } from '@/stores/chatStore';
@@ -171,6 +179,24 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     () => getVideoQualityOptionsForModel(videoModelId ?? undefined, effectiveVideoAspectRatio),
     [videoModelId, effectiveVideoAspectRatio],
   );
+  const videoEstimate = useMemo(() => {
+    const model = videoModelId ? getModelMetadataById(videoModelId) : undefined;
+    if (!videoModelId || !model) return null;
+    const durationSecs =
+      supportedVideoDurationSecs(
+        videoModelId,
+        effectiveVideoAspectRatio,
+        effectiveVideoResolution,
+      ) ?? ManagedMediaVideoGenerationRequestSchema.shape.duration_secs.parse(undefined);
+    const microusd = videoGenerationCostMicrousd({
+      model,
+      resolution: effectiveVideoResolution,
+      aspectRatio: effectiveVideoAspectRatio,
+      durationSecs,
+      generateAudio: model.videoGeneration?.supportsAudio ?? false,
+    });
+    return microusd === null ? null : { credits: chargeCreditsForMicrousd(microusd), durationSecs };
+  }, [videoModelId, effectiveVideoAspectRatio, effectiveVideoResolution]);
   useEffect(() => {
     clearInvalidMediaModelSelections();
   }, [selectedMediaModel]);
@@ -855,6 +881,23 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                       ))}
                     </>
                   ) : null}
+
+                  {mediaMode === 'video' && videoEstimate ? (
+                    <Text
+                      testID="video-cost-estimate"
+                      accessibilityRole="text"
+                      style={{
+                        fontSize: 12,
+                        color: themeColors.textMuted,
+                        paddingHorizontal: 4,
+                        marginTop: 8,
+                      }}
+                    >
+                      {`About ${formatCredits(videoEstimate.credits, {
+                        maximumFractionDigits: videoEstimate.credits < 10 ? 1 : 0,
+                      })} for a ${videoEstimate.durationSecs}-second clip. The final cost settles when it is delivered, and a failed video costs nothing.`}
+                    </Text>
+                  ) : null}
                 </View>
               ) : null}
 
@@ -1063,6 +1106,26 @@ function MediaModeRow({
   );
 }
 
+function unitCredits(usd: number): string {
+  const credits = chargeCreditsForMicrousd(Math.ceil(usd * MICROUSD_PER_USD));
+  return formatCredits(credits, { maximumFractionDigits: credits < 10 ? 1 : 0 });
+}
+
+function mediaCreditPrice(meta: ModelMetadata): string | null {
+  const byResolution = Object.values(meta.videoPerSecondCostByResolution ?? {}).filter(
+    (rate): rate is number => typeof rate === 'number' && Number.isFinite(rate),
+  );
+  const perSecond = byResolution.length > 0 ? Math.min(...byResolution) : meta.videoPerSecondCost;
+  if (perSecond !== undefined) {
+    const from = new Set(byResolution).size > 1 ? 'From ' : '';
+    return `${from}${unitCredits(perSecond)} per second`;
+  }
+  if (meta.imagePerImageCost !== undefined) {
+    return `${unitCredits(meta.imagePerImageCost)} per image`;
+  }
+  return null;
+}
+
 function MediaModelRow({
   modelId,
   selected,
@@ -1079,14 +1142,9 @@ function MediaModelRow({
   activeColor: string;
 }) {
   const meta = getModelMetadataById(modelId);
-  const perSecond = meta?.videoPerSecondCost;
-  const perImage = meta?.imagePerImageCost;
-  const price =
-    perSecond !== undefined
-      ? `$${perSecond}/sec`
-      : perImage !== undefined
-        ? `$${perImage}/image`
-        : (meta?.provider ?? '');
+  const price = meta
+    ? (mediaCreditPrice(meta) ?? providerLabels[meta.provider] ?? meta.provider)
+    : '';
 
   return (
     <Pressable

@@ -130,18 +130,6 @@ Code: `apps/cli/src/voice.rs:661-661`, `apps/cli/src/voice.rs:320-320`, `apps/cl
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 
-## S48.15: Voice picker.
-
-- Done when: The user picks the assistant voice, and the chosen voice is the one the conversation speaks with.
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | The voice picker shown before live voice (and the Settings voice list) only changes the on-device TTS voice; live voice always starts with voice null, so the server default is used. Pass the chosen voice to the live session. | handler |
-
-Code: `apps/mobile/src/features/voice/components/VoicePickerSheet.tsx:207-207`, `apps/mobile/src/features/voice/hooks/useLiveVoiceSession.ts:130-130`
-
 ## S48.16: Voice preview.
 
 - Done when: The user can hear a sample of a voice before choosing it.
@@ -151,7 +139,7 @@ Code: `apps/mobile/src/features/voice/components/VoicePickerSheet.tsx:207-207`, 
 | --- | --- | --- | --- |
 | web | partial | owner records the samples once from the repository root with OPENAI_API_KEY=<server key> node scripts/generate-voice-samples.mjs and commits apps/web/public/voice-samples; until then the committed manifest is empty and Play sample stays hidden (a7cb4c407, D-2026-09-28-04: marin via the speech endpoint, the 12 Live-only voices via one scripted Live session each, static files so a play costs nothing) | ui |
 | desktop | partial | Same as web: no live-voice sample. | ui |
-| mobile | partial | Settings previews on-device voices, which the companion uses, but live voice ignores the chosen voice (starts with voice null). | handler |
+| mobile | partial | The live voice is now chosen on the phone (3f03dd5c19), but live voices have no preview: the Settings preview plays on-device voices only, and no sample clip or preview endpoint exists for the live voices (the web has none either). Claude previews each voice ('You'll hear a preview when you click each option', support.claude.com/en/articles/11101966). Needs one sample per live voice from the server. | handler |
 
 Code: `apps/web/features/chat/components/Voice/VoiceSettingsModal.tsx:277-277`, `apps/web/features/chat/components/Voice/VoiceSampleButton.tsx:14-14`, `apps/web/features/chat/lib/voice-samples.ts:5-5`, `scripts/generate-voice-samples.mjs:95-95`
 

@@ -20,6 +20,7 @@
  */
 
 import {
+  Activity,
   BookOpen,
   CalendarClock,
   FolderOpen,
@@ -42,6 +43,7 @@ const CHAT_SECTION_PREFIXES = [
   '/chat/artifacts',
   '/chat/library',
   '/chat/finance',
+  '/chat/health',
   '/chat/schedules',
   '/chat/customize',
   '/chat/study',
@@ -81,6 +83,7 @@ export interface AppNavDestination {
    */
   hideable?: boolean;
   feature?: WorkspaceFeature;
+  requiresHealthSpace?: boolean;
 }
 
 /**
@@ -136,6 +139,16 @@ export const APP_NAV_DESTINATIONS: readonly AppNavDestination[] = [
     hideable: true,
   },
   {
+    id: 'health',
+    label: 'Health',
+    labelKey: 'navHealth',
+    icon: Activity,
+    href: '/chat/health',
+    isActive: (pathname) => isUnder(pathname, '/chat/health'),
+    hideable: true,
+    requiresHealthSpace: true,
+  },
+  {
     id: 'study',
     label: 'Study',
     labelKey: 'navStudy',
@@ -187,6 +200,7 @@ export function buildAppNavItems(options: {
    */
   hiddenIds?: readonly string[];
   disabledFeatures?: readonly WorkspaceFeature[];
+  healthSpaceAvailable?: boolean;
   translate?: (key: string, fallback: string) => string;
 }): SidebarNavItem[] {
   const {
@@ -195,9 +209,11 @@ export function buildAppNavItems(options: {
     isAdmin = false,
     hiddenIds = [],
     disabledFeatures = [],
+    healthSpaceAvailable = false,
     translate,
   } = options;
   return APP_NAV_DESTINATIONS.filter((destination) => !destination.adminOnly || isAdmin)
+    .filter((destination) => !destination.requiresHealthSpace || healthSpaceAvailable)
     .filter(
       (destination) => !destination.feature || !disabledFeatures.includes(destination.feature),
     )

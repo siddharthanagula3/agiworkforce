@@ -35,7 +35,6 @@
     "apps/mobile/src/features/chat/components/FileExportButton.tsx",
     "apps/mobile/src/features/chat/components/GeneratedFileCard.tsx",
     "apps/mobile/src/features/chat/components/GeneratedImage.tsx",
-    "apps/mobile/src/features/chat/components/GeneratedVideo.tsx",
     "apps/mobile/src/features/chat/components/ImageFullScreen.tsx",
     "apps/mobile/src/features/chat/components/ImageGenProgress.tsx",
     "apps/mobile/src/features/chat/components/InlineArtifactCard.tsx",

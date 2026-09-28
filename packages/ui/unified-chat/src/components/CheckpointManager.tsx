@@ -329,7 +329,7 @@ export function CheckpointManager({
           aria-live="polite"
           className="flex items-center justify-center py-8 text-muted-foreground"
         >
-          <Clock className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+          <Clock className="me-2 h-4 w-4 animate-spin" aria-hidden="true" />
           Loading checkpoints...
         </div>
       ) : checkpoints.length === 0 ? (
@@ -348,7 +348,7 @@ export function CheckpointManager({
             >
               {/* Timeline connector */}
               {index < checkpoints.length - 1 && (
-                <div className="absolute left-6 top-12 h-full w-0.5 bg-border" />
+                <div className="absolute start-6 top-12 h-full w-0.5 bg-border" />
               )}
 
               <div className="flex items-start gap-3">

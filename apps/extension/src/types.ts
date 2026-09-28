@@ -94,6 +94,7 @@ export type NativeMessageType =
   | 'GET_QUICK_MODE'
   | 'SET_QUICK_MODE'
   | 'SYNC_CONVERSATION'
+  | 'ENSURE_CLOUD_CONVERSATION'
   | 'DELETE_CLOUD_CONVERSATION'
   | 'START_DOWNLOAD'
   | 'LIST_DOWNLOADS'
@@ -903,6 +904,12 @@ export interface SyncConversationMessage extends BaseMessage {
   streaming?: boolean;
 }
 
+export interface EnsureCloudConversationMessage extends BaseMessage {
+  type: 'ENSURE_CLOUD_CONVERSATION';
+  owner: ManagedCloudOwner;
+  conversationId: string;
+}
+
 export interface DeleteCloudConversationMessage extends BaseMessage {
   type: 'DELETE_CLOUD_CONVERSATION';
   owner: ManagedCloudOwner;
@@ -1108,6 +1115,7 @@ export type ExtensionMessage =
   | GetQuickModeMessage
   | SetQuickModeMessage
   | SyncConversationMessage
+  | EnsureCloudConversationMessage
   | DeleteCloudConversationMessage
   | RunAutofillMessage
   | StartComputerUseMessage

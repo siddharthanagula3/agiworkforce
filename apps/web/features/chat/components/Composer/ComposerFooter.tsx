@@ -137,7 +137,7 @@ const PICKER_ROW_ATTR = 'data-picker-row';
 const PICKER_ITEM_SELECTOR = `[${PICKER_ROW_ATTR}]`;
 const PICKER_FOCUSABLE_SELECTOR = 'button:not([disabled]), input, a[href], [tabindex="0"]';
 const PICKER_ROW_CLASS =
-  'flex h-12 w-full shrink-0 items-center gap-2.5 rounded-md px-3 text-left transition-colors focus-visible:outline-none';
+  'flex h-12 w-full shrink-0 items-center gap-2.5 rounded-md px-3 text-start transition-colors focus-visible:outline-none';
 const PICKER_ROW_NAME_CLASS = 'block truncate text-sm leading-5';
 const PICKER_ROW_GUIDANCE_CLASS = 'block truncate text-xs leading-4 text-muted-foreground';
 const PICKER_ROW_WRAPPED_GUIDANCE_CLASS = 'block text-xs leading-4 text-muted-foreground';
@@ -665,7 +665,7 @@ function ModelRow({
       ) : (
         textBlock
       )}
-      <span className="ml-auto flex shrink-0 items-center gap-2">
+      <span className="ms-auto flex shrink-0 items-center gap-2">
         {row?.priceBand && <PriceBand band={row.priceBand} />}
         {releaseStageLabel && (
           <span className={`${PICKER_BADGE_CLASS} bg-muted/60 text-muted-foreground`}>
@@ -695,7 +695,7 @@ function ModelRow({
             className={`${PICKER_BADGE_CLASS} shrink-0 whitespace-nowrap bg-primary/10 normal-case text-primary`}
             aria-label={planLockLabel ?? 'Requires upgrade'}
           >
-            <Lock className="mr-0.5 inline h-4 w-4 align-[-0.1em]" aria-hidden="true" />
+            <Lock className="me-0.5 inline h-4 w-4 align-[-0.1em]" aria-hidden="true" />
             {planLockLabel ?? 'Upgrade'}
           </span>
         )}
@@ -725,7 +725,7 @@ interface ComposerFooterProps {
    * row. Used by the empty-state composer to keep everything on one bottom row.
    */
   inline?: boolean;
-  /** Extra classes applied to the outer element (e.g. flex order / ml-auto). */
+  /** Extra classes applied to the outer element (e.g. flex order / ms-auto). */
   className?: string;
   /** Images staged in the composer but not yet sent, for the compatibility check. */
   pendingImageCount?: number;

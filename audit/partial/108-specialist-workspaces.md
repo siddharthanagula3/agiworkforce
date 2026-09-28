@@ -75,12 +75,12 @@ Code: `apps/web/lib/services/finance-overview-service.ts:64-64`, `apps/web/featu
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Epic FHIR/Cerner connectors exist only if the deployment supplies their endpoint in CONNECTOR_OAUTH_PROVIDERS_JSON (no built-in endpoint). There is no health-record view; records reach the model only as connector tool calls. | ui, flag-off |
-| desktop | partial | Epic FHIR/Cerner connectors exist only if the deployment supplies their endpoint in CONNECTOR_OAUTH_PROVIDERS_JSON (no built-in endpoint). There is no health-record view; records reach the model only as connector tool calls. | ui, flag-off |
+| web | partial | billing/no-yearly 77957dc6aa, 6d5066b158 (merged at f5c3be8a6b; migration renumbered to 0337 after integration took 0336): the Health space is built as one personal project per account and stays off until the owner sets up HealthEx (CONNECTOR_OAUTH_PROVIDERS_JSON healthex, client id, vendor agreement, lawyer check). Its chats, files, HealthEx tools and memories stay out of every other chat (tool catalog, memory scope, retrieval, database triggers on move, delete and share), and Health turns, titles, follow-ups and memory extraction use only no-training models. Still missing: a view that browses imported records (they are read by asking in a Health chat) and the owner switch-on. Waits on founder research entry 1 (ChatGPT's July 2026 relaunch lets @Health reach any chat; built as the lead ruled, kept apart). | ui, flag-off |
+| desktop | partial | billing/no-yearly 77957dc6aa, 6d5066b158 (merged at f5c3be8a6b; migration renumbered to 0337 after integration took 0336): the Health space is built as one personal project per account and stays off until the owner sets up HealthEx (CONNECTOR_OAUTH_PROVIDERS_JSON healthex, client id, vendor agreement, lawyer check). Its chats, files, HealthEx tools and memories stay out of every other chat (tool catalog, memory scope, retrieval, database triggers on move, delete and share), and Health turns, titles, follow-ups and memory extraction use only no-training models. Still missing: a view that browses imported records (they are read by asking in a Health chat) and the owner switch-on. Waits on founder research entry 1 (ChatGPT's July 2026 relaunch lets @Health reach any chat; built as the lead ruled, kept apart). | ui, flag-off |
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/connectors/data/connectors.ts:1145-1154`, `apps/web/lib/connectors/catalog.ts:244-245`, `apps/web/lib/connectors/oauth-setup.ts:166-181`
+Code: `apps/web/db/neon/0337_health_space.sql:11-11`, `apps/web/db/neon/0337_health_space.sql:88-88`, `apps/web/db/neon/0337_health_space.sql:113-113`, `apps/web/db/neon/0337_health_space.sql:140-140`
 
 ## S108.17: Legal research workspace.
 

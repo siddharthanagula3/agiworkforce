@@ -832,6 +832,7 @@ async function dispatchChatCompletions(
               planTier: processed.subscriptionTier,
               organizationId: processed.organizationId,
               isToolDenied: turnConnectorPermissions.isConnectorToolDenied,
+              ...(processed.healthSpaceProjectId ? { healthSpace: true } : {}),
             }),
           )
         : { tools: [], dropped: [], limit: null };

@@ -328,11 +328,17 @@
       "label": "Artifact",
       "schema": "packages/contracts/types/src/artifacts.ts",
       "symbol": "SharedArtifact",
-      "tables": ["web_artifacts", "web_artifact_versions", "published_artifacts"],
+      "tables": [
+        "web_artifacts",
+        "web_artifact_versions",
+        "published_artifacts",
+        "published_artifact_storage"
+      ],
       "writeFunctions": [],
       "mutators": [
         "apps/web/lib/services/published-artifact-service.ts",
-        "apps/web/app/api/chat/sync/route.ts"
+        "apps/web/app/api/chat/sync/route.ts",
+        "apps/web/lib/services/artifact-runtime-service.ts"
       ],
       "projections": ["packages/contracts/cloud-contracts/src/artifact-index.ts"],
       "providerCopies": [],
@@ -1499,6 +1505,11 @@
       "table": "external_resource_references",
       "exempt": ["createdBy", "version"],
       "why": "recorded by the server for the account that reached the resource, so its creator is always its owner, and no client edits a reference under an If-Match precondition: a repeat sighting refreshes it in place"
+    },
+    {
+      "table": "published_artifact_storage",
+      "exempt": ["owner", "createdBy", "version"],
+      "why": "the value a published app saved under one key, written by the app through the runtime bridge and replaced whole: owner_user_id names the viewer it belongs to (null for the app's shared value), updated_by names the last writer, and no client edits it under an If-Match precondition"
     },
     {
       "table": "slack_account_links",

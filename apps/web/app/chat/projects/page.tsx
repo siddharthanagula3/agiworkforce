@@ -475,7 +475,7 @@ export default function ProjectsPage() {
                           setActiveProject(p.id);
                           router.push(projectPath(p));
                         }}
-                        onShare={handleShareProject}
+                        onShare={project.space === 'health' ? undefined : handleShareProject}
                         onEdit={(p) => setEditProject(p)}
                         onArchive={(p) => void handleArchiveProjectServer(p, false)}
                         onUnarchive={(p) => void handleUnarchiveProjectServer(p)}

@@ -84,7 +84,7 @@ export default function ModelRolloutPanel() {
 
           <div className={TABLE_WRAP_CLASS}>
             <table className="w-full min-w-[720px] text-sm">
-              <thead className="bg-card text-left">
+              <thead className="bg-card text-start">
                 <tr>
                   <th className="p-3 font-medium">Slot</th>
                   <th className="p-3 font-medium">Promoted</th>
@@ -123,7 +123,7 @@ export default function ModelRolloutPanel() {
 
           <div className={TABLE_WRAP_CLASS}>
             <table className="w-full min-w-[900px] text-sm">
-              <thead className="bg-card text-left">
+              <thead className="bg-card text-start">
                 <tr>
                   <th className="p-3 font-medium">Model</th>
                   <th className="p-3 font-medium">Lifecycle stage</th>

@@ -50,6 +50,8 @@ export interface RetrievalSearchScope {
   semantic: boolean;
   env?: Record<string, string | undefined>;
   residency?: SearchResidencyState;
+  healthSpaceProjectId?: string | null;
+  includeHealthSpaces?: boolean;
 }
 
 const PRIVATE_INDEX_MODES = searchModesByCorpus('private_index');
@@ -177,12 +179,18 @@ async function queryEmbedding(
 function candidateSql(options: {
   lexicalParam: number | null;
   semanticParam: number | null;
+  healthSpaceParam: number | null;
 }): string {
   const scope = `c.user_id = $1
          and c.organization_id is not distinct from $2::uuid
          and c.source_kind = any($3::text[])
-         and ($4::uuid[] is null or c.source_id = any($4::uuid[]))`;
-  const ctes: string[] = [];
+         and ($4::uuid[] is null or c.source_id = any($4::uuid[]))${
+           options.healthSpaceParam !== null
+             ? '\n         and c.document_id not in (select id from health_space_documents)'
+             : ''
+         }`;
+  const ctes: string[] =
+    options.healthSpaceParam !== null ? [healthSpaceDocuments(options.healthSpaceParam)] : [];
   const joins: string[] = [];
   const present: string[] = [];
   if (options.lexicalParam !== null) {
@@ -243,6 +251,31 @@ function candidateSql(options: {
        and coalesce(asset.temporary_chat, false) = false`;
 }
 
+function healthSpaceDocuments(param: number): string {
+  return `health_space_documents as (
+      select document.id
+        from retrieval_documents document
+        join user_projects space
+          on space.user_id = document.user_id
+         and space.space_kind = 'health'
+         and space.id is distinct from $${param}::uuid
+        left join project_knowledge_files knowledge
+          on knowledge.id = document.project_knowledge_file_id
+        left join web_artifacts artifact on artifact.id = document.artifact_id
+        left join research_reports report on report.id = document.research_report_id
+        left join media_assets asset on asset.id = document.media_asset_id
+        left join web_conversations origin
+          on origin.id = coalesce(
+            document.conversation_id,
+            artifact.conversation_id,
+            report.conversation_id,
+            asset.conversation_id
+          )
+       where document.user_id = $1
+         and space.id::text in (knowledge.project_id::text, origin.project_id)
+    )`;
+}
+
 /**
  * Hybrid retrieval over the Postgres index: full text and vector candidates
  * fused by rank and re-scored, inside the caller's row-level-security scope.
@@ -285,7 +318,10 @@ export function createPostgresSearchProvider(scope: RetrievalSearchScope): Searc
         ];
         const lexicalParam = tsQuery ? params.push(tsQuery) : null;
         const semanticParam = embedding.vector ? params.push(embedding.vector) : null;
-        const sql = candidateSql({ lexicalParam, semanticParam });
+        const healthSpaceParam = scope.includeHealthSpaces
+          ? null
+          : params.push(scope.healthSpaceProjectId ?? null);
+        const sql = candidateSql({ lexicalParam, semanticParam, healthSpaceParam });
         rows = await scope.db.query<CandidateRow>(sql, params);
         if (semanticParam !== null) {
           recordVectorQuery({

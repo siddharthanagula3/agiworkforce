@@ -19,7 +19,7 @@ function reservedRightGutterRem(from: HTMLElement, root: HTMLElement): number {
   let total = 0;
   let node: HTMLElement | null = from;
   while (node) {
-    total += spacing(node.className, ['pr', 'px', 'p']);
+    total += spacing(node.className, ['pe', 'px', 'p']);
     if (node === root) break;
     node = node.parentElement;
   }
@@ -39,7 +39,7 @@ describe('UpgradePlanDialog header, close control has its own space', () => {
     expect(close.parentElement).toBe(dialog);
     expect(close.className).toContain('absolute');
 
-    const closeFootprintRem = spacing(close.className, ['right']) + spacing(close.className, ['w']);
+    const closeFootprintRem = spacing(close.className, ['end']) + spacing(close.className, ['w']);
     expect(closeFootprintRem).toBeGreaterThan(0);
 
     const headerRow = lede.closest('.flex.items-start.justify-between') as HTMLElement | null;
