@@ -9,6 +9,14 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('server-only', () => ({}));
+vi.mock('@/lib/services/active-workspace-service', () => ({
+  resolveActiveOrganizationId: async () => null,
+}));
+vi.mock('@/lib/services/plugin-submission-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/plugin-submission-service')>()),
+  listInstalledCommunityPlugins: async () => [],
+  listCommunitySkillFiles: async () => [],
+}));
 vi.mock('../memory-cache', () => ({
   findPluginDirectoryRecord: (id: string) => mocks.findRecord(id),
 }));
@@ -382,7 +390,7 @@ describe('an uploaded or authored plugin is served from its stored files', () =>
     const fileCall = db.query.mock.calls.find((call) =>
       String(call[0]).includes('plugin_marketplace_entry_files'),
     );
-    expect(fileCall![1]).toEqual([[ENTRY_ID], 'user-9']);
+    expect((fileCall![1] as unknown[]).slice(0, 2)).toEqual([[ENTRY_ID], 'user-9']);
   });
 
   it('resolves an uploaded skill by name through the chat lookup', async () => {

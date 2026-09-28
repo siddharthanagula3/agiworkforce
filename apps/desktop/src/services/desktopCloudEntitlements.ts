@@ -4,7 +4,6 @@ import {
   getModelsForTierAndSurface,
   getModelMetadataById,
   getPlanMaxSandboxes,
-  getTierPolicy,
 } from '@agiworkforce/types';
 
 import type { PlanTier } from '../lib/cloudAccountTypes';
@@ -58,7 +57,7 @@ export function canUseDesktopCloudResearch(
   plan: PlanTier | null | undefined,
   selectedModelId: string | null | undefined,
 ): boolean {
-  if (getTierPolicy(plan).allowDeepResearch !== true || !selectedModelId) return false;
+  if (!canUseBillingPlanCapability(plan, 'deep_research') || !selectedModelId) return false;
   if (getAutoRoutingProfiles().some((profile) => profile.id === selectedModelId)) return true;
   const metadata = getModelMetadataById(selectedModelId);
   return metadata?.capabilities.research === true && metadata.capabilities.search === true;

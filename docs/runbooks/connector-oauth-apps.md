@@ -303,6 +303,17 @@ expire. Anthropic's GitHub integration is a GitHub App.
    PagerDuty is still under review and the descriptor section will name it.
 4. Copy the client ID and secret into the `pagerduty` Vercel variables.
 
+## 8. Docusign
+
+1. In Docusign Apps and Keys (https://admin.docusign.com/apps-and-keys), add an
+   app, copy its integration key, and add a secret, following Docusign's
+   [MCP server guide](https://developers.docusign.com/platform/mcp-server/).
+2. Redirect URL: `https://agiworkforce.com/api/connectors/oauth/callback`.
+3. Scopes: `signature`, plus `adm_store_unified_repo_read` and `aow_manage` only
+   if the accounts have Navigator and Maestro; Docusign refuses the whole grant
+   otherwise.
+4. Copy the integration key and secret into the `docusign` Vercel variables.
+
 ## Vendors you can skip for now
 
 29 more servers in the directory need a pre-registered app. None is wired into
@@ -361,8 +372,8 @@ pair. The fields, and the exact endpoints and scopes for each vendor, are in
 - First-party descriptors: `gmail`, `google-drive`, `google-calendar`,
   `google-contacts`, `github-mcp` and `microsoft-365`. `notion`, `linear` and `airtable` are
   optional, because those servers register themselves.
-- Pre-registered directory connectors: `asana`, `box`, `dropbox`, `figma`,
-  `hubspot`, `intercom`, `pagerduty`, `slack`, `square` and `vercel`.
+- Pre-registered directory connectors: `asana`, `box`, `docusign`, `dropbox`,
+  `figma`, `hubspot`, `intercom`, `pagerduty`, `slack`, `square` and `vercel`.
 - Microsoft 365 also needs the tenant provisioned and admin consent granted.
 
 ## Vendors that advertise registration and refuse it

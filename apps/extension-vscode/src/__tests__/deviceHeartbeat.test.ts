@@ -43,7 +43,7 @@ describe('VS Code device registry heartbeat', () => {
       osVersion: '6.8.0',
       architecture: 'x64',
       appVersion: '0.9.4',
-      capabilities: { remoteControl: false },
+      capabilities: { remoteControl: true },
     });
   });
 

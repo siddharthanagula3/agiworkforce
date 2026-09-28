@@ -151,16 +151,13 @@ Code: `apps/extension/src/features/side-panel/cloudRunsPanel.ts:372-376`
 
 - Done when: The report or run view groups findings under each research question/plan step.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The server streams per-question coverage (x_research_gaps) but mobile never reads it. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/research-loop.ts:412-412`
 
 ## S35.15: Research steering.
 
@@ -183,12 +180,12 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/research-loop.ts:412-412`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | partials/privacy 38a12b33a: a paused run shows as paused on mobile and Resume continues it. The mobile Pause control is in post-codex/p-privacy-s35.17-mobile-pause.patch because its handler lives in held files (app/(app)/chat/[id].tsx, MessageBubble.tsx); apply after Codex finishes | ui |
+| mobile | partial | partials/slack 5aafcc7ab0: the run card offers Pause while a run searches whenever it is given a handler. The handler (the cloud agent run pause route) and its wiring through the chat screen, MessageBubble and MessageList are post-codex/p-slack-s35.17-mobile-pause-held.patch, split from p-privacy's patch and checked with git apply --check on the Codex working copy; apply after Codex lands. | handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/chat/utils/researchRunState.ts:236-236`, `apps/mobile/src/features/chat/components/research/ResearchRunCard.tsx:265-265`, `apps/mobile/src/features/chat/components/research/ResearchRunCard.tsx:322-322`
+Code: `apps/mobile/src/features/chat/components/research/ResearchRunCard.tsx:170-170`, `apps/mobile/src/features/chat/components/research/ResearchRunCard.tsx:214-214`, `apps/mobile/src/features/chat/components/research/ResearchRunCard.tsx:358-358`
 
 ## S35.18: Cancel research.
 
@@ -232,12 +229,12 @@ Code: `apps/mobile/src/features/chat/utils/researchRunState.ts:236-236`, `apps/m
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile lists the report's sections, but they cannot be tapped to jump to that section. | ui |
+| mobile | partial | partials/slack f1e1d8113e: the renderer reports each section heading's position under the outline's own id. Left: the report screen's outline rows scroll to their section once post-codex/p-slack-mobile-research-citations-outline.patch lands (ReportsScreen.tsx held by Codex). | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/research/ReportsScreen.tsx:192-197`, `apps/mobile/src/features/research/reportSections.ts:16-16`
+Code: `apps/mobile/src/features/chat/components/MessageContentRenderer.tsx:306-306`, `apps/mobile/src/features/research/reportSections.ts:18-18`
 
 ## S35.22: Linked citations.
 
@@ -247,12 +244,12 @@ Code: `apps/mobile/src/features/research/ReportsScreen.tsx:192-197`, `apps/mobil
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile shows a numbered source list under the report, but [n] markers in the report text are not links. | ui |
+| mobile | partial | partials/slack f1e1d8113e: the renderer turns [n] into a tappable marker when it is given the sources. Left: the [n] markers in a research report link to its sources, in the chat card and on the report screen once post-codex/p-slack-mobile-research-citations-outline.patch passes them from MessageBubble and ReportsScreen (both held by Codex; git apply --check passes on the Codex working copy, and the patch typechecks on this branch). | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/chat/components/research/ResearchSourcesAppendix.tsx:30-34`
+Code: `apps/mobile/src/features/chat/components/MessageContentRenderer.tsx:195-195`, `apps/mobile/src/features/chat/components/MessageContentRenderer.tsx:203-203`, `apps/mobile/src/features/chat/components/CitationChip.tsx:30-30`
 
 ## S35.23: Tables and charts.
 

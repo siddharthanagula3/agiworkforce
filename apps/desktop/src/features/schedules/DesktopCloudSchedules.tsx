@@ -516,7 +516,7 @@ function AuthenticatedDesktopCloudSchedules({
   const loadRecent = async () => {
     setRecent({ status: 'loading', runs: [], error: null });
     try {
-      const page = await api.listRecentRuns({ limit: 20, offset: 0 });
+      const page = await api.listRecentRuns({ limit: 20 });
       setRecent({ status: 'success', runs: page.runs, error: null });
     } catch (error) {
       setRecent({

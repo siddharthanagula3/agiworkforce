@@ -5202,6 +5202,9 @@ async function handleChatMessage(
         fileAttachments: message.fileAttachments,
         extendedThinking: message.extendedThinking,
         ...(message.workMode === 'agiwork' ? { workMode: 'agiwork' as const } : {}),
+        ...(message.workMode === 'agiwork' && message.agiWorkPlan
+          ? { agiWorkPlan: message.agiWorkPlan }
+          : {}),
         ...(message.webSearch === false ? { webSearch: false } : {}),
         currentModelKey: message.currentModelKey,
         previousTaskType: message.previousTaskType,

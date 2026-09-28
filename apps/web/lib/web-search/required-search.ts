@@ -208,7 +208,15 @@ export function substituteGatedWebSearchTool(
   tools: readonly unknown[] | undefined,
   options: { approvalRequired: boolean; genericBackendConfigured: boolean },
 ): unknown[] | undefined {
-  if (!options.approvalRequired || !tools) return tools as unknown[] | undefined;
+  if (!options.approvalRequired) return tools as unknown[] | undefined;
+  return replaceNativeWebSearchTool(tools, options.genericBackendConfigured);
+}
+
+export function replaceNativeWebSearchTool(
+  tools: readonly unknown[] | undefined,
+  genericBackendConfigured: boolean,
+): unknown[] | undefined {
+  if (!tools) return tools;
 
   const withoutNative = tools.filter((tool) => nativeSearchToolName(tool) === '');
   if (withoutNative.length === tools.length) return tools as unknown[];
@@ -216,7 +224,7 @@ export function substituteGatedWebSearchTool(
   const alreadyGeneric = withoutNative.some(
     (tool) => classifySearchTool(tool) === 'generic-function',
   );
-  if (alreadyGeneric || !options.genericBackendConfigured) return withoutNative;
+  if (alreadyGeneric || !genericBackendConfigured) return withoutNative;
   return [...withoutNative, webSearchToolDef()];
 }
 

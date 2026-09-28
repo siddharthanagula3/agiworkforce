@@ -86,6 +86,8 @@ export {
   Collapsible,
   CollapsibleTrigger,
   CollapsibleContent,
+  PortalContainerProvider,
+  usePortalContainer,
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,

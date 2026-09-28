@@ -1,4 +1,8 @@
 import * as Crypto from 'expo-crypto';
+import {
+  getVideoDurationOptionsForModel,
+  getVideoQualityOptionsForModel,
+} from '@agiworkforce/types';
 
 import { api } from '@/services/api';
 import { resolveGeneratedVideoUri } from './videoUri';
@@ -38,6 +42,15 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+export function withSupportedVideoDuration(request: VideoGenRequest): VideoGenRequest {
+  if (request.duration_secs !== undefined || !request.model) return request;
+  const quality = getVideoQualityOptionsForModel(request.model, request.aspect_ratio).find(
+    (option) => option.id === request.resolution,
+  );
+  const [durationSecs] = getVideoDurationOptionsForModel(request.model, quality);
+  return durationSecs === undefined ? request : { ...request, duration_secs: durationSecs };
+}
+
 /**
  * Create a video generation task.
  *
@@ -62,9 +75,11 @@ export async function startVideoGeneration(
     operationId: options.operationId ?? Crypto.randomUUID(),
   });
 
-  return api.post<VideoGenStartResponse>('/api/media/video/generate', request, {
-    headers: { 'Idempotency-Key': idempotencyKey },
-  });
+  return api.post<VideoGenStartResponse>(
+    '/api/media/video/generate',
+    withSupportedVideoDuration(request),
+    { headers: { 'Idempotency-Key': idempotencyKey } },
+  );
 }
 
 export async function getVideoStatus(taskId: string): Promise<VideoGenStatusResponse> {
