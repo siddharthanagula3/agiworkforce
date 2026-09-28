@@ -294,33 +294,40 @@ describe('Web conversation data settings', () => {
     expect(useChatStore.getState().conversations).toEqual([]);
   });
 
-  it('downloads the reviewed export variant and reports a partial result', async () => {
+  it('asks for the export archive and says the download link is emailed', async () => {
     const fetchMock = vi.spyOn(global, 'fetch').mockImplementation(async (input) =>
-      String(input) === '/api/user/data?download=true'
-        ? new Response('{"export_metadata":{"completeness":{"status":"partial"}}}', {
-            headers: { 'X-Export-Status': 'partial', 'Content-Type': 'application/json' },
-          })
+      String(input) === '/api/user/export'
+        ? new Response(
+            JSON.stringify({
+              archive: {
+                id: 'export-1',
+                status: 'preparing',
+                requestedAt: '2026-09-28T10:00:00.000Z',
+                readyAt: null,
+                expiresAt: null,
+                volumes: [],
+              },
+            }),
+            { headers: { 'Content-Type': 'application/json' } },
+          )
         : new Response('{}', { headers: { 'Content-Type': 'application/json' } }),
     );
-    const createObjectURL = vi.fn(() => 'blob:https://agiworkforce.com/export');
-    const revokeObjectURL = vi.fn();
-    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createObjectURL });
-    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: revokeObjectURL });
-    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
 
     render(<PrivacySection />);
-    expect(screen.getByText(/download a copy of your account data as JSON/i)).toBeInTheDocument();
-    expect(screen.queryByText(/all your conversations as JSON/i)).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/get a copy of your account data and the files you stored/i),
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Export data' }));
 
     await waitFor(() =>
-      expect(fetchMock).toHaveBeenCalledWith('/api/user/data?download=true', { method: 'GET' }),
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/user/export',
+        expect.objectContaining({ method: 'POST' }),
+      ),
     );
     expect(
-      await screen.findByText(/downloaded, but some account data was unavailable/i),
+      await screen.findByText(/email you a download link that works for 24 hours/i),
     ).toBeInTheDocument();
-    expect(createObjectURL).toHaveBeenCalledOnce();
-    expect(revokeObjectURL).toHaveBeenCalledOnce();
   });
 
   it('scopes delete-all by the current-workspace total, not the pages the sidebar holds', async () => {
