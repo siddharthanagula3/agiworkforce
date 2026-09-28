@@ -1,0 +1,19 @@
+import 'server-only';
+
+import { NextRequest, NextResponse } from 'next/server';
+
+import { withErrorHandler } from '@/lib/error-handler';
+import { withRateLimit } from '@/lib/rate-limit';
+import { getUserScopedDb } from '@/lib/server/rls-db';
+import { loadSlackOverview } from '@/lib/slack/slack-settings';
+
+async function handleOverview(request: NextRequest): Promise<NextResponse> {
+  const { db, userId, organizationId } = await getUserScopedDb(request, {
+    resolveOrganization: true,
+  });
+  const rateLimitResponse = await withRateLimit(request, 'slack-settings', `user:${userId}`);
+  if (rateLimitResponse) return rateLimitResponse;
+  return NextResponse.json(await loadSlackOverview(db, userId, organizationId));
+}
+
+export const GET = withErrorHandler(handleOverview);
