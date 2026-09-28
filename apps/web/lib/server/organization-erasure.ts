@@ -89,6 +89,8 @@ export const ORGANIZATION_SCOPED_TABLES: ReadonlyArray<{ table: string; column: 
   { table: 'feature_flags', column: 'organization_id' },
   { table: 'event_trigger_events', column: 'organization_id' },
   { table: 'event_triggers', column: 'organization_id' },
+  { table: 'slack_assistant_runs', column: 'organization_id' },
+  { table: 'slack_account_links', column: 'organization_id' },
   { table: 'background_jobs', column: 'organization_id' },
   { table: 'organization_mcp_servers', column: 'organization_id' },
   { table: 'organization_plugin_group_settings', column: 'organization_id' },

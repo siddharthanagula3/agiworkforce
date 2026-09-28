@@ -42,6 +42,7 @@ import {
   estimateMicrousdOf,
 } from '@/lib/services/managed-usage-request-service';
 import { settleFreeTrialRequest } from '@/lib/services/free-trial-service';
+import type { GenerationAttempt } from '@/lib/services/generation-attempt';
 import {
   hostedCodeExecutionEvidence,
   priceServerToolUsage,
@@ -158,6 +159,10 @@ async function settleStreamBilling(input: {
     ...(input.cancelled === undefined ? {} : { cancelled: input.cancelled }),
     totalTokens,
   });
+  const attempt: GenerationAttempt =
+    input.cancelled === true
+      ? { outcome: 'cancelled' }
+      : { outcome: input.outcome ?? 'completed', errorClass: input.errorClass };
   const hostedCodeExecution = hostedCodeExecutionEvidence(provider, {
     codeExecutionRequests: usage.codeExecutionRequests,
     codeExecutionContainerIds: usage.codeExecutionContainerIds,
@@ -183,7 +188,8 @@ async function settleStreamBilling(input: {
     };
     await settleFreeTrialRequest({
       reservation: processed.freeTrial,
-      outcome: input.outcome ?? 'completed',
+      outcome: attempt.outcome,
+      attempt,
       provider,
       model,
       usage: freeTokenUsage,
@@ -260,10 +266,7 @@ async function settleStreamBilling(input: {
     await finalizeManagedUsageRequest({
       ...processed.managedUsage,
       outcome: billedOutcome,
-      attempt:
-        input.cancelled === true
-          ? { outcome: 'cancelled' }
-          : { outcome: input.outcome ?? 'completed', errorClass: input.errorClass },
+      attempt,
       actualCostMicrousd: billedCostMicrousd,
       providerCostMicrousd,
       usage: {
