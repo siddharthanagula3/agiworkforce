@@ -58,7 +58,7 @@ nothing is left.
 
 - Done when: Generated apps get an allowance of model calls through the product.
 - Wave: 4
-- Build on: web, desktop, mobile, cli, vscode, chrome
+- Build on: desktop, mobile, cli, vscode, chrome
 
 ## S33.21: Logs and error inspection.
 
