@@ -931,6 +931,20 @@ enum Command {
     Logout,
     /// Show authentication status for all configured providers.
     AuthStatus,
+    /// Browse your Library: generated images and videos, uploaded and generated files.
+    Library {
+        #[command(subcommand)]
+        action: Option<LibrarySubcommand>,
+        /// Only this kind: image, video or file (comma-separated for several).
+        #[arg(long)]
+        kind: Option<String>,
+        /// Only items whose name or prompt matches this text.
+        #[arg(long)]
+        search: Option<String>,
+        /// How many items to list.
+        #[arg(long, default_value_t = 24)]
+        limit: u32,
+    },
     /// List the conversation links you shared, or revoke one.
     Shares {
         #[command(subcommand)]
@@ -1106,6 +1120,23 @@ enum HistorySubcommand {
         yes: bool,
         #[arg(long)]
         json: bool,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum LibrarySubcommand {
+    /// Print a text file from your Library (text, Markdown, code or a table).
+    Show {
+        /// Library item id, as agi library lists it.
+        id: String,
+    },
+    /// Save the original file from your Library.
+    Download {
+        /// Library item id, as agi library lists it.
+        id: String,
+        /// Directory to save into (defaults to the current directory).
+        #[arg(long)]
+        out: Option<std::path::PathBuf>,
     },
 }
 
@@ -5202,6 +5233,50 @@ async fn run_cli(cli: Cli) -> Result<()> {
             }
 
             // --- Auth Status ---
+            Command::Library {
+                action,
+                kind,
+                search,
+                limit,
+            } => {
+                let client = cloud::CloudClient::connect(account_privacy_mode())
+                    .map_err(|error| anyhow::anyhow!("{error}"))?;
+                match action {
+                    None => {
+                        let page = cloud::library::list(
+                            &client,
+                            kind.as_deref(),
+                            search.as_deref(),
+                            *limit,
+                        )
+                        .await
+                        .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        println!("{}", cloud::library::render(&page));
+                    }
+                    Some(LibrarySubcommand::Show { id }) => {
+                        let preview = cloud::library::text(&client, id)
+                            .await
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        println!("{}", terminal_text::sanitize_terminal_text(&preview.text));
+                        if preview.truncated {
+                            println!(
+                                "\n(The preview stops here; agi library download {id} saves the whole file.)"
+                            );
+                        }
+                    }
+                    Some(LibrarySubcommand::Download { id, out }) => {
+                        let directory = match out {
+                            Some(directory) => directory.clone(),
+                            None => std::env::current_dir()?,
+                        };
+                        let saved = cloud::library::download(&client, id, &directory)
+                            .await
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        println!("Saved {}", saved.display());
+                    }
+                }
+                Ok(())
+            }
             Command::Shares { action } => {
                 let client = cloud::CloudClient::connect(account_privacy_mode())
                     .map_err(|error| anyhow::anyhow!("{error}"))?;

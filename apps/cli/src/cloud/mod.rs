@@ -16,6 +16,7 @@ pub mod handshake;
 pub mod image;
 pub mod image_provenance;
 pub mod knowledge;
+pub mod library;
 pub mod memory;
 pub mod personalization;
 pub mod projects;

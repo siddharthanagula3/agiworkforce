@@ -385,6 +385,24 @@ impl CloudClient {
         write_body(response, target).await
     }
 
+    pub async fn download_into(
+        &self,
+        path: &str,
+        directory: &std::path::Path,
+        fallback_name: &str,
+    ) -> Result<std::path::PathBuf, CloudError> {
+        let response = self.download_response(path).await?;
+        let name = response
+            .headers()
+            .get(reqwest::header::CONTENT_DISPOSITION)
+            .and_then(|value| value.to_str().ok())
+            .and_then(disposition_file_name)
+            .unwrap_or_else(|| fallback_name.to_string());
+        let target = directory.join(name);
+        write_body(response, &target).await?;
+        Ok(target)
+    }
+
     async fn download_response(&self, path: &str) -> Result<reqwest::Response, CloudError> {
         let response = self
             .request(reqwest::Method::GET, path)
@@ -407,6 +425,18 @@ impl CloudClient {
         }
         Ok(response)
     }
+}
+
+fn disposition_file_name(disposition: &str) -> Option<String> {
+    let raw = disposition.split(';').map(str::trim).find_map(|part| {
+        part.strip_prefix("filename=")
+            .map(|value| value.trim_matches('"').to_string())
+    })?;
+    std::path::Path::new(&raw)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty() && *name != "." && *name != "..")
+        .map(str::to_string)
 }
 
 async fn write_body(
