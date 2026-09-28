@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@agiworkforce/ui';
 
 import { ApiKeysManager } from '@features/settings/components/Settings/ApiKeys';
 import type { DeveloperRateLimit } from '../types';
+import { ProjectsPanel } from './ProjectsPanel';
 import { RateLimitsPanel } from './RateLimitsPanel';
 import { RequestPlayground } from './RequestPlayground';
 
@@ -56,6 +57,7 @@ export function DeveloperConsolePage({
       </header>
       <div className="mt-6 flex flex-col gap-6">
         <ApiKeysManager />
+        <ProjectsPanel />
         <RequestPlayground />
         <RateLimitsPanel rateLimits={rateLimits} />
         <Card className="border-border bg-card">
