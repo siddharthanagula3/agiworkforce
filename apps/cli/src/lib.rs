@@ -980,7 +980,8 @@ enum Command {
         #[command(subcommand)]
         action: MemorySubcommand,
     },
-    /// List, show or open your cloud Code sessions by the id every client uses.
+    /// Start, list, show or open your cloud Code sessions by the id every
+    /// client uses.
     Code {
         #[command(subcommand)]
         action: CodeSubcommand,
@@ -1051,6 +1052,22 @@ enum Command {
 
 #[derive(Subcommand, Debug)]
 enum CodeSubcommand {
+    /// Hand a task to a new cloud Code session for this GitHub checkout, after
+    /// a review of what moves to the cloud and what stays on this machine.
+    Start {
+        /// What the cloud session should do.
+        task: String,
+        /// Model for the cloud session. Defaults to `default.cloud_model`, then
+        /// to a coding model your plan includes.
+        #[arg(long)]
+        model: Option<String>,
+        /// Start without the review prompt.
+        #[arg(long, short = 'y')]
+        yes: bool,
+        /// Print the result as JSON.
+        #[arg(long)]
+        json: bool,
+    },
     /// List cloud Code sessions.
     List {
         /// Which sessions to list.
@@ -2056,12 +2073,22 @@ async fn print_hosted_history(limit: usize) {
     }
 }
 
-async fn handle_code_command(action: &CodeSubcommand, output: Option<OutputFormat>) -> Result<()> {
+async fn handle_code_command(
+    action: &CodeSubcommand,
+    config: &config::CliConfig,
+    output: Option<OutputFormat>,
+) -> Result<()> {
     use cloud::code_sessions;
 
     let client = cloud::CloudClient::connect(account_privacy_mode())
         .map_err(|error| anyhow::anyhow!("{error}"))?;
     match action {
+        CodeSubcommand::Start {
+            task,
+            model,
+            yes,
+            json,
+        } => handle_code_start(&client, config, task, model.as_deref(), *yes, *json, output).await,
         CodeSubcommand::List { status, json } => {
             let sessions = code_sessions::list(&client, status)
                 .await
@@ -2100,6 +2127,177 @@ async fn handle_code_command(action: &CodeSubcommand, output: Option<OutputForma
             Ok(())
         }
     }
+}
+
+async fn handle_code_start(
+    client: &cloud::CloudClient,
+    config: &config::CliConfig,
+    task: &str,
+    model: Option<&str>,
+    yes: bool,
+    json: bool,
+    output: Option<OutputFormat>,
+) -> Result<()> {
+    use cloud::code_handoff;
+    use cloud::code_sessions;
+
+    let task = code_handoff::validate_task(task).map_err(anyhow::Error::msg)?;
+    let checkout = code_handoff::inspect().map_err(anyhow::Error::msg)?;
+    let model = match model
+        .or(config.default.cloud_model.as_deref())
+        .map(str::trim)
+        .filter(|model| !model.is_empty())
+    {
+        Some(model) => model_catalog::canonical_model_id(model),
+        None => model_catalog::resolve_auto_model(
+            "auto",
+            agiworkforce_model_registry::RoutingTaskType::Coding,
+            crate::tier_cache::managed_auto_routing_tier().await,
+            agiworkforce_model_registry::TrustMode::ManagedCloud,
+        )
+        .map(|route| route.model_key)
+        .map_err(|error| {
+            anyhow::anyhow!(
+                "No coding model your plan includes could be chosen ({error}). Name one with --model."
+            )
+        })?,
+    };
+    let access = code_handoff::repository_access(client, &checkout.full_name)
+        .await
+        .map_err(|error| anyhow::anyhow!("{error}"))?;
+    let review = code_handoff::review(&checkout, &access, &model, client.base());
+    eprintln!("{}\n", code_handoff::render_review(&review, &task));
+    match resolve_destructive_decision(yes, interactive::can_prompt()) {
+        DestructiveDecision::Proceed => {}
+        DestructiveDecision::Refuse => anyhow::bail!(
+            "Nothing was started: this run cannot ask for confirmation. Re-run with --yes to start \
+             the cloud session."
+        ),
+        DestructiveDecision::Prompt => {
+            if !dialoguer::Confirm::new()
+                .with_prompt("Start the cloud session?")
+                .default(false)
+                .interact()
+                .unwrap_or(false)
+            {
+                println!("Nothing was started.");
+                return Ok(());
+            }
+        }
+    }
+
+    let body = code_handoff::create_body(
+        &format!("agi-cli-{}", uuid::Uuid::new_v4().simple()),
+        &code_handoff::title_for(&task),
+        &checkout,
+        &access,
+    );
+    eprintln!(
+        "Setting up the cloud session: cloning {} at {}.",
+        checkout.full_name, checkout.branch
+    );
+    let session = code_handoff::create(client, &body)
+        .await
+        .map_err(|error| anyhow::anyhow!("{error}"))?;
+    let url = code_sessions::page_url(client.base(), &session.id);
+    let session_text = code_handoff::render_session(&session, &checkout.remote, &url);
+    if session.state == "failed" {
+        anyhow::bail!(
+            "The cloud session could not be set up: {}\n{session_text}",
+            session
+                .last_error
+                .as_deref()
+                .unwrap_or("it did not say why")
+        );
+    }
+    eprintln!(
+        "Working on it in the cloud with {}. Follow along at {url}\nCtrl-C stops the turn; the session stays open.",
+        model_catalog::display_name(&model)
+    );
+    let outcome = tokio::select! {
+        outcome = code_handoff::start_turn(client, &session.id, &task, &model) => Some(outcome),
+        _ = code_interrupt() => None,
+    };
+    let Some(outcome) = outcome else {
+        let stopped = match code_handoff::cancel_turn(client, &session.id).await {
+            Ok(()) => "Stopped the cloud turn. The session stays open.".to_string(),
+            Err(error) => format!(
+                "The cloud turn could not be stopped from here ({error}). Stop it on the web."
+            ),
+        };
+        println!("{stopped}\n\n{session_text}");
+        return Ok(());
+    };
+    match outcome {
+        Ok(turn) => {
+            let text = [code_handoff::render_outcome(&turn, &url), session_text]
+                .into_iter()
+                .filter(|section| !section.is_empty())
+                .collect::<Vec<_>>()
+                .join("\n\n");
+            render_structured(
+                serde_json::json!({
+                    "ok": true,
+                    "sessionId": session.id,
+                    "url": url,
+                    "repository": checkout.full_name,
+                    "branch": checkout.branch,
+                    "workingBranch": session.working_branch,
+                    "model": model,
+                    "review": review,
+                    "turn": turn,
+                }),
+                text,
+                json,
+                output,
+            )
+        }
+        Err(cloud::CloudError::Api {
+            status: 409,
+            message,
+        }) => render_structured(
+            serde_json::json!({
+                "ok": true,
+                "sessionId": session.id,
+                "url": url,
+                "workingBranch": session.working_branch,
+                "model": model,
+                "review": review,
+                "turn": null,
+                "note": message,
+            }),
+            format!("{message}\n\n{session_text}"),
+            json,
+            output,
+        ),
+        Err(error) => {
+            if structured_output(json, output) == StructuredOutput::Text {
+                println!("{session_text}");
+            } else {
+                print_structured(
+                    &serde_json::json!({
+                        "ok": false,
+                        "sessionId": session.id,
+                        "url": url,
+                        "error": error.to_string(),
+                    }),
+                    structured_output(json, output),
+                )?;
+            }
+            Err(anyhow::anyhow!("The cloud turn did not run: {error}"))
+        }
+    }
+}
+
+async fn code_interrupt() {
+    if tokio::signal::ctrl_c().await.is_err() {
+        std::future::pending::<()>().await;
+    }
+    output::print_info("Stopping the cloud turn. Press Ctrl-C again to quit without waiting.");
+    tokio::spawn(async {
+        let _ = tokio::signal::ctrl_c().await;
+        std::process::exit(130);
+    });
 }
 
 async fn handle_devices_command(json: bool, output: Option<OutputFormat>) -> Result<()> {
@@ -5279,7 +5477,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
             Command::Artifacts { action } => handle_artifacts_command(action, cli.output).await,
             Command::Memory { action } => handle_memory_command(action).await,
             Command::Devices { json } => handle_devices_command(*json, cli.output).await,
-            Command::Code { action } => handle_code_command(action, cli.output).await,
+            Command::Code { action } => handle_code_command(action, &app_config, cli.output).await,
             Command::Image {
                 prompt,
                 out,
