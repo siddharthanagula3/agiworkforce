@@ -25,6 +25,8 @@ export interface ImageMaskDialogProps {
   onDone: (result: ImageMaskResult) => void;
 }
 
+const PREPARE_FAILED = 'The image could not be prepared for a masked edit. Try another image.';
+
 async function uprightSource(file: File, width: number, height: number): Promise<File | null> {
   const raw = await createImageBitmap(file, { imageOrientation: 'none' });
   const matches = raw.width === width && raw.height === height;
@@ -37,7 +39,7 @@ async function uprightSource(file: File, width: number, height: number): Promise
   canvas.getContext('2d')?.drawImage(upright, 0, 0);
   upright.close();
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
-  if (!blob) throw new Error('The image could not be prepared for a masked edit.');
+  if (!blob) throw new Error(PREPARE_FAILED);
   return new File([blob], `${file.name.replace(/\.[^.]+$/, '')}.png`, { type: 'image/png' });
 }
 
@@ -68,12 +70,8 @@ export function ImageMaskDialog({ file, onClose, onDone }: ImageMaskDialogProps)
       const { width, height } = bitmap;
       bitmap.close();
       onDone({ mask, source: await uprightSource(file, width, height) });
-    } catch (cause) {
-      setError(
-        cause instanceof Error
-          ? cause.message
-          : 'The image could not be prepared for a masked edit.',
-      );
+    } catch {
+      setError(PREPARE_FAILED);
     } finally {
       setPreparing(false);
     }
