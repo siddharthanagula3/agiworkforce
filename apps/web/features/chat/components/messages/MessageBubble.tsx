@@ -166,6 +166,7 @@ import { hasVisibleContent } from '../../lib/continue-generation';
 import type { GeneratedDocument } from '../../types/message-metadata';
 import { ThinkingBlock } from '../ThinkingBlock';
 import { mergeAdjacentThinkingSegments } from '../../lib/mergeThinkingSegments';
+import { pptxToSlidesMarkdown, xlsxFirstSheetToCsv } from '../../lib/office-file-preview';
 import { formatBytes } from '@shared/utils/format';
 import { ComparisonResponse } from './ComparisonResponse';
 import { interactiveCardRendersBeforeProse, type InteractiveCard } from '@agiworkforce/types';
@@ -1263,6 +1264,38 @@ const MessageBubbleComponent = function MessageBubble({
     };
   }, [generatedFiles, generatedTextContent]);
 
+  const [officePreviews, setOfficePreviews] = useState<Record<string, string | { failed: true }>>(
+    {},
+  );
+  useEffect(() => {
+    const pending = generatedFiles.filter(
+      (f) =>
+        (f.kind === 'pptx' || f.kind === 'xlsx') &&
+        f.byteCount <= MAX_INLINE_GENERATED_TEXT_BYTES &&
+        officePreviews[f.id] === undefined,
+    );
+    if (pending.length === 0) return;
+    let cancelled = false;
+    for (const file of pending) {
+      fetch(file.uri, { credentials: 'same-origin' })
+        .then((res) =>
+          res.ok ? res.arrayBuffer() : Promise.reject(new Error(`HTTP ${res.status}`)),
+        )
+        .then((buffer) =>
+          file.kind === 'pptx' ? pptxToSlidesMarkdown(buffer) : xlsxFirstSheetToCsv(buffer),
+        )
+        .then((preview) => {
+          if (!cancelled) setOfficePreviews((prev) => ({ ...prev, [file.id]: preview }));
+        })
+        .catch(() => {
+          if (!cancelled) setOfficePreviews((prev) => ({ ...prev, [file.id]: { failed: true } }));
+        });
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [generatedFiles, officePreviews]);
+
   const trustBoundary = useMemo(
     () => messageTrustBoundary(message.metadata, message.model, activeConversationModel),
     [message.metadata, message.model, activeConversationModel],
@@ -1332,6 +1365,27 @@ const MessageBubbleComponent = function MessageBubble({
           content: '',
           generatedFile: toGeneratedFile(f),
         });
+      } else if (f.kind === 'docx') {
+        out.push({
+          id: generatedFileArtifactId(f.id),
+          type: 'document',
+          language: 'docx',
+          title: f.fileName,
+          content: f.uri,
+          generatedFile: toGeneratedFile(f),
+        });
+      } else if (f.kind === 'pptx' || f.kind === 'xlsx') {
+        const preview = officePreviews[f.id];
+        if (typeof preview === 'string' && preview) {
+          out.push({
+            id: generatedFileArtifactId(f.id),
+            type: f.kind === 'pptx' ? 'presentation' : 'spreadsheet',
+            language: f.kind === 'pptx' ? 'markdown' : 'csv',
+            title: f.fileName,
+            content: preview,
+            generatedFile: toGeneratedFile(f),
+          });
+        }
       } else if (isGeneratedTextArtifact(f)) {
         const source = generatedTextContent[f.id];
         if (typeof source === 'string') {
@@ -1379,6 +1433,7 @@ const MessageBubbleComponent = function MessageBubble({
     message.metadata,
     generatedFiles,
     generatedTextContent,
+    officePreviews,
     toGeneratedFile,
   ]);
 
