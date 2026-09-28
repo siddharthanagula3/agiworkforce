@@ -14,6 +14,7 @@ export interface AuthRouteContext {
   redirectTo: string;
   desktopSurface: boolean;
   authRetry: boolean;
+  requestedRedirect?: boolean;
 }
 
 function query(entries: readonly (readonly [string, string])[]): string {
@@ -28,20 +29,23 @@ function retryEntries(context: AuthRouteContext): readonly (readonly [string, st
   return context.authRetry ? [[AUTH_RETRY_PARAM, AUTH_RETRY_ON]] : [];
 }
 
+function carriedRedirectEntries(context: AuthRouteContext): readonly (readonly [string, string])[] {
+  return context.desktopSurface || context.requestedRedirect
+    ? [[REDIRECT_PARAM, context.redirectTo]]
+    : [];
+}
+
+function switchUrl(path: string, context: AuthRouteContext): string {
+  const entries = [...surfaceEntries(context), ...carriedRedirectEntries(context)];
+  return entries.length === 0 ? path : `${path}?${query(entries)}`;
+}
+
 export function buildLoginUrl(context: AuthRouteContext): string {
-  if (!context.desktopSurface) return AUTH_LOGIN_PATH;
-  return `${AUTH_LOGIN_PATH}?${query([
-    ...surfaceEntries(context),
-    [REDIRECT_PARAM, context.redirectTo],
-  ])}`;
+  return switchUrl(AUTH_LOGIN_PATH, context);
 }
 
 export function buildSignupUrl(context: AuthRouteContext): string {
-  if (!context.desktopSurface) return AUTH_SIGNUP_PATH;
-  return `${AUTH_SIGNUP_PATH}?${query([
-    ...surfaceEntries(context),
-    [REDIRECT_PARAM, context.redirectTo],
-  ])}`;
+  return switchUrl(AUTH_SIGNUP_PATH, context);
 }
 
 export function buildLoginCompleteUrl(context: AuthRouteContext): string {
@@ -68,10 +72,12 @@ export function readAuthRouteContext(
   params: { redirectTo?: string; next?: string; surface?: string; authRetry?: string },
   redirectTo: string,
 ): AuthRouteContext {
+  const requested = params.redirectTo ?? params.next;
   return {
     redirectTo,
     desktopSurface: params.surface === AUTH_DESKTOP_SURFACE,
     authRetry: params.authRetry === AUTH_RETRY_ON,
+    requestedRedirect: typeof requested === 'string' && requested.trim().length > 0,
   };
 }
 export const ACCOUNT_RECOVERY_PATH = '/recover';

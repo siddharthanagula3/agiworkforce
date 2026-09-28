@@ -27,6 +27,7 @@ import {
   STATUTORY_RECORD_RETENTION_DAYS,
 } from '@/lib/billing/financial-record-retention';
 import { PolicyVersionsLink } from '@shared/components/legal/PolicyVersionsLink';
+import { ERASED_TABLE_COUNT } from '@/lib/legal/published-counts';
 
 const STATUTORY_RECORD_RETENTION_YEARS = Math.round(STATUTORY_RECORD_RETENTION_DAYS / 365.25);
 const METERING_EVIDENCE_RETENTION_YEARS = Math.round(METERING_EVIDENCE_RETENTION_DAYS / 365.25);
@@ -1109,9 +1110,10 @@ export default function PrivacyPage() {
                         What deliberately survives deleting your account
                       </h3>
                       <Prose size="sm">
-                        &ldquo;Delete my account&rdquo; erases an enumerated list of 106 user-scoped
-                        tables and your stored files. A short list of things is kept on purpose, and
-                        you should know what before you decide, not after.
+                        &ldquo;Delete my account&rdquo; erases an enumerated list of{' '}
+                        {ERASED_TABLE_COUNT} user-scoped tables and your stored files. A short list
+                        of things is kept on purpose, and you should know what before you decide,
+                        not after.
                       </Prose>
                     </Stack>
                   </div>
