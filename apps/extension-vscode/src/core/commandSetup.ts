@@ -120,9 +120,12 @@ import {
   openArtifactsSurface,
   openCapabilitySurface,
   manageHooks,
+  manageSavedApprovals,
   manageMcpServers,
   managePlugins,
   manageSkills,
+  MCP_SERVER_DETAILS_SCHEME,
+  McpServerDetailsProvider,
   openCloudTasksSurface,
   openConnectorsSurface,
   openContextSurface,
@@ -576,6 +579,14 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
   } = deps;
 
   const cliCapabilities = new CliCapabilityAdapter(localRuntimes);
+  const mcpServerDetails = new McpServerDetailsProvider();
+  context.subscriptions.push(
+    vscode.workspace.registerTextDocumentContentProvider(
+      MCP_SERVER_DETAILS_SCHEME,
+      mcpServerDetails,
+    ),
+    mcpServerDetails,
+  );
   const acceptedHandoffs = new Set<string>();
 
   type CommandHandler = Parameters<typeof vscode.commands.registerCommand>[1];
@@ -2513,8 +2524,11 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     register('agi-workforce.personalize', () => managePersonalization(context.secrets)),
     register('agi-workforce.showSkills', () => manageSkills(cliCapabilities)),
     register('agi-workforce.showPlugins', () => managePlugins(cliCapabilities)),
-    register('agi-workforce.showMcpServers', () => manageMcpServers(cliCapabilities)),
+    register('agi-workforce.showMcpServers', () =>
+      manageMcpServers(cliCapabilities, mcpServerDetails),
+    ),
     register('agi-workforce.showHooks', () => manageHooks(cliCapabilities)),
+    register('agi-workforce.showSavedApprovals', () => manageSavedApprovals(cliCapabilities)),
     register('agi-workforce.showInstructions', () =>
       openCapabilitySurface(cliCapabilities, 'instructions'),
     ),
