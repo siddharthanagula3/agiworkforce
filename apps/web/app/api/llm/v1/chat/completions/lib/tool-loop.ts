@@ -980,11 +980,13 @@ export function toolStatusEvent(
   status: 'running' | 'completed' | 'failed',
   responseModel: string,
   args?: Record<string, unknown>,
+  parallelGroup?: string,
 ): SseLine {
   const statusPayload: Record<string, unknown> = {
     type: 'mcp_tool_use',
     name: toolName,
     status,
+    ...(parallelGroup ? { parallel_group: parallelGroup } : {}),
   };
   if (status === 'running') {
     const phrase =
@@ -4119,13 +4121,25 @@ export async function* runToolLoop(
     const mutating = calls.filter((tc) => !isReadOnlyTool(tc.qualifiedName));
 
     const toolStartedAt = new Map<string, number>();
+    const parallelGroup =
+      readOnly.length > 1
+        ? `parallel:${suspendContext.completedSteps}:${readOnly[0]!.id}`
+        : undefined;
     for (const tc of calls) {
       if (!isServerOwnedSearchCall(tc, suspendContext.completedSteps)) {
         if (tc.argsMalformed) toolCapabilityEvidence.malformedCalls += 1;
         else toolCapabilityEvidence.wellFormedCalls += 1;
       }
       if (isExecutionTool(tc.qualifiedName)) executionToolCalled = true;
-      yield encoder.encode(toolStatusEvent(tc.qualifiedName, 'running', responseModel, tc.args));
+      yield encoder.encode(
+        toolStatusEvent(
+          tc.qualifiedName,
+          'running',
+          responseModel,
+          tc.args,
+          parallelGroup && isReadOnlyTool(tc.qualifiedName) ? parallelGroup : undefined,
+        ),
+      );
       const category = canonicalToolCategory(tc.qualifiedName, mcpTools);
       toolStartedAt.set(tc.id, Date.now());
       yield encoder.encode(
