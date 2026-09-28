@@ -80,6 +80,7 @@ import {
   MARKETPLACE_REMOVE_UNSENT_COPY,
   PLUGINS_FAILED_COPY,
   PLUGIN_INSTALL_FAILED_COPY,
+  pluginConnectorsLines,
   pluginDependenciesInstalledLine,
   uploadDependenciesInstalledLine,
   PLUGIN_UNINSTALL_FAILED_COPY,
@@ -1247,11 +1248,18 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       invalidateSkillsCatalog();
       announceSkillCatalogChanged();
       await refreshPluginInstalls();
-      if (outcome.dependencies.length === 0) return undefined;
-      return pluginDependenciesInstalledLine(
-        record?.name ?? userEntry?.name ?? id,
-        outcome.dependencies.map((dependency) => dependency.name),
-      );
+      const lines = [
+        ...(outcome.dependencies.length > 0
+          ? [
+              pluginDependenciesInstalledLine(
+                record?.name ?? userEntry?.name ?? id,
+                outcome.dependencies.map((dependency) => dependency.name),
+              ),
+            ]
+          : []),
+        ...pluginConnectorsLines(outcome.connectors),
+      ];
+      return lines.length > 0 ? lines.join(' ') : undefined;
     },
     [
       findCommunityPlugin,
@@ -1437,6 +1445,10 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
         plugins?: ReadonlyArray<{ name: string; skills: readonly string[] }>;
         omittedFiles?: readonly string[];
         dependencies?: ReadonlyArray<{ name: string }>;
+        connectors?: {
+          added: ReadonlyArray<{ name: string; signInRequired: boolean }>;
+          failed: ReadonlyArray<{ name: string; reason: string }>;
+        };
         error?: { message?: string };
       };
       if (!response.ok) {
@@ -1456,6 +1468,7 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
           ...(body.dependencies?.length
             ? [uploadDependenciesInstalledLine(body.dependencies.map((item) => item.name))]
             : []),
+          ...pluginConnectorsLines(body.connectors ?? null),
         ],
       };
     },
