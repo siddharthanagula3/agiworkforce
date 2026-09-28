@@ -399,9 +399,26 @@ export async function undoEnrollment(
 
 export async function replaceEnrollmentCode(
   db: DatabaseAdapter,
-  input: { userId: string; sessionId: string; codeHash: string; ttlMinutes: number },
-): Promise<number> {
+  input: {
+    userId: string;
+    sessionId: string;
+    codeHash: string;
+    ttlMinutes: number;
+    maxAttempts: number;
+    lockoutMinutes: number;
+  },
+): Promise<number | null> {
   return db.transaction(async (tx) => {
+    const [recent] = await tx.query<{ attempts: number }>(
+      `select coalesce(max(attempts), 0)::integer as attempts
+         from public.account_security_challenges
+        where user_id = $1
+          and purpose = 'enrollment_email'
+          and created_at > now() - make_interval(mins => $2::integer)`,
+      [input.userId, input.lockoutMinutes],
+    );
+    const attempts = recent?.attempts ?? 0;
+    if (attempts >= input.maxAttempts) return null;
     await tx.execute(
       `delete from public.account_security_challenges
         where user_id = $1
@@ -410,10 +427,10 @@ export async function replaceEnrollmentCode(
     );
     const [row] = await tx.query<{ expires_at: Timestamp }>(
       `insert into public.account_security_challenges
-         (user_id, purpose, session_id, code_hash, expires_at)
-       values ($1, 'enrollment_email', $2, $3, now() + make_interval(mins => $4::integer))
+         (user_id, purpose, session_id, code_hash, attempts, expires_at)
+       values ($1, 'enrollment_email', $2, $3, $5, now() + make_interval(mins => $4::integer))
        returning expires_at`,
-      [input.userId, input.sessionId, input.codeHash, input.ttlMinutes],
+      [input.userId, input.sessionId, input.codeHash, input.ttlMinutes, attempts],
     );
     if (!row) throw new Error('enrollment code was not stored');
     return toMs(row.expires_at);
