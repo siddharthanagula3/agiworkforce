@@ -340,7 +340,7 @@ export function openConnectorsSurface(provider: TreeSource): Promise<void> {
 export function openMemorySurface(provider: TreeSource): Promise<void> {
   return showSurfaceQuickPick({
     title: 'AGI Workforce, Memory',
-    placeholder: 'Workspace memory facts…',
+    placeholder: 'Your account memory, shared with every AGI client…',
     provider,
     rowActions: MEMORY_ROW_ACTIONS,
     titleActions: MEMORY_TITLE_ACTIONS,

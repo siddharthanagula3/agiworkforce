@@ -93,12 +93,14 @@ describe('MemoryTreeProvider', () => {
     mockMemoryEnabled(true);
   });
 
-  it('lists the account facts at the root and nothing beneath them', () => {
+  it('groups the account facts by category and lists nothing beneath a fact', () => {
     const provider = new MemoryTreeProvider(makeStore([fact()]).store);
     const children = provider.getChildren();
 
-    expect(children.map((child) => child.label)).toEqual(['I prefer TypeScript over JavaScript']);
-    expect(provider.getChildren(children[0])).toEqual([]);
+    expect(children.map((child) => child.label)).toEqual(['Facts']);
+    const facts = provider.getChildren(children[0]);
+    expect(facts.map((child) => child.label)).toEqual(['I prefer TypeScript over JavaScript']);
+    expect(provider.getChildren(facts[0])).toEqual([]);
     provider.dispose();
   });
 
@@ -107,10 +109,7 @@ describe('MemoryTreeProvider', () => {
     const provider = new MemoryTreeProvider(makeStore([fact()]).store);
     const children = provider.getChildren();
 
-    expect(children.map((child) => child.label)).toEqual([
-      'Memory is off',
-      'I prefer TypeScript over JavaScript',
-    ]);
+    expect(children.map((child) => child.label)).toEqual(['Memory is off', 'Facts']);
     expect(children[0]?.command?.command).toBe('agi-workforce.memory.toggle');
     expect(children[0]?.contextValue).toBe('memoryDisabled');
     provider.dispose();
@@ -133,7 +132,7 @@ describe('MemoryTreeProvider', () => {
 
     expect(children.map((child) => child.label)).toEqual([
       'Showing the memory this device already had',
-      'I prefer TypeScript over JavaScript',
+      'Facts',
     ]);
     expect(children[0]?.contextValue).toBe('memoryUnreachable');
     provider.dispose();
