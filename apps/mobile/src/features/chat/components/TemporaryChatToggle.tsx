@@ -1,9 +1,12 @@
-import { Pressable, View } from 'react-native';
+import { Alert, Pressable, View } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { EyeOff } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useTheme } from '@/src/ui/theme';
+
+const TEMPORARY_CHAT_EXPLANATION =
+  "A temporary chat won't be saved to your history, and memory is neither used nor updated from it.";
 
 export function TemporaryChatToggle() {
   const { colors } = useTheme();
@@ -11,7 +14,14 @@ export function TemporaryChatToggle() {
   const setTemporaryChat = useSettingsStore((s) => s.setTemporaryChat);
 
   const handlePress = () => {
-    setTemporaryChat(!isTemporaryChat);
+    if (isTemporaryChat) {
+      setTemporaryChat(false);
+      return;
+    }
+    Alert.alert('Turn on temporary chat?', TEMPORARY_CHAT_EXPLANATION, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Turn on', onPress: () => setTemporaryChat(true) },
+    ]);
   };
 
   return (
@@ -29,7 +39,7 @@ export function TemporaryChatToggle() {
       }}
       accessible={true}
       accessibilityLabel={isTemporaryChat ? 'Temporary chat active' : 'Enable temporary chat'}
-      accessibilityHint="Memory will not be saved from this chat"
+      accessibilityHint={isTemporaryChat ? 'Turns temporary chat off' : TEMPORARY_CHAT_EXPLANATION}
       accessibilityRole="button"
       accessibilityState={{ selected: isTemporaryChat }}
     >

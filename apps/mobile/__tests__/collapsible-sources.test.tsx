@@ -137,8 +137,8 @@ describe('CollapsibleSources', () => {
     expect(mockLinkingOpenURL).not.toHaveBeenCalled();
   });
 
-  it('source without title uses domain in accessibility label', () => {
-    const sourcesNoTitle = [{ url: 'https://example.com/page' }];
+  it('source with an empty title uses domain in accessibility label', () => {
+    const sourcesNoTitle = [{ url: 'https://example.com/page', title: '' }];
     const { getByLabelText } = render(<CollapsibleSources sources={sourcesNoTitle} />);
 
     fireEvent.press(getByLabelText('View 1 source'));

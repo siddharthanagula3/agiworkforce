@@ -420,6 +420,11 @@ export const rateLimitConfigs = {
     window: '1 m',
     failClosed: false,
   },
+  'finance-overview': {
+    limit: 30,
+    window: '1 m',
+    failClosed: false,
+  },
   'map-tile': {
     limit: 600,
     window: '1 m',
