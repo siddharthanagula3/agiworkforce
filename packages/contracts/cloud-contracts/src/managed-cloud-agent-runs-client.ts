@@ -34,6 +34,8 @@ import { stripTrailingSlashes } from '@agiworkforce/types';
 export const TOOL_APPROVAL_RESUME_PATH = '/api/llm/v1/chat/completions/approve';
 export const TOOL_INPUT_RESUME_PATH = '/api/llm/v1/chat/completions/resume-input';
 
+export const TOOL_INPUT_RESUME_PATH = '/api/llm/v1/chat/completions/resume-input';
+
 export type ManagedCloudAgentRunHeaders = Record<string, string>;
 export type ManagedCloudAgentRunFetch = (input: string, init?: RequestInit) => Promise<Response>;
 export type ManagedCloudAgentRunWait = (ms: number, signal?: AbortSignal) => Promise<void>;
