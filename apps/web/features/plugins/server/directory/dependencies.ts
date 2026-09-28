@@ -69,8 +69,8 @@ export interface DependencyRoot {
   name: string;
   marketplace: string;
   allowlist: readonly string[];
-  plugin: DependencyPlugin;
   dependencies: readonly PluginDependencyRef[];
+  bundled?: ReadonlySet<string>;
 }
 
 export interface DependencyContext {
@@ -298,12 +298,7 @@ async function resolveMarketplaceDependencies(
 ): Promise<ResolvedDependency[]> {
   const rootLabel = pluginLabel(root.name, root.marketplace);
   return resolvePluginDependencies<DependencyPlugin>(
-    {
-      name: root.name,
-      marketplace: root.marketplace,
-      plugin: root.plugin,
-      dependencies: root.dependencies,
-    },
+    { name: root.name, marketplace: root.marketplace, dependencies: root.dependencies },
     async (reference, declaredBy) => {
       const declaringMarketplace = declaredBy.marketplace ?? root.marketplace;
       const marketplace = reference.marketplace ?? declaringMarketplace;
@@ -314,6 +309,12 @@ async function resolveMarketplaceDependencies(
         requiredBy: pluginLabel(declaredBy.name, declaringMarketplace),
         rootLabel,
       };
+      if (root.bundled && marketplace === root.marketplace) {
+        if (root.bundled.has(reference.name)) return null;
+        throw new PluginDependencyError(
+          `Dependency "${target.label}" (required by ${target.requiredBy}) is not in this upload, so ${rootLabel} was not installed. Add it to the same zip, or name the marketplace it comes from as ${reference.name}@<marketplace>.`,
+        );
+      }
       if (marketplace !== declaringMarketplace) {
         const enabled = await enabledVersionInMarketplace(
           context.db,
