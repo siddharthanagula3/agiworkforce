@@ -51,6 +51,7 @@ const cloudModules = [
   'schedules',
   'live-voice-tools',
   'triggers',
+  'slack',
   'skills',
   'plugin-marketplaces',
   'plugin-packages',
