@@ -112,6 +112,7 @@ Code: `apps/extension-vscode/package.json:824-828`, `apps/extension-vscode/src/c
 
 - Done when: The user can translate a selected passage into another language.
 - Wave: 3
+- Already works on: chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -119,9 +120,6 @@ Code: `apps/extension-vscode/package.json:824-828`, `apps/extension-vscode/src/c
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Right-click Translate on a page selection sends it to the side panel chat (to English, or English to Spanish); the target language is fixed and the translation is not written back in place. | ui |
-
-Code: `apps/extension/src/background.ts:4618-4631`, `apps/extension/src/side_panel.ts:10950-10958`
 
 ## S27.27: Autosave indicator.
 
@@ -225,4 +223,3 @@ Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:421-435`,
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| chrome | partial | The code settles it: the managed completions loop routes any tool the policy does not auto-approve to an approval (tool-loop-routing.ts:54; undeclared connector tools never auto-approve), and the side panel records per-call decisions and resumes the run through RESOLVE_CHAT_APPROVAL (side_panel.ts:4321-4372). That is the same generic approval web and mobile got partial for. |  |

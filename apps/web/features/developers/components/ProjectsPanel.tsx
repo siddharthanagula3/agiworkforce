@@ -39,11 +39,13 @@ const NAME_MAX = 100;
 
 type EditorState = { mode: 'create' } | { mode: 'edit'; project: DeveloperProject } | null;
 
-function parseLimit(value: string): number | null | 'invalid' {
+type LimitField = { valid: true; limit: number | null } | { valid: false };
+
+function parseLimit(value: string): LimitField {
   const trimmed = value.trim();
-  if (trimmed === '') return null;
+  if (trimmed === '') return { valid: true, limit: null };
   const limit = Number(trimmed);
-  return Number.isInteger(limit) && limit > 0 ? limit : 'invalid';
+  return Number.isInteger(limit) && limit > 0 ? { valid: true, limit } : { valid: false };
 }
 
 function keyCountLabel(count: number): string {
@@ -79,7 +81,7 @@ function ProjectEditor({
   );
   const parsedLimit = parseLimit(limit);
   const nameValid = name.trim().length > 0 && name.trim().length <= NAME_MAX;
-  const canSave = nameValid && parsedLimit !== 'invalid' && !pending;
+  const canSave = nameValid && parsedLimit.valid && !pending;
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -87,8 +89,8 @@ function ProjectEditor({
         <form
           onSubmit={(event) => {
             event.preventDefault();
-            if (!canSave || parsedLimit === 'invalid') return;
-            onSubmit({ name: name.trim(), monthlyCreditLimit: parsedLimit });
+            if (!canSave || !parsedLimit.valid) return;
+            onSubmit({ name: name.trim(), monthlyCreditLimit: parsedLimit.limit });
           }}
         >
           <DialogHeader>
@@ -120,11 +122,11 @@ function ProjectEditor({
                 value={limit}
                 onChange={(event) => setLimit(event.target.value)}
                 placeholder="No limit"
-                aria-invalid={parsedLimit === 'invalid'}
+                aria-invalid={!parsedLimit.valid}
                 aria-describedby={`${fieldId}-limit-help`}
               />
               <p id={`${fieldId}-limit-help`} className="text-xs text-muted-foreground">
-                {parsedLimit === 'invalid'
+                {!parsedLimit.valid
                   ? 'Enter a whole number of credits, or leave it empty for no limit.'
                   : 'Once the project has used this many credits in a calendar month, its keys are refused until the month ends. Leave it empty for no limit.'}
               </p>

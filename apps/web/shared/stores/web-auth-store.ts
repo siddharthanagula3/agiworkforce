@@ -3,6 +3,7 @@
 import { create } from 'zustand';
 import {
   parseMeResponse,
+  type EffectiveCapabilityDocumentWire,
   type MeDisabledFeature,
   type MeSubscriptionSource,
 } from '@agiworkforce/cloud-contracts';
@@ -50,6 +51,7 @@ export interface AuthState {
   subscription: SubscriptionPlan | null;
   featureFlags: FeatureFlags | null;
   disabledFeatures: readonly MeDisabledFeature[];
+  capabilityDocument: EffectiveCapabilityDocumentWire | null;
   isLoading: boolean;
   error: string | null;
   initialized: boolean;
@@ -65,6 +67,7 @@ const INITIAL_STATE: Omit<AuthState, 'refreshUser' | 'signOut' | '_reset'> = {
   subscription: null,
   featureFlags: null,
   disabledFeatures: [],
+  capabilityDocument: null,
   isLoading: true,
   error: null,
   initialized: false,
@@ -91,6 +94,7 @@ export const useBillingStore = create<AuthState>()((set) => ({
               subscription: null,
               featureFlags: null,
               disabledFeatures: [],
+              capabilityDocument: null,
               isLoading: false,
               initialized: true,
               unauthenticated: true,
@@ -131,6 +135,7 @@ export const useBillingStore = create<AuthState>()((set) => ({
           subscription: plan,
           featureFlags: data.feature_flags,
           disabledFeatures: data.disabled_features ?? [],
+          capabilityDocument: data.capability_handshake ?? null,
           isLoading: false,
           error: null,
           initialized: true,

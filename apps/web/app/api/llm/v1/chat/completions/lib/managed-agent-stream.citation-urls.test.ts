@@ -58,6 +58,7 @@ vi.mock('@/lib/services/free-trial-service', () => ({
   scopeFreeTrialToolSpend: vi.fn(),
 }));
 vi.mock('@/lib/services/cloud-agent-run-service', () => ({
+  APPROVAL_CHECKPOINT_TTL_HOURS: 24,
   appendCloudAgentEvents: vi.fn(),
   transitionCloudAgentRun: vi.fn(),
   recordCloudAgentRunSettledUsage: vi.fn(),

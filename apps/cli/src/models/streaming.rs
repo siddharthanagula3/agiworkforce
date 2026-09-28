@@ -285,6 +285,7 @@ fn anthropic_spec(api_key: &str) -> ProviderSpec {
             value: api_key.to_string(),
         },
         extra_headers: Vec::new(),
+        extra_body: Vec::new(),
     }
 }
 
@@ -298,6 +299,7 @@ fn gemini_spec(api_key: &str) -> ProviderSpec {
             value: api_key.to_string(),
         },
         extra_headers: Vec::new(),
+        extra_body: Vec::new(),
     }
 }
 
@@ -308,6 +310,7 @@ fn ollama_spec(base_url: &str) -> ProviderSpec {
         base_url: base_url.to_string(),
         auth: Auth::None,
         extra_headers: Vec::new(),
+        extra_body: Vec::new(),
     }
 }
 
@@ -321,6 +324,7 @@ fn openai_compat_spec(name: &str, base_url: &str, api_key: &str) -> ProviderSpec
         base_url: base_url.to_string(),
         auth: Auth::Bearer(api_key.to_string()),
         extra_headers: Vec::new(),
+        extra_body: Vec::new(),
     }
 }
 
@@ -377,6 +381,14 @@ fn managed_cloud_spec_for_base(jwt: &str, raw_base: &str) -> Result<ProviderSpec
                 format!("agi.cli.chat.{}", uuid::Uuid::new_v4()),
             )])
             .collect(),
+        extra_body: crate::cloud::bound_conversation()
+            .map(|conversation_id| {
+                vec![(
+                    "conversation_id".to_string(),
+                    serde_json::Value::String(conversation_id),
+                )]
+            })
+            .unwrap_or_default(),
     })
 }
 
@@ -547,6 +559,13 @@ fn stream_event_handler<'a>(
     }
 }
 
+fn hosted_conversation_missing(error: &anyhow::Error) -> bool {
+    matches!(
+        error.downcast_ref::<CliError>(),
+        Some(CliError::Api { status: 404, message, .. }) if message.contains("Conversation not found")
+    )
+}
+
 fn managed_approval_resume_spec(jwt: &str) -> Result<ProviderSpec> {
     let mut spec = managed_cloud_spec(jwt)?;
     spec.base_url.push_str("/approve");
@@ -583,10 +602,9 @@ async fn run_managed_cloud(
     thinking_budget: Option<u32>,
     effort: Option<crate::design_system::Effort>,
 ) -> Result<CompletionResult> {
-    let spec = managed_cloud_spec(jwt)?;
-    let request_id = managed_request_id(&spec);
+    let mut spec = managed_cloud_spec(jwt)?;
     let mut pause = ManagedApprovalPause::default();
-    let mut completed = run_spec_observing(
+    let mut completed = match run_spec_observing(
         client,
         &spec,
         model,
@@ -599,8 +617,32 @@ async fn run_managed_cloud(
         effort,
         Some(&mut pause),
     )
-    .await?;
-    completed.managed_request_id = request_id;
+    .await
+    {
+        Err(error) if !spec.extra_body.is_empty() && hosted_conversation_missing(&error) => {
+            if let Some(conversation_id) = crate::cloud::bound_conversation() {
+                crate::cloud::forget_hosted_conversation(&conversation_id);
+            }
+            spec = managed_cloud_spec(jwt)?;
+            spec.extra_body.clear();
+            run_spec_observing(
+                client,
+                &spec,
+                model,
+                messages,
+                max_tokens,
+                temperature,
+                tools,
+                on_chunk,
+                thinking_budget,
+                effort,
+                Some(&mut pause),
+            )
+            .await?
+        }
+        result => result?,
+    };
+    completed.managed_request_id = managed_request_id(&spec);
     while let Some((run_id, calls)) = pause.take_pending()? {
         let decisions = managed_approvals::decide(&calls).await;
         let body = serde_json::json!({ "run_id": run_id, "tool_approvals": decisions });

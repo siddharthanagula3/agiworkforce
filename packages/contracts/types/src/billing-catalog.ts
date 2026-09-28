@@ -204,6 +204,7 @@ export type BillingPlanCapability =
   | 'video_generation'
   | 'managed_api'
   | 'developer_surfaces'
+  | 'slack_app'
   | 'team_admin'
   | 'enterprise_controls';
 
@@ -224,6 +225,7 @@ export const BILLING_PLAN_CAPABILITY_TIERS: Readonly<
   video_generation: ['max_15x', 'enterprise'],
   managed_api: PRO_TIERS,
   developer_surfaces: PRO_TIERS,
+  slack_app: PRO_TIERS,
   team_admin: ['team', 'enterprise'],
   enterprise_controls: ['enterprise'],
 });
@@ -257,6 +259,7 @@ export const BILLING_PLAN_CAPABILITY_LABELS: Readonly<Record<BillingPlanCapabili
     video_generation: 'Video generation',
     managed_api: 'Managed API access',
     developer_surfaces: 'Managed Cloud in the CLI and VS Code',
+    slack_app: 'AGI Workforce in Slack',
     team_admin: 'Team administration',
     enterprise_controls: 'SSO, SCIM and admin controls',
   });

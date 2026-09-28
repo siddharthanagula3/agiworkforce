@@ -133,9 +133,9 @@ Code: `apps/web/features/chat/components/messages/ChatMessageList.tsx:1396-1396`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| vscode | partial | Make picking a prompt command in the "/" menu insert or run it; today the click asks the CLI app server to run it, which only runs six management commands and otherwise shows a warning. | handler |
+| vscode | partial | partials/desktop-cli d13900eba6: the first typed text part starting with a slash expands on its own and commands/list marks prompt commands; the VS Code / menu inserting /name is p-sessions'. | ui |
 
-Code: `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:1500-1512`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:1515-1523`, `apps/cli/src/app_server/surfaces.rs:26-30`
+Code: `apps/cli/src/app_server/developer_host.rs:890-890`, `apps/cli/src/app_server/surfaces.rs:504-504`
 
 ## S13.23: Skill invocation.
 

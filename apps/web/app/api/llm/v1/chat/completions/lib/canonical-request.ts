@@ -133,7 +133,8 @@ function requiresZeroDataRetention(processed: ProcessedRequest, modelId: string)
 export function toCanonicalChatRequest(processed: ProcessedRequest): ChatRequest {
   const { llmRequest } = processed;
   const { functionTools, rawVendorTools } = splitTools(llmRequest.tools);
-  const harnessId = dispatchRoute(llmRequest.model, processed.provider)?.harnessId;
+  const route = dispatchRoute(llmRequest.model, processed.provider);
+  const harnessId = route?.harnessId;
   const admitDocument = nativeDocumentAdmission(llmRequest.model, harnessId);
 
   const wireRequest: OpenAIWireChatRequest = {
@@ -153,9 +154,11 @@ export function toCanonicalChatRequest(processed: ProcessedRequest): ChatRequest
   applyRequestParameters(chatRequest, llmRequest.requestParameters, llmRequest.model, harnessId);
   if (
     llmRequest.responseFormat &&
-    harnessId &&
+    route &&
     getModelMetadataById(llmRequest.model)?.capabilities.json === true &&
-    getHarnessResponseFormats(harnessId).includes(llmRequest.responseFormat.type)
+    (route.responseFormats ?? getHarnessResponseFormats(route.harnessId)).includes(
+      llmRequest.responseFormat.type,
+    )
   ) {
     chatRequest.responseFormat = llmRequest.responseFormat;
   }

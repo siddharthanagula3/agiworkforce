@@ -9,6 +9,7 @@ import type { ManagedCloudOwner } from './features/cloud-bridge/managedCloudAuth
 import type {
   ManagedChatSourcesDelta,
   ManagedCodeExecution,
+  ManagedMemoryCommandTurn,
   ManagedQuotaBlock,
   ManagedQuotaWarningSignal,
 } from './features/cloud-bridge/freeTrialClient';
@@ -510,6 +511,7 @@ export interface ChatMessageMessage extends BaseMessage {
   previousTaskType?: RoutingTaskType;
   conversationId?: string;
   assistantMessageId?: string;
+  memoryCommand?: ManagedMemoryCommandTurn;
 }
 
 export interface CancelStreamMessage extends BaseMessage {

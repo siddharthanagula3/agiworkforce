@@ -33,13 +33,14 @@ const ZHIPU_MODEL_ID = (() => {
   if (!model) throw new Error('no Zhipu model is admitted on the free plan');
   return model.id;
 })();
-const PERPLEXITY_TOOLLESS_MODEL_ID = (() => {
+const PERPLEXITY_TOOLLESS_MODEL = (() => {
   const model = listCanonicalModels().find(
     (candidate) => candidate.provider === 'perplexity' && candidate.capabilities.tools === false,
   );
   if (!model) throw new Error('A catalog-backed tool-less search fixture is required');
-  return model.id;
+  return model;
 })();
+const PERPLEXITY_TOOLLESS_MODEL_ID = PERPLEXITY_TOOLLESS_MODEL.id;
 
 const admitManagedTurnSlot = () => ({
   admitted: true,
@@ -895,11 +896,22 @@ describe('Per-model tools capability gate', () => {
       limit: 32,
     });
 
-    const response = await POST(makeRequest(PERPLEXITY_TOOLLESS_MODEL_ID, undefined, true));
+    const retiresAt = PERPLEXITY_TOOLLESS_MODEL.deprecation_date
+      ? Date.parse(PERPLEXITY_TOOLLESS_MODEL.deprecation_date)
+      : null;
+    if (retiresAt !== null) {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(retiresAt - 24 * 60 * 60 * 1000);
+    }
+    try {
+      const response = await POST(makeRequest(PERPLEXITY_TOOLLESS_MODEL_ID, undefined, true));
 
-    expect(workflowRouteMocks.loadMcpTools).not.toHaveBeenCalled();
-    expect(workflowRouteMocks.loadConnectorTools).not.toHaveBeenCalled();
-    expect(workflowRouteMocks.start).not.toHaveBeenCalled();
-    expect(response.status).toBe(200);
+      expect(workflowRouteMocks.loadMcpTools).not.toHaveBeenCalled();
+      expect(workflowRouteMocks.loadConnectorTools).not.toHaveBeenCalled();
+      expect(workflowRouteMocks.start).not.toHaveBeenCalled();
+      expect(response.status).toBe(200);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
