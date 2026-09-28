@@ -24,7 +24,7 @@ import {
 import { recordModerationEvent } from '@/lib/moderation';
 import { validateAttachmentMeta } from '@agiworkforce/types';
 import type { ManagedCloudProjectKnowledgeRegisterRequest } from '@agiworkforce/cloud-contracts';
-import type { ProjectKnowledgeIndexState } from '@agiworkforce/types';
+import type { BillingPlanTier, ProjectKnowledgeIndexState } from '@agiworkforce/types';
 import {
   findProjectKnowledgeDocument,
   readProjectKnowledgeIndexStates,
@@ -132,15 +132,23 @@ export type ProjectKnowledgeRegistration =
   | { status: 'created'; file: ReturnType<typeof projectKnowledgeResponse> }
   | { status: 'unavailable' };
 
-export async function registerProjectKnowledgeFile(
-  scope: {
-    db: Awaited<ReturnType<typeof getUserScopedDb>>['db'];
-    userId: string;
-    organizationId: string | null;
-    projectId: string;
-  },
-  body: ManagedCloudProjectKnowledgeRegisterRequest,
-): Promise<ProjectKnowledgeRegistration> {
+export interface ProjectKnowledgeScope {
+  db: Awaited<ReturnType<typeof getUserScopedDb>>['db'];
+  userId: string;
+  organizationId: string | null;
+  projectId: string;
+}
+
+export type ProjectKnowledgeCapacity =
+  { status: 'ready'; planTier: BillingPlanTier } | { status: 'unavailable' };
+
+export async function checkProjectKnowledgeCapacity(
+  scope: ProjectKnowledgeScope,
+  body: Pick<
+    ManagedCloudProjectKnowledgeRegisterRequest,
+    'fileName' | 'mimeType' | 'byteCount' | 'checksumSha256'
+  >,
+): Promise<ProjectKnowledgeCapacity> {
   const { db, userId, organizationId, projectId } = scope;
   const attachmentValidation = validateAttachmentMeta(
     body.fileName.trim(),
@@ -248,6 +256,45 @@ export async function registerProjectKnowledgeFile(
       );
     }
   }
+  return { status: 'ready', planTier };
+}
+
+export async function findProjectKnowledgeFileByChecksum(
+  scope: ProjectKnowledgeScope,
+  checksumSha256: string,
+): Promise<ReturnType<typeof projectKnowledgeResponse> | null> {
+  const { db, userId, projectId } = scope;
+  let row: Record<string, unknown> | undefined;
+  try {
+    [row] = await db.query<Record<string, unknown>>(
+      `select *
+         from project_knowledge_files
+        where project_id = $1
+          and checksum_sha256 = $2
+          and added_by_user_id = $3
+          and deleted_at is null
+          and superseded_at is null
+        limit 1`,
+      [projectId, checksumSha256, userId],
+    );
+  } catch (error) {
+    if (isSchemaNotReady(error)) return null;
+    throw error;
+  }
+  if (!row) return null;
+  const fileId = String(row['id'] ?? '');
+  const indexStates = await readIndexStates(db, projectId, [fileId]);
+  return projectKnowledgeResponse(row, projectId, indexStates.get(fileId) ?? null);
+}
+
+export async function registerProjectKnowledgeFile(
+  scope: ProjectKnowledgeScope,
+  body: ManagedCloudProjectKnowledgeRegisterRequest,
+): Promise<ProjectKnowledgeRegistration> {
+  const { db, userId, organizationId, projectId } = scope;
+  const capacity = await checkProjectKnowledgeCapacity(scope, body);
+  if (capacity.status === 'unavailable') return capacity;
+  const { planTier } = capacity;
 
   let supersedes: { id: string; version: number } | undefined;
   try {
