@@ -10,12 +10,14 @@ import {
   type MemoryDelta,
   type MemoryPushItem,
   type MemoryPushResponse,
+  type MemoryScope,
 } from './accountMemoryClient';
 import { loadLegacyWorkspaceFacts, type MemoryFact } from './memoryStore';
 
 export const ACCOUNT_MEMORY_CACHE_KEY = 'agiWorkforce.accountMemory';
 export const ACCOUNT_MEMORY_CURSOR_KEY = 'agiWorkforce.accountMemoryCursor';
 export const ACCOUNT_MEMORY_OWNER_KEY = 'agiWorkforce.accountMemoryOwner';
+export const ACCOUNT_MEMORY_SCOPE_KEY = 'agiWorkforce.accountMemoryScope';
 export const ACCOUNT_MEMORY_VERSIONS_KEY = 'agiWorkforce.accountMemoryVersions';
 export const WORKSPACE_MEMORY_ADOPTED_KEY = 'agiWorkforce.workspaceMemoryAdopted';
 
@@ -86,6 +88,10 @@ export class AccountMemoryStore {
     this.changed.dispose();
   }
 
+  scope(): MemoryScope | undefined {
+    return this.storage.get<MemoryScope>(ACCOUNT_MEMORY_SCOPE_KEY);
+  }
+
   /** The cached account memory, with no network call. */
   cachedFacts(): MemoryFact[] {
     const stored = this.storage.get<unknown>(ACCOUNT_MEMORY_CACHE_KEY);
@@ -117,6 +123,7 @@ export class AccountMemoryStore {
 
     try {
       await this.discardAnotherAccountsCache();
+      await this.discardAnotherWorkspacesCache(await this.client.readScope());
       const cursor = this.storage.get<string>(ACCOUNT_MEMORY_CURSOR_KEY) ?? INITIAL_CURSOR;
       const page = await this.client.pullAll(cursor);
       await this.applyDeltas(page.memories);
@@ -295,6 +302,15 @@ export class AccountMemoryStore {
       await this.storage.update(ACCOUNT_MEMORY_CURSOR_KEY, INITIAL_CURSOR);
     }
     await this.storage.update(ACCOUNT_MEMORY_OWNER_KEY, owner);
+  }
+
+  private async discardAnotherWorkspacesCache(scope: MemoryScope): Promise<void> {
+    if (this.scope()?.organizationId !== scope.organizationId) {
+      await this.storage.update(ACCOUNT_MEMORY_CACHE_KEY, []);
+      await this.storage.update(ACCOUNT_MEMORY_VERSIONS_KEY, {});
+      await this.storage.update(ACCOUNT_MEMORY_CURSOR_KEY, INITIAL_CURSOR);
+    }
+    await this.storage.update(ACCOUNT_MEMORY_SCOPE_KEY, scope);
   }
 
   /**

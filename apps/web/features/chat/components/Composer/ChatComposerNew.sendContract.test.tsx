@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatComposerNew, resetSendPendingFlagForTests } from './ChatComposerNew';
 import { COMPOSER_INPUT_ROW_CLASS } from './ComposerInput';
+import { __resetComposerDraftStorageForTests } from './composer-draft-storage';
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn(), back: vi.fn() }),
@@ -60,6 +61,9 @@ function arbitraryFromClass(className: string, prefix: string): number {
 
 beforeEach(() => {
   resetSendPendingFlagForTests();
+  window.localStorage.clear();
+  window.sessionStorage.clear();
+  __resetComposerDraftStorageForTests();
 });
 
 afterEach(() => {

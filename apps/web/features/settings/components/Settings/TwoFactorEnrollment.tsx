@@ -12,8 +12,9 @@ import {
   CardHeader,
   CardTitle,
   Input,
+  Spinner,
 } from '@agiworkforce/ui';
-import { Check, Copy, Download, Loader2, Printer, ShieldCheck, ShieldOff } from 'lucide-react';
+import { Check, Copy, Download, Printer, ShieldCheck, ShieldOff } from 'lucide-react';
 import settingsService, {
   type TwoFactorStatus,
 } from '@features/settings/services/user-preferences';
@@ -271,6 +272,7 @@ export function TwoFactorEnrollmentPanel({ onStatusChange }: TwoFactorEnrollment
   }, []);
 
   const enabled = status?.enabled === true;
+  const enrollmentAvailable = status?.enrollmentAvailable === true;
 
   return (
     <Card className="border-border bg-card">
@@ -286,7 +288,9 @@ export function TwoFactorEnrollmentPanel({ onStatusChange }: TwoFactorEnrollment
         <CardDescription>
           {enabled
             ? 'Two-factor authentication is on. Every sign-in asks for a code from your authenticator app, and so does turning it off or replacing your backup codes.'
-            : 'Add a time-based one-time code (TOTP) from an authenticator app. Every sign-in then asks for a code from it.'}
+            : enrollmentAvailable
+              ? 'Add a time-based one-time code (TOTP) from an authenticator app. Every sign-in then asks for a code from it.'
+              : 'Authenticator apps and backup codes are temporarily unavailable. Your password, passkeys and the codes we email you still protect your account.'}
         </CardDescription>
       </CardHeader>
 
@@ -464,7 +468,7 @@ export function TwoFactorEnrollmentPanel({ onStatusChange }: TwoFactorEnrollment
                 disabled={busy || code.trim().length === 0}
                 onClick={() => void handleVerify()}
               >
-                {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                {busy ? <Spinner size="sm" className="mr-2" aria-hidden="true" /> : null}
                 Verify and enable
               </Button>
               <Button type="button" variant="outline" disabled={busy} onClick={resetFlow}>
@@ -490,8 +494,9 @@ export function TwoFactorEnrollmentPanel({ onStatusChange }: TwoFactorEnrollment
               ) : (
                 <Alert variant="warning">
                   <AlertDescription>
-                    You have no backup codes. Generate a set so you can still sign in if you lose
-                    your authenticator app.
+                    {enrollmentAvailable
+                      ? 'You have no backup codes. Generate a set so you can still sign in if you lose your authenticator app.'
+                      : 'You have no backup codes, and new ones are temporarily unavailable, so keep your authenticator app safe.'}
                   </AlertDescription>
                 </Alert>
               )
@@ -502,7 +507,7 @@ export function TwoFactorEnrollmentPanel({ onStatusChange }: TwoFactorEnrollment
                   <Button
                     type="button"
                     variant="outline"
-                    disabled={busy}
+                    disabled={busy || !enrollmentAvailable}
                     onClick={() => void handleRegenerate()}
                   >
                     Generate new backup codes
@@ -517,10 +522,19 @@ export function TwoFactorEnrollmentPanel({ onStatusChange }: TwoFactorEnrollment
                   </Button>
                 </>
               ) : (
-                <Button type="button" disabled={busy} onClick={() => void handleStartSetup()}>
-                  {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                <Button
+                  type="button"
+                  disabled={busy || !enrollmentAvailable}
+                  onClick={() => void handleStartSetup()}
+                >
+                  {busy ? <Spinner size="sm" className="mr-2" aria-hidden="true" /> : null}
                   Set up authenticator app
                 </Button>
+              )}
+              {enrollmentAvailable ? null : (
+                <span className="self-center text-sm text-muted-foreground">
+                  Temporarily unavailable
+                </span>
               )}
             </div>
           </div>

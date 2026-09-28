@@ -30,7 +30,9 @@ import {
   MessageSquare,
   LibraryBig,
   Brain,
+  Minimize2,
 } from '@agiworkforce/icons';
+import { Maximize2 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { toUserMessage } from '@/lib/user-error-message';
 import { useBillingStore } from '@shared/stores/web-auth-store';
@@ -67,8 +69,20 @@ import { useLeaveLocalModel } from '@features/chat/hooks/use-leave-local-model';
 import { AttachmentPreview, type AttachmentUploadVisualStatus } from './AttachmentPreview';
 import { AnchoredComposerMenu } from './AnchoredComposerMenu';
 import { VideoCostEstimate } from './VideoCostEstimate';
-import { ComposerPlusMenu, PluginsGlyph } from './ComposerPlusMenu';
-import { ComposerFilesMenu } from './ComposerFilesMenu';
+import {
+  ComposerPlusMenu,
+  PluginsGlyph,
+  connectorToggleId,
+  type ComposerPlusMenuConnector,
+} from './ComposerPlusMenu';
+import {
+  COMPOSER_FILES_ATTACH_FAILED_COPY,
+  COMPOSER_FILES_LOADING_LABEL,
+  ComposerFilesMenu,
+  libraryFileGlyph,
+  libraryItemToFile,
+  useLibraryFiles,
+} from './ComposerFilesMenu';
 import { ComposerPluginsMenu } from './ComposerPluginsMenu';
 import { getAcceptAttribute, useAttachments } from '@features/chat/hooks/use-attachments';
 import { chatDraftRefusalNotes } from '@features/chat/lib/attachment-metadata';
@@ -103,7 +117,7 @@ import {
   TEMPORARY_CHAT_END_CONFIRMATION,
   resolveNewChatTemporary,
 } from '@/lib/temporary-chat-policy';
-import { useConfirmAction } from '@agiworkforce/ui';
+import { Spinner, useConfirmAction } from '@agiworkforce/ui';
 import { useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 import {
@@ -138,16 +152,10 @@ import type {
   ComposerMentionConfig,
 } from '@agiworkforce/unified-chat/composer-editor';
 import {
-  clearPendingDraft,
-  parkPendingDraft,
-  restorablePendingDraft,
-} from '@features/chat/lib/pending-composer-draft';
-import {
   clearPendingDraftClear,
   markPendingDraftClear,
 } from '@features/chat/lib/pending-draft-clear';
 import {
-  claimReloadedPendingDraft,
   clearPersistedDraft,
   readPersistedDraft,
   writePersistedDraft,
@@ -160,6 +168,7 @@ import {
   MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH,
   MANAGED_MEDIA_MAX_IMAGE_REFERENCES,
   MANAGED_OFFICE_FILE_TOOL_NAME,
+  type LibraryItem,
 } from '@agiworkforce/cloud-contracts';
 import {
   buildAgiWorkGoalInput,
@@ -557,6 +566,8 @@ function slashCommandQuery(value: string): string {
 const VOICE_TRANSCRIPT_SEPARATOR = ' ';
 const COMPOSER_CARET_END = 'end';
 const MENTION_INDEX_FIRST = 0;
+const NO_MENTION_FILES: readonly LibraryItem[] = [];
+const MENTION_CONNECTOR_LIMIT = 6;
 const KEY_ARROW_DOWN = 'ArrowDown';
 const KEY_ARROW_UP = 'ArrowUp';
 const KEY_ENTER = 'Enter';
@@ -568,6 +579,9 @@ const FOCUS_AFTER_TRANSCRIPT_MS = 50;
 
 const COMPOSER_AUTO_HEIGHT = 'auto';
 const COMPOSER_MAX_HEIGHT_PX = 240;
+const COMPOSER_EXPANDABLE_HEIGHT_PX = 120;
+const COMPOSER_EDITOR_CONTENT_SELECTOR = '.ProseMirror';
+const KEY_ESCAPE = 'Escape';
 /**
  * An existing chat's one-row rest state: 36px content row + the card's 12px
  * top/bottom padding and border lands inside the 48-52px parity range.
@@ -581,6 +595,7 @@ const COMPOSER_COMPACT_MEDIA_QUERY = '(max-width: 639px)';
 const COMPOSER_AUTOFOCUS_MEDIA_QUERY = '(min-width: 768px) and (pointer: fine)';
 const USAGE_RESET_TICK_MS = 60_000;
 const RESTORED_DRAFT_NOTICE = "Couldn't send. Restored here so you can try again.";
+const UPLOAD_CANCELED_NOTICE = 'Upload canceled. Your message is back here to edit or send again.';
 const RESTORED_BLOCKED_SEND_NOTICE =
   'Your previous message was still starting, so this one is back here. Send it again.';
 const DRAFT_NOT_SAVED_NOTICE =
@@ -679,6 +694,16 @@ function getSendPendingFlag(): boolean {
  *  that renders more than one send must reset it between cases itself. */
 export function resetSendPendingFlagForTests(): void {
   setSendPendingFlag(false);
+}
+
+let uploadCancelNoticePending = false;
+function holdUploadCancelNotice(pending: boolean): void {
+  uploadCancelNoticePending = pending;
+}
+function restoredDraftNotice(): string {
+  if (!uploadCancelNoticePending) return RESTORED_DRAFT_NOTICE;
+  uploadCancelNoticePending = false;
+  return UPLOAD_CANCELED_NOTICE;
 }
 
 const ChatComposerNewComponent = ({
@@ -1063,6 +1088,9 @@ const ChatComposerNewComponent = ({
 
   const canUseWorkingDirectory = useCapability('canUseWorkingDirectory');
   const canTakeScreenshotCap = useCapability('canTakeScreenshot');
+  const canPickDisplayCapture =
+    typeof navigator !== 'undefined' &&
+    typeof navigator.mediaDevices?.getDisplayMedia === 'function';
 
   // Image generation mode state (imageMode itself is per-conversation, above)
   const [imageAspectRatio, setImageAspectRatio] = useState<ImageAspectRatio>('auto');
@@ -1557,6 +1585,8 @@ const ChatComposerNewComponent = ({
    * the input is `w-full` inside it.
    */
   const composerRowRef = useRef<HTMLDivElement>(null);
+  const [composerExpanded, setComposerExpanded] = useState(false);
+  const [composerExpandable, setComposerExpandable] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const overflowRef = useRef<HTMLDivElement>(null);
   // The "+" trigger and its portaled menu. The menu is no longer a DOM
@@ -1758,13 +1788,14 @@ const ChatComposerNewComponent = ({
   const clearComposerState = useCallback(() => {
     messageRef.current = '';
     setMessage('');
+    setComposerExpanded(false);
+    holdUploadCancelNotice(false);
     composerEditorRef.current?.clear();
     // AUDIT-FIX STR-23: a sent/cleared composer must not leave a stale parked
     // draft that reappears when the user returns to this conversation.
     clearDraftContent(conversationId);
     clearPersistedDraft(conversationId ?? null);
     if (conversationId && !isIncognito) markPendingDraftClear(conversationId);
-    if (!conversationId) clearPendingDraft();
     // The blocked send this composer was holding has now left, by a send or by
     // an explicit clear. Releasing it by fingerprint is what makes the handback
     // exactly-once: a different send parked behind it is untouched.
@@ -2087,6 +2118,10 @@ const ChatComposerNewComponent = ({
     // but the initial mobile composer has already consumed most of the screen.
     // Empty content never needs measurement, so keep its stable one-line height
     // and reserve scrollHeight reads for real text.
+    if (composerExpanded) {
+      textarea.style.height = '';
+      return;
+    }
     const resting = composerRestingHeightPx(Boolean(emptyState));
     if (message.length === 0) {
       textarea.style.height = `${resting}px`;
@@ -2095,7 +2130,20 @@ const ChatComposerNewComponent = ({
     textarea.style.height = COMPOSER_AUTO_HEIGHT;
     const newHeight = Math.min(Math.max(textarea.scrollHeight, resting), COMPOSER_MAX_HEIGHT_PX);
     textarea.style.height = `${newHeight}px`;
-  }, [message, emptyState]);
+  }, [message, emptyState, composerExpanded]);
+
+  useEffect(() => {
+    if (composerExpanded) return;
+    if (!message.trim()) {
+      setComposerExpandable(false);
+      return;
+    }
+    const field =
+      textareaRef.current ??
+      composerRowRef.current?.querySelector<HTMLElement>(COMPOSER_EDITOR_CONTENT_SELECTOR);
+    if (!field) return;
+    setComposerExpandable(field.scrollHeight > COMPOSER_EXPANDABLE_HEIGHT_PX);
+  }, [message, emptyState, composerExpanded]);
 
   // Close popover on outside click or Escape
   useEffect(() => {
@@ -2351,7 +2399,9 @@ const ChatComposerNewComponent = ({
       messageRef.current = value;
       setMessage(value);
       setLocalNotice((current) =>
-        current === RESTORED_DRAFT_NOTICE || current === RESTORED_BLOCKED_SEND_NOTICE
+        current === RESTORED_DRAFT_NOTICE ||
+        current === RESTORED_BLOCKED_SEND_NOTICE ||
+        current === UPLOAD_CANCELED_NOTICE
           ? null
           : current,
       );
@@ -2424,12 +2474,28 @@ const ChatComposerNewComponent = ({
     [projectScopeSelectable, projectPicker, mentionMatches],
   );
 
+  const filteredMentionConnectors = useMemo(
+    () =>
+      connectedConnectorOptions
+        .filter((connector) => mentionMatches(connector.label))
+        .slice(0, MENTION_CONNECTOR_LIMIT),
+    [connectedConnectorOptions, mentionMatches],
+  );
+
+  const mentionFiles = useLibraryFiles(showMentions && !attachmentsUnavailable, mentionQuery);
+  const mentionFileItems = attachmentsUnavailable ? NO_MENTION_FILES : mentionFiles.items;
+
   const mentionItems = useMemo(
     () => [
       ...filteredSkills.map((skill) => ({ kind: 'skill' as const, skill })),
       ...filteredMentionProjects.map((project) => ({ kind: 'project' as const, project })),
+      ...filteredMentionConnectors.map((connector) => ({
+        kind: 'connector' as const,
+        connector,
+      })),
+      ...mentionFileItems.map((file) => ({ kind: 'file' as const, file })),
     ],
-    [filteredSkills, filteredMentionProjects],
+    [filteredSkills, filteredMentionProjects, filteredMentionConnectors, mentionFileItems],
   );
 
   const activeMentionIndex =
@@ -2465,6 +2531,31 @@ const ChatComposerNewComponent = ({
       textareaRef.current?.setSelectionRange(nextCursor, nextCursor);
     }, 0);
   }, [message, mentionStartIndex]);
+
+  const insertMentionReference = useCallback(
+    (id: string, label: string) => {
+      const commit = mentionCommitRef.current;
+      if (commit) {
+        commit.insertMention({ id, label });
+        mentionCommitRef.current = null;
+        setShowMentions(false);
+        return;
+      }
+      if (mentionStartIndex === -1) return;
+      const before = message.substring(0, mentionStartIndex);
+      const cursorPos = textareaRef.current?.selectionStart || message.length;
+      const after = message.substring(cursorPos).replace(/^[ \t]+/, '');
+      const reference = `@${label} `;
+      const nextCursor = before.length + reference.length;
+      setMessage(`${before}${reference}${after}`);
+      setShowMentions(false);
+      setTimeout(() => {
+        textareaRef.current?.focus();
+        textareaRef.current?.setSelectionRange(nextCursor, nextCursor);
+      }, 0);
+    },
+    [message, mentionStartIndex],
+  );
 
   const enableSkillRequirements = useCallback(
     (skill: SkillItem) => {
@@ -2502,12 +2593,40 @@ const ChatComposerNewComponent = ({
     [replaceMentionToken, projectPicker, clearFolder],
   );
 
+  const handleMentionConnectorSelect = useCallback(
+    (connector: ComposerPlusMenuConnector) => {
+      const toggleId = connectorToggleId(connector);
+      if (disabledConnectorIds.includes(toggleId)) setConnectorEnabled(toggleId, true);
+      insertMentionReference(toggleId, connector.label);
+    },
+    [disabledConnectorIds, setConnectorEnabled, insertMentionReference],
+  );
+
+  const handleMentionFileSelect = useCallback(
+    (file: LibraryItem) => {
+      replaceMentionToken();
+      void libraryItemToFile(file)
+        .then((attachment) => handleFileDrop([attachment]))
+        .catch(() => setLocalNotice(COMPOSER_FILES_ATTACH_FAILED_COPY));
+    },
+    [replaceMentionToken, handleFileDrop],
+  );
+
   const commitActiveMention = useCallback(() => {
     const item = mentionItems[activeMentionIndex];
     if (!item) return;
     if (item.kind === 'skill') handleMentionSelect(item.skill);
-    else handleMentionProjectSelect(item.project.id);
-  }, [mentionItems, activeMentionIndex, handleMentionSelect, handleMentionProjectSelect]);
+    else if (item.kind === 'project') handleMentionProjectSelect(item.project.id);
+    else if (item.kind === 'connector') handleMentionConnectorSelect(item.connector);
+    else handleMentionFileSelect(item.file);
+  }, [
+    mentionItems,
+    activeMentionIndex,
+    handleMentionSelect,
+    handleMentionProjectSelect,
+    handleMentionConnectorSelect,
+    handleMentionFileSelect,
+  ]);
 
   /**
    * The editor arm's mention menu. The suggestion plugin owns the trigger and
@@ -2737,6 +2856,17 @@ const ChatComposerNewComponent = ({
   const handleStop = useCallback(() => {
     onStop?.();
   }, [onStop]);
+
+  const handleRemoveAttachmentUpload = useCallback(
+    (index: number) => {
+      if (!attachmentUploadAttempt || !onRemoveAttachmentUpload) return;
+      if (!attachmentUploadAttempt.statuses.some((status) => status.phase === 'failed')) {
+        holdUploadCancelNotice(true);
+      }
+      onRemoveAttachmentUpload(index);
+    },
+    [attachmentUploadAttempt, onRemoveAttachmentUpload],
+  );
 
   const handleRetryAttachmentUpload = useCallback(
     (index: number) => {
@@ -3215,7 +3345,6 @@ const ChatComposerNewComponent = ({
    */
   const persistedDraftOwnerRef = useRef<string | null>(conversationId ?? null);
   const persistedDraftHydratedRef = useRef(false);
-  const claimedReloadedDraftRef = useRef('');
   const claimedArrivalDraftRef = useRef<{
     owner: string | null;
     content: string;
@@ -3267,33 +3396,17 @@ const ChatComposerNewComponent = ({
       pendingDraftCleanupRef.current = null;
     }
     const parked = useChatStore.getState().getDraftContent(conversationId);
-    // A saved conversation owns its draft outright. The unsaved surface does
-    // not. Its slot is shared by every new chat, so it is only the same draft
-    // when the user stepped back to it, or when the document itself was
-    // reloaded under them. See pending-composer-draft.
     persistedDraftOwnerRef.current = conversationId ?? null;
-    if (!conversationId && !claimedReloadedDraftRef.current) {
-      // Re-running this effect on the same composer is the development
-      // double-mount, not a second arrival, so the claim it already spent is
-      // still this composer's to restore.
-      claimedReloadedDraftRef.current = claimReloadedPendingDraft();
-    }
+    setComposerExpanded(false);
     if (claimedArrivalDraftRef.current?.owner !== owner) {
       claimedArrivalDraftRef.current = {
         owner,
-        content: conversationId
-          ? parked || readPersistedDraft(conversationId)
-          : restorablePendingDraft(parked) || claimedReloadedDraftRef.current,
+        content: parked || readPersistedDraft(owner),
       };
     }
     writeComposerMessage(claimedArrivalDraftRef.current.content);
     return () => {
       const outgoing = messageRef.current;
-      // The unsaved surface has no stable conversation owner. Its history
-      // draft therefore belongs only to the navigation-aware session slot:
-      // putting it in the generic conversation map would make the next New
-      // chat inherit it as soon as this deferred cleanup runs.
-      if (!conversationId && outgoing.trim()) parkPendingDraft(outgoing);
       const cleanup = { owner, cancelled: false };
       pendingDraftCleanupRef.current = cleanup;
       queueMicrotask(() => {
@@ -3331,10 +3444,7 @@ const ChatComposerNewComponent = ({
    * mounts its replacement BEFORE the save fails. Never overwrite live typing.
    *
    * Only a draft that ARRIVES while this composer is on screen is a handback.
-   * One that was already parked when it mounted belongs to the surface the
-   * user just left, and on the unsaved surface that is the previous new chat's
-   * text; restoring it here would hand it forward and undo the rule the mount
-   * path applies.
+   * One that was already parked when it mounted was restored by the mount path.
    *
    * Live typing DEFERS the handback rather than dropping it. Marking the draft
    * seen and returning stranded it: the slot still held the text but this
@@ -3367,7 +3477,7 @@ const ChatComposerNewComponent = ({
     if (messageRef.current.trim()) return;
     deferredHandbackRef.current = null;
     writeComposerMessage(deferred.content);
-    setLocalNotice(RESTORED_DRAFT_NOTICE);
+    setLocalNotice(restoredDraftNotice());
     clearDraftContent(conversationId);
   }, [clearDraftContent, conversationId, message, parkedDraft, writeComposerMessage]);
 
@@ -3386,7 +3496,7 @@ const ChatComposerNewComponent = ({
     if (!deferredUnsentDraft || messageRef.current.trim()) return;
     setSendPendingFlag(false);
     writeComposerMessage(deferredUnsentDraft);
-    setLocalNotice(RESTORED_DRAFT_NOTICE);
+    setLocalNotice(restoredDraftNotice());
     clearDeferredUnsentDraft(conversationId);
   }, [
     clearDeferredUnsentDraft,
@@ -3655,6 +3765,11 @@ const ChatComposerNewComponent = ({
         setShowMentions(false);
         setShowOverflowMenu(false);
         setShowSlashMenu(false);
+        if (!menuWasOpen && composerExpanded) {
+          e.preventDefault();
+          setComposerExpanded(false);
+          return;
+        }
         if (!menuWasOpen && isTurnActive) {
           e.preventDefault();
           e.stopPropagation();
@@ -3674,10 +3789,31 @@ const ChatComposerNewComponent = ({
       showSlashMenu,
       mentionItems.length,
       commitActiveMention,
+      composerExpanded,
     ],
   );
 
+  const toggleComposerExpanded = useCallback(() => {
+    setComposerExpanded((current) => !current);
+    focusComposer();
+  }, [focusComposer]);
+
+  const handleComposerFieldKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (event.key !== KEY_ESCAPE || event.defaultPrevented || !composerExpanded) return;
+      if (showMentions || showOverflowMenu || showSlashMenu) return;
+      event.preventDefault();
+      setComposerExpanded(false);
+      focusComposer();
+    },
+    [composerExpanded, focusComposer, showMentions, showOverflowMenu, showSlashMenu],
+  );
+
   const hasContent = Boolean(message.trim() || attachments.length > 0);
+  const showExpandControl = composerExpanded || composerExpandable;
+  const expandControlLabel = composerExpanded
+    ? tChat('composer.collapseInput', { defaultValue: 'Collapse message input' })
+    : tChat('composer.expandInput', { defaultValue: 'Expand message input' });
   const usageBlockResetAt = usageBlock?.resetAt;
   const [usageBlockNowMs, setUsageBlockNowMs] = useState(() => Date.now());
   useEffect(() => {
@@ -4022,9 +4158,10 @@ const ChatComposerNewComponent = ({
           previews={uploadAttemptPreviews}
           statuses={attachmentUploadAttempt.statuses}
           onRetry={handleRetryAttachmentUpload}
-          onRemove={onRemoveAttachmentUpload ?? (() => undefined)}
+          onRemove={handleRemoveAttachmentUpload}
           disableRemove={
-            !attachmentUploadAttempt.statuses.some((status) => status.phase === 'failed')
+            !onRemoveAttachmentUpload ||
+            attachmentUploadAttempt.statuses.every((status) => status.phase === 'complete')
           }
           className="mb-2"
           privacyShortLabel={attachmentPrivacyShortLabel}
@@ -4377,6 +4514,90 @@ const ChatComposerNewComponent = ({
                 )}
               </>
             )}
+
+            {filteredMentionConnectors.length > 0 && (
+              <>
+                <div className="mb-1.5 mt-2 border-t border-border/40 px-3 pt-2 text-caption font-medium uppercase tracking-wider text-muted-foreground">
+                  Connected apps
+                </div>
+                {filteredMentionConnectors.map((connector, i) => {
+                  const index = filteredSkills.length + filteredMentionProjects.length + i;
+                  return (
+                    <button
+                      key={connector.id}
+                      type="button"
+                      role="option"
+                      aria-selected={index === activeMentionIndex}
+                      onMouseEnter={() => setMentionIndex(index)}
+                      onClick={() => handleMentionConnectorSelect(connector)}
+                      className={cn(
+                        'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors',
+                        index === activeMentionIndex ? 'bg-muted/70' : 'hover:bg-muted/60',
+                      )}
+                    >
+                      <OfficialConnectorLogo
+                        connector={connector}
+                        className="h-5 w-5 shrink-0 rounded-full shadow-none"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-medium">{connector.label}</div>
+                        {connector.description ? (
+                          <div className="truncate text-xs text-muted-foreground">
+                            {connector.description}
+                          </div>
+                        ) : null}
+                      </div>
+                    </button>
+                  );
+                })}
+              </>
+            )}
+
+            {!attachmentsUnavailable && (
+              <>
+                <div className="mb-1.5 mt-2 border-t border-border/40 px-3 pt-2 text-caption font-medium uppercase tracking-wider text-muted-foreground">
+                  Files
+                </div>
+                {mentionFiles.error ? (
+                  <p className="px-3 py-2 text-xs text-muted-foreground">{mentionFiles.error}</p>
+                ) : mentionFiles.loading && mentionFileItems.length === 0 ? (
+                  <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground">
+                    <Spinner size="sm" aria-label={COMPOSER_FILES_LOADING_LABEL} />
+                    {COMPOSER_FILES_LOADING_LABEL}
+                  </div>
+                ) : mentionFileItems.length === 0 ? (
+                  <p className="px-3 py-2 text-xs text-muted-foreground">No matching files.</p>
+                ) : (
+                  mentionFileItems.map((file, i) => {
+                    const index =
+                      filteredSkills.length +
+                      filteredMentionProjects.length +
+                      filteredMentionConnectors.length +
+                      i;
+                    const Glyph = libraryFileGlyph(file);
+                    return (
+                      <button
+                        key={file.id}
+                        type="button"
+                        role="option"
+                        aria-selected={index === activeMentionIndex}
+                        onMouseEnter={() => setMentionIndex(index)}
+                        onClick={() => handleMentionFileSelect(file)}
+                        className={cn(
+                          'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors',
+                          index === activeMentionIndex ? 'bg-muted/70' : 'hover:bg-muted/60',
+                        )}
+                      >
+                        <Glyph aria-hidden className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                          {file.file_name}
+                        </span>
+                      </button>
+                    );
+                  })
+                )}
+              </>
+            )}
           </div>
         </AnchoredComposerMenu>
 
@@ -4424,6 +4645,7 @@ const ChatComposerNewComponent = ({
                 itself never changes width while it grows. */}
             <div
               ref={composerRowRef}
+              onKeyDown={handleComposerFieldKeyDown}
               className={cn(
                 'chat-composer-field relative -order-1 min-h-[36px] min-w-0 flex-1',
                 emptyState ? 'basis-full sm:min-h-[40px]' : 'basis-0 sm:min-h-[36px]',
@@ -4461,9 +4683,27 @@ const ChatComposerNewComponent = ({
                 // Image mode has no streaming turn to type ahead of, so it stays gated.
                 disabled={composerDisabled || ((imageMode || videoMode) && isTurnActive)}
                 emptyState={Boolean(emptyState)}
+                expanded={composerExpanded}
+                reserveEndInset={showExpandControl}
                 maxLength={COMPOSER_MAX_CHARS}
                 ariaDescribedBy={showCharCounter ? 'composer-char-counter' : undefined}
               />
+              {showExpandControl && (
+                <button
+                  type="button"
+                  onClick={toggleComposerExpanded}
+                  aria-expanded={composerExpanded}
+                  aria-label={expandControlLabel}
+                  title={expandControlLabel}
+                  className="absolute right-0 top-0 z-[var(--z-content-sticky)] flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:h-11 pointer-coarse:w-11"
+                >
+                  {composerExpanded ? (
+                    <Minimize2 className="h-4 w-4" aria-hidden="true" />
+                  ) : (
+                    <Maximize2 className="h-4 w-4" aria-hidden="true" />
+                  )}
+                </button>
+              )}
               {/* AUDIT-FIX CMP-32: character budget. Silent before it matters,
                   explicit once the message approaches the contract ceiling. */}
               {showCharCounter && (
@@ -4558,6 +4798,7 @@ const ChatComposerNewComponent = ({
                       fileInputRef.current?.click();
                       closeMenu();
                     }}
+                    onAttachLibraryFile={(file) => handleFileDrop([file])}
                     showLocalFolderRow={desktopHost !== null}
                     onAttachFromLocalFolder={() => {
                       setLocalFolderPickerOpen(true);
@@ -4600,11 +4841,9 @@ const ChatComposerNewComponent = ({
                     canUseVideoGeneration={canUseVideoGeneration}
                     videoMode={videoMode}
                     onCreateVideo={handleCreateVideoFromMenu}
-                    /* The capability table answers for the web surface, which
-                       cannot capture a screen. Inside the desktop shell the
-                       same page can: the shell answers getDisplayMedia with its
-                       own screen and window picker. */
-                    canTakeScreenshot={canTakeScreenshotCap || desktopHost !== null}
+                    canTakeScreenshot={
+                      canTakeScreenshotCap || desktopHost !== null || canPickDisplayCapture
+                    }
                     isCapturingScreenshot={isCapturingScreenshot}
                     onTakeScreenshot={() => {
                       void handleTakeScreenshot();

@@ -5,15 +5,13 @@ import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
-import {
-  getManagedSkillDirectoryForPlugins,
-  listManagedSkillFiles,
-} from '@/lib/services/skill-catalog-service';
+import { findSelectableSkillWithFiles } from '@/lib/services/skill-catalog-service';
 import { listEnabledPluginIds } from '@/lib/services/plugin-installation-service';
 
 export const runtime = 'nodejs';
 
 const SKILL_NAME_MAX_LENGTH = 200;
+const SKILL_ENTRY_FILE = 'SKILL.md';
 
 function requireSkillName(name: string | undefined): string {
   if (!name || name.length > SKILL_NAME_MAX_LENGTH) {
@@ -31,17 +29,21 @@ async function handleListFiles(
   const { db, userId } = await getUserScopedDb(request, { resolveOrganization: false });
   const name = requireSkillName((await context.params).name);
 
-  const enabledPluginIds = await listEnabledPluginIds(db, userId);
-  const directory = await getManagedSkillDirectoryForPlugins(enabledPluginIds);
-  const skill = directory.find((candidate) => candidate.name === name);
-  if (!skill) {
+  const found = await findSelectableSkillWithFiles({
+    db,
+    userId,
+    name,
+    loadEnabledPluginIds: () => listEnabledPluginIds(db, userId),
+  });
+  if (!found) {
     throw createError.notFound(`Skill "${name}" not found`);
   }
 
-  const files = await listManagedSkillFiles(skill);
-  if (files === null) {
-    throw createError.notFound(`Skill "${name}" not found`);
-  }
+  const bundled = await found.access.listFiles(found.skill);
+  const files = [
+    { path: SKILL_ENTRY_FILE, size: Buffer.byteLength(found.skill.body, 'utf8') },
+    ...bundled,
+  ].sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0));
   return NextResponse.json({ files });
 }
 

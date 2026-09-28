@@ -335,12 +335,15 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(statusBar);
 
   function updateStatusBar(): void {
-    const model = normalizeConfiguredModelId(Config.model());
+    const model = normalizeConfiguredModelId(sidebarProvider?.activeModel() ?? Config.model());
     statusBar.text = buildExtensionStatusBarText(model, Config.agentMode());
     statusBar.show();
   }
 
   updateStatusBar();
+  if (sidebarProvider !== undefined) {
+    context.subscriptions.push(sidebarProvider.onDidChangeActiveModel(updateStatusBar));
+  }
   void reconcileAgentControlConsent(context)
     .then(updateStatusBar)
     .catch((error: unknown) => {

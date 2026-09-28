@@ -9,7 +9,7 @@ const source = readSource('../src/side_panel.ts');
 
 describe('Chrome side-panel interaction accessibility', () => {
   it('uses keyboard-native controls for model, attachment, and slash-command actions', () => {
-    expect(source).toContain("const opt = el('button', {");
+    expect(source).toMatch(/const opt = el\(\s*'button',/);
     expect(source).toContain("const screenshotItem = el('button', {");
     expect(source).toContain("const fileItem = el('button', {");
     expect(source).toContain("const item = el('button', {");

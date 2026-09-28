@@ -11,6 +11,8 @@ import {
   type LocalContextHandoff,
 } from '@agiworkforce/types';
 
+import { t, tPlural } from '../../l10n';
+
 export { openDeveloperSessionLink, resumePendingDeveloperSession } from './developerSessionLink';
 export {
   parseCloudTaskHandoffQuery,
@@ -109,12 +111,12 @@ export function describeDirtyOverwrite(
   const shown = dirtyPaths.slice(0, 10);
   const rest = dirtyPaths.length - shown.length;
   return {
-    message: `Switch this workspace to ${branch} and risk losing uncommitted changes?`,
+    message: t('handoff.switchBranch', { branch }),
     detail: [
-      `${dirtyPaths.length} file${dirtyPaths.length === 1 ? '' : 's'} here have changes no commit holds. Checking out ${branch} can discard them, and that cannot be undone.`,
+      tPlural('handoff.uncommittedFiles', dirtyPaths.length, { branch }),
       '',
       ...shown,
-      ...(rest > 0 ? [`and ${rest} more`] : []),
+      ...(rest > 0 ? [tPlural('handoff.andMore', rest)] : []),
     ].join('\n'),
   };
 }

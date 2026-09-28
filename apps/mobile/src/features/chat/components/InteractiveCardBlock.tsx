@@ -1,8 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, ActivityIndicator, Alert } from 'react-native';
 import { Image } from 'expo-image';
-import { MapPinned, Navigation, ExternalLink } from 'lucide-react-native';
-import type { InteractiveCard, MapSearchCardBody, MapSearchView } from '@agiworkforce/types';
+import { AlertCircle, MapPinned, Navigation, ExternalLink } from 'lucide-react-native';
+import { isAllowedItineraryRouteUrl } from '@agiworkforce/cloud-contracts';
+import {
+  isResolvedPlace,
+  type InteractiveCard,
+  type ItineraryCardBody,
+  type ItineraryTravelMode,
+  type MapSearchCardBody,
+  type MapSearchView,
+  type PlaceIdentity,
+} from '@agiworkforce/types';
 import { getAuthHeaders } from '@/services/authSession';
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
 import { useThemeColors } from '@/src/ui/theme';
@@ -325,6 +334,194 @@ function MapSearchCard({
   );
 }
 
+const ITINERARY_DIRECTIONS: Record<ItineraryTravelMode, string> = {
+  walking: 'Walking directions in Google Maps',
+  driving: 'Driving directions in Google Maps',
+  transit: 'Transit directions in Google Maps',
+  bicycling: 'Cycling directions in Google Maps',
+};
+
+function unresolvedStopLabel(place: PlaceIdentity | undefined): string {
+  return place?.status === 'unresolved' &&
+    (place.reason === 'provider_error' || place.reason === 'rate_limited')
+    ? 'Could not be looked up'
+    : 'Not found on the map';
+}
+
+function itineraryRouteMessage(route: ItineraryCardBody['route']): string | null {
+  if (route.status === 'available' || route.reason === 'too_few_stops') return null;
+  if (route.reason === 'unresolved_stops') {
+    return route.unresolvedStopCount === 1
+      ? 'No route, because one place is missing from the map.'
+      : `No route, because ${route.unresolvedStopCount} places are missing from the map.`;
+  }
+  return 'No route is available for this plan.';
+}
+
+function ItineraryCard({ body }: { body: ItineraryCardBody }) {
+  const colors = useThemeColors();
+  const routeLegs =
+    body.route.status === 'available'
+      ? body.route.legs.filter((leg) => isAllowedItineraryRouteUrl(leg.url))
+      : [];
+  const directions =
+    body.route.status === 'available' ? ITINERARY_DIRECTIONS[body.route.travelMode] : null;
+  const routeMessage = itineraryRouteMessage(body.route);
+  const attribution = body.places.find(isResolvedPlace)?.attribution;
+
+  return (
+    <View
+      style={{
+        marginTop: 12,
+        borderRadius: 16,
+        borderCurve: 'continuous',
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: colors.border,
+        backgroundColor: colors.surfaceElevated,
+      }}
+    >
+      <View style={{ padding: 12, gap: 12 }}>
+        <View style={{ gap: 2 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <MapPinned size={16} color={colors.teal} />
+            <Text
+              selectable
+              accessibilityRole="header"
+              style={{ flex: 1, fontSize: 15, fontWeight: '600', color: colors.textPrimary }}
+            >
+              {body.title}
+            </Text>
+          </View>
+          <Text selectable style={{ fontSize: 12, color: colors.textMuted }}>
+            {body.region.label}
+          </Text>
+        </View>
+
+        {body.summary ? (
+          <Text selectable style={{ fontSize: 14, lineHeight: 20, color: colors.textSecondary }}>
+            {body.summary}
+          </Text>
+        ) : null}
+
+        {body.stops.map((stop) => {
+          const place = body.places[stop.placeIndex];
+          const resolved = place && isResolvedPlace(place) ? place : null;
+          return (
+            <View key={stop.id} style={{ flexDirection: 'row', gap: 10 }}>
+              <View
+                style={{
+                  width: 22,
+                  height: 22,
+                  borderRadius: 11,
+                  backgroundColor: colors.teal,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Text style={{ color: colors.accentText, fontSize: 11, fontWeight: '700' }}>
+                  {stop.pin}
+                </Text>
+              </View>
+              <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+                {stop.startTimeLabel ? (
+                  <Text selectable style={{ fontSize: 11, color: colors.textMuted }}>
+                    {stop.startTimeLabel}
+                  </Text>
+                ) : null}
+                <Text
+                  selectable
+                  style={{ fontSize: 14, fontWeight: '600', color: colors.textPrimary }}
+                >
+                  {resolved
+                    ? resolved.displayName
+                    : place?.status === 'unresolved'
+                      ? place.query
+                      : ''}
+                </Text>
+                {resolved ? (
+                  <Text
+                    selectable
+                    style={{ fontSize: 12, color: colors.textMuted }}
+                    numberOfLines={2}
+                  >
+                    {resolved.formattedAddress}
+                  </Text>
+                ) : (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <AlertCircle size={12} color={colors.textSecondary} />
+                    <Text selectable style={{ fontSize: 12, color: colors.textSecondary }}>
+                      {unresolvedStopLabel(place)}
+                    </Text>
+                  </View>
+                )}
+                {stop.note ? (
+                  <Text
+                    selectable
+                    style={{ fontSize: 13, lineHeight: 19, color: colors.textSecondary }}
+                  >
+                    {stop.note}
+                  </Text>
+                ) : null}
+              </View>
+            </View>
+          );
+        })}
+
+        {directions && routeLegs.length > 0 ? (
+          <View style={{ gap: 8 }}>
+            <Text selectable style={{ fontSize: 11, color: colors.textMuted }}>
+              {directions}
+            </Text>
+            {routeLegs.map((leg) => (
+              <Pressable
+                key={leg.url}
+                accessibilityRole="link"
+                accessibilityLabel={`${leg.label}, ${directions}`}
+                onPress={() => {
+                  void openUntrustedUrlInAppBrowser(leg.url).then((opened) => {
+                    if (opened) return;
+                    Alert.alert(
+                      'Could not open this route',
+                      'Check your connection and try opening the route again.',
+                    );
+                  });
+                }}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                  minHeight: 44,
+                  borderRadius: 12,
+                  borderCurve: 'continuous',
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                }}
+              >
+                <Navigation size={14} color={colors.textPrimary} />
+                <Text style={{ color: colors.textPrimary, fontSize: 13, fontWeight: '600' }}>
+                  {leg.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        ) : routeMessage ? (
+          <Text selectable style={{ fontSize: 12, color: colors.textSecondary }}>
+            {routeMessage}
+          </Text>
+        ) : null}
+
+        {attribution ? (
+          <Text selectable style={{ fontSize: 10, color: colors.textMuted }}>
+            {attribution.providerLabel}
+          </Text>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
 export function InteractiveCardBlock({
   cards,
   tileBaseUrl,
@@ -354,6 +551,9 @@ export function InteractiveCardBlock({
       }}
     >
       {cards.map((card) => {
+        if (card.recognized && card.kind === 'itinerary.v1') {
+          return <ItineraryCard key={card.cardId} body={card.body} />;
+        }
         if (card.recognized && card.kind === 'map-search.v1') {
           return (
             <MapSearchCard

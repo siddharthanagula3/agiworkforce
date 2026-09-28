@@ -81,13 +81,13 @@ Code: `apps/cli/src/tui/tui_app.rs:945-952`, `apps/cli/src/tui/tui_app.rs:953-96
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Follow-up suggestions are off by default (FOLLOW_UP_SUGGESTIONS_ENABLED_DEFAULT = false, never overridden); they appear only after a web-searched answer. Turn them on for ordinary answers. | flag-off |
-| desktop | partial | Same as web (hosted): Follow-up suggestions are off by default (FOLLOW_UP_SUGGESTIONS_ENABLED_DEFAULT = false, never overridden); they appear only after a web-searched answer. Turn them on for ordinary answers. | flag-off |
+| web | partial | owner switch only: set FOLLOW_UP_SUGGESTIONS_ENABLED_DEFAULT to true; the flagged-on path renders chips for ordinary and searched answers. | flag-off |
+| desktop | partial | owner switch only: set FOLLOW_UP_SUGGESTIONS_ENABLED_DEFAULT to true; the flagged-on path renders chips for ordinary and searched answers. | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/messages/ChatMessageList.tsx:1006-1006`, `apps/web/features/chat/components/messages/ChatMessageList.tsx:1280-1288`, `apps/web/features/chat/components/messages/ChatMessageList.tsx:1820-1830`, `apps/web/features/chat/pages/WebChatPage.tsx:5747-5747`
+Code: `apps/web/features/chat/components/messages/ChatMessageList.tsx:1046-1046`, `apps/web/features/chat/components/messages/ChatMessageList.tsx:1372-1372`, `apps/web/features/chat/components/messages/ChatMessageList.tsx:1920-1920`
 
 ## S17.17: Read aloud.
 
@@ -115,15 +115,11 @@ Code: `apps/web/features/chat/components/messages/ChatMessageList.tsx:1006-1006`
 
 - Done when: A failed answer shows a Retry control that re-runs the turn and replaces the failure with the new outcome.
 - Wave: 3
-- Already works on: mobile, vscode, chrome
+- Already works on: web, desktop, mobile, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Keep one failure state: after a retry is refused before streaming the page restores the earlier failed answer, so the alert shows the new error while the transcript and details still show the old one (LQA-05). | states |
-| desktop | partial | Same as web (hosted): Keep one failure state: after a retry is refused before streaming the page restores the earlier failed answer, so the alert shows the new error while the transcript and details still show the old one (LQA-05). | states |
 | cli | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/pages/WebChatPage.tsx:5074-5087`, `apps/web/lib/hooks/useChatStream.ts:4428-4436`, `apps/web/features/chat/lib/turn-error-notice.ts:243-248`
 
 ## S17.21: Continue truncated answer.
 
@@ -154,50 +150,38 @@ Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:1082-1096`, `a
 ## S17.23: Shorten answer.
 
 - Done when: One action rewrites an answer shorter.
-- Wave: 2
+- Wave: 3
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | No Shorten action on answers. A follow-up chip ('Can you make this more concise?') exists, but follow-ups are off by default and appear only after web-searched answers of a matching type, and the chip only pre-fills the composer. | ui, flag-off |
-| desktop | partial | Same as web (hosted): No Shorten action on answers. A follow-up chip ('Can you make this more concise?') exists, but follow-ups are off by default and appear only after web-searched answers of a matching type, and the chip only pre-fills the composer. | ui, flag-off |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/FollowUpSuggestions.tsx:122-122`, `apps/web/features/chat/components/messages/ChatMessageList.tsx:1820-1830`, `apps/web/features/chat/pages/WebChatPage.tsx:5747-5747`
 
 ## S17.24: Expand answer.
 
 - Done when: One action rewrites an answer longer/more detailed.
-- Wave: 2
+- Wave: 3
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | No Expand action on answers. A follow-up chip ('Can you go deeper on one of these points?') exists, but follow-ups are off by default and appear only after web-searched answers of a matching type, and the chip only pre-fills the composer. | ui, flag-off |
-| desktop | partial | Same as web (hosted): No Expand action on answers. A follow-up chip ('Can you go deeper on one of these points?') exists, but follow-ups are off by default and appear only after web-searched answers of a matching type, and the chip only pre-fills the composer. | ui, flag-off |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/FollowUpSuggestions.tsx:74-74`, `apps/web/features/chat/components/messages/ChatMessageList.tsx:1820-1830`, `apps/web/features/chat/pages/WebChatPage.tsx:5747-5747`
 
 ## S17.25: Change tone.
 
 - Done when: One action rewrites an answer in a different tone.
-- Wave: 2
+- Wave: 3
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | No Change-tone action on answers. A follow-up chip ('Can you adjust the tone to be more formal?') exists, but follow-ups are off by default and appear only after web-searched answers of a matching type, and the chip only pre-fills the composer. | ui, flag-off |
-| desktop | partial | Same as web (hosted): No Change-tone action on answers. A follow-up chip ('Can you adjust the tone to be more formal?') exists, but follow-ups are off by default and appear only after web-searched answers of a matching type, and the chip only pre-fills the composer. | ui, flag-off |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/FollowUpSuggestions.tsx:123-123`, `apps/web/features/chat/components/messages/ChatMessageList.tsx:1820-1830`, `apps/web/features/chat/pages/WebChatPage.tsx:5747-5747`
 
 ## S17.26: Revise selected text.
 
@@ -248,29 +232,23 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:2939-2944`, `apps/mobile/ap
 
 - Done when: A thumbs-up on an answer records positive feedback tied to that message.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | host vote not received by the product: VS Code's Chat view shows vote buttons on @agi answers, but the participant registers no onDidReceiveFeedback handler, and the sidebar has no rating. | handler |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/extension-vscode/src/features/chat-participant/chatParticipant.ts:586-600`, `apps/extension-vscode/package.json:724-730`
 
 ## S17.30: Negative feedback.
 
 - Done when: A thumbs-down on an answer records negative feedback tied to that message.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | host vote not received by the product: VS Code's Chat view shows vote buttons on @agi answers, but the participant registers no onDidReceiveFeedback handler, and the sidebar has no rating. | handler |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/extension-vscode/src/features/chat-participant/chatParticipant.ts:586-600`, `apps/extension-vscode/package.json:724-730`
 
 ## S17.31: Report answer.
 
@@ -303,14 +281,10 @@ Code: `apps/extension-vscode/src/features/chat-participant/chatParticipant.ts:58
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only artifacts (panel 'Save to project') and research reports can be saved as project sources; add 'Save to project' for an ordinary answer. | ui |
-| desktop | partial | Same as web (hosted): Only artifacts (panel 'Save to project') and research reports can be saved as project sources; add 'Save to project' for an ordinary answer. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1528-1542`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:802-808`, `apps/web/features/chat/components/artifacts/ArtifactsPanel.tsx:648-648`
 
 ## S17.35: Export answer.
 
@@ -320,12 +294,8 @@ Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1528-1542
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Export covers the whole conversation (Export dialog); add exporting a single answer. | ui |
-| desktop | partial | Same as web (hosted): Export covers the whole conversation (Export dialog); add exporting a single answer. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/pages/WebChatPage.tsx:5469-5469`, `apps/web/features/chat/pages/WebChatPage.tsx:5851-5856`
 
 ## S17.36: Actual-model and usage details.
 

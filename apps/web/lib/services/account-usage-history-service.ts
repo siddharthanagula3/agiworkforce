@@ -1,7 +1,12 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import { creditsFromMicrousd, rateCardUsageLabel } from '@agiworkforce/types';
+import {
+  ACCOUNT_USAGE_HISTORY_GRANULARITIES,
+  creditsFromMicrousd,
+  rateCardUsageLabel,
+  type AccountUsageHistoryGranularity,
+} from '@agiworkforce/types';
 
 import {
   BREAKDOWN_LIMIT,
@@ -16,8 +21,7 @@ import {
   type UsageFreshness,
 } from '@/lib/services/usage-aggregation';
 
-export const USAGE_HISTORY_GRANULARITIES = ['day', 'week', 'month'] as const;
-export type UsageHistoryGranularity = (typeof USAGE_HISTORY_GRANULARITIES)[number];
+export type UsageHistoryGranularity = AccountUsageHistoryGranularity;
 
 export const USAGE_HISTORY_PERIOD_COUNT: Readonly<Record<UsageHistoryGranularity, number>> = {
   day: 30,
@@ -28,7 +32,7 @@ export const USAGE_HISTORY_PERIOD_COUNT: Readonly<Record<UsageHistoryGranularity
 export const USAGE_EXPORT_ROW_LIMIT = 10_000;
 
 export function resolveUsageHistoryGranularity(value: string | null): UsageHistoryGranularity {
-  return USAGE_HISTORY_GRANULARITIES.includes(value as UsageHistoryGranularity)
+  return ACCOUNT_USAGE_HISTORY_GRANULARITIES.includes(value as UsageHistoryGranularity)
     ? (value as UsageHistoryGranularity)
     : 'day';
 }

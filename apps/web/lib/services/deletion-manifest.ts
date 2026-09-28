@@ -72,6 +72,7 @@ const CUSTOMER_CONTENT = [
   'user_memories',
   'user_projects',
   'user_shortcuts',
+  'user_skill_files',
   'user_skills',
   'video_generation_jobs',
   'voice_sessions',
@@ -85,6 +86,7 @@ const CUSTOMER_CONTENT = [
 
 const DERIVED_CONTENT = [
   'context_manifests',
+  'external_resource_references',
   'file_lineage',
   'retrieval_chunks',
   'retrieval_documents',
@@ -120,6 +122,7 @@ const OPERATIONAL_RECORD = [
   'credit_transactions',
   'data_rights_requests',
   'desktop_devices',
+  'developer_projects',
   'device_authorization_codes',
   'device_installations',
   'device_pairings',

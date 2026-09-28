@@ -38,6 +38,7 @@ const MODE_BANNER_TTL: Duration = Duration::from_secs(2);
 
 /// How long a first Ctrl-C keeps the session armed for exit.
 const EXIT_CONFIRM_WINDOW: Duration = Duration::from_secs(2);
+const REWIND_CONFIRM_WINDOW: Duration = EXIT_CONFIRM_WINDOW;
 
 /// How long a transient status-line notice stays on screen. Matched to
 /// [`EXIT_CONFIRM_WINDOW`] so the "press again to exit" hint disappears exactly
@@ -321,6 +322,7 @@ struct TuiApp {
     /// A second press inside `EXIT_CONFIRM_WINDOW` exits; otherwise the intent
     /// lapses, so a stray keystroke minutes later cannot end the session.
     exit_armed_at: Option<Instant>,
+    rewind_armed_at: Option<Instant>,
     /// Transient status-line notice, cleared after [`STATUS_NOTICE_TTL`].
     status_notice: Option<(String, Instant)>,
     model_name: String,
@@ -522,6 +524,7 @@ impl TuiApp {
             spinner_tick: 0,
             should_quit: false,
             exit_armed_at: None,
+            rewind_armed_at: None,
             status_notice: None,
             model_name,
             provider_name,
@@ -818,6 +821,12 @@ impl TuiApp {
                 self.active_overlay = None;
                 resume_session(&reference, self);
             }
+            ViewAction::SideAction(tag) if tag.starts_with("rewind:") => {
+                let arg = tag.trim_start_matches("rewind:").to_string();
+                self.overlay_scroll = 0;
+                self.active_overlay = None;
+                apply_rewind(self, &arg);
+            }
             ViewAction::SideAction(tag) if tag.starts_with("mention:") => {
                 let path = tag.trim_start_matches("mention:").to_string();
                 self.insert_mention(&path);
@@ -1009,6 +1018,7 @@ fn approval_choice_to_decision(
         ApprovalChoice::AlwaysAllow => ApprovalDecision::AlwaysAllow,
         ApprovalChoice::No => ApprovalDecision::Deny,
         ApprovalChoice::DenyAll => ApprovalDecision::Cancel,
+        ApprovalChoice::AllowAll => ApprovalDecision::AllowOnce,
     }
 }
 
@@ -1047,7 +1057,10 @@ fn run_tui_approval_modal(
     terminal: &mut Terminal<CrosstermBackend<Stdout>>,
     ctx: &FrameCtx,
     request: &crate::tui::approval_broker::ApprovalRequest,
-) -> Result<crate::tui::widgets::approval_overlay::ApprovalChoice> {
+) -> Result<(
+    crate::tui::widgets::approval_overlay::ApprovalChoice,
+    Option<String>,
+)> {
     use crate::tui::widgets::approval_overlay::ApprovalChoice;
     use crate::tui::widgets::interactive::{InteractiveView, ViewAction};
 
@@ -1071,13 +1084,48 @@ fn run_tui_approval_modal(
                         terminal.draw(|frame| {
                             draw_turn_chrome(frame, ctx);
                         })?;
-                        return Ok(overlay.result.unwrap_or(ApprovalChoice::No));
+                        let note = overlay.note();
+                        return Ok((overlay.result.unwrap_or(ApprovalChoice::No), note));
                     }
                     ViewAction::Continue | ViewAction::SideAction(_) => {}
                 },
-                Event::Paste(_) => {}
+                Event::Paste(text) => overlay.insert_note_text(&sanitize_terminal_text(&text)),
                 _ => {}
             }
+        }
+    }
+}
+
+fn run_tui_question_modal(
+    terminal: &mut Terminal<CrosstermBackend<Stdout>>,
+    ctx: &FrameCtx,
+    question: &str,
+    options: &[String],
+) -> Result<Option<String>> {
+    use crate::tui::widgets::interactive::{InteractiveView, ViewAction};
+
+    let mut overlay =
+        crate::tui::widgets::question_overlay::QuestionOverlayState::new(question, options);
+    loop {
+        terminal.draw(|frame| {
+            let chat_area = draw_turn_chrome(frame, ctx);
+            overlay.render_into(frame, chat_area);
+        })?;
+        if !event::poll(super::motion::FRAME_INTERVAL)? {
+            continue;
+        }
+        match event::read()? {
+            Event::Key(key) => match overlay.handle_key(crossterm_to_keyaction(key)) {
+                ViewAction::Submit(_) | ViewAction::Close => {
+                    terminal.draw(|frame| {
+                        draw_turn_chrome(frame, ctx);
+                    })?;
+                    return Ok(overlay.answer.take());
+                }
+                ViewAction::Continue | ViewAction::SideAction(_) => {}
+            },
+            Event::Paste(text) => overlay.insert_text(&sanitize_terminal_text(&text)),
+            _ => {}
         }
     }
 }
@@ -2534,10 +2582,6 @@ fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
         .keybindings
         .matches(crate::keybindings::KeybindingAction::Quit, key)
     {
-        // Esc closes what is open before it closes the session: a panel first,
-        // then a half-written composer. Only on an empty composer with nothing
-        // open does it quit, and then only on a second press, because a single
-        // stray Esc used to end the session with no warning at all.
         if !app.input.is_empty() {
             app.input.clear();
             app.cursor = 0;
@@ -2553,7 +2597,39 @@ fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
             return InputAction::Quit;
         }
         app.exit_armed_at = Some(Instant::now());
-        app.status_notice = Some(("press Esc again to quit".to_string(), Instant::now()));
+        app.status_notice = Some((
+            format!(
+                "press {} again to quit",
+                app.keybindings
+                    .display(crate::keybindings::KeybindingAction::Quit)
+                    .unwrap_or("it")
+            ),
+            Instant::now(),
+        ));
+        return InputAction::None;
+    }
+    if key.code == KeyCode::Esc && key.modifiers.is_empty() {
+        if !app.input.is_empty() {
+            app.prompt_history.record(&app.input);
+            app.input.clear();
+            app.cursor = 0;
+            app.rewind_armed_at = None;
+            app.status_notice = Some((
+                "cleared the composer · Up brings it back".to_string(),
+                Instant::now(),
+            ));
+            return InputAction::None;
+        }
+        if app
+            .rewind_armed_at
+            .is_some_and(|armed| armed.elapsed() <= REWIND_CONFIRM_WINDOW)
+        {
+            app.rewind_armed_at = None;
+            open_checkpoint_picker(app);
+            return InputAction::None;
+        }
+        app.rewind_armed_at = Some(Instant::now());
+        app.status_notice = Some(("press Esc again to rewind".to_string(), Instant::now()));
         return InputAction::None;
     }
     if app
@@ -2955,6 +3031,62 @@ fn resume_session(reference: &str, app: &mut TuiApp) {
         role: ChatRole::System,
         text,
     });
+}
+
+fn open_checkpoint_picker(app: &mut TuiApp) {
+    use crate::tui::widgets::checkpoint_picker::{CheckpointEntry, CheckpointPickerView};
+
+    let summaries = app.session.checkpoint_summaries();
+    let entries: Vec<CheckpointEntry> = summaries
+        .iter()
+        .rev()
+        .enumerate()
+        .map(|(offset, summary)| CheckpointEntry {
+            steps: offset + 1,
+            label: sanitize_terminal_text(&format!(
+                "{}  {}  ({}{})",
+                summary.created_at.format("%H:%M"),
+                crate::repl::checkpoint_prompt_line(&summary.prompt),
+                crate::repl::checkpoint_files_label(summary.tracked_files),
+                if summary.conversation_available() {
+                    ""
+                } else {
+                    "; code only"
+                }
+            ))
+            .into_owned(),
+            tracked_files: summary.tracked_files,
+            conversation_available: summary.conversation_available(),
+        })
+        .collect();
+    app.open_overlay(Box::new(CheckpointPickerView::new(entries)));
+}
+
+fn apply_rewind(app: &mut TuiApp, arg: &str) {
+    let (message, rewound) = crate::repl::rewind_session(arg, &mut app.session);
+    let conversation_restored = rewound
+        .as_ref()
+        .is_some_and(|rewound| rewound.conversation_restored);
+    if conversation_restored {
+        rebuild_transcript_from_session(app);
+        app.tool_cells.clear();
+    }
+    app.chat_messages.push(ChatMessage {
+        role: ChatRole::System,
+        text: message.plain_message(),
+    });
+    let prompt = rewound
+        .filter(|rewound| rewound.conversation_restored && !rewound.prompt.trim().is_empty())
+        .map(|rewound| rewound.prompt);
+    if let Some(prompt) = prompt {
+        app.input = prompt;
+        app.cursor = app.input.len();
+        app.status_notice = Some((
+            "your prompt from that point is back in the composer".to_string(),
+            Instant::now(),
+        ));
+    }
+    app.sync_stats();
 }
 
 /// Rebuild the visible transcript from the session's own messages, so what the
@@ -4043,9 +4175,14 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
             }
         }
 
-        "/rewind" => SlashResult::SystemMessage(
-            crate::repl::rewind_session_for_display(arg, &mut app.session).plain_message(),
-        ),
+        "/rewind" => {
+            if arg.trim().is_empty() {
+                open_checkpoint_picker(app);
+            } else {
+                apply_rewind(app, arg);
+            }
+            SlashResult::SystemMessage(String::new())
+        }
 
         // ── Tools & plugins ──
         "/mcp" if !arg.is_empty() => SlashResult::RunMcp(arg.to_string()),
@@ -4168,6 +4305,21 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
             })
         }
 
+        "/skills" if arg.starts_with("remove") => {
+            let name = arg.trim_start_matches("remove").trim();
+            SlashResult::SystemMessage(if name.is_empty() {
+                "Usage: /skills remove <skill name>".to_string()
+            } else {
+                match std::env::current_dir()
+                    .map_err(anyhow::Error::from)
+                    .and_then(|root| crate::installs::remove_skill(&root, name))
+                {
+                    Ok(removed) => format!("Removed the skill {}.", removed.display()),
+                    Err(error) => format!("Could not remove '{name}': {error:#}"),
+                }
+            })
+        }
+
         "/skills" => {
             let skills = crate::skills::discover_skills();
             if skills.is_empty() {
@@ -4241,6 +4393,17 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 Ok(message) => SlashResult::SystemMessage(message),
                 Err(error) => SlashResult::SystemMessage(format!("{error:#}")),
             }
+        }
+
+        "/plugin" | "/plugins"
+            if matches!(
+                arg.split_whitespace().next(),
+                Some("enable" | "disable" | "remove" | "uninstall")
+            ) =>
+        {
+            SlashResult::SystemMessage(crate::installs::plugin_command(arg).unwrap_or_else(|| {
+                "Usage: /plugins enable|disable|remove <name>".to_string()
+            }))
         }
 
         "/plugin" | "/plugins" | "/marketplace" | "/market" => {
@@ -4683,6 +4846,7 @@ pub async fn run(
     auto_route_seed: Option<crate::routing::classify::AutoRouteSeed>,
 ) -> Result<()> {
     crate::tier_cache::ensure_plan_models_cached().await;
+    crate::tools::enable_interactive_questions();
     tokio::spawn(async {
         let Ok(release) = crate::update_check::fetch_latest_release().await else {
             return;
@@ -5823,20 +5987,38 @@ async fn send_message_with_prompt(
                             cost_str: turn_cost_str.clone(),
                             notice: turn_notice.as_deref(),
                         };
-                        let choice = run_tui_approval_modal(terminal, &approval_ctx, &req)?;
+                        if let crate::tui::approval_broker::ApprovalRequestKind::Question {
+                            question,
+                            options,
+                        } = &req.kind
+                        {
+                            let answer =
+                                run_tui_question_modal(terminal, &approval_ctx, question, options)?;
+                            terminal.clear()?;
+                            let decision = if answer.is_some() {
+                                crate::tui::approval_broker::ApprovalDecision::AllowOnce
+                            } else {
+                                crate::tui::approval_broker::ApprovalDecision::Cancel
+                            };
+                            broker.complete_with_note(req.id, decision, answer).await;
+                            continue;
+                        }
+                        let (choice, note) = run_tui_approval_modal(terminal, &approval_ctx, &req)?;
                         // The modal ran its own key loop over frames ratatui
                         // drew; force the next frame to repaint every cell so
                         // nothing the prompt covered survives it.
                         terminal.clear()?;
                         broker
-                            .complete(req.id, approval_choice_to_decision(choice))
+                            .complete_with_note(req.id, approval_choice_to_decision(choice), note)
                             .await;
-                        if matches!(
-                            choice,
-                            crate::tui::widgets::approval_overlay::ApprovalChoice::DenyAll
-                        ) {
-                            // Stop prompting for the rest of this turn.
-                            broker.deny_all_remaining().await;
+                        match choice {
+                            crate::tui::widgets::approval_overlay::ApprovalChoice::DenyAll => {
+                                broker.deny_all_remaining().await;
+                            }
+                            crate::tui::widgets::approval_overlay::ApprovalChoice::AllowAll => {
+                                broker.allow_all_remaining().await;
+                            }
+                            _ => {}
                         }
                     }
                 }
@@ -6019,6 +6201,13 @@ async fn send_message_with_prompt(
                         "Files changed this turn: {}. /diff shows what changed.",
                         changed_files.join(", ")
                     ),
+                });
+            }
+
+            if let Some(footer) = crate::sources::render_footer(&turn.sources) {
+                app.chat_messages.push(ChatMessage {
+                    role: ChatRole::System,
+                    text: footer,
                 });
             }
 
@@ -7197,7 +7386,7 @@ mod tests {
     }
 
     #[test]
-    fn esc_clears_a_written_composer_before_it_will_quit() {
+    fn esc_clears_a_written_composer_then_twice_opens_rewind() {
         use crossterm::event::KeyCode;
 
         let mut app = minimal_app();
@@ -7212,14 +7401,16 @@ mod tests {
         assert_eq!(app.input, "");
         assert_eq!(app.cursor, 0);
 
-        // Even empty, Esc arms the exit and says so; only the second press ends
-        // the session. A single stray Esc used to end it with no warning.
         let action = handle_key_event(&mut app, make_key(KeyCode::Esc));
         assert!(matches!(action, InputAction::None));
-        assert_eq!(app.live_notice(), Some("press Esc again to quit"));
+        assert_eq!(app.live_notice(), Some("press Esc again to rewind"));
 
         let action = handle_key_event(&mut app, make_key(KeyCode::Esc));
-        assert!(matches!(action, InputAction::Quit));
+        assert!(
+            matches!(action, InputAction::None),
+            "Esc twice on an empty composer opens rewind, as in Claude Code, and never quits"
+        );
+        assert!(app.active_overlay.is_some(), "the rewind picker opened");
     }
 
     /// Regression: Esc on the `/history` listing fell straight through to the
@@ -7247,23 +7438,27 @@ mod tests {
             "closing a panel must not arm the exit either"
         );
 
-        // The session is still live: the next Esc only arms the exit.
         let action = handle_key_event(&mut app, make_key(KeyCode::Esc));
         assert!(matches!(action, InputAction::None));
+        assert!(app.exit_armed_at.is_none());
     }
 
     /// An expired arm must not carry over: Esc pressed minutes apart is two
-    /// stray keystrokes, not a confirmed quit.
+    /// stray keystrokes, not a request to rewind.
     #[test]
-    fn an_expired_esc_arm_does_not_quit() {
+    fn an_expired_esc_arm_does_not_open_rewind() {
         use crossterm::event::KeyCode;
 
         let mut app = minimal_app();
         handle_key_event(&mut app, make_key(KeyCode::Esc));
-        app.exit_armed_at = Some(Instant::now() - EXIT_CONFIRM_WINDOW - Duration::from_secs(1));
+        app.rewind_armed_at = Some(Instant::now() - REWIND_CONFIRM_WINDOW - Duration::from_secs(1));
 
         let action = handle_key_event(&mut app, make_key(KeyCode::Esc));
         assert!(matches!(action, InputAction::None));
+        assert!(
+            app.active_overlay.is_none(),
+            "presses minutes apart do not open rewind"
+        );
     }
 
     /// Regression: a terminal without the keyboard protocol never sends

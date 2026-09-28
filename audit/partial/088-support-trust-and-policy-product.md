@@ -16,10 +16,10 @@ nothing is left.
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | Permissions, configuration and custom-instructions screens link to /docs?topic=..., but the docs page ignores the topic parameter and opens the general index. | states |
+| vscode | partial | /docs and /help now honour ?topic= (permissions opens the tool approvals guide; ids, section headings and tags resolve). No help article covers CLI configuration (config.toml) or local custom instructions yet, so those two VS Code links land on the index with a notice; the CLI lane would write and claim-index those two guides. | content |
 | chrome | partial | Only the prompt-injection onboarding has a contextual "Learn more" (to /security); every other help entry is the generic help centre link. | ui |
 
-Code: `apps/extension-vscode/src/features/settings/SettingsPanel.ts:31-35`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:906-910`, `apps/extension/src/side_panel.ts:5589-5592`, `apps/extension/src/side_panel.ts:7140-7149`
+Code: `apps/web/lib/support/doc-topics.ts:7-7`, `apps/web/lib/support/doc-topics.ts:25-25`, `apps/web/app/docs/page.tsx:128-128`, `apps/web/app/docs/page.tsx:151-151`
 
 ## S88.02: Searchable help center.
 
@@ -45,42 +45,39 @@ Code: `apps/extension-vscode/src/features/settings/SettingsPanel.ts:31-35`, `app
 
 - Done when: A user can report a bug from the product, with enough context (build, platform) for support to act.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | Sends bug reports to GitHub issues, not the ticket or email channel the support page names; whether that repository accepts public issues is unconfirmed. | handler |
-| vscode | partial | Sends bug reports to GitHub issues, not the ticket or email channel the support page names; whether that repository accepts public issues is unconfirmed. | handler |
 
-Code: `apps/cli/src/claude_parity.rs:129-131`, `apps/extension-vscode/src/core/commandSetup.ts:1320-1325`, `apps/extension-vscode/src/core/commandSetup.ts:1354-1362`
+Code: `apps/cli/src/claude_parity.rs:129-131`
 
 ## S88.05: Product feedback.
 
 - Done when: Users can send general product feedback from inside the product and it is stored for the team.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | Feedback opens a GitHub issue rather than the product feedback store; whether that repository accepts public issues is unconfirmed. | handler |
-| vscode | partial | Feedback opens a GitHub issue rather than the product feedback store; whether that repository accepts public issues is unconfirmed. | handler |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/cli/src/claude_parity.rs:129-131`, `apps/extension-vscode/src/core/commandSetup.ts:1328-1330`, `apps/extension-vscode/src/core/commandSetup.ts:1354-1362`
+Code: `apps/cli/src/claude_parity.rs:129-131`
 
 ## S88.06: Feature request.
 
 - Done when: Users can submit a feature request from inside the product and it is stored for the team.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | Feedback opens a GitHub issue rather than the product feedback store; whether that repository accepts public issues is unconfirmed. | handler |
-| vscode | partial | Feedback opens a GitHub issue rather than the product feedback store; whether that repository accepts public issues is unconfirmed. | handler |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/cli/src/claude_parity.rs:129-131`, `apps/extension-vscode/src/core/commandSetup.ts:1325-1327`, `apps/extension-vscode/src/core/commandSetup.ts:1354-1362`
+Code: `apps/cli/src/claude_parity.rs:129-131`
 
 ## S88.07: User-reviewable diagnostic bundle.
 
@@ -142,11 +139,11 @@ Code: `apps/cli/src/diagnostics_bundle.rs:52-67`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Same as S2.28: the release feed has no notes body to print. | ui |
+| cli | partial | Same as S2.28: the feed has the notes summary and link; the CLI prints them once p-desktop-cli reads releaseNotes. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/cli/src/claude_parity.rs:1381-1381`
+Code: `apps/web/lib/releases/github-cli-releases.ts:157-157`
 
 ## S88.14: Model-retirement notice.
 

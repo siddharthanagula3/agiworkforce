@@ -14,6 +14,7 @@ import {
 export interface GarnishShortcutHandlers {
   onQuickAsk: () => void;
   onScreenshot: () => void;
+  onWindowShot: () => void;
   onVoice: () => void;
 }
 
@@ -89,6 +90,7 @@ export function registerGarnishShortcuts(
   const handlerFor: Record<ShortcutKey, () => void> = {
     quickAskShortcut: handlers.onQuickAsk,
     screenshotShortcut: handlers.onScreenshot,
+    windowShotShortcut: handlers.onWindowShot,
     voiceShortcut: handlers.onVoice,
   };
 
@@ -109,7 +111,9 @@ export function shortcutRegistrations(): ShortcutRegistration[] {
 }
 
 export function unregisterGarnishShortcuts(): void {
-  globalShortcut.unregisterAll();
+  for (const registration of registrations) {
+    if (registration.status === 'registered') globalShortcut.unregister(registration.accelerator);
+  }
   registrations = [];
   warnedAboutConflict = false;
 }

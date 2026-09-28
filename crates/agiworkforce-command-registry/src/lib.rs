@@ -518,6 +518,13 @@ pub fn builtin_slash_registry_commands() -> Vec<RegistryCommand> {
             true,
             vec![],
         ),
+        RegistryCommand::builtin_slash(
+            "remove-dir",
+            "Remove a directory added with /add-dir",
+            true,
+            true,
+            vec![],
+        ),
         RegistryCommand::builtin_slash("color", "Set the prompt/session color", true, true, vec![]),
         RegistryCommand::builtin_slash(
             "desktop",

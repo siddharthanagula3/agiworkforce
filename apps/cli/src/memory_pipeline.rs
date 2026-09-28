@@ -25,6 +25,9 @@ const MAX_MESSAGE_CHARS: usize = 20_000; // ~5000 tokens at 4 chars/token
 /// Minimum elapsed seconds since last consolidation before triggering a new one.
 const CONSOLIDATION_COOLDOWN_SECS: u64 = 3_600; // 1 hour
 
+pub(crate) const MEMORY_WINDOW_INTERVAL: std::time::Duration =
+    std::time::Duration::from_secs(CONSOLIDATION_COOLDOWN_SECS);
+
 /// Maximum age (in seconds) for session summaries before pruning.
 const SUMMARY_MAX_AGE_SECS: u64 = 30 * 24 * 3_600; // 30 days
 

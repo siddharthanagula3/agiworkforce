@@ -341,6 +341,22 @@ const projectKnowledgeFileExportSchema = z.object({
   updated_at: timestampSchema,
 });
 
+const externalResourceReferenceExportSchema = z.object({
+  id: z.string(),
+  kind: z.string(),
+  provider: z.string(),
+  uri: z.string(),
+  external_id: z.string().nullable(),
+  title: z.string().nullable(),
+  version: z.string().nullable(),
+  version_kind: z.string().nullable(),
+  access: z.string(),
+  connector_id: z.string().nullable(),
+  account_key: z.string().nullable(),
+  first_seen_at: timestampSchema,
+  last_seen_at: timestampSchema,
+});
+
 /**
  * Metadata, not bytes. The export is a JSON download and inlining media would
  * make it unusable. `storage_url` is a private object-storage key that resolves
@@ -434,6 +450,16 @@ const userSkillExportSchema = z.object({
   name: z.string(),
   description: z.string(),
   body: z.string(),
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+
+const userSkillFileExportSchema = z.object({
+  id: z.string(),
+  skill_id: z.string(),
+  path: z.string(),
+  content: z.string(),
+  byte_size: z.number().int().nonnegative(),
   created_at: timestampSchema,
   updated_at: timestampSchema,
 });
@@ -623,10 +649,20 @@ const apiKeyExportSchema = z.object({
   name: z.string(),
   key_prefix: z.string(),
   scopes: z.array(z.string()),
+  project_id: z.string().nullable(),
   last_used_at: nullableTimestampSchema,
   expires_at: nullableTimestampSchema,
   revoked_at: nullableTimestampSchema,
   created_at: timestampSchema,
+});
+
+const developerProjectExportSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  monthly_credit_limit: nullableNumericSchema,
+  archived_at: nullableTimestampSchema,
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
 });
 
 const securityAuditLogExportSchema = z.object({
@@ -2220,6 +2256,20 @@ async function collectUserData(
   });
   exportData['project_knowledge_files'] = projectKnowledgeFiles;
 
+  exportData['external_resource_references'] = await queryExportRowsAcrossWorkspaces({
+    scopedDbFor,
+    workspaces,
+    sql: `select id, kind, provider, uri, external_id, title, version, version_kind, access,
+                 connector_id, account_key, first_seen_at, last_seen_at
+          from external_resource_references
+          where user_id = $1
+          order by first_seen_at asc`,
+    values: [user.id],
+    schema: externalResourceReferenceExportSchema,
+    section: 'external_resource_references',
+    userId: user.id,
+    ledger,
+  });
   // Files the user uploaded and media generated for them. Absent from this
   // export until 2026-08-21, while account erasure has always deleted them.
   // so the product could destroy this category of personal data on request but
@@ -2332,6 +2382,19 @@ async function collectUserData(
     values: [user.id],
     schema: userSkillExportSchema,
     section: 'user_skills',
+    userId: user.id,
+    ledger,
+  });
+
+  exportData['user_skill_files'] = await queryExportRows({
+    db,
+    sql: `select id, skill_id, path, content, byte_size, created_at, updated_at
+          from user_skill_files
+          where user_id = $1
+          order by skill_id asc, path asc`,
+    values: [user.id],
+    schema: userSkillFileExportSchema,
+    section: 'user_skill_files',
     userId: user.id,
     ledger,
   });
@@ -2513,7 +2576,7 @@ async function collectUserData(
   // key itself was only ever shown once, at creation.
   exportData['api_keys'] = await queryExportRows({
     db,
-    sql: `select id, name, key_prefix, scopes, last_used_at, expires_at,
+    sql: `select id, name, key_prefix, scopes, project_id, last_used_at, expires_at,
                  revoked_at, created_at
           from api_keys
           where user_id = $1
@@ -2521,6 +2584,19 @@ async function collectUserData(
     values: [user.id],
     schema: apiKeyExportSchema,
     section: 'api_keys',
+    userId: user.id,
+    ledger,
+  });
+
+  exportData['developer_projects'] = await queryExportRows({
+    db,
+    sql: `select id, name, monthly_credit_limit, archived_at, created_at, updated_at
+          from developer_projects
+          where user_id = $1
+          order by created_at asc`,
+    values: [user.id],
+    schema: developerProjectExportSchema,
+    section: 'developer_projects',
     userId: user.id,
     ledger,
   });

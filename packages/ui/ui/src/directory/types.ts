@@ -2,9 +2,10 @@ import type { ReactNode } from 'react';
 
 export type DirectorySectionKey = 'skills' | 'connectors' | 'plugins';
 
-export type DirectoryBadgeKind = 'first-party' | 'official' | 'verified' | 'community' | 'custom';
+export type DirectoryBadgeKind =
+  'first-party' | 'official' | 'verified' | 'community' | 'custom' | 'update';
 
-export type DirectorySortKey = 'popular' | 'installs' | 'updated' | 'name';
+export type DirectorySortKey = 'popular' | 'updated' | 'name';
 
 export type DirectoryConnectableMode =
   'connect' | 'api-key-form' | 'desktop-and-cli' | 'needs-setup' | 'unavailable';
@@ -63,7 +64,6 @@ export interface DirectoryEntry {
   monogram?: string;
   badges?: readonly DirectoryBadgeKind[];
   isNew?: boolean;
-  installCount?: number;
   installed?: boolean;
   popular?: boolean;
   sourceId?: string;
@@ -235,9 +235,45 @@ export interface DirectoryPluginSettings {
   pluginId: string;
   skills: readonly DirectoryPluginSkillSetting[];
   connectors: readonly DirectoryPluginConnectorSetting[];
+  repairs?: readonly DirectoryPluginRepair[];
   loading: boolean;
   saving: boolean;
   error: string | null;
+}
+
+export type DirectoryPluginScanVerdict = 'pass' | 'review' | 'block';
+
+export interface DirectoryPluginScan {
+  verdict: DirectoryPluginScanVerdict;
+  findings: readonly string[];
+  scannedAt: string;
+}
+
+export interface DirectoryPluginVersionOption {
+  version: string;
+  publishedAt: string | null;
+  changelog: string;
+  newPermissions: readonly string[];
+}
+
+export interface DirectoryPluginVersions {
+  installed: string;
+  latest: string | null;
+  options: readonly DirectoryPluginVersionOption[];
+}
+
+export interface DirectoryPluginRepair {
+  id: string;
+  label: string;
+  actionLabel: string;
+  run: () => Promise<void> | void;
+}
+
+export interface DirectoryPluginPublisher {
+  id: string;
+  name: string;
+  kindLabel?: string;
+  url?: string | null;
 }
 
 export interface DirectoryPluginDetail {
@@ -245,9 +281,14 @@ export interface DirectoryPluginDetail {
   id: string;
   name: string;
   publisher?: string;
+  publisherProfile?: DirectoryPluginPublisher;
   description: string;
   verified?: boolean;
-  installCount?: number;
+  community?: boolean;
+  category?: string;
+  permissions?: readonly string[];
+  scan?: DirectoryPluginScan | null;
+  versions?: DirectoryPluginVersions;
   version?: string;
   enabled?: boolean;
   examplePrompts: readonly string[];
@@ -320,7 +361,7 @@ export interface DirectoryAdapter {
   queryEntries?: (section: DirectorySectionKey, query: DirectoryQuery) => Promise<void> | void;
   loadMore?: (section: DirectorySectionKey) => Promise<void> | void;
   loadDetail?: (section: DirectorySectionKey, id: string) => Promise<DirectoryDetail | null>;
-  install?: (section: DirectorySectionKey, id: string) => Promise<void> | void;
+  install?: (section: DirectorySectionKey, id: string) => Promise<string | void> | void;
   uninstall?: (section: DirectorySectionKey, id: string) => Promise<void> | void;
   deleteEntry?: (section: DirectorySectionKey, id: string) => Promise<void> | void;
   openSettings?: (section: DirectorySectionKey, id: string) => Promise<void> | void;
@@ -340,11 +381,22 @@ export interface DirectoryAdapter {
   removeMarketplace?: (id: string) => Promise<void>;
   refreshMarketplace?: (id: string) => Promise<void>;
   browseMarketplaceSources?: () => Promise<void> | void;
-  uploadPluginArchive?: (file: File) => Promise<DirectoryUploadResult>;
-  uploadSkillFile?: (file: File) => Promise<DirectoryUploadResult>;
+  uploadPluginArchive?: (
+    file: File,
+    acknowledgedScans?: readonly string[],
+  ) => Promise<DirectoryUploadResult>;
+  uploadSkillFile?: (
+    file: File,
+    acknowledgedScans?: readonly string[],
+  ) => Promise<DirectoryUploadResult>;
   createPlugin?: (draft: DirectoryPluginDraft) => Promise<DirectoryUploadResult>;
   pluginSettings?: DirectoryPluginSettings;
   setPluginEnabled?: (id: string, enabled: boolean) => Promise<void> | void;
+  setPluginVersion?: (
+    id: string,
+    version: string,
+    acknowledgedPermissions: readonly string[],
+  ) => Promise<void>;
   setPluginSkillEnabled?: (id: string, skill: string, enabled: boolean) => Promise<void> | void;
   openConnector?: (connectorId: string) => void;
   setSkillEnabled?: (id: string, enabled: boolean) => Promise<void> | void;

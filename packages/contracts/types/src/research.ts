@@ -291,6 +291,11 @@ export const DEFAULT_RESEARCH_DELIVERABLE: ResearchDeliverableSpec = {
   saveToLibrary: false,
 };
 
+export interface ResearchRunConfig {
+  sources: ResearchSourceRequest;
+  deliverable: ResearchDeliverableSpec;
+}
+
 export function normalizeResearchDeliverable(value: unknown): ResearchDeliverableSpec {
   if (!value || typeof value !== 'object') return { ...DEFAULT_RESEARCH_DELIVERABLE };
   const raw = value as Record<string, unknown>;
@@ -365,6 +370,17 @@ export function isResearchReportStatus(value: unknown): value is ResearchReportS
   );
 }
 
+export const RESEARCH_PAUSED_REASON = 'Paused. Resume to continue from where it stopped.';
+
+export const RESEARCH_GUIDANCE_MAX_CHARS = 2_000;
+
+export function isPausedResearchReport(report: {
+  status: ResearchReportStatus;
+  error?: string | null;
+}): boolean {
+  return report.status === 'interrupted' && report.error === RESEARCH_PAUSED_REASON;
+}
+
 /** Every valid {@link ResearchStep} `status`. */
 export const RESEARCH_STEP_STATUSES: readonly ResearchStep['status'][] = [
   'pending',
@@ -436,6 +452,8 @@ export interface ResearchReport {
 
   /** What the run was asked to produce, recorded so a reader can judge it. */
   deliverable?: ResearchDeliverableSpec;
+
+  sourceSelection?: ResearchSourceRequest;
 
   /** Planned questions the finished report does not answer. */
   gaps?: ResearchGap[];
