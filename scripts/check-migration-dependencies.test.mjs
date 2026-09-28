@@ -7,14 +7,17 @@ import { after, test } from 'node:test';
 
 import {
   ALLOWLIST_PATH,
+  APPLIED_CHECKSUMS_PATH,
   APPLIED_STATE_PATH,
   MIGRATIONS_DIR,
   REPO_ROOT,
   SCAN_ROOT,
+  findEditedAppliedMigrations,
   findMigrationDependencyReferences,
   loadAllowlist,
   loadAppliedThrough,
   loadDraftMigrations,
+  migrationChecksum,
   parseDraftMigration,
 } from './check-migration-dependencies.mjs';
 
@@ -216,4 +219,27 @@ test('constants point at the expected repo paths', () => {
   assert.equal(MIGRATIONS_DIR, 'apps/web/db/neon');
   assert.equal(SCAN_ROOT, 'apps/web');
   assert.equal(ALLOWLIST_PATH, 'scripts/config/migration-dependency-allowlist.json');
+});
+
+test('an applied migration may never change, and a pending one may', () => {
+  const applied = 'create table public.a (id int);\n';
+  const repoRoot = makeSandbox({
+    [APPLIED_STATE_PATH]: { appliedThrough: 1 },
+    [APPLIED_CHECKSUMS_PATH]: { '0001_a.sql': migrationChecksum(applied) },
+    [`${MIGRATIONS_DIR}/0001_a.sql`]: applied,
+    [`${MIGRATIONS_DIR}/0002_b.sql`]: 'create table public.b (id int);\n',
+  });
+  assert.deepEqual(findEditedAppliedMigrations({ repoRoot }), []);
+  writeFileSync(
+    path.join(repoRoot, MIGRATIONS_DIR, '0001_a.sql'),
+    `${applied}alter table public.a add column x int;\n`,
+  );
+  assert.deepEqual(findEditedAppliedMigrations({ repoRoot }), [
+    '0001_a.sql changed after it was applied',
+  ]);
+  writeFileSync(path.join(repoRoot, APPLIED_STATE_PATH), JSON.stringify({ appliedThrough: 2 }));
+  assert.equal(
+    findEditedAppliedMigrations({ repoRoot }).at(-1),
+    '0002_b.sql is applied but has no recorded checksum',
+  );
 });

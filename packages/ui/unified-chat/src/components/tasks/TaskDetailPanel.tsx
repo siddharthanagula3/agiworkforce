@@ -40,7 +40,7 @@ import {
   type AgentActivityState,
   type AgentActivityToolEntry,
 } from '@agiworkforce/client-runtime';
-import { Button } from '@agiworkforce/ui';
+import { Button, translateUiPlural } from '@agiworkforce/ui';
 import { cn } from '../../lib/utils';
 import {
   type AgiWorkExcludedTool,
@@ -361,7 +361,11 @@ function TaskCostSection({ run }: { run: CloudAgentRun }) {
             {usage.reasoningTokens > 0
               ? ` · ${formatTaskTokens(usage.reasoningTokens)} reasoning`
               : ''}{' '}
-            · {usage.providerCalls} model {usage.providerCalls === 1 ? 'call' : 'calls'}
+            ·{' '}
+            {translateUiPlural('chat', 'counts.modelCalls', usage.providerCalls, {
+              one: '{{count}} model call',
+              other: '{{count}} model calls',
+            })}
           </p>
           {live ? (
             <p className="mt-1.5 text-caption text-muted-foreground">

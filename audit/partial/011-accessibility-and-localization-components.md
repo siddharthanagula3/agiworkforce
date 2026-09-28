@@ -22,14 +22,13 @@ Code: `apps/mobile/app/(app)/notifications/index.tsx:93-93`, `apps/mobile/src/fe
 
 - Done when: Each screen has a top heading and sections use nested headings, so screen-reader users can jump by heading.
 - Wave: 3
-- Already works on: web, desktop, vscode
+- Already works on: web, desktop, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Header roles appear only on onboarding, lock and consent screens; chat, settings and projects mark no headers. | ui |
-| chrome | partial | b21db27be: each tab view has an h1, drawer and Recents h2; bridge and schedules titles belong to other lanes | bridge URL title, schedules title |
 
-Code: `apps/mobile/app/(public)/onboarding.tsx:471-471`, `apps/extension/src/side_panel.ts:10037-10037`, `apps/extension/src/side_panel.ts:7100-7100`
+Code: `apps/mobile/app/(public)/onboarding.tsx:471-471`
 
 ## S11.06: Focus restoration after panel closure.
 
@@ -173,16 +172,14 @@ Code: `apps/mobile/src/features/billing/storePricing.ts:66-66`, `apps/mobile/lib
 
 - Done when: Counted phrases follow each language's plural rules rather than an English "s" suffix.
 - Wave: 3
-- Already works on: vscode
+- Already works on: web, desktop, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | 56cd1c51f: ~20 files on _one/_other with full Arabic forms; remaining sites are in schedules, connectors, privacy, billing, MCP folders, ChatComposerNew, ProjectSettingsDialog, WorkspaceRoles and server copy | ~60 sites in other lanes' folders, compactToolSummary |
-| desktop | partial | 56cd1c51f: ~20 files on _one/_other with full Arabic forms; remaining sites are in schedules, connectors, privacy, billing, MCP folders, ChatComposerNew, ProjectSettingsDialog, WorkspaceRoles and server copy | ~60 sites in other lanes' folders, compactToolSummary |
 | mobile | partial | Counts use English-only "=== 1 ? '' : 's'" suffixes; use the i18n plural rules (one/few/many) so translated counts read correctly. | ui |
 | chrome | partial | 56cd1c51f: tPlural over Intl.PluralRules in place; adding locales is outside this item | only an English locale ships |
 
-Code: `apps/web/features/chat/components/dialogs/KeyboardShortcutsDialog.tsx:158-158`, `packages/ui/i18n/locales/ar/errors.json:295-295`, `apps/mobile/app/(app)/notifications/index.tsx:307-307`, `apps/extension/src/i18n.ts:13-13`
+Code: `apps/mobile/app/(app)/notifications/index.tsx:307-307`, `apps/extension/src/i18n.ts:13-13`, `apps/extension/src/features/side-panel/projectsDrawer.ts:12-12`
 
 ## S11.25: Translated error messages.
 

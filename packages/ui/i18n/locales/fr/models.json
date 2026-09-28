@@ -83,5 +83,9 @@
     "thinkingState": "Réflexion : {{state}}",
     "unavailable": "Indisponible",
     "visionCapability": "Vision"
+  },
+  "counts": {
+    "concurrentAnswers_one": "Votre forfait exécute {{count}} réponse à la fois, les autres démarrent donc à mesure que chacune se termine.",
+    "concurrentAnswers_other": "Votre forfait exécute {{count}} réponses à la fois, les autres démarrent donc à mesure que chacune se termine."
   }
 }

@@ -13,6 +13,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   useConfirmAction,
+  translateUiPlural,
 } from '@agiworkforce/ui';
 import {
   useCreateOrganization,
@@ -834,7 +835,15 @@ export function TeamSection() {
       {canAdminister ? (
         <SectionCard
           title="Pending invitations"
-          description={`${pendingInvitations.length} pending ${pendingInvitations.length === 1 ? 'invitation' : 'invitations'}`}
+          description={translateUiPlural(
+            'settings',
+            'counts.pendingInvitations',
+            pendingInvitations.length,
+            {
+              one: '{{count}} pending invitation',
+              other: '{{count}} pending invitations',
+            },
+          )}
         >
           {invitationsQuery.isLoading ? (
             <div
@@ -931,7 +940,10 @@ export function TeamSection() {
         title="Members"
         description={
           access.maxMembers === null
-            ? `${organization.memberCount} active ${organization.memberCount === 1 ? 'member' : 'members'}`
+            ? translateUiPlural('settings', 'counts.activeMembers', organization.memberCount, {
+                one: '{{count}} active member',
+                other: '{{count}} active members',
+              })
             : `${organization.memberCount} of ${access.maxMembers} licensed members`
         }
       >
@@ -1190,9 +1202,13 @@ export function TeamSection() {
           <div style={{ padding: 'var(--space-5)' }}>
             <p style={{ color: 'var(--text-2)', fontSize: 13, lineHeight: 1.55, margin: 0 }}>
               Deleting erases every chat, project, file, connector and API key in{' '}
-              {organization?.name ?? 'this workspace'} for all {organization?.memberCount ?? 0}{' '}
-              {organization?.memberCount === 1 ? 'member' : 'members'}. Nothing goes on the day you
-              ask: the next page schedules it, and you can cancel there until the scheduled date.
+              {organization?.name ?? 'this workspace'} for all{' '}
+              {translateUiPlural('settings', 'counts.members', organization?.memberCount ?? 0, {
+                one: '{{count}} member',
+                other: '{{count}} members',
+              })}
+              . Nothing goes on the day you ask: the next page schedules it, and you can cancel
+              there until the scheduled date.
             </p>
             <SettingsPageLink
               href={WORKSPACE_DELETION_PATH}

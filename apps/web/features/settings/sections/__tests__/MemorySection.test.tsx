@@ -39,7 +39,11 @@ describe('MemorySection top-level settings entry', () => {
     vi.clearAllMocks();
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => ({ ok: true, status: 200, json: async () => ({}) })),
+      vi.fn(async (input: unknown) => ({
+        ok: true,
+        status: 200,
+        json: async () => (String(input) === '/api/memory/conflicts' ? { conflicts: [] } : {}),
+      })),
     );
     useMemoryStore.setState({ facts: [], syncStatus: 'idle' });
   });

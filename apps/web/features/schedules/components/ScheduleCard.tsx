@@ -1,7 +1,15 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Badge, Button, Card, CardContent, Switch, useMenuKeyboard } from '@agiworkforce/ui';
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  Switch,
+  useMenuKeyboard,
+  translateUiPlural,
+} from '@agiworkforce/ui';
 import {
   Bell,
   CalendarClock,
@@ -89,9 +97,22 @@ export function scheduleTiming(schedule: ScheduleTask): string {
   if (recurrence === 'once') return formatDateTime(schedule.executeAt, schedule.timezone);
   if (recurrence === 'interval' && schedule.intervalMs) {
     const minutes = schedule.intervalMs / 60_000;
-    if (minutes % 1_440 === 0) return `Every ${minutes / 1_440} day${minutes === 1_440 ? '' : 's'}`;
-    if (minutes % 60 === 0) return `Every ${minutes / 60} hour${minutes === 60 ? '' : 's'}`;
-    return `Every ${minutes} minute${minutes === 1 ? '' : 's'}`;
+    if (minutes % 1_440 === 0) {
+      return translateUiPlural('common', 'counts.everyDays', minutes / 1_440, {
+        one: 'Every {{count}} day',
+        other: 'Every {{count}} days',
+      });
+    }
+    if (minutes % 60 === 0) {
+      return translateUiPlural('common', 'counts.everyHours', minutes / 60, {
+        one: 'Every {{count}} hour',
+        other: 'Every {{count}} hours',
+      });
+    }
+    return translateUiPlural('common', 'counts.everyMinutes', minutes, {
+      one: 'Every {{count}} minute',
+      other: 'Every {{count}} minutes',
+    });
   }
   if (recurrence === 'custom') {
     return schedule.cronExpression ? describeCronCadence(schedule.cronExpression) : 'Invalid cron';

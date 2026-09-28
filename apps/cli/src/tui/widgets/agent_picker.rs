@@ -21,7 +21,9 @@ use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Paragraph};
 use crate::agents::AgentDefinition;
 use crate::terminal_text::sanitize_terminal_text;
 use crate::tui::pad_to_cols;
-use crate::tui::terminal_palette::{ui_accent, ui_muted, ui_on_light, ui_surface_elevated};
+use crate::tui::terminal_palette::{
+    ui_accent, ui_agent, ui_muted, ui_on_light, ui_surface_elevated,
+};
 
 const PICKER_TITLE: &str = "Agents";
 const SEARCH_PLACEHOLDER: &str = "type to filter agents...";
@@ -271,21 +273,28 @@ fn render_list(frame: &mut ratatui::Frame, area: Rect, state: &AgentPickerState)
             let name_short = pad_to_cols(sanitize_terminal_text(&agent.name).as_ref(), name_col);
             let desc_short = pad_to_cols(sanitize_terminal_text(desc).as_ref(), desc_budget);
 
-            let text = format!(
-                " {} {}  {}  [{}]",
-                cursor_marker, name_short, desc_short, scope,
-            );
-
-            let style = if is_cursor {
-                Style::default()
-                    .fg(ui_on_light())
-                    .bg(ui_accent())
-                    .add_modifier(Modifier::BOLD)
-            } else {
-                Style::default()
-            };
-
-            ListItem::new(text).style(style)
+            if is_cursor {
+                return ListItem::new(format!(
+                    " {} {}  {}  [{}]",
+                    cursor_marker, name_short, desc_short, scope,
+                ))
+                .style(
+                    Style::default()
+                        .fg(ui_on_light())
+                        .bg(ui_accent())
+                        .add_modifier(Modifier::BOLD),
+                );
+            }
+            let name_style = agent
+                .color_name()
+                .and_then(ui_agent)
+                .map(|color| Style::default().fg(color).add_modifier(Modifier::BOLD))
+                .unwrap_or_default();
+            ListItem::new(Line::from(vec![
+                Span::raw(format!(" {cursor_marker} ")),
+                Span::styled(name_short, name_style),
+                Span::raw(format!("  {desc_short}  [{scope}]")),
+            ]))
         })
         .collect();
 
@@ -313,9 +322,19 @@ fn render_detail(frame: &mut ratatui::Frame, area: Rect, state: &AgentPickerStat
             .max_turns
             .map(|n| format!("  max_turns: {n}"))
             .unwrap_or_default();
+        let skills = agent
+            .skills
+            .as_ref()
+            .filter(|skills| !skills.is_empty())
+            .map(|skills| format!("  skills: {}", skills.join(", ")))
+            .unwrap_or_default();
+        let color = agent
+            .color_name()
+            .map(|color| format!("  color: {color}"))
+            .unwrap_or_default();
         let line = sanitize_terminal_text(&format!(
-            " model: {}   tools: {}{}",
-            model, tools, max_turns
+            " model: {}   tools: {}{}{}{}",
+            model, tools, max_turns, skills, color
         ))
         .into_owned();
         frame.render_widget(
@@ -429,6 +448,9 @@ mod tests {
             disallowed_tools: None,
             max_turns: None,
             permission_mode: None,
+            color: None,
+            skills: None,
+            max_budget_usd: None,
             system_prompt: "Body.".to_string(),
             path: PathBuf::from(format!("/tmp/.agiworkforce/agents/{name}.md")),
         }

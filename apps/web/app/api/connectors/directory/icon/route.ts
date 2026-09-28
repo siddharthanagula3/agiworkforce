@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import { CONNECTOR_DIRECTORY_ICON_ID_PARAM } from '@agiworkforce/cloud-contracts';
 
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -20,7 +21,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   );
   if (rateLimited) return rateLimited;
 
-  const connectorId = new URL(request.url).searchParams.get('id');
+  const connectorId = new URL(request.url).searchParams.get(CONNECTOR_DIRECTORY_ICON_ID_PARAM);
   if (!connectorId) throw createError.validation('id query parameter is required');
 
   const records = await getSnapshotRecords();

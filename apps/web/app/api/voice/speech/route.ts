@@ -14,8 +14,8 @@ import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '
 import {
   buildManagedComputeGateResponse,
   buildModelPolicyGateResponse,
-  buildSpendLimitGateResponse,
 } from '@/lib/managed-compute-gate';
+import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import {
   getModelMetadataById,
   getRoutingSlotModel,
@@ -38,7 +38,7 @@ import {
 } from '@/lib/services/managed-usage-request-service';
 import {
   buildManagedComputeAccessGateResponse,
-  evaluateManagedComputeSubscriptionAccess,
+  evaluateManagedComputeAccess,
 } from '@/lib/services/managed-compute-access';
 import { sideCallProviderAllowed } from '@/lib/server/side-call-training-policy';
 import { DEFAULT_SPEECH_VOICE, SPEECH_VOICES } from '@/lib/voice/speech-voices';
@@ -83,8 +83,6 @@ async function handleSpeech(request: NextRequest) {
     headers,
   );
   if (managedGateResponse) return managedGateResponse;
-  const spendGateResponse = await buildSpendLimitGateResponse(userId);
-  if (spendGateResponse) return spendGateResponse;
 
   const parsed = SpeechRequestSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
@@ -138,10 +136,12 @@ async function handleSpeech(request: NextRequest) {
   let reservation: ManagedUsageRequestReservation;
   try {
     const entitlement = await resolveEntitlementBundle(scoped.db, userId);
-    const access = await evaluateManagedComputeSubscriptionAccess(
+    const access = await evaluateManagedComputeAccess(
       scoped.db,
       userId,
       entitlement.subscription,
+      resolveCloudChatSurface(request),
+      { request },
     );
     if (!access.allowed) {
       const gateResponse = buildManagedComputeAccessGateResponse(access, headers);

@@ -1,36 +1,27 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { z } from 'zod';
+import {
+  CONNECTOR_CALLS_PATH,
+  ConnectorCallLogResponseSchema,
+  type ConnectorCallEntry,
+  type ConnectorCallOutcome,
+} from '@agiworkforce/cloud-contracts';
 import { Spinner } from '@agiworkforce/ui';
 
 import { cn } from '@shared/lib/utils';
 import { toUserMessage } from '@/lib/user-error-message';
 
-const CALL_LOG_ENDPOINT = '/api/connectors/calls';
 const DEFAULT_LIMIT = 20;
 const MS_PER_SECOND = 1000;
 
-const CallEntrySchema = z.object({
-  connectorId: z.string(),
-  toolName: z.string(),
-  outcome: z.enum(['succeeded', 'failed', 'blocked']),
-  durationMs: z.number().nullable(),
-  occurredAt: z.string(),
-});
-
-const CallLogSchema = z.object({ calls: z.array(CallEntrySchema) });
-
-type CallEntry = z.infer<typeof CallEntrySchema>;
-type CallOutcome = CallEntry['outcome'];
-
-const OUTCOME_LABEL: Record<CallOutcome, string> = {
+const OUTCOME_LABEL: Record<ConnectorCallOutcome, string> = {
   succeeded: 'Worked',
   failed: 'Failed',
   blocked: 'Blocked here',
 };
 
-const OUTCOME_CLASS: Record<CallOutcome, string> = {
+const OUTCOME_CLASS: Record<ConnectorCallOutcome, string> = {
   succeeded: 'text-success-text',
   failed: 'text-danger-text',
   blocked: 'text-warning-text',
@@ -56,9 +47,9 @@ function formatOccurredAt(iso: string): string {
   return at.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 }
 
-async function fetchCalls(connectorId: string, signal: AbortSignal): Promise<CallEntry[]> {
+async function fetchCalls(connectorId: string, signal: AbortSignal): Promise<ConnectorCallEntry[]> {
   const params = new URLSearchParams({ connectorId, limit: String(DEFAULT_LIMIT) });
-  const response = await fetch(`${CALL_LOG_ENDPOINT}?${params.toString()}`, {
+  const response = await fetch(`${CONNECTOR_CALLS_PATH}?${params.toString()}`, {
     credentials: 'include',
     cache: 'no-store',
     signal,
@@ -67,13 +58,13 @@ async function fetchCalls(connectorId: string, signal: AbortSignal): Promise<Cal
   if (!response.ok) {
     throw new Error(body?.error?.message ?? `Request failed (${response.status})`);
   }
-  const parsed = CallLogSchema.safeParse(body);
+  const parsed = ConnectorCallLogResponseSchema.safeParse(body);
   if (!parsed.success) throw new Error('The call log came back in a shape this page cannot read.');
   return parsed.data.calls;
 }
 
 export function ConnectorCallLog({ connectorId }: { connectorId: string }) {
-  const [calls, setCalls] = useState<CallEntry[] | null>(null);
+  const [calls, setCalls] = useState<ConnectorCallEntry[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);

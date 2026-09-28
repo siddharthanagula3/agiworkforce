@@ -8,6 +8,8 @@ pub mod api_keys;
 pub mod artifacts;
 pub mod chat;
 pub mod client;
+pub mod code_sessions;
+pub mod devices;
 pub mod handshake;
 pub mod image;
 pub mod image_provenance;

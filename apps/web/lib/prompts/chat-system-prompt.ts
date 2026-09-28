@@ -125,9 +125,33 @@ const V2_SECTIONS: ChatSystemPromptSections = {
     'separates them what the user asks for on this turn wins.',
 };
 
+const V3_SECTIONS: ChatSystemPromptSections = {
+  ...V2_SECTIONS,
+  artifact_runtime:
+    'HTML and React artifacts can use AI and keep saved data once they are published and ' +
+    'opened by a signed-in viewer. window.agi.complete(prompt) sends one text prompt to a ' +
+    "model and resolves to the reply as a string; every call counts toward the viewer's own " +
+    "plan, never the author's, and the page asks the viewer to allow AI before the first call. " +
+    'window.agi.storage keeps text between visits, and each of its calls returns a promise: ' +
+    'get(key, shared) resolves to { key, value, shared }, or null when nothing is saved under ' +
+    'the key; set(key, value, shared) saves a string; delete(key, shared) removes it; and ' +
+    'list(prefix, shared) resolves to { keys }. Pass shared as true ' +
+    'for data every viewer of the artifact sees, and leave it false for data only the current ' +
+    'viewer sees. Values are strings, so store other data with JSON.stringify and read it back ' +
+    'with JSON.parse. A key is 1 to 200 characters with no spaces, slashes or quotes, one value ' +
+    'holds up to 4 MB, and each artifact holds up to 20 MB of shared data and 20 MB for each ' +
+    'viewer. The artifact has no network access, so never fetch other URLs from it. Every call ' +
+    'can reject, while the artifact is unpublished, when the viewer is signed out or declines, ' +
+    'or when a limit is reached, so catch each error and show the user what happened. In the ' +
+    'chat preview these calls reject until the artifact is published, so tell the user to ' +
+    'publish it to try its AI and saved data. Use these APIs only when the user asks for an app ' +
+    'that needs AI or saved data.',
+};
+
 export const CHAT_SYSTEM_PROMPT_VERSIONS: readonly ChatSystemPromptVersion[] = [
   { version: 1, sections: V1_SECTIONS },
   { version: 2, sections: V2_SECTIONS },
+  { version: 3, sections: V3_SECTIONS },
 ];
 
 /** The version the chat route serves unless a variant or a rollout picks another. */

@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import type { GoogleDrivePickerResponse } from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
@@ -16,10 +17,9 @@ async function handleGetPicker(request: NextRequest): Promise<NextResponse> {
   const developerKey = process.env['GOOGLE_PICKER_API_KEY']?.trim();
   const appId = process.env['GOOGLE_PICKER_APP_ID']?.trim();
   if (!developerKey || !appId) {
-    return NextResponse.json(
-      { status: 'not-configured' },
-      { headers: { 'Cache-Control': 'no-store' } },
-    );
+    return NextResponse.json({ status: 'not-configured' } satisfies GoogleDrivePickerResponse, {
+      headers: { 'Cache-Control': 'no-store' },
+    });
   }
 
   const access = await resolveConnectorAccessToken(userId, GOOGLE_DRIVE_CONNECTOR_ID);
@@ -28,13 +28,18 @@ async function handleGetPicker(request: NextRequest): Promise<NextResponse> {
       {
         status:
           access.status === 'reauthorization-required' ? 'reconnect-required' : 'not-connected',
-      },
+      } satisfies GoogleDrivePickerResponse,
       { headers: { 'Cache-Control': 'no-store' } },
     );
   }
 
   return NextResponse.json(
-    { status: 'ready', accessToken: access.accessToken, developerKey, appId },
+    {
+      status: 'ready',
+      accessToken: access.accessToken,
+      developerKey,
+      appId,
+    } satisfies GoogleDrivePickerResponse,
     { headers: { 'Cache-Control': 'no-store' } },
   );
 }

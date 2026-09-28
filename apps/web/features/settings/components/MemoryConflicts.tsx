@@ -2,6 +2,11 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { Spinner } from '@agiworkforce/ui';
+import {
+  parseManagedMemoryConflictsResponse,
+  parseManagedMemoryRestoreResponse,
+  type ManagedMemoryConflict,
+} from '@agiworkforce/types';
 import { useMemoryStore } from '@agiworkforce/unified-chat';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
@@ -13,34 +18,39 @@ const CONFLICT_RULE =
 const LOAD_FAILED_MESSAGE = 'Could not load replaced memories. Try again later.';
 const RESTORE_FAILED_MESSAGE = 'Could not switch back to that memory. Try again.';
 
-interface MemoryConflict {
-  id: string;
-  content: string;
-  replacedAt: string | null;
-  kept: { id: string; content: string; pinned: boolean; source: string | null };
-}
-
-async function readJson<T>(response: Response, fallback: string): Promise<T> {
-  const data = (await response.json().catch(() => null)) as
-    (T & { error?: { message?: string } }) | null;
-  if (!response.ok || data === null) throw new Error(data?.error?.message || fallback);
-  return data;
+async function readContract<T>(
+  response: Response,
+  parse: (value: unknown) => T | null,
+  fallback: string,
+): Promise<T> {
+  const data: unknown = await response.json().catch(() => null);
+  if (!response.ok) {
+    const message =
+      data && typeof data === 'object'
+        ? (data as { error?: { message?: unknown } }).error?.message
+        : undefined;
+    throw new Error(typeof message === 'string' && message ? message : fallback);
+  }
+  const parsed = parse(data);
+  if (parsed === null) throw new Error(fallback);
+  return parsed;
 }
 
 export function MemoryConflicts() {
   const factCount = useMemoryStore((s) => s.facts.length);
   const hydrateMemories = useMemoryStore((s) => s.hydrateFromServer);
-  const [conflicts, setConflicts] = useState<MemoryConflict[] | null>(null);
+  const [conflicts, setConflicts] = useState<ManagedMemoryConflict[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [restoringId, setRestoringId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const data = await readJson<{ conflicts?: MemoryConflict[] }>(
+      const data = await readContract(
         await fetch(CONFLICTS_PATH),
+        parseManagedMemoryConflictsResponse,
         LOAD_FAILED_MESSAGE,
       );
-      setConflicts(data.conflicts ?? []);
+      setConflicts(data.conflicts);
       setError(null);
     } catch (caught) {
       setConflicts([]);
@@ -52,15 +62,16 @@ export function MemoryConflicts() {
     void load();
   }, [load, factCount]);
 
-  const restore = async (conflict: MemoryConflict) => {
+  const restore = async (conflict: ManagedMemoryConflict) => {
     setRestoringId(conflict.id);
     setError(null);
     try {
-      await readJson(
+      await readContract(
         await fetch(`/api/memory/${encodeURIComponent(conflict.id)}/restore`, {
           method: 'POST',
           headers: await addCsrfHeaders({}),
         }),
+        parseManagedMemoryRestoreResponse,
         RESTORE_FAILED_MESSAGE,
       );
       await Promise.all([load(), hydrateMemories()]);

@@ -277,7 +277,11 @@ export const proxy: NextMiddleware = async (request, event) => {
   const apiHostBounce = apiHostRedirect(request);
   if (apiHostBounce) return apiHostBounce;
 
-  if (isProtectedAppRoute(request) && !hasBrowserSessionCookie(request)) {
+  if (
+    isProtectedAppRoute(request) &&
+    !hasBrowserSessionCookie(request) &&
+    request.nextUrl.pathname !== CHAT_ROOT_PATH
+  ) {
     return buildSignedOutRedirect(request);
   }
 

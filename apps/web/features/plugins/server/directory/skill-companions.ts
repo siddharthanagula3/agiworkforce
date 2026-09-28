@@ -17,6 +17,7 @@ import {
   readCommunityPluginFile,
 } from '@/lib/services/plugin-submission-service';
 import {
+  CLAUDE_SKILL_FILE_NAME,
   GITHUB_API_USER_AGENT,
   GITHUB_TOKEN_ENV_VAR,
   PLUGIN_DIRECTORY_FETCH_TIMEOUT_MS,
@@ -38,6 +39,7 @@ const BINARY: SkillFileReadOutcome = { ok: false, reason: 'binary' };
 const TOO_LARGE: SkillFileReadOutcome = { ok: false, reason: 'too_large' };
 
 export function skillDirectoryOf(skillFilePath: string): string {
+  if (!skillFilePath.endsWith(`/${CLAUDE_SKILL_FILE_NAME}`)) return '';
   const index = skillFilePath.lastIndexOf('/');
   return index > 0 ? skillFilePath.slice(0, index) : '';
 }

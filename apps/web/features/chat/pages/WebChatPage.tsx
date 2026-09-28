@@ -71,6 +71,12 @@ import {
   ProjectSourcesToggleButton,
 } from '@features/projects/components/ProjectSourcesPanel';
 import {
+  ProjectAnswerSaveProvider,
+  projectAnswerFileName,
+  type ProjectAnswerSave,
+} from '@features/projects/components/project-answer-save';
+import { uploadProjectKnowledgeFile } from '@features/projects/services/project-knowledge-upload';
+import {
   EMPTY_VARIANT_INFO,
   resolveLeafForSibling,
   resolveSurvivingLeaf,
@@ -124,7 +130,14 @@ import {
   ChevronUp,
   EyeOff,
 } from '@agiworkforce/icons';
-import { Button, Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@agiworkforce/ui';
+import {
+  Button,
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+  TooltipProvider,
+  translateUiPlural,
+} from '@agiworkforce/ui';
 import { ShareConversationDialog } from '../components/share/ShareConversationDialog';
 import { useArtifactCloudSync } from '../hooks/use-artifact-cloud-sync';
 import { useBrowserReplyReadyPreference } from '../hooks/use-browser-reply-ready-preference';
@@ -794,7 +807,10 @@ async function keepTemporaryChat(params: {
 }
 
 function describeKeptMessages(count: number): string {
-  return count === 1 ? 'The message in this chat' : `All ${count} messages in this chat`;
+  return translateUiPlural('chat', 'counts.messagesInChat', count, {
+    one: 'The message in this chat',
+    other: 'All {{count}} messages in this chat',
+  });
 }
 
 const subscribeToMessageVariantsMode = () => () => {};
@@ -4667,10 +4683,10 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         if (discarded > 0) {
           confirmDestructive({
             title: 'Replace this message?',
-            description:
-              discarded === 1
-                ? 'The reply below it is deleted and cannot be recovered.'
-                : `The ${discarded} messages below it are deleted and cannot be recovered.`,
+            description: translateUiPlural('chat', 'counts.discardedReplies', discarded, {
+              one: 'The reply below it is deleted and cannot be recovered.',
+              other: 'The {{count}} messages below it are deleted and cannot be recovered.',
+            }),
             confirmLabel: 'Replace',
             onConfirm: () => runSubmitEdit(id, next, planned, conversationId),
           });
@@ -4847,10 +4863,10 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       if (discarded > 0) {
         confirmDestructive({
           title: 'Retry this message?',
-          description:
-            discarded === 1
-              ? 'The reply below it is deleted and cannot be recovered.'
-              : `The ${discarded} messages below it are deleted and cannot be recovered.`,
+          description: translateUiPlural('chat', 'counts.discardedReplies', discarded, {
+            one: 'The reply below it is deleted and cannot be recovered.',
+            other: 'The {{count}} messages below it are deleted and cannot be recovered.',
+          }),
           confirmLabel: 'Retry',
           onConfirm: () => void replaceTurn(),
         });
@@ -5104,6 +5120,23 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       ? s.disabledConnectorIdsByConversation[displayedConversationId]
       : undefined,
   );
+  const conversationTitle = displayedConversation?.title ?? null;
+  const projectAnswerSave = useMemo<ProjectAnswerSave | null>(() => {
+    if (!conversationProject) return null;
+    if (conversationProject.isOrgShared === true && conversationProject.sharedAccess !== 'write') {
+      return null;
+    }
+    return {
+      projectName: conversationProject.name,
+      save: async (content) => {
+        const file = new File([content], projectAnswerFileName(conversationTitle), {
+          type: 'text/markdown',
+        });
+        await uploadProjectKnowledgeFile({ projectId: conversationProject.id, file });
+      },
+    };
+  }, [conversationProject, conversationTitle]);
+
   const researchRunControls = useMemo<ResearchRunControls>(
     () => ({
       act: handleResearchRunAction,
@@ -6362,45 +6395,47 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                       <MessageInlineEditProvider value={messageInlineEdit}>
                         <InteractiveCardResumeProvider value={resumeInteractiveCardTurn}>
                           <ResearchRunControlsProvider value={researchRunControls}>
-                            <ChatMessageList
-                              messages={chatMessages}
-                              transcriptPatch={chatMessageProjection.patch}
-                              currentTier={currentTier}
-                              conversationId={displayedConversationId}
-                              isLoading={isLoading && !isStreaming}
-                              isUserTyping={isUserTyping}
-                              onRegenerate={handleRegenerateMessage}
-                              onRetryResearch={handleRetryResearch}
-                              onResearchPlanDecision={handleResearchPlanDecision}
-                              onAgiWorkPlanDecision={handleAgiWorkPlanDecision}
-                              retryingResearchMessageId={retryingResearchMessageId}
-                              onContinue={handleContinueMessage}
-                              onEdit={handleEditMessage}
-                              onDelete={handleDeleteMessage}
-                              onDeleteVariant={handleDeleteVariant}
-                              countVariantFollowers={countVariantFollowers}
-                              onReact={handleReactMessage}
-                              onPin={handlePinMessage}
-                              branchGroupsByMessageId={branchGroupsByMessageId}
-                              branchingMessageId={branchingMessageId}
-                              onBranch={createBranch}
-                              onSwitchBranch={switchBranch}
-                              variantInfoByMessageId={variantInfoByMessageId}
-                              onSelectVariant={handleSelectVariant}
-                              activeLeafId={activeLeafId}
-                              variantAnchorMessageId={variantAnchorMessageId}
-                              isConversationStreaming={isStreaming}
-                              onRegenerateImage={handleRegenerateImageInPlace}
-                              onResumeVideo={handleResumeVideo}
-                              onRetryVideo={handleRetryVideo}
-                              onSendMessage={setComposerPrefill}
-                              onPaywallUpgrade={handlePaywallRecovery}
-                              onPaywallDismiss={handlePaywallDismiss}
-                              onRegenerateWithModel={handleRegenerateWithModel}
-                              regenerateModelOptions={regenerateModelOptions}
-                              turnErrorActive={turnErrorNotice !== null}
-                              temporaryChat={temporaryChatActive}
-                            />
+                            <ProjectAnswerSaveProvider value={projectAnswerSave}>
+                              <ChatMessageList
+                                messages={chatMessages}
+                                transcriptPatch={chatMessageProjection.patch}
+                                currentTier={currentTier}
+                                conversationId={displayedConversationId}
+                                isLoading={isLoading && !isStreaming}
+                                isUserTyping={isUserTyping}
+                                onRegenerate={handleRegenerateMessage}
+                                onRetryResearch={handleRetryResearch}
+                                onResearchPlanDecision={handleResearchPlanDecision}
+                                onAgiWorkPlanDecision={handleAgiWorkPlanDecision}
+                                retryingResearchMessageId={retryingResearchMessageId}
+                                onContinue={handleContinueMessage}
+                                onEdit={handleEditMessage}
+                                onDelete={handleDeleteMessage}
+                                onDeleteVariant={handleDeleteVariant}
+                                countVariantFollowers={countVariantFollowers}
+                                onReact={handleReactMessage}
+                                onPin={handlePinMessage}
+                                branchGroupsByMessageId={branchGroupsByMessageId}
+                                branchingMessageId={branchingMessageId}
+                                onBranch={createBranch}
+                                onSwitchBranch={switchBranch}
+                                variantInfoByMessageId={variantInfoByMessageId}
+                                onSelectVariant={handleSelectVariant}
+                                activeLeafId={activeLeafId}
+                                variantAnchorMessageId={variantAnchorMessageId}
+                                isConversationStreaming={isStreaming}
+                                onRegenerateImage={handleRegenerateImageInPlace}
+                                onResumeVideo={handleResumeVideo}
+                                onRetryVideo={handleRetryVideo}
+                                onSendMessage={setComposerPrefill}
+                                onPaywallUpgrade={handlePaywallRecovery}
+                                onPaywallDismiss={handlePaywallDismiss}
+                                onRegenerateWithModel={handleRegenerateWithModel}
+                                regenerateModelOptions={regenerateModelOptions}
+                                turnErrorActive={turnErrorNotice !== null}
+                                temporaryChat={temporaryChatActive}
+                              />
+                            </ProjectAnswerSaveProvider>
                           </ResearchRunControlsProvider>
                         </InteractiveCardResumeProvider>
                       </MessageInlineEditProvider>

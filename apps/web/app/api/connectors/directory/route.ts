@@ -1,7 +1,13 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import {
+  ConnectorDirectoryQuerySchema,
+  type ConnectorDirectoryListResponse,
+  type ConnectorDirectoryQuery,
+  type ConnectorDirectorySort,
+  type ConnectorErrorResponse,
+} from '@agiworkforce/cloud-contracts';
 
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -10,8 +16,6 @@ import { logger } from '@/lib/logger';
 import { DIRECTORY_CATEGORIES } from '@/lib/connectors/directory/categorize';
 import { getSnapshotView } from '@/lib/connectors/directory/memory-cache';
 import {
-  DIRECTORY_AUTH_MODES,
-  DIRECTORY_BADGES,
   DIRECTORY_CONNECTABLE_MODES,
   compareDirectoryRecordsByName,
   isConnectableNow,
@@ -22,33 +26,7 @@ import type { DirectoryRecord } from '@/lib/connectors/directory/types';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const DIRECTORY_DEFAULT_LIMIT = 25;
-const DIRECTORY_MAX_LIMIT = 100;
-const SEARCH_MAX_LENGTH = 200;
-const DIRECTORY_SORTS = ['popular', 'name'] as const;
-type DirectorySort = (typeof DIRECTORY_SORTS)[number];
-const DEFAULT_SORT: DirectorySort = 'popular';
-const NAME_SORT: DirectorySort = 'name';
-
-function enumOf<Value extends string>(values: readonly Value[]) {
-  return z.enum(values as [Value, ...Value[]]);
-}
-
-const BooleanParam = z.enum(['true', 'false']).transform((value) => value === 'true');
-
-const QuerySchema = z.object({
-  search: z.string().trim().min(1).max(SEARCH_MAX_LENGTH).optional(),
-  category: z.enum(DIRECTORY_CATEGORIES).optional(),
-  badge: enumOf(DIRECTORY_BADGES).optional(),
-  connectable: enumOf(DIRECTORY_CONNECTABLE_MODES).optional(),
-  connectableOnly: BooleanParam.optional(),
-  authMode: enumOf(DIRECTORY_AUTH_MODES).optional(),
-  sort: z.enum(DIRECTORY_SORTS).default(DEFAULT_SORT),
-  limit: z.coerce.number().int().min(1).max(DIRECTORY_MAX_LIMIT).default(DIRECTORY_DEFAULT_LIMIT),
-  cursor: z.string().regex(/^\d+$/).optional(),
-});
-
-type DirectoryQuery = z.infer<typeof QuerySchema>;
+const NAME_SORT: ConnectorDirectorySort = 'name';
 
 type SearchMatcher = (record: DirectoryRecord, needle: string) => boolean;
 
@@ -65,7 +43,7 @@ function searchRank(record: DirectoryRecord, needle: string): number {
   return SEARCH_MATCHERS.findIndex((matches) => matches(record, needle));
 }
 
-function matchesFilters(record: DirectoryRecord, query: DirectoryQuery): boolean {
+function matchesFilters(record: DirectoryRecord, query: ConnectorDirectoryQuery): boolean {
   if (query.category && !record.categories.includes(query.category)) return false;
   if (query.badge && record.badge !== query.badge) return false;
   if (query.connectable && record.connectable !== query.connectable) return false;
@@ -76,7 +54,7 @@ function matchesFilters(record: DirectoryRecord, query: DirectoryQuery): boolean
 
 function selectRecords(
   records: readonly DirectoryRecord[],
-  query: DirectoryQuery,
+  query: ConnectorDirectoryQuery,
 ): DirectoryRecord[] {
   const filtered = records.filter((record) => matchesFilters(record, query));
   const needle = query.search?.toLowerCase();
@@ -93,9 +71,12 @@ function selectRecords(
 
 function readQuery(url: URL) {
   const raw = Object.fromEntries(
-    Object.keys(QuerySchema.shape).map((key) => [key, url.searchParams.get(key) ?? undefined]),
+    Object.keys(ConnectorDirectoryQuerySchema.shape).map((key) => [
+      key,
+      url.searchParams.get(key) ?? undefined,
+    ]),
   );
-  return QuerySchema.safeParse(raw);
+  return ConnectorDirectoryQuerySchema.safeParse(raw);
 }
 
 async function handleGet(request: NextRequest): Promise<NextResponse> {
@@ -105,7 +86,9 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   const parsed = readQuery(new URL(request.url));
   if (!parsed.success) {
     return NextResponse.json(
-      { error: { code: 'INVALID_QUERY', message: 'Invalid connector directory query' } },
+      {
+        error: { code: 'INVALID_QUERY', message: 'Invalid connector directory query' },
+      } satisfies ConnectorErrorResponse,
       { status: 400 },
     );
   }
@@ -124,14 +107,14 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
         entries: page.map(toDirectoryEntryView),
         total: selected.length,
         nextCursor: nextOffset < selected.length ? String(nextOffset) : null,
-        categories: DIRECTORY_CATEGORIES,
-        connectableModes: DIRECTORY_CONNECTABLE_MODES,
+        categories: [...DIRECTORY_CATEGORIES],
+        connectableModes: [...DIRECTORY_CONNECTABLE_MODES],
         stats: {
           ...view.counts,
           bootstrapComplete: view.bootstrapComplete,
           lastSyncAt: view.lastSyncAt,
         },
-      },
+      } satisfies ConnectorDirectoryListResponse,
       {
         status: 200,
         headers: { 'Cache-Control': 'public, max-age=60, stale-while-revalidate=300' },
@@ -145,7 +128,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
           code: 'CONNECTOR_DIRECTORY_UNAVAILABLE',
           message: 'Connector directory unavailable',
         },
-      },
+      } satisfies ConnectorErrorResponse,
       { status: 503 },
     );
   }
