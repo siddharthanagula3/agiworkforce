@@ -18,12 +18,6 @@ nothing is left.
 - Wave: 4
 - Build on: web, desktop, mobile, cli, vscode, chrome
 
-## S54.28: Fork plugin.
-
-- Done when: A user can fork a plugin into their own editable copy.
-- Wave: 4
-- Build on: web, desktop, mobile, cli, vscode, chrome
-
 ## S54.31: Installation approval request.
 
 - Done when: A member can request admin approval to install a blocked plugin.
