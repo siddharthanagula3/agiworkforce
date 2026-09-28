@@ -141,17 +141,16 @@ Code: `apps/cli/src/lib.rs:477-481`, `apps/cli/src/lib.rs:5020-5022`, `apps/cli/
 
 - Done when: Before the agent acts, the user sees its plan and can approve, edit or reject it.
 - Wave: 3
-- Already works on: web
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| desktop | partial | the desktop managed chat (unified-chat) does not request plan approval or render the review; the server path is ready | ui |
 | mobile | partial | Research runs wait for Approve plan before starting; AGI Work plan steps appear only as Activity log lines, with no plan view and no approve, edit or reject. | ui, handler |
 | cli | partial | Plan mode blocks edits until approval, but /plan accept\|reject exist only in the --no-tui REPL; the TUI can only toggle plan mode off. | ui |
 | vscode | partial | VS Code shows a plan card and offers Plan mode, but has no approve/reject control for the plan. | ui |
 | chrome | partial | Chrome run detail lists plan steps as journal lines only; no approve/reject, and Chrome cannot start AGI Work. | ui, handler |
 
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:4789-4789`, `apps/mobile/src/features/tasks/runPresentation.ts:227-237`, `apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx:313-329`, `apps/mobile/src/features/chat/components/research/ResearchRunCard.tsx:262-270`
+Code: `apps/mobile/src/features/tasks/runPresentation.ts:227-237`, `apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx:313-329`, `apps/mobile/src/features/chat/components/research/ResearchRunCard.tsx:262-270`, `apps/cli/src/tui/tui_app.rs:3314-3322`
 
 ## S60.14: Step list.
 
@@ -253,17 +252,14 @@ Code: `apps/mobile/src/features/companion/components/CodeSessionView.tsx:178-189
 
 - Done when: After a step fails, the user can retry just that step and the task continues.
 - Wave: 3
-- Already works on: web
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| desktop | partial | desktop has no retry-from-step control; the server accepts agi_work_plan | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:4744-4744`
 
 ## S60.25: Restart task.
 
