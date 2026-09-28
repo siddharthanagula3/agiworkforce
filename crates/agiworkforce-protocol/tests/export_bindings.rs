@@ -176,6 +176,8 @@ fn export_typescript_bindings() {
         .expect("export developer-session plugin install params graph");
     agiworkforce_protocol::developer_session::PluginRemoveParams::export_all_to(dir)
         .expect("export developer-session plugin remove params graph");
+    agiworkforce_protocol::developer_session::PluginUpdateResponse::export_all_to(dir)
+        .expect("export developer-session plugin update graph");
     agiworkforce_protocol::developer_session::McpAddParams::export_all_to(dir)
         .expect("export developer-session mcp add params graph");
     agiworkforce_protocol::developer_session::WorktreeCreateParams::export_all_to(dir)
@@ -186,6 +188,8 @@ fn export_typescript_bindings() {
         .expect("export developer-session worktree list graph");
     agiworkforce_protocol::developer_session::WorktreeRemoveParams::export_all_to(dir)
         .expect("export developer-session worktree remove params graph");
+    agiworkforce_protocol::developer_session::McpAuthRequiredNotification::export_all_to(dir)
+        .expect("export developer-session mcp auth required graph");
     agiworkforce_protocol::developer_session::McpServerInspectResponse::export_all_to(dir)
         .expect("export developer-session mcp inspect graph");
     agiworkforce_protocol::developer_session::PermissionsListResponse::export_all_to(dir)

@@ -9,11 +9,13 @@ import {
   getModelContextLimits,
   getModelCostRates,
   getModelMetadataById,
+  getAutoRoutingProfileTiers,
   getPickerModelTier,
   isAutoModeModelId,
   normalizeModelId,
   evaluateModelEnvironment,
   PROVIDER_DISPLAY,
+  type AutoRoutingProfileView,
   type ModelAvailability,
   type DeveloperReasoningEffort,
   type ModelSpeed,
@@ -202,10 +204,29 @@ export function buildGroupedQuickPickItems(
     modelId: 'auto',
     ...(autoLock === undefined ? {} : { disabled: true, lock: autoLock }),
   };
+  const profileItems: GroupedQuickPickItem[] = AUTO_PROFILE_TIERS.map((profile) => {
+    const lock = isAutoReachableForTier(profile.id, tier) ? undefined : planLock(tier);
+    return {
+      label: `$(sparkle) Auto · ${profile.label}`,
+      description: profile.description,
+      modelId: profile.id,
+      ...(lock === undefined ? {} : { disabled: true, lock }),
+    };
+  });
   if (autoLock === undefined) {
-    usable.push(autoItem, { label: '', kind: vscode.QuickPickItemKind.Separator });
+    usable.push(autoItem, ...profileItems.filter((item) => item.lock === undefined), {
+      label: '',
+      kind: vscode.QuickPickItemKind.Separator,
+    });
   } else {
     locked.set(lockKey(autoLock), { lock: autoLock, items: [autoItem] });
+  }
+  for (const item of profileItems) {
+    if (item.lock === undefined) continue;
+    const key = lockKey(item.lock);
+    const group = locked.get(key) ?? { lock: item.lock, items: [] };
+    group.items.push(item);
+    locked.set(key, group);
   }
 
   const manualOptions = manualModelOptions(tier, route);
@@ -412,6 +433,28 @@ const AUTO_ENVELOPE = getAutoCapabilityEnvelope({
   runtimeProfileId: 'vscode/managed-chat',
 });
 
+const AUTO_PROFILE_TIERS: readonly AutoRoutingProfileView[] = getAutoRoutingProfileTiers().filter(
+  (profile) => profile.profile !== 'balanced',
+);
+
+const ROUTING_PROFILE_BY_AUTO_PROFILE: Readonly<
+  Record<AutoRoutingProfileView['profile'], 'auto' | 'quality' | 'cost'>
+> = { balanced: 'auto', premium: 'quality', economy: 'cost' };
+
+export function routingProfileForModel(modelId: string): 'auto' | 'quality' | 'cost' | undefined {
+  const profile = AUTO_PROFILE_TIERS.find((candidate) => candidate.id === modelId)?.profile;
+  return profile === undefined ? undefined : ROUTING_PROFILE_BY_AUTO_PROFILE[profile];
+}
+
+function autoProfileEnvelope(modelId: string): ReturnType<typeof getAutoCapabilityEnvelope> {
+  return getAutoCapabilityEnvelope({
+    selection: modelId,
+    subscriptionTier: 'pro',
+    trustMode: 'managed_cloud',
+    runtimeProfileId: 'vscode/managed-chat',
+  });
+}
+
 const MANUAL_MODEL_OPTIONS = getCoreManualModelOptions();
 const MANUAL_MODEL_IDS = MANUAL_MODEL_OPTIONS.map((option) => option.id);
 
@@ -445,6 +488,13 @@ export const MODEL_PICKER_OPTIONS: ModelPickerOption[] = [
     detail: 'Recommended: AGI Workforce picks the optimal model automatically',
     availability: 'live',
   },
+  ...AUTO_PROFILE_TIERS.map((profile) => ({
+    id: profile.id,
+    label: `Auto · ${profile.label}`,
+    description: profile.description,
+    detail: profile.description,
+    availability: 'live' as ModelAvailability,
+  })),
   ...MANUAL_MODEL_OPTIONS.map((option) => ({
     id: option.id,
     label: option.label,
@@ -508,6 +558,12 @@ export function normalizeConfiguredModelId(modelId: string | null | undefined): 
 export const MODEL_CONTEXT_LIMITS: Record<string, number> = {
   ...manualContextLimits,
   auto: AUTO_ENVELOPE?.contextWindow ?? DEFAULT_CONTEXT_LIMIT,
+  ...Object.fromEntries(
+    AUTO_PROFILE_TIERS.map((profile) => [
+      profile.id,
+      autoProfileEnvelope(profile.id)?.contextWindow ?? DEFAULT_CONTEXT_LIMIT,
+    ]),
+  ),
 };
 
 export const MODEL_COST_RATES: Record<string, { input: number; output: number }> = {
@@ -518,6 +574,12 @@ export const MODEL_COST_RATES: Record<string, { input: number; output: number }>
     ]),
   ),
   auto: getAutoCostRate(AUTO_ENVELOPE?.reachableModelKeys ?? []),
+  ...Object.fromEntries(
+    AUTO_PROFILE_TIERS.map((profile) => [
+      profile.id,
+      getAutoCostRate(autoProfileEnvelope(profile.id)?.reachableModelKeys ?? []),
+    ]),
+  ),
 };
 
 export const CHARS_PER_TOKEN = 4;

@@ -40,11 +40,14 @@ it('degrades every declared kind', () => {
 });
 `;
 
+const LIBRARY = "export const LIBRARY_ITEM_KINDS = ['image', 'text', 'artifact'] as const;\n";
+
 function baseTree() {
   return {
     'packages/contracts/types/src/conversation.ts': VOCABULARY,
     'packages/contracts/types/src/client-capability-manifest.ts': COMPATIBILITY,
     'packages/ui/unified-chat/src/lib/__tests__/contentBlockDegradation.test.ts': DEGRADATION_TEST,
+    'packages/contracts/cloud-contracts/src/library.ts': LIBRARY,
   };
 }
 
@@ -88,6 +91,32 @@ test('a second copy of the vocabulary fails', () => {
   const result = runOn(files);
   assert.equal(result.status, 1);
   assert.match(result.stderr, /restates the block vocabulary/);
+});
+
+test('a client outside the shared packages that copies the vocabulary fails', () => {
+  const files = baseTree();
+  files['apps/mobile/src/features/chat/blockKinds.ts'] =
+    "export const MOBILE_BLOCKS = ['text', 'image', 'tool_call'];\n";
+  const result = runOn(files);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /apps\/mobile\/src\/features\/chat\/blockKinds\.ts: restates/);
+});
+
+test('a copy inside a test file is not a shipped vocabulary', () => {
+  const files = baseTree();
+  files['apps/extension/src/features/blocks.test.ts'] =
+    "const FIXTURE = ['text', 'image', 'tool_call'];\n";
+  const result = runOn(files);
+  assert.equal(result.status, 0, `${result.stderr}${result.stdout}`);
+});
+
+test('a separate vocabulary that stops sharing block kinds fails until its entry goes', () => {
+  const files = baseTree();
+  files['packages/contracts/cloud-contracts/src/library.ts'] =
+    "export const LIBRARY_ITEM_KINDS = ['image', 'document'] as const;\n";
+  const result = runOn(files);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /no longer shares block kinds with MESSAGE_KINDS/);
 });
 
 test('a degradation test that names kinds by hand fails', () => {
