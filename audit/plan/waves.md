@@ -34,7 +34,7 @@ Nothing left in this wave.
 
 ## Wave 2: switch on and wire up what is already built (flag off or not mounted)
 
-180 open items.
+182 open items.
 
 | Section | Items | File |
 | --- | ---: | --- |
@@ -57,7 +57,7 @@ Nothing left in this wave.
 | 50. Audio overviews, speech generation, and music | 2 | [partial/050-audio-overviews-speech-generation-and-music.md](../partial/050-audio-overviews-speech-generation-and-music.md) |
 | 53. Skill creation and management | 3 | [partial/053-skill-creation-and-management.md](../partial/053-skill-creation-and-management.md) |
 | 54. Plugin marketplace and customization | 3 | [partial/054-plugin-marketplace-and-customization.md](../partial/054-plugin-marketplace-and-customization.md) |
-| 56. Concrete integration families | 17 | [partial/056-concrete-integration-families.md](../partial/056-concrete-integration-families.md) |
+| 56. Concrete integration families | 19 | [partial/056-concrete-integration-families.md](../partial/056-concrete-integration-families.md) |
 | 57. Tool catalog and invocation experience | 4 | [partial/057-tool-catalog-and-invocation-experience.md](../partial/057-tool-catalog-and-invocation-experience.md) |
 | 62. Multi-agent and multi-model interfaces | 1 | [partial/062-multi-agent-and-multi-model-interfaces.md](../partial/062-multi-agent-and-multi-model-interfaces.md) |
 | 66. Coding-workspace frontend | 15 | [partial/066-coding-workspace-frontend.md](../partial/066-coding-workspace-frontend.md) |
@@ -79,7 +79,7 @@ Nothing left in this wave.
 
 ## Wave 3: finish half-built features
 
-1485 open items.
+1483 open items.
 
 | Section | Items | File |
 | --- | ---: | --- |
@@ -135,7 +135,7 @@ Nothing left in this wave.
 | 53. Skill creation and management | 16 | [partial/053-skill-creation-and-management.md](../partial/053-skill-creation-and-management.md) |
 | 54. Plugin marketplace and customization | 30 | [partial/054-plugin-marketplace-and-customization.md](../partial/054-plugin-marketplace-and-customization.md) |
 | 55. Connector setup and account management | 22 | [partial/055-connector-setup-and-account-management.md](../partial/055-connector-setup-and-account-management.md) |
-| 56. Concrete integration families | 22 | [partial/056-concrete-integration-families.md](../partial/056-concrete-integration-families.md) |
+| 56. Concrete integration families | 20 | [partial/056-concrete-integration-families.md](../partial/056-concrete-integration-families.md) |
 | 57. Tool catalog and invocation experience | 21 | [partial/057-tool-catalog-and-invocation-experience.md](../partial/057-tool-catalog-and-invocation-experience.md) |
 | 58. MCP and interactive extension products | 25 | [partial/058-mcp-and-interactive-extension-products.md](../partial/058-mcp-and-interactive-extension-products.md) |
 | 59. Approvals and human-in-the-loop UI | 14 | [partial/059-approvals-and-human-in-the-loop-ui.md](../partial/059-approvals-and-human-in-the-loop-ui.md) |
