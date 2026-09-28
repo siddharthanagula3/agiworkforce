@@ -640,6 +640,33 @@ export function classifyManagedQuotaErrorCode(
   return MANAGED_QUOTA_BLOCKS[code.trim().toLowerCase()] ?? null;
 }
 
+export interface ManagedQuotaResetTimes {
+  usageResetAt: string | null;
+  sessionResetAt: string | null;
+  weeklyResetAt: string | null;
+  flagshipWeeklyResetAt: string | null;
+}
+
+export function managedQuotaResetAt(
+  code: string | null | undefined,
+  resets: ManagedQuotaResetTimes,
+): string | null {
+  switch (code?.trim().toLowerCase()) {
+    case 'insufficient_credits':
+    case 'monthly_limit_exceeded':
+    case 'monthly_credit_limit_reached':
+      return resets.usageResetAt;
+    case 'rolling_five_hour_limit_reached':
+      return resets.sessionResetAt;
+    case 'rolling_weekly_limit_reached':
+      return resets.weeklyResetAt;
+    case 'flagship_weekly_limit_reached':
+      return resets.flagshipWeeklyResetAt;
+    default:
+      return null;
+  }
+}
+
 /**
  * Tier spellings this catalogue retired, still on rows written before the
  * rename. Folding them here is what stops each client inventing its own map.
