@@ -171,16 +171,13 @@ Code: `apps/web/features/code/components/LocalSessionPanel.tsx:199-204`, `apps/d
 
 - Done when: The user selects code in the workspace and sends that selection to the agent as context.
 - Wave: 3
-- Already works on: vscode
+- Already works on: cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | @file mentions attach whole files; there is no way to pass a selected line range. | ui |
-
-Code: `apps/cli/src/tui/widgets/mention_popup.rs:1-7`, `apps/cli/src/mentions.rs:137-143`
 
 ## S66.14: Diagnostics panel.
 

@@ -10,16 +10,13 @@ nothing is left.
 
 - Done when: A Study entry point starts a tutoring session that changes how the model teaches.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | The CLI's 'learning' output style (/output-style learning) only adds an optional learning exercise to coding answers; there is no study mode for a subject. | surface-only |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/tui/tui_app.rs:4137-4137`, `apps/cli/src/output_styles.rs:53-53`
 
 ## S38.02: Learning-goal setup.
 

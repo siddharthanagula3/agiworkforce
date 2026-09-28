@@ -252,13 +252,13 @@ Code: `apps/web/app/api/plugins/updates/route.ts:26-64`, `apps/web/lib/services/
 
 - Done when: An import dialog takes a skill file or package and adds a usable skill.
 - Wave: 2
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Upload skill and Import a SKILL.md create a personal skill, which fails unless AGI_USER_SKILL_AUTHORING=1 (default 0) though the Upload button is always shown; uploading a plugin zip works as the unflagged route. | flag-off |
 | desktop | partial | Upload skill and Import a SKILL.md create a personal skill, which fails unless AGI_USER_SKILL_AUTHORING=1 (default 0) though the Upload button is always shown; uploading a plugin zip works as the unflagged route. | flag-off |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | No import command: skills are added by copying files into a skills folder; only the Claude migration imports skills. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 

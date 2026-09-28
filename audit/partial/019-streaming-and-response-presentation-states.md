@@ -78,15 +78,12 @@ Code: `apps/cli/src/tui/tui_app.rs:169-180`, `apps/cli/src/tui/tui_app.rs:4865-4
 
 - Done when: While an image/video is generated, the surface shows generation progress.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | /image runs to completion before anything is printed; there is no generating indicator while the TUI waits. | states |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/tui/tui_app.rs:4676-4690`
 
 ## S19.14: Saving results.
 

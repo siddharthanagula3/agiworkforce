@@ -185,13 +185,13 @@ Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:569-569`, `a
 
 - Done when: A visible Upgrade entry in the shell takes an eligible user into the plan upgrade flow.
 - Wave: 2
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Upgrade entry exists, but paid checkout sits behind the beta_redemptions waitlist gate (see S81). | flag-off |
 | desktop | partial | Same flow as web: the upgrade ends at checkout behind the beta_redemptions waitlist gate. | flag-off |
 | mobile | partial | The paywall's Upgrade routes to the subscription screen, where FEATURES.billing=false disables plan changes. | flag-off |
-| cli | partial | /upgrade and /pricing only print text and the pricing URL; nothing opens an upgrade flow. | ui |
 | vscode | partial | Upgrade button opens web pricing, where checkout sits behind the beta_redemptions waitlist gate. | flag-off |
 | chrome | partial | Quota upgrade button opens web pricing/billing, where checkout sits behind the beta_redemptions waitlist gate. | flag-off |
 
