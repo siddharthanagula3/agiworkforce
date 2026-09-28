@@ -81,7 +81,7 @@ Code: `apps/cli/src/app_server/developer_host.rs:375-376`, `apps/extension-vscod
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Cloud turns now load AGENTS.md, CLAUDE.md and .agiworkforce/instructions.md like local runtimes (9af9750a2). Needs AGI_E2B_EXECUTION on in production (lead switches on at run end). | flag-off |
+| web | partial | Works once AGI_E2B_EXECUTION is on in production | flag-off |
 | desktop | partial | The thread keeps its model and each runtime loads the folder's instruction files, but each client can switch the model per turn and cloud sessions are not covered. | surface-only |
 | cli | partial | Local AGI Code threads share one agi thread store across CLI, VS Code, desktop and the paired phone, but cloud Code sessions (web) are a separate store none of the local clients can open, so it is not the same on every client. | surface-only |
 
@@ -110,10 +110,10 @@ Code: `apps/cli/src/app_server/developer_host.rs:375-375`, `apps/extension-vscod
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Cloud approvals persist server-side and reappear after reload in the web app, but no other client sees them. Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off, surface-only |
+| web | partial | Works once AGI_E2B_EXECUTION is on in production | flag-off |
 | cli | partial | Approvals live in the process running the turn; another client on the same thread does not see them. | handler |
 
-Code: `apps/web/features/code/CloudCodePage.tsx:366-369`, `apps/web/features/code/components/CodeTranscript.tsx:388-392`, `apps/cli/src/tui/widgets/approval_overlay.rs:335-335`
+Code: `apps/web/app/api/code/sessions/[sessionId]/agent/approvals/route.ts:139-139`, `apps/web/features/code/CloudCodePage.tsx:354-354`, `apps/cli/src/tui/widgets/approval_overlay.rs:335-335`
 
 ## S68.09: Same tool activity.
 
@@ -123,35 +123,10 @@ Code: `apps/web/features/code/CloudCodePage.tsx:366-369`, `apps/web/features/cod
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Cloud tool steps show only in the web app. Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off, surface-only |
+| web | partial | Works once AGI_E2B_EXECUTION is on in production | flag-off |
 | cli | partial | Tool cells stream only in the terminal running the turn. | handler |
 
-Code: `apps/web/features/code/components/CodeTranscript.tsx:217-225`, `apps/cli/src/tui/tui_app.rs:4865-4870`
-
-## S68.10: Read-only session attachment.
-
-- Done when: A client can attach to a running session read-only, watching without being able to act.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-| mobile | partial | Neither ChatGPT nor Claude offers this (code.claude.com/docs/en/remote-control, learn.chatgpt.com/codex/remote-connections, read 2026-09-27); the lane recommends declining it, pending the owner's decision. | ui |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/companion/components/CodeSessionView.tsx:57-60`, `apps/mobile/src/features/companion/remote-code/service.ts:33-35`
-
-## S68.11: Active-control attachment.
-
-- Done when: A client attaches to a running session with full control: send turns, stop, approve.
-- Wave: 3
-- Already works on: mobile
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | The auditor's terms (Take control\|attachSession\|thread/attach) can never match the cloud implementation, and the same auditor credited the mechanism elsewhere (S68.08 web: approvals persist server-side and reappear on reload; S68.15 web: the rail reopens a running session). Any signed-in browser reopens a running cloud session from the rail (CodeRail.tsx:292), re-reads its pending approvals so a half-finished turn stays answerable (CloudCodePage.tsx:362-369), and can stop the turn (l.1212) and send the next one. That is attach-with-control for cloud sessions, capped like the sibling cells: partial, miss ['flag-off','surface-only'], remaining: 'Cloud sessions can be reopened with full control from any browser, but only the web client can attach and creation needs AGI_E2B_EXECUTION=1 (gate.ts:22-27).' |  |
+Code: `apps/web/features/code/components/CodeTranscript.tsx:344-344`, `apps/cli/src/tui/tui_app.rs:4865-4870`
 
 ## S68.12: Execution-owner indicator.
 
@@ -187,10 +162,10 @@ Code: `apps/cli/src/lib.rs:829-835`, `apps/cli/src/app_server/developer_host.rs:
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The desktop continues cloud sessions through this web code (session rail reopens a running cloud session); gated by AGI_E2B_EXECUTION. | flag-off |
-| desktop | partial | Hosted web opens cloud Code sessions, but they cannot be created unless AGI_E2B_EXECUTION=1. | flag-off |
+| web | partial | Works once AGI_E2B_EXECUTION is on in production | flag-off |
+| desktop | partial | Works once AGI_E2B_EXECUTION is on in production | flag-off |
 
-Code: `apps/web/features/code/components/CodeRail.tsx:292-292`, `apps/web/lib/e2b/gate.ts:22-27`
+Code: `apps/web/features/code/CloudCodePage.tsx:124-124`, `apps/web/features/code/CloudCodePage.tsx:796-796`
 
 ## S68.16: Move work to cloud through an explicit handoff.
 
@@ -251,16 +226,15 @@ Code: `apps/web/features/settings/components/LinkedDevicesPanel.tsx:152-152`, `a
 
 - Done when: Each remote machine appears as a card with its name, platform and status.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Device rows show name, platform, status and last seen, but only in account settings, not where sessions start. | surface-only |
-| desktop | partial | Hosted-web device list only. | surface-only |
 | mobile | partial | The paired desktop gets a card (name, OS, arch, capabilities); no other machine is shown. | surface-only |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/settings/components/LinkedDevicesPanel.tsx:104-104`, `apps/web/features/settings/components/LinkedDevicesPanel.tsx:152-152`, `apps/web/features/settings/components/LinkedDevicesPanel.tsx:136-139`, `apps/mobile/src/features/companion/components/DesktopInfoCard.tsx:21-26`
+Code: `apps/mobile/src/features/companion/components/DesktopInfoCard.tsx:21-26`, `apps/mobile/src/features/companion/remote-code/service.ts:33-35`
 
 ## S68.21: Host capabilities.
 
@@ -279,17 +253,17 @@ Code: `apps/mobile/src/features/companion/components/DesktopInfoCard.tsx:73-76`,
 ## S68.22: Device pairing.
 
 - Done when: The user pairs a phone or another client with a machine so it can reach that machine's sessions.
-- Wave: 3
+- Wave: 2
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Web issues the pairing code the desktop shows; pairing needs SIGNALING_HTTP_URL/SIGNALING_INTERNAL_SECRET and is refused by the screen_share kill switch when closed. | surface-only |
+| web | partial | Owner settings SIGNALING_HTTP_URL and SIGNALING_INTERNAL_SECRET | flag-off |
 | desktop | partial | Remote Control pairs one phone at a time; no computer-to-computer pairing. | surface-only |
 | mobile | partial | Scans the desktop's code to pair; only phone-to-desktop. | surface-only |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/web/app/api/pair/initiate/route.ts:72-73`, `apps/web/features/desktop-host/components/RemoteControlSection.tsx:55-57`, `apps/web/features/desktop-host/components/RemoteControlSection.tsx:74-77`, `apps/desktop/electron/runtime/dispatcher.ts:874-875`
+Code: `apps/web/app/api/pair/initiate/route.ts:73-73`, `apps/web/app/api/pair/claim/route.ts:72-72`, `apps/web/features/desktop-host/components/RemoteControlSection.tsx:74-77`, `apps/desktop/electron/runtime/dispatcher.ts:874-875`
 
 ## S68.23: Pairing revocation.
 
@@ -306,16 +280,12 @@ Code: `apps/web/app/api/pair/initiate/route.ts:72-73`, `apps/web/features/deskto
 
 - Done when: When the remote machine is offline, the client says so and explains what that means.
 - Wave: 3
-- Already works on: mobile
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Device list marks a device offline with last seen; no session view explains it. | surface-only |
-| desktop | partial | Hosted-web device list only. | surface-only |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/settings/components/LinkedDevicesPanel.tsx:52-52`, `apps/web/features/settings/components/LinkedDevicesPanel.tsx:152-152`
 
 ## S68.26: Resume after reconnect.
 
@@ -342,36 +312,6 @@ Code: `apps/cli/src/app_server/developer_host.rs:386-386`, `apps/cli/src/lib.rs:
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-## S68.28: Summary-only transfer as a separate option.
-
-- Done when: When moving a session, the user may choose to carry only a summary instead of the full transcript.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-| mobile | missing | Not built on this surface. |  |
-| cli | partial | Neither ChatGPT nor Claude offers this (code.claude.com/docs/en/remote-control, learn.chatgpt.com/codex/remote-connections, read 2026-09-27); the lane recommends declining it, pending the owner's decision. | ui |
-| vscode | partial | Neither ChatGPT nor Claude offers this (code.claude.com/docs/en/remote-control, learn.chatgpt.com/codex/remote-connections, read 2026-09-27); the lane recommends declining it, pending the owner's decision. | ui |
-
-Code: `apps/cli/src/claude_parity.rs:405-407`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:214-214`
-
-## S68.29: Transcript branch as a separate option.
-
-- Done when: When moving a session, the user may instead branch the transcript into a new session.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-| mobile | missing | Not built on this surface. |  |
-| cli | partial | Neither ChatGPT nor Claude offers this (code.claude.com/docs/en/remote-control, learn.chatgpt.com/codex/remote-connections, read 2026-09-27); the lane recommends declining it, pending the owner's decision. | surface-only |
-| vscode | partial | Neither ChatGPT nor Claude offers this (code.claude.com/docs/en/remote-control, learn.chatgpt.com/codex/remote-connections, read 2026-09-27); the lane recommends declining it, pending the owner's decision. | surface-only |
-
-Code: `apps/cli/src/lib.rs:836-837`, `apps/cli/src/tui/tui_app.rs:3562-3566`, `apps/extension-vscode/src/core/commandSetup.ts:1210-1215`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:910-912`
 
 ## S68.30: Cross-client activity notifications.
 

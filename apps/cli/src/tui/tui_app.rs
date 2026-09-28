@@ -196,6 +196,7 @@ impl ToolTiming {
 }
 
 const CONTEXT_WARNING_PERCENT: u8 = 85;
+const BELL_AFTER_TURN_OF: std::time::Duration = std::time::Duration::from_secs(10);
 
 static EXPAND_TOOL_OUTPUT: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
@@ -579,6 +580,14 @@ impl TuiApp {
         if !crate::is_image_extension(path) {
             return Err(format!("{path} is not an image"));
         }
+        if crate::model_catalog::find(&self.session.model)
+            .is_some_and(|model| !model.supports_vision)
+        {
+            return Err(format!(
+                "{} does not accept images; switch to a vision model with /model first",
+                crate::model_catalog::display_name(&self.session.model)
+            ));
+        }
         let attachment = crate::load_image_attachment(&resolved.to_string_lossy())
             .map_err(|error| format!("{error:#}"))?;
         let path_label = resolved
@@ -602,6 +611,14 @@ impl TuiApp {
 
     /// Stage whatever bitmap the system clipboard is holding.
     fn stage_clipboard_image(&mut self) -> Result<String, String> {
+        if crate::model_catalog::find(&self.session.model)
+            .is_some_and(|model| !model.supports_vision)
+        {
+            return Err(format!(
+                "{} does not accept images; switch to a vision model with /model first",
+                crate::model_catalog::display_name(&self.session.model)
+            ));
+        }
         let image = arboard::Clipboard::new()
             .and_then(|mut clipboard| clipboard.get_image())
             .map_err(|error| format!("no image on the clipboard ({error})"))?;
@@ -3003,6 +3020,7 @@ fn open_command_popup(app: &mut TuiApp) {
         ("title", "Configure the terminal window title"),
         ("diff-review", "Review changed files hunk by hunk"),
         ("dictate", "Dictate into the composer without sending"),
+        ("find", "Search this conversation's messages"),
     ] {
         if !cmds.iter().any(|c| c.name == name) {
             cmds.push(PopupCmd::new(name, desc));
@@ -3135,6 +3153,40 @@ fn edit_turn_draft(input: &mut String, cursor: &mut usize, key: KeyEvent) -> Opt
     }
     None
 }
+
+fn find_in_transcript(messages: &[ChatMessage], query: &str) -> String {
+    let query = query.trim();
+    if query.is_empty() {
+        return "Usage: /find <text>".to_string();
+    }
+    let needle = query.to_lowercase();
+    let mut hits = Vec::new();
+    for (index, message) in messages.iter().enumerate() {
+        let who = match message.role {
+            ChatRole::User => "you",
+            ChatRole::Assistant => "assistant",
+            ChatRole::System | ChatRole::Tool | ChatRole::Error => continue,
+        };
+        for line in message.text.lines() {
+            if line.to_lowercase().contains(&needle) {
+                let snippet: String = line.trim().chars().take(120).collect();
+                hits.push(format!("  #{:<3} {who:<9} {snippet}", index + 1));
+            }
+        }
+    }
+    if hits.is_empty() {
+        return format!("Nothing in this conversation matches '{query}'.");
+    }
+    let total = hits.len();
+    hits.truncate(FIND_RESULT_LIMIT);
+    let mut text = format!("{total} line(s) match '{query}':\n{}", hits.join("\n"));
+    if total > FIND_RESULT_LIMIT {
+        text.push_str(&format!("\n  … {} more", total - FIND_RESULT_LIMIT));
+    }
+    text
+}
+
+const FIND_RESULT_LIMIT: usize = 30;
 
 fn start_side_query(
     config: &crate::config::CliConfig,
@@ -3538,6 +3590,8 @@ enum SlashResult {
     RunArtifacts(String),
     RunTasks(String),
     RunWorktree(String),
+    RunMcp(String),
+    RunAttachUrl(String),
     RunPersonalize(String),
     RunBtw(String),
 }
@@ -3546,6 +3600,7 @@ const ADD_CONTEXT_MENU: &str = "Ways to add context to your next message:
   @path            Inline a file, or list a folder with @dir/
   @agent-<name>    Hand the message to one of your agents
   /attach <image>  Attach an image file (png, jpg, gif, webp)
+  /attach <url>    Fetch a web page and add its text to the conversation
   Ctrl+V           Attach the image on the clipboard
   Paste            Long pastes collapse to [Pasted text #N]; the full text is sent
   /mcp             Run a connected server's prompt as /mcp:<server>:<prompt>
@@ -3637,6 +3692,8 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
 
         "/artifacts" => SlashResult::RunArtifacts(arg.to_string()),
         "/tasks" | "/task" => SlashResult::RunTasks(arg.to_string()),
+        "/upgrade" => SlashResult::SystemMessage(crate::claude_parity::open_upgrade_page()),
+        "/find" => SlashResult::SystemMessage(find_in_transcript(&app.chat_messages, arg)),
         "/personalize" => SlashResult::RunPersonalize(arg.to_string()),
 
         "/plan" if matches!(arg, "accept" | "approve") => SlashResult::SystemMessage(
@@ -3784,8 +3841,15 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         }
 
         "/status" => {
+            let account = match crate::tier_cache::load_jwt() {
+                None => "not signed in (agi login)".to_string(),
+                Some(_) => match crate::tier_cache::read_tier_cache() {
+                    Some(cached) => format!("signed in, {} plan", cached.tier.label()),
+                    None => "signed in".to_string(),
+                },
+            };
             let msg = format!(
-                "Version: {}\nModel: {}\nProvider: {}\nMode: {}\nSandbox: {}\nTurns: {}\nTokens: {} in / {} out\nContext: {}%",
+                "Account: {account}\nVersion: {}\nModel: {}\nProvider: {}\nMode: {}\nSandbox: {}\nTurns: {}\nTokens: {} in / {} out\nContext: {}%",
                 env!("CARGO_PKG_VERSION"),
                 crate::model_catalog::display_name(&app.session.model),
                 app.provider_name,
@@ -3984,36 +4048,65 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         ),
 
         // ── Tools & plugins ──
+        "/mcp" if !arg.is_empty() => SlashResult::RunMcp(arg.to_string()),
+
         "/mcp" => {
             use crate::tui::widgets::screen_renderers::{
                 McpScope, McpServerSummary, McpStatus, render_mcp_list,
             };
-            let scopes = if let Some(tools) = app.session.mcp_info() {
-                // Group tools by server name into a single scope.
-                let mut server_names: Vec<String> =
-                    tools.iter().map(|t| t.server_name.clone()).collect();
-                server_names.sort();
-                server_names.dedup();
-                let servers: Vec<McpServerSummary> = server_names
-                    .iter()
-                    .map(|name| {
-                        let tool_count =
-                            tools.iter().filter(|t| &t.server_name == name).count();
-                        McpServerSummary {
-                            name: name.clone(),
-                            status: McpStatus::Connected,
-                            tool_count: Some(tool_count),
+            let tools = app.session.mcp_info().unwrap_or_default();
+            let registry = crate::mcp::registry::McpRegistry::load()
+                .map(|registry| registry.list())
+                .unwrap_or_default();
+            let configured = crate::mcp::McpManager::load_configs().unwrap_or_default();
+            let tokens = crate::mcp::McpOAuthStore::load().unwrap_or_default();
+            let mut names: Vec<String> = configured
+                .keys()
+                .cloned()
+                .chain(registry.iter().map(|row| row.name.clone()))
+                .chain(tools.iter().map(|tool| tool.server_name.clone()))
+                .collect();
+            names.sort();
+            names.dedup();
+            let servers: Vec<McpServerSummary> = names
+                .iter()
+                .map(|name| {
+                    let tool_count = tools.iter().filter(|tool| &tool.server_name == name).count();
+                    let disabled = registry.iter().any(|row| &row.name == name && !row.enabled);
+                    let signed_out_remote = configured.get(name).is_some_and(|config| {
+                        match config.as_transport() {
+                            crate::mcp::McpTransport::Http { url, .. }
+                            | crate::mcp::McpTransport::Sse { url, .. } => {
+                                tokens.get(&url).is_none()
+                                    && tokens.get(url.trim_end_matches('/')).is_none()
+                            }
+                            crate::mcp::McpTransport::Stdio { .. } => false,
                         }
-                    })
-                    .collect();
-                vec![McpScope {
-                    label: "Connected servers".to_string(),
-                    servers,
-                }]
-            } else {
-                vec![]
-            };
-            SlashResult::SystemMessage(render_mcp_list(&scopes))
+                    });
+                    let status = if disabled {
+                        McpStatus::Disabled
+                    } else if tool_count > 0 {
+                        McpStatus::Connected
+                    } else if signed_out_remote {
+                        McpStatus::NeedsAuth
+                    } else {
+                        McpStatus::Failed
+                    };
+                    McpServerSummary {
+                        name: name.clone(),
+                        status,
+                        tool_count: Some(tool_count),
+                    }
+                })
+                .collect();
+            let mut text = render_mcp_list(&[McpScope {
+                label: "Configured servers".to_string(),
+                servers,
+            }]);
+            text.push_str(
+                "\n/mcp tools [server] lists tools · /mcp restart reconnects · agi mcp login <name> signs in to a remote server · /mcp enable|disable <name>",
+            );
+            SlashResult::SystemMessage(text)
         }
 
         "/permissions" | "/perms" | "/approvals" => SlashResult::SystemMessage(
@@ -4061,6 +4154,20 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
             SlashResult::SystemMessage(crate::repl::init_project_for_display().plain_message())
         }
 
+        "/skills" if arg.starts_with("import") => {
+            let path = arg.trim_start_matches("import").trim();
+            SlashResult::SystemMessage(if path.is_empty() {
+                "Usage: /skills import <path to SKILL.md or its folder>".to_string()
+            } else {
+                match crate::skills::import_skill(std::path::Path::new(
+                    &crate::path_security::expand_home(path),
+                )) {
+                    Ok(target) => format!("Imported the skill to {}.", target.display()),
+                    Err(reason) => reason,
+                }
+            })
+        }
+
         "/skills" => {
             let skills = crate::skills::discover_skills();
             if skills.is_empty() {
@@ -4082,6 +4189,9 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
             let (action, rest) = arg.split_once(' ').unwrap_or((arg, ""));
             match action {
                 "" => SlashResult::SystemMessage(ADD_CONTEXT_MENU.to_string()),
+                url if url.starts_with("https://") || url.starts_with("http://") => {
+                    SlashResult::RunAttachUrl(url.to_string())
+                }
                 "list" => SlashResult::SystemMessage(if app.staged_images.is_empty() {
                     "No images staged for the next turn.".to_string()
                 } else {
@@ -4256,7 +4366,18 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                             .persist_effort_project(&e.label().to_ascii_lowercase())
                             .map(|_| " and saved as this project's default")
                             .unwrap_or("");
-                        SlashResult::SystemMessage(format!("Effort set to {}{saved}", e.label()))
+                        let note = if matches!(
+                            crate::model_catalog::effort_support(&app.session.model),
+                            crate::model_catalog::EffortSupport::Unsupported
+                        ) {
+                            ". This model has no effort control, so it applies once you switch to one that does"
+                        } else {
+                            ""
+                        };
+                        SlashResult::SystemMessage(format!(
+                            "Effort set to {}{saved}{note}",
+                            e.label()
+                        ))
                     }
                     None => SlashResult::SystemMessage(format!(
                         "Unknown effort level '{arg}'. Use: low | medium | high | max"
@@ -4562,6 +4683,22 @@ pub async fn run(
     auto_route_seed: Option<crate::routing::classify::AutoRouteSeed>,
 ) -> Result<()> {
     crate::tier_cache::ensure_plan_models_cached().await;
+    tokio::spawn(async {
+        let Ok(release) = crate::update_check::fetch_latest_release().await else {
+            return;
+        };
+        if crate::update_check::compare_versions(
+            crate::update_check::running_version(),
+            &release.version,
+        ) == crate::update_check::UpdateVerdict::Available
+        {
+            crate::tui::push_tui_notice(format!(
+                "agi {} is available (you have {}). Install it with: agi update --install",
+                release.version,
+                crate::update_check::running_version()
+            ));
+        }
+    });
     let effective_provider_override = crate::models::plan_first_provider_override(
         &crate::models::AccountRoute::load(),
         model,
@@ -4750,6 +4887,17 @@ pub async fn run(
     .await;
 
     let mut app = TuiApp::new(session, config.clone(), sandbox_disabled);
+    if let Some(temperature) = config.default.temperature {
+        if crate::model_catalog::model_rejects_sampling_parameters(&app.session.model) {
+            app.chat_messages.push(ChatMessage {
+                role: ChatRole::System,
+                text: format!(
+                    "{} does not accept a temperature, so your configured {temperature} is not sent to it.",
+                    crate::model_catalog::display_name(&app.session.model)
+                ),
+            });
+        }
+    }
     app.mcp_elicitation_handler = mcp_elicitation_handler;
     app.wire_fallback_banner();
     // Populate the picker's Local section without blocking launch: probe Ollama
@@ -5174,6 +5322,11 @@ async fn run_event_loop(
                                     out: None,
                                 };
                                 let cwd = app.workspace_root();
+                                app.chat_messages.push(ChatMessage {
+                                    role: ChatRole::System,
+                                    text: "Generating the image...".to_string(),
+                                });
+                                render(terminal, app)?;
                                 let text =
                                     match crate::cloud::image::generate(privacy, &options, &cwd)
                                         .await
@@ -5239,6 +5392,29 @@ async fn run_event_loop(
                                 app.chat_messages.push(ChatMessage {
                                     role: ChatRole::System,
                                     text,
+                                });
+                            }
+                            SlashResult::RunAttachUrl(url) => {
+                                let text =
+                                    match crate::repl::attach_url_context(&url, &mut app.session)
+                                        .await
+                                    {
+                                        Ok(chars) => format!(
+                                        "Attached {url} ({chars} characters) to the conversation."
+                                    ),
+                                        Err(error) => format!("Could not attach {url}: {error:#}"),
+                                    };
+                                app.chat_messages.push(ChatMessage {
+                                    role: ChatRole::System,
+                                    text,
+                                });
+                            }
+                            SlashResult::RunMcp(argument) => {
+                                let outcome =
+                                    crate::repl::mcp_for_display(&argument, &mut app.session).await;
+                                app.chat_messages.push(ChatMessage {
+                                    role: ChatRole::System,
+                                    text: outcome.plain_message(),
                                 });
                             }
                             SlashResult::RunWorktree(argument) => {
@@ -5494,9 +5670,14 @@ async fn send_message_with_prompt(
     )
     .await;
 
+    let attachments = if app.staged_images.is_empty() {
+        String::new()
+    } else {
+        format!("\n[attached: {}]", app.staged_images.join(", "))
+    };
     app.chat_messages.push(ChatMessage {
         role: ChatRole::User,
-        text: transcript_text.to_string(),
+        text: format!("{transcript_text}{attachments}"),
     });
 
     // The session drains `pending_image_blocks` into this turn, so the chips
@@ -5586,6 +5767,7 @@ async fn send_message_with_prompt(
     let turn_input_tokens = app.session.total_input_tokens;
     let turn_output_tokens = app.session.total_output_tokens;
     let turn_context_percent = app.context_percent();
+    let turn_started = Instant::now();
     let turn_cost_str = crate::output::format_session_credits(app.session.cost_ledger.total_usd);
     let turn_notice = app.live_notice().map(str::to_string);
     let side_query = app
@@ -5792,6 +5974,19 @@ async fn send_message_with_prompt(
     app.session.on_tool_event = None;
     app.session.on_continuation_chunk = None;
     settle_running_tool_cells(&mut tool_cells);
+    let mut changed_files: Vec<String> = tool_cells
+        .iter()
+        .filter(|cell| {
+            cell.state == crate::tui::transcript_cell::TranscriptCellState::Complete
+                && matches!(
+                    cell.name.as_str(),
+                    "write_file" | "edit_file" | "multiedit" | "apply_patch" | "notebook_edit"
+                )
+                && !cell.summary.trim().is_empty()
+        })
+        .map(|cell| cell.summary.clone())
+        .collect();
+    changed_files.dedup();
     app.tool_cells = tool_cells;
 
     // Copy final streamed content into stream_buffer for last render
@@ -5816,6 +6011,25 @@ async fn send_message_with_prompt(
             });
 
             app.sync_stats();
+
+            if !changed_files.is_empty() {
+                app.chat_messages.push(ChatMessage {
+                    role: ChatRole::System,
+                    text: format!(
+                        "Files changed this turn: {}. /diff shows what changed.",
+                        changed_files.join(", ")
+                    ),
+                });
+            }
+
+            if app.config.ui.bell_on_finish == Some(true)
+                && turn_started.elapsed() >= BELL_AFTER_TURN_OF
+            {
+                use std::io::Write;
+                let mut stdout = std::io::stdout();
+                let _ = stdout.write_all(b"\x07");
+                let _ = stdout.flush();
+            }
 
             let context_percent = app.context_percent();
             if context_percent >= CONTEXT_WARNING_PERCENT
@@ -7370,6 +7584,8 @@ mod tests {
             "task",
             "personalize",
             "tools",
+            "budget",
+            "continue",
             "fast",
             "new",
             "models",

@@ -1002,6 +1002,17 @@ fn url_encode(input: &str) -> String {
     out
 }
 
+pub async fn discover_token_endpoint(server_url: &str) -> Result<String> {
+    let (_, prm) = discover_protected_resource(server_url, None).await?;
+    let issuer = prm
+        .authorization_servers
+        .first()
+        .ok_or_else(|| anyhow!("no authorization_servers in protected-resource metadata"))?;
+    Ok(discover_authorization_server(issuer, server_url)
+        .await?
+        .token_endpoint)
+}
+
 pub async fn perform_full_oauth(
     server_url: &str,
     cfg: &OAuthConfig,

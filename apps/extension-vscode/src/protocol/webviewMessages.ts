@@ -70,6 +70,7 @@ export const CONTEXT_ATTACHMENT_KINDS = [
   'open-files',
   'problems',
   'git-diff',
+  'url',
 ] as const;
 export const ContextAttachmentKindSchema = z.enum(CONTEXT_ATTACHMENT_KINDS);
 export type ContextAttachmentKind = z.infer<typeof ContextAttachmentKindSchema>;
@@ -171,6 +172,10 @@ const openSessionRow = z.object({
 const requestSlashCommands = z.object({ type: z.literal('requestSlashCommands') });
 const continueInCloud = z.object({ type: z.literal('continueInCloud') });
 const regenerate = z.object({ type: z.literal('regenerate') });
+const cancelQueuedMessage = z.object({
+  type: z.literal('cancelQueuedMessage'),
+  payload: z.object({ clientMessageId: z.string().min(1).max(200) }),
+});
 const openSuggestedProject = z.object({
   type: z.literal('openSuggestedProject'),
   payload: z.object({ projectId: z.string().min(1).max(200) }),
@@ -279,6 +284,7 @@ export const WebviewToExtSchema = z.discriminatedUnion('type', [
   runSlashCommand,
   continueInCloud,
   regenerate,
+  cancelQueuedMessage,
   openSuggestedProject,
 ]);
 

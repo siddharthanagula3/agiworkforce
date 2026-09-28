@@ -1495,38 +1495,35 @@ export function ComposerFooter({
                           )}
 
                           {!freePlan && (
-                            <>
-                              <LocalModelSection
-                                state={localModels}
-                                selectedId={localSelection?.id ?? null}
-                                onSelect={handleSelectLocalModel}
-                              />
-
-                              <div className="my-1 border-t border-[var(--chat-border)]" />
-                              <button
-                                type="button"
-                                {...{ [PICKER_ROW_ATTR]: '' }}
-                                className={`${PICKER_ROW_CLASS} hover:bg-muted/60 focus-visible:bg-muted/60`}
-                                onClick={() => setCatalogueOpen(true)}
-                                aria-expanded={false}
-                              >
-                                <span className="min-w-0 flex-1">
-                                  <span className={`${PICKER_ROW_NAME_CLASS} text-foreground`}>
-                                    All models
-                                  </span>
-                                </span>
-                                <span className="shrink-0 text-xs text-muted-foreground">
-                                  {catalogue.status === 'ready'
-                                    ? catalogue.count
-                                    : shortList.totalCount}
-                                </span>
-                                <ChevronRight
-                                  className="h-4 w-4 shrink-0 text-muted-foreground"
-                                  aria-hidden="true"
-                                />
-                              </button>
-                            </>
+                            <LocalModelSection
+                              state={localModels}
+                              selectedId={localSelection?.id ?? null}
+                              onSelect={handleSelectLocalModel}
+                            />
                           )}
+                          <div className="my-1 border-t border-[var(--chat-border)]" />
+                          <button
+                            type="button"
+                            {...{ [PICKER_ROW_ATTR]: '' }}
+                            className={`${PICKER_ROW_CLASS} hover:bg-muted/60 focus-visible:bg-muted/60`}
+                            onClick={() => setCatalogueOpen(true)}
+                            aria-expanded={false}
+                          >
+                            <span className="min-w-0 flex-1">
+                              <span className={`${PICKER_ROW_NAME_CLASS} text-foreground`}>
+                                All models
+                              </span>
+                            </span>
+                            <span className="shrink-0 text-xs text-muted-foreground">
+                              {catalogue.status === 'ready'
+                                ? catalogue.count
+                                : shortList.totalCount}
+                            </span>
+                            <ChevronRight
+                              className="h-4 w-4 shrink-0 text-muted-foreground"
+                              aria-hidden="true"
+                            />
+                          </button>
                         </>
                       )}
                     </div>

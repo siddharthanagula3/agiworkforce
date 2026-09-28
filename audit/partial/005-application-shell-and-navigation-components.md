@@ -75,30 +75,16 @@ Code: `apps/extension/src/side_panel.ts:6726-6755`, `apps/extension/src/side_pan
 
 - Done when: Rows in mixed lists carry an icon (or equivalent marker) that tells the resource type apart (chat, project, task, file) visually and for assistive tech.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Project rows have folder/project icons and task rows a dot with an "AGI Work" accessible name, but plain chat rows carry no type icon. | ui |
-| desktop | partial | Same as web: only projects and AGI Work rows are marked; chat rows have no type icon. | ui |
 | mobile | partial | Mixed search results show the type as a text chip, not an icon; normal lists carry no type marker. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | partial | The auditor searched only icon identifiers. openWorkSurface composes cloud tasks and schedules into one quick pick (surfaces/index.ts:306-318) whose rows carry each item's ThemeIcon as a $(icon) label prefix plus a section separator per type (treeQuickPick.ts:83-108; cloudTasksTree.ts:34, schedulesTree.ts:37). Partial: only that pick mixes types, the row icons encode run state rather than type, the separator is the type marker, and no list mixes chats, projects or files. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `packages/ui/ui/src/sidebar/SessionItem.tsx:140-172`, `packages/ui/ui/src/sidebar/Sidebar.tsx:1208-1210`, `apps/mobile/src/features/chat/ChatsListScreen.tsx:362-378`, `apps/mobile/src/features/chat/ChatsListScreen.tsx:337-337`
-
-## S5.18: Needs-input indicator.
-
-- Done when: Navigation marks items that are blocked waiting for the user (approval or input).
-- Wave: 3
-- Already works on: mobile, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | The Work history list (/tasks, reachable from the command palette) shows "Waiting for your approval" per run, but sidebar rows have no needs-input marker. | ui |
-| desktop | partial | Same as web: only the /tasks list marks runs waiting for approval. | ui |
-
-Code: `packages/ui/unified-chat/src/components/tasks/TasksPage.tsx:726-735`, `packages/ui/unified-chat/src/components/tasks/TasksPage.tsx:726-740`
+Code: `apps/mobile/src/features/chat/ChatsListScreen.tsx:362-378`, `apps/mobile/src/features/chat/ChatsListScreen.tsx:337-337`
 
 ## S5.19: Unread-result indicator.
 
@@ -181,43 +167,30 @@ Code: `apps/mobile/src/features/chat/components/CommandPalette.tsx:9-9`, `apps/e
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S5.29: User/profile menu.
-
-- Done when: A user/profile menu shows who is signed in and offers account actions (settings, plan, sign out).
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | /login and /logout exist, but the TUI has no command showing the signed-in account and plan (agi usage does, outside the TUI; TUI /usage shows session tokens). | ui |
-
-Code: `apps/cli/src/tui/tui_app.rs:3527-3529`, `apps/cli/src/tui/tui_app.rs:3527-3530`
-
 ## S5.30: Help menu.
 
 - Done when: A help menu gathers help centre, support contact, feedback and shortcuts in one place.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Help & About (about.tsx) has a Support section with Contact Support (mailto) and Send Feedback only; no help-centre or docs link exists in the file, so two of the criterion's four parts are missing (shortcuts do not apply on a phone). partial, miss ui; remaining: add a help-centre link to Help & About. |  |
-| vscode | partial | No single help menu: help is spread over the runtime "Get help" button and the Send Feedback command. | ui |
 | chrome | partial | One drawer "Get help" button that opens web help; no help menu with support, feedback or shortcuts. | surface-only |
 
-Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:569-569`, `apps/mobile/app/(app)/about.tsx:255-265`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2327-2335`, `apps/extension/src/side_panel.ts:7140-7150`
+Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:569-569`, `apps/mobile/app/(app)/about.tsx:255-265`, `apps/extension/src/side_panel.ts:7140-7150`
 
 ## S5.31: Upgrade entry.
 
 - Done when: A visible Upgrade entry in the shell takes an eligible user into the plan upgrade flow.
 - Wave: 2
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Upgrade entry exists, but paid checkout sits behind the beta_redemptions waitlist gate (see S81). | flag-off |
 | desktop | partial | Same flow as web: the upgrade ends at checkout behind the beta_redemptions waitlist gate. | flag-off |
 | mobile | partial | The paywall's Upgrade routes to the subscription screen, where FEATURES.billing=false disables plan changes. | flag-off |
-| cli | partial | /upgrade and /pricing only print text and the pricing URL; nothing opens an upgrade flow. | ui |
 | vscode | partial | Upgrade button opens web pricing, where checkout sits behind the beta_redemptions waitlist gate. | flag-off |
 | chrome | partial | Quota upgrade button opens web pricing/billing, where checkout sits behind the beta_redemptions waitlist gate. | flag-off |
 
@@ -252,26 +225,11 @@ Code: `apps/mobile/app/_layout.tsx:724-725`, `apps/cli/src/tui/tui_app.rs:1985-1
 
 - Done when: The app tells the user when a new release is available (or just installed) and how to get it.
 - Wave: 3
-- Already works on: desktop
+- Already works on: desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | agi update installs on demand; the TUI shows no notice that a newer version exists. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:774-776`, `apps/cli/src/lib.rs:3521-3523`
-
-## S5.38: Resource deep links.
-
-- Done when: Each resource (conversation, project, task) has a stable link that opens it directly in the app.
-- Wave: 3
-- Already works on: web, desktop, mobile
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | A vscode:// URI handler exists only for context handoff; conversations and projects have no shareable deep link. | ui |
-
-Code: `apps/extension-vscode/src/features/context-handoff/index.ts:265-274`

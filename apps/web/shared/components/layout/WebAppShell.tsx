@@ -275,6 +275,7 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
             ? { agiWork: true }
             : {}),
           ...(runningConversationIds.has(c.id) ? { runState: 'running' as const } : {}),
+          ...(c.needsYou ? { needsYou: true } : {}),
         }),
       }),
     [conversations, isUnread, runningConversationIds, workModeByConversation],

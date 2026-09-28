@@ -1,6 +1,6 @@
 //! Output styles, system-prompt override layer.
 //!
-//! Five styles ship in-binary; users can drop additional styles into
+//! Six styles ship in-binary; users can drop additional styles into
 //! `~/.agiworkforce/output-styles/<name>.md` to override or add new ones.
 //! The active style is persisted in `~/.agiworkforce/config.toml` under
 //! `[ui] output_style = "<name>"`.
@@ -52,6 +52,15 @@ impl OutputStyle {
         }
     }
 
+    pub fn study() -> Self {
+        Self {
+            name: "study".into(),
+            description: "Teaches step by step with questions instead of finished answers.".into(),
+            system_prompt: include_str!("output_styles/study.md").to_string(),
+            origin: BUILT_IN.into(),
+        }
+    }
+
     pub fn proactive() -> Self {
         Self {
             name: "proactive".into(),
@@ -91,6 +100,7 @@ pub fn builtin() -> Vec<OutputStyle> {
         OutputStyle::concise(),
         OutputStyle::explanatory(),
         OutputStyle::learning(),
+        OutputStyle::study(),
     ]
 }
 
@@ -237,7 +247,8 @@ mod tests {
                 "proactive".into(),
                 "concise".into(),
                 "explanatory".into(),
-                "learning".into()
+                "learning".into(),
+                "study".into()
             ]
         );
     }

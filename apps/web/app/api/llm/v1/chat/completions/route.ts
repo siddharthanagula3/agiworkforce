@@ -2,6 +2,7 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
+import { withAdmittedRateLimitHeaders } from '@/lib/rate-limit-headers';
 import { logger } from '@/lib/logger';
 import {
   handleCorsPreflightRequest,
@@ -1358,7 +1359,9 @@ async function admitAndDispatchTurn(request: NextRequest): Promise<NextResponse 
   );
 }
 
-export const POST = withCorsRoute(withErrorHandler(handleChatCompletions));
+export const POST = withCorsRoute(
+  withAdmittedRateLimitHeaders(withErrorHandler(handleChatCompletions)),
+);
 
 export function OPTIONS(request: NextRequest) {
   return (

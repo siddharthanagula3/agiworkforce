@@ -45,42 +45,39 @@ Code: `apps/extension-vscode/src/features/settings/SettingsPanel.ts:31-35`, `app
 
 - Done when: A user can report a bug from the product, with enough context (build, platform) for support to act.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | Sends bug reports to GitHub issues, not the ticket or email channel the support page names; whether that repository accepts public issues is unconfirmed. | handler |
-| vscode | partial | Sends bug reports to GitHub issues, not the ticket or email channel the support page names; whether that repository accepts public issues is unconfirmed. | handler |
 
-Code: `apps/cli/src/claude_parity.rs:129-131`, `apps/extension-vscode/src/core/commandSetup.ts:1320-1325`, `apps/extension-vscode/src/core/commandSetup.ts:1354-1362`
+Code: `apps/cli/src/claude_parity.rs:129-131`
 
 ## S88.05: Product feedback.
 
 - Done when: Users can send general product feedback from inside the product and it is stored for the team.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | Feedback opens a GitHub issue rather than the product feedback store; whether that repository accepts public issues is unconfirmed. | handler |
-| vscode | partial | Feedback opens a GitHub issue rather than the product feedback store; whether that repository accepts public issues is unconfirmed. | handler |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/cli/src/claude_parity.rs:129-131`, `apps/extension-vscode/src/core/commandSetup.ts:1328-1330`, `apps/extension-vscode/src/core/commandSetup.ts:1354-1362`
+Code: `apps/cli/src/claude_parity.rs:129-131`
 
 ## S88.06: Feature request.
 
 - Done when: Users can submit a feature request from inside the product and it is stored for the team.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | Feedback opens a GitHub issue rather than the product feedback store; whether that repository accepts public issues is unconfirmed. | handler |
-| vscode | partial | Feedback opens a GitHub issue rather than the product feedback store; whether that repository accepts public issues is unconfirmed. | handler |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/cli/src/claude_parity.rs:129-131`, `apps/extension-vscode/src/core/commandSetup.ts:1325-1327`, `apps/extension-vscode/src/core/commandSetup.ts:1354-1362`
+Code: `apps/cli/src/claude_parity.rs:129-131`
 
 ## S88.07: User-reviewable diagnostic bundle.
 
@@ -142,22 +139,21 @@ Code: `apps/cli/src/diagnostics_bundle.rs:52-67`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | /release-notes and /changelog only print the running version and a link to repository releases; no notes are shown. | ui |
+| cli | partial | Same as S2.28: the release feed has no notes body to print. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/cli/src/claude_parity.rs:194-196`, `apps/cli/src/claude_parity.rs:1138-1148`
+Code: `apps/cli/src/claude_parity.rs:1381-1381`
 
 ## S88.14: Model-retirement notice.
 
 - Done when: Users are warned before a model they use is retired and told what replaces it when it is.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | The auditor searched retire/retirementLabel/deprecation_date only. The CLI does surface deprecation: /models and --list-models (format_model_list, mounted at repl/slash_commands.rs:173 and lib.rs:2241/4120) print "!" beside a model whose status is "deprecated" and explain the flag in the legend. That is a warning, but there is no notice at selection or use time, no retirement date, and no replacement named; a resumed session whose model this build no longer knows is silently moved to the default (resumed_model, lib.rs:1539-1546). Suggested cell: partial, miss [ui], remaining "Only a ! flag in the model list; warn at selection/use time, give the date, name the replacement, and tell the user when a resumed session is moved off a retired model." |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 

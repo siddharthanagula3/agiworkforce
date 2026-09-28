@@ -30,6 +30,7 @@ describe('AddSourcesModal', () => {
         onClose={onClose}
         onUploadFile={vi.fn(async () => undefined)}
         onUploadText={onUploadText}
+        onAddFromGoogleDrive={vi.fn()}
       />,
     );
 
@@ -58,6 +59,7 @@ describe('AddSourcesModal', () => {
         onUploadText={vi.fn(async () => {
           throw new Error('Project source storage is unavailable.');
         })}
+        onAddFromGoogleDrive={vi.fn()}
       />,
     );
 
@@ -86,6 +88,7 @@ describe('AddSourcesModal', () => {
         onClose={onClose}
         onUploadFile={onUploadFile}
         onUploadText={vi.fn(async () => undefined)}
+        onAddFromGoogleDrive={vi.fn()}
       />,
     );
 

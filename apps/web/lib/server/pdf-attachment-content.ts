@@ -7,7 +7,7 @@ import { logger } from '@/lib/logger';
 export const MAX_PDF_TEXT_CHARS = 200_000;
 
 const MAX_TEXT_PAGES = 250;
-const MAX_IMAGE_PAGES = 10;
+const MAX_IMAGE_PAGES = 30;
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const MIN_TEXT_CHARS = 16;
 
@@ -29,6 +29,8 @@ export interface PdfAttachmentContent {
    * silently partial copy.
    */
   pagesOmitted: boolean;
+  /** Pages with no text layer that did not fit the image budget and reach no caller. */
+  scannedPagesOmitted: number[];
 }
 
 type PdfAttachmentFailureReason = 'corrupt' | 'encrypted';
@@ -145,6 +147,47 @@ function boundText(value: string): string | null {
  * turn died with nothing on screen. Text comes out as text; a scan with no
  * text layer comes out as page images, which every vision route accepts.
  */
+type PdfDocumentProxy = Awaited<
+  ReturnType<(typeof import('pdfjs-dist/legacy/build/pdf.mjs'))['getDocument']>['promise']
+>;
+
+async function renderPageImage(
+  document: PdfDocumentProxy,
+  paintImageOperator: number,
+  pageNumber: number,
+): Promise<Buffer | null> {
+  const page = await document.getPage(pageNumber);
+  const operators = await page.getOperatorList();
+  for (const [index, operator] of operators.fnArray.entries()) {
+    if (operator !== paintImageOperator) continue;
+    const name = operators.argsArray[index]?.[0];
+    if (typeof name !== 'string') continue;
+    const bitmap = await new Promise<unknown>((resolve) => {
+      try {
+        page.objs.get(name, resolve);
+      } catch {
+        resolve(null);
+      }
+    });
+    const candidate = bitmap as {
+      width?: number;
+      height?: number;
+      kind?: number;
+      data?: Uint8Array;
+    } | null;
+    if (!candidate?.width || !candidate.height || !candidate.data || !candidate.kind) continue;
+    const rgb = toRgb({
+      width: candidate.width,
+      height: candidate.height,
+      kind: candidate.kind,
+      data: candidate.data,
+    });
+    if (!rgb) continue;
+    return encodePng(candidate.width, candidate.height, rgb);
+  }
+  return null;
+}
+
 export async function extractPdfAttachmentContent(
   data: Buffer,
   filename: string,
@@ -176,63 +219,46 @@ export async function extractPdfAttachmentContent(
       pages.push(text);
     }
 
-    if (boundText(pages.filter(Boolean).join('\n\n'))) {
-      const text = boundText(
-        pages
-          .map((pageText, index) => (pageText ? `[Page ${index + 1}]\n${pageText}` : ''))
-          .filter(Boolean)
-          .join('\n\n'),
-      );
-      if (text) return { text, pages, pageImages: [], pagesOmitted };
-    }
+    const hasTextLayer = boundText(pages.filter(Boolean).join('\n\n')) !== null;
+    const imageCandidates = hasTextLayer
+      ? pages.flatMap((pageText, index) => (pageText ? [] : [index + 1]))
+      : Array.from({ length: document.numPages }, (_, index) => index + 1);
 
     const pageImages: PdfAttachmentContent['pageImages'] = [];
+    const scannedPagesOmitted: number[] = [];
     let imageBytes = 0;
-    for (
-      let pageNumber = 1;
-      pageNumber <= Math.min(document.numPages, MAX_IMAGE_PAGES);
-      pageNumber += 1
-    ) {
-      const page = await document.getPage(pageNumber);
-      const operators = await page.getOperatorList();
-      for (const [index, operator] of operators.fnArray.entries()) {
-        if (operator !== OPS.paintImageXObject) continue;
-        const name = operators.argsArray[index]?.[0];
-        if (typeof name !== 'string') continue;
-        const bitmap = await new Promise<unknown>((resolve) => {
-          try {
-            page.objs.get(name, resolve);
-          } catch {
-            resolve(null);
-          }
-        });
-        const candidate = bitmap as {
-          width?: number;
-          height?: number;
-          kind?: number;
-          data?: Uint8Array;
-        } | null;
-        if (!candidate?.width || !candidate.height || !candidate.data || !candidate.kind) continue;
-        const rgb = toRgb({
-          width: candidate.width,
-          height: candidate.height,
-          kind: candidate.kind,
-          data: candidate.data,
-        });
-        if (!rgb) continue;
-        const png = encodePng(candidate.width, candidate.height, rgb);
-        if (imageBytes + png.byteLength > MAX_IMAGE_BYTES) break;
-        imageBytes += png.byteLength;
-        pageImages.push({
-          mimeType: 'image/png',
-          base64: png.toString('base64'),
-          page: pageNumber,
-        });
-        break;
+    for (const pageNumber of imageCandidates) {
+      if (pageImages.length >= MAX_IMAGE_PAGES) {
+        scannedPagesOmitted.push(pageNumber);
+        continue;
       }
+      const png = await renderPageImage(document, OPS.paintImageXObject, pageNumber);
+      if (!png) continue;
+      if (imageBytes + png.byteLength > MAX_IMAGE_BYTES) {
+        scannedPagesOmitted.push(pageNumber);
+        continue;
+      }
+      imageBytes += png.byteLength;
+      pageImages.push({ mimeType: 'image/png', base64: png.toString('base64'), page: pageNumber });
     }
 
-    return { text: null, pages: [], pageImages, pagesOmitted };
+    const imagedPages = new Set(pageImages.map((image) => image.page));
+    const text = hasTextLayer
+      ? boundText(
+          pages
+            .map((pageText, index) => {
+              const pageNumber = index + 1;
+              if (pageText) return `[Page ${pageNumber}]\n${pageText}`;
+              if (imagedPages.has(pageNumber)) {
+                return `[Page ${pageNumber}]\n(scanned page, attached as an image)`;
+              }
+              return '';
+            })
+            .filter(Boolean)
+            .join('\n\n'),
+        )
+      : null;
+    return { text, pages, pageImages, pagesOmitted, scannedPagesOmitted };
   } catch (error) {
     if (error instanceof PdfAttachmentUnreadableError) throw error;
     if (error instanceof Error && error.name === PDF_PASSWORD_EXCEPTION) {

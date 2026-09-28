@@ -64,14 +64,13 @@ export { connectorRuntime };
 
 export const FALLBACK_SUPPORTED_CONNECTOR_IDS: string[] = [
   'github',
-  'slack',
   'google_drive',
-  'figma',
   'stripe',
   'vercel',
   'sentry',
   'linear',
   'notion',
+  'atlassian',
   'cloudflare',
   'gmail',
   'google_calendar',

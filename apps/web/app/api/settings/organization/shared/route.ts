@@ -42,6 +42,7 @@ export interface OrganizationSharedOverview {
   currentUserId: string;
   currentUserRole: 'owner' | 'admin' | 'member' | 'viewer';
   canManageSharing: boolean;
+  canShareOwnProjects: boolean;
   members: OrgMemberRosterEntry[];
   sharedProjects: SharedProjectSummary[];
   sharedConnectors: SharedConnectorSummary[];
@@ -60,23 +61,18 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   const canManageSharing = permissions.has('sharing.manage');
   const [members, sharedProjects, sharedConnectors, sharedArtifacts, sharedConversations] =
     await Promise.all([
-      (canManageSharing ? getNeonDb() : db).query<{
+      getNeonDb().query<{
         user_id: string;
         role: OrgMemberRosterEntry['role'];
         joined_at: string;
         display_name: string | null;
         email: string | null;
       }>(
-        canManageSharing
-          ? `select om.user_id, om.role, om.joined_at, p.display_name, p.email
-             from public.organization_members om
-             left join public.profiles p on p.id = om.user_id
-            where om.organization_id = $1
-            order by om.joined_at asc`
-          : `select user_id, role, joined_at, null::text as display_name, null::text as email
-             from public.organization_members
-            where organization_id = $1
-            order by joined_at asc`,
+        `select om.user_id, om.role, om.joined_at, p.display_name, p.email
+           from public.organization_members om
+           left join public.profiles p on p.id = om.user_id
+          where om.organization_id = $1
+          order by om.joined_at asc`,
         [membership.organizationId],
       ),
       listSharedProjects(db, membership.organizationId),
@@ -90,6 +86,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     currentUserId: userId,
     currentUserRole: membership.role,
     canManageSharing,
+    canShareOwnProjects: permissions.has('content.share'),
     members: members.map((row) => ({
       userId: row.user_id,
       role: row.role,

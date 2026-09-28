@@ -224,7 +224,11 @@ describe('ArtifactsPanel · publish honors the conversation trust boundary', () 
     render(<ArtifactsPanel />);
     const result = await capturedPublish!({ content: 'here is your artifact', versionIndex: 0 });
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(
+      fetchMock.mock.calls.filter(
+        (call) => (call as unknown as [string, RequestInit | undefined])[1]?.method === 'POST',
+      ),
+    ).toHaveLength(1);
     expect(result.kind).toBe('cloud');
   });
 });

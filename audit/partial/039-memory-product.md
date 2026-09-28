@@ -301,9 +301,8 @@ Code: `packages/ai/agent-core/src/memory.ts:78-104`, `apps/mobile/src/features/m
 | --- | --- | --- | --- |
 | web | partial | Apply memory to every model: free-pool models (free-quota, experiential-free routes) and local Ollama/LM Studio models never receive saved memory; only the managed route injects it. | handler |
 | desktop | partial | Apply memory to every model: free-pool models (free-quota, experiential-free routes) and local Ollama/LM Studio models never receive saved memory; only the managed route injects it. | handler |
-| mobile | partial | Local mode feeds on-device memory to on-device models and Cloud mode uses account memory. One shared memory would move Local data to the cloud, which the trust boundary in AGENTS.md section 6 forbids, so this needs an owner decision (for example, Cloud memory readable in Local mode, never the reverse). | handler |
 
-Code: `apps/web/features/chat/lib/free-quota-selection.ts:35-42`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2904-2921`, `apps/web/app/api/models/free-quota/completions/route.ts:586-590`, `apps/mobile/stores/chat/chatExecutionStore.ts:1368-1376`
+Code: `apps/web/features/chat/lib/free-quota-selection.ts:35-42`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2904-2921`, `apps/web/app/api/models/free-quota/completions/route.ts:586-590`
 
 ## S39.32: Cross-surface Memory continuity.
 
@@ -313,7 +312,6 @@ Code: `apps/web/features/chat/lib/free-quota-selection.ts:35-42`, `apps/web/app/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Account memory syncs in Cloud mode; Local mode keeps a separate on-device memory. Syncing Local memory would move Local data to the cloud, which AGENTS.md section 6 forbids, so continuity across the two modes needs an owner decision. | states |
 | chrome | partial | Migration 0285 is now applied in production (2026-09-27). Still open: Reads, edits and deletes reach the account, but adds from the drawer go through POST /api/memory, whose writer needs pending migration 0285, and the drawer lists only the first 100. | states |
 
-Code: `apps/mobile/src/features/chat/store/appModeStore.ts:15-15`, `apps/mobile/services/cloudSyncEngine.ts:525-536`, `apps/mobile/src/features/memory/store.ts:85-94`, `apps/extension/src/features/cloud-bridge/memoryClient.ts:99-118`
+Code: `apps/extension/src/features/cloud-bridge/memoryClient.ts:99-118`, `apps/web/app/api/memory/route.ts:140-149`, `apps/web/lib/services/managed-memory-context-service.ts:720-724`

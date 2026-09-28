@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { Check, Monitor, Sun, Moon } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAppTheme as useTheme } from '@shared/hooks/useAppTheme';
@@ -11,7 +12,7 @@ import { SELECTABLE_LANGUAGES } from '@/app/i18n/index';
 import { useTTS } from '@/lib/hooks/useTTS';
 import { clampVoicePace, useVoiceSessionStore } from '@/features/chat/stores/voice-session-store';
 import { useStyleStore } from '@/features/chat/stores/style-store';
-import { useModelStore } from '@shared/stores/model-store';
+import { useModelStore, type AIModel } from '@shared/stores/model-store';
 import {
   isModelOnPlan,
   useDefaultModelPreference,
@@ -20,7 +21,11 @@ import {
 import { useThinkingStore, type EffortLevel } from '@shared/stores/thinking-store';
 import { APP_NAV_DESTINATIONS } from '@shared/components/layout/app-nav-items';
 import { useTranslation } from 'react-i18next';
-import { getModelReasoning, splitEffortsByEntitlement } from '@shared/config/llm';
+import {
+  getModelReasoning,
+  isModelAllowedForTier,
+  splitEffortsByEntitlement,
+} from '@shared/config/llm';
 import {
   ACCENT_COLORS,
   useSettingsStore,
@@ -41,6 +46,8 @@ import {
   EFFORT_LABEL,
   IMAGE_ATTACHMENT_MIME_TYPES,
   MAX_AVATAR_BYTES,
+  PLAN_LABEL,
+  getMinimumRequiredTier,
   isFreeBillingPlanTier,
 } from '@agiworkforce/types';
 import { toUserMessage } from '@/lib/user-error-message';
@@ -1019,18 +1026,39 @@ function PreferenceSyncNotice() {
 
 const LAST_USED_MODEL_VALUE = '';
 
+type UpgradePlan = 'basic' | 'pro' | 'max';
+
+interface DefaultModelChoice {
+  model: AIModel;
+  plan: UpgradePlan | null;
+}
+
+function upgradePlanFor(model: AIModel, tier: string): UpgradePlan | null {
+  if (model.availability && model.availability !== 'live') return null;
+  if (isModelAllowedForTier(model.id, tier)) return null;
+  const minimum = getMinimumRequiredTier(model.id);
+  return minimum && minimum !== 'free' ? minimum : null;
+}
+
 function DefaultModelRow() {
   const availableModels = useModelStore((state) => state.availableModels);
   const tier = useKnownPlanTier();
   const preference = useDefaultModelPreference(availableModels.length > 0);
-  const options = useMemo(
-    () => (tier === null ? [] : availableModels.filter((model) => isModelOnPlan(model, tier))),
-    [availableModels, tier],
+  const [lockedChoice, setLockedChoice] = useState<{ name: string; plan: UpgradePlan } | null>(
+    null,
   );
+  const choices = useMemo<DefaultModelChoice[]>(() => {
+    if (tier === null) return [];
+    return availableModels.flatMap((model): DefaultModelChoice[] => {
+      if (isModelOnPlan(model, tier)) return [{ model, plan: null }];
+      const plan = upgradePlanFor(model, tier);
+      return plan ? [{ model, plan }] : [];
+    });
+  }, [availableModels, tier]);
   if (availableModels.length === 0) return null;
 
   const savedDefault = preference.modelId
-    ? options.find((model) => model.id === preference.modelId)
+    ? choices.find((choice) => choice.plan === null && choice.model.id === preference.modelId)
     : undefined;
   const savedDefaultOffPlan =
     preference.status === 'ready' && preference.modelId !== null && tier !== null && !savedDefault;
@@ -1041,14 +1069,20 @@ function DefaultModelRow() {
       hint={
         savedDefaultOffPlan
           ? 'Your saved default is not on your current plan, so new chats start with the model you used last.'
-          : 'New chats start with this model. Only models your plan includes are listed.'
+          : 'New chats start with this model.'
       }
     >
       <div className="flex flex-col items-stretch gap-1 sm:items-end">
         <select
-          value={savedDefault?.id ?? LAST_USED_MODEL_VALUE}
+          value={savedDefault?.model.id ?? LAST_USED_MODEL_VALUE}
           disabled={tier === null || preference.status !== 'ready' || preference.saving}
           onChange={(event) => {
+            const chosen = choices.find((choice) => choice.model.id === event.target.value);
+            if (chosen?.plan) {
+              setLockedChoice({ name: chosen.model.name, plan: chosen.plan });
+              return;
+            }
+            setLockedChoice(null);
             void preference
               .save(event.target.value || null)
               .catch((error: unknown) =>
@@ -1059,12 +1093,23 @@ function DefaultModelRow() {
           className={`${SELECT_CLASS} max-w-[220px]`}
         >
           <option value={LAST_USED_MODEL_VALUE}>Last used</option>
-          {options.map((model) => (
+          {choices.map(({ model, plan }) => (
             <option key={model.id} value={model.id}>
-              {model.name}
+              {plan ? `${model.name} · Upgrade to use (${PLAN_LABEL[plan]})` : model.name}
             </option>
           ))}
         </select>
+        {lockedChoice ? (
+          <p role="status" className="text-xs text-muted-foreground">
+            {`${lockedChoice.name} needs ${PLAN_LABEL[lockedChoice.plan]}. `}
+            <Link
+              href={`/upgrade/${lockedChoice.plan}`}
+              className="font-medium text-foreground underline"
+            >
+              Upgrade to use
+            </Link>
+          </p>
+        ) : null}
         {preference.status === 'error' && (
           <p role="alert" className="flex items-center gap-2 text-xs text-danger">
             {preference.error}
@@ -1390,14 +1435,11 @@ function KeyboardShortcutsRow() {
 }
 
 function VoiceSpeedRow() {
-  const { isSupported, voices } = useTTS();
+  const { isSupported } = useTTS();
   const voiceSpeed = useSettingsStore((state) => state.voiceSpeed) ?? 'normal';
   const setVoiceSpeed = useSettingsStore((state) => state.setVoiceSpeed);
 
-  // Hidden rather than disabled when the browser exposes no voices: the row
-  // above already explains the absence, and a second dead control repeating it
-  // adds noise without adding information.
-  if (!isSupported || voices.length === 0) return null;
+  if (!isSupported) return null;
 
   const options = [
     { value: 'slow' as const, label: 'Slow' },
@@ -1474,9 +1516,10 @@ function ReadAloudVoiceRow() {
 
   if (!isSupported || voices.length === 0) {
     return (
-      <Row label="Read-aloud voice">
+      <Row label="Backup read-aloud voice">
         <span className="text-xs text-muted-foreground sm:text-right">
-          This browser exposes no speech voices, so read-aloud is unavailable here.
+          This browser has no speech voices of its own, so read-aloud has no backup when the AGI
+          voice is unavailable.
         </span>
       </Row>
     );
@@ -1484,12 +1527,12 @@ function ReadAloudVoiceRow() {
 
   return (
     <>
-      <Row label="Read-aloud voice">
+      <Row label="Backup read-aloud voice">
         <div className="flex min-w-0 items-center gap-2">
           <select
             value={voiceUri ?? ''}
             onChange={(event) => setVoiceUri(event.target.value || null)}
-            aria-label="Read-aloud voice"
+            aria-label="Backup read-aloud voice"
             className="h-8 min-w-0 flex-1 rounded-md border border-border bg-background px-2 text-sm text-foreground sm:max-w-[220px]"
           >
             <option value="">Browser default</option>
@@ -1502,7 +1545,11 @@ function ReadAloudVoiceRow() {
           <button
             type="button"
             onClick={() =>
-              isSpeaking ? stop() : speak('This is how messages will sound when read aloud.')
+              isSpeaking
+                ? stop()
+                : speak('This is how read-aloud sounds when it falls back to this voice.', {
+                    deviceVoice: true,
+                  })
             }
             className="h-8 shrink-0 rounded-md border border-border px-2.5 text-xs text-foreground transition-colors hover:bg-muted"
           >
@@ -1511,9 +1558,11 @@ function ReadAloudVoiceRow() {
         </div>
       </Row>
       <p className="-mt-3 text-xs leading-relaxed text-muted-foreground">
-        Read-aloud uses your browser&apos;s built-in speech. It always plays through your system
-        default output device, browsers give web pages no way to choose one, so change it in your
-        operating system&apos;s sound settings. Read-aloud plays a reply on request and then stops.
+        Read-aloud speaks replies in the AGI voice, which uses a few credits per reply. When that
+        voice is unavailable it falls back to this browser voice. Audio always plays through your
+        system default output device, browsers give web pages no way to choose one, so change it in
+        your operating system&apos;s sound settings. Read-aloud plays a reply on request and then
+        stops.
       </p>
     </>
   );

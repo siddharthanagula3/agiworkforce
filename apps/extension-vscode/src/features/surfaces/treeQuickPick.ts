@@ -16,6 +16,7 @@ export interface SurfaceTitleAction {
 
 export type SurfaceTreeSource = Pick<vscode.TreeDataProvider<vscode.TreeItem>, 'getChildren'> & {
   onDidChangeTreeData?: vscode.Event<vscode.TreeItem | undefined | null | void>;
+  setAutoRefreshEnabled?: (enabled: boolean) => void;
 };
 
 export interface SurfaceQuickPickOptions {
@@ -146,9 +147,11 @@ export async function showSurfaceQuickPick(options: SurfaceQuickPickOptions): Pr
   const changeListener = options.provider.onDidChangeTreeData?.(() => {
     void load();
   });
+  options.provider.setAutoRefreshEnabled?.(true);
 
   return new Promise<void>((resolve) => {
     pick.onDidHide(() => {
+      options.provider.setAutoRefreshEnabled?.(false);
       changeListener?.dispose();
       pick.dispose();
       resolve();

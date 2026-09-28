@@ -69,6 +69,11 @@ pub(super) async fn handle_slash_command(
         return SlashResult::Handled;
     }
 
+    if cmd == "/upgrade" {
+        eprintln!("{}", crate::claude_parity::open_upgrade_page());
+        return SlashResult::Handled;
+    }
+
     match crate::claude_parity::handle_shared_command(cmd.as_str(), arg, session) {
         crate::claude_parity::ParityCommandResult::SystemMessage(message) => {
             persist_shared_ui_config(cmd.as_str(), arg, session, config);
@@ -177,6 +182,21 @@ pub(super) async fn handle_slash_command(
         "/models" => {
             output::print_block(&crate::provider::format_model_list());
             eprintln!("Live local discovery: run `agi models scan` or `agi models status`.");
+        }
+        "/skills" if arg.starts_with("import") => {
+            let path = arg.trim_start_matches("import").trim();
+            if path.is_empty() {
+                output::print_warn("Usage: /skills import <path to SKILL.md or its folder>");
+            } else {
+                match crate::skills::import_skill(std::path::Path::new(
+                    &crate::path_security::expand_home(path),
+                )) {
+                    Ok(target) => {
+                        output::print_info(&format!("Imported the skill to {}.", target.display()))
+                    }
+                    Err(reason) => output::print_warn(&reason),
+                }
+            }
         }
         "/skills" => {
             let all = crate::skills::discover_skills();
