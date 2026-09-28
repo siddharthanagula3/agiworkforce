@@ -62,62 +62,6 @@ Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:690-695`, `ap
 
 Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:693-700`, `apps/mobile/src/features/chat/actions/runVideoGenerationTurn.ts:103-110`, `apps/web/app/api/media/video/generate/route.ts:421-424`
 
-## S46.10: Camera-motion instructions.
-
-- Done when: User gives camera-motion instructions (pan, dolly, zoom) for the clip.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Only as free text inside the single prompt; no dedicated camera-motion field. | ui |
-| desktop | partial | Only as free text inside the single prompt; no dedicated camera-motion field. | ui |
-| mobile | partial | Only as free text inside the single prompt; no dedicated camera-motion field. | ui |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:4311-4314`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:2929-2936`, `apps/web/app/api/media/video/generate/route.ts:699-702`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:532-542`
-
-## S46.11: Scene/action instructions.
-
-- Done when: User describes the scene and action the clip should show.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Only as free text inside the single prompt; no dedicated scene or action field. | ui |
-| desktop | partial | Only as free text inside the single prompt; no dedicated scene or action field. | ui |
-| mobile | partial | Only as free text inside the single prompt; no dedicated scene or action field. | ui |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:4311-4314`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:2929-2936`, `apps/web/app/api/media/video/generate/route.ts:699-702`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:532-542`
-
-## S46.12: Dialogue instructions.
-
-- Done when: User writes dialogue lines the characters should speak.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Only as free text inside the single prompt; no dedicated dialogue field. | ui |
-| desktop | partial | Only as free text inside the single prompt; no dedicated dialogue field. | ui |
-| mobile | partial | Only as free text inside the single prompt; no dedicated dialogue field. | ui |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:4311-4314`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:2929-2936`, `apps/web/app/api/media/video/generate/route.ts:699-702`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:532-542`
-
-## S46.13: Generated-audio option.
-
-- Done when: User chooses whether the clip is generated with audio.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Audio is switched on automatically for audio-capable models (generate_audio defaults to supportsAudio); no client offers the toggle the API accepts. | ui |
-| desktop | partial | Audio is switched on automatically for audio-capable models (generate_audio defaults to supportsAudio); no client offers the toggle the API accepts. | ui |
-| mobile | partial | No audio toggle; mobile never sends generate_audio, so the model default applies. | ui |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/api/media/video/generate/route.ts:983-985`, `packages/contracts/cloud-contracts/src/managed-media.ts:152-156`, `apps/mobile/src/features/chat/actions/runVideoGenerationTurn.ts:103-110`
-
 ## S46.25: Generation queue.
 
 - Done when: User sees a queue of pending video jobs and their order.
@@ -225,17 +169,3 @@ Code: `apps/mobile/src/features/library/index.tsx:144-148`
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-## S46.34: Save to Project.
-
-- Done when: User saves a finished clip to a Project.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | The failing Add to project action is no longer offered on videos (befc57525). Saving a clip to a project needs video accepted as project knowledge; Claude projects take no video either, so this is a leader-parity decline candidate for the lead. | handler |
-| desktop | partial | The failing Add to project action is no longer offered on videos (befc57525). Saving a clip to a project needs video accepted as project knowledge; Claude projects take no video either, so this is a leader-parity decline candidate for the lead. | handler |
-| mobile | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `packages/ui/unified-chat/src/components/library/LibraryView.tsx:1632-1632`, `packages/contracts/types/src/chat.ts:185-185`

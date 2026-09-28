@@ -186,11 +186,8 @@ Code: `apps/mobile/src/features/skills/SkillsScreen.tsx:536-544`, `apps/mobile/a
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | No project mention in the composer; Claude Code has none either (projects are scoped by `agi projects link`). Candidate for n/a. | ui |
 | vscode | partial | Blind re-search with the repo's own vocabulary (activeProject, projectContextStrip): VS Code can scope turns to a hosted project via 'Use in chat' (applyProjectToChat -> setActiveCloudProject), shows it as an 'Active project' chip in the composer strip, and prepends its instructions through customInstructions.ts. Not a typed mention and no knowledge files, so partial, not missing. |  |
 | chrome | partial | Blind re-search: the auditor's own S13.31 chrome evidence names renderProjectChip. The Projects drawer's 'Use' button sets the active project, the chip renders it, and persistMessages passes the binding to upsertConversation so the chat is scoped to the project. Picker rather than mention, so partial. |  |
-
-Code: `apps/cli/src/tui/tui_app.rs:2931-2931`
 
 ## S13.26: File mention.
 
@@ -286,11 +283,10 @@ Code: `apps/mobile/src/features/chat/components/ChatInput.tsx:210-231`, `apps/ex
 | web | partial | Add a per-message output-format choice; today the composer offers tone/length (Style) and an Office-files toggle, and "preferred formatting" exists only in Settings. | ui |
 | desktop | partial | Same as web. | ui |
 | mobile | partial | Add an output-format choice; the style picker covers tone and length only (Normal, Concise, Detailed, Creative). | ui |
-| cli | partial | Neither Claude Code nor ChatGPT has a per-message output-format picker; /output-style covers session format. Candidate for n/a. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:869-876`, `apps/web/features/chat/stores/style-store.ts:187-195`, `apps/mobile/src/features/chat/components/StyleSelector.tsx:16-19`, `apps/cli/src/claude_parity.rs:125-125`
+Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:869-876`, `apps/web/features/chat/stores/style-store.ts:187-195`, `apps/mobile/src/features/chat/components/StyleSelector.tsx:16-19`
 
 ## S13.36: Dictation control.
 
