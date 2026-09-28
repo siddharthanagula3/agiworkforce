@@ -175,8 +175,7 @@ describe('WorkspacePolicySection security controls', () => {
     renderSection();
 
     const input = screen.getByLabelText('Add an IP address or CIDR block');
-    await user.type(input, '203.0.113.0/24');
-    await user.click(screen.getByRole('button', { name: 'Add' }));
+    await user.type(input, '203.0.113.0/24{Enter}');
 
     expect(screen.getByText('203.0.113.0/24')).toBeInTheDocument();
 
@@ -192,10 +191,10 @@ describe('WorkspacePolicySection security controls', () => {
     renderSection();
 
     const input = screen.getByLabelText('Add an IP address or CIDR block');
-    await user.type(input, 'not-an-ip');
+    await user.type(input, 'not-an-ip{Enter}');
 
     expect(screen.getByRole('alert')).toHaveTextContent(/CIDR block/i);
-    expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled();
+    expect(screen.queryByRole('list', { name: 'IP allow list' })).toBeNull();
   });
 
   it('removes an entry from the allow list', async () => {

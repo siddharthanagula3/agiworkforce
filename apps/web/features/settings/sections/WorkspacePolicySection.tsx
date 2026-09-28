@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { ShieldCheck } from 'lucide-react';
+import { ChipInput, useUnsavedChangesGuard } from '@agiworkforce/ui';
 import {
   centsFromCredits,
   creditsFromCents,
@@ -203,7 +204,6 @@ export function WorkspacePolicySection() {
   const overview = query.data ?? null;
 
   const [draft, setDraft] = useState<PolicyDraft | null>(null);
-  const [ipAllowListInput, setIpAllowListInput] = useState('');
 
   useEffect(() => {
     if (overview) setDraft(toDraft(overview.policy));
@@ -216,6 +216,20 @@ export function WorkspacePolicySection() {
     if (!overview.configured) return true;
     return JSON.stringify(draft) !== JSON.stringify(toDraft(overview.policy));
   }, [overview, draft]);
+
+  const edited = useMemo(() => {
+    if (!overview || !draft) return false;
+    return JSON.stringify(draft) !== JSON.stringify(toDraft(overview.policy));
+  }, [overview, draft]);
+
+  const { dialog: discardDialog } = useUnsavedChangesGuard({
+    dirty: edited && !update.isPending,
+    description:
+      'Your changes to the workspace policy have not been saved. If you leave now, they will be lost.',
+    onDiscard: () => {
+      if (overview) setDraft(toDraft(overview.policy));
+    },
+  });
 
   const coherenceError = useMemo(() => {
     if (!draft) return null;
@@ -277,30 +291,9 @@ export function WorkspacePolicySection() {
     patch({ chatSyncSurfaces: next });
   }
 
-  const trimmedIpAllowListInput = ipAllowListInput.trim();
-  const ipAllowListInputError =
-    trimmedIpAllowListInput && !isValidIpOrCidr(trimmedIpAllowListInput)
-      ? 'Enter an IP address or CIDR block, such as 203.0.113.0/24.'
-      : null;
-  const ipAllowListFull = draft.ipAllowList.length >= MAX_IP_ALLOW_LIST_ENTRIES;
-
-  function addIpAllowListEntry() {
-    if (!draft || !trimmedIpAllowListInput || ipAllowListInputError || ipAllowListFull) return;
-    if (draft.ipAllowList.includes(trimmedIpAllowListInput)) {
-      setIpAllowListInput('');
-      return;
-    }
-    patch({ ipAllowList: [...draft.ipAllowList, trimmedIpAllowListInput] });
-    setIpAllowListInput('');
-  }
-
-  function removeIpAllowListEntry(entry: string) {
-    if (!draft) return;
-    patch({ ipAllowList: draft.ipAllowList.filter((value) => value !== entry) });
-  }
-
   return (
     <section style={cardStyle}>
+      {discardDialog}
       <header style={headerStyle}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
           <ShieldCheck size={15} aria-hidden="true" />
@@ -662,92 +655,25 @@ export function WorkspacePolicySection() {
         >
           {draft.ipAllowList.length === 0
             ? 'Empty. Members may sign in to this workspace from any address.'
-            : 'Members may only sign in to this workspace from one of these addresses or blocks.'}
+            : 'Members may only sign in to this workspace from one of these addresses or blocks.'}{' '}
+          Press Enter or type a comma to add an entry.
         </div>
-        {draft.ipAllowList.length > 0 ? (
-          <ul
-            style={{
-              listStyle: 'none',
-              margin: '0 0 var(--space-3)',
-              padding: 0,
-              display: 'grid',
-              gap: 'var(--space-2)',
-            }}
-          >
-            {draft.ipAllowList.map((entry) => (
-              <li
-                key={entry}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 'var(--space-2)',
-                  fontSize: 12,
-                }}
-              >
-                <span style={{ color: 'var(--text-1)', fontFamily: 'monospace' }}>{entry}</span>
-                <button
-                  type="button"
-                  disabled={!canEdit}
-                  onClick={() => removeIpAllowListEntry(entry)}
-                  aria-label={`Remove ${entry} from the allow list`}
-                  style={{ ...buttonStyle, padding: 'var(--space-1) var(--space-2)' }}
-                >
-                  Remove
-                </button>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-        <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'flex-start' }}>
-          <div>
-            <input
-              type="text"
-              value={ipAllowListInput}
-              disabled={!canEdit || ipAllowListFull}
-              aria-label="Add an IP address or CIDR block"
-              placeholder="203.0.113.0/24"
-              onChange={(event) => setIpAllowListInput(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault();
-                  addIpAllowListEntry();
-                }
-              }}
-              style={{ width: 200, ...fieldInputStyle }}
-            />
-            {ipAllowListInputError ? (
-              <div
-                role="alert"
-                style={{
-                  fontSize: 12,
-                  color: 'var(--settings-destructive-text)',
-                  marginTop: 'var(--space-1)',
-                }}
-              >
-                {ipAllowListInputError}
-              </div>
-            ) : null}
-            {!ipAllowListInputError && ipAllowListFull ? (
-              <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
-                The allow list holds at most {MAX_IP_ALLOW_LIST_ENTRIES} entries.
-              </div>
-            ) : null}
-          </div>
-          <button
-            type="button"
-            disabled={
-              !canEdit ||
-              !trimmedIpAllowListInput ||
-              Boolean(ipAllowListInputError) ||
-              ipAllowListFull
-            }
-            onClick={addIpAllowListEntry}
-            style={buttonStyle}
-          >
-            Add
-          </button>
-        </div>
+        <ChipInput
+          values={draft.ipAllowList}
+          onChange={(ipAllowList) => patch({ ipAllowList })}
+          label="Add an IP address or CIDR block"
+          listLabel="IP allow list"
+          removeLabel={(entry) => `Remove ${entry} from the allow list`}
+          placeholder="203.0.113.0/24"
+          disabled={!canEdit}
+          maxItems={MAX_IP_ALLOW_LIST_ENTRIES}
+          validate={(entry) =>
+            isValidIpOrCidr(entry)
+              ? null
+              : 'Enter an IP address or CIDR block, such as 203.0.113.0/24.'
+          }
+          className="max-w-md"
+        />
       </div>
 
       <div

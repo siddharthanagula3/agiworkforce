@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -11,6 +11,7 @@ import {
   Input,
   Textarea,
   useConfirmAction,
+  useUnsavedChangesGuard,
 } from '@agiworkforce/ui';
 import { Label } from '@agiworkforce/ui';
 import { Copy, Download, Smile, Trash2 } from 'lucide-react';
@@ -52,18 +53,37 @@ export function ProjectSettingsDialog({
   const [isSaving, setIsSaving] = useState(false);
   const { confirm, dialog: confirmDialog } = useConfirmAction();
 
-  useEffect(() => {
+  const resetFields = useCallback(() => {
     setName(project.name);
     setDescription(project.description ?? '');
     setInstructions(project.instructions ?? '');
     setUsesGlobalMemory(project.usesGlobalMemory !== false);
-  }, [
-    project.id,
-    project.name,
-    project.description,
-    project.instructions,
-    project.usesGlobalMemory,
-  ]);
+  }, [project.name, project.description, project.instructions, project.usesGlobalMemory]);
+
+  useEffect(() => {
+    resetFields();
+  }, [project.id, resetFields]);
+
+  const dirty =
+    open &&
+    (name !== project.name ||
+      description !== (project.description ?? '') ||
+      instructions !== (project.instructions ?? '') ||
+      usesGlobalMemory !== (project.usesGlobalMemory !== false));
+  const { confirmDiscard, dialog: discardDialog } = useUnsavedChangesGuard({
+    dirty,
+    description:
+      'Your changes to this project have not been saved. If you leave now, they will be lost.',
+    onDiscard: resetFields,
+  });
+
+  const handleOpenChange = (next: boolean) => {
+    if (next) {
+      onOpenChange(true);
+      return;
+    }
+    confirmDiscard(() => onOpenChange(false));
+  };
 
   const [isDuplicating, setIsDuplicating] = useState(false);
 
@@ -151,7 +171,7 @@ export function ProjectSettingsDialog({
 
   return (
     <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
+      <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col overflow-hidden p-0 sm:max-w-lg">
           {/* Header */}
           <DialogHeader className="shrink-0 border-b border-border/60 px-6 py-5">
@@ -326,7 +346,7 @@ export function ProjectSettingsDialog({
                 so the browser streams the file without holding it in memory.
               */}
               <Button asChild variant="ghost" size="sm" className="w-full sm:w-auto">
-                <a href={`/api/projects/${project.id}/export`}>
+                <a href={`/api/projects/${project.id}/export`} download>
                   <Download className="mr-1.5 h-4 w-4" />
                   Export
                 </a>
@@ -347,6 +367,7 @@ export function ProjectSettingsDialog({
       </Dialog>
 
       {confirmDialog}
+      {discardDialog}
     </>
   );
 }
