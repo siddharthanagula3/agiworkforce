@@ -452,6 +452,7 @@ async function generateWithOpenAIImage(
   n: number,
   requestedModelId?: string,
   edit?: ImageEditContext,
+  transparentBackground = false,
 ): Promise<{ images: GeneratedImage[]; model: string }> {
   const apiKey = getApiKey('openai');
   const catalogModel = resolveOpenAIImageModel(requestedModelId);
@@ -528,6 +529,7 @@ async function generateWithOpenAIImage(
       size: imageSize,
       quality: imageQuality,
       n: Math.min(n, 4),
+      ...(transparentBackground ? { background: 'transparent', output_format: 'png' } : {}),
     }),
     signal: AbortSignal.timeout(IMAGE_GENERATION_PROVIDER_DEADLINE_MS),
   });
@@ -844,6 +846,7 @@ export async function generateImages(input: {
   n: number;
   catalogModel: ExecutableImageModel;
   edit?: ImageEditContext | undefined;
+  transparentBackground?: boolean;
 }): Promise<{ images: GeneratedImage[]; model: string }> {
   switch (input.provider) {
     case 'openai':
@@ -854,6 +857,7 @@ export async function generateImages(input: {
         input.n,
         input.catalogModel.id,
         input.edit,
+        input.transparentBackground,
       );
     case 'google':
       return generateWithImagen(

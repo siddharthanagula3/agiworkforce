@@ -605,6 +605,7 @@ async function executeImageGenerationJobAttempt(input: {
       n: job.imageCount,
       catalogModel,
       edit,
+      transparentBackground: job.plan.transparentBackground,
     });
     if (result.images.length === 0) {
       throw new Error(`${job.provider} image provider returned no usable image output`);

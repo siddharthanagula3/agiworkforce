@@ -432,7 +432,12 @@ interface ChatComposerProps {
    */
   onGenerateImage?: (
     prompt: string,
-    options: { aspectRatio: ImageAspectRatio; modelId: string; edit?: ImageEditRequest },
+    options: {
+      aspectRatio: ImageAspectRatio;
+      modelId: string;
+      edit?: ImageEditRequest;
+      transparentBackground?: boolean;
+    },
   ) => void;
   /**
    * Called when the user submits in video-generation mode. Same contract as
@@ -2884,6 +2889,9 @@ const ChatComposerNewComponent = ({
         onGenerateImage(prompt, {
           aspectRatio: effectiveImageAspectRatio,
           modelId: imageModelId,
+          ...(imageTransparentBackground && imageModelSupportsEdit
+            ? { transparentBackground: true }
+            : {}),
         });
         clearComposerState();
         return;
@@ -4865,7 +4873,7 @@ const ChatComposerNewComponent = ({
                     </div>
                   )}
 
-                  {imageSourceFile && imageModelSupportsEdit && (
+                  {imageModelSupportsEdit && (
                     <button
                       type="button"
                       aria-pressed={imageTransparentBackground}
@@ -4876,7 +4884,7 @@ const ChatComposerNewComponent = ({
                           ? 'border-primary/30 bg-primary/15 text-primary'
                           : 'border-border/60 bg-muted/40 text-muted-foreground hover:bg-muted/60 hover:text-foreground',
                       )}
-                      title="Return the edit on a transparent background"
+                      title="Return the image on a transparent background"
                     >
                       Transparent
                     </button>

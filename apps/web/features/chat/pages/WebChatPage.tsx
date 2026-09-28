@@ -2545,7 +2545,12 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   const handleGenerateImage = useCallback(
     (
       prompt: string,
-      options: { aspectRatio: ImageAspectRatio; modelId: string; edit?: ImageEditRequest },
+      options: {
+        aspectRatio: ImageAspectRatio;
+        modelId: string;
+        edit?: ImageEditRequest;
+        transparentBackground?: boolean;
+      },
     ) => {
       // Same first-message send guard as sendContent: a lazy-created image
       // conversation has the identical createConversation → bareChatSessionId
@@ -2566,6 +2571,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             options.aspectRatio,
             options.modelId,
             options.edit,
+            options.transparentBackground,
           );
           const requestedAspect: ImageAspectRatio = imageRequest.aspectRatio ?? 'auto';
           const requestedModel = imageRequest.model;
