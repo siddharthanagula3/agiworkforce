@@ -8,16 +8,13 @@ import { resolveConnectorAccessToken } from '@/lib/connectors/oauth-access';
 import { GOOGLE_DRIVE_CONNECTOR_ID } from '@/lib/connectors/google-drive-files';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 
-const PICKER_API_KEY_ENV = 'GOOGLE_PICKER_API_KEY';
-const PICKER_APP_ID_ENV = 'GOOGLE_PICKER_APP_ID';
-
 async function handleGetPicker(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
   const { userId } = await getUserScopedDb(request, { resolveOrganization: false });
-  const developerKey = process.env[PICKER_API_KEY_ENV]?.trim();
-  const appId = process.env[PICKER_APP_ID_ENV]?.trim();
+  const developerKey = process.env['GOOGLE_PICKER_API_KEY']?.trim();
+  const appId = process.env['GOOGLE_PICKER_APP_ID']?.trim();
   if (!developerKey || !appId) {
     return NextResponse.json(
       { status: 'not-configured' },
