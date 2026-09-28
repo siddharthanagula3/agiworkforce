@@ -16,6 +16,7 @@ const REDEEM_PATH = '/api/auth/desktop/redeem';
 const SIGNING_IN = 'Signing you in';
 const FAILED_HEADING = 'Sign-in did not finish';
 const INCOMPLETE = 'This sign-in link is incomplete. Start again from your browser.';
+const EXPIRED = 'This sign-in link has expired or was already used. Start again from your browser.';
 const REDEEM_FAILED = 'This sign-in could not be finished. Start again from your browser.';
 const RETRY_LABEL = 'Continue in your browser';
 const SIGN_IN_HERE = 'Sign in here instead';
@@ -25,9 +26,10 @@ interface SignInGrant {
   verifier: string;
 }
 
-function takeGrantFromLocation(): SignInGrant | null {
+function takeGrantFromLocation(): SignInGrant | 'expired' | null {
   const params = new URLSearchParams(window.location.hash.slice(1));
   window.history.replaceState(null, '', window.location.pathname);
+  if (params.get('expired') === '1') return 'expired';
   const code = params.get('code');
   const verifier = params.get('verifier');
   return code && verifier ? { code, verifier } : null;
@@ -76,6 +78,7 @@ export function DesktopSignInComplete({
     started.current = true;
     const grant = takeGrantFromLocation();
     const finish = async (): Promise<string | null> => {
+      if (grant === 'expired') return EXPIRED;
       if (!grant) return INCOMPLETE;
       try {
         return await signInWithTicket(await redeemGrant(grant), completeUrl);

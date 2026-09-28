@@ -197,6 +197,7 @@ const shellWindows = new Map<number, ShellWindowEntry>();
 
 let mainWindow: BrowserWindow | null = null;
 let pendingDeepLink: string | null = null;
+const coldStartDeepLinks: string[] = [];
 
 function liveWindows(): ShellWindowEntry[] {
   return [...shellWindows.values()].filter((entry) => !entry.win.isDestroyed());
@@ -644,11 +645,15 @@ function focusMainWindow(): void {
 
 function deliverDeepLink(url: string): void {
   if (!url.startsWith(`${DEEP_LINK_SCHEME}://`)) return;
+  if (!app.isReady()) {
+    coldStartDeepLinks.push(url);
+    return;
+  }
 
   const signIn = readBrowserSignInLink(url);
   if (signIn.kind !== 'not-sign-in') {
     showMainWindow();
-    if (signIn.kind === 'complete') void mainWindow?.loadURL(signIn.url);
+    void mainWindow?.loadURL(signIn.url);
     return;
   }
 
@@ -1445,6 +1450,9 @@ if (!hasSingleInstanceLock) {
     );
   }
 
+  const launchLink = process.argv.find((arg) => arg.startsWith(`${DEEP_LINK_SCHEME}://`));
+  if (launchLink) coldStartDeepLinks.push(launchLink);
+
   app.on('second-instance', (_event, argv) => {
     const link = argv.find((arg) => arg.startsWith(`${DEEP_LINK_SCHEME}://`));
     if (link) deliverDeepLink(link);
@@ -1476,6 +1484,7 @@ if (!hasSingleInstanceLock) {
     }
 
     createMainWindow();
+    for (const link of coldStartDeepLinks.splice(0)) deliverDeepLink(link);
 
     if (getPreferences().showInMenuBar) createTray(garnishHandlers);
     installMenu();
