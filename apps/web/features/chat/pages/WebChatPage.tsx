@@ -6346,6 +6346,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                               onRegenerateWithModel={handleRegenerateWithModel}
                               regenerateModelOptions={regenerateModelOptions}
                               turnErrorActive={turnErrorNotice !== null}
+                              temporaryChat={temporaryChatActive}
                             />
                           </ResearchRunControlsProvider>
                         </InteractiveCardResumeProvider>

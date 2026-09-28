@@ -2,6 +2,7 @@ import type {
   AccentColor,
   ChatFont,
   ChatTextSize,
+  FollowUpBehavior,
   MotionPreference,
   VoiceSpeed,
 } from '@shared/stores/web-settings-store';
@@ -19,6 +20,8 @@ export interface AppearanceSettings {
   motion: MotionPreference;
   highContrast: boolean;
   codeBlockWrap: boolean;
+  followUpSuggestionsEnabled: boolean;
+  followUpBehavior: FollowUpBehavior;
   dictationEnabled: boolean;
   voiceSpeed: VoiceSpeed;
   hiddenNavIds: string[];
@@ -32,6 +35,8 @@ export interface AppearanceNamespace {
   motion?: MotionPreference;
   highContrast?: boolean;
   codeBlockWrap?: boolean;
+  followUpSuggestions?: boolean;
+  followUpBehavior?: FollowUpBehavior;
   dictationEnabled?: boolean;
   voiceSpeed?: VoiceSpeed;
   hiddenNavIds?: string[];
@@ -75,6 +80,7 @@ const THEMES: readonly SyncedTheme[] = ['light', 'dark', 'system'];
 const TEXT_SIZES: readonly ChatTextSize[] = ['small', 'default', 'large'];
 const MOTIONS: readonly MotionPreference[] = ['system', 'reduced'];
 const VOICE_SPEEDS: readonly VoiceSpeed[] = ['slow', 'normal', 'fast'];
+const FOLLOW_UP_BEHAVIORS: readonly FollowUpBehavior[] = ['queue', 'steer'];
 
 function oneOf<T extends string>(options: readonly T[], value: unknown): T | undefined {
   return typeof value === 'string' && (options as readonly string[]).includes(value)
@@ -101,6 +107,8 @@ export function toAppearanceNamespace(settings: AppearanceSettings): Required<Ap
     motion: settings.motion,
     highContrast: settings.highContrast,
     codeBlockWrap: settings.codeBlockWrap,
+    followUpSuggestions: settings.followUpSuggestionsEnabled,
+    followUpBehavior: settings.followUpBehavior,
     dictationEnabled: settings.dictationEnabled,
     voiceSpeed: settings.voiceSpeed,
     hiddenNavIds: settings.hiddenNavIds,
@@ -132,6 +140,12 @@ export function fromAppearanceNamespace(stored: unknown): Partial<AppearanceSett
 
   const codeBlockWrap = boolean(source['codeBlockWrap']);
   if (codeBlockWrap !== undefined) patch.codeBlockWrap = codeBlockWrap;
+
+  const followUpSuggestions = boolean(source['followUpSuggestions']);
+  if (followUpSuggestions !== undefined) patch.followUpSuggestionsEnabled = followUpSuggestions;
+
+  const followUpBehavior = oneOf(FOLLOW_UP_BEHAVIORS, source['followUpBehavior']);
+  if (followUpBehavior) patch.followUpBehavior = followUpBehavior;
 
   const dictationEnabled = boolean(source['dictationEnabled']);
   if (dictationEnabled !== undefined) patch.dictationEnabled = dictationEnabled;
