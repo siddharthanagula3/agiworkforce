@@ -96,6 +96,9 @@ Every declared platform tool, and what each policy does with it. The rows are
 | `create_office_file` | asks                   | asks                           | write, reversible                                                                |
 | `skill`              | asks                   | runs                           | read, reversible                                                                 |
 | `read_tool_result`   | asks                   | runs                           | read, reversible, acceptsUntrustedContent                                        |
+| `save_memory`        | asks                   | asks                           | write, reversible                                                                |
+| `search_memory`      | asks                   | runs                           | read, reversible                                                                 |
+| `forget_memory`      | asks                   | asks                           | delete, not reversible                                                           |
 
 A connector or MCP tool forces `approvalMode: 'manual'` on the whole turn. An
 undeclared one resolves to `UNKNOWN_TOOL_METADATA`, an irreversible write with
@@ -105,7 +108,10 @@ GitHub built-ins are declared, so `get_pull_request_diff` runs under
 `post_pull_request_review` ask under every policy.
 
 `write_file` / `create_folder` / `create_office_file` / `execute_code` act inside
-the conversation's own E2B sandbox workspace, not on the user's device. Public
+the conversation's own E2B sandbox workspace, not on the user's device. The
+three Memory tools are offered only on the web, desktop and mobile apps, only
+while Memory is on and the chat is not temporary, and they go through the same
+admission and never-remember list as `/remember` and `/forget`. Public
 copy must say so in the same breath as any claim about approval, or the sentence
 reads worse than the reality.
 

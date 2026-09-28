@@ -334,6 +334,7 @@ import {
   isManagedOfficeFileTool,
   MANAGED_OFFICE_FILE_TOOL_NAME,
 } from '@/lib/services/managed-office-file-service';
+import { executeMemoryTool, isMemoryTool, memoryToolSource } from '@/lib/server/tools/memory-tools';
 import { executeMapSearchTool, isMapSearchTool } from '@/lib/services/map-search-tool-service';
 import { buildPlacesCard } from '@/lib/places/places-card';
 import {
@@ -817,6 +818,7 @@ function canonicalToolCategory(
   if (isMapSearchTool(toolName)) return 'web-search';
   if (isPlacesSearchTool(toolName)) return 'web-search';
   if (isClarifyTool(toolName)) return 'other';
+  if (isMemoryTool(toolName)) return 'memory';
   if (toolName === 'execute_code') return 'code-execution';
   if (
     toolName === 'write_file' ||
@@ -1883,6 +1885,7 @@ async function runMcpTool(
     inputResponses?: Record<string, unknown>;
     requestState?: string;
     loadSkillInstallOverrides?: () => Promise<ReadonlyMap<string, boolean>>;
+    temporaryChat?: boolean;
   },
 ): Promise<ToolLoopToolResult> {
   if (toolCall.qualifiedName === SKILL_TOOL_NAME) {
@@ -1920,6 +1923,22 @@ async function runMcpTool(
       }
     }
     return { content: result.content, isError: result.isError };
+  }
+
+  if (isMemoryTool(toolCall.qualifiedName)) {
+    if (!availableTools.has(toolCall.qualifiedName)) {
+      return { content: `Unknown tool: ${toolCall.qualifiedName}`, isError: true };
+    }
+    if (!executionContext?.userId) {
+      return { content: 'A signed-in account is required to use Memory.', isError: true };
+    }
+    return executeMemoryTool(toolCall.qualifiedName, toolCall.args, {
+      db: callerScopedDb(executionContext, executionContext.userId),
+      userId: executionContext.userId,
+      organizationId: executionContext.organizationId,
+      source: memoryToolSource(executionContext.surface),
+      temporaryChat: executionContext.temporaryChat === true,
+    });
   }
 
   if (isManagedOfficeFileTool(toolCall.qualifiedName)) {
@@ -2341,6 +2360,7 @@ export function isToolOffered(
   if (isManagedOfficeFileTool(qualifiedName)) {
     return availableTools.has(MANAGED_OFFICE_FILE_TOOL_NAME);
   }
+  if (isMemoryTool(qualifiedName)) return availableTools.has(qualifiedName);
   if (isDeviceStepTool(qualifiedName)) return availableTools.has(qualifiedName);
   if (
     isExecutionTool(qualifiedName) ||
@@ -4303,6 +4323,7 @@ export async function* runToolLoop(
               usageAttribution: processed.managedUsage?.attribution,
               webSearchMaxResults: processed.freeTrial ? WEB_SEARCH_FREE_MAX_RESULTS : undefined,
               surface: processed.chatSurface,
+              temporaryChat: processed.conversationIsTemporary === true,
               onWebSearchSpend: (spend) => {
                 searchSpend = spend;
               },
