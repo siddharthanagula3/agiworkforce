@@ -303,7 +303,10 @@
         "packages/platform/data-layer/**"
       ],
       "blockedPaths": ["apps/web/db/neon/**", "packages/contracts/types/**"],
-      "requiredChecks": ["pnpm --filter @agiworkforce/signaling-server test"],
+      "requiredChecks": [
+        "pnpm --filter @agiworkforce/signaling-server test",
+        "pnpm --filter @agiworkforce/upload-scanner test"
+      ],
       "escalationOwners": ["Security/privacy lead", "Billing owner"]
     },
     {

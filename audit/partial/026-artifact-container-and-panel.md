@@ -214,9 +214,9 @@ Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:421-435`,
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| chrome | partial | Copy puts the whole assistant message on the clipboard, not just the artifact: readChromeArtifactSource returns the message content without deriving the artifact block (VS Code derives it with deriveArtifacts). | handler |
+| chrome | partial | Copying only the artifact needs its block derived from the message (deriveArtifacts in @agiworkforce/artifacts), which is not an extension dependency yet; adding it changes the lockfile, so it waits on the lead. | handler |
 
-Code: `apps/extension/src/features/side-panel/artifactsDrawer.ts:198-221`, `apps/extension/src/features/cloud-bridge/artifactsClient.ts:197-203`
+Code: `apps/extension/src/features/side-panel/artifactsDrawer.ts:210-210`
 
 ## S26.31: Share controls.
 

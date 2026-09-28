@@ -16,6 +16,7 @@ import {
   presentTurnFailure,
 } from '../features/sidebar-webview/errorPresentation';
 import { getWebviewContent } from '../features/sidebar-webview/webviewContent';
+import { vscodeApiStub } from './vscodeApiStub';
 
 const DEEPSEEK_400 =
   "[deepseek] API error (HTTP 400): Invalid 'tools[12].function.name': string does not match pattern. Expected a string that matches the pattern '^[a-zA-Z0-9_-]+$'.";
@@ -435,7 +436,7 @@ function boot(): ReturnType<typeof vi.fn> {
   const postMessage = vi.fn();
   Object.defineProperty(globalThis, 'acquireVsCodeApi', {
     configurable: true,
-    value: () => ({ postMessage }),
+    value: () => vscodeApiStub({ postMessage }),
   });
   const inline = Array.from(parsed.querySelectorAll('script')).find((script) =>
     script.textContent?.includes('acquireVsCodeApi()'),

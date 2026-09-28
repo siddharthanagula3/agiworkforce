@@ -95,6 +95,7 @@ fi
 if [[ "$MODE" == "all" || "$MODE" == "fast" || "$MODE" == "services" ]]; then
   step "services:api-gateway:test"      pnpm --filter @agiworkforce/api-gateway test
   step "services:signaling-server:test" pnpm --filter @agiworkforce/signaling-server test
+  step "services:upload-scanner:test"   pnpm --filter @agiworkforce/upload-scanner test
 fi
 
 # --- Shared packages ---
