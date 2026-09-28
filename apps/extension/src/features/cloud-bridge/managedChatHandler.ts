@@ -16,11 +16,14 @@ import {
 import {
   createMultimodalUserContent,
   getAuthToken,
+  MANAGED_CHAT_FILE_ASSET_ID,
+  MANAGED_CHAT_MAX_ATTACHMENTS,
   getManagedModelAccess,
   streamFreeChat,
   streamManagedChatApproval,
   type FreeTrialChunk,
   type FreeTrialMessage,
+  type ManagedChatFileAttachment,
   type ManagedChatStreamOptions,
   type ManagedModelAccess,
   type ManagedQuotaBlock,
@@ -80,6 +83,7 @@ export interface ChromeManagedChatRequest {
   systemPrompt?: string;
   conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>;
   attachments?: string[];
+  fileAttachments?: ManagedChatFileAttachment[];
   extendedThinking?: boolean;
   currentModelKey?: string | null;
   previousTaskType?: RoutingTaskType | null;
@@ -222,6 +226,22 @@ function validateRequest(request: ChromeManagedChatRequest): string | null {
     }
   }
   if (!Array.isArray(request.attachments ?? [])) return 'Attachments are malformed.';
+  const fileAttachments = request.fileAttachments ?? [];
+  if (!Array.isArray(fileAttachments) || fileAttachments.length > MANAGED_CHAT_MAX_ATTACHMENTS) {
+    return 'Attachments are malformed.';
+  }
+  for (const file of fileAttachments) {
+    if (
+      !file ||
+      typeof file.assetId !== 'string' ||
+      !MANAGED_CHAT_FILE_ASSET_ID.test(file.assetId) ||
+      typeof file.mimeType !== 'string' ||
+      file.mimeType.length === 0 ||
+      file.mimeType.length > 255
+    ) {
+      return 'Attachments are malformed.';
+    }
+  }
   if (
     request.idempotencyKey !== undefined &&
     !IDEMPOTENCY_KEY_PATTERN.test(request.idempotencyKey)
@@ -376,8 +396,12 @@ export async function executeChromeManagedChat(
   const userContent = buildUserContent(request.text.trim(), request.pageContext);
   let finalUserContent: FreeTrialMessage['content'] = userContent;
   try {
-    if (request.attachments?.length) {
-      finalUserContent = createMultimodalUserContent(userContent, request.attachments);
+    if (request.attachments?.length || request.fileAttachments?.length) {
+      finalUserContent = createMultimodalUserContent(
+        userContent,
+        request.attachments ?? [],
+        request.fileAttachments ?? [],
+      );
     }
   } catch (error) {
     return {
@@ -447,10 +471,16 @@ export async function executeChromeManagedChat(
     text: request.text,
     subscriptionTier: access.subscriptionTier,
     history: (request.conversationHistory ?? []).map((message) => ({ ...message })),
-    attachments: request.attachments?.map((attachment) => ({
-      mime: attachmentMime(attachment),
-      type: 'image',
-    })),
+    attachments: [
+      ...(request.attachments ?? []).map((attachment) => ({
+        mime: attachmentMime(attachment),
+        type: 'image',
+      })),
+      ...(request.fileAttachments ?? []).map((file) => ({
+        mime: file.mimeType,
+        type: file.mimeType.startsWith('image/') ? 'image' : 'document',
+      })),
+    ],
     currentModelKey: request.currentModelKey,
     previousTaskType: request.previousTaskType,
   });
