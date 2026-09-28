@@ -1116,7 +1116,7 @@ export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
 
   const handleLaunch = (prompt: string) => {
     const encoded = encodeURIComponent(prompt);
-    router.push(`/chat?prompt=${encoded}`);
+    router.push(`/chat?starterPrompt=${encoded}`);
   };
 
   const cardGridStyle: React.CSSProperties = {
