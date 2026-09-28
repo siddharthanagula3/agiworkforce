@@ -41,27 +41,9 @@ vi.mock('@/lib/services/provider-adapter-service', () => ({
   buildProtocolRouteAdapter: vi.fn(),
 }));
 
-const reserveMock = vi.fn(async (..._args: unknown[]) => ({
-  db: {},
-  userId: 'user-1',
-  idempotencyKey: 'follow-ups:message-1',
-  requestHash: 'hash',
-  leaseToken: 'lease',
-  estimatedCostMicrousd: 400,
-  estimatedCostCents: 1,
-}));
-const finalizeMock = vi.fn(async (..._args: unknown[]) => ({
-  requestStatus: 'completed',
-  operationResult: 'finalized',
-  settlementStatus: 'succeeded',
-  actualCostCents: 1,
-}));
-const markStartedMock = vi.fn(async (..._args: unknown[]) => {});
-vi.mock('@/lib/services/managed-usage-request-service', () => ({
-  reserveManagedUsageRequest: (...args: unknown[]) => reserveMock(...args),
-  finalizeManagedUsageRequest: (...args: unknown[]) => finalizeMock(...args),
-  markManagedUsageProviderStarted: (...args: unknown[]) => markStartedMock(...args),
-  fingerprintManagedUsageRequest: () => 'hash',
+const recordCostMock = vi.fn(async (..._args: unknown[]) => {});
+vi.mock('@/lib/services/cogs-ledger-service', () => ({
+  recordSettledProviderCost: (...args: unknown[]) => recordCostMock(...args),
 }));
 
 const { generateFollowUpSuggestions, sanitizeFollowUpSuggestions } =
@@ -72,7 +54,6 @@ function input(overrides: Record<string, unknown> = {}) {
     db: {} as never,
     userId: 'user-1',
     organizationId: null,
-    planTier: 'free',
     conversationId: 'conversation-1',
     messageId: 'message-1',
     answer: 'The mainboard is user replaceable and the chassis changed in 2026.',
@@ -94,32 +75,33 @@ beforeEach(() => {
 });
 
 describe('generateFollowUpSuggestions', () => {
-  it('reserves and finalizes exactly once for one turn', async () => {
+  it('records the call at the platform cost and charges the user nothing', async () => {
     const suggestions = await generateFollowUpSuggestions(input());
 
-    expect(reserveMock).toHaveBeenCalledTimes(1);
-    expect(finalizeMock).toHaveBeenCalledTimes(1);
-    expect(finalizeMock.mock.calls[0]?.[0]).toMatchObject({ outcome: 'completed' });
+    expect(recordCostMock).toHaveBeenCalledTimes(1);
+    expect(recordCostMock.mock.calls[0]?.[0]).toMatchObject({
+      userId: 'user-1',
+      provider: 'anthropic',
+      model: 'test.model',
+      customerCanonicalMicrousd: 0,
+      taskOutcome: 'delivered',
+      usage: { type: 'follow_up_suggestions', conversationId: 'conversation-1' },
+    });
     expect(suggestions).toHaveLength(3);
   });
 
-  it('releases the reservation when the provider call fails', async () => {
+  it('records nothing when the provider call fails', async () => {
     drainToLlmResponseMock.mockRejectedValueOnce(new Error('upstream anthropic'));
 
     await expect(generateFollowUpSuggestions(input())).rejects.toThrow('upstream anthropic');
 
-    expect(reserveMock).toHaveBeenCalledTimes(1);
-    expect(finalizeMock).toHaveBeenCalledTimes(1);
-    expect(finalizeMock.mock.calls[0]?.[0]).toMatchObject({
-      outcome: 'failed',
-      actualCostCents: 0,
-    });
+    expect(recordCostMock).not.toHaveBeenCalled();
   });
 
   it('never reaches the provider for an empty answer', async () => {
     expect(await generateFollowUpSuggestions(input({ answer: '  ' }))).toEqual([]);
 
-    expect(reserveMock).not.toHaveBeenCalled();
+    expect(recordCostMock).not.toHaveBeenCalled();
     expect(drainToLlmResponseMock).not.toHaveBeenCalled();
   });
 });

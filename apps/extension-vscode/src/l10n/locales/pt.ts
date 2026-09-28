@@ -471,6 +471,52 @@ const pt = {
     'Não foi possível assumir o controle desta sessão. Envie de novo para tentar outra vez.',
   'sessionSync.stopBeforeTerminal':
     'Interrompa a resposta em andamento antes de continuar esta sessão no terminal.',
+  'remote.title': 'Controle remoto',
+  'remote.intro':
+    'Pareie seu telefone para acompanhar as sessões do AGI nas pastas desta janela: aprove etapas, leia diffs, resultados de testes e novos arquivos, e direcione o próximo turno.',
+  'remote.howToPair':
+    'Abra o aplicativo AGI Workforce no telefone, escolha "Pair with Desktop" e escaneie este código. O código funciona uma única vez e expira em poucos minutos.',
+  'remote.qrLabel': 'Código QR de pareamento',
+  'remote.pairingCode': 'Código de pareamento',
+  'remote.copyLink': 'Copiar link de pareamento',
+  'remote.linkCopied':
+    'AGI Workforce: link de pareamento copiado. Cole-o no aplicativo AGI Workforce do seu telefone.',
+  'remote.noPairing':
+    'AGI Workforce: nenhum pareamento está aguardando. Inicie o controle remoto para obter um novo código.',
+  'remote.connected': 'Conectado: {phone}.',
+  'remote.yourPhone': 'seu telefone',
+  'remote.reconnecting':
+    'Conexão perdida. Reconectando para que seu telefone continue de onde parou.',
+  'remote.pair': 'Parear um telefone',
+  'remote.pairAgain': 'Parear novamente',
+  'remote.cancelPairing': 'Cancelar pareamento',
+  'remote.disconnect': 'Desconectar telefone',
+  'remote.stop': 'Parar controle remoto',
+  'remote.disconnectTitle': 'Desconectar {phone}?',
+  'remote.disconnectConsequence':
+    'O telefone é desconectado desta janela e não pode mais acompanhar nem direcionar as sessões dela. Para conectá-lo de novo, pareie-o com um novo código.',
+  'remote.starting': 'Iniciando o controle remoto',
+  'remote.startFailed': 'AGI Workforce: não foi possível iniciar o controle remoto. {reason}',
+  'remote.pairFailed': 'Não foi possível iniciar o pareamento.',
+  'remote.signInFirst':
+    'AGI Workforce: faça login primeiro. O controle remoto pareia seu telefone pela sua conta.',
+  'remote.trustFirst':
+    'AGI Workforce: confie neste espaço de trabalho antes que um telefone possa executar sessões nele.',
+  'remote.openFolderFirst':
+    'AGI Workforce: abra uma pasta primeiro. O controle remoto executa sessões nas pastas desta janela.',
+  'remote.folderClosed': 'Essa pasta não está mais aberta nesta janela.',
+  'remote.runtimeUnavailable': 'A CLI do AGI não conseguiu listar as sessões desta pasta.',
+  'remote.runtimeHint':
+    'Verifique se a CLI do AGI está instalada e conectada e, em seguida, atualize a lista no seu telefone.',
+  'remote.deviceName': '{host} (VS Code)',
+  'remote.statusWaiting': 'Controle remoto: aguardando seu telefone',
+  'remote.statusConnected': 'Controle remoto: {phone}',
+  'remote.statusReconnecting': 'Controle remoto: reconectando',
+  'remote.statusError': 'Controle remoto: parado',
+  'remote.statusTooltip': 'Mostrar controle remoto',
+  'remote.attached_one': '{count} sessão aberta no telefone.',
+  'remote.attached_many': '{count} de sessões abertas no telefone.',
+  'remote.attached_other': '{count} sessões abertas no telefone.',
 };
 
 export default pt;

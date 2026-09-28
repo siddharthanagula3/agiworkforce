@@ -363,6 +363,50 @@ const en = {
   'sessionSync.takeOverFailed': 'This session could not be taken over. Send again to retry.',
   'sessionSync.stopBeforeTerminal':
     'Stop the running reply before continuing this session in the terminal.',
+  'remote.title': 'Remote Control',
+  'remote.intro':
+    "Pair your phone to follow the AGI sessions in this window's folders: approve steps, read diffs, test results and new files, and steer the next turn.",
+  'remote.howToPair':
+    'Open the AGI Workforce app on your phone, choose Pair with Desktop, and scan this code. The code works once and expires in a few minutes.',
+  'remote.qrLabel': 'Pairing QR code',
+  'remote.pairingCode': 'Pairing code',
+  'remote.copyLink': 'Copy pairing link',
+  'remote.linkCopied':
+    'AGI Workforce: pairing link copied. Paste it in the AGI Workforce app on your phone.',
+  'remote.noPairing':
+    'AGI Workforce: no pairing is waiting. Start Remote Control to get a new code.',
+  'remote.connected': 'Connected to {phone}.',
+  'remote.yourPhone': 'your phone',
+  'remote.reconnecting':
+    'Connection lost. Reconnecting so your phone can pick up where it left off.',
+  'remote.pair': 'Pair a phone',
+  'remote.pairAgain': 'Pair again',
+  'remote.cancelPairing': 'Cancel pairing',
+  'remote.disconnect': 'Disconnect phone',
+  'remote.stop': 'Stop Remote Control',
+  'remote.disconnectTitle': 'Disconnect {phone}?',
+  'remote.disconnectConsequence':
+    'The phone is disconnected from this window and can no longer follow or steer its sessions. To connect it again, pair it with a new code.',
+  'remote.starting': 'Starting Remote Control',
+  'remote.startFailed': 'AGI Workforce: Remote Control could not start. {reason}',
+  'remote.pairFailed': 'Pairing could not start.',
+  'remote.signInFirst':
+    'AGI Workforce: sign in first. Remote Control pairs your phone through your account.',
+  'remote.trustFirst': 'AGI Workforce: trust this workspace before a phone can run sessions in it.',
+  'remote.openFolderFirst':
+    "AGI Workforce: open a folder first. Remote Control runs sessions in this window's folders.",
+  'remote.folderClosed': 'That folder is no longer open in this window.',
+  'remote.runtimeUnavailable': 'The AGI CLI could not list the sessions in this folder.',
+  'remote.runtimeHint':
+    'Check that the AGI CLI is installed and signed in, then refresh the list on your phone.',
+  'remote.deviceName': '{host} (VS Code)',
+  'remote.statusWaiting': 'Remote Control: waiting for your phone',
+  'remote.statusConnected': 'Remote Control: {phone}',
+  'remote.statusReconnecting': 'Remote Control: reconnecting',
+  'remote.statusError': 'Remote Control: stopped',
+  'remote.statusTooltip': 'Show Remote Control',
+  'remote.attached_one': '{count} session is open on the phone.',
+  'remote.attached_other': '{count} sessions are open on the phone.',
 };
 
 export default en;

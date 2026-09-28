@@ -258,7 +258,7 @@ Code: `apps/mobile/src/features/companion/components/DesktopInfoCard.tsx:73-76`,
 | desktop | partial | Remote Control pairs one phone at a time; no computer-to-computer pairing. | surface-only |
 | mobile | partial | Scans the desktop's code to pair; only phone-to-desktop. | surface-only |
 | cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
+| vscode | partial | Remote Control in VS Code pairs a phone through /api/pair/initiate with the account token, by QR code or pairing link, but only one phone at a time and with no computer-to-computer pairing. That is the same limit the desktop cell records. | surface-only |
 
 Code: `apps/web/app/api/pair/initiate/route.ts:73-73`, `apps/web/app/api/pair/claim/route.ts:72-72`, `apps/web/features/desktop-host/components/RemoteControlSection.tsx:74-77`, `apps/desktop/electron/runtime/dispatcher.ts:874-875`
 
@@ -266,12 +266,11 @@ Code: `apps/web/app/api/pair/initiate/route.ts:73-73`, `apps/web/app/api/pair/cl
 
 - Done when: The user revokes a pairing from either side and it stops working at once.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
 
 ## S68.25: Device-offline explanation.
 

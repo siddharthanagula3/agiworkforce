@@ -241,6 +241,7 @@ export const STEP_CAPABILITY_ADVERTISEMENTS: Readonly<
   'clipboard.read': 'canUseClipboard',
   'mcp.local': 'canUseLocalMcp',
   'local.inference': 'canUseLocalModels',
+  'browser.site': 'canUseBrowserAutomation',
 });
 
 const STEP_CAPABILITY_LABELS: Readonly<Partial<Record<DesktopCapability, string>>> = Object.freeze({
@@ -252,6 +253,7 @@ const STEP_CAPABILITY_LABELS: Readonly<Partial<Record<DesktopCapability, string>
   'clipboard.read': 'access to its clipboard',
   'mcp.local': 'its local tool servers',
   'local.inference': 'its local models',
+  'browser.site': 'browser control',
 });
 
 interface RefusedDeviceCapability {
