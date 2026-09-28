@@ -30,6 +30,7 @@ import {
   ACCENT_COLORS,
   useSettingsStore,
   type ChatTextSize,
+  type FollowUpBehavior,
 } from '@shared/stores/web-settings-store';
 import { CustomCommandsSettings } from '@/features/settings/components/CustomCommandsSettings';
 import { useCloudSettingsSyncStatus } from '@/features/settings/lib/cloud-settings-sync-status';
@@ -977,6 +978,8 @@ export function GeneralSection() {
 
           {/* Code block wrapping */}
           <CodeBlockWrapRow />
+          <FollowUpSuggestionsRow />
+          <FollowUpBehaviorRow />
 
           {/* Read-aloud voice */}
           <ReadAloudVoiceRow />
@@ -1410,6 +1413,55 @@ function CodeBlockWrapRow() {
           }`}
         />
       </button>
+    </Row>
+  );
+}
+
+function FollowUpSuggestionsRow() {
+  const enabled = useSettingsStore((state) => state.followUpSuggestionsEnabled);
+  const setEnabled = useSettingsStore((state) => state.setFollowUpSuggestionsEnabled);
+
+  return (
+    <Row label="Show follow-up suggestions in chats">
+      <button
+        type="button"
+        role="switch"
+        aria-checked={enabled}
+        aria-label="Show follow-up suggestions in chats"
+        onClick={() => setEnabled(!enabled)}
+        className={`h-6 w-11 shrink-0 rounded-full transition-colors ${
+          enabled ? 'bg-primary' : 'bg-muted'
+        }`}
+      >
+        <span
+          aria-hidden="true"
+          className={`block h-5 w-5 rounded-full bg-background transition-transform ${
+            enabled ? 'translate-x-[22px]' : 'translate-x-0.5'
+          }`}
+        />
+      </button>
+    </Row>
+  );
+}
+
+function FollowUpBehaviorRow() {
+  const followUpBehavior = useSettingsStore((state) => state.followUpBehavior);
+  const setFollowUpBehavior = useSettingsStore((state) => state.setFollowUpBehavior);
+
+  return (
+    <Row
+      label="Follow-up behavior"
+      hint="Whether a message you send while AGI works waits for the next reply or steers the current one at its next step."
+    >
+      <select
+        value={followUpBehavior}
+        onChange={(event) => setFollowUpBehavior(event.target.value as FollowUpBehavior)}
+        aria-label="Follow-up behavior"
+        className={SELECT_CLASS}
+      >
+        <option value="queue">Queue</option>
+        <option value="steer">Steer</option>
+      </select>
     </Row>
   );
 }
