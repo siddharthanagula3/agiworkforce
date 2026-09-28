@@ -3141,7 +3141,7 @@
       },
       "model": {
         "content": "$2",
-        "example": "Claude Haiku 4.5"
+        "example": "the chosen model"
       }
     }
   },
@@ -3155,7 +3155,7 @@
       },
       "model": {
         "content": "$2",
-        "example": "Claude Haiku 4.5"
+        "example": "the chosen model"
       }
     }
   }
