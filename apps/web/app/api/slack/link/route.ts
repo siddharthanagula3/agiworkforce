@@ -1,7 +1,12 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+
+import {
+  ManagedCloudSlackLinkConfirmSchema,
+  ManagedCloudSlackLinkConfirmedSchema,
+  ManagedCloudSlackLinkPreviewSchema,
+} from '@agiworkforce/cloud-contracts';
 
 import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -13,7 +18,6 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { postSlackMessage, readSlackUser } from '@/lib/slack/slack-api';
 import { isSlackAppConfigured, slackAppOrigin, slackSettingsUrl } from '@/lib/slack/slack-config';
-import type { SlackLinkPreview } from '@/lib/slack/slack-contract';
 import { findSlackInstallationById } from '@/lib/slack/slack-installations';
 import {
   SlackLinkConflictError,
@@ -34,10 +38,6 @@ const ENDPOINT = '/api/slack/link';
 const EXPIRED_LINK =
   'This link has expired or was already used. Send AGI Workforce a message in Slack to get a new one.';
 
-const ConfirmSchema = z
-  .object({ token: z.string(), organizationId: z.string().uuid().nullable() })
-  .strict();
-
 async function handlePreview(request: NextRequest): Promise<NextResponse> {
   const { db, userId, organizationId } = await getUserScopedDb(request, {
     resolveOrganization: true,
@@ -54,16 +54,17 @@ async function handlePreview(request: NextRequest): Promise<NextResponse> {
   if (!pending) throw createError.notFound(EXPIRED_LINK);
 
   const workspaces = await listSlackLinkWorkspaces(db, userId);
-  const preview: SlackLinkPreview = {
-    teamName: pending.teamName,
-    expiresAt: pending.expiresAt,
-    workspaces,
-    selectedWorkspaceId: workspaces.some((workspace) => workspace.id === organizationId)
-      ? organizationId
-      : null,
-    requiredPlans: slackRequiredPlans(),
-  };
-  return NextResponse.json(preview);
+  return NextResponse.json(
+    ManagedCloudSlackLinkPreviewSchema.parse({
+      teamName: pending.teamName,
+      expiresAt: pending.expiresAt,
+      workspaces,
+      selectedWorkspaceId: workspaces.some((workspace) => workspace.id === organizationId)
+        ? organizationId
+        : null,
+      requiredPlans: slackRequiredPlans(),
+    }),
+  );
 }
 
 async function handleConfirm(request: NextRequest): Promise<NextResponse> {
@@ -79,7 +80,9 @@ async function handleConfirm(request: NextRequest): Promise<NextResponse> {
   if (!origin || !isSlackAppConfigured()) {
     throw createError.serviceUnavailable('AGI Workforce in Slack is not available right now');
   }
-  const parsed = ConfirmSchema.safeParse(await request.json().catch(() => null));
+  const parsed = ManagedCloudSlackLinkConfirmSchema.safeParse(
+    await request.json().catch(() => null),
+  );
   if (!parsed.success || !isSlackLinkToken(parsed.data.token)) {
     throw createError.validation('This link is not valid');
   }
@@ -147,7 +150,9 @@ async function handleConfirm(request: NextRequest): Promise<NextResponse> {
     logger.warn({ error, teamId: installation.teamId }, 'Slack link confirmation was not sent');
   });
 
-  return NextResponse.json({ linked: true, teamName: installation.teamName });
+  return NextResponse.json(
+    ManagedCloudSlackLinkConfirmedSchema.parse({ linked: true, teamName: installation.teamName }),
+  );
 }
 
 export const GET = withErrorHandler(handlePreview);

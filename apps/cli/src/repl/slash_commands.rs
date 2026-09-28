@@ -298,6 +298,9 @@ pub(super) async fn handle_slash_command(
                 "  Trust:      {}",
                 crate::trust::current_status().state.label()
             );
+            for line in session.session_status_lines() {
+                eprintln!("  {}", crate::terminal_text::sanitize_terminal_text(&line));
+            }
         }
         "/usage" => {
             output::print_block(
