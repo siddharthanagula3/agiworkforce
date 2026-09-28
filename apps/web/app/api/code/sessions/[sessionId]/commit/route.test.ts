@@ -112,6 +112,7 @@ describe('POST /api/code/sessions/[sessionId]/commit', () => {
       SESSION_ID,
       'pro',
       'fix the flaky test',
+      undefined,
     );
   });
 

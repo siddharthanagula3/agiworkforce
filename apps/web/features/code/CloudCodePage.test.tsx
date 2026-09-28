@@ -218,6 +218,7 @@ function createApi(overrides: Partial<CloudCodeApi> = {}): CloudCodeApi {
       truncated: false,
       unreachable: [],
     })),
+    listBranches: vi.fn(async () => ({ branches: [], truncated: false })),
     changes: vi.fn(async () => ({
       session,
       base: null,
@@ -839,7 +840,9 @@ describe('CloudCodePage', () => {
     await user.click(screen.getByRole('button', { name: 'Commit and push' }));
 
     await waitFor(() =>
-      expect(api.commit).toHaveBeenCalledWith(repoSession.id, 'wire the settings toggle'),
+      expect(api.commit).toHaveBeenCalledWith(repoSession.id, {
+        message: 'wire the settings toggle',
+      }),
     );
     expect(await screen.findByText('Pushed to the repository.')).toBeInTheDocument();
   });
@@ -1370,7 +1373,7 @@ describe('CloudCodePage', () => {
     expect(screen.getByText('apps/web/page.tsx')).toBeInTheDocument();
     expect(screen.getByText('Untracked')).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /apps\/web\/page\.tsx/ }));
+    await user.click(screen.getByRole('button', { name: 'Modified apps/web/page.tsx' }));
     expect(await screen.findByText('+const fresh = true;')).toBeInTheDocument();
   });
 
@@ -2056,17 +2059,23 @@ describe('CloudCodePage', () => {
 
   it('edits the branch of a chosen repository from its chip', async () => {
     const user = userEvent.setup();
-    const api = createApi({ listRepositories: vi.fn(async () => repositoryPage) });
+    const api = createApi({
+      listRepositories: vi.fn(async () => repositoryPage),
+      listBranches: vi.fn(async () => ({
+        branches: [
+          { name: 'main', isProtected: true },
+          { name: 'release', isProtected: false },
+        ],
+        truncated: false,
+      })),
+    });
     render(<CloudCodePage api={api} />);
 
     await user.click(await screen.findByRole('button', { name: 'Select repository' }));
     await user.click(await screen.findByRole('button', { name: /owner\/public-one/ }));
     await user.click(await screen.findByRole('button', { name: 'Change the branch' }));
 
-    const field = await screen.findByLabelText('Branch');
-    await user.clear(field);
-    await user.type(field, 'release');
-    await user.click(screen.getByRole('button', { name: 'Use this branch' }));
+    await user.click(await screen.findByRole('button', { name: /^release/ }));
 
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Change the branch' })).toHaveTextContent(
@@ -2096,7 +2105,9 @@ describe('CloudCodePage', () => {
 
     await user.click(await screen.findByRole('button', { name: 'Approval mode' }));
 
-    const rows = await screen.findAllByRole('menuitemradio');
+    const rows = (await screen.findAllByRole('menuitemradio')).filter((row) =>
+      TOOL_APPROVAL_POLICY_OPTIONS.some((option) => row.textContent?.includes(option.label)),
+    );
     expect(rows).toHaveLength(TOOL_APPROVAL_POLICY_OPTIONS.length);
     for (const option of TOOL_APPROVAL_POLICY_OPTIONS) {
       expect(screen.getByText(option.hint)).toBeInTheDocument();
