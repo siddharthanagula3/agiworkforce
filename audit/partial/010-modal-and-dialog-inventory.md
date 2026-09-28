@@ -343,15 +343,12 @@ Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:367-380`, `apps
 ## S10.35: Screen-sharing source selection.
 
 - Done when: When sharing the screen, the user picks which screen or window to share before anything is captured.
-- Wave: 2
-- Already works on: desktop
+- Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | In a plain browser the composer hides screenshot capture (capability table says web cannot capture); only the feedback dialog uses the browser picker. Offer the browser screen/window picker in the composer. | mount |
 | mobile | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:4465-4465`, `apps/web/features/chat/components/Composer/ComposerFeedbackDialog.tsx:54-54`
 
 ## S10.39: Sensitive-data transfer approval.
 
