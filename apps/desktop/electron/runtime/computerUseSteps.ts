@@ -8,6 +8,7 @@ import {
   type PermissionScope,
 } from '@agiworkforce/local-runtime-contract';
 import { TOOL_APPROVAL_ACTION_LABELS } from '@agiworkforce/types';
+import { gateApplications } from './applicationControl';
 import { ComputerUseRefused, readFrontWindow } from './computerUseService';
 import {
   askUserDuringRun,
@@ -123,6 +124,7 @@ export async function runScreenAction(
   args: StepArgs,
   action: () => Promise<unknown>,
 ): Promise<{ front: DeviceFrontWindow | null }> {
+  await gateApplications(window, command, args);
   await reviewScreenStep(window, command, args);
   await gateClipboardKeys(window, command, args);
   try {
