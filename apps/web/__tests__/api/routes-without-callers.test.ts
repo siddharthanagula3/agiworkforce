@@ -131,7 +131,6 @@ const CALLERLESS: ReadonlyArray<{ url: string; why: string }> = [
   },
 
   // Built this wave by another executor; their surfaces are still landing.
-  { url: '/api/plugins/authored', why: 'plugins directory work in flight' },
   { url: '/api/plugins/installations', why: 'plugins directory work in flight' },
   { url: '/api/plugins/installations/[id]', why: 'plugins directory work in flight' },
   { url: '/api/plugins/marketplace-installations', why: 'plugins directory work in flight' },

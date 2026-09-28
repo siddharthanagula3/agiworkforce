@@ -6,6 +6,7 @@ import type { PluginDraft } from '@agiworkforce/cloud-contracts';
 import { Spinner } from '@agiworkforce/ui';
 
 import { getCsrfToken } from '@/lib/client/csrf';
+import { toUserMessage } from '@/lib/user-error-message';
 import { cn } from '@shared/lib/utils';
 import { buildSettingsBrowseHash } from '@/features/directory/routing';
 import {
@@ -70,7 +71,7 @@ function PluginDraftCardImpl({ draft, className }: { draft: PluginDraft; classNa
     try {
       setSaved(await saveDraft(draft, target));
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : SAVE_FAILED_COPY);
+      setError(toUserMessage(caught, SAVE_FAILED_COPY));
     } finally {
       setSaving(null);
     }
