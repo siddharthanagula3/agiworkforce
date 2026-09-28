@@ -5,7 +5,12 @@ import {
   ACCOUNT_USAGE_HISTORY_GRANULARITIES,
   creditsFromMicrousd,
   rateCardUsageLabel,
+  type AccountUsageBreakdownRow,
   type AccountUsageHistoryGranularity,
+  type AccountUsageHistoryResponse,
+  type AccountUsageTotals,
+  type ManagedUsageTurnCost,
+  type MonthlyImageUsage,
 } from '@agiworkforce/types';
 
 import {
@@ -18,7 +23,6 @@ import {
   toFreshness,
   toIsoOrNull,
   type FreshnessRow,
-  type UsageFreshness,
 } from '@/lib/services/usage-aggregation';
 
 export type UsageHistoryGranularity = AccountUsageHistoryGranularity;
@@ -53,37 +57,6 @@ export function usageHistoryWindowStart(
   return new Date(Date.UTC(year, month, day - periods));
 }
 
-export interface AccountUsageTotals {
-  requests: number;
-  inputTokens: number;
-  outputTokens: number;
-  credits: number;
-}
-
-export interface AccountUsageBreakdownRow extends AccountUsageTotals {
-  key: string;
-  label: string | null;
-}
-
-export interface AccountUsagePeriodRow {
-  start: string;
-  requests: number;
-  credits: number;
-}
-
-export interface AccountUsageHistory {
-  userId: string;
-  from: string;
-  to: string;
-  granularity: UsageHistoryGranularity;
-  totals: AccountUsageTotals;
-  periods: AccountUsagePeriodRow[];
-  byWorkload: AccountUsageBreakdownRow[];
-  byModel: AccountUsageBreakdownRow[];
-  byProject: AccountUsageBreakdownRow[];
-  freshness: UsageFreshness;
-}
-
 export interface AccountUsageRecord {
   requestId: string;
   createdAt: string;
@@ -95,12 +68,6 @@ export interface AccountUsageRecord {
   projectName: string | null;
   inputTokens: number;
   outputTokens: number;
-  credits: number;
-}
-
-export interface MonthlyImageUsage {
-  images: number;
-  requests: number;
   credits: number;
 }
 
@@ -217,7 +184,7 @@ export async function readAccountUsageHistory(
   userId: string,
   window: { from: string; to: string },
   granularity: UsageHistoryGranularity = 'day',
-): Promise<AccountUsageHistory> {
+): Promise<AccountUsageHistoryResponse> {
   const params = [userId, window.from, window.to];
 
   const [totalsRows, periodRows, byWorkload, byModel, byProject, freshnessRows] = await Promise.all(
@@ -340,12 +307,6 @@ export async function readMonthlyImageUsage(
     requests: num(row?.requests),
     credits: creditsFromMicrousd(num(row?.cost_microusd)),
   };
-}
-
-export interface ManagedUsageTurnCost {
-  requestId: string;
-  status: 'settled' | 'pending';
-  credits: number | null;
 }
 
 const SETTLED_TURN_STATUSES: ReadonlySet<string> = new Set(['completed', 'released', 'declined']);

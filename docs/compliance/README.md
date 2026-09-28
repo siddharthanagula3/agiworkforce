@@ -65,6 +65,13 @@ per-document revision dates, canonical routes and their aliases) come from
    factual correction that does not re-review every row keeps that date and
    records why in a same-date version entry. Do not present a targeted check as
    a fresh review of the whole page.
+8. Keep the replaced version readable. When a date moves, give the first entry
+   of the new date a public `summary` of what changed, then run
+   `node scripts/archive-policy-versions.mjs`. It renders the text the page
+   last published under the old date and adds it to `/legal/archive`, where
+   every policy's version history lives. A version whose text no commit holds
+   gets `"archive": "not-retained"` on its first entry and is listed as not
+   kept. `scripts/check-policy-versions.mjs` fails until both are done.
 
 `apps/web/app/__tests__/legal-policy-set.test.ts` enforces 1, parts of 2, 4 and 7
 mechanically, including a prohibited-claim guard that fails if a removed claim

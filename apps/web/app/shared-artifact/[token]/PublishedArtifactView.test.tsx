@@ -51,6 +51,15 @@ vi.mock('next/link', () => ({
   ),
 }));
 
+vi.mock('@/lib/identity/client', () => ({
+  useSession: () => ({
+    isLoaded: true,
+    isSignedIn: false,
+    userId: null,
+    getToken: async () => null,
+  }),
+}));
+
 vi.mock('@agiworkforce/unified-chat', () => ({
   MarkdownContent: ({ content }: { content: string }) => (
     <div data-testid="markdown">{content}</div>

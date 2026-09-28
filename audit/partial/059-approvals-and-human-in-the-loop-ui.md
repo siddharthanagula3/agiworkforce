@@ -10,14 +10,13 @@ nothing is left.
 
 - Done when: The user can allow a tool for the rest of the current session so it stops asking until the session ends.
 - Wave: 3
-- Already works on: web, desktop, cli, vscode
+- Already works on: web, desktop, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Allow for this chat is built as post-codex/chat-gates-s59.03-mobile-after-s59.patch (applies after chat-gates-s59.patch); its handler lives in Codex-held MessageBubble.tsx. | ui |
-| chrome | partial | Approved sites persist and "Ask before acting" is a standing toggle; no allow-for-this-session choice on an approval. | ui |
 
-Code: `apps/mobile/src/features/chat/components/CloudToolApprovalControls.tsx:114-114`, `apps/extension/src/features/side-panel/computerUsePanel.ts:607-610`
+Code: `apps/mobile/src/features/chat/components/CloudToolApprovalControls.tsx:114-114`
 
 ## S59.04: Per-application permission.
 
@@ -63,63 +62,25 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/research-sources.ts:48-58`, 
 
 - Done when: The user can switch the agent into a read-only mode in which write, send and execute tools are refused.
 - Wave: 3
-- Already works on: web, desktop, cli, vscode
+- Already works on: web, desktop, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Mobile offers only the three approval policies; none refuses writes outright. | handler |
-| chrome | partial | The browser agent can ask before acting, but has no mode that allows reading pages while refusing clicks and typing. | handler |
 
-Code: `apps/mobile/app/(app)/settings/auto-approve.tsx:47-55`, `apps/extension/src/features/side-panel/computerUsePanel.ts:607-610`
-
-## S59.10: Ask-before-writing mode.
-
-- Done when: A mode lets reads run automatically but stops and asks before any write, send or execute action.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | "Ask before acting" asks for every browser action; there is no setting that runs reads but asks only before clicks or typing. | handler |
-
-Code: `apps/extension/src/features/side-panel/computerUsePanel.ts:607-610`
-
-## S59.13: Exact recipients.
-
-- Done when: Before a send is approved, the approval names exactly who will receive it.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | Recipients appear only inside the raw JSON arguments of the call; the approval does not call out who will receive the message. | ui |
-
-Code: `apps/extension/src/features/side-panel/bubbles.ts:537-537`
-
-## S59.15: Exact amount or purchase.
-
-- Done when: Before a payment or purchase is approved, the approval shows the exact amount and what is bought.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | The browser agent can click a Buy button on a site; its approval card describes the click, not the amount. | ui |
-
-Code: `apps/extension/src/features/side-panel/computerUsePanel.ts:1107-1112`
+Code: `apps/mobile/app/(app)/settings/auto-approve.tsx:47-55`
 
 ## S59.22: Ask for an alternative.
 
 - Done when: Instead of just denying, the user can tell the agent what to do instead, and the agent continues with that guidance.
 - Wave: 3
-- Already works on: web, desktop, cli, vscode, api
+- Already works on: web, desktop, cli, vscode, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Guidance input and resume wiring are held in post-codex/chat-gates-s59.patch because the handler lives in Codex-held files ([id].tsx, streaming.ts, MessageBubble.tsx, chatExecutionStore.ts, chatStore.ts). | ui |
-| chrome | partial | Chrome approvals are Approve/Decline only. | ui |
 
-Code: `apps/mobile/src/features/chat/components/CloudToolApprovalControls.tsx:114-114`, `apps/extension/src/features/side-panel/bubbles.ts:489-499`
+Code: `apps/mobile/src/features/chat/components/CloudToolApprovalControls.tsx:114-114`
 
 ## S59.23: Approval expiration.
 
@@ -132,16 +93,6 @@ Code: `apps/mobile/src/features/chat/components/CloudToolApprovalControls.tsx:11
 | cli | partial | Only the app-server runtime (used by VS Code) times approvals out, after 10 minutes; the terminal prompt waits indefinitely. | handler |
 
 Code: `apps/cli/src/app_server/developer_host.rs:68-68`
-
-## S59.24: Approval history.
-
-- Done when: The user can review a history of past approval requests and their decisions.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | Decisions from every surface land in the shared approval history (GET /api/settings/approvals); this surface has no view of it yet. | ui |
 
 ## S59.26: Approval from another device.
 
@@ -159,10 +110,10 @@ Code: `apps/cli/src/platform/runtime/session_handoff.rs:107-110`
 
 - Done when: While the agent controls a screen or browser, the user can take over control and later hand it back.
 - Wave: 3
+- Already works on: chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | desktop | partial | Take Over and Hand Back exist as app-menu items, but Hand Back only clears the flag; the model is never told control returned, so the paused run does not resume. | handler |
-| chrome | partial | The user can stop the browser agent and act in the tab, but there is no pause-and-hand-back: stopping ends the run. | ui |
 
-Code: `apps/desktop/electron/appMenu.ts:115-116`, `apps/desktop/electron/runtime/computerUseService.ts:183-193`, `apps/desktop/electron/runtime/computerUseService.ts:190-195`, `apps/extension/src/features/side-panel/computerUsePanel.ts:1067-1073`
+Code: `apps/desktop/electron/appMenu.ts:115-116`, `apps/desktop/electron/runtime/computerUseService.ts:183-193`, `apps/desktop/electron/runtime/computerUseService.ts:190-195`

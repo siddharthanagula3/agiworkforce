@@ -22,6 +22,7 @@ import {
 } from '@/lib/legal-constants';
 import { REFERRAL_PROGRAM } from '@/lib/services/referral-program';
 import { TRIAL_REMINDER_DAYS } from '@/lib/services/trial-reminder-service';
+import { PolicyVersionsLink } from '@shared/components/legal/PolicyVersionsLink';
 
 export const metadata = buildMetadata({
   title: 'Referral program terms',
@@ -94,7 +95,8 @@ export default function ReferralTermsPage() {
                 terms of service
               </Link>
               , which also apply; where the two differ about the program, these terms control. Last
-              updated: {POLICY_LAST_UPDATED.referralTerms}.
+              updated: {POLICY_LAST_UPDATED.referralTerms}.{' '}
+              <PolicyVersionsLink policy="referralTerms" />
             </>
           }
           ctas={[]}

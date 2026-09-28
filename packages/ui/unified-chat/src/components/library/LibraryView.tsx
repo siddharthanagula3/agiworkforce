@@ -372,6 +372,7 @@ export function LibraryView({
   const [query, setQuery] = useState(initialQuery.trim());
   const [page, setPage] = useState<PageState>({ items: [], hasMore: false, nextOffset: null });
   const [storageUsedBytes, setStorageUsedBytes] = useState<number | null>(null);
+  const [storageLimitBytes, setStorageLimitBytes] = useState<number | null>(null);
   const [folders, setFolders] = useState<LibraryFolder[]>([]);
   const [loading, setLoading] = useState(false);
   const [hasResolvedPage, setHasResolvedPage] = useState(false);
@@ -447,6 +448,7 @@ export function LibraryView({
         }));
         if (parsed.data.storage_used_bytes !== undefined) {
           setStorageUsedBytes(parsed.data.storage_used_bytes);
+          setStorageLimitBytes(parsed.data.storage_limit_bytes ?? null);
         }
       } catch (err) {
         if (seq !== requestSeq.current) return;
@@ -862,7 +864,9 @@ export function LibraryView({
               data-testid="library-storage-used"
               className="text-xs text-[var(--chat-text-secondary)]"
             >
-              {formatBytes(storageUsedBytes, 1)} of files stored
+              {storageLimitBytes !== null
+                ? `${formatBytes(storageUsedBytes, 1)} of ${formatBytes(storageLimitBytes, 0)} file storage used`
+                : `${formatBytes(storageUsedBytes, 1)} of file storage used`}
             </p>
           ) : null}
         </div>

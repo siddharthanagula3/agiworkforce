@@ -3,10 +3,9 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
-import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
-import { getKnowledgeStorageLimitBytes } from '@/lib/services/free-plan-entitlements';
 import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { readFileStorageMeter } from '@/lib/server/file-storage';
 import { resolveSharedProjectScope } from '@/lib/services/org-sharing-service';
 import { ManagedCloudProjectKnowledgeRegisterRequestSchema } from '@agiworkforce/cloud-contracts';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
@@ -99,43 +98,7 @@ async function handleListKnowledgeFiles(request: NextRequest, context: RouteCont
     throw createError.internal('Failed to fetch knowledge files');
   }
 
-  // The storage cap is enforced on upload and was invisible until it refused
-  // you. It is ACCOUNT-wide, not per project, so the panel cannot compute it
-  // from the files it just listed, the total has to come from here.
-  // The meter is context; the file list is the point of this endpoint. Neither
-  // the plan read nor the usage read may take the list down with it, so both
-  // degrade to "no meter" rather than propagating.
-  let limitBytes: number | null = null;
-  try {
-    limitBytes = getKnowledgeStorageLimitBytes(
-      await resolveEntitledPlanTier(db, userId, { workspaceOrganizationId: organizationId }),
-    );
-  } catch (error) {
-    logger.warn({ error, userId }, 'Knowledge storage meter: plan read failed');
-  }
-  let usedBytes: number | null = null;
-  try {
-    const [usage] = await db.query<{ total: string | number | null }>(
-      // Must match handleCreateKnowledgeFile's usage query EXACTLY, including
-      // the organization scope. A meter computed over a different set than the
-      // cap enforces is worse than no meter: it reads as headroom the upload
-      // will refuse.
-      `select coalesce(sum(k.byte_count), 0) as total
-        from project_knowledge_files k
-         join user_projects p on p.id = k.project_id
-          and p.deleted_at is null
-        where p.user_id = $1
-          and p.organization_id is not distinct from $2::uuid
-          and k.deleted_at is null
-          and k.superseded_at is null`,
-      [userId, organizationId],
-    );
-    usedBytes = Number(usage?.total ?? 0);
-  } catch (error) {
-    if (!isSchemaNotReady(error)) {
-      logger.warn({ error, userId }, 'Knowledge storage meter: usage read failed');
-    }
-  }
+  const storage = await readFileStorageMeter({ db, userId, organizationId });
 
   const indexStates = await readIndexStates(
     db,
@@ -147,7 +110,7 @@ async function handleListKnowledgeFiles(request: NextRequest, context: RouteCont
     files: data.map((row) =>
       projectKnowledgeResponse(row, projectId, indexStates.get(String(row['id'] ?? '')) ?? null),
     ),
-    storage: { usedBytes, limitBytes },
+    storage,
   });
 }
 

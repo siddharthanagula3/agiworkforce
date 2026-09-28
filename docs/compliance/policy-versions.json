@@ -12,12 +12,15 @@
         {
           "date": "2026-09-22",
           "digest": "1000ae1c69856cfa",
-          "note": "Discloses the founder-approved Experiential Labs promotional route, its Free-plan content capture and potential provider use, with a new terms acceptance version."
+          "note": "Discloses the founder-approved Experiential Labs promotional route, its Free-plan content capture and potential provider use, with a new terms acceptance version.",
+          "summary": "Discloses the Experiential Labs promotional route for Free-plan chats, what it captures and how its provider may use that content. Accounts were asked to accept the terms again.",
+          "archive": "not-retained"
         },
         {
           "date": "2026-09-23",
           "digest": "27a6295cfa3d2a5d",
-          "note": "Adds current provider terms links and explains how gateway, serving-provider and BYOK terms apply to the selected route; records the existing September 23 Terms acceptance version."
+          "note": "Adds current provider terms links and explains how gateway, serving-provider and BYOK terms apply to the selected route; records the existing September 23 Terms acceptance version.",
+          "summary": "Links each provider's current terms and explains how the gateway's, the serving provider's and your own key's terms apply to the route you choose."
         },
         {
           "date": "2026-09-23",
@@ -37,7 +40,8 @@
         {
           "date": "2026-09-22",
           "digest": "8a047905eaa64a87",
-          "note": "Adds Experiential Labs Free-plan capture and potential provider use to the privacy notice. The copy-digest instrument does not detect the new JSX text, so this explicit version records the substantive change."
+          "note": "Adds Experiential Labs Free-plan capture and potential provider use to the privacy notice. The copy-digest instrument does not detect the new JSX text, so this explicit version records the substantive change.",
+          "summary": "Adds how Free-plan chats on the Experiential Labs promotional route are captured and how its provider may use them."
         },
         {
           "date": "2026-09-22",
@@ -47,7 +51,8 @@
         {
           "date": "2026-09-27",
           "digest": "364b3259e3db9d72",
-          "note": "Adds the referral program checks and their lawful basis, and states the erasure list at 100 user-scoped tables."
+          "note": "Adds the referral program checks and their lawful basis, and states the erasure list at 100 user-scoped tables.",
+          "summary": "Adds the checks the referral program runs and their lawful basis, and states how many user-scoped tables account erasure covers."
         },
         {
           "date": "2026-09-27",
@@ -72,7 +77,8 @@
         {
           "date": "2026-09-22",
           "digest": "021c9f2af163b821",
-          "note": "Discloses the founder-requested website Skip approvals default and the approval boundaries that still require review."
+          "note": "Discloses the founder-requested website Skip approvals default and the approval boundaries that still require review.",
+          "summary": "Describes the website's Skip approvals default and the actions that still need your review."
         },
         {
           "date": "2026-09-22",
@@ -82,7 +88,8 @@
         {
           "date": "2026-09-27",
           "digest": "f5fa55928ecda09e",
-          "note": "Appeals point to the in-product appeal and the /appeal form, each with a reference, beside the email route; effective date moved to the day it ships."
+          "note": "Appeals point to the in-product appeal and the /appeal form, each with a reference, beside the email route; effective date moved to the day it ships.",
+          "summary": "Appeals can be filed in the product or through the appeal form, each with a reference, as well as by email."
         }
       ]
     },
@@ -112,7 +119,8 @@
         {
           "date": "2026-09-23",
           "digest": "5d2ea7656cc0eada",
-          "note": "Corrects the identity-provider source and removes an obsolete browser storage claim; includes the semicolon-bearing JSX fingerprint migration. The founder approved a new notice version and re-prompting visitors on 2026-09-23."
+          "note": "Corrects the identity-provider source and removes an obsolete browser storage claim; includes the semicolon-bearing JSX fingerprint migration. The founder approved a new notice version and re-prompting visitors on 2026-09-23.",
+          "summary": "Corrects where the identity provider's cookies come from and removes a browser storage entry the product no longer writes. Visitors were asked to choose again."
         },
         {
           "date": "2026-09-23",
@@ -132,7 +140,8 @@
         {
           "date": "2026-09-22",
           "digest": "31cc4fe511514a62",
-          "note": "Corrects the Experiential Labs processor row against its current platform privacy and data-controls documents and records the founder-approved Free promotional route."
+          "note": "Corrects the Experiential Labs processor row against its current platform privacy and data-controls documents and records the founder-approved Free promotional route.",
+          "summary": "Corrects the Experiential Labs entry against its current privacy and data-controls documents and records the Free-plan promotional route."
         },
         {
           "date": "2026-09-22",
@@ -212,7 +221,8 @@
         {
           "date": "2026-09-27",
           "digest": "16e8983458c38814",
-          "note": "Adds the signed-in refund request, the 14-day withdrawal for the EU, EEA and UK, the 7-day unused refund once per account, and the dispute hold, and corrects plan upgrades, which start a new billing period on the day of the upgrade while added seats keep the renewal date. Checkout now asks every customer to confirm, in wording version 2026-09-27: 'I ask for immediate access. I understand that if I withdraw within 14 days, my refund is reduced in proportion to the credits I have used.' A withdrawal is prorated by the credits used, as Claude does (support.claude.com/en/articles/12386328), only when that confirmation is recorded on the subscription or payment, and is refunded in full otherwise."
+          "note": "Adds the signed-in refund request, the 14-day withdrawal for the EU, EEA and UK, the 7-day unused refund once per account, and the dispute hold, and corrects plan upgrades, which start a new billing period on the day of the upgrade while added seats keep the renewal date. Checkout now asks every customer to confirm, in wording version 2026-09-27: 'I ask for immediate access. I understand that if I withdraw within 14 days, my refund is reduced in proportion to the credits I have used.' A withdrawal is prorated by the credits used, as Claude does (support.claude.com/en/articles/12386328), only when that confirmation is recorded on the subscription or payment, and is refunded in full otherwise.",
+          "summary": "Adds the signed-in refund request, the 14-day withdrawal in the EU, EEA and UK, a once-per-account refund within 7 days when no credits were used, and the hold during a payment dispute, and corrects how plan upgrades are billed."
         }
       ]
     },
@@ -242,7 +252,8 @@
         {
           "date": "2026-09-27",
           "digest": "ad2044fbd196d614",
-          "note": "Adds the in-product Report an accessibility barrier ticket beside the email address; effective date moved to the day it ships."
+          "note": "Adds the in-product Report an accessibility barrier ticket beside the email address; effective date moved to the day it ships.",
+          "summary": "Adds the in-product Report an accessibility barrier ticket beside the email address."
         }
       ]
     },
@@ -357,7 +368,8 @@
         {
           "date": "2026-09-27",
           "digest": "ccab8bac49fdd94a",
-          "note": "Adds the Impersonation section and the report form's impersonation option; effective date moved to the day it ships."
+          "note": "Adds the Impersonation section and the report form's impersonation option; effective date moved to the day it ships.",
+          "summary": "Adds the Impersonation section and an impersonation option on the report form."
         }
       ]
     },
@@ -447,7 +459,8 @@
         {
           "date": "2026-09-22",
           "digest": "782677e1c104ce25",
-          "note": "Updates the published website default authority to match the new account policy while retaining fail-closed and workspace boundaries."
+          "note": "Updates the published website default authority to match the new account policy while retaining fail-closed and workspace boundaries.",
+          "summary": "Updates the website's default authority to match the account policy, keeping fail-closed checks and workspace boundaries."
         },
         {
           "date": "2026-09-22",
@@ -457,7 +470,8 @@
         {
           "date": "2026-09-27",
           "digest": "7494248bce9647ac",
-          "note": "Attached files, project knowledge files and selected connector context now count as untrusted content in the injection check, so a turn holding them asks before anything could send data out; pasted text is still not counted."
+          "note": "Attached files, project knowledge files and selected connector context now count as untrusted content in the injection check, so a turn holding them asks before anything could send data out; pasted text is still not counted.",
+          "summary": "Attached files, project knowledge files and selected connector context now count as untrusted content, so a turn that holds them asks before anything could send data out."
         }
       ]
     }
