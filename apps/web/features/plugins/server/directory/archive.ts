@@ -493,6 +493,45 @@ export async function readSingleSkillFromArchive(
   };
 }
 
+export async function readSkillArchiveAsPlugin(
+  archive: Uint8Array,
+): Promise<UploadedPluginArchive> {
+  const single = await readSingleSkillFromArchive(archive);
+  const skill = parseSkillFile(single.path, single.content);
+  if (!skill) throw new PluginArchiveError([UPLOAD_NO_SKILL_FILE_MESSAGE]);
+  const name = neutralizeCopy(skill.name) || skill.name;
+  const key = pluginKeyFrom(skill.name);
+  if (!key) throw new PluginArchiveError([uploadUnusableNameMessage(skill.name)]);
+  const folder = `${CLAUDE_PLUGIN_SKILLS_DIRECTORY}${PATH_SEPARATOR}${key}`;
+  const path = `${folder}${SKILL_FILE_SUFFIX}`;
+  return {
+    sourceName: name,
+    allowlist: [],
+    plugins: [
+      {
+        key,
+        name,
+        description: neutralizeCopy(skill.description) || name,
+        version: displayVersion(null, null),
+        skills: [
+          {
+            name: skill.name,
+            description: skill.description,
+            path,
+            content: single.content,
+            files: single.files.map((file) => ({
+              path: `${folder}${PATH_SEPARATOR}${file.path}`,
+              content: file.content,
+            })),
+          },
+        ],
+        omittedFiles: single.omittedFiles,
+        dependencies: [],
+      },
+    ],
+  };
+}
+
 export async function readPluginArchive(
   archive: Uint8Array,
   fallbackName: string,

@@ -526,6 +526,10 @@
       "capabilities": ["canUseMarketplace", "canUsePlugins"],
       "concepts": [],
       "tables": [
+        "organization_plugin_files",
+        "organization_plugin_group_settings",
+        "organization_plugin_members",
+        "organization_plugins",
         "plugin_installations",
         "plugin_marketplace_entries",
         "plugin_marketplace_entry_files",

@@ -74,6 +74,7 @@ export const USER_SCOPED_TABLES: ReadonlyArray<{
   { table: 'plugin_installations', column: 'user_id' },
   { table: 'plugin_marketplace_sources', column: 'user_id' },
   { table: 'plugin_marketplace_installations', column: 'user_id' },
+  { table: 'organization_plugin_members', column: 'user_id' },
   { table: 'agent_tool_executions', column: 'user_id' },
   { table: 'agent_tools', column: 'user_id' },
   { table: 'agent_approval_requests', column: 'user_id' },
@@ -374,6 +375,12 @@ export const UNDELETED_USER_TABLES: Readonly<Record<string, string>> = {
     'Cascades from profiles (0256) on delegate_user_id and on granted_by_user_id. A delegation this user granted to somebody else is workspace configuration, and revoking it when the grantor leaves would drop the other member’s admin access.',
   legal_hold_custodians:
     'Legal preservation scope (0261). Active custodians block erasure; released-hold rows remain matter history, and added_by_user_id is legal provenance.',
+  organization_plugins:
+    'published_by is ON DELETE SET NULL (0324) and created_by is provenance: a workspace plugin belongs to the workspace and outlives the administrator who published it.',
+  organization_plugin_files:
+    'Cascades from organization_plugins (0324); created_by is provenance of workspace configuration.',
+  organization_plugin_group_settings:
+    'Workspace configuration (0325): who gets a workspace plugin belongs to the workspace, and created_by is provenance.',
   plugin_registry_lifecycle_events:
     'Global extension audit history (0259). actor_user_id identifies the operator behind a lifecycle change affecting other accounts.',
   cloud_waitlist:

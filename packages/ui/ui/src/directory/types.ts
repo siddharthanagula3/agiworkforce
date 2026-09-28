@@ -309,6 +309,9 @@ export interface DirectoryPluginDetail {
   worksWith?: readonly string[];
   installed?: boolean;
   installable?: boolean;
+  removable?: boolean;
+  locked?: boolean;
+  managedNote?: string;
   availabilityNote?: string;
   href?: string;
 }

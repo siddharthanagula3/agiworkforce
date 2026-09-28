@@ -612,6 +612,7 @@ export function PluginDetailView({
 
   const installed = detail.installed === true;
   const installable = detail.installable !== false;
+  const locked = detail.locked === true;
   const publisherProfile = detail.publisherProfile;
   const worksWith = detail.worksWith ?? EMPTY_VALUES;
   const moreInfo: { label: string; href: string }[] = [
@@ -661,7 +662,7 @@ export function PluginDetailView({
           primaryDone={installed}
           onPrimary={installable ? onInstall : undefined}
           statusNote={showCli ? (detail.availabilityNote ?? PLUGIN_DESKTOP_ONLY_LABEL) : undefined}
-          {...(installed && onUninstall
+          {...(installed && onUninstall && detail.removable !== false
             ? { onRemove: onUninstall, removeLabel: UNINSTALL_LABEL }
             : {})}
           onCopyLink={onCopyLink}
@@ -701,6 +702,8 @@ export function PluginDetailView({
 
       {detail.community ? <p className={DETAIL_NOTICE}>{PLUGIN_COMMUNITY_NOTE}</p> : null}
 
+      {detail.managedNote ? <p className={DETAIL_NOTICE}>{detail.managedNote}</p> : null}
+
       {installed && settings?.repairs && onRepair ? (
         <RepairList repairs={settings.repairs} busy={busy === true} onRepair={onRepair} />
       ) : null}
@@ -727,7 +730,7 @@ export function PluginDetailView({
             </span>
           </div>
         </div>
-      ) : installed && onSetEnabled ? (
+      ) : installed && onSetEnabled && !locked ? (
         <EnabledRow
           id={detail.id}
           enabled={detail.enabled !== false}
@@ -739,7 +742,7 @@ export function PluginDetailView({
       {showsTabs ? (
         <ContentsTabs
           settings={settings}
-          onSetSkillEnabled={onSetSkillEnabled}
+          onSetSkillEnabled={locked ? undefined : onSetSkillEnabled}
           onOpenConnector={onOpenConnector}
         />
       ) : null}
