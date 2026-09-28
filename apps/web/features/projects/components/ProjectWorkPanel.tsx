@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Bot } from 'lucide-react';
-import type { CloudAgentRun } from '@agiworkforce/cloud-contracts';
+import { AgentTaskStateSchema, type CloudAgentRun } from '@agiworkforce/cloud-contracts';
 import { TERMINAL_AGENT_TASK_STATES, agentTaskStateLabel } from '@agiworkforce/types';
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import { toUserMessage } from '@/lib/user-error-message';
@@ -12,18 +12,6 @@ export interface ProjectWorkPanelProps {
   projectId: string;
   projectName: string;
 }
-
-const RUN_STATES = [
-  'queued',
-  'running',
-  'awaiting_input',
-  'ready_for_review',
-  'paused',
-  'completed',
-  'failed',
-  'cancelled',
-  'archived',
-] as const;
 
 function stateColour(state: CloudAgentRun['state']): string {
   if (state === 'failed' || state === 'timed_out') return 'var(--chat-destructive-text)';
@@ -64,7 +52,7 @@ export function ProjectWorkPanel({ projectId, projectName }: ProjectWorkPanelPro
       try {
         const token = await getAuthToken();
         const params = new URLSearchParams({ projectId, limit: '50' });
-        for (const runState of RUN_STATES) params.append('state', runState);
+        for (const runState of AgentTaskStateSchema.options) params.append('state', runState);
         const res = await fetch(`/api/llm/v1/chat/completions/runs?${params.toString()}`, {
           credentials: 'include',
           signal: controller.signal,
