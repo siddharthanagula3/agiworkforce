@@ -8,6 +8,7 @@ import {
 
 export const CLOUD_CODE_SESSIONS_PATH = '/api/code/sessions';
 export const CLOUD_CODE_REPOSITORIES_PATH = '/api/github/repositories';
+export const CLOUD_CODE_BRANCHES_PATH = '/api/code/repositories/branches';
 
 export function cloudCodeSessionPath(sessionId: string): string {
   return `${CLOUD_CODE_SESSIONS_PATH}/${encodeURIComponent(sessionId)}`;
@@ -88,6 +89,16 @@ export const CloudCodeRepositoryListSchema = z.object({
   unreachable: z
     .array(z.object({ installationId: z.number().int(), accountLogin: z.string() }))
     .default([]),
+});
+
+export const CloudCodeBranchSchema = z.object({
+  name: z.string().min(1),
+  isProtected: z.boolean(),
+});
+
+export const CloudCodeBranchListSchema = z.object({
+  branches: z.array(CloudCodeBranchSchema),
+  truncated: z.boolean().default(false),
 });
 
 export const CloudCodeAgentStepSchema = z.object({
@@ -206,6 +217,8 @@ export type CloudCodeChanges = z.infer<typeof CloudCodeChangesSchema>;
 export type CloudCodePullRequest = z.infer<typeof CloudCodePullRequestSchema>;
 export type CloudCodeTurnCancellation = z.infer<typeof CloudCodeTurnCancellationSchema>;
 export type CloudCodeRepositoryList = z.infer<typeof CloudCodeRepositoryListSchema>;
+export type CloudCodeBranch = z.infer<typeof CloudCodeBranchSchema>;
+export type CloudCodeBranchList = z.infer<typeof CloudCodeBranchListSchema>;
 
 export interface StartCloudCodeAgentTurnRequest {
   goal: string;

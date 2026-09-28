@@ -88,6 +88,7 @@ import {
 import { LocalModelChip } from './LocalModelChip';
 import { describeRuntime, runtimeHelpText } from '../code-runtime';
 import { useCodeRepositories, type CodeRepositoryState } from '../hooks/use-code-repositories';
+import { useCodeBranches } from '../hooks/use-code-branches';
 import type { CloudCodeApi, CloudCodeRepository } from '@agiworkforce/cloud-contracts';
 import styles from '../CloudCodePage.module.css';
 
@@ -690,22 +691,42 @@ function RepositoryPicker({
 function BranchChip({
   draft,
   onDraftChange,
+  api,
 }: {
   draft: CodeDraft;
   onDraftChange: (patch: Partial<CodeDraft>) => void;
+  api: CloudCodeApi;
 }) {
   const [open, setOpen] = useState(false);
   const [branch, setBranch] = useState(draft.repositoryBranch);
+  const [search, setSearch] = useState('');
   const fieldId = useId();
+  const searchFieldId = useId();
+  const listed = draft.repository !== null;
+  const { state, reload } = useCodeBranches(draft.repository, open && listed, api);
 
   useEffect(() => setBranch(draft.repositoryBranch), [draft.repositoryBranch]);
+
+  const choose = (name: string) => {
+    onDraftChange({ repositoryBranch: name });
+    setSearch('');
+    setOpen(false);
+  };
 
   const apply = () => {
     const next = branch.trim();
     if (!next) return;
-    onDraftChange({ repositoryBranch: next });
-    setOpen(false);
+    choose(next);
   };
+
+  const needle = search.trim();
+  const matches =
+    state.status === 'ready'
+      ? state.branches.filter((candidate) =>
+          candidate.name.toLowerCase().includes(needle.toLowerCase()),
+        )
+      : [];
+  const typedIsListed = matches.some((candidate) => candidate.name === needle);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -721,35 +742,120 @@ function BranchChip({
         sideOffset={POPOVER_OFFSET}
         style={{ width: POPOVER_WIDTH }}
         className="p-0"
+        aria-label={CODE_COPY.branchEdit}
       >
         <div className={styles['popover']}>
-          <div className={styles['formField']}>
-            <label className={styles['formLabel']} htmlFor={fieldId}>
-              {CODE_COPY.repositoryBranchLabel}
-            </label>
-            <input
-              id={fieldId}
-              className={styles['textInput']}
-              value={branch}
-              onChange={(event) => setBranch(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key !== ENTER_KEY) return;
-                event.preventDefault();
-                apply();
-              }}
-              maxLength={CODE_LIMITS.repositoryBranch}
-            />
-          </div>
-          <div className={styles['popoverActions']}>
-            <button
-              type="button"
-              className={styles['primaryButton']}
-              disabled={branch.trim().length === 0}
-              onClick={apply}
-            >
-              {CODE_COPY.branchApply}
-            </button>
-          </div>
+          {listed ? (
+            <>
+              <div className={styles['repositoryList']} aria-label={CODE_COPY.branchListLabel}>
+                {(state.status === 'loading' || state.status === 'idle') && (
+                  <div className={styles['repositoryEmpty']}>
+                    <Spinner size="sm" aria-label={CODE_COPY.branchLoading} />
+                  </div>
+                )}
+
+                {state.status === 'error' && (
+                  <div className={styles['repositoryEmpty']}>
+                    <span>{CODE_COPY.branchLoadFailed}</span>
+                    <button type="button" className={styles['secondaryButton']} onClick={reload}>
+                      {CODE_COPY.retry}
+                    </button>
+                  </div>
+                )}
+
+                {state.status === 'ready' && matches.length === 0 && !needle && (
+                  <div className={styles['repositoryEmpty']}>
+                    <span>{CODE_COPY.branchNoMatches}</span>
+                  </div>
+                )}
+
+                {matches.map((candidate) => (
+                  <button
+                    key={candidate.name}
+                    type="button"
+                    className={styles['repositoryRow']}
+                    aria-current={candidate.name === draft.repositoryBranch ? 'true' : undefined}
+                    onClick={() => choose(candidate.name)}
+                  >
+                    <GitBranch size={CHIP_GLYPH_SIZE} aria-hidden="true" />
+                    <span className={styles['repositoryName']}>{candidate.name}</span>
+                    {candidate.isProtected && (
+                      <Lock
+                        size={CHIP_GLYPH_SIZE}
+                        className={styles['repositoryPrivate']}
+                        aria-label={CODE_COPY.branchProtected}
+                      />
+                    )}
+                  </button>
+                ))}
+
+                {needle && !typedIsListed && state.status !== 'loading' && (
+                  <button
+                    type="button"
+                    className={styles['repositoryRow']}
+                    onClick={() => choose(needle)}
+                  >
+                    <Plus size={CHIP_GLYPH_SIZE} aria-hidden="true" />
+                    <span className={styles['repositoryName']}>
+                      {`${CODE_COPY.branchUseTyped} ${needle}`}
+                    </span>
+                  </button>
+                )}
+              </div>
+
+              {state.status === 'ready' && state.truncated && (
+                <span className={styles['formHelp']}>{CODE_COPY.branchTruncated}</span>
+              )}
+
+              <div className={styles['repositorySearch']}>
+                <Search size={CHIP_GLYPH_SIZE} aria-hidden="true" />
+                <input
+                  id={searchFieldId}
+                  className={styles['repositorySearchInput']}
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key !== ENTER_KEY || !needle) return;
+                    event.preventDefault();
+                    choose(needle);
+                  }}
+                  placeholder={CODE_COPY.branchSearchPlaceholder}
+                  aria-label={CODE_COPY.branchSearchLabel}
+                  maxLength={CODE_LIMITS.repositoryBranch}
+                />
+              </div>
+            </>
+          ) : (
+            <>
+              <div className={styles['formField']}>
+                <label className={styles['formLabel']} htmlFor={fieldId}>
+                  {CODE_COPY.repositoryBranchLabel}
+                </label>
+                <input
+                  id={fieldId}
+                  className={styles['textInput']}
+                  value={branch}
+                  onChange={(event) => setBranch(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key !== ENTER_KEY) return;
+                    event.preventDefault();
+                    apply();
+                  }}
+                  maxLength={CODE_LIMITS.repositoryBranch}
+                />
+              </div>
+              <div className={styles['popoverActions']}>
+                <button
+                  type="button"
+                  className={styles['primaryButton']}
+                  disabled={branch.trim().length === 0}
+                  onClick={apply}
+                >
+                  {CODE_COPY.branchApply}
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </PopoverContent>
     </Popover>
@@ -801,7 +907,9 @@ function RepositoryChips({
           </button>
         }
       />
-      {draft.repositoryBranch && <BranchChip draft={draft} onDraftChange={onDraftChange} />}
+      {draft.repositoryBranch && (
+        <BranchChip draft={draft} onDraftChange={onDraftChange} api={api} />
+      )}
       <button
         type="button"
         className={`${styles['chip']} ${styles['chipCompact']}`}

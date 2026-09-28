@@ -751,6 +751,61 @@ export async function getGitHubRepositoryDefaultBranch(
   return parsed.data.default_branch;
 }
 
+const gitHubBranchSchema = z.object({
+  name: z.string().min(1).max(255),
+  protected: z.boolean().optional(),
+});
+
+export interface GitHubRepositoryBranch {
+  name: string;
+  isProtected: boolean;
+}
+
+export async function listGitHubRepositoryBranches(
+  token: string,
+  owner: string,
+  repo: string,
+  limits: { maxItems: number; maxPages: number; perPage: number },
+): Promise<{ branches: GitHubRepositoryBranch[]; truncated: boolean }> {
+  validateGitHubPathSegment(owner, 'owner');
+  validateGitHubPathSegment(repo, 'repo');
+  const collected = await collectGitHubRestPages({
+    perPage: limits.perPage,
+    maxPages: limits.maxPages,
+    maxItems: limits.maxItems,
+    loadPage: async (page) => {
+      const response = await fetch(
+        buildGitHubApiUrl(
+          `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/branches?per_page=${limits.perPage}&page=${page}`,
+        ),
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/vnd.github+json',
+            'X-GitHub-Api-Version': GITHUB_API_VERSION,
+          },
+          signal: AbortSignal.timeout(GITHUB_REQUEST_TIMEOUT_MS),
+        },
+      );
+      if (!response.ok) {
+        throw new Error(`Failed to list the repository branches: ${response.status}`);
+      }
+      const parsed = z.array(gitHubBranchSchema).safeParse(await response.json());
+      if (!parsed.success) {
+        throw new Error('GitHub branch listing response was invalid');
+      }
+      return { items: parsed.data, linkHeader: response.headers.get('link') };
+    },
+  });
+  return {
+    truncated: collected.truncated,
+    branches: collected.items.map((branch) => ({
+      name: branch.name,
+      isProtected: branch.protected ?? false,
+    })),
+  };
+}
+
 /**
  * The pull request already open from `head`, if there is one. GitHub refuses a
  * second pull request for the same head with a 422 that carries no id, so this
