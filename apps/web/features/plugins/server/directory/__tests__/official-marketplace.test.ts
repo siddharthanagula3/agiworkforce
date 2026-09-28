@@ -165,7 +165,7 @@ describe('repository helpers', () => {
       'https://raw.githubusercontent.com/anthropics/claude-plugins-official/main/.claude-plugin/marketplace.json',
     );
     expect(marketplaceInstallCommand('code-review', 'claude-plugins-official')).toBe(
-      'claude plugin install code-review@claude-plugins-official',
+      'agi plugin install code-review@claude-plugins-official',
     );
   });
 });
