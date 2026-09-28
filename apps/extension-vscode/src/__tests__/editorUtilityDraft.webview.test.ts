@@ -6,6 +6,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getWebviewContent } from '../features/sidebar-webview/webviewContent';
+import { vscodeApiStub } from './vscodeApiStub';
 
 function makeWebview() {
   return {
@@ -37,7 +38,7 @@ function bootWebview() {
   const postMessage = vi.fn();
   Object.defineProperty(globalThis, 'acquireVsCodeApi', {
     configurable: true,
-    value: () => ({ postMessage }),
+    value: () => vscodeApiStub({ postMessage }),
   });
 
   const inlineScript = Array.from(parsed.querySelectorAll('script')).find((script) =>

@@ -49,6 +49,16 @@ const LOOKUPS: Record<string, { count: number; reason: string }> = {
     reason:
       'The email filter narrows the active members of the caller workspace only, a list the caller already holds admin.members.view to read.',
   },
+  'lib/support/tickets/appeals.ts': {
+    count: 1,
+    reason:
+      'submitSignedOutAppeal files an appeal only for a suspended account, after /api/support/appeal has already answered 202 received, which it does whether or not an account uses the address.',
+  },
+  'lib/support/tickets/recovery.ts': {
+    count: 2,
+    reason:
+      'The request lookup runs after /api/support/recovery has already answered 202 received, the same whether or not an account uses the address; the second match is the staff-run update that writes a verified new address by profile id.',
+  },
   'lib/services/organization-invitation-service.ts': {
     count: 1,
     reason:

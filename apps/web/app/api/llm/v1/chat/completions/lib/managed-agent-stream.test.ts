@@ -426,6 +426,7 @@ describe('managed agent stream', () => {
         requestId: 'free-request',
       },
       outcome: 'completed',
+      attempt: { outcome: 'completed' },
       provider: 'anthropic',
       model: 'claude-test',
       cost: {
@@ -469,6 +470,7 @@ describe('managed agent stream', () => {
     expect(settleFreeTrialRequest).toHaveBeenCalledWith({
       reservation: freeProcessed.freeTrial,
       outcome: 'failed',
+      attempt: { outcome: 'failed' },
       provider: 'anthropic',
       model: 'claude-test',
       cost: { tokenMicrousd: 0, toolMicrousd: 0 },
