@@ -348,6 +348,7 @@ fn capabilities() -> AppServerCapabilities {
         installs: false,
         saved_permissions: false,
         mcp_inspect: false,
+        plugin_updates: false,
     }
 }
 
