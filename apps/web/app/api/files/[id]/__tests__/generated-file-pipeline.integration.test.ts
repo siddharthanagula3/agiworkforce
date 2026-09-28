@@ -62,6 +62,7 @@ vi.mock('@/lib/server/media-storage', async () => {
   return {
     isMediaStorageConfigured: () => true,
     isGeneratedMediaStorageConfigured: () => true,
+    isImageStorageConfigured: () => true,
     readStoredMedia: async (key: string) => {
       const entry = objectStore.get(key);
       return entry ? { data: entry.data, contentType: entry.contentType } : null;
@@ -128,6 +129,7 @@ vi.mock('@/lib/server/media-assets', async () => {
       return row?.userId === userId && row.organizationId === null ? row : null;
     },
     getMediaAssetById: async (id: string) => assetRows.get(id) ?? null,
+    latestConversationImageAssetId: async () => null,
   };
 });
 
