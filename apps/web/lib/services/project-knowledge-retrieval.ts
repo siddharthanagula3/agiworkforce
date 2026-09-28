@@ -41,6 +41,7 @@ export async function retrieveIndexedKnowledgeHits(input: {
       userId: input.userId,
       organizationId: input.organizationId,
       semantic: true,
+      includeHealthSpaces: true,
     }).search({
       text: input.query,
       kinds: ['project_knowledge'],

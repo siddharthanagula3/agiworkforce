@@ -36,6 +36,7 @@ export const ManagedCloudProjectSchema = z.object({
   importedFrom: ProjectImportSourceSchema.nullable().optional(),
   isOrgShared: z.boolean().optional(),
   sharedAccess: z.enum(['read', 'write']).nullable().optional(),
+  space: z.enum(['health']).nullable().optional(),
   createdAt: z.string().min(1),
   updatedAt: z.string().min(1),
 });
