@@ -114,9 +114,7 @@ export function TaskPhaseSection({ phase, defaultExpanded }: TaskPhaseSectionPro
 
         <StatusIcon status={phase.status} />
 
-        <span className="font-semibold text-foreground/90 truncate flex-1 min-w-0">
-          {phase.name}
-        </span>
+        <span className="font-semibold text-foreground truncate flex-1 min-w-0">{phase.name}</span>
 
         <span className="text-caption px-1.5 py-0.5 rounded-full bg-muted/50 text-muted-foreground shrink-0">
           {toolCount} {toolCount === 1 ? 'tool' : 'tools'}
