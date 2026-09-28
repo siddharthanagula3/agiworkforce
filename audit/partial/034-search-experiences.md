@@ -133,29 +133,23 @@ Code: `apps/cli/src/agent/chat.rs:619-619`, `apps/cli/src/models/streaming.rs:38
 
 - Done when: Search results show a preview (title, snippet or matched text) before the user opens them.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Chrome lists sources only as title links inside agent activity steps, with no snippet, and plain chat has no search results to preview. | ui |
-
-Code: `apps/extension/src/features/side-panel/bubbles.ts:406-432`
 
 ## S34.24: Source cards.
 
 - Done when: Sources behind an answer are shown as cards with at least title, site and link.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Sources appear only as title links inside agent activity steps (no card with site/snippet), and plain Chrome chat never searches. | ui |
-
-Code: `apps/extension/src/features/side-panel/bubbles.ts:406-432`
 
 ## S34.25: Citation hover/tap preview.
 
@@ -172,15 +166,12 @@ Code: `apps/extension/src/features/side-panel/bubbles.ts:406-432`
 
 - Done when: A compact source summary can be expanded to the full list of sources used and consulted.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Only agent activity steps can be expanded to show up to 20 source links; answers have no sources list. | ui |
-
-Code: `apps/extension/src/features/side-panel/bubbles.ts:406-432`
 
 ## S34.31: Search-result freshness information.
 

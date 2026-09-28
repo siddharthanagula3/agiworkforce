@@ -51,6 +51,7 @@ import {
   getDefaultProvider,
   IMAGE_ASPECT_RATIOS_BY_API,
   isProviderAvailable,
+  maxImagesPerRequest,
   resolveImageCatalogModel,
   resolveImageProviderFromCatalogModel,
   editImagesSha256,
@@ -369,15 +370,19 @@ export async function generateManagedImage(
     );
   }
 
-  if (catalogModel.imageApi === 'gemini' && n !== 1) {
+  const maxImages = maxImagesPerRequest(catalogModel.imageApi);
+  if (n > maxImages) {
     return NextResponse.json(
       {
         error: {
-          message: 'The requested Google image model supports one image per request.',
+          message:
+            maxImages === 1
+              ? 'The requested image model supports one image per request.'
+              : `The requested image model supports up to ${maxImages} images per request.`,
           type: 'invalid_request_error',
           code: 'unsupported_image_count',
           param: 'n',
-          max_images: 1,
+          max_images: maxImages,
         },
       },
       {

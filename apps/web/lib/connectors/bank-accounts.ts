@@ -410,3 +410,101 @@ export async function executeBankAccountsTool(
     };
   }
 }
+
+const OVERVIEW_TRANSACTION_PAGE_SIZE = 500;
+const OVERVIEW_MAX_TRANSACTIONS = 2_000;
+
+export interface BankAccountSummary {
+  accountId: string;
+  name: string;
+  mask: string | null;
+  type: string;
+  subtype: string | null;
+  available: number | null;
+  current: number | null;
+  limit: number | null;
+  currency: string | null;
+}
+
+export interface BankTransactionSummary {
+  accountId: string;
+  date: string;
+  description: string;
+  amount: number;
+  currency: string | null;
+  pending: boolean;
+  category: string | null;
+}
+
+export type BankAccountOverview =
+  | { status: 'not_connected' | 'preparing' | 'reconnect' }
+  | {
+      status: 'ready';
+      accounts: BankAccountSummary[];
+      transactions: BankTransactionSummary[];
+      totalTransactions: number;
+    };
+
+export async function readBankAccountOverview(
+  userId: string,
+  range: { startDate: string; endDate: string },
+): Promise<BankAccountOverview> {
+  const accessToken = await readBankAccountsToken(userId);
+  if (!accessToken) return { status: 'not_connected' };
+  try {
+    const listed = await plaidRequest<{ accounts: PlaidAccount[] }>('/accounts/get', {
+      access_token: accessToken,
+    });
+    const transactions: PlaidTransaction[] = [];
+    let totalTransactions = 0;
+    do {
+      const page = await plaidRequest<{
+        transactions: PlaidTransaction[];
+        total_transactions: number;
+      }>('/transactions/get', {
+        access_token: accessToken,
+        start_date: range.startDate,
+        end_date: range.endDate,
+        options: { count: OVERVIEW_TRANSACTION_PAGE_SIZE, offset: transactions.length },
+      });
+      totalTransactions = page.total_transactions;
+      transactions.push(...page.transactions);
+      if (page.transactions.length === 0) break;
+    } while (
+      transactions.length < totalTransactions &&
+      transactions.length < OVERVIEW_MAX_TRANSACTIONS
+    );
+    return {
+      status: 'ready',
+      accounts: listed.accounts.map((account) => ({
+        accountId: account.account_id,
+        name: account.official_name ?? account.name,
+        mask: account.mask ?? null,
+        type: account.type,
+        subtype: account.subtype ?? null,
+        available: account.balances.available,
+        current: account.balances.current,
+        limit: account.balances.limit,
+        currency: currencyOf(account.balances),
+      })),
+      transactions: transactions.map((transaction) => ({
+        accountId: transaction.account_id,
+        date: transaction.date,
+        description: transaction.merchant_name ?? transaction.name,
+        amount: transaction.amount,
+        currency: currencyOf(transaction),
+        pending: transaction.pending,
+        category: transaction.personal_finance_category?.primary ?? null,
+      })),
+      totalTransactions,
+    };
+  } catch (error) {
+    if (error instanceof PlaidApiError && error.plaidCode === PLAID_PRODUCT_NOT_READY) {
+      return { status: 'preparing' };
+    }
+    if (error instanceof PlaidApiError && error.plaidCode === PLAID_ITEM_LOGIN_REQUIRED) {
+      return { status: 'reconnect' };
+    }
+    throw error;
+  }
+}

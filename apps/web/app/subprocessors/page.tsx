@@ -51,7 +51,7 @@ const SUBS: Subprocessor[] = [
   {
     name: 'Fly.io',
     purpose:
-      'Runtime for the real-time signaling server used by collaborative and multi-device sessions.',
+      'Runtime for two services we operate ourselves. (1) The real-time signaling server used by collaborative and multi-device sessions. (2) The malware scanner that every file you upload passes through: it holds the file in memory only while it scans it and never stores it (services/upload-scanner).',
     region: 'United States (San Jose)',
     registryProviderIds: [],
   },

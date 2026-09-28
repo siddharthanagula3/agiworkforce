@@ -440,7 +440,11 @@
     "videoModeAttachments_one": "La génération de vidéo n'utilise que votre invite. Les fichiers joints ne sont pas envoyés au modèle vidéo. Quittez d'abord le mode vidéo si vous voulez envoyer ce fichier au modèle de chat.",
     "videoModeAttachments_other": "La génération de vidéo n'utilise que votre invite. Les fichiers joints ne sont pas envoyés au modèle vidéo. Quittez d'abord le mode vidéo si vous voulez envoyer ces fichiers au modèle de chat.",
     "viewSources_one": "Voir {{count}} source",
-    "viewSources_other": "Voir {{count}} sources"
+    "viewSources_other": "Voir {{count}} sources",
+    "savedMemoriesUsed_one": "{{count}} souvenir enregistré utilisé",
+    "savedMemoriesUsed_other": "{{count}} souvenirs enregistrés utilisés",
+    "moreSavedMemories_one": "Et {{count}} de plus",
+    "moreSavedMemories_other": "Et {{count}} de plus"
   },
   "markdownTable": {
     "label": "Tableau",
