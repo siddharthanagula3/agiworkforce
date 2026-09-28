@@ -6,7 +6,7 @@ export interface ResponsesInputTextContent {
 export interface ResponsesInputImageContent {
   type: 'input_image';
   image_url: string;
-  detail?: 'auto' | 'low' | 'high';
+  detail?: 'auto' | 'low' | 'high' | 'original';
 }
 
 export interface ResponsesInputFileContent {

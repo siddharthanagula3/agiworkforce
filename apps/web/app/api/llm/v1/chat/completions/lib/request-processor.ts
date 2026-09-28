@@ -294,6 +294,11 @@ import {
 } from '@/lib/server/provider-training-opt-out';
 import { createResearchDomainPolicy, type ResearchDomainPolicy } from './research-sources';
 import {
+  IMAGE_DETAIL_VALUES,
+  imageDetailRefusalMessage,
+  unsupportedImageDetail,
+} from './image-detail';
+import {
   JsonSchemaResponseFormatSchema,
   jsonSchemaDirective,
   jsonSchemaFormatProblem,
@@ -383,7 +388,7 @@ export const ChatCompletionRequestSchema = z
                       });
                     }
                   }),
-                  detail: z.enum(['auto', 'low', 'high']).optional(),
+                  detail: z.enum(IMAGE_DETAIL_VALUES).optional(),
                 })
                 .optional(),
               file: z
@@ -3949,6 +3954,22 @@ export async function processRequest(
             message: 'The selected model cannot read images. Choose a vision-capable model.',
             type: 'invalid_request_error',
             code: 'model_no_vision',
+          },
+        },
+        { status: 400 },
+      ),
+    };
+  }
+  const detailRefusal = unsupportedImageDetail(chatRequest.messages, chatRequest.model);
+  if (detailRefusal) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          error: {
+            message: imageDetailRefusalMessage(detailRefusal),
+            type: 'invalid_request_error',
+            code: 'image_detail_unsupported',
           },
         },
         { status: 400 },
