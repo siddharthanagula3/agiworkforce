@@ -197,7 +197,9 @@
     "addAttachmentsAndToolsActive": "Añadir archivos adjuntos y herramientas: {{count}} activos",
     "voiceStart": "Iniciar entrada de voz",
     "voiceUnsupportedBrowser": "La entrada de voz no es compatible con este navegador",
-    "voiceUnsupportedHint": "La entrada de voz no es compatible con este navegador. Prueba Chrome o Edge."
+    "voiceUnsupportedHint": "La entrada de voz no es compatible con este navegador. Prueba Chrome o Edge.",
+    "expandInput": "Ampliar el campo de mensaje",
+    "collapseInput": "Contraer el campo de mensaje"
   },
   "bubble": {
     "assistantSaid": "AGI dijo:",
@@ -346,5 +348,22 @@
     "copyFailed": "No se pudo copiar, el portapapeles no está disponible",
     "download": "Descargar como CSV",
     "close": "Cerrar tabla ampliada"
+  },
+  "markdown": {
+    "copy": "Copiar",
+    "copied": "Copiado",
+    "copyFailed": "No se pudo copiar",
+    "copyLabel": "Copiar código",
+    "copiedLabel": "Código copiado",
+    "copyFailedLabel": "No se pudo copiar el código",
+    "download": "Descargar {{fileName}}",
+    "expand": "Ampliar código",
+    "close": "Cerrar código ampliado",
+    "codeTitle": "Código {{language}}",
+    "codeBlockLabel": "Bloque de código {{language}}"
+  },
+  "streaming": {
+    "reconnecting": "Reconectando…",
+    "stopping": "Deteniendo la tarea en la nube…"
   }
 }

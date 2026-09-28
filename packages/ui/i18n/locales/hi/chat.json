@@ -197,7 +197,9 @@
     "addAttachmentsAndToolsActive": "अटैचमेंट और टूल जोड़ें: {{count}} सक्रिय",
     "voiceStart": "वॉइस इनपुट शुरू करें",
     "voiceUnsupportedBrowser": "यह ब्राउज़र वॉइस इनपुट का समर्थन नहीं करता",
-    "voiceUnsupportedHint": "यह ब्राउज़र वॉइस इनपुट का समर्थन नहीं करता। Chrome या Edge आज़माएं।"
+    "voiceUnsupportedHint": "यह ब्राउज़र वॉइस इनपुट का समर्थन नहीं करता। Chrome या Edge आज़माएं।",
+    "expandInput": "संदेश इनपुट बड़ा करें",
+    "collapseInput": "संदेश इनपुट छोटा करें"
   },
   "bubble": {
     "assistantSaid": "AGI ने कहा:",
@@ -346,5 +348,22 @@
     "copyFailed": "कॉपी नहीं हो सका, क्लिपबोर्ड उपलब्ध नहीं है",
     "download": "CSV के रूप में डाउनलोड करें",
     "close": "बड़ी तालिका बंद करें"
+  },
+  "markdown": {
+    "copy": "कॉपी करें",
+    "copied": "कॉपी हो गया",
+    "copyFailed": "कॉपी नहीं हो सका",
+    "copyLabel": "कोड कॉपी करें",
+    "copiedLabel": "कोड कॉपी हो गया",
+    "copyFailedLabel": "कोड कॉपी नहीं हो सका",
+    "download": "{{fileName}} डाउनलोड करें",
+    "expand": "कोड बड़ा करें",
+    "close": "बड़ा कोड बंद करें",
+    "codeTitle": "{{language}} कोड",
+    "codeBlockLabel": "{{language}} कोड ब्लॉक"
+  },
+  "streaming": {
+    "reconnecting": "पुनः कनेक्ट हो रहा है…",
+    "stopping": "क्लाउड कार्य रोका जा रहा है…"
   }
 }

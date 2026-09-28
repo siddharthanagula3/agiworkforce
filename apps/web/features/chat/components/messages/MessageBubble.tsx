@@ -69,6 +69,7 @@ import {
 } from './messageActionRow';
 import { variantDeleteConfirm } from './variantDeleteConfirm';
 import { VariantPager } from './VariantPager';
+import { MessageContextChips } from './MessageContextChips';
 import { toast } from 'sonner';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { TokenUsageDisplay } from '../tokens/TokenUsageDisplay';
@@ -90,6 +91,7 @@ import {
   useVoiceSessionStore,
 } from '@/features/chat/stores/voice-session-store';
 import { TranscriptNotice } from './TranscriptNotice';
+import { StreamPhaseNotice } from './StreamPhaseNotice';
 import { CitationPastChats } from './CitationPastChats';
 import {
   AgentActivityTimeline,
@@ -579,6 +581,8 @@ interface Message {
      * Set by the composer paste handler; renders a "PASTED" badge (Fix 42).
      */
     isPasted?: boolean;
+    sendReplay?: StoreMessageMetadata['sendReplay'];
+    mcpContext?: StoreMessageMetadata['mcpContext'];
     /** Persisted thumbs-up/down reaction from the user (stored in cloud messages.metadata). */
     reaction?: 'thumbsUp' | 'thumbsDown' | null;
     /** Paywall feature that triggered a capability gate message. */
@@ -905,6 +909,7 @@ const MessageBubbleComponent = function MessageBubble({
         onPrevious={handleSelectPreviousVariant}
         onNext={handleSelectNextVariant}
         disabled={isConversationStreaming}
+        kind={isUser ? 'edit' : 'response'}
       />
     ) : null;
   // `pendingTurns` (the registry resolveToolApproval consults) is process-
@@ -2431,6 +2436,13 @@ const MessageBubbleComponent = function MessageBubble({
             </div>
           )}
 
+          {isUser && (
+            <MessageContextChips
+              mcpContext={message.metadata?.mcpContext}
+              skillName={message.metadata?.sendReplay?.skillName}
+            />
+          )}
+
           {deliverables.length > 0 && (
             <div
               data-testid="deliverable-cards"
@@ -2894,6 +2906,8 @@ const MessageBubbleComponent = function MessageBubble({
             </div>
           )}
 
+          {!isUser && <StreamPhaseNotice messageId={message.id} />}
+
           {!isUser && message.metadata?.metadataNotSaved && (
             <div className="mt-2">
               <TranscriptNotice
@@ -2947,6 +2961,7 @@ const MessageBubbleComponent = function MessageBubble({
                   {LOCAL_BOUNDARY_LABEL}
                 </span>
               )}
+              {isUser && variantPager}
               <div
                 data-testid="message-action-row"
                 className={cn(
@@ -2959,6 +2974,24 @@ const MessageBubbleComponent = function MessageBubble({
               >
                 {!message.isStreaming && (
                   <TooltipProvider delayDuration={300}>
+                    {isUser && onRegenerate && !voiceModeActive && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className={cn(ACTION_BUTTON_SIZE, ACTION_BUTTON_TONE)}
+                            disabled={isConversationStreaming}
+                            onClick={() => onRegenerate(message.id)}
+                            aria-label="Retry this message"
+                          >
+                            <RefreshCw className={ACTION_ICON_SIZE} aria-hidden="true" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Retry</TooltipContent>
+                      </Tooltip>
+                    )}
+
                     {isUser && onEdit && (
                       <Tooltip>
                         <TooltipTrigger asChild>
@@ -3078,7 +3111,7 @@ const MessageBubbleComponent = function MessageBubble({
                       </>
                     )}
 
-                    {variantPager}
+                    {!isUser && variantPager}
 
                     {!isUser &&
                       !voiceModeActive &&
@@ -3442,6 +3475,9 @@ function metadataEqual(prev: Message['metadata'], next: Message['metadata']): bo
     prev?.toolType === next?.toolType &&
     prev?.isDocument === next?.isDocument &&
     prev?.documentTitle === next?.documentTitle &&
+    prev?.sendReplay === next?.sendReplay &&
+    prev?.mcpContext === next?.mcpContext &&
+    prev?.metadataNotSaved === next?.metadataNotSaved &&
     toolEntriesEqual(prev?.tools, next?.tools)
   );
 }
