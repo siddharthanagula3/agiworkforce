@@ -177,6 +177,7 @@ async fn with_usage_limit_context(error: anyhow::Error, jwt: &str) -> anyhow::Er
             recovery_href,
             retry_after,
             resets_in: context.resets_in,
+            resets_at: context.resets_at,
             alternative_model: context.alternative_model,
         }
         .into(),

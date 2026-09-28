@@ -1475,6 +1475,15 @@ pub struct TurnFailure {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub request_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub alternative_model: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub resets_at: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub recovery_href: Option<String>,
 }
 
 /// A day is the longest wait worth stating. Past it the figure is a provider's
@@ -1492,7 +1501,22 @@ impl TurnFailure {
             action: code.default_action(),
             retry_after_seconds: None,
             request_id: None,
+            alternative_model: None,
+            resets_at: None,
+            recovery_href: None,
         }
+    }
+
+    pub fn with_limit_recovery(
+        mut self,
+        alternative_model: Option<String>,
+        resets_at: Option<String>,
+        recovery_href: Option<String>,
+    ) -> Self {
+        self.alternative_model = alternative_model.filter(|model| !model.trim().is_empty());
+        self.resets_at = resets_at.filter(|at| !at.trim().is_empty());
+        self.recovery_href = recovery_href.filter(|href| !href.trim().is_empty());
+        self
     }
 
     pub fn with_provider(mut self, provider: impl Into<String>) -> Self {
