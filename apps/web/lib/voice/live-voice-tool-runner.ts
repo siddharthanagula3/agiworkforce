@@ -23,6 +23,7 @@ import { capOutput, EXECUTE_CODE_TOOL, isExecutionTool } from '@/lib/e2b/executi
 import { logger } from '@/lib/logger';
 import { executeWebMcpTool, parseQualifiedToolName } from '@/lib/mcp-tool-executor';
 import { persistGeneratedFileBytes } from '@/lib/server/generated-file-persist';
+import { readWorkspaceWebDomainPolicy } from '@/lib/services/connector-policy-service';
 import {
   generateManagedOfficeFile,
   isManagedOfficeFileTool,
@@ -94,8 +95,11 @@ function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-async function runUrlFetch(args: Record<string, unknown>, signal?: AbortSignal) {
-  const outcome = await executeUrlFetch(args, signal ? { signal } : {});
+async function runUrlFetch(input: LiveVoiceToolCallInput, args: Record<string, unknown>) {
+  const outcome = await executeUrlFetch(args, {
+    domainPolicy: await readWorkspaceWebDomainPolicy(input.db, input.organizationId),
+    ...(input.signal ? { signal: input.signal } : {}),
+  });
   if (!outcome.ok) {
     return { content: `Fetch failed (${outcome.errorCode}): ${outcome.error}`, isError: true };
   }
@@ -195,7 +199,7 @@ async function runTool(
 ): Promise<ToolRunResult> {
   const name = input.call.name;
   try {
-    if (name === URL_FETCH_TOOL) return await runUrlFetch(args, input.signal);
+    if (name === URL_FETCH_TOOL) return await runUrlFetch(input, args);
     if (isManagedOfficeFileTool(name)) return await runOfficeFile(input, args);
     const parsed = parseQualifiedToolName(name);
     if (parsed) return await runMcpTool(input, parsed.serverId, parsed.toolName, args);

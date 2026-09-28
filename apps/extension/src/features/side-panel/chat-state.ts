@@ -50,8 +50,11 @@ export interface SidePanelChatMessage {
   cloudApprovalDecisions?: Record<string, 'approved' | 'rejected'>;
   cloudApprovalError?: string;
   managedQuickMode?: boolean;
+  agiWorkPlanDeclined?: boolean;
   model?: string;
   provider?: string;
+  autoRouteReason?: string;
+  movedFromModel?: string;
   generatedFiles?: GeneratedFileWire[];
   interactiveCards?: InteractiveCard[];
   codeExecution?: ManagedCodeExecution;
@@ -84,8 +87,11 @@ export interface StoredSidePanelChatMessage {
   cloudApprovalDecisions?: Record<string, 'approved' | 'rejected'>;
   cloudApprovalError?: string;
   managedQuickMode?: boolean;
+  agiWorkPlanDeclined?: boolean;
   model?: string;
   provider?: string;
+  autoRouteReason?: string;
+  movedFromModel?: string;
   generatedFiles?: GeneratedFileWire[];
   interactiveCards?: InteractiveCard[];
   codeExecution?: ManagedCodeExecution;
@@ -172,8 +178,11 @@ export function hydrateStoredChatMessage(
       : {}),
     ...(message.cloudApprovalError ? { cloudApprovalError: message.cloudApprovalError } : {}),
     ...(message.managedQuickMode ? { managedQuickMode: true } : {}),
+    ...(message.agiWorkPlanDeclined ? { agiWorkPlanDeclined: true } : {}),
     ...(message.model ? { model: message.model } : {}),
     ...(message.provider ? { provider: message.provider } : {}),
+    ...(message.autoRouteReason ? { autoRouteReason: message.autoRouteReason } : {}),
+    ...(message.movedFromModel ? { movedFromModel: message.movedFromModel } : {}),
     ...(message.generatedFiles
       ? { generatedFiles: message.generatedFiles.map((file) => ({ ...file })) }
       : {}),

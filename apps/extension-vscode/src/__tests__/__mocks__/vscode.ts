@@ -322,7 +322,8 @@ class MockExtensionContext {
   private _workspaceState = new Map<string, unknown>();
 
   globalState = {
-    get: <T>(key: string): T | undefined => this._globalState.get(key) as T | undefined,
+    get: <T>(key: string, defaultValue?: T): T | undefined =>
+      (this._globalState.get(key) ?? defaultValue) as T | undefined,
     update: async (key: string, value: unknown): Promise<void> => {
       this._globalState.set(key, value);
     },
@@ -331,7 +332,8 @@ class MockExtensionContext {
   };
 
   workspaceState = {
-    get: <T>(key: string): T | undefined => this._workspaceState.get(key) as T | undefined,
+    get: <T>(key: string, defaultValue?: T): T | undefined =>
+      (this._workspaceState.get(key) ?? defaultValue) as T | undefined,
     update: async (key: string, value: unknown): Promise<void> => {
       this._workspaceState.set(key, value);
     },

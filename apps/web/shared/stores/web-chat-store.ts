@@ -38,7 +38,7 @@ import type {
 } from '@agiworkforce/types';
 import type { PastChatCitation } from '@/lib/past-chat-citation';
 import type { ChatOutputFormat } from '@/lib/chat-output-format';
-import type { CloudWorkMode, ManagedMemoryCitations } from '@agiworkforce/types';
+import type { AgentEventSource, CloudWorkMode, ManagedMemoryCitations } from '@agiworkforce/types';
 import type { ManagedMediaImageAspectRatio } from '@agiworkforce/cloud-contracts';
 import type {
   PaywallSlot,
@@ -238,6 +238,7 @@ export interface MessageMetadata {
   privacyMode?: 'local' | 'byok' | 'managed';
   providerMode?: 'Local' | 'DirectByok' | 'ManagedGateway' | 'ManagedNative';
   localPersonalContextMissing?: boolean;
+  sharedAttachments?: Array<{ name: string; type?: string; mimeType?: string }>;
   /** Provider model label when persisted with metadata rather than the top-level message. */
   model?: string;
   /** Provider that served the turn, written into metadata by turn persistence. */
@@ -868,7 +869,7 @@ interface ChatState {
   ) => void;
   setSearchResults: (
     id: string,
-    results: Array<{ url: string; title: string; snippet: string }>,
+    results: Array<AgentEventSource & { snippet: string }>,
     conversationId?: string,
   ) => void;
   setExecutingCode: (id: string, isExecuting: boolean, conversationId?: string) => void;

@@ -296,7 +296,12 @@ import {
   completedResearchSteps,
   researchResumeSources,
 } from '../utils/research-plan';
-import { notifyJobComplete, useLocalModelSelection } from '@/features/desktop-host';
+import {
+  notifyJobComplete,
+  PanelWindowPortal,
+  useDetachablePanels,
+  useLocalModelSelection,
+} from '@/features/desktop-host';
 import type { AgiWorkGoalInput } from '../utils/agiwork-plan';
 import {
   planEditRollback,
@@ -1009,6 +1014,17 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   // selector: `useArtifactsStore` re-renders this page on every artifact write.
   const artifactPanelOpen = useZustandStore(_sharedArtifactStore, (state) => state.panelOpen);
   const researchPanelOpen = useResearchPanelStore((state) => state.panelOpen);
+  const setResearchPanelOpen = useCallback((open: boolean) => {
+    const research = useResearchPanelStore.getState();
+    if (research.panelOpen !== open) research.togglePanel();
+  }, []);
+  const detachablePanels = useDetachablePanels({
+    enabled: !compact,
+    workOpen: workSessionPanelOpen,
+    setWorkOpen: setWorkSessionPanelOpen,
+    researchOpen: researchPanelOpen,
+    setResearchOpen: setResearchPanelOpen,
+  });
   const [projectSourcesOpen, setProjectSourcesOpen] = useState(false);
   const [activeSecondaryPanel, setActiveSecondaryPanel] = useState<SecondaryPanel | null>(null);
   const previousSecondaryPanels = useRef<SecondaryPanelFlags>(CLOSED_SECONDARY_PANELS);
@@ -1050,6 +1066,10 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
 
   const toggleSecondaryPanel = useCallback(
     (panel: SecondaryPanel) => {
+      if ((panel === 'work' || panel === 'research') && detachablePanels.isDetached(panel)) {
+        detachablePanels.focus(panel);
+        return;
+      }
       const isOpen = secondaryPanelFlags[panel] && activeSecondaryPanel === panel;
       setActiveSecondaryPanel(isOpen ? null : panel);
       setWorkSessionPanelOpen(!isOpen && panel === 'work');
@@ -1062,6 +1082,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     [
       activeSecondaryPanel,
       artifactPanelOpen,
+      detachablePanels,
       researchPanelOpen,
       secondaryPanelFlags,
       setWorkSessionPanelOpen,
@@ -6513,7 +6534,21 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             open={workSessionPanelOpen}
             onClose={() => setWorkSessionPanelOpen(false)}
             agiWork={isAgiWorkConversation}
+            {...(detachablePanels.available
+              ? { windowControls: detachablePanels.inlineControls('work') }
+              : {})}
           />
+        )}
+        {detachablePanels.available && showWorkSession && (
+          <PanelWindowPortal panel="work">
+            <WorkSessionPanel
+              messages={displayedMessages}
+              open
+              onClose={() => detachablePanels.close('work')}
+              agiWork={isAgiWorkConversation}
+              windowControls={detachablePanels.detachedControls('work')}
+            />
+          </PanelWindowPortal>
         )}
         {!compact && voiceModeActive && (
           <VoiceActivityPanel
@@ -6527,7 +6562,21 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             {...(isStreaming
               ? {}
               : { onAskFollowUp: handleResearchFollowUp, onRunAgain: handleResearchRunAgain })}
+            {...(detachablePanels.available
+              ? { windowControls: detachablePanels.inlineControls('research') }
+              : {})}
           />
+        )}
+        {detachablePanels.available && (
+          <PanelWindowPortal panel="research">
+            <ResearchPanel
+              {...(isStreaming
+                ? {}
+                : { onAskFollowUp: handleResearchFollowUp, onRunAgain: handleResearchRunAgain })}
+              onClose={() => detachablePanels.close('research')}
+              windowControls={detachablePanels.detachedControls('research')}
+            />
+          </PanelWindowPortal>
         )}
         {!compact && activeSecondaryPanel === 'artifacts' && <ArtifactsPanel />}
         {!compact && activeSecondaryPanel === 'sources' && conversationProject ? (

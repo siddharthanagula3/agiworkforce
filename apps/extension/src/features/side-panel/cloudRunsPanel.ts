@@ -1,8 +1,17 @@
 import {
+  MAX_CLOUD_AGENT_RUN_STEER_LENGTH,
   TOOL_APPROVAL_GUIDANCE_MAX_LENGTH,
+  isCloudAgentRunSteerable,
   managedCloudAgentRunPath,
   type CloudAgentRun,
 } from '@agiworkforce/cloud-contracts';
+import {
+  applyAgentActivityEvent,
+  type AgentActivityProgressEntry,
+  type AgentActivityState,
+  type AgentActivityToolEntry,
+  type ConnectorInputResponse,
+} from '@agiworkforce/client-runtime';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import {
   AGENT_TASK_BOARD_STAGES,
@@ -11,19 +20,38 @@ import {
   type AgentTaskBoardStage,
 } from '@agiworkforce/types';
 import {
+  AGIWORK_PLAN_OVERVIEW_PROGRESS_ID,
+  AGIWORK_PLAN_PROGRESS_ID_PREFIX,
+} from '@agiworkforce/unified-chat/agi-work-progress';
+import {
+  isLiveTaskState,
+  isPausableState,
+  runWorkState,
+  taskResultText,
+} from '@agiworkforce/unified-chat/task-display';
+import {
   ALL_MANAGED_RUN_STATES,
+  answerChromeManagedRunInput,
   cancelChromeManagedRun,
   listChromeManagedRuns,
+  pauseChromeManagedRun,
   readChromeManagedRunJournal,
   resolveChromeManagedRunApproval,
+  resumePausedChromeManagedRun,
+  steerChromeManagedRun,
 } from '../cloud-bridge/managedRunControl';
 import { openClerkSignIn } from '../cloud-bridge/clerkAuth';
+import { buildConnectorInputForm, type ConnectorInputBinding } from './connectorInputForm';
+import { answerFiles, buildAnswerFiles, type AnswerFileAccess } from './generatedFiles';
 import {
   buildSchedulesSection,
   SCHEDULES_SECTION_CSS,
   type SchedulesSectionDependencies,
 } from './schedulesSection';
 import { el } from './dom';
+import { buildHelpArticleLink } from './helpLinks';
+import { renderMarkdown, sanitizeHtml } from './markdown';
+import { t } from '../../i18n';
 
 export const CLOUD_RUNS_PANEL_CSS =
   `
@@ -427,6 +455,189 @@ export const CLOUD_RUNS_PANEL_CSS =
     white-space: pre-wrap;
     word-break: break-word;
   }
+
+  .sp-run-preview {
+    font-size: var(--type-caption-size);
+    color: var(--agi-ext-text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .sp-runs-detail-meta {
+    flex-basis: 100%;
+    font-size: var(--type-caption-size);
+    color: var(--agi-ext-text-muted);
+    overflow-wrap: anywhere;
+  }
+
+  .sp-run-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 8px 14px;
+    padding: 10px 12px;
+    border: 1px solid var(--agi-ext-border);
+    border-radius: var(--corner-field);
+  }
+
+  .sp-run-section-title {
+    margin: 0;
+    font-size: var(--type-caption-size);
+    font-weight: 600;
+    color: var(--agi-ext-text);
+  }
+
+  .sp-run-plan-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .sp-run-plan-step {
+    display: flex;
+    gap: 8px;
+    font-size: var(--type-caption-size);
+    color: var(--agi-ext-text);
+  }
+
+  .sp-run-plan-marker {
+    flex-shrink: 0;
+    width: 8px;
+    height: 8px;
+    margin-top: 5px;
+    border: 1px solid var(--agi-ext-border-strong);
+    border-radius: var(--corner-pill);
+  }
+
+  .sp-run-plan-step[data-status='completed'] .sp-run-plan-marker {
+    background: var(--agi-ext-success);
+    border-color: var(--agi-ext-success);
+  }
+
+  .sp-run-plan-step[data-status='failed'] .sp-run-plan-marker {
+    background: var(--agi-ext-danger);
+    border-color: var(--agi-ext-danger);
+  }
+
+  .sp-run-plan-step[data-status='running'] .sp-run-plan-marker {
+    background: var(--agi-ext-accent);
+    border-color: var(--agi-ext-accent);
+  }
+
+  .sp-run-plan-step[data-status='stopped'] .sp-run-plan-marker {
+    background: var(--agi-ext-text-muted);
+    border-color: var(--agi-ext-text-muted);
+  }
+
+  .sp-run-plan-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .sp-run-plan-status {
+    color: var(--agi-ext-text-muted);
+  }
+
+  .sp-run-plan-step[data-status='running'] .sp-run-plan-status {
+    color: var(--agi-ext-accent-text);
+    font-weight: 600;
+  }
+
+  .sp-run-plan-step[data-status='completed'] .sp-run-plan-status {
+    color: var(--agi-ext-success-text);
+  }
+
+  .sp-run-plan-step[data-status='failed'] .sp-run-plan-status {
+    color: var(--agi-ext-danger-text);
+  }
+
+  .sp-run-plan-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding-top: 6px;
+    border-top: 1px solid var(--agi-ext-border);
+    font-size: var(--type-caption-size);
+    color: var(--agi-ext-text);
+    overflow-wrap: anywhere;
+  }
+
+  .sp-run-plan-summary p,
+  .sp-run-steer-item p {
+    margin: 0;
+  }
+
+  .sp-run-steer {
+    position: sticky;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px 14px;
+    border-top: 1px solid var(--agi-ext-border);
+    background: var(--agi-ext-bg);
+  }
+
+  .sp-run-steer-queue {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .sp-run-steer-item {
+    padding: 6px 8px;
+    border: 1px solid var(--agi-ext-border);
+    border-radius: var(--corner-control);
+  }
+
+  .sp-run-steer-text {
+    font-size: var(--type-caption-size);
+    color: var(--agi-ext-text);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .sp-run-steer-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .sp-run-approval .sp-connector-input {
+    margin: 6px 0 0;
+  }
+
+  .sp-runs-help {
+    padding: 8px 14px;
+  }
+
+  .sp-run-result {
+    max-height: 320px;
+    overflow-y: auto;
+    font-size: var(--type-caption-size);
+    line-height: var(--type-body-height);
+    color: var(--agi-ext-text);
+    overflow-wrap: anywhere;
+  }
+
+  .sp-run-result > :first-child {
+    margin-top: 0;
+  }
+
+  .sp-run-result > :last-child {
+    margin-bottom: 0;
+  }
 ` + SCHEDULES_SECTION_CSS;
 
 type RunFilter = 'active' | 'needs-you' | 'all';
@@ -519,6 +730,7 @@ function saveRunLayout(layout: RunLayout): void {
   }
 }
 const MAX_RENDERED_JOURNAL_ENTRIES = 200;
+const MAX_RESULT_EVENTS = 20_000;
 const MAX_RENDERED_TEXT_CHARACTERS = 20_000;
 
 export interface CloudRunsPanelDependencies {
@@ -526,10 +738,15 @@ export interface CloudRunsPanelDependencies {
   readJournal: typeof readChromeManagedRunJournal;
   resolveApproval: typeof resolveChromeManagedRunApproval;
   cancelRun: typeof cancelChromeManagedRun;
+  pauseRun: typeof pauseChromeManagedRun;
+  resumePausedRun: typeof resumePausedChromeManagedRun;
+  steerRun: typeof steerChromeManagedRun;
+  answerInput: typeof answerChromeManagedRunInput;
   signIn: typeof openClerkSignIn;
   refreshIntervalMs: number;
   now: () => number;
   schedules: Partial<SchedulesSectionDependencies>;
+  fileAccess?: AnswerFileAccess;
 }
 
 export interface CloudRunsPanelAPI {
@@ -545,6 +762,10 @@ const DEFAULT_DEPENDENCIES: CloudRunsPanelDependencies = {
   readJournal: readChromeManagedRunJournal,
   resolveApproval: resolveChromeManagedRunApproval,
   cancelRun: cancelChromeManagedRun,
+  pauseRun: pauseChromeManagedRun,
+  resumePausedRun: resumePausedChromeManagedRun,
+  steerRun: steerChromeManagedRun,
+  answerInput: answerChromeManagedRunInput,
   signIn: openClerkSignIn,
   refreshIntervalMs: RUN_REFRESH_INTERVAL_MS,
   now: () => Date.now(),
@@ -567,6 +788,134 @@ interface JournalEntry {
   kind: 'text' | 'tool' | 'approval' | 'state' | 'error';
   title: string;
   detail?: string;
+}
+
+type PlanItemStatus = 'completed' | 'failed' | 'running' | 'stopped' | 'pending';
+
+interface PlanItem {
+  ordinal: number;
+  description: string;
+  status: PlanItemStatus;
+}
+
+interface InputAnswer {
+  round: number;
+  responses: Record<string, ConnectorInputResponse>;
+}
+
+const PLAN_ITEM_STATUS_LABELS: Record<PlanItemStatus, string> = {
+  completed: 'Done',
+  failed: 'Failed',
+  running: 'In progress',
+  stopped: 'Stopped',
+  pending: 'Not started',
+};
+
+const STOPPED_SHORT_STATES: ReadonlySet<CloudAgentRun['state']> = new Set<CloudAgentRun['state']>([
+  'partial',
+  'timed_out',
+  'cancelled',
+  'failed',
+]);
+
+const PLAN_LINE = /^(\d+)\.\s*(.+)$/;
+
+function isPlanProgressId(progressId: string): boolean {
+  return (
+    progressId === AGIWORK_PLAN_OVERVIEW_PROGRESS_ID ||
+    progressId.startsWith(AGIWORK_PLAN_PROGRESS_ID_PREFIX)
+  );
+}
+
+function planStepStatus(
+  step: AgentActivityProgressEntry | undefined,
+  live: boolean,
+): PlanItemStatus {
+  if (step?.status === 'completed' || step?.status === 'failed') return step.status;
+  if (step?.status === 'running') return live ? 'running' : 'stopped';
+  return step?.status === 'cancelled' ? 'stopped' : 'pending';
+}
+
+function planFromActivity(activity: AgentActivityState | undefined, live: boolean): PlanItem[] {
+  const progress = (activity?.entries ?? []).filter(
+    (entry): entry is AgentActivityProgressEntry => entry.kind === 'progress',
+  );
+  const steps = progress.filter((entry) =>
+    entry.progressId.startsWith(AGIWORK_PLAN_PROGRESS_ID_PREFIX),
+  );
+  const overview = progress.find((entry) => entry.progressId === AGIWORK_PLAN_OVERVIEW_PROGRESS_ID);
+  if (overview?.detail) {
+    return overview.detail.split('\n').flatMap((line): PlanItem[] => {
+      const match = PLAN_LINE.exec(line.trim());
+      if (!match?.[1] || !match[2]) return [];
+      const ordinal = Number(match[1]);
+      const step = steps.find(
+        (entry) => entry.progressId === `${AGIWORK_PLAN_PROGRESS_ID_PREFIX}agiwork-plan-${ordinal}`,
+      );
+      return [{ ordinal, description: match[2], status: planStepStatus(step, live) }];
+    });
+  }
+  return steps.map((step, index): PlanItem => {
+    const match = PLAN_LINE.exec(step.summary.trim());
+    return {
+      ordinal: match?.[1] ? Number(match[1]) : index + 1,
+      description: match?.[2] ?? step.summary,
+      status: planStepStatus(step, live),
+    };
+  });
+}
+
+function pendingInputEntries(run: CloudAgentRun): AgentActivityToolEntry[] {
+  const pending = run.pendingInput;
+  if (!pending) return [];
+  const requestedAtMs = Date.parse(pending.requestedAt);
+  return pending.toolCalls.map((call): AgentActivityToolEntry => ({
+    kind: 'tool',
+    id: call.toolCallId,
+    toolCallId: call.toolCallId,
+    name: call.name,
+    category: 'connector',
+    summary: call.name,
+    status: 'awaiting-approval',
+    startedAtMs: Number.isFinite(requestedAtMs) ? requestedAtMs : 0,
+    inputRequest: {
+      connectorId: call.connectorId,
+      inputRequests: call.inputRequests,
+      round: call.round,
+    },
+  }));
+}
+
+function mergeRun(previous: CloudAgentRun | null | undefined, next: CloudAgentRun): CloudAgentRun {
+  if (!previous) return next;
+  return {
+    ...next,
+    ...(!next.conversationTitle && previous.conversationTitle
+      ? { conversationTitle: previous.conversationTitle }
+      : {}),
+    ...(!next.conversationPreview && previous.conversationPreview
+      ? { conversationPreview: previous.conversationPreview }
+      : {}),
+  };
+}
+
+function runTitle(run: CloudAgentRun): string | null {
+  return run.conversationTitle?.trim() || null;
+}
+
+function runPreview(run: CloudAgentRun, title: string | null): string | null {
+  const preview = run.conversationPreview?.trim();
+  return preview && preview !== title ? preview : null;
+}
+
+function runModeAndModel(run: CloudAgentRun): string {
+  return `${WORK_MODE_LABELS[run.workMode]} • ${run.model}`;
+}
+
+function runStateLabel(run: CloudAgentRun): string {
+  return run.pauseRequestedAt && isPausableState(runWorkState(run))
+    ? 'Pausing'
+    : agentTaskStateLabel(run.state);
 }
 
 function describeEnvelope(envelope: AgentEventEnvelope): JournalEntry | null {
@@ -592,6 +941,7 @@ function describeEnvelope(envelope: AgentEventEnvelope): JournalEntry | null {
     case 'input-requested':
       return { kind: 'approval', title: `Input requested: ${event.toolName}` };
     case 'progress-update':
+      if (isPlanProgressId(event.progressId)) return null;
       return {
         kind: 'tool',
         title: event.summary,
@@ -716,8 +1066,15 @@ export function buildCloudRunsPanel(
   let inFlight: AbortController | null = null;
   let refreshTimer: ReturnType<typeof setTimeout> | undefined;
   let pendingDecisionRunId: string | null = null;
+  let pendingControlRunId: string | null = null;
+  let pendingInputRunId: string | null = null;
+  let openActivity: AgentActivityState | undefined;
+  let openEvents: AgentEventEnvelope[] = [];
   let statusOrigin: StatusOrigin = 'progress';
   const guidanceByRunId = new Map<string, string>();
+  const steerDraftByRunId = new Map<string, string>();
+  const inputAnswersByRunId = new Map<string, Map<string, InputAnswer>>();
+  const inputErrorByRunId = new Map<string, string>();
 
   function setStatus(
     message: string,
@@ -773,9 +1130,14 @@ export function buildCloudRunsPanel(
     }
   }
 
-  function isEditingGuidance(): boolean {
+  function isEditingInPanel(): boolean {
     const focused = panelEl.ownerDocument.activeElement;
-    return focused instanceof HTMLTextAreaElement && panelEl.contains(focused);
+    return (
+      (focused instanceof HTMLTextAreaElement ||
+        focused instanceof HTMLInputElement ||
+        focused instanceof HTMLSelectElement) &&
+      panelEl.contains(focused)
+    );
   }
 
   function hasLiveRun(): boolean {
@@ -840,27 +1202,350 @@ export function buildCloudRunsPanel(
     return card;
   }
 
-  // A connector `input_required` pause is not a tool approval: it needs the
-  // remote server's own form, which this panel does not render. Say so instead
-  // of showing an attention badge with nothing under it.
-  function buildPendingInputNotice(run: CloudAgentRun): HTMLElement | null {
-    const pending = run.pendingInput;
-    if (!pending) return null;
+  function replaceRun(updated: CloudAgentRun): void {
+    runs = runs.map((run) => (run.id === updated.id ? mergeRun(run, updated) : run));
+    if (detailRun?.id === updated.id) detailRun = mergeRun(detailRun, updated);
+  }
+
+  function pruneInputAnswers(): void {
+    for (const [runId, answers] of inputAnswersByRunId) {
+      const current = detailRun?.id === runId ? detailRun : runs.find((run) => run.id === runId);
+      const calls = current?.pendingInput?.toolCalls ?? [];
+      for (const [toolCallId, answer] of answers) {
+        if (!calls.some((call) => call.toolCallId === toolCallId && call.round === answer.round)) {
+          answers.delete(toolCallId);
+        }
+      }
+      if (answers.size === 0) inputAnswersByRunId.delete(runId);
+    }
+    for (const runId of inputErrorByRunId.keys()) {
+      const current = detailRun?.id === runId ? detailRun : runs.find((run) => run.id === runId);
+      if (!current?.pendingInput) inputErrorByRunId.delete(runId);
+    }
+  }
+
+  function inputBinding(run: CloudAgentRun): ConnectorInputBinding {
+    const answers = inputAnswersByRunId.get(run.id);
+    const answered = new Set(
+      (run.pendingInput?.toolCalls ?? [])
+        .filter((call) => answers?.get(call.toolCallId)?.round === call.round)
+        .map((call) => call.toolCallId),
+    );
+    const error = inputErrorByRunId.get(run.id);
+    const sending = pendingInputRunId === run.id;
+    return {
+      answered,
+      sending,
+      ...(error ? { error } : {}),
+      ...(sending
+        ? {}
+        : {
+            onRespond: (toolCallId: string, responses: Record<string, ConnectorInputResponse>) =>
+              void respondToInput(run, toolCallId, responses),
+          }),
+    };
+  }
+
+  async function respondToInput(
+    run: CloudAgentRun,
+    toolCallId: string,
+    responses: Record<string, ConnectorInputResponse>,
+  ): Promise<void> {
+    const calls = run.pendingInput?.toolCalls ?? [];
+    const call = calls.find((candidate) => candidate.toolCallId === toolCallId);
+    if (!call || pendingInputRunId !== null) return;
+    const answers = inputAnswersByRunId.get(run.id) ?? new Map<string, InputAnswer>();
+    answers.set(toolCallId, { round: call.round, responses });
+    inputAnswersByRunId.set(run.id, answers);
+    inputErrorByRunId.delete(run.id);
+    if (calls.some((candidate) => answers.get(candidate.toolCallId)?.round !== candidate.round)) {
+      render();
+      return;
+    }
+    pendingInputRunId = run.id;
+    render();
+    const result = await deps.answerInput({
+      runId: run.id,
+      toolInputs: calls.map((candidate) => ({
+        tool_call_id: candidate.toolCallId,
+        input_responses: answers.get(candidate.toolCallId)?.responses ?? {},
+      })),
+    });
+    pendingInputRunId = null;
+    if (result.status === 'success') {
+      setStatus('Sent. The run continues from here.', 'success', 'action');
+    } else {
+      inputAnswersByRunId.delete(run.id);
+      inputErrorByRunId.set(run.id, result.message);
+    }
+    render();
+    await load({ background: true });
+  }
+
+  function buildPendingInputCard(run: CloudAgentRun): HTMLElement | null {
+    const entries = pendingInputEntries(run);
+    if (entries.length === 0) return null;
     const card = el('div', { class: 'sp-run-approval', role: 'group' });
     card.appendChild(el('div', { class: 'sp-run-approval-title' }, 'Waiting on connector details'));
-    for (const call of pending.toolCalls) {
-      card.appendChild(
-        el('div', { class: 'sp-run-approval-call' }, `${call.name} • ${call.connectorId}`),
-      );
+    const binding = inputBinding(run);
+    for (const entry of entries) {
+      const form = buildConnectorInputForm(entry, binding);
+      if (form) card.appendChild(form);
     }
-    card.appendChild(
+    return card;
+  }
+
+  function buildPausedCard(run: CloudAgentRun): HTMLElement | null {
+    if (runWorkState(run) !== 'paused') return null;
+    const card = el('div', { class: 'sp-run-approval', role: 'group' });
+    card.appendChild(el('div', { class: 'sp-run-approval-title' }, agentTaskStateLabel('paused')));
+    const guidance = el('textarea', {
+      class: 'sp-run-approval-guidance',
+      rows: '2',
+      maxlength: String(TOOL_APPROVAL_GUIDANCE_MAX_LENGTH),
+      placeholder: 'Tell the agent what to change when it resumes (optional)',
+      'aria-label': 'Guidance for when this run resumes',
+    });
+    guidance.value = guidanceByRunId.get(run.id) ?? '';
+    guidance.addEventListener('input', () => {
+      guidanceByRunId.set(run.id, guidance.value);
+    });
+    card.appendChild(guidance);
+    const buttons = el('div', { class: 'sp-run-approval-btns' });
+    const resumeBtn = el('button', { type: 'button', class: 'sp-run-approve' }, 'Resume');
+    resumeBtn.disabled = pendingControlRunId === run.id;
+    resumeBtn.addEventListener('click', () => void resumeRun(run));
+    buttons.appendChild(resumeBtn);
+    card.appendChild(buttons);
+    return card;
+  }
+
+  function buildPlanSection(run: CloudAgentRun): HTMLElement | null {
+    const workState = runWorkState(run);
+    const live = isLiveTaskState(workState);
+    const plan = planFromActivity(openActivity, live);
+    if (plan.length === 0) return null;
+    const section = el('section', {
+      class: 'sp-run-section',
+      'aria-labelledby': 'sp-run-plan-title',
+    });
+    section.appendChild(
+      el('h3', { class: 'sp-run-section-title', id: 'sp-run-plan-title' }, `Plan · ${plan.length}`),
+    );
+    const list = el('ol', { class: 'sp-run-plan-list' });
+    for (const item of plan) {
+      const step = el('li', {
+        class: 'sp-run-plan-step',
+        'data-status': item.status,
+        ...(item.status === 'running' ? { 'aria-current': 'step' } : {}),
+      });
+      step.appendChild(el('span', { class: 'sp-run-plan-marker', 'aria-hidden': 'true' }));
+      const copy = el('span', { class: 'sp-run-plan-copy' });
+      copy.appendChild(el('span', {}, `${item.ordinal}. ${item.description}`));
+      copy.appendChild(
+        el('span', { class: 'sp-run-plan-status' }, PLAN_ITEM_STATUS_LABELS[item.status]),
+      );
+      step.appendChild(copy);
+      list.appendChild(step);
+    }
+    section.appendChild(list);
+    if (!live && STOPPED_SHORT_STATES.has(workState)) {
+      const remaining = plan.filter((item) => item.status !== 'completed');
+      const summary = el('div', { class: 'sp-run-plan-summary' });
+      summary.appendChild(
+        el(
+          'p',
+          {},
+          `Done ${plan.length - remaining.length} of ${plan.length} steps before it stopped.`,
+        ),
+      );
+      if (remaining.length > 0) {
+        summary.appendChild(
+          el(
+            'p',
+            { class: 'sp-run-sub' },
+            `Remaining: ${remaining.map((item) => `${item.ordinal}. ${item.description}`).join('; ')}`,
+          ),
+        );
+      }
+      section.appendChild(summary);
+    }
+    return section;
+  }
+
+  function buildResultSection(run: CloudAgentRun): HTMLElement | null {
+    const text = taskResultText(openEvents);
+    if (!text) return null;
+    const live = isLiveTaskState(runWorkState(run));
+    const section = el('section', {
+      class: 'sp-run-section',
+      'aria-labelledby': 'sp-run-result-title',
+    });
+    section.appendChild(
       el(
-        'div',
-        { class: 'sp-run-sub' },
-        `This run needs a connector form that only ${ORIGIN_SURFACE_LABELS[run.originSurface]} can show. Answer it there to let the run continue.`,
+        'h3',
+        { class: 'sp-run-section-title', id: 'sp-run-result-title' },
+        live
+          ? t('spRunLatestOutput')
+          : run.workMode === 'research'
+            ? t('spRunReport')
+            : t('spRunResult'),
       ),
     );
-    return card;
+    const body = el('div', { class: 'sp-run-result' });
+    body.innerHTML = sanitizeHtml(renderMarkdown(text));
+    section.appendChild(body);
+    return section;
+  }
+
+  function buildOutputsSection(): HTMLElement | null {
+    const files = answerFiles(undefined, openActivity);
+    const list = buildAnswerFiles(files, deps.fileAccess);
+    if (!list) return null;
+    const section = el('section', {
+      class: 'sp-run-section',
+      'aria-labelledby': 'sp-run-outputs-title',
+    });
+    section.appendChild(
+      el(
+        'h3',
+        { class: 'sp-run-section-title', id: 'sp-run-outputs-title' },
+        `Outputs · ${files.length}`,
+      ),
+    );
+    section.appendChild(list);
+    return section;
+  }
+
+  function buildSteerSection(run: CloudAgentRun): HTMLElement | null {
+    const queued = run.pendingSteers ?? [];
+    const steerable = isCloudAgentRunSteerable(run);
+    if (!steerable && queued.length === 0) return null;
+    const live = isLiveTaskState(runWorkState(run));
+    const section = el('section', { class: 'sp-run-steer', 'aria-label': 'Message the agent' });
+    if (queued.length > 0) {
+      const list = el('ul', { class: 'sp-run-steer-queue', 'aria-label': 'Queued messages' });
+      for (const steer of queued) {
+        const item = el('li', { class: 'sp-run-steer-item' });
+        item.appendChild(el('p', { class: 'sp-run-steer-text' }, steer.text));
+        item.appendChild(
+          el(
+            'p',
+            { class: 'sp-run-sub' },
+            live
+              ? 'Queued. The agent reads it at its next step.'
+              : 'Not read before the run finished.',
+          ),
+        );
+        list.appendChild(item);
+      }
+      section.appendChild(list);
+    }
+    if (steerable) {
+      const busy = pendingControlRunId === run.id;
+      const form = el('form', { class: 'sp-run-steer-form' });
+      const inputId = `sp-run-steer-${run.id}`;
+      form.appendChild(
+        el('label', { class: 'sp-visually-hidden', for: inputId }, 'Message for the agent'),
+      );
+      const input = el('textarea', {
+        id: inputId,
+        class: 'sp-run-approval-guidance',
+        rows: '2',
+        maxlength: String(MAX_CLOUD_AGENT_RUN_STEER_LENGTH),
+        placeholder: 'Message the agent to add instructions or change course',
+      });
+      input.value = steerDraftByRunId.get(run.id) ?? '';
+      input.disabled = busy;
+      const send = el('button', { type: 'submit', class: 'sp-run-approve' }, 'Send');
+      send.disabled = busy || input.value.trim().length === 0;
+      input.addEventListener('input', () => {
+        steerDraftByRunId.set(run.id, input.value);
+        send.disabled = pendingControlRunId === run.id || input.value.trim().length === 0;
+      });
+      input.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+          event.preventDefault();
+          form.requestSubmit();
+        }
+      });
+      form.addEventListener('submit', (event) => {
+        event.preventDefault();
+        void submitSteer(run);
+      });
+      form.appendChild(input);
+      const foot = el('div', { class: 'sp-run-steer-foot' });
+      foot.appendChild(
+        el(
+          'span',
+          { class: 'sp-run-sub' },
+          'It reads your message at its next step and keeps its progress.',
+        ),
+      );
+      foot.appendChild(send);
+      form.appendChild(foot);
+      section.appendChild(form);
+    }
+    return section;
+  }
+
+  function focusSteerInput(runId: string): void {
+    const input = panelEl.ownerDocument.getElementById(`sp-run-steer-${runId}`);
+    if (input instanceof HTMLTextAreaElement && !input.disabled) input.focus();
+  }
+
+  async function submitSteer(run: CloudAgentRun): Promise<void> {
+    const message = steerDraftByRunId.get(run.id)?.trim();
+    if (!message || pendingControlRunId !== null) return;
+    pendingControlRunId = run.id;
+    render();
+    const result = await deps.steerRun({ runId: run.id, message });
+    pendingControlRunId = null;
+    if (result.status === 'success') {
+      steerDraftByRunId.delete(run.id);
+      replaceRun(result.run);
+      setStatus('Message queued.', 'success', 'action');
+    } else {
+      setStatus(result.message, 'error', 'action');
+    }
+    render();
+    focusSteerInput(run.id);
+  }
+
+  async function pauseRun(run: CloudAgentRun): Promise<void> {
+    if (pendingControlRunId !== null) return;
+    pendingControlRunId = run.id;
+    render();
+    const result = await deps.pauseRun({ runId: run.id });
+    pendingControlRunId = null;
+    if (result.status === 'success') {
+      replaceRun(result.run);
+      setStatus('Pausing at the next step.', 'success', 'action');
+    } else {
+      setStatus(result.message, 'error', 'action');
+    }
+    render();
+    scheduleRefresh();
+  }
+
+  async function resumeRun(run: CloudAgentRun): Promise<void> {
+    if (pendingControlRunId !== null) return;
+    pendingControlRunId = run.id;
+    render();
+    const guidance = guidanceByRunId.get(run.id)?.trim();
+    const result = await deps.resumePausedRun({
+      runId: run.id,
+      ...(guidance ? { guidance } : {}),
+    });
+    pendingControlRunId = null;
+    if (result.status === 'success') {
+      guidanceByRunId.delete(run.id);
+      setStatus(run.pauseRequestedAt ? 'Kept working.' : 'Resumed.', 'success', 'action');
+    } else {
+      setStatus(result.message, 'error', 'action');
+    }
+    render();
+    await load({ background: true });
   }
 
   async function submitApproval(
@@ -905,13 +1590,49 @@ export function buildCloudRunsPanel(
     await load({ background: true });
   }
 
+  function runOpenLabel(run: CloudAgentRun, title: string | null): string {
+    return `Open ${title ?? `${WORK_MODE_LABELS[run.workMode]} run`}, ${runStateLabel(run)}`;
+  }
+
+  function buildAttentionCard(run: CloudAgentRun): HTMLElement | null {
+    return buildApprovalCard(run) ?? buildPendingInputCard(run) ?? buildPausedCard(run);
+  }
+
+  function buildPauseControl(
+    run: CloudAgentRun,
+    subject: string,
+    offerResume: boolean,
+    follow: (action: Promise<void>) => void = (action) => void action,
+  ): HTMLButtonElement | null {
+    const workState = runWorkState(run);
+    const paused = workState === 'paused';
+    if (!isPausableState(workState) && !(paused && offerResume)) return null;
+    const pauseRequested = !paused && Boolean(run.pauseRequestedAt);
+    const [label, ariaLabel] = paused
+      ? ['Resume', `Resume ${subject}`]
+      : pauseRequested
+        ? ['Keep working', `Keep ${subject} working`]
+        : ['Pause', `Pause ${subject}`];
+    const button = el(
+      'button',
+      { type: 'button', class: 'sp-runs-icon-btn', 'aria-label': ariaLabel },
+      label,
+    );
+    button.disabled = pendingControlRunId !== null || run.cancellationRequestedAt !== null;
+    button.addEventListener('click', () =>
+      follow(paused || pauseRequested ? resumeRun(run) : pauseRun(run)),
+    );
+    return button;
+  }
+
   function buildRunRow(run: CloudAgentRun, now: number): DocumentFragment {
     const fragment = document.createDocumentFragment();
+    const title = runTitle(run);
     const row = el('button', {
       type: 'button',
       class: 'sp-run-row',
       'data-run-id': run.id,
-      'aria-label': `Open ${WORK_MODE_LABELS[run.workMode]} run, ${agentTaskStateLabel(run.state)}`,
+      'aria-label': runOpenLabel(run, title),
     });
 
     const head = el('div', { class: 'sp-run-row-head' });
@@ -919,22 +1640,23 @@ export function buildCloudRunsPanel(
       el(
         'span',
         { class: 'sp-run-badge', 'data-tone': RUN_STATE_TONES[run.state] },
-        agentTaskStateLabel(run.state),
+        runStateLabel(run),
       ),
     );
     head.appendChild(el('span', { class: 'sp-run-time' }, formatRelativeTime(run.updatedAt, now)));
     row.appendChild(head);
+    row.appendChild(el('div', { class: 'sp-run-title' }, title ?? runModeAndModel(run)));
+    const preview = runPreview(run, title);
+    if (preview) row.appendChild(el('div', { class: 'sp-run-preview' }, preview));
+    const origin = `Started on ${ORIGIN_SURFACE_LABELS[run.originSurface]}`;
     row.appendChild(
-      el('div', { class: 'sp-run-title' }, `${WORK_MODE_LABELS[run.workMode]} • ${run.model}`),
-    );
-    row.appendChild(
-      el('div', { class: 'sp-run-sub' }, `Started on ${ORIGIN_SURFACE_LABELS[run.originSurface]}`),
+      el('div', { class: 'sp-run-sub' }, title ? `${runModeAndModel(run)} • ${origin}` : origin),
     );
     row.addEventListener('click', () => void openRunDetail(run.id));
     fragment.appendChild(row);
 
-    const approval = buildApprovalCard(run) ?? buildPendingInputNotice(run);
-    if (approval) fragment.appendChild(approval);
+    const attention = buildAttentionCard(run);
+    if (attention) fragment.appendChild(attention);
     return fragment;
   }
 
@@ -953,25 +1675,25 @@ export function buildCloudRunsPanel(
 
   function buildBoardCard(run: CloudAgentRun, now: number): HTMLElement {
     const card = el('li', { class: 'sp-runs-card', 'data-board-run-id': run.id });
+    const title = runTitle(run);
     const openBtn = el('button', {
       type: 'button',
       class: 'sp-runs-card-open',
       'data-run-id': run.id,
-      'aria-label': `Open ${WORK_MODE_LABELS[run.workMode]} run, ${agentTaskStateLabel(run.state)}`,
+      'aria-label': runOpenLabel(run, title),
     });
     const head = el('div', { class: 'sp-run-row-head' });
     head.appendChild(
       el(
         'span',
         { class: 'sp-run-badge', 'data-tone': RUN_STATE_TONES[run.state] },
-        agentTaskStateLabel(run.state),
+        runStateLabel(run),
       ),
     );
     head.appendChild(el('span', { class: 'sp-run-time' }, formatRelativeTime(run.updatedAt, now)));
     openBtn.appendChild(head);
-    openBtn.appendChild(
-      el('div', { class: 'sp-run-title' }, `${WORK_MODE_LABELS[run.workMode]} • ${run.model}`),
-    );
+    openBtn.appendChild(el('div', { class: 'sp-run-title' }, title ?? runModeAndModel(run)));
+    if (title) openBtn.appendChild(el('div', { class: 'sp-run-sub' }, runModeAndModel(run)));
     openBtn.addEventListener('click', () => void openRunDetail(run.id));
     card.appendChild(openBtn);
 
@@ -986,11 +1708,7 @@ export function buildCloudRunsPanel(
       );
     } else if (run.pendingInput) {
       card.appendChild(
-        el(
-          'div',
-          { class: 'sp-runs-card-note' },
-          `Answer on ${ORIGIN_SURFACE_LABELS[run.originSurface]} to let it continue.`,
-        ),
+        el('div', { class: 'sp-runs-card-note' }, 'Open it to answer the connector request.'),
       );
     }
 
@@ -1016,6 +1734,10 @@ export function buildCloudRunsPanel(
       actions.appendChild(approveBtn);
       actions.appendChild(denyBtn);
     }
+    const control = buildPauseControl(run, `${run.model} run`, true, (action) =>
+      moveBoardCard(run, action),
+    );
+    if (control) actions.appendChild(control);
     if (LIVE_RUN_STATES.has(run.state)) {
       const stopBtn = el(
         'button',
@@ -1092,6 +1814,9 @@ export function buildCloudRunsPanel(
         fragment.appendChild(moreBtn);
       }
     }
+    fragment.appendChild(
+      el('div', { class: 'sp-runs-help' }, buildHelpArticleLink('agi-work', t('spHelpLinkRuns'))),
+    );
     listEl.replaceChildren(fragment);
   }
 
@@ -1104,32 +1829,37 @@ export function buildCloudRunsPanel(
 
     const run = detailRun;
     if (run) {
+      const title = runTitle(run);
+      const summary = `${runModeAndModel(run)} • ${ORIGIN_SURFACE_LABELS[run.originSurface]}`;
       head.appendChild(
         el(
           'span',
           { class: 'sp-run-badge', 'data-tone': RUN_STATE_TONES[run.state] },
-          agentTaskStateLabel(run.state),
+          runStateLabel(run),
         ),
       );
-      head.appendChild(
-        el(
-          'h2',
-          { class: 'sp-runs-detail-title' },
-          `${WORK_MODE_LABELS[run.workMode]} • ${run.model} • ${ORIGIN_SURFACE_LABELS[run.originSurface]}`,
-        ),
-      );
+      head.appendChild(el('h2', { class: 'sp-runs-detail-title' }, title ?? summary));
+      const control = buildPauseControl(run, 'this run', false);
+      if (control) head.appendChild(control);
       if (LIVE_RUN_STATES.has(run.state)) {
         const stopBtn = el('button', { type: 'button', class: 'sp-runs-icon-btn' }, 'Stop');
         stopBtn.disabled = run.cancellationRequestedAt !== null;
         stopBtn.addEventListener('click', () => void cancelRun(run));
         head.appendChild(stopBtn);
       }
+      if (title) head.appendChild(el('div', { class: 'sp-runs-detail-meta' }, summary));
     }
     fragment.appendChild(head);
 
     if (run) {
-      const approval = buildApprovalCard(run) ?? buildPendingInputNotice(run);
-      if (approval) fragment.appendChild(approval);
+      const attention = buildAttentionCard(run);
+      if (attention) fragment.appendChild(attention);
+      const plan = buildPlanSection(run);
+      if (plan) fragment.appendChild(plan);
+      const result = buildResultSection(run);
+      if (result) fragment.appendChild(result);
+      const outputs = buildOutputsSection();
+      if (outputs) fragment.appendChild(outputs);
     }
 
     if (openEntries.length === 0) {
@@ -1143,6 +1873,10 @@ export function buildCloudRunsPanel(
         }
         fragment.appendChild(entryEl);
       }
+    }
+    if (run) {
+      const steer = buildSteerSection(run);
+      if (steer) fragment.appendChild(steer);
     }
     detailEl.replaceChildren(fragment);
   }
@@ -1187,21 +1921,27 @@ export function buildCloudRunsPanel(
       if (result.status === 'error') {
         if (result.code !== 'cancelled') {
           reportLoadFailure(result, 'load');
-          if (!isEditingGuidance()) render();
+          if (!isEditingInPanel()) render();
         }
       } else {
-        const loaded = result.journal.run;
+        const loaded = mergeRun(detailRun, result.journal.run);
         detailRun = loaded;
         openEntries = summarizeRunJournal(result.journal.events, openEntries);
+        openEvents = [...openEvents, ...result.journal.events].slice(-MAX_RESULT_EVENTS);
+        openActivity = result.journal.events.reduce<AgentActivityState | undefined>(
+          (activity, envelope) => applyAgentActivityEvent(activity, envelope),
+          openActivity,
+        );
         openAfterSequence = result.journal.nextAfterSequence;
         openJournalTruncated = openJournalTruncated || result.journal.truncated;
-        runs = runs.map((run) => (run.id === loaded.id ? loaded : run));
+        runs = runs.map((run) => (run.id === loaded.id ? mergeRun(run, loaded) : run));
+        pruneInputAnswers();
         if (openJournalTruncated && statusOrigin !== 'action') {
           setStatus('Showing the most recent activity for this run.', undefined, 'load');
         } else {
           clearTransientStatus();
         }
-        if (!isEditingGuidance()) render();
+        if (!isEditingInPanel()) render();
       }
       scheduleRefresh();
       return;
@@ -1220,7 +1960,7 @@ export function buildCloudRunsPanel(
     if (result.status === 'error') {
       if (result.code !== 'cancelled') {
         reportLoadFailure(result, 'load');
-        if (!isEditingGuidance()) render();
+        if (!isEditingInPanel()) render();
       }
       scheduleRefresh();
       return;
@@ -1228,13 +1968,16 @@ export function buildCloudRunsPanel(
     const loaded = filter === 'needs-you' ? result.page.runs.filter(needsYou) : result.page.runs;
     runs = options.append ? [...runs, ...loaded] : loaded;
     nextCursor = result.page.nextCursor;
+    pruneInputAnswers();
     clearTransientStatus();
-    if (!isEditingGuidance()) render();
+    if (!isEditingInPanel()) render();
     scheduleRefresh();
   }
 
   function resetOpenJournal(): void {
     openEntries = [];
+    openActivity = undefined;
+    openEvents = [];
     openAfterSequence = null;
     openJournalTruncated = false;
   }
@@ -1303,7 +2046,12 @@ export function buildCloudRunsPanel(
     openRunId = null;
     detailRun = null;
     pendingDecisionRunId = null;
+    pendingControlRunId = null;
+    pendingInputRunId = null;
     guidanceByRunId.clear();
+    steerDraftByRunId.clear();
+    inputAnswersByRunId.clear();
+    inputErrorByRunId.clear();
     resetOpenJournal();
     setStatus('');
     render();

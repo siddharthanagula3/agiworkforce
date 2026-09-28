@@ -2,6 +2,7 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
+import type { ResearchDomainPolicy } from '@/app/api/llm/v1/chat/completions/lib/research-sources';
 import { logger } from '@/lib/logger';
 import type { ConnectorAccessPolicy } from './connector-policy-evaluator';
 
@@ -9,12 +10,12 @@ export interface OrganizationConnectorPolicy extends ConnectorAccessPolicy {
   allowedPlugins: string[];
   blockedPlugins: string[];
   allowedMcpHosts: string[];
+  allowedWebDomains: string[];
+  blockedWebDomains: string[];
   organizationId: string;
   updatedByUserId: string | null;
   updatedAt: string;
 }
-
-export const CONNECTOR_POLICY_LIST_LIMIT = 512;
 
 interface Row {
   organization_id: string;
@@ -24,13 +25,15 @@ interface Row {
   allowed_plugins: string[] | null;
   blocked_plugins: string[] | null;
   allowed_mcp_hosts: string[] | null;
+  allowed_web_domains: string[] | null;
+  blocked_web_domains: string[] | null;
   updated_by_user_id: string | null;
   updated_at: string | Date;
 }
 
 const COLUMNS = `organization_id, allowed_connectors, blocked_connectors,
   allow_custom_connectors, allowed_plugins, blocked_plugins, allowed_mcp_hosts,
-  updated_by_user_id, updated_at`;
+  allowed_web_domains, blocked_web_domains, updated_by_user_id, updated_at`;
 
 function format(row: Row): OrganizationConnectorPolicy {
   return {
@@ -41,6 +44,8 @@ function format(row: Row): OrganizationConnectorPolicy {
     allowedPlugins: [...(row.allowed_plugins ?? [])],
     blockedPlugins: [...(row.blocked_plugins ?? [])],
     allowedMcpHosts: [...(row.allowed_mcp_hosts ?? [])],
+    allowedWebDomains: [...(row.allowed_web_domains ?? [])],
+    blockedWebDomains: [...(row.blocked_web_domains ?? [])],
     updatedByUserId: row.updated_by_user_id,
     updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : row.updated_at,
   };
@@ -86,6 +91,16 @@ export async function readConnectorPolicySafely(
   }
 }
 
+export async function readWorkspaceWebDomainPolicy(
+  db: DatabaseAdapter,
+  organizationId: string | null,
+): Promise<ResearchDomainPolicy | null> {
+  const policy = await readConnectorPolicySafely(db, organizationId);
+  if (!policy) return null;
+  if (policy.allowedWebDomains.length === 0 && policy.blockedWebDomains.length === 0) return null;
+  return { allow: policy.allowedWebDomains, deny: policy.blockedWebDomains };
+}
+
 export interface ConnectorPolicyInput {
   allowedConnectors: string[];
   blockedConnectors: string[];
@@ -93,6 +108,8 @@ export interface ConnectorPolicyInput {
   allowedPlugins: string[];
   blockedPlugins: string[];
   allowedMcpHosts: string[];
+  allowedWebDomains: string[];
+  blockedWebDomains: string[];
 }
 
 /** Whole-row write, for the reason the model policy gives: partial writes on interdependent lists silently carry or drop the fields nobody touched. */
@@ -106,8 +123,9 @@ export async function upsertConnectorPolicy(
     `insert into public.organization_connector_policies
        (organization_id, allowed_connectors, blocked_connectors,
         allow_custom_connectors, allowed_plugins, blocked_plugins,
-        allowed_mcp_hosts, updated_by_user_id)
-     values ($1, $2::text[], $3::text[], $4, $5::text[], $6::text[], $7::text[], $8)
+        allowed_mcp_hosts, allowed_web_domains, blocked_web_domains, updated_by_user_id)
+     values ($1, $2::text[], $3::text[], $4, $5::text[], $6::text[], $7::text[], $8::text[],
+             $9::text[], $10)
      on conflict (organization_id) do update set
        allowed_connectors      = excluded.allowed_connectors,
        blocked_connectors      = excluded.blocked_connectors,
@@ -115,6 +133,8 @@ export async function upsertConnectorPolicy(
        allowed_plugins         = excluded.allowed_plugins,
        blocked_plugins         = excluded.blocked_plugins,
        allowed_mcp_hosts       = excluded.allowed_mcp_hosts,
+       allowed_web_domains     = excluded.allowed_web_domains,
+       blocked_web_domains     = excluded.blocked_web_domains,
        updated_by_user_id      = excluded.updated_by_user_id
      returning ${COLUMNS}`,
     [
@@ -125,6 +145,8 @@ export async function upsertConnectorPolicy(
       input.allowedPlugins,
       input.blockedPlugins,
       input.allowedMcpHosts,
+      input.allowedWebDomains,
+      input.blockedWebDomains,
       updatedByUserId,
     ],
   );
@@ -146,6 +168,8 @@ export function diffConnectorPolicy(
     if (after.allowedPlugins.length > 0) changed.push('allowedPlugins');
     if (after.blockedPlugins.length > 0) changed.push('blockedPlugins');
     if (after.allowedMcpHosts.length > 0) changed.push('allowedMcpHosts');
+    if (after.allowedWebDomains.length > 0) changed.push('allowedWebDomains');
+    if (after.blockedWebDomains.length > 0) changed.push('blockedWebDomains');
     return changed;
   }
   const same = (a: string[], b: string[]) =>
@@ -158,5 +182,7 @@ export function diffConnectorPolicy(
   if (!same(before.allowedPlugins, after.allowedPlugins)) changed.push('allowedPlugins');
   if (!same(before.blockedPlugins, after.blockedPlugins)) changed.push('blockedPlugins');
   if (!same(before.allowedMcpHosts, after.allowedMcpHosts)) changed.push('allowedMcpHosts');
+  if (!same(before.allowedWebDomains, after.allowedWebDomains)) changed.push('allowedWebDomains');
+  if (!same(before.blockedWebDomains, after.blockedWebDomains)) changed.push('blockedWebDomains');
   return changed;
 }
