@@ -97,6 +97,7 @@ import {
 import { TranscriptNotice } from './TranscriptNotice';
 import { StreamPhaseNotice } from './StreamPhaseNotice';
 import { CitationPastChats } from './CitationPastChats';
+import { CitationMemories } from './CitationMemories';
 import {
   AgentActivityTimeline,
   BranchNavigator,
@@ -387,7 +388,9 @@ function isGeneratedTextArtifact(file: GeneratedFileMetadataEntry): boolean {
 
 const LOCAL_BOUNDARY_LABEL = 'Local';
 const LOCAL_BOUNDARY_TITLE =
-  'Answered by a model running on this device. Nothing in this turn was sent to AGI Cloud or a provider, and it used none of your plan.';
+  'Answered by a model running on this device. Nothing you wrote in this chat was sent to AGI Cloud or a provider, and it used none of your plan.';
+const LOCAL_PERSONAL_CONTEXT_MISSING =
+  'Answered without your instructions and memory: they could not be loaded onto this device.';
 
 const PROVIDER_MODE_BY_PRIVACY_MODE = {
   local: 'Local',
@@ -454,6 +457,7 @@ interface Message {
     /** Trust-boundary labels persisted with the turn (Local/BYOK handoff evidence). */
     privacyMode?: StoreMessageMetadata['privacyMode'];
     providerMode?: StoreMessageMetadata['providerMode'];
+    localPersonalContextMissing?: StoreMessageMetadata['localPersonalContextMissing'];
     finishReason?: StoreMessageMetadata['finishReason'];
     streamError?: StoreMessageMetadata['streamError'];
     /** The run a Task feedback report is filed against. */
@@ -568,6 +572,7 @@ interface Message {
     /** Project knowledge passages this turn read, each with where it came from. */
     projectSources?: ProjectFileCitation[];
     pastChatSources?: StoreMessageMetadata['pastChatSources'];
+    memoryCitations?: StoreMessageMetadata['memoryCitations'];
     /** Web search citations from server-managed tools (e.g., Anthropic web_search) */
     citations?: Array<{
       type?: string;
@@ -2988,6 +2993,12 @@ const MessageBubbleComponent = function MessageBubble({
             </div>
           )}
 
+          {!isUser && message.metadata?.memoryCitations && (
+            <div className="mt-2">
+              <CitationMemories citations={message.metadata.memoryCitations} />
+            </div>
+          )}
+
           {!isUser && !message.isStreaming && searchSources.length > 0 && (
             <div className="mt-2 flex justify-end">
               <SourcesControl
@@ -3429,6 +3440,16 @@ const MessageBubbleComponent = function MessageBubble({
                   {answeredByChipLabel}
                 </span>
               )}
+              {!isUser &&
+                trustBoundary.privacyMode === 'local' &&
+                message.metadata?.localPersonalContextMissing === true && (
+                  <span
+                    data-testid="message-local-context-missing"
+                    className="basis-full text-xs text-muted-foreground"
+                  >
+                    {LOCAL_PERSONAL_CONTEXT_MISSING}
+                  </span>
+                )}
             </div>
           )}
         </div>

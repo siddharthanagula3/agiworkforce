@@ -1,4 +1,5 @@
-import { View } from 'react-native';
+import { useState } from 'react';
+import { Pressable, ScrollView, View } from 'react-native';
 import Svg, { Circle, G, Line, Path, Polyline, Rect, Text as SvgText } from 'react-native-svg';
 import { Text } from '@/components/ui/text';
 import type { ColorScheme } from '@/src/ui/theme';
@@ -41,6 +42,82 @@ function shortLabel(label: string): string {
   return label.length > MAX_LABEL_CHARS ? `${label.slice(0, MAX_LABEL_CHARS - 1)}…` : label;
 }
 
+function seriesLabel(chart: XyChart, index: number): string {
+  const series = chart.series[index]!;
+  return series.name ?? `${series.type === 'bar' ? 'Bars' : 'Line'} ${index + 1}`;
+}
+
+function selectionReadout(chart: MermaidChart, selected: number): string {
+  if (chart.kind === 'pie') {
+    const slice = chart.slices[selected];
+    if (!slice) return '';
+    const total = chart.slices.reduce((sum, entry) => sum + entry.value, 0);
+    return `${slice.label}: ${formatChartValue(slice.value)} (${formatChartValue((slice.value / total) * 100)}%)`;
+  }
+  const category = chart.categories[selected];
+  if (category === undefined) return '';
+  const values = chart.series.map(
+    (series, index) =>
+      `${seriesLabel(chart, index)} ${formatChartValue(series.values[selected] ?? 0)}`,
+  );
+  return `${category}: ${values.join(', ')}`;
+}
+
+function chartTable(chart: MermaidChart): { header: string[]; rows: string[][] } {
+  if (chart.kind === 'pie') {
+    return {
+      header: ['Label', 'Value'],
+      rows: chart.slices.map((slice) => [slice.label, formatChartValue(slice.value)]),
+    };
+  }
+  return {
+    header: ['', ...chart.series.map((_, index) => seriesLabel(chart, index))],
+    rows: chart.categories.map((category, row) => [
+      category,
+      ...chart.series.map((series) => formatChartValue(series.values[row] ?? 0)),
+    ]),
+  };
+}
+
+function ChartDataTable({ chart, colors }: { chart: MermaidChart; colors: ColorScheme }) {
+  const { header, rows } = chartTable(chart);
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator style={{ marginTop: 6 }}>
+      <View style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 4 }}>
+        {[header, ...rows].map((row, rowIndex) => (
+          <View
+            key={`row-${rowIndex}`}
+            style={{
+              flexDirection: 'row',
+              backgroundColor: rowIndex === 0 ? colors.surfaceHover : undefined,
+              borderTopWidth: rowIndex === 0 ? 0 : 1,
+              borderTopColor: colors.borderLight,
+            }}
+          >
+            {row.map((cell, cellIndex) => (
+              <Text
+                key={`cell-${rowIndex}-${cellIndex}`}
+                selectable
+                style={{
+                  width: 110,
+                  paddingHorizontal: 8,
+                  paddingVertical: 5,
+                  fontSize: 12,
+                  fontWeight: rowIndex === 0 ? '600' : '400',
+                  color: rowIndex === 0 ? colors.textPrimary : colors.textSecondary,
+                  textAlign: cellIndex === 0 ? 'left' : 'right',
+                }}
+              >
+                {cell}
+              </Text>
+            ))}
+          </View>
+        ))}
+      </View>
+    </ScrollView>
+  );
+}
+
 function Legend({
   entries,
   colors,
@@ -63,7 +140,17 @@ function Legend({
   );
 }
 
-function XyChartView({ chart, colors }: { chart: XyChart; colors: ColorScheme }) {
+function XyChartView({
+  chart,
+  colors,
+  selected,
+  onSelect,
+}: {
+  chart: XyChart;
+  colors: ColorScheme;
+  selected: number | null;
+  onSelect: (index: number) => void;
+}) {
   const palette = seriesPalette(colors);
   const values = chart.series.flatMap((series) => series.values);
   const low = chart.yRange?.min ?? Math.min(0, ...values);
@@ -80,8 +167,8 @@ function XyChartView({ chart, colors }: { chart: XyChart; colors: ColorScheme })
   const barWidth = (band * 0.7) / Math.max(1, bars.length);
   const baseline = y(Math.min(high, Math.max(low, 0)));
   const labelEvery = Math.ceil(chart.categories.length / MAX_CATEGORY_LABELS);
-  const legend = chart.series.map((series, index) => ({
-    label: series.name ?? `${series.type === 'bar' ? 'Bars' : 'Line'} ${index + 1}`,
+  const legend = chart.series.map((_, index) => ({
+    label: seriesLabel(chart, index),
     color: colorAt(palette, index),
   }));
 
@@ -89,6 +176,15 @@ function XyChartView({ chart, colors }: { chart: XyChart; colors: ColorScheme })
     <>
       <View style={{ width: '100%', aspectRatio: XY_WIDTH / XY_HEIGHT }}>
         <Svg width="100%" height="100%" viewBox={`0 0 ${XY_WIDTH} ${XY_HEIGHT}`}>
+          {selected !== null ? (
+            <Rect
+              x={PLOT_LEFT + band * selected}
+              y={PLOT_TOP}
+              width={band}
+              height={plotHeight}
+              fill={colors.accentSurface}
+            />
+          ) : null}
           {Array.from({ length: Y_TICKS + 1 }, (_, tick) => {
             const value = low + ((high - low) * tick) / Y_TICKS;
             const tickY = y(value);
@@ -162,6 +258,17 @@ function XyChartView({ chart, colors }: { chart: XyChart; colors: ColorScheme })
             stroke={colors.border}
             strokeWidth={1}
           />
+          {chart.categories.map((category, index) => (
+            <Rect
+              key={`hit-${category}-${index}`}
+              x={PLOT_LEFT + band * index}
+              y={PLOT_TOP}
+              width={band}
+              height={plotHeight + PLOT_BOTTOM}
+              fill={colors.transparent}
+              onPress={() => onSelect(index)}
+            />
+          ))}
           {chart.categories.map((category, index) =>
             index % labelEvery === 0 ? (
               <SvgText
@@ -202,7 +309,17 @@ function arcPath(startAngle: number, endAngle: number): string {
   return `M ${center} ${center} L ${start.x} ${start.y} A ${PIE_RADIUS} ${PIE_RADIUS} 0 ${largeArc} 1 ${end.x} ${end.y} Z`;
 }
 
-function PieChartView({ chart, colors }: { chart: PieChart; colors: ColorScheme }) {
+function PieChartView({
+  chart,
+  colors,
+  selected,
+  onSelect,
+}: {
+  chart: PieChart;
+  colors: ColorScheme;
+  selected: number | null;
+  onSelect: (index: number) => void;
+}) {
   const palette = seriesPalette(colors);
   const total = chart.slices.reduce((sum, slice) => sum + slice.value, 0);
   let angle = 0;
@@ -218,15 +335,22 @@ function PieChartView({ chart, colors }: { chart: PieChart; colors: ColorScheme 
       <View style={{ width: '60%', aspectRatio: 1, alignSelf: 'center' }}>
         <Svg width="100%" height="100%" viewBox={`0 0 ${PIE_SIZE} ${PIE_SIZE}`}>
           {arcs.length === 1 ? (
-            <Circle cx={PIE_SIZE / 2} cy={PIE_SIZE / 2} r={PIE_RADIUS} fill={arcs[0]!.color} />
+            <Circle
+              cx={PIE_SIZE / 2}
+              cy={PIE_SIZE / 2}
+              r={PIE_RADIUS}
+              fill={arcs[0]!.color}
+              onPress={() => onSelect(0)}
+            />
           ) : (
-            arcs.map((arc) => (
+            arcs.map((arc, index) => (
               <Path
                 key={`${arc.slice.label}-${arc.start}`}
                 d={arcPath(arc.start, arc.end)}
                 fill={arc.color}
-                stroke={colors.surfaceBase}
-                strokeWidth={1}
+                stroke={selected === index ? colors.textPrimary : colors.surfaceBase}
+                strokeWidth={selected === index ? 2 : 1}
+                onPress={() => onSelect(index)}
               />
             ))
           )}
@@ -244,11 +368,13 @@ function PieChartView({ chart, colors }: { chart: PieChart; colors: ColorScheme 
 }
 
 export function ReportChart({ chart, colors }: { chart: MermaidChart; colors: ColorScheme }) {
+  const [selected, setSelected] = useState<number | null>(null);
+  const [showData, setShowData] = useState(false);
+  const select = (index: number) => setSelected((current) => (current === index ? null : index));
+  const readout = selected === null ? null : selectionReadout(chart, selected);
+
   return (
     <View
-      accessible
-      accessibilityRole="image"
-      accessibilityLabel={describeChart(chart)}
       testID="report-chart"
       style={{
         marginVertical: 8,
@@ -259,18 +385,39 @@ export function ReportChart({ chart, colors }: { chart: MermaidChart; colors: Co
         backgroundColor: colors.surfaceBase,
       }}
     >
-      {chart.title ? (
+      <View accessible accessibilityRole="image" accessibilityLabel={describeChart(chart)}>
+        {chart.title ? (
+          <Text
+            style={{ fontSize: 13, fontWeight: '600', color: colors.textPrimary, marginBottom: 6 }}
+          >
+            {chart.title}
+          </Text>
+        ) : null}
+        {chart.kind === 'pie' ? (
+          <PieChartView chart={chart} colors={colors} selected={selected} onSelect={select} />
+        ) : (
+          <XyChartView chart={chart} colors={colors} selected={selected} onSelect={select} />
+        )}
+      </View>
+      {readout ? (
         <Text
-          style={{ fontSize: 13, fontWeight: '600', color: colors.textPrimary, marginBottom: 6 }}
+          style={{ fontSize: 12, color: colors.textPrimary, marginTop: 6 }}
+          accessibilityLiveRegion="polite"
         >
-          {chart.title}
+          {readout}
         </Text>
       ) : null}
-      {chart.kind === 'pie' ? (
-        <PieChartView chart={chart} colors={colors} />
-      ) : (
-        <XyChartView chart={chart} colors={colors} />
-      )}
+      <Pressable
+        onPress={() => setShowData((shown) => !shown)}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: showData }}
+        style={{ minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' }}
+      >
+        <Text style={{ fontSize: 13, fontWeight: '500', color: colors.textSecondary }}>
+          {showData ? 'Hide data' : 'Show data'}
+        </Text>
+      </Pressable>
+      {showData ? <ChartDataTable chart={chart} colors={colors} /> : null}
     </View>
   );
 }

@@ -76,22 +76,19 @@ Code: `apps/mobile/app/(app)/chat/[id].tsx:354-362`, `apps/cli/src/tui/tui_app.r
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Offer Resend on user messages; the long-press sheet gives users Edit/Copy/Delete only and Retry exists only on replies and the send-error banner. | ui |
+| mobile | partial | Resend on the user's own message is built in post-codex/chat-gates-s16.09-s17.38-s17.39-s20.26-mobile-bubble.patch (MessageBubble is held by Codex); the store already re-runs from a user message (retryMessage). Claude's user message row has Retry. | ui |
 
-Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:524-526`, `apps/mobile/stores/chat/chatExecutionStore.ts:2961-2964`
+Code: `apps/mobile/stores/chat/chatExecutionStore.ts:3017-3017`, `apps/mobile/src/features/chat/components/MessageBubble.tsx:522-522`
 
 ## S16.10: Branch-from-message action.
 
 - Done when: From a chosen user message the user can start a new branch conversation that contains the thread up to that message.
-- Wave: 2
+- Wave: 3
 - Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Wire a "Branch from here" action to the existing forkConversation store action (it already accepts forkPointMessageId); no screen calls it. | ui, mount |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/stores/chat/chatMessageStore.ts:242-242`, `apps/mobile/stores/chat/chatMessageStore.ts:271-272`
 
 ## S16.11: Message-version navigation.
 

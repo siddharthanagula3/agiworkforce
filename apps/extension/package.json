@@ -37,6 +37,7 @@
     "check:no-cloud-ipc": "node scripts/check-no-cloud-ipc-v1.mjs"
   },
   "dependencies": {
+    "@agiworkforce/artifacts": "workspace:*",
     "@agiworkforce/browser-tool": "workspace:*",
     "@agiworkforce/client-runtime": "workspace:*",
     "@agiworkforce/cloud-contracts": "workspace:*",

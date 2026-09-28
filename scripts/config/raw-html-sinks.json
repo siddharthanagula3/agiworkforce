@@ -9,18 +9,6 @@
   ],
   "sinks": [
     {
-      "file": "apps/web/app/api/mcp-apps/sandbox/route.ts",
-      "kind": "srcdoc-assignment",
-      "count": 1,
-      "reason": "The MCP Apps proxy page assigns the app's HTML to an inner iframe that the same page declares with sandbox=\"allow-scripts allow-forms\" and no allow-same-origin, served under the CSP this route builds; the host may narrow the sandbox but the proxy never widens it past what the host sends."
-    },
-    {
-      "file": "apps/web/shared/components/seo/JsonLd.tsx",
-      "kind": "dangerously-set-inner-html",
-      "count": 1,
-      "reason": "A type=application/ld+json script body built from JSON.stringify of server-built schema objects with every '<' escaped to \\u003c, so no value can close the script element or open a tag."
-    },
-    {
       "file": "apps/desktop/src/features/artifacts/ArtifactRendererView.tsx",
       "kind": "srcdoc-attribute",
       "count": 1,
@@ -55,6 +43,24 @@
       "kind": "inner-html-assignment",
       "count": 1,
       "reason": "Inside the mermaid preview document: r.svg comes from mermaid.render with securityLevel strict under a CSP meta tag, in the WebView SafeArtifactPreview locks down."
+    },
+    {
+      "file": "apps/web/app/api/mcp-apps/sandbox/route.ts",
+      "kind": "srcdoc-assignment",
+      "count": 1,
+      "reason": "The MCP Apps proxy page assigns the app's HTML to an inner iframe that the same page declares with sandbox=\"allow-scripts allow-forms\" and no allow-same-origin, served under the CSP this route builds; the host may narrow the sandbox but the proxy never widens it past what the host sends."
+    },
+    {
+      "file": "apps/web/app/layout.tsx",
+      "kind": "dangerously-set-inner-html",
+      "count": 1,
+      "reason": "An inline script whose body is BROWSER_SUPPORT_SCRIPT, a module-level string literal in apps/web/lib/browser-support.ts with no request or user input in it, carried by the per-request CSP nonce; it only unhides the unsupported-browser notice."
+    },
+    {
+      "file": "apps/web/shared/components/seo/JsonLd.tsx",
+      "kind": "dangerously-set-inner-html",
+      "count": 1,
+      "reason": "A type=application/ld+json script body built from JSON.stringify of server-built schema objects with every '<' escaped to \\u003c, so no value can close the script element or open a tag."
     },
     {
       "file": "packages/ui/unified-chat/src/components/artifact-components/ArtifactSandboxFrame.tsx",
