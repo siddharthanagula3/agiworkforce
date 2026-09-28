@@ -170,15 +170,11 @@ Code: `apps/web/features/connectors/components/ConnectorAccountSelector.tsx:151-
 
 - Done when: After connecting, the user can see which scopes/permissions were actually granted.
 - Wave: 3
-- Already works on: mobile, vscode
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Requested scopes show only before connecting (Permissions requested); after connecting, the granted scopes returned by GET /api/connectors and the accounts route are never rendered. | ui |
-| desktop | partial | Requested scopes show only before connecting (Permissions requested); after connecting, the granted scopes returned by GET /api/connectors and the accounts route are never rendered. | ui |
 | cli | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/connectors/hooks/use-connectors-settings-adapter.tsx:841-843`, `apps/web/features/connectors/components/ConnectorScopeList.tsx:51-69`, `apps/web/features/connectors/components/ConnectorAccountSelector.tsx:151-169`, `apps/web/app/api/connectors/route.ts:282-304`
 
 ## S55.18: Connection health.
 
@@ -292,16 +288,13 @@ Code: `apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.
 
 - Done when: At connect time the product explains what connector data it stores and for how long.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only the privacy notice says connector-fetched data is kept with the chat record; the connect flow and consent summary never state retention. | ui |
-| desktop | partial | Only the privacy notice says connector-fetched data is kept with the chat record; the connect flow and consent summary never state retention. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/privacy/page.tsx:964-976`, `apps/web/features/connectors/components/ConnectorConsentSummary.tsx:7-10`
 
 ## S55.29: Source-provider attribution.
 
