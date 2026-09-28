@@ -238,6 +238,7 @@ import type {
   ResearchPlanDecision,
   ResearchPlanOptions,
 } from '../components/research/ResearchActivity';
+import type { AgiWorkPlanDecision } from '../components/work-session/AgiWorkPlanReview';
 import { CreateProjectDialog } from '../components/dialogs/CreateProjectDialog';
 import { TimeFocusReminder } from '@/features/time-focus/TimeFocusReminder';
 import { toast } from 'sonner';
@@ -4970,6 +4971,96 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     ],
   );
 
+  const handleAgiWorkPlanDecision = useCallback(
+    async (id: string, decision: AgiWorkPlanDecision) => {
+      if (!displayedConversationId || isStreaming) return;
+      const assistantMsg = displayedMessages.find((m) => m.id === id);
+      const steps = assistantMsg?.metadata?.agiWorkPlan;
+      const review = assistantMsg?.metadata?.agiWorkPlanReview;
+      if (!assistantMsg || !steps?.length || !review) return;
+
+      if (decision.kind === 'cancel') {
+        updateMessage(
+          id,
+          {
+            metadata: {
+              ...assistantMsg.metadata,
+              agiWorkPlan: steps.map((step) => ({ ...step, status: 'cancelled' as const })),
+              agiWorkPlanReview: { ...review, awaitingApproval: false },
+            },
+          },
+          displayedConversationId,
+        );
+        return;
+      }
+      if (isTrialExhausted) {
+        handleOpenUpgradeDialog();
+        return;
+      }
+
+      if (decision.kind === 'retry') {
+        const step = steps[decision.fromIndex];
+        if (!step) return;
+        setRetryingResearchMessageId(id);
+        try {
+          await sendMessage(`Retry step ${decision.fromIndex + 1}: ${step.description}`, {
+            model: activeModelId,
+            conversationId: displayedConversationId,
+            workMode: 'agiwork',
+            agiWorkGoal: review.goal,
+            agiWorkPlan: steps.slice(decision.fromIndex).map((entry) => entry.description),
+          });
+        } finally {
+          setRetryingResearchMessageId(null);
+        }
+        return;
+      }
+
+      const plan = planRegenerateRollback(displayedMessages, id);
+      if (!plan) return;
+      const userMsg = displayedMessages[plan.userIndex];
+      if (!userMsg) return;
+      const boundaryRefusal = resolveRegenerateBoundaryRefusal({
+        conversation: displayedConversation,
+        messages: displayedMessages,
+        targetModelId: activeModelId,
+      });
+      if (boundaryRefusal) {
+        setChatError(boundaryRefusal, displayedConversationId);
+        return;
+      }
+      setRetryingResearchMessageId(id);
+      try {
+        await sendReplacingMessages(plan.rollbackIds, (onTurnCommitted) =>
+          sendMessage(userMsg.content, {
+            model: activeModelId,
+            conversationId: displayedConversationId,
+            attachments: userMsg.attachments,
+            workMode: 'agiwork',
+            agiWorkGoal: review.goal,
+            agiWorkPlan: decision.steps,
+            onTurnCommitted,
+          }),
+        );
+      } finally {
+        setRetryingResearchMessageId(null);
+      }
+    },
+    [
+      activeModelId,
+      displayedConversation,
+      displayedConversationId,
+      displayedMessages,
+      handleOpenUpgradeDialog,
+      isStreaming,
+      isTrialExhausted,
+      sendMessage,
+      sendReplacingMessages,
+      setChatError,
+      updateMessage,
+    ],
+  );
+
   /**
    * Continue Generation: resume the last assistant turn when it was truncated
    * at the token cap or user-stopped with partial text. Appends to the same
@@ -5958,6 +6049,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                             onRegenerate={handleRegenerateMessage}
                             onRetryResearch={handleRetryResearch}
                             onResearchPlanDecision={handleResearchPlanDecision}
+                            onAgiWorkPlanDecision={handleAgiWorkPlanDecision}
                             retryingResearchMessageId={retryingResearchMessageId}
                             onContinue={handleContinueMessage}
                             onEdit={handleEditMessage}
