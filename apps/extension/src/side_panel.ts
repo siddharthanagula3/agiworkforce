@@ -3,6 +3,7 @@ import {
   LANE_CAP,
   QueueFullError,
   type AgentActivityToolEntry,
+  type ConnectorInputResponse,
 } from '@agiworkforce/client-runtime';
 import {
   createManagedCloudChatAttachmentsClient,
@@ -102,6 +103,7 @@ import {
   resolveManagedArtifactUrl,
   type RegenerateModelOption,
 } from './features/side-panel/bubbles';
+import type { ConnectorInputBinding } from './features/side-panel/connectorInputForm';
 import {
   clarifyAnswerMessage,
   clarifyAnswersFromResponse,
@@ -2935,6 +2937,83 @@ function injectStyles(): void {
     .sp-agent-approval__button:focus-visible {
       outline: 2px solid var(--agi-ext-focus);
       outline-offset: 2px;
+    }
+    .sp-connector-input {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      margin: 0 5px 6px 26px;
+      padding: 10px;
+      border: 1px solid var(--agi-ext-border-strong);
+      border-radius: var(--corner-control);
+      background: var(--agi-ext-bg);
+      white-space: normal;
+    }
+    .sp-connector-input__heading { margin: 0; color: var(--agi-ext-text); font-weight: 600; line-height: var(--type-body-height); }
+    .sp-connector-input__meta,
+    .sp-connector-input__hint { margin: 0; color: var(--agi-ext-text-muted); font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
+    .sp-connector-input [hidden] { display: none; }
+    .sp-connector-input__form { display: flex; flex-direction: column; gap: 12px; margin-top: 8px; }
+    .sp-connector-input__prompt { display: flex; flex-direction: column; gap: 10px; }
+    .sp-connector-input__message { margin: 0; color: var(--agi-ext-text); line-height: var(--type-body-height); white-space: pre-wrap; overflow-wrap: anywhere; }
+    .sp-connector-input__field { display: flex; flex-direction: column; gap: 4px; min-width: 0; margin: 0; padding: 0; border: 0; }
+    .sp-connector-input__label { padding: 0; color: var(--agi-ext-text); font-size: var(--type-caption-size); font-weight: 600; line-height: var(--type-caption-height); }
+    .sp-connector-input__optional { color: var(--agi-ext-text-muted); font-weight: 400; }
+    .sp-connector-input__control {
+      box-sizing: border-box;
+      width: 100%;
+      min-height: var(--control-md);
+      padding: 5px 9px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-control);
+      background: var(--agi-ext-bg);
+      color: var(--agi-ext-text);
+      font: inherit;
+      font-size: var(--type-caption-size);
+    }
+    .sp-connector-input__control[aria-invalid='true'] { border-color: var(--agi-ext-danger-border); }
+    .sp-connector-input__check-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      color: var(--agi-ext-text);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
+    .sp-connector-input__check { flex-shrink: 0; margin: 2px 0 0; accent-color: var(--agi-ext-accent); }
+    .sp-connector-input__error { margin: 0; color: var(--agi-ext-danger-text); font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
+    .sp-connector-input__address {
+      margin: 0;
+      padding: 6px 8px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-control);
+      color: var(--agi-ext-text-muted);
+      font-family: var(--type-code-family);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      overflow-wrap: anywhere;
+    }
+    .sp-connector-input__address strong { color: var(--agi-ext-text); }
+    .sp-connector-input__warning {
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+      margin: 0;
+      color: var(--agi-ext-warning-text);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
+    .sp-connector-input__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+    .sp-connector-input__open,
+    .sp-connector-input__submit { display: inline-flex; align-items: center; gap: 5px; }
+    .sp-connector-input button:disabled { cursor: default; opacity: 0.5; }
+    .sp-connector-input__submit[aria-busy='true'] svg { animation: sp-spin var(--duration-spin) linear infinite; }
+    .sp-connector-input__control:focus-visible,
+    .sp-connector-input__check:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
+    @media (pointer: coarse) {
+      .sp-connector-input__control,
+      .sp-connector-input__check-row,
+      .sp-connector-input button { min-height: 44px; }
     }
 
     /* ── Thinking dots ── */
@@ -5797,6 +5876,10 @@ function scrollToBottom(): void {
 
 const toolsAllowedForChat = new Map<string, Set<string>>();
 const approvalGuidanceDrafts = new Map<string, string>();
+const connectorInputResponses = new Map<
+  string,
+  Map<string, Record<string, ConnectorInputResponse>>
+>();
 
 function setApprovalGuidanceDraft(toolCallId: string, guidance: string): void {
   if (guidance.trim()) approvalGuidanceDrafts.set(toolCallId, guidance);
@@ -5917,6 +6000,97 @@ function resolveManagedToolApproval(
         );
       } else if (response?.success !== true) {
         handleStreamError(assistant.id, response?.error ?? 'Approval could not be continued.');
+      }
+    },
+  );
+}
+
+function pendingConnectorInputs(message: ChatMessage): AgentActivityToolEntry[] {
+  return (
+    message.agentActivity?.entries.filter(
+      (entry): entry is AgentActivityToolEntry =>
+        entry.kind === 'tool' && entry.inputRequest !== undefined,
+    ) ?? []
+  );
+}
+
+function connectorInputBinding(message: ChatMessage): ConnectorInputBinding | undefined {
+  if (message.role !== 'assistant' || !message.cloudAgentRun) return undefined;
+  return {
+    answered: new Set(connectorInputResponses.get(message.id)?.keys()),
+    sending: message.streaming === true,
+    ...(message.cloudApprovalError ? { error: message.cloudApprovalError } : {}),
+    ...(_ctx.isStreaming || !_ctx.managedCloudOwner
+      ? {}
+      : {
+          onRespond: (toolCallId: string, responses: Record<string, ConnectorInputResponse>) =>
+            resolveManagedToolInput(message.id, toolCallId, responses),
+        }),
+  };
+}
+
+function resolveManagedToolInput(
+  assistantMessageId: string,
+  toolCallId: string,
+  responses: Record<string, ConnectorInputResponse>,
+): void {
+  const assistant = _ctx.messages.find(
+    (message) => message.id === assistantMessageId && message.role === 'assistant',
+  );
+  const run = assistant?.cloudAgentRun;
+  const owner = _ctx.managedCloudOwner;
+  const pendingCalls = assistant ? pendingConnectorInputs(assistant) : [];
+  if (
+    !assistant ||
+    !run ||
+    !owner ||
+    _ctx.isStreaming ||
+    !pendingCalls.some((entry) => entry.toolCallId === toolCallId)
+  ) {
+    return;
+  }
+
+  const answered = connectorInputResponses.get(assistant.id) ?? new Map();
+  answered.set(toolCallId, responses);
+  connectorInputResponses.set(assistant.id, answered);
+  assistant.cloudApprovalError = undefined;
+  _ctx.needsMessageRebuild = true;
+  if (pendingCalls.some((entry) => !answered.has(entry.toolCallId))) {
+    renderMessages();
+    return;
+  }
+
+  const toolInputs = pendingCalls.map((entry) => ({
+    tool_call_id: entry.toolCallId,
+    input_responses: answered.get(entry.toolCallId) ?? {},
+  }));
+  assistant.streaming = true;
+  _ctx.currentStreamId = assistant.id;
+  ownerByStreamId.set(assistant.id, { ...owner });
+  _ctx.isStreaming = true;
+  startManagedChatKeepalive();
+  armManagedStreamInactivityWatchdog(assistant.id);
+  updateSendButton();
+  renderMessages();
+
+  chrome.runtime.sendMessage(
+    {
+      type: 'RESOLVE_CHAT_INPUT',
+      owner,
+      clientInstanceId: SIDE_PANEL_CLIENT_INSTANCE_ID,
+      id: assistant.id,
+      cloudRun: run,
+      toolInputs,
+    },
+    (response?: { success?: boolean; error?: string }) => {
+      if (_ctx.currentStreamId !== assistant.id) return;
+      if (chrome.runtime.lastError) {
+        handleStreamError(
+          assistant.id,
+          chrome.runtime.lastError.message ?? t('spConnectorInputSendFailed'),
+        );
+      } else if (response?.success !== true) {
+        handleStreamError(assistant.id, response?.error ?? t('spConnectorInputSendFailed'));
       }
     },
   );
@@ -6114,6 +6288,7 @@ function renderMessages(): void {
             resolveManagedToolApproval(msg.id, toolCallId, decision),
           onApproveForChat: (_toolCallId, toolName) => approveToolForChat(msg.id, toolName),
           onApprovalGuidanceChange: setApprovalGuidanceDraft,
+          connectorInput: connectorInputBinding(msg),
           onRetry: (messageId) => retryFailedMessage(messageId),
           onSwitchModel: () => document.getElementById('sp-model-selector-btn')?.click(),
           quotaRecovery: { label: quotaRecoveryLabel, open: openQuotaRecovery },
@@ -7100,18 +7275,20 @@ function handleStreamError(
   removeThinking();
   const existing = _ctx.messages.find((message) => message.id === id);
   if (existing) existing.reconnecting = false;
-  const canRetryApproval = existing?.agentActivity?.entries.some(
+  const canRetryPause = existing?.agentActivity?.entries.some(
     (entry) =>
       entry.kind === 'tool' &&
-      entry.status === 'awaiting-approval' &&
-      Boolean(entry.approval) &&
-      !entry.approval?.decision,
+      (entry.inputRequest !== undefined ||
+        (entry.status === 'awaiting-approval' &&
+          Boolean(entry.approval) &&
+          !entry.approval?.decision)),
   );
-  if (existing && canRetryApproval) {
+  if (existing && canRetryPause) {
     existing.streaming = false;
     if (streamUsedQuick) existing.managedQuickMode = true;
     existing.cloudApprovalDecisions = undefined;
     existing.cloudApprovalError = errorText.slice(0, 500);
+    connectorInputResponses.delete(existing.id);
   } else {
     applyStreamFailure(_ctx.messages, id, errorText, Date.now(), errorAction, quota?.recovery);
   }
@@ -14516,6 +14693,10 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
       before.cloudApprovalDecisions = undefined;
       before.cloudApprovalError = undefined;
     }
+    if (chunk.agentEvent.event.type === 'input-requested' && before) {
+      connectorInputResponses.delete(before.id);
+      before.cloudApprovalError = undefined;
+    }
     const assistant = applyCanonicalAgentEvent(_ctx.messages, chunk.id, chunk.agentEvent);
     assistant.runtime = 'managed-cloud';
     if (streamUsedQuick) assistant.managedQuickMode = true;
@@ -14527,6 +14708,13 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
       )
     ) {
       assistant.cloudApprovalDecisions = undefined;
+      assistant.cloudApprovalError = undefined;
+    }
+    if (
+      chunk.agentEvent.event.type === 'input-resolved' &&
+      pendingConnectorInputs(assistant).length === 0
+    ) {
+      connectorInputResponses.delete(assistant.id);
       assistant.cloudApprovalError = undefined;
     }
     const cloudRun = cloudRunsByStreamId.get(chunk.id);

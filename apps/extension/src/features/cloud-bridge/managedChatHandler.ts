@@ -10,8 +10,10 @@ import { fenceUntrustedContent } from '@agiworkforce/utils/fence';
 import {
   ManagedCloudAgentRunReferenceSchema,
   ToolApprovalResumeRequestSchema,
+  ToolInputResumeRequestSchema,
   type ManagedCloudAgentRunReference,
   type ToolApprovalDecisionWire,
+  type ToolInputResponseWire,
 } from '@agiworkforce/cloud-contracts';
 import {
   createMultimodalUserContent,
@@ -21,6 +23,7 @@ import {
   getManagedModelAccess,
   streamFreeChat,
   streamManagedChatApproval,
+  streamManagedChatToolInput,
   type FreeTrialChunk,
   type FreeTrialMessage,
   type ManagedChatFileAttachment,
@@ -160,6 +163,13 @@ export type ChromeManagedApprovalResult =
       quota?: ManagedQuotaBlock;
     };
 
+export interface ChromeManagedToolInputRequest {
+  id: string;
+  run: ManagedCloudAgentRunReference;
+  toolInputs: ToolInputResponseWire[];
+  signal?: AbortSignal;
+}
+
 export interface ChromeManagedApprovalDependencies {
   getAuthToken: typeof getAuthToken;
   streamApproval: typeof streamManagedChatApproval;
@@ -185,9 +195,26 @@ const DEFAULT_DEPENDENCIES: Omit<ChromeManagedChatDependencies, 'onText'> = {
   streamChat: streamFreeChat,
 };
 
+type ChromeManagedResumeHandlers = Omit<
+  ChromeManagedApprovalDependencies,
+  'getAuthToken' | 'streamApproval'
+>;
+
+export type ChromeManagedResumeCallbacks = Omit<ChromeManagedResumeHandlers, 'onText'>;
+
+export interface ChromeManagedToolInputDependencies extends ChromeManagedResumeHandlers {
+  getAuthToken: typeof getAuthToken;
+  streamToolInput: typeof streamManagedChatToolInput;
+}
+
 const DEFAULT_APPROVAL_DEPENDENCIES: Omit<ChromeManagedApprovalDependencies, 'onText'> = {
   getAuthToken,
   streamApproval: streamManagedChatApproval,
+};
+
+const DEFAULT_TOOL_INPUT_DEPENDENCIES: Omit<ChromeManagedToolInputDependencies, 'onText'> = {
+  getAuthToken,
+  streamToolInput: streamManagedChatToolInput,
 };
 
 function validateRequest(request: ChromeManagedChatRequest): string | null {
@@ -308,7 +335,7 @@ function validateRequest(request: ChromeManagedChatRequest): string | null {
 }
 
 async function managedChatIdempotencyKey(
-  kind: 'send' | 'approval',
+  kind: 'send' | 'approval' | 'input',
   value: string,
 ): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
@@ -634,48 +661,12 @@ export async function executeChromeManagedChat(
   };
 }
 
-export async function executeChromeManagedApproval(
-  request: ChromeManagedApprovalRequest,
-  dependencies: ChromeManagedApprovalDependencies,
+async function relayManagedResume(
+  stream: AsyncGenerator<FreeTrialChunk>,
+  dependencies: ChromeManagedResumeHandlers,
+  unterminatedMessage: string,
 ): Promise<ChromeManagedApprovalResult> {
-  if (
-    !STREAM_ID_PATTERN.test(request.id) ||
-    !ManagedCloudAgentRunReferenceSchema.safeParse(request.run).success ||
-    !ToolApprovalResumeRequestSchema.safeParse({
-      run_id: request.run.runId,
-      tool_approvals: request.toolApprovals,
-      ...(request.guidance === undefined ? {} : { guidance: request.guidance }),
-    }).success
-  ) {
-    return {
-      status: 'error',
-      code: 'invalid_request',
-      message: 'Invalid Managed Cloud approval request.',
-    };
-  }
-
-  const token = await dependencies.getAuthToken();
-  if (!token) {
-    return {
-      status: 'error',
-      code: 'auth_required',
-      message: 'Sign in to continue this Managed Cloud approval.',
-    };
-  }
-
-  for await (const chunk of dependencies.streamApproval(
-    request.run.runId,
-    request.toolApprovals,
-    token,
-    {
-      signal: request.signal,
-      ...(request.guidance === undefined ? {} : { guidance: request.guidance }),
-      idempotencyKey: await managedChatIdempotencyKey(
-        'approval',
-        `${request.id}:${request.run.runId}:${JSON.stringify(request.toolApprovals)}:${request.guidance ?? ''}`,
-      ),
-    },
-  )) {
+  for await (const chunk of stream) {
     if (chunk.type === 'text') {
       await dependencies.onText(chunk.text);
       continue;
@@ -723,11 +714,91 @@ export async function executeChromeManagedApproval(
     return { status: 'success' };
   }
 
-  return {
-    status: 'error',
-    code: 'protocol_error',
-    message: 'AGI Cloud closed the approval stream without a terminal event.',
-  };
+  return { status: 'error', code: 'protocol_error', message: unterminatedMessage };
+}
+
+export async function executeChromeManagedApproval(
+  request: ChromeManagedApprovalRequest,
+  dependencies: ChromeManagedApprovalDependencies,
+): Promise<ChromeManagedApprovalResult> {
+  if (
+    !STREAM_ID_PATTERN.test(request.id) ||
+    !ManagedCloudAgentRunReferenceSchema.safeParse(request.run).success ||
+    !ToolApprovalResumeRequestSchema.safeParse({
+      run_id: request.run.runId,
+      tool_approvals: request.toolApprovals,
+      ...(request.guidance === undefined ? {} : { guidance: request.guidance }),
+    }).success
+  ) {
+    return {
+      status: 'error',
+      code: 'invalid_request',
+      message: 'Invalid Managed Cloud approval request.',
+    };
+  }
+
+  const token = await dependencies.getAuthToken();
+  if (!token) {
+    return {
+      status: 'error',
+      code: 'auth_required',
+      message: 'Sign in to continue this Managed Cloud approval.',
+    };
+  }
+
+  return relayManagedResume(
+    dependencies.streamApproval(request.run.runId, request.toolApprovals, token, {
+      signal: request.signal,
+      ...(request.guidance === undefined ? {} : { guidance: request.guidance }),
+      idempotencyKey: await managedChatIdempotencyKey(
+        'approval',
+        `${request.id}:${request.run.runId}:${JSON.stringify(request.toolApprovals)}:${request.guidance ?? ''}`,
+      ),
+    }),
+    dependencies,
+    'AGI Cloud closed the approval stream without a terminal event.',
+  );
+}
+
+export async function executeChromeManagedToolInput(
+  request: ChromeManagedToolInputRequest,
+  dependencies: ChromeManagedToolInputDependencies,
+): Promise<ChromeManagedApprovalResult> {
+  if (
+    !STREAM_ID_PATTERN.test(request.id) ||
+    !ManagedCloudAgentRunReferenceSchema.safeParse(request.run).success ||
+    !ToolInputResumeRequestSchema.safeParse({
+      run_id: request.run.runId,
+      tool_inputs: request.toolInputs,
+    }).success
+  ) {
+    return {
+      status: 'error',
+      code: 'invalid_request',
+      message: 'Invalid Managed Cloud input response.',
+    };
+  }
+
+  const token = await dependencies.getAuthToken();
+  if (!token) {
+    return {
+      status: 'error',
+      code: 'auth_required',
+      message: 'Sign in to answer this Managed Cloud request.',
+    };
+  }
+
+  return relayManagedResume(
+    dependencies.streamToolInput(request.run.runId, request.toolInputs, token, {
+      signal: request.signal,
+      idempotencyKey: await managedChatIdempotencyKey(
+        'input',
+        `${request.id}:${request.run.runId}:${request.run.lastSequence}:${JSON.stringify(request.toolInputs)}`,
+      ),
+    }),
+    dependencies,
+    'AGI Cloud closed the input stream without a terminal event.',
+  );
 }
 
 export function createChromeManagedChatDependencies(
@@ -761,4 +832,11 @@ export function createChromeManagedApprovalDependencies(
   > = {},
 ): ChromeManagedApprovalDependencies {
   return { ...DEFAULT_APPROVAL_DEPENDENCIES, onText, ...callbacks };
+}
+
+export function createChromeManagedToolInputDependencies(
+  onText: ChromeManagedToolInputDependencies['onText'],
+  callbacks: ChromeManagedResumeCallbacks = {},
+): ChromeManagedToolInputDependencies {
+  return { ...DEFAULT_TOOL_INPUT_DEPENDENCIES, onText, ...callbacks };
 }
