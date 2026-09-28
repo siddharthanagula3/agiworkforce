@@ -429,7 +429,7 @@ export const CLOUD_RUNS_PANEL_CSS =
   }
 ` + SCHEDULES_SECTION_CSS;
 
-type RunFilter = 'active' | 'all';
+type RunFilter = 'active' | 'needs-you' | 'all';
 type RunLayout = 'list' | 'board';
 type RunStateTone = 'active' | 'attention' | 'success' | 'danger' | 'muted';
 type StatusOrigin = 'progress' | 'load' | 'action';
@@ -480,8 +480,11 @@ const NEEDS_YOU_STATES: ReadonlySet<CloudAgentRun['state']> = new Set([
   'paused',
 ]);
 
+function needsYou(run: CloudAgentRun): boolean {
+  return NEEDS_YOU_STATES.has(run.workState ?? run.state);
+}
+
 function needsYouFirst(runs: readonly CloudAgentRun[]): CloudAgentRun[] {
-  const needsYou = (run: CloudAgentRun) => NEEDS_YOU_STATES.has(run.workState ?? run.state);
   return [...runs.filter(needsYou), ...runs.filter((run) => !needsYou(run))];
 }
 
@@ -645,12 +648,23 @@ export function buildCloudRunsPanel(
     { type: 'button', class: 'sp-runs-filter', 'data-filter': 'active', 'aria-pressed': 'true' },
     'Active',
   );
+  const needsYouFilterBtn = el(
+    'button',
+    {
+      type: 'button',
+      class: 'sp-runs-filter',
+      'data-filter': 'needs-you',
+      'aria-pressed': 'false',
+    },
+    'Needs you',
+  );
   const allFilterBtn = el(
     'button',
     { type: 'button', class: 'sp-runs-filter', 'data-filter': 'all', 'aria-pressed': 'false' },
     'All',
   );
   filters.appendChild(activeFilterBtn);
+  filters.appendChild(needsYouFilterBtn);
   filters.appendChild(allFilterBtn);
   const layoutGroup = el('div', {
     class: 'sp-runs-filters',
@@ -1058,9 +1072,11 @@ export function buildCloudRunsPanel(
         el(
           'div',
           { class: 'sp-runs-empty' },
-          filter === 'active'
-            ? 'No active runs.\n\nRuns you start on the web, the desktop app or your phone show up here while they are working.'
-            : 'No runs yet.\n\nRuns you start on any signed-in surface show up here.',
+          filter === 'needs-you'
+            ? 'Nothing needs you right now.\n\nA run that is waiting for your approval, an answer or a resume shows up here.'
+            : filter === 'active'
+              ? 'No active runs.\n\nRuns you start on the web, the desktop app or your phone show up here while they are working.'
+              : 'No runs yet.\n\nRuns you start on any signed-in surface show up here.',
         ),
       );
     } else {
@@ -1137,6 +1153,7 @@ export function buildCloudRunsPanel(
     detailEl.hidden = !detailOpen;
     schedules.sectionEl.hidden = detailOpen;
     activeFilterBtn.setAttribute('aria-pressed', String(filter === 'active'));
+    needsYouFilterBtn.setAttribute('aria-pressed', String(filter === 'needs-you'));
     allFilterBtn.setAttribute('aria-pressed', String(filter === 'all'));
     listLayoutBtn.setAttribute('aria-pressed', String(layout === 'list'));
     boardLayoutBtn.setAttribute('aria-pressed', String(layout === 'board'));
@@ -1191,7 +1208,11 @@ export function buildCloudRunsPanel(
     }
 
     const result = await deps.listRuns({
-      ...(filter === 'all' ? { states: [...ALL_MANAGED_RUN_STATES] } : {}),
+      ...(filter === 'all'
+        ? { states: [...ALL_MANAGED_RUN_STATES] }
+        : filter === 'needs-you'
+          ? { states: [...NEEDS_YOU_STATES] }
+          : {}),
       ...(options.append && nextCursor ? { cursor: nextCursor } : {}),
       signal: controller.signal,
     });
@@ -1204,7 +1225,8 @@ export function buildCloudRunsPanel(
       scheduleRefresh();
       return;
     }
-    runs = options.append ? [...runs, ...result.page.runs] : result.page.runs;
+    const loaded = filter === 'needs-you' ? result.page.runs.filter(needsYou) : result.page.runs;
+    runs = options.append ? [...runs, ...loaded] : loaded;
     nextCursor = result.page.nextCursor;
     clearTransientStatus();
     if (!isEditingGuidance()) render();
@@ -1256,6 +1278,7 @@ export function buildCloudRunsPanel(
   listLayoutBtn.addEventListener('click', () => setLayout('list'));
   boardLayoutBtn.addEventListener('click', () => setLayout('board'));
   activeFilterBtn.addEventListener('click', () => setFilter('active'));
+  needsYouFilterBtn.addEventListener('click', () => setFilter('needs-you'));
   allFilterBtn.addEventListener('click', () => setFilter('all'));
   refreshBtn.addEventListener('click', () => void load());
 
