@@ -49,6 +49,7 @@
     "apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx",
     "apps/mobile/src/features/chat/components/ProviderConsentBanner.tsx",
     "apps/mobile/src/features/chat/components/QuotedReplyBar.tsx",
+    "apps/mobile/src/features/chat/components/ReportChart.tsx",
     "apps/mobile/src/features/chat/components/ReportFlagButton.tsx",
     "apps/mobile/src/features/chat/components/SendButton.tsx",
     "apps/mobile/src/features/chat/components/SendErrorBanner.tsx",
