@@ -22,8 +22,10 @@ import {
   canAccessManualModelSelection,
   getBillingPlanPricing,
   SYNCED_APP_SURFACES,
+  type PlatformCapability,
   type SyncedAppSurface,
 } from '@agiworkforce/types';
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type { MeDisabledFeature, MeResponse } from '@agiworkforce/cloud-contracts';
 import { e2bCutoverEnabled } from '@/lib/e2b/gate';
 import { webSearchBackendConfigured } from '@/lib/web-search/web-search-tool';
@@ -33,6 +35,7 @@ import {
 } from '@/lib/services/capability-handshake-service';
 import { resolveSubscriptionBillingSource } from '@/lib/server/subscription-billing-owner';
 import { getCapabilityLimitResets } from '@/lib/server/capability-limit-resets';
+import { resolveCloudCodeExecutionPolicy } from '@/lib/server/code-execution-policy';
 import { getIdentityUser } from '@/lib/server/identity';
 import { provisionEnterpriseSignIn } from '@/lib/server/sso/jit-provisioning';
 import { linkPendingScimUsersAtSignIn } from '@/lib/server/scim/scim-sign-in-linking';
@@ -73,6 +76,16 @@ async function closedFeatures(
     capability,
     reason: versionDisableReason(definitions, capability),
   }));
+}
+
+async function userDisabledCapabilities(
+  db: DatabaseAdapter,
+  userId: string,
+): Promise<PlatformCapability[]> {
+  const codeExecution = await resolveCloudCodeExecutionPolicy(db, userId);
+  return !codeExecution.allowed && codeExecution.reason === 'disabled'
+    ? ['canUseCloudExecution']
+    : [];
 }
 
 const PatchMeSchema = z.object({
@@ -235,6 +248,7 @@ async function handleGetMe(request: NextRequest) {
       surface,
       cloudExecutionDeploymentEnabled: feature_flags.code_execution,
       closedCapabilities: platformCapabilitiesOf(killSwitches?.closedCapabilities ?? []),
+      userDisabledCapabilities: await userDisabledCapabilities(db, userId),
       resets: await getCapabilityLimitResets(db, userId, subscription?.current_period_end ?? null),
     });
 
