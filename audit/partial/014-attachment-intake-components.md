@@ -86,6 +86,7 @@ Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:857-857`,
 
 - Done when: The user can attach a web page by its URL so its content is used as context for the message.
 - Wave: 3
+- Already works on: vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -93,7 +94,6 @@ Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:857-857`,
 | desktop | partial | Add a control that attaches a link as a context chip; today a link pasted into the message is read only if the model chooses to call url_fetch. | ui |
 | mobile | partial | Attach a shared or pasted link as a page; today a link shared into the app becomes draft text and is read only if the cloud model calls url_fetch. | ui |
 | cli | partial | Add a way to attach a URL as context; today a link in the prompt is fetched only if the agent calls its web_fetch tool. | ui |
-| vscode | partial | Add a way to attach a URL as context; today a link in the prompt is fetched only if the CLI agent calls web_fetch. | ui |
 | chrome | partial | The item is attaching a page by its URL. The cited control captures the text of the tab currently open; there is no URL input, and the auditor's own note concedes the user must navigate first. Page-context capture is a partial answer, not done. |  |
 
 Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:1501-1508`, `apps/web/lib/url-fetch/url-fetch-tool.ts:10-10`, `apps/web/features/chat/pages/WebChatPage.tsx:5668-5668`, `apps/mobile/src/features/share-preview/index.tsx:81-81`

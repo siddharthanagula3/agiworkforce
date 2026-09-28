@@ -184,6 +184,7 @@ describe('menu ordering', () => {
       'open-files',
       'problems',
       'git-diff',
+      'url',
     ]);
   });
 });

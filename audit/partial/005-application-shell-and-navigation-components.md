@@ -75,30 +75,16 @@ Code: `apps/extension/src/side_panel.ts:6726-6755`, `apps/extension/src/side_pan
 
 - Done when: Rows in mixed lists carry an icon (or equivalent marker) that tells the resource type apart (chat, project, task, file) visually and for assistive tech.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Project rows have folder/project icons and task rows a dot with an "AGI Work" accessible name, but plain chat rows carry no type icon. | ui |
-| desktop | partial | Same as web: only projects and AGI Work rows are marked; chat rows have no type icon. | ui |
 | mobile | partial | Mixed search results show the type as a text chip, not an icon; normal lists carry no type marker. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | partial | The auditor searched only icon identifiers. openWorkSurface composes cloud tasks and schedules into one quick pick (surfaces/index.ts:306-318) whose rows carry each item's ThemeIcon as a $(icon) label prefix plus a section separator per type (treeQuickPick.ts:83-108; cloudTasksTree.ts:34, schedulesTree.ts:37). Partial: only that pick mixes types, the row icons encode run state rather than type, the separator is the type marker, and no list mixes chats, projects or files. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `packages/ui/ui/src/sidebar/SessionItem.tsx:140-172`, `packages/ui/ui/src/sidebar/Sidebar.tsx:1208-1210`, `apps/mobile/src/features/chat/ChatsListScreen.tsx:362-378`, `apps/mobile/src/features/chat/ChatsListScreen.tsx:337-337`
-
-## S5.18: Needs-input indicator.
-
-- Done when: Navigation marks items that are blocked waiting for the user (approval or input).
-- Wave: 3
-- Already works on: mobile, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | The Work history list (/tasks, reachable from the command palette) shows "Waiting for your approval" per run, but sidebar rows have no needs-input marker. | ui |
-| desktop | partial | Same as web: only the /tasks list marks runs waiting for approval. | ui |
-
-Code: `packages/ui/unified-chat/src/components/tasks/TasksPage.tsx:726-735`, `packages/ui/unified-chat/src/components/tasks/TasksPage.tsx:726-740`
+Code: `apps/mobile/src/features/chat/ChatsListScreen.tsx:362-378`, `apps/mobile/src/features/chat/ChatsListScreen.tsx:337-337`
 
 ## S5.19: Unread-result indicator.
 

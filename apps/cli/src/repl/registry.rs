@@ -468,6 +468,7 @@ pub async fn tasks_for_display(
 enum ExportFormat {
     Markdown,
     Json,
+    Answer,
 }
 
 fn parse_export_argument(arg: &str) -> (ExportFormat, Option<&str>) {
@@ -477,6 +478,7 @@ fn parse_export_argument(arg: &str) -> (ExportFormat, Option<&str>) {
     match keyword {
         "" => (ExportFormat::Markdown, None),
         "json" => (ExportFormat::Json, rest),
+        "answer" | "last" => (ExportFormat::Answer, rest),
         "markdown" | "md" => (ExportFormat::Markdown, rest),
         _ if std::path::Path::new(arg)
             .extension()
@@ -505,6 +507,14 @@ fn render_export(format: ExportFormat, session: &AgentSession) -> Result<String,
             let md = conversations::export_as_markdown(session);
             Ok(sanitize_terminal_text(&md).into_owned())
         }
+        ExportFormat::Answer => session
+            .messages
+            .iter()
+            .rev()
+            .find(|message| message.role == "assistant")
+            .map(|message| sanitize_terminal_text(message.text_content().trim()).into_owned())
+            .filter(|text| !text.is_empty())
+            .ok_or_else(|| CommandOutcome::Warn("No answer to export yet.".to_string())),
     }
 }
 

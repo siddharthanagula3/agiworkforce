@@ -4,6 +4,8 @@ import { Check, Scale, Star } from '@agiworkforce/icons';
 import { ProviderLogo } from '@features/chat/components/Composer/ProviderLogo';
 import type { ModelCatalogueEntry } from '@/app/api/models/catalogue/route';
 import { entryCapabilities } from '../lib/model-filters';
+import Link from 'next/link';
+
 import {
   accessLabel,
   isSelectable,
@@ -11,6 +13,7 @@ import {
   retirementLabel,
   statusLabel,
   tokenCeilingLabel,
+  upgradePlanFor,
 } from '../lib/model-presentation';
 
 const CHIP_CLASS =
@@ -46,6 +49,7 @@ export function ModelCard({
   const status = statusLabel(entry);
   const retirement = retirementLabel(entry);
   const selectable = isSelectable(entry);
+  const upgradePlan = upgradePlanFor(entry);
 
   return (
     <article
@@ -123,19 +127,28 @@ export function ModelCard({
       ) : null}
 
       <div className="mt-auto flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          disabled={!selectable}
-          onClick={() => onTry(entry.id)}
-          className={[
-            'inline-flex h-9 items-center rounded-md px-3 text-sm font-medium transition-colors pointer-coarse:min-h-11',
-            selectable
-              ? 'bg-primary text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]'
-              : 'cursor-not-allowed bg-muted text-muted-foreground',
-          ].join(' ')}
-        >
-          Try model
-        </button>
+        {upgradePlan ? (
+          <Link
+            href={`/upgrade/${upgradePlan}`}
+            className="inline-flex h-9 items-center rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)] pointer-coarse:min-h-11"
+          >
+            Upgrade to use
+          </Link>
+        ) : (
+          <button
+            type="button"
+            disabled={!selectable}
+            onClick={() => onTry(entry.id)}
+            className={[
+              'inline-flex h-9 items-center rounded-md px-3 text-sm font-medium transition-colors pointer-coarse:min-h-11',
+              selectable
+                ? 'bg-primary text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]'
+                : 'cursor-not-allowed bg-muted text-muted-foreground',
+            ].join(' ')}
+          >
+            Try model
+          </button>
+        )}
         <span className="text-xs text-muted-foreground">{accessLabel(entry, planLabel)}</span>
         {retirement ? (
           <span
