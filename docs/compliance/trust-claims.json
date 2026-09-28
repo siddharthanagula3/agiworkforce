@@ -244,7 +244,7 @@
       "owner": "Legal/compliance",
       "reviewedOn": "2026-09-28",
       "asOf": "2026-09-28",
-      "digest": "a9978d9b6995bd4f",
+      "digest": "2d18a7586ef12be7",
       "jurisdiction": "European Union, EEA and United Kingdom (GDPR and UK GDPR)",
       "scope": "Every account on the hosted service, wherever the account holder is",
       "implementation": [
@@ -643,9 +643,9 @@
       "ledger": "POSTURE",
       "label": "Database row-level isolation",
       "owner": "Security",
-      "reviewedOn": "2026-09-27",
-      "asOf": "2026-09-27",
-      "digest": "af48774921b5d39e",
+      "reviewedOn": "2026-09-28",
+      "asOf": "2026-09-28",
+      "digest": "82975c484473512c",
       "implementation": ["apps/web/app/api"],
       "proof": [
         {

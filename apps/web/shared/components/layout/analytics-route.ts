@@ -7,6 +7,8 @@ export const DYNAMIC_PAGE_ROUTES = [
   '/connect/[deviceType]',
   '/gallery/[templateId]',
   '/help/[slug]',
+  '/legal/archive/[policy]',
+  '/legal/archive/[policy]/[date]',
   '/open/[target]/[id]',
   '/pair/[code]',
   '/plugins/[id]',
