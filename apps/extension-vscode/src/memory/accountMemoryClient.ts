@@ -1,6 +1,7 @@
 import {
   MemorySyncPullResponseSchema,
   MemorySyncPushResponseSchema,
+  MemorySyncRejectionSchema,
   type MemorySyncPushItem,
   type MemoryWireDelta,
 } from '@agiworkforce/cloud-contracts';
@@ -17,12 +18,8 @@ export const INITIAL_CURSOR = '0';
 /** A response that does not match the contract is a bad gateway, not a client error. */
 const CONTRACT_VIOLATION_STATUS = 502;
 
-/** The hosted push response, keeping the refusals the shared schema drops. */
 const PushResponseSchema = MemorySyncPushResponseSchema.extend({
-  rejected: z
-    .array(z.object({ id: z.string(), term: z.string().nullable().optional() }))
-    .optional()
-    .default([]),
+  rejected: z.array(MemorySyncRejectionSchema).optional().default([]),
 });
 
 const WorkspaceListSchema = z.object({
