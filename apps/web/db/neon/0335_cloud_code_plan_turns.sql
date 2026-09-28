@@ -1,5 +1,5 @@
 -- =============================================================================
--- Migration 0334: a Code turn can run in plan mode
+-- Migration 0335: a Code turn can run in plan mode
 --
 -- Why    : a cloud Code session had no read-only mode. Claude Code's cloud
 --          sessions offer Plan beside their editing modes: the agent reads,

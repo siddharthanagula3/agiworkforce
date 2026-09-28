@@ -1,4 +1,4 @@
--- Reversal of 0334 : Code turns lose their mode, and every turn runs as an
+-- Reversal of 0335 : Code turns lose their mode, and every turn runs as an
 -- agent turn.
 --
 -- WHAT THIS COSTS: which past turns were plan turns is lost. A plan turn still
@@ -17,6 +17,6 @@ alter table public.cloud_code_agent_turns
   drop column if exists mode;
 
 delete from public.schema_migrations
- where filename = '0334_cloud_code_plan_turns.sql';
+ where filename = '0335_cloud_code_plan_turns.sql';
 
 commit;
