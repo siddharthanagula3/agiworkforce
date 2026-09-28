@@ -455,6 +455,12 @@ const ja = {
   'mcpDetails.field': '{label}: {value}',
   'chatNotice.webSearchDenied':
     'このセッションでは Web 検索を利用できません。{reason} 検索なしで送信するには Browse the web をオフにしてください。',
+  'webSearchSetup.title': 'Web 検索を設定',
+  'webSearchSetup.placeholder': 'API キーを持っている検索サービスを選んでください',
+  'webSearchSetup.detail':
+    'ターミナルでその API キーを入力します。自分のキーのセッションとローカル セッションはこのキーで検索します。マネージド セッションには不要です。',
+  'webSearchSetup.unavailable':
+    'AGI Workforce: この AGI CLI は保存できる検索キーを示していません。VS Code から Web 検索を設定するには AGI CLI を更新してください。',
 };
 
 export default ja;

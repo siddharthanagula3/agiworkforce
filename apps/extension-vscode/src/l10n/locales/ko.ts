@@ -442,6 +442,12 @@ const ko = {
   'mcpDetails.field': '{label}: {value}',
   'chatNotice.webSearchDenied':
     '이 세션에서는 웹 검색을 사용할 수 없습니다. {reason} 검색 없이 보내려면 Browse the web을 끄세요.',
+  'webSearchSetup.title': '웹 검색 설정',
+  'webSearchSetup.placeholder': 'API 키가 있는 검색 서비스를 선택하세요',
+  'webSearchSetup.detail':
+    '터미널에서 해당 API 키를 입력하세요. 내 키 세션과 로컬 세션은 이 키로 검색하며, 관리형 세션에는 필요하지 않습니다.',
+  'webSearchSetup.unavailable':
+    'AGI Workforce: 이 AGI CLI는 저장할 수 있는 검색 키를 알려 주지 않습니다. VS Code에서 웹 검색을 설정하려면 AGI CLI를 업데이트하세요.',
 };
 
 export default ko;

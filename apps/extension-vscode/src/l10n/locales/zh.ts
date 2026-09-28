@@ -394,6 +394,12 @@ const zh = {
   'mcpDetails.field': '{label}：{value}',
   'chatNotice.webSearchDenied':
     '此会话无法使用网页搜索。{reason} 如需不搜索直接发送，请关闭 Browse the web。',
+  'webSearchSetup.title': '设置网页搜索',
+  'webSearchSetup.placeholder': '选择你拥有 API 密钥的搜索服务',
+  'webSearchSetup.detail':
+    '在终端中输入其 API 密钥。使用你自己密钥的会话和本地会话会用它搜索；托管会话不需要。',
+  'webSearchSetup.unavailable':
+    'AGI Workforce：此 AGI CLI 未说明可以保存哪些搜索密钥。请更新 AGI CLI，以便在 VS Code 中设置网页搜索。',
 };
 
 export default zh;

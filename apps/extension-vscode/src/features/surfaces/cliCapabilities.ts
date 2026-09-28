@@ -118,10 +118,30 @@ export interface CliCapabilityEntry {
   detail?: string;
 }
 
+export interface CliWebSearchSetup {
+  key?: string;
+  logins: string[];
+}
+
 export interface CliAccountStatus {
   signedIn: boolean;
   email?: string;
   tier?: string;
+  webSearch?: CliWebSearchSetup;
+}
+
+const LOGIN_TARGET = /^[A-Za-z0-9_-]{1,64}$/u;
+
+function readWebSearchSetup(record: Record<string, unknown>): CliWebSearchSetup | undefined {
+  const logins = record['webSearchLogins'];
+  if (!Array.isArray(logins)) return undefined;
+  const key = readString(record, ['webSearchKey']);
+  return {
+    ...(key === undefined ? {} : { key }),
+    logins: logins.filter(
+      (login): login is string => typeof login === 'string' && LOGIN_TARGET.test(login),
+    ),
+  };
 }
 
 export interface CliLoginChallenge {
@@ -251,12 +271,14 @@ export class CliCapabilityAdapter {
         : {};
     const email = readString(record, ['email', 'account', 'user']);
     const tier = readString(record, ['tier', 'plan', 'planTier']);
+    const webSearch = readWebSearchSetup(record);
     return {
       status: 'ok',
       value: {
         signedIn: record['signedIn'] === true,
         ...(email === undefined ? {} : { email }),
         ...(tier === undefined ? {} : { tier }),
+        ...(webSearch === undefined ? {} : { webSearch }),
       },
     };
   }

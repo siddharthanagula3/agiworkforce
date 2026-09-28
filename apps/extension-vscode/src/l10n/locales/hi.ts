@@ -510,6 +510,12 @@ const hi = {
   'mcpDetails.field': '{label}: {value}',
   'chatNotice.webSearchDenied':
     'इस सत्र में वेब खोज उपलब्ध नहीं है। {reason} इसके बिना भेजने के लिए Browse the web बंद करें।',
+  'webSearchSetup.title': 'वेब खोज सेट अप करें',
+  'webSearchSetup.placeholder': 'वह खोज सेवा चुनें जिसकी API कुंजी आपके पास है',
+  'webSearchSetup.detail':
+    'टर्मिनल में उसकी API कुंजी डालें। आपकी कुंजी वाले और लोकल सत्र इससे खोजते हैं; प्रबंधित सत्रों को इसकी ज़रूरत नहीं है।',
+  'webSearchSetup.unavailable':
+    'AGI Workforce: यह AGI CLI नहीं बताता कि वह कौन-सी खोज कुंजियाँ सहेज सकता है। VS Code से वेब खोज सेट अप करने के लिए AGI CLI अपडेट करें।',
 };
 
 export default hi;

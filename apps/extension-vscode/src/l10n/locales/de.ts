@@ -552,6 +552,12 @@ const de = {
   'mcpDetails.field': '{label}: {value}',
   'chatNotice.webSearchDenied':
     'Die Websuche ist in dieser Sitzung nicht verfügbar. {reason} Deaktivieren Sie Browse the web, um ohne sie zu senden.',
+  'webSearchSetup.title': 'Websuche einrichten',
+  'webSearchSetup.placeholder': 'Wählen Sie den Suchdienst, für den Sie einen API-Schlüssel haben',
+  'webSearchSetup.detail':
+    'Geben Sie den API-Schlüssel im Terminal ein. Sitzungen mit Ihrem Schlüssel und lokale Sitzungen suchen damit; verwaltete Sitzungen brauchen keinen.',
+  'webSearchSetup.unavailable':
+    'AGI Workforce: Diese AGI CLI gibt nicht an, welche Suchschlüssel sie speichern kann. Aktualisieren Sie die AGI CLI, um die Websuche in VS Code einzurichten.',
 };
 
 export default de;
