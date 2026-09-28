@@ -3,7 +3,10 @@ import 'server-only';
 import { logger } from '@/lib/logger';
 import { getHandoffConfig, type HandoffConfig } from './config';
 import { listFreshOnlineAgents } from './store';
-import type { HandoffAvailability, HandoffAvailabilityReason } from './types';
+import type {
+  HandoffAvailability,
+  HandoffAvailabilityReason,
+} from '@agiworkforce/cloud-contracts/support';
 
 const CACHE_TTL_MS = 5_000;
 

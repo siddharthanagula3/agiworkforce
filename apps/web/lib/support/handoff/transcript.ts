@@ -1,5 +1,9 @@
 import { SECRET_PATTERNS } from '@/lib/leak-detector';
-import type { HandoffAttemptedAction, HandoffCitation, HandoffTranscriptTurn } from './types';
+import type {
+  HandoffAttemptedAction,
+  HandoffCitation,
+  HandoffTranscriptTurn,
+} from '@agiworkforce/cloud-contracts/support';
 
 export const MAX_TRANSCRIPT_TURNS = 200;
 export const MAX_TRANSCRIPT_CHARS = 60_000;

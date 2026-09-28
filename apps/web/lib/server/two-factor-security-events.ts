@@ -11,6 +11,7 @@ import {
 export interface TwoFactorSecurityEvent {
   userId: string;
   event: IdentitySecurityEventKey;
+  noticeRef?: string | null;
   request?: Request;
   organizationId?: string | null;
   detail?: AuditEventDetail;
@@ -25,6 +26,7 @@ export async function announceTwoFactorChange(event: TwoFactorSecurityEvent): Pr
   await handleIdentitySecurityEvent(getNeonDb(), getIdentityProvider(), {
     userId: event.userId,
     event: event.event,
+    ...(event.noticeRef ? { noticeRef: event.noticeRef } : {}),
     ...(event.request ? { request: event.request } : {}),
     organizationId: event.organizationId ?? null,
     ...(event.detail ? { detail: event.detail } : {}),
