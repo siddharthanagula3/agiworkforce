@@ -83,13 +83,12 @@ Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:752-763`, `ap
 
 - Done when: When starting a chat the user is offered their recently used files to attach in one step.
 - Wave: 3
-- Already works on: mobile, vscode
+- Already works on: mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Show recent files in the default Chat composer; today the 6 most recent Library files appear only in the Files menu of AGI Work mode (paid plans), not in ordinary chats. | ui |
 | desktop | partial | Show recent files in the default Chat composer; today the 6 most recent Library files appear only in the Files menu of AGI Work mode (paid plans), not in ordinary chats. | ui |
-| cli | partial | Rank recently used files first; the @ popup lists workspace files ordered by path length, not by recent use. | handler |
 
 Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:5312-5316`, `apps/web/features/chat/components/Composer/ComposerFilesMenu.tsx:84-97`, `apps/web/app/api/library/route.ts:12-12`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:2199-2199`
 

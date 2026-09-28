@@ -52,6 +52,7 @@ export interface GeminiGenerateContentRequest {
     stopSequences?: string[];
     thinkingConfig?: GeminiThinkingConfig;
     responseMimeType?: string;
+    responseJsonSchema?: Record<string, unknown>;
   };
   safetySettings?: Array<{
     category: string;

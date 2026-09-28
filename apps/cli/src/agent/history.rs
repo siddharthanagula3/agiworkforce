@@ -14,7 +14,49 @@ impl AgentSession {
     }
 
     pub fn context_report(&self, reserved_output_tokens: usize) -> String {
-        compaction::format_context_report(&self.context_usage(reserved_output_tokens))
+        let mut lines = vec![compaction::format_context_report(
+            &self.context_usage(reserved_output_tokens),
+        )];
+        lines.push(String::new());
+        lines.push("In context:".to_string());
+        let system_chars = self
+            .messages
+            .first()
+            .filter(|message| message.role == "system")
+            .map(|message| message.text_content().chars().count())
+            .unwrap_or(0);
+        lines.push(format!(
+            "  System prompt      about {} tokens (instructions, memory, output style, rules)",
+            system_chars / 4
+        ));
+        let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+        for (tier, path, exists) in crate::memory::MemoryManager::new(&cwd).list() {
+            if exists {
+                lines.push(format!("  Instructions       {tier}: {}", path.display()));
+            }
+        }
+        for rule in &self.workspace_rules {
+            lines.push(format!("  Rule               {}", rule.source.display()));
+        }
+        for file in &self.attached_context_files {
+            lines.push(format!("  Attached file      {}", file.display()));
+        }
+        for dir in &self.additional_context_dirs {
+            lines.push(format!("  Added directory    {}", dir.display()));
+        }
+        let turns = self
+            .messages
+            .iter()
+            .filter(|message| message.role == "user")
+            .count();
+        lines.push(format!(
+            "  Conversation       {} messages over {turns} of your turns",
+            self.messages.len().saturating_sub(1)
+        ));
+        if let Some(tools) = self.mcp_info() {
+            lines.push(format!("  MCP tools          {}", tools.len()));
+        }
+        lines.join("\n")
     }
 
     /// Save a checkpoint of the current conversation state.

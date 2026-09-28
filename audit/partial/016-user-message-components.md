@@ -10,34 +10,20 @@ nothing is left.
 
 - Done when: The author of each turn is distinguishable visually (avatar, name, alignment/bubble style or terminal marker) AND announced to assistive tech (R-n).
 - Wave: 3
-- Already works on: mobile, cli, vscode
+- Already works on: mobile, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | User turns are told apart only by a right-aligned bubble; add a screen-reader author label (e.g. "You said" / assistant name) per message, since the log region announces no sender. | ui |
 | desktop | partial | Same as web (hosted): User turns are told apart only by a right-aligned bubble; add a screen-reader author label (e.g. "You said" / assistant name) per message, since the log region announces no sender. | ui |
-| chrome | partial | User turns differ only by right alignment (sp-msg-user); add a screen-reader sender label per bubble. | ui |
 
-Code: `apps/web/features/chat/components/messages/MessageBubble.tsx:1784-1795`, `apps/web/features/chat/components/messages/ChatMessageList.tsx:1914-1917`, `apps/web/features/chat/components/messages/ChatMessageList.tsx:731-731`, `apps/extension/src/features/side-panel/bubbles.ts:225-227`
-
-## S16.03: Attachment group.
-
-- Done when: Files and images sent with a user turn are listed on that message (thumbnail or named chip) after sending.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Show the images/files a turn carried on the transcript message; staged image chips are cleared at send and only typed @paths remain visible. | ui |
-| chrome | partial | Keep attachment names on the user message; the side panel sends them with the turn but the bubble stores and shows only the text. | ui |
-
-Code: `apps/cli/src/tui/tui_app.rs:4957-4960`, `apps/cli/src/tui/tui_app.rs:4926-4929`, `apps/extension/src/side_panel.ts:4957-4957`, `apps/extension/src/features/side-panel/bubbles.ts:235-235`
+Code: `apps/web/features/chat/components/messages/MessageBubble.tsx:1784-1795`, `apps/web/features/chat/components/messages/ChatMessageList.tsx:1914-1917`, `apps/web/features/chat/components/messages/ChatMessageList.tsx:731-731`
 
 ## S16.04: Source and context chips.
 
 - Done when: A sent user message shows chips for the non-file context it carried (quoted text, connector/MCP resources, page, editor selection, @mentions).
 - Wave: 3
-- Already works on: vscode
+- Already works on: vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -45,7 +31,6 @@ Code: `apps/cli/src/tui/tui_app.rs:4957-4960`, `apps/cli/src/tui/tui_app.rs:4926
 | desktop | partial | Same as web (hosted): only a "pasted" badge; MCP/project context the turn carried has no chip. | ui |
 | mobile | partial | Render quoted-reply and project/style context as chips on the sent message; a quote is only inlined into the text as a "> You: ..." line. | ui |
 | cli | partial | Show context the turn carried as distinct chips; the transcript only keeps the literal @path text the user typed. | ui |
-| chrome | partial | Mark the user message with the page context it sent; page text travels with the turn but the bubble shows none of it. | ui |
 
 Code: `apps/web/features/chat/components/messages/MessageBubble.tsx:1824-1828`, `apps/web/lib/hooks/useChatStream.ts:3548-3554`, `apps/mobile/app/(app)/chat/[id].tsx:354-362`, `apps/cli/src/tui/tui_app.rs:4926-4929`
 
@@ -105,7 +90,7 @@ Code: `apps/web/features/chat/components/messages/MessageBubble.tsx:2932-2932`, 
 
 - Done when: A sent user message can be re-sent unchanged from the message itself to get a fresh reply.
 - Wave: 3
-- Already works on: cli
+- Already works on: cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -113,7 +98,6 @@ Code: `apps/web/features/chat/components/messages/MessageBubble.tsx:2932-2932`, 
 | desktop | partial | Add a Resend/Send-again action on a sent user message; re-running it is only possible via Regenerate on the reply or Retry after a failure. | ui |
 | mobile | partial | Offer Resend on user messages; the long-press sheet gives users Edit/Copy/Delete only and Retry exists only on replies and the send-error banner. | ui |
 | vscode | partial | Only a failed turn can be re-sent (error-block Retry); a sent message has no Resend action. | ui |
-| chrome | partial | Retry appears only on errored or interrupted replies; a sent user message has no Resend action. | ui |
 
 Code: `apps/web/features/chat/pages/WebChatPage.tsx:4449-4456`, `apps/web/features/chat/components/messages/MessageBubble.tsx:2813-2813`, `apps/mobile/src/features/chat/components/MessageBubble.tsx:524-526`, `apps/mobile/stores/chat/chatExecutionStore.ts:2961-2964`
 
@@ -205,16 +189,15 @@ Code: `apps/web/features/chat/pages/WebChatPage.tsx:5074-5087`, `apps/web/lib/ho
 
 - Done when: A failed send offers Retry that re-sends the same turn (text and attachments) and replaces the failure with the new outcome.
 - Wave: 3
-- Already works on: mobile, vscode
+- Already works on: mobile, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Retry resends the turn, but when that retry is refused before any output (e.g. a plan gate) the earlier failed answer is restored and its old error stays in the transcript and details while the alert shows the new one (LQA-05). | states |
 | desktop | partial | Retry resends the turn, but when that retry is refused before any output (e.g. a plan gate) the earlier failed answer is restored and its old error stays in the transcript and details while the alert shows the new one (LQA-05). | states |
 | cli | missing | Not built on this surface. |  |
-| chrome | partial | Retry re-sends only the prompt text: attachments and attached page context from the failed turn are dropped, so the retried question can differ. | handler |
 
-Code: `apps/web/features/chat/pages/WebChatPage.tsx:5078-5086`, `apps/web/features/chat/pages/WebChatPage.tsx:4449-4466`, `apps/web/lib/hooks/useChatStream.ts:4428-4433`, `apps/extension/src/features/side-panel/bubbles.ts:157-166`
+Code: `apps/web/features/chat/pages/WebChatPage.tsx:5078-5086`, `apps/web/features/chat/pages/WebChatPage.tsx:4449-4466`, `apps/web/lib/hooks/useChatStream.ts:4428-4433`
 
 ## S16.17: Queued-message state.
 

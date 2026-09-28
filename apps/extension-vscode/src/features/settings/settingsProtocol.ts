@@ -41,6 +41,8 @@ export const SETTINGS_COMMANDS = [
   'openConfigDocs',
   'openInstructionDocs',
   'openMemory',
+  'openPrivacySettings',
+  'openSubprocessors',
 ] as const;
 
 export type SettingsCommand = (typeof SETTINGS_COMMANDS)[number];

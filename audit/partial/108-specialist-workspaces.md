@@ -136,29 +136,23 @@ Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:860-867`,
 
 - Done when: A research environment runs code/notebooks in a pinned environment that can be re-run to reproduce results.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | A Code Interpreter notebook (Jupyter, pandas, numpy) runs cells and run-all in a managed sandbox. Environments cannot be pinned, snapshotted or shared, so a run cannot be reproduced later. | ui |
-| desktop | partial | A Code Interpreter notebook (Jupyter, pandas, numpy) runs cells and run-all in a managed sandbox. Environments cannot be pinned, snapshotted or shared, so a run cannot be reproduced later. | ui |
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/code/CloudCodePage.tsx:1122-1128`, `apps/web/app/api/code/sessions/[sessionId]/notebook/execute/route.ts:63-76`, `apps/web/lib/e2b/templates.ts:139-148`
 
 ## S108.23: Education/teacher workspace.
 
 - Done when: An education workspace for teachers and learners (classes, assignments, guided study).
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The Study page (/chat/study) gives learners learn/practise/revise sessions. There are no teacher tools: classes, assignments, rosters or grading. | ui |
-| desktop | partial | The Study page (/chat/study) gives learners learn/practise/revise sessions. There are no teacher tools: classes, assignments, rosters or grading. | ui |
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/chat/study/page.tsx:1-18`, `apps/web/features/study/lib/study-session.ts:9-35`, `apps/web/app/api/study/sessions/route.ts:69-105`
 
 ## S108.24: Curriculum and lesson generation.
 
@@ -248,12 +242,11 @@ Code: `apps/web/features/chat/components/cards/index.tsx:37-45`, `apps/web/featu
 
 - Done when: The user plans a trip (itinerary, places, routes) and can make reservations from the product.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | search_maps renders place/route cards; reservations only via generic third-party connectors (Booking.com, Expedia) through the chat tool loop; itinerary.v1 never produced or rendered; no native workspace. | ui |
-| desktop | partial | search_maps renders place/route cards; reservations only via generic third-party connectors (Booking.com, Expedia) through the chat tool loop; itinerary.v1 never produced or rendered; no native workspace. | ui |
-| mobile | partial | Mobile renders search_maps place and route cards. There is no itinerary builder and no bookings or reservations. | ui |
-| chrome | partial | The side panel renders search_maps place and route cards. There is no itinerary builder and no bookings or reservations. | ui |
+| mobile | partial | billing/no-yearly fd41d3eda renders itinerary cards natively on mobile (synced cloud chats show them now); mobile turns produce them once post-codex/no-yearly-s108-33-mobile-itinerary.patch adds itinerary.v1 to x_interactive_cards.supported in apps/mobile/stores/chat/chatExecutionStore.ts, which Codex holds | handler |
+| chrome | partial | server offers plan_itinerary to chrome once the side panel declares itinerary.v1; p-chrome adds it to supported in apps/extension/src/features/cloud-bridge/freeTrialClient.ts and an itinerary.v1 builder in apps/extension/src/features/side-panel/bubbles.ts | ui |
 
-Code: `apps/web/features/chat/components/messages/InteractiveCardBlock.tsx:37-37`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:744-762`, `apps/web/lib/services/map-search-tool-service.ts:41-50`, `apps/web/lib/connectors/directory/sources/vendor-directory.json:908-908`
+Code: `apps/mobile/src/features/chat/components/InteractiveCardBlock.tsx:361-361`, `apps/mobile/src/features/chat/components/InteractiveCardBlock.tsx:554-554`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:950-950`
