@@ -399,7 +399,15 @@ describe('settleFreeTrialRequest', () => {
 
     const [settle] = executed('update public.free_daily_usage_reservations');
     expect(settle?.[0]).toContain('actual_cost_microusd = $3');
-    expect(settle?.[1]).toEqual(['user-1', 'request-1', 3_250, 'completed', expect.any(String)]);
+    expect(settle?.[1]).toEqual([
+      'user-1',
+      'request-1',
+      3_250,
+      'completed',
+      expect.any(String),
+      'completed',
+      null,
+    ]);
     expect(JSON.parse(String(settle?.[1]?.[4]))).toEqual({
       requestId: 'request-1',
       outcome: 'completed',
