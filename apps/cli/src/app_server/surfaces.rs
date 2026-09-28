@@ -1172,7 +1172,7 @@ pub fn expand_prompt_command(text: &str) -> Result<Option<String>, DeveloperSess
     }
 }
 
-const BUILTIN_PROMPTS: [(&str, fn(&str) -> String); 7] = [
+const BUILTIN_PROMPTS: [(&str, fn(&str) -> String); 9] = [
     ("review", crate::claude_parity::review_prompt),
     (
         "security-review",
@@ -1183,6 +1183,8 @@ const BUILTIN_PROMPTS: [(&str, fn(&str) -> String); 7] = [
     ("think-back", crate::claude_parity::think_back_prompt),
     ("recap", crate::claude_parity::recap_prompt),
     ("powerup", crate::claude_parity::powerup_prompt),
+    ("save-skill", crate::claude_parity::save_skill_prompt),
+    ("save-routine", crate::claude_parity::save_routine_prompt),
 ];
 
 fn builtin_prompt_command(command: &str, args: &str) -> Option<String> {

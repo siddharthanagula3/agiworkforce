@@ -467,6 +467,20 @@ pub fn builtin_slash_registry_commands() -> Vec<RegistryCommand> {
             vec![],
         ),
         RegistryCommand::builtin_slash(
+            "save-skill",
+            "Save the task you just finished as a reusable skill",
+            false,
+            true,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash(
+            "save-routine",
+            "Turn the task you just finished into a scheduled routine",
+            false,
+            true,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash(
             "theme",
             "Change syntax highlighting theme",
             false,
