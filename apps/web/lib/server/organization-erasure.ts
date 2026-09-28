@@ -70,6 +70,7 @@ export const ORGANIZATION_SCOPED_TABLES: ReadonlyArray<{ table: string; column: 
   { table: 'organization_member_roles', column: 'organization_id' },
   { table: 'organization_group_roles', column: 'organization_id' },
   { table: 'organization_group_managers', column: 'organization_id' },
+  { table: 'organization_group_members', column: 'organization_id' },
   { table: 'organization_roles', column: 'organization_id' },
   { table: 'organization_policy_overrides', column: 'organization_id' },
   { table: 'organization_policy_revisions', column: 'organization_id' },
