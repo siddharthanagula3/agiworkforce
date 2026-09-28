@@ -3928,6 +3928,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       { value: 'plan', label: 'Plan mode', description: 'Generate a plan; no edits until approved' },
       { value: 'bypass', label: 'Bypass permissions', description: 'Skip all approval prompts (dangerous)' }
     ];
+    var activeEffortLevels = null;
     var EFFORT_OPTIONS = [
       { value: 'low', label: 'Low', description: 'Minimal reasoning, fastest, lowest cost' },
       { value: 'medium', label: 'Medium', description: 'Balanced reasoning, default' },
@@ -4000,7 +4001,11 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       appendControlsGroup(
         'Reasoning effort',
         activeSupportsEffort ? '' : 'This model does not take a reasoning effort.',
-        activeSupportsEffort ? EFFORT_OPTIONS : [],
+        activeSupportsEffort
+          ? EFFORT_OPTIONS.filter(function (option) {
+              return !activeEffortLevels || activeEffortLevels.indexOf(option.value) !== -1;
+            })
+          : [],
         activeEffort,
         'setEffort',
         'effort'
@@ -5952,6 +5957,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       else if (msg.type === 'effortChanged') {
         activeEffort = msg.payload.effort;
         activeSupportsEffort = Boolean(msg.payload.supportsEffort);
+        activeEffortLevels = Array.isArray(msg.payload.efforts) ? msg.payload.efforts : null;
         renderControlsSummary();
       }
 
@@ -10776,6 +10782,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       { value: 'plan', label: 'Plan mode', description: 'Generate a plan; no edits until approved' },
       { value: 'bypass', label: 'Bypass permissions', description: 'Skip all approval prompts (dangerous)' }
     ];
+    var activeEffortLevels = null;
     var EFFORT_OPTIONS = [
       { value: 'low', label: 'Low', description: 'Minimal reasoning, fastest, lowest cost' },
       { value: 'medium', label: 'Medium', description: 'Balanced reasoning, default' },
@@ -10848,7 +10855,11 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       appendControlsGroup(
         'Reasoning effort',
         activeSupportsEffort ? '' : 'This model does not take a reasoning effort.',
-        activeSupportsEffort ? EFFORT_OPTIONS : [],
+        activeSupportsEffort
+          ? EFFORT_OPTIONS.filter(function (option) {
+              return !activeEffortLevels || activeEffortLevels.indexOf(option.value) !== -1;
+            })
+          : [],
         activeEffort,
         'setEffort',
         'effort'
@@ -12800,6 +12811,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       else if (msg.type === 'effortChanged') {
         activeEffort = msg.payload.effort;
         activeSupportsEffort = Boolean(msg.payload.supportsEffort);
+        activeEffortLevels = Array.isArray(msg.payload.efforts) ? msg.payload.efforts : null;
         renderControlsSummary();
       }
 
@@ -17624,6 +17636,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       { value: 'plan', label: 'Plan mode', description: 'Generate a plan; no edits until approved' },
       { value: 'bypass', label: 'Bypass permissions', description: 'Skip all approval prompts (dangerous)' }
     ];
+    var activeEffortLevels = null;
     var EFFORT_OPTIONS = [
       { value: 'low', label: 'Low', description: 'Minimal reasoning, fastest, lowest cost' },
       { value: 'medium', label: 'Medium', description: 'Balanced reasoning, default' },
@@ -17696,7 +17709,11 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       appendControlsGroup(
         'Reasoning effort',
         activeSupportsEffort ? '' : 'This model does not take a reasoning effort.',
-        activeSupportsEffort ? EFFORT_OPTIONS : [],
+        activeSupportsEffort
+          ? EFFORT_OPTIONS.filter(function (option) {
+              return !activeEffortLevels || activeEffortLevels.indexOf(option.value) !== -1;
+            })
+          : [],
         activeEffort,
         'setEffort',
         'effort'
@@ -19648,6 +19665,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       else if (msg.type === 'effortChanged') {
         activeEffort = msg.payload.effort;
         activeSupportsEffort = Boolean(msg.payload.supportsEffort);
+        activeEffortLevels = Array.isArray(msg.payload.efforts) ? msg.payload.efforts : null;
         renderControlsSummary();
       }
 

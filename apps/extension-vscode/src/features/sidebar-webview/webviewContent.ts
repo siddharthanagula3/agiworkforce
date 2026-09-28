@@ -3885,6 +3885,7 @@ export function getWebviewContent(
       { value: 'plan', label: 'Plan mode', description: 'Generate a plan; no edits until approved' },
       { value: 'bypass', label: 'Bypass permissions', description: 'Skip all approval prompts (dangerous)' }
     ];
+    var activeEffortLevels = null;
     var EFFORT_OPTIONS = [
       { value: 'low', label: 'Low', description: 'Minimal reasoning, fastest, lowest cost' },
       { value: 'medium', label: 'Medium', description: 'Balanced reasoning, default' },
@@ -3957,7 +3958,11 @@ export function getWebviewContent(
       appendControlsGroup(
         'Reasoning effort',
         activeSupportsEffort ? '' : 'This model does not take a reasoning effort.',
-        activeSupportsEffort ? EFFORT_OPTIONS : [],
+        activeSupportsEffort
+          ? EFFORT_OPTIONS.filter(function (option) {
+              return !activeEffortLevels || activeEffortLevels.indexOf(option.value) !== -1;
+            })
+          : [],
         activeEffort,
         'setEffort',
         'effort'
@@ -5909,6 +5914,7 @@ export function getWebviewContent(
       else if (msg.type === 'effortChanged') {
         activeEffort = msg.payload.effort;
         activeSupportsEffort = Boolean(msg.payload.supportsEffort);
+        activeEffortLevels = Array.isArray(msg.payload.efforts) ? msg.payload.efforts : null;
         renderControlsSummary();
       }
 
