@@ -721,6 +721,7 @@ fn repl_runtime_command_names() -> std::collections::BTreeSet<&'static str> {
         "sync",
         "onboarding",
         "auth",
+        "personalize",
         "help",
         "h",
         "?",

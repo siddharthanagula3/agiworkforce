@@ -2345,7 +2345,7 @@ async fn handle_projects_command(
             registry.link_cloud_project(&cwd, &found.id)?;
             registry.save(&home)?;
             println!(
-                "{} is linked to the account project '{}'.",
+                "{} is linked to the account project '{}'. Managed turns here use its instructions and knowledge files, and their conversations are filed under it.",
                 cwd.display(),
                 found.name
             );

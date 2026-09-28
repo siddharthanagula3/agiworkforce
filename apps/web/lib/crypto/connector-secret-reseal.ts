@@ -16,6 +16,7 @@ export const CONNECTOR_SECRET_PURPOSES = [
   'oauth-code-verifier',
   'oauth-access-token',
   'oauth-refresh-token',
+  'slack-bot-token',
 ] as const;
 
 export type ConnectorSecretPurpose = (typeof CONNECTOR_SECRET_PURPOSES)[number];
@@ -71,6 +72,12 @@ export const CONNECTOR_SECRET_COLUMNS: readonly ConnectorSecretColumn[] = [
     column: 'refresh_token_enc',
     keyColumn: 'id',
     purpose: 'oauth-refresh-token',
+  },
+  {
+    table: 'public.slack_installations',
+    column: 'bot_token_enc',
+    keyColumn: 'id',
+    purpose: 'slack-bot-token',
   },
 ];
 
