@@ -237,6 +237,11 @@ import {
   type PaletteCommand,
 } from './features/side-panel/commandPalette';
 import {
+  AGIWORK_PLAN_REVIEW_CSS,
+  pendingAgiWorkPlanSteps,
+  type AgiWorkPlanReviewBinding,
+} from './features/side-panel/agiWorkPlanReview';
+import {
   beginPairing,
   loadPairingState,
   storeBridgeSecret,
@@ -1030,6 +1035,7 @@ interface TurnPayload {
   capturePage: boolean;
   images: ComposerImage[];
   files: ComposerFile[];
+  agiWorkPlan?: string[];
 }
 
 const pendingAttachments: ComposerImage[] = [];
@@ -1106,6 +1112,9 @@ function serializeMessagesForHistory() {
       ? { cloudApprovalError: message.cloudApprovalError }
       : {}),
     ...(message.role === 'assistant' && message.managedQuickMode ? { managedQuickMode: true } : {}),
+    ...(message.role === 'assistant' && message.agiWorkPlanDeclined
+      ? { agiWorkPlanDeclined: true }
+      : {}),
     ...(message.role === 'assistant' && message.model ? { model: message.model } : {}),
     ...(message.role === 'assistant' && message.provider ? { provider: message.provider } : {}),
     ...(message.role === 'assistant' && message.generatedFiles
@@ -6071,7 +6080,9 @@ function injectStyles(): void {
         '\n' +
         ARTIFACTS_DRAWER_CSS +
         '\n' +
-        COMMAND_PALETTE_CSS,
+        COMMAND_PALETTE_CSS +
+        '\n' +
+        AGIWORK_PLAN_REVIEW_CSS,
     );
     document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
   } else {
@@ -6501,6 +6512,7 @@ function renderMessages(): void {
           onApproveForChat: (_toolCallId, toolName) => approveToolForChat(msg.id, toolName),
           onApprovalGuidanceChange: setApprovalGuidanceDraft,
           connectorInput: connectorInputBinding(msg),
+          ...agiWorkPlanReviewOption(msg, i),
           onRetry: (messageId) => retryFailedMessage(messageId),
           onSwitchModel: () => document.getElementById('sp-model-selector-btn')?.click(),
           quotaRecovery: { label: quotaRecoveryLabel, open: openQuotaRecovery },
@@ -7356,7 +7368,8 @@ function postTurn(
       extendedThinking: _ctx.thinkingEnabled || undefined,
       modelSelection: _ctx.selectedModel,
       quickMode: quickMode || undefined,
-      ...(_ctx.workMode === 'agiwork' ? { workMode: 'agiwork' } : {}),
+      ...(_ctx.workMode === 'agiwork' || payload.agiWorkPlan ? { workMode: 'agiwork' } : {}),
+      ...(payload.agiWorkPlan ? { agiWorkPlan: payload.agiWorkPlan } : {}),
       ...(capabilityAllowed(capabilityDocument, 'canUseWebSearch') ? {} : { webSearch: false }),
       ...(memoryCommand ? { memoryCommand } : {}),
       ...managedOutboundRoutingPayload(quickMode),
@@ -7444,6 +7457,63 @@ function regenerateTurn(messageId: string, modelSelection?: string): void {
 
 function retryFailedMessage(messageId: string): void {
   regenerateTurn(messageId);
+}
+
+function startAgiWorkPlan(messageId: string, steps: string[]): void {
+  if (!canReplayTurn()) return;
+  const index = _ctx.messages.findIndex((message) => message.id === messageId);
+  const userIndex = lastUserMessageIndex();
+  if (index < 0 || index !== _ctx.messages.length - 1 || userIndex < 0 || userIndex > index) {
+    return;
+  }
+  const userMsg = _ctx.messages[userIndex]!;
+  const payload = replayableTurnPayload(userMsg);
+  if (!payload) {
+    restoreTurnToComposer(userMsg);
+    return;
+  }
+  _ctx.messages.splice(userIndex + 1);
+  turnPayloadByMessageId.set(userMsg.id, payload);
+  _ctx.conversationGeneration += 1;
+  _ctx.needsMessageRebuild = true;
+  renderModelNotice(null);
+  saveMessages();
+  renderMessages();
+  dispatchTurn(userMsg, { ...payload, agiWorkPlan: steps }, _ctx.quickMode);
+}
+
+function declineAgiWorkPlan(messageId: string): void {
+  const message = _ctx.messages.find((candidate) => candidate.id === messageId);
+  if (message?.role !== 'assistant') return;
+  message.agiWorkPlanDeclined = true;
+  _ctx.needsMessageRebuild = true;
+  saveMessages();
+  renderMessages();
+}
+
+function agiWorkPlanReviewOption(
+  message: ChatMessage,
+  index: number,
+): { planReview?: AgiWorkPlanReviewBinding } {
+  if (message.role !== 'assistant' || message.streaming || index !== _ctx.messages.length - 1) {
+    return {};
+  }
+  const steps = pendingAgiWorkPlanSteps(message.agentActivity);
+  if (!steps) return {};
+  const busy = !canReplayTurn();
+  return {
+    planReview: {
+      steps,
+      declined: message.agiWorkPlanDeclined === true,
+      busy,
+      ...(busy
+        ? {}
+        : {
+            onStart: (planSteps: string[]) => startAgiWorkPlan(message.id, planSteps),
+            onCancel: () => declineAgiWorkPlan(message.id),
+          }),
+    },
+  };
 }
 
 function handleStreamError(
