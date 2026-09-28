@@ -6,33 +6,18 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S16.01: User identity/avatar.
-
-- Done when: The author of each turn is distinguishable visually (avatar, name, alignment/bubble style or terminal marker) AND announced to assistive tech (R-n).
-- Wave: 3
-- Already works on: mobile, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | User turns are told apart only by a right-aligned bubble; add a screen-reader author label (e.g. "You said" / assistant name) per message, since the log region announces no sender. | ui |
-| desktop | partial | Same as web (hosted): User turns are told apart only by a right-aligned bubble; add a screen-reader author label (e.g. "You said" / assistant name) per message, since the log region announces no sender. | ui |
-
-Code: `apps/web/features/chat/components/messages/MessageBubble.tsx:1784-1795`, `apps/web/features/chat/components/messages/ChatMessageList.tsx:1914-1917`, `apps/web/features/chat/components/messages/ChatMessageList.tsx:731-731`
-
 ## S16.04: Source and context chips.
 
 - Done when: A sent user message shows chips for the non-file context it carried (quoted text, connector/MCP resources, page, editor selection, @mentions).
 - Wave: 3
-- Already works on: vscode, chrome
+- Already works on: web, desktop, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Show chips on the user message for the MCP resources/prompt, project or tools the turn carried; only a "pasted" badge renders today. | ui |
-| desktop | partial | Same as web (hosted): only a "pasted" badge; MCP/project context the turn carried has no chip. | ui |
 | mobile | partial | Render quoted-reply and project/style context as chips on the sent message; a quote is only inlined into the text as a "> You: ..." line. | ui |
 | cli | partial | Show context the turn carried as distinct chips; the transcript only keeps the literal @path text the user typed. | ui |
 
-Code: `apps/web/features/chat/components/messages/MessageBubble.tsx:1824-1828`, `apps/web/lib/hooks/useChatStream.ts:3548-3554`, `apps/mobile/app/(app)/chat/[id].tsx:354-362`, `apps/cli/src/tui/tui_app.rs:4926-4929`
+Code: `apps/mobile/app/(app)/chat/[id].tsx:354-362`, `apps/cli/src/tui/tui_app.rs:4926-4929`
 
 ## S16.05: Timestamp.
 
@@ -50,17 +35,14 @@ Code: `apps/web/features/chat/components/messages/MessageBubble.tsx:1824-1828`, 
 
 - Done when: A user message that was edited after sending is visibly marked as edited.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Add a persistent "Edited" marker on revised messages; today the only sign is the version pager, which appears in the hover-revealed action row. | ui |
-| desktop | partial | Add a persistent "Edited" marker on revised messages; today the only sign is the version pager, which appears in the hover-revealed action row. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/messages/MessageBubble.tsx:2932-2932`, `apps/web/features/chat/components/messages/MessageBubble.tsx:2806-2808`, `apps/web/features/chat/pages/WebChatPage.tsx:4314-4322`
 
 ## S16.07: Copy action.
 
@@ -90,16 +72,14 @@ Code: `apps/web/features/chat/components/messages/MessageBubble.tsx:2932-2932`, 
 
 - Done when: A sent user message can be re-sent unchanged from the message itself to get a fresh reply.
 - Wave: 3
-- Already works on: cli, chrome
+- Already works on: web, desktop, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Add a Resend/Send-again action on a sent user message; re-running it is only possible via Regenerate on the reply or Retry after a failure. | ui |
-| desktop | partial | Add a Resend/Send-again action on a sent user message; re-running it is only possible via Regenerate on the reply or Retry after a failure. | ui |
 | mobile | partial | Offer Resend on user messages; the long-press sheet gives users Edit/Copy/Delete only and Retry exists only on replies and the send-error banner. | ui |
 | vscode | partial | Only a failed turn can be re-sent (error-block Retry); a sent message has no Resend action. | ui |
 
-Code: `apps/web/features/chat/pages/WebChatPage.tsx:4449-4456`, `apps/web/features/chat/components/messages/MessageBubble.tsx:2813-2813`, `apps/mobile/src/features/chat/components/MessageBubble.tsx:524-526`, `apps/mobile/stores/chat/chatExecutionStore.ts:2961-2964`
+Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:524-526`, `apps/mobile/stores/chat/chatExecutionStore.ts:2961-2964`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:3414-3431`
 
 ## S16.10: Branch-from-message action.
 
@@ -164,40 +144,21 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:3181-3186`, `apps/mobile/ap
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Mark the transcript message itself while it is being delivered; pending shows only on the send button ("Sending…") and as the typing indicator. | ui |
-| desktop | partial | Mark the transcript message itself while it is being delivered; pending shows only on the send button ("Sending…") and as the typing indicator. | ui |
 | mobile | partial | The "queued" badge is the only pending marker and it is set solely by the offline queue (isOnline false and cloud mode). An online send appends the user row with no pending/sending state; the auditor's own note admits "online sends show only the streaming indicator", which is the case the criterion names ("not yet accepted by the service"). Partial with miss states; remaining: show a sending state on online user rows until the server accepts the turn. Same standard the auditor applied to web (partial). |  |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/Composer/SendButton.tsx:95-96`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:5188-5188`, `apps/web/features/chat/components/messages/ChatMessageList.tsx:1192-1192`, `apps/mobile/src/features/chat/components/MessageBubble.tsx:684-700`
-
-## S16.15: Delivery-failed state.
-
-- Done when: When a user message fails to deliver, the transcript shows a clear failed state for that turn.
-- Wave: 3
-- Already works on: mobile, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Keep one failure state: after a retry is refused before streaming the page restores the earlier failed answer, so the alert shows the new error while the transcript and details still show the old one (LQA-05). | states |
-| desktop | partial | Keep one failure state: after a retry is refused before streaming the page restores the earlier failed answer, so the alert shows the new error while the transcript and details still show the old one (LQA-05). | states |
-
-Code: `apps/web/features/chat/pages/WebChatPage.tsx:5074-5087`, `apps/web/lib/hooks/useChatStream.ts:4428-4436`, `apps/web/features/chat/lib/turn-error-notice.ts:243-248`
+Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:684-700`, `apps/mobile/app/(app)/chat/[id].tsx:478-490`, `apps/mobile/app/(app)/chat/[id].tsx:1434-1434`, `apps/mobile/src/features/chat/components/MessageList.tsx:92-92`
 
 ## S16.16: Retry-send action.
 
 - Done when: A failed send offers Retry that re-sends the same turn (text and attachments) and replaces the failure with the new outcome.
 - Wave: 3
-- Already works on: mobile, vscode, chrome
+- Already works on: web, desktop, mobile, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Retry resends the turn, but when that retry is refused before any output (e.g. a plan gate) the earlier failed answer is restored and its old error stays in the transcript and details while the alert shows the new one (LQA-05). | states |
-| desktop | partial | Retry resends the turn, but when that retry is refused before any output (e.g. a plan gate) the earlier failed answer is restored and its old error stays in the transcript and details while the alert shows the new one (LQA-05). | states |
 | cli | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/pages/WebChatPage.tsx:5078-5086`, `apps/web/features/chat/pages/WebChatPage.tsx:4449-4466`, `apps/web/lib/hooks/useChatStream.ts:4428-4433`
 
 ## S16.17: Queued-message state.
 
@@ -260,11 +221,7 @@ Code: `apps/cli/src/lib.rs:1646-1670`, `apps/cli/src/lib.rs:1668-1669`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Add a "Copy link to message" action; /chat/<id>?highlightMessage=<messageId> opens and highlights a message (used by search and past-chat citations) but users cannot get that link, and the parameter is stripped after landing. | ui |
-| desktop | partial | Add a "Copy link to message" action; /chat/<id>?highlightMessage=<messageId> opens and highlights a message (used by search and past-chat citations) but users cannot get that link, and the parameter is stripped after landing. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/pages/WebChatPage.tsx:897-897`, `apps/web/features/chat/pages/WebChatPage.tsx:3925-3935`, `apps/web/features/chat/pages/WebChatPage.tsx:3945-3945`, `apps/web/features/chat/components/messages/CitationPastChats.tsx:8-8`

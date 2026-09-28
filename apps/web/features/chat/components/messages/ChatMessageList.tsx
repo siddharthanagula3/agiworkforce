@@ -403,11 +403,13 @@ interface MessageGroupRowProps {
   /** Attached to the last assistant turn only; see MessageBubble.turnFailureReason. */
   lastTurnFailureReason?: string;
   lastTurnFailureActions?: React.ReactNode;
+  resendBlockedMessageIds: ReadonlySet<string>;
 }
 
 interface MessageRowProps {
   message: ChatMessage;
   isLastMessage?: boolean;
+  isResendBlocked: boolean;
   lastTurnFailureReason?: string;
   lastTurnFailureActions?: React.ReactNode;
   currentTier: UserTier;
@@ -613,6 +615,7 @@ function messageRowPropsEqual(prev: MessageRowProps, next: MessageRowProps): boo
 const MessageRow = memo(function MessageRow({
   message,
   isLastMessage,
+  isResendBlocked,
   lastTurnFailureReason,
   lastTurnFailureActions,
   currentTier,
@@ -765,8 +768,9 @@ const MessageRow = memo(function MessageRow({
       }}
       onRegenerate={
         onRegenerate &&
-        displayRole === 'assistant' &&
-        message.metadata?.['errorCode'] !== FREE_QUOTA_EXHAUSTED_CODE
+        (displayRole === 'assistant'
+          ? message.metadata?.['errorCode'] !== FREE_QUOTA_EXHAUSTED_CODE
+          : !isResendBlocked)
           ? handleRegenerate
           : undefined
       }
@@ -871,6 +875,7 @@ const MessageGroupRow = memo(
     regenerateModelOptions,
     lastTurnFailureReason,
     lastTurnFailureActions,
+    resendBlockedMessageIds,
   }: MessageGroupRowProps) => {
     return (
       <div
@@ -881,6 +886,7 @@ const MessageGroupRow = memo(
             key={message.id}
             message={message}
             isLastMessage={isLastGroup && index === group.messages.length - 1}
+            isResendBlocked={resendBlockedMessageIds.has(message.id)}
             {...(isLastGroup && index === group.messages.length - 1
               ? { lastTurnFailureReason, lastTurnFailureActions }
               : {})}
@@ -954,7 +960,8 @@ const MessageGroupRow = memo(
       prev.isReadAloudSupported === next.isReadAloudSupported &&
       prev.onReadAloud === next.onReadAloud &&
       prev.onRegenerateWithModel === next.onRegenerateWithModel &&
-      prev.regenerateModelOptions === next.regenerateModelOptions
+      prev.regenerateModelOptions === next.regenerateModelOptions &&
+      prev.resendBlockedMessageIds === next.resendBlockedMessageIds
     );
   },
 );
@@ -1037,6 +1044,20 @@ const VirtualizedTranscriptRow = memo(function VirtualizedTranscriptRow({
 VirtualizedTranscriptRow.displayName = 'VirtualizedTranscriptRow';
 
 const FOLLOW_UP_SUGGESTIONS_ENABLED_DEFAULT = false;
+
+const MEDIA_GENERATION_TOOL_TYPES: ReadonlySet<unknown> = new Set([
+  'image-generation',
+  'video-generation',
+]);
+const RESEND_BLOCKED_ID_SEPARATOR = '\n';
+
+function replyBlocksResend(reply: ChatMessage | undefined): boolean {
+  if (reply?.role !== 'assistant') return false;
+  return (
+    MEDIA_GENERATION_TOOL_TYPES.has(reply.metadata?.['toolType']) ||
+    reply.metadata?.['errorCode'] === FREE_QUOTA_EXHAUSTED_CODE
+  );
+}
 
 const SCROLL_THRESHOLD_PX = 120;
 const ANCHOR_SETTLE_TIMEOUT_MS = 1000;
@@ -1238,6 +1259,21 @@ const ChatMessageListComponent = ({
     }
     return null;
   }, [messages]);
+
+  const resendBlockedKey = useMemo(
+    () =>
+      messages
+        .filter(
+          (message, index) => message.role === 'user' && replyBlocksResend(messages[index + 1]),
+        )
+        .map((message) => message.id)
+        .join(RESEND_BLOCKED_ID_SEPARATOR),
+    [messages],
+  );
+  const resendBlockedMessageIds = useMemo<ReadonlySet<string>>(
+    () => new Set(resendBlockedKey ? resendBlockedKey.split(RESEND_BLOCKED_ID_SEPARATOR) : []),
+    [resendBlockedKey],
+  );
 
   const lastMessageFingerprint = useMemo(
     () => (lastMessage ? `${lastMessage.id}-${lastMessage.content.length}` : ''),
@@ -1757,6 +1793,7 @@ const ChatMessageListComponent = ({
       regenerateModelOptions,
       lastTurnFailureReason,
       lastTurnFailureActions,
+      resendBlockedMessageIds,
     }),
     [
       branchGroupsByMessageId,
@@ -1792,6 +1829,7 @@ const ChatMessageListComponent = ({
       regenerateModelOptions,
       lastTurnFailureReason,
       lastTurnFailureActions,
+      resendBlockedMessageIds,
     ],
   );
 

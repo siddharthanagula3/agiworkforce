@@ -9,6 +9,7 @@ export interface ResearchSource {
   favicon?: string;
   /** When the page was published, when the search backend reported it. */
   publishedDate?: string;
+  retrievedAt?: string;
   citationIndex?: number;
 }
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   CheckCircle2,
   ChevronRight,
@@ -11,15 +11,21 @@ import {
   FileText,
   FolderOpen,
   Globe,
+  Info,
   PanelRight,
   Puzzle,
   Sparkles,
   X,
 } from 'lucide-react';
 import { Button } from '@agiworkforce/ui';
-import { agiWorkPlanSentence, buildAgentActivitySummary } from '@agiworkforce/unified-chat';
+import {
+  agiWorkPlanSentence,
+  buildAgentActivitySummary,
+  getManagedModelPresentationLabel,
+} from '@agiworkforce/unified-chat';
 import {
   formatDeliverableTypeLine,
+  isAutoModeModelId,
   runStatusLabel,
   toolCallStatusLabel,
   type CloudWorkMode,
@@ -79,6 +85,21 @@ const OPEN_ACTION_VERB = 'Open';
 const PAUSED_STATUS_LABEL = 'Paused';
 const PARTIAL_STATUS_LABEL = 'Finished with errors';
 const IDLE_STATUS_LABEL = 'Ready';
+const CHAT_DETAILS_LABEL = 'Details';
+const CHAT_DETAILS_CREATED_LABEL = 'Created';
+const CHAT_DETAILS_UPDATED_LABEL = 'Last updated';
+const CHAT_DETAILS_MODEL_LABEL = 'Model';
+const CHAT_DETAILS_MODELS_LABEL = 'Models';
+const CHAT_DETAILS_MESSAGES_LABEL = 'Messages';
+const CHAT_DETAILS_DATE_FORMAT: Intl.DateTimeFormatOptions = {
+  dateStyle: 'medium',
+  timeStyle: 'short',
+};
+
+interface ChatDetailRow {
+  label: string;
+  value: string;
+}
 
 interface WorkSessionPanelProps {
   messages: Message[];
@@ -148,6 +169,49 @@ function byteLabel(byteCount: number | undefined): string | undefined {
   if (byteCount < BYTES_PER_KILOBYTE) return `${byteCount} B`;
   if (byteCount < BYTES_PER_MEGABYTE) return `${(byteCount / BYTES_PER_KILOBYTE).toFixed(1)} KB`;
   return `${(byteCount / BYTES_PER_MEGABYTE).toFixed(1)} MB`;
+}
+
+function formatDetailDate(value: string | undefined): string {
+  if (!value) return '';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? ''
+    : date.toLocaleString(undefined, CHAT_DETAILS_DATE_FORMAT);
+}
+
+function answeringModelLabels(messages: readonly Message[]): string[] {
+  const labels: string[] = [];
+  for (const message of messages) {
+    if (message.role !== 'assistant' || !message.model || isAutoModeModelId(message.model)) {
+      continue;
+    }
+    const label = getManagedModelPresentationLabel(message.model);
+    if (!labels.includes(label)) labels.push(label);
+  }
+  return labels;
+}
+
+function ChatDetailsSection({ rows }: { rows: readonly ChatDetailRow[] }) {
+  return (
+    <details className="group border-b border-border/20" open>
+      <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-medium marker:hidden">
+        <Info className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+        <span>{CHAT_DETAILS_LABEL}</span>
+        <ChevronRight
+          className="ml-auto h-3.5 w-3.5 text-muted-foreground transition-transform group-open:rotate-90 motion-reduce:transition-none"
+          aria-hidden="true"
+        />
+      </summary>
+      <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1.5 px-4 pb-4 text-xs">
+        {rows.map((row) => (
+          <Fragment key={row.label}>
+            <dt className="text-muted-foreground">{row.label}</dt>
+            <dd className="min-w-0 break-words text-foreground">{row.value}</dd>
+          </Fragment>
+        ))}
+      </dl>
+    </details>
+  );
 }
 
 function DockSection({
@@ -396,6 +460,17 @@ export function WorkSessionPanel({
   const conversationArtifacts = useArtifactsStore((state) =>
     activeConversationId ? state.getConversationArtifacts(activeConversationId) : [],
   );
+  const conversationCreatedAt = useChatStore(
+    (state) =>
+      state.conversations.find((conversation) => conversation.id === state.activeConversationId)
+        ?.createdAt,
+  );
+  const conversationUpdatedAt = useChatStore(
+    (state) =>
+      state.conversations.find((conversation) => conversation.id === state.activeConversationId)
+        ?.updatedAt,
+  );
+  const modelLabels = useMemo(() => answeringModelLabels(messages), [messages]);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLElement>(null);
   const layout = useOverlayLayout(SHEET_OVERLAY_QUERY);
@@ -467,6 +542,15 @@ export function WorkSessionPanel({
     ? (summary.title ?? TASK_DOCK_FALLBACK_TITLE)
     : activeConversationTitle?.trim() || CHAT_DOCK_FALLBACK_TITLE;
   const panelLabel = agiWork ? TASK_DOCK_PANEL_LABEL : CHAT_DOCK_PANEL_LABEL;
+  const detailRows = [
+    { label: CHAT_DETAILS_CREATED_LABEL, value: formatDetailDate(conversationCreatedAt) },
+    { label: CHAT_DETAILS_UPDATED_LABEL, value: formatDetailDate(conversationUpdatedAt) },
+    {
+      label: modelLabels.length === 1 ? CHAT_DETAILS_MODEL_LABEL : CHAT_DETAILS_MODELS_LABEL,
+      value: modelLabels.join(', '),
+    },
+    { label: CHAT_DETAILS_MESSAGES_LABEL, value: String(messages.length) },
+  ].filter((row) => row.value);
 
   const sourcesSection = (
     <DockSection
@@ -649,18 +733,10 @@ export function WorkSessionPanel({
 
         <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-width:thin]">
           <TaskDockProgressSection summary={summary} agiWork={agiWork} />
-          {agiWork ? (
-            <>
-              {filesSection}
-              {contextSection}
-              {sourcesSection}
-            </>
-          ) : (
-            <>
-              {filesSection}
-              {sourcesSection}
-            </>
-          )}
+          {filesSection}
+          {contextSection}
+          {sourcesSection}
+          <ChatDetailsSection rows={detailRows} />
         </div>
       </aside>
     </>

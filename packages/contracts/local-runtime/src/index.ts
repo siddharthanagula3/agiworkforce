@@ -51,7 +51,9 @@ export {
   DEVELOPER_SESSION_ORIGIN_LABELS,
   DEVELOPER_SESSION_TRUST_LABELS,
   DEVELOPER_TURN_OUTCOMES,
+  WORKING_TREE_CHANGE_STATES,
   isDeveloperSessionCommand,
+  parseWorkingTreeStatus,
 } from './developer-sessions';
 export type {
   DeveloperApprovalAnswer,
@@ -71,6 +73,11 @@ export type {
   DeveloperTurnFailure,
   DeveloperTurnOutcome,
   DeveloperTurnRequest,
+  LocalBranchPush,
+  LocalBranches,
+  WorkingTreeChange,
+  WorkingTreeChangeState,
+  WorkingTreeChanges,
 } from './developer-sessions';
 
 export {
@@ -119,6 +126,7 @@ export type {
   FileSearchMatch,
   FileStat,
   FileTextContent,
+  FileTextEdit,
   FilesystemCommand,
 } from './filesystem';
 
@@ -254,6 +262,7 @@ export {
   MAX_DEVICE_DISPLAY_ID,
   MAX_DEVICE_HOST_HEADER_LENGTH,
   MAX_DEVICE_REVIEW_LENGTH,
+  MAX_DEVICE_SEARCH_LENGTH,
   MAX_DEVICE_SCROLL_DELTA,
   MAX_DEVICE_STEP_RESULT_LENGTH,
   MAX_DEVICE_STEP_ROOTS,
@@ -324,3 +333,11 @@ export type {
   ComputerUseStatus,
   DeviceFrontWindow,
 } from './computer-use';
+
+export { BACKGROUND_WORK_KINDS, isBackgroundWorkKind } from './background-activity';
+export type {
+  BackgroundActivity,
+  BackgroundCodingRuntime,
+  BackgroundCommandRun,
+  BackgroundWorkKind,
+} from './background-activity';

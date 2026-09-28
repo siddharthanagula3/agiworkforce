@@ -74,6 +74,7 @@ export class ApiKeyService {
     name: string,
     scopes: ApiKeyScope[],
     expiresAt: Date | null = null,
+    projectId: string | null = null,
   ): Promise<{ apiKey: ApiKeyRow; rawKey: string }> {
     const uniqueScopes = new Set(scopes);
     if (
@@ -92,10 +93,18 @@ export class ApiKeyService {
     const { raw, hash, keyId } = await generateKey();
 
     const rows = await db.query<ApiKeyRow>(
-      `INSERT INTO api_keys (user_id, name, key_hash, key_prefix, scopes, expires_at)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO api_keys (user_id, name, key_hash, key_prefix, scopes, expires_at, project_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
-      [userId, name, hash, keyId, scopes, expiresAt === null ? null : expiresAt.toISOString()],
+      [
+        userId,
+        name,
+        hash,
+        keyId,
+        scopes,
+        expiresAt === null ? null : expiresAt.toISOString(),
+        projectId,
+      ],
     );
 
     if (!rows[0]) {

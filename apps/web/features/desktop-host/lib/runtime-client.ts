@@ -6,6 +6,8 @@ import {
   assertLocalTurnCarriesNoAttachments,
   getHostBridge,
   type ApplicationOpenResult,
+  type BackgroundActivity,
+  type BackgroundWorkKind,
   type BrowserPairingState,
   type ClipboardSnapshot,
   type ComputerUseStatus,
@@ -32,12 +34,16 @@ import {
   type DeveloperSessionList,
   type DeveloperSessionTranscript,
   type DeveloperTurnRequest,
+  type LocalBranchPush,
+  type LocalBranches,
   type ShellPolicy,
   type ShellRunResult,
+  type WorkingTreeChanges,
   type WorkspaceRoot,
   type WorkspaceRootKind,
 } from '@agiworkforce/local-runtime-contract';
 import type { BrowserPageSummary } from '@agiworkforce/types';
+import type { PluginSummary, SkillSummary } from '@agiworkforce/types/protocol';
 
 const NO_HOST_MESSAGE = 'Local access is only available in the AGI Cloud desktop app.';
 
@@ -78,6 +84,10 @@ export function openWorkspaceInEditor(rootId: string): Promise<ApplicationOpenRe
 
 export function readWorkspaceText(rootId: string, path: string): Promise<FileTextContent> {
   return invoke<FileTextContent>('file_read_text', { rootId, path });
+}
+
+export function writeWorkspaceText(rootId: string, path: string, text: string): Promise<unknown> {
+  return invoke<unknown>('file_write_text', { rootId, path, text });
 }
 
 export function revokeWorkspaceRoot(rootId: string): Promise<boolean> {
@@ -315,6 +325,17 @@ export function revokeDesktopPermission(
   });
 }
 
+export function readBackgroundActivity(): Promise<BackgroundActivity> {
+  return invoke<BackgroundActivity>('background_activity');
+}
+
+export function stopBackgroundWork(
+  kind: BackgroundWorkKind,
+  id?: string,
+): Promise<BackgroundActivity> {
+  return invoke<BackgroundActivity>('background_stop', { kind, ...(id ? { id } : {}) });
+}
+
 export function readRemoteControl(): Promise<RemoteControlState> {
   return invoke<RemoteControlState>('remote_control_state');
 }
@@ -523,6 +544,54 @@ export function startDeveloperSession(
 
 export function startDeveloperTurn(request: DeveloperTurnRequest): Promise<{ turnId: string }> {
   return invoke<{ turnId: string }>('developer_turn_start', { ...request });
+}
+
+export function listLocalBranches(rootId: string): Promise<LocalBranches | null> {
+  return invoke<LocalBranches | null>('developer_branches_list', { rootId });
+}
+
+export function pushLocalBranch(rootId: string): Promise<LocalBranchPush> {
+  return invoke<LocalBranchPush>('developer_branch_push', { rootId });
+}
+
+export function switchLocalBranch(rootId: string, branch: string): Promise<string> {
+  return invoke<string>('developer_branch_switch', { rootId, branch });
+}
+
+export function listDeveloperSkills(rootId: string): Promise<SkillSummary[]> {
+  return invoke<SkillSummary[]>('developer_skills_list', { rootId });
+}
+
+export function setDeveloperSkillEnabled(
+  rootId: string,
+  name: string,
+  enabled: boolean,
+): Promise<boolean> {
+  return invoke<boolean>('developer_skill_set_enabled', { rootId, name, enabled });
+}
+
+export function setDeveloperSkillConsent(rootId: string, granted: boolean): Promise<boolean> {
+  return invoke<boolean>('developer_skill_consent', { rootId, granted });
+}
+
+export function listDeveloperPlugins(rootId: string): Promise<PluginSummary[]> {
+  return invoke<PluginSummary[]>('developer_plugins_list', { rootId });
+}
+
+export function setDeveloperPluginEnabled(
+  rootId: string,
+  id: string,
+  enabled: boolean,
+): Promise<boolean> {
+  return invoke<boolean>('developer_plugin_set_enabled', { rootId, id, enabled });
+}
+
+export function readDeveloperSessionChanges(rootId: string): Promise<WorkingTreeChanges | null> {
+  return invoke<WorkingTreeChanges | null>('developer_session_changes', { rootId });
+}
+
+export function discardDeveloperSessionChanges(rootId: string, paths: string[]): Promise<string[]> {
+  return invoke<string[]>('developer_session_discard', { rootId, paths });
 }
 
 export function interruptDeveloperTurn(

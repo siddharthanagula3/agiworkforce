@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useContext } from 'react';
+import type { ResearchConnectorOption } from './ResearchActivity';
 
 export type ResearchRunAction =
   { kind: 'pause' } | { kind: 'resume'; guidance?: string } | { kind: 'steer'; guidance: string };
@@ -10,10 +11,15 @@ export type ResearchRunActionHandler = (
   action: ResearchRunAction,
 ) => Promise<boolean>;
 
-const ResearchRunActionContext = createContext<ResearchRunActionHandler | null>(null);
+export interface ResearchRunControls {
+  act: ResearchRunActionHandler;
+  connectorOptions: readonly ResearchConnectorOption[];
+}
 
-export const ResearchRunActionProvider = ResearchRunActionContext.Provider;
+const ResearchRunControlsContext = createContext<ResearchRunControls | null>(null);
 
-export function useResearchRunAction(): ResearchRunActionHandler | null {
-  return useContext(ResearchRunActionContext);
+export const ResearchRunControlsProvider = ResearchRunControlsContext.Provider;
+
+export function useResearchRunControls(): ResearchRunControls | null {
+  return useContext(ResearchRunControlsContext);
 }
