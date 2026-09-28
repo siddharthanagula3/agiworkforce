@@ -243,6 +243,7 @@ pub struct AccountRoute {
     signed_in: bool,
     tier: Option<crate::tier_cache::UserTier>,
     plan_models: Option<std::collections::HashSet<String>>,
+    capabilities: Option<crate::tier_cache::CapabilityDocumentWire>,
 }
 
 impl AccountRoute {
@@ -253,6 +254,7 @@ impl AccountRoute {
             signed_in,
             tier,
             plan_models: None,
+            capabilities: None,
         }
     }
 
@@ -268,6 +270,7 @@ impl AccountRoute {
             tier: crate::tier_cache::read_tier_cache().map(|cached| cached.tier),
             plan_models: crate::tier_cache::read_plan_models_cache()
                 .map(|models| models.into_iter().collect()),
+            capabilities: crate::tier_cache::cached_capabilities(),
         }
     }
 
@@ -292,7 +295,7 @@ impl AccountRoute {
     /// True when the managed route can run this model. An unknown tier is not
     /// a refusal; the server decides.
     fn runs_managed(&self, model: &str) -> bool {
-        if !self.signed_in {
+        if !self.signed_in || self.cloud_models_denied() {
             return false;
         }
         if let Some(plan_models) = &self.plan_models {
@@ -310,6 +313,19 @@ impl AccountRoute {
             Some(tier) => crate::model_catalog::can_access_model_for_tier(model, tier),
             None => true,
         }
+    }
+
+    fn cloud_models_denied(&self) -> bool {
+        self.capabilities
+            .as_ref()
+            .is_some_and(|document| !document.allows(crate::tier_cache::CLOUD_MODELS_CAPABILITY))
+    }
+
+    fn cloud_models_withheld(&self) -> bool {
+        self.cloud_models_denied()
+            && self.capabilities.as_ref().is_some_and(|document| {
+                document.denying_layer(crate::tier_cache::CLOUD_MODELS_CAPABILITY) != Some("tier")
+            })
     }
 
     fn cloud_eligible(model: &str) -> bool {
@@ -391,15 +407,19 @@ pub fn decide_turn_route(
     }
 
     if AccountRoute::cloud_eligible(model) {
-        let error = if account.signed_in {
+        let error = if !account.signed_in {
+            CliError::AccountSignedOut {
+                model: model.to_string(),
+            }
+        } else if account.cloud_models_withheld() {
+            CliError::ModelUnavailable {
+                model: model.to_string(),
+            }
+        } else {
             CliError::PlanExcludesModel {
                 model: model.to_string(),
                 tier: account.tier_label(),
                 alternative_model: account.eligible_model(),
-            }
-        } else {
-            CliError::AccountSignedOut {
-                model: model.to_string(),
             }
         };
         return TurnRoute::Blocked {

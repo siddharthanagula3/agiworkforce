@@ -819,7 +819,8 @@ impl AgentSession {
 
         if !planning_locked
             && self.privacy_mode == PrivacyMode::Managed
-            && crate::plans::cached_plan_allows("image_generation")
+            && crate::tier_cache::capability_allowed(crate::tier_cache::IMAGES_CAPABILITY)
+                .unwrap_or_else(|| crate::plans::cached_plan_allows("image_generation"))
         {
             tool_definitions.extend(crate::runtime::tool_catalog::image_tool_definitions(
                 self.allowed_tools.as_deref(),

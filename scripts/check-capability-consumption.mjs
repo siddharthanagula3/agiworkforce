@@ -55,8 +55,17 @@ export const CAPABILITY_READERS = Object.freeze({
     owner: 'apps/extension-vscode',
   },
   cli: {
-    gap: 'apps/cli/src/tier_cache.rs reads only plan.tier from /api/me and decides model availability locally in model_verdict; the capability document is never deserialized.',
-    owner: 'apps/cli',
+    reads: [
+      { file: 'apps/cli/src/tier_cache.rs', evidence: 'capability_handshake' },
+      {
+        file: 'apps/cli/src/models/provider_dispatch.rs',
+        evidence: 'allows\\(crate::tier_cache::CLOUD_MODELS_CAPABILITY\\)',
+      },
+      {
+        file: 'apps/cli/src/agent/mod.rs',
+        evidence: 'capability_allowed\\(crate::tier_cache::IMAGES_CAPABILITY\\)',
+      },
+    ],
   },
 });
 
