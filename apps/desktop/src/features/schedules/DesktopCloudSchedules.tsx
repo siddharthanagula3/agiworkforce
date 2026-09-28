@@ -24,6 +24,7 @@ import {
   describeScheduleRunTiming,
   managedCloudScheduleShareUrlPath,
   type ManagedCloudScheduleTemplate,
+  type ManagedCloudScheduleRecentRun,
   type ManagedCloudScheduleMutation,
   type ManagedCloudScheduleRecurrence,
   type ManagedCloudScheduleRun,
@@ -505,6 +506,26 @@ function AuthenticatedDesktopCloudSchedules({
   const [operation, setOperation] = useState<Record<string, string | null>>({});
   const [rowErrors, setRowErrors] = useState<Record<string, string | null>>({});
   const [shareUrls, setShareUrls] = useState<Record<string, string>>({});
+  const [recentOpen, setRecentOpen] = useState(false);
+  const [recent, setRecent] = useState<{
+    status: 'idle' | 'loading' | 'success' | 'error';
+    runs: ManagedCloudScheduleRecentRun[];
+    error: string | null;
+  }>({ status: 'idle', runs: [], error: null });
+
+  const loadRecent = async () => {
+    setRecent({ status: 'loading', runs: [], error: null });
+    try {
+      const page = await api.listRecentRuns({ limit: 20, offset: 0 });
+      setRecent({ status: 'success', runs: page.runs, error: null });
+    } catch (error) {
+      setRecent({
+        status: 'error',
+        runs: [],
+        error: errorText(error, 'Recent results could not be loaded.'),
+      });
+    }
+  };
   const { confirm: confirmAction, dialog: confirmDialog } = useConfirmAction();
   const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
   const [expandedTriggersId, setExpandedTriggersId] = useState<string | null>(null);
@@ -925,6 +946,85 @@ function AuthenticatedDesktopCloudSchedules({
             </button>
           </div>
         </header>
+
+        {schedules.length > 0 ? (
+          <section
+            aria-labelledby="desktop-recent-results-heading"
+            className="rounded-2xl border border-[var(--chat-border)] p-4"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <h2 id="desktop-recent-results-heading" className="text-sm font-medium">
+                Recent results
+              </h2>
+              <button
+                type="button"
+                aria-expanded={recentOpen}
+                aria-controls="desktop-recent-results"
+                onClick={() => {
+                  const next = !recentOpen;
+                  setRecentOpen(next);
+                  if (next && recent.status === 'idle') void loadRecent();
+                }}
+                className={SECONDARY_BUTTON}
+              >
+                {recentOpen ? 'Hide' : 'Show'}
+              </button>
+            </div>
+            {recentOpen ? (
+              <div id="desktop-recent-results" className="mt-3 space-y-2 text-xs">
+                {recent.status === 'loading' ? (
+                  <p role="status" className="text-[var(--chat-text-muted)]">
+                    Loading recent results…
+                  </p>
+                ) : recent.status === 'error' ? (
+                  <div
+                    role="alert"
+                    className="flex items-center gap-2 text-[var(--chat-destructive)]"
+                  >
+                    <span>{recent.error}</span>
+                    <button
+                      type="button"
+                      onClick={() => void loadRecent()}
+                      className={SECONDARY_BUTTON}
+                    >
+                      Retry
+                    </button>
+                  </div>
+                ) : recent.runs.length === 0 ? (
+                  <p className="text-[var(--chat-text-muted)]">No schedule has run yet.</p>
+                ) : (
+                  recent.runs.map((run) => {
+                    const timing = describeScheduleRunTiming(run, (value) => dateTimeLabel(value));
+                    return (
+                      <div
+                        key={run.id}
+                        className="rounded-lg border border-[var(--chat-border)] bg-[var(--chat-surface-base)] p-3"
+                      >
+                        <p className="text-sm font-medium text-[var(--chat-text-primary)]">
+                          {run.taskName}
+                        </p>
+                        <p className="mt-1 text-[var(--chat-text-muted)]">
+                          {timing?.skipped ? 'skipped' : run.status} ·{' '}
+                          {dateTimeLabel(run.startedAt)}
+                        </p>
+                        {runResultText(run) ? (
+                          <p className="mt-2 line-clamp-4 leading-5 text-[var(--chat-text-secondary)]">
+                            {runResultText(run)}
+                          </p>
+                        ) : null}
+                        {timing ? (
+                          <p className="mt-2 text-[var(--chat-text-secondary)]">{timing.note}</p>
+                        ) : run.error ? (
+                          <p className="mt-2 text-[var(--chat-destructive)]">{run.error}</p>
+                        ) : null}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            ) : null}
+          </section>
+        ) : null}
 
         {galleryOpen && schedules.length > 0 ? (
           <section

@@ -39,6 +39,7 @@ import {
 } from 'lucide-react';
 import { ScheduleCard, scheduleCardElementId, type ScheduleOperation } from './ScheduleCard';
 import { ScheduleForm } from './ScheduleForm';
+import { RecentScheduleResults } from './RecentScheduleResults';
 import { SCHEDULE_TEMPLATES, type ScheduleTemplate } from '../lib/schedule-templates';
 import type { ScheduleApprovalDecision, ScheduleHistoryState } from './ScheduleRunHistory';
 import {
@@ -971,6 +972,17 @@ export function SchedulesPage({
               />
             </section>
           )}
+
+        {listStatus === 'success' && sortedSchedules.length > 0 ? (
+          <RecentScheduleResults
+            api={api}
+            schedules={sortedSchedules}
+            fallbackTimezone={Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'}
+            onResolveApproval={(schedule, run, decision) =>
+              void resolveApproval(schedule, run, decision)
+            }
+          />
+        ) : null}
 
         {listStatus === 'success' && sortedSchedules.length > 0 && (
           <div
