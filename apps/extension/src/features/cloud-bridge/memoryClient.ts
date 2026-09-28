@@ -147,8 +147,11 @@ function headers(token: string, sendsBody: boolean): Record<string, string> {
 async function readError(response: Response): Promise<string> {
   try {
     const body = (await response.json()) as Record<string, unknown>;
-    const message = body['error'] ?? body['message'];
-    if (typeof message === 'string' && message.trim()) return message.trim();
+    const error = body['error'];
+    const message =
+      error && typeof error === 'object' ? (error as Record<string, unknown>)['message'] : error;
+    const text = typeof message === 'string' ? message : body['message'];
+    if (typeof text === 'string' && text.trim()) return text.trim();
   } catch {
     // The gateway does not always answer with JSON.
   }

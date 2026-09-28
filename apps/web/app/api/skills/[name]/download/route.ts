@@ -6,7 +6,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getBundledSkillDownloadForPlugins } from '@/lib/services/skill-catalog-service';
-import { listEnabledPluginIds } from '@/lib/services/plugin-installation-service';
+import { listPermittedPluginIds } from '@/lib/services/workspace-plugin-access';
 
 export const runtime = 'nodejs';
 
@@ -23,7 +23,7 @@ async function handleDownload(
     throw createError.validation('skill name is required (1–200 chars)');
   }
 
-  const enabledPluginIds = await listEnabledPluginIds(db, userId);
+  const enabledPluginIds = await listPermittedPluginIds(db, userId);
   const download = await getBundledSkillDownloadForPlugins(enabledPluginIds, name);
   if (download === null) {
     throw createError.notFound(`Bundled skill "${name}" not found`);

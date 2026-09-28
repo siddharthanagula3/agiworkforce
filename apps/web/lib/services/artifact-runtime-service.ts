@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { connectorsAllowedWithoutRequest } from '@/lib/connectors/connector-capability';
 import { randomUUID } from 'node:crypto';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { openAIWireRequestToChatRequest } from '@agiworkforce/provider-protocol';
@@ -275,7 +276,12 @@ export async function buildArtifactConnectorPlan(input: {
   if (
     getModelMetadataById(input.modelKey)?.capabilities?.tools !== true ||
     policy.allowToolUse === false ||
-    policy.allowMCP === false
+    policy.allowMCP === false ||
+    !(await connectorsAllowedWithoutRequest({
+      userId: input.userId,
+      organizationId: input.organizationId,
+      planTier: input.planTier,
+    }))
   ) {
     return null;
   }

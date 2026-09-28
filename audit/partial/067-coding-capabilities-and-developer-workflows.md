@@ -9,199 +9,199 @@ nothing is left.
 ## S67.01: Explain repository structure.
 
 - Done when: The agent reads the repository and explains its structure: main parts, entry points, how they fit.
-- Wave: 2
+- Wave: 3
 - Already works on: desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The cloud agent (read_file, list_files, run_command in the E2B sandbox) can do this; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
+| web | partial | Code done; switch-on AGI_E2B_EXECUTION=1 (with E2B_API_KEY and priced sandbox compute) at deploy creates cloud sessions. | switch-on |
 | mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
 
-Code: `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/web/lib/services/cloud-code-agent-tools.ts:274-279`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:84-86`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`
+Code: `apps/web/lib/services/cloud-code-agent-loop.ts:401-401`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
 
 ## S67.02: Find implementations.
 
 - Done when: Asked where something is implemented, the agent finds the defining code and cites file and line.
-- Wave: 2
+- Wave: 3
 - Already works on: desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The cloud agent (read_file, list_files, run_command in the E2B sandbox) can do this; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
+| web | partial | Code done; switch-on AGI_E2B_EXECUTION=1 (with E2B_API_KEY and priced sandbox compute) at deploy creates cloud sessions. | switch-on |
 | mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
 
-Code: `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/web/lib/services/cloud-code-agent-tools.ts:274-279`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:84-86`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`
+Code: `apps/web/lib/services/cloud-code-agent-loop.ts:401-401`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
 
 ## S67.03: Find references.
 
 - Done when: Asked where a symbol is used, the agent finds its references across the repository.
-- Wave: 2
+- Wave: 3
 - Already works on: desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The cloud agent (read_file, list_files, run_command in the E2B sandbox) can do this; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
+| web | partial | Code done; switch-on AGI_E2B_EXECUTION=1 (with E2B_API_KEY and priced sandbox compute) at deploy creates cloud sessions. | switch-on |
 | mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
 
-Code: `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/web/lib/services/cloud-code-agent-tools.ts:274-279`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:84-86`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`
+Code: `apps/web/lib/services/cloud-code-agent-loop.ts:401-401`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
 
 ## S67.04: Trace call paths.
 
 - Done when: The agent traces how a call flows through the code from entry point to effect.
-- Wave: 2
+- Wave: 3
 - Already works on: desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The cloud agent (read_file, list_files, run_command in the E2B sandbox) can do this; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
+| web | partial | Code done; switch-on AGI_E2B_EXECUTION=1 (with E2B_API_KEY and priced sandbox compute) at deploy creates cloud sessions. | switch-on |
 | mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
 
-Code: `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/web/lib/services/cloud-code-agent-tools.ts:274-279`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:84-86`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`
+Code: `apps/web/lib/services/cloud-code-agent-loop.ts:401-401`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
 
 ## S67.05: Answer repository questions.
 
 - Done when: The agent answers free-form questions about the repository by reading its files.
-- Wave: 2
+- Wave: 3
 - Already works on: desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The cloud agent (read_file, list_files, run_command in the E2B sandbox) can do this; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
+| web | partial | Code done; switch-on AGI_E2B_EXECUTION=1 (with E2B_API_KEY and priced sandbox compute) at deploy creates cloud sessions. | switch-on |
 | mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
 
-Code: `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/web/lib/services/cloud-code-agent-tools.ts:274-279`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:84-86`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`
+Code: `apps/web/lib/services/cloud-code-agent-loop.ts:401-401`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
 
 ## S67.06: Implement a feature.
 
 - Done when: Given a feature request, the agent edits and creates files in the repository to implement it.
-- Wave: 2
+- Wave: 3
 - Already works on: desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The cloud agent (read_file, list_files, run_command in the E2B sandbox) can do this, but it has no file-write tool: every edit goes through a shell command that needs approval; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
+| web | partial | Code done; switch-on AGI_E2B_EXECUTION=1 (with E2B_API_KEY and priced sandbox compute) at deploy creates cloud sessions. Ledger text was stale: write_file and edit_file are offered outside plan mode and executed through runApprovedTool. | switch-on |
 | mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
 
-Code: `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/web/lib/services/cloud-code-agent-tools.ts:274-279`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:84-86`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`
+Code: `apps/web/lib/services/cloud-code-agent-tools.ts:434-434`, `apps/web/lib/services/cloud-code-agent-loop.ts:401-401`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
 
 ## S67.07: Fix a defect.
 
 - Done when: Given a defect, the agent finds the cause and edits the code to fix it.
-- Wave: 2
+- Wave: 3
 - Already works on: desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The cloud agent (read_file, list_files, run_command in the E2B sandbox) can do this, but it has no file-write tool: every edit goes through a shell command that needs approval; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
+| web | partial | Code done; switch-on AGI_E2B_EXECUTION=1 (with E2B_API_KEY and priced sandbox compute) at deploy creates cloud sessions. Ledger text was stale: write_file and edit_file are offered outside plan mode and executed through runApprovedTool. | switch-on |
 | mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
 
-Code: `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/web/lib/services/cloud-code-agent-tools.ts:274-279`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:84-86`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`
+Code: `apps/web/lib/services/cloud-code-agent-tools.ts:434-434`, `apps/web/lib/services/cloud-code-agent-loop.ts:401-401`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
 
 ## S67.08: Refactor code.
 
 - Done when: The agent restructures existing code across files without changing behaviour.
-- Wave: 2
+- Wave: 3
 - Already works on: desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The cloud agent (read_file, list_files, run_command in the E2B sandbox) can do this, but it has no file-write tool: every edit goes through a shell command that needs approval; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
+| web | partial | Code done; switch-on AGI_E2B_EXECUTION=1 (with E2B_API_KEY and priced sandbox compute) at deploy creates cloud sessions. Ledger text was stale: write_file and edit_file are offered outside plan mode and executed through runApprovedTool. | switch-on |
 | mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
 
-Code: `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/web/lib/services/cloud-code-agent-tools.ts:274-279`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:84-86`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`
+Code: `apps/web/lib/services/cloud-code-agent-tools.ts:434-434`, `apps/web/lib/services/cloud-code-agent-loop.ts:401-401`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
 
 ## S67.09: Generate tests.
 
 - Done when: The agent writes new test files or cases for existing code.
-- Wave: 2
+- Wave: 3
 - Already works on: desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The cloud agent (read_file, list_files, run_command in the E2B sandbox) can do this, but it has no file-write tool: every edit goes through a shell command that needs approval; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
+| web | partial | Code done; switch-on AGI_E2B_EXECUTION=1 (with E2B_API_KEY and priced sandbox compute) at deploy creates cloud sessions. Ledger text was stale: write_file and edit_file are offered outside plan mode and executed through runApprovedTool. | switch-on |
 | mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
 
-Code: `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/web/lib/services/cloud-code-agent-tools.ts:274-279`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:84-86`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`
+Code: `apps/web/lib/services/cloud-code-agent-tools.ts:434-434`, `apps/web/lib/services/cloud-code-agent-loop.ts:401-401`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
 
 ## S67.10: Run tests.
 
 - Done when: The agent runs the project's test suite and reports the result.
-- Wave: 2
+- Wave: 3
 - Already works on: desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The cloud agent (read_file, list_files, run_command in the E2B sandbox) can do this, though package-manager commands (npm, pnpm, cargo...) always stop for approval; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
+| web | partial | Code done; switch-on AGI_E2B_EXECUTION=1 (with E2B_API_KEY and priced sandbox compute) at deploy creates cloud sessions. Ledger text was stale: in the autonomous approval mode package-manager commands run without a prompt; only destructive commands ask. | switch-on |
 | mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
 
-Code: `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/web/lib/services/cloud-code-agent-tools.ts:274-279`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:84-86`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`
+Code: `apps/web/lib/services/cloud-code-agent-tools.ts:357-357`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
 
 ## S67.11: Interpret test failures.
 
 - Done when: After a test run fails, the agent reads the failure output and explains or fixes the cause.
-- Wave: 2
+- Wave: 3
 - Already works on: desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The cloud agent (read_file, list_files, run_command in the E2B sandbox) can do this, though package-manager commands (npm, pnpm, cargo...) always stop for approval; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
+| web | partial | Code done; switch-on AGI_E2B_EXECUTION=1 (with E2B_API_KEY and priced sandbox compute) at deploy creates cloud sessions. Ledger text was stale: in the autonomous approval mode package-manager commands run without a prompt; only destructive commands ask. | switch-on |
 | mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
 
-Code: `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/web/lib/services/cloud-code-agent-tools.ts:274-279`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:84-86`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`
+Code: `apps/web/lib/services/cloud-code-agent-tools.ts:357-357`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
 
 ## S67.12: Run type checking.
 
 - Done when: The agent runs the project's type checker and reports errors.
-- Wave: 2
+- Wave: 3
 - Already works on: desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The cloud agent (read_file, list_files, run_command in the E2B sandbox) can do this, though package-manager commands (npm, pnpm, cargo...) always stop for approval; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
+| web | partial | Code done; switch-on AGI_E2B_EXECUTION=1 (with E2B_API_KEY and priced sandbox compute) at deploy creates cloud sessions. Ledger text was stale: in the autonomous approval mode package-manager commands run without a prompt; only destructive commands ask. | switch-on |
 | mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
 
-Code: `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/web/lib/services/cloud-code-agent-tools.ts:274-279`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:84-86`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`
+Code: `apps/web/lib/services/cloud-code-agent-tools.ts:357-357`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
 
 ## S67.13: Run linting.
 
 - Done when: The agent runs the project's linter and reports findings.
-- Wave: 2
+- Wave: 3
 - Already works on: desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The cloud agent (read_file, list_files, run_command in the E2B sandbox) can do this, though package-manager commands (npm, pnpm, cargo...) always stop for approval; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
+| web | partial | Code done; switch-on AGI_E2B_EXECUTION=1 (with E2B_API_KEY and priced sandbox compute) at deploy creates cloud sessions. Ledger text was stale: in the autonomous approval mode package-manager commands run without a prompt; only destructive commands ask. | switch-on |
 | mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
 
-Code: `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/web/lib/services/cloud-code-agent-tools.ts:274-279`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:84-86`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`
+Code: `apps/web/lib/services/cloud-code-agent-tools.ts:357-357`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
 
 ## S67.14: Build applications.
 
 - Done when: The agent builds the application with the project's build command.
-- Wave: 2
+- Wave: 3
 - Already works on: desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The cloud agent (read_file, list_files, run_command in the E2B sandbox) can do this, though package-manager commands (npm, pnpm, cargo...) always stop for approval; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
+| web | partial | Code done; switch-on AGI_E2B_EXECUTION=1 (with E2B_API_KEY and priced sandbox compute) at deploy creates cloud sessions. Ledger text was stale: in the autonomous approval mode package-manager commands run without a prompt; only destructive commands ask. | switch-on |
 | mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
 
-Code: `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/web/lib/services/cloud-code-agent-tools.ts:274-279`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:84-86`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`
+Code: `apps/web/lib/services/cloud-code-agent-tools.ts:357-357`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
 
 ## S67.15: Start development servers.
 
 - Done when: The agent starts a development server and keeps it running while it continues working.
 - Wave: 3
+- Already works on: desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
-| desktop | partial | The local agent's run_command waits for the command to exit (or time out); there are no background shells, so a server cannot stay up while it keeps working. | handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | run_command blocks until the command exits or times out; there is no background shell, so a dev server cannot keep running while the agent continues. | handler |
 | vscode | partial | Same local runtime limit (no background shell); the user can start a server in a VS Code terminal themselves. | handler |
 
-Code: `apps/web/features/code/components/LocalSessionPanel.tsx:160-160`, `apps/desktop/electron/runtime/dispatcher.ts:892-895`, `apps/cli/src/tui/tui_app.rs:4747-4749`, `apps/cli/src/features/exec/tools/mod.rs:552-552`
+Code: `apps/cli/src/tui/tui_app.rs:4747-4749`, `apps/cli/src/features/exec/tools/mod.rs:552-552`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:775-777`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:950-950`
 
 ## S67.16: Inspect browser behavior.
 
@@ -222,12 +222,11 @@ Code: `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`,
 
 - Done when: The agent reads the browser console errors of the app under test.
 - Wave: 3
-- Already works on: chrome
+- Already works on: desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
-| desktop | partial | Not in my batch but the same dead search: the auditor searched read_console\|consoleMessages\|consoleCapture and missed browser_console. The Browser tools dialog's 'Read the console' action (BrowserToolsDialog.tsx:59,118-127) calls browser_console via runtime-client.ts:293-299, routed by dispatcher.ts:1035 to commandGate.ts:120-129, which reads the paired Chrome's console (level/pattern filters) into the conversation. Partial, miss ['handler'], remaining: 'Read the console is a manual Browser tools dialog action that attaches the paired Chrome's console to the chat; the local coding agent has no browser_console tool.' Web stays missing: the dialog only works under window.agiHost. |  |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
@@ -236,12 +235,11 @@ Code: `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`,
 
 - Done when: The agent inspects failed network requests of the app under test.
 - Wave: 3
-- Already works on: chrome
+- Already works on: desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
-| desktop | partial | The auditor's identifier regex (read_network\|networkCapture\|networkRequests) could never match the real name: the hosted web app's Browser tools dialog (mounted from the chat composer, ChatComposerNew.tsx:5255) has a 'Read network activity' action that calls browser_network through window.agiHost; dispatcher.ts:1035 routes every browser_* command to runBrowserCommand and commandGate.ts:130-139 plans it for the paired Chrome with a failedOnly filter. The coding agent itself has no such tool (tools/mod.rs:565 lists read_page/click/type/navigate/screenshot only), so this is partial, miss ['handler'], remaining: 'Read network activity is a manual Browser tools dialog that attaches the paired Chrome's requests to the chat; the local coding agent has no browser_network tool and cannot inspect them itself.' |  |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
@@ -249,15 +247,15 @@ Code: `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`,
 ## S67.20: Review code changes.
 
 - Done when: The agent reviews the current code changes and reports issues with file/line references.
-- Wave: 2
+- Wave: 3
 - Already works on: desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The cloud agent (read_file, list_files, run_command in the E2B sandbox) can do this, with no review command (only by asking the agent in words); Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
+| web | partial | Code done; switch-on AGI_E2B_EXECUTION=1 (with E2B_API_KEY and priced sandbox compute) at deploy creates cloud sessions. Ledger text was stale: /review and /security-review are cloud goal commands (Claude Code cloud sessions run built-in text commands, code.claude.com/docs/en/claude-code-on-the-web, 2026-09-28). | switch-on |
 | mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
 
-Code: `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/web/lib/services/cloud-code-agent-tools.ts:274-279`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:84-86`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`
+Code: `apps/web/lib/services/cloud-code-commands.ts:21-21`, `packages/contracts/types/src/cloud-code.ts:303-303`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
 
 ## S67.21: Review pull requests.
 
@@ -275,15 +273,15 @@ Code: `apps/extension/src/features/content/in-page-panel/pageActions.ts:76-92`
 ## S67.22: Scan for security problems.
 
 - Done when: The agent scans the code for security problems and reports them.
-- Wave: 2
+- Wave: 3
 - Already works on: desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The cloud agent (read_file, list_files, run_command in the E2B sandbox) can do this, with no security-review command; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
+| web | partial | Code done; switch-on AGI_E2B_EXECUTION=1 (with E2B_API_KEY and priced sandbox compute) at deploy creates cloud sessions. Ledger text was stale: /review and /security-review are cloud goal commands (Claude Code cloud sessions run built-in text commands, code.claude.com/docs/en/claude-code-on-the-web, 2026-09-28). | switch-on |
 | mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
 
-Code: `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/web/lib/services/cloud-code-agent-tools.ts:274-279`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:84-86`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`
+Code: `apps/web/lib/services/cloud-code-commands.ts:21-21`, `packages/contracts/types/src/cloud-code.ts:303-303`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
 
 ## S67.23: Explain findings.
 
@@ -301,109 +299,109 @@ Code: `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`,
 ## S67.24: Propose patches.
 
 - Done when: The agent proposes a change as a reviewable patch before or as it applies it.
-- Wave: 2
+- Wave: 3
 - Already works on: desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The cloud agent (read_file, list_files, run_command in the E2B sandbox) can do this, and the Changes panel shows the resulting diff; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
+| web | partial | Code done; switch-on AGI_E2B_EXECUTION=1 (with E2B_API_KEY and priced sandbox compute) at deploy creates cloud sessions. | switch-on |
 | mobile | partial | The phone renders diffs (CodeSessionView.tsx:334-340) relayed by the Electron remote-control host (remoteControlHost.ts:104 -> codeRemoteController diffsFor) from a desktop session it can only steer; no patch is proposed or applied by the mobile surface. Every other mobile cell in this section is partial for exactly that dependency ('only by steering an existing desktop AGI Code session'), and the desktop cell for the same relayed data was rated partial, so done here is inconsistent. Partial, miss ['surface-only'], remaining: 'diffs and approvals are relayed from a paired desktop session; the phone cannot run the agent or produce a patch itself.' |  |
 
-Code: `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/web/lib/services/cloud-code-agent-tools.ts:274-279`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:84-86`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:334-340`
+Code: `apps/web/lib/services/cloud-code-agent-loop.ts:401-401`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:334-340`, `apps/desktop/electron/remote/codeRemoteController.ts:158-168`
 
 ## S67.25: Apply selected patches.
 
 - Done when: The user picks which of the agent's proposed patches to apply, and only those are applied.
-- Wave: 2
+- Wave: 3
 - Already works on: desktop, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only per-command approve/reject of a paused step; no selection among patches (commit takes every change); Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off, handler |
+| web | partial | Code done; switch-on AGI_E2B_EXECUTION=1 (with E2B_API_KEY and priced sandbox compute) at deploy creates cloud sessions. Ledger text was stale: each changed file can be discarded before commit, as the desktop cell that is done. | switch-on |
 | mobile | partial | Approve/deny each pending desktop tool call from the phone; no patch-level selection. | handler |
 | cli | partial | /diff-review stages the files you approve; agi apply applies the whole latest diff; no per-patch selection. | handler |
 
-Code: `apps/web/features/code/components/CodeTranscript.tsx:405-409`, `apps/web/features/code/CloudCodePage.tsx:634-638`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:158-160`, `apps/mobile/src/features/companion/remote-code/service.ts:60-74`
+Code: `apps/web/features/code/components/CodeChangesPanel.tsx:326-326`, `apps/web/app/api/code/sessions/[sessionId]/changes/route.ts:135-135`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:158-160`, `apps/mobile/src/features/companion/remote-code/service.ts:60-74`
 
 ## S67.26: Generate documentation.
 
 - Done when: The agent writes or updates documentation (README, doc comments) from the code.
-- Wave: 2
+- Wave: 3
 - Already works on: desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The cloud agent (read_file, list_files, run_command in the E2B sandbox) can do this, but it has no file-write tool: every edit goes through a shell command that needs approval; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
+| web | partial | Code done; switch-on AGI_E2B_EXECUTION=1 (with E2B_API_KEY and priced sandbox compute) at deploy creates cloud sessions. Ledger text was stale: write_file and edit_file are offered outside plan mode and executed through runApprovedTool. | switch-on |
 | mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
 
-Code: `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/web/lib/services/cloud-code-agent-tools.ts:274-279`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:84-86`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`
+Code: `apps/web/lib/services/cloud-code-agent-tools.ts:434-434`, `apps/web/lib/services/cloud-code-agent-loop.ts:401-401`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
 
 ## S67.27: Perform migrations.
 
 - Done when: The agent performs a code or schema migration across the repository.
-- Wave: 2
+- Wave: 3
 - Already works on: desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The cloud agent (read_file, list_files, run_command in the E2B sandbox) can do this, but it has no file-write tool: every edit goes through a shell command that needs approval; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
+| web | partial | Code done; switch-on AGI_E2B_EXECUTION=1 (with E2B_API_KEY and priced sandbox compute) at deploy creates cloud sessions. Ledger text was stale: write_file and edit_file are offered outside plan mode and executed through runApprovedTool. | switch-on |
 | mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
 
-Code: `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/web/lib/services/cloud-code-agent-tools.ts:274-279`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:84-86`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`
+Code: `apps/web/lib/services/cloud-code-agent-tools.ts:434-434`, `apps/web/lib/services/cloud-code-agent-loop.ts:401-401`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
 
 ## S67.28: Upgrade dependencies.
 
 - Done when: The agent upgrades dependencies and adjusts code to the new versions.
-- Wave: 2
+- Wave: 3
 - Already works on: desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The cloud agent (read_file, list_files, run_command in the E2B sandbox) can do this, but dependency installs always stop for approval; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
+| web | partial | Code done; switch-on AGI_E2B_EXECUTION=1 (with E2B_API_KEY and priced sandbox compute) at deploy creates cloud sessions. Ledger text was stale: in the autonomous approval mode package-manager commands run without a prompt; only destructive commands ask. | switch-on |
 | mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
 
-Code: `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/web/lib/services/cloud-code-agent-tools.ts:274-279`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:84-86`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`
+Code: `apps/web/lib/services/cloud-code-agent-tools.ts:357-357`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
 
 ## S67.29: Create commits.
 
 - Done when: The agent (or user from the coding surface) commits the session's changes with a message.
-- Wave: 2
+- Wave: 3
 - Already works on: desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Commit form commits and pushes the working branch; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
+| web | partial | Code done; switch-on AGI_E2B_EXECUTION=1 (with E2B_API_KEY and priced sandbox compute) at deploy creates cloud sessions. | switch-on |
 | mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
 
-Code: `apps/web/features/code/components/CodeChangesPanel.tsx:281-291`, `apps/web/lib/services/cloud-code-session-service.ts:2001-2003`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
+Code: `apps/web/lib/services/cloud-code-agent-loop.ts:401-401`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
 
 ## S67.30: Create branches.
 
 - Done when: The agent creates a git branch for its work.
-- Wave: 2
+- Wave: 3
 - Already works on: desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Each repository session gets its own working branch automatically; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
+| web | partial | Code done; switch-on AGI_E2B_EXECUTION=1 (with E2B_API_KEY and priced sandbox compute) at deploy creates cloud sessions. | switch-on |
 | mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
 
-Code: `apps/web/features/code/components/CodeChangesPanel.tsx:180-184`, `apps/web/lib/services/cloud-code-session-service.ts:1307-1311`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
+Code: `apps/web/lib/services/cloud-code-agent-loop.ts:401-401`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
 
 ## S67.31: Create pull requests.
 
 - Done when: The agent opens a pull request for its branch on the code host.
-- Wave: 2
+- Wave: 3
 - Already works on: desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Create pull request opens a GitHub PR for the working branch; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
+| web | partial | Code done; switch-on AGI_E2B_EXECUTION=1 (with E2B_API_KEY and priced sandbox compute) at deploy creates cloud sessions. | switch-on |
 | mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
 | cli | partial | No pull-request tool or command; only gh through run_command when the user has it installed and signed in. | handler |
 | vscode | partial | Same local runtime: no pull-request tool, only gh through the shell tool. | handler |
 
-Code: `apps/web/features/code/components/CodeChangesPanel.tsx:320-327`, `apps/web/app/api/code/sessions/[sessionId]/pull-request/route.ts:57-60`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
+Code: `apps/web/lib/services/cloud-code-agent-loop.ts:401-401`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`, `apps/cli/src/tui/tui_app.rs:4747-4749`
 
 ## S67.32: Respond to review feedback.
 
@@ -427,13 +425,13 @@ Code: `apps/cli/src/claude_parity.rs:228-228`, `apps/cli/src/claude_parity.rs:11
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | A failed GitHub check can trigger a routine, but no step reads the CI logs or the repository to find the cause. | handler |
+| web | partial | Ledger text was stale: an @agi-workforce mention on an issue or pull request starts a cloud coding task, reads failed checks with their output on a PR, commits and opens a PR. Switch-on AGI_E2B_EXECUTION=1 and AGI_MANAGED_COMPUTE_PRIVATE_BETA at deploy (the task replies 'unavailable' without both). | switch-on |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/triggers/github-events.ts:52-62`, `apps/web/app/api/github/webhook/route.ts:141-141`, `apps/web/features/connectors/hooks/use-connectors-settings-adapter.tsx:626-630`
+Code: `apps/web/lib/services/cloud-code-github-task.ts:216-216`, `apps/web/lib/services/cloud-code-github-task.ts:259-259`, `apps/web/app/api/github/webhook/route.ts:253-253`
 
 ## S67.34: Work from issues or team mentions.
 
@@ -442,27 +440,27 @@ Code: `apps/web/lib/triggers/github-events.ts:52-62`, `apps/web/app/api/github/w
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | An @agi-workforce mention on a PR only triggers a review; nothing turns an issue or mention into a coding task. | handler |
-| desktop | partial | Only the hosted-web PR-review mention; no issue or mention starts a coding task. | handler |
+| web | partial | Ledger text was stale: an @agi-workforce mention on an issue or pull request starts a cloud coding task, reads failed checks with their output on a PR, commits and opens a PR. Switch-on AGI_E2B_EXECUTION=1 and AGI_MANAGED_COMPUTE_PRIVATE_BETA at deploy (the task replies 'unavailable' without both). | switch-on |
+| desktop | partial | Ledger text was stale: an @agi-workforce mention on an issue or pull request starts a cloud coding task, reads failed checks with their output on a PR, commits and opens a PR. Switch-on AGI_E2B_EXECUTION=1 and AGI_MANAGED_COMPUTE_PRIVATE_BETA at deploy (the task replies 'unavailable' without both). | switch-on |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/web/app/api/github/webhook/route.ts:32-32`, `apps/web/app/api/github/webhook/route.ts:236-236`, `apps/web/features/connectors/hooks/use-connectors-settings-adapter.tsx:626-630`
+Code: `apps/web/lib/services/cloud-code-github-task.ts:216-216`, `apps/web/lib/services/cloud-code-github-task.ts:259-259`, `apps/web/app/api/github/webhook/route.ts:253-253`
 
 ## S67.36: Run bounded goal/completion loops.
 
 - Done when: The user sets a goal and a bound (turns/time) and the agent loops until done or the bound is hit.
-- Wave: 2
+- Wave: 3
 - Already works on: desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Each cloud turn is bounded by a fixed 10-minute budget the user cannot change; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off, ui |
+| web | partial | Code done; switch-on AGI_E2B_EXECUTION=1 (with E2B_API_KEY and priced sandbox compute) at deploy creates cloud sessions. Ledger text was stale: the cloud composer offers the same 12/24/48 step bounds as the desktop cell that is done. | switch-on |
 | mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
 | vscode | partial | The runtime loop uses its default cap; the extension exposes only effort presets, not a goal bound. | ui |
 
-Code: `apps/web/lib/deadline-policy.ts:33-33`, `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
+Code: `apps/web/features/code/components/CodeComposer.tsx:1177-1177`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:151-151`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
 
 ## S67.37: Persist useful repository-specific Memory.
 

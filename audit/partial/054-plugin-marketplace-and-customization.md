@@ -160,17 +160,13 @@ Code: `apps/cli/src/lib.rs:3613-3652`, `apps/cli/src/lib.rs:3617-3634`
 
 - Done when: A plugin shows the agents it includes, and they are usable when installed.
 - Wave: 3
-- Already works on: cli
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Detail shows only a count/flag for agents; web installs only a plugin's skills, so its agents never run. | handler |
-| desktop | partial | Same as web: agents shown, never run. | handler |
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `packages/ui/ui/src/directory/PluginDetailView.tsx:113-145`, `apps/web/features/plugins/server/directory/install.ts:155-204`
 
 ## S54.17: Included commands.
 
