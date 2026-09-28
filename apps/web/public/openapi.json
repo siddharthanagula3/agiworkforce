@@ -666,7 +666,7 @@
           },
           "response_format": {
             "type": "object",
-            "description": "`text`, `json_object` and `json_schema` are honoured. `json_object` and `json_schema` need `stream: false`, because the reply is validated before it is returned. With `json_schema` the reply is checked against the schema, and a reply that does not satisfy it answers 502 `json_schema_not_satisfied` rather than returning unvalidated output. It works with image input on any model the registry marks for both vision and structured output; a model without structured output answers 400 `model_no_structured_output`.",
+            "description": "`text`, `json_object` and `json_schema` are honoured. `json_object` and `json_schema` need `stream: false`, because the reply is validated before it is returned. With `json_schema` the reply is checked against the schema, and a reply that does not satisfy it answers 502 `json_schema_not_satisfied` rather than returning unvalidated output. It works with image input on any model the registry marks for both vision and structured output; a model without structured output answers 400 `model_no_structured_output`. When the registry marks the serving model for structured output and its provider offers a native JSON mode, the request also asks the provider for that mode.",
             "properties": {
               "type": {
                 "type": "string",
