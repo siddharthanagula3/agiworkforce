@@ -153,14 +153,13 @@ Code: `packages/platform/local-llm/src/tier3.ts:228-238`, `packages/platform/loc
 
 - Done when: The app shows whether the local model runtime is running and healthy, with errors when it is not.
 - Wave: 3
-- Already works on: cli
+- Already works on: cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Performance shows device tier, runtimes and thermal state, but not whether a model is actually loaded or failing; "No local model loaded" is based on the selection, not the runtime. | ui |
-| vscode | partial | The model picker lists local models found or says none were found, but shows no running/not-running state or error for each local server. | ui |
 
-Code: `apps/mobile/app/(app)/settings/performance.tsx:512-523`, `apps/mobile/app/(app)/settings/performance.tsx:636-642`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:1131-1146`
+Code: `apps/mobile/app/(app)/settings/performance.tsx:512-523`, `apps/mobile/app/(app)/settings/performance.tsx:636-642`
 
 ## S109.25: Local resource/compute dashboard.
 

@@ -4,6 +4,7 @@ import { createPostgresContextManifestStore, resolveContext } from '@agiworkforc
 import {
   classifyTaskLocally,
   detectIndicScript,
+  modelsPastDeprecationDate,
   resolveAutoRoute,
   type AutoRoutingRequest,
 } from '@agiworkforce/routing';
@@ -670,6 +671,7 @@ async function selectScheduledRoute(
     subscriptionTier,
     trustMode: 'managed_cloud',
     runtimeProfileId: 'web/cloud-chat',
+    retiredModelKeys: modelsPastDeprecationDate(),
   };
   const routing = await sideCallRoutingRequest(scope.db, scope.userId, baseRouting);
   if (!routing) throw new Error(NO_TRAINING_MODEL_MESSAGE);
