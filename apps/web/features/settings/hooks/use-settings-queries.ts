@@ -252,14 +252,22 @@ export function useCreateAPIKey(): CreateAPIKeyMutation {
   const { withStepUp, dialog } = useStepUp();
 
   const mutation = useMutation<CreateAPIKeyResult, Error, CreateApiKeyFormData>({
-    mutationFn: async ({ name, scopes }: CreateApiKeyFormData): Promise<CreateAPIKeyResult> => {
+    mutationFn: async ({
+      name,
+      scopes,
+      expiresInDays,
+    }: CreateApiKeyFormData): Promise<CreateAPIKeyResult> => {
       if (!name.trim()) {
         throw new Error('Please enter a name for the API key');
       }
+      const expiresAt =
+        !expiresInDays || expiresInDays === 'never'
+          ? null
+          : new Date(Date.now() + Number(expiresInDays) * 24 * 60 * 60 * 1000).toISOString();
       const response = await withStepUp((headers) =>
         sendAuthorizedJson(
           '/api/settings/api-keys',
-          { method: 'POST', body: { name, scopes } },
+          { method: 'POST', body: { name, scopes, expiresAt } },
           headers,
         ),
       );
