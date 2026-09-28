@@ -2763,6 +2763,10 @@ export const NON_US_PROVIDERS: ReadonlySet<string> = Object.freeze(
   new Set<string>(modelRegistry.policies.auto.providerPolicies.usOnly.excludedProviders),
 );
 
+export const US_ONLY_ROUTING_TIERS: readonly string[] = Object.freeze([
+  ...modelRegistry.policies.auto.providerPolicies.usOnly.allowedTiers,
+]);
+
 /**
  * Kinds of "default model" requests `getDefaultModelFor` understands.
  *
