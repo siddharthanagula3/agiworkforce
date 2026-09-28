@@ -38,6 +38,13 @@ import {
   INSTALL_LABEL,
   MARKETPLACE_REFRESHING_LABEL,
   MARKETPLACE_REFRESH_LABEL,
+  CUSTOMIZE_CONFIRM_BODY,
+  CUSTOMIZE_CONFIRM_LABEL,
+  CUSTOMIZE_CONFIRM_TITLE_PREFIX,
+  EDIT_PLUGIN_FAILED_COPY,
+  EDIT_PLUGIN_INTRO,
+  EDIT_PLUGIN_LABEL,
+  EDIT_PLUGIN_SUBMIT_LABEL,
   PLUGIN_VERSION_CHANGELOG_LABEL,
   PLUGIN_VERSION_CONFIRM_BODY,
   PLUGIN_VERSION_CONFIRM_TITLE_PREFIX,
@@ -71,6 +78,7 @@ import type {
   DirectoryFilterSelection,
   DirectoryGroup,
   DirectoryManageAction,
+  DirectoryPluginDraft,
   DirectoryPluginRepair,
   DirectoryPluginVersionOption,
   DirectoryQuery,
@@ -150,6 +158,9 @@ function DirectorySectionPanel({
   const [marketplaceOpen, setMarketplaceOpen] = useState(false);
   const [uploadPluginOpen, setUploadPluginOpen] = useState(false);
   const [createPluginOpen, setCreatePluginOpen] = useState(false);
+  const [editPlugin, setEditPlugin] = useState<{ id: string; draft: DirectoryPluginDraft } | null>(
+    null,
+  );
   const [uploadSkillOpen, setUploadSkillOpen] = useState(false);
   const [browsing, setBrowsing] = useState(false);
   const [refreshingSourceId, setRefreshingSourceId] = useState<string | null>(null);
@@ -533,6 +544,33 @@ function DirectorySectionPanel({
             })
         : undefined;
       const repair = (item: DirectoryPluginRepair) => void runAction(detail.id, () => item.run());
+      const loadPluginDraft = adapter.loadPluginDraft;
+      const openEditor = async (id: string) => {
+        if (!loadPluginDraft) return;
+        setEditPlugin({ id, draft: await loadPluginDraft(id) });
+      };
+      const edit =
+        detail.editable && loadPluginDraft && adapter.updatePlugin
+          ? () => void runAction(detail.id, () => openEditor(detail.id))
+          : undefined;
+      const customizePlugin = adapter.customizePlugin;
+      const customize =
+        detail.customizable && customizePlugin
+          ? () =>
+              confirm({
+                title: `${CUSTOMIZE_CONFIRM_TITLE_PREFIX} ${detail.name}?`,
+                description: CUSTOMIZE_CONFIRM_BODY,
+                confirmLabel: CUSTOMIZE_CONFIRM_LABEL,
+                cancelLabel: INSTALL_CONFIRM_CANCEL_LABEL,
+                destructive: false,
+                onConfirm: () =>
+                  runAction(detail.id, async () => {
+                    const copyId = await customizePlugin(detail.id);
+                    setEntryId(copyId);
+                    await openEditor(copyId);
+                  }),
+              })
+          : undefined;
       return (
         <>
           {renderActionError()}
@@ -542,6 +580,8 @@ function DirectorySectionPanel({
             onInstall={install}
             onUninstall={remove}
             onRepair={repair}
+            {...(edit ? { onEdit: edit } : {})}
+            {...(customize ? { onCustomize: customize } : {})}
             {...(showPublisher ? { onShowPublisher: showPublisher } : {})}
             {...(changeVersion ? { onChangeVersion: changeVersion } : {})}
             onCopyLink={copyLink}
@@ -787,6 +827,22 @@ function DirectorySectionPanel({
             void adapter.loadSection?.('plugins');
           }}
           onSubmit={adapter.createPlugin}
+        />
+      ) : null}
+      {editPlugin && adapter.updatePlugin ? (
+        <CreatePluginDialog
+          key={editPlugin.id}
+          open
+          initial={editPlugin.draft}
+          title={EDIT_PLUGIN_LABEL}
+          intro={EDIT_PLUGIN_INTRO}
+          submitLabel={EDIT_PLUGIN_SUBMIT_LABEL}
+          failureCopy={EDIT_PLUGIN_FAILED_COPY}
+          onClose={() => {
+            setEditPlugin(null);
+            void adapter.loadSection?.('plugins');
+          }}
+          onSubmit={(draft) => adapter.updatePlugin!(editPlugin.id, draft)}
         />
       ) : null}
       {adapter.uploadSkillFile ? (
