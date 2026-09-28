@@ -86,6 +86,8 @@ pub struct RejectedMemory {
     pub id: String,
     #[serde(default)]
     pub term: Option<String>,
+    #[serde(default)]
+    pub message: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -268,6 +270,9 @@ pub fn refusals(request: &MemoryPushRequest, response: &MemoryPushResponse) -> V
                 .iter()
                 .find(|rejected| rejected.id == memory.id)
             {
+                if let Some(message) = rejected.message.as_deref() {
+                    return format!("'{preview}': {message}");
+                }
                 match rejected.term.as_deref() {
                     Some(term) => format!("'{preview}' was refused by your account's memory policy ({term})"),
                     None => format!("'{preview}' was refused by your account's memory policy"),
@@ -425,6 +430,7 @@ mod tests {
             rejected: vec![RejectedMemory {
                 id: request.memories[1].id.clone(),
                 term: Some("password".to_string()),
+                message: None,
             }],
             cursor: "10".to_string(),
         };
