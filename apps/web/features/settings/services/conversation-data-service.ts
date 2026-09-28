@@ -5,7 +5,12 @@ import {
   ManagedCloudDeleteConversationResponseSchema,
   ManagedCloudUpdateConversationResponseSchema,
   managedCloudConversationPath,
+  managedCloudPublishedArtifactVersionPath,
+  managedCloudPublishedArtifactVersionsPath,
+  ManagedCloudPublishedArtifactVersionDetailSchema,
+  ManagedCloudPublishedArtifactVersionListResponseSchema,
   normalizeManagedCloudConversation,
+  type ManagedCloudPublishedArtifactVersion,
 } from '@agiworkforce/cloud-contracts';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 
@@ -238,6 +243,52 @@ export async function listPublishedArtifacts(
     throw await responseError(response, 'Failed to load published artifacts');
   }
   return PublishedArtifactListResponseSchema.parse(await response.json()).artifacts;
+}
+
+export async function listPublishedArtifactVersions(
+  token: string,
+  signal?: AbortSignal,
+): Promise<ManagedCloudPublishedArtifactVersion[]> {
+  const response = await fetch(managedCloudPublishedArtifactVersionsPath(token), {
+    credentials: 'include',
+    signal,
+  });
+  if (!response.ok) {
+    throw await responseError(response, 'Failed to load the publish history');
+  }
+  return ManagedCloudPublishedArtifactVersionListResponseSchema.parse(await response.json())
+    .versions;
+}
+
+export async function republishArtifactVersion(
+  artifact: PublishedArtifactSummary,
+  version: number,
+): Promise<void> {
+  const detailResponse = await fetch(
+    managedCloudPublishedArtifactVersionPath(artifact.token, version),
+    { credentials: 'include' },
+  );
+  if (!detailResponse.ok) {
+    throw await responseError(detailResponse, 'Failed to read that published version');
+  }
+  const detail = ManagedCloudPublishedArtifactVersionDetailSchema.parse(
+    await detailResponse.json(),
+  );
+  const response = await fetch('/api/artifacts/publish', {
+    method: 'POST',
+    credentials: 'include',
+    headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({
+      artifactId: artifact.artifactId,
+      title: detail.title,
+      kind: detail.kind,
+      ...(detail.language ? { language: detail.language } : {}),
+      content: detail.content,
+    }),
+  });
+  if (!response.ok) {
+    throw await responseError(response, 'Failed to put that version live');
+  }
 }
 
 export async function unpublishArtifact(token: string): Promise<void> {
