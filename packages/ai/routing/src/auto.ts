@@ -42,7 +42,7 @@ export type ModelCapabilityName = RegistryCapabilityName;
 
 interface RegistryModel {
   identity: { key: string; provider: string; providerModelId: string };
-  lifecycle: { availability: string; deprecated: boolean };
+  lifecycle: { availability: string; deprecated: boolean; deprecationDate?: string | null };
   /**
    * Regions this model may be processed in, projected from its serving
    * provider's governance record. `null` records an unverified fact, which is
@@ -214,6 +214,7 @@ export interface AutoRoutingRequest {
    * several hosts at the same price.
    */
   excludedRouteHosts?: ReadonlySet<string>;
+  retiredModelKeys?: ReadonlySet<string>;
   /**
    * The residency region this request must be processed in, such as `us`.
    *
@@ -1303,6 +1304,9 @@ function evaluateEligibility(
     reasons.push(`model ${modelKey} availability is ${model.lifecycle.availability}`);
   }
   if (model.lifecycle.deprecated) reasons.push(`model ${modelKey} is deprecated`);
+  if (request.retiredModelKeys?.has(modelKey)) {
+    reasons.push(`model ${modelKey} passed its deprecation date`);
+  }
   const tier = normalizeTier(request.subscriptionTier);
   const tierRejection = tierAdmissionRejection(modelKey, tier);
   if (tierRejection) reasons.push(tierRejection);
@@ -1587,6 +1591,18 @@ function trustModeRejection(
       `trust mode ${request.trustMode} is not permitted by workspace policy (permitted: ${permitted.join(', ') || 'none'})`,
     ],
   };
+}
+
+export function modelsPastDeprecationDate(now: Date = new Date()): ReadonlySet<string> {
+  const nowMs = now.getTime();
+  return new Set(
+    Object.entries(registry.models).flatMap(([modelKey, model]) => {
+      const deprecationDate = model.lifecycle.deprecationDate;
+      if (!deprecationDate) return [];
+      const cutoffMs = Date.parse(deprecationDate);
+      return Number.isFinite(cutoffMs) && cutoffMs <= nowMs ? [modelKey] : [];
+    }),
+  );
 }
 
 export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision {

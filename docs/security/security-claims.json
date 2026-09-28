@@ -1196,7 +1196,7 @@
       "id": "approval-precedence-and-tool-table",
       "section": "1.1 Managed Cloud, default tool authority",
       "kind": "rows",
-      "rows": 20,
+      "rows": 30,
       "implementation": [
         "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts",
         "apps/web/app/api/llm/v1/chat/completions/lib/tool-metadata.ts"
@@ -1375,7 +1375,7 @@
       "id": "the-scope-ceiling-table",
       "section": "Ceiling table",
       "kind": "rows",
-      "rows": 60,
+      "rows": 65,
       "implementation": ["apps/web/lib/connectors/oauth-scope-allowlist.ts"],
       "proof": [
         {

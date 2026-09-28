@@ -313,6 +313,18 @@
       "verifiedBy": "official-openai-images-vision-guide",
       "status": "CORRECTION",
       "notes": "GPT-6 Astra accepts the image detail value original. developers.openai.com/api/docs/guides/images-vision, retrieved 2026-09-27, lists gpt-6-astra with the gpt-5.6 series among the models that take original detail, so its imageInput now records the same detail values as gpt-5.6."
+    },
+    {
+      "date": "2026-09-28",
+      "verifiedBy": "official-anthropic-messages-api-reference",
+      "status": "CORRECTION",
+      "notes": "Claude Sonnet 5 rejects sampling parameters. platform.claude.com/docs/en/api/messages, retrieved 2026-09-28, says models released after Claude Opus 4.6 accept only a temperature of 1.0 and do not accept top_p or top_k, rejecting other values with a 400. Sonnet 5 was released on 2026-06-30, so its reasoning now records rejectsSamplingParameters as Opus 5 and Fable 5.1 already did."
+    },
+    {
+      "date": "2026-09-28",
+      "verifiedBy": "official-xai-chat-completions-reference",
+      "status": "CORRECTION",
+      "notes": "Grok 4.6 is a reasoning model and rejects stop, frequency_penalty and presence_penalty. docs.x.ai/developers/rest-api-reference/inference/chat-completions, retrieved 2026-09-28, marks stop and frequency_penalty with 'Reasoning models don't support this parameter' and presence_penalty as unsupported for reasoning models, so its reasoning records them as unsupportedRequestParameters."
     }
   ],
   "providers": {
@@ -1269,6 +1281,7 @@
         "supportedEfforts": ["low", "medium", "high", "xhigh", "max"],
         "defaultEffort": "high",
         "canDisableThinking": true,
+        "rejectsSamplingParameters": true,
         "request": {
           "api": "messages",
           "effortPath": "output_config.effort",
@@ -2964,6 +2977,7 @@
         "supportedEfforts": ["low", "medium", "high", "xhigh"],
         "defaultEffort": "high",
         "canDisableThinking": false,
+        "unsupportedRequestParameters": ["stop", "frequency_penalty", "presence_penalty"],
         "request": {
           "api": "chat",
           "effortPath": "reasoning_effort",

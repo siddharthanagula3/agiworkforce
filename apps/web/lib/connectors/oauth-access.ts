@@ -22,6 +22,8 @@ import {
   type ConnectorOAuthProvider,
 } from '@/lib/connectors/oauth-registry';
 import { getMcpEndpoint } from '@/lib/connectors/mcp-endpoints';
+import { removeBankAccountsItem } from '@/lib/connectors/bank-accounts';
+import { BANK_ACCOUNTS_CONNECTOR_ID } from '@/lib/connectors/plaid-config';
 import { refreshDiscoveredGrant } from '@/lib/connectors/mcp-discovery';
 import { getCustomConnectorOAuthClient } from '@/lib/connectors/mcp-custom-connections';
 import { canonicalResourceUri } from '@/lib/connectors/registry-authorization';
@@ -270,6 +272,7 @@ export async function disconnectConnectorOAuthGrant(
   connectorId: string,
   accountKey?: string | null,
 ): Promise<boolean> {
+  if (connectorId === BANK_ACCOUNTS_CONNECTOR_ID) await removeBankAccountsItem(userId);
   const provider: ConnectorOAuthProvider | null = getConnectorOAuthProvider(connectorId);
   if (provider?.revocationUrl) {
     try {

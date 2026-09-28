@@ -25,6 +25,7 @@ import {
   mcpAuthorizationContext,
   purgeMcpResponseCachePartitions,
 } from '@/lib/connectors/mcp-runtime-cache';
+import { removeBankAccountsItem } from '@/lib/connectors/bank-accounts';
 
 export const USER_SCOPED_TABLES: ReadonlyArray<{
   table: string;
@@ -82,6 +83,8 @@ export const USER_SCOPED_TABLES: ReadonlyArray<{
   { table: 'feedback', column: 'user_id' },
   { table: 'api_keys', column: 'user_id' },
   { table: 'developer_projects', column: 'user_id' },
+  { table: 'developer_webhook_deliveries', column: 'user_id' },
+  { table: 'developer_webhook_endpoints', column: 'user_id' },
   { table: 'user_two_factor', column: 'user_id' },
   { table: 'account_sessions', column: 'user_id' },
   { table: 'account_lockout_attempts', column: 'user_id' },
@@ -938,6 +941,12 @@ export async function eraseUserAccountData(
       }
     }
     await eraseConnectorResponseCache(db, userId);
+    await removeBankAccountsItem(userId).catch((error: unknown) => {
+      logger.warn(
+        { userId, error: error instanceof Error ? error.name : 'unknown' },
+        'Account erasure could not end the Plaid item; its stored token is erased with the grants',
+      );
+    });
 
     for (const { table, column } of ANONYMIZED_USER_COLUMNS) {
       try {

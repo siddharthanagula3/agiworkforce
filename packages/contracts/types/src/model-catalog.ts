@@ -55,6 +55,7 @@ import {
   type LifecycleStage,
   type ModelCapabilityName,
   type ModelCapabilityValue,
+  type RequestParameter,
   type RouteCommercialStatus,
 } from '@agiworkforce/model-registry';
 
@@ -367,6 +368,7 @@ export interface ModelReasoning {
   supportsManualThinking?: boolean;
   maxEffortWhenThinkingDisabled?: Effort;
   rejectsSamplingParameters?: boolean;
+  unsupportedRequestParameters?: readonly RequestParameter[];
   thinkingBudget?: ReasoningBudget;
   request?: ReasoningRequestPaths;
   /**

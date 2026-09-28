@@ -16,7 +16,6 @@ import { resolveSecretHandlingPolicy } from '@/lib/services/organization-policy-
 import {
   MAX_CONTENT_CHARS,
   PUBLISHABLE_KINDS,
-  PUBLISHED_TOKEN_REGEX,
   PublishedArtifactOwnershipError,
   PublishedArtifactQuotaError,
   PublishedArtifactValidationError,
@@ -35,11 +34,6 @@ const PublishSchema = z.object({
   language: z.string().trim().max(50).optional(),
   content: z.string().min(1).max(MAX_CONTENT_CHARS),
   conversationId: z.string().trim().uuid().optional(),
-});
-
-const RestoreSchema = z.object({
-  token: z.string().trim().regex(PUBLISHED_TOKEN_REGEX),
-  version: z.number().int().min(1),
 });
 
 const PG_UNDEFINED_TABLE = '42P01';
@@ -173,26 +167,6 @@ async function recordPublishedVersion(
   return version;
 }
 
-async function loadOwnedPublication(
-  db: DatabaseAdapter,
-  input: { userId: string; token: string },
-): Promise<{ id: string; artifactId: string; conversationId: string | null } | null> {
-  const [row] = await db.query<{
-    id: string;
-    artifact_id: string;
-    conversation_id: string | null;
-  }>(
-    `select id, artifact_id, conversation_id
-       from public.published_artifacts
-      where token = $1 and user_id = $2
-      limit 1`,
-    [input.token, input.userId],
-  );
-  return row
-    ? { id: row.id, artifactId: row.artifact_id, conversationId: row.conversation_id }
-    : null;
-}
-
 async function handlePublish(request: NextRequest): Promise<Response> {
   const csrfResponse = await requireCsrfToken(request);
   if (csrfResponse) return csrfResponse;
@@ -288,149 +262,9 @@ async function handlePublish(request: NextRequest): Promise<Response> {
   );
 }
 
-/**
- * The history of one publication, newest first. Content comes with it: a
- * restore preview that cannot show what it would restore is not a preview.
- */
-async function handleListVersions(request: NextRequest, token: string): Promise<NextResponse> {
-  const { db, userId } = await getUserScopedDb(request);
-
-  let publication: Awaited<ReturnType<typeof loadOwnedPublication>>;
-  let rows: PublishedVersionRow[];
-  try {
-    publication = await loadOwnedPublication(db, { userId, token });
-    if (!publication) throw createError.notFound('That published artifact does not exist.');
-    rows = await db.query<PublishedVersionRow>(
-      `select id, version, title, kind, language, content, created_at
-         from public.published_artifact_versions
-        where published_artifact_id = $1 and user_id = $2
-        order by version desc`,
-      [publication.id, userId],
-    );
-  } catch (error) {
-    if (isPublishedArtifactSchemaUnavailable(error)) return publishingUnavailableResponse();
-    throw error;
-  }
-
-  return NextResponse.json({
-    token,
-    artifactId: publication.artifactId,
-    versions: rows.map((row) => ({
-      version: toVersionNumber(row.version),
-      title: row.title,
-      kind: row.kind,
-      language: row.language,
-      content: row.content,
-      createdAt: new Date(row.created_at).toISOString(),
-    })),
-  });
-}
-
-/**
- * Restore an earlier version by publishing it again. History is append-only, so
- * the restored content becomes the newest version rather than erasing the ones
- * after it, and the share URL does not change.
- */
-async function handleRestore(request: NextRequest): Promise<Response> {
-  const csrfResponse = await requireCsrfToken(request);
-  if (csrfResponse) return csrfResponse;
-
-  const rateLimitResponse = await withRateLimit(request, 'share-create');
-  if (rateLimitResponse) return rateLimitResponse;
-
-  let rawBody: unknown;
-  try {
-    rawBody = await request.json();
-  } catch {
-    throw createError.validation('Request body must be JSON');
-  }
-
-  const parsed = RestoreSchema.safeParse(rawBody);
-  if (!parsed.success) {
-    throw createError.validation('Invalid restore request', parsed.error.flatten());
-  }
-
-  const { db, userId, organizationId } = await getUserScopedDb(request);
-
-  let restored: number;
-  let publication: Awaited<ReturnType<typeof loadOwnedPublication>>;
-  try {
-    publication = await loadOwnedPublication(db, { userId, token: parsed.data.token });
-    if (!publication) throw createError.notFound('That published artifact does not exist.');
-
-    const [target] = await db.query<PublishedVersionRow>(
-      `select id, version, title, kind, language, content, created_at
-         from public.published_artifact_versions
-        where published_artifact_id = $1 and user_id = $2 and version = $3
-        limit 1`,
-      [publication.id, userId, parsed.data.version],
-    );
-    if (!target) {
-      throw createError.notFound(`Version ${parsed.data.version} is not in this artifact history.`);
-    }
-
-    refuseModeratedPublication(userId, target.title, target.content);
-
-    const outbound = await inspectOutboundContent({
-      channel: 'artifact_publish',
-      value: target.content,
-      userId,
-      organizationId,
-      resourceId: publication.artifactId,
-      resolveMode: () => resolveSecretHandlingPolicy(db, userId),
-    });
-    if (outbound.action === 'blocked') {
-      throw createError.validation(outbound.message);
-    }
-
-    await publishArtifactRecord(db, {
-      userId,
-      artifactId: publication.artifactId,
-      title: target.title,
-      kind: target.kind,
-      conversationId: publication.conversationId,
-      ...(target.language ? { language: target.language } : {}),
-      content: outbound.value,
-    });
-
-    restored = await recordPublishedVersion(db, {
-      publishedArtifactId: publication.id,
-      userId,
-      title: target.title,
-      kind: target.kind,
-      language: target.language,
-      content: outbound.value,
-    });
-  } catch (error) {
-    if (error instanceof PublishedArtifactValidationError) {
-      throw createError.validation(error.message);
-    }
-    if (error instanceof PublishedArtifactOwnershipError) {
-      throw createError.forbidden(error.message);
-    }
-    if (isPublishedArtifactSchemaUnavailable(error)) return publishingUnavailableResponse();
-    throw error;
-  }
-
-  return NextResponse.json({
-    token: parsed.data.token,
-    shareUrl: buildPublishedArtifactUrl(parsed.data.token),
-    restoredFrom: parsed.data.version,
-    version: restored,
-  });
-}
-
 async function handleList(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'share-view');
   if (rateLimitResponse) return rateLimitResponse;
-
-  const versionsToken = new URL(request.url).searchParams.get('versionsOf');
-  if (versionsToken) {
-    if (!PUBLISHED_TOKEN_REGEX.test(versionsToken)) {
-      throw createError.validation('versionsOf must be a published artifact token');
-    }
-    return handleListVersions(request, versionsToken);
-  }
 
   const { db, userId, organizationId } = await getUserScopedDb(request);
   let artifacts;
@@ -453,7 +287,6 @@ async function handleList(request: NextRequest): Promise<NextResponse> {
 
 export const POST = withCorsRoute(withErrorHandler(handlePublish));
 export const GET = withCorsRoute(withErrorHandler(handleList));
-export const PATCH = withCorsRoute(withErrorHandler(handleRestore));
 
 export function OPTIONS(request: NextRequest): NextResponse {
   return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
