@@ -48,7 +48,7 @@ Code: `apps/mobile/app/(app)/connectors/index.tsx:4-5`, `apps/mobile/src/feature
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Only an already-connected connector opens a detail screen; tapping an unconnected entry connects it or does nothing, so there is no page to read about a connector before connecting. | ui |
-| cli | partial | `agi mcp get <name>` prints only name, status, transport, target and file for a server the user registered; there is no description, publisher or tool list per server outside a live session. | ui |
+| cli | partial | agi mcp get still prints no description, publisher or tool list for a server outside a live session. | ui |
 | vscode | partial | VS Code shows a tooltip per connected connector (health, source, auth type, scopes); catalogue detail pages open on web. | surface-only |
 
 Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:676-716`, `apps/mobile/app/(app)/connectors/[id].tsx:9-10`, `apps/cli/src/lib.rs:1337-1382`, `apps/cli/src/lib.rs:2505-2541`
@@ -57,14 +57,11 @@ Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:676-716`, `a
 
 - Done when: The connector page lists the operations/tools the connector exposes (before or after connecting).
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Tool names and descriptions per server print only from bare /mcp in the --no-tui REPL; the default TUI /mcp shows a tool count per server, and `agi mcp` has no tools subcommand. | ui |
-
-Code: `apps/cli/src/claude_parity.rs:832-859`, `apps/cli/src/tui/tui_app.rs:3596-3626`
 
 ## S55.06: Read/write capability explanation.
 
@@ -84,14 +81,13 @@ Code: `apps/extension-vscode/src/features/connectors/connectorPresentation.ts:52
 
 - Done when: A connector that needs an API key offers a form to enter it, stores it encrypted, and connects.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Only a custom MCP bearer token can be typed; catalogue connectors that need an API key get a 409 credentialsPath that the shared runtime ignores and sends into the OAuth path, so they cannot be connected on mobile. | handler |
-| cli | partial | `agi mcp add` and `/mcp add` take no token or header; an API key has to be hand-written into headers/env in ~/.agiworkforce/mcp.json. | ui |
 
-Code: `apps/mobile/src/features/settings/cloud-connectors/AddCustomConnectorModal.tsx:186-189`, `packages/client/client-runtime/src/connectors/runtime.ts:264-291`, `apps/cli/src/lib.rs:1337-1382`, `apps/cli/src/mcp/registry.rs:294-318`
+Code: `apps/mobile/src/features/settings/cloud-connectors/AddCustomConnectorModal.tsx:186-189`, `packages/client/client-runtime/src/connectors/runtime.ts:264-291`
 
 ## S55.10: Service-account authorization.
 
@@ -151,14 +147,13 @@ Code: `apps/web/lib/connectors/accounts.ts:134-134`
 
 - Done when: Each connector shows whether it is healthy, needs reauthorization or is not responding.
 - Wave: 3
-- Already works on: web, desktop, vscode
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Mobile marks only expired authorization; the server's "not-responding" health is ignored, so a failing connector still shows Connected. | ui |
-| cli | partial | Only servers that started show up (TUI /mcp labels every one Connected); a server that failed to start or lost auth is not listed with a state, and the McpServerStatus snapshot has no caller. | ui |
 
-Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:430-444`, `apps/cli/src/tui/tui_app.rs:3596-3626`, `apps/cli/src/mcp/status.rs:8-18`
+Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:430-444`
 
 ## S55.20: Reconnect/reauthorize.
 
@@ -177,15 +172,12 @@ Code: `packages/ui/ui/src/settings-modal/SettingsModal.tsx:281-281`, `apps/web/f
 
 - Done when: The user can run an on-demand check that a connection works and see the result.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | `/mcp restart` reconnects and reports the tool count only in the --no-tui REPL; `agi mcp get` does not contact the server. | ui |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/repl/slash_commands.rs:67-70`, `apps/cli/src/repl/registry.rs:1244-1262`
 
 ## S55.23: Revoke permission.
 

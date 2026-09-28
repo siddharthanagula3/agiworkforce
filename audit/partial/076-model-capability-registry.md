@@ -230,14 +230,13 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:392-396
 
 - Done when: The registry records per-model reasoning-effort levels and each surface offers and sends only those levels.
 - Wave: 3
-- Already works on: web, desktop, mobile, chrome, api
+- Already works on: web, desktop, mobile, cli, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | The TUI effort picker sends the same effort to every model in all three provider dialects; it does not read the registry supported efforts per model. | handler |
 | vscode | partial | The effort picker is shown per provider (PROVIDER_DISPLAY.supportsEffort), not from each model's registry effort levels. | ui |
 
-Code: `apps/cli/src/models/streaming.rs:347-352`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:678-686`
+Code: `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:678-686`
 
 ## S76.28: Context-window limit.
 
