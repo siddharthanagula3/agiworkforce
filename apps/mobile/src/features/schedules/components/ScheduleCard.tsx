@@ -122,6 +122,23 @@ function formatRelativeTime(isoDate: string | null): string {
   return `in ${days} days`;
 }
 
+function formatLastRun(isoDate: string | null): string | null {
+  if (!isoDate) return null;
+  const at = new Date(isoDate);
+  if (!Number.isFinite(at.getTime())) return null;
+  const minutes = Math.floor((Date.now() - at.getTime()) / 60_000);
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return at.toLocaleString([], {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
 type StatusBadgeColor = 'green' | 'red' | 'yellow' | 'gray';
 function getStatusBadge(status: Schedule['lastRunStatus']): {
   label: string;
@@ -216,6 +233,11 @@ export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: S
           <View className="flex-row items-center gap-2 mb-2">
             <Badge label={getManagedDisplayName(schedule.model)} color="gray" />
             <Badge label={statusBadge.label} color={statusBadge.color} />
+            {formatLastRun(schedule.lastRunAt) ? (
+              <Text className="text-[11px]" style={{ color: colors.textMuted }}>
+                Last run {formatLastRun(schedule.lastRunAt)}
+              </Text>
+            ) : null}
           </View>
 
           {/* Footer: Next run + history toggle + delete */}
