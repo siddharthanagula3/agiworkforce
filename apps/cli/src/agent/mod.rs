@@ -1895,9 +1895,8 @@ impl AgentSession {
                     },
                 ));
                 format!(
-                    "Routing set to {}. The next message goes to {}, and each later one is routed again for its task.",
-                    describe(crate::routing::profile::id(profile)),
-                    crate::model_catalog::display_name(&self.model)
+                    "Routing set to {}. AGI Workforce picks the model for each message from its task, its tools, your plan and cost, and names it when it changes.",
+                    describe(crate::routing::profile::id(profile))
                 )
             }
             Err(error) => format!("That routing profile cannot run on your plan: {error}"),

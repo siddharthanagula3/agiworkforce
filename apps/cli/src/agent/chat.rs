@@ -741,9 +741,21 @@ impl AgentSession {
 
     pub(crate) fn request_model(&self) -> String {
         match self.managed_auto_routing() {
-            Some(state) if self.server_routes_auto() => state.selection.clone(),
+            Some(state) if self.server_routes_auto() => {
+                crate::routing::profile::gateway_request(&state.selection, state.speed_first)
+                    .0
+                    .to_string()
+            }
             _ => self.model.clone(),
         }
+    }
+
+    pub(crate) fn request_routing_profile(&self) -> Option<&'static str> {
+        self.managed_auto_routing()
+            .filter(|_| self.server_routes_auto())
+            .and_then(|state| {
+                crate::routing::profile::gateway_request(&state.selection, state.speed_first).1
+            })
     }
 
     pub(crate) fn adopt_served_model(&mut self, served: &str) {
@@ -2178,15 +2190,20 @@ impl TurnHost for TurnHostAdapter<'_> {
         // caller's `on_chunk` for the first completion, `continuation_sink()`
         // thereafter) to preserve byte-for-byte incremental output, so the
         // engine's stream sink is intentionally unused here.
+        let routing_profile = self.session.request_routing_profile();
         let completion = match phase {
-            TurnPhase::First if self.search_turn => models::searching(self.complete_first()).await,
-            TurnPhase::First => self.complete_first().await,
-            TurnPhase::Continuation => self.complete_continuation().await,
+            TurnPhase::First if self.search_turn => {
+                models::routed(routing_profile, models::searching(self.complete_first())).await
+            }
+            TurnPhase::First => models::routed(routing_profile, self.complete_first()).await,
+            TurnPhase::Continuation => {
+                models::routed(routing_profile, self.complete_continuation()).await
+            }
         };
         if let Ok(completion) = &completion {
             self.record_completion_usage(completion);
         }
-        self.settle_generation(completion?).await
+        models::routed(routing_profile, self.settle_generation(completion?)).await
     }
 
     fn record_assistant(&mut self, completion: &Completion) {
