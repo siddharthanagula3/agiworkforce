@@ -206,18 +206,6 @@ Code: `apps/cli/src/lib.rs:1024-1027`, `apps/cli/src/cloud/artifacts.rs:306-316`
 
 Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:421-435`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:228-252`, `apps/cli/src/lib.rs:1034-1041`, `apps/cli/src/lib.rs:1944-1948`
 
-## S26.31: Share controls.
-
-- Done when: The user can publish an artifact to a link, copy/share the link, choose who can open it, and take it down.
-- Wave: 3
-- Already works on: web, desktop, cli
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Publish, copy link and share link work, but mobile has no way to unpublish an artifact or choose who can open it (workspace vs anyone). | ui |
-
-Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:405-418`, `apps/mobile/src/features/chat/services/artifactPublishing.ts:13-25`
-
 ## S26.32: Public/private state.
 
 - Done when: Wherever an artifact is shown, the user can see whether it is private, published to anyone, or shared with the workspace.

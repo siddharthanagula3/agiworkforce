@@ -239,6 +239,9 @@
           "minimum": 1,
           "maximum": 1
         },
+        "speed": {
+          "enum": ["very-fast", "fast", "medium", "slow"]
+        },
         "residencyRegions": {
           "type": ["array", "null"],
           "uniqueItems": true,
@@ -1393,13 +1396,24 @@
     "policies": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["auto", "legacyTiers"],
+      "required": ["auto", "legacyTiers", "release"],
       "properties": {
         "auto": {
           "$ref": "#/definitions/autoPolicy"
         },
         "legacyTiers": {
           "type": "object"
+        },
+        "release": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["policyVersion"],
+          "properties": {
+            "policyVersion": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
         }
       }
     },

@@ -7,12 +7,13 @@ const {
   getNeonDbMock,
   userScopedDbMock,
   installMarketplaceEntryMock,
+  installMarketplaceEntryPluginMock,
+  removePluginConnectorsMock,
   listMarketplaceInstallationsMock,
   setMarketplaceInstallationEnabledMock,
   getMarketplaceInstallationSettingsMock,
   updateMarketplaceInstallationSettingsMock,
   installDirectoryPluginMock,
-  installMarketplaceEntryPluginMock,
   uninstallDirectoryInstallationMock,
   recordWorkspaceAuditEventMock,
   pluginPolicyMock,
@@ -26,12 +27,13 @@ const {
   getNeonDbMock: vi.fn(),
   userScopedDbMock: vi.fn(),
   installMarketplaceEntryMock: vi.fn(),
+  installMarketplaceEntryPluginMock: vi.fn(),
+  removePluginConnectorsMock: vi.fn(),
   listMarketplaceInstallationsMock: vi.fn(),
   setMarketplaceInstallationEnabledMock: vi.fn(),
   getMarketplaceInstallationSettingsMock: vi.fn(),
   updateMarketplaceInstallationSettingsMock: vi.fn(),
   installDirectoryPluginMock: vi.fn(),
-  installMarketplaceEntryPluginMock: vi.fn(),
   uninstallDirectoryInstallationMock: vi.fn(),
   recordWorkspaceAuditEventMock: vi.fn(),
 }));
@@ -76,6 +78,13 @@ vi.mock('@/features/plugins/server/directory/install', () => ({
   installDirectoryPlugin: installDirectoryPluginMock,
   installMarketplaceEntryPlugin: installMarketplaceEntryPluginMock,
   uninstallDirectoryInstallation: uninstallDirectoryInstallationMock,
+}));
+vi.mock('@/features/plugins/server/directory/memory-cache', () => ({
+  findPluginDirectoryRecord: async () => null,
+}));
+vi.mock('@/lib/connectors/plugin-connectors', () => ({
+  registerPluginConnectors: async () => ({ added: [], failed: [] }),
+  removePluginConnectors: removePluginConnectorsMock,
 }));
 
 import { NextRequest } from 'next/server';
@@ -198,7 +207,7 @@ describe('POST /api/plugins/marketplace-installations (install)', () => {
     expect(pluginPolicyMock).toHaveBeenCalledWith(
       expect.objectContaining({ pluginKey: 'acme-support-bundle' }),
     );
-    expect(installMarketplaceEntryMock).not.toHaveBeenCalled();
+    expect(installMarketplaceEntryPluginMock).not.toHaveBeenCalled();
   });
 
   it('refuses a directory plugin the workspace policy forbids', async () => {
@@ -268,7 +277,7 @@ describe('POST /api/plugins/marketplace-installations (install)', () => {
       'adobe-for-creativity',
       expect.anything(),
     );
-    expect(installMarketplaceEntryMock).not.toHaveBeenCalled();
+    expect(installMarketplaceEntryPluginMock).not.toHaveBeenCalled();
     expect(recordWorkspaceAuditEventMock).toHaveBeenCalledWith(
       expect.anything(),
       expect.anything(),
@@ -324,7 +333,7 @@ describe('POST /api/plugins/marketplace-installations (install)', () => {
       const response = await POST(post('/api/plugins/marketplace-installations', body));
       expect(response.status).toBe(400);
     }
-    expect(installMarketplaceEntryMock).not.toHaveBeenCalled();
+    expect(installMarketplaceEntryPluginMock).not.toHaveBeenCalled();
     expect(installDirectoryPluginMock).not.toHaveBeenCalled();
   });
 
@@ -379,7 +388,7 @@ describe('PATCH /api/plugins/marketplace-installations/[id]', () => {
 
 describe('DELETE /api/plugins/marketplace-installations/[id]', () => {
   it('uninstalls through the directory-aware path and returns 204', async () => {
-    uninstallDirectoryInstallationMock.mockResolvedValue(true);
+    uninstallDirectoryInstallationMock.mockResolvedValue('acme-support-bundle');
     const response = await DELETE(
       del(`/api/plugins/marketplace-installations/${INSTALLATION_ID}`),
       params(INSTALLATION_ID),
@@ -389,6 +398,10 @@ describe('DELETE /api/plugins/marketplace-installations/[id]', () => {
       expect.anything(),
       'user-1',
       INSTALLATION_ID,
+    );
+    expect(removePluginConnectorsMock).toHaveBeenCalledWith(
+      expect.anything(),
+      'acme-support-bundle',
     );
     expect(recordWorkspaceAuditEventMock).toHaveBeenCalledWith(
       expect.anything(),
@@ -401,7 +414,7 @@ describe('DELETE /api/plugins/marketplace-installations/[id]', () => {
   });
 
   it('404s when nothing was installed to remove', async () => {
-    uninstallDirectoryInstallationMock.mockResolvedValue(false);
+    uninstallDirectoryInstallationMock.mockResolvedValue(null);
     const response = await DELETE(
       del(`/api/plugins/marketplace-installations/${INSTALLATION_ID}`),
       params(INSTALLATION_ID),
