@@ -116,17 +116,6 @@ Code: `packages/client/client-runtime/src/index.ts:29-38`, `apps/extension/src/f
 
 Code: `packages/contracts/cloud-contracts/src/sync.ts:110-110`, `apps/web/app/api/chat/sync/route.ts:89-89`, `apps/web/app/api/chat/sync/route.ts:597-597`, `packages/client/sync/src/conversations.ts:66-66`
 
-## S101.15: Shared Project models.
-
-- Done when: Project records have one shared model used by the server and every client.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Web, mobile, Chrome and VS Code share the cloud-contracts project schema; the CLI hand-writes its own Rust project structs with no parity check. | surface-only |
-
-Code: `packages/contracts/cloud-contracts/src/managed-cloud-projects-client.ts:138-142`, `apps/cli/src/cloud/projects.rs:21-29`
-
 ## S101.16: Shared file/Library models.
 
 - Done when: Files and Library items share one file model across server and clients.
@@ -156,9 +145,9 @@ Code: `apps/cli/src/cloud/artifacts.rs:50-58`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | Citation types are used only by web; mobile declares its own Source shape in CollapsibleSources, and Chrome and VS Code have no citation model. | surface-only |
+| platform | partial | Web and mobile read sources as the protocol's AgentEventSource (97a8ff4744); the Chrome (SidePanelSource, ManagedChatSourceWire, bubbles.ts) and VS Code (sourceList payload) adoption patches are with p-chrome and p-sessions. | surface-only |
 
-Code: `apps/mobile/src/features/chat/components/CollapsibleSources.tsx:15-20`
+Code: `apps/mobile/src/features/chat/components/CollapsibleSources.tsx:17-17`, `apps/mobile/types/chat.ts:115-115`
 
 ## S101.19: Shared Memory contracts.
 
@@ -167,9 +156,9 @@ Code: `apps/mobile/src/features/chat/components/CollapsibleSources.tsx:15-20`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | Web, mobile and VS Code use the shared memory types; the CLI hand-writes MemoryPushItem/MemoryDelta in Rust, and Chrome has no memory contract import. | surface-only |
+| platform | partial | Web routes and clients share memory-wire.ts and one 20,000-character limit, and the CLI's Rust memory structs are held to the contract by check-cli-wire-parity; the Chrome memory client adoption patch (scratch/p-privacy/adoption/chrome-s101-19-memory-contract.patch) is with p-chrome and VS Code's MemorySyncRejectionSchema adoption with p-sessions. | surface-only |
 
-Code: `apps/cli/src/cloud/memory.rs:21-29`
+Code: `packages/contracts/types/src/memory-wire.ts:1-1`, `packages/contracts/cloud-contracts/src/sync.ts:278-278`, `scripts/check-cli-wire-parity.mjs:31-31`
 
 ## S101.20: Shared tool definitions.
 
