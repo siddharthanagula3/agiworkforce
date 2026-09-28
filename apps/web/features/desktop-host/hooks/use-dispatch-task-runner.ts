@@ -11,6 +11,7 @@ import {
 import { ManagedCloudCreateConversationResponseSchema } from '@agiworkforce/cloud-contracts';
 import { QUICK_ASK_PATH } from '@/features/chat/lib/new-chat-entry';
 import { addCsrfHeaders } from '@/lib/client/csrf';
+import { useCurrentUser } from '@/lib/identity/client';
 import { toWebConversation } from '@/lib/hooks/useConversations';
 import type { UseChatStreamReturn } from '@/lib/hooks/useChatStream';
 import { toUserMessage } from '@/lib/user-error-message';
@@ -255,15 +256,19 @@ function onRuntimeEvent(event: DesktopRuntimeEvent): void {
 
 export function useDispatchTaskRunner(host: HostBridge, runtime: DesktopChatRuntime): void {
   const { sendMessage, stopGeneration } = runtime;
+  const { isLoaded, isSignedIn } = useCurrentUser();
+  const ready = isLoaded && isSignedIn;
 
   useEffect(() => {
     latestRuntime = { sendMessage, stopGeneration };
   }, [sendMessage, stopGeneration]);
 
   useEffect(() => {
-    if (host.shell !== 'electron' || listeningTo === host || isQuickAskWindow()) return;
-    listeningTo = host;
-    host.onRuntimeEvent(onRuntimeEvent);
-    void setDispatchTaskRunnerReady(true).catch(() => undefined);
-  }, [host]);
+    if (host.shell !== 'electron' || isQuickAskWindow() || !isLoaded) return;
+    if (listeningTo !== host) {
+      listeningTo = host;
+      host.onRuntimeEvent(onRuntimeEvent);
+    }
+    void setDispatchTaskRunnerReady(ready).catch(() => undefined);
+  }, [host, isLoaded, ready]);
 }

@@ -820,6 +820,7 @@ function adoptReportedAccount(account: string | null): void {
   signedInAccount = account;
   patchShellWindowState(adoptAccount(readShellWindowState(), account));
   if (!changed) return;
+  if (remoteControlActive()) stopRemoteControl();
 
   const plan = planSignOut(openWindows());
   for (const id of plan.close) {
