@@ -1740,30 +1740,39 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       function capMode(s: string): string {
         return s.charAt(0).toUpperCase() + s.slice(1);
       }
-      const modeItems: vscode.QuickPickItem[] = [
+      type ModeItem = vscode.QuickPickItem & { mode: 'ask' | 'auto' | 'plan' | 'bypass' };
+      const modeItems: ModeItem[] = [
         {
           label: '$(comment-discussion) Ask before edits',
           description: 'AGI will ask for approval before making each edit',
-          detail: 'ask',
+          detail:
+            'Example: “add a test for parseDate” shows each edit and command for you to approve.',
+          mode: 'ask',
           picked: currentMode === 'ask',
         },
         {
           label: '$(symbol-misc) Auto safe operations',
           description: 'Safe reads run automatically; writes and commands require approval',
-          detail: 'auto',
+          detail:
+            'Example: reading files and searching run on their own; npm install still asks first.',
+          mode: 'auto',
           picked: currentMode === 'auto',
         },
         {
           label: '$(checklist) Plan mode',
           description: 'AGI will explore the code and present a plan before editing',
-          detail: 'plan',
+          detail:
+            'Example: “move to the new API” returns a step-by-step plan and edits nothing until you approve it.',
+          mode: 'plan',
           picked: currentMode === 'plan',
         },
         {
           label: '$(warning) Bypass permissions',
           description:
             'AGI will not ask for approval before running potentially dangerous commands',
-          detail: 'bypass',
+          detail:
+            'Example: a throwaway container or VM where every edit and command may run without asking.',
+          mode: 'bypass',
           picked: currentMode === 'bypass',
         },
       ];
@@ -1772,8 +1781,8 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         placeHolder: `Current: ${capMode(currentMode)} · choose the authority for future actions`,
         matchOnDescription: true,
       });
-      if (modePick?.detail !== undefined) {
-        const selectedMode = modePick.detail as 'ask' | 'auto' | 'plan' | 'bypass';
+      if (modePick !== undefined) {
+        const selectedMode = modePick.mode;
         if (await setAgentModeWithConsent(context, selectedMode)) {
           vscode.window.showInformationMessage(
             `AGI Workforce agent mode set to: ${capMode(selectedMode)}`,
