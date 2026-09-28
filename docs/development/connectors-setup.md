@@ -195,6 +195,27 @@ set the named variables in production and locally.
   `CONNECTOR_OAUTH_GOOGLE_CALENDAR_CLIENT_SECRET`. One Google client may serve
   all three descriptors; the names stay separate.
 
+### Google Contacts (`google-contacts`, hosted, read-only)
+
+Looks people up so the assistant can find a recipient's address, as ChatGPT's
+Google Contacts connector does (D-2026-09-28-08). Google hosts the People API
+MCP server at `https://people.googleapis.com/mcp/v1` with three read tools,
+`get_user_profile`, `search_contacts` and `search_directory_people`
+(https://developers.google.com/workspace/guides/configure-mcp-servers, read
+2026-09-28, a Workspace Developer Preview).
+
+- Same Google Cloud project and OAuth client as above. Enable the People API and
+  the People MCP API.
+- Descriptor values: the Google `authorizationUrl`, `tokenUrl`, `revocationUrl`
+  and `authorizationParams` above, `mcpUrl`
+  `https://people.googleapis.com/mcp/v1`.
+- Scopes the allowlist permits: the identity scopes above, `contacts.readonly`
+  and `directory.readonly`. The contacts write scope is not admitted.
+- The three tools are declared reads in `CONNECTOR_TOOL_METADATA`, so they run
+  under the read-only and autonomous approval policies without asking.
+- Variables: `CONNECTOR_OAUTH_GOOGLE_CONTACTS_CLIENT_ID`,
+  `CONNECTOR_OAUTH_GOOGLE_CONTACTS_CLIENT_SECRET`.
+
 ### GitHub MCP server (`github-mcp`, hosted, pre-registered)
 
 GitHub's official remote server, separate from the GitHub App integration above,

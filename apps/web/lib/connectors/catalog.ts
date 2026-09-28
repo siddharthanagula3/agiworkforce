@@ -153,6 +153,7 @@ export const CONNECTOR_CAPABILITIES: Readonly<Record<string, ConnectorCapability
   gmail: mcpConnector('gmail', 'oauth2', 'read-write'),
   'google-calendar': mcpConnector('google-calendar', 'oauth2', 'read-write'),
   'google-drive': mcpConnector('google-drive', 'oauth2', 'read-write'),
+  'google-contacts': mcpConnector('google-contacts', 'oauth2', 'read-only'),
   notion: mcpConnector('notion', 'oauth2', 'read-write'),
   slack: mcpConnector('slack', 'oauth2', 'read-write'),
   github: firstPartyConnector('github', 'github-app', 'read-write', [

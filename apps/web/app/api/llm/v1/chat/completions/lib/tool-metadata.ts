@@ -311,8 +311,33 @@ const GMAIL_TOOL_METADATA: Readonly<Record<string, ToolMetadata>> = Object.freez
   },
 });
 
+const GOOGLE_CONTACTS_TOOL_METADATA: Readonly<Record<string, ToolMetadata>> = Object.freeze({
+  get_user_profile: {
+    actionClass: 'read',
+    reversible: true,
+    acceptsUntrustedContent: false,
+    createsEgressPath: false,
+    declared: true,
+  },
+  search_contacts: {
+    actionClass: 'read',
+    reversible: true,
+    acceptsUntrustedContent: true,
+    createsEgressPath: false,
+    declared: true,
+  },
+  search_directory_people: {
+    actionClass: 'read',
+    reversible: true,
+    acceptsUntrustedContent: true,
+    createsEgressPath: false,
+    declared: true,
+  },
+});
+
 const CONNECTOR_TOOL_METADATA: Readonly<Record<string, Readonly<Record<string, ToolMetadata>>>> =
   Object.freeze({
+    'google-contacts': GOOGLE_CONTACTS_TOOL_METADATA,
     github: GITHUB_TOOL_METADATA,
     gmail: GMAIL_TOOL_METADATA,
   });

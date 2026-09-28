@@ -16,6 +16,11 @@ export const CONNECTOR_LOGOS: Record<
     width: 32,
     height: 32,
   },
+  'google-contacts': {
+    url: 'https://www.google.com/s2/favicons?domain=contacts.google.com&sz=64',
+    width: 32,
+    height: 32,
+  },
   notion: {
     url: 'https://upload.wikimedia.org/wikipedia/commons/e/e9/Notion-logo.svg',
     width: 32,
