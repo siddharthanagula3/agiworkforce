@@ -14,6 +14,37 @@ export const runtime = 'nodejs';
 
 const CONNECTOR_REF_RE = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$/;
 
+interface ToolParameterSummary {
+  name: string;
+  required: boolean;
+  type?: string;
+  description?: string;
+}
+
+function toolParameters(inputSchema: Record<string, unknown>): ToolParameterSummary[] {
+  const properties = inputSchema['properties'];
+  if (!properties || typeof properties !== 'object' || Array.isArray(properties)) return [];
+  const required = new Set(
+    Array.isArray(inputSchema['required'])
+      ? inputSchema['required'].filter((name): name is string => typeof name === 'string')
+      : [],
+  );
+  return Object.entries(properties as Record<string, unknown>).map(([name, raw]) => {
+    const property =
+      raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
+    const type = typeof property['type'] === 'string' ? property['type'] : undefined;
+    const description = plainMcpServerText(
+      typeof property['description'] === 'string' ? property['description'] : undefined,
+    );
+    return {
+      name,
+      required: required.has(name),
+      ...(type ? { type } : {}),
+      ...(description ? { description } : {}),
+    };
+  });
+}
+
 async function handleGet(
   request: NextRequest,
   context: { params: Promise<{ connectorId: string }> },
@@ -52,6 +83,7 @@ async function handleGet(
         name: tool.toolName,
         title: plainMcpServerText(tool.title),
         description: plainMcpServerText(tool.description),
+        parameters: toolParameters(tool.inputSchema),
         visibility: tool.visibility,
         hasApp: Boolean(tool.app),
       })),
