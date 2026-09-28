@@ -5,7 +5,9 @@ import {
   isDesktopCapability,
   isHighRiskCapability,
   permissionKey,
+  permissionScopeKey,
   type DesktopCapability,
+  type DesktopPermissionsReview,
   type PermissionDecision,
   type PermissionGrantDuration,
   type PermissionScope,
@@ -19,6 +21,7 @@ import {
   isSingleUse,
   normalizeGrantDuration,
 } from './permissionCore';
+import { systemPermissionStatuses } from './systemPermissions';
 
 const persisted = new Map<string, PermissionDecision>();
 const session = new Map<string, PermissionDecision>();
@@ -114,6 +117,20 @@ export function revokePermission(capability: DesktopCapability, scope: Permissio
   const key = permissionKey(capability, scope);
   session.delete(key);
   if (persisted.delete(key)) persist();
+}
+
+export function revokeScope(scope: PermissionScope): void {
+  load();
+  const target = permissionScopeKey(scope);
+  let changed = false;
+  for (const store of [session, persisted]) {
+    for (const [key, decision] of store) {
+      if (permissionScopeKey(decision.scope) !== target) continue;
+      store.delete(key);
+      if (store === persisted) changed = true;
+    }
+  }
+  if (changed) persist();
 }
 
 export function listPermissions(): PermissionDecision[] {
@@ -275,6 +292,33 @@ function describe(capability: DesktopCapability, scope: PermissionScope): string
   const verb = CAPABILITY_LABELS[capability];
   if (!scope.target || scope.kind === 'application') return verb;
   return `${verb} ${scope.target}`;
+}
+
+const REVIEW_PHRASES: Partial<Record<DesktopCapability, string>> = {
+  'browser.site': 'use the paired browser',
+  'browser.cdp': "read the paired browser's page internals",
+};
+
+export function describePermissionDecision(decision: PermissionDecision): string {
+  const phrase = REVIEW_PHRASES[decision.capability];
+  if (decision.scope.kind === 'application' && decision.scope.target) {
+    return `${phrase ?? CAPABILITY_LABELS[decision.capability]}, when ${decision.scope.target} asks`;
+  }
+  return phrase ?? describe(decision.capability, decision.scope);
+}
+
+export function reviewPermissions(): DesktopPermissionsReview {
+  const effective = new Map<string, PermissionDecision>();
+  for (const decision of listPermissions()) {
+    if (decision.duration === 'once') continue;
+    effective.set(permissionKey(decision.capability, decision.scope), decision);
+  }
+  return {
+    decisions: [...effective.values()]
+      .sort((a, b) => b.decidedAtMs - a.decidedAtMs)
+      .map((decision) => ({ ...decision, description: describePermissionDecision(decision) })),
+    system: systemPermissionStatuses(),
+  };
 }
 
 /** Who is being allowed, and what they are being allowed to do. */
