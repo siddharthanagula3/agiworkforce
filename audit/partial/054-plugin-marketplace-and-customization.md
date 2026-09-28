@@ -317,18 +317,34 @@ Code: `apps/cli/src/lib.rs:1293-1326`, `apps/cli/src/lib.rs:3984-4025`
 ## S54.27: Customize installed plugin.
 
 - Done when: A user can customize an installed plugin (edit its skills or content).
-- Wave: 3
+- Wave: 2
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only per-skill switches; an installed plugin's skills or content cannot be edited. | ui |
-| desktop | partial | Only per-skill switches; an installed plugin's skills or content cannot be edited. | ui |
+| web | partial | partials/routines-voice 71dda8e8f: Customize makes an installed registry, directory, uploaded or marketplace plugin into your own editable copy with its skills and bundled files and opens it for editing; it sits behind the skill-authoring gate and stays off until the lead switches AGI_USER_SKILL_AUTHORING on | flag-off |
+| desktop | partial | partials/routines-voice 71dda8e8f: Customize makes an installed registry, directory, uploaded or marketplace plugin into your own editable copy with its skills and bundled files and opens it for editing; it sits behind the skill-authoring gate and stays off until the lead switches AGI_USER_SKILL_AUTHORING on | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | Installed plugins are local folders a user can edit by hand; the CLI offers no customization command. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `packages/ui/ui/src/directory/PluginDetailView.tsx:271-305`, `apps/web/features/directory/hooks/useDirectoryAdapter.ts:1276-1285`, `apps/cli/src/lib.rs:3613-3652`
+Code: `apps/web/features/plugins/server/directory/customize.ts:154-154`, `apps/web/app/api/plugins/customize/route.ts:25-25`, `packages/ui/ui/src/directory/DirectoryPanel.tsx:557-557`, `packages/ui/ui/src/directory/PluginDetailView.tsx:694-694`
+
+## S54.28: Fork plugin.
+
+- Done when: A user can fork a plugin into their own editable copy.
+- Wave: 2
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+| web | partial | partials/routines-voice 71dda8e8f: forking copies the plugin into a created plugin you own, turns the original off so chats use your copy, and reopens the existing copy on a second request; behind AGI_USER_SKILL_AUTHORING until the lead switches it on | flag-off |
+| desktop | partial | partials/routines-voice 71dda8e8f: forking copies the plugin into a created plugin you own, turns the original off so chats use your copy, and reopens the existing copy on a second request; behind AGI_USER_SKILL_AUTHORING until the lead switches it on | flag-off |
+| mobile | missing | Not built on this surface. |  |
+| cli | missing | Not built on this surface. |  |
+| vscode | missing | Not built on this surface. |  |
+| chrome | missing | Not built on this surface. |  |
+
+Code: `apps/web/features/plugins/server/directory/customize.ts:154-154`, `apps/web/features/plugins/server/directory/customize.ts:198-198`
 
 ## S54.29: Uninstall.
 
@@ -399,18 +415,18 @@ Code: `apps/web/features/workspace-console/components/WorkspaceConnectorPolicy.t
 ## S54.35: Plugin-creation assistant.
 
 - Done when: The product helps a user build a plugin with an assistant.
-- Wave: 3
+- Wave: 2
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Create plugin is a plain form (name, description, skills); "Create with AGI" only pre-fills a chat prompt and nothing turns the reply into a plugin (R-r). | handler |
-| desktop | partial | Create plugin is a plain form (name, description, skills); "Create with AGI" only pre-fills a chat prompt and nothing turns the reply into a plugin (R-r). | handler |
+| web | partial | partials/routines-voice 71dda8e8f: asking to build or change a plugin or skill gives the model a draft_plugin tool whose validated draft renders as a card with Save plugin and Save as a skill; offered only where skill authoring is on, so it stays off until the lead switches AGI_USER_SKILL_AUTHORING on | flag-off |
+| desktop | partial | partials/routines-voice 71dda8e8f: asking to build or change a plugin or skill gives the model a draft_plugin tool whose validated draft renders as a card with Save plugin and Save as a skill; offered only where skill authoring is on, so it stays off until the lead switches AGI_USER_SKILL_AUTHORING on | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `packages/ui/ui/src/directory/DirectoryPanel.tsx:374-380`, `apps/web/features/directory/hooks/useDirectoryAdapter.ts:1208-1221`, `apps/web/features/directory/hooks/useDirectoryAdapter.ts:274-283`
+Code: `apps/web/lib/server/tools/plugin-draft-tool.ts:101-101`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4332-4332`, `apps/web/features/chat/components/messages/ToolTimeline.tsx:492-492`, `apps/web/features/chat/components/PluginDraftCard.tsx:35-35`
 
 ## S54.36: Submission and review workflow.
 

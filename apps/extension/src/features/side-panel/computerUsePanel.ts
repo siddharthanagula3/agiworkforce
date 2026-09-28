@@ -1,6 +1,10 @@
 import type { ComputerUseCommandResponse } from '../../types';
 import type { AgentLoopStep, AgentLoopUsage } from '../computer-use/agentLoop';
 import { APPROVAL_TIMEOUT_MS } from '../computer-use/agentLoop';
+import {
+  BROWSER_CONTROL_CONSENT_BODY,
+  BROWSER_CONTROL_CONSENT_HEADLINE,
+} from '../computer-use/browserControlConsent';
 import { getAuthToken } from '../computer-use/cloudAgentClient';
 
 export const COMPUTER_USE_PANEL_CSS = `
@@ -132,6 +136,25 @@ export const COMPUTER_USE_PANEL_CSS = `
     color: var(--agi-ext-accent-text);
   }
 
+  .sp-cu-takeover-btn {
+    background: none;
+    border: 1px solid var(--agi-ext-border);
+    border-radius: 5px;
+    color: var(--agi-ext-text);
+    font-size: 11px;
+    padding: 3px 10px;
+    cursor: pointer;
+  }
+
+  .sp-cu-takeover-btn:hover {
+    border-color: var(--agi-ext-accent);
+  }
+
+  .sp-cu-takeover-btn[hidden],
+  .sp-cu-run-btn[hidden] {
+    display: none;
+  }
+
   .sp-cu-run-btn {
     background: var(--agi-ext-accent);
     color: var(--agi-ext-on-accent);
@@ -253,6 +276,104 @@ export const COMPUTER_USE_PANEL_CSS = `
     color: var(--agi-ext-text-muted);
     flex-shrink: 0;
     margin-top: 3px;
+  }
+
+  /* Task composer and site setup */
+  .sp-cu-task {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--agi-ext-border);
+    flex-shrink: 0;
+  }
+
+  .sp-cu-task-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--agi-ext-text-muted);
+  }
+
+  #sp-cu-goal {
+    width: 100%;
+    min-height: 52px;
+    box-sizing: border-box;
+    resize: vertical;
+    padding: 7px 9px;
+    border: 1px solid var(--agi-ext-border);
+    border-radius: 6px;
+    background: var(--agi-ext-bg);
+    color: var(--agi-ext-text);
+    font: inherit;
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  #sp-cu-goal:focus-visible {
+    outline: 2px solid var(--agi-ext-focus);
+    outline-offset: -2px;
+  }
+
+  .sp-cu-task-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .sp-cu-task-site {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--agi-ext-text-muted);
+    font-size: 11px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .sp-cu-setup {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 10px 14px 0;
+    padding: 10px 12px;
+    border: 1px solid var(--agi-ext-warning-border);
+    border-radius: 8px;
+    background: var(--agi-ext-warning-bg);
+    flex-shrink: 0;
+  }
+
+  .sp-cu-setup[hidden] {
+    display: none;
+  }
+
+  .sp-cu-setup-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--agi-ext-text);
+  }
+
+  .sp-cu-setup-headline {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--agi-ext-warning-text);
+  }
+
+  .sp-cu-setup-body {
+    margin: 0;
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--agi-ext-text-muted);
+  }
+
+  .sp-cu-setup .sp-cu-run-btn {
+    align-self: flex-start;
+  }
+
+  @media (pointer: coarse) {
+    .sp-cu-run-btn,
+    .sp-cu-stop-btn {
+      min-height: 44px;
+    }
   }
 
   /* Screenshot thumbnails */
@@ -481,7 +602,7 @@ const KIND_EMOJI: Record<string, string> = {
 export type AutofillOutcome = 'escalation' | 'success' | 'error';
 
 /** `run_stopped` reports the end of a browser-control run, not an autofill. */
-export type PanelNoticeKind = AutofillOutcome | 'run_stopped';
+export type PanelNoticeKind = AutofillOutcome | 'run_stopped' | 'handoff';
 
 const BANNER_PRESENTATION: Record<PanelNoticeKind, { title: string; icon: string; style: string }> =
   {
@@ -505,6 +626,11 @@ const BANNER_PRESENTATION: Record<PanelNoticeKind, { title: string; icon: string
       icon: '\u{25A0}', // filled square
       style: 'error',
     },
+    handoff: {
+      title: 'Your turn',
+      icon: '\u{270B}',
+      style: 'escalation',
+    },
   };
 
 /**
@@ -513,13 +639,16 @@ const BANNER_PRESENTATION: Record<PanelNoticeKind, { title: string; icon: string
  * back to idle and the user was never told why the agent stopped driving.
  */
 const CANCELLATION_REASON_COPY: Record<string, string> = {
-  account_changed: 'The signed-in AGI Cloud account changed, so the run was stopped.',
+  account_changed:
+    'The signed-in AGI Cloud account changed, so the run was stopped. Sign in again and start the task again to continue.',
   debugger_detached:
-    'You dismissed Chrome’s browser-debugging bar for this tab, so the run was stopped.',
+    'You dismissed Chrome’s browser-debugging bar for this tab, so the run was stopped. Start the task again to let AGI continue; Chrome shows the bar while it has control.',
   panel_closed: 'The side panel closed, so the run was stopped.',
+  site_access_withdrawn:
+    'Access to this site was withdrawn, so the run was stopped. The site was removed from your approved sites, its browser control was revoked, or your administrator blocked it. Approve the site again in the Computer use tab, then start the task again.',
   superseded: 'A newer run replaced this one.',
   tab_intent_changed:
-    'The tab left the page this run was approved for, so the run was stopped before acting.',
+    'The tab left the page this run was approved for, so the run was stopped before acting. Go back to that page and start the task again.',
   tab_removed: 'The tab this run was driving was closed.',
   user_cleared: 'The run was stopped when the log was cleared.',
   user_stopped: 'You stopped the run.',
@@ -544,9 +673,12 @@ const RUN_LOST_MESSAGE =
 const RUN_RECOVERED_MESSAGE =
   'A browser-control run started before this panel was reopened is still active. Use Stop to end it.';
 
+export type ComputerUseTaskSite =
+  { kind: 'none' | 'restricted' } | { kind: 'ready' | 'needs-approval'; origin: string };
+
 export interface ComputerUsePanelAPI {
   panelEl: HTMLElement;
-  appendStep(step: AgentLoopStep & { screenshotBase64?: string }): void;
+  appendStep(step: AgentLoopStep): void;
   showHandoffBanner(reason: string, kind?: PanelNoticeKind): void;
   hideHandoffBanner(): void;
   clearLog(): void;
@@ -557,9 +689,14 @@ export interface ComputerUsePanelAPI {
     resolve: (allowed: boolean) => void,
   ): void;
   onRunAutofill(handler: () => void): void;
+  onStartTask(handler: (goal: string) => void): void;
+  onApproveSite(handler: (origin: string) => void): void;
+  setTaskSite(site: ComputerUseTaskSite): void;
+  focusTask(): void;
   updateUsageMeter(usage: AgentLoopUsage): void;
   refreshAuthChip(): void;
   setRunState(running: boolean, runId?: string, generation?: number): void;
+  setPaused(paused: boolean, reason?: string): void;
   ownsRun(runId: unknown): boolean;
   noteRunActivity(): void;
 }
@@ -665,6 +802,21 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
   stopBtn.title = 'Stop the active computer-use run';
   stopBtn.setAttribute('aria-label', 'Stop computer use');
 
+  const takeOverBtn = document.createElement('button');
+  takeOverBtn.type = 'button';
+  takeOverBtn.className = 'sp-cu-takeover-btn';
+  takeOverBtn.textContent = 'Take over';
+  takeOverBtn.title = 'Pause AGI and use the page yourself; it continues when you hand it back';
+  takeOverBtn.hidden = true;
+
+  const continueBtn = document.createElement('button');
+  continueBtn.type = 'button';
+  continueBtn.className = 'sp-cu-run-btn';
+  continueBtn.textContent = 'Continue';
+  continueBtn.title = 'Hand the page back so AGI continues the task';
+  continueBtn.hidden = true;
+  let paused = false;
+
   let activeRunId: string | null = null;
   let activeRunGeneration = 0;
   let runActivityTimer: ReturnType<typeof setTimeout> | null = null;
@@ -697,9 +849,13 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
       activeRunGeneration = Math.max(activeRunGeneration, generation);
     }
     runAutofillBtn.disabled = running;
+    taskRunning = running;
+    renderTaskSite();
     stopBtn.disabled = false;
     stopBtn.textContent = 'Stop';
     stopBtn.classList.toggle('visible', running);
+    if (running) paused = false;
+    renderTakeover();
     controlsLabel.textContent = running
       ? 'AGI Cloud • agent running'
       : 'AGI Cloud • powered by AGI';
@@ -709,6 +865,59 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
       clearRunActivityWatchdog();
     }
   }
+
+  function renderTakeover(): void {
+    const running = activeRunId !== null;
+    takeOverBtn.hidden = !running || paused;
+    continueBtn.hidden = !running || !paused;
+    takeOverBtn.disabled = false;
+    continueBtn.disabled = false;
+  }
+
+  function setPaused(next: boolean, reason?: string): void {
+    if (!activeRunId) return;
+    paused = next;
+    renderTakeover();
+    if (next) {
+      showHandoffBanner(
+        `${reason ?? 'AGI needs you to use this page.'} Choose Continue when you are done.`,
+        'handoff',
+      );
+      continueBtn.focus();
+    } else {
+      hideHandoffBanner();
+    }
+  }
+
+  async function sendTakeover(type: 'PAUSE_COMPUTER_USE' | 'RESUME_COMPUTER_USE'): Promise<void> {
+    const runId = activeRunId;
+    if (!runId) return;
+    takeOverBtn.disabled = true;
+    continueBtn.disabled = true;
+    let response: ComputerUseCommandResponse | null = null;
+    try {
+      response = (await chrome.runtime.sendMessage({ type, runId })) as ComputerUseCommandResponse;
+    } catch {
+      response = null;
+    }
+    renderTakeover();
+    if (response?.success !== true) {
+      showHandoffBanner(
+        response?.error ??
+          (type === 'PAUSE_COMPUTER_USE'
+            ? 'AGI could not hand you the page. Use Stop to end the run.'
+            : 'AGI could not take the page back. Try Continue again, or use Stop.'),
+        'error',
+      );
+    }
+  }
+
+  takeOverBtn.addEventListener('click', () => {
+    void sendTakeover('PAUSE_COMPUTER_USE');
+  });
+  continueBtn.addEventListener('click', () => {
+    void sendTakeover('RESUME_COMPUTER_USE');
+  });
 
   function ownsRun(runId: unknown): boolean {
     return typeof runId === 'string' && activeRunId === runId;
@@ -765,6 +974,7 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
       typeof state.runGeneration === 'number' ? state.runGeneration : undefined,
     );
     showHandoffBanner(RUN_RECOVERED_MESSAGE, 'run_stopped');
+    if (state.paused === true) setPaused(true, state.pauseReason);
   }
 
   async function requestCancellation(
@@ -852,12 +1062,112 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
   refreshAuthChip();
 
   controls.appendChild(runAutofillBtn);
+  controls.appendChild(continueBtn);
+  controls.appendChild(takeOverBtn);
   controls.appendChild(stopBtn);
   controls.appendChild(authChip);
   controls.appendChild(controlsLabel);
   controls.appendChild(askLabel);
   controls.appendChild(clearBtn);
   panelEl.appendChild(controls);
+
+  const setupCard = document.createElement('div');
+  setupCard.className = 'sp-cu-setup';
+  setupCard.hidden = true;
+  const setupTitle = document.createElement('div');
+  setupTitle.className = 'sp-cu-setup-title';
+  const setupHeadline = document.createElement('div');
+  setupHeadline.className = 'sp-cu-setup-headline';
+  setupHeadline.textContent = BROWSER_CONTROL_CONSENT_HEADLINE;
+  const setupBody = document.createElement('p');
+  setupBody.className = 'sp-cu-setup-body';
+  setupBody.textContent = BROWSER_CONTROL_CONSENT_BODY;
+  const setupBtn = document.createElement('button');
+  setupBtn.type = 'button';
+  setupBtn.className = 'sp-cu-run-btn';
+  setupCard.append(setupTitle, setupHeadline, setupBody, setupBtn);
+  panelEl.appendChild(setupCard);
+
+  const taskForm = document.createElement('form');
+  taskForm.className = 'sp-cu-task';
+  taskForm.noValidate = true;
+  const taskLabel = document.createElement('label');
+  taskLabel.className = 'sp-cu-task-label';
+  taskLabel.htmlFor = 'sp-cu-goal';
+  taskLabel.textContent = 'Task';
+  const goalInput = document.createElement('textarea');
+  goalInput.id = 'sp-cu-goal';
+  goalInput.rows = 2;
+  goalInput.maxLength = 4096;
+  goalInput.placeholder =
+    'Tell AGI what to do on this page, for example: find the cheapest direct flight to Denver next Friday';
+  const taskRow = document.createElement('div');
+  taskRow.className = 'sp-cu-task-row';
+  const taskSiteEl = document.createElement('span');
+  taskSiteEl.className = 'sp-cu-task-site';
+  taskSiteEl.setAttribute('role', 'status');
+  const startBtn = document.createElement('button');
+  startBtn.type = 'submit';
+  startBtn.className = 'sp-cu-run-btn';
+  startBtn.textContent = 'Start';
+  taskRow.append(taskSiteEl, startBtn);
+  taskForm.append(taskLabel, goalInput, taskRow);
+  panelEl.appendChild(taskForm);
+
+  let taskSite: ComputerUseTaskSite = { kind: 'none' };
+  let taskRunning = false;
+  let startTaskHandler: ((goal: string) => void) | null = null;
+  let approveSiteHandler: ((origin: string) => void) | null = null;
+
+  function siteHost(origin: string): string {
+    try {
+      return new URL(origin).host;
+    } catch {
+      return origin;
+    }
+  }
+
+  function renderTaskSite(): void {
+    setupCard.hidden = taskSite.kind !== 'needs-approval';
+    if (taskSite.kind === 'needs-approval') {
+      const host = siteHost(taskSite.origin);
+      setupTitle.textContent = `Let AGI act on ${host}`;
+      setupBtn.textContent = `Allow browser control on ${host}`;
+    }
+    taskSiteEl.textContent =
+      taskSite.kind === 'ready'
+        ? `Works on ${siteHost(taskSite.origin)}`
+        : taskSite.kind === 'needs-approval'
+          ? `Allow ${siteHost(taskSite.origin)} above to start`
+          : taskSite.kind === 'restricted'
+            ? 'AGI cannot act on this page. Open an ordinary website.'
+            : '';
+    startBtn.disabled = taskRunning || taskSite.kind !== 'ready';
+    goalInput.disabled = taskRunning;
+  }
+
+  function submitTask(): void {
+    const goal = goalInput.value.trim();
+    if (!goal || taskRunning || taskSite.kind !== 'ready') {
+      goalInput.focus();
+      return;
+    }
+    startTaskHandler?.(goal);
+  }
+
+  taskForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    submitTask();
+  });
+  goalInput.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
+    event.preventDefault();
+    submitTask();
+  });
+  setupBtn.addEventListener('click', () => {
+    if (taskSite.kind === 'needs-approval') approveSiteHandler?.(taskSite.origin);
+  });
+  renderTaskSite();
 
   const usageMeter = document.createElement('div');
   usageMeter.className = 'sp-cu-usage-meter';
@@ -888,8 +1198,8 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
   const emptyEl = document.createElement('div');
   emptyEl.className = 'sp-cu-empty';
   emptyEl.textContent =
-    'No agent activity yet.\n\nStart an autofill on a Greenhouse, Lever, or Ashby job page. ' +
-    'If the fast-path stalls, the agent loop takes over automatically.';
+    'No agent activity yet.\n\nGive AGI a task above and it works in this tab, asking before ' +
+    'sensitive steps. On a Greenhouse, Lever or Ashby job page, Run Autofill fills the application.';
   logEl.appendChild(emptyEl);
 
   panelEl.appendChild(logEl);
@@ -903,7 +1213,7 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
     emptyEl.style.display = isEmpty ? '' : 'none';
   }
 
-  function buildStepEl(step: AgentLoopStep & { screenshotBase64?: string }): DocumentFragment {
+  function buildStepEl(step: AgentLoopStep): DocumentFragment {
     const frag = document.createDocumentFragment();
 
     const stepEl = document.createElement('div');
@@ -997,11 +1307,16 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
     stepEl.appendChild(timeEl);
     frag.appendChild(stepEl);
 
-    if (step.kind === 'screenshot' && step.screenshotBase64) {
+    const screenshotUrl = step.screenshotDataUrl;
+    if (
+      step.kind === 'screenshot' &&
+      screenshotUrl &&
+      /^data:image\/(?:png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(screenshotUrl)
+    ) {
       const thumb = document.createElement('div');
       thumb.className = 'sp-cu-screenshot';
       const img = document.createElement('img');
-      img.src = `data:image/png;base64,${step.screenshotBase64}`;
+      img.src = screenshotUrl;
       img.alt = 'Agent screenshot';
       img.loading = 'lazy';
       thumb.appendChild(img);
@@ -1010,7 +1325,7 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
           `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">` +
           `<title>AGI screenshot</title>` +
           `<style>body{margin:0;background:black}img{max-width:100%;height:auto;display:block}</style>` +
-          `</head><body><img src="data:image/png;base64,${step.screenshotBase64}" alt="Agent screenshot"></body></html>`;
+          `</head><body><img src="${screenshotUrl}" alt="Agent screenshot"></body></html>`;
         const blob = new Blob([htmlContent], { type: 'text/html' });
         const url = URL.createObjectURL(blob);
         window.open(url, '_blank', 'noopener,noreferrer');
@@ -1057,7 +1372,7 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
       .join('\n');
   }
 
-  function appendStep(step: AgentLoopStep & { screenshotBase64?: string }): void {
+  function appendStep(step: AgentLoopStep): void {
     setEmpty(false);
     const frag = buildStepEl(step);
     logEl.appendChild(frag);
@@ -1170,6 +1485,23 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
     _runAutofillHandler = handler;
   }
 
+  function onStartTask(handler: (goal: string) => void): void {
+    startTaskHandler = handler;
+  }
+
+  function onApproveSite(handler: (origin: string) => void): void {
+    approveSiteHandler = handler;
+  }
+
+  function setTaskSite(site: ComputerUseTaskSite): void {
+    taskSite = site;
+    renderTaskSite();
+  }
+
+  function focusTask(): void {
+    goalInput.focus();
+  }
+
   function updateUsageMeter(usage: AgentLoopUsage): void {
     const { stepsUsed, maxSteps, totalTokens } = usage;
     usageStepsEl.textContent = `Steps: ${stepsUsed}/${maxSteps}`;
@@ -1195,9 +1527,14 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
     isAskBeforeActing,
     showApprovalCard,
     onRunAutofill,
+    onStartTask,
+    onApproveSite,
+    setTaskSite,
+    focusTask,
     updateUsageMeter,
     refreshAuthChip,
     setRunState,
+    setPaused,
     ownsRun,
     noteRunActivity,
   };

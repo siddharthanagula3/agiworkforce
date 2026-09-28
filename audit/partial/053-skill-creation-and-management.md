@@ -100,14 +100,14 @@ Code: `apps/web/lib/services/user-skill-service.ts:255-255`, `apps/web/features/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The skill editor (name, description, instructions) only appears with AGI_USER_SKILL_AUTHORING=1 (default 0); Create plugin can author skills once but they cannot be edited afterwards. | flag-off |
-| desktop | partial | The skill editor (name, description, instructions) only appears with AGI_USER_SKILL_AUTHORING=1 (default 0); Create plugin can author skills once but they cannot be edited afterwards. | flag-off |
+| web | partial | partials/routines-voice 71dda8e8f: the skill editor edits personal skills and Edit plugin now reopens a created plugin's skills for editing (instructions, names, descriptions, adding and removing skills, keeping bundled files and switches); both stay off until the lead switches AGI_USER_SKILL_AUTHORING on | flag-off |
+| desktop | partial | partials/routines-voice 71dda8e8f: the skill editor edits personal skills and Edit plugin now reopens a created plugin's skills for editing (instructions, names, descriptions, adding and removing skills, keeping bundled files and switches); both stay off until the lead switches AGI_USER_SKILL_AUTHORING on | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | No in-product editor; users write SKILL.md files in their own editor. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/skills/components/SkillEditorDialog.tsx:185-200`, `apps/web/features/skills/hooks/use-skills-settings-adapter.tsx:160-163`, `apps/web/lib/services/user-skill-authoring.ts:3-7`, `packages/ui/ui/src/directory/CreatePluginDialog.tsx:179-210`
+Code: `apps/web/lib/services/plugin-owned-source-service.ts:516-516`, `apps/web/app/api/plugins/authored/[entryId]/route.ts:56-56`, `packages/ui/ui/src/directory/DirectoryPanel.tsx:552-552`, `packages/ui/ui/src/directory/PluginDetailView.tsx:682-682`
 
 ## S53.10: Reference-file bundle.
 
