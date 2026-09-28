@@ -8,9 +8,13 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { readJsonBody } from '@/lib/read-json-body';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
-import { ManagedSkillsResponseSchema } from '@agiworkforce/cloud-contracts';
+import {
+  isPluginMarketplaceContentHash,
+  ManagedSkillsResponseSchema,
+  PLUGIN_UPLOAD_ACKNOWLEDGED_SCAN_FIELD,
+} from '@agiworkforce/cloud-contracts';
 import { SkillDraftBodySchema } from './skill-draft-schema';
-import { parseSkillDraftFromMarkdown } from '@agiworkforce/skills';
+import { parseSkillDraftFromMarkdown, type SkillDraft } from '@agiworkforce/skills';
 import { PayloadCeilingExceededError } from '@/lib/payload-ceiling';
 import {
   PluginArchiveError,
@@ -33,6 +37,8 @@ import {
   createUserSkill,
   listUserSkills,
   toUserSkillSummary,
+  type UserSkillFileInput,
+  type UserSkillUpload,
 } from '@/lib/services/user-skill-service';
 import { userSkillAuthoringEnabled } from '@/lib/services/user-skill-authoring';
 import { listEnabledPluginIds } from '@/lib/services/plugin-installation-service';
@@ -56,7 +62,13 @@ function isZipArchive(bytes: Uint8Array): boolean {
   return ZIP_MAGIC.every((byte, index) => bytes[index] === byte);
 }
 
-async function readUploadedSkillDraft(request: NextRequest) {
+interface UploadedSkillDraft {
+  draft: SkillDraft;
+  upload: UserSkillUpload;
+  omittedFiles: string[];
+}
+
+async function readUploadedSkillDraft(request: NextRequest): Promise<UploadedSkillDraft> {
   let form: FormData;
   try {
     form = (await request.formData()) as unknown as FormData;
@@ -76,9 +88,14 @@ async function readUploadedSkillDraft(request: NextRequest) {
   });
 
   let source: string;
+  let files: UserSkillFileInput[] = [];
+  let omittedFiles: string[] = [];
   if (isZipArchive(bytes)) {
     try {
-      source = (await readSingleSkillFromArchive(bytes)).content;
+      const skill = await readSingleSkillFromArchive(bytes);
+      source = skill.content;
+      files = skill.files;
+      omittedFiles = skill.omittedFiles;
     } catch (error) {
       if (error instanceof PluginArchiveError) throw createError.validation(error.message);
       throw error;
@@ -93,7 +110,10 @@ async function readUploadedSkillDraft(request: NextRequest) {
 
   const parsed = parseSkillDraftFromMarkdown(source);
   if (!parsed.ok) throw createError.validation(parsed.errors.join(' '));
-  return parsed.draft;
+  const acknowledgedScans = form
+    .getAll(PLUGIN_UPLOAD_ACKNOWLEDGED_SCAN_FIELD)
+    .filter((value): value is string => isPluginMarketplaceContentHash(value));
+  return { draft: parsed.draft, upload: { files, acknowledgedScans }, omittedFiles };
 }
 
 async function handleListSkills(request: NextRequest) {
@@ -168,9 +188,11 @@ async function handleCreateSkill(request: NextRequest) {
   if (featureGate) return featureGate;
   const uploaded = (request.headers.get('content-type') ?? '').includes(MULTIPART_CONTENT_TYPE);
 
-  let draft;
+  let draft: SkillDraft;
+  let upload: UploadedSkillDraft | null = null;
   if (uploaded) {
-    draft = await readUploadedSkillDraft(request);
+    upload = await readUploadedSkillDraft(request);
+    draft = upload.draft;
   } else {
     const parsed = SkillDraftBodySchema.safeParse(await readJsonBody(request));
     if (!parsed.success) {
@@ -184,7 +206,7 @@ async function handleCreateSkill(request: NextRequest) {
     throw createError.conflict(`"${draft.name}" is already a built-in skill name.`);
   }
 
-  const created = await createUserSkill(db, userId, draft);
+  const created = await createUserSkill(db, userId, draft, upload?.upload);
   await recordWorkspaceAuditEvent(db, request, {
     userId,
     eventType: 'skill_installed',
@@ -194,7 +216,13 @@ async function handleCreateSkill(request: NextRequest) {
       source: uploaded ? 'uploaded' : 'authored',
     },
   });
-  return NextResponse.json({ skill: toUserSkillSummary(created) }, { status: 201 });
+  return NextResponse.json(
+    {
+      skill: toUserSkillSummary(created),
+      ...(upload && upload.omittedFiles.length > 0 ? { omittedFiles: upload.omittedFiles } : {}),
+    },
+    { status: 201 },
+  );
 }
 
 export const GET = withCorsRoute(withErrorHandler(handleListSkills));

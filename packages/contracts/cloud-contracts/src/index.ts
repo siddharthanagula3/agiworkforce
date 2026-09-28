@@ -27,6 +27,8 @@ export * from './chat-attachments';
 export * from './managed-cloud-chat-attachments-client';
 export * from './project-knowledge';
 export * from './managed-cloud-project-knowledge-client';
+export * from './resumable-uploads';
+export * from './managed-cloud-resumable-upload-client';
 export * from './domain-events';
 export * from './tool-events';
 export * from './agent-events';

@@ -198,7 +198,9 @@
     "addAttachmentsAndToolsActive": "Anhänge und Tools hinzufügen: {{count}} aktiv",
     "voiceStart": "Spracheingabe starten",
     "voiceUnsupportedBrowser": "Spracheingabe wird in diesem Browser nicht unterstützt",
-    "voiceUnsupportedHint": "Spracheingabe wird in diesem Browser nicht unterstützt. Versuchen Sie Chrome oder Edge."
+    "voiceUnsupportedHint": "Spracheingabe wird in diesem Browser nicht unterstützt. Versuchen Sie Chrome oder Edge.",
+    "expandInput": "Nachrichtenfeld vergrößern",
+    "collapseInput": "Nachrichtenfeld verkleinern"
   },
   "bubble": {
     "assistantSaid": "AGI hat gesagt:",
@@ -347,5 +349,22 @@
     "copyFailed": "Kopieren fehlgeschlagen, Zwischenablage nicht verfügbar",
     "download": "Als CSV herunterladen",
     "close": "Vergrößerte Tabelle schließen"
+  },
+  "markdown": {
+    "copy": "Kopieren",
+    "copied": "Kopiert",
+    "copyFailed": "Kopieren fehlgeschlagen",
+    "copyLabel": "Code kopieren",
+    "copiedLabel": "Code kopiert",
+    "copyFailedLabel": "Kopieren des Codes fehlgeschlagen",
+    "download": "{{fileName}} herunterladen",
+    "expand": "Code vergrößern",
+    "close": "Vergrößerten Code schließen",
+    "codeTitle": "{{language}}-Code",
+    "codeBlockLabel": "{{language}}-Codeblock"
+  },
+  "streaming": {
+    "reconnecting": "Verbindung wird wiederhergestellt…",
+    "stopping": "Cloud-Aufgabe wird gestoppt…"
   }
 }

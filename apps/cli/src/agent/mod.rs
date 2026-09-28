@@ -17,6 +17,7 @@ use crate::subagent;
 use crate::teams;
 
 mod chat;
+mod checkpoints;
 mod executor;
 mod history;
 mod prompt;
@@ -24,8 +25,11 @@ mod tools;
 
 pub use crate::runtime::session::PrivacyMode;
 pub use chat::SideQuery;
-pub use executor::ToolCall;
+pub(crate) use checkpoints::CheckpointLog;
+pub use checkpoints::{CheckpointSummary, RestoreReport, RewindMode, RewindOutcome};
 pub(crate) use executor::value_to_legacy_args;
+pub use executor::ToolCall;
+pub(crate) use history::close_orphaned_tool_calls;
 pub use prompt::assemble_system_prompt;
 pub(crate) use prompt::encode_untrusted_context;
 
@@ -188,7 +192,8 @@ pub struct AgentSession {
     pub fast_mode: bool,
     #[allow(dead_code)]
     pub(crate) original_model: Option<String>,
-    pub(crate) checkpoints: Vec<Vec<Message>>,
+    pub(crate) checkpoint_log: checkpoints::CheckpointLog,
+    pub(crate) checkpoint_captures: std::collections::HashMap<String, Vec<PathBuf>>,
     #[allow(dead_code)]
     pub session_name: Option<String>,
     /// Stable, filesystem-safe identifier for this process-local session run.
@@ -676,7 +681,8 @@ impl AgentSession {
             quiet: false,
             fast_mode: false,
             original_model: None,
-            checkpoints: Vec::new(),
+            checkpoint_log: checkpoints::CheckpointLog::in_memory(),
+            checkpoint_captures: std::collections::HashMap::new(),
             session_name: None,
             runtime_session_id: session_id,
             allowed_tools: None,
@@ -943,6 +949,46 @@ impl AgentSession {
             already_present,
             instructions_loaded: instructions.is_some(),
         })
+    }
+
+    pub fn remove_context_dir(&mut self, raw_path: &str) -> Result<PathBuf> {
+        let expanded = crate::path_security::expand_home(raw_path.trim());
+        let path = PathBuf::from(expanded);
+        let absolute = if path.is_absolute() {
+            path
+        } else {
+            std::env::current_dir()?.join(path)
+        };
+        let resolved = absolute.canonicalize().unwrap_or(absolute);
+        let registered = crate::path_security::registered_additional_workspace_roots();
+        let Some(root) = registered
+            .iter()
+            .chain(self.additional_context_dirs.iter())
+            .find(|root| **root == resolved)
+            .cloned()
+        else {
+            anyhow::bail!(
+                "{} was not added with /add-dir or --add-dir",
+                resolved.display()
+            );
+        };
+        crate::path_security::unregister_additional_workspace_roots(std::slice::from_ref(&root));
+        self.additional_context_dirs.retain(|path| path != &root);
+        let opening = format!(
+            "<additional_directory_context path=\"{}\">",
+            escape_attr(&root)
+        );
+        self.messages.retain(|message| {
+            !(message.role == "system" && message.text_content().starts_with(&opening))
+        });
+        self.messages.push(Message::text(
+            "system",
+            format!(
+                "<additional_directory_removed path=\"{}\">\nThe user removed this directory from the workspace. Do not read or change files in it unless the user adds it again.\n</additional_directory_removed>",
+                escape_attr(&root)
+            ),
+        ));
+        Ok(root)
     }
 
     /// Activate any glob-scoped rules that match files entering the live turn
@@ -1340,7 +1386,8 @@ impl AgentSession {
         self.plan_rejection_feedback = None;
         self.plan_approved = false;
         self.context_usage_anchor = None;
-        self.checkpoints.clear();
+        self.checkpoint_log.truncate(0);
+        self.checkpoint_captures.clear();
         self.recent_tool_calls.clear();
         self.loop_strike_count = 0;
         self.mcp_manager = None;
@@ -1462,7 +1509,9 @@ impl AgentSession {
         managed_session.workspace_root = std::env::current_dir().ok();
         managed_session.created_by = Some("cli".to_string());
         let path = store.save(&managed_session)?;
-        self.adopt_managed_session(managed_session, path)?;
+        let carried = std::mem::take(&mut self.checkpoint_log);
+        self.adopt_managed_session(managed_session, path.clone())?;
+        self.checkpoint_log = carried.moved_beside(&path);
         self.sync_managed_session_metadata()?;
         Ok(())
     }
@@ -1537,6 +1586,12 @@ impl AgentSession {
         self.session_activity = std::sync::Arc::new(std::sync::Mutex::new(
             crate::runtime::session_activity::SessionActivity::from_session(&managed_session),
         ));
+        self.checkpoint_log = if self.session_persistence {
+            checkpoints::CheckpointLog::beside(&path)
+        } else {
+            checkpoints::CheckpointLog::in_memory()
+        };
+        self.checkpoint_captures.clear();
         self.managed_session = Some(managed_session);
         self.managed_session_path = Some(path);
         Ok(())

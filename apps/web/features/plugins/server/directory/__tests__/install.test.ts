@@ -89,6 +89,7 @@ function database(): FakeDb & DatabaseAdapter {
 const fetchedUrls: string[] = [];
 const fetchSkill = vi.fn(async (input: string) => {
   fetchedUrls.push(input);
+  if (input.endsWith('/.claude-plugin/plugin.json')) return new Response('', { status: 404 });
   return new Response(SKILL, { status: 200 });
 });
 
@@ -110,6 +111,7 @@ describe('installDirectoryPlugin', () => {
       status: 'installed',
       installation: INSTALLATION,
       skills: ['background-removal'],
+      dependencies: [],
     });
     expect(fetchedUrls[0]).toBe(
       `https://raw.githubusercontent.com/adobe/skills/${SHA}/plugins/creative-cloud/adobe-for-creativity/skills/background-removal/SKILL.md`,

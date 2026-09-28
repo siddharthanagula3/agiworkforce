@@ -89,7 +89,8 @@ describe('model catalogue - the customer chooses a model, not a supplier', () =>
     renderCatalogue([entry()]);
     openDetailCard();
 
-    expect(screen.getByText('Fixture Model')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Back to the model list' })).toBeTruthy();
+    expect(screen.getAllByText('Fixture Model').length).toBeGreaterThan(0);
     expect(screen.queryByText(/available through/i)).toBeNull();
     for (const word of SUPPLIER_WORDS) {
       expect(screen.queryByText(new RegExp(word, 'i'))).toBeNull();

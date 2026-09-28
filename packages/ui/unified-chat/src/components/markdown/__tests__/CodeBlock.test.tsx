@@ -10,7 +10,7 @@ vi.mock('../MermaidDiagram', () => ({
   MermaidDiagram: ({ source }: { source: string }) => source,
 }));
 
-const { CodeBlock } = await import('../MarkdownContent');
+const { CodeBlock } = await import('../CodeBlock');
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 

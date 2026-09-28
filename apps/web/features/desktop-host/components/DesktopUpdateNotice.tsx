@@ -50,7 +50,7 @@ export function DesktopUpdateNotice({ host }: { host: HostBridge }) {
     <aside
       role="status"
       aria-live="polite"
-      className="fixed left-1/2 top-3 z-[var(--z-popover)] flex w-[min(92vw,560px)] -translate-x-1/2 items-center gap-3 rounded-xl border border-border bg-background px-4 py-3 text-foreground shadow-lg"
+      className="pointer-events-auto flex items-center gap-3 rounded-xl border border-border bg-background px-4 py-3 text-foreground shadow-lg"
     >
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium">AGI Cloud {update.version} is available</p>

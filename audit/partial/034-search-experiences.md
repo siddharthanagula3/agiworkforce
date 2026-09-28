@@ -148,16 +148,13 @@ Code: `apps/extension-vscode/src/core/commandSetup.ts:2265-2269`, `apps/extensio
 
 - Done when: When a search query is ambiguous the product offers clarification choices the user can pick before searching.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | The agent can ask a free-text question (ask_user) and wait for a typed answer, but it offers no choices to pick from. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/features/exec/tools/task_registry/mod.rs:471-493`
 
 ## S34.23: Result previews.
 

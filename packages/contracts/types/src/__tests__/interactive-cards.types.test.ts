@@ -150,11 +150,12 @@ describe('kind allowlist', () => {
       'map-search.v1',
       'mcp-app.v1',
       'places.v1',
+      'product-comparison.v1',
     ]);
   });
 
-  it('leads the turn with the places map and the itinerary and trails with every other kind', () => {
-    const leading = new Set(['itinerary.v1', 'places.v1']);
+  it('leads the turn with the places map, the itinerary and the product comparison', () => {
+    const leading = new Set(['itinerary.v1', 'places.v1', 'product-comparison.v1']);
     for (const kind of KNOWN_INTERACTIVE_CARD_KINDS) {
       expect(interactiveCardRendersBeforeProse(kind)).toBe(leading.has(kind));
     }

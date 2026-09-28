@@ -94,6 +94,12 @@ function RemoveButton({
   );
 }
 
+function removeLabel(fileName: string, status?: AttachmentUploadVisualStatus): string {
+  const inFlight =
+    status?.phase === 'preparing' || status?.phase === 'uploading' || status?.phase === 'verifying';
+  return inFlight ? `Cancel upload of ${fileName}` : `Remove ${fileName}`;
+}
+
 function PrivacyChip({ label }: { label: string }) {
   return (
     <div
@@ -185,11 +191,14 @@ function ImageThumbnail({
     >
       <RemoveButton
         onClick={() => onRemove(index)}
-        label={`Remove ${preview.file.name}`}
+        label={removeLabel(preview.file.name, status)}
         disabled={disableRemove}
       />
       {privacyShortLabel ? <PrivacyChip label={privacyShortLabel} /> : null}
-      <div className="h-14 w-14 overflow-hidden rounded-lg border border-border/50 bg-muted/30">
+      <div
+        className="h-14 w-14 overflow-hidden rounded-lg border border-border/50 bg-muted/30"
+        title={`${preview.file.name}, ${formatSize(preview.file.size)}`}
+      >
         <img
           src={preview.url}
           alt={preview.file.name}
@@ -239,7 +248,7 @@ function DocumentChip({
     >
       <RemoveButton
         onClick={() => onRemove(index)}
-        label={`Remove ${name}`}
+        label={removeLabel(name, status)}
         disabled={disableRemove}
       />
       <div

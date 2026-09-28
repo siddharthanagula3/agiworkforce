@@ -44,7 +44,7 @@ impl KeybindingAction {
     /// by naming it under `[ui.keybindings]`, and it stays inert otherwise.
     const fn default_binding(self) -> Option<&'static str> {
         match self {
-            Self::Quit => Some("esc"),
+            Self::Quit => Some("ctrl+d"),
             Self::CycleMode => Some("shift+tab"),
             Self::Redraw => Some("ctrl+l"),
             Self::ClearChat => None,
@@ -133,6 +133,12 @@ impl Keybindings {
         Self { entries }
     }
 
+    pub fn display(&self, action: KeybindingAction) -> Option<&str> {
+        self.entries
+            .get(action.config_key())
+            .map(|(display, _)| display.as_str())
+    }
+
     pub fn matches(&self, action: KeybindingAction, event: KeyEvent) -> bool {
         self.entries
             .get(action.config_key())
@@ -150,6 +156,7 @@ impl Keybindings {
             lines.push(format!("  {binding:<14} {}", action.label()));
         }
         lines.extend([
+            "  Esc Esc        Rewind to before an earlier prompt".to_string(),
             "  Up/Down        Scroll history or navigate overlays".to_string(),
             "  Enter          Send prompt or confirm an overlay".to_string(),
             format!("  REPL editor    {edit_mode}"),

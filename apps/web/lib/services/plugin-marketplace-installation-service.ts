@@ -4,6 +4,7 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type {
   PluginConnectorRequirementState,
   PluginInstallationSettings,
+  PluginMarketplaceEntry,
   PluginMarketplaceInstallation,
 } from '@agiworkforce/cloud-contracts';
 
@@ -86,15 +87,11 @@ export async function getMarketplaceInstallation(
   return rows[0] ? mapInstallation(rows[0]) : null;
 }
 
-export async function installMarketplaceEntry(
+async function writeEntryInstallation(
   db: DatabaseAdapter,
   userId: string,
-  entryId: string,
-): Promise<PluginMarketplaceInstallation | null> {
-  const entry = await getMarketplaceEntryForUser(db, userId, entryId);
-  if (!entry) return null;
-  await assertMarketplaceEntryInstallable(db, entry);
-
+  entry: PluginMarketplaceEntry,
+): Promise<string | null> {
   const rows = await db.query<{ id: string }>(
     `insert into public.plugin_marketplace_installations
        (user_id, entry_id, installed_version, enabled, enabled_skills, installed_at, updated_at)
@@ -104,15 +101,41 @@ export async function installMarketplaceEntry(
            enabled = true,
            updated_at = now()
      returning id`,
-    [userId, entryId, entry.version, JSON.stringify(entry.declaredSkills)],
+    [userId, entry.id, entry.version, JSON.stringify(entry.declaredSkills)],
   );
   const inserted = rows[0];
   if (!inserted) return null;
   await approveMarketplaceInstallationPermissions(db, userId, inserted.id, entry.permissions);
+  return inserted.id;
+}
+
+export async function installMarketplaceEntries(
+  db: DatabaseAdapter,
+  userId: string,
+  entries: readonly PluginMarketplaceEntry[],
+): Promise<Map<string, string>> {
+  for (const entry of entries) await assertMarketplaceEntryInstallable(db, entry);
+  const installed = new Map<string, string>();
+  for (const entry of entries) {
+    const installationId = await writeEntryInstallation(db, userId, entry);
+    if (installationId) installed.set(entry.id, installationId);
+  }
+  return installed;
+}
+
+export async function installMarketplaceEntry(
+  db: DatabaseAdapter,
+  userId: string,
+  entryId: string,
+): Promise<PluginMarketplaceInstallation | null> {
+  const entry = await getMarketplaceEntryForUser(db, userId, entryId);
+  if (!entry) return null;
+  const installationId = (await installMarketplaceEntries(db, userId, [entry])).get(entry.id);
+  if (!installationId) return null;
 
   const installed = await db.query<PluginMarketplaceInstallationRow>(
     `${INSTALLATION_SELECT} where installation.id = $1`,
-    [inserted.id],
+    [installationId],
   );
   return installed[0] ? mapInstallation(installed[0]) : null;
 }
