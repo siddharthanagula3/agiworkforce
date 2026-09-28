@@ -3,6 +3,8 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   LIVE_VOICE_TOOL_INPUT_PREVIEW_MAX_CHARS,
+  LIVE_VOICE_WORK_TASK_TOOL,
+  liveVoiceWorkTaskGoal,
   type LiveVoiceToolCallRequest,
   type LiveVoiceToolCallResponse,
   type LiveVoiceToolFile,
@@ -39,6 +41,9 @@ const MESSAGE = {
   blocked: "The user's tool permissions block this action, so it did not run.",
   declined: 'The user declined this action, so it did not run.',
   malformed: 'The arguments for this call were not a JSON object, so it did not run.',
+  workTaskGoal: 'The task needs a goal in words, so it did not start.',
+  workTaskHandedOff:
+    'The task is starting in the chat as an AGI Work task. It runs in the background and is tracked in Tasks, so tell the user where to follow it.',
 } as const;
 
 interface ToolRunResult {
@@ -199,6 +204,11 @@ async function runTool(
 ): Promise<ToolRunResult> {
   const name = input.call.name;
   try {
+    if (name === LIVE_VOICE_WORK_TASK_TOOL) {
+      return liveVoiceWorkTaskGoal(input.call.arguments)
+        ? { content: MESSAGE.workTaskHandedOff, isError: false }
+        : { content: MESSAGE.workTaskGoal, isError: true };
+    }
     if (name === URL_FETCH_TOOL) return await runUrlFetch(input, args);
     if (isManagedOfficeFileTool(name)) return await runOfficeFile(input, args);
     const parsed = parseQualifiedToolName(name);
