@@ -3410,5 +3410,9 @@
   "spHelpShortcutCapture": {
     "message": "Capture the page",
     "description": "What the page capture browser shortcut does"
+  },
+  "spAttachmentUploadsOff": {
+    "message": "File uploads aren’t available for this account.",
+    "description": "The account's capability document denies file uploads, so an attached file was not added"
   }
 }
