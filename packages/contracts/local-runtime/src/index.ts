@@ -61,6 +61,7 @@ export type {
   DeveloperHostModel,
   DeveloperModelOption,
   DeveloperModelUnreachable,
+  DeveloperRuntimeFeatures,
   DeveloperRuntimeModels,
   DeveloperRuntimeStatus,
   DeveloperRuntimeUnavailable,
