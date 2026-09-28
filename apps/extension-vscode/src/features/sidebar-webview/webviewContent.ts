@@ -2317,6 +2317,14 @@ export function getWebviewContent(
       text-overflow: ellipsis;
       flex: 1 1 auto;
     }
+    .context-limit-notice {
+      display: block;
+      flex-basis: 100%;
+      color: var(--text-secondary);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
+    .context-limit-notice[hidden] { display: none; }
     .attachment-chip__thumb {
       width: 16px;
       height: 16px;
@@ -2717,6 +2725,7 @@ export function getWebviewContent(
         <button class="model-pill" id="modelPill" title="Model" aria-haspopup="menu" aria-expanded="false">Auto</button>
         <button class="controls-summary" id="controlsSummary" title="Mode and reasoning effort" aria-label="Mode and reasoning effort">${modeLabel} · ${effortLabel}</button>
         <span class="context-usage" id="contextUsage"></span>
+        <span class="context-limit-notice" id="contextLimitNotice" role="status" aria-live="polite" hidden></span>
         <span class="follow-up-status" id="followUpStatus" role="status" aria-live="polite"></span>
         <button id="stopBtn" title="Stop response" aria-label="Stop response"></button>
         <button id="sendBtn" title="Send (Enter)" aria-label="Send"><span class="send-action-label" id="sendActionLabel"></span></button>
@@ -2753,6 +2762,7 @@ export function getWebviewContent(
 
     // ── DOM refs ──────────────────────────────────────────────────────────────
     const messagesEl = document.getElementById('messages');
+    const contextLimitNotice = document.getElementById('contextLimitNotice');
     const userInput = document.getElementById('userInput');
     const sendBtn = document.getElementById('sendBtn');
     const stopBtn = document.getElementById('stopBtn');
@@ -3531,6 +3541,25 @@ export function getWebviewContent(
       contextUsageEl.textContent = '';
       contextUsageEl.className = 'context-usage';
       contextUsageEl.removeAttribute('title');
+      announceContextLimit(0);
+    }
+
+    var MOD_KEY_LABEL = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '') ? 'Cmd' : 'Ctrl';
+    var contextLimitAnnounced = false;
+
+    function announceContextLimit(pct) {
+      if (!contextLimitNotice) return;
+      if (pct < 90) {
+        contextLimitAnnounced = false;
+        contextLimitNotice.hidden = true;
+        contextLimitNotice.textContent = '';
+        return;
+      }
+      if (contextLimitAnnounced) return;
+      contextLimitAnnounced = true;
+      contextLimitNotice.hidden = false;
+      contextLimitNotice.textContent =
+        'This chat has used ' + pct + '% of the model\u2019s context. Older messages may be dropped; start a new chat to keep full context.';
     }
 
     function renderContextUsage(usedTokens, contextWindow) {
@@ -3553,6 +3582,7 @@ export function getWebviewContent(
         (pct >= 90 ? ' is-critical' : pct >= 75 ? ' is-high' : '');
       contextUsageEl.title = 'Context after the last turn: ' + usedTokens.toLocaleString() +
         ' of ' + contextWindow.toLocaleString() + ' tokens (' + pct + '%)';
+      announceContextLimit(pct);
     }
 
     function addErrorMessage(presentation) {
@@ -3817,14 +3847,14 @@ export function getWebviewContent(
       sendBtn.setAttribute(
         'title',
         value
-          ? actionLabel + ' follow-up (Enter) · ' + (followUpBehavior === 'steer' ? 'Queue' : 'Steer') + ' once (Cmd/Ctrl+Enter)'
+          ? actionLabel + ' follow-up (Enter) · ' + (followUpBehavior === 'steer' ? 'Queue' : 'Steer') + ' once (' + MOD_KEY_LABEL + '+Enter)'
           : 'Send (Enter)'
       );
       if (stopBtn) stopBtn.classList.toggle('visible', value);
       userInput.disabled = runtimeBlock !== null;
       if (composerHint) {
         composerHint.innerHTML = value
-          ? '<kbd>Enter</kbd> to ' + actionLabel.toLowerCase() + ' · <kbd>Cmd/Ctrl+Enter</kbd> to ' +
+          ? '<kbd>Enter</kbd> to ' + actionLabel.toLowerCase() + ' · <kbd>' + MOD_KEY_LABEL + '+Enter</kbd> to ' +
               (followUpBehavior === 'steer' ? 'queue' : 'steer') + ' once · <kbd>Shift+Enter</kbd> for newline'
           : '<kbd>Enter</kbd> to send · <kbd>Shift+Enter</kbd> for newline';
       }
@@ -4311,6 +4341,7 @@ export function getWebviewContent(
     }
 
     userInput.addEventListener('keydown', (e) => {
+      if (e.isComposing || e.keyCode === 229) return;
       // The slash popup owns Enter while it is open: the highlighted command
       // runs instead of the literal "/name" being sent as a chat message.
       if (slashMenuIsOpen()) {
