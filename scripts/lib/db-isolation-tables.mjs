@@ -59,6 +59,8 @@ export const USER_OWNED_TABLES = new Set([
   'connector_call_events',
   'sync_data',
   'github_installations',
+  'slack_account_links',
+  'slack_assistant_runs',
   'messaging_connections',
   'email_preferences',
   'user_two_factor',
