@@ -52,6 +52,7 @@ import {
   spreadsheetSafeExport,
 } from '@agiworkforce/unified-chat';
 import { TypeIcon } from './InlineArtifactCards';
+import { ArtifactVersionHistory } from './ArtifactVersionHistory';
 import { cn } from '@shared/lib/utils';
 import {
   DropdownMenu,
@@ -257,6 +258,8 @@ export function ArtifactPreview({
   const upsertArtifact = useArtifactsStore((s) => s.upsertArtifact);
   const isStoredArtifact = useArtifactsStore((s) => s.artifacts.some((a) => a.id === artifact.id));
   const [viewedVersionIndex, setViewedVersionIndex] = useState<number | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const historyToggleRef = useRef<HTMLButtonElement>(null);
   // Manual source edit. null = not editing; a string = the unsaved draft.
   const [sourceDraft, setSourceDraft] = useState<string | null>(null);
   const { confirm: confirmAction, dialog: confirmDialog } = useConfirmAction();
@@ -482,6 +485,38 @@ export function ArtifactPreview({
    * revision has to be restored before it can be edited.
    */
   const isLatestVersion = versionCount === 0 || shownVersionIndex === versionCount - 1;
+
+  useEffect(() => {
+    setHistoryOpen(false);
+  }, [artifact.id]);
+
+  const closeHistory = useCallback(() => {
+    setHistoryOpen(false);
+    historyToggleRef.current?.focus();
+  }, []);
+
+  const requestRestore = useCallback(
+    (index: number) => {
+      const draftIsUnsaved =
+        sourceDraft !== null && sourceDraft !== versionHistory?.[index]?.content;
+      const summary = `This replaces what you are looking at with version ${
+        index + 1
+      }, added as the new latest so the versions in between survive.`;
+      confirmAction({
+        title: `Restore version ${index + 1}?`,
+        description: draftIsUnsaved ? `${summary} Your unsaved edits are discarded.` : summary,
+        confirmLabel: 'Restore',
+        destructive: draftIsUnsaved,
+        onConfirm: () => {
+          if (restoreArtifactVersion(artifact.id, index)) {
+            setSourceDraft(null);
+            setViewedVersionIndex(null);
+          }
+        },
+      });
+    },
+    [artifact.id, confirmAction, restoreArtifactVersion, sourceDraft, versionHistory],
+  );
   const canEditSource =
     variant === 'panel' && isStoredArtifact && isLatestVersion && !isPdf && !isDocx && !isImage;
 
@@ -1266,12 +1301,26 @@ if (__AgiApp) {
                 >
                   <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
                 </button>
-                <span
-                  className="min-w-[2.75rem] text-center text-xs tabular-nums text-muted-foreground"
-                  aria-live="polite"
+                <button
+                  ref={historyToggleRef}
+                  type="button"
+                  onClick={() => (historyOpen ? closeHistory() : setHistoryOpen(true))}
+                  aria-expanded={historyOpen}
+                  aria-controls={
+                    historyOpen ? `artifact-version-history-${artifact.id}` : undefined
+                  }
+                  aria-label={`Version ${shownVersionIndex + 1} of ${versionCount}. Show version history`}
+                  title="Version history"
+                  className={cn(
+                    'min-w-[2.75rem] rounded-compact text-center text-xs tabular-nums transition-colors hover:text-foreground',
+                    historyOpen ? 'text-foreground' : 'text-muted-foreground',
+                  )}
+                  data-testid="artifact-version-history-toggle"
                 >
-                  v{shownVersionIndex + 1}/{versionCount}
-                </span>
+                  <span aria-live="polite">
+                    v{shownVersionIndex + 1}/{versionCount}
+                  </span>
+                </button>
                 <button
                   type="button"
                   onClick={() =>
@@ -1294,29 +1343,7 @@ if (__AgiApp) {
                 {shownVersionIndex < versionCount - 1 && (
                   <button
                     type="button"
-                    onClick={() => {
-                      const draftIsUnsaved =
-                        sourceDraft !== null &&
-                        sourceDraft !== versionHistory?.[shownVersionIndex]?.content;
-                      confirmAction({
-                        title: `Restore version ${shownVersionIndex + 1}?`,
-                        description: draftIsUnsaved
-                          ? `This replaces what you are looking at with version ${
-                              shownVersionIndex + 1
-                            }, added as the new latest so the versions in between survive. Your unsaved edits are discarded.`
-                          : `This replaces what you are looking at with version ${
-                              shownVersionIndex + 1
-                            }, added as the new latest so the versions in between survive.`,
-                        confirmLabel: 'Restore',
-                        destructive: draftIsUnsaved,
-                        onConfirm: () => {
-                          if (restoreArtifactVersion(artifact.id, shownVersionIndex)) {
-                            setSourceDraft(null);
-                            setViewedVersionIndex(null);
-                          }
-                        },
-                      });
-                    }}
+                    onClick={() => requestRestore(shownVersionIndex)}
                     className="flex h-6 items-center justify-center rounded-compact px-1.5 text-caption font-medium text-muted-foreground transition-colors hover:text-foreground"
                     aria-label={`Restore version ${shownVersionIndex + 1}`}
                     title={`Restore v${shownVersionIndex + 1} as the latest version`}
@@ -1653,6 +1680,17 @@ if (__AgiApp) {
         {/* The project this artifact's conversation belongs to (WEBE-24). The
             artifact carries no project of its own; the host derives it from the
             conversation and passes the name here. */}
+        {historyOpen && versionHistory && versionCount > 0 && (
+          <ArtifactVersionHistory
+            id={`artifact-version-history-${artifact.id}`}
+            versions={versionHistory}
+            shownIndex={shownVersionIndex}
+            onOpen={(index) => setViewedVersionIndex(index === versionCount - 1 ? null : index)}
+            onRestore={requestRestore}
+            onClose={closeHistory}
+          />
+        )}
+
         {projectLink && (
           <div
             className="flex shrink-0 items-center gap-2 border-b border-border/30 px-4 py-2"

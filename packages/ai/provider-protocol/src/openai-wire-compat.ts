@@ -104,6 +104,12 @@ function wireContentToText(content: OpenAIWireMessage['content']): string {
   return '';
 }
 
+type ImageDetail = NonNullable<Extract<ContentBlock, { type: 'image' }>['detail']>;
+
+function isImageDetail(value: unknown): value is ImageDetail {
+  return value === 'auto' || value === 'low' || value === 'high';
+}
+
 function wireContentToBlocks(content: Array<Record<string, unknown>>): ContentBlock[] {
   const blocks: ContentBlock[] = [];
   for (const part of content) {
@@ -115,10 +121,10 @@ function wireContentToBlocks(content: Array<Record<string, unknown>>): ContentBl
     if (type === 'image_url') {
       const imageUrl = part['image_url'] as { url?: string; detail?: unknown } | undefined;
       const url = imageUrl?.url;
-      const detail =
-        imageUrl?.detail === 'auto' || imageUrl?.detail === 'low' || imageUrl?.detail === 'high'
-          ? { detail: imageUrl.detail }
-          : {};
+      const requestedDetail = imageUrl?.detail;
+      const detail: { detail?: ImageDetail } = isImageDetail(requestedDetail)
+        ? { detail: requestedDetail }
+        : {};
       if (typeof url === 'string' && url.length > 0) {
         const dataUrlMatch = /^data:([^;]+);base64,([\s\S]*)$/.exec(url);
         if (dataUrlMatch && dataUrlMatch[1] && dataUrlMatch[2] !== undefined) {

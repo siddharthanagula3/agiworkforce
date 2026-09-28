@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useUiTranslation } from '@agiworkforce/ui';
 
 import { networkErrorMessage } from '@/lib/user-error-message';
 
@@ -20,6 +21,7 @@ export interface ChatFailureNoticeProps {
  * different products depending on where it was thrown.
  */
 export function ChatFailureNotice({ error, onRetry }: ChatFailureNoticeProps) {
+  const { t } = useUiTranslation('errors');
   const [offline, setOffline] = useState(false);
 
   useEffect(() => {
@@ -37,12 +39,24 @@ export function ChatFailureNotice({ error, onRetry }: ChatFailureNoticeProps) {
   // Next redacts the route boundary's error to a digest, so nothing about the
   // original failure survives for the helper to read.
   const network = networkErrorMessage(error);
-  const title = offline ? 'You are offline' : 'Chat could not be displayed';
+  const title = offline
+    ? t('chatFailure.offlineTitle', 'You are offline')
+    : t('chatFailure.title', 'Chat could not be displayed');
   const description = offline
-    ? 'This conversation cannot load while your connection is down. Your messages are saved, reconnect and try again.'
+    ? t(
+        'chatFailure.offlineDescription',
+        'This conversation cannot load while your connection is down. Your messages are saved, reconnect and try again.',
+      )
     : network
-      ? `${network} Your messages are saved, try again, or open a different conversation.`
-      : 'Something went wrong while rendering this conversation. Your messages are saved, try again, or open a different conversation.';
+      ? t(
+          'chatFailure.networkDescription',
+          '{{network}} Your messages are saved, try again, or open a different conversation.',
+          { network },
+        )
+      : t(
+          'chatFailure.description',
+          'Something went wrong while rendering this conversation. Your messages are saved, try again, or open a different conversation.',
+        );
 
   return (
     <div
@@ -92,7 +106,7 @@ export function ChatFailureNotice({ error, onRetry }: ChatFailureNoticeProps) {
               cursor: 'pointer',
             }}
           >
-            Try again
+            {t('boundary.tryAgain', 'Try again')}
           </button>
           <a
             href="/chat"
@@ -108,12 +122,12 @@ export function ChatFailureNotice({ error, onRetry }: ChatFailureNoticeProps) {
               textDecoration: 'none',
             }}
           >
-            Back to chat
+            {t('chatFailure.backToChat', 'Back to chat')}
           </a>
         </div>
         {error.digest && (
           <p style={{ marginTop: 'var(--space-4)', fontSize: 12, color: 'var(--text-3)' }}>
-            Error ID: {error.digest}
+            {t('boundary.errorId', 'Error ID: {{reference}}', { reference: error.digest })}
           </p>
         )}
       </div>

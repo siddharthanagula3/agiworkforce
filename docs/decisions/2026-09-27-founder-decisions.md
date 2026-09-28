@@ -87,6 +87,23 @@ build it, and the audit cell is recorded as not applicable by this decision.
   Both take the time zone from the device and offer no general reset.
 - **Attaching to a turn running in another process (S68.11 cli, VS Code,
   desktop).** Neither Claude nor Codex does it; work moves by reviewed hand-off.
+- **Connector extras (S55.12, S55.15, S55.19, S55.31, S56.06, S57.19, S57.20, S57.25,
+  S57.27, S57.35, S57.38, S58.04).** One account per connector, no sync time,
+  no member approval requests, no Gmail labels, no transcription or speech
+  tools, no subagent or approval-request tool, no retry or per-tool cost, and
+  custom servers are removed and re-added instead of edited.
+- **Project extras (S23.04, S23.10, S23.16, S23.18, S23.19, S23.26, S23.27, S23.31,
+  S23.38).** Claude and ChatGPT projects have no cover image, notes editor,
+  default model, linked folder or repo, copy-chat, save-answer-to-knowledge,
+  full export or import, or parent steering conversation.
+- **VS Code extras (S4.09, S4.13, S4.17, S4.23, S4.37, S4.38, S4.40).** Claude Code
+  in VS Code has no projects, library, AGI Work, schedule creation, account
+  connection, model catalog or billing; it hands those to the web.
+- **Dedicated artifact editors (S27.34, S27.39-41, S28.02, S28.09, S28.28, S28.30,
+  S29.01-04, S29.10-11, S30.01, S30.03, S30.18-19, S30.23, S30.26, S32.06,
+  S32.26-28, S32.30, S33.02, S33.05, S33.08-09, S33.13, S33.19).** ChatGPT
+  Canvas and Claude artifacts change files by prompt and have no spreadsheet,
+  slide, design, email-send or deployment editor.
 - **Periodic usage recap (S42.20).** Neither delivers one; Reflect builds a recap
   on demand.
 - **Search domain, source-type and per-answer source controls (S34.08, S34.09,
@@ -96,4 +113,5 @@ build it, and the audit cell is recorded as not applicable by this decision.
   S45.20-21, S45.25-27, S46.10-13, S47.11). ChatGPT and Gemini edit and generate
   by prompt; Claude has no image generation. The select-an-area edit tool is
   built, because ChatGPT has one. Per-image cost and remaining image counts
-  (S44.14, S44.15) and adding videos to projects (S46.34) are declined too.
+  (S44.14, S44.15), negative prompts (S44.13), a generation queue view (S44.16,
+  S46.25), external image sharing (S44.31) and adding videos to projects (S46.34) are declined too.

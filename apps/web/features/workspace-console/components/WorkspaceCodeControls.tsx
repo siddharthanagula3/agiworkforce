@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
-import { Spinner, useConfirmAction } from '@agiworkforce/ui';
+import { Spinner, useConfirmAction, useUnsavedChangesGuard } from '@agiworkforce/ui';
 import {
   WORKSPACE_CODE_CONTROL_HINTS,
   WORKSPACE_CODE_CONTROL_LABELS,
@@ -138,6 +138,20 @@ export function WorkspaceCodeControls() {
     setMcpServers(saved.allowedMcpServers.join(', '));
     setEgressHosts(saved.allowedEgressHosts.join(', '));
   }, [saved]);
+
+  const edited =
+    saved !== null &&
+    draft !== null &&
+    JSON.stringify({
+      ...draft,
+      allowedMcpServers: parseHosts(mcpServers),
+      allowedEgressHosts: parseHosts(egressHosts),
+    }) !== JSON.stringify(saved);
+  const { dialog: discardDialog } = useUnsavedChangesGuard({
+    dirty: edited && !update.isPending,
+    description:
+      'Your changes to the Code controls have not been saved. If you leave now, they will be lost.',
+  });
 
   if (policy.isLoading) {
     return (
@@ -301,6 +315,7 @@ export function WorkspaceCodeControls() {
         </div>
       ) : null}
       {dialog}
+      {discardDialog}
     </section>
   );
 }

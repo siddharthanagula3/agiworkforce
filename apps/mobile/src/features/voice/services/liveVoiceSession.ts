@@ -63,6 +63,7 @@ export interface LiveVoiceSessionCallbacks {
 export interface LiveVoiceSessionOptions {
   voice: string | null;
   conversationId: string | null;
+  language: string | null;
   callbacks: LiveVoiceSessionCallbacks;
 }
 
@@ -233,6 +234,8 @@ export class LiveVoiceSession {
           sdp,
           voice: options.voice,
           conversationId: options.conversationId,
+          ...(options.language ? { language: options.language } : {}),
+          surface: 'mobile',
         }),
       });
       if (!response.ok) throw await readErrorMessage(response);

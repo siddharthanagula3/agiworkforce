@@ -7,6 +7,7 @@ import {
   DialogTitle,
   DialogDescription,
   Switch,
+  useUiTranslation,
 } from '@agiworkforce/ui';
 import { Separator } from '@agiworkforce/ui';
 import { Keyboard } from 'lucide-react';
@@ -27,6 +28,7 @@ function KeyboardShortcutsDialogImpl({
   onOpenChange,
   shortcuts,
 }: KeyboardShortcutsDialogProps) {
+  const { plural } = useUiTranslation('chat');
   const isMac = safePlatform.isMac();
   const hostShortcuts = useHostShortcuts();
 
@@ -153,7 +155,10 @@ function KeyboardShortcutsDialogImpl({
         {disabledIds.length > 0 ? (
           <div className="mt-4 flex items-center justify-between rounded-lg border border-border p-3 text-xs">
             <span className="text-muted-foreground">
-              {disabledIds.length} shortcut{disabledIds.length === 1 ? '' : 's'} turned off
+              {plural('counts.shortcutsOff', disabledIds.length, {
+                one: '{{count}} shortcut turned off',
+                other: '{{count}} shortcuts turned off',
+              })}
             </span>
             <button
               type="button"

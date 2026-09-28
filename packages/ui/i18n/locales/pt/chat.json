@@ -307,5 +307,33 @@
     "morningNamed": "Bom dia, {{name}}",
     "afternoonNamed": "Boa tarde, {{name}}",
     "eveningNamed": "Boa noite, {{name}}"
+  },
+  "counts": {
+    "shortcutsOff_one": "{{count}} atalho desativado",
+    "shortcutsOff_other": "{{count}} atalhos desativados",
+    "searchHistoryCleared_one": "{{count}} pesquisa apagada do histórico",
+    "searchHistoryCleared_other": "{{count}} pesquisas apagadas do histórico",
+    "searches_one": "{{count}} pesquisa",
+    "searches_other": "{{count}} pesquisas",
+    "searchesOf_one": "{{count}} de {{max}} pesquisas",
+    "searchesOf_other": "{{count}} de {{max}} pesquisas",
+    "sources_one": "{{count}} fonte",
+    "sources_other": "{{count}} fontes",
+    "intermediateSteps_one": "{{count}} etapa intermediária",
+    "intermediateSteps_other": "{{count}} etapas intermediárias",
+    "conversations_one": "{{count}} conversa",
+    "conversations_other": "{{count}} conversas",
+    "tools_one": "{{count}} ferramenta",
+    "tools_other": "{{count}} ferramentas",
+    "citations_one": "{{count}} citação",
+    "citations_other": "{{count}} citações",
+    "checkpoints_one": "{{count}} ponto de controle",
+    "checkpoints_other": "{{count}} pontos de controle",
+    "usedTools_one": "{{count}} ferramenta usada",
+    "usedTools_other": "{{count}} ferramentas usadas",
+    "runningTools_one": "Executando {{count}} ferramenta",
+    "runningTools_other": "Executando {{count}} ferramentas",
+    "runningToolsOf_one": "Executando {{running}}/{{count}} ferramenta: {{name}}",
+    "runningToolsOf_other": "Executando {{running}}/{{count}} ferramentas: {{name}}"
   }
 }
