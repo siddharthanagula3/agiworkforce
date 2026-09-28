@@ -190,6 +190,27 @@ export const PLATFORM_TOOL_METADATA: Readonly<Record<string, ToolMetadata>> = Ob
     createsEgressPath: false,
     declared: true,
   },
+  save_memory: {
+    actionClass: 'write',
+    reversible: true,
+    acceptsUntrustedContent: false,
+    createsEgressPath: false,
+    declared: true,
+  },
+  search_memory: {
+    actionClass: 'read',
+    reversible: true,
+    acceptsUntrustedContent: false,
+    createsEgressPath: false,
+    declared: true,
+  },
+  forget_memory: {
+    actionClass: 'delete',
+    reversible: false,
+    acceptsUntrustedContent: false,
+    createsEgressPath: false,
+    declared: true,
+  },
 });
 
 const GITHUB_TOOL_METADATA: Readonly<Record<string, ToolMetadata>> = Object.freeze({

@@ -97,6 +97,7 @@ import {
   MEMORY_COMMAND_TURN_STATUSES,
   memoryCommandTurnNote,
 } from '@/lib/services/memory-commands';
+import { isMemoryTool, memoryToolDefinitions } from '@/lib/server/tools/memory-tools';
 import {
   supportsOpenAIReasoningEffort,
   SYSTEM_PROMPT_CACHE_BOUNDARY,
@@ -713,6 +714,32 @@ export async function applyImplicitManagedSkillOffer(
     createSkillToolDefinition(),
   ];
   return relevant.map((skill) => skill.name);
+}
+
+export function applyMemoryToolCapability(
+  request: ChatCompletionRequest,
+  params: {
+    surface: CloudChatSurface;
+    toolsCapable: boolean;
+    memoryEnabled: boolean;
+    isTemporary: boolean;
+  },
+): void {
+  if (
+    !params.toolsCapable ||
+    !request.stream ||
+    params.isTemporary ||
+    !params.memoryEnabled ||
+    request.memory_enabled === false ||
+    request.personalization === false ||
+    !MEMORY_COMMAND_CLIENT_SURFACES.has(params.surface)
+  ) {
+    return;
+  }
+  request.tools = [
+    ...(request.tools ?? []).filter((tool) => !isMemoryTool(tool.function.name)),
+    ...memoryToolDefinitions(),
+  ];
 }
 
 export function applyManagedOfficeFileCreation(request: ChatCompletionRequest): void {
@@ -3993,6 +4020,13 @@ export async function processRequest(
     toolsCapable: resolvedModelCaps?.tools ?? true,
     userMessage: lastUserText,
     placesSearchOffered: placesRequirement.offered,
+  });
+
+  applyMemoryToolCapability(chatRequest, {
+    surface: chatSurface,
+    toolsCapable: resolvedModelCaps?.tools ?? true,
+    memoryEnabled: managedMemoryPolicy.enabled,
+    isTemporary: conversationIsTemporary,
   });
 
   const lastUserContent = lastUserMsg?.content;
