@@ -315,7 +315,12 @@ export async function getResearchReportByRequestId(
 
 export async function listResearchReports(
   db: DatabaseAdapter,
-  input: { userId: string; conversationId?: string | null; limit?: number },
+  input: {
+    userId: string;
+    organizationId: string | null;
+    conversationId?: string | null;
+    limit?: number;
+  },
 ): Promise<PersistedResearchReport[]> {
   if (!input.userId) return [];
   const limit = Math.min(100, Math.max(1, Math.floor(input.limit ?? 20)));
@@ -328,16 +333,17 @@ export async function listResearchReports(
         [input.userId, input.conversationId, limit],
       )
     : await db.query<ResearchReportRow>(
-        `select * from public.research_reports
-          where user_id = $1
-            and not exists (
-              select 1 from public.web_conversations conversation
-               where conversation.id = research_reports.conversation_id
-                 and (conversation.is_temporary or conversation.deleted_at is not null)
-            )
-          order by created_at desc
-          limit $2`,
-        [input.userId, limit],
+        `select report.* from public.research_reports report
+           join public.web_conversations conversation
+             on conversation.id = report.conversation_id
+          where report.user_id = $1
+            and conversation.user_id = $1
+            and conversation.organization_id is not distinct from $2::uuid
+            and not conversation.is_temporary
+            and conversation.deleted_at is null
+          order by report.created_at desc
+          limit $3`,
+        [input.userId, input.organizationId, limit],
       );
   return rows.map(rowToReport);
 }
