@@ -354,6 +354,45 @@ export async function downloadGeneratedFile(url: string, fileName: string): Prom
   return (await downloadGeneratedFileAsManagedFile(url, fileName)).uri;
 }
 
+function videoFileKey(url: string): string {
+  const cloudId = CLOUD_FILE_PATH.exec(url)?.[1];
+  if (cloudId && /^[a-zA-Z0-9_-]+$/.test(cloudId)) return cloudId;
+  let hash = 2166136261;
+  for (let index = 0; index < url.length; index += 1) {
+    hash = Math.imul(hash ^ url.charCodeAt(index), 16777619) >>> 0;
+  }
+  return hash.toString(16);
+}
+
+export interface LocalVideoPlayer {
+  videoUri: string;
+  playerUri: string;
+  directoryUri: string;
+}
+
+export async function prepareLocalVideoPlayer(url: string): Promise<LocalVideoPlayer> {
+  const key = videoFileKey(url);
+  const cachedVideo = `${EXPORTS_DIR}video-${key}.mp4`;
+  const videoUri = (await getInfoAsync(cachedVideo)).exists
+    ? cachedVideo
+    : await downloadGeneratedFile(url, `video-${key}.mp4`);
+  const videoName = videoUri.slice(videoUri.lastIndexOf('/') + 1);
+  const playerUri = `${EXPORTS_DIR}player-${key}.html`;
+  await writeAsStringAsync(
+    playerUri,
+    [
+      '<!DOCTYPE html><html><head><meta charset="utf-8">',
+      '<meta name="viewport" content="width=device-width, initial-scale=1">',
+      '<style>html,body{margin:0;height:100%;background:#000}',
+      'video{width:100%;height:100%;object-fit:contain}</style></head><body>',
+      `<video src="${videoName}" controls playsinline autoplay></video>`,
+      '</body></html>',
+    ].join(''),
+    { encoding: EncodingType.UTF8 },
+  );
+  return { videoUri, playerUri, directoryUri: EXPORTS_DIR };
+}
+
 const SHAREABLE_IMAGE_TYPES: Readonly<Record<string, { extension: string; mimeType: string }>> = {
   'image/png': { extension: 'png', mimeType: 'image/png' },
   'image/jpeg': { extension: 'jpg', mimeType: 'image/jpeg' },
