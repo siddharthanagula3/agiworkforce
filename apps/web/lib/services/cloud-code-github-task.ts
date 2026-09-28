@@ -45,7 +45,8 @@ export const GITHUB_CODE_TASK_MENTION = '@agi-workforce';
 const MENTION = new RegExp(`(^|[^\\w-])${GITHUB_CODE_TASK_MENTION}(?![\\w-])`, 'i');
 const EVERY_MENTION = new RegExp(MENTION.source, 'gi');
 const REQUEST_TEXT = /[\p{L}\p{N}]/u;
-const REVIEW_REQUEST = /^review\b/i;
+const REVIEW_REQUEST =
+  /^(?:(?:hey|hi|hello|please|pls|kindly|can you|could you|would you)\b[\s,.!]*)*review\b/i;
 const MAX_TASK_LENGTH = 1_000;
 const MAX_DESCRIPTION_LENGTH = 2_500;
 const MAX_CHECK_BLOCK_LENGTH = 3_200;
