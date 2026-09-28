@@ -673,6 +673,7 @@ export interface ResearchSourceEntry {
   snippet?: string;
   /** When the page says it was published, so a report's cards are dated. */
   date?: string;
+  retrievedAt?: string;
 }
 
 /**
@@ -688,10 +689,19 @@ export class SourceAggregator {
    * enforced here rather than at each call site: a result from a refused domain
    * never reaches the citation list, the synthesis prompt, or the saved report.
    */
-  constructor(private readonly domainPolicy: ResearchDomainPolicy | null = null) {}
+  constructor(
+    private readonly domainPolicy: ResearchDomainPolicy | null = null,
+    private readonly now: () => number = Date.now,
+  ) {}
 
   add(
-    entry: { url?: unknown; title?: unknown; snippet?: unknown; date?: unknown },
+    entry: {
+      url?: unknown;
+      title?: unknown;
+      snippet?: unknown;
+      date?: unknown;
+      retrievedAt?: unknown;
+    },
     chosenByReader = false,
   ): boolean {
     const url = typeof entry.url === 'string' ? entry.url.trim() : '';
@@ -713,8 +723,17 @@ export class SourceAggregator {
       title: typeof entry.title === 'string' && entry.title ? entry.title : '',
       snippet: typeof entry.snippet === 'string' && entry.snippet ? entry.snippet : undefined,
       date: typeof entry.date === 'string' && entry.date ? entry.date : undefined,
+      retrievedAt: this.retrievalTime(entry.retrievedAt),
     });
     return true;
+  }
+
+  private retrievalTime(carried: unknown): string {
+    const carriedMs = typeof carried === 'string' ? Date.parse(carried) : Number.NaN;
+    const nowMs = this.now();
+    return new Date(
+      Number.isFinite(carriedMs) && carriedMs <= nowMs ? carriedMs : nowMs,
+    ).toISOString();
   }
 
   get size(): number {
@@ -779,6 +798,7 @@ export class SourceAggregator {
                 // Client maps `encrypted_content` to the snippet field.
                 encrypted_content: s.snippet ?? '',
                 ...(s.date ? { page_age: s.date } : {}),
+                ...(s.retrievedAt ? { retrieved_at: s.retrievedAt } : {}),
                 position: s.position,
               })),
             },
@@ -800,7 +820,7 @@ export class SourceAggregator {
       title: source.title,
       url: source.url,
       ...(source.snippet ? { snippet: source.snippet } : {}),
-      accessedAt,
+      accessedAt: source.retrievedAt ?? accessedAt,
     }));
   }
 
@@ -1503,7 +1523,7 @@ export async function* runResearchLoop(
   }
 
   const domainPolicy = options.domainPolicy ?? null;
-  const sources = new SourceAggregator(domainPolicy);
+  const sources = new SourceAggregator(domainPolicy, now);
   const maxQueryRewrites = envInt(
     'AGI_RESEARCH_MAX_QUERY_REWRITES',
     DEFAULT_RESEARCH_MAX_QUERY_REWRITES,

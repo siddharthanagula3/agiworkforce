@@ -636,6 +636,7 @@ async function dispatchChatCompletions(
                   url: source.url,
                   title: source.title ?? source.url,
                   ...(source.snippet ? { snippet: source.snippet } : {}),
+                  ...(source.retrieved_at ? { retrievedAt: source.retrieved_at } : {}),
                 })),
                 priorSteps: processed.researchResume.steps,
                 approvedPlan: processed.researchResume.approvedSteps,

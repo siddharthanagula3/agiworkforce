@@ -108,7 +108,7 @@ describe('schedule form contract', () => {
         missedExecutionPolicy: 'run_once',
         condition: null,
         creditCap: null,
-        sources: { project: true, memory: true, web: true },
+        sources: { project: true, memory: true, web: true, recentChats: false },
         connectors: null,
       },
     });

@@ -93,6 +93,7 @@ export const ManagedCloudScheduleSourcesSchema = z.object({
   project: z.boolean(),
   memory: z.boolean(),
   web: z.boolean(),
+  recentChats: z.boolean().optional(),
 });
 export type ManagedCloudScheduleSources = z.infer<typeof ManagedCloudScheduleSourcesSchema>;
 
@@ -100,6 +101,7 @@ export const MANAGED_CLOUD_SCHEDULE_DEFAULT_SOURCES: ManagedCloudScheduleSources
   project: true,
   memory: true,
   web: true,
+  recentChats: false,
 };
 export const MANAGED_CLOUD_SCHEDULE_MAX_CONNECTORS = 100;
 
@@ -715,6 +717,7 @@ export interface ManagedCloudScheduleTemplateDraft {
   recurrence: Extract<ManagedCloudScheduleRecurrence, 'daily' | 'weekly'>;
   daysOfWeek?: number[];
   timeOfDay: string;
+  sources?: ManagedCloudScheduleSources;
 }
 
 export interface ManagedCloudScheduleTemplate {
@@ -750,10 +753,11 @@ export const MANAGED_CLOUD_SCHEDULE_TEMPLATES: readonly ManagedCloudScheduleTemp
     draft: {
       name: 'Daily briefing',
       prompt:
-        'Give me a brief for today. Check my connected calendar for today’s meetings and what to prepare, my connected email for anything that needs a reply today, what you remember about my work, and the web for news that bears on it. Lead with the few things that matter most, flag anything time-sensitive, and end with one thing worth doing early while I have focus. If a calendar or email is not connected, say so in one line and brief from the rest. Keep it under 250 words.',
+        'Give me a brief for today. Check my connected calendar for today’s meetings and what to prepare, my connected email for anything that needs a reply today, what I worked on in my recent chats, what you remember about my work, and the web for news that bears on it. Lead with the few things that matter most, flag anything time-sensitive, and end with one thing worth doing early while I have focus. If a calendar or email is not connected, say so in one line and brief from the rest. Keep it under 250 words.',
       recurrence: 'weekly',
       daysOfWeek: WEEKDAYS,
       timeOfDay: '08:00',
+      sources: { ...MANAGED_CLOUD_SCHEDULE_DEFAULT_SOURCES, recentChats: true },
     },
   },
   {
