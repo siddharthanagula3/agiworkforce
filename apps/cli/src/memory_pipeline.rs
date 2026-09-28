@@ -112,6 +112,22 @@ fn cap_consolidated_facts(consolidated: &str, max_facts: usize) -> String {
     kept.join("\n")
 }
 
+pub fn stored_fact_count(home: &Path) -> usize {
+    fs::read_to_string(home.join("memories").join("raw_memories.md"))
+        .map(|content| {
+            content
+                .lines()
+                .map(str::trim)
+                .filter(|line| {
+                    !line.is_empty()
+                        && !line.starts_with('#')
+                        && !line.starts_with("_Last consolidated")
+                })
+                .count()
+        })
+        .unwrap_or(0)
+}
+
 pub struct MemoryPipeline;
 
 impl MemoryPipeline {

@@ -4810,15 +4810,19 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         "/memories" => {
             use crate::tui::widgets::memories_settings::{MemoriesSettingsView, MemorySettings};
             // Seed from the persisted settings; save commits back via take_result.
-            let (auto_memory, decay_threshold_days, max_facts) =
-                crate::config::CliConfig::config_dir()
-                    .map(|home| crate::memory_pipeline::load_memory_settings(&home))
-                    .unwrap_or((true, 30, 500));
-            let view = MemoriesSettingsView::new(MemorySettings {
+            let home = crate::config::CliConfig::config_dir().ok();
+            let (auto_memory, decay_threshold_days, max_facts) = home
+                .as_deref()
+                .map(crate::memory_pipeline::load_memory_settings)
+                .unwrap_or((true, 30, 500));
+            let mut view = MemoriesSettingsView::new(MemorySettings {
                 auto_memory,
                 decay_threshold_days,
                 max_facts,
             });
+            if let Some(home) = home.as_deref() {
+                view = view.with_stored_facts(crate::memory_pipeline::stored_fact_count(home));
+            }
             app.open_overlay(Box::new(view));
             SlashResult::SystemMessage(
                 "Memory settings (\u{2191}\u{2193} navigate \u{00b7} Enter toggle \u{00b7} Esc close)".into(),
