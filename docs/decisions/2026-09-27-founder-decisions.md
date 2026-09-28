@@ -87,6 +87,11 @@ build it, and the audit cell is recorded as not applicable by this decision.
   Both take the time zone from the device and offer no general reset.
 - **Attaching to a turn running in another process (S68.11 cli, VS Code,
   desktop).** Neither Claude nor Codex does it; work moves by reviewed hand-off.
+- **Connector extras (S55.12, S55.15, S55.19, S55.31, S56.06, S57.19, S57.20, S57.25,
+  S57.27, S57.35, S57.38, S58.04).** One account per connector, no sync time,
+  no member approval requests, no Gmail labels, no transcription or speech
+  tools, no subagent or approval-request tool, no retry or per-tool cost, and
+  custom servers are removed and re-added instead of edited.
 - **Periodic usage recap (S42.20).** Neither delivers one; Reflect builds a recap
   on demand.
 - **Search domain, source-type and per-answer source controls (S34.08, S34.09,

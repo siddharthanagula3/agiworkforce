@@ -247,40 +247,6 @@ Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:194-194`, 
 
 Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:1218-1220`, `apps/web/features/media/services/media-api-service.ts:195-195`, `apps/mobile/app/(app)/chat/[id].tsx:386-386`, `apps/mobile/src/features/video/services/videogen.ts:65-65`
 
-## S57.19: Transcription tool.
-
-- Done when: The assistant can transcribe an audio recording into text (a transcription tool or endpoint), beyond composer dictation.
-- Wave: 3
-- Already works on: api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Only the user's own dictation is transcribed into the composer; the assistant has no tool to transcribe an audio or video file it is given. | handler |
-| desktop | partial | Only the user's own dictation is transcribed into the composer; the assistant has no tool to transcribe an audio or video file it is given. | handler |
-| mobile | partial | Only the user's own dictation is transcribed into the composer; the assistant has no tool to transcribe an audio or video file it is given. | handler |
-| cli | partial | Dictation only (/voice), and it needs the user's own OPENAI_API_KEY or a local whisper binary; no transcription tool for files. | handler |
-| vscode | missing | Not built on this surface. |  |
-| chrome | partial | Only the user's own dictation is transcribed into the composer; the assistant has no tool to transcribe an audio or video file it is given. Chrome uses the browser's own SpeechRecognition. | handler |
-
-Code: `apps/web/features/chat/stores/voice-input-store.ts:150-150`, `apps/mobile/src/features/chat/components/ChatInput.tsx:571-571`, `apps/cli/src/voice.rs:4-5`, `apps/extension/src/features/side-panel/voice.ts:49-50`
-
-## S57.20: Speech-generation tool.
-
-- Done when: The assistant can generate spoken audio from text (a speech tool or endpoint) and play or return it.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Replies can be read aloud on request (device speech), but the assistant cannot call a speech-generation tool or produce an audio file. | handler |
-| desktop | partial | Replies can be read aloud on request (device speech), but the assistant cannot call a speech-generation tool or produce an audio file. | handler |
-| mobile | partial | Replies can be read aloud on request (device speech), but the assistant cannot call a speech-generation tool or produce an audio file. | handler |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-| api | missing | Not built on this surface. |  |
-
-Code: `apps/web/lib/hooks/useTTS.ts:76-76`, `apps/web/features/chat/components/messages/ChatMessageList.tsx:391-391`, `apps/mobile/src/features/chat/components/MessageBubble.tsx:427-433`
-
 ## S57.21: Memory tool.
 
 - Done when: The assistant can call a memory tool to save, recall or delete a remembered fact during a turn.
@@ -342,21 +308,6 @@ Code: `apps/cli/src/platform/runtime/tool_catalog.rs:337-340`
 
 Code: `apps/web/app/chat/schedules/page.tsx:12-12`, `apps/mobile/lib/v1FeatureFlags.ts:16-16`, `apps/extension/src/side_panel.ts:9307-9307`
 
-## S57.25: Agent-delegation tool.
-
-- Done when: The assistant can call a tool that delegates a sub-task to another agent and uses its result.
-- Wave: 3
-- Already works on: cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Cloud turns run one model loop; the assistant cannot hand a sub-task to another agent (no subagent tool in the tool loop). | handler |
-| desktop | partial | Cloud turns run one model loop; the assistant cannot hand a sub-task to another agent (no subagent tool in the tool loop). | handler |
-| mobile | partial | Cloud turns run one model loop; the assistant cannot hand a sub-task to another agent (no subagent tool in the tool loop). | handler |
-| chrome | partial | Cloud turns run one model loop; the assistant cannot hand a sub-task to another agent (no subagent tool in the tool loop). | handler |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:2614-2618`, `apps/web/lib/services/cloud-agent-budget.ts:20-21`
-
 ## S57.26: Clarification/input tool.
 
 - Done when: The assistant can call a tool that asks the user a clarifying question (with choices) and waits for the answer.
@@ -370,22 +321,6 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:2614-2618`, `ap
 | chrome | partial | The clarify tool is offered only when the client declares clarify.v1 cards; this client sends only map-search.v1, so the model never gets it. | ui |
 
 Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1756-1756`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:713-713`, `apps/cli/src/features/exec/tools/task_registry/mod.rs:489-492`, `apps/extension-vscode/src/features/permissions/approvalScope.ts:15-15`
-
-## S57.27: Approval-request tool.
-
-- Done when: The assistant can call a tool that explicitly asks the user to approve a plan or decision and waits for the answer.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Approvals are raised by the server gate per tool call (and by Deep Research plan review); the model has no tool to ask the user to approve a plan or decision before it continues. | handler |
-| desktop | partial | Approvals are raised by the server gate per tool call (and by Deep Research plan review); the model has no tool to ask the user to approve a plan or decision before it continues. | handler |
-| mobile | partial | Approvals are raised by the server gate per tool call (and by Deep Research plan review); the model has no tool to ask the user to approve a plan or decision before it continues. | handler |
-| cli | partial | Only in plan mode: the model submits update_plan and waits for /plan approve; in normal mode it cannot ask for approval itself. | handler |
-| vscode | partial | Only runtime-raised approvals (per tool) reach the sidebar; the model has no approval-request tool. | handler |
-| chrome | partial | Approvals are raised by the server gate per tool call (and by Deep Research plan review); the model has no tool to ask the user to approve a plan or decision before it continues. | handler |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-call-gate.ts:136-144`, `apps/mobile/src/features/chat/components/research/ResearchRunCard.tsx:181-181`, `apps/cli/src/agent/chat.rs:2191-2194`, `apps/cli/src/repl/slash_commands.rs:332-332`
 
 ## S57.29: Tool search.
 
@@ -442,22 +377,6 @@ Code: `apps/cli/src/tui/tui_app.rs:4865-4883`, `apps/cli/src/features/exec/tools
 
 Code: `apps/cli/src/tui/tui_app.rs:4902-4906`
 
-## S57.35: Tool error and retry.
-
-- Done when: A failed tool call shows its error, the error goes back to the model so it can retry or explain, and the user can retry.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | The cited Resend (ToolCallCard 450-460) renders only inside showExpiredApproval ('This approval request expired'), and onRetryTurn (ToolTimeline 463-469) only feeds ConnectorConnectCard. A failed tool call shows its error and the error goes back to the model, but no control retries it; the user must send a new message, the same gap the auditor rated partial on chrome. remaining: 'Failed tool calls show the error but offer no retry control; add a retry action on the failed card.' miss: ui. |  |
-| desktop | partial | Hosted-web mirror of the web cell: the only Resend is the expired-approval one (ToolCallCard 450-460); nothing retries a failed tool call. remaining: 'Failed tool calls show the error but offer no retry control; add a retry action on the failed card.' miss: ui. |  |
-| mobile | partial | The cited 'Resend' (ToolCallTimeline 258-273) is inside the approvalExpired branch of the approval card; a tool that ended failed shows its error (statusTone error) with no retry control. remaining: 'Failed tool calls show the error but offer no retry control; add a retry action on the failed row.' miss: ui. |  |
-| cli | partial | apply_tool_event only flips the row to Failed (tui_app 4884-4896); no slash command or key retries a failed tool (no retry/resend handling anywhere in tui_app.rs), and 'the user retries by asking again' is not a control under R-k. Chrome got partial for exactly this, so cli must match. remaining: 'No retry control for a failed tool call in the TUI; add /retry or a key on the failed row.' miss: ui. |  |
-| vscode | partial | The only Retry in the sidebar (webviewContent 3343-3349) is for a retryable turn-error presentation; a toolCallEnd with isError (5109-5113) marks the card red and continues the turn with no retry control. Same gap the auditor rated partial on chrome, so vscode must match. remaining: 'Failed tool calls show the error but offer no retry control; add a retry action on the failed card.' miss: ui. notes: needs-local-cli. |  |
-| chrome | partial | Chrome shows the tool's error text, but has no retry control for a failed tool call; the user must send a new message. | ui |
-
-Code: `packages/ui/unified-chat/src/components/ToolCallCard.tsx:320-329`, `packages/ui/unified-chat/src/components/ToolCallCard.tsx:457-460`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:2614-2618`, `apps/mobile/src/features/chat/components/ToolCallTimeline.tsx:267-273`
-
 ## S57.36: Large-result references.
 
 - Done when: An oversized tool result is stored in full and replaced in context by a reference the model or user can open later.
@@ -487,19 +406,3 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:353-353`, `apps
 | chrome | partial | Tool steps show in the transcript only; Chrome has no call log or receipt view. | ui |
 
 Code: `apps/mobile/src/features/chat/components/ToolCallTimeline.tsx:368-386`, `apps/cli/src/approval_audit.rs:12-16`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:5908-5913`, `apps/extension/src/features/side-panel/bubbles.ts:537-538`
-
-## S57.38: Per-tool cost and usage where exposed.
-
-- Done when: Where the product exposes costs, the user can see the cost or usage attributable to each tool call.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Cost is shown per task or run, never per tool call; web search and sandbox charges are metered server-side but not itemized to the user. | ui |
-| desktop | partial | Cost is shown per task or run, never per tool call; web search and sandbox charges are metered server-side but not itemized to the user. | ui |
-| mobile | missing | Not built on this surface. |  |
-| cli | partial | The cost ledger records each provider request of a tool loop, not each tool call. | ui |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `packages/ui/unified-chat/src/components/tasks/TaskDetailPanel.tsx:292-298`, `apps/cli/src/cost_ledger.rs:95-97`
