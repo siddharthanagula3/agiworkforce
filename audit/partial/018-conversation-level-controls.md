@@ -203,14 +203,13 @@ Code: `apps/web/features/chat/components/work-session/WorkSessionPanel.tsx:463-4
 
 - Done when: The user can inspect what context and sources the conversation is using (files, instructions, memory, token budget).
 - Wave: 3
-- Already works on: vscode
+- Already works on: cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | The 'Chat details' dock shows Sources and Context (and files) only for AGI Work or agent turns; plain chats have no context/source inspector. | ui |
 | desktop | partial | The 'Chat details' dock shows Sources and Context (and files) only for AGI Work or agent turns; plain chats have no context/source inspector. | ui |
 | mobile | partial | Only a warning chip appears when the thread nears the model's context limit; add a view of what is in context. | ui |
-| cli | partial | /context (/ctx) reports only the percentage of the window used; add a list of what is in context (files, instructions, memory). | ui |
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/web/features/chat/components/work-session/WorkSessionPanel.tsx:577-585`, `apps/web/features/chat/components/work-session/WorkSessionPanel.tsx:468-474`, `apps/web/features/chat/pages/WebChatPage.tsx:4906-4906`, `apps/mobile/app/(app)/chat/[id].tsx:1458-1464`

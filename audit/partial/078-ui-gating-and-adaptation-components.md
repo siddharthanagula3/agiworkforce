@@ -26,28 +26,15 @@ Code: `apps/web/app/api/me/route.ts:228-236`, `apps/web/features/chat/components
 
 - Done when: Which files the composer accepts (or how it reacts to them) depends on what the selected model can read.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | On-device chat switches to a vision model when an image is attached, but the cloud composer accepts the same files for every model and relies on the server refusal. | ui |
-| cli | partial | The CLI shows a V (vision) flag in `agi models list`, but attachments are not filtered or refused by the selected model on the client. | handler |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/model-picker/localModelRuntime.ts:60-62`, `apps/mobile/services/streaming.ts:167-167`, `apps/cli/src/provider.rs:264-265`
-
-## S78.05: Model-dependent sampling options.
-
-- Done when: Sampling options offered or sent depend on the selected model.
-- Wave: 3
-- Already works on: api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | A configured temperature is silently dropped for models that reject sampling; the CLI never tells the user or hides the setting for those models. | ui |
-
-Code: `apps/cli/src/config.rs:89-89`, `apps/cli/src/models/streaming.rs:301-306`
+Code: `apps/mobile/src/features/model-picker/localModelRuntime.ts:60-62`, `apps/mobile/services/streaming.ts:167-167`
 
 ## S78.06: Model-dependent media settings.
 

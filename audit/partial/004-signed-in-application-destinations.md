@@ -95,17 +95,14 @@ Code: `apps/extension/src/features/side-panel/projectsDrawer.ts:239-245`, `apps/
 
 - Done when: A project members view shows who has access to a project and lets the owner add or remove people.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Project organisation-sharing only: a project can be shared with the whole organisation (Workspace > Sharing); there is no per-project member list or per-person invite. | ui |
-| desktop | partial | Project organisation-sharing only: a project can be shared with the whole organisation (Workspace > Sharing); there is no per-project member list or per-person invite. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/workspace/sharing/page.tsx:16-16`, `apps/web/features/settings/sections/OrganizationSharingSection.tsx:208-218`, `apps/web/app/api/settings/organization/shared/projects/[projectId]/route.ts:71-71`
 
 ## S4.12: Project Memory.
 
