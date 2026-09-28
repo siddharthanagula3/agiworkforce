@@ -49,14 +49,13 @@ Code: `apps/extension/src/features/side-panel/bubbles.ts:406-432`, `apps/extensi
 
 - Done when: Files the assistant produced appear as cards on the answer with name/type and open/download.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Files the agent writes show only as tool rows naming the path; add a per-answer list of produced files with an open action. | ui |
 | chrome | partial | Generated files arrive and are stored on the message but the bubble never renders them; only artifact steps inside the activity timeline get an 'Open or download' link. | ui |
 
-Code: `apps/cli/src/tui/tui_app.rs:169-180`, `apps/cli/src/tui/tui_app.rs:4865-4880`, `apps/extension/src/side_panel.ts:10791-10796`, `apps/extension/src/features/side-panel/bubbles.ts:434-456`
+Code: `apps/extension/src/side_panel.ts:10791-10796`, `apps/extension/src/features/side-panel/bubbles.ts:434-456`
 
 ## S17.09: Artifact launch cards.
 
@@ -168,16 +167,13 @@ Code: `apps/web/features/chat/pages/WebChatPage.tsx:5074-5087`, `apps/web/lib/ho
 
 - Done when: An answer cut off by the output limit offers Continue, which resumes the same answer.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | A cut answer is kept and flagged ('reached this model's maximum length'), but the only advice is to ask for a shorter answer; add a continue command. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/agent/chat.rs:318-320`, `apps/cli/src/errors.rs:92-94`
 
 ## S17.22: Rewrite with another model.
 
@@ -359,17 +355,16 @@ Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1528-1542
 
 - Done when: A single answer can be exported to a file (e.g. PDF, Markdown, text).
 - Wave: 3
-- Already works on: mobile
+- Already works on: mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Export covers the whole conversation (Export dialog); add exporting a single answer. | ui |
 | desktop | partial | Same as web (hosted): Export covers the whole conversation (Export dialog); add exporting a single answer. | ui |
-| cli | partial | /export writes the whole conversation (markdown by default); add exporting one answer. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/pages/WebChatPage.tsx:5469-5469`, `apps/web/features/chat/pages/WebChatPage.tsx:5851-5856`, `apps/cli/src/tui/tui_app.rs:3581-3589`, `apps/cli/src/tui/tui_app.rs:3581-3582`
+Code: `apps/web/features/chat/pages/WebChatPage.tsx:5469-5469`, `apps/web/features/chat/pages/WebChatPage.tsx:5851-5856`
 
 ## S17.36: Actual-model and usage details.
 

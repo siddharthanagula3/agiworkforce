@@ -153,6 +153,13 @@ function SessionItemBase({
           <span className="sr-only">{t('sidebar.running', 'Running')}</span>
         </span>
       )}
+      {session.needsYou && (
+        <span
+          data-testid={`session-needs-you-${session.id}`}
+          className="h-2 w-2 shrink-0 rounded-full bg-[var(--chat-warning-fg)]"
+          aria-hidden="true"
+        />
+      )}
       {session.agiWork && (
         <span
           data-testid={`session-agi-work-${session.id}`}
@@ -176,6 +183,8 @@ function SessionItemBase({
   const rowNameParts = [
     rowLabel,
     session.agiWork ? t('sidebar.agiWork', 'AGI Work') : null,
+    session.needsYou ? t('sidebar.needsYou', 'Needs you') : null,
+    session.runState === 'running' ? t('sidebar.running', 'Running') : null,
     session.unread ? t('sidebar.unread', 'Unread') : null,
   ].filter((part): part is string => Boolean(part));
   const rowAccessibleName = rowNameParts.length > 1 ? rowNameParts.join(', ') : undefined;

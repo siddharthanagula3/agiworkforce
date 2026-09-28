@@ -154,12 +154,11 @@ Code: `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:15
 
 - Done when: The user can explicitly invoke a Skill from the composer so the next message runs with it.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | The criterion is invoking a skill from the composer. The cited ui anchor is the Skills screen; the composer's Add-to-chat sheet lists Camera, Photos, File, Library, Model, Image, Video, Deep research, Project and Choose style with no Skills entry, and the '/' palette has four commands (/image, /voice, /compare, /export). The skill chip and skill_name plumbing are real, so partial. |  |
-| vscode | partial | Make choosing a skill in the "/" menu apply it; today it is listed but the click runs a CLI command that the app server cannot run, so only a warning appears. | handler |
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/mobile/src/features/skills/SkillsScreen.tsx:536-544`, `apps/mobile/app/(app)/(tabs)/chat.tsx:417-420`, `apps/mobile/stores/chat/chatExecutionStore.ts:1761-1761`, `apps/mobile/app/(app)/skills/index.tsx:4-4`
@@ -330,16 +329,15 @@ Code: `apps/cli/src/voice.rs:320-320`, `apps/cli/src/voice.rs:880-880`
 
 - Done when: A queued message can be edited or cancelled before it is sent.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Add Edit for queued messages; each queued message can only be cancelled. | ui |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | Add per-message Edit/Cancel for queued follow-ups; today they are only dropped all together by Clear Conversation, New Chat or switching sessions. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/chat/components/ChatInput.tsx:871-887`, `apps/mobile/src/features/chat/components/ChatInput.tsx:409-412`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:840-845`
+Code: `apps/mobile/src/features/chat/components/ChatInput.tsx:871-887`, `apps/mobile/src/features/chat/components/ChatInput.tsx:409-412`
 
 ## S13.40: Mid-task steering input.
 

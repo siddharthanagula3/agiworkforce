@@ -193,18 +193,6 @@ Code: `apps/web/features/chat/components/Voice/VoiceModeSurface.tsx:82-85`, `app
 
 Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:386-389`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:3628-3630`, `packages/ai/model-registry/catalog/routing-policies.json:358-359`
 
-## S76.26: Reasoning-effort controls.
-
-- Done when: The registry records per-model reasoning-effort levels and each surface offers and sends only those levels.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | The effort picker is shown per provider (PROVIDER_DISPLAY.supportsEffort), not from each model's registry effort levels. | ui |
-
-Code: `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:678-686`
-
 ## S76.28: Context-window limit.
 
 - Done when: The registry records each model context window; the product shows it and trims or refuses over-long requests accordingly.

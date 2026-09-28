@@ -22,56 +22,19 @@ nothing is left.
 
 Code: `apps/web/app/api/me/route.ts:228-236`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:879-886`
 
-## S78.02: Model-dependent composer controls.
-
-- Done when: Composer controls (effort, thinking, attachment options) appear, change or disappear according to the selected model.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | The effort control is shown or hidden per provider, not from the selected model's capabilities. | ui |
-
-Code: `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:678-686`
-
 ## S78.03: Model-dependent accepted-file types.
 
 - Done when: Which files the composer accepts (or how it reacts to them) depends on what the selected model can read.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | On-device chat switches to a vision model when an image is attached, but the cloud composer accepts the same files for every model and relies on the server refusal. | ui |
-| cli | partial | The CLI shows a V (vision) flag in `agi models list`, but attachments are not filtered or refused by the selected model on the client. | handler |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/model-picker/localModelRuntime.ts:60-62`, `apps/mobile/services/streaming.ts:167-167`, `apps/cli/src/provider.rs:264-265`
-
-## S78.04: Model-dependent reasoning options.
-
-- Done when: The reasoning/effort options offered match the selected model, and unsupported levels are not sent.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Effort is offered per provider rather than from each model's registry effort levels. | ui |
-
-Code: `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:678-686`
-
-## S78.05: Model-dependent sampling options.
-
-- Done when: Sampling options offered or sent depend on the selected model.
-- Wave: 3
-- Already works on: api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | A configured temperature is silently dropped for models that reject sampling; the CLI never tells the user or hides the setting for those models. | ui |
-
-Code: `apps/cli/src/config.rs:89-89`, `apps/cli/src/models/streaming.rs:301-306`
+Code: `apps/mobile/src/features/model-picker/localModelRuntime.ts:60-62`, `apps/mobile/services/streaming.ts:167-167`
 
 ## S78.06: Model-dependent media settings.
 
@@ -249,19 +212,6 @@ Code: `apps/extension/src/features/cloud-bridge/managedModelPicker.ts:94-106`
 
 Code: `apps/web/app/api/code/sessions/route.ts:132-135`, `apps/mobile/src/features/companion/components/ConnectionStateViews.tsx:69-71`, `apps/cli/src/context_handoff.rs:1-5`
 
-## S78.24: Explicit processing-path selection.
-
-- Done when: The user can explicitly choose where a request is processed (local model, own key, managed cloud).
-- Wave: 3
-- Already works on: desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | In a normal browser the web app offers only the managed cloud path; the Local path appears in the picker only when the page runs inside the desktop app. | ui |
-| chrome | partial | Side-panel chat always takes the managed cloud path; there is no in-panel choice of Local or BYOK. | ui |
-
-Code: `apps/web/features/chat/components/Composer/ComposerFooter.tsx:167-167`, `apps/web/features/desktop-host/lib/runtime-client.ts:386-389`, `apps/extension/src/features/cloud-bridge/managedChatRouting.ts:28-30`
-
 ## S78.25: Attachment-preservation choice after model change.
 
 - Done when: After switching to a model that cannot use the current attachments, the user chooses to keep them (by switching model) or remove them.
@@ -274,18 +224,6 @@ Code: `apps/web/features/chat/components/Composer/ComposerFooter.tsx:167-167`, `
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-## S78.26: Unsupported-parameter removal or correction.
-
-- Done when: Parameters the chosen model cannot take are removed or corrected before the request is sent.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Effort is corrected per provider, not per model, so an unsupported level can still be sent to a model in a supporting provider. | ui |
-
-Code: `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:678-686`
 
 ## S78.28: Live updates after a plan, policy, connection, or device change.
 

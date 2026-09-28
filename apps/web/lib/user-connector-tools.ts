@@ -76,6 +76,12 @@ import {
   type ConnectorAuthorizationReason,
 } from '@/lib/connectors/connect-required';
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
+import {
+  GMAIL_CONNECTOR_ID,
+  executeGmailAction,
+  gmailActionToolDefs,
+  isGmailActionTool,
+} from '@/lib/connectors/gmail-actions';
 import { resolveToolMetadata } from '@/app/api/llm/v1/chat/completions/lib/tool-metadata';
 import { getBillingPlanProductLimits, getPlanMaxConnectorTools } from '@agiworkforce/types';
 
@@ -2363,9 +2369,11 @@ export async function loadUserConnectorToolCatalog(
           const access = await resolveConnectorAccessToken(userId, connectorId);
           if (access.status !== 'ready') return [];
           const catalog = await buildOAuthConnectorCatalog(userId, target, access);
-          return catalog
-            ? catalogToConnectorToolDefs(catalog, target.displayName ?? connectorId)
-            : [];
+          if (!catalog) return [];
+          const label = target.displayName ?? connectorId;
+          return connectorId === GMAIL_CONNECTOR_ID
+            ? [...catalogToConnectorToolDefs(catalog, label), ...gmailActionToolDefs(label)]
+            : catalogToConnectorToolDefs(catalog, label);
         },
       });
     }
@@ -2592,6 +2600,13 @@ export function makeUserConnectorExecutor(
 
     if (serverId === GITHUB_SERVER_ID) {
       return guarded((safeArgs) => executeGithubTool(userId, toolName, safeArgs));
+    }
+
+    if (isGmailActionTool(serverId, toolName)) {
+      return guarded(async (safeArgs) => ({
+        handled: true,
+        ...(await executeGmailAction(userId, toolName, safeArgs)),
+      }));
     }
 
     const customShortId = customShortIdFromServerId(serverId);

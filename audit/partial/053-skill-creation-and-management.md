@@ -113,13 +113,13 @@ Code: `apps/web/features/skills/components/SkillEditorDialog.tsx:185-200`, `apps
 
 - Done when: A skill can bundle reference files that the model reads when the skill runs.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Built-in skills carry reference files the model can read; skills users create or upload hold only SKILL.md, and plugin-directory skills run without their extra files. | handler |
 | desktop | partial | Built-in skills carry reference files the model can read; skills users create or upload hold only SKILL.md, and plugin-directory skills run without their extra files. | handler |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Skill packages with references/ are integrity-hashed, but the skill tool never tells the model where the package lives, so the files are reachable only if the instructions carry a usable path. | handler |
 | vscode | partial | Runs through the local CLI runtime, which has the same gap: package files are hashed but their location is not given to the model. | handler |
 | chrome | missing | Not built on this surface. |  |
 
@@ -129,13 +129,13 @@ Code: `packages/ui/ui/src/directory/SkillDetailView.tsx:147-190`, `packages/tool
 
 - Done when: A skill can bundle scripts that run when the skill is used.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Bundled scripts can be read by the model but no skill path executes them (code execution is a separate, default-off sandbox). | handler |
 | desktop | partial | Same as web: scripts readable, never executed by the skill path. | handler |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | scripts/ are part of the hashed package, but the load result gives no package path, so the agent can run them only if the instructions carry an absolute path. | handler |
 | vscode | partial | Same CLI-runtime gap as the CLI cell. | handler |
 | chrome | missing | Not built on this surface. |  |
 
@@ -210,13 +210,13 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:639-639
 
 - Done when: A user can upload or import a skill file/package and use it.
 - Wave: 2
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Upload skill and Import a SKILL.md create a personal skill, which fails unless AGI_USER_SKILL_AUTHORING=1 (default 0) though the Upload button is always shown; uploading a plugin zip works as the unflagged route. | flag-off |
 | desktop | partial | Upload skill and Import a SKILL.md create a personal skill, which fails unless AGI_USER_SKILL_AUTHORING=1 (default 0) though the Upload button is always shown; uploading a plugin zip works as the unflagged route. | flag-off |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | No import command: skills are added by copying files into a skills folder; only the Claude migration imports skills. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 

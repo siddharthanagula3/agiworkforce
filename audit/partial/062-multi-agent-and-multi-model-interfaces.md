@@ -54,17 +54,14 @@ Code: `apps/cli/src/subagent.rs:45-61`
 
 - Done when: Each participating agent or model is labelled with the model it runs on.
 - Wave: 3
-- Already works on: mobile
+- Already works on: mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
-| cli | partial | Subagent usage records the model, but no view shows which model each child used. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/subagent.rs:64-73`
 
 ## S62.05: Per-agent status.
 
@@ -97,33 +94,30 @@ Code: `apps/cli/src/subagent.rs:64-73`
 
 - Done when: Each participating agent's result is shown separately.
 - Wave: 3
-- Already works on: mobile
+- Already works on: mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
-| cli | partial | A subagent's result goes back to the parent model as a tool result; the user sees no separate per-agent result view. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/subagent.rs:247-255`
 
 ## S62.08: Per-agent usage.
 
 - Done when: The user sees usage or cost per participating agent or model.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | partial | Compare shows only a rough token estimate (characters/4) and timing per model, not real usage or cost. | handler |
-| cli | partial | Subagent usage is recorded to an audit log file but never shown per agent. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/compare/index.tsx:575-589`, `apps/mobile/src/features/compare/index.tsx:210-212`, `apps/cli/src/subagent.rs:64-73`, `apps/cli/src/subagent.rs:367-373`
+Code: `apps/mobile/src/features/compare/index.tsx:575-589`, `apps/mobile/src/features/compare/index.tsx:210-212`
 
 ## S62.10: Needs-input prioritization.
 

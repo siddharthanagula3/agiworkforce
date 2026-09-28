@@ -590,6 +590,7 @@ export interface Conversation {
    * override in `workModeByConversation` is the other half of the answer.
    */
   workMode?: CloudAgentWorkMode;
+  needsYou?: boolean;
   /** Pinned to top of sidebar. Persisted in web_conversations.pinned. */
   isPinned?: boolean;
   /** Starred by the user. Client-side only (no DB column in v1). */

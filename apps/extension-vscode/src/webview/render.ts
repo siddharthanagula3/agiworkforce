@@ -9,15 +9,34 @@ const md = markdownit({
   typographer: false,
 });
 
+const DIFF_LANGUAGES = new Set(['diff', 'patch']);
+
+function diffLineClass(line: string): string {
+  if (line.startsWith('+++') || line.startsWith('---')) return 'diff-file';
+  if (line.startsWith('@@')) return 'diff-hunk';
+  if (line.startsWith('+')) return 'diff-add';
+  if (line.startsWith('-')) return 'diff-del';
+  return 'diff-context';
+}
+
+function renderCodeBody(content: string, language: string): string {
+  if (!DIFF_LANGUAGES.has(language.toLowerCase())) return md.utils.escapeHtml(content);
+  return content
+    .split('\n')
+    .map((line) => `<span class="${diffLineClass(line)}">${md.utils.escapeHtml(line)}</span>`)
+    .join('\n');
+}
+
 function renderCodeBlock(content: string, language = ''): string {
   const languageClass = language ? ` class="language-${md.utils.escapeHtml(language)}"` : '';
   return [
     '<div class="code-block-wrapper">',
     '<div class="code-block-actions">',
     '<button type="button" class="copy-btn" aria-label="Copy code">Copy</button>',
+    '<button type="button" class="explain-btn" aria-label="Explain this code">Explain</button>',
     '<button type="button" class="apply-btn" aria-label="Apply code changes">Apply</button>',
     '</div>',
-    `<pre><code${languageClass}>${md.utils.escapeHtml(content)}</code></pre>`,
+    `<pre><code${languageClass}>${renderCodeBody(content, language)}</code></pre>`,
     '</div>',
     '',
   ].join('\n');
@@ -126,7 +145,9 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
   }
   if (
     node.tagName === 'BUTTON' &&
-    (node.classList.contains('copy-btn') || node.classList.contains('apply-btn'))
+    (node.classList.contains('copy-btn') ||
+      node.classList.contains('apply-btn') ||
+      node.classList.contains('explain-btn'))
   ) {
     node.setAttribute('type', 'button');
   }

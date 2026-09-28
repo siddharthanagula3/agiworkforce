@@ -96,42 +96,30 @@ Code: `apps/mobile/src/features/settings/cloud-connectors/AddCustomConnectorModa
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Credential connectors can be added with an API key and shared to a workspace, but a service account cannot be registered as its own account next to a personal one: nothing writes account scope "service", so the Service account hint never applies. | handler |
-| desktop | partial | Credential connectors can be added with an API key and shared to a workspace, but a service account cannot be registered as its own account next to a personal one: nothing writes account scope "service", so the Service account hint never applies. | handler |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/connectors/components/ConnectorAccountSelector.tsx:43-45`, `apps/web/features/connectors/components/ConnectorAccountSelector.tsx:151-169`, `apps/web/app/api/connectors/[connectorId]/credentials/route.ts:183-191`, `apps/web/app/api/connectors/oauth/callback/route.ts:153-161`
 
 ## S55.13: Account display name.
 
 - Done when: Each connected account shows a human-readable name.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | 439e7cf79 records the account's email or username from the OpenID id_token (Google, Microsoft and other OIDC providers), so those accounts show their address instead of "Personal". Providers that return no id_token (Notion, Linear, GitHub) still show "Personal"; they would need a per-provider identity call. | handler |
-| desktop | partial | 439e7cf79 records the account's email or username from the OpenID id_token (Google, Microsoft and other OIDC providers), so those accounts show their address instead of "Personal". Providers that return no id_token (Notion, Linear, GitHub) still show "Personal"; they would need a per-provider identity call. | handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/web/lib/connectors/accounts.ts:134-134`, `apps/web/lib/connectors/oauth-client.ts:158-158`, `apps/web/lib/connectors/mcp-discovery.ts:365-365`
 
 ## S55.14: Account identity and domain.
 
 - Done when: A connected account shows which identity (email/login) and domain/workspace it belongs to.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Identity and domain now show for OIDC providers through the id_token email; non-OIDC OAuth connectors still record no identity. | handler |
-| desktop | partial | Identity and domain now show for OIDC providers through the id_token email; non-OIDC OAuth connectors still record no identity. | handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/web/lib/connectors/accounts.ts:134-134`
 
 ## S55.17: Granted-scope display.
 
@@ -195,15 +183,11 @@ Code: `apps/cli/src/lib.rs:2557-2571`, `apps/cli/src/mcp/mod.rs:658-670`
 
 - Done when: The user limits a connector to chosen folders or repositories.
 - Wave: 3
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | GitHub repository access is chosen on GitHub's own App install page; no in-product picker exists for folders (Drive, Dropbox, Box) or repositories. | ui |
-| desktop | partial | GitHub repository access is chosen on GitHub's own App install page; no in-product picker exists for folders (Drive, Dropbox, Box) or repositories. | ui |
-| mobile | partial | Mobile opens the GitHub App install page (repository choice happens on GitHub); no folder picker for drive connectors. | ui |
 | cli | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/api/connectors/route.ts:522-528`, `apps/web/features/connectors/hooks/use-connectors-settings-adapter.tsx:530-570`, `apps/mobile/src/features/settings/cloud-connectors/index.tsx:676-716`
 
 ## S55.26: Read-only mode.
 

@@ -4,6 +4,7 @@
 //! Everything here is gated on Managed privacy mode. A Local or BYOK session
 //! never reaches these endpoints, and says so once instead of failing quietly.
 
+pub mod api_keys;
 pub mod artifacts;
 pub mod chat;
 pub mod client;

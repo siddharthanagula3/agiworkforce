@@ -136,29 +136,23 @@ Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:860-867`,
 
 - Done when: A research environment runs code/notebooks in a pinned environment that can be re-run to reproduce results.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | A Code Interpreter notebook (Jupyter, pandas, numpy) runs cells and run-all in a managed sandbox. Environments cannot be pinned, snapshotted or shared, so a run cannot be reproduced later. | ui |
-| desktop | partial | A Code Interpreter notebook (Jupyter, pandas, numpy) runs cells and run-all in a managed sandbox. Environments cannot be pinned, snapshotted or shared, so a run cannot be reproduced later. | ui |
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/code/CloudCodePage.tsx:1122-1128`, `apps/web/app/api/code/sessions/[sessionId]/notebook/execute/route.ts:63-76`, `apps/web/lib/e2b/templates.ts:139-148`
 
 ## S108.23: Education/teacher workspace.
 
 - Done when: An education workspace for teachers and learners (classes, assignments, guided study).
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The Study page (/chat/study) gives learners learn/practise/revise sessions. There are no teacher tools: classes, assignments, rosters or grading. | ui |
-| desktop | partial | The Study page (/chat/study) gives learners learn/practise/revise sessions. There are no teacher tools: classes, assignments, rosters or grading. | ui |
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/chat/study/page.tsx:1-18`, `apps/web/features/study/lib/study-session.ts:9-35`, `apps/web/app/api/study/sessions/route.ts:69-105`
 
 ## S108.24: Curriculum and lesson generation.
 
