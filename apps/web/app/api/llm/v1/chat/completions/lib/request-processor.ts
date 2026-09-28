@@ -2562,16 +2562,6 @@ export async function processRequest(
       ),
     };
   }
-  const customInstructionsPromise =
-    chatSurface === 'api' || chatRequest.personalization === false
-      ? null
-      : scopedDbPromise
-          .then((scoped) => buildCustomInstructionsPreamble(scoped.db, userId))
-          .catch((error: unknown) => {
-            logger.warn({ error, userId }, 'Custom instructions read failed; sending none');
-            return null;
-          });
-
   const skillInstallOverridesPromise: Promise<ReadonlyMap<string, boolean>> = scopedDbPromise
     .then((scoped) => getSkillInstallOverrides(scoped.db, userId))
     .catch((error: unknown) => {
@@ -2871,6 +2861,19 @@ export async function processRequest(
   }
   const projectInstructionBlock =
     ownership.projectBlocks.find((block) => block.layer === 'project')?.text ?? null;
+  const customInstructionsPromise =
+    chatSurface === 'api' || chatRequest.personalization === false
+      ? null
+      : scopedDbPromise
+          .then((scoped) =>
+            buildCustomInstructionsPreamble(scoped.db, userId, {
+              projectId: conversationProjectId,
+            }),
+          )
+          .catch((error: unknown) => {
+            logger.warn({ error, userId }, 'Custom instructions read failed; sending none');
+            return null;
+          });
 
   const memoryPolicyLeg: Promise<ManagedMemoryPolicy> = conversationIsTemporary
     ? Promise.resolve(DISABLED_MANAGED_MEMORY_POLICY)
