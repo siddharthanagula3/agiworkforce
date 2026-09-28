@@ -66,6 +66,14 @@ export const LOCAL_CODE_COPY = {
   changesNotRepository: 'This folder is not a git repository, so there are no changes to show.',
   discardFailed: 'That change could not be discarded.',
   commandFailed: 'That command could not be run.',
+  pushAndOpenPullRequest: 'Push and open a pull request',
+  pullRequestOnGitHub: 'Open a pull request on GitHub',
+  pullRequestNotConnected:
+    'The AGI GitHub App is not installed on this repository, so GitHub opens the compare page instead.',
+  pullRequestOnBase: 'Switch to a branch other than the default branch to open a pull request.',
+  pullRequestNoBase: 'The remote has no default branch to open a pull request against.',
+  pullRequestReadFailed: 'The pull request for this branch could not be read.',
+  pullRequestOpenFailed: 'The pull request could not be opened.',
   commandStopped: 'stopped',
   extensions: 'Skills and plugins',
   skillsHeading: 'Skills',
@@ -85,6 +93,34 @@ const LOCAL_SESSION_STATUS_LABELS: Partial<Record<ThreadStatus, string>> = {
   awaiting_approval: 'Needs approval',
   failed: 'Failed',
 };
+
+const LOCAL_PULL_REQUEST_STATE_LABELS = {
+  open: 'open',
+  draft: 'draft',
+  merged: 'merged',
+  closed: 'closed',
+} as const;
+
+const LOCAL_PULL_REQUEST_CHECK_LABELS = {
+  passing: 'checks passing',
+  failing: 'checks failing',
+  pending: 'checks running',
+  none: '',
+} as const;
+
+export function localPullRequestLabel(pullRequest: {
+  number: number;
+  state: keyof typeof LOCAL_PULL_REQUEST_STATE_LABELS;
+  checks: keyof typeof LOCAL_PULL_REQUEST_CHECK_LABELS;
+}): string {
+  return [
+    `Pull request #${pullRequest.number}`,
+    LOCAL_PULL_REQUEST_STATE_LABELS[pullRequest.state],
+    LOCAL_PULL_REQUEST_CHECK_LABELS[pullRequest.checks],
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
 
 export function localSessionStatusLabel(status: ThreadStatus): string | null {
   return LOCAL_SESSION_STATUS_LABELS[status] ?? null;

@@ -106,6 +106,7 @@ import {
 import {
   discardWorkingTreeChanges,
   listLocalBranches,
+  pushLocalBranch,
   readWorkingTreeChanges,
   readWorkspaceGit,
   switchLocalBranch,
@@ -466,6 +467,10 @@ const CAPABILITY_BY_COMMAND: Record<string, { capability: DesktopCapability; rea
   developer_branch_switch: {
     capability: 'git.write',
     reason: 'Switching branches changes the files in this folder to that branch.',
+  },
+  developer_branch_push: {
+    capability: 'git.write',
+    reason: "Opening a pull request pushes this folder's current branch to its GitHub remote.",
   },
   developer_skills_list: {
     capability: 'filesystem.read',
@@ -1005,6 +1010,8 @@ async function execute(
       return listLocalBranches(resolveRoot(args).path);
     case 'developer_branch_switch':
       return switchLocalBranch(resolveRoot(args).path, requireString(args, 'branch'));
+    case 'developer_branch_push':
+      return pushLocalBranch(resolveRoot(args).path);
     case 'developer_skills_list':
       return listDeveloperSkills(requireString(args, 'rootId'));
     case 'developer_skill_set_enabled':

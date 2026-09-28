@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import {
   parseWorkingTreeStatus,
+  type LocalBranchPush,
   type LocalBranches,
   type WorkingTreeChanges,
   type WorkspaceGitState,
@@ -22,6 +23,8 @@ const GIT_MAX_BUFFER = 8 * 1024 * 1024;
 const WORKING_TREE_DIFF_LIMIT = 200_000;
 const STATUS_ARGS = ['status', '--porcelain=v1', '--untracked-files=all'];
 const LOCAL_BRANCH_LIMIT = 500;
+const PUSH_TIMEOUT_MS = 120_000;
+const PUSH_REMOTE = 'origin';
 
 /**
  * Runs git with an argument array.
@@ -35,12 +38,17 @@ const LOCAL_BRANCH_LIMIT = 500;
  * a leading space; trimming both ends shifts every status left by one and
  * reports it as staged.
  */
-async function git(cwd: string, args: string[]): Promise<string> {
+async function git(
+  cwd: string,
+  args: string[],
+  options: { timeoutMs?: number; env?: NodeJS.ProcessEnv } = {},
+): Promise<string> {
   const { stdout } = await run('git', args, {
     cwd,
-    timeout: GIT_TIMEOUT_MS,
+    timeout: options.timeoutMs ?? GIT_TIMEOUT_MS,
     maxBuffer: GIT_MAX_BUFFER,
     windowsHide: true,
+    ...(options.env ? { env: options.env } : {}),
   });
   return stdout.trimEnd();
 }
@@ -196,7 +204,19 @@ export async function listLocalBranches(directory: string): Promise<LocalBranche
   return {
     current: await gitOrNull(root, ['symbolic-ref', '--short', '--quiet', 'HEAD']),
     branches: listed.split('\n').filter(Boolean),
+    remoteUrl: await gitOrNull(root, ['remote', 'get-url', PUSH_REMOTE]),
+    baseBranch: await remoteDefaultBranch(root),
   };
+}
+
+async function remoteDefaultBranch(root: string): Promise<string | null> {
+  const remoteHead = await gitOrNull(root, [
+    'symbolic-ref',
+    '--short',
+    '--quiet',
+    `refs/remotes/${PUSH_REMOTE}/HEAD`,
+  ]);
+  return remoteHead ? remoteHead.slice(PUSH_REMOTE.length + 1) : null;
 }
 
 export async function switchLocalBranch(directory: string, branch: string): Promise<string> {
@@ -208,4 +228,18 @@ export async function switchLocalBranch(directory: string, branch: string): Prom
   }
   await git(root, ['switch', branch]);
   return branch;
+}
+
+export async function pushLocalBranch(directory: string): Promise<LocalBranchPush> {
+  const root = await findRepositoryRoot(directory);
+  if (!root) throw new Error('This folder is not a git repository, so there is nothing to push.');
+  const branch = await gitOrNull(root, ['symbolic-ref', '--short', '--quiet', 'HEAD']);
+  if (!branch) throw new Error('Check out a branch before opening a pull request.');
+  const remoteUrl = await gitOrNull(root, ['remote', 'get-url', PUSH_REMOTE]);
+  if (!remoteUrl) throw new Error('This repository has no origin remote to push to.');
+  await git(root, ['push', '--set-upstream', PUSH_REMOTE, branch], {
+    timeoutMs: PUSH_TIMEOUT_MS,
+    env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+  });
+  return { branch, remoteUrl, baseBranch: await remoteDefaultBranch(root) };
 }

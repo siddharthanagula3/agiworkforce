@@ -44,6 +44,7 @@ export {
   openWorkspaceInEditor,
   openWorkspacePath,
   pickWorkspaceRoot,
+  pushLocalBranch,
   readHostClipboard,
   readLocalCommandPolicy,
   readLocalModelSettings,
