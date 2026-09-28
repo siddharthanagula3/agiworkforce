@@ -70,14 +70,13 @@ Code: `apps/extension-vscode/src/core/commandSetup.ts:1168-1181`, `apps/extensio
 
 - Done when: Within a conversation, the user can switch its working mode (e.g. chat vs agent/work/plan) and later turns follow it.
 - Wave: 3
-- Already works on: web, desktop, cli, vscode
+- Already works on: web, desktop, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Task chips (image, write, web search) only set the mode of the next message; there is no conversation-level mode switch such as Chat vs Work. | ui |
-| chrome | partial | The cited control is the Quick toggle in the model dropdown, whose copy is 'Quick' / 'Answer faster on a cheaper route' (messages.json:852-855, 1148-1151) and whose handler sends SET_QUICK_MODE (side_panel.ts:6148-6166): a latency/route preference, not a chat-vs-agent/work/plan working mode. Computer-use is a separate side-panel tab (side_panel.ts:732), not a mode of the conversation, and grep finds no agentMode/workMode switch in side_panel.ts. |  |
 
-Code: `apps/mobile/src/features/chat/components/TaskChips.tsx:34-36`, `apps/mobile/src/features/chat/components/Composer/Composer.tsx:81-81`, `apps/extension/src/side_panel.ts:6183-6189`, `apps/extension/src/side_panel.ts:6148-6160`
+Code: `apps/mobile/src/features/chat/components/TaskChips.tsx:34-36`, `apps/mobile/src/features/chat/components/Composer/Composer.tsx:81-81`
 
 ## S18.10: Change privacy mode through an explicit flow.
 
@@ -88,9 +87,9 @@ Code: `apps/mobile/src/features/chat/components/TaskChips.tsx:34-36`, `apps/mobi
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | TemporaryChatToggle flips the global settingsStore.isTemporaryChat flag (TemporaryChatToggle.tsx:10-15, settingsStore.ts:66) and shows only an EyeOff icon plus the word 'Temporary' when on (36-52); the consequence ('Memory will not be saved from this chat') exists only as an accessibilityHint, so sighted users get no explanation and there is no confirmation or flow. Real effect: chatExecutionStore reads the flag per turn (1368-1402). |  |
-| chrome | partial | Only a global 'account mirroring' toggle on the options page decides whether chats sync; there is no per-conversation private/temporary mode. | ui |
+| chrome | partial | Per-conversation temporary chat is scheduled with section 41 (temporary and private experiences) in the next Chrome batch. | ui |
 
-Code: `apps/mobile/src/features/chat/components/TemporaryChatToggle.tsx:11-31`, `apps/mobile/src/features/chat/components/TemporaryChatToggle.tsx:11-14`, `apps/mobile/app/(app)/(tabs)/chat.tsx:805-805`, `apps/extension/src/features/options/data-handling-section.ts:147-157`
+Code: `apps/mobile/src/features/chat/components/TemporaryChatToggle.tsx:11-31`, `apps/mobile/src/features/chat/components/TemporaryChatToggle.tsx:11-14`, `apps/mobile/app/(app)/(tabs)/chat.tsx:805-805`, `apps/extension/src/features/options/data-handling-section.ts:147-147`
 
 ## S18.11: Conversation search.
 

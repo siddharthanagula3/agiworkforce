@@ -1,5 +1,5 @@
 -- =============================================================================
--- Migration 0322: the files a personal skill bundles
+-- Migration 0318: the files a personal skill bundles
 --
 -- Why    : a personal skill stored only its SKILL.md instructions, so a skill
 --          uploaded as a folder lost the references, templates and scripts it

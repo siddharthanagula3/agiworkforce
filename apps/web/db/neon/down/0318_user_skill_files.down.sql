@@ -1,4 +1,4 @@
--- Reversal of 0322 : personal skills keep only their SKILL.md.
+-- Reversal of 0318 : personal skills keep only their SKILL.md.
 --
 -- WHAT THIS COSTS: every file a personal skill bundles is deleted, so its
 -- references can no longer be read and its scripts no longer run. The skills
@@ -13,6 +13,6 @@ drop index if exists public.user_skill_files_user_idx;
 drop table if exists public.user_skill_files;
 
 delete from public.schema_migrations
- where filename = '0322_user_skill_files.sql';
+ where filename = '0318_user_skill_files.sql';
 
 commit;

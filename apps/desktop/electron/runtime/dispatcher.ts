@@ -6,6 +6,7 @@ import {
   LocalInferenceRefused,
   ShellCommandRefused,
   assertLocalTurnCarriesNoAttachments,
+  isBackgroundWorkKind,
   isDesktopCapability,
   isSystemPermissionKind,
   isWorkspaceRootKind,
@@ -26,6 +27,7 @@ import {
   type WorkspaceSnapshot,
 } from '@agiworkforce/local-runtime-contract';
 import {
+  BROWSER_STEP_COMMAND,
   DEVICE_REGISTRY_PROFILE_COMMAND,
   type DeviceRegistryProfile,
   DEVICE_STEP_TOOLS,
@@ -39,14 +41,22 @@ import {
   type DeveloperAgentMode,
   normalizeDeveloperAgentMode,
 } from '@agiworkforce/local-runtime-contract';
-import { isBrowserCommand } from '@agiworkforce/types';
+import {
+  CLOUD_CODE_TURN_STEP_BOUNDS,
+  isBrowserCommand,
+  isCloudCodeTurnStepBound,
+} from '@agiworkforce/types';
 import {
   BrowserBridgeError,
   installHostForPairedExtension,
+  listBrowserActivity,
   pairingState,
+  recordBrowserActivity,
   removeHostAndPairing,
   sendBrowserCommand,
+  settleBrowserActivity,
 } from '../browser/bridgeServer';
+import { BrowserStepRefused, runBrowserStep } from '../browser/browserSteps';
 import {
   InvalidBrowserArguments,
   planBrowserCommand,
@@ -79,6 +89,7 @@ import {
   takeOverComputerUse,
 } from './computerUseSession';
 import { confirmHandBack, runScreenAction } from './computerUseSteps';
+import { readBackgroundActivity, stopBackgroundWork } from './backgroundActivity';
 import { openSystemPermission } from './systemPermissions';
 import {
   computerUseLoopMessage,
@@ -107,7 +118,9 @@ import { cancelShellRun, runShellCommand, type ShellApprovalRequest } from './sh
 import { detectShellSandbox, type ShellSandbox } from './shellSandbox';
 import { readShellPolicy, writeShellPolicy } from './shellPolicyStore';
 import {
+  TextEditRefused,
   createDirectory,
+  editTextFile,
   globFiles,
   grepFiles,
   listDirectory,
@@ -126,6 +139,7 @@ import {
 } from './gitService';
 import {
   DeveloperRuntimeUnavailableError,
+  addDeveloperMemory,
   answerDeveloperApproval,
   interruptDeveloperTurn,
   listDeveloperPlugins,
@@ -278,12 +292,6 @@ function requireRegion(args: Args): DeviceStepRegion {
     throw new InvalidArguments('"region" must be an object with x, y, width and height.');
   }
   return requireRegionFields(value as Args);
-}
-
-function requireBoolean(args: Args, key: string): boolean {
-  const value = args[key];
-  if (typeof value !== 'boolean') throw new InvalidArguments(`"${key}" must be true or false.`);
-  return value;
 }
 
 const PERMISSION_SCOPE_KINDS: readonly PermissionScopeKind[] = [
@@ -456,6 +464,10 @@ const CAPABILITY_BY_COMMAND: Record<string, { capability: DesktopCapability; rea
   file_write_text: {
     capability: 'filesystem.write',
     reason: 'The agent wants to create or change files in this folder.',
+  },
+  file_edit_text: {
+    capability: 'filesystem.write',
+    reason: 'The agent wants to change part of a file in this folder.',
   },
   file_create_directory: {
     capability: 'filesystem.write',
@@ -718,6 +730,9 @@ const BROWSER_OBJECT_PHRASES: Readonly<Record<string, string>> = Object.freeze({
   'browser.cdp': "read the paired browser's page internals",
 });
 
+const MANUAL_BROWSER_CLIENT = 'You';
+const FAILED_BROWSER_ACTION = 'The browser did not answer.';
+
 export async function runBrowserCommand(
   window: BrowserWindow | null,
   command: string,
@@ -765,7 +780,22 @@ export async function runBrowserCommand(
     return runtimeFailure('cancelled', 'That browser action was not run.');
   }
 
-  const value = await sendBrowserCommand(plan.command, plan.args);
+  const activity = caller
+    ? null
+    : recordBrowserActivity(MANUAL_BROWSER_CLIENT, plan.command, plan.args);
+  let value: unknown;
+  try {
+    value = await sendBrowserCommand(plan.command, plan.args);
+  } catch (error) {
+    if (activity) {
+      settleBrowserActivity(
+        activity,
+        error instanceof Error ? error.message : FAILED_BROWSER_ACTION,
+      );
+    }
+    throw error;
+  }
+  if (activity) settleBrowserActivity(activity, null);
   consumeSingleUse(plan.capability, scope);
   return runtimeSuccess(value);
 }
@@ -781,15 +811,19 @@ function declareDeviceHost(): DesktopHostDeclaration {
   const screenUsable = computerUseEnabled() && computerUseAvailability().supported;
   const capabilities = [
     ...new Set(
-      DEVICE_STEP_TOOLS.filter((tool) =>
-        deviceStepScope(tool) === 'screen'
-          ? screenUsable &&
-            getPermissionState(deviceStepCapability(tool), { kind: 'global' }) !== 'denied'
-          : roots.some(
-              (root) =>
-                getPermissionState(deviceStepCapability(tool), workspaceScope(root)) !== 'denied',
-            ),
-      ).map(deviceStepCapability),
+      DEVICE_STEP_TOOLS.filter((tool) => {
+        const scope = deviceStepScope(tool);
+        if (scope === 'workspace') {
+          return roots.some(
+            (root) =>
+              getPermissionState(deviceStepCapability(tool), workspaceScope(root)) !== 'denied',
+          );
+        }
+        const usable = scope === 'screen' ? screenUsable : pairingState().paired;
+        return (
+          usable && getPermissionState(deviceStepCapability(tool), { kind: 'global' }) !== 'denied'
+        );
+      }).map(deviceStepCapability),
     ),
   ];
   return {
@@ -866,6 +900,20 @@ async function execute(
         requireString(args, 'path'),
         optionalString(args, 'text', ''),
       );
+    case 'file_edit_text': {
+      const oldText = args['oldText'];
+      const newText = args['newText'];
+      if (typeof oldText !== 'string' || oldText.length === 0 || typeof newText !== 'string') {
+        throw new InvalidArguments('"oldText" must be a non-empty string and "newText" a string.');
+      }
+      return editTextFile(
+        resolveRoot(args),
+        requireString(args, 'path'),
+        oldText,
+        newText,
+        args['replaceAll'] === true,
+      );
+    }
     case 'file_create_directory':
       return createDirectory(resolveRoot(args), requireString(args, 'path'));
     case 'file_glob':
@@ -1026,6 +1074,26 @@ async function execute(
       return reviewPermissions();
     case 'permission_revoke':
       return revokeReviewedPermission(window, args);
+    case BROWSER_STEP_COMMAND:
+      return runBrowserStep(window, args);
+    case 'browser_activity':
+      return listBrowserActivity();
+    case 'browser_downloads_open': {
+      const failure = await shell.openPath(app.getPath('downloads'));
+      if (failure !== '') throw new InvalidArguments(failure);
+      return true;
+    }
+    case 'background_activity':
+      return readBackgroundActivity();
+    case 'background_stop': {
+      const kind = args['kind'];
+      if (!isBackgroundWorkKind(kind)) {
+        throw new InvalidArguments(
+          '"kind" must be coding-runtime, command, computer-use or remote-control.',
+        );
+      }
+      return stopBackgroundWork(kind, optionalString(args, 'id', '') || null);
+    }
     case 'device_host_declaration':
       return declareDeviceHost();
     case DEVICE_REGISTRY_PROFILE_COMMAND:
@@ -1053,13 +1121,27 @@ async function execute(
     case 'developer_turn_start': {
       const model = optionalString(args, 'model', '');
       const agentMode = rendererAgentMode(optionalString(args, 'agentMode', ''));
+      const maxTurns = optionalNumber(args, 'maxTurns');
+      if (maxTurns !== undefined && !isCloudCodeTurnStepBound(maxTurns)) {
+        throw new InvalidArguments(
+          `"maxTurns" must be one of ${CLOUD_CODE_TURN_STEP_BOUNDS.join(', ')}.`,
+        );
+      }
       return startDeveloperTurn({
         rootId: requireString(args, 'rootId'),
         threadId: requireString(args, 'threadId'),
         text: requireString(args, 'text'),
         ...(model === '' ? {} : { model }),
         ...(agentMode ? { agentMode } : {}),
+        ...(maxTurns === undefined ? {} : { maxTurns }),
       });
+    }
+    case 'developer_memory_add': {
+      const scope = requireString(args, 'scope');
+      if (scope !== 'project' && scope !== 'user') {
+        throw new InvalidArguments('"scope" must be project or user.');
+      }
+      return addDeveloperMemory(requireString(args, 'rootId'), requireString(args, 'text'), scope);
     }
     case 'developer_turn_interrupt':
       return interruptDeveloperTurn(
@@ -1142,10 +1224,17 @@ function toFailure(error: unknown): DesktopRuntimeResponse<never> {
     return runtimeFailure(REFUSAL_CODES[error.reason] ?? 'io-error', error.message);
   }
   if (error instanceof InvalidArguments) return runtimeFailure('invalid-arguments', error.message);
+  if (error instanceof TextEditRefused) return runtimeFailure('invalid-arguments', error.message);
   if (error instanceof InvalidBrowserArguments) {
     return runtimeFailure('invalid-arguments', error.message);
   }
   if (error instanceof BrowserBridgeError) return runtimeFailure('io-error', error.message);
+  if (error instanceof BrowserStepRefused) {
+    return runtimeFailure(
+      error.reason === 'permission' ? 'permission-denied' : 'cancelled',
+      error.message,
+    );
+  }
   if (error instanceof UnknownWorkspace) return runtimeFailure('not-found', error.message);
   if (error instanceof DeveloperRuntimeUnavailableError) {
     return runtimeFailure('runtime-unavailable', `${error.message} ${error.hint}`);

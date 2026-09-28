@@ -1,3 +1,4 @@
+import type { BrowserCommand } from '@agiworkforce/types';
 import { DESKTOP_CAPABILITIES, type DesktopCapability } from './capabilities';
 
 /**
@@ -19,6 +20,9 @@ export const DEVICE_STEP_TOOLS = [
   'device_read_file',
   'device_list_folder',
   'device_write_file',
+  'device_edit_file',
+  'device_find_files',
+  'device_search_text',
   'device_run_command',
   'device_screenshot',
   'device_zoom',
@@ -29,6 +33,12 @@ export const DEVICE_STEP_TOOLS = [
   'device_type',
   'device_key',
   'device_wait',
+  'device_browser_read_page',
+  'device_browser_navigate',
+  'device_browser_click',
+  'device_browser_type',
+  'device_browser_screenshot',
+  'device_browser_download',
 ] as const;
 
 export type DeviceStepTool = (typeof DEVICE_STEP_TOOLS)[number];
@@ -55,13 +65,26 @@ export function isScreenDeviceStep(name: string): boolean {
  * it is scoped to the session instead: it needs no folder and must not be
  * withheld from a shell that has granted none.
  */
-export type DeviceStepScope = 'workspace' | 'screen';
+export type DeviceStepScope = 'workspace' | 'screen' | 'browser';
 
 export interface DeviceStepDefinition {
   command: string;
   capability: DesktopCapability;
   scope: DeviceStepScope;
   description: string;
+  browserCommand?: BrowserCommand;
+}
+
+export const BROWSER_STEP_COMMAND = 'browser_step';
+
+function browserStep(browserCommand: BrowserCommand, description: string): DeviceStepDefinition {
+  return {
+    command: BROWSER_STEP_COMMAND,
+    capability: 'browser.site',
+    scope: 'browser',
+    description,
+    browserCommand,
+  };
 }
 
 const SCREEN_PREAMBLE =
@@ -88,6 +111,27 @@ export const DEVICE_STEP_DEFINITIONS: Readonly<Record<DeviceStepTool, DeviceStep
     scope: 'workspace',
     description:
       'Create or replace a text file inside a folder the user granted on their desktop. The whole file is replaced by the text supplied.',
+  },
+  device_edit_file: {
+    command: 'file_edit_text',
+    capability: 'filesystem.write',
+    scope: 'workspace',
+    description:
+      'Change part of a text file inside a folder the user granted on their desktop by replacing one exact passage with new text. Read the file first and copy the passage exactly; it must appear once, unless replaceAll is set.',
+  },
+  device_find_files: {
+    command: 'file_glob',
+    capability: 'filesystem.read',
+    scope: 'workspace',
+    description:
+      'Find files by name inside a folder the user granted on their desktop, with a glob pattern such as **/*.md or **/*invoice*. Returns the matching paths.',
+  },
+  device_search_text: {
+    command: 'file_grep',
+    capability: 'filesystem.read',
+    scope: 'workspace',
+    description:
+      'Search the text of the files inside a folder the user granted on their desktop. Returns each matching line with its file and line number.',
   },
   device_run_command: {
     command: 'shell_run',
@@ -154,6 +198,30 @@ export const DEVICE_STEP_DEFINITIONS: Readonly<Record<DeviceStepTool, DeviceStep
     description:
       'Pause before the next step, to let a window open, a page load or an animation settle. Follow it with a fresh screenshot.',
   },
+  device_browser_read_page: browserStep(
+    'browser_read_page',
+    "Read the address, title and visible text of the tab open in the user's paired Chrome browser, to summarize it or answer questions about it.",
+  ),
+  device_browser_navigate: browserStep(
+    'browser_navigate',
+    "Open a web address in the active tab of the user's paired Chrome browser. Read the page afterwards to see what loaded.",
+  ),
+  device_browser_click: browserStep(
+    'browser_click',
+    "Click the element matching a CSS selector on the active tab of the user's paired Chrome browser. Read the page first to choose the selector.",
+  ),
+  device_browser_type: browserStep(
+    'browser_type',
+    "Type text into the field matching a CSS selector on the active tab of the user's paired Chrome browser, to fill in a form. Set clear to replace what the field already holds.",
+  ),
+  device_browser_screenshot: browserStep(
+    'browser_screenshot',
+    "Capture the visible part of the active tab in the user's paired Chrome browser.",
+  ),
+  device_browser_download: browserStep(
+    'browser_download',
+    "Download a file through the user's paired Chrome browser into their downloads folder. The user is asked before it starts.",
+  ),
 };
 
 export function deviceStepCapability(tool: DeviceStepTool): DesktopCapability {
@@ -166,6 +234,10 @@ export function deviceStepCommand(tool: DeviceStepTool): string {
 
 export function deviceStepScope(tool: DeviceStepTool): DeviceStepScope {
   return DEVICE_STEP_DEFINITIONS[tool].scope;
+}
+
+export function deviceStepBrowserCommand(tool: DeviceStepTool): BrowserCommand | null {
+  return DEVICE_STEP_DEFINITIONS[tool].browserCommand ?? null;
 }
 
 export const DEVICE_MOUSE_BUTTONS = ['left', 'right'] as const;
@@ -252,6 +324,7 @@ export const MAX_DEVICE_STEP_ROOTS = 12;
 export const MAX_DEVICE_STEP_RESULT_LENGTH = 24_000;
 export const DEVICE_STEP_TTL_MINUTES = 15;
 export const MAX_DEVICE_REVIEW_LENGTH = 200;
+export const MAX_DEVICE_SEARCH_LENGTH = 500;
 
 const MAX_FIELD_LENGTH = 200;
 
@@ -404,6 +477,15 @@ export interface DeviceStepRequest {
   region?: DeviceStepRegion;
   display?: number;
   review?: string;
+  url?: string;
+  selector?: string;
+  clear?: boolean;
+  pattern?: string;
+  query?: string;
+  ignoreCase?: boolean;
+  oldText?: string;
+  newText?: string;
+  replaceAll?: boolean;
 }
 
 export class DeviceStepRefused extends Error {
@@ -486,6 +568,8 @@ export const DEVICE_REVIEWED_STEP_TOOLS: readonly DeviceStepTool[] = [
   'device_drag',
   'device_type',
   'device_key',
+  'device_browser_click',
+  'device_browser_type',
 ];
 
 function withReview(request: DeviceStepRequest, args: Record<string, unknown>): DeviceStepRequest {
@@ -589,6 +673,63 @@ function planScreenStepFields(
  * A screen step is bounded here instead: a coordinate that is not a number, or
  * is outside any real display, never becomes an event on the user's machine.
  */
+const MAX_BROWSER_SELECTOR_LENGTH = 1_000;
+const MAX_BROWSER_URL_LENGTH = 2_000;
+
+function readHttpUrl(value: unknown): string {
+  const raw = readBoundedString(value, MAX_BROWSER_URL_LENGTH);
+  if (!raw) refuse('A browser step needs a "url".');
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    refuse('"url" must be a web address.');
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    refuse('Only http and https addresses can be opened.');
+  }
+  return parsed.toString();
+}
+
+function readSelector(value: unknown): string {
+  const selector = readBoundedString(value, MAX_BROWSER_SELECTOR_LENGTH);
+  if (!selector) refuse('A browser step needs a CSS "selector".');
+  return selector;
+}
+
+function planBrowserStep(tool: DeviceStepTool, args: Record<string, unknown>): DeviceStepRequest {
+  switch (tool) {
+    case 'device_browser_read_page':
+    case 'device_browser_screenshot':
+      return { tool };
+    case 'device_browser_navigate':
+    case 'device_browser_download':
+      return { tool, url: readHttpUrl(args['url']) };
+    case 'device_browser_click':
+      return withReview({ tool, selector: readSelector(args['selector']) }, args);
+    case 'device_browser_type': {
+      const text = args['text'];
+      if (typeof text !== 'string' || text.length === 0) {
+        refuse('A browser type step needs "text" to type.');
+      }
+      if (text.length > MAX_DEVICE_TYPE_LENGTH) {
+        refuse(`"text" must be ${MAX_DEVICE_TYPE_LENGTH} characters or fewer.`);
+      }
+      return withReview(
+        {
+          tool,
+          selector: readSelector(args['selector']),
+          text,
+          ...(args['clear'] === true ? { clear: true } : {}),
+        },
+        args,
+      );
+    }
+    default:
+      refuse(`"${tool}" is not a browser step.`);
+  }
+}
+
 export function planDeviceStep(
   tool: string,
   args: Record<string, unknown>,
@@ -599,6 +740,9 @@ export function planDeviceStep(
   }
   if (deviceStepScope(tool) === 'screen') {
     return planScreenStep(tool, args);
+  }
+  if (deviceStepScope(tool) === 'browser') {
+    return planBrowserStep(tool, args);
   }
 
   const rootId = readBoundedString(args['rootId']);
@@ -626,6 +770,22 @@ export function planDeviceStep(
     return { tool, rootId, ...(path ? { path } : {}) };
   }
 
+  if (tool === 'device_find_files' || tool === 'device_search_text') {
+    const key = tool === 'device_find_files' ? 'pattern' : 'query';
+    const value = readBoundedString(args[key], MAX_DEVICE_SEARCH_LENGTH);
+    if (!value) {
+      throw new DeviceStepRefused('invalid-arguments', `${tool} needs a "${key}".`);
+    }
+    const path = readBoundedString(args['path'], 1_000);
+    return {
+      tool,
+      rootId,
+      [key]: value,
+      ...(path ? { path } : {}),
+      ...(tool === 'device_search_text' && args['ignoreCase'] === true ? { ignoreCase: true } : {}),
+    };
+  }
+
   const path = readBoundedString(args['path'], 1_000);
   if (!path) {
     throw new DeviceStepRefused('invalid-arguments', `${tool} needs a "path" inside the folder.`);
@@ -636,6 +796,30 @@ export function planDeviceStep(
       throw new DeviceStepRefused('invalid-arguments', 'A write step needs "text" to write.');
     }
     return { tool, rootId, path, text };
+  }
+  if (tool === 'device_edit_file') {
+    const oldText = args['oldText'];
+    const newText = args['newText'];
+    if (typeof oldText !== 'string' || oldText.length === 0) {
+      throw new DeviceStepRefused(
+        'invalid-arguments',
+        'An edit step needs the "oldText" to replace.',
+      );
+    }
+    if (typeof newText !== 'string') {
+      throw new DeviceStepRefused(
+        'invalid-arguments',
+        'An edit step needs the "newText" to put in its place.',
+      );
+    }
+    return {
+      tool,
+      rootId,
+      path,
+      oldText,
+      newText,
+      ...(args['replaceAll'] === true ? { replaceAll: true } : {}),
+    };
   }
   return { tool, rootId, path };
 }
@@ -653,6 +837,12 @@ export function describeDeviceStep(
       return request.path ? `List ${request.path} in ${where}` : `List ${where}`;
     case 'device_write_file':
       return `Write ${request.path} in ${where}`;
+    case 'device_edit_file':
+      return `Edit ${request.path} in ${where}`;
+    case 'device_find_files':
+      return `Find ${request.pattern} in ${where}`;
+    case 'device_search_text':
+      return `Search ${where} for "${request.query}"`;
     case 'device_run_command':
       return `Run ${request.command} in ${where}`;
     case 'device_screenshot':
@@ -678,5 +868,17 @@ export function describeDeviceStep(
       return `Press ${[...(request.modifiers ?? []), request.key].join('+')}`;
     case 'device_wait':
       return `Wait ${request.ms}ms`;
+    case 'device_browser_read_page':
+      return 'Read the page open in Chrome';
+    case 'device_browser_navigate':
+      return `Open ${request.url} in Chrome`;
+    case 'device_browser_click':
+      return `Click ${request.selector} in Chrome`;
+    case 'device_browser_type':
+      return `Type into ${request.selector} in Chrome`;
+    case 'device_browser_screenshot':
+      return 'Take a screenshot of the Chrome tab';
+    case 'device_browser_download':
+      return `Download ${request.url} through Chrome`;
   }
 }

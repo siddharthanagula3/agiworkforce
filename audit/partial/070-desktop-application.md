@@ -6,39 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S70.07: Companion window.
-
-- Done when: A compact companion window can stay open beside other apps while the user works elsewhere.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| desktop | partial | Quick Ask floats above other apps but hides as soon as it loses focus or Escape is pressed; there is no companion window that stays open beside other work. | ui |
-
-Code: `apps/desktop/electron/quickAsk.ts:12-42`, `apps/desktop/electron/quickAsk.ts:98-107`
-
-## S70.08: Always-on-top option.
-
-- Done when: The user can choose to keep an app window above all other windows.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| desktop | partial | The shell can pin a window on top (window control "setAlwaysOnTop"), but no menu item, setting or page control lets the user turn it on; only Quick Ask floats, and it always does. | ui |
-
-Code: `apps/desktop/electron/main.ts:421-456`, `apps/desktop/electron/quickAsk.ts:35-35`
-
-## S70.13: Local filesystem search.
-
-- Done when: The user or assistant can search approved local folders by file name or content.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| desktop | partial | The attach dialog now searches a granted folder by name and text; the assistant's device tools still cannot search (device_find_files and device_search_text land in the next p-electron batch). | handler |
-
-Code: `apps/web/features/desktop-host/components/LocalFolderAttachDialog.tsx:367-367`, `apps/web/features/desktop-host/components/LocalFolderAttachDialog.tsx:167-167`, `apps/desktop/electron/runtime/filesystemService.ts:243-243`
-
 ## S70.16: Local agent daemon.
 
 - Done when: A local agent service runs on the machine and keeps accepting work in the background.
@@ -55,17 +22,6 @@ Code: `apps/web/features/desktop-host/components/LocalFolderAttachDialog.tsx:367
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 
-## S70.25: Background-runtime controls.
-
-- Done when: The user can see and control what the desktop app keeps running in the background.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| desktop | partial | Users can hide the menu-bar icon and stop phone remote control, but nothing shows what keeps running (coding runtimes, browser bridge, shell runs) or lets them stop it short of quitting. | ui |
-
-Code: `apps/web/features/desktop-host/components/DesktopSettingsSection.tsx:215-222`, `apps/desktop/electron/main.ts:1189-1193`, `apps/desktop/electron/main.ts:1394-1401`
-
 ## S70.26: Automatic updates.
 
 - Done when: The app finds, downloads and installs new versions by itself (or with one click).
@@ -73,6 +29,6 @@ Code: `apps/web/features/desktop-host/components/DesktopSettingsSection.tsx:215-
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| desktop | partial | The app checks for a new version daily and offers a link to download the installer, but never downloads or installs the update itself. | handler |
+| desktop | partial | The app now downloads and installs updates itself through Squirrel, but only once releases carry a .zip per architecture: apps/desktop/electron-builder.yml mac.target needs zip beside dmg, and .github/workflows/release-desktop-cloud.yml must upload apps/desktop/release/*.zip and include them in SHA256SUMS. Until then the feed answers 204 and the installer download stays. | config |
 
-Code: `apps/web/features/desktop-host/components/DesktopUpdateNotice.tsx:17-27`, `apps/desktop/electron/main.ts:562-570`
+Code: `apps/desktop/electron/desktopAutoUpdate.ts:23-23`, `apps/desktop/electron/desktopAutoUpdate.ts:49-49`, `apps/desktop/electron/main.ts:604-604`, `apps/web/app/api/releases/desktop-cloud/update/[arch]/[version]/route.ts:52-52`
