@@ -46,6 +46,22 @@ export const PanelLeft = createIcon(
   </>,
 );
 
+export const Columns2 = createIcon(
+  'Columns2',
+  <>
+    <path d="M4.5 3h15L21 4.5v15L19.5 21h-15L3 19.5V4.5z" />
+    <path d="M12 3v18" />
+  </>,
+);
+
+export const Rows2 = createIcon(
+  'Rows2',
+  <>
+    <path d="M4.5 3h15L21 4.5v15L19.5 21h-15L3 19.5V4.5z" />
+    <path d="M3 12h18" />
+  </>,
+);
+
 export const Upload = createIcon(
   'Upload',
   <>

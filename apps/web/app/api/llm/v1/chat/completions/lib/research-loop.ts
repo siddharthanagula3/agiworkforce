@@ -2088,10 +2088,10 @@ export async function* runResearchLoop(
             continue;
           }
           yield encoder.encode(loopToolStatusEvent(call.name, 'running', responseModel, call.args));
-          const outcome = await executeWebSearch(
-            call.args,
-            options.signal ? { signal: options.signal } : {},
-          );
+          const outcome = await executeWebSearch(call.args, {
+            domainPolicy,
+            ...(options.signal ? { signal: options.signal } : {}),
+          });
           await settlePerplexitySearchCall({
             userId: _billing.userId,
             organizationId: processed.organizationId ?? null,
@@ -2167,6 +2167,7 @@ export async function* runResearchLoop(
         yield encoder.encode(loopToolStatusEvent(call.name, 'running', responseModel, call.args));
         const outcome = await executeUrlFetch(call.args, {
           maxContentChars: RESEARCH_FETCH_MAX_CONTENT_CHARS,
+          domainPolicy,
           ...(options.signal ? { signal: options.signal } : {}),
         });
         if (outcome.ok) {

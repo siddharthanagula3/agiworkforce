@@ -51,7 +51,6 @@ import {
 } from '@/lib/user-connector-tools';
 import { extractUserQuery, runResearchLoop } from './lib/research-loop';
 import { readResearchConnectorSources } from '@/lib/services/research-connector-source-service';
-import { createResearchDomainPolicy } from './lib/research-sources';
 import { searchResearchFileSources } from '@/lib/services/research-file-source-service';
 import {
   saveResearchReport,
@@ -584,14 +583,11 @@ async function dispatchChatCompletions(
         onResilienceObservation: recordResilienceObservation,
         ...(processed.freeLane ? { onAttemptFailure: observeFreeLaneAttemptFailure } : {}),
       });
-      // §24 sources. The domain policy is built here, once, from what the user
-      // chose on the plan card; the loop applies it at ingestion. The file
-      // search runs before the loop so a failing index degrades to a web-only
-      // run rather than failing the turn.
-      const researchDomainPolicy = createResearchDomainPolicy({
-        allow: processed.researchSources?.allowDomains,
-        deny: processed.researchSources?.denyDomains,
-      });
+      // §24 sources. The domain policy is what the user chose on the plan card
+      // within the workspace's site rules; the loop applies it at ingestion. The
+      // file search runs before the loop so a failing index degrades to a
+      // web-only run rather than failing the turn.
+      const researchDomainPolicy = processed.webSearchDomainPolicy ?? null;
       const researchConnectorIds = processed.researchSources?.connectors ?? [];
       const researchFileSources = processed.researchSources?.files
         ? await searchResearchFileSources(runDb, {

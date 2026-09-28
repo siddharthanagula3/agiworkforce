@@ -22,6 +22,7 @@ import {
   buildPublishedArtifactUrl,
   listPublishedArtifacts,
   publishArtifactRecord,
+  recordPublishedVersion,
   requiresSandboxedRender,
 } from '@/lib/services/published-artifact-service';
 
@@ -87,84 +88,6 @@ async function describeWorkspaceAudience(
   );
   const parsed = Number(row?.member_count ?? 0);
   return { memberCount: Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 0 };
-}
-
-interface PublishedVersionRow {
-  id: string;
-  version: number | string;
-  title: string;
-  kind: string;
-  language: string | null;
-  content: string;
-  created_at: string | Date;
-}
-
-function toVersionNumber(value: number | string | null | undefined): number {
-  const parsed = Number(value ?? 0);
-  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 0;
-}
-
-/**
- * Append this publish to the artifact's history, unless it says exactly what
- * the newest version already says. Republishing an unchanged artifact is what
- * the Publish button does on every second click, and a history full of
- * identical versions is not a history.
- */
-async function recordPublishedVersion(
-  db: DatabaseAdapter,
-  input: {
-    publishedArtifactId: string;
-    userId: string;
-    title: string;
-    kind: string;
-    language: string | null;
-    content: string;
-  },
-): Promise<number> {
-  const [newest] = await db.query<PublishedVersionRow>(
-    `select id, version, title, kind, language, content, created_at
-       from public.published_artifact_versions
-      where published_artifact_id = $1 and user_id = $2
-      order by version desc
-      limit 1`,
-    [input.publishedArtifactId, input.userId],
-  );
-
-  if (
-    newest &&
-    newest.content === input.content &&
-    newest.title === input.title &&
-    newest.kind === input.kind &&
-    (newest.language ?? null) === input.language
-  ) {
-    return toVersionNumber(newest.version);
-  }
-
-  const [inserted] = await db.query<{ version: number | string }>(
-    `insert into public.published_artifact_versions
-       (published_artifact_id, user_id, version, title, kind, language, content, parent_version_id)
-     values ($1, $2, $3, $4, $5, $6, $7, $8)
-     returning version`,
-    [
-      input.publishedArtifactId,
-      input.userId,
-      toVersionNumber(newest?.version) + 1,
-      input.title,
-      input.kind,
-      input.language,
-      input.content,
-      newest?.id ?? null,
-    ],
-  );
-
-  const version = toVersionNumber(inserted?.version);
-  await db.execute(
-    `update public.published_artifacts
-        set version = $2
-      where id = $1 and user_id = $3`,
-    [input.publishedArtifactId, version, input.userId],
-  );
-  return version;
 }
 
 async function handlePublish(request: NextRequest): Promise<Response> {

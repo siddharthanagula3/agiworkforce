@@ -136,6 +136,26 @@ export function scheduleRunLabel(run: ManagedCloudScheduleRun): string {
   return `${status} · ${formatTimestamp(run.startedAt)}`;
 }
 
+const RUN_OUTPUT_PREVIEW_LENGTH = 120;
+
+export function scheduleRunOutput(run: ManagedCloudScheduleRun): string | undefined {
+  const output = run.output?.trim() ?? '';
+  return output === '' ? undefined : output;
+}
+
+export function scheduleRunOutputPreview(run: ManagedCloudScheduleRun): string | undefined {
+  const output = scheduleRunOutput(run);
+  if (output === undefined) return undefined;
+  const firstLine = output
+    .split('\n')
+    .map((line) => line.replace(/^#+\s*/u, '').trim())
+    .find((line) => line !== '');
+  if (firstLine === undefined) return undefined;
+  return firstLine.length <= RUN_OUTPUT_PREVIEW_LENGTH
+    ? firstLine
+    : `${firstLine.slice(0, RUN_OUTPUT_PREVIEW_LENGTH - 1)}…`;
+}
+
 export function scheduleRunDetail(run: ManagedCloudScheduleRun): string {
   const parts = [
     run.triggerSource === 'manual' ? 'run now' : run.triggerSource,
