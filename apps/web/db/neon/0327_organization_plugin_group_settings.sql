@@ -1,5 +1,5 @@
 -- =============================================================================
--- Migration 0325: a workspace sets its plugins per group
+-- Migration 0327: a workspace sets its plugins per group
 --
 -- Why    : a workspace could approve or block plugins but not decide who
 --          gets one. Claude lets an owner set each plugin to required,
@@ -21,7 +21,7 @@
 -- Depends: 0015 (organizations, organization_members), 0084 (scim_groups,
 --          scim_provisioned_users, scim_group_members), 0076
 --          (set_row_updated_at), 0278 (assign_cloud_sync_version), 0314
---          (organization_group_members), 0324 (organization_plugins)
+--          (organization_group_members), 0326 (organization_plugins)
 -- =============================================================================
 
 begin;

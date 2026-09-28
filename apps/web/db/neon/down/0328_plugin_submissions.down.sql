@@ -1,4 +1,4 @@
--- Reversal of 0326 : plugins can no longer be submitted to the community
+-- Reversal of 0328 : plugins can no longer be submitted to the community
 -- directory.
 --
 -- WHAT THIS COSTS: every submission, its file snapshot, its review state and
@@ -30,6 +30,6 @@ drop table if exists public.plugin_submission_files;
 drop table if exists public.plugin_submissions;
 
 delete from public.schema_migrations
- where filename = '0326_plugin_submissions.sql';
+ where filename = '0328_plugin_submissions.sql';
 
 commit;

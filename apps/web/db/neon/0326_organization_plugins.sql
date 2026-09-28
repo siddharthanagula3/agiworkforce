@@ -1,5 +1,5 @@
 -- =============================================================================
--- Migration 0324: a workspace's private plugin marketplace
+-- Migration 0326: a workspace's private plugin marketplace
 --
 -- Why    : an administrator could only approve or block plugins from the
 --          shared catalogue; a workspace could not offer its own plugins to
