@@ -1,3 +1,4 @@
+import { translateUiPlural } from '@agiworkforce/ui';
 import {
   isPluginEntryInstallable,
   isPluginEntryWebInstallable,
@@ -26,9 +27,10 @@ export function pluginAvailabilityClaim(catalog: PluginCatalogResult): string {
   }
   const total = catalog.entries.length;
   if (installable === total) {
-    return total === 1
-      ? 'The 1 pack in the registry is installable today.'
-      : `All ${total} packs in the registry are installable today.`;
+    return translateUiPlural('common', 'counts.packsInstallable', total, {
+      one: 'The {{count}} pack in the registry is installable today.',
+      other: 'All {{count}} packs in the registry are installable today.',
+    });
   }
   return `${installable} of ${total} packs are installable today; the rest are declared and not yet published.`;
 }

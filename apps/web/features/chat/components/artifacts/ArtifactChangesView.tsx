@@ -1,11 +1,12 @@
 import { useMemo } from 'react';
+import { translateUiPlural } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 import {
   artifactChanges,
   type ArtifactChangeKind,
   type ArtifactChangeRun,
   type ArtifactChangeUnit,
-} from './artifactChanges';
+} from '@agiworkforce/artifacts';
 
 export interface ArtifactChangesViewProps {
   previous: string;
@@ -28,10 +29,6 @@ const COLOURS: Record<ChangedKind, string> = {
 };
 
 const LINE_SIGNS: Record<ArtifactChangeKind, string> = { same: '', added: '+', removed: '-' };
-
-function plural(count: number, word: string): string {
-  return `${count} ${word}${count === 1 ? '' : 's'}`;
-}
 
 function Lines({ run }: { run: ArtifactChangeRun }) {
   return run.text.split('\n').map((line, index) => (
@@ -73,11 +70,30 @@ export function ArtifactChangesView({
   toVersion,
 }: ArtifactChangesViewProps) {
   const changes = useMemo(() => artifactChanges(previous, next, unit), [previous, next, unit]);
-  const counted = changes.unit === 'line' ? 'line' : 'word';
   const summary =
     changes.added === 0 && changes.removed === 0
       ? `No changes since version ${fromVersion}`
-      : `Since version ${fromVersion}: ${plural(changes.added, counted)} added, ${changes.removed} removed`;
+      : changes.unit === 'line'
+        ? translateUiPlural(
+            'chat',
+            'counts.artifactLinesChangedSince',
+            changes.added,
+            {
+              one: 'Since version {{version}}: {{count}} line added, {{removed}} removed',
+              other: 'Since version {{version}}: {{count}} lines added, {{removed}} removed',
+            },
+            { version: fromVersion, removed: changes.removed },
+          )
+        : translateUiPlural(
+            'chat',
+            'counts.artifactWordsChangedSince',
+            changes.added,
+            {
+              one: 'Since version {{version}}: {{count}} word added, {{removed}} removed',
+              other: 'Since version {{version}}: {{count}} words added, {{removed}} removed',
+            },
+            { version: fromVersion, removed: changes.removed },
+          );
 
   return (
     <div className="flex h-full w-full flex-col bg-background" data-testid="artifact-changes">

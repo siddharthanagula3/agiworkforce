@@ -44,7 +44,7 @@ import {
 import { rawFileUrl } from './inspection';
 import { DIRECTORY_MARKETPLACES, type DirectoryFetch } from './official-marketplace';
 import { releaseTagSatisfying } from './release-tags';
-import { fetchPluginSkillFiles } from './skill-files';
+import { fetchPluginSkillFiles, pluginContentPaths } from './skill-files';
 import type { InstalledDirectorySkill, PluginDirectoryEntry, PluginSourceLocation } from './types';
 
 const HTTP_NOT_FOUND = 404;
@@ -525,7 +525,7 @@ export async function planMarketplaceDependencies(
     }
     const skills = await fetchPluginSkillFiles(
       { ...plugin.source.location, sha: plugin.source.sha },
-      plugin.source.record.runtime.components.skillPaths,
+      pluginContentPaths(plugin.source.record.runtime.components),
       context.fetchImpl,
     );
     if (skills.length === 0) {

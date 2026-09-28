@@ -1,7 +1,24 @@
 'use client';
 
+import { translateUiPlural } from '@agiworkforce/ui';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { z } from 'zod';
+import {
+  CONNECTOR_OAUTH_START_PATH,
+  CUSTOM_CONNECTORS_PATH,
+  ConnectConflictResponseSchema,
+  ConnectorConnectionSchema,
+  ConnectorOAuthStartResponseSchema,
+  CreatedCustomConnectorSchema,
+  CustomConnectorSchema,
+  CustomConnectorSummarySchema,
+  ListConnectorsResponseSchema,
+  ListCustomConnectorsResponseSchema,
+  MANAGED_CLOUD_CONNECTORS_PATH,
+  connectorErrorMessage,
+  type ConnectRequest,
+  type CreateCustomConnectorRequest,
+} from '@agiworkforce/cloud-contracts';
 import type {
   CustomConnectorPreset,
   DirectoryAdapter,
@@ -93,18 +110,19 @@ const GITHUB_INSTALLATIONS_NOTICE =
 const CONNECTOR_DATA_DEGRADED_NOTICE =
   'Some connector data could not be read. Valid connectors remain available; retry to refresh.';
 
-const ConnectorsResponseSchema = z.object({
-  connectors: z.array(
-    z.object({
-      connectorId: z.string().min(1),
-      connectedAt: z.string().optional(),
-      needsReauthorization: z.boolean().optional(),
-      health: z.string().min(1).optional(),
-      scopes: z.array(z.string()).optional(),
-    }),
-  ),
-  available: z.array(z.string().min(1)).optional(),
-});
+const ConnectorRowSchema = ConnectorConnectionSchema.pick({
+  connectorId: true,
+  connectedAt: true,
+  needsReauthorization: true,
+  health: true,
+  scopes: true,
+}).partial({ connectedAt: true });
+
+const ConnectorsResponseSchema = ListConnectorsResponseSchema.pick({ available: true })
+  .partial()
+  .extend({ connectors: z.array(ConnectorRowSchema) });
+
+const AvailableConnectorIdSchema = ListConnectorsResponseSchema.shape.available.element;
 
 const GitHubInstallationsResponseSchema = z.object({
   installations: z.array(
@@ -117,40 +135,73 @@ const GitHubInstallationsResponseSchema = z.object({
   ),
 });
 
-const CustomConnectorsResponseSchema = z.object({
-  connectors: z.array(
-    z.object({
-      id: z.string().min(1),
-      name: z.string().min(1),
-      url: z.string().url(),
-      createdAt: z.string(),
-      directoryId: z.string().min(1).optional(),
-      shortId: z.string().min(1).optional(),
-      signInRequired: z.boolean().optional(),
-      signedIn: z.boolean().optional(),
-    }),
-  ),
-  oauthRedirectUri: z.string().url().optional(),
+const CustomConnectorRowSchema = CustomConnectorSummarySchema.pick({
+  id: true,
+  name: true,
+  url: true,
+  createdAt: true,
+  directoryId: true,
+  shortId: true,
+  signInRequired: true,
+  signedIn: true,
+}).partial({ shortId: true });
+
+const CustomConnectorsResponseSchema = ListCustomConnectorsResponseSchema.pick({
+  oauthRedirectUri: true,
+}).extend({ connectors: z.array(CustomConnectorRowSchema) });
+
+const OAuthRedirectUriSchema = ListCustomConnectorsResponseSchema.pick({ oauthRedirectUri: true });
+
+const OAuthStartSchema = ConnectorOAuthStartResponseSchema.pick({
+  authorizeUrl: true,
+  error: true,
+  status: true,
 });
 
-type ParsedConnectorRow = {
-  connectorId: string;
-  connectedAt?: string;
-  needsReauthorization?: boolean;
-  health?: string;
-  scopes?: string[];
-};
+const ConnectedSchema = z.object({
+  connector: ConnectorConnectionSchema.pick({ connectorId: true, connectedAt: true }).partial({
+    connectedAt: true,
+  }),
+});
 
-type ParsedCustomConnectorRow = {
-  id: string;
-  name: string;
-  url: string;
-  createdAt: string;
-  directoryId?: string;
-  shortId?: string;
-  signInRequired?: boolean;
-  signedIn?: boolean;
-};
+const CreatedCustomConnectorRowSchema = CreatedCustomConnectorSchema.pick({
+  signInRequired: true,
+}).extend({
+  connector: CustomConnectorSchema.pick({ id: true, shortId: true, name: true }),
+});
+
+type ParsedConnectorRow = z.infer<typeof ConnectorRowSchema>;
+
+type ParsedCustomConnectorRow = z.infer<typeof CustomConnectorRowSchema>;
+
+function salvageRow<Row>(
+  schema: z.ZodType<Row>,
+  raw: unknown,
+): { row: Row | null; degraded: boolean } {
+  const parsed = schema.safeParse(raw);
+  if (parsed.success) return { row: parsed.data, degraded: false };
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { row: null, degraded: true };
+  const invalid = new Set(parsed.error.issues.map((issue) => issue.path[0]));
+  const retried = schema.safeParse(
+    Object.fromEntries(Object.entries(raw).filter(([key]) => !invalid.has(key))),
+  );
+  return { row: retried.success ? retried.data : null, degraded: true };
+}
+
+function salvageRows<Row>(
+  schema: z.ZodType<Row>,
+  value: unknown,
+): { rows: Row[]; degraded: boolean } | null {
+  if (!Array.isArray(value)) return null;
+  let degraded = false;
+  const rows: Row[] = [];
+  for (const raw of value) {
+    const salvaged = salvageRow(schema, raw);
+    if (salvaged.degraded) degraded = true;
+    if (salvaged.row !== null) rows.push(salvaged.row);
+  }
+  return { rows, degraded };
+}
 
 function readConnectorResponse(value: unknown): {
   rows: ParsedConnectorRow[];
@@ -159,55 +210,15 @@ function readConnectorResponse(value: unknown): {
 } | null {
   if (!value || typeof value !== 'object') return null;
   const envelope = value as { connectors?: unknown; available?: unknown };
-  if (!Array.isArray(envelope.connectors)) return null;
-
-  let degraded = false;
-  const rows: ParsedConnectorRow[] = [];
-  for (const raw of envelope.connectors) {
-    if (!raw || typeof raw !== 'object') {
-      degraded = true;
-      continue;
-    }
-    const row = raw as Record<string, unknown>;
-    if (typeof row['connectorId'] !== 'string' || row['connectorId'].length === 0) {
-      degraded = true;
-      continue;
-    }
-    const parsed: ParsedConnectorRow = { connectorId: row['connectorId'] };
-    if (row['connectedAt'] !== undefined) {
-      if (typeof row['connectedAt'] === 'string') parsed.connectedAt = row['connectedAt'];
-      else degraded = true;
-    }
-    if (row['needsReauthorization'] !== undefined) {
-      if (typeof row['needsReauthorization'] === 'boolean') {
-        parsed.needsReauthorization = row['needsReauthorization'];
-      } else degraded = true;
-    }
-    if (row['health'] !== undefined) {
-      if (typeof row['health'] === 'string' && row['health'].length > 0) {
-        parsed.health = row['health'];
-      } else degraded = true;
-    }
-    if (Array.isArray(row['scopes'])) {
-      parsed.scopes = row['scopes'].filter((scope): scope is string => typeof scope === 'string');
-    }
-    rows.push(parsed);
-  }
-
-  let available: string[] = [];
-  if (envelope.available !== undefined) {
-    if (!Array.isArray(envelope.available)) {
-      degraded = true;
-    } else {
-      available = envelope.available.filter((id): id is string => {
-        const valid = typeof id === 'string' && id.length > 0;
-        if (!valid) degraded = true;
-        return valid;
-      });
-    }
-  }
-
-  return { rows, available, degraded };
+  const connectors = salvageRows(ConnectorRowSchema, envelope.connectors);
+  if (!connectors) return null;
+  if (envelope.available === undefined) return { ...connectors, available: [] };
+  const available = salvageRows(AvailableConnectorIdSchema, envelope.available);
+  return {
+    rows: connectors.rows,
+    available: available?.rows ?? [],
+    degraded: connectors.degraded || available === null || available.degraded,
+  };
 }
 
 function readCustomConnectorResponse(value: unknown): {
@@ -215,46 +226,7 @@ function readCustomConnectorResponse(value: unknown): {
   degraded: boolean;
 } | null {
   if (!value || typeof value !== 'object') return null;
-  const envelope = value as { connectors?: unknown };
-  if (!Array.isArray(envelope.connectors)) return null;
-
-  let degraded = false;
-  const rows: ParsedCustomConnectorRow[] = [];
-  for (const raw of envelope.connectors) {
-    if (!raw || typeof raw !== 'object') {
-      degraded = true;
-      continue;
-    }
-    const row = raw as Record<string, unknown>;
-    if (
-      typeof row['id'] !== 'string' ||
-      row['id'].length === 0 ||
-      typeof row['name'] !== 'string' ||
-      row['name'].length === 0 ||
-      typeof row['url'] !== 'string' ||
-      row['url'].length === 0 ||
-      typeof row['createdAt'] !== 'string'
-    ) {
-      degraded = true;
-      continue;
-    }
-    rows.push({
-      id: row['id'],
-      name: row['name'],
-      url: row['url'],
-      createdAt: row['createdAt'],
-      ...(typeof row['directoryId'] === 'string' && row['directoryId'].length > 0
-        ? { directoryId: row['directoryId'] }
-        : {}),
-      ...(typeof row['shortId'] === 'string' && row['shortId'].length > 0
-        ? { shortId: row['shortId'] }
-        : {}),
-      ...(row['signInRequired'] === true ? { signInRequired: true } : {}),
-      ...(row['signedIn'] === true ? { signedIn: true } : {}),
-    });
-  }
-
-  return { rows, degraded };
+  return salvageRows(CustomConnectorRowSchema, (value as { connectors?: unknown }).connectors);
 }
 
 const CONNECTOR_NOT_CONNECTED_LABEL = 'Not connected';
@@ -271,9 +243,8 @@ const CUSTOM_CONNECTOR_ICON_BG = 'from-muted to-muted';
 const CUSTOM_CONNECTOR_ICON_TEXT = 'MCP';
 
 function readOAuthRedirectUri(value: unknown): string | null {
-  if (!value || typeof value !== 'object') return null;
-  const uri = (value as { oauthRedirectUri?: unknown }).oauthRedirectUri;
-  return typeof uri === 'string' && uri.length > 0 ? uri : null;
+  const parsed = OAuthRedirectUriSchema.safeParse(value);
+  return parsed.success ? (parsed.data.oauthRedirectUri ?? null) : null;
 }
 
 function customSignInPending(row: ParsedCustomConnectorRow): boolean {
@@ -400,7 +371,7 @@ export function useConnectorsSettingsAdapter({
   const [githubInstallationsNotice, setGithubInstallationsNotice] = useState<string | null>(null);
 
   const refreshCustomConnectors = useCallback(async () => {
-    const response = await fetch('/api/connectors/custom', {
+    const response = await fetch(CUSTOM_CONNECTORS_PATH, {
       credentials: 'include',
       headers: await authedHeaders(),
     });
@@ -432,9 +403,9 @@ export function useConnectorsSettingsAdapter({
           ...(signal ? { signal } : {}),
         };
         const [connectorsResponse, installationsResponse, customResponse] = await Promise.all([
-          fetch('/api/connectors', requestOptions),
+          fetch(MANAGED_CLOUD_CONNECTORS_PATH, requestOptions),
           fetch('/api/github/installations', requestOptions),
-          fetch('/api/connectors/custom', requestOptions),
+          fetch(CUSTOM_CONNECTORS_PATH, requestOptions),
         ]);
         if (!connectorsResponse.ok || !customResponse.ok) {
           const status = [connectorsResponse, customResponse].find(
@@ -603,7 +574,7 @@ export function useConnectorsSettingsAdapter({
   const startCustomConnectorSignIn = useCallback(
     async (shortId: string, name: string) => {
       const target = withConnectorReturnPath(
-        `/api/connectors/oauth/start?connectorId=${encodeURIComponent(`${CUSTOM_CONNECTOR_ID_PREFIX}${shortId}`)}`,
+        `${CONNECTOR_OAUTH_START_PATH}?connectorId=${encodeURIComponent(`${CUSTOM_CONNECTOR_ID_PREFIX}${shortId}`)}`,
         currentConnectorReturnPath(),
       );
       if (!target) throw new Error(`Could not connect ${name}.`);
@@ -611,11 +582,8 @@ export function useConnectorsSettingsAdapter({
         headers: await authedHeaders(),
         credentials: 'include',
       });
-      const body = (await res.json().catch(() => null)) as {
-        authorizeUrl?: string;
-        error?: string;
-        status?: string;
-      } | null;
+      const parsed = OAuthStartSchema.safeParse(await res.json().catch(() => null));
+      const body = parsed.success ? parsed.data : null;
       if (res.ok && body?.authorizeUrl) {
         window.location.href = body.authorizeUrl;
         return;
@@ -645,31 +613,28 @@ export function useConnectorsSettingsAdapter({
       const connector = SETTINGS_CONNECTORS.find((c) => c.id === id);
       const name = connector?.name ?? id;
       const csrfToken = await getCsrfToken();
-      const res = await fetch('/api/connectors', {
+      const connectRequest: ConnectRequest = {
+        connectorId: id,
+        ...(connector ? { authType: connector.authType } : {}),
+      };
+      const res = await fetch(MANAGED_CLOUD_CONNECTORS_PATH, {
         method: 'POST',
         headers: await authedHeaders({
           'Content-Type': 'application/json',
           'x-csrf-token': csrfToken,
         }),
         credentials: 'include',
-        body: JSON.stringify({
-          connectorId: id,
-          ...(connector ? { authType: connector.authType } : {}),
-        }),
+        body: JSON.stringify(connectRequest),
       });
       if (!res.ok) {
         // GitHub connects through the App install flow: the server answers POST
         // with 409 + installStartPath. Follow it instead of surfacing an error.
-        const body = (await res
+        const raw: unknown = await res
           .clone()
           .json()
-          .catch(() => null)) as {
-          error?: string;
-          oauthStartPath?: string;
-          installStartPath?: string;
-          credentialsPath?: string;
-          accountUrlConnector?: string;
-        } | null;
+          .catch(() => null);
+        const conflict = ConnectConflictResponseSchema.safeParse(raw);
+        const body = conflict.success ? conflict.data : null;
         if (res.status === 409 && body?.credentialsPath) {
           setApiKeyConnectorId(id);
           return;
@@ -680,7 +645,7 @@ export function useConnectorsSettingsAdapter({
           onOpenCustomConnector();
           return;
         }
-        const plaidRoutes = res.status === 409 ? plaidLinkRoutesOf(body) : null;
+        const plaidRoutes = res.status === 409 && body ? plaidLinkRoutesOf(body) : null;
         if (plaidRoutes && typeof window !== 'undefined') {
           const connectedAt = await connectBankAccountsWithPlaid(plaidRoutes, authedHeaders);
           if (connectedAt) {
@@ -703,11 +668,10 @@ export function useConnectorsSettingsAdapter({
                 headers: await authedHeaders(),
                 credentials: 'include',
               });
-              const probeBody = (await probeRes.json().catch(() => null)) as {
-                authorizeUrl?: string;
-                error?: string;
-                status?: string;
-              } | null;
+              const probeParsed = OAuthStartSchema.safeParse(
+                await probeRes.json().catch(() => null),
+              );
+              const probeBody = probeParsed.success ? probeParsed.data : null;
               if (probeRes.ok && probeBody?.authorizeUrl) {
                 window.location.href = probeBody.authorizeUrl;
                 return;
@@ -724,14 +688,14 @@ export function useConnectorsSettingsAdapter({
             return;
           }
         }
-        throw new Error(body?.error ?? `Could not connect ${name}.`);
+        throw new Error(connectorErrorMessage(raw, `Could not connect ${name}.`));
       }
-      const json = (await res.json()) as {
-        connector: { connectorId: string; connectedAt?: string };
-      };
+      const connected = ConnectedSchema.safeParse(await res.json().catch(() => null));
+      if (!connected.success) throw new Error(`Could not connect ${name}.`);
+      const { connector: saved } = connected.data;
       setConnectedConnectors((prev) => [
         ...prev.filter((c) => c.connectorId !== id),
-        { connectorId: json.connector.connectorId, connectedAt: json.connector.connectedAt },
+        { connectorId: saved.connectorId, connectedAt: saved.connectedAt },
       ]);
     },
     [authedHeaders, customConnectors, onOpenCustomConnector, startCustomConnectorSignIn],
@@ -799,7 +763,7 @@ export function useConnectorsSettingsAdapter({
       }
       if (id.startsWith(CUSTOM_CONNECTOR_ID_PREFIX)) {
         const rowId = id.slice(CUSTOM_CONNECTOR_ID_PREFIX.length);
-        const res = await fetch(`/api/connectors/custom?id=${encodeURIComponent(rowId)}`, {
+        const res = await fetch(`${CUSTOM_CONNECTORS_PATH}?id=${encodeURIComponent(rowId)}`, {
           method: 'DELETE',
           headers: await authedHeaders({ 'x-csrf-token': csrfToken }),
           credentials: 'include',
@@ -810,11 +774,14 @@ export function useConnectorsSettingsAdapter({
         setCustomConnectors((prev) => prev.filter((c) => c.id !== rowId));
         return;
       }
-      const res = await fetch(`/api/connectors?connectorId=${encodeURIComponent(id)}`, {
-        method: 'DELETE',
-        headers: await authedHeaders({ 'x-csrf-token': csrfToken }),
-        credentials: 'include',
-      });
+      const res = await fetch(
+        `${MANAGED_CLOUD_CONNECTORS_PATH}?connectorId=${encodeURIComponent(id)}`,
+        {
+          method: 'DELETE',
+          headers: await authedHeaders({ 'x-csrf-token': csrfToken }),
+          credentials: 'include',
+        },
+      );
       if (!res.ok) {
         throw new Error('Could not disconnect. Try again.');
       }
@@ -832,38 +799,43 @@ export function useConnectorsSettingsAdapter({
       oauthClientSecret?: string;
     }) => {
       const csrfToken = await getCsrfToken();
-      const res = await fetch('/api/connectors/custom', {
+      const createRequest: CreateCustomConnectorRequest = {
+        name: input.name,
+        url: input.url,
+        ...(input.authToken ? { authToken: input.authToken } : {}),
+        ...(input.oauthClientId ? { oauthClientId: input.oauthClientId } : {}),
+        ...(input.oauthClientSecret ? { oauthClientSecret: input.oauthClientSecret } : {}),
+      };
+      const res = await fetch(CUSTOM_CONNECTORS_PATH, {
         method: 'POST',
         headers: await authedHeaders({
           'Content-Type': 'application/json',
           'x-csrf-token': csrfToken,
         }),
         credentials: 'include',
-        body: JSON.stringify({
-          name: input.name,
-          url: input.url,
-          ...(input.authToken ? { authToken: input.authToken } : {}),
-          ...(input.oauthClientId ? { oauthClientId: input.oauthClientId } : {}),
-          ...(input.oauthClientSecret ? { oauthClientSecret: input.oauthClientSecret } : {}),
-        }),
+        body: JSON.stringify(createRequest),
       });
       if (!res.ok) {
-        const body = (await res.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(body?.error ?? 'Could not add connector. Try again.');
+        throw new Error(
+          connectorErrorMessage(
+            await res.json().catch(() => null),
+            'Could not add connector. Try again.',
+          ),
+        );
       }
-      const created = (await res.json().catch(() => null)) as {
-        connector?: { id?: string; shortId?: string; name?: string };
-        signInRequired?: boolean;
-      } | null;
+      const parsedCreated = CreatedCustomConnectorRowSchema.safeParse(
+        await res.json().catch(() => null),
+      );
+      const created = parsedCreated.success ? parsedCreated.data : null;
       await refreshCustomConnectors();
       const connector = created?.connector;
-      if (!created?.signInRequired || !connector?.shortId) return;
+      if (!created?.signInRequired || !connector) return;
       try {
-        await startCustomConnectorSignIn(connector.shortId, connector.name ?? input.name);
+        await startCustomConnectorSignIn(connector.shortId, connector.name);
       } catch (error) {
-        if (input.oauthClientId || !connector.id) throw error;
+        if (input.oauthClientId) throw error;
         const removed = await fetch(
-          `/api/connectors/custom?id=${encodeURIComponent(connector.id)}`,
+          `${CUSTOM_CONNECTORS_PATH}?id=${encodeURIComponent(connector.id)}`,
           {
             method: 'DELETE',
             headers: await authedHeaders({ 'x-csrf-token': await getCsrfToken() }),
@@ -906,10 +878,15 @@ export function useConnectorsSettingsAdapter({
         ? {
             connectors: {
               count: expiredConnectorIds.length,
-              description:
-                expiredConnectorIds.length === 1
-                  ? '1 connector needs to be reconnected'
-                  : `${expiredConnectorIds.length} connectors need to be reconnected`,
+              description: translateUiPlural(
+                'settings',
+                'counts.connectorsNeedReconnect',
+                expiredConnectorIds.length,
+                {
+                  one: '{{count}} connector needs to be reconnected',
+                  other: '{{count}} connectors need to be reconnected',
+                },
+              ),
             },
           }
         : undefined,

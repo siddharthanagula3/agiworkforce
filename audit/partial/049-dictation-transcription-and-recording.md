@@ -166,30 +166,13 @@ Code: `apps/mobile/src/features/voice/components/RecordingOverlay.tsx:23-23`, `a
 
 - Done when: The user can export a recording transcript as a file.
 - Wave: 3
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | surface-only: voice transcripts leave with the chat export; no standalone recordings exist | surface-only |
-| desktop | partial | Same as web, via the hosted chat export. | surface-only |
-| mobile | partial | Voice turns leave with the conversation export (PDF or text); no standalone recording transcripts. | surface-only |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/lib/live-voice-session.ts:1-1`, `apps/web/features/chat/pages/WebChatPage.tsx:5851-5851`, `apps/mobile/app/(app)/chat/[id].tsx:1599-1599`, `apps/mobile/src/features/chat/components/ConversationExportSheet.tsx:96-96`
-
-## S49.27: Retention and deletion controls.
-
-- Done when: Recordings and transcripts have retention settings and can be deleted.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | surface-only: no voice audio is kept; transcripts are chat messages under the chat's own deletion | surface-only |
-| desktop | partial | Dictation and live-voice audio is never kept; voice transcripts are saved as chat messages and can be removed only by deleting the conversation or message, and there is no voice-specific retention setting. | ui |
-| mobile | partial | Recognition runs on device and keeps no audio; spoken turns become chat messages that can be removed only by deleting the chat, and there is no voice-specific retention setting. | ui |
-
-Code: `apps/web/features/chat/stores/voice-input-store.ts:1-1`, `apps/web/features/chat/pages/WebChatPage.tsx:4999-5012`, `apps/web/app/api/chat/conversations/[id]/route.ts:517-517`, `apps/mobile/app/(app)/chat/[id].tsx:1155-1164`
 
 ## S49.30: Undo inserted text.
 
