@@ -1,10 +1,22 @@
-import type {
-  PluginInstalledDependency,
-  PluginMarketplaceEntry,
-  PluginMarketplaceInstallation,
-  PluginMarketplaceSourceSummary,
-  PluginScanResponse,
-  PluginVersionsResponse,
+import {
+  COMMUNITY_PLUGINS_PATH,
+  MEMBER_ORGANIZATION_PLUGINS_PATH,
+  PLUGIN_SUBMISSIONS_PATH,
+  type CommunityPlugin,
+  type CommunityPluginPatch,
+  type CommunityPluginsResponse,
+  type MemberOrganizationPlugin,
+  type MemberOrganizationPluginPatch,
+  type MemberOrganizationPluginsResponse,
+  type PluginInstalledDependency,
+  type PluginMarketplaceEntry,
+  type PluginMarketplaceInstallation,
+  type PluginMarketplaceSourceSummary,
+  type PluginScanResponse,
+  type PluginSubmissionResponse,
+  type PluginSubmissionsResponse,
+  type PluginSubmissionSummary,
+  type PluginVersionsResponse,
 } from '@agiworkforce/cloud-contracts';
 import {
   isPluginEntryWebInstallable,
@@ -28,6 +40,7 @@ import {
   type DirectoryPluginComponents,
   type DirectoryPluginDetail,
   type DirectoryPluginScan,
+  type DirectoryPluginSubmission,
   type DirectoryPluginVersions,
   type DirectoryQuery,
   type DirectorySection,
@@ -82,6 +95,8 @@ import {
   PLUGIN_PUBLISHER_GROUP_LABEL,
   PLUGIN_PUBLISHER_KIND_LABELS,
   PLUGIN_PUBLISHER_MORE_HEADING_PREFIX,
+  PLUGIN_PERMISSIONS_NOTICE_PREFIX,
+  PLUGIN_PERMISSIONS_NOTICE_SUFFIX,
   PLUGIN_SOURCE_BUILTIN,
   PLUGIN_SOURCE_FACETS,
   PLUGIN_SOURCE_MARKETPLACE,
@@ -90,6 +105,8 @@ import {
   PLUGIN_STATE_DESKTOP_AND_CLI,
   PLUGIN_STATE_INSTALL,
   PLUGIN_STATE_INSTALLED,
+  PLUGIN_STATE_REQUIRED,
+  PLUGIN_STATE_TURNED_OFF,
   PLUGIN_UNINSTALL_FAILED_COPY,
   PLUGIN_UNPUBLISHED_LABEL,
   PLUGIN_SCAN_LEAF,
@@ -102,6 +119,18 @@ import {
   PLUGIN_WORKS_WITH_GROUP_LABEL,
   PLUGIN_WORKS_WITH_LABELS,
   PLUGIN_WORKS_WITH_ORDER,
+  PLUGIN_COMMUNITY_GROUP_HEADING,
+  PLUGIN_COMMUNITY_GROUP_ID,
+  PLUGIN_COMMUNITY_INSTALL_NOTICE,
+  PLUGIN_SUBMISSION_STATUS_LABELS,
+  PLUGIN_SUBMIT_FAILED_COPY,
+  PLUGIN_WITHDRAW_FAILED_COPY,
+  PLUGIN_WORKSPACE_AVAILABLE_NOTE,
+  PLUGIN_WORKSPACE_DEFAULT_NOTE,
+  PLUGIN_WORKSPACE_GROUP_ID,
+  PLUGIN_WORKSPACE_PUBLISHER,
+  PLUGIN_WORKSPACE_REQUIRED_NOTE,
+  workspaceGroupHeading,
 } from '../constants';
 import { DirectoryRequestError } from './request-error';
 
@@ -160,6 +189,12 @@ export const EMPTY_INSTALL_STATE: PluginInstallState = {
 };
 
 export const EMPTY_USER_MARKETPLACES: UserMarketplaceState = { sources: [], entries: [] };
+
+export const EMPTY_WORKSPACE_PLUGINS: MemberOrganizationPluginsResponse = {
+  organizationId: null,
+  organizationName: null,
+  plugins: [],
+};
 
 function isSourceFacet(value: string | null): value is PluginSourceFacet {
   return value !== null && PLUGIN_SOURCE_FACETS.includes(value);
@@ -371,6 +406,248 @@ export async function fetchUserMarketplaces(): Promise<UserMarketplaceState> {
   return { sources: sources?.sources ?? [], entries: entries?.entries ?? [] };
 }
 
+export async function fetchWorkspacePlugins(): Promise<MemberOrganizationPluginsResponse> {
+  return (
+    (await readOptional<MemberOrganizationPluginsResponse>(MEMBER_ORGANIZATION_PLUGINS_PATH)) ??
+    EMPTY_WORKSPACE_PLUGINS
+  );
+}
+
+export async function updateWorkspacePlugin(
+  id: string,
+  patch: MemberOrganizationPluginPatch,
+  csrfToken: string,
+): Promise<MemberOrganizationPlugin> {
+  const response = await fetch(`${MEMBER_ORGANIZATION_PLUGINS_PATH}/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': JSON_CONTENT_TYPE, [CSRF_HEADER]: csrfToken },
+    body: JSON.stringify(patch),
+  });
+  const body = (await response.json().catch(() => ({}))) as {
+    plugin?: MemberOrganizationPlugin;
+    error?: { message?: string };
+  };
+  if (!response.ok || !body.plugin) {
+    throw new DirectoryRequestError(
+      response.status,
+      body.error?.message ?? PLUGIN_INSTALL_FAILED_COPY,
+    );
+  }
+  return body.plugin;
+}
+
+function workspacePublisher(workspace: MemberOrganizationPluginsResponse): string {
+  return workspace.organizationName ?? PLUGIN_WORKSPACE_PUBLISHER;
+}
+
+function workspaceStatusLabel(plugin: MemberOrganizationPlugin): string {
+  if (plugin.installPreference === 'required') return PLUGIN_STATE_REQUIRED;
+  if (!plugin.installed) return PLUGIN_STATE_INSTALL;
+  return plugin.enabled ? PLUGIN_STATE_INSTALLED : PLUGIN_STATE_TURNED_OFF;
+}
+
+export function toWorkspacePluginEntry(
+  plugin: MemberOrganizationPlugin,
+  workspace: MemberOrganizationPluginsResponse,
+): DirectoryEntry {
+  return {
+    id: plugin.id,
+    name: plugin.name,
+    publisher: workspacePublisher(workspace),
+    description: plugin.description,
+    monogram: monogramOf(plugin.name),
+    installed: plugin.installed,
+    installable: true,
+    statusLabel: workspaceStatusLabel(plugin),
+    updatedAt: plugin.updatedAt,
+    facets: {},
+  };
+}
+
+function workspaceNote(plugin: MemberOrganizationPlugin): string {
+  if (plugin.installPreference === 'required') return PLUGIN_WORKSPACE_REQUIRED_NOTE;
+  return plugin.installPreference === 'installed_by_default'
+    ? PLUGIN_WORKSPACE_DEFAULT_NOTE
+    : PLUGIN_WORKSPACE_AVAILABLE_NOTE;
+}
+
+export function toWorkspacePluginDetail(
+  plugin: MemberOrganizationPlugin,
+  workspace: MemberOrganizationPluginsResponse,
+): DirectoryPluginDetail {
+  return {
+    kind: 'plugin',
+    id: plugin.id,
+    name: plugin.name,
+    publisher: workspacePublisher(workspace),
+    description: plugin.description,
+    version: plugin.version,
+    enabled: plugin.enabled,
+    examplePrompts: [],
+    components: {
+      skills: plugin.skills,
+      commands: 0,
+      agents: 0,
+      hooks: false,
+      mcpServers: [],
+      lspServers: [],
+    },
+    sourceLabel: workspacePublisher(workspace),
+    updatedAt: plugin.updatedAt,
+    installed: plugin.installed,
+    installable: true,
+    removable: plugin.installPreference === 'available',
+    locked: plugin.installPreference === 'required',
+    managedNote: workspaceNote(plugin),
+  };
+}
+
+export async function fetchCommunityPlugins(): Promise<CommunityPlugin[]> {
+  return (await readOptional<CommunityPluginsResponse>(COMMUNITY_PLUGINS_PATH))?.plugins ?? [];
+}
+
+export async function fetchPluginSubmissions(): Promise<PluginSubmissionSummary[]> {
+  return (
+    (await readOptional<PluginSubmissionsResponse>(PLUGIN_SUBMISSIONS_PATH))?.submissions ?? []
+  );
+}
+
+async function sendJson<T>(
+  path: string,
+  method: string,
+  body: unknown,
+  csrfToken: string,
+  failureCopy: string,
+): Promise<T | null> {
+  const response = await fetch(path, {
+    method,
+    headers: { 'Content-Type': JSON_CONTENT_TYPE, [CSRF_HEADER]: csrfToken },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+  if (!response.ok) {
+    const failure = (await response.json().catch(() => ({}))) as {
+      error?: { message?: string };
+    };
+    throw new DirectoryRequestError(response.status, failure.error?.message ?? failureCopy);
+  }
+  return response.status === 204 ? null : ((await response.json()) as T);
+}
+
+export async function updateCommunityPlugin(
+  id: string,
+  patch: CommunityPluginPatch,
+  csrfToken: string,
+): Promise<void> {
+  await sendJson(
+    `${COMMUNITY_PLUGINS_PATH}/${encodeURIComponent(id)}`,
+    'PATCH',
+    patch,
+    csrfToken,
+    PLUGIN_INSTALL_FAILED_COPY,
+  );
+}
+
+export async function submitPluginForReview(
+  entryId: string,
+  csrfToken: string,
+): Promise<PluginSubmissionSummary | null> {
+  const body = await sendJson<PluginSubmissionResponse>(
+    PLUGIN_SUBMISSIONS_PATH,
+    'POST',
+    { entryId },
+    csrfToken,
+    PLUGIN_SUBMIT_FAILED_COPY,
+  );
+  return body?.submission ?? null;
+}
+
+export async function withdrawPluginSubmission(id: string, csrfToken: string): Promise<void> {
+  await sendJson(
+    `${PLUGIN_SUBMISSIONS_PATH}/${encodeURIComponent(id)}`,
+    'DELETE',
+    undefined,
+    csrfToken,
+    PLUGIN_WITHDRAW_FAILED_COPY,
+  );
+}
+
+export function latestSubmissionFor(
+  submissions: readonly PluginSubmissionSummary[],
+  entryId: string,
+): PluginSubmissionSummary | undefined {
+  return submissions
+    .filter((submission) => submission.entryId === entryId)
+    .sort((left, right) => right.submittedAt.localeCompare(left.submittedAt))[0];
+}
+
+function toSubmissionDetail(submission: PluginSubmissionSummary): DirectoryPluginSubmission {
+  return {
+    statusLabel: PLUGIN_SUBMISSION_STATUS_LABELS[submission.status] ?? submission.status,
+    note: submission.reviewNote,
+    withdrawable: submission.status === 'pending' || submission.status === 'approved',
+  };
+}
+
+function communityStatusLabel(plugin: CommunityPlugin): string {
+  if (!plugin.installed) return PLUGIN_STATE_INSTALL;
+  return plugin.enabled ? PLUGIN_STATE_INSTALLED : PLUGIN_STATE_TURNED_OFF;
+}
+
+export function toCommunityPluginEntry(plugin: CommunityPlugin): DirectoryEntry {
+  return {
+    id: plugin.id,
+    name: plugin.name,
+    publisher: plugin.publisherName,
+    description: plugin.description,
+    monogram: monogramOf(plugin.name),
+    badges: [COMMUNITY_BADGE],
+    installed: plugin.installed,
+    installable: true,
+    statusLabel: communityStatusLabel(plugin),
+    ...(plugin.installed ? {} : { installNotice: PLUGIN_COMMUNITY_INSTALL_NOTICE }),
+    ...(plugin.approvedAt ? { updatedAt: plugin.approvedAt } : {}),
+    facets: plugin.category ? { [DIRECTORY_CATEGORY_FILTER_ID]: [plugin.category] } : {},
+  };
+}
+
+export function toCommunityPluginDetail(plugin: CommunityPlugin): DirectoryPluginDetail {
+  return {
+    kind: 'plugin',
+    id: plugin.id,
+    name: plugin.name,
+    publisher: plugin.publisherName,
+    description: plugin.description,
+    community: true,
+    ...(plugin.category ? { category: plugin.category } : {}),
+    version: plugin.version,
+    enabled: plugin.enabled,
+    scan: {
+      verdict: plugin.scanVerdict,
+      findings: [
+        ...new Set(
+          plugin.scanFindings.map(
+            (finding) => `${finding.path}:${finding.line} ${finding.message}`,
+          ),
+        ),
+      ],
+      scannedAt: plugin.approvedAt ?? '',
+    },
+    examplePrompts: [],
+    components: {
+      skills: plugin.skills,
+      commands: 0,
+      agents: 0,
+      hooks: false,
+      mcpServers: [],
+      lspServers: [],
+    },
+    sourceLabel: PLUGIN_COMMUNITY_GROUP_HEADING,
+    ...(plugin.approvedAt ? { updatedAt: plugin.approvedAt } : {}),
+    installed: plugin.installed,
+    installable: true,
+  };
+}
+
 export function isPluginInstalled(entry: PluginDirectoryEntry, installs: PluginInstallState) {
   return entry.sourceFacet === PLUGIN_SOURCE_BUILTIN
     ? installs.builtinIds.has(entry.id)
@@ -397,6 +674,12 @@ function monogramOf(name: string): string {
   return name.slice(0, 1).toUpperCase();
 }
 
+function permissionsNotice(permissions: readonly string[]): string | null {
+  return permissions.length > 0
+    ? `${PLUGIN_PERMISSIONS_NOTICE_PREFIX} ${permissions.join(', ')}. ${PLUGIN_PERMISSIONS_NOTICE_SUFFIX}`
+    : null;
+}
+
 function isCommunityPlugin(entry: PluginDirectoryEntry): boolean {
   return !entry.verified && entry.sourceFacet === PLUGIN_SOURCE_MARKETPLACE;
 }
@@ -420,6 +703,7 @@ export function toPluginEntry(
   const installable = isPluginEntryWebInstallable(entry);
   const badges = pluginBadges(entry, installs);
   const category = pluginCategoryKey(entry);
+  const notice = installed ? null : permissionsNotice(entry.permissions);
   return {
     id: entry.id,
     name: entry.name,
@@ -432,6 +716,7 @@ export function toPluginEntry(
     installed,
     installable,
     statusLabel: pluginStateLabel(entry, installed, installable),
+    ...(notice ? { installNotice: notice } : {}),
     updatedAt: entry.updatedAt,
     facets: {
       [PLUGIN_WORKS_WITH_GROUP_ID]: entry.worksWith,
@@ -447,6 +732,7 @@ export function toUserMarketplaceEntry(
   installs: PluginInstallState,
 ): DirectoryEntry {
   const installed = installs.byEntryId.has(entry.id);
+  const notice = installed ? null : permissionsNotice(entry.permissions);
   return {
     id: entry.id,
     name: entry.name,
@@ -458,6 +744,7 @@ export function toUserMarketplaceEntry(
     installed,
     installable: true,
     statusLabel: installed ? PLUGIN_STATE_INSTALLED : PLUGIN_STATE_INSTALL,
+    ...(notice ? { installNotice: notice } : {}),
     updatedAt: entry.updatedAt,
     facets: {},
   };
@@ -470,6 +757,8 @@ export interface PluginManageInput {
   details: readonly PluginDirectoryEntry[];
   user: UserMarketplaceState;
   installs: PluginInstallState;
+  workspace?: MemberOrganizationPluginsResponse;
+  community?: readonly CommunityPlugin[];
 }
 
 function findRecord(input: PluginManageInput, id: string): PluginDirectoryEntry | undefined {
@@ -532,6 +821,29 @@ export function toPluginManageRows(input: PluginManageInput): DirectoryManageRow
       ...(source ? { author: source.name } : {}),
       skillCount: entry?.declaredSkills.length ?? installation.enabledSkills.length,
       updatedAt: installation.updatedAt,
+    });
+  }
+
+  for (const plugin of input.community ?? []) {
+    if (!plugin.installed) continue;
+    push({
+      id: plugin.id,
+      name: plugin.name,
+      author: plugin.publisherName,
+      skillCount: plugin.skills.length,
+      ...(plugin.approvedAt ? { updatedAt: plugin.approvedAt } : {}),
+    });
+  }
+
+  const workspace = input.workspace ?? EMPTY_WORKSPACE_PLUGINS;
+  for (const plugin of workspace.plugins) {
+    if (!plugin.installed) continue;
+    push({
+      id: plugin.id,
+      name: plugin.name,
+      author: workspacePublisher(workspace),
+      skillCount: plugin.skills.length,
+      updatedAt: plugin.updatedAt,
     });
   }
 
@@ -630,9 +942,11 @@ export function toUserMarketplaceDetail(
   entry: PluginMarketplaceEntry,
   source: PluginMarketplaceSourceSummary | undefined,
   installs: PluginInstallState,
+  submission?: PluginSubmissionSummary,
 ): DirectoryPluginDetail {
   const installation = installs.byEntryId.get(entry.id);
   const authored = source?.kind === PLUGIN_SOURCE_KIND_AUTHORED;
+  const owned = source !== undefined && source.kind !== PLUGIN_SOURCE_KIND_REPOSITORY;
   return {
     kind: 'plugin',
     id: entry.id,
@@ -643,6 +957,8 @@ export function toUserMarketplaceDetail(
     ...(installation ? { enabled: installation.enabled } : {}),
     editable: authored,
     customizable: installation?.enabled === true && !authored,
+    submittable: owned && submission?.status !== 'pending',
+    ...(owned && submission ? { submission: toSubmissionDetail(submission) } : {}),
     examplePrompts: entry.examplePrompts,
     components: {
       skills: entry.declaredSkills,
@@ -742,6 +1058,8 @@ export interface PluginSectionInput {
   stats: PluginDirectoryStats | null;
   user: UserMarketplaceState;
   installs: PluginInstallState;
+  workspace?: MemberOrganizationPluginsResponse;
+  community?: readonly CommunityPlugin[];
 }
 
 interface PluginGroupSlice {
@@ -774,6 +1092,8 @@ export function toPluginSection({
   stats,
   user,
   installs,
+  workspace = EMPTY_WORKSPACE_PLUGINS,
+  community = [],
 }: PluginSectionInput): DirectorySection {
   const request = toPluginRequest(query);
   const userSourceId = userMarketplaceSourceId(query);
@@ -805,6 +1125,21 @@ export function toPluginSection({
   } else {
     const facet = request.source;
     if (facet !== null) catalogHeading = PLUGIN_GROUP_HEADINGS[facet];
+    if (facet === null && workspace.plugins.length > 0) {
+      slices.push({
+        group: {
+          id: PLUGIN_WORKSPACE_GROUP_ID,
+          heading: workspaceGroupHeading(workspace.organizationName),
+        },
+        entries: sortDirectoryEntries(
+          workspace.plugins
+            .map((plugin) => toWorkspacePluginEntry(plugin, workspace))
+            .filter(matches),
+          query.sort,
+        ),
+        remote: false,
+      });
+    }
     if (facet === null || facet === PLUGIN_SOURCE_BUILTIN) {
       slices.push({
         group: facetGroup(PLUGIN_SOURCE_BUILTIN),
@@ -824,6 +1159,16 @@ export function toPluginSection({
         group: facetGroup(PLUGIN_SOURCE_MARKETPLACE),
         entries: (marketplace?.entries ?? []).map((entry) => toPluginEntry(entry, installs)),
         remote: true,
+      });
+    }
+    if (facet === null && community.length > 0) {
+      slices.push({
+        group: { id: PLUGIN_COMMUNITY_GROUP_ID, heading: PLUGIN_COMMUNITY_GROUP_HEADING },
+        entries: sortDirectoryEntries(
+          community.map(toCommunityPluginEntry).filter(matches),
+          query.sort,
+        ),
+        remote: false,
       });
     }
     if (facet === null && user.entries.length > 0) {
@@ -1011,6 +1356,10 @@ export async function fetchPluginVersions(
   const body = await readOptional<PluginVersionsResponse>(pluginPath(id, PLUGIN_VERSIONS_LEAF));
   if (!body?.installedVersion) return null;
   const approved = new Set(body.approvedPermissions);
+  const installedSkills = new Set(
+    body.versions.find((version) => version.version === body.installedVersion)?.declaredSkills ??
+      [],
+  );
   return {
     installed: body.installedVersion,
     latest:
@@ -1024,6 +1373,10 @@ export async function fetchPluginVersions(
       publishedAt: version.publishedAt,
       changelog: version.changelog,
       newPermissions: version.permissions.filter((permission) => !approved.has(permission)),
+      addedSkills: version.declaredSkills.filter((skill) => !installedSkills.has(skill)),
+      removedSkills: [...installedSkills].filter(
+        (skill) => !version.declaredSkills.includes(skill),
+      ),
     })),
   };
 }
