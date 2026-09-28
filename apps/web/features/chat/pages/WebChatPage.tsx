@@ -2167,6 +2167,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             disabledConnectorIds: options.meta?.disabledConnectorIds,
             connectorToolsEnabled: options.meta?.connectorToolsEnabled,
             memoryEnabled: options.meta?.memoryEnabled,
+            routingProfile: useModelStore.getState().routingProfile,
             ...(memoryCommand ? { memoryCommand } : {}),
           });
 
