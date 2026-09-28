@@ -114,6 +114,7 @@ import {
   CliCapabilityAdapter,
   openArtifactsSurface,
   openCapabilitySurface,
+  manageHooks,
   manageMcpServers,
   managePlugins,
   manageSkills,
@@ -442,6 +443,14 @@ async function continueThisSessionInTheTerminal(sidebarProvider: SidebarProvider
   if (folder === undefined) {
     await vscode.window.showWarningMessage(
       'AGI Workforce: open the folder this session is working in before continuing it in the terminal.',
+    );
+    return;
+  }
+  try {
+    await sidebarProvider.releaseForTerminal();
+  } catch (error) {
+    await vscode.window.showWarningMessage(
+      `AGI Workforce: ${error instanceof Error ? error.message : String(error)}`,
     );
     return;
   }
@@ -1226,6 +1235,8 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       );
     }),
 
+    register('agi-workforce.showCheckpoints', () => sidebarProvider.showCheckpoints()),
+
     register('agi-workforce.openConversation', async (idOrItem: string | ConversationTreeItem) => {
       const id = typeof idOrItem === 'string' ? idOrItem : idOrItem.thread.id;
       await revealFirstPartyChat();
@@ -1588,6 +1599,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         | 'mention-file-project'
         | 'clear'
         | 'history'
+        | 'checkpoints'
         | 'switch-model'
         | 'effort'
         | 'mode'
@@ -1615,6 +1627,15 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
           description: 'Resume a workspace-scoped developer session',
           action: 'history',
         },
+        ...((await sidebarProvider.checkpointsAvailable())
+          ? [
+              {
+                label: '$(debug-step-back) Checkpoints',
+                description: 'Rewind this session’s code or conversation to an earlier prompt',
+                action: 'checkpoints' as const,
+              },
+            ]
+          : []),
         { label: 'Model', kind: vscode.QuickPickItemKind.Separator },
         {
           label: '$(symbol-color) Switch model…',
@@ -1668,6 +1689,9 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
           break;
         case 'history':
           await vscode.commands.executeCommand('agi-workforce.showSessionsHistory');
+          break;
+        case 'checkpoints':
+          await sidebarProvider.showCheckpoints();
           break;
         case 'switch-model':
           await vscode.commands.executeCommand('agi-workforce.selectModel');
@@ -2529,7 +2553,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     register('agi-workforce.showSkills', () => manageSkills(cliCapabilities)),
     register('agi-workforce.showPlugins', () => managePlugins(cliCapabilities)),
     register('agi-workforce.showMcpServers', () => manageMcpServers(cliCapabilities)),
-    register('agi-workforce.showHooks', () => openCapabilitySurface(cliCapabilities, 'hooks')),
+    register('agi-workforce.showHooks', () => manageHooks(cliCapabilities)),
     register('agi-workforce.showInstructions', () =>
       openCapabilitySurface(cliCapabilities, 'instructions'),
     ),

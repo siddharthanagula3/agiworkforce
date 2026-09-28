@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import type { ComposerSendMeta } from '@/features/chat/components/Composer/ChatComposerNew';
+import { CHAT_OUTPUT_FORMATS } from '@/lib/chat-output-format';
 
 export const PROJECT_CHAT_HANDOFF_KEY = 'agi.project.pendingHandoff.v1';
 
@@ -21,6 +22,7 @@ const ProjectChatHandoffSchema = z.object({
     thinkingEnabled: z.boolean().optional(),
     codeExecutionEnabled: z.boolean().optional(),
     officeCreationEnabled: z.boolean().optional(),
+    officeOutputFormat: z.enum(CHAT_OUTPUT_FORMATS).optional(),
     researchEnabled: z.boolean().optional(),
     searchRequested: z.boolean().optional(),
     styleInstruction: z.string().max(10_000).optional(),

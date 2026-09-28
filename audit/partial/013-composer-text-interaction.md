@@ -256,16 +256,15 @@ Code: `apps/mobile/src/features/chat/components/ChatInput.tsx:210-231`
 
 - Done when: Before sending, the user can choose the output format for the reply (e.g. table, document, code, slides).
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | product call: Claude's message box has Output then Docs, with Slides and Design templates, in beta on Pro, Max, Team and Enterprise (support.claude.com/en/articles/16923645 and /17153992, fetched 2026-09-28); our nearest outputs are the Office files tool (docx, pptx, xlsx) and artifacts. Which formats and plans to offer decides the build. | ui |
-| desktop | partial | product call: Claude's message box has Output then Docs, with Slides and Design templates, in beta on Pro, Max, Team and Enterprise (support.claude.com/en/articles/16923645 and /17153992, fetched 2026-09-28); our nearest outputs are the Office files tool (docx, pptx, xlsx) and artifacts. Which formats and plans to offer decides the build. | ui |
 | mobile | partial | Add an output-format choice; the style picker covers tone and length only (Normal, Concise, Detailed, Creative). | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:1003-1003`, `apps/mobile/src/features/chat/components/StyleSelector.tsx:16-19`
+Code: `apps/mobile/src/features/chat/components/StyleSelector.tsx:16-19`
 
 ## S13.36: Dictation control.
 

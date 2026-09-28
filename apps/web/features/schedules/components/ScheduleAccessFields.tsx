@@ -43,6 +43,12 @@ const SOURCE_OPTIONS: ReadonlyArray<{
     label: 'The web',
     helper: 'Web search and reading pages.',
   },
+  {
+    key: 'recentChats',
+    label: 'Recent chats',
+    helper:
+      'Your chats from the last 24 hours. Read only while Search past chats is on in Settings.',
+  },
 ];
 
 export function ScheduleAccessFields({
@@ -94,7 +100,7 @@ export function ScheduleAccessFields({
             <div key={option.key} className="flex items-start gap-3">
               <Checkbox
                 id={id}
-                checked={sources[option.key]}
+                checked={sources[option.key] === true}
                 onCheckedChange={(checked) =>
                   onChange({ sources: { ...sources, [option.key]: checked === true } })
                 }

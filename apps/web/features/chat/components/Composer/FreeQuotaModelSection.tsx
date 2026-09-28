@@ -114,6 +114,10 @@ export function FreeQuotaModelSection({
           {enabled && experientialStatus === 'ready' && experientialCatalogue && (
             <div className="space-y-1" aria-label="Experiential Labs free models">
               <p className="px-1 text-xs font-medium text-foreground">Experiential Labs · Free</p>
+              <p className="px-1 text-xs text-muted-foreground">
+                These models get only your messages, not your instructions or memory: their
+                providers have not said they keep prompts out of training.
+              </p>
               <a href="/privacy" className="px-1 text-xs text-muted-foreground underline">
                 Data use
               </a>

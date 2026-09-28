@@ -25,6 +25,10 @@ import {
   type ManagedCloudOwner,
 } from '../cloud-bridge/managedCloudAuthority';
 import { cloudMirroringEnabledSnapshot } from '../privacy/cloudMirroring';
+import {
+  CODE_EXECUTION_OUTPUT_MAX_CHARS,
+  type ManagedCodeExecution,
+} from '../cloud-bridge/freeTrialClient';
 
 export const BROWSER_STORE_KEY = 'agi_browser_conversations_v2';
 const LEGACY_BROWSER_STORE_KEY = 'agi_browser_conversations_v1';
@@ -82,6 +86,7 @@ export interface HistoryMessage {
   provider?: string;
   generatedFiles?: GeneratedFileWire[];
   interactiveCards?: InteractiveCard[];
+  codeExecution?: ManagedCodeExecution;
   attachments?: SidePanelMessageAttachment[];
   pages?: SidePanelPageReference[];
   sources?: SidePanelSource[];
@@ -368,6 +373,8 @@ function normalizeHistoryMessage(
       interactiveCards: message['interactiveCards'],
     });
     if (interactiveCards.length > 0) normalized.interactiveCards = interactiveCards;
+    const codeExecution = readStoredCodeExecution(message['codeExecution']);
+    if (codeExecution) normalized.codeExecution = codeExecution;
     const sources = readStoredSources(message['sources']);
     if (sources.length > 0) normalized.sources = sources;
     const citations = readStoredSources(message['citations']);
@@ -416,6 +423,30 @@ function normalizeHistoryMessage(
     normalized.cloudSyncedFingerprint = message['cloudSyncedFingerprint'];
   }
   return normalized;
+}
+
+function readStoredCodeExecution(value: unknown): ManagedCodeExecution | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const record = value as Record<string, unknown>;
+  const status = record['status'];
+  if (status !== 'completed' && status !== 'failed') return undefined;
+  const output = (field: 'stdout' | 'stderr'): string =>
+    typeof record[field] === 'string'
+      ? (record[field] as string).slice(0, CODE_EXECUTION_OUTPUT_MAX_CHARS)
+      : '';
+  const returnCode = record['returnCode'];
+  const errorCode = record['errorCode'];
+  return {
+    status,
+    stdout: output('stdout'),
+    stderr: output('stderr'),
+    ...(typeof returnCode === 'number' && Number.isInteger(returnCode) ? { returnCode } : {}),
+    ...(typeof errorCode === 'string' &&
+    errorCode.length <= 80 &&
+    !containsControlCharacter(errorCode)
+      ? { errorCode }
+      : {}),
+  };
 }
 
 function containsControlCharacter(value: string): boolean {
