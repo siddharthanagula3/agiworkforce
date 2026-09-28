@@ -228,6 +228,8 @@ pub struct AgentSession {
     /// runtime cannot keep issuing provider requests or writing memory after
     /// its shutdown acknowledgment.
     memory_consolidation_tasks: Vec<tokio::task::JoinHandle<()>>,
+    memory_extracted_through: usize,
+    memory_extracted_at: std::time::Instant,
     pub(crate) managed_session: Option<ManagedSession>,
     pub(crate) managed_session_path: Option<PathBuf>,
     pub(crate) session_activity: crate::runtime::session_activity::SharedSessionActivity,
@@ -699,6 +701,8 @@ impl AgentSession {
             subagent_depth: 0,
             team_manager: None,
             memory_consolidation_tasks: Vec::new(),
+            memory_extracted_through: 0,
+            memory_extracted_at: std::time::Instant::now(),
             managed_session: None,
             managed_session_path: None,
             session_activity: Default::default(),
@@ -1760,14 +1764,15 @@ impl AgentSession {
     /// Persist the session-end memory summary using the active model/provider
     /// boundary. Local sessions always take the deterministic on-device path.
     pub async fn finalize_memory(&self, config: &CliConfig) -> Result<()> {
-        if !self.memory_enabled || !self.messages.iter().any(|message| message.role != "system") {
+        let unextracted = &self.messages[self.memory_extracted_through.min(self.messages.len())..];
+        if !self.memory_enabled || !unextracted.iter().any(|message| message.role != "system") {
             return Ok(());
         }
         let home = CliConfig::config_dir()?;
         crate::memory_pipeline::MemoryPipeline::extract_session_summary(
             &home,
             &self.runtime_session_id,
-            &self.messages,
+            unextracted,
             config,
             &self.provider,
             &self.model,
