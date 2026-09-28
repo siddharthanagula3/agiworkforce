@@ -92,6 +92,13 @@ build it, and the audit cell is recorded as not applicable by this decision.
   no member approval requests, no Gmail labels, no transcription or speech
   tools, no subagent or approval-request tool, no retry or per-tool cost, and
   custom servers are removed and re-added instead of edited.
+- **Project extras (S23.04, S23.10, S23.16, S23.18, S23.19, S23.26, S23.27, S23.31,
+  S23.38).** Claude and ChatGPT projects have no cover image, notes editor,
+  default model, linked folder or repo, copy-chat, save-answer-to-knowledge,
+  full export or import, or parent steering conversation.
+- **VS Code extras (S4.09, S4.13, S4.17, S4.23, S4.37, S4.38, S4.40).** Claude Code
+  in VS Code has no projects, library, AGI Work, schedule creation, account
+  connection, model catalog or billing; it hands those to the web.
 - **Periodic usage recap (S42.20).** Neither delivers one; Reflect builds a recap
   on demand.
 - **Search domain, source-type and per-answer source controls (S34.08, S34.09,
