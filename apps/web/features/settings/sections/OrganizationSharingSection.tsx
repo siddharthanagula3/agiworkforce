@@ -9,14 +9,22 @@ import { getAuthToken } from '@shared/lib/get-auth-token';
 import {
   useOrganizationSharedOverview,
   useSetSharedProjectMemberAccess,
+  useSetSharedProjectMembersAccess,
   useShareConnectorWithOrganization,
   useShareProjectWithOrganization,
   useUnshareConnectorFromOrganization,
   useUnshareArtifactFromOrganization,
   useUnshareConversationFromOrganization,
   useUnshareProjectFromOrganization,
+  type OrgMemberProjectAccess,
   type OrgSharedOverview,
+  type OrgSharedProject,
 } from '../hooks/use-settings-queries';
+import {
+  MemberIdentity,
+  MemberPicker,
+  memberDisplayName,
+} from '@shared/components/people/MemberPicker';
 
 const cardStyle = {
   border: '1px solid var(--settings-border)',
@@ -153,11 +161,162 @@ async function fetchOwnConnectors(): Promise<OwnConnector[]> {
   return json.connectors ?? [];
 }
 
+const ACCESS_LABELS: Record<OrgMemberProjectAccess, string> = {
+  read: 'Can view',
+  write: 'Can edit',
+  none: 'No access',
+};
+
+const ROLE_LABELS: Record<OrgSharedOverview['members'][number]['role'], string> = {
+  owner: 'Workspace owner',
+  admin: 'Admin',
+  member: 'Member',
+  viewer: 'Viewer',
+};
+
+function ProjectPeopleAccess({
+  project,
+  overview,
+}: {
+  project: OrgSharedProject;
+  overview: OrgSharedOverview;
+}) {
+  const setAccess = useSetSharedProjectMemberAccess();
+  const setManyAccess = useSetSharedProjectMembersAccess();
+  const [picked, setPicked] = useState<string[]>([]);
+  const [pickedAccess, setPickedAccess] = useState<'write' | 'none'>('write');
+  const busy = setAccess.isPending || setManyAccess.isPending;
+
+  const grantByUser = new Map(project.memberGrants.map((grant) => [grant.userId, grant.access]));
+  const owner = overview.members.find((member) => member.userId === project.ownerUserId);
+  const specific = overview.members.filter(
+    (member) =>
+      member.userId !== project.ownerUserId &&
+      (grantByUser.get(member.userId) === 'write' || grantByUser.get(member.userId) === 'none'),
+  );
+  const candidates = overview.members.filter(
+    (member) => member.userId !== project.ownerUserId && !specific.includes(member),
+  );
+  const addId = `add-access-${project.projectId}`;
+
+  return (
+    <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
+      <ul
+        style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 'var(--space-1)' }}
+      >
+        {owner ? (
+          <li
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 'var(--space-2)',
+            }}
+          >
+            <MemberIdentity member={owner} detail={ROLE_LABELS[owner.role]} />
+            <span style={{ color: 'var(--text-3)', fontSize: 12, flexShrink: 0 }}>
+              Project owner
+            </span>
+          </li>
+        ) : null}
+        {specific.map((member) => {
+          const controlId = `access-${project.projectId}-${member.userId}`;
+          const name = memberDisplayName(member);
+          return (
+            <li
+              key={member.userId}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 'var(--space-2)',
+              }}
+            >
+              <MemberIdentity member={member} detail={ROLE_LABELS[member.role]} />
+              <label htmlFor={controlId} style={{ position: 'absolute', left: -9999 }}>
+                Access for {name}
+              </label>
+              <select
+                id={controlId}
+                value={grantByUser.get(member.userId) ?? 'read'}
+                style={{ ...selectStyle, flexShrink: 0 }}
+                disabled={busy}
+                onChange={(event) => {
+                  const next = event.target.value as OrgMemberProjectAccess;
+                  setAccess.mutate({
+                    projectId: project.projectId,
+                    userId: member.userId,
+                    access: next === 'read' ? 'inherit' : next,
+                  });
+                }}
+              >
+                <option value="read">{ACCESS_LABELS.read}</option>
+                <option value="write">{ACCESS_LABELS.write}</option>
+                <option value="none">{ACCESS_LABELS.none}</option>
+              </select>
+            </li>
+          );
+        })}
+        <li style={{ color: 'var(--text-3)', fontSize: 12 }}>
+          {specific.length === 0
+            ? 'Everyone in this organization can view.'
+            : 'Everyone else in this organization can view.'}
+        </li>
+      </ul>
+      {candidates.length > 0 ? (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'flex-end',
+            gap: 'var(--space-2)',
+            flexWrap: 'wrap',
+          }}
+        >
+          <div style={{ flex: '1 1 260px', minWidth: 0 }}>
+            <MemberPicker
+              label="Add people"
+              members={candidates}
+              selectedIds={picked}
+              onChange={setPicked}
+              disabled={busy}
+            />
+          </div>
+          <label htmlFor={addId} style={{ position: 'absolute', left: -9999 }}>
+            Access for the people you add
+          </label>
+          <select
+            id={addId}
+            value={pickedAccess}
+            style={{ ...selectStyle, minHeight: 36 }}
+            disabled={busy}
+            onChange={(event) => setPickedAccess(event.target.value === 'none' ? 'none' : 'write')}
+          >
+            <option value="write">{ACCESS_LABELS.write}</option>
+            <option value="none">{ACCESS_LABELS.none}</option>
+          </select>
+          <button
+            type="button"
+            style={{ ...buttonStyle, minHeight: 36 }}
+            disabled={picked.length === 0 || busy}
+            onClick={() =>
+              setManyAccess.mutate(
+                { projectId: project.projectId, userIds: picked, access: pickedAccess },
+                { onSuccess: () => setPicked([]) },
+              )
+            }
+          >
+            {setManyAccess.isPending ? 'Saving…' : 'Add'}
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function SharedProjects({ overview }: { overview: OrgSharedOverview }) {
   const [selected, setSelected] = useState('');
   const shareProject = useShareProjectWithOrganization();
   const unshareProject = useUnshareProjectFromOrganization();
-  const setAccess = useSetSharedProjectMemberAccess();
   const { confirm, dialog: confirmDialog } = useConfirmAction();
 
   const ownProjects = useQuery<OwnProject[], Error>({
@@ -288,58 +447,7 @@ function SharedProjects({ overview }: { overview: OrgSharedOverview }) {
                 </div>
 
                 {overview.canManageSharing ? (
-                  <div style={{ display: 'grid', gap: 'var(--space-1)' }}>
-                    {overview.members.map((member) => {
-                      const grant = project.memberGrants.find((g) => g.userId === member.userId);
-                      const value =
-                        grant?.access === 'none'
-                          ? 'none'
-                          : grant?.access === 'write'
-                            ? 'write'
-                            : 'read';
-                      const controlId = `access-${project.projectId}-${member.userId}`;
-                      return (
-                        <div
-                          key={member.userId}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 'var(--space-2)',
-                            fontSize: 12,
-                          }}
-                        >
-                          <label
-                            htmlFor={controlId}
-                            style={{ flex: 1, color: 'var(--text-2)', wordBreak: 'break-all' }}
-                          >
-                            {member.userId} ({member.role})
-                          </label>
-                          <select
-                            id={controlId}
-                            value={value}
-                            style={selectStyle}
-                            disabled={setAccess.isPending}
-                            onChange={(event) =>
-                              setAccess.mutate({
-                                projectId: project.projectId,
-                                userId: member.userId,
-                                access:
-                                  event.target.value === 'none'
-                                    ? 'none'
-                                    : event.target.value === 'write'
-                                      ? 'write'
-                                      : 'inherit',
-                              })
-                            }
-                          >
-                            <option value="read">Can view</option>
-                            <option value="write">Can edit</option>
-                            <option value="none">No access</option>
-                          </select>
-                        </div>
-                      );
-                    })}
-                  </div>
+                  <ProjectPeopleAccess project={project} overview={overview} />
                 ) : null}
               </li>
             );

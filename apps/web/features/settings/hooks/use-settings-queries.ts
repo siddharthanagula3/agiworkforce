@@ -1604,12 +1604,21 @@ export interface OrgSharedConversation {
   createdAt: string;
 }
 
+export interface OrgSharingMember {
+  userId: string;
+  role: OrgSharingRole;
+  joinedAt: string;
+  name: string;
+  email: string;
+  avatarUrl: string | null;
+}
+
 export interface OrgSharedOverview {
   organizationId: string;
   currentUserId: string;
   currentUserRole: OrgSharingRole;
   canManageSharing: boolean;
-  members: { userId: string; role: OrgSharingRole; joinedAt: string }[];
+  members: OrgSharingMember[];
   sharedProjects: OrgSharedProject[];
   sharedConnectors: OrgSharedConnector[];
   sharedArtifacts: OrgSharedArtifact[];
@@ -1724,6 +1733,36 @@ export function useSetSharedProjectMemberAccess(): UseMutationResult<
     },
     onError: (error: Error) =>
       toast.error(toUserMessage(error, 'The request failed. Please try again.')),
+  });
+}
+
+export function useSetSharedProjectMembersAccess(): UseMutationResult<
+  void,
+  Error,
+  { projectId: string; userIds: string[]; access: OrgMemberProjectAccess }
+> {
+  const queryClient: QueryClient = useQueryClient();
+  return useMutation<
+    void,
+    Error,
+    { projectId: string; userIds: string[]; access: OrgMemberProjectAccess }
+  >({
+    mutationFn: async ({ projectId, userIds, access }) => {
+      for (const userId of userIds) {
+        await sharingRequest(`/api/settings/organization/shared/projects/${projectId}`, 'PATCH', {
+          userId,
+          access,
+        });
+      }
+    },
+    onSuccess: (_result, { userIds }) => {
+      toast.success(
+        userIds.length === 1 ? 'Access updated' : `Access updated for ${userIds.length} people`,
+      );
+    },
+    onError: (error: Error) =>
+      toast.error(toUserMessage(error, 'The request failed. Please try again.')),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ORG_SHARED_QUERY_KEY }),
   });
 }
 
