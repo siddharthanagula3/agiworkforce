@@ -311,3 +311,13 @@ Video editing (S104.08) is not built: neither leader documents one. An
 integrated terminal on the web (S104.T09) is not built: ChatGPT offers it only
 in its desktop app and Claude Code on the web has no terminal input. Checked
 2026-09-28.
+
+## D-2026-09-28-19 Profile updates and legal holds stay out of the public API
+
+Neither leader's public API changes a user's profile: OpenAI's Admin API
+updates roles only and Anthropic's Update User changes the organization role
+only. Neither leader's compliance API places or releases a legal hold; both
+export records that the customer holds with its own tools. So the public API
+keeps GET /api/me and read access to held records and preservation status,
+while profile edits stay a signed-in client action and holds stay an admin
+console action (S85.01 api, S87.37 api). Checked 2026-09-28.

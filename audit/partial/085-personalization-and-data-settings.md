@@ -16,9 +16,8 @@ nothing is left.
 | --- | --- | --- | --- |
 | mobile | partial | partials/auth 68949fe36: the Full Name field now saves to the account display name through PATCH /api/me; there is still no profile photo upload on mobile | ui |
 | cli | missing | Not built on this surface. |  |
-| api | partial | GET /api/me (documented) returns the profile; updating the name or photo (PATCH /api/me) works for signed-in clients but is not part of the documented public API. | api |
 
-Code: `apps/mobile/src/features/settings/personalization/index.tsx:334-334`, `apps/web/app/api/me/route.ts:347-347`
+Code: `apps/mobile/src/features/settings/personalization/index.tsx:334-334`
 
 ## S85.03: Communication style.
 
