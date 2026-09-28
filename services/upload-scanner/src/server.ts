@@ -30,9 +30,10 @@ export interface ScannerOptions {
   maxBytes?: number;
   scanDeadlineMs?: number;
   now?: () => number;
+  probe?: () => Promise<ClamdHealth>;
 }
 
-interface ClamdHealth {
+export interface ClamdHealth {
   scanning: boolean;
   signatures: SignatureStatus | null;
 }
@@ -132,7 +133,7 @@ async function probeClamd(clamd: ClamdAddress): Promise<ClamdHealth> {
   return { scanning: verdict?.kind === 'infected', signatures };
 }
 
-function cachedProbe(clamd: ClamdAddress): () => Promise<ClamdHealth> {
+export function clamdProbe(clamd: ClamdAddress): () => Promise<ClamdHealth> {
   let last: { at: number; health: Promise<ClamdHealth> } | null = null;
   return () => {
     const at = Date.now();
@@ -175,7 +176,7 @@ export function createScannerServer(options: ScannerOptions): Server {
   const maxBytes = options.maxBytes ?? MAX_SCAN_BYTES;
   const deadlineMs = options.scanDeadlineMs ?? SCAN_DEADLINE_MS;
   const now = options.now ?? Date.now;
-  const probe = cachedProbe(options.clamd);
+  const probe = options.probe ?? clamdProbe(options.clamd);
 
   const server = createServer((req, res) => {
     const path = (req.url ?? '/').split('?', 1)[0];
