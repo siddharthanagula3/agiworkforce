@@ -85,15 +85,14 @@ Code: `apps/mobile/app/(app)/chat/[id].tsx:1186-1192`, `apps/mobile/app/(app)/ch
 
 - Done when: An artifact share dialog publishes it to a link, lets the user copy it and choose who can open it, and can take it down.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Publish, copy link and share link work, but mobile has no way to unpublish an artifact or choose who can open it (workspace vs anyone). | ui |
-| cli | partial | Publish and unpublish work, but the CLI cannot choose who can open the link (no audience option). | ui |
 | vscode | partial | VS Code can only open an already-published artifact's link; it cannot publish, copy the link, change the audience or unpublish. | ui |
 
-Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:405-418`, `apps/mobile/src/features/chat/services/artifactPublishing.ts:13-25`, `apps/cli/src/lib.rs:1053-1068`, `apps/cli/src/lib.rs:1976-2027`
+Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:405-418`, `apps/mobile/src/features/chat/services/artifactPublishing.ts:13-25`, `apps/extension-vscode/package.json:597-600`, `apps/extension-vscode/src/features/artifacts/artifactActions.ts:151-155`
 
 ## S10.11: Publish generated application.
 
@@ -310,18 +309,6 @@ Code: `apps/extension-vscode/src/core/commandSetup.ts:1129-1132`
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/mobile/stores/chat/chatExecutionStore.ts:584-584`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:3329-3329`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:3312-3312`
-
-## S10.28: Usage-limit notice.
-
-- Done when: When a usage limit is reached, the user sees which limit, when it resets, and what they can do.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | The paywall message is never shown: the server sends *_limit_reached, not kind "paywall", so the CLI prints a generic error without which limit or when it resets. | handler |
-
-Code: `apps/cli/src/usage_summary.rs:283-285`, `apps/cli/src/errors.rs:348-360`, `apps/cli/src/usage_summary.rs:146-170`
 
 ## S10.29: Credit-purchase dialog.
 

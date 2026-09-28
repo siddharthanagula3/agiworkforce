@@ -6,6 +6,7 @@ import type { Project, ProjectGalleryCreateInput } from '@agiworkforce/unified-c
 import { useRouter, useSearchParams } from 'next/navigation';
 import { CreateProjectDialog } from '@features/chat/components/dialogs/CreateProjectDialog';
 import { ProjectSettingsDialog } from '@features/projects/components/ProjectSettingsDialog';
+import { ProjectShareDialog } from '@features/projects/components/ProjectShareDialog';
 import { useManagedCloudProjects, useProjectStore } from '@features/projects';
 import { webManagedCloudProjects } from '@/features/projects/services/managed-cloud-projects';
 import { WebAppShell } from '@shared/components/layout/WebAppShell';
@@ -132,15 +133,8 @@ export default function ProjectsPage() {
     [updateProject],
   );
 
-  const handleShareProject = useCallback(async (project: Project) => {
-    const url = `${window.location.origin}/chat/projects/${encodeURIComponent(project.id)}`;
-    try {
-      await navigator.clipboard.writeText(url);
-      toast.success('Project link copied');
-    } catch (error) {
-      toast.error(toUserMessage(error, 'Could not copy the project link'));
-    }
-  }, []);
+  const [shareTarget, setShareTarget] = useState<Project | null>(null);
+  const handleShareProject = useCallback((project: Project) => setShareTarget(project), []);
 
   const handleDeleteProjectServer = useCallback(
     async (project: Project, alreadyRemovedFromView: boolean) => {
@@ -399,7 +393,7 @@ export default function ProjectsPage() {
                 onSelect={(project) => {
                   router.push(projectPath(project));
                 }}
-                onShareProject={(project) => void handleShareProject(project)}
+                onShareProject={handleShareProject}
                 onEditProject={(project) => setEditProject(project)}
                 onArchiveProject={(project) => {
                   void handleArchiveProjectServer(project, true);
@@ -481,7 +475,7 @@ export default function ProjectsPage() {
                           setActiveProject(p.id);
                           router.push(projectPath(p));
                         }}
-                        onShare={(p) => void handleShareProject(p)}
+                        onShare={handleShareProject}
                         onEdit={(p) => setEditProject(p)}
                         onArchive={(p) => void handleArchiveProjectServer(p, false)}
                         onUnarchive={(p) => void handleUnarchiveProjectServer(p)}
@@ -540,6 +534,17 @@ export default function ProjectsPage() {
               removeProject(id);
               setEditProject(null);
             }}
+          />
+        )}
+        {shareTarget && (
+          <ProjectShareDialog
+            open={!!shareTarget}
+            onOpenChange={(open) => {
+              if (!open) setShareTarget(null);
+            }}
+            projectId={shareTarget.id}
+            projectName={shareTarget.name}
+            isOwner={!shareTarget.isOrgShared}
           />
         )}
       </section>

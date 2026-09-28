@@ -503,6 +503,11 @@
         "icon": "$(cloud-download)"
       },
       {
+        "command": "agi-workforce.showApprovalHistory",
+        "title": "AGI Workforce: Show Approval History",
+        "icon": "$(checklist)"
+      },
+      {
         "command": "agi-workforce.showSessionActivity",
         "title": "AGI Workforce: Show Session Activity",
         "icon": "$(history)"

@@ -22,15 +22,14 @@ Code: `apps/extension-vscode/src/core/commandSetup.ts:1243-1278`
 
 - Done when: A destination lists the user's archived conversations and lets them open, restore or delete them.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Sessions can be archived and unarchived by id (`agi session archive\|unarchive`), but no command lists archived sessions; add an archived listing. | ui |
 | vscode | partial | A session can be archived from the tree, but the tree lists threads with includeArchived: false and nothing lists or restores archived sessions. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/cli/src/lib.rs:1255-1258`, `apps/cli/src/lib.rs:2847-2866`, `apps/extension-vscode/src/core/commandSetup.ts:1168-1182`, `apps/extension-vscode/src/features/trees/conversationTreeProvider.ts:109-113`
+Code: `apps/extension-vscode/src/core/commandSetup.ts:1168-1182`, `apps/extension-vscode/src/features/trees/conversationTreeProvider.ts:109-113`
 
 ## S4.05: Pinned conversations.
 
@@ -48,14 +47,13 @@ Code: `apps/cli/src/lib.rs:1255-1258`, `apps/cli/src/lib.rs:2847-2866`, `apps/ex
 
 - Done when: Opening a project shows its home: name, description/instructions summary, and entry points to its chats and files.
 - Wave: 2
-- Already works on: web, desktop, vscode, chrome
+- Already works on: web, desktop, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | The cloud project screen shows only the name plus Chats and Sources tabs; the summary header (description, instructions, members, last used) renders only after fetchProject, which is blocked while FEATURES.crossDeviceSync is off. | flag-off |
-| cli | partial | `agi projects list` prints each project's id, name and description; add a command that shows one project (instructions, files, chats). | ui |
 
-Code: `apps/mobile/app/(app)/projects/[id].tsx:222-226`, `apps/mobile/app/(app)/projects/[id].tsx:170-175`, `apps/cli/src/lib.rs:1831-1851`
+Code: `apps/mobile/app/(app)/projects/[id].tsx:222-226`, `apps/mobile/app/(app)/projects/[id].tsx:170-175`
 
 ## S4.08: Project conversations.
 
@@ -301,22 +299,6 @@ Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:72-73`, `
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S4.29: Video studio.
-
-- Done when: A dedicated video studio where the user prompts, configures and generates videos and sees results/history in one place.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Videos are generated from a chat composer mode ("Create video") as in-chat cards; there is no dedicated video studio page. | ui |
-| desktop | partial | Videos are generated from a chat composer mode ("Create video") as in-chat cards; there is no dedicated video studio page. | ui |
-| mobile | partial | Videos are generated from the chat composer with an in-chat progress card; there is no dedicated video studio screen. | ui |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:72-73`, `apps/web/app/api/media/video/generate/route.ts:1642-1643`, `apps/mobile/src/features/chat/actions/runVideoGenerationTurn.ts:65-80`, `apps/mobile/src/features/chat/components/VideoGenProgress.tsx:1-40`
-
 ## S4.30: Media job history.
 
 - Done when: A media job history lists image/video generation jobs with their status (queued, running, failed, done) and links to results.
@@ -365,17 +347,15 @@ Code: `apps/web/features/code/CloudCodePage.tsx:1122-1127`, `apps/web/features/n
 
 - Done when: A signed-in destination lists the user's custom assistants (GPT/Gem-style) and lets them open, create, edit and delete them.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | /agents lists, shows, creates and validates file-based agents, but has no edit or delete subcommand; users edit or remove the markdown file by hand. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/tui/tui_app.rs:3647-3662`, `apps/cli/src/agents.rs:395-420`
 
 ## S4.34: Custom-assistant builder.
 
