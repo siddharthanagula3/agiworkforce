@@ -249,6 +249,15 @@ const ALLOWLIST = [
       'so there is no owner to constrain by',
   },
   {
+    match: /lib\/support\/tickets\/recovery\.ts$/,
+    tables: ['profiles'],
+    reason:
+      'an account-recovery request comes from someone who has lost access, so there is no ' +
+      'session to scope by: the email names the account, the caller gets the same answer ' +
+      'whether or not a profile matches, and the matched id only files a support ticket and a ' +
+      'security event for staff review',
+  },
+  {
     match: /lib\/server\/security-log-retention\.ts$/,
     tables: ['security_audit_logs'],
     reason:
