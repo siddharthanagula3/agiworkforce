@@ -38,13 +38,13 @@ Code: `apps/mobile/src/features/projects/components/ProjectSourcesTab.tsx:199-19
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The Google Drive and Slack tiles in Add sources only open the connectors page; nothing is imported from them into the project. | handler |
-| desktop | partial | The Google Drive and Slack tiles in Add sources only open the connectors page; nothing is imported from them into the project. | handler |
+| web | partial | Evidence was stale: the Google Drive tile now opens the Picker and imports the chosen files as project sources (same code as S23.08); only the connect fallback routes to /connectors. Waits on the same owner step as S23.08 (GOOGLE_PICKER_API_KEY, GOOGLE_PICKER_APP_ID) and a live Picker check. Slack declined (no leader imports Slack into a project). | config |
+| desktop | partial | Evidence was stale: the Google Drive tile now opens the Picker and imports the chosen files as project sources (same code as S23.08); only the connect fallback routes to /connectors. Waits on the same owner step as S23.08 (GOOGLE_PICKER_API_KEY, GOOGLE_PICKER_APP_ID) and a live Picker check. Slack declined (no leader imports Slack into a project). | config |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/projects/components/AddSourcesModal.tsx:279-279`, `apps/web/features/projects/components/AddSourcesModal.tsx:282-282`
+Code: `apps/web/features/projects/components/AddSourcesModal.tsx:126-126`, `apps/web/features/projects/components/AddSourcesModal.tsx:295-295`
 
 ## S37.11: Add written note.
 

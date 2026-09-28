@@ -148,19 +148,6 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1424-1424`
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S41.14: Local-only conversation.
-
-- Done when: The user can keep conversations only on their device, never uploaded to the account.
-- Wave: 3
-- Already works on: mobile, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Local-model chats are forced temporary, so there is no durable device-only conversation on web. | persistence |
-| desktop | partial | Local-model chats are forced temporary, so there is no durable device-only conversation on web. | persistence |
-
-Code: `apps/web/features/chat/pages/WebChatPage.tsx:1976-1984`
-
 ## S41.15: Local-only file collection.
 
 - Done when: The user can keep a collection of files on the device that chats can use without uploading them.

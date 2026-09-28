@@ -119,30 +119,30 @@ Code: `apps/cli/src/platform/runtime/tool_catalog.rs:203-208`
 ## S28.10: HTML preview.
 
 - Done when: HTML artifacts render as a live, interactive preview.
-- Wave: 3
+- Wave: 2
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The cited SandboxedIframe branch (src=sandboxOrigin, 217-229) exists only when getSandboxOrigin() returns a value from NEXT_PUBLIC_SANDBOX_ORIGIN (artifact-sandbox.ts:24-43); otherwise the component renders the srcDoc fallback (236-250), and fallbackWillRunScripts (75-77) marks any document with an inline script as dead because the page CSP in proxy.ts:39 allows only nonce'd scripts. A live, interactive preview is therefore off by default behind an env gate; whether production sets it is S96.16's open production-state question. |  |
-| desktop | partial | The cited SandboxedIframe branch (src=sandboxOrigin, 217-229) exists only when getSandboxOrigin() returns a value from NEXT_PUBLIC_SANDBOX_ORIGIN (artifact-sandbox.ts:24-43); otherwise the component renders the srcDoc fallback (236-250), and fallbackWillRunScripts (75-77) marks any document with an inline script as dead because the page CSP in proxy.ts:39 allows only nonce'd scripts. A live, interactive preview is therefore off by default behind an env gate; whether production sets it is S96.16's open production-state question. Hosted-web inherits the same gate. |  |
+| web | partial | switch-on: set NEXT_PUBLIC_SANDBOX_ORIGIN=https://sandbox.agiworkforce.com on the web production env and redeploy infrastructure/sandbox first (live check 2026-09-28: sandbox.agiworkforce.com answers 200 with the repo CSP and frame-ancestors, but its index.html differs from the repo copy, which carries the artifact runtime). Then a live check that an HTML and a React artifact run scripts in chat. | flag-off |
+| desktop | partial | switch-on: set NEXT_PUBLIC_SANDBOX_ORIGIN=https://sandbox.agiworkforce.com on the web production env and redeploy infrastructure/sandbox first (live check 2026-09-28: sandbox.agiworkforce.com answers 200 with the repo CSP and frame-ancestors, but its index.html differs from the repo copy, which carries the artifact runtime). Then a live check that an HTML and a React artifact run scripts in chat. | flag-off |
 | mobile | partial | HTML previews render with JavaScript disabled (only Mermaid enables it), so interactive pages show layout only. | states |
 | cli | partial | The cited lines open a browser URL: the share page when published, else the web conversation (browse_url, artifacts.rs:449-459). For an unpublished artifact that is a link-out to the web app, which the same auditor scored as partial/surface-only on S26.14 cli with this exact evidence. Done is inconsistent with that call and with R-a; partial with surface-only matches. |  |
 
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1800-1812`, `apps/web/features/chat/components/SandboxedIframe.tsx:217-229`, `infrastructure/sandbox/index.html:459-462`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:638-639`
+Code: `apps/web/lib/artifact-sandbox.ts:93-94`, `infrastructure/sandbox/deploy-target.json:3-3`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:638-639`, `apps/mobile/src/features/chat/components/SafeArtifactPreview.tsx:30-36`
 
 ## S28.11: React or supported framework preview.
 
 - Done when: React (or other supported framework) components render as a live preview.
-- Wave: 3
+- Wave: 2
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The cited SandboxedIframe branch (src=sandboxOrigin, 217-229) exists only when getSandboxOrigin() returns a value from NEXT_PUBLIC_SANDBOX_ORIGIN (artifact-sandbox.ts:24-43); otherwise the component renders the srcDoc fallback (236-250), and fallbackWillRunScripts (75-77) marks any document with an inline script as dead because the page CSP in proxy.ts:39 allows only nonce'd scripts. A live, interactive preview is therefore off by default behind an env gate; whether production sets it is S96.16's open production-state question. |  |
-| desktop | partial | The cited SandboxedIframe branch (src=sandboxOrigin, 217-229) exists only when getSandboxOrigin() returns a value from NEXT_PUBLIC_SANDBOX_ORIGIN (artifact-sandbox.ts:24-43); otherwise the component renders the srcDoc fallback (236-250), and fallbackWillRunScripts (75-77) marks any document with an inline script as dead because the page CSP in proxy.ts:39 allows only nonce'd scripts. A live, interactive preview is therefore off by default behind an env gate; whether production sets it is S96.16's open production-state question. Hosted-web inherits the same gate. |  |
+| web | partial | switch-on: set NEXT_PUBLIC_SANDBOX_ORIGIN=https://sandbox.agiworkforce.com on the web production env and redeploy infrastructure/sandbox first (live check 2026-09-28: sandbox.agiworkforce.com answers 200 with the repo CSP and frame-ancestors, but its index.html differs from the repo copy, which carries the artifact runtime). Then a live check that an HTML and a React artifact run scripts in chat. | flag-off |
+| desktop | partial | switch-on: set NEXT_PUBLIC_SANDBOX_ORIGIN=https://sandbox.agiworkforce.com on the web production env and redeploy infrastructure/sandbox first (live check 2026-09-28: sandbox.agiworkforce.com answers 200 with the repo CSP and frame-ancestors, but its index.html differs from the repo copy, which carries the artifact runtime). Then a live check that an HTML and a React artifact run scripts in chat. | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | The cited lines open a browser URL: the share page when published, else the web conversation (browse_url, artifacts.rs:449-459). For an unpublished artifact that is a link-out to the web app, which the same auditor scored as partial/surface-only on S26.14 cli with this exact evidence. Done is inconsistent with that call and with R-a; partial with surface-only matches. |  |
 
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1800-1812`, `infrastructure/sandbox/index.html:360-383`, `apps/web/features/chat/components/SandboxedIframe.tsx:217-229`, `apps/cli/src/lib.rs:1955-1975`
+Code: `apps/web/lib/artifact-sandbox.ts:93-94`, `infrastructure/sandbox/deploy-target.json:3-3`, `apps/cli/src/lib.rs:1955-1975`, `apps/cli/src/cloud/artifacts.rs:450-460`
 
 ## S28.16: Runtime-error overlay.
 
