@@ -1,4 +1,4 @@
--- Reversal of 0318 : Code sessions are owner-only again.
+-- Reversal of 0320 : Code sessions are owner-only again.
 --
 -- WHAT THIS COSTS: every shared Code session becomes private and its links stop
 -- opening. The sessions themselves are untouched.
@@ -15,6 +15,6 @@ alter table public.cloud_code_sessions
   drop column if exists share_visibility;
 
 delete from public.schema_migrations
- where filename = '0318_cloud_code_session_sharing.sql';
+ where filename = '0320_cloud_code_session_sharing.sql';
 
 commit;

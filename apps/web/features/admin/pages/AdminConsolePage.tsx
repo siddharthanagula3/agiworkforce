@@ -116,6 +116,14 @@ const ADMIN_CONTROLS: ReadonlyArray<{
     external: true,
   },
   {
+    name: 'Plugin moderation',
+    href: '/admin/plugins',
+    service: 'GET /api/admin/plugins, GET/POST /api/plugins/{id}/lifecycle',
+    detail:
+      'Find any plugin in the registry, read its versions and lifecycle history, publish a version in review, deprecate or suspend a version with a recorded reason, and roll a plugin back.',
+    external: true,
+  },
+  {
     name: 'Background jobs',
     href: '/operator#jobs',
     service: 'GET/POST /api/admin/background-jobs',

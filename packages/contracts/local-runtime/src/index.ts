@@ -61,6 +61,7 @@ export type {
   DeveloperHostModel,
   DeveloperModelOption,
   DeveloperModelUnreachable,
+  DeveloperRuntimeFeatures,
   DeveloperRuntimeModels,
   DeveloperRuntimeStatus,
   DeveloperRuntimeUnavailable,
@@ -202,6 +203,7 @@ export type {
 } from './inference';
 
 export {
+  CODE_HOME_DEEP_LINK_ID,
   DEFAULT_SESSION_COMPLETION_ALERTS,
   DESKTOP_DEEP_LINK_SCHEME,
   DESKTOP_DEEP_LINK_TARGETS,

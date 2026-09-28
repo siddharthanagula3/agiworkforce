@@ -172,6 +172,7 @@ pub struct ApprovalRequest {
     pub kind: ApprovalRequestKind,
     pub summary: String,
     pub detail: Vec<String>,
+    pub proposal: Option<String>,
 }
 
 impl ApprovalRequest {
@@ -181,7 +182,13 @@ impl ApprovalRequest {
             kind,
             summary: summary.into(),
             detail,
+            proposal: None,
         }
+    }
+
+    pub fn with_proposal(mut self, content: impl Into<String>) -> Self {
+        self.proposal = Some(content.into());
+        self
     }
 }
 

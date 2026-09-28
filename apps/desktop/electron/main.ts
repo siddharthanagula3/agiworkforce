@@ -134,9 +134,15 @@ import {
   pickableCaptureSources,
   type WindowFrame,
 } from './garnishCore';
-import { destroyQuickAsk, toggleQuickAsk, warmUpQuickAsk } from './quickAsk';
+import {
+  configureQuickAskBridge,
+  destroyQuickAsk,
+  toggleQuickAsk,
+  warmUpQuickAsk,
+} from './quickAsk';
 import { deliverBrowserHandoff } from './browserHandoff';
-import { captureToChat } from './screenshot';
+import { captureToChat, captureWindowToChat } from './screenshot';
+import { frontWindowIdOutside } from './runtime/computerUseService';
 import { getPreferences, getShortcuts, saveSettings } from './settingsStore';
 import {
   registerGarnishShortcuts,
@@ -1181,6 +1187,7 @@ const garnishHandlers = {
   onNewChat: openNewChat,
   onQuickAsk: () => toggleQuickAsk(mainWindow),
   onScreenshot: () => void captureToChat(mainWindow),
+  onWindowShot: () => void captureWindowToChat(mainWindow, () => frontWindowIdOutside(process.pid)),
   onVoice: () => void toggleGlobalDictation(mainWindow),
   onCheckForUpdates: () => void checkForCloudUpdate(),
 };
@@ -1190,6 +1197,7 @@ function applyGarnishShortcuts(): void {
   registerGarnishShortcuts({
     onQuickAsk: garnishHandlers.onQuickAsk,
     onScreenshot: garnishHandlers.onScreenshot,
+    onWindowShot: garnishHandlers.onWindowShot,
     onVoice: garnishHandlers.onVoice,
   });
 }
@@ -1215,6 +1223,7 @@ function hostPreferencesState(): HostPreferencesState {
       sessionApprovalAlerts: preferences.sessionApprovalAlerts,
       quickAskShortcut: shortcuts.quickAskShortcut,
       screenshotShortcut: shortcuts.screenshotShortcut,
+      windowShotShortcut: shortcuts.windowShotShortcut,
       voiceShortcut: shortcuts.voiceShortcut,
     },
     shortcutStatus: Object.fromEntries(
@@ -1513,6 +1522,13 @@ if (!hasSingleInstanceLock) {
       spawn: spawnTrackedDeveloperRuntime,
     });
 
+    configureQuickAskBridge({
+      preload: path.join(__dirname, 'preload.cjs'),
+      additionalArguments: [
+        `--agi-app-version=${app.getVersion()}`,
+        `--agi-app-origin=${CLOUD_APP_ORIGIN}`,
+      ],
+    });
     setTimeout(warmUpQuickAsk, QUICK_ASK_WARMUP_MS).unref?.();
     if (autoUpdateSupported()) startAutoUpdate(installedMacArchitecture(), announceUpdateReady);
     void startPairingBridge();

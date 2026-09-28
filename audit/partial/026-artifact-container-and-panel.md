@@ -49,14 +49,11 @@ Code: `apps/mobile/src/features/chat/components/InlineArtifactCard.tsx:236-239`,
 
 - Done when: Where the platform allows it, the artifact can be popped out into its own window or tab that shows the rendered artifact.
 - Wave: 3
-- Already works on: web
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| desktop | partial | The desktop window policy (apps/desktop/electron windowPolicy.ts, p-sessions) opens only http(s) links, so the blob: tab the web now builds is still dropped; allow blob: URLs created by the app window, or open the page in an in-app window. | handler |
 | mobile | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1142-1142`
 
 ## S26.12: Multiple-artifact switching.
 

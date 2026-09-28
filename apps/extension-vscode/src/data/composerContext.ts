@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { getContextBuilder } from './contextBuilder';
 import { CONTEXT_ATTACHMENT_KINDS, type ContextAttachmentKind } from '../protocol/webviewMessages';
 import { Config } from '../platform/config';
+import { tPlural } from '../l10n';
 import { MAX_TOTAL_REFERENCE_CHARS } from '../features/chat-participant/promptReferences';
 
 export interface ContextMenuItemState {
@@ -271,7 +272,7 @@ export function resolveEditorContext(dismissed: ReadonlySet<string>): EditorCont
     snapshot.chips.push({
       id: problemsId,
       kind: 'problems',
-      label: `${reported.count} problem${reported.count === 1 ? '' : 's'}`,
+      label: tPlural('composer.problems', reported.count),
     });
     snapshot.texts.push(reported.text);
   }
