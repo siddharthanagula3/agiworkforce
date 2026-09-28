@@ -57,6 +57,7 @@ describe('0090 shared project knowledge is read-only for org members', () => {
    * argued for in a diff rather than landing as a quiet `create policy`.
    */
   const REVIEWED_LATER_POLICY_CHANGES = ['0217_shared_project_editor_write.sql'];
+  const REVIEWED_READ_NARROWINGS = ['0315_private_shared_projects.sql'];
 
   it('is the last unreviewed migration to touch this table POLICIES, so its grants win', () => {
     const laterPolicyChanges = readdirSync(neonDir)
@@ -68,7 +69,9 @@ describe('0090 shared project knowledge is read-only for org members', () => {
           sqlText,
         );
       })
-      .filter((f) => !REVIEWED_LATER_POLICY_CHANGES.includes(f));
+      .filter(
+        (f) => !REVIEWED_LATER_POLICY_CHANGES.includes(f) && !REVIEWED_READ_NARROWINGS.includes(f),
+      );
 
     expect(laterPolicyChanges).toEqual([]);
   });
@@ -85,6 +88,22 @@ describe('0090 shared project knowledge is read-only for org members', () => {
         expect(policy).toContain('organization_project_access');
         expect(policy).toMatch(/a\.access = 'write'/);
         expect(policy).not.toMatch(/for\s+all/i);
+      }
+    }
+  });
+
+  it('keeps every reviewed read narrowing a select policy that still honours a denial', () => {
+    for (const file of REVIEWED_READ_NARROWINGS) {
+      const later = readMigration(file);
+      const knowledgePolicies = later
+        .split('create policy')
+        .filter((chunk) => /on public\.project_knowledge_files/i.test(chunk));
+
+      expect(knowledgePolicies.length).toBeGreaterThan(0);
+      for (const policy of knowledgePolicies) {
+        expect(policy).toMatch(/for\s+select/i);
+        expect(policy).toContain('organization_project_access');
+        expect(policy).toMatch(/coalesce\(a\.access, s\.default_access\) <> 'none'/);
       }
     }
   });

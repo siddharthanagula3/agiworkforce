@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-const source = readFileSync(
-  join(process.cwd(), 'app/api/projects/[id]/knowledge-files/route.ts'),
-  'utf8',
-);
+const source = [
+  'app/api/projects/[id]/knowledge-files/route.ts',
+  'lib/server/project-knowledge-files.ts',
+]
+  .map((file) => readFileSync(join(process.cwd(), file), 'utf8'))
+  .join('\n');
 
 function usageQueries(): string[] {
   return source
