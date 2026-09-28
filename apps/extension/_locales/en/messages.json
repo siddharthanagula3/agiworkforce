@@ -3912,5 +3912,41 @@
   "spPlanReviewDeclined": {
     "message": "You cancelled this plan. Nothing was run.",
     "description": "Note left on an AGI Work turn whose plan the person cancelled"
+  },
+  "spHelpLinkMemory": {
+    "message": "How memory works",
+    "description": "Link from the memory settings to the help article about memory"
+  },
+  "spHelpLinkTemporary": {
+    "message": "How temporary chats work",
+    "description": "Link from the temporary chat notice to the help article about temporary chats"
+  },
+  "spHelpLinkSharing": {
+    "message": "How sharing works",
+    "description": "Link from the share confirmation to the help article about shared links"
+  },
+  "spHelpLinkShortcuts": {
+    "message": "All keyboard shortcuts",
+    "description": "Link from the Help shortcuts list to the full keyboard shortcuts article"
+  },
+  "spHelpLinkUsage": {
+    "message": "How usage and credits work",
+    "description": "Link from the usage meter to the help article about usage limits and credits"
+  },
+  "spHelpLinkArtifacts": {
+    "message": "How artifacts work",
+    "description": "Link from the artifacts list to the help article about artifacts"
+  },
+  "spHelpLinkProjects": {
+    "message": "How projects work",
+    "description": "Link from the projects list to the help article about projects"
+  },
+  "spHelpLinkSchedules": {
+    "message": "How schedules work",
+    "description": "Link from the schedules section to the help article about schedules"
+  },
+  "spHelpLinkRuns": {
+    "message": "How AGI Work runs a task",
+    "description": "Link from the cloud runs list to the help article about AGI Work"
   }
 }
