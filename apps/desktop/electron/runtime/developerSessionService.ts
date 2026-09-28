@@ -23,6 +23,8 @@ import type {
 import type {
   DeveloperMessage,
   DeveloperSessionFileChange,
+  PluginSummary,
+  SkillSummary,
   DeveloperSessionSource,
   DeveloperSessionTrustMode,
   ThreadStatus,
@@ -1050,6 +1052,65 @@ export async function startDeveloperTurn(input: DeveloperTurnRequest): Promise<{
   const turnId = isRecord(turn) ? readString(turn, 'id') : null;
   if (!turnId) throw new Error('The AGI CLI started no turn.');
   return { turnId };
+}
+
+function isSkillSummary(value: unknown): value is SkillSummary {
+  return (
+    isRecord(value) &&
+    typeof value['name'] === 'string' &&
+    typeof value['description'] === 'string' &&
+    typeof value['enabled'] === 'boolean' &&
+    typeof value['consented'] === 'boolean'
+  );
+}
+
+function isPluginSummary(value: unknown): value is PluginSummary {
+  return (
+    isRecord(value) &&
+    typeof value['id'] === 'string' &&
+    typeof value['name'] === 'string' &&
+    typeof value['enabled'] === 'boolean'
+  );
+}
+
+export async function listDeveloperSkills(rootId: string): Promise<SkillSummary[]> {
+  const server = await readyServer(requireRoot(rootId));
+  const result = await request(server, 'skills/list', {});
+  const skills = isRecord(result) ? result['skills'] : null;
+  return Array.isArray(skills) ? skills.filter(isSkillSummary) : [];
+}
+
+export async function setDeveloperSkillEnabled(
+  rootId: string,
+  name: string,
+  enabled: boolean,
+): Promise<boolean> {
+  const server = await readyServer(requireRoot(rootId));
+  await request(server, 'skills/setEnabled', { name, enabled });
+  return enabled;
+}
+
+export async function setDeveloperSkillConsent(rootId: string, granted: boolean): Promise<boolean> {
+  const server = await readyServer(requireRoot(rootId));
+  const result = await request(server, 'skills/consent', { granted });
+  return isRecord(result) && result['consented'] === true;
+}
+
+export async function listDeveloperPlugins(rootId: string): Promise<PluginSummary[]> {
+  const server = await readyServer(requireRoot(rootId));
+  const result = await request(server, 'plugins/list', {});
+  const plugins = isRecord(result) ? result['plugins'] : null;
+  return Array.isArray(plugins) ? plugins.filter(isPluginSummary) : [];
+}
+
+export async function setDeveloperPluginEnabled(
+  rootId: string,
+  id: string,
+  enabled: boolean,
+): Promise<boolean> {
+  const server = await readyServer(requireRoot(rootId));
+  await request(server, 'plugins/setEnabled', { id, enabled });
+  return enabled;
 }
 
 export async function interruptDeveloperTurn(

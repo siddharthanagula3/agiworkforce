@@ -34,6 +34,7 @@ import {
   type WorkspaceRootKind,
 } from '@agiworkforce/local-runtime-contract';
 import type { BrowserPageSummary } from '@agiworkforce/types';
+import type { PluginSummary, SkillSummary } from '@agiworkforce/types/protocol';
 
 const NO_HOST_MESSAGE = 'Local access is only available in the AGI Cloud desktop app.';
 
@@ -449,6 +450,34 @@ export function startDeveloperSession(
 
 export function startDeveloperTurn(request: DeveloperTurnRequest): Promise<{ turnId: string }> {
   return invoke<{ turnId: string }>('developer_turn_start', { ...request });
+}
+
+export function listDeveloperSkills(rootId: string): Promise<SkillSummary[]> {
+  return invoke<SkillSummary[]>('developer_skills_list', { rootId });
+}
+
+export function setDeveloperSkillEnabled(
+  rootId: string,
+  name: string,
+  enabled: boolean,
+): Promise<boolean> {
+  return invoke<boolean>('developer_skill_set_enabled', { rootId, name, enabled });
+}
+
+export function setDeveloperSkillConsent(rootId: string, granted: boolean): Promise<boolean> {
+  return invoke<boolean>('developer_skill_consent', { rootId, granted });
+}
+
+export function listDeveloperPlugins(rootId: string): Promise<PluginSummary[]> {
+  return invoke<PluginSummary[]>('developer_plugins_list', { rootId });
+}
+
+export function setDeveloperPluginEnabled(
+  rootId: string,
+  id: string,
+  enabled: boolean,
+): Promise<boolean> {
+  return invoke<boolean>('developer_plugin_set_enabled', { rootId, id, enabled });
 }
 
 export function readDeveloperSessionChanges(rootId: string): Promise<WorkingTreeChanges | null> {

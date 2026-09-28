@@ -20,6 +20,11 @@ export const DEVELOPER_SESSION_COMMANDS = [
   'developer_approval_answer',
   'developer_session_changes',
   'developer_session_discard',
+  'developer_skills_list',
+  'developer_skill_set_enabled',
+  'developer_skill_consent',
+  'developer_plugins_list',
+  'developer_plugin_set_enabled',
 ] as const;
 
 export type DeveloperSessionCommand = (typeof DEVELOPER_SESSION_COMMANDS)[number];

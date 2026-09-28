@@ -108,11 +108,16 @@ import {
   DeveloperRuntimeUnavailableError,
   answerDeveloperApproval,
   interruptDeveloperTurn,
+  listDeveloperPlugins,
   listDeveloperSessions,
+  listDeveloperSkills,
   readDeveloperModels,
   readDeveloperRuntimeStatus,
   readDeveloperSession,
   resumeDeveloperSession,
+  setDeveloperPluginEnabled,
+  setDeveloperSkillConsent,
+  setDeveloperSkillEnabled,
   startDeveloperSession,
   startDeveloperTurn,
   stopDeveloperRuntime,
@@ -193,6 +198,12 @@ function requirePathList(args: Args, key: string): string[] {
     throw new InvalidArguments(`"${key}" must list between 1 and ${MAX_DISCARD_PATHS} paths.`);
   }
   return value as string[];
+}
+
+function requireBoolean(args: Args, key: string): boolean {
+  const value = args[key];
+  if (typeof value !== 'boolean') throw new InvalidArguments(`"${key}" must be true or false.`);
+  return value;
 }
 
 function rendererAgentMode(raw: string): DeveloperAgentMode | null {
@@ -441,6 +452,28 @@ const CAPABILITY_BY_COMMAND: Record<string, { capability: DesktopCapability; rea
   developer_session_discard: {
     capability: 'filesystem.write',
     reason: 'Discarding a change puts files in this folder back to their last committed version.',
+  },
+  developer_skills_list: {
+    capability: 'filesystem.read',
+    reason: 'Listing skills reads the skill files this folder and your account provide.',
+  },
+  developer_plugins_list: {
+    capability: 'filesystem.read',
+    reason: 'Listing plugins reads the plugin files this folder and your account provide.',
+  },
+  developer_skill_set_enabled: {
+    capability: 'shell.execute',
+    reason:
+      'Turning a skill on lets coding sessions here follow its instructions and run its scripts.',
+  },
+  developer_skill_consent: {
+    capability: 'shell.execute',
+    reason:
+      "Trusting this folder's skills lets coding sessions here follow them and run their scripts with your account.",
+  },
+  developer_plugin_set_enabled: {
+    capability: 'shell.execute',
+    reason: 'Turning a plugin on lets coding sessions here use its commands, skills and servers.',
   },
 };
 
@@ -954,6 +987,27 @@ async function execute(
         requestId: requireString(args, 'requestId'),
         approved: args['approved'] === true,
       });
+    case 'developer_skills_list':
+      return listDeveloperSkills(requireString(args, 'rootId'));
+    case 'developer_skill_set_enabled':
+      return setDeveloperSkillEnabled(
+        requireString(args, 'rootId'),
+        requireString(args, 'name'),
+        requireBoolean(args, 'enabled'),
+      );
+    case 'developer_skill_consent':
+      return setDeveloperSkillConsent(
+        requireString(args, 'rootId'),
+        requireBoolean(args, 'granted'),
+      );
+    case 'developer_plugins_list':
+      return listDeveloperPlugins(requireString(args, 'rootId'));
+    case 'developer_plugin_set_enabled':
+      return setDeveloperPluginEnabled(
+        requireString(args, 'rootId'),
+        requireString(args, 'id'),
+        requireBoolean(args, 'enabled'),
+      );
     case 'developer_session_changes':
       return readWorkingTreeChanges(resolveRoot(args).path);
     case 'developer_session_discard':
