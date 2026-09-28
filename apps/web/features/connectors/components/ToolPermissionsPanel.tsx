@@ -49,6 +49,8 @@ const RESET_LABEL = 'Reset all to default';
 const RESET_CONFIRM_TITLE = 'Reset every tool permission?';
 const RESET_CONFIRM_LABEL = 'Reset permissions';
 const SAVING_LABEL = 'Saving this permission';
+const READ_ONLY_CATEGORY = 'Read-only tools';
+const WRITE_CATEGORY = 'Write and delete tools';
 
 function resetConfirmDescription(connectorName: string): string {
   return `Every allow and deny you set for ${connectorName} is removed. Its tools that AGI does not recognise go back to asking before every call, and tools it knows only read data follow your Tool approvals default. This cannot be undone.`;
@@ -130,6 +132,48 @@ function ToolRow({ connectorId, toolName }: ToolRowProps) {
   );
 }
 
+interface ToolCategory {
+  label: string;
+  tools: readonly string[];
+}
+
+function CategoryRow({ connectorId, category }: { connectorId: string; category: ToolCategory }) {
+  const setToolsPermission = useToolPermissionsStore((s) => s.setToolsPermission);
+  const permissions = useToolPermissionsStore((s) => s.permissions[connectorId]);
+  const levels = category.tools.map((name) => permissions?.[name] ?? DEFAULT_PERMISSION_LEVEL);
+  const shared = levels.every((level) => level === levels[0]) ? levels[0] : null;
+
+  return (
+    <div className="flex items-center justify-between gap-3 px-1 pt-2">
+      <span className="min-w-0 flex-1 truncate text-xs font-medium text-muted-foreground">
+        {category.label} ({category.tools.length})
+      </span>
+      <div
+        className="flex items-center gap-1"
+        role="group"
+        aria-label={`Permission for all ${category.label.toLowerCase()}`}
+      >
+        {PERMISSION_LEVELS.map(({ level, label, icon, activeClass }) => (
+          <button
+            key={level}
+            type="button"
+            onClick={() => setToolsPermission(connectorId, category.tools, level)}
+            aria-pressed={shared === level}
+            title={`${label} all ${category.label.toLowerCase()}`}
+            className={cn(
+              'flex h-7 min-w-7 items-center justify-center gap-1 rounded-md border px-2 text-xs font-medium transition-all duration-quick',
+              shared === level ? activeClass : INACTIVE_CLASS,
+            )}
+          >
+            {icon}
+            <span className="hidden sm:inline">{label}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function PermissionLegend() {
   return (
     <div className="flex flex-wrap gap-3 rounded-lg border border-border bg-muted/50 px-3 py-2">
@@ -168,6 +212,18 @@ export function ToolPermissionsPanel({ connector, open, onOpenChange }: ToolPerm
 
   const tools: readonly string[] =
     catalog?.tools.map((tool) => tool.name) ?? getDeclaredConnectorActions(connector.id);
+  const categories: readonly ToolCategory[] = catalog
+    ? [
+        {
+          label: READ_ONLY_CATEGORY,
+          tools: catalog.tools.filter((tool) => tool.readOnly).map((tool) => tool.name),
+        },
+        {
+          label: WRITE_CATEGORY,
+          tools: catalog.tools.filter((tool) => !tool.readOnly).map((tool) => tool.name),
+        },
+      ].filter((category) => category.tools.length > 0)
+    : [];
   const discovering = loading && tools.length === 0;
   const discoveryFailed = error !== null && tools.length === 0;
 
@@ -231,9 +287,26 @@ export function ToolPermissionsPanel({ connector, open, onOpenChange }: ToolPerm
                     </button>
                   </div>
                 ) : null}
-                {tools.map((toolName) => (
-                  <ToolRow key={toolName} connectorId={permissionConnectorId} toolName={toolName} />
-                ))}
+                {categories.length > 0
+                  ? categories.map((category) => (
+                      <div key={category.label} className="space-y-1.5">
+                        <CategoryRow connectorId={permissionConnectorId} category={category} />
+                        {category.tools.map((toolName) => (
+                          <ToolRow
+                            key={toolName}
+                            connectorId={permissionConnectorId}
+                            toolName={toolName}
+                          />
+                        ))}
+                      </div>
+                    ))
+                  : tools.map((toolName) => (
+                      <ToolRow
+                        key={toolName}
+                        connectorId={permissionConnectorId}
+                        toolName={toolName}
+                      />
+                    ))}
               </div>
             ) : (
               <div className="rounded-lg border border-border bg-muted/50 px-4 py-6">

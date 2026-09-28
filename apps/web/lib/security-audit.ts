@@ -326,6 +326,7 @@ export type AuditEventType =
    */
   | 'provider_egress_refused'
   | 'tool_executed'
+  | 'tool_approval_decided'
   | 'browser_action'
   | 'computer_use_action'
   | 'data_accessed'
@@ -404,6 +405,7 @@ export interface AuditEventDetail {
   organizationId?: string;
   targetUserId?: string;
   sessionId?: string;
+  conversationId?: string;
   subjectRef?: string;
   scopes?: string[];
   changedKeys?: string[];
@@ -505,6 +507,7 @@ const AUDIT_DETAIL_KEYS: ReadonlySet<string> = new Set<keyof AuditEventDetail & 
   'organizationId',
   'targetUserId',
   'sessionId',
+  'conversationId',
   'subjectRef',
   'scopes',
   'changedKeys',
@@ -823,6 +826,7 @@ function inferResourceType(eventType: AuditEventType): string {
     case 'provider_egress_refused':
       return 'provider_egress';
     case 'tool_executed':
+    case 'tool_approval_decided':
       return 'tool';
     case 'browser_action':
       return 'browser';
