@@ -200,9 +200,9 @@ Code: `packages/contracts/cloud-contracts/src/tool-events.ts:18-24`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | partials/platform ee4cbfb7b2, with p-mcp-web df03cba4d: connector sources, health states and permission levels are declared once in @agiworkforce/types. cloud-contracts and client-runtime re-export them, and the fifteen /api/connectors routes take their bodies from cloud-contracts. Still open: the Chrome side panel answering input requests (routed to p-chrome), and desktop cloudConnectors.ts and the client-runtime parsers (p-mcp-web) | surface-only |
+| platform | partial | partials/mcp-web 78fa04806 and 0e1680af5, with p-platform ee4cbfb7b2: the connection and health bodies now have one definition. client-runtime (mobile and desktop) and the desktop cloud client parse /api/connectors, custom connectors, tool permissions and the OAuth start with the cloud-contracts schemas, and the vocabulary lives once in @agiworkforce/types. Still owed for policy: /api/settings/organization/connector-policy has no cloud-contracts schema, so client-runtime parseConnectorPolicy (parse.ts:72) and the web use-connector-policy hook still read it by hand. | surface-only |
 
-Code: `packages/contracts/types/src/connector-vocabulary.ts:1-1`, `packages/contracts/types/src/connector-vocabulary.ts:4-4`, `packages/contracts/types/src/connector-vocabulary.ts:14-14`, `packages/contracts/cloud-contracts/src/connectors.ts:6-6`
+Code: `packages/client/client-runtime/src/connectors/parse.ts:51-51`, `packages/client/client-runtime/src/connectors/parse.ts:62-62`, `packages/client/client-runtime/src/connectors/parse.ts:122-122`, `apps/desktop/src/api/cloudConnectors.ts:47-47`
 
 ## S101.23: Shared Skill/Plugin manifests.
 
