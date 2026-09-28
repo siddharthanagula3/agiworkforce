@@ -311,6 +311,8 @@ struct SharedModelMetadata {
     model_type: String,
     #[serde(default, rename = "inputModalities")]
     input_modalities: Vec<String>,
+    #[serde(default, rename = "imageInput")]
+    image_input: Option<SharedImageInput>,
     /// Prompt-consuming models must publish this. Media APIs may omit it
     /// because token context is inapplicable; those entries are parsed so the
     /// shared catalog remains readable, then excluded by the CLI model-type
@@ -359,6 +361,12 @@ struct SharedModelMetadata {
     /// Backward-compatible singular tier while generated catalogs migrate.
     #[serde(default, rename = "longContext")]
     long_context: Option<SharedLongContextPricing>,
+}
+
+#[derive(Debug, Deserialize)]
+struct SharedImageInput {
+    #[serde(default, rename = "maxImagesPerRequest")]
+    max_images_per_request: Option<u64>,
 }
 
 /// Whether a band's threshold token count is billed at the band's rates or at
@@ -1793,6 +1801,14 @@ pub fn nearest_supported_effort<'a>(requested: &str, levels: &'a [String]) -> Op
         .filter_map(|level| rank(level).map(|position| (level, position)))
         .min_by_key(|(_, position)| (position.abs_diff(wanted), usize::MAX - position))
         .map(|(level, _)| level.as_str())
+}
+
+pub fn max_images_per_request(model_id: &str) -> Option<u64> {
+    let catalog = shared_catalog()?;
+    shared_model_for_any(catalog, model_id)?
+        .image_input
+        .as_ref()?
+        .max_images_per_request
 }
 
 pub fn model_rejects_sampling_parameters(model_id: &str) -> bool {

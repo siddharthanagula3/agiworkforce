@@ -328,14 +328,27 @@ struct RegistryRoutePricing {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct RegistryHarness {
     #[serde(default)]
     features: HashMap<String, RegistryHarnessFeature>,
+    #[serde(default)]
+    media_input: Option<RegistryMediaInput>,
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct RegistryHarnessFeature {
     implementation: String,
+    #[serde(default)]
+    provider_support: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RegistryMediaInput {
+    #[serde(default)]
+    max_images_per_request: Option<u64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -561,6 +574,64 @@ pub fn route_pricing(route_id: &str) -> Result<Option<RoutePricing>, RegistryErr
         cache_class: route.cache_class,
         commercial_status: route.commercial_status,
     }))
+}
+
+pub fn serving_harness_id(
+    trust_mode: TrustMode,
+    provider: &str,
+    model: &str,
+) -> Result<Option<String>, RegistryError> {
+    let registry = registry()?;
+    let provider = provider_key(provider);
+    Ok(registry
+        .routes
+        .iter()
+        .filter(|(_, route)| {
+            route.trust_modes.contains(&trust_mode)
+                && (route.model_key.eq_ignore_ascii_case(model)
+                    || route.provider_model_id.eq_ignore_ascii_case(model))
+                && (trust_mode == TrustMode::ManagedCloud
+                    || provider_key(&route.provider) == provider)
+        })
+        .min_by(|(left_id, left), (right_id, right)| {
+            right
+                .is_default
+                .cmp(&left.is_default)
+                .then_with(|| left_id.cmp(right_id))
+        })
+        .map(|(_, route)| route.harness_id.clone()))
+}
+
+fn provider_key(provider: &str) -> String {
+    provider
+        .chars()
+        .filter(char::is_ascii_alphanumeric)
+        .map(|character| character.to_ascii_lowercase())
+        .collect()
+}
+
+pub fn harness_feature_implemented(harness_id: &str, feature: &str) -> Result<bool, RegistryError> {
+    let registry = registry()?;
+    Ok(registry
+        .harnesses
+        .get(harness_id)
+        .and_then(|harness| harness.features.get(feature))
+        .is_some_and(|feature| {
+            feature.implementation == "implemented"
+                && matches!(
+                    feature.provider_support.as_deref(),
+                    Some("native" | "compatible")
+                )
+        }))
+}
+
+pub fn harness_max_images_per_request(harness_id: &str) -> Result<Option<u64>, RegistryError> {
+    let registry = registry()?;
+    Ok(registry
+        .harnesses
+        .get(harness_id)
+        .and_then(|harness| harness.media_input.as_ref())
+        .and_then(|media| media.max_images_per_request))
 }
 
 fn route_expected_cents(route: &RegistryRoute, request: &AutoRoutingRequest<'_>) -> f64 {
