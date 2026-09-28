@@ -13,6 +13,7 @@ pub mod devices;
 pub mod handshake;
 pub mod image;
 pub mod image_provenance;
+pub mod knowledge;
 pub mod memory;
 pub mod personalization;
 pub mod projects;
@@ -297,7 +298,7 @@ pub async fn create_project(
 
 pub const PROJECTS_PATH: &str = "/api/projects";
 
-fn project_path(project_id: &str) -> String {
+pub(crate) fn project_path(project_id: &str) -> String {
     format!("{PROJECTS_PATH}/{}", urlencoding::encode(project_id))
 }
 
