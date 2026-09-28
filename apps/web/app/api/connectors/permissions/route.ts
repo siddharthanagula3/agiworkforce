@@ -10,6 +10,11 @@ import { createError } from '@/lib/errors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { isDestructiveConnectorTool } from '@/app/api/llm/v1/chat/completions/lib/tool-metadata';
+import {
+  CONNECTOR_TOOL_CATEGORIES,
+  connectorCategoryToolName,
+  isConnectorCategoryToolName,
+} from '@shared/types/connectorToolCategories';
 
 export const runtime = 'nodejs';
 
@@ -31,10 +36,20 @@ const UpsertSchema = z
     connectorId: z.string().min(1).max(200),
     toolName: z.string().min(1).max(200).optional(),
     toolNames: z.array(z.string().min(1).max(200)).min(1).max(MAX_TOOLS_PER_WRITE).optional(),
+    category: z.enum(CONNECTOR_TOOL_CATEGORIES).optional(),
     level: z.enum(['allow', 'ask', 'deny']),
     destructive: z.boolean().optional(),
   })
-  .refine((body) => (body.toolName === undefined) !== (body.toolNames === undefined));
+  .refine((body) =>
+    body.category === undefined
+      ? (body.toolName === undefined) !== (body.toolNames === undefined)
+      : body.toolName === undefined,
+  )
+  .refine((body) =>
+    [body.toolName, ...(body.toolNames ?? [])].every(
+      (name) => name === undefined || !isConnectorCategoryToolName(name),
+    ),
+  );
 
 type PermissionRow = {
   connector_id: string;
@@ -71,15 +86,26 @@ async function handleUpsert(request: NextRequest): Promise<NextResponse> {
   const parsed = UpsertSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     throw createError.validation(
-      'connectorId, one of toolName or toolNames, and a valid level are required',
+      'connectorId, a category or one of toolName or toolNames, and a valid level are required',
     );
   }
-  const { connectorId, level } = parsed.data;
-  const toolNames = [...new Set(parsed.data.toolNames ?? [parsed.data.toolName!])];
-  const auditName = toolNames.length === 1 ? toolNames[0]! : `${toolNames.length} tools`;
+  const { connectorId, level, category } = parsed.data;
+  const listed = [
+    ...new Set(parsed.data.toolNames ?? (parsed.data.toolName ? [parsed.data.toolName] : [])),
+  ];
+  const toolNames = category ? [...listed, connectorCategoryToolName(category)] : listed;
+  const auditName = category
+    ? connectorCategoryToolName(category)
+    : toolNames.length === 1
+      ? toolNames[0]!
+      : `${toolNames.length} tools`;
 
   // a destructiveness verdict is a safety property, not a caller preference.
-  const destructiveFlags = toolNames.map((name) => isDestructiveConnectorTool(connectorId, name));
+  const destructiveFlags = toolNames.map((name) =>
+    isConnectorCategoryToolName(name)
+      ? category === 'write'
+      : isDestructiveConnectorTool(connectorId, name),
+  );
   const destructive = destructiveFlags.some(Boolean);
 
   const { db, userId, organizationId } = await getUserScopedDb(request);

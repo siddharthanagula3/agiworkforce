@@ -1,3 +1,5 @@
+import { translateUi } from './translate';
+
 const NETWORK_FAILURE = /failed to fetch|networkerror|network request failed|\bload failed\b/i;
 const HTTP_STATUS_SUFFIX = /\(HTTP\s+(\d{3})\)\s*$/;
 
@@ -6,18 +8,39 @@ export function networkErrorMessage(error: unknown): string | null {
   if (!(error instanceof TypeError || NETWORK_FAILURE.test(raw))) return null;
   const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
   return offline
-    ? 'You appear to be offline. Check your connection.'
-    : 'Could not reach the server.';
+    ? translateUi('errors', 'network.offline', 'You appear to be offline. Check your connection.')
+    : translateUi('errors', 'network.unreachable', 'Could not reach the server.');
 }
 
 export function httpStatusMessage(status: number | undefined): string | null {
   if (typeof status !== 'number') return null;
-  if (status === 401) return 'Your session has expired. Sign in again to continue.';
-  if (status === 403) return 'You do not have access to this.';
-  if (status === 404) return 'That is no longer available.';
-  if (status === 408) return 'The server took too long to answer. Try again.';
-  if (status === 429) return 'You are going a little fast. Wait a moment and try again.';
-  if (status >= 500) return 'Something went wrong on our side. Try again shortly.';
+  if (status === 401) {
+    return translateUi(
+      'errors',
+      'http.sessionExpired',
+      'Your session has expired. Sign in again to continue.',
+    );
+  }
+  if (status === 403)
+    return translateUi('errors', 'http.forbidden', 'You do not have access to this.');
+  if (status === 404) return translateUi('errors', 'http.notFound', 'That is no longer available.');
+  if (status === 408) {
+    return translateUi('errors', 'http.timeout', 'The server took too long to answer. Try again.');
+  }
+  if (status === 429) {
+    return translateUi(
+      'errors',
+      'http.rateLimited',
+      'You are going a little fast. Wait a moment and try again.',
+    );
+  }
+  if (status >= 500) {
+    return translateUi(
+      'errors',
+      'http.server',
+      'Something went wrong on our side. Try again shortly.',
+    );
+  }
   return null;
 }
 

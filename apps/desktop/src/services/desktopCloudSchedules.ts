@@ -102,6 +102,12 @@ export const desktopCloudSchedules = {
     );
   },
 
+  listRecentRuns(input: ManagedCloudSchedulesPageInput) {
+    return withSchedulesClient('Managed Cloud schedule recent results', (client) =>
+      client.listRecentRuns(input),
+    );
+  },
+
   shareSchedule(scheduleId: string, signal?: AbortSignal): Promise<ManagedCloudScheduleShare> {
     return withSchedulesClient('Managed Cloud schedule share', (client) =>
       client.shareSchedule(scheduleId, signal),

@@ -100,6 +100,7 @@ import {
   hasStreamError,
   ProjectFileCitations,
   resolveModelEscalation,
+  StreamAnnouncer,
   type BranchItem,
 } from '@agiworkforce/unified-chat';
 import {
@@ -165,6 +166,7 @@ import { hasVisibleContent } from '../../lib/continue-generation';
 import type { GeneratedDocument } from '../../types/message-metadata';
 import { ThinkingBlock } from '../ThinkingBlock';
 import { mergeAdjacentThinkingSegments } from '../../lib/mergeThinkingSegments';
+import { pptxToSlidesMarkdown, xlsxFirstSheetToCsv } from '../../lib/office-file-preview';
 import { formatBytes } from '@shared/utils/format';
 import { ComparisonResponse } from './ComparisonResponse';
 import { interactiveCardRendersBeforeProse, type InteractiveCard } from '@agiworkforce/types';
@@ -181,12 +183,17 @@ import {
   type ResearchPlanDecision,
   type ResearchPlanOptions,
 } from '../research/ResearchActivity';
+import { AgiWorkPlanReview, type AgiWorkPlanDecision } from '../work-session/AgiWorkPlanReview';
 import {
   reconcileCitationMarkersFromSourceList,
   stripTrailingSourceList,
   stripTrailingCitationOnlyBlock,
 } from '../../lib/researchReportSources';
 import type { MessageResearchState } from '@shared/stores/web-chat-store';
+import type {
+  AgiWorkPlanReview as AgiWorkPlanReviewState,
+  AgiWorkPlanStep,
+} from '../../utils/agiwork-plan';
 import {
   collectMessageResearchSources,
   orderSourcesByCitation,
@@ -525,6 +532,7 @@ interface Message {
     imageGenModel?: string;
     /** Bounded provider/gateway retry instant for explicit image regeneration. */
     imageRetryAt?: string;
+    imageVersions?: StoreMessageMetadata['imageVersions'];
     imageData?: MediaGenerationResult;
     videoUrl?: string;
     thumbnailUrl?: string;
@@ -588,6 +596,9 @@ interface Message {
     interactiveCards?: InteractiveCard[];
     /** Deep Research run state (activity header + persistence). */
     research?: MessageResearchState;
+    /** AGI Work plan steps with their status, and the goal and approval state they belong to. */
+    agiWorkPlan?: AgiWorkPlanStep[];
+    agiWorkPlanReview?: AgiWorkPlanReviewState;
     /**
      * The client's post-stream metadata save failed. What is on screen is
      * richer than what a reload will show, and the notice below says so.
@@ -622,6 +633,8 @@ interface MessageBubbleProps {
     decision: ResearchPlanDecision,
     options?: ResearchPlanOptions,
   ) => void;
+  /** Answer an AGI Work plan: start it as edited, cancel it, or retry from a stopped step. */
+  onAgiWorkPlanDecision?: (messageId: string, decision: AgiWorkPlanDecision) => void;
   /** True while a research retry or approved start for THIS message is in flight. */
   isRetryingResearch?: boolean;
   onDelete?: (messageId: string) => void;
@@ -697,6 +710,7 @@ const MessageBubbleComponent = function MessageBubble({
   onRegenerate,
   onRetryResearch,
   onResearchPlanDecision,
+  onAgiWorkPlanDecision,
   isRetryingResearch = false,
   onDelete,
   onDeleteVariant,
@@ -1250,6 +1264,38 @@ const MessageBubbleComponent = function MessageBubble({
     };
   }, [generatedFiles, generatedTextContent]);
 
+  const [officePreviews, setOfficePreviews] = useState<Record<string, string | { failed: true }>>(
+    {},
+  );
+  useEffect(() => {
+    const pending = generatedFiles.filter(
+      (f) =>
+        (f.kind === 'pptx' || f.kind === 'xlsx') &&
+        f.byteCount <= MAX_INLINE_GENERATED_TEXT_BYTES &&
+        officePreviews[f.id] === undefined,
+    );
+    if (pending.length === 0) return;
+    let cancelled = false;
+    for (const file of pending) {
+      fetch(file.uri, { credentials: 'same-origin' })
+        .then((res) =>
+          res.ok ? res.arrayBuffer() : Promise.reject(new Error(`HTTP ${res.status}`)),
+        )
+        .then((buffer) =>
+          file.kind === 'pptx' ? pptxToSlidesMarkdown(buffer) : xlsxFirstSheetToCsv(buffer),
+        )
+        .then((preview) => {
+          if (!cancelled) setOfficePreviews((prev) => ({ ...prev, [file.id]: preview }));
+        })
+        .catch(() => {
+          if (!cancelled) setOfficePreviews((prev) => ({ ...prev, [file.id]: { failed: true } }));
+        });
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [generatedFiles, officePreviews]);
+
   const trustBoundary = useMemo(
     () => messageTrustBoundary(message.metadata, message.model, activeConversationModel),
     [message.metadata, message.model, activeConversationModel],
@@ -1319,6 +1365,27 @@ const MessageBubbleComponent = function MessageBubble({
           content: '',
           generatedFile: toGeneratedFile(f),
         });
+      } else if (f.kind === 'docx') {
+        out.push({
+          id: generatedFileArtifactId(f.id),
+          type: 'document',
+          language: 'docx',
+          title: f.fileName,
+          content: f.uri,
+          generatedFile: toGeneratedFile(f),
+        });
+      } else if (f.kind === 'pptx' || f.kind === 'xlsx') {
+        const preview = officePreviews[f.id];
+        if (typeof preview === 'string' && preview) {
+          out.push({
+            id: generatedFileArtifactId(f.id),
+            type: f.kind === 'pptx' ? 'presentation' : 'spreadsheet',
+            language: f.kind === 'pptx' ? 'markdown' : 'csv',
+            title: f.fileName,
+            content: preview,
+            generatedFile: toGeneratedFile(f),
+          });
+        }
       } else if (isGeneratedTextArtifact(f)) {
         const source = generatedTextContent[f.id];
         if (typeof source === 'string') {
@@ -1366,6 +1433,7 @@ const MessageBubbleComponent = function MessageBubble({
     message.metadata,
     generatedFiles,
     generatedTextContent,
+    officePreviews,
     toGeneratedFile,
   ]);
 
@@ -1902,6 +1970,7 @@ const MessageBubbleComponent = function MessageBubble({
     >
       {/* Delete confirmation. Rendered outside the dropdown so closing the menu
           on select cannot unmount the dialog that the select just opened. */}
+      {isUser ? <h5 className="sr-only">You said:</h5> : <h6 className="sr-only">AGI said:</h6>}
       {destructiveConfirmDialog}
       {/* Inner content row · constrained to max-w-3xl. No avatars: user messages
           read as a right-aligned bubble, assistant messages as a flat left column. */}
@@ -1959,6 +2028,16 @@ const MessageBubbleComponent = function MessageBubble({
                 : {})}
             />
           )}
+
+          {!isUser && onAgiWorkPlanDecision && message.metadata?.agiWorkPlan?.length ? (
+            <AgiWorkPlanReview
+              steps={message.metadata.agiWorkPlan}
+              awaitingApproval={message.metadata.agiWorkPlanReview?.awaitingApproval === true}
+              runFinished={!message.isStreaming}
+              busy={isRetryingResearch || (message.isStreaming ?? false)}
+              onDecision={(decision) => onAgiWorkPlanDecision(message.id, decision)}
+            />
+          ) : null}
 
           {/* One canonical Cloud run spine. It is collapsed inline by default,
               expands in place, and each tool then owns its own request/response
@@ -2196,6 +2275,7 @@ const MessageBubbleComponent = function MessageBubble({
                       content={cleanedContent}
                       isStreaming
                       citations={citationsByMarker}
+                      announce={false}
                     />
                   ) : (
                     <MarkdownContent
@@ -2205,16 +2285,20 @@ const MessageBubbleComponent = function MessageBubble({
                       literalHtml={isUser}
                     />
                   );
-                  return formatCardType ? (
-                    <MessageFormatCard
-                      content={cleanedContent}
-                      cardType={formatCardType}
-                      messageId={message.id}
-                    >
-                      {markdown}
-                    </MessageFormatCard>
-                  ) : (
-                    markdown
+                  return (
+                    <StreamAnnouncer text={cleanedContent} isStreaming={proseIsStreaming}>
+                      {formatCardType ? (
+                        <MessageFormatCard
+                          content={cleanedContent}
+                          cardType={formatCardType}
+                          messageId={message.id}
+                        >
+                          {markdown}
+                        </MessageFormatCard>
+                      ) : (
+                        markdown
+                      )}
+                    </StreamAnnouncer>
                   );
                 })()
               )}
@@ -2486,6 +2570,7 @@ const MessageBubbleComponent = function MessageBubble({
                 aspectRatio={message.metadata.imageGenAspect as ImageAspectRatio | undefined}
                 modelId={message.metadata.imageGenModel as string | undefined}
                 retryAt={message.metadata.imageRetryAt as string | undefined}
+                previousVersions={message.metadata.imageVersions}
                 onRegenerate={onRegenerateImage}
               />
             </div>
@@ -2923,7 +3008,7 @@ const MessageBubbleComponent = function MessageBubble({
                   'flex flex-nowrap items-center gap-1 transition-opacity',
                   ACTION_ROW_MIN_HEIGHT,
                   isUser || !isLatestTurn
-                    ? 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 has-[[aria-expanded=true]]:opacity-100'
+                    ? 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 has-[[aria-expanded=true]]:opacity-100 [@media(hover:none)]:opacity-100'
                     : 'opacity-100',
                 )}
               >
@@ -3374,6 +3459,8 @@ function metadataEqual(prev: Message['metadata'], next: Message['metadata']): bo
     prev?.isThinking === next?.isThinking &&
     prev?.agentActivity === next?.agentActivity &&
     prev?.research === next?.research &&
+    prev?.agiWorkPlan === next?.agiWorkPlan &&
+    prev?.agiWorkPlanReview === next?.agiWorkPlanReview &&
     prev?.generatedFiles === next?.generatedFiles &&
     prev?.generatedFile === next?.generatedFile &&
     prev?.artifactManifest === next?.artifactManifest &&
@@ -3466,6 +3553,8 @@ export const MessageBubble = React.memo(MessageBubbleComponent, (prev, next) => 
   if (prev.onResumeVideo !== next.onResumeVideo) return false;
   if (prev.onRetryVideo !== next.onRetryVideo) return false;
   if (prev.onSelectVariant !== next.onSelectVariant) return false;
+  if (prev.onAgiWorkPlanDecision !== next.onAgiWorkPlanDecision) return false;
+  if (prev.isRetryingResearch !== next.isRetryingResearch) return false;
 
   // Check flags
   if (prev.isBranching !== next.isBranching) return false;

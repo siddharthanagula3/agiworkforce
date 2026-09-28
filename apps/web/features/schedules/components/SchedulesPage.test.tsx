@@ -97,6 +97,11 @@ function createApi(overrides: Partial<ScheduleApi> = {}): ScheduleApi {
     listRuns: vi.fn(async () => runsPage()),
     runNow: vi.fn(async () => ({ run: successfulRun, replay: false })),
     resolveRunApproval: vi.fn(async () => successfulRun),
+    listRecentRuns: vi.fn(async () => ({
+      runs: [{ ...successfulRun, taskName: schedule.name }],
+      pagination: { limit: 20, offset: 0 },
+      hasMore: false,
+    })),
     shareSchedule: vi.fn(async () => ({
       token: 'abcdefghijklmnopqrstuvwx',
       snapshot: {
@@ -845,7 +850,7 @@ describe('SchedulesPage row menu and result panel (slice E item 6)', () => {
     expect(onOpenChat).toHaveBeenCalledWith(schedule);
   });
 
-  it('copies a link and reports success when Share is chosen', async () => {
+  it('creates a share link and copies it when Share is chosen', async () => {
     const api = createApi({ listSchedules: vi.fn(async () => page([schedule])) });
     const user = userEvent.setup();
     // Defined after setup(): user-event installs its own clipboard stub on
@@ -860,10 +865,12 @@ describe('SchedulesPage row menu and result panel (slice E item 6)', () => {
     await screen.findByRole('heading', { name: 'Morning brief' });
     await user.click(screen.getByRole('button', { name: 'More actions for Morning brief' }));
     await user.click(screen.getByRole('menuitem', { name: 'Share' }));
+    await user.click(await screen.findByRole('button', { name: 'Create link' }));
+    await user.click(await screen.findByRole('button', { name: 'Copy link' }));
 
     await waitFor(() =>
       expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
-        expect.stringContaining('/chat/schedules'),
+        expect.stringContaining('/share/schedules/abcdefghijklmnopqrstuvwx'),
       ),
     );
   });

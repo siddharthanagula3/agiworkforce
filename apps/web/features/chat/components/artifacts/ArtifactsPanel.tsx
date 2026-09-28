@@ -4,12 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Code2, X, FileCode, PanelRightOpen, FolderDown } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { Button, EmptyState } from '@agiworkforce/ui';
-import {
-  MAX_SIDE_PANEL_WIDTH,
-  MIN_SIDE_PANEL_WIDTH,
-  useChatProjectStore,
-  useChatUIStore,
-} from '@agiworkforce/unified-chat';
+import { useChatProjectStore } from '@agiworkforce/unified-chat';
 import type { PrivacyMode, SharedArtifact } from '@agiworkforce/types';
 import {
   publishArtifact as publishArtifactService,
@@ -36,6 +31,7 @@ import { StreamingArtifactView } from './StreamingArtifactView';
 import { downloadAllArtifacts } from '../../utils/downloadArtifacts';
 import {
   createWebCloudPublisher,
+  fetchArtifactPublication,
   setPublishedArtifactAudience,
   type PublishedArtifactAudience,
   type WebPublishDetails,
@@ -46,6 +42,7 @@ import { ArtifactPrivacyNotice } from '@/features/onboarding/components/Artifact
 import { useUIStore } from '@shared/stores/layout-store';
 import { TASK_DOCK_ARTIFACTS_LABEL, TASK_DOCK_LABEL } from '../../lib/agi-work';
 import { useOverlayDialog } from '../../hooks/use-overlay-dialog';
+import { SidePanelResizeHandle, useSidePanelWidth } from '../SidePanelResizeHandle';
 
 const ARTIFACT_CONFLICT_NOTICE =
   'Someone else changed this artifact first, so their version is shown. Your edit is kept as the latest version.';
@@ -123,6 +120,7 @@ function ArtifactViewer({
   onClose,
   publishArtifact,
   artifactAudience,
+  publishedLink,
   projectLink,
   projectSave,
 }: {
@@ -131,6 +129,7 @@ function ArtifactViewer({
   onClose: () => void;
   publishArtifact?: (selection: ArtifactPublishSelection) => Promise<PublishResult>;
   artifactAudience?: ArtifactAudienceControl;
+  publishedLink?: string;
   projectLink?: ArtifactProjectLink;
   projectSave?: ArtifactProjectSave;
 }) {
@@ -144,6 +143,7 @@ function ArtifactViewer({
         onClose={onClose}
         {...(publishArtifact ? { publishArtifact } : {})}
         {...(artifactAudience ? { artifactAudience } : {})}
+        {...(publishedLink ? { publishedLink } : {})}
         {...(projectLink ? { projectLink } : {})}
         {...(projectSave ? { projectSave } : {})}
       />
@@ -200,10 +200,6 @@ export function resolveArtifactOriginPrivacyMode(
   ]);
 }
 
-const MIN_PANEL_WIDTH = MIN_SIDE_PANEL_WIDTH;
-const MAX_PANEL_WIDTH = MAX_SIDE_PANEL_WIDTH;
-const PANEL_WIDTH_KEY_STEP = 24;
-
 function useOverlayLayout(): 'unknown' | 'mobile' | 'desktop' {
   const [layout, setLayout] = useState<'unknown' | 'mobile' | 'desktop'>('unknown');
 
@@ -249,8 +245,7 @@ export function ArtifactsPanel() {
   const taskDockOpen = useUIStore((s) => s.taskDockOpen);
   const streaming = useStreamingArtifactStore((s) => s.streaming);
   // re-exported through `useArtifact`) with no caller for the setter and a
-  const panelWidth = useChatUIStore((s) => s.artifactPanelWidth);
-  const setPanelWidth = useChatUIStore((s) => s.setArtifactPanelWidth);
+  const panelWidth = useSidePanelWidth();
   const layout = useOverlayLayout();
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -359,6 +354,25 @@ export function ArtifactsPanel() {
   const selectedArtifact = artifacts.find((a) => a.id === selectedArtifactId) ?? artifacts[0];
 
   const selectedConflict = selectedArtifact ? artifactConflicts[selectedArtifact.id] : undefined;
+  const selectedArtifactKey =
+    selectedArtifact &&
+    resolveArtifactOriginPrivacyMode(selectedArtifact, conversationMessages, activeConversation) ===
+      'managed'
+      ? selectedArtifact.id
+      : null;
+  useEffect(() => {
+    setPublishDetails(null);
+    if (!selectedArtifactKey) return;
+    let cancelled = false;
+    void fetchArtifactPublication(selectedArtifactKey)
+      .then((details) => {
+        if (!cancelled && details) setPublishDetails(details);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedArtifactKey]);
 
   const streamingArtifact =
     streaming &&
@@ -404,36 +418,6 @@ export function ArtifactsPanel() {
   const closeModalOverlay = useCallback(() => setPanelOpen(false), [setPanelOpen]);
   useOverlayDialog(panelRef, isModalOverlay, closeModalOverlay);
 
-  const onResizePointerDown = useCallback(
-    (event: React.PointerEvent<HTMLDivElement>) => {
-      if (layout !== 'desktop') return;
-      event.preventDefault();
-      const onPointerMove = (move: PointerEvent) => {
-        setPanelWidth(window.innerWidth - move.clientX);
-      };
-      const onPointerUp = () => {
-        window.removeEventListener('pointermove', onPointerMove);
-        window.removeEventListener('pointerup', onPointerUp);
-        document.body.style.removeProperty('user-select');
-      };
-      document.body.style.setProperty('user-select', 'none');
-      window.addEventListener('pointermove', onPointerMove);
-      window.addEventListener('pointerup', onPointerUp);
-    },
-    [layout, setPanelWidth],
-  );
-
-  const onResizeKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLDivElement>) => {
-      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
-      event.preventDefault();
-      setPanelWidth(
-        panelWidth + (event.key === 'ArrowLeft' ? PANEL_WIDTH_KEY_STEP : -PANEL_WIDTH_KEY_STEP),
-      );
-    },
-    [panelWidth, setPanelWidth],
-  );
-
   if (!panelOpen) return null;
 
   return (
@@ -462,22 +446,7 @@ export function ArtifactsPanel() {
           'animate-in slide-in-from-right duration-moved',
         )}
       >
-        {/* AUDIT-FIX ART-23: drag handle (desktop only). Also keyboard
-            operable, a mouse-only resize is not a resize for everyone. */}
-        {layout === 'desktop' && (
-          <div
-            role="separator"
-            aria-orientation="vertical"
-            aria-label="Resize artifacts panel"
-            aria-valuenow={panelWidth}
-            aria-valuemin={MIN_PANEL_WIDTH}
-            aria-valuemax={MAX_PANEL_WIDTH}
-            tabIndex={0}
-            onPointerDown={onResizePointerDown}
-            onKeyDown={onResizeKeyDown}
-            className="absolute inset-y-0 -left-1 z-[var(--z-control)] w-2 cursor-col-resize bg-transparent transition-colors hover:bg-primary/30 focus-visible:bg-primary/40 focus-visible:outline-none"
-          />
-        )}
+        {layout === 'desktop' && <SidePanelResizeHandle label="Resize artifacts panel" />}
         {/* Header, slim strip: panel title + count badge + Download all.
             Close X only shown here when no artifact is selected (no toolbar
             Close visible). When an artifact IS selected, the ArtifactPreview
@@ -486,7 +455,7 @@ export function ArtifactsPanel() {
             artifact selections. */}
         {/* @container, same reason as the ArtifactPreview toolbar: this strip
             lives INSIDE the split pane, which the user can drag down to
-            MIN_PANEL_WIDTH while the window stays wide. Viewport breakpoints
+            MIN_SIDE_PANEL_WIDTH while the window stays wide. Viewport breakpoints
             here reveal labels at a width this bar never has. */}
         <div className="@container flex items-center justify-between border-b border-border/30 px-4 py-3">
           <div className="flex min-w-0 items-center gap-2 overflow-hidden">
@@ -644,6 +613,7 @@ export function ArtifactsPanel() {
                   onClose={() => setPanelOpen(false)}
                   publishArtifact={makePublishHandler(selectedArtifact)}
                   {...(artifactAudience ? { artifactAudience } : {})}
+                  {...(publishDetails ? { publishedLink: publishDetails.shareUrl } : {})}
                   {...(projectLink ? { projectLink } : {})}
                   projectSave={projectSave}
                 />

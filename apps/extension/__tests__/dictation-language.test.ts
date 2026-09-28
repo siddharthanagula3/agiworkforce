@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import {
   DICTATION_LANGUAGE_KEY,
@@ -10,9 +13,30 @@ import {
 } from '../src/features/side-panel/dictation-language';
 import { micTooltip } from '../src/features/side-panel/voice';
 
+const catalog = JSON.parse(
+  readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), '..', '_locales', 'en', 'messages.json'),
+    'utf8',
+  ),
+) as Record<string, { message: string; placeholders?: Record<string, { content: string }> }>;
+
+function getMessage(key: string, substitutions: string[] = []): string {
+  const entry = catalog[key];
+  if (!entry) return '';
+  return entry.message.replace(/\$([A-Za-z0-9_]+)\$/g, (_match, name: string) =>
+    (entry.placeholders?.[name.toLowerCase()]?.content ?? '').replace(
+      /\$(\d)/g,
+      (_digit, index: string) => substitutions[Number(index) - 1] ?? '',
+    ),
+  );
+}
+
+const i18n = { getMessage, getUILanguage: () => 'en' };
+
 function stubSyncStorage(initial: Record<string, unknown> = {}): Record<string, unknown> {
   const values = { ...initial };
   (globalThis as unknown as { chrome: unknown }).chrome = {
+    i18n,
     storage: {
       sync: {
         get: async (key: string) =>

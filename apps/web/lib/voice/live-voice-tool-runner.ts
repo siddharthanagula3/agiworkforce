@@ -5,6 +5,7 @@ import {
   LIVE_VOICE_TOOL_INPUT_PREVIEW_MAX_CHARS,
   type LiveVoiceToolCallRequest,
   type LiveVoiceToolCallResponse,
+  type LiveVoiceToolFile,
 } from '@agiworkforce/cloud-contracts';
 import type { AgentEventToolCategory } from '@agiworkforce/types/protocol';
 import { loadConnectorToolPermissions } from '@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions';
@@ -42,6 +43,7 @@ const MESSAGE = {
 interface ToolRunResult {
   content: string;
   isError: boolean;
+  files?: LiveVoiceToolFile[];
 }
 
 export interface LiveVoiceToolCallInput {
@@ -123,6 +125,7 @@ async function runOfficeFile(
   });
   if (!persisted.ok) return { content: 'The Office file could not be saved.', isError: true };
   return {
+    files: [{ name: persisted.file.file_name, uri: persisted.file.uri }],
     content: JSON.stringify({
       ok: true,
       file: {
@@ -218,13 +221,17 @@ async function runSandboxTool(
     surface: VOICE_TOOL_SURFACE,
     ...(input.signal ? { signal: input.signal } : {}),
   });
-  const saved = (result.generatedFiles ?? []).map((file) => file.file_name);
+  const files = (result.generatedFiles ?? []).map((file) => ({
+    name: file.file_name,
+    uri: file.uri,
+  }));
   return {
     content:
-      saved.length > 0
-        ? `${result.content}\n\nSaved to the Library: ${saved.join(', ')}`
+      files.length > 0
+        ? `${result.content}\n\nSaved to the Library: ${files.map((file) => file.name).join(', ')}`
         : result.content,
     isError: result.isError,
+    ...(files.length > 0 ? { files } : {}),
   };
 }
 
@@ -307,12 +314,22 @@ export async function handleLiveVoiceToolCall(
 
   if (isExecutionTool(call.name)) {
     const result = await runSandboxTool(input, args);
-    return { status: 'completed', output: boundedOutput(result.content), isError: result.isError };
+    return {
+      status: 'completed',
+      output: boundedOutput(result.content),
+      isError: result.isError,
+      ...(result.files ? { files: result.files } : {}),
+    };
   }
 
   const startedAt = Date.now();
   const result = await runTool(input, args);
   const output = await applyToolResultSecretPolicy(input.userId, call.name, result.content);
   await auditCall(input, result.isError ? 'failed' : 'completed', Date.now() - startedAt);
-  return { status: 'completed', output: boundedOutput(output), isError: result.isError };
+  return {
+    status: 'completed',
+    output: boundedOutput(output),
+    isError: result.isError,
+    ...(result.files ? { files: result.files } : {}),
+  };
 }

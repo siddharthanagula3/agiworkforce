@@ -232,6 +232,16 @@ function createApi(overrides: Partial<CloudCodeApi> = {}): CloudCodeApi {
       number: 7,
       alreadyOpen: false,
     })),
+    pullRequestStatus: vi.fn(async () => ({
+      number: 7,
+      url: 'https://github.com/owner/repository/pull/7',
+      state: 'open' as const,
+      draft: false,
+      merged: false,
+      checksState: 'passing' as const,
+      failedChecks: [],
+      reviewState: 'none' as const,
+    })),
     get: vi.fn(async () => ({ session, terminalEntries: [], turns: [] })),
     create: vi.fn(async () => ({ session, terminalEntries: [], turns: [] })),
     run: vi.fn(async () => ({

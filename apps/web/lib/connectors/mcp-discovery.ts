@@ -15,6 +15,7 @@ import { createDeadline } from '@/lib/url-fetch/guarded-fetch';
 import { TOKEN_REQUEST_TIMEOUT_MS } from '@/lib/connectors/oauth-client';
 import { generateOAuthState } from '@/lib/connectors/pkce';
 import { getCustomConnectorOAuthClient } from '@/lib/connectors/mcp-custom-connections';
+import { accountLabelFromIdToken } from '@/lib/connectors/accounts';
 import {
   McpOAuthClientProvider,
   McpPkceUnsupportedError,
@@ -330,6 +331,7 @@ export async function completeMcpAuthorization(input: {
         token_type?: string;
         expires_in?: number;
         scope?: string;
+        id_token?: string;
       }
     | undefined;
 
@@ -343,20 +345,25 @@ export async function completeMcpAuthorization(input: {
 
   const grantedScopes = tokens.scope ? tokens.scope.split(/\s+/).filter(Boolean) : [];
 
-  await upsertConnectorOAuthGrant(pending.userId, pending.connectorId, {
-    accessToken: tokens.access_token,
-    refreshToken: tokens.refresh_token ?? null,
-    tokenType: tokens.token_type ?? 'Bearer',
-    grantedScopes,
-    accessTokenExpiresAt:
-      typeof tokens.expires_in === 'number'
-        ? new Date(Date.now() + tokens.expires_in * 1000)
-        : null,
-    tokenEndpoint: pending.tokenEndpoint ?? '',
-    issuer: provider.issuer ?? pending.issuer ?? null,
-    resourceUrl: pending.resourceUrl ?? null,
-    mcpUrl,
-  });
+  await upsertConnectorOAuthGrant(
+    pending.userId,
+    pending.connectorId,
+    {
+      accessToken: tokens.access_token,
+      refreshToken: tokens.refresh_token ?? null,
+      tokenType: tokens.token_type ?? 'Bearer',
+      grantedScopes,
+      accessTokenExpiresAt:
+        typeof tokens.expires_in === 'number'
+          ? new Date(Date.now() + tokens.expires_in * 1000)
+          : null,
+      tokenEndpoint: pending.tokenEndpoint ?? '',
+      issuer: provider.issuer ?? pending.issuer ?? null,
+      resourceUrl: pending.resourceUrl ?? null,
+      mcpUrl,
+    },
+    { accountLabel: accountLabelFromIdToken(tokens.id_token) },
+  );
 
   logger.info(
     { connectorId: pending.connectorId, issuer: provider.issuer },

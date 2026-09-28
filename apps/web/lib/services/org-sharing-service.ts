@@ -12,7 +12,7 @@ import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-ser
 import { resolveOrganizationPermissions } from '@/lib/services/organization-permission-service';
 
 export type OrgRole = 'owner' | 'admin' | 'member' | 'viewer';
-export type SharedProjectAccess = 'read' | 'write';
+export type SharedProjectAccess = 'read' | 'write' | 'none';
 export type MemberProjectAccess = 'read' | 'write' | 'none';
 
 const ADMIN_ROLES: readonly OrgRole[] = ['owner', 'admin'];
@@ -72,6 +72,40 @@ export async function requireSharingManager(
       .asUserSafe();
   }
   return member;
+}
+
+/**
+ * Who may share a project, change who can open it or stop sharing it: anyone
+ * who manages sharing, or the project's own owner when their role lets them
+ * share their work (0316).
+ */
+export async function requireProjectSharingRight(
+  db: DatabaseAdapter,
+  membership: OrgMembership | null,
+  userId: string,
+  projectId: string,
+): Promise<OrgMembership> {
+  const member = requireOrgMember(membership);
+  const permissions = await resolveOrganizationPermissions(member.organizationId, userId);
+  if (permissions.has('sharing.manage')) return member;
+  if (permissions.has('content.share')) {
+    const [owned] = await db.query<{ id: string }>(
+      `select id
+         from public.user_projects
+        where id = $1
+          and user_id = $2
+          and organization_id is not distinct from $3::uuid
+          and deleted_at is null
+        limit 1`,
+      [projectId, userId, member.organizationId],
+    );
+    if (owned) return member;
+  }
+  throw createError
+    .forbidden(
+      "Only the project's owner or someone who manages sharing can change who can open it.",
+    )
+    .asUserSafe();
 }
 
 export function requireOrgMember(membership: OrgMembership | null): OrgMembership {
@@ -152,14 +186,14 @@ export async function listReadableSharedProjectIds(
     `select s.project_id
        from public.organization_shared_projects s
       where s.organization_id = $1
-        and not exists (
-          select 1
-            from public.organization_project_access a
-           where a.organization_id = s.organization_id
-             and a.project_id = s.project_id
-             and a.user_id = $2
-             and a.access = 'none'
-        )`,
+        and coalesce(
+          (select a.access
+             from public.organization_project_access a
+            where a.organization_id = s.organization_id
+              and a.project_id = s.project_id
+              and a.user_id = $2),
+          s.default_access
+        ) <> 'none'`,
     [organizationId, userId],
   );
   return rows.map((row) => row.project_id);

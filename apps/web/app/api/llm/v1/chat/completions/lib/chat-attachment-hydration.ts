@@ -464,8 +464,29 @@ export async function hydrateChatAttachments(
         continue;
       }
       stageForSandbox();
+      const pageImageParts = content.pageImages.flatMap((image) => [
+        { type: 'text' as const, text: `[Page ${image.page}]` },
+        {
+          type: 'image_url' as const,
+          image_url: { url: `data:${image.mimeType};base64,${image.base64}` },
+        },
+      ]);
+      const omittedScanNote =
+        content.scannedPagesOmitted.length > 0
+          ? [
+              {
+                type: 'text' as const,
+                text: `[${filename}: scanned ${content.scannedPagesOmitted.length === 1 ? 'page' : 'pages'} ${content.scannedPagesOmitted.join(', ')} did not fit in this message and ${content.scannedPagesOmitted.length === 1 ? 'was' : 'were'} not included]`,
+              },
+            ]
+          : [];
       if (content.text) {
-        slot.resolved = [header, ...textDocumentParts(filename, content.text)];
+        slot.resolved = [
+          header,
+          ...textDocumentParts(filename, content.text),
+          ...pageImageParts,
+          ...omittedScanNote,
+        ];
         continue;
       }
       if (content.pageImages.length > 0) {
@@ -475,10 +496,8 @@ export async function hydrateChatAttachments(
             type: 'text',
             text: `[${filename} has no text layer; its ${content.pageImages.length === 1 ? 'page is' : `${content.pageImages.length} pages are`} attached as images]`,
           },
-          ...content.pageImages.map((image) => ({
-            type: 'image_url' as const,
-            image_url: { url: `data:${image.mimeType};base64,${image.base64}` },
-          })),
+          ...pageImageParts,
+          ...omittedScanNote,
         ];
         continue;
       }

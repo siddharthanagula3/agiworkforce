@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -11,6 +11,7 @@ import {
   Input,
   Textarea,
   useConfirmAction,
+  useUnsavedChangesGuard,
 } from '@agiworkforce/ui';
 import { Label } from '@agiworkforce/ui';
 import { Copy, Download, Smile, Trash2 } from 'lucide-react';
@@ -19,6 +20,7 @@ import { addCsrfHeaders } from '@/lib/client/csrf';
 import { webManagedCloudProjects } from '@/features/projects/services/managed-cloud-projects';
 import { KnowledgeFilesPanel } from './KnowledgeFilesPanel';
 import { ProjectMemoryPanel } from './ProjectMemoryPanel';
+import { ProjectDefaultModelField } from './ProjectDefaultModelField';
 import type { Project } from '@features/projects/stores/project-store';
 import { toUserMessage } from '@/lib/user-error-message';
 import { PROJECT_DESCRIPTION_MAX_LENGTH } from '@agiworkforce/cloud-contracts';
@@ -53,16 +55,18 @@ export function ProjectSettingsDialog({
     project.usesAccountInstructions !== false,
   );
   const [usesAccountStyle, setUsesAccountStyle] = useState(project.usesAccountStyle !== false);
+  const [defaultModelId, setDefaultModelId] = useState(project.defaultModelId ?? null);
   const [isSaving, setIsSaving] = useState(false);
   const { confirm, dialog: confirmDialog } = useConfirmAction();
 
-  useEffect(() => {
+  const resetFields = useCallback(() => {
     setName(project.name);
     setDescription(project.description ?? '');
     setInstructions(project.instructions ?? '');
     setUsesGlobalMemory(project.usesGlobalMemory !== false);
     setUsesAccountInstructions(project.usesAccountInstructions !== false);
     setUsesAccountStyle(project.usesAccountStyle !== false);
+    setDefaultModelId(project.defaultModelId ?? null);
   }, [
     project.id,
     project.name,
@@ -71,7 +75,36 @@ export function ProjectSettingsDialog({
     project.usesGlobalMemory,
     project.usesAccountInstructions,
     project.usesAccountStyle,
+    project.defaultModelId,
   ]);
+
+  useEffect(() => {
+    resetFields();
+  }, [project.id, resetFields]);
+
+  const dirty =
+    open &&
+    (name !== project.name ||
+      description !== (project.description ?? '') ||
+      instructions !== (project.instructions ?? '') ||
+      usesGlobalMemory !== (project.usesGlobalMemory !== false) ||
+      usesAccountInstructions !== (project.usesAccountInstructions !== false) ||
+      usesAccountStyle !== (project.usesAccountStyle !== false) ||
+      defaultModelId !== (project.defaultModelId ?? null));
+  const { confirmDiscard, dialog: discardDialog } = useUnsavedChangesGuard({
+    dirty,
+    description:
+      'Your changes to this project have not been saved. If you leave now, they will be lost.',
+    onDiscard: resetFields,
+  });
+
+  const handleOpenChange = (next: boolean) => {
+    if (next) {
+      onOpenChange(true);
+      return;
+    }
+    confirmDiscard(() => onOpenChange(false));
+  };
 
   const [isDuplicating, setIsDuplicating] = useState(false);
 
@@ -117,6 +150,7 @@ export function ProjectSettingsDialog({
       usesGlobalMemory,
       usesAccountInstructions,
       usesAccountStyle,
+      defaultModelId,
     };
     setIsSaving(true);
     try {
@@ -161,7 +195,7 @@ export function ProjectSettingsDialog({
 
   return (
     <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
+      <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col overflow-hidden p-0 sm:max-w-lg">
           {/* Header */}
           <DialogHeader className="shrink-0 border-b border-border/60 px-6 py-5">
@@ -246,6 +280,8 @@ export function ProjectSettingsDialog({
                 className="resize-y rounded-xl bg-muted/40"
               />
             </div>
+
+            <ProjectDefaultModelField value={defaultModelId} onChange={setDefaultModelId} />
 
             <div className="space-y-1.5">
               <p className="text-caption font-semibold uppercase tracking-[0.08em] text-muted-foreground">
@@ -376,7 +412,7 @@ export function ProjectSettingsDialog({
                 so the browser streams the file without holding it in memory.
               */}
               <Button asChild variant="ghost" size="sm" className="w-full sm:w-auto">
-                <a href={`/api/projects/${project.id}/export`}>
+                <a href={`/api/projects/${project.id}/export`} download>
                   <Download className="mr-1.5 h-4 w-4" />
                   Export
                 </a>
@@ -397,6 +433,7 @@ export function ProjectSettingsDialog({
       </Dialog>
 
       {confirmDialog}
+      {discardDialog}
     </>
   );
 }

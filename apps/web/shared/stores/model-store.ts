@@ -3,7 +3,13 @@
 import { freeQuotaSelection } from '@features/chat/lib/free-quota-selection';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import type { ModelAvailability, ModelEnvironment, RoutingTaskType } from '@agiworkforce/types';
+import {
+  isRoutingProfileChoice,
+  type ModelAvailability,
+  type ModelEnvironment,
+  type RoutingProfileChoice,
+  type RoutingTaskType,
+} from '@agiworkforce/types';
 import {
   PROVIDER_LABELS,
   getDisplayModels,
@@ -58,6 +64,7 @@ type PersistedModelState = {
   selectedModelId: string;
   selectedProvider: string | null;
   selectedRouteId: string | null;
+  routingProfile: RoutingProfileChoice;
 };
 
 /**
@@ -80,6 +87,7 @@ interface ModelState extends PersistedModelState {
   setSelectedModel: (id: string, provider?: string | null) => void;
   selectModel: (id: string, provider?: string | null) => Promise<void>;
   setSelectedProvider: (provider: string | null) => void;
+  setRoutingProfile: (profile: RoutingProfileChoice) => void;
   getSelectedModel: () => AIModel;
   getAvailableModels: () => Promise<AIModel[]>;
 }
@@ -344,10 +352,17 @@ function applyModelSelection(
   };
 }
 
+const DEFAULT_ROUTING_PROFILE: RoutingProfileChoice = 'auto';
+
+function persistedRoutingProfile(value: unknown): RoutingProfileChoice {
+  return isRoutingProfileChoice(value) ? value : DEFAULT_ROUTING_PROFILE;
+}
+
 export const useModelStore = create<ModelState>()(
   persist(
     (set, get) => ({
       ...applyModelSelection(DEFAULT_MODEL_ID),
+      routingProfile: DEFAULT_ROUTING_PROFILE,
       availableModels: AVAILABLE_MODELS,
       loading: false,
 
@@ -376,6 +391,10 @@ export const useModelStore = create<ModelState>()(
         set({ selectedProvider: provider, selectedRouteId: null });
       },
 
+      setRoutingProfile: (profile) => {
+        set({ routingProfile: profile });
+      },
+
       getSelectedModel: () => {
         const { selectedModelId } = get();
         return findSelectableModel(selectedModelId) ?? AVAILABLE_MODELS[0]!;
@@ -393,14 +412,18 @@ export const useModelStore = create<ModelState>()(
         selectedModelId: state.selectedModelId,
         selectedProvider: state.selectedProvider,
         selectedRouteId: state.selectedRouteId,
+        routingProfile: state.routingProfile,
       }),
       migrate: (persistedState: unknown) => {
         const state = (persistedState as Partial<PersistedModelState>) ?? {};
-        return applyModelSelection(
-          state.selectedModelId ?? DEFAULT_MODEL_ID,
-          state.selectedProvider,
-          state.selectedRouteId,
-        );
+        return {
+          ...applyModelSelection(
+            state.selectedModelId ?? DEFAULT_MODEL_ID,
+            state.selectedProvider,
+            state.selectedRouteId,
+          ),
+          routingProfile: persistedRoutingProfile(state.routingProfile),
+        };
       },
       // Zustand only calls `migrate` when a stored version differs. Validate in
       // `merge` as well so same-version stale IDs are repaired on every hydrate.
@@ -413,6 +436,7 @@ export const useModelStore = create<ModelState>()(
             state.selectedProvider,
             state.selectedRouteId,
           ),
+          routingProfile: persistedRoutingProfile(state.routingProfile),
         };
       },
     },

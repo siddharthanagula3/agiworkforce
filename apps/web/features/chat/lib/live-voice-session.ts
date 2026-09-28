@@ -7,7 +7,16 @@ import {
   type LiveVoiceToolCallRequest,
   type LiveVoiceToolCallResponse,
   type LiveVoiceToolDecision,
+  type LiveVoiceToolFile,
 } from '@agiworkforce/cloud-contracts';
+
+export interface LiveVoiceToolOutcome {
+  callId: string;
+  label: string;
+  output: string;
+  isError: boolean;
+  files: readonly LiveVoiceToolFile[];
+}
 import { formatUsageResetIn } from '@agiworkforce/types';
 import { getCsrfToken } from '@/lib/client/csrf';
 import { ANALYSER_FFT_SIZE, readAnalyserLevel } from '@features/chat/lib/dictation-machine';
@@ -108,6 +117,8 @@ export interface LiveVoiceSessionCallbacks {
   /** A spoken claim of a completed action with no tool result behind it. */
   onUnverifiedClaim?: (turn: LiveTranscriptTurn) => void;
   onToolApprovals?: (approvals: readonly LiveVoicePendingApproval[]) => void;
+  /** A function tool's result, so the surface can show what the voice turn got back. */
+  onToolResult?: (outcome: LiveVoiceToolOutcome) => void;
   onTranscript: (turn: LiveTranscriptTurn) => void;
   onUsage: (seconds: number) => void;
   onClosed: (closed: LiveSessionClosed) => void;
@@ -240,6 +251,8 @@ export class LiveVoiceSession {
   private readonly audio: HTMLAudioElement;
   private context: AudioContext | null = null;
   private levelTimer: number | null = null;
+  private inputLevel = 0;
+  private outputLevel = 0;
   private settleTimer: number | null = null;
   private disconnectTimer: number | null = null;
   private keepaliveTimer: number | null = null;
@@ -289,7 +302,19 @@ export class LiveVoiceSession {
         this.publishToolActivity();
       },
       onToolCompleted: (name) => this.completedTools.push(name),
+      onToolResult: (result) =>
+        this.callbacks.onToolResult?.({
+          callId: result.callId,
+          label: this.describeTool(result.name).label,
+          output: result.output,
+          isError: result.isError,
+          files: result.files,
+        }),
     });
+  }
+
+  get level(): number {
+    return Math.max(this.inputLevel, this.outputLevel);
   }
 
   get outputElement(): HTMLAudioElement {
@@ -546,10 +571,21 @@ export class LiveVoiceSession {
     analyser.fftSize = ANALYSER_FFT_SIZE;
     this.context.createMediaStreamSource(remote).connect(analyser);
     const samples = new Uint8Array(analyser.fftSize);
+    const microphoneAnalyser = this.context.createAnalyser();
+    microphoneAnalyser.fftSize = ANALYSER_FFT_SIZE;
+    if (this.microphone.getAudioTracks().length > 0) {
+      this.context.createMediaStreamSource(this.microphone).connect(microphoneAnalyser);
+    }
+    const microphoneSamples = new Uint8Array(microphoneAnalyser.fftSize);
     this.levelTimer = window.setInterval(() => {
       analyser.getByteTimeDomainData(samples);
+      microphoneAnalyser.getByteTimeDomainData(microphoneSamples);
+      this.outputLevel = readAnalyserLevel(samples);
+      this.inputLevel = this.microphone.getAudioTracks().some((track) => track.enabled)
+        ? readAnalyserLevel(microphoneSamples)
+        : 0;
       const now = Date.now();
-      if (readAnalyserLevel(samples) >= ASSISTANT_AUDIO_LEVEL) {
+      if (this.outputLevel >= ASSISTANT_AUDIO_LEVEL) {
         this.lastAudioAt = now;
         this.lastInboundAt = now;
       }

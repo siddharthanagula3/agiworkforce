@@ -32,7 +32,9 @@ use ratatui::widgets::{Block, Borders, Clear, Paragraph};
 
 use super::interactive::{InteractiveView, KeyAction, ViewAction};
 use crate::terminal_text::sanitize_terminal_text;
-use crate::tui::terminal_palette::{ui_muted, ui_on_light, ui_surface_elevated, ui_warning};
+use crate::tui::terminal_palette::{
+    ui_danger, ui_muted, ui_on_light, ui_surface_elevated, ui_warning,
+};
 use crate::tui::{display_width, pad_to_cols};
 
 // ---------------------------------------------------------------------------
@@ -238,13 +240,18 @@ impl ApprovalOverlayState {
         let mut button_spans: Vec<Span> = vec![Span::raw("  ")];
         for (i, choice) in CHOICES.iter().enumerate() {
             let selected = i == self.cursor;
-            let style = if selected {
-                Style::default()
+            let destructive = *choice == ApprovalChoice::DenyAll;
+            let style = match (selected, destructive) {
+                (true, true) => Style::default()
+                    .fg(ui_on_light())
+                    .bg(ui_danger())
+                    .add_modifier(Modifier::BOLD),
+                (true, false) => Style::default()
                     .fg(ui_on_light())
                     .bg(ui_warning())
-                    .add_modifier(Modifier::BOLD)
-            } else {
-                Style::default()
+                    .add_modifier(Modifier::BOLD),
+                (false, true) => Style::default().fg(ui_danger()),
+                (false, false) => Style::default(),
             };
             let label = format!("[{}]", choice.label());
             button_spans.push(Span::styled(label, style));

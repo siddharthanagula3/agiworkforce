@@ -2,7 +2,10 @@ import 'server-only';
 
 import { z } from 'zod';
 import { NextRequest, NextResponse } from 'next/server';
-import { ManagedMediaImageRefSchema } from '@agiworkforce/cloud-contracts';
+import {
+  MANAGED_MEDIA_MAX_IMAGE_REFERENCES,
+  ManagedMediaImageRefSchema,
+} from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -38,6 +41,11 @@ const ImageRetryRequestSchema = z
     job_id: z.string().uuid(),
     source_image: ManagedMediaImageRefSchema.optional(),
     mask_image: ManagedMediaImageRefSchema.optional(),
+    reference_images: z
+      .array(ManagedMediaImageRefSchema)
+      .min(1)
+      .max(MANAGED_MEDIA_MAX_IMAGE_REFERENCES)
+      .optional(),
   })
   .strict();
 
@@ -109,7 +117,16 @@ async function handleImageRetry(request: NextRequest): Promise<NextResponse> {
       const maskBytes = parsed.data.mask_image
         ? await resolveImageRefBytes(parsed.data.mask_image, userId, scoped.db)
         : undefined;
-      inlineEdit = { sourceBytes, ...(maskBytes ? { maskBytes } : {}) };
+      const referenceBytes = await Promise.all(
+        (parsed.data.reference_images ?? []).map((reference) =>
+          resolveImageRefBytes(reference, userId, scoped.db),
+        ),
+      );
+      inlineEdit = {
+        sourceBytes,
+        ...(maskBytes ? { maskBytes } : {}),
+        ...(referenceBytes.length > 0 ? { referenceBytes } : {}),
+      };
     } catch (error) {
       logger.error(
         { error: error instanceof Error ? error.message : String(error), jobId: existing.id },

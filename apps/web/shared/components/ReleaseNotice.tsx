@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Sparkles } from 'lucide-react';
 import { Button } from '@agiworkforce/ui';
-import { RELEASES, type Release } from '@/lib/changelog-entries';
+import { RELEASES, releasePath, type Release } from '@/lib/changelog-entries';
 import { ProductNoticeCard } from './ProductNotice';
 
 const LAST_SEEN_RELEASE_KEY = 'agi-last-seen-release';
@@ -53,8 +53,8 @@ export function ReleaseNotice() {
       message={`What's new: ${unseen.headline}`}
       action={
         <Button asChild size="sm" variant="outline" className="shrink-0 pointer-coarse:min-h-11">
-          <Link href="/release-notes" onClick={dismiss}>
-            Release notes
+          <Link href={releasePath(unseen)} onClick={dismiss}>
+            Read more
           </Link>
         </Button>
       }

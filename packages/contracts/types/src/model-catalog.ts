@@ -1155,6 +1155,7 @@ const TIER_POLICIES_DEFINITION: Record<ProductTier, TierPolicy> = {
       'voice_live',
       'voice_live_backend',
       'voice_rewrite',
+      'voice_speech',
     ],
     allowedProviderSurfaces: ['managed_cloud'],
     manualModelSelection: false,
@@ -1192,6 +1193,7 @@ const TIER_POLICIES_DEFINITION: Record<ProductTier, TierPolicy> = {
       'voice_live',
       'voice_live_backend',
       'voice_rewrite',
+      'voice_speech',
     ],
     allowedProviderSurfaces: ['managed_cloud', 'byok'],
     manualModelSelection: true,
@@ -1240,6 +1242,7 @@ const TIER_POLICIES_DEFINITION: Record<ProductTier, TierPolicy> = {
       'voice_live',
       'voice_live_backend',
       'voice_rewrite',
+      'voice_speech',
     ],
     allowedProviderSurfaces: ['managed_cloud', 'byok', 'local'],
     manualModelSelection: true,
@@ -1292,6 +1295,7 @@ const TIER_POLICIES_DEFINITION: Record<ProductTier, TierPolicy> = {
       'voice_live',
       'voice_live_backend',
       'voice_rewrite',
+      'voice_speech',
     ],
     allowedProviderSurfaces: ['managed_cloud', 'byok', 'local'],
     manualModelSelection: true,
@@ -2299,6 +2303,17 @@ export function getVideoQualityOptionsForModel(
     });
   }
   return sortByKnownOrder(VIDEO_QUALITY_ORDER, [...seen.keys()]).map((id) => seen.get(id)!);
+}
+
+export function getVideoDurationOptionsForModel(
+  modelId?: string,
+  quality?: VideoQualityOption,
+): number[] {
+  const durations =
+    quality?.durationSecs ??
+    (modelId ? getModelMetadataById(modelId)?.videoGeneration?.durationSecs : undefined) ??
+    [];
+  return [...new Set(durations)].sort((a, b) => a - b);
 }
 
 export function isVideoOutputSupported(

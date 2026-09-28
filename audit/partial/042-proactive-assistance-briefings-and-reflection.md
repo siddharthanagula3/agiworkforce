@@ -45,18 +45,6 @@ Code: `apps/extension/src/types.ts:787-787`, `apps/extension/src/side_panel.ts:9
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-## S42.15: Pause briefings.
-
-- Done when: The user can pause and resume briefings.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | A schedule can only be created paused (--paused); there is no pause or resume command for an existing one. | ui |
-
-Code: `apps/cli/src/lib.rs:1124-1124`
-
 ## S42.16: Quiet hours.
 
 - Done when: During quiet hours the product holds proactive notifications and nudges.
@@ -73,14 +61,11 @@ Code: `apps/cli/src/lib.rs:1124-1124`
 
 - Done when: The user is notified when background work (a scheduled run or agent task) completes.
 - Wave: 3
-- Already works on: web, desktop, mobile, chrome
+- Already works on: web, desktop, mobile, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | No built-in completion notification; a user-written Stop hook can notify, and the Stop event fires only in the --no-tui REPL. | ui |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/repl/mod.rs:598-598`
 
 ## S42.19: Personal usage reflection.
 
@@ -134,14 +119,13 @@ Code: `apps/cli/src/repl/mod.rs:598-598`
 
 - Done when: Past briefings and proactive outputs are kept as a browsable history.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only a per-schedule run history showing each run's text output; there is no combined history of briefings or saved editions. | ui |
-| desktop | partial | Only a per-schedule run history showing each run's text output; there is no combined history of briefings or saved editions. | ui |
 | mobile | partial | Only a per-schedule run history. | ui |
 | cli | partial | Only a per-schedule run list (agi schedules runs). | ui |
 | vscode | partial | Only a per-schedule run list. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/schedules/components/ScheduleRunHistory.tsx:110-110`, `apps/web/features/schedules/components/ScheduleCard.tsx:288-288`, `apps/mobile/src/features/schedules/components/ScheduleRunHistory.tsx:124-124`, `apps/cli/src/lib.rs:1140-1140`
+Code: `apps/mobile/src/features/schedules/components/ScheduleRunHistory.tsx:124-124`, `apps/cli/src/lib.rs:1140-1140`, `apps/extension-vscode/src/core/commandSetup.ts:2237-2237`, `apps/extension-vscode/src/features/schedules/scheduleActions.ts:126-126`

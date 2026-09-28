@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useContext, useMemo, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import rehypeKatex from 'rehype-katex';
 import rehypeRaw from 'rehype-raw';
@@ -10,9 +10,16 @@ import { MARKDOWN_SANITIZE_SCHEMA } from './markdownSanitizeSchema';
 import { preprocessMath } from './preprocessMath';
 import { reactNodeText } from './reactNodeText';
 import { MermaidDiagram } from './MermaidDiagram';
+import { MarkdownTable } from './MarkdownTable';
 import { HighlightedCode } from './HighlightedCode';
 import { LITERAL_HTML_REMARK_PLUGINS, REMARK_PLUGINS } from './remarkPlugins';
 import { StreamTailContext, useIsStreamTail } from './streamTailContext';
+import {
+  TaskItemIndexContext,
+  TaskToggleContext,
+  taskIndexAtOffset,
+  type TaskToggle,
+} from './taskList';
 import {
   CITATION_GROUP_HREF_PATTERN,
   CITATION_HREF_PATTERN,
@@ -315,26 +322,42 @@ function hasClassToken(className: unknown, token: string): boolean {
  * boundary stays on the text-muted token in both states, because the accent
  * fill alone reaches only 2.82:1 against the page.
  */
-const MarkdownTaskCheckbox = ({ checked, disabled }: { checked?: boolean; disabled?: boolean }) => (
-  <span
-    className={cn(
-      'relative mr-2 inline-flex h-[15px] w-[15px] shrink-0 items-center justify-center',
-      'translate-y-[0.15em] rounded-compact border border-[var(--chat-text-muted)] align-top',
-      checked
-        ? 'bg-[var(--chat-accent-primary)] text-[var(--chat-accent-on-primary)]'
-        : 'bg-transparent',
-    )}
-  >
-    <input
-      type={CHECKBOX_INPUT_TYPE}
-      checked={Boolean(checked)}
-      disabled={Boolean(disabled)}
-      readOnly
-      className="absolute inset-0 m-0 h-full w-full appearance-none opacity-0"
-    />
-    {checked && <Check className="h-[11px] w-[11px]" strokeWidth={3.5} aria-hidden="true" />}
-  </span>
-);
+const MarkdownTaskCheckbox = ({ checked, disabled }: { checked?: boolean; disabled?: boolean }) => {
+  const toggle = useContext(TaskToggleContext);
+  const index = useContext(TaskItemIndexContext);
+  const interactive = toggle !== null && index !== null;
+  return (
+    <span
+      className={cn(
+        'relative mr-2 inline-flex h-[15px] w-[15px] shrink-0 items-center justify-center',
+        'translate-y-[0.15em] rounded-compact border border-[var(--chat-text-muted)] align-top',
+        checked
+          ? 'bg-[var(--chat-accent-primary)] text-[var(--chat-accent-on-primary)]'
+          : 'bg-transparent',
+        interactive && 'cursor-pointer has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring',
+      )}
+    >
+      {interactive ? (
+        <input
+          type={CHECKBOX_INPUT_TYPE}
+          checked={Boolean(checked)}
+          onChange={() => toggle.onToggle(index)}
+          aria-label={checked ? 'Mark as not done' : 'Mark as done'}
+          className="absolute inset-0 m-0 h-full w-full cursor-pointer appearance-none opacity-0"
+        />
+      ) : (
+        <input
+          type={CHECKBOX_INPUT_TYPE}
+          checked={Boolean(checked)}
+          disabled={Boolean(disabled)}
+          readOnly
+          className="absolute inset-0 m-0 h-full w-full appearance-none opacity-0"
+        />
+      )}
+      {checked && <Check className="h-[11px] w-[11px]" strokeWidth={3.5} aria-hidden="true" />}
+    </span>
+  );
+};
 
 const MarkdownUnorderedList = ({
   children,
@@ -368,19 +391,26 @@ const MarkdownOrderedList = ({
 const MarkdownListItem = ({
   children,
   className,
+  node,
 }: {
   children?: React.ReactNode;
   className?: string;
+  node?: { position?: { start?: { offset?: number } } };
 }) => {
   const citations = useMarkdownCitations();
+  const toggle = useContext(TaskToggleContext);
+  const isTask = hasClassToken(className, TASK_LIST_ITEM_CLASS);
+  const offset = node?.position?.start?.offset;
+  const taskIndex =
+    isTask && toggle && offset !== undefined ? taskIndexAtOffset(toggle.source, offset) : -1;
+  const content = unwrapCitationParens(children, citations);
   return (
-    <li
-      className={cn(
-        'mb-1 break-words',
-        hasClassToken(className, TASK_LIST_ITEM_CLASS) && 'list-none',
+    <li className={cn('mb-1 break-words', isTask && 'list-none')}>
+      {taskIndex >= 0 ? (
+        <TaskItemIndexContext.Provider value={taskIndex}>{content}</TaskItemIndexContext.Provider>
+      ) : (
+        content
       )}
-    >
-      {unwrapCitationParens(children, citations)}
     </li>
   );
 };
@@ -431,7 +461,7 @@ const MarkdownTableHeader = ({
 }) => (
   <th
     className={cn(
-      'border border-border bg-muted px-3 py-2 align-top font-semibold break-words',
+      'sticky top-0 z-[var(--z-content-raised)] border border-border bg-muted px-3 py-2 align-top font-semibold break-words',
       markdownTableAlignmentClass(align, style?.textAlign),
     )}
   >
@@ -455,16 +485,7 @@ const markdownComponents: Components = {
       {children}
     </blockquote>
   ),
-  table: ({ children }) => (
-    <div
-      className="my-3 max-w-full overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]"
-      role="region"
-      aria-label="Table"
-      tabIndex={0}
-    >
-      <table className="w-full border-collapse text-sm">{children}</table>
-    </div>
-  ),
+  table: MarkdownTable as Components['table'],
   th: MarkdownTableHeader as Components['th'],
   td: MarkdownTableCell as Components['td'],
   a: MarkdownLink as Components['a'],
@@ -485,6 +506,7 @@ export interface MarkdownContentProps {
   citations?: readonly MarkdownCitation[];
   linkifyNumericCitations?: boolean;
   literalHtml?: boolean;
+  onTaskToggle?: (index: number) => void;
 }
 
 /**
@@ -521,6 +543,7 @@ function MarkdownContentImpl({
   citations,
   linkifyNumericCitations = true,
   literalHtml,
+  onTaskToggle,
 }: MarkdownContentProps) {
   const mathContent = useMemo(
     () => (skipPreprocess ? content : preprocessMath(content)),
@@ -533,23 +556,30 @@ function MarkdownContentImpl({
         : mathContent,
     [mathContent, isStreaming, citations, linkifyNumericCitations],
   );
+  const taskToggle = useMemo<TaskToggle | null>(
+    () =>
+      onTaskToggle && !isStreaming ? { source: processedContent, onToggle: onTaskToggle } : null,
+    [onTaskToggle, isStreaming, processedContent],
+  );
   return (
-    <StreamTailContext.Provider value={Boolean(isStreaming)}>
-      <CitationsContext.Provider value={citations ?? EMPTY_CITATIONS}>
-        <Tooltip.Provider delayDuration={150} skipDelayDuration={300}>
-          <ReactMarkdown
-            remarkPlugins={literalHtml ? LITERAL_HTML_REMARK_PLUGINS : REMARK_PLUGINS}
-            rehypePlugins={REHYPE_PLUGINS}
-            components={markdownComponents}
-          >
-            {processedContent}
-          </ReactMarkdown>
-        </Tooltip.Provider>
-      </CitationsContext.Provider>
-      {isStreaming && content.trim() && (
-        <span className="ml-1 inline-block h-4 w-0.5 animate-pulse bg-primary" />
-      )}
-    </StreamTailContext.Provider>
+    <TaskToggleContext.Provider value={taskToggle}>
+      <StreamTailContext.Provider value={Boolean(isStreaming)}>
+        <CitationsContext.Provider value={citations ?? EMPTY_CITATIONS}>
+          <Tooltip.Provider delayDuration={150} skipDelayDuration={300}>
+            <ReactMarkdown
+              remarkPlugins={literalHtml ? LITERAL_HTML_REMARK_PLUGINS : REMARK_PLUGINS}
+              rehypePlugins={REHYPE_PLUGINS}
+              components={markdownComponents}
+            >
+              {processedContent}
+            </ReactMarkdown>
+          </Tooltip.Provider>
+        </CitationsContext.Provider>
+        {isStreaming && content.trim() && (
+          <span className="ml-1 inline-block h-4 w-0.5 animate-pulse bg-primary" />
+        )}
+      </StreamTailContext.Provider>
+    </TaskToggleContext.Provider>
   );
 }
 

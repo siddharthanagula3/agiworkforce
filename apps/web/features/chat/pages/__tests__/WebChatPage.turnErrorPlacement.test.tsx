@@ -6,7 +6,7 @@ const CONVERSATION_ID = '00000000-0000-4000-8000-000000000931';
 const USER_MESSAGE_ID = '00000000-0000-4000-8000-0000000009c1';
 const SEND_FAILURE = 'Could not start the conversation.';
 const EMPTY_RESPONSE = /returned no response for this turn/i;
-const COMPOSER_COLUMN_CLASSES = ['mx-auto', 'w-full', 'max-w-3xl', 'px-4'];
+const COMPOSER_COLUMN_CLASSES = ['mx-auto', 'w-full', 'max-w-3xl', 'px-gutter-compact'];
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: vi.fn(), push: vi.fn(), back: vi.fn() }),

@@ -166,6 +166,7 @@ vi.mock('@/features/chat/components/dialogs/GlobalSearchDialog', () => ({
 vi.mock('@agiworkforce/ui', async () => {
   const React = await import('react');
   return {
+    confirmNavigation: (proceed: () => void) => proceed(),
     MOBILE_NAV_DRAWER_WIDTH: 280,
     OPEN_SEARCH_SHORTCUT: { key: 'F', ctrl: true, meta: true, shift: true },
     Sidebar: (props: {
@@ -384,10 +385,18 @@ vi.mock('@/lib/hooks/useManagedUsageSummary', () => ({
   getWorstUsagePercent: (usage: { percent: number } | null) => usage?.percent ?? 0,
 }));
 
-vi.mock('@shared/stores/web-chat-store', () => ({
-  useChatStore: (selector: (state: { updateConversation: () => void }) => unknown) =>
-    selector({ updateConversation: vi.fn() }),
-}));
+vi.mock('@shared/stores/web-chat-store', () => {
+  const state = {
+    updateConversation: vi.fn(),
+    loadingConversationIds: [],
+    streamingConversationIds: [],
+    workModeByConversation: {},
+  };
+  return {
+    AGI_WORK_MODE: 'agiwork',
+    useChatStore: (selector: (value: typeof state) => unknown) => selector(state),
+  };
+});
 
 vi.mock('@shared/stores/authentication-store', () => ({
   useAuthStore: () => ({

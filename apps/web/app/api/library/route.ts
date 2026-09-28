@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { z } from 'zod';
 import { NextRequest, NextResponse } from 'next/server';
 import {
   LibraryListQuerySchema,
@@ -9,9 +10,18 @@ import {
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
-import { listLibraryAssets, type LibraryAssetRow } from '@/lib/server/media-assets';
+import { logger } from '@/lib/logger';
+import { fileTextPreviewKind } from '@/lib/server/file-text-preview';
+import { RESOURCE_RECOVERY_WINDOW_DAYS } from '@/lib/resources/deletion-policies';
+import {
+  listLibraryAssets,
+  sumLibraryStorageBytes,
+  type LibraryAssetRow,
+} from '@/lib/server/media-assets';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
+import { requireCsrfToken } from '@/lib/csrf';
+import { persistGeneratedFileBytes } from '@/lib/server/generated-file-persist';
 
 export const runtime = 'nodejs';
 
@@ -38,9 +48,18 @@ function fileNameForRow(row: LibraryAssetRow): string {
 }
 
 function previewableForRow(row: LibraryAssetRow): boolean {
-  const persisted = row.metadata['previewable'];
-  if (typeof persisted === 'boolean') return persisted;
-  return row.mimeType.toLowerCase().startsWith('image/');
+  const mime = row.mimeType.toLowerCase();
+  if (mime.startsWith('image/') || mime.startsWith('video/') || mime === 'application/pdf') {
+    return true;
+  }
+  if (fileTextPreviewKind(fileNameForRow(row), row.mimeType)) return true;
+  return row.metadata['previewable'] === true;
+}
+
+function eraseAfter(deletedAt: string): string {
+  return new Date(
+    Date.parse(deletedAt) + RESOURCE_RECOVERY_WINDOW_DAYS * 24 * 60 * 60 * 1000,
+  ).toISOString();
 }
 
 function toLibraryItem(row: LibraryAssetRow): LibraryItem {
@@ -61,6 +80,9 @@ function toLibraryItem(row: LibraryAssetRow): LibraryItem {
     model: row.model,
     prompt: row.prompt,
     created_at: row.createdAt,
+    updated_at: row.updatedAt,
+    conversation_id: row.conversationId,
+    ...(row.deletedAt ? { erase_after: eraseAfter(row.deletedAt) } : {}),
   };
 }
 
@@ -108,10 +130,84 @@ async function handleListLibrary(request: NextRequest): Promise<NextResponse> {
     has_more: hasMore,
     next_offset: hasMore ? offset + limit : null,
   };
-  return NextResponse.json(body, { headers: headers(request) });
+  const storageUsedBytes =
+    offset === 0 && !deleted
+      ? await sumLibraryStorageBytes(userId, db).catch((error: unknown) => {
+          logger.warn({ error, userId }, 'Library storage total unavailable');
+          return null;
+        })
+      : null;
+  const response: LibraryListResponse = {
+    ...body,
+    ...(storageUsedBytes !== null ? { storage_used_bytes: storageUsedBytes } : {}),
+  };
+  return NextResponse.json(response, { headers: headers(request) });
+}
+
+const MAX_SAVED_ARTIFACT_CHARS = 1_000_000;
+
+const SaveArtifactSchema = z
+  .object({
+    fileName: z.string().trim().min(1).max(200),
+    content: z.string().min(1).max(MAX_SAVED_ARTIFACT_CHARS),
+    conversationId: z.string().uuid().optional(),
+  })
+  .strict();
+
+const SAVED_ARTIFACT_MIME_BY_EXTENSION: Record<string, string> = {
+  html: 'text/html',
+  htm: 'text/html',
+  svg: 'image/svg+xml',
+  md: 'text/markdown',
+  markdown: 'text/markdown',
+  json: 'application/json',
+  csv: 'text/csv',
+};
+
+async function handleSaveArtifact(request: NextRequest): Promise<NextResponse> {
+  const csrfError = await requireCsrfToken(request);
+  if (csrfError) return csrfError as NextResponse;
+
+  const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
+  if (rateLimitResponse) return rateLimitResponse;
+
+  let rawBody: unknown;
+  try {
+    rawBody = await request.json();
+  } catch {
+    throw createError.validation('Invalid JSON in request body');
+  }
+  const parsed = SaveArtifactSchema.safeParse(rawBody);
+  if (!parsed.success) throw createError.validation('Choose an artifact to save');
+
+  const { db, userId, organizationId } = await getUserScopedDb(request);
+  const extension = parsed.data.fileName.toLowerCase().split('.').pop() ?? '';
+  const outcome = await persistGeneratedFileBytes(
+    {
+      userId,
+      organizationId,
+      data: Buffer.from(parsed.data.content, 'utf8'),
+      mimeType: SAVED_ARTIFACT_MIME_BY_EXTENSION[extension] ?? 'text/plain',
+      filename: parsed.data.fileName,
+      provider: 'artifact',
+      origin: 'saved_artifact',
+      ...(parsed.data.conversationId ? { conversationId: parsed.data.conversationId } : {}),
+    },
+    db,
+  );
+  if (!outcome.ok) {
+    if (outcome.reason === 'too_large') {
+      throw createError.validation('This artifact is too large to save to your Library.');
+    }
+    throw createError
+      .serviceUnavailable('Your Library could not store this artifact. Nothing was saved.')
+      .asUserSafe();
+  }
+  return NextResponse.json({ id: outcome.file.id }, { status: 201, headers: headers(request) });
 }
 
 export const GET = withErrorHandler(handleListLibrary);
+export const POST = withErrorHandler(handleSaveArtifact);
 
 export async function OPTIONS(request: NextRequest): Promise<NextResponse> {
   return (

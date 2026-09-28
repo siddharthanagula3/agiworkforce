@@ -48,7 +48,7 @@ Code: `apps/mobile/app/(app)/connectors/index.tsx:4-5`, `apps/mobile/src/feature
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Only an already-connected connector opens a detail screen; tapping an unconnected entry connects it or does nothing, so there is no page to read about a connector before connecting. | ui |
-| cli | partial | `agi mcp get <name>` prints only name, status, transport, target and file for a server the user registered; there is no description, publisher or tool list per server outside a live session. | ui |
+| cli | partial | agi mcp get still prints no description, publisher or tool list for a server outside a live session. | ui |
 | vscode | partial | VS Code shows a tooltip per connected connector (health, source, auth type, scopes); catalogue detail pages open on web. | surface-only |
 
 Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:676-716`, `apps/mobile/app/(app)/connectors/[id].tsx:9-10`, `apps/cli/src/lib.rs:1337-1382`, `apps/cli/src/lib.rs:2505-2541`
@@ -57,42 +57,37 @@ Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:676-716`, `a
 
 - Done when: The connector page lists the operations/tools the connector exposes (before or after connecting).
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Tool names and descriptions per server print only from bare /mcp in the --no-tui REPL; the default TUI /mcp shows a tool count per server, and `agi mcp` has no tools subcommand. | ui |
-
-Code: `apps/cli/src/claude_parity.rs:832-859`, `apps/cli/src/tui/tui_app.rs:3596-3626`
 
 ## S55.06: Read/write capability explanation.
 
 - Done when: Before connecting, the user sees in plain language what the connector can read and what it can change.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | ConnectorScopeList renders a placeholder "not reviewed yet" for the 17 curated providers whose ceiling is SCOPE_REVIEW_PENDING (airtable, clickup, stripe, ...) and nothing at all (status none -> null) for registry connectors, so most connectors give no read/write explanation before connecting. |  |
-| desktop | partial | ConnectorScopeList renders a placeholder "not reviewed yet" for the 17 curated providers whose ceiling is SCOPE_REVIEW_PENDING (airtable, clickup, stripe, ...) and nothing at all (status none -> null) for registry connectors, so most connectors give no read/write explanation before connecting. |  |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | partial | VS Code tooltips list raw granted scope strings with no read/write explanation. | ui |
 
-Code: `apps/web/features/connectors/hooks/use-connectors-settings-adapter.tsx:841-843`, `apps/web/features/connectors/components/ConnectorScopeList.tsx:51-69`, `apps/web/lib/connectors/scope-descriptions.ts:283-295`, `apps/extension-vscode/src/features/connectors/connectorPresentation.ts:52-61`
+Code: `apps/extension-vscode/src/features/connectors/connectorPresentation.ts:52-61`
 
 ## S55.09: API-key authorization.
 
 - Done when: A connector that needs an API key offers a form to enter it, stores it encrypted, and connects.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Only a custom MCP bearer token can be typed; catalogue connectors that need an API key get a 409 credentialsPath that the shared runtime ignores and sends into the OAuth path, so they cannot be connected on mobile. | handler |
-| cli | partial | `agi mcp add` and `/mcp add` take no token or header; an API key has to be hand-written into headers/env in ~/.agiworkforce/mcp.json. | ui |
 
-Code: `apps/mobile/src/features/settings/cloud-connectors/AddCustomConnectorModal.tsx:186-189`, `packages/client/client-runtime/src/connectors/runtime.ts:264-291`, `apps/cli/src/lib.rs:1337-1382`, `apps/cli/src/mcp/registry.rs:294-318`
+Code: `apps/mobile/src/features/settings/cloud-connectors/AddCustomConnectorModal.tsx:186-189`, `packages/client/client-runtime/src/connectors/runtime.ts:264-291`
 
 ## S55.10: Service-account authorization.
 
@@ -101,112 +96,52 @@ Code: `apps/mobile/src/features/settings/cloud-connectors/AddCustomConnectorModa
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Credential connectors can be added with an API key and shared to a workspace, but a service account cannot be registered as its own account next to a personal one: nothing writes account scope "service", so the Service account hint never applies. | handler |
-| desktop | partial | Credential connectors can be added with an API key and shared to a workspace, but a service account cannot be registered as its own account next to a personal one: nothing writes account scope "service", so the Service account hint never applies. | handler |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/connectors/components/ConnectorAccountSelector.tsx:43-45`, `apps/web/features/connectors/components/ConnectorAccountSelector.tsx:151-169`, `apps/web/app/api/connectors/[connectorId]/credentials/route.ts:183-191`, `apps/web/app/api/connectors/oauth/callback/route.ts:153-161`
-
-## S55.12: Multiple accounts per connector.
-
-- Done when: The user can connect more than one account for the same connector and keep both.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Accounts list, default switch and schema (0253) exist, but no flow creates a second account: both OAuth callbacks save every grant under the "default" account key, so a second sign-in replaces the first. | handler |
-| desktop | partial | Accounts list, default switch and schema (0253) exist, but no flow creates a second account: both OAuth callbacks save every grant under the "default" account key, so a second sign-in replaces the first. | handler |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/connectors/components/ConnectorAccountSelector.tsx:151-169`, `apps/web/app/api/connectors/[connectorId]/accounts/route.ts:44-52`, `apps/web/app/api/connectors/oauth/callback/route.ts:153-161`
 
 ## S55.13: Account display name.
 
 - Done when: Each connected account shows a human-readable name.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The accounts list renders a label, but nothing ever records one (callbacks pass no accountLabel), so every account reads "Personal" instead of the provider account name. | handler |
-| desktop | partial | The accounts list renders a label, but nothing ever records one (callbacks pass no accountLabel), so every account reads "Personal" instead of the provider account name. | handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/connectors/components/ConnectorAccountSelector.tsx:151-169`, `apps/web/lib/connectors/accounts.ts:32-36`, `apps/web/app/api/connectors/oauth/callback/route.ts:153-161`
 
 ## S55.14: Account identity and domain.
 
 - Done when: A connected account shows which identity (email/login) and domain/workspace it belongs to.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only GitHub App installations show the account login (in the PR-review block); OAuth connectors never record which provider account or domain was connected. | handler |
-| desktop | partial | Only GitHub App installations show the account login (in the PR-review block); OAuth connectors never record which provider account or domain was connected. | handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/connectors/hooks/use-connectors-settings-adapter.tsx:802-804`, `apps/web/features/connectors/components/ConnectorAccountSelector.tsx:151-169`, `apps/web/app/api/connectors/oauth/callback/route.ts:153-161`
-
-## S55.15: Default-account selection.
-
-- Done when: With several accounts for one connector, the user picks which is used by default.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | "Use by default" works (PATCH accounts) but is moot: only one account per connector can exist (see Multiple accounts). | handler |
-| desktop | partial | "Use by default" works (PATCH accounts) but is moot: only one account per connector can exist (see Multiple accounts). | handler |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/connectors/components/ConnectorAccountSelector.tsx:151-169`, `apps/web/app/api/connectors/[connectorId]/accounts/route.ts:73-81`
 
 ## S55.17: Granted-scope display.
 
 - Done when: After connecting, the user can see which scopes/permissions were actually granted.
 - Wave: 3
-- Already works on: mobile, vscode
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Requested scopes show only before connecting (Permissions requested); after connecting, the granted scopes returned by GET /api/connectors and the accounts route are never rendered. | ui |
-| desktop | partial | Requested scopes show only before connecting (Permissions requested); after connecting, the granted scopes returned by GET /api/connectors and the accounts route are never rendered. | ui |
 | cli | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/connectors/hooks/use-connectors-settings-adapter.tsx:841-843`, `apps/web/features/connectors/components/ConnectorScopeList.tsx:51-69`, `apps/web/features/connectors/components/ConnectorAccountSelector.tsx:151-169`, `apps/web/app/api/connectors/route.ts:282-304`
 
 ## S55.18: Connection health.
 
 - Done when: Each connector shows whether it is healthy, needs reauthorization or is not responding.
 - Wave: 3
-- Already works on: web, desktop, vscode
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Mobile marks only expired authorization; the server's "not-responding" health is ignored, so a failing connector still shows Connected. | ui |
-| cli | partial | Only servers that started show up (TUI /mcp labels every one Connected); a server that failed to start or lost auth is not listed with a state, and the McpServerStatus snapshot has no caller. | ui |
 
-Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:430-444`, `apps/cli/src/tui/tui_app.rs:3596-3626`, `apps/cli/src/mcp/status.rs:8-18`
-
-## S55.19: Last synchronization time.
-
-- Done when: Each connection shows when it last synchronized or was last used.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Connectors do not sync; the last-used time is shown only inside the Tool permissions panel (newest calls with their time), not on the connection row. | ui |
-| desktop | partial | Connectors do not sync; the last-used time is shown only inside the Tool permissions panel (newest calls with their time), not on the connection row. | ui |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/api/connectors/health/route.ts:21-29`, `apps/web/lib/connectors/health.ts:152-154`, `apps/web/features/connectors/hooks/use-connectors-settings-adapter.tsx:844-846`, `apps/web/features/connectors/components/ConnectorCallLog.tsx:148-154`
+Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:430-444`
 
 ## S55.20: Reconnect/reauthorize.
 
@@ -225,15 +160,12 @@ Code: `packages/ui/ui/src/settings-modal/SettingsModal.tsx:281-281`, `apps/web/f
 
 - Done when: The user can run an on-demand check that a connection works and see the result.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | `/mcp restart` reconnects and reports the tool count only in the --no-tui REPL; `agi mcp get` does not contact the server. | ui |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/repl/slash_commands.rs:67-70`, `apps/cli/src/repl/registry.rs:1244-1262`
 
 ## S55.23: Revoke permission.
 
@@ -251,29 +183,24 @@ Code: `apps/cli/src/lib.rs:2557-2571`, `apps/cli/src/mcp/mod.rs:658-670`
 
 - Done when: The user limits a connector to chosen folders or repositories.
 - Wave: 3
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | GitHub repository access is chosen on GitHub's own App install page; no in-product picker exists for folders (Drive, Dropbox, Box) or repositories. | ui |
-| desktop | partial | GitHub repository access is chosen on GitHub's own App install page; no in-product picker exists for folders (Drive, Dropbox, Box) or repositories. | ui |
-| mobile | partial | Mobile opens the GitHub App install page (repository choice happens on GitHub); no folder picker for drive connectors. | ui |
 | cli | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/api/connectors/route.ts:522-528`, `apps/web/features/connectors/hooks/use-connectors-settings-adapter.tsx:530-570`, `apps/mobile/src/features/settings/cloud-connectors/index.tsx:676-716`
 
 ## S55.26: Read-only mode.
 
 - Done when: A connector can be set to read-only so its write operations are blocked.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Per-tool Allow/Ask/Block exists, but there is no single read-only switch that blocks every write tool of a connector. | ui |
-| desktop | partial | Per-tool Allow/Ask/Block exists, but there is no single read-only switch that blocks every write tool of a connector. | ui |
 | mobile | partial | Per-tool Allow/Ask/Block only, and only for tools that already have a saved permission; no read-only switch. | ui |
 | cli | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/connectors/hooks/use-connectors-settings-adapter.tsx:830-836`, `apps/web/features/settings/components/WebSettingsModal.tsx:231-238`, `apps/web/app/api/connectors/permissions/route.ts:59-69`, `apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx:53-56`
+Code: `apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx:53-56`, `apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx:278-282`
 
 ## S55.27: Write-action settings.
 
@@ -292,16 +219,13 @@ Code: `apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.
 
 - Done when: At connect time the product explains what connector data it stores and for how long.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only the privacy notice says connector-fetched data is kept with the chat record; the connect flow and consent summary never state retention. | ui |
-| desktop | partial | Only the privacy notice says connector-fetched data is kept with the chat record; the connect flow and consent summary never state retention. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/privacy/page.tsx:964-976`, `apps/web/features/connectors/components/ConnectorConsentSummary.tsx:7-10`
 
 ## S55.29: Source-provider attribution.
 
@@ -320,30 +244,13 @@ Code: `apps/mobile/src/features/chat/components/ToolCallTimeline.tsx:84-87`, `pa
 
 - Done when: When a task needs a scope the grant lacks, the product asks the user to grant that permission.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Reconnect on the connector screen re-requests the wider scopes, but chat never shows which permission is missing (no connect card on mobile). | ui |
-| cli | partial | The MCP crate parses insufficient_scope challenges, but no CLI path re-runs login with the extra scope; the user must run `agi mcp login` again by hand. | handler |
 
-Code: `apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx:318-348`, `apps/web/app/api/connectors/oauth/start/route.ts:261-271`, `crates/agiworkforce-mcp/src/oauth/flow.rs:185-193`, `apps/cli/src/lib.rs:2542-2556`
-
-## S55.31: Organization approval flow.
-
-- Done when: A member can request a connector and an organization admin approves or denies it.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Admins approve or block connectors, plugins and MCP hosts, but a member cannot request approval for a connector; blocked members get a refusal only. | handler |
-| desktop | partial | Admins approve or block connectors, plugins and MCP hosts, but a member cannot request approval for a connector; blocked members get a refusal only. | handler |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/workspace/connectors/page.tsx:16-17`, `apps/web/features/workspace-console/components/WorkspaceConnectorPolicy.tsx:35-36`, `apps/web/lib/services/connector-policy-gate.ts:103-121`
+Code: `apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx:318-348`, `apps/web/app/api/connectors/oauth/start/route.ts:261-271`
 
 ## S55.32: Private-network setup where offered.
 

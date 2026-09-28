@@ -23,7 +23,9 @@ mod prompt;
 mod tools;
 
 pub use crate::runtime::session::PrivacyMode;
+pub use chat::SideQuery;
 pub use executor::ToolCall;
+pub(crate) use executor::value_to_legacy_args;
 pub use prompt::assemble_system_prompt;
 pub(crate) use prompt::encode_untrusted_context;
 
@@ -495,6 +497,15 @@ impl AgentSession {
         if provider_privacy_mode(&provider) != PrivacyMode::Managed {
             return;
         }
+        if linked_cloud_project().is_some() {
+            if let Err(error) = crate::cloud::refresh_projects(PrivacyMode::Managed).await {
+                if !error.is_boundary() {
+                    crate::output::print_warn(&format!(
+                        "using the project instructions this device already had: {error}"
+                    ));
+                }
+            }
+        }
         match crate::cloud::refresh_memory(PrivacyMode::Managed).await {
             Ok(_) => {}
             Err(error) if error.is_boundary() => crate::cloud::report_boundary_once(&error),
@@ -589,11 +600,27 @@ impl AgentSession {
             .map(|home| crate::cloud::account_memory_context(privacy_mode, &home))
             .unwrap_or_default();
 
-        let combined_memory = [memory_context, persistent_memory, account_memory]
-            .into_iter()
-            .filter(|block| !block.trim().is_empty())
-            .collect::<Vec<_>>()
-            .join("\n");
+        let project_instructions = crate::config::CliConfig::config_dir()
+            .ok()
+            .map(|home| {
+                crate::cloud::project_instructions_context(
+                    privacy_mode,
+                    &home,
+                    linked_cloud_project().as_deref(),
+                )
+            })
+            .unwrap_or_default();
+
+        let combined_memory = [
+            memory_context,
+            persistent_memory,
+            account_memory,
+            project_instructions,
+        ]
+        .into_iter()
+        .filter(|block| !block.trim().is_empty())
+        .collect::<Vec<_>>()
+        .join("\n");
 
         let system_message = Message::text(
             "system",
@@ -780,7 +807,7 @@ impl AgentSession {
     /// answer is yes. Cheap when no shell is running: there is no file to
     /// read, so nothing is sent.
     pub(crate) async fn refresh_browser_availability(&mut self) {
-        if self.browser_available.is_some() {
+        if self.browser_available == Some(true) {
             return;
         }
         self.browser_available = Some(crate::browser_bridge::browser_state().await.is_paired());
@@ -1756,6 +1783,12 @@ impl AgentSession {
 
     pub(crate) fn take_memory_consolidation_tasks(&mut self) -> Vec<tokio::task::JoinHandle<()>> {
         std::mem::take(&mut self.memory_consolidation_tasks)
+    }
+
+    pub(crate) async fn refresh_mcp_tools(&mut self) {
+        if let Some(manager) = self.mcp_manager.as_mut() {
+            manager.refresh_changed_servers().await;
+        }
     }
 
     /// Return MCP tool metadata (if any MCP servers are connected).

@@ -10,31 +10,27 @@ nothing is left.
 
 - Done when: A notebook has a title and description the user can set and later edit.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | The CLI sets a name and --description only at creation; there is no rename or description-edit command. | ui |
-| vscode | partial | VS Code asks only for a name at creation; the description and renaming are edited on the web. | ui |
 | chrome | partial | The side panel names a project at creation only; it cannot rename it or set or edit a description. | ui |
 
-Code: `apps/cli/src/lib.rs:983-993`, `apps/extension-vscode/src/features/projects/projectActions.ts:235-235`, `apps/extension-vscode/src/features/projects/projectActions.ts:116-116`, `apps/extension/src/features/side-panel/projectsDrawer.ts:533-533`
+Code: `apps/extension/src/features/side-panel/projectsDrawer.ts:533-533`
 
 ## S37.04: Source rail.
 
 - Done when: Inside a notebook, a source list sits beside the conversation so the user can see what grounds the answers.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Sources are a separate tab on the project page, not a panel beside the open conversation; inside a chat the user cannot see or reach the project's sources. | ui |
-| desktop | partial | Sources are a separate tab on the project page, not a panel beside the open conversation; inside a chat the user cannot see or reach the project's sources. | ui |
 | mobile | partial | Sources are a tab on the project screen, not beside the conversation. | ui |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | VS Code lists a project's knowledge files read-only in the project quick pick; there is no source panel beside the chat. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/app/chat/projects/[id]/page.tsx:43-43`, `apps/web/app/chat/projects/[id]/page.tsx:1242-1242`, `apps/web/app/api/projects/[id]/knowledge-files/route.ts:227-227`, `apps/mobile/src/features/projects/components/ProjectSourcesTab.tsx:199-199`
+Code: `apps/mobile/src/features/projects/components/ProjectSourcesTab.tsx:199-199`, `apps/mobile/src/features/projects/store.ts:137-137`
 
 ## S37.06: Add files.
 
@@ -91,15 +87,13 @@ Code: `apps/web/features/projects/components/AddSourcesModal.tsx:279-279`, `apps
 
 - Done when: The notebook has instructions that apply to every chat in it.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | A directory linked to an account project (agi projects link) never receives that project's own instructions; only local AGENTS.md/CLAUDE.md files apply. | handler |
-| vscode | partial | Instructions can be typed at creation and are prepended to VS Code turns while the project is in use, but cannot be edited in VS Code afterwards. | ui |
 | chrome | partial | Chrome sets instructions only while creating a project and cannot edit them later. | ui |
 
-Code: `apps/cli/src/agent/prompt.rs:503-503`, `apps/cli/src/cloud/projects.rs:138-138`, `apps/extension-vscode/src/features/projects/projectActions.ts:252-252`, `apps/extension-vscode/src/features/projects/activeProject.ts:51-51`
+Code: `apps/extension/src/features/side-panel/projectsDrawer.ts:533-533`, `apps/extension/src/side_panel.ts:6421-6421`
 
 ## S37.16: Saved chat responses.
 
@@ -108,14 +102,6 @@ Code: `apps/cli/src/agent/prompt.rs:503-503`, `apps/cli/src/cloud/projects.rs:13
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only artifacts and research reports have "Save to project"; an ordinary chat answer cannot be saved, and the save hits the same 0-byte storage cap for users without their own subscriptions row. | ui |
-| desktop | partial | Only artifacts and research reports have "Save to project"; an ordinary chat answer cannot be saved, and the save hits the same 0-byte storage cap for users without their own subscriptions row. | ui |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1542-1542`, `apps/web/features/chat/components/artifacts/ArtifactsPanel.tsx:296-296`, `apps/web/app/api/projects/[id]/knowledge-files/route.ts:227-228`
 
 ## S37.17: Notebook notes.
 
@@ -124,13 +110,6 @@ Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1542-1542
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | A note can only be added as a pasted .txt source; there is no note list, note editor or edit-in-place, and saving hits the 0-byte storage cap for users without their own subscriptions row. | ui, handler |
-| desktop | partial | A note can only be added as a pasted .txt source; there is no note list, note editor or edit-in-place, and saving hits the 0-byte storage cap for users without their own subscriptions row. | ui, handler |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/projects/components/AddSourcesModal.tsx:364-364`, `apps/web/features/projects/components/SourcesPanel.tsx:149-149`
 
 ## S37.19: Citation-linked navigation.
 
@@ -149,113 +128,92 @@ Code: `apps/web/features/projects/components/AddSourcesModal.tsx:364-364`, `apps
 
 - Done when: One click turns the sources into a briefing document.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | No one-click Studio generator; producible only as a generic document via the office-file tool in a project chat. | ui |
-| desktop | partial | No one-click Studio generator; producible only as a generic document via the office-file tool in a project chat. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:868-875`, `apps/web/lib/services/managed-office-file-service.ts:408-412`, `apps/web/lib/services/managed-office-file-service.ts:644-648`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:1868-1880`
 
 ## S37.24: Study guide.
 
 - Done when: One click turns the sources into a study guide.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | No one-click Studio generator; producible only as a generic document via the office-file tool in a project chat. | ui |
-| desktop | partial | No one-click Studio generator; producible only as a generic document via the office-file tool in a project chat. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:868-875`, `apps/web/lib/services/managed-office-file-service.ts:408-412`, `apps/web/lib/services/managed-office-file-service.ts:644-648`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:1868-1880`
 
 ## S37.25: Frequently asked questions.
 
 - Done when: One click turns the sources into an FAQ.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | No one-click Studio generator; producible only as a generic document via the office-file tool in a project chat. | ui |
-| desktop | partial | No one-click Studio generator; producible only as a generic document via the office-file tool in a project chat. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:868-875`, `apps/web/lib/services/managed-office-file-service.ts:408-412`, `apps/web/lib/services/managed-office-file-service.ts:644-648`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:1868-1880`
 
 ## S37.26: Timeline.
 
 - Done when: One click turns the sources into a timeline.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | No Studio button makes this from the notebook's sources; the user has to ask a project chat in words, which grounds the answer in the project files but produces it only as ordinary chat output (a Mermaid timeline diagram renders in chat). | ui |
-| desktop | partial | No Studio button makes this from the notebook's sources; the user has to ask a project chat in words, which grounds the answer in the project files but produces it only as ordinary chat output (a Mermaid timeline diagram renders in chat). | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/chat/projects/[id]/page.tsx:234-234`, `packages/ui/unified-chat/src/components/markdown/MermaidDiagram.tsx:143-143`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2550-2550`
 
 ## S37.27: Mind map.
 
 - Done when: One click turns the sources into a mind map.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | No Studio button makes this from the notebook's sources; the user has to ask a project chat in words, which grounds the answer in the project files but produces it only as ordinary chat output (a Mermaid mindmap renders in chat). | ui |
-| desktop | partial | No Studio button makes this from the notebook's sources; the user has to ask a project chat in words, which grounds the answer in the project files but produces it only as ordinary chat output (a Mermaid mindmap renders in chat). | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/chat/projects/[id]/page.tsx:234-234`, `packages/ui/unified-chat/src/components/markdown/MermaidDiagram.tsx:143-143`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2550-2550`
 
 ## S37.28: Data table.
 
 - Done when: One click extracts a data table from the sources.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | No Studio button makes this from the notebook's sources; the user has to ask a project chat in words, which grounds the answer in the project files but produces it only as ordinary chat output (a markdown table, or a .csv/.xlsx via the office-file tool). | ui |
-| desktop | partial | No Studio button makes this from the notebook's sources; the user has to ask a project chat in words, which grounds the answer in the project files but produces it only as ordinary chat output (a markdown table, or a .csv/.xlsx via the office-file tool). | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/chat/projects/[id]/page.tsx:234-234`, `apps/web/lib/prompts/chat-system-prompt.ts:104-104`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2550-2550`
 
 ## S37.30: Slide deck.
 
 - Done when: One click turns the sources into a slide deck.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | No Studio button makes this from the notebook's sources; the user has to ask a project chat in words, which grounds the answer in the project files but produces it only as ordinary chat output (a .pptx via the office-file tool). | ui |
-| desktop | partial | No Studio button makes this from the notebook's sources; the user has to ask a project chat in words, which grounds the answer in the project files but produces it only as ordinary chat output (a .pptx via the office-file tool). | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/chat/projects/[id]/page.tsx:234-234`, `apps/web/lib/prompts/chat-system-prompt.ts:104-104`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2550-2550`
 
 ## S37.34: Notebook sharing.
 
@@ -277,14 +235,6 @@ Code: `apps/web/app/chat/projects/[id]/page.tsx:234-234`, `apps/web/lib/prompts/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Export downloads JSON with settings and each file's extracted text; conversations and original files are left out. | handler |
-| desktop | partial | Export downloads JSON with settings and each file's extracted text; conversations and original files are left out. | handler |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/projects/components/ProjectSettingsDialog.tsx:327-327`, `apps/web/app/api/projects/[id]/export/route.ts:70-70`
 
 ## S37.37: Notebook-to-main-chat context handoff.
 
@@ -305,12 +255,11 @@ Code: `apps/mobile/src/features/chat/components/ProjectSelectorBar.tsx:38-38`, `
 
 - Done when: A notebook and its sources and notes are available in every app the user signs into.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | The CLI lists and creates account projects but shows none of their sources, notes or chats. | ui |
 | vscode | partial | VS Code shows projects and their knowledge files read-only; nothing else from the notebook. | ui |
 | chrome | partial | The Chrome side panel lists projects and recent chat titles, but not their sources or notes. | ui |
 
-Code: `apps/cli/src/lib.rs:1831-1831`, `apps/cli/src/cloud/mod.rs:202-202`, `apps/extension-vscode/src/features/projects/projectsTree.ts:87-87`, `apps/extension-vscode/src/features/projects/projectActions.ts:133-133`
+Code: `apps/extension-vscode/src/features/projects/projectsTree.ts:87-87`, `apps/extension-vscode/src/features/projects/projectActions.ts:133-133`, `apps/extension-vscode/src/features/projects/projectsClient.ts:48-48`, `apps/extension/src/features/side-panel/projectsDrawer.ts:489-489`

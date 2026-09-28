@@ -95,6 +95,7 @@
   "navLogOut": "Sair",
   "navProjects": "Projetos",
   "navLibrary": "Biblioteca",
+  "navImages": "Imagens",
   "navModels": "Modelos",
   "navSchedules": "Agendamentos",
   "navAdmin": "Administração",
@@ -122,5 +123,40 @@
   "previous": "Anterior",
   "previousSlide": "Slide anterior",
   "rowsPerPage": "Linhas por página",
-  "rowsSelected": "{{selected}} de {{total}} linha(s) selecionada(s)."
+  "rowsSelected": "{{selected}} de {{total}} linha(s) selecionada(s).",
+  "support": {
+    "waitRemaining_one": "Vou esperar mais {{count}} segundo e depois enviar isto por e-mail.",
+    "waitRemaining_other": "Vou esperar mais {{count}} segundos e depois enviar isto por e-mail."
+  },
+  "counts": {
+    "results_one": "{{count}} resultado",
+    "results_other": "{{count}} resultados",
+    "messages_one": "{{count}} mensagem",
+    "messages_other": "{{count}} mensagens",
+    "agentsConfigured_one": "{{count}} agente configurado",
+    "agentsConfigured_other": "{{count}} agentes configurados",
+    "skills_one": "{{count}} habilidade",
+    "skills_other": "{{count}} habilidades",
+    "agents_one": "{{count}} agente",
+    "agents_other": "{{count}} agentes"
+  },
+  "relative": {
+    "minutesAgo_one": "há {{count}} minuto",
+    "minutesAgo_other": "há {{count}} minutos",
+    "hoursAgo_one": "há {{count}} hora",
+    "hoursAgo_other": "há {{count}} horas",
+    "daysAgo_one": "há {{count}} dia",
+    "daysAgo_other": "há {{count}} dias"
+  },
+  "unsavedChanges": {
+    "title": "Descartar alterações não salvas?",
+    "description": "Suas alterações não foram salvas. Se você sair agora, elas serão perdidas.",
+    "discard": "Descartar",
+    "keepEditing": "Continuar editando"
+  },
+  "chipInput": {
+    "full": "Esta lista aceita no máximo {{count}} entradas.",
+    "rejected": "{{value}} não foi adicionado. {{reason}}",
+    "remove": "Remover {{value}}"
+  }
 }

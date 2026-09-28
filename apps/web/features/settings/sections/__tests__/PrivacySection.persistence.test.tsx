@@ -3,6 +3,10 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import React from 'react';
 
+vi.mock('../../components/UsOnlyRoutingPanel', () => ({
+  UsOnlyRoutingPanel: () => null,
+}));
+
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
 }));
@@ -135,6 +139,9 @@ describe('privacy preference persistence', () => {
     expect(toggle()).toHaveAttribute('aria-checked', 'false');
     await userEvent.click(screen.getByRole('button', { name: /retry saving/i }));
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Saved'));
-    expect(savePreferenceNamespace).toHaveBeenLastCalledWith('privacy', { shareTelemetry: false });
+    expect(savePreferenceNamespace).toHaveBeenLastCalledWith('privacy', {
+      shareTelemetry: false,
+      keepOutOfProviderTraining: false,
+    });
   });
 });

@@ -44,29 +44,22 @@ Code: `apps/extension/src/side_panel.ts:7870-7915`, `apps/extension/src/features
 
 - Done when: The user can search or filter their saved memories by text.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | Rows filter only through VS Code quick-pick matching on labels cut to 60 characters; there is no search over the full memory text. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/extension-vscode/src/features/surfaces/index.ts:333-341`
 
 ## S39.06: Topic grouping.
 
 - Done when: Saved memories are grouped by topic (e.g. preferences, work, background) when the user reviews them.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Show topic-grouped memory: consolidation groups learned facts by topic only inside ~/.agiworkforce/memories/raw_memories.md (Managed mode), no command displays it, and agi memory list is flat. | ui |
-| vscode | partial | Group facts by category; the category appears only in each fact's hover tooltip. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/memory_pipeline.rs:350-358`, `apps/cli/src/lib.rs:2058-2076`, `apps/extension-vscode/src/memory/memoryTreeProvider.ts:8-29`, `apps/extension-vscode/src/memory/accountMemoryStore.ts:135-145`
 
 ## S39.07: Profile summary.
 
@@ -96,30 +89,17 @@ Code: `apps/mobile/app/(app)/settings/memory-summary.tsx:36-60`, `apps/mobile/sr
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S39.10: Add Memory manually.
-
-- Done when: The user can type a new fact and save it to their memory, where later chats can use it.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Saving works (account sync push), but the prompt says the fact is 'Stored locally' when it is saved to the account, and it refuses unless a workspace folder is open although memory is account-wide. | states |
-
-Code: `apps/extension-vscode/src/core/commandSetup.ts:1863-1902`, `apps/extension-vscode/src/core/commandSetup.ts:1866-1870`, `apps/extension-vscode/src/memory/accountMemoryStore.ts:135-145`
-
 ## S39.11: Explicit “remember this” action.
 
 - Done when: From inside a conversation the user can explicitly ask the assistant to remember something and gets confirmation it was saved.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| vscode | partial | Add a 'remember this' action from a chat or selection; only the separate 'Add a memory fact' command exists. | ui |
 | chrome | partial | Migration 0285 is now applied in production (2026-09-27). Still open: Add a 'remember this' action in the side-panel chat; only the drawer's Add memory exists, and it saves through pending migration 0285. | ui |
 
-Code: `apps/extension-vscode/src/core/commandSetup.ts:1863-1870`, `apps/extension/src/side_panel.ts:7928-7938`
+Code: `apps/extension/src/side_panel.ts:7928-7938`
 
 ## S39.12: Automatic Memory update.
 
@@ -129,76 +109,44 @@ Code: `apps/extension-vscode/src/core/commandSetup.ts:1863-1870`, `apps/extensio
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| vscode | partial | Memory is learned only when a thread is archived in the local CLI runtime (developer_host archive path); ordinary VS Code chats never update memory. | mount |
+| vscode | partial | Memory is learned only when the local CLI runtime archives a thread. Learning during ordinary turns needs the CLI app-server to run memory extraction per turn (p-desktop-cli). | mount |
 
-Code: `apps/cli/src/app_server/developer_host.rs:1676-1685`
-
-## S39.13: Edit Memory.
-
-- Done when: The user can change the text of a saved memory and the corrected text is what later chats use.
-- Wave: 3
-- Already works on: web, desktop, mobile, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Add an edit command for account memories (agi memory has list/add/forget only); /memory edit opens a CLAUDE.md file in $EDITOR and only in the --no-tui REPL, the TUI refuses. | ui |
-| vscode | partial | Editing updates the account memory, but the prompt calls it a 'locally stored fact', and it refuses unless a workspace folder is open. | states |
-
-Code: `apps/cli/src/repl/registry.rs:1507-1527`, `apps/extension-vscode/src/core/commandSetup.ts:1904-1933`, `apps/extension-vscode/src/memory/accountMemoryStore.ts:147-160`
+Code: `apps/cli/src/app_server/developer_host.rs:1691-1691`
 
 ## S39.15: Delete all Memory.
 
 - Done when: One action deletes every saved memory, after a confirmation, and afterwards none remain.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | 'Forget everything' deletes only the facts cached at the last refresh (it does not re-pull first) and stale versions come back as refusals; there is no server-side delete-all. | states |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/extension-vscode/src/core/commandSetup.ts:1815-1845`, `apps/extension-vscode/src/memory/accountMemoryStore.ts:176-188`
 
 ## S39.16: Prioritize Memory.
 
 - Done when: The user can mark a memory as important (pin) so it is kept and preferred over others.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Add a pin/prioritise command; agi memory list only marks pinned memories with *. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:2069-2074`
 
 ## S39.17: Memory source/provenance.
 
 - Done when: Each saved memory shows where it came from (typed by the user, imported, or learned from a named conversation).
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | Migration 0285 is now applied in production (2026-09-27). Still open: Show which chat a memory came from; agi memory list prints only the writer label (web, mobile, auto...), and the chat link needs pending migration 0285. | ui |
-| vscode | partial | Show where each memory came from; the Memory tree tooltip shows only category and dates although the sync feed returns a source label. | ui |
 | chrome | partial | Show where each memory came from; drawer rows show only text and a relative time although GET /api/memory returns a source label. | ui |
 
-Code: `apps/cli/src/lib.rs:2070-2074`, `apps/extension-vscode/src/memory/memoryTreeProvider.ts:15-22`, `apps/web/app/api/memory/sync/route.ts:160-168`, `apps/extension/src/side_panel.ts:7768-7775`
-
-## S39.18: Last-updated information.
-
-- Done when: Each saved memory shows when it was last added or changed.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Print when each memory was last changed; agi memory list shows id, origin and text although the cache holds updated_at. | ui |
-
-Code: `apps/cli/src/lib.rs:2070-2074`, `apps/cli/src/cloud/memory.rs:104-114`
+Code: `apps/cli/src/lib.rs:2070-2074`, `apps/extension/src/side_panel.ts:7768-7775`, `apps/web/app/api/memory/route.ts:62-68`
 
 ## S39.19: Correction of stale information.
 
@@ -229,29 +177,23 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:1278-12
 
 - Done when: The user can bring memories from a file or another assistant into their memory, preview them, and later chats use them.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Import into account memory or from a file; agi migrate only copies Claude Code's ~/.claude/CLAUDE.md to the local global memory file, and only when none exists. | handler |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:3849-3856`, `apps/cli/src/ecosystem.rs:567-571`
 
 ## S39.22: Memory export.
 
 - Done when: The user can download their saved memories in a readable file.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Add a memory export (file or JSON); agi memory list only prints account memories as plain text and ignores --output. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:2060-2074`
 
 ## S39.23: Memory-capacity display where relevant.
 
@@ -291,10 +233,10 @@ Code: `apps/cli/src/tui/tui_app.rs:3914-3928`, `apps/cli/src/memory_pipeline.rs:
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | Say which workspace's memory this surface shows; memory follows the account's active workspace on the server, but the surface never names it and has no shared workspace knowledge view. | ui |
-| vscode | partial | Say which workspace's memory this surface shows; memory follows the account's active workspace on the server, but the surface never names it and has no shared workspace knowledge view. Its list is still labelled 'Workspace memory facts' (VS Code folder), which is not the account workspace. | ui |
+| vscode | partial | The surface now says it shows your account memory, not a folder's. It still does not name the account's active workspace or show shared workspace knowledge; the sync feed returns no workspace name. | ui |
 | chrome | partial | Say which workspace's memory this surface shows; memory follows the account's active workspace on the server, but the surface never names it and has no shared workspace knowledge view. | ui |
 
-Code: `apps/cli/src/cloud/mod.rs:322-334`, `apps/web/app/api/memory/sync/route.ts:57-63`, `apps/web/lib/services/active-workspace-service.ts:63-88`, `apps/extension-vscode/src/features/surfaces/index.ts:333-341`
+Code: `apps/cli/src/cloud/mod.rs:322-334`, `apps/web/app/api/memory/sync/route.ts:57-63`, `apps/web/lib/services/active-workspace-service.ts:63-88`, `apps/extension-vscode/src/features/surfaces/index.ts:343-343`
 
 ## S39.27: Memory-used indication.
 
@@ -329,30 +271,25 @@ Code: `apps/web/features/chat/components/messages/MessageBubble.tsx:2730-2733`, 
 
 - Done when: The user can stop sensitive information from being remembered (e.g. never-remember terms or categories), and sensitive facts such as credentials are refused automatically.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Add sensitive-memory controls on mobile; the never-remember list can only be edited on web, and on-device learning (Local mode) has no credential or special-category filter at all. | ui, handler |
-| cli | partial | Add a way to set never-remember terms from the CLI; account writes are refused server-side (and the refusal is printed), but local learned memory (raw_memories.md) has no sensitive-content filter. | ui, handler |
-| vscode | partial | Add a way to set never-remember terms in VS Code; saves are refused server-side and the refusal is shown, but the list itself is web-only. | ui |
 | chrome | partial | Migration 0285 is now applied in production (2026-09-27). Still open: Add never-remember controls in the side panel; its adds go through POST /api/memory, which enforces the web list but whose writer needs pending migration 0285. | ui |
 
-Code: `packages/ai/agent-core/src/memory.ts:78-104`, `apps/mobile/src/features/memory/services/consolidation.ts:146-160`, `apps/web/app/api/memory/sync/route.ts:159-169`, `apps/cli/src/lib.rs:2083-2093`
+Code: `packages/ai/agent-core/src/memory.ts:78-104`, `apps/mobile/src/features/memory/services/consolidation.ts:146-160`, `apps/web/app/api/memory/sync/route.ts:159-169`, `apps/extension/src/background.ts:3853-3859`
 
 ## S39.30: Memory reset independent from chat deletion.
 
 - Done when: The user can reset all memory without deleting chats, and deleting chats does not silently wipe (or silently keep) memory.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | 'Forget everything' clears memory without touching chats, but it deletes only the facts cached at the last refresh, with no server-side reset. | handler |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/extension-vscode/src/core/commandSetup.ts:1815-1845`, `apps/extension-vscode/src/memory/accountMemoryStore.ts:176-188`
 
 ## S39.31: Cross-model personalization.
 
@@ -364,9 +301,8 @@ Code: `apps/extension-vscode/src/core/commandSetup.ts:1815-1845`, `apps/extensio
 | --- | --- | --- | --- |
 | web | partial | Apply memory to every model: free-pool models (free-quota, experiential-free routes) and local Ollama/LM Studio models never receive saved memory; only the managed route injects it. | handler |
 | desktop | partial | Apply memory to every model: free-pool models (free-quota, experiential-free routes) and local Ollama/LM Studio models never receive saved memory; only the managed route injects it. | handler |
-| mobile | partial | Local mode feeds on-device memory to on-device models and Cloud mode uses account memory. One shared memory would move Local data to the cloud, which the trust boundary in AGENTS.md section 6 forbids, so this needs an owner decision (for example, Cloud memory readable in Local mode, never the reverse). | handler |
 
-Code: `apps/web/features/chat/lib/free-quota-selection.ts:35-42`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2904-2921`, `apps/web/app/api/models/free-quota/completions/route.ts:586-590`, `apps/mobile/stores/chat/chatExecutionStore.ts:1368-1376`
+Code: `apps/web/features/chat/lib/free-quota-selection.ts:35-42`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2904-2921`, `apps/web/app/api/models/free-quota/completions/route.ts:586-590`
 
 ## S39.32: Cross-surface Memory continuity.
 
@@ -376,7 +312,6 @@ Code: `apps/web/features/chat/lib/free-quota-selection.ts:35-42`, `apps/web/app/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Account memory syncs in Cloud mode; Local mode keeps a separate on-device memory. Syncing Local memory would move Local data to the cloud, which AGENTS.md section 6 forbids, so continuity across the two modes needs an owner decision. | states |
 | chrome | partial | Migration 0285 is now applied in production (2026-09-27). Still open: Reads, edits and deletes reach the account, but adds from the drawer go through POST /api/memory, whose writer needs pending migration 0285, and the drawer lists only the first 100. | states |
 
-Code: `apps/mobile/src/features/chat/store/appModeStore.ts:15-15`, `apps/mobile/services/cloudSyncEngine.ts:525-536`, `apps/mobile/src/features/memory/store.ts:85-94`, `apps/extension/src/features/cloud-bridge/memoryClient.ts:99-118`
+Code: `apps/extension/src/features/cloud-bridge/memoryClient.ts:99-118`, `apps/web/app/api/memory/route.ts:140-149`, `apps/web/lib/services/managed-memory-context-service.ts:720-724`

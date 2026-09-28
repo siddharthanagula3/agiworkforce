@@ -31,14 +31,14 @@ const ACTIVITY_SPAN_DAYS = 30;
 function barColorClass(pct: number): string {
   if (pct > 95) return 'bg-danger-fill';
   if (pct >= 80) return 'bg-warning-fill';
-  if (pct >= 50) return 'bg-blue-500';
+  if (pct >= 50) return 'bg-info-fill';
   return 'bg-success-fill';
 }
 
 function textColorClass(pct: number): string {
   if (pct > 95) return 'text-danger-text';
   if (pct >= 80) return 'text-warning-text';
-  if (pct >= 50) return 'text-blue-500';
+  if (pct >= 50) return 'text-info-text';
   return 'text-success-text';
 }
 
@@ -276,7 +276,7 @@ function UsageResetSection({ period, periodEnd }: ResetSectionProps) {
     >
       <div className="flex items-center gap-2">
         <CalendarClock className="h-4 w-4 text-muted-foreground" />
-        <h4 id="usage-resets-heading" className="text-sm font-semibold">
+        <h4 id="usage-resets-heading" className="text-h5">
           Usage limit resets
         </h4>
       </div>
@@ -320,7 +320,7 @@ function ActivitySection({ timeseries, models, nowMs }: ActivitySectionProps) {
     >
       <div className="flex items-center gap-2">
         <Flame className="h-4 w-4 text-muted-foreground" />
-        <h4 id="usage-activity-heading" className="text-sm font-semibold">
+        <h4 id="usage-activity-heading" className="text-h5">
           Activity
         </h4>
       </div>
@@ -462,7 +462,7 @@ export function UsageDashboard() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-semibold">Plan usage limits</h3>
+          <h3 className="text-h3">Plan usage limits</h3>
           <p className="text-sm text-muted-foreground mt-0.5">
             Monitor your token, model, and credit usage.
           </p>
@@ -491,7 +491,7 @@ export function UsageDashboard() {
             <div className="rounded-lg border border-border bg-card p-4 space-y-4">
               <div className="flex items-center gap-2">
                 <TrendingUp className="h-4 w-4 text-muted-foreground" />
-                <h4 className="text-sm font-semibold">Current session</h4>
+                <h4 className="text-h5">Current session</h4>
               </div>
 
               <UsageRow
@@ -530,7 +530,7 @@ export function UsageDashboard() {
             <div className="rounded-lg border border-border bg-card p-4 space-y-4">
               <div className="flex items-center gap-2">
                 <BarChart3 className="h-4 w-4 text-muted-foreground" />
-                <h4 className="text-sm font-semibold">Model limits</h4>
+                <h4 className="text-h5">Model limits</h4>
               </div>
 
               <div className="space-y-3">
@@ -561,7 +561,7 @@ export function UsageDashboard() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
-                  <h4 className="text-sm font-semibold">Credits used</h4>
+                  <h4 className="text-h5">Credits used</h4>
                 </div>
                 <button
                   type="button"

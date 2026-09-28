@@ -75,18 +75,22 @@ export function StreamAnnouncer({
   children,
 }: StreamAnnouncerProps) {
   const announcement = useStreamAnnouncement(text, isStreaming, announceIntervalMs);
+  const [hasStreamed, setHasStreamed] = useState(isStreaming);
+  if (isStreaming && !hasStreamed) setHasStreamed(true);
   return (
     <>
       {children}
-      <span
-        data-testid="stream-announcer"
-        className="sr-only"
-        role="status"
-        aria-live="polite"
-        aria-atomic="true"
-      >
-        {announcement}
-      </span>
+      {hasStreamed && (
+        <span
+          data-testid="stream-announcer"
+          className="sr-only"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          {announcement}
+        </span>
+      )}
     </>
   );
 }

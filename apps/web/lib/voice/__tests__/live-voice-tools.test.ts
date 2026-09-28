@@ -76,10 +76,7 @@ describe('live voice delegation tools', () => {
   it('names every tool it cannot run and why', () => {
     expect(Object.keys(LIVE_VOICE_EXCLUDED_TOOLS).sort()).toEqual([
       'agi_work',
-      'read_file',
-      'run_code',
       'web_search_fallback',
-      'write_file',
     ]);
     for (const reason of Object.values(LIVE_VOICE_EXCLUDED_TOOLS)) {
       expect(reason.length).toBeGreaterThan(20);

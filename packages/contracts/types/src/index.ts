@@ -33,6 +33,8 @@ export * from './visual-session-capture';
 
 export * from './time-focus';
 export * from './tool-approval-policy';
+export * from './routing-profile-choice';
+export * from './auto-route-explanation';
 export * from './tool-request-diff';
 export * from './tool-approval-stakes';
 export * from './surface-binding';

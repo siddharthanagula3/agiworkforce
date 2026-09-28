@@ -35,9 +35,11 @@ import {
 import {
   agiWorkPlanSentence,
   isAgiWorkGoalEntry,
+  isAgiWorkPlanOverviewEntry,
   isAgiWorkPlanEntry,
 } from '../lib/agi-work-progress';
 import { ConnectorConnectCard } from './ConnectorConnectCard';
+import { translateUiPlural } from '@agiworkforce/ui';
 
 const ACTIVITY_PAGE_SIZE = 40;
 const TOKEN_NUMBER_FORMAT = new Intl.NumberFormat('en-US');
@@ -129,6 +131,7 @@ function lastStepFailed(activity: Pick<AgentActivityState, 'entries'>): boolean 
     if (!entry) continue;
     if (entry.kind === 'error') return true;
     if (entry.kind !== 'tool' && entry.kind !== 'progress') continue;
+    if (isAgiWorkPlanOverviewEntry(entry)) continue;
     if (entry.status === 'pending' || entry.status === 'running') continue;
     return entry.status === 'failed';
   }
@@ -163,7 +166,10 @@ const WEB_SEARCH_CANCELLED_SUMMARY = 'Search stopped';
 const WEB_SEARCH_IN_PROGRESS_PREFIX = 'Searching';
 
 function sourceCountLabel(sourceCount: number): string {
-  return `${sourceCount} source${sourceCount === 1 ? '' : 's'}`;
+  return translateUiPlural('chat', 'counts.sources', sourceCount, {
+    one: '{{count}} source',
+    other: '{{count}} sources',
+  });
 }
 
 function webSearchCompletedLabel(sourceCount: number): string {
@@ -922,7 +928,10 @@ export function AgentActivityTimeline({
   // echo it back.
   const planLineEntryIndex = planSentence ? activity.entries.findIndex(isAgiWorkPlanEntry) : -1;
   const rowEntries = activity.entries.filter(
-    (entry, index) => index !== planLineEntryIndex && !isAgiWorkGoalEntry(entry),
+    (entry, index) =>
+      index !== planLineEntryIndex &&
+      !isAgiWorkGoalEntry(entry) &&
+      !isAgiWorkPlanOverviewEntry(entry),
   );
   const visibleEntryCount =
     entryVisibility.turnId === activity.turnId ? entryVisibility.count : ACTIVITY_PAGE_SIZE;

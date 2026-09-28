@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { randomUUID } from 'node:crypto';
+import { editMaskProblem } from '../lib/edit-mask';
 import { NextRequest, NextResponse, after } from 'next/server';
 import {
   ManagedMediaImageGenerationRequestSchema,
@@ -68,6 +69,7 @@ import {
   isProviderAvailable,
   resolveImageCatalogModel,
   resolveImageProviderFromCatalogModel,
+  editImagesSha256,
   resolveImageRefBytes,
   resolveProviderImageAspectRatio,
   sha256HexFromBytes,
@@ -304,6 +306,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     operation,
     source_image,
     mask_image,
+    reference_images,
     transparent_background,
     async: wantsAsync,
   } = validationResult.data;
@@ -589,14 +592,22 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
   if (operation !== 'generate' && source_image) {
     let sourceBytes: Uint8Array;
     let maskBytes: Uint8Array | undefined;
+    let referenceBytes: Uint8Array[] = [];
     try {
       const referencesStoredAsset =
-        'asset_id' in source_image || (mask_image && 'asset_id' in mask_image);
+        'asset_id' in source_image ||
+        (mask_image && 'asset_id' in mask_image) ||
+        (reference_images ?? []).some((reference) => 'asset_id' in reference);
       const editRefDb = referencesStoredAsset ? (await callerScope()).db : undefined;
       sourceBytes = await resolveImageRefBytes(source_image, userId, editRefDb);
       maskBytes = mask_image
         ? await resolveImageRefBytes(mask_image, userId, editRefDb)
         : undefined;
+      referenceBytes = await Promise.all(
+        (reference_images ?? []).map((reference) =>
+          resolveImageRefBytes(reference, userId, editRefDb),
+        ),
+      );
     } catch (error) {
       logger.error(
         {
@@ -627,12 +638,11 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
       );
     }
 
-    const suppliedUploads: ReadonlyArray<readonly [string, Uint8Array]> = maskBytes
-      ? [
-          ['source_image', sourceBytes],
-          ['mask_image', maskBytes],
-        ]
-      : [['source_image', sourceBytes]];
+    const suppliedUploads: ReadonlyArray<readonly [string, Uint8Array]> = [
+      ['source_image', sourceBytes],
+      ...(maskBytes ? [['mask_image', maskBytes] as const] : []),
+      ...referenceBytes.map((bytes, index) => [`reference_images.${index}`, bytes] as const),
+    ];
     for (const [param, bytes] of suppliedUploads) {
       const hashMatch = matchDenylistedUpload(bytes);
       if (hashMatch.matched) {
@@ -690,8 +700,30 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
       );
     }
 
-    inlineEdit = { sourceBytes, ...(maskBytes ? { maskBytes } : {}) };
-    sourceImageSha256 = sha256HexFromBytes(sourceBytes);
+    const maskProblem = maskBytes ? editMaskProblem(sourceBytes, maskBytes) : null;
+    if (maskProblem) {
+      return NextResponse.json(
+        {
+          error: {
+            message: maskProblem,
+            type: 'invalid_request_error',
+            code: 'invalid_mask_image',
+            param: 'mask_image',
+          },
+        },
+        {
+          status: 422,
+          headers: { ...getCorsHeaders(request), ...getSecurityHeaders() },
+        },
+      );
+    }
+
+    inlineEdit = {
+      sourceBytes,
+      ...(maskBytes ? { maskBytes } : {}),
+      ...(referenceBytes.length > 0 ? { referenceBytes } : {}),
+    };
+    sourceImageSha256 = editImagesSha256(sourceBytes, referenceBytes);
     maskImageSha256 = maskBytes ? sha256HexFromBytes(maskBytes) : undefined;
   }
 
@@ -794,6 +826,9 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     return managedUsageErrorResponse(request, managedError);
   }
 
+  const referenceAssetIds = (reference_images ?? []).flatMap((reference) =>
+    'asset_id' in reference ? [reference.asset_id] : [],
+  );
   const plan: ImageGenerationPlan = {
     aspectRatio: providerAspectRatio,
     quality,
@@ -803,6 +838,11 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     ...(negative_prompt ? { negativePrompt: negative_prompt } : {}),
     ...(source_image && 'asset_id' in source_image ? { sourceAssetId: source_image.asset_id } : {}),
     ...(mask_image && 'asset_id' in mask_image ? { maskAssetId: mask_image.asset_id } : {}),
+    ...(reference_images
+      ? referenceAssetIds.length === reference_images.length
+        ? { referenceAssetIds }
+        : { referencesInline: true }
+      : {}),
   };
 
   // Narrowed rather than asserted: only the two providers with an executable

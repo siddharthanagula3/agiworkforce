@@ -100,7 +100,10 @@
     "noArchived": "Nessuna chat archiviata",
     "noConversations": "Ancora nessuna conversazione",
     "showActive": "Torna alle chat attive",
-    "showArchived": "Mostra le chat archiviate ({{count}})"
+    "showArchived": "Mostra le chat archiviate ({{count}})",
+    "archivedToast": "Chat archiviata",
+    "archivedUndo": "Annulla",
+    "archivedView": "Vedi archiviate"
   },
   "emptyChat": {
     "neutralHeadline": "Come posso aiutarti oggi?",
@@ -164,7 +167,7 @@
     "provenanceDesc": "Recipients see which model generated this, no spoofing.",
     "htmlPreview": "HTML preview",
     "fileCount_one": "{{count}} file",
-    "fileCount_other": "{{count}} files",
+    "fileCount_other": "{{count}} file",
     "mcpManage": "Manage",
     "mcpConnected": "Connected:"
   },
@@ -407,6 +410,8 @@
     "weeksAgo": "{{count}} weeks ago"
   },
   "canvas": {
-    "sessionOnlyNotice": "Per ora gli schizzi durano solo la sessione: chiudendo l'app la lavagna si svuota."
+    "sessionOnlyNotice": "Per ora gli schizzi durano solo la sessione: chiudendo l'app la lavagna si svuota.",
+    "elementCount_one": "{{count}} elemento",
+    "elementCount_other": "{{count}} elementi"
   }
 }

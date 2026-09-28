@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CircleAlert, X } from '@agiworkforce/icons';
-import { ApprovalCard, Spinner } from '@agiworkforce/ui';
+import { ApprovalCard, Button, Spinner } from '@agiworkforce/ui';
 import { TOOL_APPROVAL_ACTION_LABELS, type VisualFrame } from '@agiworkforce/types';
 
 import { cn } from '@shared/lib/utils';
@@ -32,7 +32,28 @@ const LABEL = {
   cameraPreview: 'Preview of what your camera is sharing',
   cameraSharing: 'Your camera is being shared with this call.',
   approvalTitle: 'Waiting for your approval',
+  stopTask: 'Stop the task',
+  stopTaskHint: 'Stops the running action and keeps the call open.',
+  slowTool: 'is taking longer than usual',
+  toolResults: 'What the actions returned',
+  toolFailed: 'Did not complete',
+  openFile: 'Open',
+  rejoinTitle: 'This chat already has an open voice session',
+  rejoinBody:
+    'Continue with the voice, language and pace it used, or start with your current settings.',
+  rejoin: 'Continue that session',
+  startFresh: 'Use my settings',
+  pause: 'Pause',
+  resume: 'Resume',
+  pausedHint:
+    'Paused. The call is closed and nothing is being used. Resume to pick up this conversation.',
 } as const;
+
+const GENERATED_FILE_PATH = /^\/api\/files\/[A-Za-z0-9_-]+(?:\?.*)?$/;
+
+function isGeneratedFilePath(uri: string): boolean {
+  return GENERATED_FILE_PATH.test(uri);
+}
 
 const ESCAPE = 'Escape';
 
@@ -170,6 +191,7 @@ export function VoiceModeSurface({
       focus={focusMode}
       growIn
       reducedMotion={session.reducedMotion}
+      level={session.audioLevel}
       onClick={toggleFocusMode}
       className={focusMode ? 'pointer-events-auto' : undefined}
     />
@@ -202,6 +224,10 @@ export function VoiceModeSurface({
         {LABEL.retry}
       </button>
     </div>
+  ) : session.paused ? (
+    <p data-testid="voice-paused-hint" className="text-sm text-[var(--chat-text-muted)]">
+      {LABEL.pausedHint}
+    </p>
   ) : muted && status === VOICE_SESSION_STATUS.muted ? (
     <p data-testid="voice-muted-hint" className="text-sm text-[var(--chat-text-muted)]">
       {session.mutedHint}
@@ -254,6 +280,107 @@ export function VoiceModeSurface({
       </p>
 
       {notice}
+      {session.rejoinOffer ? (
+        <div
+          role="dialog"
+          aria-labelledby="voice-rejoin-title"
+          data-testid="voice-rejoin-offer"
+          className="flex w-full max-w-md flex-col gap-2 rounded-xl border border-[var(--chat-border-strong)] bg-[var(--chat-surface-elevated)] p-4 text-sm"
+        >
+          <p id="voice-rejoin-title" className="font-medium text-[var(--chat-text-primary)]">
+            {LABEL.rejoinTitle}
+          </p>
+          <p className="text-[var(--chat-text-secondary)]">
+            Started{' '}
+            {new Date(session.rejoinOffer.startedAt).toLocaleTimeString([], {
+              hour: 'numeric',
+              minute: '2-digit',
+            })}{' '}
+            on {session.rejoinOffer.surface}. {LABEL.rejoinBody}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" className="min-h-11" onClick={() => session.answerRejoin(true)}>
+              {LABEL.rejoin}
+            </Button>
+            <button
+              type="button"
+              onClick={() => session.answerRejoin(false)}
+              className="min-h-11 rounded-full border border-[var(--chat-border-strong)] px-4 py-2 font-medium text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]"
+            >
+              {LABEL.startFresh}
+            </button>
+          </div>
+        </div>
+      ) : null}
+      {session.toolActivity.length > 0 ? (
+        <div data-testid="voice-tool-activity" className="flex w-full max-w-md flex-col gap-2">
+          {session.toolActivity.map((activity) => (
+            <div
+              key={activity.delegationId}
+              className="flex items-center gap-2 rounded-full border border-[var(--chat-border-strong)] bg-[var(--chat-surface-elevated)] px-3 py-1.5 text-sm text-[var(--chat-text-primary)]"
+            >
+              {activity.state === 'running' ? (
+                <Spinner size="sm" className="h-4 w-4 shrink-0" />
+              ) : (
+                <CircleAlert
+                  className="h-4 w-4 shrink-0 text-[var(--chat-text-secondary)]"
+                  aria-hidden="true"
+                />
+              )}
+              <span className="min-w-0 flex-1 truncate">
+                {activity.state === 'timed_out'
+                  ? `${activity.label} ${LABEL.slowTool}`
+                  : activity.label}
+              </span>
+            </div>
+          ))}
+          <button
+            type="button"
+            data-testid="voice-stop-task"
+            onClick={session.cancelBackendWork}
+            title={LABEL.stopTaskHint}
+            className="min-h-11 self-center rounded-full border border-[var(--chat-border-strong)] px-4 py-2 text-sm font-medium text-[var(--chat-text-secondary)] transition-colors hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]"
+          >
+            {LABEL.stopTask}
+          </button>
+        </div>
+      ) : null}
+      {session.toolOutcomes.length > 0 ? (
+        <details data-testid="voice-tool-results" className="w-full max-w-md text-sm">
+          <summary className="cursor-pointer text-[var(--chat-text-secondary)]">
+            {LABEL.toolResults}
+          </summary>
+          <ul className="mt-2 flex flex-col gap-2">
+            {session.toolOutcomes.map((outcome) => (
+              <li
+                key={outcome.callId}
+                className="rounded-lg border border-[var(--chat-border-strong)] bg-[var(--chat-surface-elevated)] p-2"
+              >
+                <p className="font-medium text-[var(--chat-text-primary)]">
+                  {outcome.label}
+                  {outcome.isError ? ` · ${LABEL.toolFailed}` : null}
+                </p>
+                <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono text-caption text-[var(--chat-text-secondary)]">
+                  {outcome.output}
+                </pre>
+                {outcome.files
+                  .filter((file) => isGeneratedFilePath(file.uri))
+                  .map((file) => (
+                    <a
+                      key={file.uri}
+                      href={file.uri}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-1 inline-flex min-h-6 items-center gap-1 font-medium text-[var(--chat-accent-primary-text)] underline-offset-2 hover:underline"
+                    >
+                      {LABEL.openFile} {file.name}
+                    </a>
+                  ))}
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
       {session.toolApprovals.map((approval) => (
         <ApprovalCard
           key={approval.callId}
@@ -310,6 +437,18 @@ export function VoiceModeSurface({
             </>
           ) : null}
         </div>
+      ) : null}
+
+      {status !== VOICE_SESSION_STATUS.error ? (
+        <button
+          type="button"
+          data-testid="voice-pause-toggle"
+          aria-pressed={session.paused}
+          onClick={session.paused ? session.resume : session.pause}
+          className="min-h-11 rounded-full border border-[var(--chat-border-strong)] px-4 py-2 text-sm font-medium text-[var(--chat-text-secondary)] transition-colors hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]"
+        >
+          {session.paused ? LABEL.resume : LABEL.pause}
+        </button>
       ) : null}
 
       <VoiceComposer

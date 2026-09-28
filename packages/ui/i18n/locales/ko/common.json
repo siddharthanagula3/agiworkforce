@@ -95,6 +95,7 @@
   "navLogOut": "로그아웃",
   "navProjects": "프로젝트",
   "navLibrary": "라이브러리",
+  "navImages": "이미지",
   "navModels": "모델",
   "navSchedules": "일정",
   "navAdmin": "관리",
@@ -122,5 +123,40 @@
   "previous": "이전",
   "previousSlide": "이전 슬라이드",
   "rowsPerPage": "페이지당 행 수",
-  "rowsSelected": "{{total}}개 중 {{selected}}개 행 선택됨."
+  "rowsSelected": "{{total}}개 중 {{selected}}개 행 선택됨.",
+  "support": {
+    "waitRemaining_one": "{{count}}초 더 기다린 후 대신 이메일로 보내겠습니다.",
+    "waitRemaining_other": "{{count}}초 더 기다린 후 대신 이메일로 보내겠습니다."
+  },
+  "counts": {
+    "results_one": "결과 {{count}}개",
+    "results_other": "결과 {{count}}개",
+    "messages_one": "메시지 {{count}}개",
+    "messages_other": "메시지 {{count}}개",
+    "agentsConfigured_one": "에이전트 {{count}}개 구성됨",
+    "agentsConfigured_other": "에이전트 {{count}}개 구성됨",
+    "skills_one": "스킬 {{count}}개",
+    "skills_other": "스킬 {{count}}개",
+    "agents_one": "에이전트 {{count}}개",
+    "agents_other": "에이전트 {{count}}개"
+  },
+  "relative": {
+    "minutesAgo_one": "{{count}}분 전",
+    "minutesAgo_other": "{{count}}분 전",
+    "hoursAgo_one": "{{count}}시간 전",
+    "hoursAgo_other": "{{count}}시간 전",
+    "daysAgo_one": "{{count}}일 전",
+    "daysAgo_other": "{{count}}일 전"
+  },
+  "unsavedChanges": {
+    "title": "저장하지 않은 변경 사항을 삭제할까요?",
+    "description": "변경 사항이 저장되지 않았습니다. 지금 나가면 사라집니다.",
+    "discard": "삭제",
+    "keepEditing": "계속 편집"
+  },
+  "chipInput": {
+    "full": "이 목록에는 최대 {{count}}개까지 넣을 수 있습니다.",
+    "rejected": "{{value}}을(를) 추가하지 않았습니다. {{reason}}",
+    "remove": "{{value}} 제거"
+  }
 }

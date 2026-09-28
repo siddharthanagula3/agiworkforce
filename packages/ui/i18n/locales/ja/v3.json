@@ -100,7 +100,10 @@
     "noArchived": "アーカイブ済みのチャットはありません",
     "noConversations": "まだ会話がありません",
     "showActive": "アクティブなチャットに戻る",
-    "showArchived": "アーカイブ済みのチャットを表示（{{count}}）"
+    "showArchived": "アーカイブ済みのチャットを表示（{{count}}）",
+    "archivedToast": "チャットをアーカイブしました",
+    "archivedUndo": "元に戻す",
+    "archivedView": "アーカイブを表示"
   },
   "emptyChat": {
     "neutralHeadline": "今日は何をお手伝いしましょうか？",
@@ -163,8 +166,8 @@
     "provenance": "Provenance is preserved",
     "provenanceDesc": "Recipients see which model generated this, no spoofing.",
     "htmlPreview": "HTML preview",
-    "fileCount_one": "{{count}} file",
-    "fileCount_other": "{{count}} files",
+    "fileCount_one": "{{count}} 個のファイル",
+    "fileCount_other": "{{count}} 個のファイル",
     "mcpManage": "Manage",
     "mcpConnected": "Connected:"
   },
@@ -407,6 +410,8 @@
     "weeksAgo": "{{count}} weeks ago"
   },
   "canvas": {
-    "sessionOnlyNotice": "スケッチは現在このセッション限りです。アプリを閉じるとボードは消去されます。"
+    "sessionOnlyNotice": "スケッチは現在このセッション限りです。アプリを閉じるとボードは消去されます。",
+    "elementCount_one": "{{count}} 個の要素",
+    "elementCount_other": "{{count}} 個の要素"
   }
 }

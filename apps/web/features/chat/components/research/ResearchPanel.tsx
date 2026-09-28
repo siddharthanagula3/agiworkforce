@@ -24,6 +24,7 @@ import { ResearchReportView, type ReportArtifactInput } from './ResearchReportVi
 import { ResearchReportsGallery } from './ResearchReportsGallery';
 import { toUserMessage } from '@/lib/user-error-message';
 import { useOverlayDialog, useOverlayLayout } from '../../hooks/use-overlay-dialog';
+import { SidePanelResizeHandle, useSidePanelWidth } from '../SidePanelResizeHandle';
 
 // ============================================================================
 // Source row
@@ -175,9 +176,11 @@ function SourcesEmptyState() {
 function ReportTab({
   conversationId,
   onAskFollowUp,
+  onRunAgain,
 }: {
   conversationId: string | null;
   onAskFollowUp?: (prompt: string) => void;
+  onRunAgain?: (query: string) => void;
 }) {
   const [report, setReport] = useState<ResearchReport | null>(null);
   const [state, setState] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle');
@@ -266,6 +269,7 @@ function ReportTab({
       report={report}
       onCreateArtifact={createArtifact}
       {...(onAskFollowUp ? { onAskFollowUp } : {})}
+      {...(onRunAgain ? { onRunAgain } : {})}
     />
   );
 }
@@ -281,9 +285,11 @@ interface ResearchPanelProps {
    * composer whose question would go nowhere.
    */
   onAskFollowUp?: (prompt: string) => void;
+  /** Start a new Deep Research run on a report's question, when a turn can start. */
+  onRunAgain?: (query: string) => void;
 }
 
-export function ResearchPanel({ onAskFollowUp }: ResearchPanelProps) {
+export function ResearchPanel({ onAskFollowUp, onRunAgain }: ResearchPanelProps) {
   const panelOpen = useResearchPanelStore((s) => s.panelOpen);
   const closePanel = useResearchPanelStore((s) => s.closePanel);
   const sourcesFor = useResearchPanelStore((s) => s.sourcesFor);
@@ -300,11 +306,18 @@ export function ResearchPanel({ onAskFollowUp }: ResearchPanelProps) {
         closePanel();
       }
     : undefined;
+  const runAgainAndClose = onRunAgain
+    ? (query: string) => {
+        onRunAgain(query);
+        closePanel();
+      }
+    : undefined;
 
   const panelRef = useRef<HTMLDivElement>(null);
   const layout = useOverlayLayout();
   const isModalOverlay = layout === 'mobile' && panelOpen;
   useOverlayDialog(panelRef, isModalOverlay, closePanel);
+  const panelWidth = useSidePanelWidth();
 
   if (!panelOpen) return null;
 
@@ -325,16 +338,17 @@ export function ResearchPanel({ onAskFollowUp }: ResearchPanelProps) {
           'bg-card/95 backdrop-blur-xl',
           // Mobile: full-screen overlay
           'fixed inset-y-0 right-0 z-[var(--z-panel)] w-full',
-          // Desktop: inline panel, same width as ArtifactsPanel
           'sm:relative sm:inset-auto sm:z-auto sm:w-[360px] sm:min-w-[280px] sm:shrink',
           // Slide-in animation
           'animate-in slide-in-from-right duration-moved',
         )}
+        style={layout === 'desktop' ? { width: panelWidth } : undefined}
         aria-label="Research panel"
         // Only the covering form is a dialog. Beside the conversation this is an
         // ordinary region and must not trap focus or swallow Escape.
         {...(isModalOverlay ? { role: 'dialog' as const, 'aria-modal': true, tabIndex: -1 } : {})}
       >
+        {layout === 'desktop' && <SidePanelResizeHandle label="Resize research panel" />}
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border/30 px-4 py-3">
           <div className="flex items-center gap-2">
@@ -411,6 +425,7 @@ export function ResearchPanel({ onAskFollowUp }: ResearchPanelProps) {
             <ReportTab
               conversationId={activeConversationId}
               {...(askFollowUpAndClose ? { onAskFollowUp: askFollowUpAndClose } : {})}
+              {...(runAgainAndClose ? { onRunAgain: runAgainAndClose } : {})}
             />
           </div>
         ) : (

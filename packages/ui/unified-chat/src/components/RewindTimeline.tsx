@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { History, RotateCcw, RefreshCw } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useCheckpointStore, selectCheckpoints } from '../stores/checkpointStore';
+import { useUiTranslation } from '@agiworkforce/ui';
 
 export interface CodingCheckpoint {
   id: string;
@@ -45,6 +46,7 @@ export function RewindTimeline({
   onToolEvent,
   conversationId,
 }: RewindTimelineProps) {
+  const { plural } = useUiTranslation('chat');
   const storeCheckpoints = useCheckpointStore(selectCheckpoints(conversationId ?? '__none__'));
 
   const labelMap = useMemo<Record<string, string>>(() => {
@@ -125,7 +127,10 @@ export function RewindTimeline({
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <History className="w-3.5 h-3.5" />
           <span>
-            {checkpoints.length} checkpoint{checkpoints.length !== 1 ? 's' : ''}
+            {plural('counts.checkpoints', checkpoints.length, {
+              one: '{{count}} checkpoint',
+              other: '{{count}} checkpoints',
+            })}
           </span>
         </div>
         <button

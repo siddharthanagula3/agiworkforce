@@ -95,6 +95,7 @@
   "navLogOut": "Выйти",
   "navProjects": "Проекты",
   "navLibrary": "Библиотека",
+  "navImages": "Изображения",
   "navModels": "Модели",
   "navSchedules": "Расписания",
   "navAdmin": "Администрирование",
@@ -122,5 +123,58 @@
   "previous": "Назад",
   "previousSlide": "Предыдущий слайд",
   "rowsPerPage": "Строк на странице",
-  "rowsSelected": "Выбрано строк: {{selected}} из {{total}}."
+  "rowsSelected": "Выбрано строк: {{selected}} из {{total}}.",
+  "support": {
+    "waitRemaining_one": "Подожду ещё {{count}} секунду, а затем отправлю это по электронной почте.",
+    "waitRemaining_few": "Подожду ещё {{count}} секунды, а затем отправлю это по электронной почте.",
+    "waitRemaining_many": "Подожду ещё {{count}} секунд, а затем отправлю это по электронной почте.",
+    "waitRemaining_other": "Подожду ещё {{count}} секунды, а затем отправлю это по электронной почте."
+  },
+  "counts": {
+    "results_one": "{{count}} результат",
+    "results_few": "{{count}} результата",
+    "results_many": "{{count}} результатов",
+    "results_other": "{{count}} результата",
+    "messages_one": "{{count}} сообщение",
+    "messages_few": "{{count}} сообщения",
+    "messages_many": "{{count}} сообщений",
+    "messages_other": "{{count}} сообщения",
+    "agentsConfigured_one": "Настроен {{count}} агент",
+    "agentsConfigured_few": "Настроено {{count}} агента",
+    "agentsConfigured_many": "Настроено {{count}} агентов",
+    "agentsConfigured_other": "Настроено {{count}} агента",
+    "skills_one": "{{count}} навык",
+    "skills_few": "{{count}} навыка",
+    "skills_many": "{{count}} навыков",
+    "skills_other": "{{count}} навыка",
+    "agents_one": "{{count}} агент",
+    "agents_few": "{{count}} агента",
+    "agents_many": "{{count}} агентов",
+    "agents_other": "{{count}} агента"
+  },
+  "relative": {
+    "minutesAgo_one": "{{count}} минуту назад",
+    "minutesAgo_few": "{{count}} минуты назад",
+    "minutesAgo_many": "{{count}} минут назад",
+    "minutesAgo_other": "{{count}} минуты назад",
+    "hoursAgo_one": "{{count}} час назад",
+    "hoursAgo_few": "{{count}} часа назад",
+    "hoursAgo_many": "{{count}} часов назад",
+    "hoursAgo_other": "{{count}} часа назад",
+    "daysAgo_one": "{{count}} день назад",
+    "daysAgo_few": "{{count}} дня назад",
+    "daysAgo_many": "{{count}} дней назад",
+    "daysAgo_other": "{{count}} дня назад"
+  },
+  "unsavedChanges": {
+    "title": "Отменить несохранённые изменения?",
+    "description": "Изменения не сохранены. Если вы уйдёте сейчас, они будут потеряны.",
+    "discard": "Отменить изменения",
+    "keepEditing": "Продолжить редактирование"
+  },
+  "chipInput": {
+    "full": "Максимальное число записей в этом списке: {{count}}.",
+    "rejected": "{{value}} не добавлено. {{reason}}",
+    "remove": "Удалить {{value}}"
+  }
 }

@@ -134,7 +134,6 @@ const WORKSPACE_SCOPE_BASELINE = new Map([
   ['apps/web/lib/user-connector-tools.ts', 4],
   ['apps/web/lib/services/product-link-resolver.ts', 3],
   ['apps/web/lib/server/video-generation-transcript.ts', 3],
-  ['apps/web/lib/services/retrieval-index-service.ts', 2],
   ['apps/web/lib/server/video-generation-jobs.ts', 2],
   ['apps/web/app/api/llm/v1/chat/completions/lib/context-compaction.ts', 2],
   ['apps/web/lib/triggers/trigger-service.ts', 1],

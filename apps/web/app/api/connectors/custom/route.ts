@@ -212,8 +212,7 @@ async function handlePost(request: NextRequest) {
       connectorId: customConnectorId(saved.short_id),
       transport: saved.transport,
       source: AUDIT_SOURCE,
-      signInRequired,
-      oauthClientSupplied: oauthClientId.length > 0,
+      status: signInRequired ? 'sign-in-required' : 'connected',
     },
   });
 

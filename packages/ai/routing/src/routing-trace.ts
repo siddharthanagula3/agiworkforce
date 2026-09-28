@@ -1,4 +1,5 @@
 import { modelRegistry } from '@agiworkforce/model-registry';
+import routingPolicies from '@agiworkforce/model-registry/routing-policies.json' with { type: 'json' };
 
 import {
   canaryRoutingEnabled,
@@ -10,7 +11,9 @@ import {
 } from './auto';
 import { taskFamilyRoutingStageEnabled } from './task-family-routing';
 
-export const ROUTING_TRACE_SCHEMA_VERSION = 2;
+export const ROUTING_TRACE_SCHEMA_VERSION = 3;
+
+export const ROUTING_POLICY_VERSION: number = routingPolicies.release.policyVersion;
 
 export type RoutingCohort = 'control' | 'canary';
 
@@ -39,6 +42,7 @@ export interface RoutingResponseAssessmentTrace {
 
 export interface RoutingDecisionTrace {
   schemaVersion: typeof ROUTING_TRACE_SCHEMA_VERSION;
+  policyVersion: number;
   requestId: string | null;
   selection: string;
   taskType: string;
@@ -146,6 +150,7 @@ export function buildRoutingDecisionTrace(
   const canaryEnabled = request.enableCanary ?? canaryRoutingEnabled();
   return {
     schemaVersion: ROUTING_TRACE_SCHEMA_VERSION,
+    policyVersion: ROUTING_POLICY_VERSION,
     requestId: request.requestId ?? null,
     selection: decision.requestedSelection,
     taskType: request.taskType,

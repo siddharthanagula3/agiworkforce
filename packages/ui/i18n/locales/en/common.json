@@ -95,6 +95,7 @@
   "navLogOut": "Log out",
   "navProjects": "Projects",
   "navLibrary": "Library",
+  "navImages": "Images",
   "navModels": "Models",
   "navSchedules": "Schedules",
   "navAdmin": "Admin",
@@ -122,5 +123,40 @@
   "previous": "Previous",
   "previousSlide": "Previous slide",
   "rowsPerPage": "Rows per page",
-  "rowsSelected": "{{selected}} of {{total}} row(s) selected."
+  "rowsSelected": "{{selected}} of {{total}} row(s) selected.",
+  "support": {
+    "waitRemaining_one": "I will wait {{count}} more second, then email this instead.",
+    "waitRemaining_other": "I will wait {{count}} more seconds, then email this instead."
+  },
+  "counts": {
+    "results_one": "{{count}} result",
+    "results_other": "{{count}} results",
+    "messages_one": "{{count}} message",
+    "messages_other": "{{count}} messages",
+    "agentsConfigured_one": "{{count}} agent configured",
+    "agentsConfigured_other": "{{count}} agents configured",
+    "skills_one": "{{count}} skill",
+    "skills_other": "{{count}} skills",
+    "agents_one": "{{count}} agent",
+    "agents_other": "{{count}} agents"
+  },
+  "relative": {
+    "minutesAgo_one": "{{count}} minute ago",
+    "minutesAgo_other": "{{count}} minutes ago",
+    "hoursAgo_one": "{{count}} hour ago",
+    "hoursAgo_other": "{{count}} hours ago",
+    "daysAgo_one": "{{count}} day ago",
+    "daysAgo_other": "{{count}} days ago"
+  },
+  "unsavedChanges": {
+    "title": "Discard unsaved changes?",
+    "description": "Your changes have not been saved. If you leave now, they will be lost.",
+    "discard": "Discard",
+    "keepEditing": "Keep editing"
+  },
+  "chipInput": {
+    "full": "This list holds at most {{count}} entries.",
+    "rejected": "{{value}} was not added. {{reason}}",
+    "remove": "Remove {{value}}"
+  }
 }

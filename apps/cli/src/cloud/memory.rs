@@ -27,6 +27,8 @@ pub struct MemoryPushItem {
     pub base_version: String,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub is_deleted: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pinned: Option<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -182,6 +184,27 @@ pub fn new_memory(content: &str, category: Option<&str>, source: &str) -> Memory
         source: source.to_string(),
         base_version: INITIAL_CURSOR.to_string(),
         is_deleted: false,
+        pinned: None,
+    }
+}
+
+pub fn revise_memory(
+    entry: &CachedMemory,
+    state: &SyncState,
+    source: &str,
+    content: Option<&str>,
+    pinned: Option<bool>,
+) -> MemoryPushItem {
+    MemoryPushItem {
+        id: entry.id.clone(),
+        content: content
+            .map(|content| truncate(content.trim(), CONTENT_MAX_CHARS))
+            .unwrap_or_else(|| entry.content.clone()),
+        category: entry.category.clone(),
+        source: source.to_string(),
+        base_version: state.memories.base_version(&entry.id),
+        is_deleted: false,
+        pinned,
     }
 }
 
@@ -193,6 +216,7 @@ pub fn delete_memory(entry: &CachedMemory, state: &SyncState, source: &str) -> M
         source: source.to_string(),
         base_version: state.memories.base_version(&entry.id),
         is_deleted: true,
+        pinned: None,
     }
 }
 

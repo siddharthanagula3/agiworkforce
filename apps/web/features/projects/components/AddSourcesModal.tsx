@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Upload, FileText, HardDrive, MessageSquare, X, ExternalLink } from 'lucide-react';
+import { Upload, FileText, HardDrive, X, ExternalLink } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { toUserMessage } from '@/lib/user-error-message';
 import { useDialogKeyboard } from '@agiworkforce/ui';
@@ -11,6 +11,7 @@ interface Props {
   onClose: () => void;
   onUploadFile: (file: File) => Promise<void>;
   onUploadText: (text: string, title: string) => Promise<void>;
+  onAddFromGoogleDrive: () => Promise<'added' | 'connect'>;
   isUploading?: boolean;
   accept?: string;
 }
@@ -20,6 +21,7 @@ export function AddSourcesModal({
   onClose,
   onUploadFile,
   onUploadText,
+  onAddFromGoogleDrive,
   isUploading = false,
   accept,
 }: Props) {
@@ -119,6 +121,20 @@ export function AddSourcesModal({
   function handleConnectorRoute(path: string) {
     onClose();
     router.push(path);
+  }
+
+  async function handleGoogleDrive() {
+    setIsSubmitting(true);
+    setSubmitError(null);
+    try {
+      const outcome = await onAddFromGoogleDrive();
+      if (outcome === 'connect') handleConnectorRoute('/connectors');
+      else onClose();
+    } catch (error) {
+      setSubmitError(toUserMessage(error, 'Could not add files from Google Drive.'));
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -277,18 +293,9 @@ export function AddSourcesModal({
                 <SourceButton
                   icon={<HardDrive style={{ width: 20, height: 20 }} aria-hidden="true" />}
                   label="Google Drive"
-                  description="Connect in Settings"
-                  badge="Settings"
-                  onClick={() => handleConnectorRoute('/connectors')}
-                />
-
-                {/* Slack */}
-                <SourceButton
-                  icon={<MessageSquare style={{ width: 20, height: 20 }} aria-hidden="true" />}
-                  label="Slack"
-                  description="Connect in Settings"
-                  badge="Settings"
-                  onClick={() => handleConnectorRoute('/connectors')}
+                  description="Pick files from your Drive"
+                  onClick={() => void handleGoogleDrive()}
+                  disabled={isUploading || isSubmitting}
                 />
               </div>
 
@@ -311,7 +318,7 @@ export function AddSourcesModal({
                   lineHeight: 1.5,
                 }}
               >
-                Google Drive and Slack require a connector.{' '}
+                Google Drive needs its connector.{' '}
                 <button
                   type="button"
                   onClick={() => handleConnectorRoute('/connectors')}
