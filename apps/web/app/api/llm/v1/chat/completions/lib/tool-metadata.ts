@@ -255,9 +255,29 @@ const GITHUB_TOOL_METADATA: Readonly<Record<string, ToolMetadata>> = Object.free
   },
 });
 
+const GMAIL_TOOL_METADATA: Readonly<Record<string, ToolMetadata>> = Object.freeze({
+  send_draft: {
+    actionClass: 'external_send',
+    reversible: false,
+    acceptsUntrustedContent: false,
+    createsEgressPath: true,
+    declared: true,
+    externalDelivery: 'send',
+    retrySafety: 'at_most_once',
+  },
+  read_attachments: {
+    actionClass: 'read',
+    reversible: true,
+    acceptsUntrustedContent: true,
+    createsEgressPath: false,
+    declared: true,
+  },
+});
+
 const CONNECTOR_TOOL_METADATA: Readonly<Record<string, Readonly<Record<string, ToolMetadata>>>> =
   Object.freeze({
     github: GITHUB_TOOL_METADATA,
+    gmail: GMAIL_TOOL_METADATA,
   });
 
 export const UNKNOWN_TOOL_METADATA: ToolMetadata = Object.freeze({

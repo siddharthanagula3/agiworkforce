@@ -176,7 +176,12 @@ set the named variables in production and locally.
   `userinfo.profile`, then per connector Gmail `gmail.readonly`, `gmail.compose`
   (drafts), `gmail.send`;
   Drive `drive.file`, `drive.metadata.readonly`; Calendar `calendar.readonly`,
-  `calendar.events`. The full-mailbox, full-drive and full-calendar scopes are
+  `calendar.events`. AGI adds two Gmail tools beside Google's server, both
+  calling the Gmail API with the same grant: `send_draft` sends a draft the
+  user has seen (`drafts.send`, which needs `gmail.compose`) and
+  `read_attachments` reads a message's attachments as text
+  (`messages.attachments.get`, which needs `gmail.readonly`). The full-mailbox,
+  full-drive and full-calendar scopes are
   forbidden and dropped. `gmail.modify`, which Gmail's label tools need, is left
   out like Microsoft's `Mail.ReadWrite`; admitting it is an owner decision.
 - Variables: `CONNECTOR_OAUTH_GMAIL_CLIENT_ID`,
