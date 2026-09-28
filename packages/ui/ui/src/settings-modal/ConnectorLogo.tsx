@@ -196,6 +196,8 @@ const CONNECTOR_LOGO_URLS: Record<string, string> = {
 
   plaid: 'https://www.google.com/s2/favicons?domain=plaid.com&sz=64',
 
+  'google-contacts': 'https://www.google.com/s2/favicons?domain=contacts.google.com&sz=64',
+
   'epic-fhir': 'https://www.google.com/s2/favicons?domain=epic.com&sz=64',
   cerner: 'https://www.google.com/s2/favicons?domain=oracle.com&sz=64',
 };

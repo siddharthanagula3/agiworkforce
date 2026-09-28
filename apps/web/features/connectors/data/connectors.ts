@@ -192,6 +192,17 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
     iconEmoji: '📁',
   },
   {
+    id: 'google-contacts',
+    name: 'Google Contacts',
+    capabilitySummary: 'contact and directory lookups for names, email addresses and phone numbers',
+    category: 'Productivity',
+    authType: 'oauth',
+    phase: 1,
+    iconBg: 'from-blue-500 to-blue-600',
+    iconText: 'C',
+    iconEmoji: '👤',
+  },
+  {
     id: 'notion',
     name: 'Notion',
     capabilitySummary: 'page search, content edits, and database management',

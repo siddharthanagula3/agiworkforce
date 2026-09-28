@@ -41,6 +41,10 @@ export const CONNECTOR_OAUTH_SCOPE_CEILINGS: Readonly<Record<string, ConnectorSc
   gmail: [...GOOGLE_IDENTITY_SCOPES, ...google('gmail.readonly', 'gmail.compose', 'gmail.send')],
   'google-calendar': [...GOOGLE_IDENTITY_SCOPES, ...google('calendar.readonly', 'calendar.events')],
   'google-drive': [...GOOGLE_IDENTITY_SCOPES, ...google('drive.file', 'drive.metadata.readonly')],
+  'google-contacts': [
+    ...GOOGLE_IDENTITY_SCOPES,
+    ...google('contacts.readonly', 'directory.readonly'),
+  ],
   'google-sheets': [
     ...GOOGLE_IDENTITY_SCOPES,
     ...google('spreadsheets.readonly', 'spreadsheets', 'drive.file'),
