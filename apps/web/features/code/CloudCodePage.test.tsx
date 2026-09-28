@@ -113,6 +113,19 @@ const listDeveloperModels = vi.fn(async () => ({
 }));
 
 vi.mock('@/features/desktop-host', () => ({
+  ContinueOnDesktop: ({
+    label,
+    fallbackHref,
+    className,
+  }: {
+    label: string;
+    fallbackHref: string;
+    className?: string;
+  }) => (
+    <a href={fallbackHref} className={className}>
+      {label}
+    </a>
+  ),
   useDesktopHost: () => host,
   answerDeveloperApproval: vi.fn(async () => true),
   interruptDeveloperTurn: vi.fn(async () => true),
