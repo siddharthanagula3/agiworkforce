@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { ToolApprovalResumeRequestSchema } from '@agiworkforce/cloud-contracts';
 import { isFreeBillingPlanTier } from '@agiworkforce/types';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -348,7 +348,7 @@ async function handleToolApproval(request: NextRequest, authResult: AuthGateSucc
       toolApprovalPolicy,
       connectorPermissions,
       onDurableUnavailable: 'inline',
-      signal: request.signal,
+      signal: resumeFields.detached ? new AbortController().signal : request.signal,
       completionReason: 'tool_loop_resume_completed',
       cancellationReason: 'client_cancelled_tool_loop_resume',
       hasConnectorTools: mcpTools.some((tool) => tool.origin === 'connector'),
@@ -459,6 +459,18 @@ async function handleToolApproval(request: NextRequest, authResult: AuthGateSucc
         })
       : turn.readable;
 
+  if (resumeFields.detached && turn.transport === 'inline') {
+    const [clientBranch, serverBranch] = body.tee();
+    after(() =>
+      serverBranch.pipeTo(new WritableStream()).catch((error: unknown) => {
+        logger.warn(
+          { error, userId, runId: claim.checkpoint.runId },
+          'Detached approval resume stream ended with an error',
+        );
+      }),
+    );
+    return new NextResponse(withSseHeartbeat(clientBranch), { headers: streamHeaders });
+  }
   return new NextResponse(withSseHeartbeat(body), { headers: streamHeaders });
 }
 
