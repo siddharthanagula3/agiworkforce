@@ -197,35 +197,33 @@ Code: `apps/web/features/desktop-host/components/BrowserToolsDialog.tsx:56-56`, 
 
 - Done when: The assistant can call an image-generation tool during a turn and the generated image appears in the transcript.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Images are generated when the user's message is classified as an image request or Image mode is chosen; the model cannot call image generation as a tool mid-turn or inside AGI Work. | handler |
-| desktop | partial | Images are generated when the user's message is classified as an image request or Image mode is chosen; the model cannot call image generation as a tool mid-turn or inside AGI Work. | handler |
-| mobile | partial | Images are generated when the user's message is classified as an image request or Image mode is chosen; the model cannot call image generation as a tool mid-turn or inside AGI Work. | handler |
-| cli | partial | Expose cloud::image::generate as an agent tool for Managed sessions. | handler |
+| mobile | partial | The server offers the tools to mobile, but the mobile client does not yet declare image.v1 (apps/mobile/stores/chat/chatExecutionStore.ts:1812, held by Codex) and has no image.v1 renderer. That needs a post-codex patch. | handler |
+| cli | partial | Not in this lane: exposing cloud::image::generate as an agent tool for Managed CLI sessions belongs to p-desktop-cli. | handler |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 | api | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/pages/WebChatPage.tsx:3409-3422`, `apps/web/lib/hooks/useMediaGeneration.ts:253-253`, `apps/mobile/app/(app)/chat/[id].tsx:113-113`, `apps/cli/src/cloud/image.rs:556-556`
+Code: `apps/web/app/api/media/image/lib/image-chat-tools.ts:45-45`, `apps/cli/src/cloud/image.rs:556-556`
 
 ## S57.17: Image-editing tool.
 
 - Done when: The assistant can call a tool that edits a supplied image (edit, inpaint, variation) and shows the result.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Editing (edit, mask edit) runs only from the user's own image controls; the model cannot call an image-edit tool. | handler |
-| desktop | partial | Editing (edit, mask edit) runs only from the user's own image controls; the model cannot call an image-edit tool. | handler |
-| mobile | partial | Editing (edit, mask edit) runs only from the user's own image controls; the model cannot call an image-edit tool. | handler |
+| mobile | partial | Same as S57.16 mobile: declare and render image.v1 in the mobile client after Codex releases chatExecutionStore.ts. | handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 | api | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:194-194`, `apps/web/app/api/media/image/generate/route.ts:588-596`, `apps/mobile/src/features/chat/actions/resolveMobileImageGenerationRequest.ts:239-241`
+Code: `apps/web/app/api/media/image/lib/image-chat-tools.ts:45-45`
 
 ## S57.18: Video-generation tool.
 

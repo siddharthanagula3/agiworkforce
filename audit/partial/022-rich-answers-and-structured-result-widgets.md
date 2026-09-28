@@ -92,6 +92,7 @@ Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:73-73`, `
 
 - Done when: Location answers render an interactive map with markers.
 - Wave: 3
+- Already works on: chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -99,9 +100,8 @@ Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:73-73`, `
 | desktop | partial | code complete; the map shows once production sets AGI_MAP_TILE_URL_TEMPLATE (owner setting). | config |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Map-search cards list the places with Open in maps buttons, but no map is drawn in the side panel. | ui |
 
-Code: `apps/web/features/chat/components/messages/cards/MapSearchCard.tsx:34-34`, `apps/web/lib/maps/map-tile-provider.ts:5-5`, `apps/extension/src/features/side-panel/bubbles.ts:94-94`, `apps/extension/src/features/side-panel/bubbles.ts:76-76`
+Code: `apps/web/features/chat/components/messages/cards/MapSearchCard.tsx:34-34`, `apps/web/lib/maps/map-tile-provider.ts:5-5`
 
 ## S22.11: Place and business cards.
 
