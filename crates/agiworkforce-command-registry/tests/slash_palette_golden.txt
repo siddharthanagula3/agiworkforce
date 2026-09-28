@@ -51,6 +51,8 @@
 /voice [v]
 /image [imagine]
 /search
+/save-skill
+/save-routine
 /theme
 /login
 /logout
