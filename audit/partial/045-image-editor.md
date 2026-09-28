@@ -249,16 +249,12 @@ Code: `apps/web/features/chat/components/ImageGenerationCard.tsx:664-668`, `apps
 
 - Done when: Editing keeps the original image available next to the result instead of overwriting it.
 - Wave: 3
-- Already works on: mobile
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The revise panel overwrites the chat card in place; the original survives only as a separate Library item with no link, and an uploaded source is never kept. Add keep-original or revert. | ui |
-| desktop | partial | The revise panel overwrites the chat card in place; the original survives only as a separate Library item with no link, and an uploaded source is never kept. Add keep-original or revert. | ui |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/pages/WebChatPage.tsx:2566-2570`, `apps/web/features/chat/components/ImageGenerationCard.tsx:880-886`, `apps/web/app/api/media/image/lib/image-job-executor.ts:421-429`
 
 ## S45.33: Alpha-channel preservation.
 

@@ -30,16 +30,13 @@ nothing is left.
 
 - Done when: User picks a style preset (photo, illustration, etc.) that changes the generated look.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The request accepts a style string but no surface offers presets and every provider adapter ignores it (_style). | ui, handler |
-| desktop | partial | Hosted web: same as web; style is accepted and ignored. | ui, handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `packages/contracts/cloud-contracts/src/managed-media.ts:92-94`, `apps/web/app/api/media/image/lib/image-generation-provider.ts:536-544`
 
 ## S44.04: Reference-image slots.
 
@@ -208,16 +205,15 @@ Code: `apps/web/app/api/media/image/lib/image-job-drive-queue.ts:8-15`, `apps/we
 
 - Done when: User stops an image generation in progress and the job is cancelled (not billed further).
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | /api/media/image/cancel exists but nothing calls it; the generating card has no stop control. | ui |
-| desktop | partial | Hosted web: no stop control. | ui |
 | mobile | partial | Stop only marks the message stopped on the phone; it never calls the cancel route, so the server job continues. | handler |
 | cli | partial | Ctrl-C only stops waiting; the CLI never calls the cancel route. | ui, handler |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/app/api/media/image/cancel/route.ts:26-30`, `apps/mobile/stores/chat/chatMessageStore.ts:885-893`
+Code: `apps/mobile/stores/chat/chatMessageStore.ts:885-893`, `apps/web/app/api/media/image/cancel/route.ts:26-30`
 
 ## S44.19: Retry generation.
 
@@ -268,16 +264,15 @@ Code: `apps/cli/src/tui/tui_app.rs:3307-3310`, `apps/cli/src/cloud/image.rs:261-
 
 - Done when: User can see the prompt and generation settings (model, ratio, size, quality) used for an image.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Prompt (user turn) and model label are shown; ratio only inside the revise panel; size/quality are never shown. | ui |
-| desktop | partial | Hosted web: prompt and model only. | ui |
 | mobile | partial | Prompt shows in the full-screen viewer and Library; model and settings are not shown for the image. | ui |
 | cli | partial | Prints model and provider; size, quality and ratio are not reported back. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/ImageGenerationCard.tsx:968-972`, `apps/web/features/chat/pages/WebChatPage.tsx:2309-2315`, `apps/mobile/src/features/chat/components/ImageFullScreen.tsx:220-224`, `apps/cli/src/lib.rs:1751-1753`
+Code: `apps/mobile/src/features/chat/components/ImageFullScreen.tsx:220-224`, `apps/cli/src/lib.rs:1751-1753`
 
 ## S44.24: Reuse prompt.
 
@@ -297,16 +292,15 @@ Code: `apps/cli/src/lib.rs:939-951`, `apps/cli/src/tui/tui_app.rs:3307-3310`
 
 - Done when: User regenerates with the same settings (model, ratio) as an earlier image.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Revise panel reuses the card's model and ratio, but Library Remix restores only the prompt and image, not model or ratio. | ui |
-| desktop | partial | Hosted web: same as web. | ui |
 | mobile | partial | Model and ratio stay selected in the sheet, but an earlier image's settings cannot be restored. | ui |
 | cli | partial | Flags must be retyped; no saved settings. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/ImageGenerationCard.tsx:439-445`, `apps/web/features/library/lib/library-chat-handoff.ts:15-19`, `apps/mobile/src/features/chat/actions/mediaMode.ts:48-55`, `apps/cli/src/lib.rs:942-963`
+Code: `apps/mobile/src/features/chat/actions/mediaMode.ts:48-55`, `apps/cli/src/lib.rs:942-963`
 
 ## S44.27: Save to Library.
 
@@ -322,16 +316,13 @@ Code: `apps/web/features/chat/components/ImageGenerationCard.tsx:439-445`, `apps
 
 - Done when: User adds a generated image to a Project.
 - Wave: 3
-- Already works on: web
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| desktop | partial | Hosted web: same storage-cap defect. | handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/library/components/LibraryView.tsx:211-218`
 
 ## S44.29: Download full-quality image.
 
@@ -350,16 +341,15 @@ Code: `apps/mobile/src/features/chat/components/ImageFullScreen.tsx:175-183`, `a
 
 - Done when: User copies the image itself to the clipboard.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Copy puts the image URL on the clipboard, not the image; add a ClipboardItem image copy. | ui, handler |
-| desktop | partial | Hosted web: copies the URL only. | ui, handler |
 | mobile | partial | Only via the OS share sheet; no Copy image action. | ui |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/ImageGenerationCard.tsx:906-912`, `apps/web/features/chat/components/ImageGenerationCard.tsx:815-819`, `apps/mobile/services/fileCreation.ts:395-408`, `apps/mobile/src/features/chat/components/ImageFullScreen.tsx:175-183`
+Code: `apps/mobile/services/fileCreation.ts:395-408`, `apps/mobile/src/features/chat/components/ImageFullScreen.tsx:175-183`
 
 ## S44.31: Share image.
 
