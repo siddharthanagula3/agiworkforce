@@ -22,6 +22,7 @@ describe('TIER_POLICIES, Free chat tier', () => {
       'voice_live',
       'voice_live_backend',
       'voice_rewrite',
+      'voice_speech',
     ]);
   });
 
@@ -223,6 +224,7 @@ describe('getTierPolicy, public getter', () => {
         'voice_live',
         'voice_live_backend',
         'voice_rewrite',
+        'voice_speech',
       ],
       allowMediaGeneration: false,
       allowImageGeneration: false,
@@ -249,6 +251,7 @@ describe('getTierPolicy, public getter', () => {
         'voice_live',
         'voice_live_backend',
         'voice_rewrite',
+        'voice_speech',
       ],
       allowMediaGeneration: false,
       allowManualSelection: false,

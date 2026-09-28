@@ -2501,9 +2501,9 @@
       "releasedOverride": "March 20, 2025",
       "pricingNote": "$0.60/1M input text tokens, $12/1M output audio tokens. Added to the Audio API on 2025-03-20; the gpt-4o-mini-tts-2025-12-15 snapshot became the default on 2026-01-13. NOT deprecated: it is absent from OpenAI's deprecations page, carries no deprecated badge on the models page, and the text-to-speech guide still names it the recommended text-to-speech model. It is the only model served on /v1/audio/speech. Verified 2026-09-04.",
       "lifecycle": {
-        "stage": "registered",
-        "stagedOn": "2026-09-05",
-        "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
+        "stage": "promoted",
+        "stagedOn": "2026-09-27",
+        "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.voice_speech"
       }
     },
     "gemini-3.8-flash": {

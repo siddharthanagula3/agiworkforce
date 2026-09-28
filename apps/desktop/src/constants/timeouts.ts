@@ -32,6 +32,8 @@ export const MCP_INIT_TIMEOUT_MS = 60_000;
 
 export const MCP_OAUTH_TIMEOUT_MS = 60_000;
 
+export const MCP_SIGN_IN_TIMEOUT_MS = 150_000;
+
 export const COMPLETION_TIMEOUT_MS = 500;
 
 export const EMBEDDINGS_TIMEOUT_MS = 30_000;

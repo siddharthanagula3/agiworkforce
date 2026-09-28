@@ -298,7 +298,7 @@ describe('GeneralSection read-aloud disclosure', () => {
   it('says where the audio goes instead of offering an output picker it cannot honour', () => {
     render(<GeneralSection />);
 
-    expect(screen.getByRole('combobox', { name: 'Read-aloud voice' })).toBeVisible();
+    expect(screen.getByRole('combobox', { name: 'Backup read-aloud voice' })).toBeVisible();
     expect(screen.getByText(/system default output device/i)).toBeVisible();
     expect(screen.getByText(/browsers give web pages no way to choose one/i)).toBeVisible();
   });
@@ -324,7 +324,7 @@ describe('GeneralSection read-aloud disclosure', () => {
 
     render(<GeneralSection />);
 
-    expect(screen.getByText(/exposes no speech voices/i)).toBeVisible();
+    expect(screen.getByText(/no speech voices of its own/i)).toBeVisible();
   });
 });
 

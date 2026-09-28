@@ -111,6 +111,7 @@ import { clearActiveCloudProject, getActiveCloudProject } from '../projects/acti
 import { OPEN_PROJECT_COMMAND } from '../projects/projectsTree';
 import { resolveStartSuggestions, type StartSuggestions } from './startSuggestions';
 import type { SessionReceipt } from './sessionReceipt';
+import type { SlashCommandListResponse } from '@agiworkforce/types/protocol';
 import {
   buildWorkspaceReferenceInputs,
   isWorkspaceFileReference,
@@ -231,7 +232,10 @@ export type WebviewToExtMessage =
         provider?: string;
       };
     }
-  | { type: 'respondToApproval'; payload: { requestId: string; decision: ApprovalDecision } }
+  | {
+      type: 'respondToApproval';
+      payload: { requestId: string; decision: ApprovalDecision; guidance?: string };
+    }
   | {
       type: 'attachFiles';
       payload: {
@@ -674,6 +678,7 @@ export class ChatStateManager {
   private readonly _localModelProviders = new Map<string, LocalModelSummary['provider']>();
   private _runtimeReady = false;
   private readonly _cliCapabilities: CliCapabilityAdapter;
+  private _skillCommands: ReadonlySet<string> = new Set();
   private readonly _dismissedEditorContext = new Set<string>();
   private readonly _sessionApprovals = new Set<string>();
   private readonly _pendingApprovals = new Map<
@@ -1046,6 +1051,9 @@ export class ChatStateManager {
 
       case 'respondToApproval': {
         await this._resolveApproval(msg.payload.requestId, msg.payload.decision, false);
+        if (msg.payload.decision === 'deny' && msg.payload.guidance !== undefined) {
+          await this._handleSendMessage(msg.payload.guidance);
+        }
         break;
       }
 
@@ -1610,12 +1618,18 @@ export class ChatStateManager {
   }
 
   private async _pushSlashCommands(): Promise<void> {
-    const listed = await this._cliCapabilities.listEntries('commands');
+    const listed = await this._cliCapabilities.call<SlashCommandListResponse>('commands');
+    const commands = listed.status === 'ok' ? listed.value.commands : [];
+    this._skillCommands = new Set(
+      commands
+        .filter((command) => command.source === 'skill' && !command.runnable)
+        .map((command) => command.name),
+    );
     const items =
-      listed.status === 'ok' && listed.value.length > 0
-        ? listed.value.map((entry) => ({
-            name: entry.label.startsWith('/') ? entry.label : `/${entry.label}`,
-            description: entry.description ?? '',
+      commands.length > 0
+        ? commands.map((command) => ({
+            name: `/${command.name.replace(/^\//u, '')}`,
+            description: command.description,
           }))
         : BUILT_IN_SLASH_COMMANDS.map((entry) => ({
             name: entry.name,
@@ -1631,7 +1645,15 @@ export class ChatStateManager {
       await vscode.commands.executeCommand(builtIn.command);
       return;
     }
-    await vscode.commands.executeCommand('agi-workforce.runCliCommand', normalized.slice(1));
+    const bare = normalized.slice(1);
+    if (this._skillCommands.has(bare)) {
+      this._post({
+        type: 'composerDraft',
+        payload: { text: `Use the ${bare} skill to `, references: [] },
+      });
+      return;
+    }
+    await vscode.commands.executeCommand('agi-workforce.runCliCommand', bare);
   }
 
   public pushFollowUpBehavior(): void {

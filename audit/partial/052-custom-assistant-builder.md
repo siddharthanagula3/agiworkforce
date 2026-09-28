@@ -10,6 +10,7 @@ nothing is left.
 
 - Done when: A user sees their custom assistants in one place and can open, edit or remove each.
 - Wave: 3
+- Already works on: cli
 - Needs a founder decision: true
 
 | Surface | Status | What is left | Gap |
@@ -17,11 +18,8 @@ nothing is left.
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | CLI lists, shows and validates file-based agents (/agents) but cannot edit, rename or delete one; users change the .md file by hand. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/claude_parity.rs:188-188`, `apps/cli/src/agents.rs:396-445`, `apps/cli/src/agents.rs:464-500`, `apps/cli/src/agents.rs:502-540`
 
 ## S52.02: Create assistant.
 
@@ -42,17 +40,15 @@ Code: `apps/cli/src/claude_parity.rs:188-188`, `apps/cli/src/agents.rs:396-445`,
 
 - Done when: A user can edit an assistant's fields (name, instructions, model, tools) in a form or editor inside the product.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | No in-product editor: users edit the agent .md frontmatter in their own editor (/agents path prints where it lives). | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/agents.rs:396-445`, `apps/cli/src/agents.rs:20-40`
 
 ## S52.05: Live test/preview pane.
 

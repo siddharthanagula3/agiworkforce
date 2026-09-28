@@ -101,44 +101,41 @@ Code: `apps/extension/src/features/side-panel/computerUsePanel.ts:607-610`
 
 - Done when: Before a send is approved, the approval names exactly who will receive it.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | MCP tools that send messages (Slack, email servers) ask for approval, but recipients appear only inside the raw argument preview; the approval does not call out who will receive it. | ui |
-| vscode | partial | MCP tools that send messages ask for approval through the local runtime, but recipients appear only inside the raw argument detail; the approval does not call out who will receive it. | ui |
 | chrome | partial | Recipients appear only inside the raw JSON arguments of the call; the approval does not call out who will receive the message. | ui |
 
-Code: `apps/cli/src/agent/tools.rs:116-139`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:378-389`, `apps/extension/src/features/side-panel/bubbles.ts:537-537`
+Code: `apps/cli/src/agent/tools.rs:116-139`, `apps/extension/src/features/side-panel/bubbles.ts:537-537`
 
 ## S59.15: Exact amount or purchase.
 
 - Done when: Before a payment or purchase is approved, the approval shows the exact amount and what is bought.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | Payment or store MCP servers (Stripe, Shopify) can be added, and their calls ask for approval, but the approval shows only the raw arguments, never a highlighted amount or item. | ui |
-| vscode | partial | Payment or store MCP servers can run through the local runtime and ask for approval, but the approval shows only the raw arguments, never a highlighted amount or item. | ui |
 | chrome | partial | The browser agent can click a Buy button on a site; its approval card describes the click, not the amount. | ui |
 
-Code: `apps/cli/src/agent/tools.rs:116-139`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:378-389`, `apps/extension/src/features/side-panel/computerUsePanel.ts:1107-1112`
+Code: `apps/cli/src/agent/tools.rs:116-139`, `apps/extension/src/features/side-panel/computerUsePanel.ts:1107-1112`
 
 ## S59.22: Ask for an alternative.
 
 - Done when: Instead of just denying, the user can tell the agent what to do instead, and the agent continues with that guidance.
 - Wave: 3
-- Already works on: web, desktop, api
+- Already works on: web, desktop, vscode, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Guidance input and resume wiring are held in post-codex/chat-gates-s59.patch because the handler lives in Codex-held files ([id].tsx, streaming.ts, MessageBubble.tsx, chatExecutionStore.ts, chatStore.ts). | ui |
 | cli | partial | The overlay answers No or Deny All; the user cannot attach guidance to a denial (they must type a new message after the turn). | ui |
-| vscode | partial | Cloud-run approvals accept guidance, but local runtime approvals are once/session/deny/abort only. | ui |
 | chrome | partial | Chrome approvals are Approve/Decline only. | ui |
 
-Code: `apps/mobile/src/features/chat/components/CloudToolApprovalControls.tsx:114-114`, `apps/cli/src/tui/widgets/approval_overlay.rs:81-87`, `apps/extension-vscode/src/features/cloud-tasks/cloudRunApproval.ts:8-10`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:4596-4601`
+Code: `apps/mobile/src/features/chat/components/CloudToolApprovalControls.tsx:114-114`, `apps/cli/src/tui/widgets/approval_overlay.rs:81-87`, `apps/extension/src/features/side-panel/bubbles.ts:489-499`
 
 ## S59.23: Approval expiration.
 
@@ -156,11 +153,10 @@ Code: `apps/cli/src/app_server/developer_host.rs:68-68`
 
 - Done when: The user can review a history of past approval requests and their decisions.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| vscode | partial | Decisions from every surface land in the shared approval history (GET /api/settings/approvals); this surface has no view of it yet. | ui |
 | chrome | partial | Decisions from every surface land in the shared approval history (GET /api/settings/approvals); this surface has no view of it yet. | ui |
 
 ## S59.26: Approval from another device.
@@ -179,6 +175,7 @@ Code: `apps/cli/src/platform/runtime/session_handoff.rs:107-110`
 
 - Done when: When an approval is needed the user is notified and can approve or deny directly from the notification.
 - Wave: 3
+- Already works on: vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -186,10 +183,9 @@ Code: `apps/cli/src/platform/runtime/session_handoff.rs:107-110`
 | desktop | partial | Hosted web push only opens the app; no actionable approval notification. | ui |
 | mobile | partial | The approval notification only opens the app ("Review"); the user cannot approve or deny from the notification itself. | ui |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | The @agi participant raises a modal dialog and the sidebar shows an attention badge; no notification carries approve/deny. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/notifications/components/WebPushOptIn.tsx:107-107`, `apps/web/lib/services/cloud-agent-run-service.ts:1389-1393`, `apps/mobile/services/notificationCategories.ts:10-16`, `apps/extension-vscode/src/features/chat-participant/chatParticipant.ts:415-421`
+Code: `apps/web/features/notifications/components/WebPushOptIn.tsx:107-107`, `apps/web/lib/services/cloud-agent-run-service.ts:1389-1393`, `apps/mobile/services/notificationCategories.ts:10-16`
 
 ## S59.29: User takeover.
 

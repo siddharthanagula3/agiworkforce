@@ -337,7 +337,7 @@ pub fn render(
     // ── overlay size ──────────────────────────────────────────────────────────
     let effort_rows: u16 = if state.show_effort_bar() { 2 } else { 0 };
     let max_list_rows: u16 = 18.min(state.rows.len() as u16);
-    let popup_height = (3 + max_list_rows + effort_rows).min(area.height.saturating_sub(2));
+    let popup_height = (4 + max_list_rows + effort_rows).min(area.height.saturating_sub(2));
     let popup_width = 78.min(area.width.saturating_sub(4));
 
     let popup_area = Rect {
@@ -382,6 +382,7 @@ pub fn render(
         Constraint::Length(1), // search bar
         Constraint::Length(1), // separator line
         Constraint::Min(3),    // model list
+        Constraint::Length(1), // selected model detail
     ];
     if state.show_effort_bar() {
         constraints.push(Constraint::Length(1)); // effort bar
@@ -398,10 +399,57 @@ pub fn render(
     render_divider(frame, chunks[1], popup_area.width.saturating_sub(2));
     // Model list
     render_list(frame, chunks[2], state, current_model);
+    render_detail(frame, chunks[3], state);
     // Effort bar (conditional)
     if state.show_effort_bar() {
-        render_effort_bar(frame, chunks[3], state);
+        render_effort_bar(frame, chunks[4], state);
     }
+}
+
+fn render_detail(frame: &mut ratatui::Frame, area: Rect, state: &ModelPickerState) {
+    let Some(model) = state.selected_model() else {
+        return;
+    };
+    let text = model_detail_text(&model.id, &model.status);
+    frame.render_widget(
+        Paragraph::new(Line::from(Span::styled(
+            sanitize_terminal_text(&text).into_owned(),
+            Style::default().fg(ui_muted()),
+        ))),
+        area,
+    );
+}
+
+fn model_detail_text(model_id: &str, status: &str) -> String {
+    let detail = crate::model_catalog::model_detail(model_id);
+    let mut parts = Vec::new();
+    if let Some(detail) = &detail {
+        if !detail.best_for.is_empty() {
+            parts.push(format!(
+                "Best for {}",
+                detail
+                    .best_for
+                    .iter()
+                    .take(3)
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ));
+        }
+    }
+    let status = detail
+        .as_ref()
+        .and_then(|detail| detail.status.clone())
+        .unwrap_or_else(|| status.to_string());
+    if matches!(status.as_str(), "preview" | "beta" | "experimental") {
+        parts.push(status.clone());
+    }
+    match detail.and_then(|detail| detail.deprecation_date) {
+        Some(date) => parts.push(format!("deprecated, leaves {date}")),
+        None if status == "deprecated" => parts.push("deprecated".to_string()),
+        None => {}
+    }
+    format!(" {}", parts.join(" · "))
 }
 
 fn render_search(frame: &mut ratatui::Frame, area: Rect, state: &ModelPickerState) {
