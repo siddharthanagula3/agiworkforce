@@ -167,17 +167,15 @@ Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:660-660`, `app
 
 - Done when: Printing or exporting an answer/conversation keeps the rendered formatting (headings, lists, tables, code, math).
 - Wave: 3
-- Already works on: cli
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | PDF and DOCX now keep headings, tables, nested and task lists, links, code, quotes, footnotes and math; in PDF a right-to-left paragraph is still left-aligned and non-Latin text is drawn as an image, so it is not selectable (p-contrast follow-up). | content |
-| desktop | partial | PDF and DOCX now keep headings, tables, nested and task lists, links, code, quotes, footnotes and math; in PDF a right-to-left paragraph is still left-aligned and non-Latin text is drawn as an image, so it is not selectable (p-contrast follow-up). | content |
 | mobile | partial | PDF export converts only headings, bold/italic, code and flat lists; tables, math, links and list numbering are lost. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `packages/ui/unified-chat/src/components/markdown/markdownDocument.ts:230-230`, `apps/web/features/chat/services/export-pdf.ts:868-868`, `apps/web/features/chat/services/export-pdf.ts:422-422`, `apps/web/features/chat/services/export-pdf.ts:845-845`
+Code: `apps/mobile/src/features/chat/components/ConversationExportSheet.tsx:36-36`, `apps/mobile/services/fileCreation.ts:59-59`
 
 ## S20.29: Right-to-left content.
 

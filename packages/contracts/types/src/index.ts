@@ -22,6 +22,8 @@ export * from './tool-events';
 
 export * from './tool-status';
 
+export * from './account-eligibility';
+
 export * from './agent-status';
 
 export * from './auth';
@@ -198,6 +200,7 @@ export * from './request-identity';
 
 export * from './file-reference';
 export * from './file-model';
+export * from './external-resource-reference';
 
 export * from './browser-bridge';
 export * from './context-handoff-uri';

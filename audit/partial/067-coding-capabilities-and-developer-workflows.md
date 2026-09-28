@@ -284,7 +284,7 @@ Code: `apps/extension/src/features/content/in-page-panel/pageActions.ts:76-92`
 | desktop | partial | The local runtime expands only custom and skill slash commands at turn time (expand_prompt_command), so /security-review typed in a local desktop session reaches the model unexpanded. The CLI lane needs expand_prompt_command to also expand the built-in prompt commands (/security-review, /review) the way claude_parity does in the terminal. | handler |
 | mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
 
-Code: `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/web/lib/services/cloud-code-agent-tools.ts:274-279`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:84-86`, `apps/cli/src/app_server/surfaces.rs:577-577`
+Code: `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/web/lib/services/cloud-code-agent-tools.ts:274-279`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:84-86`, `apps/cli/src/app_server/surfaces.rs:906-906`
 
 ## S67.23: Explain findings.
 

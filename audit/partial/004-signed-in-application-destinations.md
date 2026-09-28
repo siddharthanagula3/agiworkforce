@@ -459,17 +459,14 @@ Code: `apps/mobile/src/features/settings/index.tsx:451-456`, `apps/mobile/app/(a
 
 - Done when: A developer console lets the user create/revoke API keys, see API usage per key, read API docs and try requests.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Keys, projects, a request playground (answers as an API key would), limits and docs are in /developers. Usage per key needs managed_usage_requests.api_key_id written at reservation, which waits on the approval asked for request-processor.ts, auth-gate.ts, managed-usage-request-service.ts and transcriptions. | per-key usage |
-| desktop | partial | Keys, projects, a request playground (answers as an API key would), limits and docs are in /developers. Usage per key needs managed_usage_requests.api_key_id written at reservation, which waits on the approval asked for request-processor.ts, auth-gate.ts, managed-usage-request-service.ts and transcriptions. | per-key usage |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/developers/components/DeveloperConsolePage.tsx:59-59`, `apps/web/features/developers/components/DeveloperConsolePage.tsx:61-61`, `apps/web/features/developers/components/DeveloperConsolePage.tsx:14-14`, `apps/web/features/developers/components/RequestPlayground.tsx:202-202`
 
 ## S4.44: Help and feedback.
 

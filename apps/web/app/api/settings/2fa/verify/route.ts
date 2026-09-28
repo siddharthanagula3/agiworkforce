@@ -16,6 +16,7 @@ import { logAuthFailure } from '@/lib/security-audit';
 import { getIdentityProvider } from '@/lib/server/identity';
 import { rememberMfaEnrollment } from '@/lib/mfa-policy-gate';
 import { announceTwoFactorChange } from '@/lib/server/two-factor-security-events';
+import { requireAuthenticatorEnrollment } from '@/lib/authenticator-enrollment';
 
 async function registerSignInFactor(
   userId: string,
@@ -46,6 +47,8 @@ async function handleVerify2FA(request: NextRequest) {
 
   const rateLimitResponse = await withRateLimit(request, '2fa-verify', `user:${userId}`);
   if (rateLimitResponse) return rateLimitResponse;
+
+  requireAuthenticatorEnrollment();
 
   const body = await readJsonBody<{ code?: string }>(request);
   const code = typeof body.code === 'string' ? body.code.trim() : '';

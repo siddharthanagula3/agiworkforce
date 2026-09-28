@@ -282,18 +282,6 @@ Code: `apps/cli/src/tui/tui_app.rs:3431-3443`, `apps/cli/src/agent/mod.rs:1779-1
 
 Code: `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:1172-1180`, `apps/extension-vscode/src/core/commandSetup.ts:1062-1062`
 
-## S15.30: Conversation-specific override.
-
-- Done when: A conversation can keep its own model, separate from the default used elsewhere.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Keep a model per chat; picking a model writes the global agiWorkforce.model setting, so it changes every chat. | handler |
-
-Code: `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:1225-1227`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:3676-3734`
-
 ## S15.31: Per-turn model override.
 
 - Done when: The user can run a single turn with a different model without changing the conversation's model.

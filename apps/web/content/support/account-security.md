@@ -4,7 +4,7 @@ title: Passkeys, two-factor and active sessions
 path: /security
 category: account
 tags: passkey, two factor, 2fa, mfa, totp, authenticator, backup codes, recovery codes, change password, forgot password, sessions, log out all devices, revoke session, api keys
-updated: 2026-09-27
+updated: 2026-09-28
 scope: public
 ---
 
@@ -18,14 +18,16 @@ check the spam folder before requesting another.
 ## Second factors
 
 Settings, Security manages passkeys and two-factor authentication. Passkeys sign
-you in; an authenticator app code (TOTP) with recovery backup codes is the
-supported second factor. Hardware security keys, SMS MFA and trusted-device
-lists are not part of the current account contract, so they are not offered
-rather than silently ignored.
+you in. Authenticator apps (TOTP) and backup codes are temporarily unavailable:
+Settings, Security shows **Temporarily unavailable** where you would set one up
+or replace your backup codes, and a workspace cannot start requiring
+multi-factor authentication until they return. Hardware security keys and SMS
+MFA are not part of the current account contract, so they are not offered rather
+than silently ignored.
 
-Keep the backup codes somewhere separate from the phone holding the
-authenticator. At sign-in the second-factor screen accepts either the
-authenticator code or one of your backup codes.
+No device skips the sign-in checks. Devices you linked, such as the CLI, VS
+Code, the Chrome extension or the desktop app, are listed in Settings, Account
+under **Linked devices**, where you can unlink each one.
 
 ## Password
 
@@ -59,11 +61,7 @@ minutes, so a second change right after the first does not ask again.
 - **Forgotten password.** Reset it from the sign-in screen with **Forgot
   password?**.
 - **Lost the phone with your authenticator.** Enter one of your backup codes at
-  the second-factor screen, then set the authenticator up again in Settings,
-  Security. Each backup code works once.
-- **Running low on backup codes.** Settings, Security generates a new set after
-  you confirm your second factor again, and the new set replaces the old one, so
-  codes you printed earlier stop working.
+  the second-factor screen. Each backup code works once.
 - **Lost the authenticator and every backup code.** There is no self-serve way
   back in, and there is no screen from which support can remove a second factor.
   Email contact@agiworkforce.com from the address on the account, with your
@@ -95,5 +93,6 @@ issue; they identify the account, they are not secrets that grant access.
 
 ## API keys
 
-API keys are managed from Settings, Account under **API keys**. Regenerating a
-key invalidates the previous one immediately, so update anything using it.
+API keys are managed in the developer console at /developers, and from Settings,
+Account under **API keys**. Regenerating a key invalidates the previous one
+immediately, so update anything using it.

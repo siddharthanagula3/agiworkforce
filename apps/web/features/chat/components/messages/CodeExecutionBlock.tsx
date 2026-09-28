@@ -53,10 +53,10 @@ export function CodeExecutionBlock({ isExecuting, result }: CodeExecutionBlockPr
         className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-muted/30 rounded-lg transition-colors"
         aria-expanded={expanded}
       >
-        <Code2 className="h-4 w-4 shrink-0 text-violet-700 dark:text-violet-400" />
-        <span className="font-medium text-foreground/80 flex-1">Code Execution</span>
+        <Code2 className="h-4 w-4 shrink-0 text-muted-foreground" />
+        <span className="font-medium text-foreground flex-1">Code Execution</span>
         {isExecuting ? (
-          <Spinner className="h-3.5 w-3.5 text-violet-700 dark:text-violet-400" />
+          <Spinner className="h-3.5 w-3.5 text-muted-foreground" />
         ) : success ? (
           <CircleCheck className="h-3.5 w-3.5 text-success-text" />
         ) : result ? (
@@ -85,7 +85,7 @@ export function CodeExecutionBlock({ isExecuting, result }: CodeExecutionBlockPr
               <pre
                 className={cn(
                   'rounded-compact bg-background/60 px-3 py-2 text-xs font-mono leading-relaxed',
-                  'overflow-x-auto whitespace-pre-wrap break-words text-foreground/90',
+                  'overflow-x-auto whitespace-pre-wrap break-words text-foreground',
                   'max-h-64 overflow-y-auto',
                 )}
               >

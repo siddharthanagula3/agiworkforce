@@ -175,7 +175,7 @@ function HighlightedCodeBlock({ language, code }: { language: string; code: stri
           type="button"
           aria-label={copied ? 'Code copied' : 'Copy code'}
           onClick={handleCopy}
-          className="h-6 gap-1 px-1.5 text-caption flex items-center rounded-compact text-gray-400 hover:text-gray-200 hover:bg-gray-700/50 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+          className="h-6 gap-1 px-1.5 text-caption flex items-center rounded-compact text-[var(--chat-code-lang-label)] hover:bg-[var(--chat-code-copy-hover-bg)] hover:text-[var(--chat-code-copy-hover-fg)] opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
         >
           {copied ? (
             <Check className="h-2.5 w-2.5" aria-hidden="true" />

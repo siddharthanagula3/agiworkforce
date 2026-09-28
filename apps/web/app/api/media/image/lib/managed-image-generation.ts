@@ -647,7 +647,7 @@ export async function generateManagedImage(
   let reservation: ManagedUsageRequestReservation;
   let sourceSurface: ManagedMediaSurface;
   let organizationId: string | null;
-  let scopedDb: Awaited<ReturnType<typeof getUserScopedDb>>['db'];
+  let scopedDb: UserScopedDb['db'];
   let jobStoreReady = false;
   try {
     const idempotencyKey = parseManagedUsageIdempotencyKey(input.idempotencyKey);

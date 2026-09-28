@@ -12,6 +12,7 @@ import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
 import BackgroundJobsPanel from '../components/BackgroundJobsPanel';
 import ContentTakedownPanel from '../components/ContentTakedownPanel';
+import CopyrightNoticeQueuePanel from '../components/CopyrightNoticeQueuePanel';
 import EconomicsSummaryPanel from '../components/EconomicsSummaryPanel';
 import OperatorCostsPanel from '../components/OperatorCostsPanel';
 import PrivacyRequestsPanel from '../components/PrivacyRequestsPanel';
@@ -448,6 +449,8 @@ export function OperatorDashboardPage() {
       {tab === 'routes' ? <RouteEconomicsPanel /> : null}
 
       {tab === 'economics' ? <EconomicsSummaryPanel /> : null}
+
+      {tab === 'content' ? <CopyrightNoticeQueuePanel /> : null}
 
       {tab === 'content' ? <ContentTakedownPanel /> : null}
 

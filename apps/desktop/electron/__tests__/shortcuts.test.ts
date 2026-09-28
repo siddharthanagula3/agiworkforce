@@ -37,7 +37,7 @@ const { registerGarnishShortcuts, shortcutRegistrations, unregisterGarnishShortc
   await import('../shortcuts');
 
 function handlers() {
-  return { onQuickAsk: vi.fn(), onScreenshot: vi.fn(), onVoice: vi.fn() };
+  return { onQuickAsk: vi.fn(), onScreenshot: vi.fn(), onWindowShot: vi.fn(), onVoice: vi.fn() };
 }
 
 function statusOf(key: keyof GarnishShortcuts): string | undefined {
@@ -67,6 +67,7 @@ describe('global shortcut registration', () => {
   it('ships a dictation default that collides with neither sibling shortcut', () => {
     registerGarnishShortcuts(handlers());
     expect(shortcutRegistrations().map((entry) => entry.status)).toEqual([
+      'registered',
       'registered',
       'registered',
       'registered',

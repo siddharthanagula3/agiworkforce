@@ -2,7 +2,7 @@
   "version": 1,
   "generatedBy": "scripts/build-support-corpus.mjs",
   "documentCount": 41,
-  "chunkCount": 227,
+  "chunkCount": 228,
   "documents": [
     {
       "id": "account-security",
@@ -25,7 +25,7 @@
         "revoke session",
         "api keys"
       ],
-      "updated": "2026-09-27",
+      "updated": "2026-09-28",
       "source": "content/support/account-security.md",
       "chunks": [
         {
@@ -40,7 +40,7 @@
           "ordinal": 1,
           "heading": "Second factors",
           "headingPath": "Passkeys, two-factor and active sessions › Second factors",
-          "text": "Settings, Security manages passkeys and two-factor authentication. Passkeys sign\nyou in; an authenticator app code (TOTP) with recovery backup codes is the\nsupported second factor. Hardware security keys, SMS MFA and trusted-device\nlists are not part of the current account contract, so they are not offered\nrather than silently ignored.\n\nKeep the backup codes somewhere separate from the phone holding the\nauthenticator. At sign-in the second-factor screen accepts either the\nauthenticator code or one of your backup codes."
+          "text": "Settings, Security manages passkeys and two-factor authentication. Passkeys sign\nyou in. Authenticator apps (TOTP) and backup codes are temporarily unavailable:\nSettings, Security shows **Temporarily unavailable** where you would set one up\nor replace your backup codes, and a workspace cannot start requiring\nmulti-factor authentication until they return. Hardware security keys and SMS\nMFA are not part of the current account contract, so they are not offered rather\nthan silently ignored.\n\nNo device skips the sign-in checks. Devices you linked, such as the CLI, VS\nCode, the Chrome extension or the desktop app, are listed in Settings, Account\nunder **Linked devices**, where you can unlink each one."
         },
         {
           "id": "account-security#2",
@@ -68,7 +68,7 @@
           "ordinal": 5,
           "heading": "If you cannot sign in",
           "headingPath": "Passkeys, two-factor and active sessions › If you cannot sign in",
-          "text": "- **Forgotten password.** Reset it from the sign-in screen with **Forgot\n  password?**.\n- **Lost the phone with your authenticator.** Enter one of your backup codes at\n  the second-factor screen, then set the authenticator up again in Settings,\n  Security. Each backup code works once.\n- **Running low on backup codes.** Settings, Security generates a new set after\n  you confirm your second factor again, and the new set replaces the old one, so\n  codes you printed earlier stop working.\n- **Lost the authenticator and every backup code.** There is no self-serve way\n  back in, and there is no screen from which support can remove a second factor.\n  Email contact@agiworkforce.com from the address on the account, with your\n  **User ID** if you have it."
+          "text": "- **Forgotten password.** Reset it from the sign-in screen with **Forgot\n  password?**.\n- **Lost the phone with your authenticator.** Enter one of your backup codes at\n  the second-factor screen. Each backup code works once.\n- **Lost the authenticator and every backup code.** There is no self-serve way\n  back in, and there is no screen from which support can remove a second factor.\n  Email contact@agiworkforce.com from the address on the account, with your\n  **User ID** if you have it."
         },
         {
           "id": "account-security#6",
@@ -89,7 +89,7 @@
           "ordinal": 8,
           "heading": "API keys",
           "headingPath": "Passkeys, two-factor and active sessions › API keys",
-          "text": "API keys are managed from Settings, Account under **API keys**. Regenerating a\nkey invalidates the previous one immediately, so update anything using it."
+          "text": "API keys are managed in the developer console at /developers, and from Settings,\nAccount under **API keys**. Regenerating a key invalidates the previous one\nimmediately, so update anything using it."
         }
       ]
     },
@@ -2107,6 +2107,9 @@
         "failed",
         "broken",
         "stuck",
+        "unsupported browser",
+        "supported browsers",
+        "javascript",
         "cannot send",
         "no response",
         "offline",
@@ -2121,7 +2124,7 @@
         "device code",
         "extension"
       ],
-      "updated": "2026-09-22",
+      "updated": "2026-09-28",
       "source": "content/support/troubleshooting.md",
       "chunks": [
         {
@@ -2134,76 +2137,83 @@
         {
           "id": "troubleshooting#1",
           "ordinal": 1,
+          "heading": "The page says this browser is too old",
+          "headingPath": "Troubleshooting: when something does not work › The page says this browser is too old",
+          "text": "AGI runs in current versions of Chrome, Edge, Firefox and Safari. A browser too\nold to run it shows a notice at the top of the page naming those browsers, and\na browser with JavaScript turned off shows a notice asking you to turn it on."
+        },
+        {
+          "id": "troubleshooting#2",
+          "ordinal": 2,
           "heading": "A chat will not load",
           "headingPath": "Troubleshooting: when something does not work › A chat will not load",
           "text": "\"Chat could not be displayed\" with **Try again** means the conversation failed\nto render, or, when it adds \"Could not reach the server.\", that the request\nfailed on the way. Either way your messages are already saved, so retrying or\nopening another conversation loses nothing. \"You are offline\" means the browser\nlost its connection: reconnect and try again."
         },
         {
-          "id": "troubleshooting#2",
-          "ordinal": 2,
+          "id": "troubleshooting#3",
+          "ordinal": 3,
           "heading": "A message will not send",
           "headingPath": "Troubleshooting: when something does not work › A message will not send",
           "text": "- \"Your previous message was still starting, so this one is back here. Send it\n  again.\" Send it once more; nothing was lost.\n- \"Your queued message was not sent: you switched chats before the reply\n  finished.\" It was saved as a draft in the original chat. Its attachments were\n  not kept, so re-attach them.\n- A plan-limited refusal names the plan, not a fault. Check the usage view in\n  Settings for the current allowance and reset time."
         },
         {
-          "id": "troubleshooting#3",
-          "ordinal": 3,
+          "id": "troubleshooting#4",
+          "ordinal": 4,
           "heading": "A file was not attached",
           "headingPath": "Troubleshooting: when something does not work › A file was not attached",
           "text": "The composer refuses a file instead of sending your message without it, and names\nthe file and the reason, such as too large, a type it cannot read, or too many\nfiles. Convert, split, or paste the contents as text."
         },
         {
-          "id": "troubleshooting#4",
-          "ordinal": 4,
+          "id": "troubleshooting#5",
+          "ordinal": 5,
           "heading": "A tool or connector did nothing",
           "headingPath": "Troubleshooting: when something does not work › A tool or connector did nothing",
           "text": "Under the website's Skip approvals default, eligible tools run automatically.\nA session may still wait for a destructive or unknown action, a saved Ask choice,\nor a workspace restriction. Check the approval prompt, the connector's\n**Recent calls** log, and its per-tool permissions: a tool set to\n**Never run this tool** is refused by your own setting."
         },
         {
-          "id": "troubleshooting#5",
-          "ordinal": 5,
-          "heading": "A model is missing from the picker",
-          "headingPath": "Troubleshooting: when something does not work › A model is missing from the picker",
-          "text": "The badge says which case it is: **Upgrade** (your plan), **Coming soon, not yet\navailable** (not live yet), or **Unavailable right now** (live but not\nanswering). A workspace model policy can also remove models entirely, in which\ncase they do not appear at all."
-        },
-        {
           "id": "troubleshooting#6",
           "ordinal": 6,
+          "heading": "A model is missing from the picker",
+          "headingPath": "Troubleshooting: when something does not work › A model is missing from the picker",
+          "text": "The badge says which case it is: **Upgrade** (your plan), **Coming soon** (not\nlive yet), or **Unavailable right now** (live but not answering). A workspace model policy can also remove models entirely, in which\ncase they do not appear at all."
+        },
+        {
+          "id": "troubleshooting#7",
+          "ordinal": 7,
           "heading": "A retired model",
           "headingPath": "Troubleshooting: when something does not work › A retired model",
           "text": "A conversation saved with a model that no longer exists says so in place and\ncontinues on a named replacement. Nothing is lost, and you can pick a different\nmodel."
         },
         {
-          "id": "troubleshooting#7",
-          "ordinal": 7,
+          "id": "troubleshooting#8",
+          "ordinal": 8,
           "heading": "Voice will not start",
           "headingPath": "Troubleshooting: when something does not work › Voice will not start",
           "text": "The message names the cause: microphone denied, no microphone available, the\nbrowser cannot open a voice connection, or the connection failed or dropped.\nGrant the microphone permission in site settings, or try again on a network that\nallows the connection."
         },
         {
-          "id": "troubleshooting#8",
-          "ordinal": 8,
+          "id": "troubleshooting#9",
+          "ordinal": 9,
           "heading": "Search did not run",
           "headingPath": "Troubleshooting: when something does not work › Search did not run",
           "text": "A web search that could not run shows as a failed search step in the reply, and\nthe answer is written without live results. The model is told the search did\nnot run and why, and is instructed to say which parts it could not confirm, so\ncheck the step before relying on anything time-sensitive. If the composer shows\nsearch as off for the model you picked, that model has no search path here, so\npick one that has.\n\nSearching your own conversations with Cmd/Ctrl+K reports a failed request as\n\"Search failed. Please try again.\" If the search window itself cannot open, it\nshows \"Search unavailable\" instead; close it and open it again.\n\nThe help centre's search tells an index that could not be loaded apart from a\nquery that matched nothing, so \"nothing matched\" really means nothing matched."
         },
         {
-          "id": "troubleshooting#9",
-          "ordinal": 9,
+          "id": "troubleshooting#10",
+          "ordinal": 10,
           "heading": "The CLI will not sign in",
           "headingPath": "Troubleshooting: when something does not work › The CLI will not sign in",
           "text": "`agi login` with no provider signs in to your AGI account. It shows a link and\na code, opens the link in your browser, and waits while you approve the code\nthere, signed in to the same account. If the wait stops with \"Device code\nexpired. Please run /login again.\" or \"Authorization timed out\", the code was\nnot approved in time: run `agi login` again for a fresh one.\n\n`agi auth-status` lists every credential the CLI holds and how each one\nauthenticates; \"No authentication configured.\" means nothing is stored yet.\n`agi doctor` runs the local preflight checks. The CLI keeps credentials in the\noperating system's credential store, and a credentials file that other accounts\non the machine can read is refused, with the command that fixes it."
         },
         {
-          "id": "troubleshooting#10",
-          "ordinal": 10,
+          "id": "troubleshooting#11",
+          "ordinal": 11,
           "heading": "An extension will not connect",
           "headingPath": "Troubleshooting: when something does not work › An extension will not connect",
           "text": "Neither the Chrome extension nor the VS Code extension is published yet, so\nthere is no public build to connect. In Chrome, use the web app; in VS Code, use\nthe CLI in the integrated terminal."
         },
         {
-          "id": "troubleshooting#11",
-          "ordinal": 11,
+          "id": "troubleshooting#12",
+          "ordinal": 12,
           "heading": "Still stuck",
           "headingPath": "Troubleshooting: when something does not work › Still stuck",
           "text": "Email contact@agiworkforce.com. Include your **User ID** from Settings, Account,\nand the **Organization ID** too if the problem is workspace-wide. The support\npage lists the available channels and response commitments."

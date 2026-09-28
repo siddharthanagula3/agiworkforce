@@ -113,8 +113,25 @@ export const PLUGIN_WORKS_WITH_LABELS: Readonly<Record<string, string>> = {
   [PLUGIN_WORKS_WITH_COWORK]: 'Cowork',
 };
 
-export const PLUGIN_SORT_INSTALLS = 'installs';
 export const PLUGIN_COUNT_SUFFIX = 'plugins';
+export const PLUGIN_CATEGORY_GROUP_LABEL = 'Category';
+export const PLUGIN_PUBLISHER_GROUP_LABEL = 'Publisher';
+export const PLUGIN_PUBLISHER_MORE_HEADING_PREFIX = 'Plugins by';
+export const PLUGIN_PUBLISHER_KIND_LABELS: Readonly<Record<string, string>> = {
+  'first-party': 'First-party',
+  partner: 'Partner',
+  'third-party': 'Community',
+};
+export const PLUGIN_UPDATES_PATH = `${PLUGINS_API_PATH}/updates`;
+export const PLUGIN_SCAN_LEAF = 'scan';
+export const PLUGIN_VERSIONS_LEAF = 'versions';
+export const PLUGIN_UPDATE_FAILED_COPY = 'Could not change the plugin version. Try again.';
+export const PLUGIN_REPAIR_RELOAD_ID = 'reload-skills';
+export const PLUGIN_REPAIR_MISSING_SKILLS_COPY = 'These skills did not load:';
+export const PLUGIN_REPAIR_RELOAD_LABEL = 'Reinstall';
+export const PLUGIN_REPAIR_CONNECTOR_ID_PREFIX = 'connector:';
+export const PLUGIN_REPAIR_CONNECTOR_COPY = 'Its skills need the connector';
+export const PLUGIN_REPAIR_CONNECT_LABEL = 'Connect';
 export const PLUGIN_INSTALLS_DISABLED_CODE = 'PLUGIN_INSTALLS_DISABLED';
 export const PLUGIN_NOT_INSTALLABLE_CODE = 'PLUGIN_NOT_INSTALLABLE';
 export const PLUGIN_INSTALLS_DISABLED_STATUS = 503;
@@ -215,6 +232,7 @@ export const DIRECTORY_QUERY_TRUE = 'true';
 export const DIRECTORY_QUERY_SORT = 'sort';
 export const DIRECTORY_QUERY_SOURCE = 'source';
 export const DIRECTORY_QUERY_WORKS_WITH = 'worksWith';
+export const DIRECTORY_QUERY_PUBLISHER = 'publisher';
 export const DIRECTORY_QUERY_LIMIT = 'limit';
 export const DIRECTORY_QUERY_CURSOR = 'cursor';
 export const SKILLS_PATH = '/api/skills';
@@ -224,8 +242,14 @@ export const PLUGINS_PATH = PLUGINS_API_PATH;
 export const PLUGIN_INSTALLATIONS_PATH = PLUGIN_INSTALLATIONS_API_PATH;
 export const PLUGIN_MARKETPLACES_PATH = PLUGIN_MARKETPLACES_API_PATH;
 export const PLUGIN_SOURCE_KIND_REPOSITORY = 'repository';
+export const PLUGIN_SOURCE_KIND_AUTHORED = 'authored';
 export const PLUGIN_UPLOADS_PATH = `${PLUGINS_API_PATH}/uploads`;
 export const PLUGIN_AUTHORED_PATH = `${PLUGINS_API_PATH}/authored`;
+export const PLUGIN_CUSTOMIZE_PATH = `${PLUGINS_API_PATH}/customize`;
+export const PLUGIN_EDIT_LOAD_FAILED_COPY = 'That plugin could not be opened for editing.';
+export const PLUGIN_EDIT_FAILED_COPY = 'That plugin could not be saved.';
+export const PLUGIN_CUSTOMIZE_FAILED_COPY = 'A copy of that plugin could not be made.';
+export const EDIT_PLUGIN_DONE_TITLE = 'Plugin saved';
 export const UPLOAD_FILE_FIELD = 'file';
 export const PLUGIN_UPLOAD_FAILED_COPY = 'That plugin could not be uploaded.';
 export const PLUGIN_CREATE_FAILED_COPY = 'That plugin could not be created.';

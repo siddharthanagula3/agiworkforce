@@ -48,6 +48,16 @@
           "date": "2026-09-27",
           "digest": "364b3259e3db9d72",
           "note": "Adds the referral program checks and their lawful basis, and states the erasure list at 100 user-scoped tables."
+        },
+        {
+          "date": "2026-09-27",
+          "digest": "223728cc89c29c90",
+          "note": "The erasure table count moves from 100 to 103 as schedule share links, personal skill files and developer projects joined the list; no commitment changed, so the date stays."
+        },
+        {
+          "date": "2026-09-27",
+          "digest": "0d390129817c56c5",
+          "note": "The erasure table count moves from 103 to 105 as developer webhook endpoints and their delivery log joined the list; no commitment changed, so the date stays."
         }
       ]
     },
@@ -153,6 +163,16 @@
           "date": "2026-08-14",
           "digest": "973f62e76c3b695f",
           "note": "The protected route group list gains developers, the developer console, taking the count from fifteen to sixteen; no security commitment changed, so the date stays."
+        },
+        {
+          "date": "2026-08-14",
+          "digest": "c59af537262d6533",
+          "note": "The erasure table count moves from 100 to 103 as schedule share links, personal skill files and developer projects joined the list; no security commitment changed, so the date stays."
+        },
+        {
+          "date": "2026-08-14",
+          "digest": "e93cdce8ea060c48",
+          "note": "The erasure table count moves from 103 to 105 as developer webhook endpoints and their delivery log joined the list; no security commitment changed, so the date stays."
         }
       ]
     },
@@ -258,6 +278,16 @@
           "date": "2026-09-21",
           "digest": "1eb7dc94e82e26ac",
           "note": "The protected route group count moves from fifteen to sixteen with the developer console, and the change record gains that 2026-09-27 entry; no commitment changed, so the date stays."
+        },
+        {
+          "date": "2026-09-21",
+          "digest": "300653ec2c867809",
+          "note": "The GDPR row states the erasure count of 103 tables and the change record gains its 2026-09-28 entry; no commitment changed, so the date stays."
+        },
+        {
+          "date": "2026-09-21",
+          "digest": "9a4eecbe42c720f7",
+          "note": "The GDPR row states the erasure count of 105 tables and the change record gains the developer webhooks entry; no commitment changed, so the date stays."
         }
       ]
     },
