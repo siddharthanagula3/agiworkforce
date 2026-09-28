@@ -340,6 +340,8 @@ const en = {
   'webview.answerTokens_other': '{model} · {count} tokens ({input} in, {output} out)',
   'webview.moreLinesHidden_one': '{count} more line not shown',
   'webview.moreLinesHidden_other': '{count} more lines not shown',
+  'mcp.connected_one': 'AGI Workforce: {name} connected in {ms} ms and offers {count} tool.',
+  'mcp.connected_other': 'AGI Workforce: {name} connected in {ms} ms and offers {count} tools.',
 };
 
 export default en;

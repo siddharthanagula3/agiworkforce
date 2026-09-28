@@ -253,6 +253,7 @@ const zh = {
   'webview.contextUsed_other': '上一轮后的上下文：已用 {used} / {count} 个令牌（{percent}%）',
   'webview.answerTokens_other': '{model} · {count} 个令牌（输入 {input}，输出 {output}）',
   'webview.moreLinesHidden_other': '另有 {count} 行未显示',
+  'mcp.connected_other': 'AGI Workforce：{name} 已在 {ms} 毫秒内连接，提供 {count} 个工具。',
 };
 
 export default zh;

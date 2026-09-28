@@ -345,6 +345,8 @@ const hi = {
   'webview.answerTokens_other': '{model} · {count} टोकन ({input} इनपुट, {output} आउटपुट)',
   'webview.moreLinesHidden_one': '{count} और पंक्ति नहीं दिखाई गई',
   'webview.moreLinesHidden_other': '{count} और पंक्तियाँ नहीं दिखाई गईं',
+  'mcp.connected_one': 'AGI Workforce: {name} {ms} ms में कनेक्ट हुआ और {count} टूल देता है।',
+  'mcp.connected_other': 'AGI Workforce: {name} {ms} ms में कनेक्ट हुआ और {count} टूल देता है।',
 };
 
 export default hi;

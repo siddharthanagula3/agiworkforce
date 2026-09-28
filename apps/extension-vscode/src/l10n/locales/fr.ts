@@ -448,6 +448,11 @@ const fr = {
   'webview.moreLinesHidden_one': '{count} ligne supplémentaire non affichée',
   'webview.moreLinesHidden_many': '{count} de lignes supplémentaires non affichées',
   'webview.moreLinesHidden_other': '{count} lignes supplémentaires non affichées',
+  'mcp.connected_one': 'AGI Workforce : {name} s’est connecté en {ms} ms et propose {count} outil.',
+  'mcp.connected_many':
+    'AGI Workforce : {name} s’est connecté en {ms} ms et propose {count} d’outils.',
+  'mcp.connected_other':
+    'AGI Workforce : {name} s’est connecté en {ms} ms et propose {count} outils.',
 };
 
 export default fr;

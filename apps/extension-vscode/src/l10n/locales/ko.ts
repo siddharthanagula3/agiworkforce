@@ -285,6 +285,8 @@ const ko = {
     '마지막 턴 이후 컨텍스트: 토큰 {count}개 중 {used}개 사용({percent}%)',
   'webview.answerTokens_other': '{model} · 토큰 {count}개(입력 {input}, 출력 {output})',
   'webview.moreLinesHidden_other': '표시되지 않은 줄 {count}개',
+  'mcp.connected_other':
+    'AGI Workforce: {name}에 {ms}ms 만에 연결되었습니다. 도구 {count}개를 제공합니다.',
 };
 
 export default ko;

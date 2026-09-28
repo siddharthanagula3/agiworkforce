@@ -573,6 +573,12 @@ const ar = {
   'webview.moreLinesHidden_few': '{count} أسطر أخرى غير معروضة',
   'webview.moreLinesHidden_many': '{count} سطرًا آخر غير معروض',
   'webview.moreLinesHidden_other': '{count} سطر آخر غير معروض',
+  'mcp.connected_zero': 'AGI Workforce: اتصل {name} خلال {ms} مللي ثانية، ولا يوفّر أي أداة.',
+  'mcp.connected_one': 'AGI Workforce: اتصل {name} خلال {ms} مللي ثانية، ويوفّر أداة واحدة.',
+  'mcp.connected_two': 'AGI Workforce: اتصل {name} خلال {ms} مللي ثانية، ويوفّر أداتين.',
+  'mcp.connected_few': 'AGI Workforce: اتصل {name} خلال {ms} مللي ثانية، ويوفّر {count} أدوات.',
+  'mcp.connected_many': 'AGI Workforce: اتصل {name} خلال {ms} مللي ثانية، ويوفّر {count} أداةً.',
+  'mcp.connected_other': 'AGI Workforce: اتصل {name} خلال {ms} مللي ثانية، ويوفّر {count} أداة.',
 };
 
 export default ar;

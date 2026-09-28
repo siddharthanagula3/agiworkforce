@@ -437,6 +437,11 @@ const it = {
   'webview.moreLinesHidden_one': '{count} riga in più non mostrata',
   'webview.moreLinesHidden_many': '{count} di righe in più non mostrate',
   'webview.moreLinesHidden_other': '{count} righe in più non mostrate',
+  'mcp.connected_one': 'AGI Workforce: {name} si è connesso in {ms} ms e offre {count} strumento.',
+  'mcp.connected_many':
+    'AGI Workforce: {name} si è connesso in {ms} ms e offre {count} di strumenti.',
+  'mcp.connected_other':
+    'AGI Workforce: {name} si è connesso in {ms} ms e offre {count} strumenti.',
 };
 
 export default it;
