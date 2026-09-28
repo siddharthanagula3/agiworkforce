@@ -115,8 +115,8 @@ GitHub built-ins are declared, so `get_pull_request_diff` runs under
 
 `write_file` / `create_folder` / `create_office_file` / `execute_code` act inside
 the conversation's own E2B sandbox workspace, not on the user's device. The
-three Memory tools are offered only on the web, desktop and mobile apps, only
-while Memory is on and the chat is not temporary, and they go through the same
+three Memory tools are offered only on the web, desktop and mobile apps and the
+Chrome extension, only while Memory is on and the chat is not temporary, and they go through the same
 admission and never-remember list as `/remember` and `/forget`. Public
 copy must say so in the same breath as any claim about approval, or the sentence
 reads worse than the reality.
