@@ -97,6 +97,11 @@ function createApi(overrides: Partial<ScheduleApi> = {}): ScheduleApi {
     listRuns: vi.fn(async () => runsPage()),
     runNow: vi.fn(async () => ({ run: successfulRun, replay: false })),
     resolveRunApproval: vi.fn(async () => successfulRun),
+    listRecentRuns: vi.fn(async () => ({
+      runs: [{ ...successfulRun, taskName: schedule.name }],
+      pagination: { limit: 20, offset: 0 },
+      hasMore: false,
+    })),
     shareSchedule: vi.fn(async () => ({
       token: 'abcdefghijklmnopqrstuvwx',
       snapshot: {
