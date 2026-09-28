@@ -154,30 +154,24 @@ Code: `apps/cli/src/skills.rs:944-962`
 
 - Done when: A skill declares the connectors/MCP servers it needs and the product shows or enforces it.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | requires.mcp is enforced when the model loads a skill, but no screen shows which connectors a skill needs. | ui |
-| desktop | partial | Same as web. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `packages/tools/skills/src/tool.ts:180-200`
-
 ## S53.17: Manual invocation.
 
 - Done when: A user can explicitly pick a skill for a message and the model then uses that skill.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode
+- Already works on: web, desktop, mobile, cli, vscode, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | chrome | missing | Not built on this surface. |  |
-| api | partial | skill_name works on POST /api/llm/v1/chat/completions but is undocumented in the API reference. | ui |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:613-637`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:498-512`
 
 ## S53.18: Automatic relevance-based invocation.
 
@@ -251,14 +245,13 @@ Code: `apps/cli/src/agent/chat.rs:1046-1062`, `apps/cli/src/skill_learner.rs:1-1
 
 - Done when: A skill shows a summary of the permissions it uses and where it came from.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Detail shows publisher (You/AGI/Plugin/Managed) and license, but nothing summarizes what the skill may access (tools, connectors) or where it came from beyond that label. | ui |
-| desktop | partial | Detail shows publisher (You/AGI/Plugin/Managed) and license, but nothing summarizes what the skill may access (tools, connectors) or where it came from beyond that label. | ui |
 | mobile | partial | Rows show the source label and required tools only; no permission or provenance summary. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/directory/services/skills-directory.ts:62-66`, `packages/ui/ui/src/directory/SkillDetailView.tsx:101-118`, `apps/web/features/directory/services/skills-directory.ts:265-292`, `apps/mobile/src/features/skills/SkillsScreen.tsx:240-275`
+Code: `apps/mobile/src/features/skills/SkillsScreen.tsx:240-275`

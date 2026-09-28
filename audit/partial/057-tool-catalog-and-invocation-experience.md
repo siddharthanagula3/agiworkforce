@@ -25,15 +25,15 @@ Code: `apps/cli/src/features/exec/tools/web/mod.rs:286-286`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | url_fetch now reads PDFs and Word, Excel and PowerPoint files by URL (d67ced36f), but the served tool description is still v1, which says binary content is unsupported; tool.url_fetch_description@2 is recorded on the internal channel and needs a canary advance to stable. Uploaded files and connector sources are still not opened by reference. | handler |
-| desktop | partial | url_fetch now reads PDFs and Word, Excel and PowerPoint files by URL (d67ced36f), but the served tool description is still v1, which says binary content is unsupported; tool.url_fetch_description@2 is recorded on the internal channel and needs a canary advance to stable. Uploaded files and connector sources are still not opened by reference. | handler |
+| web | partial | release step: tool.url_fetch_description@2 is on internal and needs a canary advance with an eval quality signal (lead). Uploaded files and connector sources are still reached only through search_files excerpts, not opened whole by reference | handler |
+| desktop | partial | release step: tool.url_fetch_description@2 is on internal and needs a canary advance with an eval quality signal (lead). Uploaded files and connector sources are still reached only through search_files excerpts, not opened whole by reference | handler |
 | mobile | partial | url_fetch now reads PDFs and Word, Excel and PowerPoint files by URL (d67ced36f), but the served tool description is still v1, which says binary content is unsupported; tool.url_fetch_description@2 is recorded on the internal channel and needs a canary advance to stable. Uploaded files and connector sources are still not opened by reference. | handler |
 | cli | partial | No PDF/Office text extraction in the CLI; adding a PDF crate changes Cargo.lock (lead-owned). | handler |
 | vscode | partial | Runs the CLI tools: read_file and web_fetch read plain text only; no PDF or Office source reader. | handler |
 | chrome | partial | Same as web: url_fetch reads PDF and Office files by URL (d67ced36f), but the served tool description is still v1 until tool.url_fetch_description@2 advances to stable; uploaded files and connector sources are still not opened by reference. | handler |
-| api | partial | url_fetch now reads PDFs and Word, Excel and PowerPoint files by URL (d67ced36f), but the served tool description is still v1, which says binary content is unsupported; tool.url_fetch_description@2 is recorded on the internal channel and needs a canary advance to stable. Uploaded files and connector sources are still not opened by reference. | handler |
+| api | partial | release step: tool.url_fetch_description@2 is on internal and needs a canary advance with an eval quality signal (lead). Uploaded files and connector sources are still reached only through search_files excerpts, not opened whole by reference | handler |
 
-Code: `apps/web/lib/url-fetch/url-fetch-tool.ts:479-479`, `apps/web/lib/prompts/prompt-manifest.ts:97-97`, `apps/cli/src/features/exec/tools/mod.rs:365-372`, `apps/cli/src/features/exec/tools/mod.rs:568-568`
+Code: `apps/web/lib/prompts/prompt-manifest.ts:97-97`, `packages/ai/model-registry/catalog/routing-policies.json:161-161`, `apps/web/lib/url-fetch/url-fetch-tool.ts:479-479`, `apps/cli/src/features/exec/tools/mod.rs:365-372`
 
 ## S57.04: File-search tool.
 

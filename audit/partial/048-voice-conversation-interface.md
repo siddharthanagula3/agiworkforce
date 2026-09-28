@@ -295,12 +295,11 @@ Code: `apps/cli/src/voice.rs:254-254`, `apps/cli/src/voice.rs:320-320`, `apps/cl
 
 - Done when: The user can steer a remote coding session (running on another device) by voice.
 - Wave: 2
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only composer dictation exists in the /code composer; there is no voice mode for coding sessions, and web cloud sessions are flag-off. | surface-only |
-| desktop | partial | Same as web: dictation into the hosted /code composer only. | surface-only |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | Voice drives the local session only; steering a session on another device needs the same remote-session relay S72.30 lacks. | handler, flag-off |
 
-Code: `apps/web/features/code/components/CodeComposer.tsx:1201-1201`, `apps/cli/src/voice.rs:75-75`
+Code: `apps/cli/src/voice.rs:75-75`
