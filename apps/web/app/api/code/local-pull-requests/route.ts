@@ -6,6 +6,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { isGitHubAppConfigured, isGitHubInstallationLinkingAvailable } from '@/lib/github-app';
 import { withRateLimit } from '@/lib/rate-limit';
+import { recordAuditEvent } from '@/lib/security-audit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import {
   LocalPullRequestError,
@@ -67,18 +68,24 @@ async function handleOpen(request: NextRequest) {
     throw createError.validation('Request body must be an object');
   }
   const record = body as Record<string, unknown>;
-  try {
-    return NextResponse.json(
-      await openLocalPullRequest(userId, {
-        remoteUrl: record['remoteUrl'],
-        head: record['head'],
-        base: record['base'],
-        title: record['title'],
-      }),
-    );
-  } catch (error) {
-    rethrow(error);
-  }
+  const pullRequest = await openLocalPullRequest(userId, {
+    remoteUrl: record['remoteUrl'],
+    head: record['head'],
+    base: record['base'],
+    title: record['title'],
+  }).catch(rethrow);
+  await recordAuditEvent({
+    userId,
+    request,
+    eventType: 'tool_executed',
+    detail: {
+      resourceType: 'github_pull_request',
+      resourceId: pullRequest.url,
+      provider: 'github',
+      status: 'pull_request_opened',
+    },
+  });
+  return NextResponse.json(pullRequest);
 }
 
 export const GET = withErrorHandler(handleRead);

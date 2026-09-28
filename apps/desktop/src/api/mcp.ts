@@ -548,7 +548,7 @@ export async function mcpOAuthSetCredentials(
   try {
     validateNonEmpty(provider, 'provider');
     validateNonEmpty(clientId, 'client ID');
-    if (provider !== 'microsoft') validateNonEmpty(clientSecret, 'client secret');
+    validateNonEmpty(clientSecret, 'client secret');
     await invokeWithTimeout<void>('mcp_oauth_set_credentials', {
       provider,
       clientId,

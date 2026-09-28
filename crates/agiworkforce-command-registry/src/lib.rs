@@ -254,6 +254,13 @@ pub fn builtin_slash_registry_commands() -> Vec<RegistryCommand> {
         RegistryCommand::builtin_slash("skills", "Browse available skills", true, false, vec![]),
         RegistryCommand::builtin_slash("agents", "Browse and manage agents", true, false, vec![]),
         RegistryCommand::builtin_slash(
+            "team",
+            "See teammates, message one, or stop one",
+            true,
+            true,
+            vec!["teams"],
+        ),
+        RegistryCommand::builtin_slash(
             "permissions",
             "Manage tool permissions",
             false,
