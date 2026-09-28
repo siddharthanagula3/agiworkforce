@@ -116,10 +116,14 @@ before it retires the old one, so a deploy never leaves the web without a
 scanner.
 
 clamd exiting stops the service, and so do five minutes without a detection
-of the test string; either way Fly restarts the machine. freshclam exiting does
-not: it exits by design when the ClamAV CDN refuses it, so clamd keeps scanning
-with the signatures it has, freshclam starts again an hour later, and `/health`
-reports the growing signature age.
+of the test string. Either way the process exits non-zero, and `fly.toml` sets
+`[[restart]] policy = 'on-failure'`, which restarts a machine only on a
+non-zero exit and is Fly's default when unset
+([the restart section](https://docs.fly.io/reference/configuration/#the-restart-section),
+checked 2026-09-28). freshclam exiting does not: it exits by design when the
+ClamAV CDN refuses it, so clamd keeps scanning with the signatures it has,
+freshclam starts again an hour later, and `/health` reports the growing
+signature age.
 
 ## Runbook: running the scanner
 
