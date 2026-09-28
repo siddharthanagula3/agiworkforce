@@ -9,8 +9,6 @@ import { getUserScopedDb } from '@/lib/server/rls-db';
 import { logger } from '@/lib/logger';
 import { recordExternalResourceReferences } from '@/lib/server/external-resource-references';
 import { evaluateConnectorPolicyForUser } from '@/lib/services/connector-policy-gate';
-import { validateHttpsMcpUrl } from '@/lib/mcp-url-validation';
-import { bearerCredential, sealCustomConnectorCredential } from '@/lib/custom-connector-crypto';
 import { recordAuditEvent } from '@/lib/security-audit';
 import {
   evictCustomConnectorCaches,
@@ -18,38 +16,23 @@ import {
   type UserCustomConnectorSummary,
 } from '@/lib/user-connector-tools';
 import { findDirectoryTargetByRemoteUrl } from '@/lib/connectors/mcp-directory-targets';
-import { mcpServerPublishesProtectedResource } from '@/lib/connectors/mcp-discovery';
+import { createCustomConnector } from '@/lib/connectors/custom-connector-creation';
 import { disconnectConnectorOAuthGrant } from '@/lib/connectors/oauth-access';
 import { resolveClientRedirectUri } from '@/lib/connectors/mcp-client-metadata';
 import { getUserConnectorOAuthGrantSummaries } from '@/lib/connectors/oauth-store';
 import {
-  assertConnectorToolCapacity,
-  assertCustomConnectorCapacity,
   clearConnectorToolPermissions,
   customConnectorId,
   deleteCustomConnectorRows,
-  edgeBlockedMessage,
-  insertCustomConnector,
-  McpProbeError,
-  probeMcpServer,
   toCustomConnectorView,
-  transportForUrl,
-  type McpProbeResult,
 } from '@/lib/connectors/mcp-custom-connections';
 
 export const runtime = 'nodejs';
 
 const CONNECTOR_SCOPE = { resolveOrganization: false } as const;
 const RATE_LIMIT_BUCKET = 'chat-conversation';
-const NAME_MAX_LENGTH = 200;
-const AUTH_TOKEN_MAX_LENGTH = 4096;
 const AUDIT_RESOURCE_TYPE = 'custom_mcp_connector';
 const AUDIT_SOURCE = 'custom_mcp';
-const OAUTH_CLIENT_ID_MAX_LENGTH = 512;
-const OAUTH_CLIENT_SECRET_MAX_LENGTH = 4096;
-const OAUTH_CLIENT_WITH_TOKEN_MESSAGE =
-  'Use either an access token or OAuth client credentials for a custom connector, not both.';
-const OAUTH_SECRET_WITHOUT_ID_MESSAGE = 'An OAuth client secret needs its OAuth client ID.';
 
 async function withDirectoryLink(
   summary: UserCustomConnectorSummary,
@@ -122,85 +105,19 @@ async function handlePost(request: NextRequest) {
     throw createError.validation('Invalid JSON body');
   }
 
-  const name = body.name?.trim();
-  if (!name || name.length > NAME_MAX_LENGTH) {
-    throw createError.validation(`name is required (1 to ${NAME_MAX_LENGTH} chars)`);
-  }
-
-  const capacity = await assertCustomConnectorCapacity(db, userId);
-
-  const parsedUrl = await validateHttpsMcpUrl(body.url);
-  const url = parsedUrl.toString();
-  const transport = transportForUrl(parsedUrl, body.transport);
-
-  const hostDecision = await evaluateConnectorPolicyForUser({
-    db,
-    userId,
-    connectorId: null,
-    isCustom: true,
-    url,
-    request,
-  });
-  if (!hostDecision.allowed) throw createError.forbidden(hostDecision.reason);
-
-  const authToken = typeof body.authToken === 'string' ? body.authToken.trim() : '';
-  if (authToken.length > AUTH_TOKEN_MAX_LENGTH) {
-    throw createError.validation('authToken is too long');
-  }
-  const credential = authToken ? bearerCredential(authToken) : null;
-
-  const oauthClientId = typeof body.oauthClientId === 'string' ? body.oauthClientId.trim() : '';
-  const oauthClientSecret =
-    typeof body.oauthClientSecret === 'string' ? body.oauthClientSecret.trim() : '';
-  if (
-    oauthClientId.length > OAUTH_CLIENT_ID_MAX_LENGTH ||
-    oauthClientSecret.length > OAUTH_CLIENT_SECRET_MAX_LENGTH
-  ) {
-    throw createError.validation('OAuth client credentials are too long');
-  }
-  if (oauthClientSecret && !oauthClientId) {
-    throw createError.validation(OAUTH_SECRET_WITHOUT_ID_MESSAGE);
-  }
-  if (credential && oauthClientId) {
-    throw createError.validation(OAUTH_CLIENT_WITH_TOKEN_MESSAGE);
-  }
-
-  let probe: McpProbeResult | null = null;
-  try {
-    probe = await probeMcpServer({
-      serverName: name,
-      url,
-      transport,
-      ...(credential ? { headers: { [credential.headerName]: credential.headerValue } } : {}),
-      authorizationContext: `user:${userId}:custom-url:${url}`,
-    });
-  } catch (error) {
-    if (!(error instanceof McpProbeError)) throw error;
-    if (!error.authChallenge || credential) {
-      throw createError.serviceUnavailable(
-        error.edgeBlocked
-          ? edgeBlockedMessage(name)
-          : `Failed to connect to MCP server: ${error.message}`,
-      );
-    }
-  }
-
-  const signInRequired =
-    !credential && (probe === null || (await mcpServerPublishesProtectedResource(url)));
-
-  if (probe) assertConnectorToolCapacity(capacity.planTier, probe.toolCount);
-
-  const saved = await insertCustomConnector(db, {
-    userId,
-    name,
-    url,
-    transport,
-    credentialEnc: credential ? sealCustomConnectorCredential(credential) : null,
-    connectorLimit: capacity.connectorLimit,
+  const {
+    connector: saved,
     signInRequired,
-    oauthClient: oauthClientId
-      ? { clientId: oauthClientId, clientSecret: oauthClientSecret || null }
-      : null,
+    probe,
+  } = await createCustomConnector(db, {
+    userId,
+    request,
+    name: body.name,
+    url: body.url,
+    transport: body.transport,
+    authToken: body.authToken,
+    oauthClientId: body.oauthClientId,
+    oauthClientSecret: body.oauthClientSecret,
   });
 
   await recordExternalResourceReferences(db, { userId, organizationId: null }, [
@@ -217,21 +134,6 @@ async function handlePost(request: NextRequest) {
       { error, userId, connectorId: customConnectorId(saved.short_id) },
       '[connectors] the custom connector server was not recorded',
     );
-  });
-
-  await recordAuditEvent({
-    userId,
-    eventType: 'connector_added',
-    request,
-    detail: {
-      resourceType: AUDIT_RESOURCE_TYPE,
-      resourceId: saved.id,
-      resourceName: saved.name,
-      connectorId: customConnectorId(saved.short_id),
-      transport: saved.transport,
-      source: AUDIT_SOURCE,
-      status: signInRequired ? 'sign-in-required' : 'connected',
-    },
   });
 
   const view = toCustomConnectorView(saved);

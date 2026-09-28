@@ -13,6 +13,7 @@ export type {
   SettingsConnector,
   ConnectedConnector,
   CustomConnectorInput,
+  CustomConnectorPreset,
   SettingsSkill,
   SettingsPlugin,
   SettingsSectionKey,

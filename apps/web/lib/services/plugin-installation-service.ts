@@ -25,11 +25,17 @@ import {
   PluginPackageRefusedError,
 } from './plugin-marketplace-service';
 import {
+  conflictingConstraints,
+  conflictingConstraintsMessage,
+  installedOutsideRangeMessage,
+  listedOutsideRangeMessage,
   parsePluginDependencies,
   pluginDependencyLabel,
   PluginDependencyError,
   resolvePluginDependencies,
+  unmetConstraint,
   type PluginDependencyNode,
+  type ResolvedPluginDependency,
 } from './plugin-dependencies';
 
 interface PluginInstallationRow {
@@ -206,9 +212,9 @@ async function satisfiedRegistryPlugins(
   db: DatabaseAdapter,
   userId: string,
   pluginIds: readonly string[],
-): Promise<Set<string>> {
-  const rows = await db.query<{ plugin_id: string }>(
-    `select installation.plugin_id
+): Promise<Map<string, string>> {
+  const rows = await db.query<{ plugin_id: string; installed_version: string }>(
+    `select installation.plugin_id, installation.installed_version
        from public.plugin_installations installation
        left join public.plugin_registry_versions pinned
               on pinned.plugin_id = installation.plugin_id
@@ -220,7 +226,29 @@ async function satisfiedRegistryPlugins(
         and coalesce(pinned.status, 'published') <> 'suspended'`,
     [userId, pluginIds],
   );
-  return new Set(rows.map((row) => row.plugin_id));
+  return new Map(rows.map((row) => [row.plugin_id, row.installed_version]));
+}
+
+function assertRegistryVersionConstraints(
+  dependency: ResolvedPluginDependency<RegistryPlugin>,
+  installedVersion: string | undefined,
+  rootId: string,
+): void {
+  if (dependency.constraints.length === 0) return;
+  const conflict = conflictingConstraints(dependency.constraints);
+  if (conflict) {
+    throw new PluginDependencyError(
+      conflictingConstraintsMessage(dependency.label, conflict, rootId),
+    );
+  }
+  const version = installedVersion ?? dependency.plugin.entry.version;
+  const unmet = unmetConstraint(version, dependency.constraints);
+  if (!unmet) return;
+  throw new PluginDependencyError(
+    installedVersion === undefined
+      ? listedOutsideRangeMessage(dependency.label, unmet, version, rootId)
+      : installedOutsideRangeMessage(dependency.label, unmet, version, rootId),
+  );
 }
 
 export async function planWebPluginInstall(
@@ -242,11 +270,6 @@ export async function planWebPluginInstall(
           `Dependency "${label}" (required by ${requiredBy}) is in marketplace "${reference.marketplace}", which is not in the allowlist. A built-in plugin depends on built-in plugins only, so ${rootId} was not installed.`,
         );
       }
-      if (reference.version !== null) {
-        throw new PluginDependencyError(
-          `Dependency "${label}" (required by ${requiredBy}) asks for version ${reference.version}, and built-in plugins install at their current version only, so ${rootId} was not installed.`,
-        );
-      }
       const found = await findWebInstallablePlugin(db, reference.name);
       if (!found) {
         throw new PluginDependencyError(
@@ -263,6 +286,9 @@ export async function planWebPluginInstall(
     userId,
     resolved.map((dependency) => dependency.plugin.entry.id),
   );
+  for (const dependency of resolved) {
+    assertRegistryVersionConstraints(dependency, satisfied.get(dependency.plugin.entry.id), rootId);
+  }
   return {
     root,
     dependencies: resolved.map(({ plugin, requiredBy }) => ({

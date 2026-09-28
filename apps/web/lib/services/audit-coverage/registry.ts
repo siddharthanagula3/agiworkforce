@@ -57,6 +57,7 @@ export const UNAUDITED_MUTATING_ROUTES: readonly UnauditedRoute[] = [
   { route: 'files/uploads/route.ts', reason: 'own_content' },
   { route: 'github/issues/route.ts', reason: 'own_content' },
   { route: 'interactive-cards/respond/route.ts', reason: 'own_content' },
+  { route: 'library/route.ts', reason: 'own_content' },
   {
     route: 'llm/v1/chat/completions/runs/[runId]/resume/stream/route.ts',
     reason: 'no_governed_state',
@@ -83,6 +84,7 @@ export const UNAUDITED_MUTATING_ROUTES: readonly UnauditedRoute[] = [
   { route: 'projects/[id]/duplicate/route.ts', reason: 'own_content' },
   { route: 'projects/[id]/knowledge-files/[fileId]/reindex/route.ts', reason: 'own_content' },
   { route: 'projects/[id]/knowledge-files/[fileId]/route.ts', reason: 'own_content' },
+  { route: 'projects/[id]/knowledge-files/google-drive/route.ts', reason: 'own_content' },
   { route: 'projects/[id]/knowledge-files/route.ts', reason: 'own_content' },
   { route: 'projects/[id]/route.ts', reason: 'own_content' },
   { route: 'projects/sync/route.ts', reason: 'no_governed_state' },
