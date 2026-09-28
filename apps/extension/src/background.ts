@@ -3956,12 +3956,18 @@ async function handleMessageAsync(
     }
 
     case 'LIST_MEMORIES' as ExtensionMessage['type']: {
-      const listed = await memoryList();
+      const listOffset = (message as unknown as { offset?: unknown }).offset;
+      const listed = await memoryList(
+        typeof listOffset === 'number' && Number.isInteger(listOffset) && listOffset > 0
+          ? listOffset
+          : 0,
+      );
       return {
         success: listed.status === 'ready',
         status: listed.status,
         memories: listed.memories,
         fromCache: listed.fromCache,
+        hasMore: listed.hasMore === true,
         error: listed.error,
       } as ExtensionResponse;
     }
@@ -5184,6 +5190,7 @@ async function handleChatMessage(
         previousTaskType: message.previousTaskType,
         conversationId: message.conversationId,
         assistantMessageId: message.assistantMessageId,
+        ...(message.memoryCommand ? { memoryCommand: message.memoryCommand } : {}),
         idempotencyKey: delivery?.requestId,
         completionMode: delivery ? 'unattended' : 'interactive',
         signal: activeStream.controller.signal,
