@@ -761,7 +761,7 @@ async function handlePush(request: NextRequest) {
       );
       collectBatchRows(rows, applied.artifacts, conflicts.artifacts);
       if (applied.artifacts.length > 0) {
-        await db.execute(RECORD_ARTIFACT_VERSIONS_SQL, [
+        await db.query(RECORD_ARTIFACT_VERSIONS_SQL, [
           userId,
           applied.artifacts.map((row) => row.id),
         ]);
