@@ -59,6 +59,7 @@ import { trackProductEvent } from '@shared/lib/product-analytics';
 import { cn } from '@shared/lib/utils';
 import type { DocumentFormat } from '../../types/message-metadata';
 import { documentExportService } from '../../services/document-export-service';
+import { formatSourceDate } from '../../utils/research-sources';
 import { toUserMessage } from '@/lib/user-error-message';
 import { useOverlayDialog } from '../../hooks/use-overlay-dialog';
 
@@ -211,23 +212,9 @@ export function researchReportFilename(report: ResearchReport): string {
 // Citation row
 // ============================================================================
 
-const CITATION_DATE_FORMAT: Intl.DateTimeFormatOptions = {
-  year: 'numeric',
-  month: 'short',
-  day: 'numeric',
-};
-
-function formatCitationDate(value: string | undefined): string | null {
-  if (!value) return null;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime())
-    ? null
-    : date.toLocaleDateString(undefined, CITATION_DATE_FORMAT);
-}
-
 function citationDateLabel(citation: Citation): string | null {
-  const published = formatCitationDate(citation.publishedDate);
-  const retrieved = formatCitationDate(citation.accessedAt);
+  const published = formatSourceDate(citation.publishedDate);
+  const retrieved = formatSourceDate(citation.accessedAt);
   return (
     [published ? `Published ${published}` : null, retrieved ? `Retrieved ${retrieved}` : null]
       .filter(Boolean)

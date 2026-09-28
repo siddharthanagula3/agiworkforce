@@ -39,7 +39,7 @@ import { cn } from '@shared/lib/utils';
 import { useModelStore } from '@shared/stores/model-store';
 import { estimateResearchCredits } from '@/lib/billing/credit-estimates';
 import { ResearchPlan } from './ResearchPlan';
-import { useResearchRunAction } from './research-run-controls';
+import { useResearchRunControls } from './research-run-controls';
 import type { MessageResearchState } from '@shared/stores/web-chat-store';
 import { useUiTranslation } from '@agiworkforce/ui';
 import { isResearchGuidanceStep } from '../../utils/research-plan';
@@ -130,7 +130,7 @@ function PlanStepRow({ step }: { step: ResearchStep }) {
         )}
       >
         {step.description}
-        {step.status === 'dropped' && step.note ? (
+        {(step.status === 'dropped' || step.status === 'failed') && step.note ? (
           <span className="block text-caption text-muted-foreground">{step.note}</span>
         ) : null}
       </span>
@@ -253,7 +253,9 @@ export function ResearchActivity({
   const paused = research.phase === 'paused';
   const complete = research.phase === 'complete';
 
-  const runAction = useResearchRunAction();
+  const runControls = useResearchRunControls();
+  const runAction = runControls?.act ?? null;
+  const availableConnectors = connectorOptions ?? runControls?.connectorOptions ?? [];
   const controllable = Boolean(runAction && messageId);
   const steerable =
     controllable &&
@@ -337,7 +339,7 @@ export function ResearchActivity({
   const [addKind, setAddKind] = useState<AddableKind>('web');
   const [addValue, setAddValue] = useState('');
 
-  const connectorChoices = (connectorOptions ?? []).filter(
+  const connectorChoices = availableConnectors.filter(
     (option) =>
       !sources.some((source) => source.kind === 'connector' && source.id === option.connectorId),
   );
@@ -629,7 +631,7 @@ export function ResearchActivity({
                 aria-label="What kind of source to add"
               >
                 {(['web', 'web-excluded', 'files', 'connector'] as AddableKind[])
-                  .filter((kind) => kind !== 'connector' || (connectorOptions?.length ?? 0) > 0)
+                  .filter((kind) => kind !== 'connector' || availableConnectors.length > 0)
                   .map((kind) => (
                     <option key={kind} value={kind}>
                       {ADD_KIND_LABELS[kind]}

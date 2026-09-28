@@ -13,6 +13,7 @@ import {
   COMPOSER_EDITOR_QUERY_PARAM,
 } from '@features/chat/lib/composer-editor-gate';
 import { useMicrophoneNoticeStore } from '@features/chat/stores/microphone-notice-store';
+import { __resetComposerDraftStorageForTests } from './composer-draft-storage';
 import { ChatComposerNew } from './ChatComposerNew';
 
 /**
@@ -190,6 +191,8 @@ beforeEach(() => {
   // Composer toggles and drafts live in the chat store, so they outlive a
   // render and would otherwise leak an image mode or a skill into the next test.
   window.sessionStorage.clear();
+  window.localStorage.clear();
+  __resetComposerDraftStorageForTests();
   useChatStore.setState({
     composerTogglesByConversation: {},
     draftsByConversation: {},
@@ -539,28 +542,26 @@ describe('editor arm · committing from a bare slash', () => {
 });
 
 /**
- * The whole journey happens on the unsaved surface, so both of these read the
- * same draft slot and demand opposite answers. What separates them is how the
- * user got there: a new chat is a push, a return is a history step.
+ * The whole journey happens on the unsaved surface, so every arrival reads the
+ * same draft slot: whatever was typed there and not sent comes back, whether
+ * the user returns by the sidebar or by a history step.
  */
 describe('editor arm · the unsaved surface draft', () => {
   function mount() {
     return render(<ChatComposerNew onSend={vi.fn()} />);
   }
 
-  it('withholds the draft from a new chat and hands it back on the way back', () => {
+  it('hands the unsent draft back on every return to the surface', () => {
     const typed = 'half-typed draft that belongs to this chat';
     const composing = mount();
     type(typed);
     composing.unmount();
 
-    // The new chat the user opened on purpose starts blank.
     editorHandle.setText.mockClear();
-    const newChat = mount();
-    expect(editorHandle.setText).toHaveBeenCalledExactlyOnceWith('');
-    newChat.unmount();
+    const returned = mount();
+    expect(editorHandle.setText).toHaveBeenCalledExactlyOnceWith(typed);
+    returned.unmount();
 
-    // Stepping back to the surface they left returns what was on it.
     window.dispatchEvent(new PopStateEvent('popstate'));
     editorHandle.setText.mockClear();
     mount();

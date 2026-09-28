@@ -14,6 +14,13 @@
   border-bottom: 1px solid var(--chat-code-border);
 }
 
+@media (pointer: coarse) {
+  .code-block-header-bar {
+    height: auto;
+    min-height: 44px;
+  }
+}
+
 .code-block-lang-label {
   color: var(--chat-code-lang-label);
   font-family: var(--chat-font-mono);

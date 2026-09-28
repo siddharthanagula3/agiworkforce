@@ -10,12 +10,10 @@ nothing is left.
 
 - Done when: The user can manually enlarge the composer (an expand control or resize handle) beyond its automatic height.
 - Wave: 3
-- Already works on: mobile
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
@@ -24,12 +22,10 @@ nothing is left.
 
 - Done when: The user can open the draft in a full-screen (or external) editor and return it to the composer.
 - Wave: 3
-- Already works on: mobile, cli
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
@@ -37,7 +33,7 @@ nothing is left.
 
 - Done when: Standard undo/redo shortcuts (Cmd/Ctrl+Z, Shift+Cmd/Ctrl+Z) revert and reapply edits in the composer.
 - Wave: 3
-- Already works on: cli
+- Already works on: web, desktop, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -80,33 +76,25 @@ nothing is left.
 
 - Done when: The unsent composer text is saved automatically while typing, so it survives a reload or crash.
 - Wave: 3
-- Already works on: mobile
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Autosave itself is real (writePersistedDraft on every change), but the consumer side is broken for the ordinary return path: restorablePendingDraft() answers '' for a push navigation and claimReloadedPendingDraft() is single-use per document, so the saved text is never read back after the user navigates away and comes back through the sidebar. A draft that autosaves but is not restored is not the behaviour the item promises; live E057 confirms the empty composer. |  |
-| desktop | partial | Autosave itself is real (writePersistedDraft on every change), but the consumer side is broken for the ordinary return path: restorablePendingDraft() answers '' for a push navigation and claimReloadedPendingDraft() is single-use per document, so the saved text is never read back after the user navigates away and comes back through the sidebar. A draft that autosaves but is not restored is not the behaviour the item promises; live E057 confirms the empty composer. Desktop renders the same hosted web code. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/ComposerInput.tsx:128-153`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:3137-3156`, `apps/web/features/chat/hooks/use-conversation-draft-sync.ts:28-40`, `apps/web/features/chat/pages/WebChatPage.tsx:5668-5668`
 
 ## S13.17: Draft recovery.
 
 - Done when: After a reload, crash or failed send, the unsent text is put back in the composer (with a notice).
 - Wave: 3
-- Already works on: mobile
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The cited anchors only show the failed-send and blocked-send notices. The reload/return path is restorablePendingDraft(): it returns '' unless a popstate preceded the mount, and claimReloadedPendingDraft() is spent once per document, so the sidebar Chat item (a push to /chat) mounts an empty composer even though the text was parked. The conflict toast comes from useConversationDraftSync per conversation id and claims the text is on screen when it is not. Matches live E057 at this SHA. |  |
-| desktop | partial | The cited anchors only show the failed-send and blocked-send notices. The reload/return path is restorablePendingDraft(): it returns '' unless a popstate preceded the mount, and claimReloadedPendingDraft() is spent once per document, so the sidebar Chat item (a push to /chat) mounts an empty composer even though the text was parked. The conflict toast comes from useConversationDraftSync per conversation id and claims the text is on screen when it is not. Matches live E057 at this SHA. Desktop renders the same hosted web code. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:565-565`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:3257-3282`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:3316-3341`, `apps/web/features/chat/pages/WebChatPage.tsx:5668-5668`
 
 ## S13.18: Draft isolation by conversation.
 
@@ -127,28 +115,27 @@ Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:565-565`, 
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Turn follow-up suggestions on for ordinary replies; today the switch defaults off and they appear only after a turn that searched the web or ran research. | flag-off |
-| desktop | partial | Same as web (default-off outside searched turns). | flag-off |
+| web | partial | with the switch on, ordinary replies still get only keyword chips: ChatMessageList.tsx:1391 should use enabled: showFollowUps and follow-ups/route.ts:67-70 should drop its no-sources early return. | flag-off |
+| desktop | partial | with the switch on, ordinary replies still get only keyword chips: ChatMessageList.tsx:1391 should use enabled: showFollowUps and follow-ups/route.ts:67-70 should drop its no-sources early return. | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | partial | Blind re-search: chatParticipant.ts registers a followupProvider that returns three clickable follow-up prompts after every reply in VS Code's Chat view (the same participant the auditor credited for S13.24). That is a real prompt-suggestion surface, so missing is wrong; the sidebar webview still has none and the list is static, hence partial. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/messages/ChatMessageList.tsx:1006-1006`, `apps/web/features/chat/components/messages/ChatMessageList.tsx:1280-1288`, `apps/web/features/chat/components/messages/ChatMessageList.tsx:1820-1832`
+Code: `apps/web/features/chat/components/messages/ChatMessageList.tsx:1046-1046`, `apps/web/features/chat/components/messages/ChatMessageList.tsx:1391-1391`, `apps/web/app/api/chat/conversations/[id]/messages/[messageId]/follow-ups/route.ts:67-67`
 
 ## S13.21: Prompt-template insertion.
 
 - Done when: The user can insert a saved prompt template (e.g. a custom command) into the composer, filling in their own text.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
 | vscode | partial | Make picking a prompt command in the "/" menu insert or run it; today the click asks the CLI app server to run it, which only runs six management commands and otherwise shows a warning. | handler |
-| chrome | partial | The item is a saved prompt template (e.g. a custom command). The cited anchors show a hard-coded SLASH_COMMANDS table and acceptSlash inserting the command token; nothing lets a user save or edit a template, which the auditor's own note concedes. Built-in page prompts are a partial implementation, not done. |  |
 
-Code: `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:1500-1512`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:1515-1523`, `apps/cli/src/app_server/surfaces.rs:26-30`, `apps/extension/src/side_panel.ts:4556-4575`
+Code: `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:1500-1512`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:1515-1523`, `apps/cli/src/app_server/surfaces.rs:26-30`
 
 ## S13.23: Skill invocation.
 
@@ -180,13 +167,12 @@ Code: `apps/mobile/src/features/skills/SkillsScreen.tsx:536-544`, `apps/mobile/a
 
 - Done when: Typing a mention in the composer can reference a project, scoping the message to it.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
 | vscode | partial | Blind re-search with the repo's own vocabulary (activeProject, projectContextStrip): VS Code can scope turns to a hosted project via 'Use in chat' (applyProjectToChat -> setActiveCloudProject), shows it as an 'Active project' chip in the composer strip, and prepends its instructions through customInstructions.ts. Not a typed mention and no knowledge files, so partial, not missing. |  |
-| chrome | partial | Blind re-search: the auditor's own S13.31 chrome evidence names renderProjectChip. The Projects drawer's 'Use' button sets the active project, the chip renders it, and persistMessages passes the binding to upsertConversation so the chat is scoped to the project. Picker rather than mention, so partial. |  |
 
 ## S13.26: File mention.
 
@@ -196,12 +182,12 @@ Code: `apps/mobile/src/features/skills/SkillsScreen.tsx:536-544`, `apps/mobile/a
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Let @ mention files; today files can only be attached through the "+" menu or the AGI Work Files menu (the @ menu lists skills and projects). | ui |
-| desktop | partial | Same as web: no @ file mention. | ui |
+| web | partial | ChatGPT's @ palette searches files (docs/research/leader-settings-and-directory-reference-2026-09-07.md:208, observed 2026-09-07), so this is not n/a: the @ menu needs Library files that attach on selection (p-contrast next batch). | ui |
+| desktop | partial | ChatGPT's @ palette searches files (docs/research/leader-settings-and-directory-reference-2026-09-07.md:208, observed 2026-09-07), so this is not n/a: the @ menu needs Library files that attach on selection (p-contrast next batch). | ui |
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:2351-2357`
+Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:2457-2457`, `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:76-76`
 
 ## S13.27: Folder mention.
 
@@ -222,12 +208,12 @@ Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:691-708`,
 
 - Done when: The user can reference an open browser tab (choosing which one) as context for the message.
 - Wave: 3
+- Already works on: chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | desktop | partial | Let the user pick which tab; the desktop "Use the browser" dialog can read the paired browser's current page and attach it, but not choose or mention other tabs. | ui |
 | cli | partial | Needs a list-tabs call in the Chrome bridge protocol and extension before the composer can offer tabs. | ui, api |
-| chrome | partial | Let the user choose other tabs; today only the current tab's page can be attached ("Add the browser page"). | ui |
 
 Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:5255-5259`, `apps/web/features/desktop-host/components/BrowserToolsDialog.tsx:44-60`, `apps/cli/src/features/exec/tools/mod.rs:685-689`, `apps/cli/src/platform/runtime/tool_catalog.rs:180-182`
 
@@ -238,14 +224,14 @@ Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:5255-5259`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Add an inline mention of connected apps; today a connector's prompt or resources are picked in its capabilities panel and appear as chips in the composer. | ui |
-| desktop | partial | Same as web: selection happens in the connector panel, not inline. | ui |
+| web | partial | ChatGPT's @ lists installed plugins (docs/research/leader-settings-and-directory-reference-2026-09-07.md:208, observed 2026-09-07), so this is not n/a: the @ menu needs connected connectors (p-contrast next batch). | ui |
+| desktop | partial | ChatGPT's @ lists installed plugins (docs/research/leader-settings-and-directory-reference-2026-09-07.md:208, observed 2026-09-07), so this is not n/a: the @ menu needs connected connectors (p-contrast next batch). | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | Needs McpManager::list_resources/read_resource in apps/cli/src/mcp (p-mcp-rust's files); the crate client already has both (crates/agiworkforce-mcp/src/client.rs:168,182). | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/connectors/components/ConnectorCapabilitiesPanel.tsx:135-145`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:840-869`, `apps/cli/src/tui/tui_app.rs:2637-2650`, `apps/cli/src/tui/tui_app.rs:4086-4088`
+Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:2457-2457`, `apps/web/features/connectors/components/ConnectorCapabilitiesPanel.tsx:227-227`, `apps/cli/src/tui/tui_app.rs:2637-2650`, `apps/cli/src/tui/tui_app.rs:4086-4088`
 
 ## S13.32: Selected-source chips.
 
@@ -278,13 +264,13 @@ Code: `apps/mobile/src/features/chat/components/ChatInput.tsx:210-231`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Add a per-message output-format choice; today the composer offers tone/length (Style) and an Office-files toggle, and "preferred formatting" exists only in Settings. | ui |
-| desktop | partial | Same as web. | ui |
+| web | partial | Claude has an Output picker (Docs, Slides, Design; beta, paid); formats and plans are a product call before building. | ui |
+| desktop | partial | Claude has an Output picker (Docs, Slides, Design; beta, paid); formats and plans are a product call before building. | ui |
 | mobile | partial | Add an output-format choice; the style picker covers tone and length only (Normal, Concise, Detailed, Creative). | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:869-876`, `apps/web/features/chat/stores/style-store.ts:187-195`, `apps/mobile/src/features/chat/components/StyleSelector.tsx:16-19`
+Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:886-886`, `apps/web/features/chat/stores/style-store.ts:298-298`, `apps/mobile/src/features/chat/components/StyleSelector.tsx:16-19`
 
 ## S13.36: Dictation control.
 
@@ -342,16 +328,15 @@ Code: `apps/mobile/src/features/chat/components/ChatInput.tsx:871-887`, `apps/mo
 
 - Done when: While an agent is working, the user can send guidance that steers the running task without stopping it.
 - Wave: 3
-- Already works on: cli, vscode
+- Already works on: cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Let users steer a running turn from the composer; today guidance can be added only when approving or denying a tool step, and typed messages wait in the queue. | ui, handler |
-| desktop | partial | Same as web: guidance only at approval checkpoints. | ui, handler |
+| web | partial | steering a running turn from the composer needs p-chat-gates' steer route and tool-loop draining queued guidance at each tool boundary; the composer side follows once that call lands. | ui, handler |
+| desktop | partial | steering a running turn from the composer needs p-chat-gates' steer route and tool-loop draining queued guidance at each tool boundary; the composer side follows once that call lands. | ui, handler |
 | mobile | partial | Let users steer a running mobile chat; steering exists only for a paired desktop's code session ("Steer this run" in Remote), while mobile chats queue messages. | ui |
-| chrome | partial | Let users steer a running chat or run from the panel; today guidance can be attached only to an approval decision in the Work runs panel. | ui, handler |
 
-Code: `apps/web/features/chat/components/approvals/ApprovalInbox.tsx:223-235`, `apps/web/features/chat/components/approvals/ApprovalInbox.tsx:125-132`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:177-190`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:85-97`
+Code: `apps/web/features/chat/components/approvals/ApprovalInbox.tsx:226-226`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:5247-5247`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:177-190`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:85-97`
 
 ## S13.41: Separate side question that does not modify the main task.
 

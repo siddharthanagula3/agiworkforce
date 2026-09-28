@@ -41,4 +41,5 @@ export type AppServerCapabilities = {
   promptCommands?: boolean;
   maxTurns?: boolean;
   memory?: boolean;
+  plan?: boolean;
 };

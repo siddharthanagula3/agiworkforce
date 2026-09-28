@@ -76,6 +76,8 @@ vi.mock('../runtime/computerUseService', () => ({
 
 vi.mock('../runtime/computerUseSession', () => ({
   askUserDuringRun: vi.fn((_window: unknown, ask: () => Promise<unknown>) => ask()),
+  configureComputerUse: vi.fn(),
+  shutDownComputerUse: vi.fn(),
   computerUseEnabled: () => true,
   computerUsePhase,
   computerUseStatus: vi.fn(() => ({ phase: computerUsePhase() })),
@@ -90,7 +92,12 @@ vi.mock('../runtime/computerUseSession', () => ({
   withoutInputWatch: vi.fn((action: () => Promise<unknown>) => action()),
 }));
 
-vi.mock('../runtime/systemPermissions', () => ({ openSystemPermission: vi.fn() }));
+vi.mock('../runtime/systemPermissions', () => ({
+  listForAccessibility: vi.fn(),
+  openSystemPermission: vi.fn(),
+  systemPermissionStatus: vi.fn(() => 'granted'),
+  systemPermissionStatuses: vi.fn(() => ({})),
+}));
 
 vi.mock('../runtime/workspaceStore', () => ({
   getRoot: (id: string) => (id === root.id ? root : undefined),
@@ -103,7 +110,11 @@ vi.mock('../runtime/workspaceStore', () => ({
   WorkspaceGrantRefused: class extends Error {},
 }));
 
-vi.mock('../runtime/shellService', () => ({ runShellCommand, cancelShellRun }));
+vi.mock('../runtime/shellService', () => ({
+  runShellCommand,
+  cancelShellRun,
+  listShellRuns: vi.fn(() => []),
+}));
 vi.mock('../runtime/shellPolicyStore', () => ({ readShellPolicy, writeShellPolicy }));
 vi.mock('../runtime/appsService', () => ({
   openInEditor,
@@ -112,7 +123,9 @@ vi.mock('../runtime/appsService', () => ({
 }));
 vi.mock('../runtime/clipboardService', () => ({ readClipboard }));
 vi.mock('../runtime/filesystemService', () => ({
+  TextEditRefused: class extends Error {},
   createDirectory: vi.fn(),
+  editTextFile: vi.fn(),
   globFiles: vi.fn(),
   grepFiles: vi.fn(),
   listDirectory: vi.fn(),

@@ -1,10 +1,11 @@
-
 export interface SearchResult {
   title: string;
   url: string;
   snippet: string;
   source?: string;
   publishedDate?: string;
+  retrievedAt?: string;
+  provenance?: { retrievedAt?: string };
   favicon?: string;
 }
 

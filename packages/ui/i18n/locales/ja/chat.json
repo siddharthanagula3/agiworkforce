@@ -198,7 +198,9 @@
     "addAttachmentsAndToolsActive": "添付ファイルとツールを追加: {{count}} 件有効",
     "voiceStart": "音声入力を開始",
     "voiceUnsupportedBrowser": "このブラウザでは音声入力に対応していません",
-    "voiceUnsupportedHint": "このブラウザでは音声入力に対応していません。Chrome または Edge をお試しください。"
+    "voiceUnsupportedHint": "このブラウザでは音声入力に対応していません。Chrome または Edge をお試しください。",
+    "expandInput": "メッセージ入力欄を広げる",
+    "collapseInput": "メッセージ入力欄を元に戻す"
   },
   "bubble": {
     "assistantSaid": "AGIの発言:",
@@ -347,5 +349,22 @@
     "copyFailed": "コピーできませんでした。クリップボードを利用できません",
     "download": "CSV としてダウンロード",
     "close": "拡大した表を閉じる"
+  },
+  "markdown": {
+    "copy": "コピー",
+    "copied": "コピーしました",
+    "copyFailed": "コピーできませんでした",
+    "copyLabel": "コードをコピー",
+    "copiedLabel": "コードをコピーしました",
+    "copyFailedLabel": "コードをコピーできませんでした",
+    "download": "{{fileName}} をダウンロード",
+    "expand": "コードを拡大",
+    "close": "拡大したコードを閉じる",
+    "codeTitle": "{{language}} のコード",
+    "codeBlockLabel": "{{language}} のコードブロック"
+  },
+  "streaming": {
+    "reconnecting": "再接続中…",
+    "stopping": "クラウドタスクを停止しています…"
   }
 }
