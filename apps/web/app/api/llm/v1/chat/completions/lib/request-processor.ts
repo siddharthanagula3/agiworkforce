@@ -168,6 +168,8 @@ import {
   resolveMaxOutputTokens,
   resolvePromptCachePrivacyClass,
   getDefaultModelFor,
+  getDefaultAutoRoutingProfile,
+  ROUTING_PROFILE_CHOICES,
 } from '@agiworkforce/types';
 import type {
   ModelCapabilities,
@@ -273,6 +275,7 @@ import {
   type ProjectContextBlock,
 } from '@/lib/services/project-context-service';
 import { JSON_OBJECT_DIRECTIVE, wantsJsonObject } from './json-object-mode';
+import { autoAliasForRoutingProfile, speedFirstSlots } from './routing-profile-selection';
 import {
   modelKeepsInputsOutOfTraining,
   noTrainingChatModelFor,
@@ -465,6 +468,7 @@ export const ChatCompletionRequestSchema = z
     /** Per-chat Memory override. False skips memory injection and memory writes for this turn. */
     memory_enabled: z.boolean().optional(),
     personalization: z.boolean().optional(),
+    routing_profile: z.enum(ROUTING_PROFILE_CHOICES).optional(),
     memory_command: z
       .object({
         kind: z.enum(MEMORY_COMMAND_KINDS),
@@ -2574,6 +2578,11 @@ export async function processRequest(
       return true;
     });
 
+  const routingProfileAlias =
+    chatRequest.model === getDefaultAutoRoutingProfile().id
+      ? autoAliasForRoutingProfile(chatRequest.routing_profile)
+      : null;
+  if (routingProfileAlias) chatRequest.model = routingProfileAlias;
   const freeAutoSelection =
     isFreePlanTier(subscription.plan_tier) && isAutoModeModelId(chatRequest.model);
   applyFreePlanDefaultModel(chatRequest, subscription.plan_tier);
@@ -3532,12 +3541,16 @@ export async function processRequest(
         subscription.plan_tier,
         resolvedTaskType,
         routeUsage,
-        undefined,
+        chatRequest.routing_profile === 'speed' ? speedFirstSlots() : undefined,
         {
           ...baseRouteHealthState,
           ...(routeAffinity ? { preferredRouteId: routeAffinity.routeId } : {}),
-          ...(routeAffinity?.modelKey ? { currentModelKey: routeAffinity.modelKey } : {}),
-          ...(routeAffinity?.taskType ? { previousTaskType: routeAffinity.taskType } : {}),
+          ...(routeAffinity?.modelKey && !routingProfileAlias
+            ? { currentModelKey: routeAffinity.modelKey }
+            : {}),
+          ...(routeAffinity?.taskType && !routingProfileAlias
+            ? { previousTaskType: routeAffinity.taskType }
+            : {}),
         },
         availableProviderIds,
         zeroDataRetentionOnly,
