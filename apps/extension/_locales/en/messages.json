@@ -3986,5 +3986,17 @@
         "example": "the best fit for this kind of request"
       }
     }
+  },
+  "spRunLatestOutput": {
+    "message": "Latest output",
+    "description": "Heading of a live cloud run's most recent answer text in the runs panel"
+  },
+  "spRunResult": {
+    "message": "Result",
+    "description": "Heading of a finished cloud run's final answer in the runs panel"
+  },
+  "spRunReport": {
+    "message": "Report",
+    "description": "Heading of a finished research run's report in the runs panel"
   }
 }
