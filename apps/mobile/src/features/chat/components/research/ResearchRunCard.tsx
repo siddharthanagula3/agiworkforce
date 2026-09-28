@@ -167,6 +167,7 @@ interface ResearchRunCardProps {
   isResuming?: boolean;
   onPlanDecision?: (decision: ResearchPlanDecision) => void;
   onStop?: () => void;
+  onPause?: () => Promise<boolean>;
   onRetry?: () => void;
 }
 
@@ -176,10 +177,12 @@ export function ResearchRunCard({
   isResuming = false,
   onPlanDecision,
   onStop,
+  onPause,
   onRetry,
 }: ResearchRunCardProps) {
   const colors = useThemeColors();
   const active = isStreaming && isResearchRunActive(research);
+  const [pauseRequested, setPauseRequested] = useState(false);
 
   const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
@@ -208,6 +211,13 @@ export function ResearchRunCard({
   const canDecide = Boolean(onPlanDecision) && awaitingApproval && !isStreaming;
   const canRetry = Boolean(onRetry) && (failed || interrupted || paused) && !isStreaming;
   const canStop = Boolean(onStop) && active;
+  const canPause = Boolean(onPause) && active && research.phase !== 'synthesizing';
+
+  const requestPause = async () => {
+    if (!onPause) return;
+    setPauseRequested(true);
+    if (!(await onPause())) setPauseRequested(false);
+  };
 
   const tint = failed ? colors.agentError : complete ? colors.agentSuccess : colors.agentActive;
 
@@ -318,7 +328,7 @@ export function ResearchRunCard({
         </View>
       ) : null}
 
-      {canDecide || canRetry || canStop ? (
+      {canDecide || canRetry || canStop || canPause ? (
         <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
           {canDecide ? (
             <>
@@ -338,6 +348,15 @@ export function ResearchRunCard({
                 testID="research-plan-cancel"
               />
             </>
+          ) : null}
+          {canPause ? (
+            <ActionButton
+              label={pauseRequested ? 'Pausing…' : 'Pause'}
+              icon={Pause}
+              disabled={pauseRequested}
+              onPress={() => void requestPause()}
+              testID="research-run-pause"
+            />
           ) : null}
           {canStop ? (
             <ActionButton
