@@ -141,16 +141,15 @@ Code: `apps/cli/src/lib.rs:477-481`, `apps/cli/src/lib.rs:5020-5022`, `apps/cli/
 
 - Done when: Before the agent acts, the user sees its plan and can approve, edit or reject it.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Research runs wait for Approve plan before starting; AGI Work plan steps appear only as Activity log lines, with no plan view and no approve, edit or reject. | ui, handler |
-| cli | partial | Plan mode blocks edits until approval, but /plan accept\|reject exist only in the --no-tui REPL; the TUI can only toggle plan mode off. | ui |
 | vscode | partial | VS Code shows a plan card and offers Plan mode, but has no approve/reject control for the plan. | ui |
 | chrome | partial | Chrome run detail lists plan steps as journal lines only; no approve/reject, and Chrome cannot start AGI Work. | ui, handler |
 
-Code: `apps/mobile/src/features/tasks/runPresentation.ts:227-237`, `apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx:313-329`, `apps/mobile/src/features/chat/components/research/ResearchRunCard.tsx:262-270`, `apps/cli/src/tui/tui_app.rs:3314-3322`
+Code: `apps/mobile/src/features/tasks/runPresentation.ts:227-237`, `apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx:313-329`, `apps/mobile/src/features/chat/components/research/ResearchRunCard.tsx:262-270`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:5576-5606`
 
 ## S60.14: Step list.
 
@@ -213,16 +212,15 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:3007-30
 
 - Done when: The user can redirect a running task with new guidance without starting over.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | The phone can send guidance to a running desktop local code session (Remote Code "Guidance for the next turn", optionally interrupting); AGI Work cloud runs offer only Approve/Deny with no guidance. | surface-only |
-| cli | partial | The TUI parks input during a turn, so the user can only interrupt (Esc) and send a new prompt; the engine steering path is not reachable from the TUI. | ui |
 | vscode | partial | The cited 'guidance' is only the rejection reason collected when the user rejects a pending tool approval (guidance is undefined on approve, and nothing offers it to a running run). That is not redirecting a running task with new guidance. miss: states/ui; remaining: offer a steer/pause-and-resume control with guidance for running cloud tasks. |  |
 | chrome | partial | The cited guidance field lives inside buildApprovalCard, so it exists only while a run is awaiting_input on a tool approval; a run that is simply running offers Stop and nothing else (no pause, no guidance). The criterion is redirecting a running task; chrome can steer only at an approval prompt. miss: states; remaining: add a pause/steer control for running runs (web has Pause -> Resume with guidance). |  |
 
-Code: `apps/mobile/src/features/companion/components/CodeSessionView.tsx:178-189`, `apps/mobile/src/features/companion/remote-code/service.ts:41-49`, `apps/cli/src/tui/tui_app.rs:5123-5135`, `apps/extension-vscode/src/features/cloud-tasks/cloudRunApproval.ts:117-129`
+Code: `apps/mobile/src/features/companion/components/CodeSessionView.tsx:178-189`, `apps/mobile/src/features/companion/remote-code/service.ts:41-49`, `apps/extension-vscode/src/features/cloud-tasks/cloudRunApproval.ts:117-129`, `apps/extension-vscode/src/features/cloud-tasks/cloudRunApproval.ts:146-150`
 
 ## S60.21: Pause.
 
