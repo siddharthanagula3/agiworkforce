@@ -417,7 +417,7 @@ async function handleDelete(request: NextRequest) {
 
     return NextResponse.json(
       {
-        message: `Account deletion scheduled. Your account and all data will be permanently deleted within 24 hours. Sign back in and cancel from Settings > Account any time before then to keep your account.`,
+        message: `Account deletion scheduled. Erasing your account and all its data starts 24 hours from now, on the first daily erasure run after that. Sign back in and cancel from Settings > Account any time before then to keep your account.`,
         scheduledFor,
         status: scheduledOutcome.status,
         statusReason: deletionReceiptReason(scheduledOutcome),

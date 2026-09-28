@@ -9,6 +9,7 @@ import {
 } from '@clerk/nextjs';
 import type { SessionVerificationResource } from '@clerk/nextjs/types';
 import { useCallback, useMemo, useRef } from 'react';
+import type { AuthProviderId } from '@agiworkforce/client-runtime';
 import { getHostBridge } from '@agiworkforce/local-runtime-contract';
 import { isAuthPath } from '@agiworkforce/types/product-routes';
 import { AUTH_LOGIN_PATH } from '@/features/auth/authRoutes';
@@ -268,6 +269,65 @@ function reverificationStep(verification: SessionVerificationResource): Identity
     factors.some((factor) => factor.strategy === 'passkey') && browserSupportsPasskeys();
   if (!password && !passkey && !emailCode) return { kind: 'unavailable' };
   return { kind: 'first_factor', password, passkey, emailCode };
+}
+
+export interface IdentityConnectedAccount {
+  id: string;
+  provider: string;
+  email: string | null;
+}
+
+export interface IdentityConnectedAccountsState {
+  isLoaded: boolean;
+  accounts: readonly IdentityConnectedAccount[];
+  connect: (provider: AuthProviderId, returnUrl: string) => Promise<void>;
+  disconnect: (accountId: string) => Promise<void>;
+}
+
+const CONNECT_STRATEGIES = {
+  google: 'oauth_google',
+  github: 'oauth_github',
+  microsoft: 'oauth_microsoft',
+  apple: 'oauth_apple',
+} as const satisfies Readonly<Record<AuthProviderId, string>>;
+
+export function useConnectedAccounts(): IdentityConnectedAccountsState {
+  const { isLoaded, user } = useUser();
+  const accounts = useMemo<IdentityConnectedAccount[]>(
+    () =>
+      (user?.externalAccounts ?? []).map((account) => ({
+        id: account.id,
+        provider: account.provider,
+        email: optional(account.emailAddress),
+      })),
+    [user],
+  );
+
+  const connect = useCallback(
+    async (provider: AuthProviderId, returnUrl: string) => {
+      if (!user) throw new Error('Sign in again to connect an account.');
+      const account = await user.createExternalAccount({
+        strategy: CONNECT_STRATEGIES[provider],
+        redirectUrl: returnUrl,
+      });
+      const next = account.verification?.externalVerificationRedirectURL;
+      if (!next) throw new Error('The sign-in provider did not start. Try again.');
+      window.location.assign(next.toString());
+    },
+    [user],
+  );
+
+  const disconnect = useCallback(
+    async (accountId: string) => {
+      const account = user?.externalAccounts.find((candidate) => candidate.id === accountId);
+      if (!user || !account) return;
+      await account.destroy();
+      await user.reload();
+    },
+    [user],
+  );
+
+  return { isLoaded, accounts, connect, disconnect };
 }
 
 export function useSessionReverification(): IdentityReverification {

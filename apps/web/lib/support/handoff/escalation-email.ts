@@ -211,3 +211,39 @@ export async function sendTicketOpenedEmail(
     idempotencyKey: `support-ticket-opened-${input.ticket.id}`,
   });
 }
+
+export interface CustomerTicketEmailInput {
+  to: string;
+  ticketId: string;
+  subject: string;
+  body: string;
+  followPath: string;
+  idempotencyKey: string;
+}
+
+export async function sendCustomerTicketEmail(
+  input: CustomerTicketEmailInput,
+): Promise<SendEmailResult> {
+  const subjectLine = singleLine(redactSecrets(input.subject));
+  const followUrl = `${SITE_URL}${input.followPath}`;
+  const text = [
+    input.body,
+    '',
+    `Reference: ${input.ticketId}`,
+    `Read and answer it at ${followUrl}`,
+  ].join('\n');
+  const html = [
+    '<div style="font-family:system-ui,sans-serif;font-size:14px;line-height:1.5">',
+    `<p style="white-space:pre-wrap">${escapeHtml(input.body)}</p>`,
+    `<p>Reference: ${escapeHtml(input.ticketId)}</p>`,
+    `<p><a href="${escapeHtml(followUrl)}">Read and answer it</a></p>`,
+    '</div>',
+  ].join('');
+  return sendSupportEmail({
+    to: input.to,
+    subject: `[AGI Support] ${subjectLine}`,
+    text,
+    html,
+    idempotencyKey: input.idempotencyKey,
+  });
+}

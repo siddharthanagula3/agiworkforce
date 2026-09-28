@@ -115,8 +115,12 @@ const CustomConnectorsResponseSchema = z.object({
       url: z.string().url(),
       createdAt: z.string(),
       directoryId: z.string().min(1).optional(),
+      shortId: z.string().min(1).optional(),
+      signInRequired: z.boolean().optional(),
+      signedIn: z.boolean().optional(),
     }),
   ),
+  oauthRedirectUri: z.string().url().optional(),
 });
 
 type ParsedConnectorRow = {
@@ -132,6 +136,9 @@ type ParsedCustomConnectorRow = {
   url: string;
   createdAt: string;
   directoryId?: string;
+  shortId?: string;
+  signInRequired?: boolean;
+  signedIn?: boolean;
 };
 
 function readConnectorResponse(value: unknown): {
@@ -225,6 +232,11 @@ function readCustomConnectorResponse(value: unknown): {
       ...(typeof row['directoryId'] === 'string' && row['directoryId'].length > 0
         ? { directoryId: row['directoryId'] }
         : {}),
+      ...(typeof row['shortId'] === 'string' && row['shortId'].length > 0
+        ? { shortId: row['shortId'] }
+        : {}),
+      ...(row['signInRequired'] === true ? { signInRequired: true } : {}),
+      ...(row['signedIn'] === true ? { signedIn: true } : {}),
     });
   }
 
@@ -238,8 +250,21 @@ const CAPABILITY_SENTENCE_END = '.';
 const CUSTOM_CONNECTOR_ID_PREFIX = 'custom-';
 const CUSTOM_CONNECTOR_CATEGORY = 'Custom';
 const CUSTOM_CONNECTOR_AUTH_TYPE = 'custom_mcp';
+const CUSTOM_CONNECTOR_SIGN_IN_COPY = 'Sign-in required';
+const CUSTOM_CONNECTOR_OAUTH_CLIENT_HINT =
+  'If the server gave you an OAuth client, add it again with its Client ID and Secret under Advanced settings.';
 const CUSTOM_CONNECTOR_ICON_BG = 'from-muted to-muted';
 const CUSTOM_CONNECTOR_ICON_TEXT = 'MCP';
+
+function readOAuthRedirectUri(value: unknown): string | null {
+  if (!value || typeof value !== 'object') return null;
+  const uri = (value as { oauthRedirectUri?: unknown }).oauthRedirectUri;
+  return typeof uri === 'string' && uri.length > 0 ? uri : null;
+}
+
+function customSignInPending(row: ParsedCustomConnectorRow): boolean {
+  return row.signInRequired === true && row.signedIn !== true && row.shortId !== undefined;
+}
 
 function capabilityDescription(connector: (typeof CONNECTORS)[number]): string {
   const summary = connector.capabilitySummary;
@@ -264,7 +289,10 @@ export const SETTINGS_CONNECTORS = CONNECTORS.filter((c) => !c.exclusive).map((c
 
 export type ConnectorsSettingsAdapterSlice = Pick<
   SettingsDataAdapter,
-  'addCustomConnector' | 'customConnectorAuthTokenSupported'
+  | 'addCustomConnector'
+  | 'customConnectorAuthTokenSupported'
+  | 'customConnectorOAuthClientSupported'
+  | 'customConnectorOAuthRedirectUri'
 >;
 
 export interface ToolPermissionsConnector {
@@ -334,6 +362,7 @@ export function useConnectorsSettingsAdapter({
   // build-time hardcoded false.
   const [availableIds, setAvailableIds] = useState<string[]>([]);
   const [customConnectors, setCustomConnectors] = useState<ParsedCustomConnectorRow[]>([]);
+  const [oauthRedirectUri, setOauthRedirectUri] = useState<string | null>(null);
 
   const [connectorsError, setConnectorsError] = useState<string | null>(null);
   const [connectorsNotice, setConnectorsNotice] = useState<string | null>(null);
@@ -346,6 +375,7 @@ export function useConnectorsSettingsAdapter({
     });
     if (!response.ok) throw new Error('Custom connector directory request failed.');
     const body = await response.json();
+    setOauthRedirectUri(readOAuthRedirectUri(body));
     const parsed = CustomConnectorsResponseSchema.safeParse(body);
     if (parsed.success) {
       setCustomConnectors(parsed.data.connectors);
@@ -409,6 +439,7 @@ export function useConnectorsSettingsAdapter({
             .map((connector) => connector.connectorId),
         );
         setCustomConnectors(customFallback.rows);
+        setOauthRedirectUri(readOAuthRedirectUri(customJson));
         if (connectorsFallback.degraded || customFallback.degraded) {
           setConnectorsNotice(CONNECTOR_DATA_DEGRADED_NOTICE);
         }
@@ -476,7 +507,7 @@ export function useConnectorsSettingsAdapter({
         phase: 1,
         iconBg: CUSTOM_CONNECTOR_ICON_BG,
         iconText: CUSTOM_CONNECTOR_ICON_TEXT,
-        canConnect: false,
+        canConnect: customSignInPending(c),
       })),
     [selfAddedConnectors],
   );
@@ -522,13 +553,52 @@ export function useConnectorsSettingsAdapter({
       rows.push({
         connectorId: `${CUSTOM_CONNECTOR_ID_PREFIX}${c.id}`,
         connectedAt: c.createdAt,
+        ...(customSignInPending(c)
+          ? { status: 'warning' as const, warningLabel: CUSTOM_CONNECTOR_SIGN_IN_COPY }
+          : {}),
       });
     }
     return rows;
   }, [connectedConnectors, githubInstallations, selfAddedConnectors]);
 
+  const startCustomConnectorSignIn = useCallback(
+    async (shortId: string, name: string) => {
+      const target = withConnectorReturnPath(
+        `/api/connectors/oauth/start?connectorId=${encodeURIComponent(`${CUSTOM_CONNECTOR_ID_PREFIX}${shortId}`)}`,
+        currentConnectorReturnPath(),
+      );
+      if (!target) throw new Error(`Could not connect ${name}.`);
+      const res = await fetch(`${target}${target.includes('?') ? '&' : '?'}mode=json`, {
+        headers: await authedHeaders(),
+        credentials: 'include',
+      });
+      const body = (await res.json().catch(() => null)) as {
+        authorizeUrl?: string;
+        error?: string;
+        status?: string;
+      } | null;
+      if (res.ok && body?.authorizeUrl) {
+        window.location.href = body.authorizeUrl;
+        return;
+      }
+      throw new Error(
+        (body?.status && brokerOutcomeMessage(body.status, name)) ??
+          body?.error ??
+          `Could not connect ${name}.`,
+      );
+    },
+    [authedHeaders],
+  );
+
   const connectConnector = useCallback(
     async (id: string) => {
+      if (id.startsWith(CUSTOM_CONNECTOR_ID_PREFIX)) {
+        const row = customConnectors.find((c) => `${CUSTOM_CONNECTOR_ID_PREFIX}${c.id}` === id);
+        if (!row?.shortId)
+          throw new Error('This connector could not be found. Refresh and try again.');
+        await startCustomConnectorSignIn(row.shortId, row.name);
+        return;
+      }
       // Web has no working per-provider authorization flow yet, so the catalog
       // is mapped with canConnect: false and the shared panel never invokes
       // this. Kept non-optimistic for when a real flow lands: POST first, only
@@ -607,7 +677,7 @@ export function useConnectorsSettingsAdapter({
         { connectorId: json.connector.connectorId, connectedAt: json.connector.connectedAt },
       ]);
     },
-    [authedHeaders],
+    [authedHeaders, customConnectors, startCustomConnectorSignIn],
   );
 
   const setGithubPrReview = useCallback(
@@ -697,7 +767,13 @@ export function useConnectorsSettingsAdapter({
   );
 
   const addCustomConnector = useCallback(
-    async (input: { name: string; url: string; authToken?: string }) => {
+    async (input: {
+      name: string;
+      url: string;
+      authToken?: string;
+      oauthClientId?: string;
+      oauthClientSecret?: string;
+    }) => {
       const csrfToken = await getCsrfToken();
       const res = await fetch('/api/connectors/custom', {
         method: 'POST',
@@ -710,15 +786,40 @@ export function useConnectorsSettingsAdapter({
           name: input.name,
           url: input.url,
           ...(input.authToken ? { authToken: input.authToken } : {}),
+          ...(input.oauthClientId ? { oauthClientId: input.oauthClientId } : {}),
+          ...(input.oauthClientSecret ? { oauthClientSecret: input.oauthClientSecret } : {}),
         }),
       });
       if (!res.ok) {
         const body = (await res.json().catch(() => null)) as { error?: string } | null;
         throw new Error(body?.error ?? 'Could not add connector. Try again.');
       }
+      const created = (await res.json().catch(() => null)) as {
+        connector?: { id?: string; shortId?: string; name?: string };
+        signInRequired?: boolean;
+      } | null;
       await refreshCustomConnectors();
+      const connector = created?.connector;
+      if (!created?.signInRequired || !connector?.shortId) return;
+      try {
+        await startCustomConnectorSignIn(connector.shortId, connector.name ?? input.name);
+      } catch (error) {
+        if (input.oauthClientId || !connector.id) throw error;
+        const removed = await fetch(
+          `/api/connectors/custom?id=${encodeURIComponent(connector.id)}`,
+          {
+            method: 'DELETE',
+            headers: await authedHeaders({ 'x-csrf-token': await getCsrfToken() }),
+            credentials: 'include',
+          },
+        );
+        await refreshCustomConnectors();
+        if (!removed.ok) throw error;
+        const reason = error instanceof Error ? error.message : `Could not connect ${input.name}.`;
+        throw new Error(`${reason} ${CUSTOM_CONNECTOR_OAUTH_CLIENT_HINT}`);
+      }
     },
-    [authedHeaders, refreshCustomConnectors],
+    [authedHeaders, refreshCustomConnectors, startCustomConnectorSignIn],
   );
 
   const setToolPermissionsConnectorId = useCallback(
@@ -853,6 +954,8 @@ export function useConnectorsSettingsAdapter({
     adapter: {
       addCustomConnector,
       customConnectorAuthTokenSupported: true,
+      customConnectorOAuthClientSupported: true,
+      ...(oauthRedirectUri ? { customConnectorOAuthRedirectUri: oauthRedirectUri } : {}),
     },
     directoryAdapter,
     navBadges,

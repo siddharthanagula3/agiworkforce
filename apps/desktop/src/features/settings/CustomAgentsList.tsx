@@ -156,9 +156,7 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
 }
 
 type EditorMode =
-  | { kind: 'closed' }
-  | { kind: 'create' }
-  | { kind: 'edit'; agent: CustomAgentConfig };
+  { kind: 'closed' } | { kind: 'create' } | { kind: 'edit'; agent: CustomAgentConfig };
 
 export function CustomAgentsList() {
   const { agents, isLoading, error, fetchAgents, deleteAgent } = useCustomAgentsStore(
@@ -222,7 +220,7 @@ export function CustomAgentsList() {
       {/* Toolbar */}
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-semibold">Custom Agents</h3>
+          <h3 className="text-h3">Custom Agents</h3>
           <p className="text-xs text-muted-foreground mt-0.5">
             {agents.length === 0
               ? 'No agents configured'

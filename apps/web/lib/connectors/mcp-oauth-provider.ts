@@ -46,11 +46,17 @@ export interface McpOAuthProviderSeed {
   discoveryState?: OAuthDiscoveryState | undefined;
 }
 
+export interface McpSuppliedOAuthClient {
+  clientId: string;
+  clientSecret: string | null;
+}
+
 export interface McpOAuthProviderOptions {
   mcpUrl: string;
   state: string;
   seed?: McpOAuthProviderSeed;
   refuseWithoutPkce?: boolean;
+  client?: McpSuppliedOAuthClient | null;
 }
 
 export class McpClientIdentityUnavailableError extends Error {
@@ -126,6 +132,14 @@ export class McpOAuthClientProvider implements OAuthClientProvider {
     ctx?: OAuthClientInformationContext,
   ): Promise<StoredOAuthClientInformation | undefined> {
     if (this._clientInformation) return this._clientInformation;
+    const supplied = this.options.client;
+    if (supplied) {
+      this._clientInformation = {
+        client_id: supplied.clientId,
+        ...(supplied.clientSecret ? { client_secret: supplied.clientSecret } : {}),
+      } as StoredOAuthClientInformation;
+      return this._clientInformation;
+    }
     const issuer = ctx?.issuer ?? this.issuer;
     if (!issuer) return undefined;
 
@@ -242,7 +256,7 @@ export class McpOAuthClientProvider implements OAuthClientProvider {
     if (scope === 'all' || scope === 'client') {
       const issuer = this.issuer;
       this._clientInformation = undefined;
-      if (issuer) await deleteMcpOAuthClient(issuer);
+      if (issuer && !this.options.client) await deleteMcpOAuthClient(issuer);
     }
     if (scope === 'all' || scope === 'discovery') this._discovery = null;
   }

@@ -100,7 +100,10 @@
     "noArchived": "没有已归档的对话",
     "noConversations": "暂无对话",
     "showActive": "返回活跃对话",
-    "showArchived": "显示已归档对话（{{count}}）"
+    "showArchived": "显示已归档对话（{{count}}）",
+    "archivedToast": "对话已归档",
+    "archivedUndo": "撤销",
+    "archivedView": "查看已归档"
   },
   "emptyChat": {
     "neutralHeadline": "今天我能帮你做什么？",
@@ -381,6 +384,9 @@
       "constraintsPlaceholder": "边界、需避免的内容、优先来源…",
       "deliverableLabel": "交付物",
       "deliverablePlaceholder": "你期望的具体产出（文件、表格、摘要等）",
+      "toolsLabel": "此任务可使用的工具",
+      "toolWebSearch": "网页搜索与浏览",
+      "toolCodeExecution": "代码执行",
       "palette": {
         "label": "AGI Work 工具",
         "searchPlaceholder": "搜索插件、文件夹和技能",

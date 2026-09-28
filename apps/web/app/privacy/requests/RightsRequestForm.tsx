@@ -39,7 +39,7 @@ const REQUEST_TYPES = [
 
 type FormState = 'idle' | 'submitting' | 'error';
 
-export function RightsRequestForm() {
+export function RightsRequestForm({ onSubmitted }: { onSubmitted?: () => void } = {}) {
   const typeId = useId();
   const emailId = useId();
   const detailsId = useId();
@@ -102,6 +102,7 @@ export function RightsRequestForm() {
       setOperatorNotified(body.operatorNotified === true);
       setState('idle');
       setDetails('');
+      onSubmitted?.();
     } catch {
       setErrorMsg('Your request was not recorded, so nothing was stored.');
       setState('error');

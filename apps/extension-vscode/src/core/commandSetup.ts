@@ -101,6 +101,7 @@ import { installCli } from '../integrations/cliInstaller';
 import {
   admitDeveloperSessionHandoff,
   describeHandoffRefusal,
+  describeHandoffReview,
 } from '../integrations/developerSessionHandoff';
 import { DEVELOPER_SESSION_PROTOCOL_VERSION } from '@agiworkforce/types';
 import {
@@ -449,9 +450,12 @@ async function continueThisSessionInTheTerminal(sidebarProvider: SidebarProvider
   );
 }
 
+const CONTINUE_HANDOFF_HERE = 'Continue here';
+
 async function continueCliSessionHere(
   localRuntimes: LocalRuntimePool,
   accepted: Set<string>,
+  threadId?: string,
 ): Promise<void> {
   const folder = getActiveWorkspaceFolderSync();
   if (folder === undefined) {
@@ -471,12 +475,15 @@ async function continueCliSessionHere(
     );
     return;
   }
-  const newest = [...threads.threads].sort((left, right) =>
-    right.updatedAt.localeCompare(left.updatedAt),
-  )[0];
+  const newest =
+    threadId === undefined
+      ? [...threads.threads].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0]
+      : threads.threads.find((thread) => thread.id === threadId);
   if (newest === undefined) {
     await vscode.window.showInformationMessage(
-      'AGI Workforce: the AGI CLI has no session in this folder to continue.',
+      threadId === undefined
+        ? 'AGI Workforce: the AGI CLI has no session in this folder to continue.'
+        : 'AGI Workforce: that session is not in this folder. Open the folder it works in and send it again.',
     );
     return;
   }
@@ -494,6 +501,13 @@ async function continueCliSessionHere(
     );
     return;
   }
+  const review = describeHandoffReview(handoff, outcome.admission);
+  const choice = await vscode.window.showInformationMessage(
+    review.message,
+    { modal: true, detail: review.detail },
+    CONTINUE_HANDOFF_HERE,
+  );
+  if (choice !== CONTINUE_HANDOFF_HERE) return;
   accepted.add(outcome.receipt);
   await runtime.acceptHandoff(handoff);
   await vscode.commands.executeCommand('agi-workforce.chat');
@@ -1271,8 +1285,12 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       conversationTreeProvider.refresh();
     }),
 
-    register('agi-workforce.continueCliSession', async () => {
-      await continueCliSessionHere(localRuntimes, acceptedHandoffs);
+    register('agi-workforce.continueCliSession', async (argument: unknown) => {
+      await continueCliSessionHere(
+        localRuntimes,
+        acceptedHandoffs,
+        typeof argument === 'string' && argument !== '' ? argument : undefined,
+      );
     }),
 
     register('agi-workforce.continueInTerminal', async () => {

@@ -36,6 +36,8 @@
 /replay
 /insights
 /context [ctx]
+/personalize
+/tasks [task]
 /config
 /models [providers]
 /memory [mem]

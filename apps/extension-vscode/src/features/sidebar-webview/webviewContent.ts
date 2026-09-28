@@ -1953,6 +1953,8 @@ export function getWebviewContent(
       background: var(--bg-elevated);
     }
     .sessions-sheet-title { font-size: var(--type-body-size); line-height: var(--type-body-height); font-weight: 600; }
+    .sessions-sheet-actions { display: flex; align-items: center; gap: 2px; }
+    .sessions-sheet-actions .icon-btn[hidden] { display: none; }
 
     .sessions-sheet-toggle {
       display: flex;
@@ -2371,9 +2373,21 @@ export function getWebviewContent(
   <section class="sessions-sheet" id="sessionsSheet" hidden aria-label="Sessions">
     <div class="sessions-sheet-head">
       <span class="sessions-sheet-title">Sessions</span>
-      <button class="icon-btn" id="sessionsSheetClose" title="Close" aria-label="Close sessions">
-        <span class="codicon codicon-close" aria-hidden="true"></span>
-      </button>
+      <div class="sessions-sheet-actions">
+        <button
+          class="icon-btn"
+          id="sessionsContinueInCloud"
+          type="button"
+          title="Continue in the cloud"
+          aria-label="Continue in the cloud"
+          hidden
+        >
+          <span class="codicon codicon-cloud-upload" aria-hidden="true"></span>
+        </button>
+        <button class="icon-btn" id="sessionsSheetClose" title="Close" aria-label="Close sessions">
+          <span class="codicon codicon-close" aria-hidden="true"></span>
+        </button>
+      </div>
     </div>
     <div class="sessions-sheet-toggle" role="tablist" aria-label="Session source">
       <button type="button" role="tab" id="sessionsTabLocal" aria-selected="true">Local</button>
@@ -2703,6 +2717,7 @@ export function getWebviewContent(
     const sessionsSearch = document.getElementById('sessionsSearch');
     const sessionsTabLocal = document.getElementById('sessionsTabLocal');
     const sessionsTabCloud = document.getElementById('sessionsTabCloud');
+    const sessionsContinueInCloud = document.getElementById('sessionsContinueInCloud');
     const slashBtn = document.getElementById('slashBtn');
     const slashMenu = document.getElementById('slashMenu');
     const composerStatusBoundary = document.getElementById('composerStatusBoundary');
@@ -4331,7 +4346,7 @@ export function getWebviewContent(
         loading.setAttribute('role', 'status');
         loading.textContent = sessionsSource === 'local'
           ? 'Loading developer sessions…'
-          : 'Loading cloud chats…';
+          : 'Loading cloud sessions…';
         sessionsSheetList.appendChild(loading);
         return;
       }
@@ -4355,7 +4370,7 @@ export function getWebviewContent(
         empty.className = 'sessions-sheet-empty';
         empty.textContent = sessionsSource === 'local'
           ? 'No developer sessions in this workspace yet'
-          : 'No cloud chats yet';
+          : 'No cloud chats or AGI Code sessions yet';
         sessionsSheetList.appendChild(empty);
         return;
       }
@@ -4413,6 +4428,7 @@ export function getWebviewContent(
       if (sessionsSearch) sessionsSearch.hidden = true;
       if (sessionsTabLocal) sessionsTabLocal.setAttribute('aria-selected', String(source === 'local'));
       if (sessionsTabCloud) sessionsTabCloud.setAttribute('aria-selected', String(source === 'cloud'));
+      if (sessionsContinueInCloud) sessionsContinueInCloud.hidden = source !== 'cloud';
       renderSessionsRows();
       vscode.postMessage({ type: 'requestSessions', payload: { source: source } });
     }
@@ -4433,6 +4449,11 @@ export function getWebviewContent(
 
     if (sessionsBtn) sessionsBtn.addEventListener('click', openSessionsSheet);
     if (sessionsSheetClose) sessionsSheetClose.addEventListener('click', closeSessionsSheet);
+    if (sessionsContinueInCloud) {
+      sessionsContinueInCloud.addEventListener('click', function () {
+        vscode.postMessage({ type: 'continueInCloud' });
+      });
+    }
     if (sessionsTabLocal) {
       sessionsTabLocal.addEventListener('click', function () { requestSessions('local'); });
     }

@@ -125,7 +125,7 @@ function StaffTicketThreadView({
 
       <div className={CARD_CLASS}>
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h3 className="text-sm font-medium">{ticket.subject}</h3>
+          <h3 className="text-h5">{ticket.subject}</h3>
           <span className="text-xs font-medium">{TICKET_STATUS_LABEL[ticket.status]}</span>
         </div>
         <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs text-muted-foreground">
@@ -304,7 +304,7 @@ export default function SupportTicketQueuePanel() {
   return (
     <section className="flex flex-col gap-4" aria-labelledby="support-ticket-queue-title">
       <div>
-        <h2 id="support-ticket-queue-title" className="text-sm font-medium">
+        <h2 id="support-ticket-queue-title" className="text-h5">
           Support tickets
         </h2>
         <p className="mt-1 text-xs text-muted-foreground">

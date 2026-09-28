@@ -75,7 +75,7 @@ export function NotificationsSettings({
 
   return (
     <div>
-      <h3 className="text-lg font-semibold mb-4">Notifications</h3>
+      <h3 className="text-h3 mb-4">Notifications</h3>
       <p className="text-sm text-muted-foreground mb-6">Configure how you receive notifications</p>
       {notificationLoading ? (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">

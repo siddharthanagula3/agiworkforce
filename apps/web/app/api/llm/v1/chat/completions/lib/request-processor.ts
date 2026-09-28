@@ -756,6 +756,7 @@ export function applyClarifyCardCapability(
       hasAttachment: params.hasAttachment,
       webSearch: request.web_search === true,
       research: request.research === true,
+      agiWork: request.work_mode === 'agiwork',
     })
   ) {
     return;
@@ -814,10 +815,11 @@ export function validationRefusalMessage(error: z.ZodError): string {
 export function applyWorkMode(chatRequest: ChatCompletionRequest): void {
   if (chatRequest.work_mode !== 'agiwork') return;
 
+  const excluded = new Set(chatRequest.agi_work_goal?.excludedTools ?? []);
   chatRequest.stream = true;
-  chatRequest.web_search = true;
-  chatRequest.web_fetch = true;
-  chatRequest.code_execution = true;
+  chatRequest.web_search = !excluded.has('web_search');
+  chatRequest.web_fetch = !excluded.has('web_search');
+  chatRequest.code_execution = !excluded.has('code_execution');
   chatRequest.messages.unshift({
     role: 'system',
     content:

@@ -18,7 +18,7 @@ export function ShareArtifactDialog({ artifact, isOpen, onClose }: ShareArtifact
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <div className="relative w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-2xl">
+      <div className="relative w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-e4">
         <button
           type="button"
           onClick={onClose}
@@ -33,9 +33,7 @@ export function ShareArtifactDialog({ artifact, isOpen, onClose }: ShareArtifact
             <Lock className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
           </div>
           <div className="min-w-0">
-            <h2 className="text-sm font-semibold text-foreground">
-              Local artifacts cannot be shared
-            </h2>
+            <h2 className="text-h5 text-foreground">Local artifacts cannot be shared</h2>
             <p className="truncate text-xs text-muted-foreground">{artifact.title}</p>
           </div>
         </div>

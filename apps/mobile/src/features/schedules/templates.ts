@@ -19,7 +19,7 @@ export const SCHEDULE_TEMPLATES: readonly ScheduleTemplate[] = [
     initialData: {
       name: 'Daily focus',
       prompt:
-        'Create a concise plan for today with three priorities, one risk to watch, and the first concrete action. If there is not enough context, provide a short fill-in template instead of inventing details.',
+        'Give me a brief for today. Check my connected calendar for today’s meetings and what to prepare, my connected email for anything that needs a reply today, what you remember about my work, and the web for news that bears on it. Then give three priorities, one risk to watch, and the first concrete action. If a calendar or email is not connected, say so in one line and brief from the rest instead of inventing details.',
       model: DEFAULT_AUTO_MODE_ID,
       recurrence: 'daily',
       timeOfDay: '09:00',

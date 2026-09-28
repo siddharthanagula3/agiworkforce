@@ -222,7 +222,7 @@ export function MCPConnectionStatus() {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-semibold">Runtime Health</h2>
+          <h2 className="text-h2">Runtime Health</h2>
           <p className="text-sm text-muted-foreground">
             Live MCP server health, recent executions, and tool performance.
           </p>
@@ -312,7 +312,7 @@ export function MCPConnectionStatus() {
             {health.length === 0 ? (
               <div className="py-12 text-center">
                 <Activity className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
-                <h3 className="mb-2 text-lg font-semibold">No connected MCP servers</h3>
+                <h3 className="mb-2 text-h3">No connected MCP servers</h3>
                 <p className="text-sm text-muted-foreground">
                   Enable and connect MCP servers to see live health.
                 </p>
@@ -418,7 +418,7 @@ export function MCPConnectionStatus() {
             {executionHistory.length === 0 ? (
               <div className="py-12 text-center">
                 <Zap className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
-                <h3 className="mb-2 text-lg font-semibold">No MCP executions yet</h3>
+                <h3 className="mb-2 text-h3">No MCP executions yet</h3>
                 <p className="text-sm text-muted-foreground">
                   Tool execution history appears here after MCP tools run.
                 </p>

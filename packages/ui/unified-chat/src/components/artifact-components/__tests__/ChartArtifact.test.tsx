@@ -272,7 +272,7 @@ describe('ChartArtifact', () => {
 
     const chart = screen.getByTestId('chart-artifact');
     expect(chart.getAttribute('data-chart-kind')).toBe('line');
-    expect(screen.getByText(/1 point/)).toBeDefined();
+    expect(screen.getByText(/1 point ·/)).toBeDefined();
     expect(screen.queryByTestId('chart-artifact-fallback')).toBeNull();
   });
 

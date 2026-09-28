@@ -4,24 +4,82 @@ import { useId, useState, type FormEvent } from 'react';
 
 import { addCsrfHeaders } from '@/lib/client/csrf';
 
-const STATEMENTS = [
-  {
-    id: 'goodFaith',
-    label:
-      'I have a good-faith belief that the use is not authorised by the rights holder, its agent, or the law.',
-  },
-  {
-    id: 'accurate',
-    label: 'The information in this notice is accurate.',
-  },
-  {
-    id: 'authorized',
-    label:
-      'Under penalty of perjury, I am the rights holder or authorised to act on the rights holder’s behalf.',
-  },
-] as const;
+export type NoticeType = 'copyright' | 'trademark' | 'impersonation';
 
-type StatementId = (typeof STATEMENTS)[number]['id'];
+type StatementId = 'goodFaith' | 'accurate' | 'authorized';
+
+interface NoticeTypeCopy {
+  label: string;
+  holderLabel: string;
+  claimLabel: string;
+  claimHint: string;
+  statements: ReadonlyArray<{ id: StatementId; label: string }>;
+}
+
+const ACCURATE_STATEMENT = {
+  id: 'accurate',
+  label: 'The information in this notice is accurate.',
+} as const;
+
+const NOTICE_TYPES: Record<NoticeType, NoticeTypeCopy> = {
+  copyright: {
+    label: 'Copyright',
+    holderLabel: 'Rights holder, if not you (optional)',
+    claimLabel: 'The work you say is infringed',
+    claimHint:
+      'Describe the copyrighted work and where the original can be seen. A registration number helps but is not required.',
+    statements: [
+      {
+        id: 'goodFaith',
+        label:
+          'I have a good-faith belief that the use is not authorised by the rights holder, its agent, or the law.',
+      },
+      ACCURATE_STATEMENT,
+      {
+        id: 'authorized',
+        label:
+          'Under penalty of perjury, I am the rights holder or authorised to act on the rights holder’s behalf.',
+      },
+    ],
+  },
+  trademark: {
+    label: 'Trademark',
+    holderLabel: 'Mark owner, if not you (optional)',
+    claimLabel: 'The mark you say is infringed',
+    claimHint:
+      'Name the mark, the goods or services it covers and where it is registered. A registration number helps but is not required.',
+    statements: [
+      {
+        id: 'goodFaith',
+        label:
+          'I have a good-faith belief that the use of the mark is not authorised by its owner, its agent, or the law.',
+      },
+      ACCURATE_STATEMENT,
+      { id: 'authorized', label: 'I am the mark owner or authorised to act on its behalf.' },
+    ],
+  },
+  impersonation: {
+    label: 'Impersonation',
+    holderLabel: 'Person or organisation impersonated, if not you (optional)',
+    claimLabel: 'How the material impersonates them',
+    claimHint:
+      'Say who is being impersonated and what in the material presents itself as them, for example a name, likeness, logo or claimed affiliation.',
+    statements: [
+      {
+        id: 'goodFaith',
+        label:
+          'I have a good-faith belief that the material impersonates the person or organisation named.',
+      },
+      ACCURATE_STATEMENT,
+      {
+        id: 'authorized',
+        label: 'I am the person or organisation impersonated, or authorised to act for them.',
+      },
+    ],
+  },
+};
+
+const NOTICE_TYPE_ORDER: readonly NoticeType[] = ['copyright', 'trademark', 'impersonation'];
 
 type FormState = 'idle' | 'submitting' | 'error';
 
@@ -30,7 +88,13 @@ interface Result {
   operatorNotified: boolean;
 }
 
-export function CopyrightNoticeForm({ reportedUrl }: { reportedUrl: string }) {
+export function CopyrightNoticeForm({
+  reportedUrl,
+  initialType,
+}: {
+  reportedUrl: string;
+  initialType: NoticeType;
+}) {
   const urlId = useId();
   const nameId = useId();
   const emailId = useId();
@@ -40,6 +104,7 @@ export function CopyrightNoticeForm({ reportedUrl }: { reportedUrl: string }) {
   const workId = useId();
   const signatureId = useId();
 
+  const [noticeType, setNoticeType] = useState<NoticeType>(initialType);
   const [contentUrl, setContentUrl] = useState(reportedUrl);
   const [reporterName, setReporterName] = useState('');
   const [reporterEmail, setReporterEmail] = useState('');
@@ -58,6 +123,9 @@ export function CopyrightNoticeForm({ reportedUrl }: { reportedUrl: string }) {
   const [errorMsg, setErrorMsg] = useState('');
   const [result, setResult] = useState<Result | null>(null);
 
+  const copy = NOTICE_TYPES[noticeType];
+  const contactRequired = noticeType !== 'impersonation';
+
   function clearError() {
     if (state === 'error') {
       setState('idle');
@@ -74,7 +142,7 @@ export function CopyrightNoticeForm({ reportedUrl }: { reportedUrl: string }) {
     event.preventDefault();
     if (state === 'submitting') return;
 
-    if (!STATEMENTS.every((statement) => affirmed[statement.id])) {
+    if (!copy.statements.every((statement) => affirmed[statement.id])) {
       fail('A notice is only actionable with all three statements affirmed.');
       return;
     }
@@ -89,11 +157,12 @@ export function CopyrightNoticeForm({ reportedUrl }: { reportedUrl: string }) {
         headers,
         credentials: 'same-origin',
         body: JSON.stringify({
+          noticeType,
           contentUrl: contentUrl.trim(),
           reporterName: reporterName.trim(),
           reporterEmail: reporterEmail.trim().toLowerCase(),
-          reporterPhone: reporterPhone.trim(),
-          reporterAddress: reporterAddress.trim(),
+          reporterPhone: reporterPhone.trim() || undefined,
+          reporterAddress: reporterAddress.trim() || undefined,
           rightsHolder: rightsHolder.trim() || undefined,
           workDescription: workDescription.trim(),
           signature: signature.trim(),
@@ -140,7 +209,10 @@ export function CopyrightNoticeForm({ reportedUrl }: { reportedUrl: string }) {
   if (result) {
     return (
       <div className="agi-ds-stack" data-gap="tight" role="status">
-        <h3 className="agi-ds-h3">Notice recorded, reference {result.reference}</h3>
+        <h3 className="agi-ds-h3">
+          {noticeType === 'impersonation' ? 'Report' : 'Notice'} recorded, reference{' '}
+          {result.reference}
+        </h3>
         <p className="agi-ds-prose" data-size="sm">
           The notice is in the operator queue with the exact link you reported.{' '}
           <strong>Nothing has been removed yet</strong>, a person reviews the notice and then
@@ -164,6 +236,28 @@ export function CopyrightNoticeForm({ reportedUrl }: { reportedUrl: string }) {
 
   return (
     <form onSubmit={handleSubmit} noValidate className="agi-ds-form">
+      <fieldset className="agi-ds-fieldset">
+        <legend className="agi-ds-fieldset-legend">What you are reporting</legend>
+        {NOTICE_TYPE_ORDER.map((type) => (
+          <label key={type} className="agi-ds-consent-item-label">
+            <input
+              type="radio"
+              name="noticeType"
+              value={type}
+              checked={noticeType === type}
+              disabled={state === 'submitting'}
+              className="agi-ds-checkbox"
+              onChange={() => {
+                setNoticeType(type);
+                setAffirmed({ goodFaith: false, accurate: false, authorized: false });
+                clearError();
+              }}
+            />
+            {NOTICE_TYPES[type].label}
+          </label>
+        ))}
+      </fieldset>
+
       <div className="agi-ds-field">
         <label htmlFor={urlId} className="agi-ds-field-label">
           Link to the material
@@ -231,14 +325,14 @@ export function CopyrightNoticeForm({ reportedUrl }: { reportedUrl: string }) {
 
       <div className="agi-ds-field">
         <label htmlFor={phoneId} className="agi-ds-field-label">
-          Telephone number
+          {contactRequired ? 'Telephone number' : 'Telephone number (optional)'}
         </label>
         <input
           id={phoneId}
           name="reporterPhone"
           type="tel"
           autoComplete="tel"
-          required
+          required={contactRequired}
           value={reporterPhone}
           disabled={state === 'submitting'}
           className="agi-ds-input"
@@ -251,13 +345,13 @@ export function CopyrightNoticeForm({ reportedUrl }: { reportedUrl: string }) {
 
       <div className="agi-ds-field">
         <label htmlFor={addressId} className="agi-ds-field-label">
-          Mailing address
+          {contactRequired ? 'Mailing address' : 'Mailing address (optional)'}
         </label>
         <textarea
           id={addressId}
           name="reporterAddress"
           rows={3}
-          required
+          required={contactRequired}
           maxLength={500}
           value={reporterAddress}
           disabled={state === 'submitting'}
@@ -275,7 +369,7 @@ export function CopyrightNoticeForm({ reportedUrl }: { reportedUrl: string }) {
 
       <div className="agi-ds-field">
         <label htmlFor={holderId} className="agi-ds-field-label">
-          Rights holder, if not you (optional)
+          {copy.holderLabel}
         </label>
         <input
           id={holderId}
@@ -291,7 +385,7 @@ export function CopyrightNoticeForm({ reportedUrl }: { reportedUrl: string }) {
 
       <div className="agi-ds-field">
         <label htmlFor={workId} className="agi-ds-field-label">
-          The work you say is infringed
+          {copy.claimLabel}
         </label>
         <textarea
           id={workId}
@@ -307,15 +401,12 @@ export function CopyrightNoticeForm({ reportedUrl }: { reportedUrl: string }) {
             clearError();
           }}
         />
-        <p className="agi-ds-hint">
-          Describe the copyrighted work or trademark, and where the original can be seen. A
-          registration number helps but is not required.
-        </p>
+        <p className="agi-ds-hint">{copy.claimHint}</p>
       </div>
 
       <fieldset className="agi-ds-fieldset">
         <legend className="agi-ds-fieldset-legend">Statements</legend>
-        {STATEMENTS.map((statement) => (
+        {copy.statements.map((statement) => (
           <label key={statement.id} className="agi-ds-consent-item-label">
             <input
               type="checkbox"
@@ -366,7 +457,11 @@ export function CopyrightNoticeForm({ reportedUrl }: { reportedUrl: string }) {
           data-variant="primary"
           disabled={state === 'submitting'}
         >
-          {state === 'submitting' ? 'Recording…' : 'Send notice'}
+          {state === 'submitting'
+            ? 'Recording…'
+            : noticeType === 'impersonation'
+              ? 'Send report'
+              : 'Send notice'}
         </button>
       </div>
     </form>

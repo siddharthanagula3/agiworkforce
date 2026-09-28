@@ -269,8 +269,54 @@ export const ManagedCloudScheduleRunApprovalResponseSchema = z.object({
 
 export const ManagedCloudScheduleDeleteResponseSchema = z.object({ success: z.literal(true) });
 
+export const MANAGED_CLOUD_SCHEDULE_SHARE_TOKEN_PATTERN = /^[A-Za-z0-9_-]{24}$/;
+
+export const ManagedCloudScheduleShareSnapshotSchema = z.object({
+  name: z.string(),
+  description: z.string().nullable(),
+  prompt: z.string(),
+  model: z.string().nullable(),
+  scheduleType: ManagedCloudScheduleTaskSchema.shape.scheduleType,
+  cronExpression: z.string().nullable(),
+  intervalMs: z.number().int().nullable(),
+  recurrenceRule: z.string().nullable(),
+  dayparts: z.array(ManagedCloudScheduleDaypartSchema).nullable(),
+  metadata: NullableRecordSchema,
+  missedExecutionPolicy: ManagedCloudScheduleMissedExecutionPolicySchema,
+  retryMaxAttempts: z.number().int().nonnegative(),
+  retryBackoffSeconds: z.number().int().positive(),
+});
+export type ManagedCloudScheduleShareSnapshot = z.infer<
+  typeof ManagedCloudScheduleShareSnapshotSchema
+>;
+
+export const ManagedCloudScheduleShareSchema = z.object({
+  token: z.string().regex(MANAGED_CLOUD_SCHEDULE_SHARE_TOKEN_PATTERN),
+  snapshot: ManagedCloudScheduleShareSnapshotSchema,
+  createdAt: z.string(),
+});
+export type ManagedCloudScheduleShare = z.infer<typeof ManagedCloudScheduleShareSchema>;
+
+export const ManagedCloudScheduleShareResponseSchema = z.object({
+  share: ManagedCloudScheduleShareSchema,
+});
+
+export const MANAGED_CLOUD_SCHEDULE_SHARES_PATH = '/api/schedule-shares';
+
+export function managedCloudScheduleSharedPath(token: string): string {
+  return `${MANAGED_CLOUD_SCHEDULE_SHARES_PATH}/${encodeURIComponent(token)}`;
+}
+
+export function managedCloudScheduleShareUrlPath(token: string): string {
+  return `/share/schedules/${encodeURIComponent(token)}`;
+}
+
 export function managedCloudSchedulePath(scheduleId: string): string {
   return `${MANAGED_CLOUD_SCHEDULES_PATH}/${encodeURIComponent(scheduleId)}`;
+}
+
+export function managedCloudScheduleSharePath(scheduleId: string): string {
+  return `${managedCloudSchedulePath(scheduleId)}/share`;
 }
 
 export function managedCloudScheduleRunsPath(scheduleId: string): string {
@@ -346,6 +392,8 @@ export interface ManagedCloudSchedulesClient {
     input: ManagedCloudScheduleRunApproval,
     signal?: AbortSignal,
   ): Promise<ManagedCloudScheduleRun>;
+  shareSchedule(scheduleId: string, signal?: AbortSignal): Promise<ManagedCloudScheduleShare>;
+  unshareSchedule(scheduleId: string, signal?: AbortSignal): Promise<void>;
 }
 
 export class ManagedCloudSchedulesHttpError extends Error {
@@ -565,5 +613,171 @@ export function createManagedCloudSchedulesClient(
       );
       return result.run;
     },
+    async shareSchedule(scheduleId, signal) {
+      const result = await request(
+        managedCloudScheduleSharePath(scheduleId),
+        'POST',
+        ManagedCloudScheduleShareResponseSchema,
+        { signal, label: 'share' },
+      );
+      return result.share;
+    },
+    async unshareSchedule(scheduleId, signal) {
+      await request(
+        managedCloudScheduleSharePath(scheduleId),
+        'DELETE',
+        ManagedCloudScheduleDeleteResponseSchema,
+        { signal, label: 'unshare' },
+      );
+    },
   };
 }
+
+export interface ManagedCloudScheduleRunTiming {
+  skipped: boolean;
+  note: string;
+}
+
+function formatScheduleLateness(ms: number): string {
+  const minutes = Math.max(1, Math.round(ms / 60_000));
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'}`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 48) return `${hours} hour${hours === 1 ? '' : 's'}`;
+  return `${Math.round(hours / 24)} days`;
+}
+
+function recordOf(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+export function describeScheduleRunTiming(
+  run: Pick<ManagedCloudScheduleRun, 'result'>,
+  formatWhen: (iso: string) => string,
+): ManagedCloudScheduleRunTiming | null {
+  const result = run.result ?? {};
+  const skipped = result['skipped'] === true;
+  const missed = recordOf(result['missedExecution']);
+  const scheduledFor = typeof missed?.['scheduledFor'] === 'string' ? missed['scheduledFor'] : null;
+  const lateByMs = typeof missed?.['lateByMs'] === 'number' ? missed['lateByMs'] : null;
+  if (scheduledFor && lateByMs !== null) {
+    const when = formatWhen(scheduledFor);
+    const late = formatScheduleLateness(lateByMs);
+    return skipped
+      ? {
+          skipped,
+          note: `Skipped the run scheduled for ${when}: it was missed by ${late}, and this schedule skips missed runs.`,
+        }
+      : { skipped, note: `Ran late: scheduled for ${when}, started ${late} later.` };
+  }
+  const detail = recordOf(result['conditionWatch'])?.['detail'];
+  if (skipped && typeof detail === 'string' && detail.trim()) {
+    return { skipped, note: `Skipped: the condition was not met. ${detail}` };
+  }
+  return null;
+}
+
+export interface ManagedCloudScheduleTemplateDraft {
+  name: string;
+  prompt: string;
+  recurrence: Extract<ManagedCloudScheduleRecurrence, 'daily' | 'weekly'>;
+  daysOfWeek?: number[];
+  timeOfDay: string;
+}
+
+export interface ManagedCloudScheduleTemplate {
+  id: string;
+  name: string;
+  cadenceLabel: string;
+  description: string;
+  draft: ManagedCloudScheduleTemplateDraft;
+}
+
+const WEEKDAYS = [1, 2, 3, 4, 5];
+
+export const MANAGED_CLOUD_SCHEDULE_TEMPLATES: readonly ManagedCloudScheduleTemplate[] = [
+  {
+    id: 'weekly-review',
+    name: 'Weekly review',
+    cadenceLabel: 'Fridays at 4:00 PM',
+    description: 'Summarise the week and surface what slipped, before you log off.',
+    draft: {
+      name: 'Weekly review',
+      prompt:
+        'Write a short review of my week. Cover what got finished, what slipped, and the two or three things that most deserve attention next week. Be concrete and skip filler.',
+      recurrence: 'weekly',
+      daysOfWeek: [5],
+      timeOfDay: '16:00',
+    },
+  },
+  {
+    id: 'daily-briefing',
+    name: 'Daily briefing',
+    cadenceLabel: 'Weekdays at 8:00 AM',
+    description: 'A short start-of-day brief so the first thing you read is the plan.',
+    draft: {
+      name: 'Daily briefing',
+      prompt:
+        'Give me a brief for today. Check my connected calendar for today’s meetings and what to prepare, my connected email for anything that needs a reply today, what you remember about my work, and the web for news that bears on it. Lead with the few things that matter most, flag anything time-sensitive, and end with one thing worth doing early while I have focus. If a calendar or email is not connected, say so in one line and brief from the rest. Keep it under 250 words.',
+      recurrence: 'weekly',
+      daysOfWeek: WEEKDAYS,
+      timeOfDay: '08:00',
+    },
+  },
+  {
+    id: 'meeting-prep',
+    name: 'Meeting prep',
+    cadenceLabel: 'Weekdays at 7:30 AM',
+    description: 'Questions and context to walk in with, prepared before the day starts.',
+    draft: {
+      name: 'Meeting prep',
+      prompt:
+        'Help me prepare for my meetings today. For each, suggest the questions worth asking, the decisions that need making, and anything I should have read first.',
+      recurrence: 'weekly',
+      daysOfWeek: WEEKDAYS,
+      timeOfDay: '07:30',
+    },
+  },
+  {
+    id: 'inbox-triage',
+    name: 'Inbox triage',
+    cadenceLabel: 'Weekdays at 9:00 AM',
+    description: 'Sort what needs a reply from what can wait.',
+    draft: {
+      name: 'Inbox triage',
+      prompt:
+        'Help me triage my inbox. Separate what genuinely needs a reply today from what can wait, and draft a one-line response for anything routine.',
+      recurrence: 'weekly',
+      daysOfWeek: WEEKDAYS,
+      timeOfDay: '09:00',
+    },
+  },
+  {
+    id: 'content-ideas',
+    name: 'Content ideas',
+    cadenceLabel: 'Mondays at 10:00 AM',
+    description: 'A fresh batch of angles to work from at the start of the week.',
+    draft: {
+      name: 'Content ideas',
+      prompt:
+        'Suggest five specific things worth writing about this week, based on what I have been working on. For each, give the angle and who it is for, not just a topic.',
+      recurrence: 'weekly',
+      daysOfWeek: [1],
+      timeOfDay: '10:00',
+    },
+  },
+  {
+    id: 'monitor-topic',
+    name: 'Monitor a topic',
+    cadenceLabel: 'Daily at 7:00 AM',
+    description: 'Track a subject over time and hear only what actually changed.',
+    draft: {
+      name: 'Monitor a topic',
+      prompt:
+        'Track [replace this with the topic you want followed]. Report only what has genuinely changed since the last run, and say plainly when nothing has.',
+      recurrence: 'daily',
+      timeOfDay: '07:00',
+    },
+  },
+];

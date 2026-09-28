@@ -108,7 +108,7 @@ describe('Chrome side-panel demo surface', () => {
 
   it('presents the menu as a flat list of rows that open one page each', () => {
     expect(source).toContain("'aria-label': 'AGI menu'");
-    expect(source).toContain("el('div', { id: 'sp-drawer-title' }, t('spMenuTitle'))");
+    expect(source).toContain("el('h2', { id: 'sp-drawer-title' }, t('spMenuTitle'))");
     expect(source).toContain("class: 'sp-drawer-row'");
     expect(source).toContain("class: 'sp-drawer-row-chevron'");
     expect(source).toContain('function openDrawerGroup(');

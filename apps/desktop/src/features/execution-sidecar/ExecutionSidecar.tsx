@@ -76,7 +76,7 @@ export function ExecutionSidecar() {
   return (
     <div
       className={cn(
-        'bg-surface-base border-l border-white/10 shadow-2xl flex flex-col shrink-0',
+        'bg-surface-base border-l border-white/10 shadow-e4 flex flex-col shrink-0',
         'transition-all duration-300 ease-in-out',
       )}
       style={{ width }}

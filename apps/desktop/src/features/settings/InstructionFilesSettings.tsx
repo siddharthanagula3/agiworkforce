@@ -156,7 +156,7 @@ export function InstructionFilesSettings() {
   return (
     <div className="space-y-4">
       <div>
-        <h3 className="text-lg font-semibold mb-1">Instruction Files</h3>
+        <h3 className="text-h3 mb-1">Instruction Files</h3>
         <p className="text-sm text-muted-foreground">
           Instruction files (CLAUDE.md, AGENTS.md, etc.) are automatically loaded by AI coding
           tools. Manage them here.

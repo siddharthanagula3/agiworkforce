@@ -289,6 +289,13 @@ export function ChatInput({
     if (canUseAgiWork && activeProjectId) setWorkMode('agiwork');
   }, [activeProjectId, canUseAgiWork]);
 
+  const pendingWorkMode = useChatStore((s) => s.pendingWorkMode);
+  useEffect(() => {
+    if (!pendingWorkMode) return;
+    setWorkMode(canUseAgiWork ? pendingWorkMode : 'chat');
+    useChatStore.getState().setPendingWorkMode(null);
+  }, [pendingWorkMode, canUseAgiWork]);
+
   const prevFolderLabelRef = useRef(currentFolderLabel);
   useEffect(() => {
     const prev = prevFolderLabelRef.current;
@@ -990,7 +997,7 @@ export function ChatInput({
           : t('placeholderEmpty', 'How can I help you today?');
 
   return (
-    <div className={cn('relative mx-auto w-full max-w-3xl px-4 pb-2', className)}>
+    <div className={cn('relative mx-auto w-full max-w-3xl px-gutter-compact pb-2', className)}>
       <SlashCommandMenu
         show={slashMenuOpen}
         suggestions={slashSuggestions}
@@ -1258,7 +1265,7 @@ export function ChatInput({
                       className={cn(
                         'flex h-7 items-center rounded-full px-3 transition-colors',
                         workMode === mode
-                          ? 'bg-[var(--chat-surface-elevated)] text-[var(--chat-text-primary)] shadow-sm'
+                          ? 'bg-[var(--chat-surface-elevated)] text-[var(--chat-text-primary)] shadow-e1'
                           : 'text-[var(--chat-text-secondary)] hover:text-[var(--chat-text-primary)]',
                         disabled && 'cursor-not-allowed opacity-50',
                       )}
@@ -1452,7 +1459,7 @@ export function ChatInput({
               ref={scopePanelRef}
               role="listbox"
               aria-label={t('composer.projectOrFolder', 'Project or folder')}
-              className="absolute bottom-full left-0 z-[var(--z-dropdown)] mb-2 w-72 rounded-xl border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] p-1.5 shadow-xl"
+              className="absolute bottom-full left-0 z-[var(--z-dropdown)] mb-2 w-72 rounded-xl border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] p-1.5 shadow-e4"
             >
               {!canUseAgiWork && (
                 <p

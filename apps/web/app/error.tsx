@@ -40,7 +40,7 @@ export default function Error({
             >
               <AlertTriangle className="h-12 w-12 text-danger" />
             </div>
-            <h1 className="text-3xl font-bold mb-4">{friendly.title}</h1>
+            <h1 className="text-display mb-4">{friendly.title}</h1>
             <p className="text-muted-foreground max-w-md mx-auto mb-2">{friendly.message}</p>
             {friendly.suggestion && (
               <p className="text-muted-foreground max-w-md mx-auto mb-2">{friendly.suggestion}</p>

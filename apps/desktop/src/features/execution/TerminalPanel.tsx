@@ -185,7 +185,7 @@ export function TerminalPanel({ className }: TerminalPanelProps) {
       {}
       <div className="flex items-center justify-between border-b border-border px-4 py-2">
         <div className="flex items-center gap-2">
-          <h3 className="text-sm font-semibold text-foreground">Terminal Output</h3>
+          <h3 className="text-h5 text-foreground">Terminal Output</h3>
           <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
             {terminalLogs.length} {terminalLogs.length === 1 ? 'entry' : 'entries'}
           </span>
