@@ -232,29 +232,23 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:2939-2944`, `apps/mobile/ap
 
 - Done when: A thumbs-up on an answer records positive feedback tied to that message.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | host vote not received by the product: VS Code's Chat view shows vote buttons on @agi answers, but the participant registers no onDidReceiveFeedback handler, and the sidebar has no rating. | handler |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/extension-vscode/src/features/chat-participant/chatParticipant.ts:586-600`, `apps/extension-vscode/package.json:724-730`
 
 ## S17.30: Negative feedback.
 
 - Done when: A thumbs-down on an answer records negative feedback tied to that message.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | host vote not received by the product: VS Code's Chat view shows vote buttons on @agi answers, but the participant registers no onDidReceiveFeedback handler, and the sidebar has no rating. | handler |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/extension-vscode/src/features/chat-participant/chatParticipant.ts:586-600`, `apps/extension-vscode/package.json:724-730`
 
 ## S17.31: Report answer.
 
