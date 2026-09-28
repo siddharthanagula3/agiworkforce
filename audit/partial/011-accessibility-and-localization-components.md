@@ -22,15 +22,14 @@ Code: `apps/mobile/app/(app)/notifications/index.tsx:93-93`, `apps/mobile/src/fe
 
 - Done when: Each screen has a top heading and sections use nested headings, so screen-reader users can jump by heading.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Header roles appear only on onboarding, lock and consent screens; chat, settings and projects mark no headers. | ui |
-| vscode | partial | Only the onboarding steps use h2; the chat view, settings panel and cards have no headings. | ui |
 | chrome | partial | b21db27be: each tab view has an h1, drawer and Recents h2; bridge and schedules titles belong to other lanes | bridge URL title, schedules title |
 
-Code: `apps/mobile/app/(public)/onboarding.tsx:471-471`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2284-2284`, `apps/extension/src/side_panel.ts:10037-10037`, `apps/extension/src/side_panel.ts:7100-7100`
+Code: `apps/mobile/app/(public)/onboarding.tsx:471-471`, `apps/extension/src/side_panel.ts:10037-10037`, `apps/extension/src/side_panel.ts:7100-7100`
 
 ## S11.06: Focus restoration after panel closure.
 
@@ -145,18 +144,6 @@ Code: `apps/web/app/i18n/index.ts:78-78`, `packages/ui/i18n/src/languages.ts:13-
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S11.21: Input-method composition support.
-
-- Done when: Typing with an input method (Japanese, Chinese, Korean) never sends the message when Enter confirms a composition.
-- Wave: 3
-- Already works on: web, desktop, mobile, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | The composer sends on Enter without checking isComposing or keyCode 229, so confirming a Japanese/Chinese composition sends the message; add the guard web and Chrome use. | handler |
-
-Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:4008-4008`
-
 ## S11.22: Locale-aware dates and numbers.
 
 - Done when: Dates, times and numbers are formatted for the user's locale rather than a fixed US format.
@@ -212,18 +199,6 @@ Code: `apps/web/features/chat/components/dialogs/KeyboardShortcutsDialog.tsx:158
 | vscode | partial | Host notifications are translated (l10n in 12 locales), but errors inside the chat webview are English only. | ui |
 
 Code: `apps/extension-vscode/src/l10n/index.ts:45-45`, `apps/extension-vscode/src/platform/applyEdit.ts:43-43`
-
-## S11.26: Platform-specific shortcut notation.
-
-- Done when: Shortcut hints use the platform's notation (⌘ on Apple, Ctrl elsewhere).
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Contributed keybindings carry mac variants, but the webview hint prints "Cmd/Ctrl+Enter" on every platform. | ui |
-
-Code: `apps/extension-vscode/package.json:1143-1143`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:3524-3524`
 
 ## S11.27: Long-label and translated-copy layouts.
 

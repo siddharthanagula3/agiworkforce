@@ -125,17 +125,15 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1725-1731`, `apps/mobile/sr
 
 - Done when: The user can cap how much a task may spend, and the run stops at the cap.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Spend cap exists only for one-shot runs (agi --max-budget-usd with a prompt); the interactive TUI has no spend budget. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:477-481`, `apps/cli/src/lib.rs:5020-5022`, `apps/cli/src/agent/chat.rs:945-948`
 
 ## S60.13: Reviewable task plan.
 
@@ -155,14 +153,13 @@ Code: `apps/mobile/src/features/tasks/runPresentation.ts:227-237`, `apps/mobile/
 
 - Done when: The task view lists its steps with an accurate per-step status.
 - Wave: 3
-- Already works on: web, desktop, mobile, vscode
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | update_plan/todo_write steps are saved to ~/.agiworkforce/plans and narrated in the REPL; the TUI has no step-list panel. | ui |
 | chrome | partial | Run detail is a flat journal of events; no step list with status. | ui |
 
-Code: `apps/cli/src/agent/mod.rs:1332-1341`, `apps/cli/src/agent/chat.rs:2197-2212`, `apps/extension/src/features/side-panel/cloudRunsPanel.ts:471-481`
+Code: `apps/extension/src/features/side-panel/cloudRunsPanel.ts:471-481`
 
 ## S60.16: Running-step indicator.
 
@@ -298,18 +295,6 @@ Code: `apps/mobile/src/features/companion/components/CodeSessionView.tsx:178-189
 
 Code: `apps/cli/src/agent/chat.rs:1047-1057`
 
-## S60.29: Results summary.
-
-- Done when: When a task ends the user sees a summary of the result.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Cloud task detail shows steps and outputs but no result text (only "Open on web"); local chat answers show in the chat. | ui |
-
-Code: `apps/extension-vscode/src/features/cloud-tasks/cloudRunDetail.ts:67-77`, `apps/extension-vscode/src/features/cloud-tasks/cloudRunDetail.ts:90-100`
-
 ## S60.30: Generated deliverables.
 
 - Done when: Files the task produced are listed and can be opened or downloaded.
@@ -327,15 +312,14 @@ Code: `apps/mobile/src/features/tasks/runPresentation.ts:248-249`, `apps/mobile/
 
 - Done when: When a task stops short, the user sees what was done and what remains.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | Only the run state and last error; no done-versus-remaining summary. | ui |
 | chrome | partial | Only the state label in the journal; no done-versus-remaining summary. | ui |
 
-Code: `apps/extension-vscode/src/features/cloud-tasks/cloudRunDetail.ts:78-81`, `apps/extension/src/features/side-panel/cloudRunsPanel.ts:479-480`
+Code: `apps/extension/src/features/side-panel/cloudRunsPanel.ts:479-480`
 
 ## S60.33: Task sharing.
 

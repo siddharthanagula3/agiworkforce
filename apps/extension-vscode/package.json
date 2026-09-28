@@ -503,6 +503,11 @@
         "icon": "$(cloud-download)"
       },
       {
+        "command": "agi-workforce.showHelp",
+        "title": "AGI Workforce: Help",
+        "icon": "$(question)"
+      },
+      {
         "command": "agi-workforce.reviewPullRequest",
         "title": "AGI Workforce: Review a Pull Request",
         "icon": "$(git-pull-request)"
@@ -786,6 +791,17 @@
             },
             "completionEvents": [
               "onCommand:agi-workforce.showAccountUsage"
+            ]
+          },
+          {
+            "id": "setUpMemory",
+            "title": "Decide what AGI remembers",
+            "description": "Memory keeps short facts about you in your AGI Cloud account and sends them with your turns while it is on. [Open Memory](command:agi-workforce.memory)",
+            "media": {
+              "markdown": "media/walkthrough/05-memory.md"
+            },
+            "completionEvents": [
+              "onCommand:agi-workforce.memory"
             ]
           }
         ]

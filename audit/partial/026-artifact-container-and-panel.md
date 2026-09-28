@@ -89,9 +89,8 @@ Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:1022-1032`, `a
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | Source prints in the terminal, but a rendered preview exists only by opening the published page in the browser; for an unpublished artifact `agi artifacts open` opens its conversation instead. | surface-only |
-| vscode | partial | VS Code shows source only; a rendered view exists only for a published artifact, via the Open Published Artifact row action in the browser. | surface-only |
 
-Code: `apps/cli/src/lib.rs:1914-1920`, `apps/cli/src/cloud/artifacts.rs:450-460`, `apps/extension-vscode/src/features/artifacts/artifactActions.ts:99-103`, `apps/extension-vscode/src/features/artifacts/artifactActions.ts:151-155`
+Code: `apps/cli/src/lib.rs:1914-1920`, `apps/cli/src/cloud/artifacts.rs:450-460`
 
 ## S26.15: Direct-edit mode.
 
@@ -207,7 +206,6 @@ Code: `apps/cli/src/lib.rs:1024-1027`, `apps/cli/src/cloud/artifacts.rs:306-316`
 | --- | --- | --- | --- |
 | mobile | partial | A single Download action exports Markdown or plain text through the share sheet; there is no menu to pick another format (HTML, CSV, SVG). | ui |
 | cli | partial | `agi artifacts show <id> --out <path>` writes only the raw source; there is no choice of export format. | ui |
-| vscode | partial | "Save Artifact into Workspace" writes only the raw source file; there is no choice of export format. | ui |
 
 Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:421-435`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:228-252`, `apps/cli/src/lib.rs:1034-1041`, `apps/cli/src/lib.rs:1944-1948`
 
@@ -232,9 +230,8 @@ Code: `apps/extension/src/features/side-panel/artifactsDrawer.ts:198-221`, `apps
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Publish, copy link and share link work, but mobile has no way to unpublish an artifact or choose who can open it (workspace vs anyone). | ui |
-| vscode | partial | VS Code can only open an already-published artifact's link; it cannot publish, copy the link, change the audience or unpublish. | ui |
 
-Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:405-418`, `apps/mobile/src/features/chat/services/artifactPublishing.ts:13-25`, `apps/extension-vscode/package.json:597-600`, `apps/extension-vscode/src/features/artifacts/artifactActions.ts:151-155`
+Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:405-418`, `apps/mobile/src/features/chat/services/artifactPublishing.ts:13-25`
 
 ## S26.32: Public/private state.
 

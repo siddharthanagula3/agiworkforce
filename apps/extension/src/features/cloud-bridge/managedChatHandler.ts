@@ -127,6 +127,7 @@ export interface ChromeManagedChatDependencies {
   onInteractiveCard?: (
     chunk: Extract<FreeTrialChunk, { type: 'interactive-card' }>,
   ) => void | Promise<void>;
+  onSources?: (chunk: Extract<FreeTrialChunk, { type: 'sources' }>) => void | Promise<void>;
   onRunReference?: (run: Extract<FreeTrialChunk, { type: 'run' }>['run']) => void | Promise<void>;
   onQuotaWarning?: (warning: ManagedQuotaWarningSignal) => void | Promise<void>;
 }
@@ -161,6 +162,7 @@ export interface ChromeManagedApprovalDependencies {
   onInteractiveCard?: (
     chunk: Extract<FreeTrialChunk, { type: 'interactive-card' }>,
   ) => void | Promise<void>;
+  onSources?: (chunk: Extract<FreeTrialChunk, { type: 'sources' }>) => void | Promise<void>;
   onRunReference?: (run: Extract<FreeTrialChunk, { type: 'run' }>['run']) => void | Promise<void>;
   onQuotaWarning?: (warning: ManagedQuotaWarningSignal) => void | Promise<void>;
 }
@@ -546,6 +548,10 @@ export async function executeChromeManagedChat(
       await dependencies.onInteractiveCard?.(chunk);
       continue;
     }
+    if (chunk.type === 'sources') {
+      await dependencies.onSources?.(chunk);
+      continue;
+    }
     if (chunk.type === 'run') {
       if (chunk.run.state) latestTaskState = chunk.run.state;
       await dependencies.onRunReference?.(chunk.run);
@@ -635,6 +641,10 @@ export async function executeChromeManagedApproval(
       await dependencies.onInteractiveCard?.(chunk);
       continue;
     }
+    if (chunk.type === 'sources') {
+      await dependencies.onSources?.(chunk);
+      continue;
+    }
     if (chunk.type === 'run') {
       await dependencies.onRunReference?.(chunk.run);
       continue;
@@ -673,6 +683,7 @@ export function createChromeManagedChatDependencies(
     | 'onAgentEvent'
     | 'onGeneratedFiles'
     | 'onInteractiveCard'
+    | 'onSources'
     | 'onRunReference'
     | 'onQuotaWarning'
   > = {},
@@ -684,7 +695,12 @@ export function createChromeManagedApprovalDependencies(
   onText: ChromeManagedApprovalDependencies['onText'],
   callbacks: Pick<
     ChromeManagedApprovalDependencies,
-    'onAgentEvent' | 'onGeneratedFiles' | 'onInteractiveCard' | 'onRunReference' | 'onQuotaWarning'
+    | 'onAgentEvent'
+    | 'onGeneratedFiles'
+    | 'onInteractiveCard'
+    | 'onSources'
+    | 'onRunReference'
+    | 'onQuotaWarning'
   > = {},
 ): ChromeManagedApprovalDependencies {
   return { ...DEFAULT_APPROVAL_DEPENDENCIES, onText, ...callbacks };

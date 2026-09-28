@@ -166,10 +166,11 @@ function SharedProjects({ overview }: { overview: OrgSharedOverview }) {
   const unshareProject = useUnshareProjectFromOrganization();
   const { confirm, dialog: confirmDialog } = useConfirmAction();
 
+  const canShareProjects = overview.canManageSharing || overview.canShareOwnProjects;
   const ownProjects = useQuery<OwnProject[], Error>({
     queryKey: ['projects', 'shareable'],
     queryFn: fetchOwnProjects,
-    enabled: overview.canManageSharing,
+    enabled: canShareProjects,
     staleTime: 60 * 1000,
   });
 
@@ -185,7 +186,7 @@ function SharedProjects({ overview }: { overview: OrgSharedOverview }) {
       title="Shared projects"
       description="Share a project with the people you invite, or with everyone in the workspace. Members with access read its instructions and knowledge files; give someone Can edit and they can also change its name, instructions, appearance and sources. Archiving and deleting stay with the owner, and conversations stay private to each member."
     >
-      {overview.canManageSharing && ownProjects.isError ? (
+      {canShareProjects && ownProjects.isError ? (
         <LoadError
           message={toUserMessage(
             ownProjects.error,
@@ -194,7 +195,7 @@ function SharedProjects({ overview }: { overview: OrgSharedOverview }) {
           onRetry={() => void ownProjects.refetch()}
         />
       ) : null}
-      {overview.canManageSharing && !ownProjects.isError ? (
+      {canShareProjects && !ownProjects.isError ? (
         <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
           <label htmlFor="org-share-project" style={{ position: 'absolute', left: -9999 }}>
             Project to share
@@ -254,6 +255,9 @@ function SharedProjects({ overview }: { overview: OrgSharedOverview }) {
             const editorCount = project.memberGrants.filter(
               (grant) => grant.access === 'write',
             ).length;
+            const canManageProject =
+              overview.canManageSharing ||
+              (overview.canShareOwnProjects && project.ownerUserId === overview.currentUserId);
             return (
               <li
                 key={project.projectId}
@@ -280,7 +284,7 @@ function SharedProjects({ overview }: { overview: OrgSharedOverview }) {
                       {editorCount === 0 ? 'read-only' : `${editorCount} can edit`}
                     </div>
                   </div>
-                  {overview.canManageSharing ? (
+                  {canManageProject ? (
                     <button
                       type="button"
                       style={buttonStyle}
@@ -299,12 +303,12 @@ function SharedProjects({ overview }: { overview: OrgSharedOverview }) {
                   ) : null}
                 </div>
 
-                {overview.canManageSharing ? (
-                  <>
-                    <SharedProjectAudienceControl project={project} />
-                    <SharedProjectMemberAccessList project={project} members={overview.members} />
-                  </>
-                ) : null}
+                {canManageProject ? <SharedProjectAudienceControl project={project} /> : null}
+                <SharedProjectMemberAccessList
+                  project={project}
+                  members={overview.members}
+                  canManage={canManageProject}
+                />
               </li>
             );
           })}
@@ -670,7 +674,9 @@ export function OrganizationSharingSection() {
         description={
           overview.canManageSharing
             ? 'You can change what the organization shares.'
-            : 'Only an owner or admin can change what is shared.'
+            : overview.canShareOwnProjects
+              ? 'You can share your own projects and choose who can open them. An owner or admin manages everything else that is shared.'
+              : 'Only an owner or admin can change what is shared.'
         }
       >
         <Empty>

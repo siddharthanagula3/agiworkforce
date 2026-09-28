@@ -3,6 +3,7 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { withErrorHandler } from '@/lib/error-handler';
+import { withAdmittedRateLimitHeaders } from '@/lib/rate-limit-headers';
 import { withRateLimit } from '@/lib/rate-limit';
 import { CreditService } from '@/lib/services/credit-service';
 import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
@@ -131,7 +132,7 @@ async function handleGetBalance(request: NextRequest) {
   });
 }
 
-export const GET = withErrorHandler(handleGetBalance);
+export const GET = withAdmittedRateLimitHeaders(withErrorHandler(handleGetBalance));
 export function OPTIONS(request: NextRequest) {
   return new NextResponse(null, { status: 204, headers: getCorsHeaders(request) });
 }

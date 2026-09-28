@@ -246,7 +246,7 @@ describe('ComposerFooter · environment gating (Phase A)', () => {
     fireEvent.click(screen.getByRole('button', { name: /All models/i }));
 
     expect(screen.getByText('Beta')).toBeInTheDocument();
-    expect(screen.queryByText(/and above$/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Upgrade to use/)).not.toBeInTheDocument();
   });
 
   it('(b) env-gated row uses native disabled semantics, not an upgrade path', () => {

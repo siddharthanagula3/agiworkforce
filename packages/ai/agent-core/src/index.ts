@@ -27,6 +27,7 @@ export {
   passiveMemoryText,
   MAX_MEMORY_EXTRACTION_SOURCE_CHARS,
   MEMORY_COMMAND_KINDS,
+  MEMORY_CONFLICT_TOPICS,
   MEMORY_FACT_EXTRACTION_SYSTEM_PROMPT,
   type ExplicitForgetOutcome,
   type ExplicitMemoryCommand,
