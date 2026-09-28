@@ -182,15 +182,12 @@ Code: `apps/web/features/connectors/data/connectors.ts:385-394`, `apps/web/lib/c
 
 - Done when: The user compares products for purchase (specs, prices, merchants) in a structured comparison.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | A generic two-item comparison card (pros, cons, winner) renders when an answer is written as "X vs Y". It has no product search, prices, merchants or buy links. | ui |
-| desktop | partial | A generic two-item comparison card (pros, cons, winner) renders when an answer is written as "X vs Y". It has no product search, prices, merchants or buy links. | ui |
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/cards/index.tsx:37-45`, `apps/web/features/chat/components/messages/MessageBubble.tsx:2089-2096`, `apps/web/features/chat/components/cards/ComparisonCard.tsx:15-28`
 
 ## S108.33: Travel planning and reservations.
 
