@@ -412,16 +412,14 @@ Code: `apps/extension-vscode/src/features/surfaces/capabilityManagement.ts:124-1
 ## S4.38: Model catalog.
 
 - Done when: A model catalog lists the models the user can reach with capabilities/context/price and lets them pick one or set a default.
-- Wave: 2
-- Already works on: mobile, cli, api
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The /models catalog page has no navigation entry; paid users reach the catalog via the composer "All models" row, but Free users (row hidden) can only type the URL. | mount |
-| desktop | partial | Same as web: /models has no navigation entry and the composer "All models" row is hidden on Free. | mount |
 | chrome | partial | Only the side-panel model dropdown (Auto, primary, more); no catalog view with capabilities, context size or pricing. | ui |
 
-Code: `apps/web/app/models/page.tsx:12-18`, `apps/web/features/models/components/ModelsPage.tsx:12-27`, `apps/web/features/chat/lib/use-model-catalogue.ts:1-10`, `apps/web/features/chat/components/Composer/ComposerFooter.tsx:1494-1504`
+Code: `apps/extension/src/side_panel.ts:6168-6178`, `apps/extension/src/features/cloud-bridge/managedModelPicker.ts:47-50`
 
 ## S4.39: Usage dashboard.
 

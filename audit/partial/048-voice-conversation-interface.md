@@ -151,11 +151,11 @@ Code: `apps/mobile/src/features/voice/components/VoicePickerSheet.tsx:207-207`, 
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | owner supplies samples: Play sample loads <NEXT_PUBLIC_LIVE_VOICE_SAMPLE_BASE_URL>/<voice>.mp3 and hides when missing (2fe34c28e) | ui |
+| web | partial | owner records the samples once from the repository root with OPENAI_API_KEY=<server key> node scripts/generate-voice-samples.mjs and commits apps/web/public/voice-samples; until then the committed manifest is empty and Play sample stays hidden (a7cb4c407, D-2026-09-28-04: marin via the speech endpoint, the 12 Live-only voices via one scripted Live session each, static files so a play costs nothing) | ui |
 | desktop | partial | Same as web: no live-voice sample. | ui |
 | mobile | partial | Settings previews on-device voices, which the companion uses, but live voice ignores the chosen voice (starts with voice null). | handler |
 
-Code: `apps/web/features/chat/components/Voice/VoiceSettingsModal.tsx:277-277`, `apps/web/features/chat/components/Voice/VoiceSampleButton.tsx:1-1`, `apps/web/features/chat/components/Voice/VoiceSettingsModal.tsx:256-256`, `apps/mobile/src/features/settings/voice-language/index.tsx:102-102`
+Code: `apps/web/features/chat/components/Voice/VoiceSettingsModal.tsx:277-277`, `apps/web/features/chat/components/Voice/VoiceSampleButton.tsx:14-14`, `apps/web/features/chat/lib/voice-samples.ts:5-5`, `scripts/generate-voice-samples.mjs:95-95`
 
 ## S48.17: Language selection.
 

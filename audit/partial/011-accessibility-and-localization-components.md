@@ -145,18 +145,6 @@ Code: `apps/web/app/i18n/index.ts:78-78`, `packages/ui/i18n/src/languages.ts:13-
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S11.21: Input-method composition support.
-
-- Done when: Typing with an input method (Japanese, Chinese, Korean) never sends the message when Enter confirms a composition.
-- Wave: 3
-- Already works on: web, desktop, mobile, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | The composer sends on Enter without checking isComposing or keyCode 229, so confirming a Japanese/Chinese composition sends the message; add the guard web and Chrome use. | handler |
-
-Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:4008-4008`
-
 ## S11.22: Locale-aware dates and numbers.
 
 - Done when: Dates, times and numbers are formatted for the user's locale rather than a fixed US format.
@@ -212,18 +200,6 @@ Code: `apps/web/features/chat/components/dialogs/KeyboardShortcutsDialog.tsx:158
 | vscode | partial | Host notifications are translated (l10n in 12 locales), but errors inside the chat webview are English only. | ui |
 
 Code: `apps/extension-vscode/src/l10n/index.ts:45-45`, `apps/extension-vscode/src/platform/applyEdit.ts:43-43`
-
-## S11.26: Platform-specific shortcut notation.
-
-- Done when: Shortcut hints use the platform's notation (⌘ on Apple, Ctrl elsewhere).
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Contributed keybindings carry mac variants, but the webview hint prints "Cmd/Ctrl+Enter" on every platform. | ui |
-
-Code: `apps/extension-vscode/package.json:1143-1143`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:3524-3524`
 
 ## S11.27: Long-label and translated-copy layouts.
 

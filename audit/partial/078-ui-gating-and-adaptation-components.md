@@ -22,18 +22,6 @@ nothing is left.
 
 Code: `apps/web/app/api/me/route.ts:228-236`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:879-886`
 
-## S78.02: Model-dependent composer controls.
-
-- Done when: Composer controls (effort, thinking, attachment options) appear, change or disappear according to the selected model.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | The effort control is shown or hidden per provider, not from the selected model's capabilities. | ui |
-
-Code: `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:678-686`
-
 ## S78.03: Model-dependent accepted-file types.
 
 - Done when: Which files the composer accepts (or how it reacts to them) depends on what the selected model can read.
@@ -48,18 +36,6 @@ Code: `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:67
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/mobile/src/features/model-picker/localModelRuntime.ts:60-62`, `apps/mobile/services/streaming.ts:167-167`, `apps/cli/src/provider.rs:264-265`
-
-## S78.04: Model-dependent reasoning options.
-
-- Done when: The reasoning/effort options offered match the selected model, and unsupported levels are not sent.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Effort is offered per provider rather than from each model's registry effort levels. | ui |
-
-Code: `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:678-686`
 
 ## S78.05: Model-dependent sampling options.
 
@@ -274,18 +250,6 @@ Code: `apps/web/features/chat/components/Composer/ComposerFooter.tsx:167-167`, `
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-## S78.26: Unsupported-parameter removal or correction.
-
-- Done when: Parameters the chosen model cannot take are removed or corrected before the request is sent.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Effort is corrected per provider, not per model, so an unsupported level can still be sent to a model in a supporting provider. | ui |
-
-Code: `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:678-686`
 
 ## S78.28: Live updates after a plan, policy, connection, or device change.
 

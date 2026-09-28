@@ -42,13 +42,10 @@ Code: `apps/cli/src/features/plugins/registry.rs:538-563`
 ## S98.26: Publisher identity service.
 
 - Done when: Publishers have verified identities and installs check a package came from its publisher.
-- Wave: 2
+- Wave: 3
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | Signatures are checked only against one operator-supplied key set (PLUGIN_SIGNING_PUBLIC_KEYS, refuses when unset); publishers have no individual verified identity. | handler, flag-off |
-
-Code: `apps/web/lib/services/plugin-marketplace-service.ts:74-74`, `apps/web/lib/services/plugin-marketplace-service.ts:80-90`
 
 ## S98.27: Organization distribution service.
 
