@@ -74,7 +74,10 @@
     "runtimeConsent": "Esta app quiere usar IA con tu cuenta. Cada solicitud cuenta para el uso de tu plan.",
     "runtimeConsentConnectors": "Esta app quiere usar IA con tu cuenta y leer o cambiar datos en {{apps}}. Ve lo que devuelven esas apps, y cada solicitud cuenta para el uso de tu plan.",
     "runtimeAllow": "Permitir",
-    "runtimeDecline": "No permitir"
+    "runtimeDecline": "No permitir",
+    "saveCopy": "Guardar una copia en mis chats",
+    "saveCopyBusy": "Copiando…",
+    "saveCopyFailed": "No se pudo copiar este artefacto."
   },
   "sidebar": {
     "activeConversation": "Conversación activa",
