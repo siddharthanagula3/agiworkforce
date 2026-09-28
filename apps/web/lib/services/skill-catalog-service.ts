@@ -495,6 +495,14 @@ export async function executeManagedSkillToolForPlugins(
   );
 }
 
+export async function listManagedPluginSkillsWithFiles(
+  pluginId: string,
+): Promise<SkillWithFileAccess[]> {
+  return (await getManagedSkillDirectory())
+    .filter((skill) => skillPluginOwner(skill) === pluginId)
+    .map((skill) => ({ skill, access: managedSkillFileAccess }));
+}
+
 export async function findManagedSkillWithFiles(
   name: string,
   enabledPluginIds: ReadonlySet<string> | null,
