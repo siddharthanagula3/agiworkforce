@@ -28,6 +28,14 @@ import 'server-only';
  * destructive, external, privileged, or expensive agent actions."
  */
 
+import type { ToolApprovalPolicy } from '@agiworkforce/types';
+import {
+  CREATE_FOLDER_TOOL,
+  EDIT_FILE_TOOL,
+  WRITE_FILE_TOOL,
+  e2bExecutionToolDefs,
+} from '@/lib/e2b/execution-tools';
+
 export type CommandRisk =
   | 'safe'
   /** May run only after the user explicitly approves this exact command. */
@@ -118,6 +126,21 @@ const VERSION_PROBE_BINARIES = new Set([
 
 const VERSION_PROBE_FLAGS = new Set(['--version', '-v', '-V', '--help']);
 
+const READ_ONLY_GIT_SUBCOMMANDS = new Set([
+  'status',
+  'diff',
+  'log',
+  'show',
+  'blame',
+  'ls-files',
+  'rev-parse',
+  'describe',
+  'shortlog',
+  'grep',
+]);
+
+const GIT_WRITING_FLAG = /^(?:--output\b|--ext-diff$|-o$)/;
+
 const VERSION_PROBE_TOKEN_COUNT = 2;
 
 const DENIED_PATTERNS: Array<{ pattern: RegExp; reason: string }> = [
@@ -153,30 +176,39 @@ const DENIED_PATTERNS: Array<{ pattern: RegExp; reason: string }> = [
   },
 ];
 
-const APPROVAL_PATTERNS: Array<{ pattern: RegExp; reason: string }> = [
+const APPROVAL_PATTERNS: Array<{ pattern: RegExp; reason: string; destructive: boolean }> = [
   {
     pattern: /\brm\b|\bmv\b|\btruncate\b|\bshred\b/,
     reason: 'Deletes or moves files in the workspace.',
+    destructive: true,
   },
   {
     pattern: /\bfind\b.*\s-(?:delete|exec|execdir|ok|okdir|fprint0?|fprintf|fls)\b/,
     reason: 'find with an action flag deletes files or executes commands.',
+    destructive: true,
   },
   {
     pattern: /\b(npm|pnpm|yarn|pip|pip3|cargo|go|gem|apt|apt-get|brew)\b/,
     reason:
       'Installs or builds dependencies. This fetches and executes third-party code and can ' +
       'take a long time.',
+    destructive: false,
   },
   {
     pattern: /\bgit\s+(commit|checkout|switch|merge|rebase|revert|restore|branch|tag)\b/,
     reason: 'Changes version-control state in the workspace.',
+    destructive: true,
   },
   {
     pattern: /\bchmod\b|\bchown\b|\bln\b/,
     reason: 'Changes file permissions or ownership.',
+    destructive: false,
   },
 ];
+
+function isDestructiveCommand(command: string): boolean {
+  return APPROVAL_PATTERNS.some(({ pattern, destructive }) => destructive && pattern.test(command));
+}
 
 export function classifyCommandRisk(rawCommand: string): CommandClassification {
   const command = rawCommand.trim();
@@ -215,6 +247,13 @@ export function classifyCommandRisk(rawCommand: string): CommandClassification {
   }
   if (READ_ONLY_COMMANDS.has(firstToken)) {
     return { risk: 'safe', reason: 'Read-only, workspace-scoped command.' };
+  }
+  if (
+    firstToken === 'git' &&
+    READ_ONLY_GIT_SUBCOMMANDS.has(tokens[1] ?? '') &&
+    !tokens.slice(2).some((token) => GIT_WRITING_FLAG.test(token))
+  ) {
+    return { risk: 'safe', reason: 'Reads the repository history or working tree.' };
   }
   if (
     tokens.length === VERSION_PROBE_TOKEN_COUNT &&
@@ -271,11 +310,111 @@ export const CLOUD_CODE_READ_FILE_TOOL = 'read_file';
 export const CLOUD_CODE_LIST_FILES_TOOL = 'list_files';
 export const CLOUD_CODE_RUN_COMMAND_TOOL = 'run_command';
 
+const READ_TOOLS: ReadonlySet<string> = new Set([
+  CLOUD_CODE_READ_FILE_TOOL,
+  CLOUD_CODE_LIST_FILES_TOOL,
+]);
+const EDIT_TOOLS: ReadonlySet<string> = new Set([
+  WRITE_FILE_TOOL,
+  EDIT_FILE_TOOL,
+  CREATE_FOLDER_TOOL,
+]);
+const EVERY_ACTION_REASON =
+  'Ask before every action is on, so this waits for you even though it only reads.';
+const EDIT_REASON = 'Changes files in the workspace.';
+const MAX_APPROVAL_SUMMARY_LENGTH = 100_000;
+const APPROVAL_SUMMARY_TAIL_RESERVE = 64;
+const OVERSIZED_COMMAND_REASON =
+  'This command is too long to show for approval. Split it into smaller commands.';
+
+export type CloudCodeToolGate =
+  { action: 'run' } | { action: 'refuse'; reason: string } | { action: 'ask'; reason: string };
+
+export function gateCloudCodeTool(
+  policy: ToolApprovalPolicy,
+  toolName: string,
+  command: string | null,
+): CloudCodeToolGate {
+  if (command !== null) {
+    const verdict = classifyCommandRisk(command);
+    if (verdict.risk === 'denied') return { action: 'refuse', reason: verdict.reason };
+    const ask = (reason: string): CloudCodeToolGate =>
+      command.length > MAX_APPROVAL_SUMMARY_LENGTH
+        ? { action: 'refuse', reason: OVERSIZED_COMMAND_REASON }
+        : { action: 'ask', reason };
+    if (policy === 'ask_every_time') {
+      return ask(verdict.risk === 'safe' ? EVERY_ACTION_REASON : verdict.reason);
+    }
+    if (verdict.risk === 'safe') return { action: 'run' };
+    if (policy === 'autonomous' && !isDestructiveCommand(command)) return { action: 'run' };
+    return ask(verdict.reason);
+  }
+  if (READ_TOOLS.has(toolName)) {
+    return policy === 'ask_every_time'
+      ? { action: 'ask', reason: EVERY_ACTION_REASON }
+      : { action: 'run' };
+  }
+  if (EDIT_TOOLS.has(toolName)) {
+    return policy === 'autonomous' ? { action: 'run' } : { action: 'ask', reason: EDIT_REASON };
+  }
+  return { action: 'refuse', reason: `Tool "${toolName}" is not available in Code sessions.` };
+}
+
+const APPROVAL_MODE_LINES: Record<ToolApprovalPolicy, string> = {
+  ask_every_time:
+    'Approval mode for this turn: ask before every action. Every command, file read and file ' +
+    'edit waits for the user approval.',
+  auto_approve_read_only:
+    'Approval mode for this turn: reads and read-only commands run immediately; file edits and ' +
+    'commands that change the workspace wait for the user approval.',
+  autonomous:
+    'Approval mode for this turn: file edits and most commands run immediately; commands that ' +
+    'delete or move files or change version-control state wait for the user approval.',
+};
+
+export function cloudCodeApprovalModeLine(policy: ToolApprovalPolicy): string {
+  return APPROVAL_MODE_LINES[policy];
+}
+
+function prefixedLines(text: unknown, prefix: string): string[] {
+  return typeof text === 'string' ? text.split('\n').map((line) => `${prefix}${line}`) : [];
+}
+
+export function cloudCodeActionLabel(toolName: string, args: Record<string, unknown>): string {
+  if (toolName === CLOUD_CODE_RUN_COMMAND_TOOL) return String(args['command'] ?? '');
+  const path = typeof args['path'] === 'string' ? args['path'] : '';
+  return `${toolName} ${path || '.'}`;
+}
+
+export function cloudCodeApprovalSummary(toolName: string, args: Record<string, unknown>): string {
+  const label = cloudCodeActionLabel(toolName, args);
+  const summary =
+    toolName === WRITE_FILE_TOOL
+      ? [label, ...prefixedLines(args['content'], '+ ')].join('\n')
+      : toolName === EDIT_FILE_TOOL
+        ? [
+            label,
+            ...prefixedLines(args['old_text'], '- '),
+            ...prefixedLines(args['new_text'], '+ '),
+          ].join('\n')
+        : label;
+  if (toolName === CLOUD_CODE_RUN_COMMAND_TOOL || summary.length <= MAX_APPROVAL_SUMMARY_LENGTH) {
+    return summary;
+  }
+  const shownLength = MAX_APPROVAL_SUMMARY_LENGTH - APPROVAL_SUMMARY_TAIL_RESERVE;
+  const hiddenLines = summary.slice(shownLength).split('\n').length;
+  return `${summary.slice(0, shownLength)}\n[${hiddenLines} more ${hiddenLines === 1 ? 'line' : 'lines'} not shown]`;
+}
+
 export function cloudCodeAgentToolDefs(): Array<{
   type: 'function';
   function: { name: string; description: string; parameters: Record<string, unknown> };
 }> {
+  const editTools = e2bExecutionToolDefs().filter(
+    (tool) => tool.function.name === WRITE_FILE_TOOL || tool.function.name === EDIT_FILE_TOOL,
+  );
   return [
+    ...editTools,
     {
       type: 'function',
       function: {
@@ -314,9 +453,9 @@ export function cloudCodeAgentToolDefs(): Array<{
       function: {
         name: CLOUD_CODE_RUN_COMMAND_TOOL,
         description:
-          'Run a shell command in the session workspace. Destructive, privileged, ' +
-          'network, or dependency-installing commands are paused for explicit user ' +
-          'approval before they execute; read-only commands run immediately.',
+          'Run a shell command in the session workspace. Depending on the approval mode, ' +
+          'a command that changes the workspace may pause for the user approval before it ' +
+          'runs; read-only commands run immediately and some commands are always refused.',
         parameters: {
           type: 'object',
           properties: {
