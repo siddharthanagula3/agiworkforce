@@ -4,15 +4,20 @@ import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 
+import {
+  MANAGED_CLOUD_SLACK_LINK_PATH,
+  ManagedCloudSlackLinkConfirmedSchema,
+  ManagedCloudSlackLinkPreviewSchema,
+  type ManagedCloudSlackLinkPreview,
+} from '@agiworkforce/cloud-contracts';
+
 import { Header } from '@shared/components/layout/Header';
 import { SuccessState } from '@shared/components/SuccessState';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { Eyebrow, Prose, Stack } from '@/features/marketing/components/system';
 import { useCurrentUser } from '@/lib/identity/client';
-import type { SlackLinkPreview } from '@/lib/slack/slack-contract';
 import { toUserMessage } from '@/lib/user-error-message';
 
-const LINK_PATH = '/api/slack/link';
 const SETTINGS_PATH = '/chat?settings=slack';
 const LOOKUP_FAILED =
   'This link could not be checked. Send AGI Workforce a message in Slack to get a new one.';
@@ -22,7 +27,7 @@ type LookupState =
   | { kind: 'idle' }
   | { kind: 'loading' }
   | { kind: 'failed'; message: string }
-  | { kind: 'ready'; preview: SlackLinkPreview };
+  | { kind: 'ready'; preview: ManagedCloudSlackLinkPreview };
 
 function errorMessage(body: unknown, fallback: string): string {
   if (!body || typeof body !== 'object') return fallback;
@@ -33,30 +38,6 @@ function errorMessage(body: unknown, fallback: string): string {
     if (typeof message === 'string' && message.trim()) return message;
   }
   return fallback;
-}
-
-function isPreview(body: unknown): body is SlackLinkPreview {
-  if (!body || typeof body !== 'object') return false;
-  const candidate = body as Record<string, unknown>;
-  const workspaces = candidate['workspaces'];
-  return (
-    typeof candidate['teamName'] === 'string' &&
-    typeof candidate['expiresAt'] === 'string' &&
-    typeof candidate['requiredPlans'] === 'string' &&
-    (candidate['selectedWorkspaceId'] === null ||
-      typeof candidate['selectedWorkspaceId'] === 'string') &&
-    Array.isArray(workspaces) &&
-    workspaces.length > 0 &&
-    workspaces.every((workspace: unknown) => {
-      const entry = workspace as Record<string, unknown> | null;
-      return (
-        !!entry &&
-        (entry['id'] === null || typeof entry['id'] === 'string') &&
-        typeof entry['name'] === 'string' &&
-        typeof entry['planAllowed'] === 'boolean'
-      );
-    })
-  );
 }
 
 function SlackLinkForm() {
@@ -81,7 +62,7 @@ function SlackLinkForm() {
     }
     const controller = new AbortController();
     setLookup({ kind: 'loading' });
-    void fetch(`${LINK_PATH}?token=${encodeURIComponent(token)}`, {
+    void fetch(`${MANAGED_CLOUD_SLACK_LINK_PATH}?token=${encodeURIComponent(token)}`, {
       method: 'GET',
       credentials: 'include',
       cache: 'no-store',
@@ -90,10 +71,11 @@ function SlackLinkForm() {
       .then(async (response) => {
         const body = (await response.json().catch(() => null)) as unknown;
         if (!response.ok) throw new Error(errorMessage(body, LOOKUP_FAILED));
-        if (!isPreview(body)) throw new Error(LOOKUP_FAILED);
+        const parsed = ManagedCloudSlackLinkPreviewSchema.safeParse(body);
+        if (!parsed.success) throw new Error(LOOKUP_FAILED);
         if (!controller.signal.aborted) {
-          setWorkspaceId(body.selectedWorkspaceId);
-          setLookup({ kind: 'ready', preview: body });
+          setWorkspaceId(parsed.data.selectedWorkspaceId);
+          setLookup({ kind: 'ready', preview: parsed.data });
         }
       })
       .catch((error: unknown) => {
@@ -117,7 +99,7 @@ function SlackLinkForm() {
       const csrfResponse = await fetch('/api/csrf', { method: 'GET', credentials: 'include' });
       const csrf = (await csrfResponse.json().catch(() => null)) as { token?: string } | null;
       if (!csrfResponse.ok || !csrf?.token) throw new Error(CONNECT_FAILED);
-      const response = await fetch(LINK_PATH, {
+      const response = await fetch(MANAGED_CLOUD_SLACK_LINK_PATH, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrf.token },
@@ -125,7 +107,9 @@ function SlackLinkForm() {
       });
       const body = (await response.json().catch(() => null)) as unknown;
       if (!response.ok) throw new Error(errorMessage(body, CONNECT_FAILED));
-      setConnectedTeam(preview.teamName);
+      const confirmed = ManagedCloudSlackLinkConfirmedSchema.safeParse(body);
+      if (!confirmed.success) throw new Error(CONNECT_FAILED);
+      setConnectedTeam(confirmed.data.teamName);
     } catch (error) {
       setMessage(toUserMessage(error, CONNECT_FAILED));
     } finally {
