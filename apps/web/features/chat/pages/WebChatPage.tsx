@@ -3607,9 +3607,9 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     stopGeneration(displayedConversationId ?? undefined);
   }, [stopGeneration, displayedConversationId]);
 
-  const handleSendQueuedNow = useCallback(
+  const handleSteerQueuedMessage = useCallback(
     async (message: string) =>
-      displayedConversationId ? steerActiveTurn(displayedConversationId, message) : false,
+      displayedConversationId ? steerActiveTurn(displayedConversationId, message) : null,
     [steerActiveTurn, displayedConversationId],
   );
 
@@ -6242,7 +6242,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                         onEnterVoiceMode={enterVoiceSession}
                         conversationId={displayedConversationId}
                         onStop={handleStopGeneration}
-                        onSendQueuedNow={handleSendQueuedNow}
+                        onSteerQueuedMessage={handleSteerQueuedMessage}
                         isLoading={isLoading}
                         isGenerating={isStreaming || imageTurnActive}
                         placeholder={t('chat:placeholderEmpty')}
@@ -6367,7 +6367,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                         onEnterVoiceMode={enterVoiceSession}
                         conversationId={displayedConversationId}
                         onStop={handleStopGeneration}
-                        onSendQueuedNow={handleSendQueuedNow}
+                        onSteerQueuedMessage={handleSteerQueuedMessage}
                         isLoading={isLoading}
                         isGenerating={isStreaming || imageTurnActive}
                         placeholder={t('chat:placeholder')}

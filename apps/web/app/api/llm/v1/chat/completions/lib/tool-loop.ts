@@ -174,7 +174,10 @@ import {
   planDeviceStep,
   type DesktopHostDeclaration,
 } from '@agiworkforce/local-runtime-contract';
-import { DEVICE_SCREENSHOT_MESSAGE_PREFIX } from '@agiworkforce/cloud-contracts';
+import {
+  DEVICE_SCREENSHOT_MESSAGE_PREFIX,
+  cloudAgentRunSteerProgressId,
+} from '@agiworkforce/cloud-contracts';
 import { getE2BExecutor, pauseE2BSession } from '@/lib/e2b/runtime';
 import type { E2BUnavailableCause } from '@/lib/e2b/unavailability';
 import { nativeSearchToolName } from '@/lib/web-search/required-search';
@@ -4373,7 +4376,7 @@ export async function* runToolLoop(
       yield encoder.encode(
         eventStream.emit({
           type: 'progress-update',
-          progressId: `steer:${steer.id}`,
+          progressId: cloudAgentRunSteerProgressId(steer.id),
           summary: STEER_RECEIVED_SUMMARY,
           detail: steer.text,
           status: 'completed',
@@ -6038,6 +6041,7 @@ export async function* runToolLoop(
         }
         const lateSteers =
           options.takeSteerMessages &&
+          agiWorkTurn &&
           step < maxSteps &&
           !isBlockedFinishReason(finishReason) &&
           !isCancelledFinishReason(finishReason)

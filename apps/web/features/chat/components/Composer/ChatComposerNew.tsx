@@ -168,6 +168,8 @@ import {
   MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH,
   MANAGED_MEDIA_MAX_IMAGE_REFERENCES,
   MANAGED_OFFICE_FILE_TOOL_NAME,
+  cloudAgentRunSteerProgressId,
+  isCloudAgentRunSteerProgressId,
   type LibraryItem,
 } from '@agiworkforce/cloud-contracts';
 import {
@@ -251,6 +253,7 @@ interface QueuedFollowUp {
   args: ComposerSendArgs;
   preview: string;
   toolsLabel: string | null;
+  steerId?: string;
 }
 
 const WORK_MODE_LABELS: Record<ComposerWorkMode, string> = {
@@ -303,6 +306,7 @@ const TURN_ACTIVE_PLACEHOLDER = 'Follow up';
  * only has to name which message and keep its Edit and Cancel reachable.
  */
 const QUEUED_ROW_LEAD = 'Queued';
+const STEERED_ROW_LEAD = 'Sent to the running reply';
 
 type SkillToolToggle = 'officeCreationEnabled' | 'codeExecutionEnabled';
 const SKILL_TOOL_TOGGLES: Readonly<Record<string, SkillToolToggle>> = {
@@ -413,7 +417,7 @@ interface ChatComposerProps {
   onTypingChange?: (isTyping: boolean) => void;
   /** Called when the user clicks the stop button. */
   onStop?: () => void;
-  onSendQueuedNow?: (message: string) => Promise<boolean>;
+  onSteerQueuedMessage?: (message: string) => Promise<string | null>;
   /** ArrowUp on an empty composer opens the last user message for editing, as both leaders do. */
   onEditLastMessage?: () => void;
   /**
@@ -724,7 +728,7 @@ const ChatComposerNewComponent = ({
   onRemoveAttachmentUpload,
   onTypingChange,
   onStop,
-  onSendQueuedNow,
+  onSteerQueuedMessage,
   onEditLastMessage,
   onEnterVoiceMode,
   clearSignal,
@@ -3611,31 +3615,58 @@ const ChatComposerNewComponent = ({
     setQueuedFollowUps((current) => current.filter((item) => item.id !== id));
   }, []);
 
-  const sendQueuedNow = useCallback(
+  const streamingRunId = useChatStore((state) => {
+    const last = state.messages.at(-1);
+    return last?.role === 'assistant' && last.isStreaming
+      ? (last.metadata?.cloudAgentRun?.runId ?? null)
+      : null;
+  });
+  const readSteerProgressIds = useChatStore((state) =>
+    (state.messages.at(-1)?.metadata?.agentActivity?.entries ?? [])
+      .flatMap((entry) =>
+        entry.kind === 'progress' && isCloudAgentRunSteerProgressId(entry.progressId)
+          ? [entry.progressId]
+          : [],
+      )
+      .join(' '),
+  );
+
+  useEffect(() => {
+    if (!readSteerProgressIds) return;
+    const read = new Set(readSteerProgressIds.split(' '));
+    const remaining = queuedFollowUpsRef.current.filter(
+      (item) => !item.steerId || !read.has(cloudAgentRunSteerProgressId(item.steerId)),
+    );
+    if (remaining.length === queuedFollowUpsRef.current.length) return;
+    queuedFollowUpsRef.current = remaining;
+    setQueuedFollowUps(remaining);
+  }, [readSteerProgressIds]);
+
+  const steerQueuedMessage = useCallback(
     async (id: string) => {
       const target = queuedFollowUpsRef.current.find((item) => item.id === id);
-      if (!target || !onSendQueuedNow) return;
-      let steered: boolean;
+      if (!target || target.steerId || !onSteerQueuedMessage) return;
+      let steerId: string | null;
       try {
-        steered = await onSendQueuedNow(target.args[0]);
+        steerId = await onSteerQueuedMessage(target.args[0]);
       } catch (error) {
-        setLocalNotice(toUserMessage(error, 'Your message was not sent. It is still queued.'));
+        setLocalNotice(
+          toUserMessage(error, 'Your message did not reach the running reply. It is still queued.'),
+        );
+        return;
+      }
+      if (!steerId) {
+        setLocalNotice('This reply cannot take a message now, so yours sends when it finishes.');
         return;
       }
       if (editingQueuedIdRef.current === id) editingQueuedIdRef.current = null;
-      if (steered) {
-        const remaining = queuedFollowUpsRef.current.filter((item) => item.id !== id);
-        queuedFollowUpsRef.current = remaining;
-        setQueuedFollowUps(remaining);
-        setLocalNotice('Sent to the agent. It reads your message at its next step.');
-        return;
-      }
-      const reordered = [target, ...queuedFollowUpsRef.current.filter((item) => item.id !== id)];
-      queuedFollowUpsRef.current = reordered;
-      setQueuedFollowUps(reordered);
-      onStop?.();
+      const next = queuedFollowUpsRef.current.map((item) =>
+        item.id === id ? { ...item, steerId } : item,
+      );
+      queuedFollowUpsRef.current = next;
+      setQueuedFollowUps(next);
     },
-    [onSendQueuedNow, onStop],
+    [onSteerQueuedMessage],
   );
 
   const editQueuedMessage = useCallback(
@@ -4003,9 +4034,11 @@ const ChatComposerNewComponent = ({
             >
               <Clock className="h-4 w-4 shrink-0" aria-hidden="true" />
               <span className="min-w-0 flex-1 truncate">
-                {queuedFollowUps.length > 1
-                  ? `${QUEUED_ROW_LEAD} ${index + 1} of ${queuedFollowUps.length}: `
-                  : `${QUEUED_ROW_LEAD}: `}
+                {queued.steerId
+                  ? `${STEERED_ROW_LEAD}: `
+                  : queuedFollowUps.length > 1
+                    ? `${QUEUED_ROW_LEAD} ${index + 1} of ${queuedFollowUps.length}: `
+                    : `${QUEUED_ROW_LEAD}: `}
                 {queued.preview}
                 {/* AUDIT-FIX CMP-16: say which toggles the queued turn will carry.
                     they are editable while it waits (the "+" menu stays open during
@@ -4014,36 +4047,41 @@ const ChatComposerNewComponent = ({
                   <span className="ml-1 text-[var(--chat-text-muted)]">· {queued.toolsLabel}</span>
                 )}
               </span>
-              {onSendQueuedNow &&
-              isTurnActive &&
+              {onSteerQueuedMessage &&
+              streamingRunId &&
+              !queued.steerId &&
               queued.conversationId === (conversationId ?? null) &&
               queued.args[0].trim().length > 0 &&
               !queued.args[1]?.length ? (
                 <button
                   type="button"
-                  onClick={() => void sendQueuedNow(queued.id)}
+                  onClick={() => void steerQueuedMessage(queued.id)}
                   className="shrink-0 rounded-compact px-1.5 py-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-                  aria-label={`Send now: ${queued.preview}`}
+                  aria-label={`Steer the running reply with: ${queued.preview}`}
                 >
-                  Send now
+                  Steer
                 </button>
               ) : null}
-              <button
-                type="button"
-                onClick={() => editQueuedMessage(queued.id)}
-                className="shrink-0 rounded-compact px-1.5 py-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-                aria-label={`Edit queued message: ${queued.preview}`}
-              >
-                Edit
-              </button>
-              <button
-                type="button"
-                onClick={() => cancelQueuedMessage(queued.id)}
-                className="shrink-0 rounded-compact px-1.5 py-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-                aria-label={`Cancel queued message: ${queued.preview}`}
-              >
-                Cancel
-              </button>
+              {queued.steerId ? null : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => editQueuedMessage(queued.id)}
+                    className="shrink-0 rounded-compact px-1.5 py-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                    aria-label={`Edit queued message: ${queued.preview}`}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => cancelQueuedMessage(queued.id)}
+                    className="shrink-0 rounded-compact px-1.5 py-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                    aria-label={`Cancel queued message: ${queued.preview}`}
+                  >
+                    Cancel
+                  </button>
+                </>
+              )}
             </li>
           ))}
         </ul>

@@ -307,7 +307,7 @@ export interface UseChatStreamReturn {
     toolCallId: string,
     inputResponses: Record<string, unknown>,
   ) => Promise<boolean>;
-  steerActiveTurn: (conversationId: string, message: string) => Promise<boolean>;
+  steerActiveTurn: (conversationId: string, message: string) => Promise<string | null>;
   isStreaming: boolean;
 }
 
@@ -3294,7 +3294,7 @@ export function useChatStream(): UseChatStreamReturn {
   const { getToken } = useSession();
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
   const activeRunsRef = useRef<
-    Map<string, ManagedCloudAgentRunHandle & { assistantMessageId: string; agiWork?: boolean }>
+    Map<string, ManagedCloudAgentRunHandle & { assistantMessageId: string }>
   >(new Map());
 
   // streamingConversationIds only flips after the auth-token await below, so it
@@ -3869,11 +3869,7 @@ export function useChatStream(): UseChatStreamReturn {
             ...(assistantParentId ? { assistantParentId } : {}),
             onRunHandle: (handle) => {
               if (handle) {
-                activeRunsRef.current.set(conversationId, {
-                  ...handle,
-                  assistantMessageId,
-                  agiWork: options.workMode === 'agiwork',
-                });
+                activeRunsRef.current.set(conversationId, { ...handle, assistantMessageId });
                 // AGI Work is the only mode sold as work that outlives the tab,
                 // so it is the only one that owes the reader a correction when
                 // the server could not give it the durable transport.
@@ -4322,15 +4318,15 @@ export function useChatStream(): UseChatStreamReturn {
   );
 
   const steerActiveTurn = useCallback(
-    async (conversationId: string, message: string): Promise<boolean> => {
+    async (conversationId: string, message: string): Promise<string | null> => {
       const activeRun = activeRunsRef.current.get(conversationId);
-      if (!activeRun?.agiWork) return false;
+      if (!activeRun) return null;
       const client = createManagedCloudAgentRunClient({
         getAuthToken: getToken,
         decorateMutationHeaders: addCsrfHeaders,
       });
-      await client.steerRun(activeRun.runId, message);
-      return true;
+      const { steer } = await client.steerRun(activeRun.runId, message);
+      return steer.id;
     },
     [getToken],
   );
