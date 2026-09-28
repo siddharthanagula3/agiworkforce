@@ -295,18 +295,6 @@ Code: `apps/mobile/src/features/companion/components/CodeSessionView.tsx:178-189
 
 Code: `apps/cli/src/agent/chat.rs:1047-1057`
 
-## S60.29: Results summary.
-
-- Done when: When a task ends the user sees a summary of the result.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Cloud task detail shows steps and outputs but no result text (only "Open on web"); local chat answers show in the chat. | ui |
-
-Code: `apps/extension-vscode/src/features/cloud-tasks/cloudRunDetail.ts:67-77`, `apps/extension-vscode/src/features/cloud-tasks/cloudRunDetail.ts:90-100`
-
 ## S60.30: Generated deliverables.
 
 - Done when: Files the task produced are listed and can be opened or downloaded.
@@ -324,15 +312,14 @@ Code: `apps/mobile/src/features/tasks/runPresentation.ts:248-249`, `apps/mobile/
 
 - Done when: When a task stops short, the user sees what was done and what remains.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | Only the run state and last error; no done-versus-remaining summary. | ui |
 | chrome | partial | Only the state label in the journal; no done-versus-remaining summary. | ui |
 
-Code: `apps/extension-vscode/src/features/cloud-tasks/cloudRunDetail.ts:78-81`, `apps/extension/src/features/side-panel/cloudRunsPanel.ts:479-480`
+Code: `apps/extension/src/features/side-panel/cloudRunsPanel.ts:479-480`
 
 ## S60.33: Task sharing.
 

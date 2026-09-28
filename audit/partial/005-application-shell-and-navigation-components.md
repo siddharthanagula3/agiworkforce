@@ -171,15 +171,14 @@ Code: `apps/mobile/src/features/chat/components/CommandPalette.tsx:9-9`, `apps/e
 
 - Done when: A help menu gathers help centre, support contact, feedback and shortcuts in one place.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Help & About (about.tsx) has a Support section with Contact Support (mailto) and Send Feedback only; no help-centre or docs link exists in the file, so two of the criterion's four parts are missing (shortcuts do not apply on a phone). partial, miss ui; remaining: add a help-centre link to Help & About. |  |
-| vscode | partial | No single help menu: help is spread over the runtime "Get help" button and the Send Feedback command. | ui |
 | chrome | partial | One drawer "Get help" button that opens web help; no help menu with support, feedback or shortcuts. | surface-only |
 
-Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:569-569`, `apps/mobile/app/(app)/about.tsx:255-265`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2327-2335`, `apps/extension/src/side_panel.ts:7140-7150`
+Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:569-569`, `apps/mobile/app/(app)/about.tsx:255-265`, `apps/extension/src/side_panel.ts:7140-7150`
 
 ## S5.31: Upgrade entry.
 
@@ -234,15 +233,3 @@ Code: `apps/mobile/app/_layout.tsx:724-725`, `apps/cli/src/tui/tui_app.rs:1985-1
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-## S5.38: Resource deep links.
-
-- Done when: Each resource (conversation, project, task) has a stable link that opens it directly in the app.
-- Wave: 3
-- Already works on: web, desktop, mobile
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | A vscode:// URI handler exists only for context handoff; conversations and projects have no shareable deep link. | ui |
-
-Code: `apps/extension-vscode/src/features/context-handoff/index.ts:265-274`
