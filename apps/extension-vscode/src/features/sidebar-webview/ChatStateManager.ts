@@ -232,7 +232,10 @@ export type WebviewToExtMessage =
         provider?: string;
       };
     }
-  | { type: 'respondToApproval'; payload: { requestId: string; decision: ApprovalDecision } }
+  | {
+      type: 'respondToApproval';
+      payload: { requestId: string; decision: ApprovalDecision; guidance?: string };
+    }
   | {
       type: 'attachFiles';
       payload: {
@@ -1048,6 +1051,9 @@ export class ChatStateManager {
 
       case 'respondToApproval': {
         await this._resolveApproval(msg.payload.requestId, msg.payload.decision, false);
+        if (msg.payload.decision === 'deny' && msg.payload.guidance !== undefined) {
+          await this._handleSendMessage(msg.payload.guidance);
+        }
         break;
       }
 
