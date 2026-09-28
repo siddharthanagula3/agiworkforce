@@ -23,7 +23,15 @@ are in `docs/security/upload-scanning.md`.
 The web rejects the upload for anything but `{ "safe": true }`, so every
 failure here fails closed. `MAX_SCAN_BYTES` is the largest file the web sends,
 and `__tests__/limits.test.ts` fails if the web's limit moves without it. The
-14 s deadline answers before the web's own 15 s timeout gives up.
+14 s deadline answers before the web's own 15 s timeout gives up. A 401, 411 or
+413 closes the connection without reading the body, so a client still sending
+a large file may see the connection reset instead of the status.
+
+`AlertExceedsMax` is on, so a file clamd cannot scan to the end (an archive
+nested more than 17 deep, more than 10,000 members, a member above 100 MB
+unpacked, more than 400 MB unpacked in total) comes back as a
+`Heuristics.Limits.Exceeded` detection and is refused rather than passed on a
+partial scan.
 
 `GET /health` reports clamd's engine version and the signature database's
 version, publication time and age. It answers 200 while the signatures are
@@ -34,12 +42,15 @@ itself warns), and 503 `unavailable` while clamd does not answer.
 
 One container. Node 24 runs `src/index.ts` directly, so nothing is built or
 installed at runtime. At start it refreshes the signatures with freshclam, then
-supervises clamd and the freshclam daemon; if either exits, the service exits
-and Fly restarts the machine. clamd listens only on `127.0.0.1:3310`
+supervises clamd and the freshclam daemon. If clamd exits, the service exits
+and Fly restarts the machine. If freshclam exits, which it does by design when
+the ClamAV CDN refuses it, clamd keeps scanning with the signatures it has and
+freshclam starts again an hour later. clamd listens only on `127.0.0.1:3310`
 (`clamav/clamd.conf`, matching `CLAMD` in `src/index.ts`) and spools each
 stream in `/dev/shm`, so upload bytes stay in memory and are gone when the scan
-ends. The image carries the signatures current at build time; freshclam brings
-them up to date at start and every two hours after.
+ends. The image carries the signatures from the build that created its
+signature layer, which a builder may reuse from cache; freshclam brings them up
+to date at start and every two hours after.
 
 ## Local run
 
