@@ -362,6 +362,13 @@ pub fn builtin_slash_registry_commands() -> Vec<RegistryCommand> {
             vec!["ctx"],
         ),
         RegistryCommand::builtin_slash(
+            "personalize",
+            "Show or set how replies address you and read (/personalize set <field> <value>)",
+            false,
+            true,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash(
             "tasks",
             "List subagent tasks (/tasks show <id>, /tasks stop <id>)",
             true,
