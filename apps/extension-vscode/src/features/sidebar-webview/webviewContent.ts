@@ -517,7 +517,7 @@ export function getWebviewContent(
     #messages {
       flex: 1;
       overflow-y: auto;
-      padding: 10px 12px 16px;
+      padding: 10px max(12px, calc((100% - 768px) / 2)) 16px;
       display: flex;
       flex-direction: column;
       gap: 10px;
@@ -1231,6 +1231,7 @@ export function getWebviewContent(
     .message th, .message td { padding: 4px 10px; border: 1px solid var(--border); text-align: left; vertical-align: top; }
     .message th { background: var(--bg-overlay); font-weight: 600; }
     li { margin-left: 16px; list-style: disc; }
+    ol > li { list-style: decimal; }
     blockquote { border-left: 2px solid var(--accent-teal); padding-left: 8px; color: var(--text-secondary); margin: 6px 0; }
     .code-block-wrapper { position: relative; margin: 8px 0; }
     .code-block-wrapper pre { margin: 0; padding-top: 36px; }
