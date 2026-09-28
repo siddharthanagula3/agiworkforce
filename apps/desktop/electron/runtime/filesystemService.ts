@@ -10,6 +10,7 @@ import {
   type FileSearchMatch,
   type FileStat,
   type FileTextContent,
+  type FileTextEdit,
   type WorkspaceRoot,
 } from '@agiworkforce/local-runtime-contract';
 import {
@@ -180,6 +181,49 @@ export async function writeTextFile(
   await fs.mkdir(path.dirname(resolved.absolute), { recursive: true });
   await fs.writeFile(resolved.absolute, text, 'utf8');
   return statPath(root, relativePath);
+}
+
+export class TextEditRefused extends Error {}
+
+function countOccurrences(text: string, passage: string): number {
+  let count = 0;
+  let index = text.indexOf(passage);
+  while (index !== -1) {
+    count += 1;
+    index = text.indexOf(passage, index + passage.length);
+  }
+  return count;
+}
+
+export async function editTextFile(
+  root: WorkspaceRoot,
+  relativePath: string,
+  oldText: string,
+  newText: string,
+  replaceAll: boolean,
+): Promise<FileTextEdit> {
+  const current = await readTextFile(root, relativePath);
+  if (current.truncated) {
+    throw new TextEditRefused(
+      `${current.path} is too large to edit in place. Replace it whole instead.`,
+    );
+  }
+  const occurrences = countOccurrences(current.text, oldText);
+  if (occurrences === 0) {
+    throw new TextEditRefused(
+      `The passage to replace is not in ${current.path}. Read the file again and copy the passage exactly.`,
+    );
+  }
+  if (occurrences > 1 && !replaceAll) {
+    throw new TextEditRefused(
+      `The passage appears ${occurrences} times in ${current.path}. Include more of the surrounding text so it appears once, or set replaceAll.`,
+    );
+  }
+  const next = replaceAll
+    ? current.text.split(oldText).join(newText)
+    : current.text.replace(oldText, () => newText);
+  const stat = await writeTextFile(root, relativePath, next);
+  return { path: current.path, replacements: occurrences, sizeBytes: stat.sizeBytes };
 }
 
 export async function createDirectory(
