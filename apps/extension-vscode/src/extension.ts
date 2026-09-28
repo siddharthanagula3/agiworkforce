@@ -19,6 +19,7 @@ import {
   showCloudCodeSession,
 } from './features/cloud-tasks';
 import { getCloudWebOrigin } from './utils/api';
+import { SHOW_HELP_COMMAND, showHelpMenu } from './features/help/helpMenu';
 import {
   SHOW_APPROVAL_HISTORY_COMMAND,
   showApprovalHistory,
@@ -268,6 +269,7 @@ export function activate(context: vscode.ExtensionContext): void {
       if (reference === undefined || reference.trim() === '') return;
       await runEditorUtility(buildPullRequestReviewPrompt(reference));
     }),
+    vscode.commands.registerCommand(SHOW_HELP_COMMAND, showHelpMenu),
     vscode.commands.registerCommand('agi-workforce.securityReview', () =>
       runEditorUtility(buildSecurityReviewPrompt()),
     ),
