@@ -56,12 +56,12 @@ export const CLOUD_RUNS_PANEL_CSS =
   .sp-runs-filter {
     background: none;
     border: 1px solid var(--agi-ext-border);
-    border-radius: 5px;
+    border-radius: var(--corner-control);
     color: var(--agi-ext-text-muted);
-    font-size: 11px;
+    font-size: var(--type-label-size);
     padding: 3px 10px;
     cursor: pointer;
-    transition: border-color 0.12s, color 0.12s;
+    transition: border-color var(--duration-instant), color var(--duration-instant);
   }
 
   .sp-runs-filter[aria-pressed='true'] {
@@ -72,9 +72,9 @@ export const CLOUD_RUNS_PANEL_CSS =
   .sp-runs-icon-btn {
     background: none;
     border: 1px solid var(--agi-ext-border);
-    border-radius: 5px;
+    border-radius: var(--corner-control);
     color: var(--agi-ext-text-muted);
-    font-size: 11px;
+    font-size: var(--type-label-size);
     padding: 3px 10px;
     cursor: pointer;
     flex-shrink: 0;
@@ -92,8 +92,8 @@ export const CLOUD_RUNS_PANEL_CSS =
 
   .sp-runs-status {
     padding: 6px 14px;
-    font-size: 11px;
-    line-height: 1.5;
+    font-size: var(--type-caption-size);
+    line-height: var(--type-caption-height);
     color: var(--agi-ext-text-muted);
     border-bottom: 1px solid var(--agi-ext-border);
     flex-shrink: 0;
@@ -146,9 +146,9 @@ export const CLOUD_RUNS_PANEL_CSS =
   .sp-runs-empty {
     padding: 32px 20px;
     text-align: center;
-    font-size: 12px;
+    font-size: var(--type-caption-size);
     color: var(--agi-ext-text-muted);
-    line-height: 1.6;
+    line-height: var(--type-caption-height);
   }
 
   .sp-run-row {
@@ -177,10 +177,10 @@ export const CLOUD_RUNS_PANEL_CSS =
   }
 
   .sp-run-badge {
-    border-radius: 10px;
+    border-radius: var(--corner-menu);
     border: 1px solid var(--agi-ext-border);
     padding: 1px 8px;
-    font-size: 10px;
+    font-size: var(--type-label-size);
     font-weight: 600;
     white-space: nowrap;
   }
@@ -211,13 +211,13 @@ export const CLOUD_RUNS_PANEL_CSS =
 
   .sp-run-time {
     margin-left: auto;
-    font-size: 10px;
+    font-size: var(--type-caption-size);
     color: var(--agi-ext-text-muted);
     white-space: nowrap;
   }
 
   .sp-run-title {
-    font-size: 12px;
+    font-size: var(--type-caption-size);
     font-weight: 500;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -225,7 +225,7 @@ export const CLOUD_RUNS_PANEL_CSS =
   }
 
   .sp-run-sub {
-    font-size: 11px;
+    font-size: var(--type-caption-size);
     color: var(--agi-ext-text-muted);
   }
 
@@ -234,8 +234,8 @@ export const CLOUD_RUNS_PANEL_CSS =
     padding: 10px 12px;
     background: color-mix(in srgb, var(--agi-ext-warning) 10%, transparent);
     border: 1px solid color-mix(in srgb, var(--agi-ext-warning) 40%, transparent);
-    border-radius: 8px;
-    font-size: 12px;
+    border-radius: var(--corner-field);
+    font-size: var(--type-caption-size);
   }
 
   .sp-run-approval-title {
@@ -245,7 +245,7 @@ export const CLOUD_RUNS_PANEL_CSS =
   }
 
   .sp-run-approval-call {
-    font-size: 11px;
+    font-size: var(--type-caption-size);
     color: var(--agi-ext-text-muted);
     margin-bottom: 6px;
     white-space: pre-wrap;
@@ -262,11 +262,11 @@ export const CLOUD_RUNS_PANEL_CSS =
     margin-bottom: 8px;
     padding: 6px 8px;
     border: 1px solid var(--agi-ext-border);
-    border-radius: 6px;
+    border-radius: var(--corner-control);
     background: var(--agi-ext-surface);
     color: var(--agi-ext-text);
     font: inherit;
-    font-size: 11px;
+    font-size: var(--type-caption-size);
   }
 
   .sp-run-approval-btns {
@@ -278,9 +278,9 @@ export const CLOUD_RUNS_PANEL_CSS =
     background: var(--agi-ext-accent);
     color: var(--agi-ext-on-accent);
     border: none;
-    border-radius: 5px;
+    border-radius: var(--corner-control);
     padding: 4px 14px;
-    font-size: 11px;
+    font-size: var(--type-caption-size);
     font-weight: 500;
     cursor: pointer;
   }
@@ -289,9 +289,9 @@ export const CLOUD_RUNS_PANEL_CSS =
     background: none;
     border: 1px solid var(--agi-ext-border);
     color: var(--agi-ext-text-muted);
-    border-radius: 5px;
+    border-radius: var(--corner-control);
     padding: 4px 14px;
-    font-size: 11px;
+    font-size: var(--type-caption-size);
     cursor: pointer;
   }
 
@@ -316,7 +316,7 @@ export const CLOUD_RUNS_PANEL_CSS =
     gap: 6px;
     padding: 8px;
     border: 1px solid var(--agi-ext-border);
-    border-radius: 8px;
+    border-radius: var(--corner-field);
     scroll-snap-align: start;
     min-width: 0;
   }
@@ -325,7 +325,7 @@ export const CLOUD_RUNS_PANEL_CSS =
     display: flex;
     justify-content: space-between;
     margin: 0;
-    font-size: 12px;
+    font-size: var(--type-caption-size);
     font-weight: 600;
     color: var(--agi-ext-text);
   }
@@ -338,7 +338,7 @@ export const CLOUD_RUNS_PANEL_CSS =
   .sp-runs-column-empty {
     padding: 12px 0;
     text-align: center;
-    font-size: 11px;
+    font-size: var(--type-caption-size);
     color: var(--agi-ext-text-muted);
   }
 
@@ -357,7 +357,7 @@ export const CLOUD_RUNS_PANEL_CSS =
     gap: 6px;
     padding: 8px;
     border: 1px solid var(--agi-ext-border);
-    border-radius: 6px;
+    border-radius: var(--corner-control);
     background: var(--agi-ext-surface);
   }
 
@@ -376,7 +376,7 @@ export const CLOUD_RUNS_PANEL_CSS =
   }
 
   .sp-runs-card-note {
-    font-size: 11px;
+    font-size: var(--type-caption-size);
     color: var(--agi-ext-text-muted);
     overflow-wrap: anywhere;
   }
@@ -397,7 +397,7 @@ export const CLOUD_RUNS_PANEL_CSS =
   }
 
   .sp-runs-detail-title {
-    font-size: 12px;
+    font-size: var(--type-caption-size);
     font-weight: 500;
     flex: 1;
     min-width: 0;
@@ -413,7 +413,7 @@ export const CLOUD_RUNS_PANEL_CSS =
   }
 
   .sp-run-entry-title {
-    font-size: 12px;
+    font-size: var(--type-caption-size);
     color: var(--agi-ext-text);
   }
 
@@ -422,7 +422,7 @@ export const CLOUD_RUNS_PANEL_CSS =
   }
 
   .sp-run-entry-detail {
-    font-size: 11px;
+    font-size: var(--type-caption-size);
     color: var(--agi-ext-text-muted);
     white-space: pre-wrap;
     word-break: break-word;
