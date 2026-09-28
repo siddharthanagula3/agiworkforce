@@ -850,6 +850,21 @@ impl McpConnection {
     }
 
     /// Discover prompts from the MCP server.
+    pub fn serves_resources(&self) -> bool {
+        self.client.server().capabilities.get("resources").is_some()
+    }
+
+    pub async fn list_resources(&mut self) -> Result<Vec<agiworkforce_mcp::McpResource>> {
+        Ok(self.client.list_resources().await?)
+    }
+
+    pub async fn read_resource(
+        &mut self,
+        uri: &str,
+    ) -> Result<Vec<agiworkforce_mcp::McpResourceContents>> {
+        Ok(self.client.read_resource(uri).await?)
+    }
+
     pub async fn list_prompts(&mut self) -> Result<Vec<McpPrompt>> {
         let response = self
             .client
@@ -1491,6 +1506,58 @@ impl McpManager {
             );
         }
         Ok((tool.server_name.clone(), tool.original_name.clone()))
+    }
+
+    /// Every resource the connected servers allowed in `privacy_mode` list,
+    /// paired with the server that owns it.
+    pub async fn list_resources(
+        &mut self,
+        privacy_mode: crate::agent::PrivacyMode,
+    ) -> Result<Vec<(String, agiworkforce_mcp::McpResource)>> {
+        let mut listed = Vec::new();
+        let names: Vec<String> = self
+            .connections
+            .keys()
+            .filter(|name| self.server_allowed(name, privacy_mode))
+            .cloned()
+            .collect();
+        for name in names {
+            let Some(conn) = self
+                .connections
+                .get_mut(&name)
+                .filter(|conn| conn.serves_resources())
+            else {
+                continue;
+            };
+            let resources = conn
+                .list_resources()
+                .await
+                .with_context(|| format!("[{name}] could not list MCP resources"))?;
+            listed.extend(
+                resources
+                    .into_iter()
+                    .map(|resource| (name.clone(), resource)),
+            );
+        }
+        Ok(listed)
+    }
+
+    pub async fn read_resource(
+        &mut self,
+        server_name: &str,
+        uri: &str,
+        privacy_mode: crate::agent::PrivacyMode,
+    ) -> Result<Vec<agiworkforce_mcp::McpResourceContents>> {
+        if !self.server_allowed(server_name, privacy_mode) {
+            bail!(
+                "MCP server '{server_name}' is remote and unavailable in Local privacy mode; create an explicit BYOK or Managed continuation before reading its resources"
+            );
+        }
+        self.connections
+            .get_mut(server_name)
+            .context(format!("[{server_name}] MCP server not connected"))?
+            .read_resource(uri)
+            .await
     }
 
     /// Execute a namespaced MCP tool call.
