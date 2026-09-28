@@ -99,6 +99,7 @@ Every declared platform tool, and what each policy does with it. The rows are
 | `save_memory`        | asks                   | asks                           | write, reversible                                                                |
 | `search_memory`      | asks                   | runs                           | read, reversible                                                                 |
 | `forget_memory`      | asks                   | asks                           | delete, not reversible                                                           |
+| `search_files`       | asks                   | runs                           | read, reversible, acceptsUntrustedContent                                        |
 
 A connector or MCP tool forces `approvalMode: 'manual'` on the whole turn. An
 undeclared one resolves to `UNKNOWN_TOOL_METADATA`, an irreversible write with

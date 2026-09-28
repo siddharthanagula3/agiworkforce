@@ -336,6 +336,7 @@ import {
   MANAGED_OFFICE_FILE_TOOL_NAME,
 } from '@/lib/services/managed-office-file-service';
 import { searchToolsByKeyword } from '@/lib/connectors/tool-search';
+import { executeFileSearchTool, isFileSearchTool } from '@/lib/server/tools/file-search-tool';
 import { executeMemoryTool, isMemoryTool, memoryToolSource } from '@/lib/server/tools/memory-tools';
 import { executeMapSearchTool, isMapSearchTool } from '@/lib/services/map-search-tool-service';
 import { buildPlacesCard } from '@/lib/places/places-card';
@@ -821,6 +822,7 @@ function canonicalToolCategory(
   if (isPlacesSearchTool(toolName)) return 'web-search';
   if (isClarifyTool(toolName)) return 'other';
   if (isMemoryTool(toolName)) return 'memory';
+  if (isFileSearchTool(toolName)) return 'filesystem';
   if (toolName === 'execute_code') return 'code-execution';
   if (
     toolName === 'write_file' ||
@@ -1930,6 +1932,21 @@ async function runMcpTool(
     return { content: result.content, isError: result.isError };
   }
 
+  if (isFileSearchTool(toolCall.qualifiedName)) {
+    if (!availableTools.has(toolCall.qualifiedName)) {
+      return { content: `Unknown tool: ${toolCall.qualifiedName}`, isError: true };
+    }
+    if (!executionContext?.userId) {
+      return { content: 'A signed-in account is required to search files.', isError: true };
+    }
+    return executeFileSearchTool(toolCall.args, {
+      db: callerScopedDb(executionContext, executionContext.userId),
+      userId: executionContext.userId,
+      organizationId: executionContext.organizationId,
+      temporaryChat: executionContext.temporaryChat === true,
+    });
+  }
+
   if (isMemoryTool(toolCall.qualifiedName)) {
     if (!availableTools.has(toolCall.qualifiedName)) {
       return { content: `Unknown tool: ${toolCall.qualifiedName}`, isError: true };
@@ -2367,6 +2384,7 @@ export function isToolOffered(
     return availableTools.has(MANAGED_OFFICE_FILE_TOOL_NAME);
   }
   if (isMemoryTool(qualifiedName)) return availableTools.has(qualifiedName);
+  if (isFileSearchTool(qualifiedName)) return availableTools.has(qualifiedName);
   if (isDeviceStepTool(qualifiedName)) return availableTools.has(qualifiedName);
   if (
     isExecutionTool(qualifiedName) ||
