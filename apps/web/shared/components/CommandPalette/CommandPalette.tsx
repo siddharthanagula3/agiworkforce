@@ -8,14 +8,19 @@ import {
   ChevronRight,
   CreditCard,
   DollarSign,
+  FileText,
+  FolderOpen,
   ListChecks,
   MessageSquare,
   Monitor,
   Moon,
   Search,
   Settings,
+  Shapes,
   SquarePen,
+  SquareTerminal,
   Sun,
+  Telescope,
   TerminalSquare,
   X,
 } from 'lucide-react';
@@ -60,12 +65,26 @@ export interface CommandOption {
   subtitle?: string;
   group: string;
   icon: React.ElementType;
+  typeLabel?: string;
   hasSubMenu?: boolean;
   subCommands?: CommandOption[];
   action: () => void;
 }
 
 type ActiveSubMenu = 'model' | null;
+
+const SEARCH_RESULT_TYPES: Readonly<
+  Record<SearchResult['type'], { icon: React.ElementType; label: string }>
+> = {
+  session: { icon: MessageSquare, label: 'Chat' },
+  message: { icon: MessageSquare, label: 'Message in a chat' },
+  project: { icon: FolderOpen, label: 'Project' },
+  file: { icon: FileText, label: 'File' },
+  project_knowledge: { icon: FileText, label: 'Project source' },
+  artifact: { icon: Shapes, label: 'Artifact' },
+  research_report: { icon: Telescope, label: 'Research report' },
+  developer_session: { icon: SquareTerminal, label: 'Code session' },
+};
 
 const DEFAULT_COMMAND_PALETTE_MODEL = requireProviderDefaultModel('anthropic');
 const COMMAND_PALETTE_LISTBOX_ID = 'command-palette-listbox';
@@ -87,6 +106,7 @@ function recentConversationCommands(
       subtitle: formatRelativeTime(conversation.updatedAt),
       group: 'Recents',
       icon: conversation.workMode === 'agiwork' ? ListChecks : MessageSquare,
+      typeLabel: conversation.workMode === 'agiwork' ? 'AGI Work' : 'Chat',
       action: () => router.push(`/chat/${encodeURIComponent(conversation.id)}`),
     }));
 }
@@ -338,7 +358,8 @@ export function CommandPalette({ open, onOpenChange }: Props) {
         title: result.sessionTitle || 'Untitled chat',
         subtitle: result.matchedText,
         group: 'Search results',
-        icon: result.type === 'project' ? ListChecks : MessageSquare,
+        icon: SEARCH_RESULT_TYPES[result.type].icon,
+        typeLabel: SEARCH_RESULT_TYPES[result.type].label,
         action: () => router.push(globalSearchResultHref(result)),
       })),
     [router, searchResults],
@@ -515,6 +536,9 @@ export function CommandPalette({ open, onOpenChange }: Props) {
                         />
                         <div className="flex-1 min-w-0">
                           <span className="font-medium">{cmd.title}</span>
+                          {cmd.typeLabel ? (
+                            <span className="sr-only">, {cmd.typeLabel}</span>
+                          ) : null}
                           {cmd.subtitle && (
                             <span className="ml-2 text-xs text-muted-foreground truncate">
                               {cmd.subtitle}
