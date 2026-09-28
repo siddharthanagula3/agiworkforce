@@ -6496,9 +6496,9 @@ function updateSendButton(): void {
   document.getElementById('sp-messages')?.classList.toggle('sp-messages--busy', _ctx.isStreaming);
   const composer = document.getElementById('sp-input') as HTMLTextAreaElement | null;
   if (composer && managedCloudChatState === 'ready') {
-    composer.placeholder = t(
-      _ctx.isStreaming ? 'spComposerPlaceholderQueue' : 'spComposerPlaceholder',
-    );
+    composer.placeholder = _ctx.isStreaming
+      ? t('spComposerPlaceholderQueue')
+      : t('spComposerPlaceholder');
   }
   const btn = document.getElementById('sp-send-btn') as HTMLButtonElement | null;
   if (!btn) return;
@@ -7930,12 +7930,12 @@ function buildUI(): void {
     modelEffortBadge.hidden = state.status !== 'ready';
     modelModeBadge.hidden = _ctx.workMode !== 'agiwork';
     modelSelectorBtn.title = state.description;
+    const menuLabelArgs = [getModelBadgeLabel(_ctx.selectedModel), effortLabel];
     modelSelectorBtn.setAttribute(
       'aria-label',
-      t(_ctx.workMode === 'agiwork' ? 'spModelMenuAriaWork' : 'spModelMenuAria', [
-        getModelBadgeLabel(_ctx.selectedModel),
-        effortLabel,
-      ]),
+      _ctx.workMode === 'agiwork'
+        ? t('spModelMenuAriaWork', menuLabelArgs)
+        : t('spModelMenuAria', menuLabelArgs),
     );
   }
   refreshEffortUI = renderModelTrigger;
@@ -12716,14 +12716,19 @@ function refreshShortcuts(): void {
   );
 }
 
+let workflowAnnouncements = 0;
+
 function announceWorkflowMutation(
   message: string,
   kind: 'info' | 'success' | 'error' = 'info',
-): void {
+): number {
+  workflowAnnouncements += 1;
   const status = document.getElementById('sp-wf-mutation-status');
-  if (!status) return;
-  status.textContent = message;
-  status.setAttribute('data-kind', kind);
+  if (status) {
+    status.textContent = message;
+    status.setAttribute('data-kind', kind);
+  }
+  return workflowAnnouncements;
 }
 
 function refreshWorkflowsShortcuts(): void {
@@ -12871,7 +12876,7 @@ function renderShortcutRows(
       btns.appendChild(editBtn);
     }
     const delBtn = iconButton(
-      { class: 'sp-wf-btn-delete', title: 'Delete' },
+      { class: 'sp-wf-btn-delete', title: t('spShortcutDelete') },
       Trash2,
     ) as HTMLButtonElement;
     let deleteConfirmTimer: ReturnType<typeof setTimeout> | null = null;
@@ -12882,13 +12887,11 @@ function renderShortcutRows(
         const confirmText = command
           ? t('spShortcutDeleteConfirm', [sc.name, command])
           : t('spWorkflowDeleteConfirm', [sc.name]);
-        announceWorkflowMutation(confirmText);
+        const confirmation = announceWorkflowMutation(confirmText);
         deleteConfirmTimer = setTimeout(() => {
           delBtn.classList.remove('is-confirm');
-          delBtn.title = 'Delete';
-          if (document.getElementById('sp-wf-mutation-status')?.textContent === confirmText) {
-            announceWorkflowMutation('');
-          }
+          delBtn.title = t('spShortcutDelete');
+          if (confirmation === workflowAnnouncements) announceWorkflowMutation('');
           deleteConfirmTimer = null;
         }, DRAWER_DELETE_CONFIRM_MS);
         return;
