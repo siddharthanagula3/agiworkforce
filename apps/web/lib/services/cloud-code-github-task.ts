@@ -42,6 +42,9 @@ import { assertWorkspaceCodeAccess } from './organization-policy-code-gate';
 
 export const GITHUB_CODE_TASK_MENTION = '@agi-workforce';
 
+const MENTION = new RegExp(`(^|[^\\w-])${GITHUB_CODE_TASK_MENTION}(?![\\w-])`, 'i');
+const EVERY_MENTION = new RegExp(MENTION.source, 'gi');
+const REQUEST_TEXT = /[\p{L}\p{N}]/u;
 const REVIEW_REQUEST = /^review\b/i;
 const MAX_TASK_LENGTH = 1_000;
 const MAX_DESCRIPTION_LENGTH = 2_500;
@@ -94,12 +97,9 @@ interface TaskInstallation {
 }
 
 export function githubMentionTask(commentBody: string): string | null {
-  const start = commentBody.toLowerCase().indexOf(GITHUB_CODE_TASK_MENTION);
-  if (start < 0) return null;
-  return commentBody
-    .slice(start + GITHUB_CODE_TASK_MENTION.length)
-    .trim()
-    .slice(0, MAX_TASK_LENGTH);
+  if (!MENTION.test(commentBody)) return null;
+  const request = commentBody.replace(EVERY_MENTION, '$1').trim();
+  return REQUEST_TEXT.test(request) ? request.slice(0, MAX_TASK_LENGTH) : '';
 }
 
 export function isGitHubReviewRequest(task: string): boolean {
