@@ -1,4 +1,9 @@
-import { isResearchStep, type ResearchStep } from '@agiworkforce/types';
+import {
+  isResearchGap,
+  isResearchStep,
+  type ResearchGap,
+  type ResearchStep,
+} from '@agiworkforce/types';
 import type { StreamDelta } from '@/services/streaming';
 import type { ToolSearchResult } from '@/types/chat';
 
@@ -35,6 +40,7 @@ export interface ResearchRunState {
   startedAt?: string;
   error?: string;
   steps?: ResearchStep[];
+  gaps?: ResearchGap[];
   sourcesForRetry?: ToolSearchResult[];
 }
 
@@ -52,6 +58,7 @@ export const RESEARCH_PHASE_LABELS: Record<ResearchPhase, string> = {
 const MAX_RETRY_SOURCES = 100;
 const MAX_PLAN_STEPS = 50;
 const MAX_STEP_NOTE_CHARS = 300;
+const MAX_RESEARCH_GAPS = 50;
 
 function readCount(source: Record<string, unknown>, key: string): number | undefined {
   const value = source[key];
@@ -127,6 +134,14 @@ export function parseResearchPlanSteps(payload: unknown): ResearchStep[] | null 
   return steps.length > 0 ? steps : null;
 }
 
+export function parseResearchGaps(payload: unknown): ResearchGap[] | null {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null;
+  const rawGaps = (payload as { gaps?: unknown }).gaps;
+  if (!Array.isArray(rawGaps)) return null;
+  const gaps = rawGaps.filter(isResearchGap).slice(0, MAX_RESEARCH_GAPS);
+  return gaps.length > 0 ? gaps : null;
+}
+
 export function parseResearchSearchSources(payload: unknown): ToolSearchResult[] {
   if (!payload || typeof payload !== 'object') return [];
   const content = (payload as { content?: unknown }).content;
@@ -166,6 +181,7 @@ export function reduceResearchDelta(
   const wire = delta as {
     x_research_status?: unknown;
     x_research_plan?: unknown;
+    x_research_gaps?: unknown;
     x_search_results?: unknown;
   };
 
@@ -174,6 +190,11 @@ export function reduceResearchDelta(
   const steps = parseResearchPlanSteps(wire.x_research_plan);
   if (steps) {
     next = { ...(next ?? { phase: 'planning', startedAt: nowIso }), steps };
+  }
+
+  const gaps = parseResearchGaps(wire.x_research_gaps);
+  if (next && gaps) {
+    next = { ...next, gaps };
   }
 
   if (next && wire.x_search_results !== undefined) {

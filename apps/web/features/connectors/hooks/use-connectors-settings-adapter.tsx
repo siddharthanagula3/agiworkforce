@@ -54,6 +54,7 @@ import {
   CONNECTOR_REAUTHORIZATION_COPY,
   useDirectoryAdapter,
 } from '@/features/directory';
+import { announceBankConnected } from '@features/finance/lib/announce-bank-connected';
 
 export const CONNECTOR_DETAIL_FOOTER_TESTID = 'connector-detail-footer';
 
@@ -653,6 +654,7 @@ export function useConnectorsSettingsAdapter({
               ...prev.filter((c) => c.connectorId !== id),
               { connectorId: id, connectedAt },
             ]);
+            announceBankConnected();
           }
           return;
         }

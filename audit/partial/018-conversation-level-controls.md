@@ -75,18 +75,6 @@ nothing is left.
 
 Code: `apps/mobile/src/features/chat/components/TaskChips.tsx:34-36`, `apps/mobile/src/features/chat/components/Composer/Composer.tsx:81-81`
 
-## S18.10: Change privacy mode through an explicit flow.
-
-- Done when: The user switches a conversation's privacy mode (e.g. temporary/incognito, local-only) through an explicit flow that explains the consequence.
-- Wave: 3
-- Already works on: web, desktop, cli, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | TemporaryChatToggle flips the global settingsStore.isTemporaryChat flag (TemporaryChatToggle.tsx:10-15, settingsStore.ts:66) and shows only an EyeOff icon plus the word 'Temporary' when on (36-52); the consequence ('Memory will not be saved from this chat') exists only as an accessibilityHint, so sighted users get no explanation and there is no confirmation or flow. Real effect: chatExecutionStore reads the flag per turn (1368-1402). |  |
-
-Code: `apps/mobile/src/features/chat/components/TemporaryChatToggle.tsx:11-31`, `apps/mobile/src/features/chat/components/TemporaryChatToggle.tsx:11-14`, `apps/mobile/app/(app)/(tabs)/chat.tsx:805-805`
-
 ## S18.11: Conversation search.
 
 - Done when: The user can search within the open conversation's messages.
