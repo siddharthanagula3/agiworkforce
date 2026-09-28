@@ -25,6 +25,8 @@ describe('buildRemoteMcpConnectorEntry', () => {
       headersJson: '{"X-Workspace":"engineering"}',
       timeoutSecs: 45,
       verifySsl: true,
+      oauthClientId: '',
+      oauthClientSecret: '',
     });
 
     expect(entry.serverName).toBe('custom-acme-data-mcp');
@@ -56,6 +58,8 @@ describe('buildRemoteMcpConnectorEntry', () => {
         headersJson: '',
         timeoutSecs: 30,
         verifySsl: true,
+        oauthClientId: '',
+        oauthClientSecret: '',
       }),
     ).toThrow('Remote MCP URL must start with http:// or https://');
   });
@@ -69,6 +73,8 @@ describe('buildRemoteMcpConnectorEntry', () => {
         headersJson: '{"X-Workspace":42}',
         timeoutSecs: 30,
         verifySsl: true,
+        oauthClientId: '',
+        oauthClientSecret: '',
       }),
     ).toThrow('Header "X-Workspace" must be a string');
   });
