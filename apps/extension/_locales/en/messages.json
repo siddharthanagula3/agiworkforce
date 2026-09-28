@@ -2700,5 +2700,255 @@
         "example": "execution_time_exceeded"
       }
     }
+  },
+  "spPersonalizationTitle": {
+    "message": "Personalization",
+    "description": "Drawer section title for the account personalization settings"
+  },
+  "spPersonalizationHelp": {
+    "message": "Your name, background, response style and custom instructions shape side-panel chats too. They are kept in your account settings.",
+    "description": "Explains that side-panel chats follow the account personalization settings"
+  },
+  "spPersonalizationOpen": {
+    "message": "Open personalization settings",
+    "description": "Button that opens the account personalization settings on the web"
+  },
+  "spMemoryScopePersonal": {
+    "message": "Showing your personal memory. Memory saved in a workspace stays in that workspace.",
+    "description": "Which memory the drawer lists when no workspace is active"
+  },
+  "spMemoryScopeWorkspace": {
+    "message": "Showing the memory for the $WORKSPACE$ workspace. Your personal memory is kept apart.",
+    "description": "Which memory the drawer lists when a workspace is active",
+    "placeholders": {
+      "workspace": {
+        "content": "$1",
+        "example": "Acme"
+      }
+    }
+  },
+  "spMemoryShowMore": {
+    "message": "Show more",
+    "description": "Button that loads the next page of saved memories"
+  },
+  "spMemoryShowing_one": {
+    "message": "$COUNT$ memory shown",
+    "description": "How many saved memories the drawer lists, one plural form",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "spMemoryShowing_other": {
+    "message": "$COUNT$ memories shown",
+    "description": "How many saved memories the drawer lists, every other plural form",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "12"
+      }
+    }
+  },
+  "spMemoryShowingMore_one": {
+    "message": "$COUNT$ memory shown, more are saved",
+    "description": "How many saved memories the drawer lists when more remain, one plural form",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "spMemoryShowingMore_other": {
+    "message": "$COUNT$ memories shown, more are saved",
+    "description": "How many saved memories the drawer lists when more remain, every other plural form",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "100"
+      }
+    }
+  },
+  "spMemoryOriginLearnedFromTitled": {
+    "message": "Learned from “$TITLE$”",
+    "description": "Provenance of a memory learned from a named conversation",
+    "placeholders": {
+      "title": {
+        "content": "$1",
+        "example": "Trip planning"
+      }
+    }
+  },
+  "spMemoryOriginLearnedFromChat": {
+    "message": "Learned from a chat",
+    "description": "Provenance of a memory learned from a conversation"
+  },
+  "spMemoryOriginImported": {
+    "message": "Imported",
+    "description": "Provenance of an imported memory"
+  },
+  "spMemoryOriginAdded": {
+    "message": "Added by you",
+    "description": "Provenance of a memory the user typed"
+  },
+  "spMemoryNeverRememberTitle": {
+    "message": "Never remember",
+    "description": "Title of the list of terms memory never saves"
+  },
+  "spMemoryNeverRememberHelp": {
+    "message": "New memories containing any of these terms are discarded before they are saved, on every device. Matching ignores case. This applies to new memories only, and anything already saved stays until you delete it.",
+    "description": "Explains the never remember list"
+  },
+  "spMemoryNeverRememberPlaceholder": {
+    "message": "e.g. my home address",
+    "description": "Example term for the never remember list"
+  },
+  "spMemoryNeverRememberInputLabel": {
+    "message": "Term to never remember",
+    "description": "Accessible name of the never remember input"
+  },
+  "spMemoryNeverRememberAdd": {
+    "message": "Add",
+    "description": "Button that adds a term to the never remember list"
+  },
+  "spMemoryNeverRememberRemove": {
+    "message": "Remove $TERM$",
+    "description": "Accessible name of the button that removes a never remember term",
+    "placeholders": {
+      "term": {
+        "content": "$1",
+        "example": "home address"
+      }
+    }
+  },
+  "spMemoryNeverRememberEmpty": {
+    "message": "No terms yet. Memory keeps anything you ask it to.",
+    "description": "Empty never remember list"
+  },
+  "spMemoryNeverRememberTooShort": {
+    "message": "Enter at least $COUNT$ characters, shorter terms match almost anything.",
+    "description": "A never remember term that is too short",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "3"
+      }
+    }
+  },
+  "spMemoryNeverRememberFull": {
+    "message": "You can store up to $COUNT$ terms.",
+    "description": "The never remember list is full",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "50"
+      }
+    }
+  },
+  "spMemoryNeverRememberSaveFailed": {
+    "message": "Could not save the never remember list. Try again.",
+    "description": "Saving the never remember list failed"
+  },
+  "spMemoryNeverRememberLoadFailed": {
+    "message": "Could not load the never remember list.",
+    "description": "Loading the never remember list failed"
+  },
+  "spMemorySignedOut": {
+    "message": "Sign in to your AGI account to change memory.",
+    "description": "Memory settings need a signed-in account"
+  },
+  "spMemoryConflictsTitle": {
+    "message": "When memories disagree",
+    "description": "Title of the replaced memories list"
+  },
+  "spMemoryConflictsRule": {
+    "message": "When two memories disagree, a pinned memory wins, then one you added over one learned from a chat, then the newer one. The replaced one is kept here so you can switch back.",
+    "description": "The rule that decides which of two conflicting memories is used"
+  },
+  "spMemoryConflictsListLabel": {
+    "message": "Replaced memories",
+    "description": "Accessible name of the replaced memories list"
+  },
+  "spMemoryConflictsEmpty": {
+    "message": "No memory has replaced another.",
+    "description": "Empty replaced memories list"
+  },
+  "spMemoryConflictUsing": {
+    "message": "Using: $MEMORY$",
+    "description": "The memory that won a conflict",
+    "placeholders": {
+      "memory": {
+        "content": "$1",
+        "example": "Prefers aisle seats"
+      }
+    }
+  },
+  "spMemoryConflictReplaced": {
+    "message": "Replaced: $MEMORY$",
+    "description": "The memory that lost a conflict",
+    "placeholders": {
+      "memory": {
+        "content": "$1",
+        "example": "Prefers window seats"
+      }
+    }
+  },
+  "spMemoryConflictRestore": {
+    "message": "Use the replaced one instead",
+    "description": "Button that switches back to the replaced memory"
+  },
+  "spMemoryConflictRestoreFailed": {
+    "message": "Could not switch back to that memory. Try again.",
+    "description": "Switching back to a replaced memory failed"
+  },
+  "spMemoryConflictsLoadFailed": {
+    "message": "Could not load replaced memories. Try again later.",
+    "description": "Loading replaced memories failed"
+  },
+  "spMemoryForgetPrompt_one": {
+    "message": "Forget $LIST$? Chats stop using it, and it cannot be restored.",
+    "description": "Asks before forgetting one memory the user asked to forget, one plural form",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
+      },
+      "list": {
+        "content": "$2",
+        "example": "“Lives in Austin”"
+      }
+    }
+  },
+  "spMemoryForgetPrompt_other": {
+    "message": "Forget $COUNT$ memories, $LIST$? Chats stop using them, and they cannot be restored.",
+    "description": "Asks before forgetting several memories the user asked to forget, every other plural form",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "2"
+      },
+      "list": {
+        "content": "$2",
+        "example": "“Lives in Austin” “Works at Acme”"
+      }
+    }
+  },
+  "spMemoryForgetConfirm": {
+    "message": "Forget",
+    "description": "Button that confirms forgetting the listed memories"
+  },
+  "spMemoryForgetKeep": {
+    "message": "Keep",
+    "description": "Button that keeps the listed memories"
+  },
+  "spMemoryNoticeDismiss": {
+    "message": "Dismiss",
+    "description": "Accessible name of the button that closes the memory notice"
+  },
+  "spMemoryCommandUnavailable": {
+    "message": "Memory did not answer, so nothing was changed.",
+    "description": "A remember or forget request could not reach memory"
   }
 }

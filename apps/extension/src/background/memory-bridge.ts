@@ -22,6 +22,7 @@ export interface MemoryListResult {
   status: MemoryStatus;
   memories: MemoryItem[];
   fromCache: boolean;
+  hasMore?: boolean;
   error?: string;
 }
 
@@ -123,7 +124,7 @@ function failureMessage(error: unknown): string {
   return 'Memory could not be reached. Check your connection and try again.';
 }
 
-export async function memoryList(): Promise<MemoryListResult> {
+export async function memoryList(offset = 0): Promise<MemoryListResult> {
   const auth = await getManagedCloudAuthContext();
   if (!auth) {
     await clearCache();
@@ -131,10 +132,14 @@ export async function memoryList(): Promise<MemoryListResult> {
   }
 
   try {
+    if (offset > 0) {
+      const page = await fetchAccountMemories(auth.token, offset);
+      return { status: 'ready', memories: page.memories, fromCache: false, hasMore: page.hasMore };
+    }
     await migrateLegacyMemories(auth.token);
-    const items = await fetchAccountMemories(auth.token);
-    await writeCache(auth.owner, items);
-    return { status: 'ready', memories: items, fromCache: false };
+    const page = await fetchAccountMemories(auth.token);
+    await writeCache(auth.owner, page.memories);
+    return { status: 'ready', memories: page.memories, fromCache: false, hasMore: page.hasMore };
   } catch (error) {
     if (error instanceof AccountMemoryHttpError && error.status === 401) {
       await clearCache();
