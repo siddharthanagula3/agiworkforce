@@ -4022,7 +4022,10 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 app.session.total_output_tokens,
                 app.context_percent(),
             );
-            SlashResult::SystemMessage(msg)
+            SlashResult::SystemMessage(format!(
+                "{msg}\n{}",
+                app.session.session_status_lines().join("\n")
+            ))
         }
 
         "/context" | "/ctx" => SlashResult::SystemMessage(
