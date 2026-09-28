@@ -21,7 +21,7 @@ import {
 
 const HEADING = 'Computer use';
 const HEADING_HINT =
-  'Let AGI see your screen and use the mouse and keyboard on this computer when you ask it to.';
+  'Let AGI see your screen and use the mouse and keyboard on this computer when you ask it to. It asks before it controls each app, and your answers are listed under Permissions.';
 const TOGGLE_LABEL = 'Computer use';
 const OPEN_SETTINGS_LABEL = 'Open System Settings';
 const STOP_LABEL = 'Stop';

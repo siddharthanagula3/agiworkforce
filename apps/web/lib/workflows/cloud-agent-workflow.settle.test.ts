@@ -380,6 +380,23 @@ describe('durable cloud agent workflow settlement', () => {
     });
   });
 
+  it('records how the attempt ended, and nothing for a turn that only paused', async () => {
+    await settleWorkflowInvocation(makeInput(), 'failed', undefined, 'provider_rate_limited');
+    expect(mocks.finalize).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        attempt: { outcome: 'failed', errorClass: 'provider_rate_limited' },
+      }),
+    );
+
+    await settleWorkflowInvocation(makeInput(), 'cancelled');
+    expect(mocks.finalize).toHaveBeenLastCalledWith(
+      expect.objectContaining({ attempt: { outcome: 'cancelled', errorClass: undefined } }),
+    );
+
+    await settleWorkflowInvocation(makeInput(), 'awaiting_input');
+    expect(mocks.finalize).toHaveBeenLastCalledWith(expect.objectContaining({ attempt: null }));
+  });
+
   it('prices a run that was cancelled before any provider call at zero', async () => {
     mocks.usage.mockResolvedValue({
       providerCalls: 0,

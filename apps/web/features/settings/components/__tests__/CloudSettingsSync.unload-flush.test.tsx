@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useSettingsStore } from '@shared/stores/web-settings-store';
 
-const session = { isLoaded: true, isSignedIn: true };
+const session = { isLoaded: true, isSignedIn: true, userId: 'user-1' };
 const themeState = { theme: 'system', setTheme: vi.fn() };
 const preferences = {
   fetchStoredPreferenceNamespace: vi.fn(async (namespace: string) =>
@@ -16,6 +16,8 @@ const preferences = {
           motion: 'system',
           highContrast: false,
           codeBlockWrap: false,
+          followUpSuggestions: true,
+          followUpBehavior: 'queue',
           dictationEnabled: true,
           voiceSpeed: 'normal',
           hiddenNavIds: [],
@@ -80,6 +82,8 @@ beforeEach(() => {
     motion: 'system',
     highContrast: false,
     codeBlockWrap: false,
+    followUpSuggestionsEnabled: true,
+    followUpBehavior: 'queue',
     dictationEnabled: true,
     voiceSpeed: 'normal',
     hiddenNavIds: [],

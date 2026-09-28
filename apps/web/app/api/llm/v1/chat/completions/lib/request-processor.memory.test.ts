@@ -337,10 +337,11 @@ describe('applyMemoryToolCapability', () => {
       .filter((name) => MEMORY_TOOLS.includes(name));
   }
 
-  it('offers the memory tools only on the apps, only with Memory on and never in a temporary chat', () => {
+  it('offers the memory tools only on the apps and the Chrome extension, only with Memory on and never in a temporary chat', () => {
     expect(offeredMemoryTools()).toEqual(MEMORY_TOOLS);
     expect(offeredMemoryTools({ surface: 'desktop' })).toEqual(MEMORY_TOOLS);
     expect(offeredMemoryTools({ surface: 'mobile' })).toEqual(MEMORY_TOOLS);
+    expect(offeredMemoryTools({ surface: 'chrome' })).toEqual(MEMORY_TOOLS);
     expect(offeredMemoryTools({ surface: 'api' })).toEqual([]);
     expect(offeredMemoryTools({ memoryEnabled: false })).toEqual([]);
     expect(offeredMemoryTools({ isTemporary: true })).toEqual([]);

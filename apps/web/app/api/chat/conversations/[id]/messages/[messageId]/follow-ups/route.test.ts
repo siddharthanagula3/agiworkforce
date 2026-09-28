@@ -93,13 +93,17 @@ describe('follow-ups route', () => {
     expect(mocks.generate).toHaveBeenCalledTimes(1);
   });
 
-  it('generates nothing for a turn that did not search', async () => {
+  it('generates for a turn that did not search, from the answer alone', async () => {
     respondWith({});
 
     const response = await POST(request(), context());
 
-    expect(await response.json()).toEqual({ suggestions: [], cached: false });
-    expect(mocks.generate).not.toHaveBeenCalled();
+    expect(await response.json()).toEqual({
+      suggestions: ['What changed?', 'Who makes it?', 'Is it repairable?'],
+      cached: false,
+    });
+    expect(mocks.generate).toHaveBeenCalledTimes(1);
+    expect(mocks.generate.mock.calls[0]?.[0]).toMatchObject({ sourceTitles: [] });
   });
 
   it('serves a cached set without a second generation', async () => {

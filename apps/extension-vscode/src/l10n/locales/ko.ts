@@ -305,6 +305,50 @@ const ko = {
   'sessionSync.takeOverFailed': '이 세션을 넘겨받지 못했습니다. 다시 보내서 재시도하세요.',
   'sessionSync.stopBeforeTerminal':
     '터미널에서 이 세션을 계속하기 전에 실행 중인 응답을 중지하세요.',
+  'remote.title': '원격 제어',
+  'remote.intro':
+    '휴대폰을 페어링하면 이 창의 폴더에 있는 AGI 세션을 따라갈 수 있습니다. 단계를 승인하고, diff와 테스트 결과, 새 파일을 확인하고, 다음 턴을 이끌 수 있습니다.',
+  'remote.howToPair':
+    '휴대폰에서 AGI Workforce 앱을 열고 "Pair with Desktop"을 선택한 다음 이 코드를 스캔하세요. 코드는 한 번만 작동하며 몇 분 후 만료됩니다.',
+  'remote.qrLabel': '페어링 QR 코드',
+  'remote.pairingCode': '페어링 코드',
+  'remote.copyLink': '페어링 링크 복사',
+  'remote.linkCopied':
+    'AGI Workforce: 페어링 링크를 복사했습니다. 휴대폰의 AGI Workforce 앱에 붙여 넣으세요.',
+  'remote.noPairing':
+    'AGI Workforce: 대기 중인 페어링이 없습니다. 새 코드를 받으려면 원격 제어를 시작하세요.',
+  'remote.connected': '{phone}에 연결되었습니다.',
+  'remote.yourPhone': '휴대폰',
+  'remote.reconnecting':
+    '연결이 끊겼습니다. 휴대폰이 멈춘 곳에서 이어갈 수 있도록 다시 연결하는 중입니다.',
+  'remote.pair': '휴대폰 페어링',
+  'remote.pairAgain': '다시 페어링',
+  'remote.cancelPairing': '페어링 취소',
+  'remote.disconnect': '휴대폰 연결 해제',
+  'remote.stop': '원격 제어 중지',
+  'remote.disconnectTitle': '{phone} 연결을 해제할까요?',
+  'remote.disconnectConsequence':
+    '휴대폰이 이 창에서 연결 해제되어 더 이상 세션을 따라가거나 이끌 수 없습니다. 다시 연결하려면 새 코드로 페어링하세요.',
+  'remote.starting': '원격 제어를 시작하는 중',
+  'remote.startFailed': 'AGI Workforce: 원격 제어를 시작하지 못했습니다. {reason}',
+  'remote.pairFailed': '페어링을 시작하지 못했습니다.',
+  'remote.signInFirst':
+    'AGI Workforce: 먼저 로그인하세요. 원격 제어는 계정을 통해 휴대폰을 페어링합니다.',
+  'remote.trustFirst':
+    'AGI Workforce: 휴대폰이 이 작업 영역에서 세션을 실행하기 전에 작업 영역을 신뢰하세요.',
+  'remote.openFolderFirst':
+    'AGI Workforce: 먼저 폴더를 여세요. 원격 제어는 이 창의 폴더에서 세션을 실행합니다.',
+  'remote.folderClosed': '해당 폴더가 더 이상 이 창에 열려 있지 않습니다.',
+  'remote.runtimeUnavailable': 'AGI CLI가 이 폴더의 세션 목록을 가져오지 못했습니다.',
+  'remote.runtimeHint':
+    'AGI CLI가 설치되어 있고 로그인되어 있는지 확인한 다음 휴대폰에서 목록을 새로 고치세요.',
+  'remote.deviceName': '{host} (VS Code)',
+  'remote.statusWaiting': '원격 제어: 휴대폰 대기 중',
+  'remote.statusConnected': '원격 제어: {phone}',
+  'remote.statusReconnecting': '원격 제어: 다시 연결하는 중',
+  'remote.statusError': '원격 제어: 중지됨',
+  'remote.statusTooltip': '원격 제어 표시',
+  'remote.attached_other': '휴대폰에서 세션 {count}개가 열려 있습니다.',
 };
 
 export default ko;

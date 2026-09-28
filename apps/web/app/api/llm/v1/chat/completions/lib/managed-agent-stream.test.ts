@@ -114,7 +114,7 @@ import {
   observedProviderUsageLedgerMicrousd,
 } from '@/lib/services/managed-usage-accounting-service';
 import { nativeServerToolMicrousdPerRequest } from '@/lib/web-search/native-search-pricing';
-import { buildManagedAgentStream } from './managed-agent-stream';
+import { buildManagedAgentStream, managedAgentReportedFailureCode } from './managed-agent-stream';
 import type { ProcessedRequest } from './request-processor';
 import { INTERACTIVE_CARDS_MAX_PER_MESSAGE, AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
 
@@ -320,7 +320,11 @@ describe('managed agent stream', () => {
     await reader.cancel();
 
     expect(finalize).toHaveBeenCalledWith(
-      expect.objectContaining({ reason: 'client_cancelled_research', cancelled: true }),
+      expect.objectContaining({
+        reason: 'client_cancelled_research',
+        cancelled: true,
+        attempt: { outcome: 'cancelled' },
+      }),
     );
   });
 
@@ -342,8 +346,26 @@ describe('managed agent stream', () => {
       expect.objectContaining({
         reason: 'tool_loop_completed_reported_failure',
         cancelled: true,
+        attempt: { outcome: 'failed', errorClass: undefined },
       }),
     );
+  });
+
+  it('reads the error code a reported failure carries', () => {
+    const encoder = new TextEncoder();
+    expect(
+      managedAgentReportedFailureCode(
+        encoder.encode(
+          'data: {"choices":[{"delta":{"x_stream_error":{"message":"slow down","code":"provider_rate_limited"}}}]}\n\n',
+        ),
+      ),
+    ).toBe('provider_rate_limited');
+    expect(
+      managedAgentReportedFailureCode(
+        encoder.encode('data: {"choices":[{"delta":{"x_stream_error":{"message":"failed"}}}]}\n\n'),
+      ),
+    ).toBeUndefined();
+    expect(managedAgentReportedFailureCode(encoder.encode('data: [DONE]\n\n'))).toBeUndefined();
   });
 
   it('leaves the delivery marker alone on a released turn the provider rejected', async () => {

@@ -612,6 +612,51 @@ const ar = {
   'sessionSync.notSent': 'لم تُرسل: يستخدم {client} هذه الجلسة. أرسل مرة أخرى لتتولاها من هنا.',
   'sessionSync.takeOverFailed': 'تعذر تولي هذه الجلسة. أرسل مرة أخرى لإعادة المحاولة.',
   'sessionSync.stopBeforeTerminal': 'أوقف الرد الجاري قبل متابعة هذه الجلسة في الطرفية.',
+  'remote.title': 'التحكم عن بُعد',
+  'remote.intro':
+    'اقرن هاتفك لمتابعة جلسات AGI في مجلدات هذه النافذة: وافق على الخطوات، واقرأ الفروقات ونتائج الاختبارات والملفات الجديدة، ووجّه الدور التالي.',
+  'remote.howToPair':
+    'افتح تطبيق AGI Workforce على هاتفك، واختر "Pair with Desktop"، ثم امسح هذا الرمز. يعمل الرمز مرة واحدة وتنتهي صلاحيته خلال بضع دقائق.',
+  'remote.qrLabel': 'رمز QR للاقتران',
+  'remote.pairingCode': 'رمز الاقتران',
+  'remote.copyLink': 'نسخ رابط الاقتران',
+  'remote.linkCopied':
+    'AGI Workforce: تم نسخ رابط الاقتران. الصقه في تطبيق AGI Workforce على هاتفك.',
+  'remote.noPairing':
+    'AGI Workforce: لا يوجد اقتران قيد الانتظار. ابدأ التحكم عن بُعد للحصول على رمز جديد.',
+  'remote.connected': 'متصل: {phone}.',
+  'remote.yourPhone': 'هاتفك',
+  'remote.reconnecting': 'انقطع الاتصال. تجري إعادة الاتصال ليكمل هاتفك من حيث توقف.',
+  'remote.pair': 'اقتران هاتف',
+  'remote.pairAgain': 'الاقتران مرة أخرى',
+  'remote.cancelPairing': 'إلغاء الاقتران',
+  'remote.disconnect': 'فصل الهاتف',
+  'remote.stop': 'إيقاف التحكم عن بُعد',
+  'remote.disconnectTitle': 'هل تريد فصل {phone}؟',
+  'remote.disconnectConsequence':
+    'يُفصل الهاتف عن هذه النافذة ولا يعود بإمكانه متابعة جلساتها أو توجيهها. لتوصيله مرة أخرى، اقرنه برمز جديد.',
+  'remote.starting': 'جارٍ بدء التحكم عن بُعد',
+  'remote.startFailed': 'AGI Workforce: تعذر بدء التحكم عن بُعد. {reason}',
+  'remote.pairFailed': 'تعذر بدء الاقتران.',
+  'remote.signInFirst': 'AGI Workforce: سجّل الدخول أولًا. يقرن التحكم عن بُعد هاتفك عبر حسابك.',
+  'remote.trustFirst': 'AGI Workforce: ثق بمساحة العمل هذه قبل أن يتمكن هاتف من تشغيل جلسات فيها.',
+  'remote.openFolderFirst':
+    'AGI Workforce: افتح مجلدًا أولًا. يشغّل التحكم عن بُعد الجلسات في مجلدات هذه النافذة.',
+  'remote.folderClosed': 'لم يعد هذا المجلد مفتوحًا في هذه النافذة.',
+  'remote.runtimeUnavailable': 'تعذر على AGI CLI عرض الجلسات في هذا المجلد.',
+  'remote.runtimeHint': 'تحقق من تثبيت AGI CLI وتسجيل الدخول فيه، ثم حدّث القائمة على هاتفك.',
+  'remote.deviceName': '{host} (VS Code)',
+  'remote.statusWaiting': 'التحكم عن بُعد: في انتظار هاتفك',
+  'remote.statusConnected': 'التحكم عن بُعد: {phone}',
+  'remote.statusReconnecting': 'التحكم عن بُعد: إعادة الاتصال',
+  'remote.statusError': 'التحكم عن بُعد: متوقف',
+  'remote.statusTooltip': 'إظهار التحكم عن بُعد',
+  'remote.attached_zero': 'لا توجد جلسات مفتوحة على الهاتف.',
+  'remote.attached_one': 'جلسة واحدة مفتوحة على الهاتف.',
+  'remote.attached_two': 'جلستان مفتوحتان على الهاتف.',
+  'remote.attached_few': '{count} جلسات مفتوحة على الهاتف.',
+  'remote.attached_many': '{count} جلسة مفتوحة على الهاتف.',
+  'remote.attached_other': '{count} جلسة مفتوحة على الهاتف.',
 };
 
 export default ar;

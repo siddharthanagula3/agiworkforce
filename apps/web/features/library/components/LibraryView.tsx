@@ -34,6 +34,10 @@ export { iconKindFor, generatedFileFromLibraryItem } from '@agiworkforce/unified
 
 const PROJECTS_PATH = '/chat/projects';
 const PROJECT_LIST_ENDPOINT = '/api/projects';
+const MEDIA_JOBS_ENDPOINT = '/api/media/jobs';
+const IMAGE_CANCEL_ENDPOINT = '/api/media/image/cancel';
+const IMAGE_RETRY_ENDPOINT = '/api/media/image/retry';
+const VIDEO_CANCEL_ENDPOINT = '/api/media/video/cancel';
 
 function publishableArtifactShape(item: LibraryItem): { type: string; language?: string } {
   const type = artifactTypeForLibraryItem(item);
@@ -218,6 +222,29 @@ export function LibraryView() {
         toast.success(`Added to ${folder.name}`);
       },
       shareArtifact: shareLibraryArtifact,
+      mediaJobs: {
+        listMediaJobs: () => fetch(MEDIA_JOBS_ENDPOINT, { credentials: 'same-origin' }),
+        cancelMediaJob: async (job) => {
+          const csrf = await getCsrfToken();
+          return fetch(job.kind === 'video' ? VIDEO_CANCEL_ENDPOINT : IMAGE_CANCEL_ENDPOINT, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrf },
+            body: JSON.stringify(job.kind === 'video' ? { task_id: job.id } : { job_id: job.id }),
+          });
+        },
+        retryMediaJob: async (job) => {
+          const csrf = await getCsrfToken();
+          return fetch(IMAGE_RETRY_ENDPOINT, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrf },
+            body: JSON.stringify({ job_id: job.id }),
+          });
+        },
+        openConversation: (conversationId) =>
+          router.push(`/chat/${encodeURIComponent(conversationId)}`),
+      },
       // 'excel' is deliberately absent: the export service builds PDF and DOCX
       // and there is no xlsx writer on web, so offering it would be a control
       // that fails after the user picks it.
