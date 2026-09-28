@@ -25,7 +25,9 @@ import {
   type DirectoryMarketplaceInput,
   type DirectoryOpenEntry,
   type DirectoryMarketplaceResult,
+  type DirectoryPluginDetail,
   type DirectoryPluginDraft,
+  type DirectoryPluginRepair,
   type DirectoryPluginSettings,
   type DirectoryQuery,
   type DirectoryUploadResult,
@@ -81,6 +83,18 @@ import {
   SKILLS_PATH,
   SKILL_UPLOAD_FAILED_COPY,
   UPLOAD_FILE_FIELD,
+  PLUGIN_REPAIR_CONNECT_LABEL,
+  PLUGIN_REPAIR_CONNECTOR_COPY,
+  PLUGIN_REPAIR_CONNECTOR_ID_PREFIX,
+  PLUGIN_REPAIR_MISSING_SKILLS_COPY,
+  PLUGIN_REPAIR_RELOAD_ID,
+  PLUGIN_REPAIR_RELOAD_LABEL,
+  PLUGIN_UPDATE_FAILED_COPY,
+  PLUGIN_CUSTOMIZE_FAILED_COPY,
+  PLUGIN_CUSTOMIZE_PATH,
+  PLUGIN_EDIT_FAILED_COPY,
+  PLUGIN_EDIT_LOAD_FAILED_COPY,
+  EDIT_PLUGIN_DONE_TITLE,
   UPLOAD_PLUGIN_DONE_TITLE,
   UPLOAD_SKILL_DONE_TITLE,
   uploadOmittedFilesLine,
@@ -125,8 +139,11 @@ import {
   DEFAULT_PLUGIN_QUERY,
   EMPTY_INSTALL_STATE,
   EMPTY_USER_MARKETPLACES,
+  applyPluginVersion,
   facetRequest,
   fetchPluginDirectoryEntry,
+  fetchPluginScan,
+  fetchPluginVersions,
   fetchPluginDirectoryPage,
   fetchPluginInstallState,
   fetchUserMarketplaces,
@@ -178,6 +195,7 @@ const SKILL_CREATE_ACTION_ID = 'create-skill';
 const SKILL_COMPOSE_ACTION_ID = 'compose-skill';
 const EMPTY_SKILL_NAMES: readonly string[] = [];
 const EMPTY_SKILL_DESCRIPTIONS: ReadonlyMap<string, string> = new Map();
+const EMPTY_SKILL_INDEX: ReadonlyMap<string, ManagedSkillSummary> = new Map();
 const EMPTY_CATALOG: readonly ManagedSkillSummary[] = [];
 const SECTIONS: readonly DirectorySectionKey[] = ['skills', 'connectors', 'plugins'];
 const DEFAULT_CONNECT_AUTH_TYPE = 'oauth2';
@@ -358,6 +376,12 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
   const [settingsSkills, setSettingsSkills] = useState<readonly string[]>(EMPTY_SKILL_NAMES);
   const [skillDescriptions, setSkillDescriptions] =
     useState<ReadonlyMap<string, string>>(EMPTY_SKILL_DESCRIPTIONS);
+  const [skillIndex, setSkillIndex] =
+    useState<ReadonlyMap<string, ManagedSkillSummary>>(EMPTY_SKILL_INDEX);
+  const publishSkillCatalog = useCallback((catalog: readonly ManagedSkillSummary[]) => {
+    setSkillDescriptions(skillDescriptionsByName(catalog));
+    setSkillIndex(new Map(catalog.map((skill) => [skill.name, skill])));
+  }, []);
   const [settingsEnabled, setSettingsEnabled] = useState(true);
   const pluginSettingsState = usePluginsSettingsAdapter(settingsTarget, settingsEnabled);
 
@@ -375,7 +399,7 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       ]);
       skillCache.current = catalog;
       installedSkills.current = installed;
-      setSkillDescriptions(skillDescriptionsByName(catalog));
+      publishSkillCatalog(catalog);
       setSkills({
         ...toSkillSection(catalog, installed),
         manage: {
@@ -403,7 +427,7 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
         retry: loadSkills,
       }));
     }
-  }, [createSkillLabel]);
+  }, [createSkillLabel, publishSkillCatalog]);
 
   useEffect(() => {
     setSkills((prev) =>
@@ -819,7 +843,7 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
 
   const ensureSkillCatalog = useCallback(async () => {
     if (skillCache.current.length > 0) {
-      setSkillDescriptions(skillDescriptionsByName(skillCache.current));
+      publishSkillCatalog(skillCache.current);
       return;
     }
     const [catalog, installed] = await Promise.all([
@@ -829,8 +853,22 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
     if (catalog.length === 0) return;
     skillCache.current = catalog;
     installedSkills.current = installed;
-    setSkillDescriptions(skillDescriptionsByName(catalog));
-  }, []);
+    publishSkillCatalog(catalog);
+  }, [publishSkillCatalog]);
+
+  const withPluginReview = useCallback(
+    async (detail: DirectoryPluginDetail): Promise<DirectoryPluginDetail> => {
+      const installs = pluginPageRef.current.installs;
+      const [scan, versions] = await Promise.all([
+        fetchPluginScan(detail.id),
+        installs.builtinIds.has(detail.id)
+          ? fetchPluginVersions(detail.id, installs.updates.get(detail.id)?.latestVersion ?? null)
+          : Promise.resolve(null),
+      ]);
+      return { ...detail, scan, ...(versions ? { versions } : {}) };
+    },
+    [],
+  );
 
   const loadPluginDetail = useCallback(
     async (id: string): Promise<DirectoryDetail | null> => {
@@ -839,22 +877,31 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       const page = pluginPageRef.current;
       const record = findPluginRecord(id);
       selectSettingsTarget(record ?? null, id);
-      if (record) return toPluginDetail(record, page.installs);
+      if (record) return withPluginReview(toPluginDetail(record, page.installs));
       const userEntry = findUserEntry(id);
       if (userEntry) {
-        return toUserMarketplaceDetail(
-          userEntry,
-          page.user.sources.find((source) => source.id === userEntry.sourceId),
-          page.installs,
+        return withPluginReview(
+          toUserMarketplaceDetail(
+            userEntry,
+            page.user.sources.find((source) => source.id === userEntry.sourceId),
+            page.installs,
+          ),
         );
       }
       const fetched = await fetchPluginDirectoryEntry(id);
       if (!fetched) return null;
       pluginDetails.current.set(id, fetched);
       selectSettingsTarget(fetched, id);
-      return toPluginDetail(fetched, pluginPageRef.current.installs);
+      return withPluginReview(toPluginDetail(fetched, pluginPageRef.current.installs));
     },
-    [primePlugins, findPluginRecord, findUserEntry, selectSettingsTarget, ensureSkillCatalog],
+    [
+      primePlugins,
+      findPluginRecord,
+      findUserEntry,
+      selectSettingsTarget,
+      ensureSkillCatalog,
+      withPluginReview,
+    ],
   );
 
   const loadSection = useCallback(
@@ -1269,6 +1316,64 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
     [readInstallResponse, refreshPluginInstalls, refreshUserMarketplaces],
   );
 
+  const loadPluginDraft = useCallback(async (id: string): Promise<DirectoryPluginDraft> => {
+    const response = await fetch(`${PLUGIN_AUTHORED_PATH}/${encodeURIComponent(id)}`, {
+      cache: 'no-store',
+    });
+    const body = (await response.json().catch(() => ({}))) as {
+      draft?: DirectoryPluginDraft;
+      error?: { message?: string };
+    };
+    if (!response.ok || !body.draft) {
+      throw new Error(body.error?.message ?? PLUGIN_EDIT_LOAD_FAILED_COPY);
+    }
+    return body.draft;
+  }, []);
+
+  const updatePlugin = useCallback(
+    async (id: string, draft: DirectoryPluginDraft): Promise<DirectoryUploadResult> => {
+      const csrfToken = await getCsrfToken();
+      const response = await fetch(`${PLUGIN_AUTHORED_PATH}/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': JSON_CONTENT_TYPE, [CSRF_HEADER]: csrfToken },
+        body: JSON.stringify(draft),
+      });
+      const result = await readInstallResponse(
+        response,
+        PLUGIN_EDIT_FAILED_COPY,
+        EDIT_PLUGIN_DONE_TITLE,
+      );
+      invalidateSkillsCatalog();
+      announceSkillCatalogChanged();
+      await refreshUserMarketplaces();
+      await refreshPluginInstalls();
+      return result;
+    },
+    [readInstallResponse, refreshPluginInstalls, refreshUserMarketplaces],
+  );
+
+  const customizePlugin = useCallback(
+    async (id: string): Promise<string> => {
+      const response = await postJson(
+        PLUGIN_CUSTOMIZE_PATH,
+        findPluginRecord(id) ? { pluginId: id } : { entryId: id },
+      );
+      const body = (await response.json().catch(() => ({}))) as {
+        entryId?: string;
+        error?: { message?: string };
+      };
+      if (!response.ok || !body.entryId) {
+        throw new Error(body.error?.message ?? PLUGIN_CUSTOMIZE_FAILED_COPY);
+      }
+      invalidateSkillsCatalog();
+      announceSkillCatalogChanged();
+      await refreshUserMarketplaces();
+      await refreshPluginInstalls();
+      return body.entryId;
+    },
+    [findPluginRecord, refreshPluginInstalls, refreshUserMarketplaces],
+  );
+
   const uploadSkillFile = useCallback(
     async (file: File, acknowledgedScans?: readonly string[]): Promise<DirectoryUploadResult> => {
       const response = await postFile(SKILLS_PATH, file, acknowledgedScans);
@@ -1293,11 +1398,55 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
     [loadSection, postFile],
   );
 
+  const openConnector = useCallback((connectorId: string) => {
+    if (typeof window === 'undefined') return;
+    window.location.hash = buildSettingsBrowseHash('connectors', connectorId);
+  }, []);
+
+  const pluginRepairs = useCallback(
+    (pluginId: string, enabledSkills: ReadonlySet<string>): DirectoryPluginRepair[] => {
+      if (!settingsEnabled || skillIndex.size === 0) return [];
+      const connectorLabel = (connectorId: string): string =>
+        curatedRef.current.find((entry) => entry.id === connectorId)?.name ?? connectorId;
+      const active = settingsSkills.filter((name) => enabledSkills.has(name));
+      const missing = active.filter((name) => !skillIndex.has(name));
+      const connected = connectedIds();
+      const repairs: DirectoryPluginRepair[] = [];
+      if (missing.length > 0) {
+        repairs.push({
+          id: PLUGIN_REPAIR_RELOAD_ID,
+          label: `${PLUGIN_REPAIR_MISSING_SKILLS_COPY} ${missing.join(', ')}`,
+          actionLabel: PLUGIN_REPAIR_RELOAD_LABEL,
+          run: async () => {
+            await installPlugin(pluginId);
+          },
+        });
+      }
+      const needed = new Set(
+        active.flatMap((name) => skillIndex.get(name)?.requiredConnectors ?? []),
+      );
+      for (const connectorId of needed) {
+        if (connected.has(connectorId)) continue;
+        repairs.push({
+          id: `${PLUGIN_REPAIR_CONNECTOR_ID_PREFIX}${connectorId}`,
+          label: `${PLUGIN_REPAIR_CONNECTOR_COPY} ${connectorLabel(connectorId)}.`,
+          actionLabel: PLUGIN_REPAIR_CONNECT_LABEL,
+          run: () => openConnector(connectorId),
+        });
+      }
+      return repairs;
+    },
+    [settingsEnabled, settingsSkills, skillIndex, connectedIds, installPlugin, openConnector],
+  );
+
   const pluginSettings = useMemo<DirectoryPluginSettings | undefined>(() => {
     if (!settingsPluginId) return undefined;
     const enabledSkills = new Set(pluginSettingsState.settings?.enabledSkills ?? []);
     const connectorLabel = (connectorId: string): string =>
       curatedRef.current.find((entry) => entry.id === connectorId)?.name ?? connectorId;
+    const repairs = pluginSettingsState.settings
+      ? pluginRepairs(settingsPluginId, enabledSkills)
+      : [];
     return {
       pluginId: settingsPluginId,
       skills: settingsSkills.map((name) => {
@@ -1313,11 +1462,29 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
         name: connectorLabel(connector.connectorId),
         connected: connector.connected,
       })),
+      ...(repairs.length > 0 ? { repairs } : {}),
       loading: pluginSettingsState.loading,
       saving: pluginSettingsState.saving,
       error: pluginSettingsState.error,
     };
-  }, [settingsPluginId, settingsSkills, pluginSettingsState, skillDescriptions]);
+  }, [settingsPluginId, settingsSkills, pluginSettingsState, skillDescriptions, pluginRepairs]);
+
+  const setPluginVersion = useCallback(
+    async (id: string, version: string, acknowledgedPermissions: readonly string[]) => {
+      try {
+        await applyPluginVersion(id, version, acknowledgedPermissions, await getCsrfToken());
+      } catch (caught: unknown) {
+        throw describeActionFailure(
+          caught,
+          caught instanceof DirectoryRequestError ? caught.message : PLUGIN_UPDATE_FAILED_COPY,
+        );
+      }
+      invalidateSkillsCatalog();
+      announceSkillCatalogChanged();
+      await refreshPluginInstalls();
+    },
+    [refreshPluginInstalls],
+  );
 
   const setPluginEnabled = useCallback(
     async (id: string, enabled: boolean) => {
@@ -1396,11 +1563,6 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
     [closeSettings],
   );
 
-  const openConnector = useCallback((connectorId: string) => {
-    if (typeof window === 'undefined') return;
-    window.location.hash = buildSettingsBrowseHash('connectors', connectorId);
-  }, []);
-
   const openSettings = useCallback(
     (section: DirectorySectionKey, id: string) => {
       if (section === 'skills') onEditSkill?.(id);
@@ -1452,9 +1614,19 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       addMarketplace,
       removeMarketplace,
       refreshMarketplace,
-      ...(onCreateSkill ? { uploadPluginArchive, createPlugin, uploadSkillFile } : {}),
+      ...(onCreateSkill
+        ? {
+            uploadPluginArchive,
+            createPlugin,
+            uploadSkillFile,
+            loadPluginDraft,
+            updatePlugin,
+            customizePlugin,
+          }
+        : {}),
       ...(pluginSettings ? { pluginSettings } : {}),
       setPluginEnabled,
+      setPluginVersion,
       setPluginSkillEnabled,
       openConnector,
       setSkillEnabled,
@@ -1489,8 +1661,12 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       uploadPluginArchive,
       createPlugin,
       uploadSkillFile,
+      loadPluginDraft,
+      updatePlugin,
+      customizePlugin,
       pluginSettings,
       setPluginEnabled,
+      setPluginVersion,
       setPluginSkillEnabled,
       openConnector,
       setSkillEnabled,

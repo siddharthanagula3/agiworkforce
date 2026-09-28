@@ -16,10 +16,16 @@ function preferences(overrides: Partial<HostPreferencesState['preferences']> = {
       cliPath: '',
       quickAskShortcut: 'Alt+Space',
       screenshotShortcut: 'CommandOrControl+Shift+2',
+      windowShotShortcut: NO_HOST_SHORTCUT,
       voiceShortcut: NO_HOST_SHORTCUT,
       ...overrides,
     },
-    shortcutStatus: { quickAsk: 'registered', screenshot: 'registered', voice: 'off' },
+    shortcutStatus: {
+      quickAsk: 'registered',
+      screenshot: 'registered',
+      windowShot: 'off',
+      voice: 'off',
+    },
   } as HostPreferencesState;
 }
 

@@ -64,6 +64,7 @@ function makeHandlers() {
     onNewChat: vi.fn(),
     onQuickAsk: vi.fn(),
     onScreenshot: vi.fn(),
+    onWindowShot: vi.fn(),
     onVoice: vi.fn(),
     onCheckForUpdates: vi.fn(),
   };
@@ -121,6 +122,7 @@ describe('tray shortcut customization', () => {
     expect(registerGarnishShortcuts).toHaveBeenCalledWith({
       onQuickAsk: handlers.onQuickAsk,
       onScreenshot: handlers.onScreenshot,
+      onWindowShot: handlers.onWindowShot,
       onVoice: handlers.onVoice,
     });
 

@@ -4,6 +4,7 @@ import {
   type ManagedCloudScheduleRunPendingApproval,
   type ManagedCloudScheduleTask,
 } from '@agiworkforce/cloud-contracts';
+import { tPlural } from '../../l10n';
 
 export type ScheduleStatus = ManagedCloudScheduleTask['status'];
 export type ScheduleRunStatus = ManagedCloudScheduleRun['status'];
@@ -111,7 +112,7 @@ export function scheduleTooltipLines(task: ManagedCloudScheduleTask, now = Date.
     `${scheduleStatusLabel(task.status)} · ${scheduleCadence(task)} · ${task.timezone}`,
     scheduleNextRunLabel(task, now),
     scheduleLastRunLabel(task),
-    `${task.executionCount} run${task.executionCount === 1 ? '' : 's'} so far`,
+    tPlural('schedule.runsSoFar', task.executionCount),
   ];
   if (task.pausedReason === 'approval_required') {
     lines.push(`Paused: ${WAITING_FOR_APPROVAL}. Open its runs to approve or deny it.`);

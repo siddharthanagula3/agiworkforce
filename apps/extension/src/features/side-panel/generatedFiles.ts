@@ -101,7 +101,7 @@ function readBlobAsDataUrl(blob: Blob): Promise<string> {
   });
 }
 
-function loadImageDataUrl(url: string, access: AnswerFileAccess): Promise<string> {
+export function loadImageDataUrl(url: string, access: AnswerFileAccess): Promise<string> {
   const cached = imageDataUrlCache.get(url);
   if (cached) return cached;
   const pending = access

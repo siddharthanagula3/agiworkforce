@@ -113,11 +113,26 @@ const listDeveloperModels = vi.fn(async () => ({
 }));
 
 vi.mock('@/features/desktop-host', () => ({
+  ContinueOnDesktop: ({
+    label,
+    fallbackHref,
+    className,
+  }: {
+    label: string;
+    fallbackHref: string;
+    className?: string;
+  }) => (
+    <a href={fallbackHref} className={className}>
+      {label}
+    </a>
+  ),
   useDesktopHost: () => host,
   answerDeveloperApproval: vi.fn(async () => true),
   interruptDeveloperTurn: vi.fn(async () => true),
   listDeveloperModels: (...args: unknown[]) => listDeveloperModels(...(args as [])),
   listDeveloperSessions: () => listDeveloperSessions(),
+  listLocalBranches: vi.fn(async () => null),
+  switchLocalBranch: vi.fn(async (_rootId: string, branch: string) => branch),
   onDeveloperSessionEvent: () => () => undefined,
   openWorkspaceInEditor: vi.fn(async () => true),
   pickWorkspaceRoot: () => pickWorkspaceRoot(),
@@ -218,6 +233,7 @@ function createApi(overrides: Partial<CloudCodeApi> = {}): CloudCodeApi {
       truncated: false,
       unreachable: [],
     })),
+    listBranches: vi.fn(async () => ({ branches: [], truncated: false })),
     changes: vi.fn(async () => ({
       session,
       base: null,
@@ -243,6 +259,20 @@ function createApi(overrides: Partial<CloudCodeApi> = {}): CloudCodeApi {
       reviewState: 'none' as const,
     })),
     get: vi.fn(async () => ({ session, terminalEntries: [], turns: [] })),
+    setSharing: vi.fn(async () => session),
+    openShared: vi.fn(async () => ({
+      visibility: 'public' as const,
+      title: session.title,
+      repositoryUrl: null,
+      workingBranch: null,
+      baseBranch: null,
+      pullRequestUrl: null,
+      pullRequestNumber: null,
+      createdAt: session.createdAt,
+      updatedAt: session.updatedAt,
+      terminalEntries: [],
+      turns: [],
+    })),
     create: vi.fn(async () => ({ session, terminalEntries: [], turns: [] })),
     run: vi.fn(async () => ({
       session,
@@ -825,7 +855,9 @@ describe('CloudCodePage', () => {
     await user.click(screen.getByRole('button', { name: 'Commit and push' }));
 
     await waitFor(() =>
-      expect(api.commit).toHaveBeenCalledWith(repoSession.id, 'wire the settings toggle'),
+      expect(api.commit).toHaveBeenCalledWith(repoSession.id, {
+        message: 'wire the settings toggle',
+      }),
     );
     expect(await screen.findByText('Pushed to the repository.')).toBeInTheDocument();
   });
@@ -1356,7 +1388,7 @@ describe('CloudCodePage', () => {
     expect(screen.getByText('apps/web/page.tsx')).toBeInTheDocument();
     expect(screen.getByText('Untracked')).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /apps\/web\/page\.tsx/ }));
+    await user.click(screen.getByRole('button', { name: 'Modified apps/web/page.tsx' }));
     expect(await screen.findByText('+const fresh = true;')).toBeInTheDocument();
   });
 
@@ -1807,16 +1839,24 @@ describe('CloudCodePage', () => {
     vi.spyOn(navigator, 'clipboard', 'get').mockReturnValue({
       writeText,
     } as unknown as Clipboard);
+    const shared = {
+      ...session,
+      shareVisibility: 'public' as const,
+      shareAudience: 'public' as const,
+      shareToken: 'AbCdEfGhIjKlMnOpQrStUvWx',
+    };
     const api = createApi({
-      list: vi.fn(async () => ({ availability, sessions: [session], runtimes: [] })),
+      list: vi.fn(async () => ({ availability, sessions: [shared], runtimes: [] })),
+      get: vi.fn(async () => ({ session: shared, terminalEntries: [], turns: [] })),
     });
     render(<CloudCodePage api={api} />);
 
     await openSession(user, session.title);
     await user.click(await screen.findByRole('button', { name: 'Session actions' }));
-    await user.click(await screen.findByRole('menuitem', { name: 'Copy link' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Share' }));
+    await user.click(await screen.findByRole('button', { name: 'Copy link' }));
 
-    expect(await screen.findByRole('menuitem', { name: 'Could not copy the link' })).toBeVisible();
+    expect(await screen.findByRole('button', { name: 'Could not copy the link' })).toBeVisible();
   });
 
   it('puts the error notice in the composer column, directly above the composer', async () => {
@@ -2034,17 +2074,23 @@ describe('CloudCodePage', () => {
 
   it('edits the branch of a chosen repository from its chip', async () => {
     const user = userEvent.setup();
-    const api = createApi({ listRepositories: vi.fn(async () => repositoryPage) });
+    const api = createApi({
+      listRepositories: vi.fn(async () => repositoryPage),
+      listBranches: vi.fn(async () => ({
+        branches: [
+          { name: 'main', isProtected: true },
+          { name: 'release', isProtected: false },
+        ],
+        truncated: false,
+      })),
+    });
     render(<CloudCodePage api={api} />);
 
     await user.click(await screen.findByRole('button', { name: 'Select repository' }));
     await user.click(await screen.findByRole('button', { name: /owner\/public-one/ }));
     await user.click(await screen.findByRole('button', { name: 'Change the branch' }));
 
-    const field = await screen.findByLabelText('Branch');
-    await user.clear(field);
-    await user.type(field, 'release');
-    await user.click(screen.getByRole('button', { name: 'Use this branch' }));
+    await user.click(await screen.findByRole('button', { name: /^release/ }));
 
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Change the branch' })).toHaveTextContent(
@@ -2074,7 +2120,9 @@ describe('CloudCodePage', () => {
 
     await user.click(await screen.findByRole('button', { name: 'Approval mode' }));
 
-    const rows = await screen.findAllByRole('menuitemradio');
+    const rows = (await screen.findAllByRole('menuitemradio')).filter((row) =>
+      TOOL_APPROVAL_POLICY_OPTIONS.some((option) => row.textContent?.includes(option.label)),
+    );
     expect(rows).toHaveLength(TOOL_APPROVAL_POLICY_OPTIONS.length);
     for (const option of TOOL_APPROVAL_POLICY_OPTIONS) {
       expect(screen.getByText(option.hint)).toBeInTheDocument();

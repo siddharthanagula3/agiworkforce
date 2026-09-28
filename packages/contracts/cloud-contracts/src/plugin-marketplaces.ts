@@ -214,6 +214,30 @@ export const PluginPackageRefusalDetailsSchema = z.object({
 export type PluginScanFindingSummary = z.infer<typeof PluginScanFindingSummarySchema>;
 export type PluginPackageRefusalDetails = z.infer<typeof PluginPackageRefusalDetailsSchema>;
 
+export interface PluginScanSummary {
+  verdict: 'pass' | 'review' | 'block';
+  findings: PluginScanFindingSummary[];
+  scannedAt: string;
+}
+
+export interface PluginScanResponse {
+  scan: PluginScanSummary | null;
+}
+
+export interface PluginPublishedVersion {
+  version: string;
+  publishedAt: string | null;
+  changelog: string;
+  permissions: string[];
+  declaredSkills: string[];
+}
+
+export interface PluginVersionsResponse {
+  versions: PluginPublishedVersion[];
+  installedVersion: string | null;
+  approvedPermissions: string[];
+}
+
 export interface PluginConnectorRequirementState {
   connectorId: string;
   connected: boolean;
@@ -235,3 +259,35 @@ export const PluginInstallationSettingsPatchSchema = z
   .strict();
 
 export type PluginInstallationSettingsPatch = z.infer<typeof PluginInstallationSettingsPatchSchema>;
+
+export const PLUGIN_DRAFT_TOOL_NAME = 'draft_plugin';
+export const PLUGIN_DRAFT_RESULT_KEY = 'plugin_draft';
+
+export const PluginDraftSkillSchema = z.object({
+  name: z.string().min(1),
+  description: z.string().min(1),
+  body: z.string().min(1),
+});
+
+export const PluginDraftSchema = z.object({
+  name: z.string().min(1),
+  description: z.string().min(1),
+  skills: z.array(PluginDraftSkillSchema).min(1),
+});
+
+export type PluginDraft = z.infer<typeof PluginDraftSchema>;
+
+export function readPluginDraftToolResult(toolName: string, result: unknown): PluginDraft | null {
+  if (toolName !== PLUGIN_DRAFT_TOOL_NAME || typeof result !== 'string') return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(result);
+  } catch {
+    return null;
+  }
+  if (!parsed || typeof parsed !== 'object') return null;
+  const draft = PluginDraftSchema.safeParse(
+    (parsed as Record<string, unknown>)[PLUGIN_DRAFT_RESULT_KEY],
+  );
+  return draft.success ? draft.data : null;
+}

@@ -20,6 +20,7 @@ import {
   handleSaveShortcut,
   handleListShortcuts,
   handleDeleteShortcut,
+  handleUpdateShortcut,
   planShortcutReplay,
 } from './features/background/shortcuts';
 import { validateShortcutReplayTarget } from './features/shortcuts/origin';
@@ -94,6 +95,7 @@ import {
   ComputerUseStartCoordinator,
   type ComputerUseCancellationReason,
   type ComputerUseRunLease,
+  type ComputerUseTakeover,
 } from './features/computer-use/runOwnership';
 import {
   BROWSER_CONTROL_CONSENT_STORAGE_KEY,
@@ -110,9 +112,11 @@ import {
   isTrustedExtensionPageSender,
   normalizeWebMCPToolsUpdate,
   resolveMessageTargetTabId,
+  sanitizePageText,
   validateBridgeUrl,
   type NormalizedWebMCPToolsUpdate,
 } from './background/policy';
+import type { SiteToolDescriptor } from './features/tools/siteToolRegistry';
 import { ADMIN_SITE_POLICY_STORAGE_KEY, readAdminSitePolicy } from './features/site-policy/store';
 import {
   CONTEXT_HANDOFF_CLI_DESTINATION,
@@ -172,7 +176,10 @@ import {
 } from './features/cloud-bridge/conversationSync';
 import { watchCloudMirroringEnabled } from './features/privacy/cloudMirroring';
 import { installBackgroundErrorReporting } from './features/observability/errorReporting';
-import { resolveComputerUseModel } from './features/computer-use/cloudAgentClient';
+import {
+  BROWSER_TOOL_DEFINITIONS,
+  resolveComputerUseModel,
+} from './features/computer-use/cloudAgentClient';
 import {
   initDownloadLedger,
   listSessionDownloads,
@@ -295,6 +302,48 @@ function broadcastComputerUseForCurrentRun(
     runGeneration: lease.generation,
     tabId: lease.tabId,
   });
+}
+
+const USER_TAKEOVER_REASON = 'You have the page. AGI waits until you hand it back.';
+const USER_INPUT_TAKEOVER_REASON = 'You started using the page, so AGI stopped acting on it.';
+const AGENT_INPUT_ECHO_MS = 750;
+
+function watchComputerUseUserInput(tabId: number, watching: boolean): void {
+  void chrome.tabs
+    .sendMessage(tabId, { type: 'AGI_CU_WATCH_INPUT', watching })
+    .catch(() => undefined);
+}
+
+function untilHandedBack(lease: ComputerUseRunLease, takeover: ComputerUseTakeover): Promise<void> {
+  const signal = lease.controller.signal;
+  return new Promise<void>((resolve, reject) => {
+    const onAbort = (): void => {
+      reject(
+        signal.reason instanceof Error
+          ? signal.reason
+          : new DOMException('Computer-use run was cancelled', 'AbortError'),
+      );
+    };
+    if (signal.aborted) {
+      onAbort();
+      return;
+    }
+    signal.addEventListener('abort', onAbort, { once: true });
+    void takeover.handedBack.then(() => {
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    });
+  });
+}
+
+function handComputerUseTabToUser(lease: ComputerUseRunLease, reason: string): Promise<void> {
+  const takeover = computerUseRuns.beginTakeover(lease, reason);
+  broadcastComputerUseForCurrentRun(lease, {
+    type: 'AGI_CU_STATE',
+    status: 'paused',
+    reason: takeover.reason,
+  });
+  return untilHandedBack(lease, takeover);
 }
 
 function cancelActiveComputerUseRun(
@@ -1322,6 +1371,68 @@ async function ensureTabGroup(tabId: number): Promise<boolean> {
   } catch (err) {
     logger.debug('Tab group operation failed (non-fatal)', err);
     return false;
+  }
+}
+
+const SITE_TOOL_RESULT_MAX_CHARS = 8_000;
+
+async function discoverRunSiteTools(tabId: number, tabUrl: string): Promise<SiteToolDescriptor[]> {
+  try {
+    const discovery = (await forwardToContentScript(tabId, {
+      type: 'WEBMCP_DISCOVER_TOOLS',
+    } as ExtensionMessage)) as unknown as { success?: boolean; tools?: unknown; url?: unknown };
+    if (discovery.success !== true) return [];
+    const normalized = normalizeWebMCPToolsUpdate(discovery.tools, discovery.url, tabUrl);
+    if (!normalized) return [];
+    const taken = new Set(BROWSER_TOOL_DEFINITIONS.map((tool) => tool.function.name));
+    return normalized.tools.flatMap((tool): SiteToolDescriptor[] => {
+      const name = `site_${tool.name.replace(/[^A-Za-z0-9_-]/g, '_')}`.slice(0, 64);
+      if (taken.has(name)) return [];
+      taken.add(name);
+      return [
+        {
+          name,
+          pageName: tool.name,
+          effect: tool.effect,
+          source: tool.source,
+          description: tool.description,
+          ...(tool.inputSchema ? { inputSchema: tool.inputSchema } : {}),
+        },
+      ];
+    });
+  } catch {
+    return [];
+  }
+}
+
+async function callRunSiteTool(
+  tabId: number,
+  pageName: string,
+  args: Record<string, unknown>,
+): Promise<string> {
+  const response = (await forwardToContentScript(tabId, {
+    type: 'WEBMCP_CALL_TOOL',
+    toolName: pageName,
+    arguments: args,
+  } as ExtensionMessage)) as unknown as { success?: boolean; result?: unknown; error?: string };
+  if (response.success !== true) {
+    throw new Error(response.error ?? 'The page did not complete its tool.');
+  }
+  const text =
+    typeof response.result === 'string' ? response.result : JSON.stringify(response.result ?? null);
+  return sanitizePageText(text).slice(0, SITE_TOOL_RESULT_MAX_CHARS);
+}
+
+async function markComputerUseTab(tabId: number): Promise<() => Promise<void>> {
+  const leaveAsIs = async (): Promise<void> => undefined;
+  if (!chrome.tabGroups) return leaveAsIs;
+  try {
+    const tab = await chrome.tabs.get(tabId);
+    if (typeof tab.groupId === 'number' && tab.groupId >= 0) return leaveAsIs;
+    if (!(await ensureTabGroup(tabId))) return leaveAsIs;
+    return () => chrome.tabs.ungroup(tabId).catch(() => undefined);
+  } catch {
+    return leaveAsIs;
   }
 }
 
@@ -2624,7 +2735,7 @@ function cancelActiveRunUnlessOriginStillApproved(
     // Invalid stored intent is handled by the same fail-closed cancellation.
   }
   computerUseStartGeneration += 1;
-  cancelActiveComputerUseRun('tab_intent_changed', lease.runId);
+  cancelActiveComputerUseRun('site_access_withdrawn', lease.runId);
 }
 
 chrome.storage.onChanged.addListener((changes, area) => {
@@ -3678,6 +3789,9 @@ async function handleMessageAsync(
     case 'DELETE_SHORTCUT':
       return handleDeleteShortcut(message as import('./types').DeleteShortcutMessage);
 
+    case 'UPDATE_SHORTCUT':
+      return handleUpdateShortcut(message as import('./types').UpdateShortcutMessage);
+
     case 'REPLAY_SHORTCUT':
       return handleReplayShortcut(message as import('./types').ReplayShortcutMessage);
 
@@ -4146,8 +4260,15 @@ async function handleMessageAsync(
         }
       };
 
+      const siteTools = await discoverRunSiteTools(cuTabId, cuTab.url);
+      if (!computerUseRuns.isCurrent(lease)) {
+        return failStart('AGI_START_COMPUTER_USE: superseded or cancelled before admission');
+      }
+
       const completion = runAgentLoop(cuGoal, cuTabId, {
         model: computerUseModel,
+        siteTools,
+        callSiteTool: (pageName, args) => callRunSiteTool(cuTabId, pageName, args),
         runId: lease.runId,
         signal: lease.controller.signal,
         assertOwnership: () => assertComputerUseOwnership(lease).then(() => undefined),
@@ -4157,6 +4278,14 @@ async function handleMessageAsync(
           computerUseStartGeneration += 1;
           cancelActiveComputerUseRun('debugger_detached', lease.runId);
         },
+        onActionPoint: (point) => {
+          void chrome.tabs
+            .sendMessage(cuTabId, { type: 'AGI_CU_SHOW_ACTION', x: point.x, y: point.y })
+            .catch(() => undefined);
+        },
+        requestTakeover: (reason) => handComputerUseTabToUser(lease, reason),
+        pendingTakeover: () => (lease.takeover ? untilHandedBack(lease, lease.takeover) : null),
+        isTakenOver: () => lease.takeover !== null,
         onBeforeAction,
         onProgress: (step) => {
           broadcastComputerUseForCurrentRun(lease, { type: 'AGI_CU_STEP', step });
@@ -4166,7 +4295,11 @@ async function handleMessageAsync(
         },
       });
       computerUseRuns.trackCompletion(lease, completion);
+      watchComputerUseUserInput(cuTabId, true);
+      void completion.finally(() => watchComputerUseUserInput(cuTabId, false));
+      const unmarkTab = markComputerUseTab(cuTabId);
       void completion.finally(() => flushAutomationAuditOutbox().catch(() => false));
+      void completion.finally(() => unmarkTab.then((unmark) => unmark()));
       void completion.then(
         () => {
           if (!computerUseRuns.finish(lease)) return;
@@ -4326,6 +4459,80 @@ async function handleMessageAsync(
         runId: activeLease.runId,
         runGeneration: activeLease.generation,
         tabId: activeLease.tabId,
+        ...(activeLease.takeover ? { paused: true, pauseReason: activeLease.takeover.reason } : {}),
+      } as ExtensionResponse;
+    }
+
+    case 'AGI_CU_USER_INPUT' as ExtensionMessage['type']: {
+      const lease = computerUseRuns.getActive();
+      if (
+        lease &&
+        sender?.tab?.id === lease.tabId &&
+        !lease.takeover &&
+        !lease.actionInFlight &&
+        Date.now() - lease.lastActionEndedAt > AGENT_INPUT_ECHO_MS
+      ) {
+        void handComputerUseTabToUser(lease, USER_INPUT_TAKEOVER_REASON).catch(() => undefined);
+      }
+      return { success: true } as ExtensionResponse;
+    }
+
+    case 'PAUSE_COMPUTER_USE' as ExtensionMessage['type']:
+    case 'RESUME_COMPUTER_USE' as ExtensionMessage['type']: {
+      const takeoverMessage = message as import('./types').ComputerUseTakeoverMessage;
+      const lease = computerUseRuns.getActive();
+      if (!lease || lease.runId !== takeoverMessage.runId) {
+        return {
+          success: false,
+          running: lease !== null,
+          error: `${takeoverMessage.type}: run ownership no longer matches`,
+        } as ExtensionResponse;
+      }
+      if (takeoverMessage.type === 'PAUSE_COMPUTER_USE') {
+        void handComputerUseTabToUser(lease, USER_TAKEOVER_REASON).catch(() => undefined);
+        return {
+          success: true,
+          running: true,
+          runId: lease.runId,
+          runGeneration: lease.generation,
+        } as ExtensionResponse;
+      }
+      let handedBackUrl: string | undefined;
+      try {
+        handedBackUrl = (await chrome.tabs.get(lease.tabId)).url;
+      } catch {
+        handedBackUrl = undefined;
+      }
+      if (!computerUseRuns.isCurrent(lease)) {
+        return { success: true, running: false } as ExtensionResponse;
+      }
+      let handedBackOrigin: string | null = null;
+      try {
+        handedBackOrigin = handedBackUrl ? new URL(handedBackUrl).origin : null;
+      } catch {
+        handedBackOrigin = null;
+      }
+      const stillApproved =
+        handedBackOrigin !== null &&
+        isOriginApprovedForAutomation(handedBackOrigin) &&
+        (await hasBrowserControlConsent(handedBackOrigin).catch(() => false));
+      if (!computerUseRuns.isCurrent(lease)) {
+        return { success: true, running: false } as ExtensionResponse;
+      }
+      if (!stillApproved || !handedBackUrl) {
+        computerUseStartGeneration += 1;
+        cancelActiveComputerUseRun('site_access_withdrawn', lease.runId);
+        return { success: true, running: false } as ExtensionResponse;
+      }
+      computerUseRuns.commitTabIntent(lease, handedBackUrl);
+      computerUseRuns.endTakeover(lease);
+      void chrome.tabs.update(lease.tabId, { active: true }).catch(() => undefined);
+      broadcastComputerUseForCurrentRun(lease, { type: 'AGI_CU_STATE', status: 'running' });
+      return {
+        success: true,
+        running: true,
+        runId: lease.runId,
+        runGeneration: lease.generation,
       } as ExtensionResponse;
     }
 
@@ -4690,10 +4897,14 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
     lease?.tabId === tabId &&
     typeof changeInfo.url === 'string' &&
     changeInfo.url !== lease.tabIntentUrl &&
-    !lease.actionInFlight
+    !lease.actionInFlight &&
+    !lease.takeover
   ) {
     computerUseStartGeneration += 1;
     cancelActiveComputerUseRun('tab_intent_changed', lease.runId);
+  }
+  if (lease?.tabId === tabId && changeInfo.status === 'complete') {
+    watchComputerUseUserInput(tabId, true);
   }
   if (changeInfo.url !== undefined || changeInfo.status === 'loading') {
     suspendPageWatchForNavigation(tabId);
@@ -4707,7 +4918,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
 
 chrome.tabs.onActivated.addListener((activeInfo) => {
   const lease = computerUseRuns.getActive();
-  if (!lease) return;
+  if (!lease || lease.takeover) return;
   if (
     lease.windowId === undefined ||
     activeInfo.windowId !== lease.windowId ||
@@ -4957,6 +5168,7 @@ async function handleChatMessage(
         attachments: message.attachments,
         fileAttachments: message.fileAttachments,
         extendedThinking: message.extendedThinking,
+        ...(message.workMode === 'agiwork' ? { workMode: 'agiwork' as const } : {}),
         currentModelKey: message.currentModelKey,
         previousTaskType: message.previousTaskType,
         conversationId: message.conversationId,

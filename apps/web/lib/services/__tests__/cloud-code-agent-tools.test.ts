@@ -12,6 +12,7 @@ import {
   buildValidationSummary,
   verifyTaskCompletion,
 } from '../cloud-code-result';
+import { EDIT_FILE_TOOL, WRITE_FILE_TOOL, e2bExecutionToolDefs } from '@/lib/e2b/execution-tools';
 
 describe('classifyCommandRisk', () => {
   it('allows read-only, workspace-scoped commands to run unattended', () => {
@@ -143,18 +144,24 @@ describe('executeCodeAsShellCommand', () => {
 });
 
 describe('cloudCodeAgentToolDefs', () => {
-  it('adds exactly the coding-agent tools a code-execution tool set lacks', () => {
+  it('offers file edits beside reading, listing and running commands', () => {
     const names = cloudCodeAgentToolDefs().map((t) => t.function.name);
     expect(names).toEqual([
+      WRITE_FILE_TOOL,
+      EDIT_FILE_TOOL,
       CLOUD_CODE_READ_FILE_TOOL,
       CLOUD_CODE_LIST_FILES_TOOL,
       CLOUD_CODE_RUN_COMMAND_TOOL,
     ]);
   });
 
-  it('does not redeclare tools owned by the shared execution tool set', () => {
-    const names = cloudCodeAgentToolDefs().map((t) => t.function.name);
-    expect(names).not.toContain('write_file');
+  it('reuses the shared execution definitions for file edits instead of redeclaring them', () => {
+    const shared = new Map(e2bExecutionToolDefs().map((t) => [t.function.name, t]));
+    const offered = cloudCodeAgentToolDefs();
+    for (const name of [WRITE_FILE_TOOL, EDIT_FILE_TOOL]) {
+      expect(offered.find((t) => t.function.name === name)).toEqual(shared.get(name));
+    }
+    const names = offered.map((t) => t.function.name);
     expect(names).not.toContain('create_folder');
     expect(names).not.toContain('execute_code');
   });

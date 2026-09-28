@@ -60,6 +60,10 @@
       "serves": "platform_only",
       "reason": "Route cache and latency counters."
     },
+    "apps/web/app/api/admin/plugins/route.ts": {
+      "serves": "platform_only",
+      "reason": "The plugin registry catalogue and the review state of its versions. No tenant row is read."
+    },
     "apps/web/app/api/admin/privacy/erasures/route.ts": {
       "serves": "submitted_to_platform",
       "reason": "The subject asked to be erased by email, and the request names only that email."

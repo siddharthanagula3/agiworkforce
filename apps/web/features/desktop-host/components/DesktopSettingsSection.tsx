@@ -67,6 +67,10 @@ const SHORTCUT_ROWS: Record<HostShortcutKey, { label: string; hint: string }> = 
     label: 'Screenshot to chat shortcut',
     hint: 'Capture part of the screen straight into a conversation.',
   },
+  windowShot: {
+    label: 'Window to chat shortcut',
+    hint: 'Capture the window you are working in, not the whole screen, straight into a conversation.',
+  },
   voice: {
     label: 'Voice shortcut',
     hint: 'Speak to AGI from anywhere on your desktop.',
