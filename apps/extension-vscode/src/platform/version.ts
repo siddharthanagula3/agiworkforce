@@ -1,7 +1,6 @@
-
 import * as vscode from 'vscode';
 
-const EXTENSION_ID = 'agiworkforce.agi-workforce';
+export const EXTENSION_ID = 'agiworkforce.agi-workforce';
 const FALLBACK_VERSION = '0.3.0';
 
 export function getExtensionVersion(): string {
