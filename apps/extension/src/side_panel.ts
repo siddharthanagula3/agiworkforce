@@ -14707,12 +14707,23 @@ const DRAWER_DELETE_CONFIRM_MS = 3000;
 
 const PENDING_CHAT_TTL_MS = 5 * 60_000;
 
+function browserLanguageName(): string {
+  const code = chrome.i18n.getUILanguage();
+  try {
+    return new Intl.DisplayNames(['en'], { type: 'language' }).of(code) ?? code;
+  } catch {
+    return code;
+  }
+}
+
 function pendingChatPrompt(pending: { type: string; text: string }): string {
   switch (pending.type) {
     case 'explain':
       return `Explain the following:\n\n"${pending.text}"`;
-    case 'translate':
-      return `Translate the following to English (or if already English, to Spanish):\n\n"${pending.text}"`;
+    case 'translate': {
+      const language = browserLanguageName();
+      return `Translate the following into ${language}. If it is already in ${language}, ask me which language to translate it into:\n\n"${pending.text}"`;
+    }
     default:
       return pending.text;
   }
