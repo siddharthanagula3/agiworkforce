@@ -73,6 +73,7 @@ export type {
   DeveloperTurnFailure,
   DeveloperTurnOutcome,
   DeveloperTurnRequest,
+  LocalBranchPush,
   LocalBranches,
   WorkingTreeChange,
   WorkingTreeChangeState,

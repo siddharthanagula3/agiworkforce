@@ -27,6 +27,7 @@ export const DEVELOPER_SESSION_COMMANDS = [
   'developer_plugin_set_enabled',
   'developer_branches_list',
   'developer_branch_switch',
+  'developer_branch_push',
 ] as const;
 
 export type DeveloperSessionCommand = (typeof DEVELOPER_SESSION_COMMANDS)[number];
@@ -287,9 +288,17 @@ export interface WorkingTreeChange {
   originalPath: string | null;
 }
 
+export interface LocalBranchPush {
+  branch: string;
+  remoteUrl: string;
+  baseBranch: string | null;
+}
+
 export interface LocalBranches {
   current: string | null;
   branches: string[];
+  remoteUrl: string | null;
+  baseBranch: string | null;
 }
 
 export interface WorkingTreeChanges {

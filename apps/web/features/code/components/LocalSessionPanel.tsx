@@ -503,6 +503,7 @@ export function LocalSessionPanel({
         {changesOpen && (
           <LocalChangesPanel
             rootId={session.rootId}
+            title={session.title}
             refreshKey={state.messages.length}
             onClose={() => setChangesOpen(false)}
           />

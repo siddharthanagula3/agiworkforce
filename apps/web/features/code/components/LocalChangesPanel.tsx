@@ -13,6 +13,7 @@ import { CODE_COPY, changeStateLabel } from '../code-surface';
 import { diffByPath } from '../code-diff';
 import { LOCAL_CODE_COPY } from '../local-code';
 import { DiffBody } from './CodeChangesPanel';
+import { LocalPullRequest } from './LocalPullRequest';
 import { LocalTerminal } from './LocalTerminal';
 import styles from '../CloudCodePage.module.css';
 
@@ -82,11 +83,12 @@ function LocalChangedFile({
 
 export interface LocalChangesPanelProps {
   rootId: string;
+  title: string;
   refreshKey: number;
   onClose: () => void;
 }
 
-export function LocalChangesPanel({ rootId, refreshKey, onClose }: LocalChangesPanelProps) {
+export function LocalChangesPanel({ rootId, title, refreshKey, onClose }: LocalChangesPanelProps) {
   const [changes, setChanges] = useState<WorkingTreeChanges | null>(null);
   const [repository, setRepository] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -199,6 +201,8 @@ export function LocalChangesPanel({ rootId, refreshKey, onClose }: LocalChangesP
         {changes?.diffTruncated && (
           <p className={styles['formHelp']}>{CODE_COPY.changesDiffTruncated}</p>
         )}
+
+        <LocalPullRequest rootId={rootId} title={title} refreshKey={refreshKey} />
 
         <LocalTerminal rootId={rootId} onCommandFinished={() => void load()} />
       </div>

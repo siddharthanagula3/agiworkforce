@@ -27,6 +27,7 @@ import {
   type DeveloperSessionList,
   type DeveloperSessionTranscript,
   type DeveloperTurnRequest,
+  type LocalBranchPush,
   type LocalBranches,
   type ShellPolicy,
   type ShellRunResult,
@@ -455,6 +456,10 @@ export function startDeveloperTurn(request: DeveloperTurnRequest): Promise<{ tur
 
 export function listLocalBranches(rootId: string): Promise<LocalBranches | null> {
   return invoke<LocalBranches | null>('developer_branches_list', { rootId });
+}
+
+export function pushLocalBranch(rootId: string): Promise<LocalBranchPush> {
+  return invoke<LocalBranchPush>('developer_branch_push', { rootId });
 }
 
 export function switchLocalBranch(rootId: string, branch: string): Promise<string> {
