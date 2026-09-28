@@ -38,6 +38,8 @@ export function webviewStrings() {
     collapseDetails: t('webview.collapseDetails'),
     expandDetails: t('webview.expandDetails'),
     lineDelta: t('webview.lineDelta'),
+    searchingSessions: t('webview.searchingSessions'),
+    noMatchingSessions: t('webview.noMatchingSessions'),
     actions: pluralForms('webview.actions'),
     errors: pluralForms('webview.errors'),
     runningCount: pluralForms('webview.runningCount'),

@@ -415,6 +415,25 @@ const hi = {
   'remote.statusTooltip': 'रिमोट कंट्रोल दिखाएँ',
   'remote.attached_one': 'फ़ोन पर {count} सत्र खुला है।',
   'remote.attached_other': 'फ़ोन पर {count} सत्र खुले हैं।',
+  'sessionSearch.title': 'सत्र इतिहास',
+  'sessionSearch.placeholder': 'शीर्षक या संदेशों के टेक्स्ट से सत्र खोजें',
+  'sessionSearch.folderFailed': 'AGI Workforce: AGI CLI {folder} के सत्र नहीं पढ़ सका। {reason}',
+  'archived.title': 'संग्रहीत सत्र',
+  'archived.placeholder': 'किसी सत्र को वापस लाने और खोलने के लिए उसे चुनें',
+  'archived.none': 'AGI Workforce: इस वर्कस्पेस में कोई संग्रहीत सत्र नहीं है।',
+  'archived.restore': 'वापस लाएँ',
+  'archived.delete': 'स्थायी रूप से हटाएँ',
+  'archived.deleteTitle': '"{title}" को स्थायी रूप से हटाएँ?',
+  'archived.deleteDetail':
+    'इसका ट्रांसक्रिप्ट और इसके साथ दर्ज स्वीकृतियाँ व फ़ाइल बदलाव इस मशीन से हर AGI सतह के लिए हटा दिए जाते हैं। इसे पूर्ववत नहीं किया जा सकता।',
+  'archived.restored': 'AGI Workforce: "{title}" आपके सत्रों में वापस आ गया है।',
+  'archived.open': 'खोलें',
+  'archived.deleted': 'AGI Workforce: "{title}" हटा दिया गया।',
+  'archived.notFound': 'AGI Workforce: वह सत्र अब इस वर्कस्पेस में नहीं है।',
+  'archived.actionFailed': 'AGI Workforce: {reason}',
+  'webview.searchingSessions': 'सत्र खोजे जा रहे हैं…',
+  'webview.noMatchingSessions': '"{query}" से कोई सत्र मेल नहीं खाता',
+  'webview.archivedSessions': 'संग्रहीत सत्र',
 };
 
 export default hi;

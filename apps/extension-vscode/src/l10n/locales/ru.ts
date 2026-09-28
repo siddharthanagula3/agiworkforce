@@ -577,6 +577,26 @@ const ru = {
   'remote.attached_few': 'На телефоне открыты {count} сессии.',
   'remote.attached_many': 'На телефоне открыто {count} сессий.',
   'remote.attached_other': 'На телефоне открыто {count} сессии.',
+  'sessionSearch.title': 'История сессий',
+  'sessionSearch.placeholder': 'Ищите сессии по названию или тексту сообщений',
+  'sessionSearch.folderFailed':
+    'AGI Workforce: AGI CLI не удалось прочитать сессии в {folder}. {reason}',
+  'archived.title': 'Архивные сессии',
+  'archived.placeholder': 'Выберите сессию, чтобы восстановить и открыть её',
+  'archived.none': 'AGI Workforce: в этой рабочей области нет архивных сессий.',
+  'archived.restore': 'Восстановить',
+  'archived.delete': 'Удалить навсегда',
+  'archived.deleteTitle': 'Удалить «{title}» навсегда?',
+  'archived.deleteDetail':
+    'Её расшифровка, а также сохранённые с ней подтверждения и изменения файлов удаляются с этого компьютера для всех поверхностей AGI. Это действие нельзя отменить.',
+  'archived.restored': 'AGI Workforce: «{title}» снова среди ваших сессий.',
+  'archived.open': 'Открыть',
+  'archived.deleted': 'AGI Workforce: «{title}» удалена.',
+  'archived.notFound': 'AGI Workforce: этой сессии больше нет в этой рабочей области.',
+  'archived.actionFailed': 'AGI Workforce: {reason}',
+  'webview.searchingSessions': 'Поиск сессий…',
+  'webview.noMatchingSessions': 'Нет сессий, соответствующих «{query}»',
+  'webview.archivedSessions': 'Архивные сессии',
 };
 
 export default ru;

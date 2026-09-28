@@ -58,6 +58,11 @@ const openModelPopover = z.object({ type: z.literal('openModelPopover') });
 const openFilePicker = z.object({ type: z.literal('openFilePicker') });
 const openHistory = z.object({ type: z.literal('openHistory') });
 const newChat = z.object({ type: z.literal('newChat') });
+const openArchivedSessions = z.object({ type: z.literal('openArchivedSessions') });
+const searchSessions = z.object({
+  type: z.literal('searchSessions'),
+  payload: z.object({ query: z.string().trim().min(2).max(200) }),
+});
 const openAccount = z.object({ type: z.literal('openAccount') });
 const completeOnboarding = z.object({ type: z.literal('completeOnboarding') });
 const openPermissionDocs = z.object({ type: z.literal('openPermissionDocs') });
@@ -282,6 +287,8 @@ export const WebviewToExtSchema = z.discriminatedUnion('type', [
   openFilePicker,
   openHistory,
   newChat,
+  openArchivedSessions,
+  searchSessions,
   openAccount,
   completeOnboarding,
   openPermissionDocs,

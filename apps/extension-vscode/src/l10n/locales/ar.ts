@@ -657,6 +657,26 @@ const ar = {
   'remote.attached_few': '{count} جلسات مفتوحة على الهاتف.',
   'remote.attached_many': '{count} جلسة مفتوحة على الهاتف.',
   'remote.attached_other': '{count} جلسة مفتوحة على الهاتف.',
+  'sessionSearch.title': 'سجل الجلسات',
+  'sessionSearch.placeholder': 'ابحث في الجلسات حسب العنوان أو نص الرسائل',
+  'sessionSearch.folderFailed':
+    'AGI Workforce: تعذر على AGI CLI قراءة الجلسات في {folder}. {reason}',
+  'archived.title': 'الجلسات المؤرشفة',
+  'archived.placeholder': 'اختر جلسة لاستعادتها وفتحها',
+  'archived.none': 'AGI Workforce: لا توجد جلسات مؤرشفة في مساحة العمل هذه.',
+  'archived.restore': 'استعادة',
+  'archived.delete': 'حذف نهائي',
+  'archived.deleteTitle': 'هل تريد حذف "{title}" نهائيًا؟',
+  'archived.deleteDetail':
+    'تُزال نصوصها والموافقات وتغييرات الملفات المسجلة معها من هذا الجهاز في كل واجهات AGI. لا يمكن التراجع عن ذلك.',
+  'archived.restored': 'AGI Workforce: عادت "{title}" إلى جلساتك.',
+  'archived.open': 'فتح',
+  'archived.deleted': 'AGI Workforce: تم حذف "{title}".',
+  'archived.notFound': 'AGI Workforce: لم تعد هذه الجلسة في مساحة العمل هذه.',
+  'archived.actionFailed': 'AGI Workforce: {reason}',
+  'webview.searchingSessions': 'جارٍ البحث في الجلسات…',
+  'webview.noMatchingSessions': 'لا توجد جلسات تطابق "{query}"',
+  'webview.archivedSessions': 'الجلسات المؤرشفة',
 };
 
 export default ar;

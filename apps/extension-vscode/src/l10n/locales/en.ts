@@ -407,6 +407,26 @@ const en = {
   'remote.statusTooltip': 'Show Remote Control',
   'remote.attached_one': '{count} session is open on the phone.',
   'remote.attached_other': '{count} sessions are open on the phone.',
+  'sessionSearch.title': 'Sessions history',
+  'sessionSearch.placeholder': 'Search sessions by title or message text',
+  'sessionSearch.folderFailed':
+    'AGI Workforce: the AGI CLI could not read the sessions in {folder}. {reason}',
+  'archived.title': 'Archived sessions',
+  'archived.placeholder': 'Select a session to restore and open it',
+  'archived.none': 'AGI Workforce: there are no archived sessions in this workspace.',
+  'archived.restore': 'Restore',
+  'archived.delete': 'Delete permanently',
+  'archived.deleteTitle': 'Permanently delete "{title}"?',
+  'archived.deleteDetail':
+    'Its transcript and the approvals and file changes recorded with it are removed from this machine for every AGI surface. This cannot be undone.',
+  'archived.restored': 'AGI Workforce: "{title}" is back in your sessions.',
+  'archived.open': 'Open',
+  'archived.deleted': 'AGI Workforce: "{title}" was deleted.',
+  'archived.notFound': 'AGI Workforce: that session is no longer in this workspace.',
+  'archived.actionFailed': 'AGI Workforce: {reason}',
+  'webview.searchingSessions': 'Searching sessions…',
+  'webview.noMatchingSessions': 'No sessions match "{query}"',
+  'webview.archivedSessions': 'Archived sessions',
 };
 
 export default en;

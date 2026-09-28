@@ -85,6 +85,7 @@ import {
   type SessionSource,
 } from '../surfaces';
 import { resolveProjectsWorkspace } from '../projects/projectsClient';
+import { SHOW_ARCHIVED_SESSIONS_COMMAND } from '../trees/sessionPickers';
 import {
   CONTINUE_IN_CLOUD_COMMAND,
   OPEN_CLOUD_CODE_SESSION_COMMAND,
@@ -296,6 +297,8 @@ export type WebviewToExtMessage =
   | { type: 'clearActiveProject' }
   | { type: 'openSurface'; payload: { surfaceId: string } }
   | { type: 'requestSessions'; payload: { source: SessionListSource } }
+  | { type: 'searchSessions'; payload: { query: string } }
+  | { type: 'openArchivedSessions' }
   | { type: 'openSessionRow'; payload: { id: string; source: SessionSource } }
   | { type: 'requestSlashCommands' }
   | { type: 'continueInCloud' }
@@ -510,6 +513,14 @@ export type ExtToWebviewMessage =
       payload: {
         source: SessionListSource;
         rows: SessionRow[];
+        unavailable?: string;
+      };
+    }
+  | {
+      type: 'sessionsSearchResults';
+      payload: {
+        query: string;
+        rows: Array<SessionRow & { snippet?: string }>;
         unavailable?: string;
       };
     }
@@ -1125,6 +1136,16 @@ export class ChatStateManager {
 
       case 'requestSessions': {
         await this._pushSessions(msg.payload.source);
+        break;
+      }
+
+      case 'searchSessions': {
+        await this._searchSessions(msg.payload.query);
+        break;
+      }
+
+      case 'openArchivedSessions': {
+        await vscode.commands.executeCommand(SHOW_ARCHIVED_SESSIONS_COMMAND);
         break;
       }
 
@@ -1782,6 +1803,53 @@ export class ChatStateManager {
         },
       });
     }
+  }
+
+  private async _searchSessions(query: string): Promise<void> {
+    const provider = this._conversationTreeProvider;
+    if (provider === undefined) {
+      this._post({
+        type: 'sessionsSearchResults',
+        payload: { query, rows: [], unavailable: t('chatNotice.historyUnavailable') },
+      });
+      return;
+    }
+    const { items: hits, failures } = await provider.searchThreads(query);
+    const snippets = new Map(
+      hits.flatMap((hit) => {
+        const [first] = hit.matches;
+        return first === undefined ? [] : [[hit.thread.id, first.snippet] as const];
+      }),
+    );
+    const rows = mergeSessionRows(
+      hits.map((hit) => ({
+        id: hit.thread.id,
+        title: hit.thread.title,
+        updatedAt: hit.thread.updatedAt,
+        source: 'local' as const,
+        ...(hit.thread.createdBy === undefined ? {} : { origin: hit.thread.createdBy }),
+        ...(hit.thread.gitBranch === undefined ? {} : { branch: hit.thread.gitBranch }),
+      })),
+    ).map((row) => {
+      const snippet = snippets.get(row.id);
+      return snippet === undefined ? row : { ...row, snippet };
+    });
+    const [failure] = failures;
+    this._post({
+      type: 'sessionsSearchResults',
+      payload: {
+        query,
+        rows,
+        ...(failure === undefined || hits.length > 0
+          ? {}
+          : {
+              unavailable: t('sessionSearch.folderFailed', {
+                folder: failure.folderName,
+                reason: failure.reason,
+              }),
+            }),
+      },
+    });
   }
 
   private async _pushSlashCommands(): Promise<void> {

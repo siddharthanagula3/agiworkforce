@@ -305,6 +305,25 @@ const zh = {
   'remote.statusError': '远程控制：已停止',
   'remote.statusTooltip': '显示远程控制',
   'remote.attached_other': '手机上打开了 {count} 个会话。',
+  'sessionSearch.title': '会话历史',
+  'sessionSearch.placeholder': '按标题或消息内容搜索会话',
+  'sessionSearch.folderFailed': 'AGI Workforce：AGI CLI 无法读取 {folder} 中的会话。{reason}',
+  'archived.title': '已归档的会话',
+  'archived.placeholder': '选择一个会话以恢复并打开它',
+  'archived.none': 'AGI Workforce：此工作区中没有已归档的会话。',
+  'archived.restore': '恢复',
+  'archived.delete': '永久删除',
+  'archived.deleteTitle': '要永久删除“{title}”吗？',
+  'archived.deleteDetail':
+    '它的记录以及随之保存的批准和文件更改都会从这台机器上删除，所有 AGI 界面都不再可用。此操作无法撤销。',
+  'archived.restored': 'AGI Workforce：“{title}”已回到你的会话中。',
+  'archived.open': '打开',
+  'archived.deleted': 'AGI Workforce：已删除“{title}”。',
+  'archived.notFound': 'AGI Workforce：该会话已不在此工作区中。',
+  'archived.actionFailed': 'AGI Workforce：{reason}',
+  'webview.searchingSessions': '正在搜索会话…',
+  'webview.noMatchingSessions': '没有与“{query}”匹配的会话',
+  'webview.archivedSessions': '已归档的会话',
 };
 
 export default zh;

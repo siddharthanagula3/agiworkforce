@@ -360,6 +360,26 @@ const ja = {
   'remote.statusError': 'リモートコントロール: 停止',
   'remote.statusTooltip': 'リモートコントロールを表示',
   'remote.attached_other': 'スマートフォンで {count} 件のセッションが開かれています。',
+  'sessionSearch.title': 'セッション履歴',
+  'sessionSearch.placeholder': 'タイトルまたはメッセージの本文でセッションを検索',
+  'sessionSearch.folderFailed':
+    'AGI Workforce: AGI CLI は {folder} のセッションを読み取れませんでした。{reason}',
+  'archived.title': 'アーカイブ済みのセッション',
+  'archived.placeholder': 'セッションを選択すると復元して開きます',
+  'archived.none': 'AGI Workforce: このワークスペースにアーカイブ済みのセッションはありません。',
+  'archived.restore': '復元',
+  'archived.delete': '完全に削除',
+  'archived.deleteTitle': '「{title}」を完全に削除しますか？',
+  'archived.deleteDetail':
+    'このセッションのトランスクリプトと、記録された承認やファイル変更は、すべての AGI サーフェスでこのマシンから削除されます。この操作は元に戻せません。',
+  'archived.restored': 'AGI Workforce: 「{title}」をセッションに戻しました。',
+  'archived.open': '開く',
+  'archived.deleted': 'AGI Workforce: 「{title}」を削除しました。',
+  'archived.notFound': 'AGI Workforce: そのセッションはこのワークスペースにありません。',
+  'archived.actionFailed': 'AGI Workforce: {reason}',
+  'webview.searchingSessions': 'セッションを検索しています…',
+  'webview.noMatchingSessions': '「{query}」に一致するセッションはありません',
+  'webview.archivedSessions': 'アーカイブ済みのセッション',
 };
 
 export default ja;
