@@ -333,9 +333,6 @@ Code: `apps/web/app/workspace/data/page.tsx:24-24`, `apps/web/features/workspace
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
-| api | partial | Workspace API keys can export held records and read preservation status, but cannot place or release a hold (session only). | api |
-
-Code: `apps/web/lib/server/service-principals/route-access.ts:35-41`, `apps/web/app/api/settings/organization/legal-holds/[holdId]/preservation/route.ts:40-46`
 
 ## S87.39: Policy diagnostics.
 
