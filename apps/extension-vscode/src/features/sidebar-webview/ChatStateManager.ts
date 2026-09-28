@@ -7,6 +7,8 @@ import { type DiffDecorationProvider } from '../../providers/diffDecorationProvi
 import {
   normalizeConfiguredModelId,
   getModelProviderInfo,
+  registryEffortLevels,
+  supportedEffort,
   buildGroupedQuickPickItems,
   isModelReachableForTier,
   MODEL_CONTEXT_LIMITS,
@@ -354,7 +356,11 @@ export type ExtToWebviewMessage =
   | { type: 'modeChanged'; payload: { mode: AgentMode } }
   | {
       type: 'effortChanged';
-      payload: { effort: DeveloperReasoningEffort; supportsEffort: boolean };
+      payload: {
+        effort: DeveloperReasoningEffort;
+        supportsEffort: boolean;
+        efforts: DeveloperReasoningEffort[] | null;
+      };
     }
   | { type: 'usageMeter'; payload: UsageMeterWebviewPayload }
   | {
@@ -730,8 +736,15 @@ export class ChatStateManager {
     return this._effort;
   }
 
+  modelEffortLevels(modelId: string): DeveloperReasoningEffort[] | null {
+    if (this._localModelProviders.has(modelId)) return null;
+    return registryEffortLevels(modelId);
+  }
+
   modelSupportsEffort(modelId: string): boolean {
     if (this._localModelProviders.has(modelId)) return false;
+    const levels = registryEffortLevels(modelId);
+    if (levels !== null) return levels.length > 0;
     const { providerId } = getModelProviderInfo(modelId);
     if (providerId === null) return false;
     return PROVIDER_DISPLAY[providerId]?.supportsEffort ?? false;
@@ -759,6 +772,7 @@ export class ChatStateManager {
           payload: {
             effort: this._effort ?? Config.agentEffort(),
             supportsEffort: this.modelSupportsEffort(model),
+            efforts: this.modelEffortLevels(model),
           },
         });
 
@@ -828,6 +842,7 @@ export class ChatStateManager {
           payload: {
             effort: this._effort ?? Config.agentEffort(),
             supportsEffort: this.modelSupportsEffort(model),
+            efforts: this.modelEffortLevels(model),
           },
         });
         break;
@@ -1145,6 +1160,7 @@ export class ChatStateManager {
           payload: {
             effort: this._effort ?? Config.agentEffort(),
             supportsEffort: this.modelSupportsEffort(model),
+            efforts: this.modelEffortLevels(model),
           },
         });
         break;
@@ -1320,6 +1336,7 @@ export class ChatStateManager {
           payload: {
             effort: this._effort ?? Config.agentEffort(),
             supportsEffort: this.modelSupportsEffort(normalized),
+            efforts: this.modelEffortLevels(normalized),
           },
         });
         await this._pushUsageMeterOnBoundaryChange();
@@ -1811,6 +1828,7 @@ export class ChatStateManager {
         payload: {
           effort: this._effort ?? Config.agentEffort(),
           supportsEffort: this.modelSupportsEffort(model),
+          efforts: this.modelEffortLevels(model),
         },
       });
       const committedEpoch = this._conversationEpoch;
@@ -1911,6 +1929,7 @@ export class ChatStateManager {
       payload: {
         effort: this._effort ?? Config.agentEffort(),
         supportsEffort: this.modelSupportsEffort(model),
+        efforts: this.modelEffortLevels(model),
       },
     });
   }
@@ -2117,7 +2136,11 @@ export class ChatStateManager {
     const model = normalizeConfiguredModelId(Config.model());
     this._post({
       type: 'effortChanged',
-      payload: { effort, supportsEffort: this.modelSupportsEffort(model) },
+      payload: {
+        effort,
+        supportsEffort: this.modelSupportsEffort(model),
+        efforts: this.modelEffortLevels(model),
+      },
     });
   }
 
@@ -2836,7 +2859,7 @@ export class ChatStateManager {
             ...attachmentInputs,
           ],
           agentMode: enforceAgentModeConsent(this._mode ?? Config.agentMode()),
-          reasoningEffort: this._effort ?? Config.agentEffort(),
+          reasoningEffort: supportedEffort(requestedModel, this._effort ?? Config.agentEffort()),
           ...(contextFiles.length === 0 ? {} : { contextFiles }),
           ...(isAutoRoutingModel(requestedModel)
             ? {
