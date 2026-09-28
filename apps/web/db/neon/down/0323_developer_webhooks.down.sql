@@ -1,4 +1,4 @@
--- Reversal of 0322 : developer webhooks are removed.
+-- Reversal of 0323 : developer webhooks are removed.
 --
 -- WHAT THIS COSTS: every registered endpoint, its signing secret and the whole
 -- delivery log are deleted, and no further event is sent to any endpoint.
@@ -18,6 +18,6 @@ drop index if exists public.idx_developer_webhook_endpoints_user;
 drop table if exists public.developer_webhook_endpoints;
 
 delete from public.schema_migrations
- where filename = '0322_developer_webhooks.sql';
+ where filename = '0323_developer_webhooks.sql';
 
 commit;
