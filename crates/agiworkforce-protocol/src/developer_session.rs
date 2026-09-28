@@ -98,6 +98,7 @@ pub mod method {
     pub const MCP_TEST: &str = "mcp/test";
     pub const MCP_TOOLS: &str = "mcp/tools";
     pub const MCP_INSPECT: &str = "mcp/inspect";
+    pub const MCP_AUTH_REQUIRED: &str = "mcp/authRequired";
     pub const MCP_ADD: &str = "mcp/add";
     pub const MCP_REMOVE: &str = "mcp/remove";
     pub const HOOKS_LIST: &str = "hooks/list";
@@ -629,6 +630,19 @@ pub struct DeveloperTodo {
     pub content: String,
     pub status: DeveloperStepStatus,
     pub priority: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct McpAuthRequiredNotification {
+    pub thread_id: String,
+    pub turn_id: String,
+    pub tool_call_id: String,
+    pub server: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub scope: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]

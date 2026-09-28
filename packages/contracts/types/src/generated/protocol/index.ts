@@ -208,6 +208,7 @@ export * from './LocalShellExecAction';
 export * from './LocalShellStatus';
 export * from './ManagedFileSystemPermissions';
 export * from './McpAddParams';
+export * from './McpAuthRequiredNotification';
 export * from './McpAuthStatus';
 export * from './McpInvocation';
 export * from './McpListToolsResponseEvent';
