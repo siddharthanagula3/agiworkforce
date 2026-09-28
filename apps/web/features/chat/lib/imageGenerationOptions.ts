@@ -165,6 +165,7 @@ export function resolveImageGenerationRequestOptions(
   aspectRatio: ImageAspectRatio,
   modelId?: string,
   edit?: ImageEditRequest,
+  transparentBackground?: boolean,
 ): ResolvedImageGenerationRequestOptions {
   const model = resolveImageModel(modelId);
   if (!model) return {};
@@ -181,8 +182,10 @@ export function resolveImageGenerationRequestOptions(
           ...(edit.referenceImagesBase64?.length
             ? { referenceImagesBase64: edit.referenceImagesBase64 }
             : {}),
-          ...(edit.transparentBackground ? { transparentBackground: true } : {}),
         }
+      : {}),
+    ...(transparentBackground || edit?.transparentBackground
+      ? { transparentBackground: true }
       : {}),
   };
 }
