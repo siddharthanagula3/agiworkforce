@@ -68,6 +68,7 @@ import {
   initializeAgentModeConsent,
   reconcileAgentControlConsent,
 } from './features/permissions/agentModeConsent';
+import { registerProposedChangeReview } from './features/permissions/proposedChangeReview';
 
 let activeLocalRuntimes: LocalRuntimePool | undefined;
 
@@ -133,7 +134,7 @@ export function activate(context: vscode.ExtensionContext): void {
       }),
   );
   activeLocalRuntimes = localRuntimes;
-  context.subscriptions.push(localRuntimes);
+  context.subscriptions.push(localRuntimes, registerProposedChangeReview());
 
   let chatState: ChatState | undefined;
   try {

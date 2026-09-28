@@ -147,6 +147,8 @@ const capabilitiesSchema = z.object({
   writerLease: z.boolean().optional(),
   installs: z.boolean().optional(),
   mcpTools: z.boolean().optional(),
+  approvalNotes: z.boolean().optional(),
+  approvalEdits: z.boolean().optional(),
 });
 
 const initializeResponseSchema = z.object({
@@ -634,6 +636,8 @@ const approvalRequestedEventSchema = z.object({
   // gentler answer.
   riskLevel: z.enum(APPROVAL_RISK_LEVELS).optional().catch(undefined),
   reversible: z.boolean().optional().catch(undefined),
+  proposedContent: z.string().max(1_000_000).optional().catch(undefined),
+  editable: z.boolean().optional().catch(undefined),
 });
 const turnInterruptedEventSchema = z.object({
   threadId: z.string().min(1),
@@ -1095,13 +1099,13 @@ export class LocalRuntimeClient {
     await connection.request('thread/delete', { threadId });
   }
 
-  async offersCheckpoints(): Promise<boolean> {
-    return (await this.initialize()).capabilities.checkpoints === true;
+  async offers(capability: keyof AppServerCapabilities): Promise<boolean> {
+    return (await this.initialize()).capabilities[capability] === true;
   }
 
   async listCheckpoints(threadId: string): Promise<ThreadCheckpointList> {
     const connection = await this.readyConnection();
-    if (!(await this.offersCheckpoints())) {
+    if (!(await this.offers('checkpoints'))) {
       throw new Error('The installed AGI CLI keeps no checkpoints. Update the AGI CLI to rewind.');
     }
     return threadCheckpointsResponseSchema.parse(
@@ -1111,7 +1115,7 @@ export class LocalRuntimeClient {
 
   async rewindThread(params: ThreadRewindParams): Promise<ThreadRewindOutcome> {
     const connection = await this.readyConnection();
-    if (!(await this.offersCheckpoints())) {
+    if (!(await this.offers('checkpoints'))) {
       throw new Error('The installed AGI CLI keeps no checkpoints. Update the AGI CLI to rewind.');
     }
     return threadRewindResponseSchema.parse(await connection.request('thread/rewind', params));
