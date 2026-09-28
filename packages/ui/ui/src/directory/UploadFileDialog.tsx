@@ -5,6 +5,7 @@ import { useRef, useState } from 'react';
 
 import { cn } from '../cn';
 import { toUserMessage } from '../lib/network-error';
+import { Alert, AlertDescription, AlertTitle } from '../primitives/Alert';
 import {
   Dialog,
   DialogContent,
@@ -17,11 +18,15 @@ import { Spinner } from '../primitives/Spinner';
 import {
   UPLOAD_BUSY_LABEL,
   UPLOAD_CANCEL_LABEL,
+  UPLOAD_CAUTION_BODY,
+  UPLOAD_CAUTION_CONTINUE_LABEL,
+  UPLOAD_CAUTION_TITLE,
   UPLOAD_CHOOSE_FILE_LABEL,
   UPLOAD_DONE_LABEL,
   UPLOAD_NO_FILE_LABEL,
   UPLOAD_SUBMIT_LABEL,
 } from './constants';
+import { isDirectoryScanCaution, type DirectoryScanCaution } from './scan-caution';
 import { DIRECTORY_CREATE_BUTTON, DIRECTORY_FOCUS_RING } from './styles';
 import type { DirectoryUploadResult } from './types';
 
@@ -40,35 +45,45 @@ export function UploadFileDialog({
   accept: string;
   failureCopy: string;
   onClose: () => void;
-  onSubmit: (file: File) => Promise<DirectoryUploadResult>;
+  onSubmit: (file: File, acknowledgedScans?: readonly string[]) => Promise<DirectoryUploadResult>;
 }) {
   const input = useRef<HTMLInputElement | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [caution, setCaution] = useState<DirectoryScanCaution | null>(null);
   const [result, setResult] = useState<DirectoryUploadResult | null>(null);
 
   const close = () => {
     setFile(null);
     setBusy(false);
     setError(null);
+    setCaution(null);
     setResult(null);
     if (input.current) input.current.value = '';
     onClose();
   };
 
-  const submit = async () => {
+  const submit = async (acknowledgedScans?: readonly string[]) => {
     if (!file) return;
     setBusy(true);
     setError(null);
+    setCaution(null);
     try {
-      setResult(await onSubmit(file));
+      setResult(await onSubmit(file, acknowledgedScans));
     } catch (caught) {
-      setError(toUserMessage(caught, failureCopy));
+      if (isDirectoryScanCaution(caught)) setCaution(caught);
+      else setError(toUserMessage(caught, failureCopy));
     } finally {
       setBusy(false);
     }
   };
+
+  const submitIcon = busy ? (
+    <Spinner aria-label={UPLOAD_BUSY_LABEL} className="size-4" />
+  ) : (
+    <Upload aria-hidden className="size-4" />
+  );
 
   return (
     <Dialog
@@ -98,6 +113,7 @@ export function UploadFileDialog({
               aria-label={UPLOAD_CHOOSE_FILE_LABEL}
               onChange={(event) => {
                 setError(null);
+                setCaution(null);
                 setFile(event.target.files?.[0] ?? null);
               }}
               className={cn(
@@ -109,6 +125,21 @@ export function UploadFileDialog({
             <p className="text-xs text-muted-foreground">
               {file ? file.name : UPLOAD_NO_FILE_LABEL}
             </p>
+            {caution ? (
+              <Alert variant="warning">
+                <AlertTitle>{UPLOAD_CAUTION_TITLE}</AlertTitle>
+                <AlertDescription className="flex flex-col gap-2 text-foreground">
+                  <p>{UPLOAD_CAUTION_BODY}</p>
+                  <ul className="flex list-disc flex-col gap-1 pl-4 text-xs">
+                    {caution.findings.map((finding) => (
+                      <li key={finding} className="break-words">
+                        {finding}
+                      </li>
+                    ))}
+                  </ul>
+                </AlertDescription>
+              </Alert>
+            ) : null}
             {error ? (
               <p
                 role="alert"
@@ -138,19 +169,27 @@ export function UploadFileDialog({
               >
                 {UPLOAD_CANCEL_LABEL}
               </button>
-              <button
-                type="button"
-                onClick={() => void submit()}
-                disabled={busy || !file}
-                className={cn(DIRECTORY_CREATE_BUTTON, 'gap-2 disabled:opacity-60')}
-              >
-                {busy ? (
-                  <Spinner aria-label={UPLOAD_BUSY_LABEL} className="size-4" />
-                ) : (
-                  <Upload aria-hidden className="size-4" />
-                )}
-                {busy ? UPLOAD_BUSY_LABEL : UPLOAD_SUBMIT_LABEL}
-              </button>
+              {caution ? (
+                <button
+                  type="button"
+                  onClick={() => void submit(caution.acknowledgements)}
+                  disabled={busy || !file}
+                  className={cn(DIRECTORY_CREATE_BUTTON, 'gap-2 disabled:opacity-60')}
+                >
+                  {submitIcon}
+                  {busy ? UPLOAD_BUSY_LABEL : UPLOAD_CAUTION_CONTINUE_LABEL}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => void submit()}
+                  disabled={busy || !file}
+                  className={cn(DIRECTORY_CREATE_BUTTON, 'gap-2 disabled:opacity-60')}
+                >
+                  {submitIcon}
+                  {busy ? UPLOAD_BUSY_LABEL : UPLOAD_SUBMIT_LABEL}
+                </button>
+              )}
             </>
           )}
         </DialogFooter>

@@ -51,6 +51,7 @@ const TRUNCATED_TREE_REASON = 'repository tree truncated before any skill was se
 export interface GithubTreeEntry {
   path: string;
   type: string;
+  size?: number;
 }
 
 export interface RepositoryTree {
@@ -128,7 +129,11 @@ export async function fetchRepositoryTree(
     if (!item || typeof item !== 'object') continue;
     const record = item as Record<string, unknown>;
     if (typeof record['path'] === 'string' && typeof record['type'] === 'string') {
-      entries.push({ path: record['path'], type: record['type'] });
+      entries.push({
+        path: record['path'],
+        type: record['type'],
+        ...(typeof record['size'] === 'number' ? { size: record['size'] } : {}),
+      });
     }
   }
   return { status: 'ok', tree: { sha: body.sha, entries, truncated: body.truncated === true } };

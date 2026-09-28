@@ -6,10 +6,13 @@ import {
   LocalInferenceRefused,
   ShellCommandRefused,
   assertLocalTurnCarriesNoAttachments,
+  isDesktopCapability,
+  isSystemPermissionKind,
   isWorkspaceRootKind,
   runtimeFailure,
   runtimeSuccess,
   type DesktopCapability,
+  type DesktopPermissionsReview,
   type DesktopRuntimeErrorCode,
   type DesktopRuntimeResponse,
   type LocalChatMessage,
@@ -17,6 +20,7 @@ import {
   type LocalModelSettings,
   type LocalModelSnapshot,
   type PermissionScope,
+  type PermissionScopeKind,
   type ShellPolicy,
   type WorkspaceRoot,
   type WorkspaceSnapshot,
@@ -57,16 +61,25 @@ import {
   clickPointer,
   computerUseAvailability,
   dragPointer,
-  isComputerUseTakenOver,
   movePointer,
   pressKey,
   screenChangesSeen,
   scrollPointer,
-  stopComputerUseHelper,
-  takeOverComputerUse,
   typeText,
   waitFor,
 } from './computerUseService';
+import {
+  computerUseEnabled,
+  computerUseStatus,
+  enterScreenStep,
+  finishComputerUse,
+  refuseScreenStepEarly,
+  setComputerUseEnabled,
+  stopComputerUse,
+  takeOverComputerUse,
+} from './computerUseSession';
+import { confirmHandBack, runScreenAction } from './computerUseSteps';
+import { openSystemPermission } from './systemPermissions';
 import {
   computerUseLoopMessage,
   createComputerUseLoopDetector,
@@ -137,7 +150,9 @@ import {
   consumeSingleUse,
   getPermissionState,
   requestPermission,
+  reviewPermissions,
   revokePermission,
+  revokeScope,
 } from './permissionManager';
 import {
   findContainingRoot,
@@ -265,6 +280,37 @@ function requireRegion(args: Args): DeviceStepRegion {
   return requireRegionFields(value as Args);
 }
 
+function requireBoolean(args: Args, key: string): boolean {
+  const value = args[key];
+  if (typeof value !== 'boolean') throw new InvalidArguments(`"${key}" must be true or false.`);
+  return value;
+}
+
+const PERMISSION_SCOPE_KINDS: readonly PermissionScopeKind[] = [
+  'workspace',
+  'application',
+  'site',
+  'global',
+];
+
+function requireScope(args: Args): PermissionScope {
+  const value = args['scope'];
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new InvalidArguments('"scope" must be an object with a kind.');
+  }
+  const kind = (value as Args)['kind'];
+  const target = (value as Args)['target'];
+  if (!PERMISSION_SCOPE_KINDS.includes(kind as PermissionScopeKind)) {
+    throw new InvalidArguments('"scope.kind" must be workspace, application, site or global.');
+  }
+  if (target !== undefined && target !== null && typeof target !== 'string') {
+    throw new InvalidArguments('"scope.target" must be a string.');
+  }
+  return typeof target === 'string' && target.length > 0
+    ? { kind: kind as PermissionScopeKind, target }
+    : { kind: kind as PermissionScopeKind };
+}
+
 function requireRegionFields(region: Args): DeviceStepRegion {
   return {
     x: requireNumber(region, 'x'),
@@ -294,13 +340,12 @@ export function resetScreenStepGate(): void {
   screenChangesAtLastStep = screenChangesSeen();
 }
 
-function guardScreenStep(command: string, args: Args): void {
-  if (isComputerUseTakenOver()) {
-    throw new ComputerUseRefused(
-      'paused',
-      'The user has taken over the screen. Do not try another screen step; tell them what you were about to do and wait for them to hand control back.',
-    );
-  }
+async function guardScreenStep(
+  window: BrowserWindow | null,
+  command: string,
+  args: Args,
+): Promise<void> {
+  await enterScreenStep(window, command);
   if (command === 'computer_screenshot' || command === 'computer_zoom') return;
   // A screenshot that showed the screen moving means the steps so far did
   // something, so the same step again is progress and not a loop.
@@ -499,6 +544,21 @@ const CAPABILITY_BY_COMMAND: Record<string, { capability: DesktopCapability; rea
 const COMPUTER_USE_REASON =
   'The agent moves the pointer, clicks and types on this Mac as if you were doing it, and reads the screen to decide where. It can reach anything already open, including apps and pages you are signed into.';
 
+function revokeReviewedPermission(
+  window: BrowserWindow | null,
+  args: Args,
+): DesktopPermissionsReview {
+  const capability = requireString(args, 'capability');
+  if (!isDesktopCapability(capability)) {
+    throw new InvalidArguments(`"${capability}" is not a desktop permission.`);
+  }
+  const scope = requireScope(args);
+  if (capability === 'computer.use' && scope.kind === 'global') stopComputerUse();
+  else revokePermission(capability, scope);
+  emitRuntimeEvent(window, { kind: 'permission-changed', capability, scope });
+  return reviewPermissions();
+}
+
 /** Capabilities scoped to the session rather than to one folder. */
 const GLOBAL_CAPABILITY_BY_COMMAND: Record<
   string,
@@ -518,25 +578,6 @@ const GLOBAL_CAPABILITY_BY_COMMAND: Record<
   computer_key: { capability: 'computer.use', reason: COMPUTER_USE_REASON },
   computer_wait: { capability: 'computer.use', reason: COMPUTER_USE_REASON },
 };
-
-/**
- * Stop a screen-control run now.
- *
- * Killing the helper ends the action in flight, and withdrawing the grant is
- * what stops the next one: each step is independent here, so without that the
- * very next call spawns a new helper and the pointer keeps moving. The user
- * grants again to carry on, which is the same prompt that started it.
- *
- * Deliberately outside the capability table. Needing permission to stop
- * something already running is the one place a prompt must not appear, and
- * until now the only way to end a run was to quit the app while it held the
- * mouse.
- */
-function stopComputerUse(): { stopped: true } {
-  stopComputerUseHelper();
-  revokePermission('computer.use', { kind: 'global' });
-  return { stopped: true };
-}
 
 async function snapshotFor(root: WorkspaceRoot): Promise<WorkspaceSnapshot> {
   const git = await readWorkspaceGit(root);
@@ -737,7 +778,7 @@ export async function runBrowserCommand(
 function declareDeviceHost(): DesktopHostDeclaration {
   const roots = listRoots();
   const identity = deviceIdentity();
-  const screenUsable = computerUseAvailability().supported;
+  const screenUsable = computerUseEnabled() && computerUseAvailability().supported;
   const capabilities = [
     ...new Set(
       DEVICE_STEP_TOOLS.filter((tool) =>
@@ -778,7 +819,7 @@ async function describeDeviceForRegistry(): Promise<DeviceRegistryProfile> {
     appVersion: app.getVersion(),
     capabilities: {
       browser: pairingState().paired,
-      computerUse: computerUseAvailability().supported,
+      computerUse: computerUseEnabled() && computerUseAvailability().supported,
       localModels: await localModelsAvailable(),
       localMcp: false,
       remoteControl: remoteControlAvailable(),
@@ -791,7 +832,7 @@ async function execute(
   command: string,
   args: Args,
 ): Promise<unknown> {
-  if (SCREEN_STEP_COMMANDS.has(command)) guardScreenStep(command, args);
+  if (SCREEN_STEP_COMMANDS.has(command)) await guardScreenStep(window, command, args);
   switch (command) {
     case 'workspace_pick_root':
       return pickRoot(window, args);
@@ -800,6 +841,8 @@ async function execute(
     case 'workspace_revoke_root': {
       const rootId = requireString(args, 'rootId');
       stopDeveloperRuntime(rootId);
+      const root = getRoot(rootId);
+      if (root) revokeScope(workspaceScope(root));
       return revokeRoot(rootId);
     }
     case 'workspace_snapshot':
@@ -830,12 +873,14 @@ async function execute(
         resolveRoot(args),
         requireString(args, 'pattern'),
         optionalString(args, 'path', ''),
+        { ignoreCase: args['ignoreCase'] === true },
       );
     case 'file_grep':
       return grepFiles(
         resolveRoot(args),
         requireString(args, 'query'),
         optionalString(args, 'path', ''),
+        { ignoreCase: args['ignoreCase'] === true },
       );
     case 'shell_run': {
       const root = resolveRoot(args);
@@ -924,39 +969,63 @@ async function execute(
     }
     case 'computer_zoom':
       return captureRegion(requireRegion(args));
-    case 'computer_move':
-      return movePointer(requireNumber(args, 'x'), requireNumber(args, 'y'));
-    case 'computer_click':
-      return clickPointer(
-        requireNumber(args, 'x'),
-        requireNumber(args, 'y'),
-        requireMouseButton(args),
-        optionalNumberOr(args, 'count', 1),
-      );
-    case 'computer_drag':
-      return dragPointer(
-        requireNumber(args, 'x'),
-        requireNumber(args, 'y'),
-        requireNumber(args, 'toX'),
-        requireNumber(args, 'toY'),
-      );
-    case 'computer_scroll':
-      return scrollPointer(
-        requireNumber(args, 'x'),
-        requireNumber(args, 'y'),
-        optionalNumberOr(args, 'deltaX', 0),
-        optionalNumberOr(args, 'deltaY', 0),
-      );
-    case 'computer_type':
-      return typeText(requireString(args, 'text'));
-    case 'computer_key':
-      return pressKey(requireString(args, 'key'), requireModifiers(args));
+    case 'computer_move': {
+      const [x, y] = [requireNumber(args, 'x'), requireNumber(args, 'y')];
+      return runScreenAction(window, command, args, () => movePointer(x, y));
+    }
+    case 'computer_click': {
+      const [x, y] = [requireNumber(args, 'x'), requireNumber(args, 'y')];
+      const button = requireMouseButton(args);
+      const count = optionalNumberOr(args, 'count', 1);
+      return runScreenAction(window, command, args, () => clickPointer(x, y, button, count));
+    }
+    case 'computer_drag': {
+      const [x, y] = [requireNumber(args, 'x'), requireNumber(args, 'y')];
+      const [toX, toY] = [requireNumber(args, 'toX'), requireNumber(args, 'toY')];
+      return runScreenAction(window, command, args, () => dragPointer(x, y, toX, toY));
+    }
+    case 'computer_scroll': {
+      const [x, y] = [requireNumber(args, 'x'), requireNumber(args, 'y')];
+      const deltaX = optionalNumberOr(args, 'deltaX', 0);
+      const deltaY = optionalNumberOr(args, 'deltaY', 0);
+      return runScreenAction(window, command, args, () => scrollPointer(x, y, deltaX, deltaY));
+    }
+    case 'computer_type': {
+      const text = requireString(args, 'text');
+      return runScreenAction(window, command, args, () => typeText(text));
+    }
+    case 'computer_key': {
+      const key = requireString(args, 'key');
+      const modifiers = requireModifiers(args);
+      return runScreenAction(window, command, args, () => pressKey(key, modifiers));
+    }
     case 'computer_wait':
       return waitFor(optionalNumberOr(args, 'ms', 500));
     case 'computer_stop':
       return stopComputerUse();
     case 'computer_take_over':
       return takeOverComputerUse();
+    case 'computer_hand_back':
+      return confirmHandBack(window);
+    case 'computer_use_status':
+      return computerUseStatus();
+    case 'computer_use_set_enabled':
+      return setComputerUseEnabled(requireBoolean(args, 'enabled'));
+    case 'computer_use_finish':
+      return finishComputerUse(window);
+    case 'system_permission_open': {
+      const permission = args['permission'];
+      if (!isSystemPermissionKind(permission)) {
+        throw new InvalidArguments(
+          '"permission" must be screen-recording, accessibility or microphone.',
+        );
+      }
+      return openSystemPermission(permission);
+    }
+    case 'permission_review':
+      return reviewPermissions();
+    case 'permission_revoke':
+      return revokeReviewedPermission(window, args);
     case 'device_host_declaration':
       return declareDeviceHost();
     case DEVICE_REGISTRY_PROFILE_COMMAND:
@@ -1163,6 +1232,7 @@ export async function dispatch(
 
     const globalRequirement = GLOBAL_CAPABILITY_BY_COMMAND[command];
     if (globalRequirement) {
+      if (SCREEN_STEP_COMMANDS.has(command)) refuseScreenStepEarly();
       const scope: PermissionScope = { kind: 'global' };
       const state =
         getPermissionState(globalRequirement.capability, scope) === 'prompt'

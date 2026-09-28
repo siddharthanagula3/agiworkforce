@@ -522,12 +522,70 @@ pub(super) async fn execute_ask_user(
         ));
     }
 
+    let options = question_options(args.get("options"));
+    if approval_callback.is_some() && super::interactive_questions_enabled() {
+        let request = crate::tui::approval_broker::ApprovalRequest::new(
+            crate::tui::approval_broker::ApprovalRequestKind::Question {
+                question: question.clone(),
+                options: options.clone(),
+            },
+            question.clone(),
+            options.clone(),
+        );
+        let (decision, mut notes) =
+            super::collect_approval_notes(super::request_approval(approval_callback, request))
+                .await;
+        return Ok(match (decision, notes.pop()) {
+            (Some(decision), Some(reply)) if super::approval_allows(decision) => {
+                answer(true, format!("User responded: {reply}"))
+            }
+            _ => answer(
+                false,
+                "The user closed the question without answering. Carry on with your best judgment, or ask again in your reply if you cannot."
+                    .into(),
+            ),
+        });
+    }
+
     if approval_callback.is_some() || !crate::interactive::can_prompt() {
         return Ok(answer(
             false,
             "A typed answer cannot be collected mid-turn here. Ask the question in your reply and end the turn; the user will answer in their next message."
                 .into(),
         ));
+    }
+
+    if !options.is_empty() {
+        eprintln!(
+            "\n{} {}",
+            crate::terminal_style::accent_header("Agent asks:"),
+            question
+        );
+        let mut items = options.clone();
+        items.push("Type your own answer".to_string());
+        let picked = dialoguer::Select::new()
+            .items(&items)
+            .default(0)
+            .interact_opt()
+            .unwrap_or(None);
+        match picked {
+            Some(index) if index < options.len() => {
+                return Ok(answer(true, format!("User responded: {}", options[index])));
+            }
+            Some(_) => {}
+            None => {
+                return Ok(answer(
+                    false,
+                    "The user closed the question without answering. Carry on with your best judgment, or ask again in your reply if you cannot."
+                        .into(),
+                ));
+            }
+        }
+        let reply = dialoguer::Input::<String>::new()
+            .with_prompt("Your answer")
+            .interact_text()
+            .unwrap_or_else(|_| "(no answer)".to_string());
+        return Ok(answer(true, format!("User responded: {reply}")));
     }
 
     eprintln!(
@@ -543,6 +601,37 @@ pub(super) async fn execute_ask_user(
 
     Ok(answer(true, format!("User responded: {reply}")))
 }
+
+fn question_options(raw: Option<&String>) -> Vec<String> {
+    let Some(raw) = raw.map(|raw| raw.trim()).filter(|raw| !raw.is_empty()) else {
+        return Vec::new();
+    };
+    let parsed: Vec<String> = match serde_json::from_str::<Vec<serde_json::Value>>(raw) {
+        Ok(values) => values
+            .into_iter()
+            .filter_map(|value| match value {
+                serde_json::Value::String(text) => Some(text),
+                serde_json::Value::Object(map) => map
+                    .get("label")
+                    .and_then(serde_json::Value::as_str)
+                    .map(str::to_string),
+                _ => None,
+            })
+            .collect(),
+        Err(_) => raw.split('\n').map(str::to_string).collect(),
+    };
+    let mut options: Vec<String> = Vec::new();
+    for option in parsed {
+        let option = option.trim().to_string();
+        if !option.is_empty() && !options.contains(&option) && options.len() < MAX_QUESTION_OPTIONS
+        {
+            options.push(option);
+        }
+    }
+    options
+}
+
+const MAX_QUESTION_OPTIONS: usize = 6;
 
 // ---------------------------------------------------------------------------
 // M36: LSP tools

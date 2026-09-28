@@ -251,6 +251,7 @@ export {
   DEVICE_KEY_MODIFIERS,
   DEVICE_MOUSE_BUTTONS,
   DEVICE_NAMED_KEYS,
+  DEVICE_REVIEWED_STEP_TOOLS,
   DEVICE_STEP_DEFINITIONS,
   DEVICE_STEP_TOOLS,
   DEVICE_STEP_TTL_MINUTES,
@@ -259,6 +260,7 @@ export {
   MAX_DEVICE_COORDINATE,
   MAX_DEVICE_DISPLAY_ID,
   MAX_DEVICE_HOST_HEADER_LENGTH,
+  MAX_DEVICE_REVIEW_LENGTH,
   MAX_DEVICE_SCROLL_DELTA,
   MAX_DEVICE_STEP_RESULT_LENGTH,
   MAX_DEVICE_STEP_ROOTS,
@@ -302,3 +304,30 @@ export type {
   RemoteControlState,
   RemoteControlStatus,
 } from './remote-control';
+
+export {
+  SYSTEM_PERMISSION_KINDS,
+  SYSTEM_PERMISSION_LABELS,
+  SYSTEM_PERMISSION_PURPOSES,
+  isSystemPermissionKind,
+} from './desktop-privacy';
+export type {
+  DesktopPermissionsReview,
+  ReviewedPermission,
+  SystemPermissionKind,
+  SystemPermissionStatus,
+} from './desktop-privacy';
+
+export {
+  COMPUTER_USE_PHASES,
+  COMPUTER_USE_STOP_SHORTCUT,
+  describeDeviceFrontWindow,
+  deviceFrontWindowRefusal,
+  readDeviceFrontWindow,
+} from './computer-use';
+export type {
+  ComputerUsePauseCause,
+  ComputerUsePhase,
+  ComputerUseStatus,
+  DeviceFrontWindow,
+} from './computer-use';

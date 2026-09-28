@@ -237,6 +237,7 @@ describe('POST /api/plugins/marketplace-installations (install)', () => {
       status: 'installed',
       installation: { ...INSTALLATION, pluginKey: 'adobe-for-creativity' },
       skills: ['background-removal'],
+      dependencies: [],
     });
     const response = await POST(
       post('/api/plugins/marketplace-installations', { pluginId: 'adobe-for-creativity' }),
@@ -249,6 +250,7 @@ describe('POST /api/plugins/marketplace-installations (install)', () => {
       expect.anything(),
       'user-1',
       'adobe-for-creativity',
+      expect.anything(),
     );
     expect(installMarketplaceEntryMock).not.toHaveBeenCalled();
     expect(recordWorkspaceAuditEventMock).toHaveBeenCalledWith(

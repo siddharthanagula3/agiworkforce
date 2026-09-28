@@ -119,7 +119,7 @@ export const PLUGIN_INSTALLS_DISABLED_CODE = 'PLUGIN_INSTALLS_DISABLED';
 export const PLUGIN_NOT_INSTALLABLE_CODE = 'PLUGIN_NOT_INSTALLABLE';
 export const PLUGIN_INSTALLS_DISABLED_STATUS = 503;
 export const PLUGIN_CONFLICT_STATUS = 409;
-export const PLUGIN_MESSAGE_STATUSES: readonly number[] = [404, 409, 502, 503];
+export const PLUGIN_MESSAGE_STATUSES: readonly number[] = [403, 404, 409, 502, 503];
 
 export const DIRECTORY_PAGE_SIZE = 100;
 export const DIRECTORY_SORT_POPULAR = 'popular';
@@ -234,10 +234,28 @@ export const UPLOAD_PLUGIN_DONE_TITLE = 'Plugin installed';
 export const UPLOAD_SKILL_DONE_TITLE = 'Skill added';
 export const CREATE_PLUGIN_DONE_TITLE = 'Plugin created';
 
+const OMITTED_FILES_SHOWN = 3;
+
+export function uploadOmittedFilesLine(paths: readonly string[]): string {
+  const shown = paths.slice(0, OMITTED_FILES_SHOWN).join(', ');
+  const more =
+    paths.length > OMITTED_FILES_SHOWN ? ` and ${paths.length - OMITTED_FILES_SHOWN} more` : '';
+  return `Left out ${paths.length === 1 ? 'a file that is' : `${paths.length} files that are`} not text: ${shown}${more}. Skills can bundle text files such as references and scripts.`;
+}
+
 export function uploadSkillCountLine(count: number): string {
   return count === 1
     ? '1 skill is now available in chat.'
     : `${count} skills are now available in chat.`;
+}
+
+const DEPENDENCY_NAMES = new Intl.ListFormat('en', { style: 'long', type: 'conjunction' });
+
+export function pluginDependenciesInstalledLine(
+  pluginName: string,
+  dependencyNames: readonly string[],
+): string {
+  return `Installed ${pluginName} and the ${dependencyNames.length === 1 ? 'plugin' : 'plugins'} it depends on: ${DEPENDENCY_NAMES.format(dependencyNames)}.`;
 }
 export const PLUGIN_MARKETPLACE_ENTRIES_PATH = `${PLUGIN_MARKETPLACES_API_PATH}/entries`;
 export const PLUGIN_MARKETPLACE_INSTALLATIONS_PATH = PLUGIN_MARKETPLACE_INSTALLATIONS_API_PATH;
