@@ -1,6 +1,7 @@
 import { MetadataRoute } from 'next';
 
 import { SITE_URL } from '@/lib/seo/site';
+import { INSPIRATION, inspirationPath } from './gallery/inspiration';
 
 type ChangeFrequency = 'always' | 'hourly' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'never';
 
@@ -110,7 +111,12 @@ const routes: RouteConfig[] = [
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const lastModified = new Date('2026-08-13');
-  return routes.map((route) => ({
+  const templates: RouteConfig[] = INSPIRATION.map((template) => ({
+    path: inspirationPath(template.id),
+    priority: 0.5,
+    changeFrequency: 'monthly',
+  }));
+  return [...routes, ...templates].map((route) => ({
     url: `${SITE_URL}${route.path}`,
     lastModified,
     changeFrequency: route.changeFrequency,
