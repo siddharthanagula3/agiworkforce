@@ -17,7 +17,6 @@ nothing is left.
 | desktop | partial | Group models by family; the catalogue groups by developer and shows the family only on the About card. | ui |
 | mobile | partial | Group models by family; the sheet groups cloud models by routing tier and puts on-device models in their own section. | ui |
 | cli | partial | Group models by family; the picker groups by access mode and provider. | ui |
-| vscode | partial | Group models by family; the popover groups by provider and access boundary. | ui |
 | chrome | partial | Group models by family; "More models" groups by provider only. | ui |
 
 Code: `apps/web/features/chat/components/Composer/ModelCatalogue.tsx:357-357`, `apps/web/features/chat/components/Composer/ModelCatalogue.tsx:166-167`, `apps/web/features/chat/components/Composer/ComposerFooter.tsx:1379-1389`, `apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx:63-89`
@@ -66,10 +65,9 @@ Code: `apps/web/features/chat/components/Composer/ModelCatalogue.tsx:357-357`, `
 | --- | --- | --- | --- |
 | mobile | partial | Mark recommended models; the sheet leads with Auto profiles but labels no model as recommended. | ui |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | Recommend actual models; the "Recommended" group holds only Auto. | ui |
 | chrome | partial | Label the short list as recommended; the dropdown shows a primary list then "More models" without saying why. | ui |
 
-Code: `apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx:670-678`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:1107-1117`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:1095-1145`, `apps/extension/src/side_panel.ts:6168-6208`
+Code: `apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx:670-678`, `apps/extension/src/side_panel.ts:6168-6208`
 
 ## S15.09: Default-profile option.
 
@@ -153,17 +151,16 @@ Code: `apps/mobile/src/features/model-picker/service.ts:171-175`
 
 - Done when: The selector tells the user which models are faster or slower.
 - Wave: 3
-- Already works on: cli
+- Already works on: cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Show relative speed per model; today only the guidance line hints at it ("For quick answers"). | ui |
 | desktop | partial | Show relative speed per model; today only the guidance line hints at it ("For quick answers"). | ui |
 | mobile | partial | Show relative speed per model; only the effort choices describe speed ("Faster and cheaper than the default"). | ui |
-| vscode | partial | Show relative speed; rows carry a Premium/Balanced/Economy tier, not speed. | ui |
 | chrome | partial | Show speed on every row; "Fastest/Balanced/Most capable" appears only for models without a description. | ui |
 
-Code: `apps/web/features/chat/components/Composer/ComposerFooter.tsx:660-660`, `packages/ui/unified-chat/src/lib/modelPicker.ts:53-57`, `apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx:48-48`, `apps/extension-vscode/src/features/model-picker/modelConstants.ts:94-98`
+Code: `apps/web/features/chat/components/Composer/ComposerFooter.tsx:660-660`, `packages/ui/unified-chat/src/lib/modelPicker.ts:53-57`, `apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx:48-48`, `apps/extension/src/side_panel.ts:6035-6041`
 
 ## S15.17: Relative usage or cost information.
 
@@ -380,16 +377,13 @@ Code: `apps/cli/src/tui/tui_app.rs:1847-1859`
 
 - Done when: Switching to a model that cannot handle the current conversation (images, tools, context) asks for confirmation and explains what will be lost.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | Warn what a new model cannot do (images, tools, context); today the only switch check refuses a model outside the chat's trust boundary. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/extension-vscode/src/core/commandSetup.ts:1129-1132`
 
 ## S15.35: Preserve-or-remove incompatible attachments choice.
 
