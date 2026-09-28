@@ -6,6 +6,7 @@ import { Button, ButtonRow, Prose, Section, Stack } from '@/features/marketing/c
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { NoteList } from '@/features/marketing/components/pages/company/shared';
 import { CANONICAL_POLICY_ROUTES, POLICY_LAST_UPDATED } from '@/lib/legal-constants';
+import { PolicyVersionsLink } from '@shared/components/legal/PolicyVersionsLink';
 
 export const metadata = buildMetadata({
   title: 'How we use your data',
@@ -211,7 +212,7 @@ export default function DataUsePage() {
                 privacy policy
               </Link>{' '}
               wins: this page is a guide to it, not a replacement for it. Last updated:{' '}
-              {POLICY_LAST_UPDATED.dataUse}.
+              {POLICY_LAST_UPDATED.dataUse}. <PolicyVersionsLink policy="dataUse" />
             </>
           }
           ctas={[]}

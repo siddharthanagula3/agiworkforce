@@ -12,6 +12,15 @@ import type {
   PluginVersionRecord,
 } from '@/lib/services/plugin-lifecycle';
 import type { PluginModerationEntry } from '@/lib/services/plugin-registry-service';
+import {
+  ADMIN_PLUGIN_SUBMISSIONS_PATH,
+  PLUGIN_SUBMISSION_REVIEW_STATUS_PARAM,
+  type PluginSubmissionDecision,
+  type PluginSubmissionReview,
+  type PluginSubmissionReviewListResponse,
+  type PluginSubmissionReviewResponse,
+  type PluginSubmissionStatus,
+} from '@agiworkforce/cloud-contracts';
 import { formatDateTime } from '../lib/operator-format';
 
 const LIST_ENDPOINT = '/api/admin/plugins';
@@ -581,6 +590,358 @@ function PluginReviewPanel({
   );
 }
 
+type ReviewedSubmission = PluginSubmissionReviewListResponse['submissions'][number];
+
+const SUBMISSION_STATUS_VIEW: Record<PluginSubmissionStatus, StatusView> = {
+  pending: { label: 'Waiting for review', tone: 'info' },
+  approved: { label: 'Listed', tone: 'success' },
+  rejected: { label: 'Not approved', tone: 'neutral' },
+  withdrawn: { label: 'Withdrawn', tone: 'neutral' },
+  suspended: { label: 'Suspended', tone: 'danger' },
+};
+
+const SUBMISSION_FILTERS: ReadonlyArray<{ value: PluginSubmissionStatus; label: string }> = [
+  { value: 'pending', label: 'Waiting for review' },
+  { value: 'approved', label: 'Listed' },
+  { value: 'suspended', label: 'Suspended' },
+  { value: 'rejected', label: 'Not approved' },
+];
+
+type NoteAction = 'reject' | 'suspend';
+
+function submissionUrl(id: string): string {
+  return `${ADMIN_PLUGIN_SUBMISSIONS_PATH}/${encodeURIComponent(id)}`;
+}
+
+function SubmissionReviewPanel({
+  submission,
+  confirm,
+  onDecided,
+}: {
+  submission: ReviewedSubmission;
+  confirm: (request: ConfirmActionRequest) => void;
+  onDecided: () => Promise<void>;
+}) {
+  const [review, setReview] = useState<PluginSubmissionReview | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [noteAction, setNoteAction] = useState<NoteAction | null>(null);
+  const [note, setNote] = useState('');
+  const [pending, setPending] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    readJson<PluginSubmissionReviewResponse>(submissionUrl(submission.id))
+      .then((body) => {
+        if (!cancelled) setReview(body.submission);
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) setLoadError(toUserMessage(error, 'The submission could not be loaded.'));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [submission.id]);
+
+  async function decide(decision: PluginSubmissionDecision) {
+    setPending(true);
+    setFailure(null);
+    try {
+      await readJson(submissionUrl(submission.id), {
+        method: 'POST',
+        headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(decision),
+      });
+      setNoteAction(null);
+      setNote('');
+      await onDecided();
+    } catch (error) {
+      setFailure(toUserMessage(error, 'That decision could not be saved.'));
+    } finally {
+      setPending(false);
+    }
+  }
+
+  const approve = () =>
+    confirm({
+      title: `Approve ${submission.name}?`,
+      description:
+        'It is listed in the community directory for everyone at once, and its developer is told. A version it replaces leaves the directory and its installs move to this one.',
+      confirmLabel: 'Approve and list',
+      cancelLabel: 'Keep reviewing',
+      destructive: false,
+      onConfirm: () => decide({ action: 'approve' }),
+    });
+
+  const submitNote = (event: SubmitEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const trimmed = note.trim();
+    if (!noteAction || !trimmed) return;
+    if (noteAction === 'reject') {
+      void decide({ action: 'reject', note: trimmed });
+      return;
+    }
+    confirm({
+      title: `Suspend ${submission.name}?`,
+      description:
+        'It leaves the directory and stops for everyone who installed it. Its developer is told why.',
+      confirmLabel: 'Suspend it',
+      cancelLabel: 'Keep it listed',
+      destructive: true,
+      onConfirm: () => decide({ action: 'suspend', note: trimmed }),
+    });
+  };
+
+  return (
+    <div className="mt-4 space-y-4 rounded-xl border border-border bg-background p-4">
+      <p className="whitespace-pre-line break-words text-sm text-foreground">
+        {submission.description}
+      </p>
+      <p className="text-xs text-muted-foreground">
+        {`Skills: ${submission.skills.join(', ') || 'none'}`}
+      </p>
+      {submission.scanFindings.length > 0 ? (
+        <div className="space-y-1">
+          <p className="text-xs font-medium text-foreground">Scan findings</p>
+          <ul className="space-y-1">
+            {submission.scanFindings.map((finding) => (
+              <li
+                key={`${finding.path}:${finding.line}:${finding.message}`}
+                className="break-words text-xs text-muted-foreground"
+              >
+                {`${finding.path}:${finding.line} ${finding.message}`}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground">The scan found nothing to review.</p>
+      )}
+      {loadError ? (
+        <p role="alert" className="text-sm text-danger">
+          {loadError}
+        </p>
+      ) : review ? (
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-foreground">
+            {`${review.files.length} ${review.files.length === 1 ? 'file' : 'files'} as submitted`}
+          </p>
+          {review.files.map((file) => (
+            <details key={file.path} className="rounded-lg border border-border">
+              <summary className="cursor-pointer break-all px-3 py-2 font-mono text-xs text-foreground pointer-coarse:min-h-11">
+                {file.path}
+              </summary>
+              <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words border-t border-border px-3 py-2 font-mono text-xs text-foreground">
+                {file.content}
+              </pre>
+            </details>
+          ))}
+        </div>
+      ) : (
+        <LoadingLine label="Loading the submitted files…" />
+      )}
+      {failure ? (
+        <p role="alert" className="text-sm text-danger">
+          {failure}
+        </p>
+      ) : null}
+      {noteAction ? (
+        <form className="space-y-2" onSubmit={submitNote}>
+          <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+            {noteAction === 'reject'
+              ? 'Why it was not approved. The developer reads this.'
+              : 'Why it is suspended. The developer reads this.'}
+            <textarea
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+              rows={3}
+              maxLength={2000}
+              className={FIELD_CLASS}
+            />
+          </label>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="submit"
+              disabled={pending || !note.trim()}
+              className={noteAction === 'suspend' ? DESTRUCTIVE_CLASS : ACTION_CLASS}
+            >
+              {noteAction === 'reject' ? 'Send the decision' : 'Suspend'}
+            </button>
+            <button
+              type="button"
+              disabled={pending}
+              className={ACTION_CLASS}
+              onClick={() => {
+                setNoteAction(null);
+                setNote('');
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      ) : submission.status === 'pending' ? (
+        <div className="flex flex-wrap gap-2">
+          <button type="button" disabled={pending} className={ACTION_CLASS} onClick={approve}>
+            Approve
+          </button>
+          <button
+            type="button"
+            disabled={pending}
+            className={ACTION_CLASS}
+            onClick={() => setNoteAction('reject')}
+          >
+            Reject
+          </button>
+        </div>
+      ) : submission.status === 'approved' ? (
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={pending}
+            className={DESTRUCTIVE_CLASS}
+            onClick={() => setNoteAction('suspend')}
+          >
+            Suspend
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function SubmissionQueue({ confirm }: { confirm: (request: ConfirmActionRequest) => void }) {
+  const [status, setStatus] = useState<PluginSubmissionStatus>('pending');
+  const [submissions, setSubmissions] = useState<ReviewedSubmission[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const latest = useRef(0);
+
+  const load = useCallback(async (next: PluginSubmissionStatus) => {
+    const request = latest.current + 1;
+    latest.current = request;
+    setLoading(true);
+    try {
+      const body = await readJson<PluginSubmissionReviewListResponse>(
+        `${ADMIN_PLUGIN_SUBMISSIONS_PATH}?${PLUGIN_SUBMISSION_REVIEW_STATUS_PARAM}=${next}`,
+      );
+      if (request !== latest.current) return;
+      setSubmissions(body.submissions);
+      setError(null);
+    } catch (loadFailure) {
+      if (request !== latest.current) return;
+      setError(toUserMessage(loadFailure, 'The submissions could not be loaded.'));
+    } finally {
+      if (request === latest.current) setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load(status);
+  }, [load, status]);
+
+  return (
+    <section className="flex flex-col gap-3" aria-labelledby="plugin-submissions-title">
+      <h2 id="plugin-submissions-title" className="text-h5">
+        Community submissions
+      </h2>
+      <div className={CARD_CLASS}>
+        <label className="flex max-w-xs flex-col gap-1 text-xs text-muted-foreground">
+          Show
+          <select
+            value={status}
+            onChange={(event) => {
+              setOpenId(null);
+              setStatus(event.target.value as PluginSubmissionStatus);
+            }}
+            className={FIELD_CLASS}
+          >
+            {SUBMISSION_FILTERS.map((filter) => (
+              <option key={filter.value} value={filter.value}>
+                {filter.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="mt-4 border-t border-border pt-4">
+          {loading ? (
+            <LoadingLine label="Loading submissions…" />
+          ) : error ? (
+            <div className="flex flex-col items-start gap-3">
+              <p role="alert" className="text-sm text-danger">
+                {error}
+              </p>
+              <button type="button" className={ACTION_CLASS} onClick={() => void load(status)}>
+                Try again
+              </button>
+            </div>
+          ) : submissions.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Nothing here right now.</p>
+          ) : (
+            <ul className="divide-y divide-border">
+              {submissions.map((submission) => {
+                const open = submission.id === openId;
+                const view = SUBMISSION_STATUS_VIEW[submission.status];
+                return (
+                  <li key={submission.id} className="py-4">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                      <div className="min-w-0 space-y-1">
+                        <p className="flex flex-wrap items-center gap-2 text-sm text-foreground">
+                          <span className="break-words font-medium">{submission.name}</span>
+                          <span className={`${BADGE_CLASS} ${TONE_CLASS[view.tone]}`}>
+                            {view.label}
+                          </span>
+                          {submission.scanVerdict === 'review' ? (
+                            <span className={`${BADGE_CLASS} ${TONE_CLASS.warning}`}>
+                              Scan findings
+                            </span>
+                          ) : null}
+                        </p>
+                        <p className="break-words text-xs text-muted-foreground">
+                          {`${submission.publisherName} · version ${submission.version} · submitted ${formatDateTime(submission.submittedAt)}`}
+                        </p>
+                        {submission.reviewNote ? (
+                          <p className="break-words text-xs text-muted-foreground">
+                            “{submission.reviewNote}”
+                          </p>
+                        ) : null}
+                        <p className="break-all font-mono text-xs text-muted-foreground">
+                          {submission.submitterId}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        className={`${ACTION_CLASS} self-start`}
+                        aria-expanded={open}
+                        aria-label={`${open ? 'Close' : 'Review'} ${submission.name}`}
+                        onClick={() => setOpenId(open ? null : submission.id)}
+                      >
+                        {open ? 'Close' : 'Review'}
+                      </button>
+                    </div>
+                    {open ? (
+                      <SubmissionReviewPanel
+                        key={submission.id}
+                        submission={submission}
+                        confirm={confirm}
+                        onDecided={async () => {
+                          setOpenId(null);
+                          await load(status);
+                        }}
+                      />
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function PluginModerationPage() {
   const { confirm, dialog } = useConfirmAction();
   const [query, setQuery] = useState('');
@@ -642,6 +1003,8 @@ export default function PluginModerationPage() {
         </header>
 
         {dialog}
+
+        <SubmissionQueue confirm={confirm} />
 
         <section className="flex flex-col gap-3" aria-labelledby="plugin-registry-title">
           <h2 id="plugin-registry-title" className="text-h5">

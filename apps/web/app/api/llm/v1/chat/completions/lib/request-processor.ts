@@ -337,6 +337,7 @@ import {
   unsupportedRequestParameter,
   type RequestedParameters,
 } from './request-parameters';
+import { countImageParts, maxImagesPerRequest } from './media-input';
 import {
   JsonSchemaResponseFormatSchema,
   jsonSchemaDirective,
@@ -4043,6 +4044,22 @@ export async function processRequest(
             message: imageDetailRefusalMessage(detailRefusal),
             type: 'invalid_request_error',
             code: 'image_detail_unsupported',
+          },
+        },
+        { status: 400 },
+      ),
+    };
+  }
+  const imageLimit = maxImagesPerRequest(chatRequest.model, routeDecision.harnessId);
+  if (imageLimit !== null && countImageParts(chatRequest.messages) > imageLimit) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          error: {
+            message: `The selected model takes up to ${imageLimit.toLocaleString('en-US')} images in one request. Remove some images or split the request.`,
+            type: 'invalid_request_error',
+            code: 'too_many_images',
           },
         },
         { status: 400 },

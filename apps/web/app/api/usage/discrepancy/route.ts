@@ -21,10 +21,9 @@ import { MAX_TICKET_MESSAGE_CHARS, openTicket } from '@/lib/support/tickets/serv
 import {
   readAccountUsageHistory,
   readAccountUsageRecords,
-  type AccountUsageBreakdownRow,
-  type AccountUsageHistory,
   type AccountUsageRecord,
 } from '@/lib/services/account-usage-history-service';
+import type { AccountUsageBreakdownRow, AccountUsageHistoryResponse } from '@agiworkforce/types';
 import {
   getManagedUsageSummary,
   type AccountUsageSummary,
@@ -116,7 +115,7 @@ function balanceLines(summary: AccountUsageSummary): string[] {
 }
 
 function usageRecord(input: {
-  history: AccountUsageHistory;
+  history: AccountUsageHistoryResponse;
   summary: AccountUsageSummary;
   request: AccountUsageRecord | null;
 }): string {

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 
 const mocks = vi.hoisted(() => ({
+  useTeamMembers: vi.fn(),
   useLegalHolds: vi.fn(),
   useCreateLegalHold: vi.fn(),
   useReleaseLegalHold: vi.fn(),
@@ -11,6 +12,10 @@ vi.mock('../../hooks/use-legal-holds', () => ({
   useLegalHolds: mocks.useLegalHolds,
   useCreateLegalHold: mocks.useCreateLegalHold,
   useReleaseLegalHold: mocks.useReleaseLegalHold,
+}));
+
+vi.mock('@/features/settings/hooks/use-settings-queries', () => ({
+  useTeamMembers: mocks.useTeamMembers,
 }));
 
 import { WorkspaceDataControls } from '../WorkspaceDataControls';
@@ -47,6 +52,13 @@ function strip() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.useTeamMembers.mockReturnValue({
+    data: [],
+    isPending: false,
+    isError: false,
+    error: null,
+    refetch: vi.fn(),
+  });
   mocks.useCreateLegalHold.mockReturnValue({ mutate: vi.fn(), isPending: false, isError: false });
   mocks.useReleaseLegalHold.mockReturnValue({
     mutate: vi.fn(),

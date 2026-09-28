@@ -41,6 +41,12 @@ import {
   CUSTOMIZE_CONFIRM_BODY,
   CUSTOMIZE_CONFIRM_LABEL,
   CUSTOMIZE_CONFIRM_TITLE_PREFIX,
+  SUBMIT_PLUGIN_CONFIRM_BODY,
+  SUBMIT_PLUGIN_CONFIRM_LABEL,
+  SUBMIT_PLUGIN_CONFIRM_TITLE_PREFIX,
+  WITHDRAW_SUBMISSION_CONFIRM_BODY,
+  WITHDRAW_SUBMISSION_CONFIRM_LABEL,
+  WITHDRAW_SUBMISSION_CONFIRM_TITLE_PREFIX,
   EDIT_PLUGIN_FAILED_COPY,
   EDIT_PLUGIN_INTRO,
   EDIT_PLUGIN_LABEL,
@@ -48,7 +54,9 @@ import {
   PLUGIN_VERSION_CHANGELOG_LABEL,
   PLUGIN_VERSION_CONFIRM_BODY,
   PLUGIN_VERSION_CONFIRM_TITLE_PREFIX,
+  PLUGIN_VERSION_ADDED_SKILLS_PREFIX,
   PLUGIN_VERSION_NEW_PERMISSIONS_PREFIX,
+  PLUGIN_VERSION_REMOVED_SKILLS_PREFIX,
   PLUGIN_VERSION_SWITCH_LABEL,
   CREATE_PLUGIN_ACTION_ID,
   CREATE_PLUGIN_LABEL,
@@ -530,6 +538,12 @@ function DirectorySectionPanel({
                 option.newPermissions.length > 0
                   ? `${PLUGIN_VERSION_NEW_PERMISSIONS_PREFIX} ${option.newPermissions.join(', ')}.`
                   : '',
+                option.addedSkills.length > 0
+                  ? `${PLUGIN_VERSION_ADDED_SKILLS_PREFIX} ${option.addedSkills.join(', ')}.`
+                  : '',
+                option.removedSkills.length > 0
+                  ? `${PLUGIN_VERSION_REMOVED_SKILLS_PREFIX} ${option.removedSkills.join(', ')}.`
+                  : '',
                 option.changelog ? `${PLUGIN_VERSION_CHANGELOG_LABEL}: ${option.changelog}` : '',
               ]
                 .filter(Boolean)
@@ -571,6 +585,32 @@ function DirectorySectionPanel({
                   }),
               })
           : undefined;
+      const submitPlugin = adapter.submitPlugin;
+      const submit =
+        detail.submittable && submitPlugin
+          ? () =>
+              confirm({
+                title: `${SUBMIT_PLUGIN_CONFIRM_TITLE_PREFIX} ${detail.name}?`,
+                description: SUBMIT_PLUGIN_CONFIRM_BODY,
+                confirmLabel: SUBMIT_PLUGIN_CONFIRM_LABEL,
+                cancelLabel: INSTALL_CONFIRM_CANCEL_LABEL,
+                destructive: false,
+                onConfirm: () => runAction(detail.id, () => submitPlugin(detail.id)),
+              })
+          : undefined;
+      const withdrawSubmission = adapter.withdrawPluginSubmission;
+      const withdraw =
+        detail.submission?.withdrawable && withdrawSubmission
+          ? () =>
+              confirm({
+                title: `${WITHDRAW_SUBMISSION_CONFIRM_TITLE_PREFIX} ${detail.name}?`,
+                description: WITHDRAW_SUBMISSION_CONFIRM_BODY,
+                confirmLabel: WITHDRAW_SUBMISSION_CONFIRM_LABEL,
+                cancelLabel: INSTALL_CONFIRM_CANCEL_LABEL,
+                destructive: true,
+                onConfirm: () => runAction(detail.id, () => withdrawSubmission(detail.id)),
+              })
+          : undefined;
       return (
         <>
           {renderActionError()}
@@ -582,6 +622,8 @@ function DirectorySectionPanel({
             onRepair={repair}
             {...(edit ? { onEdit: edit } : {})}
             {...(customize ? { onCustomize: customize } : {})}
+            {...(submit ? { onSubmit: submit } : {})}
+            {...(withdraw ? { onWithdrawSubmission: withdraw } : {})}
             {...(showPublisher ? { onShowPublisher: showPublisher } : {})}
             {...(changeVersion ? { onChangeVersion: changeVersion } : {})}
             onCopyLink={copyLink}

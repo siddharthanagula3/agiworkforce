@@ -67,7 +67,13 @@
     "sharedFrom": "来自 AGI 的分享",
     "sharedWithWorkspace": "已与您的工作区共享",
     "renderFailed": "无法渲染此工件：{{error}}",
-    "svgUnavailable": "此 SVG 中没有可以安全显示的内容。"
+    "svgUnavailable": "此 SVG 中没有可以安全显示的内容。",
+    "runtimeSignIn": "登录后即可使用此应用的 AI 和已保存的数据。",
+    "runtimeSignInAction": "登录",
+    "runtimeConsentLabel": "AI 权限",
+    "runtimeConsent": "此应用想使用您的账户调用 AI。每次请求都会计入您的套餐用量。",
+    "runtimeAllow": "允许",
+    "runtimeDecline": "不允许"
   },
   "sidebar": {
     "activeConversation": "当前对话",

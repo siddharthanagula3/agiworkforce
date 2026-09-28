@@ -8,11 +8,16 @@ import {
   type ContextSourceLoader,
 } from '@agiworkforce/context-engine';
 
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+
 import type { CloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { logger } from '@/lib/logger';
 import type { PastChatCitation } from '@/lib/past-chat-citation';
+import { buildCustomInstructionsPreamble } from '@/lib/server/user-identity';
 import {
+  DISABLED_MANAGED_MEMORY_POLICY,
   formatManagedMemorySystemPrompt,
+  loadManagedMemoryPolicy,
   loadOrganizationContextPolicy,
   loadProjectMemoryScope,
   loadSuppressedMemorySources,
@@ -176,4 +181,67 @@ export async function resolveInteractiveTurnContext(
     memories,
     manifest: resolution.manifest,
   };
+}
+
+export async function resolveFreeOfferingPersonalContext(
+  db: DatabaseAdapter,
+  input: {
+    turnId: string;
+    userId: string;
+    organizationId: string | null;
+    projectId: string | null;
+    conversationId: string;
+    temporaryChat: boolean;
+    memoryEnabled: boolean | undefined;
+    personalization: boolean | undefined;
+    query: string;
+  },
+): Promise<string[]> {
+  if (input.personalization === false) return [];
+  const [preamble, policy] = await Promise.all([
+    buildCustomInstructionsPreamble(db, input.userId, { projectId: input.projectId }).catch(
+      (error: unknown) => {
+        logger.warn(
+          { error, userId: input.userId },
+          'Custom instructions read failed; sending none',
+        );
+        return null;
+      },
+    ),
+    loadManagedMemoryPolicy(db, {
+      userId: input.userId,
+      organizationId: input.organizationId,
+    }).catch((error: unknown) => {
+      logger.error(
+        { error, userId: input.userId, conversationId: input.conversationId },
+        'Managed memory load failed; continuing without account memory',
+      );
+      return DISABLED_MANAGED_MEMORY_POLICY;
+    }),
+  ]);
+  let context: InteractiveTurnContext | null = null;
+  try {
+    context = await resolveInteractiveTurnContext(db, {
+      turnId: input.turnId,
+      userId: input.userId,
+      organizationId: input.organizationId,
+      projectId: input.projectId,
+      conversationId: input.conversationId,
+      temporaryChat: input.temporaryChat,
+      surface: 'web',
+      memoryEnabled: input.memoryEnabled,
+      policy,
+      query: input.query,
+      projectContext: null,
+      projectBlocks: [],
+    });
+  } catch (error) {
+    logger.error(
+      { error, userId: input.userId, conversationId: input.conversationId },
+      'Turn context could not be assembled; continuing without account memory or past chats',
+    );
+  }
+  return [preamble, context?.memoryPrompt ?? null, context?.pastChatPrompt ?? null].filter(
+    (block): block is string => Boolean(block),
+  );
 }

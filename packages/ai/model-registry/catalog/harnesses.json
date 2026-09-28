@@ -31,9 +31,15 @@
       "provider": "openai",
       "apiFamily": "responses",
       "adapter": "@agiworkforce/providers-openai",
+      "responseFormats": ["json_object", "json_schema"],
+      "mediaInput": { "maxImagesPerRequest": 1500, "documentMediaTypes": ["application/pdf"] },
       "requestParameters": ["top_p", "user"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {
+        "parallelToolCalls": {
+          "providerSupport": "native",
+          "implementation": "implemented"
+        },
         "webSearch": {
           "providerSupport": "native",
           "implementation": "implemented"
@@ -88,6 +94,8 @@
       "provider": "openai",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-openai",
+      "responseFormats": ["json_object", "json_schema"],
+      "mediaInput": { "maxImagesPerRequest": 1500, "documentMediaTypes": ["application/pdf"] },
       "requestParameters": [
         "top_p",
         "stop",
@@ -98,7 +106,12 @@
         "user"
       ],
       "trustModes": ["managed_cloud", "byok"],
-      "features": {}
+      "features": {
+        "parallelToolCalls": {
+          "providerSupport": "native",
+          "implementation": "implemented"
+        }
+      }
     },
     "openai/media": {
       "provider": "openai",
@@ -111,9 +124,19 @@
       "provider": "anthropic",
       "apiFamily": "messages",
       "adapter": "@agiworkforce/providers-anthropic",
+      "responseFormats": ["json_schema"],
+      "mediaInput": {
+        "maxImagesPerRequest": 600,
+        "documentMediaTypes": ["application/pdf"],
+        "maxDocumentPagesPerRequest": 600
+      },
       "requestParameters": ["top_p", "stop", "user"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {
+        "parallelToolCalls": {
+          "providerSupport": "native",
+          "implementation": "implemented"
+        },
         "webSearch": {
           "providerSupport": "native",
           "implementation": "implemented"
@@ -128,9 +151,19 @@
       "provider": "google",
       "apiFamily": "generate_content",
       "adapter": "@agiworkforce/providers-google",
+      "responseFormats": ["json_object", "json_schema"],
+      "mediaInput": {
+        "maxImagesPerRequest": 3600,
+        "documentMediaTypes": ["application/pdf"],
+        "maxDocumentPagesPerRequest": 1000
+      },
       "requestParameters": ["top_p", "stop"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {
+        "parallelToolCalls": {
+          "providerSupport": "native",
+          "implementation": "implemented"
+        },
         "webSearch": {
           "providerSupport": "native",
           "implementation": "implemented"
@@ -173,6 +206,7 @@
       "provider": "xai",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-xai",
+      "responseFormats": ["json_object", "json_schema"],
       "requestParameters": [
         "top_p",
         "stop",
@@ -182,12 +216,18 @@
         "user"
       ],
       "trustModes": ["managed_cloud", "byok"],
-      "features": {}
+      "features": {
+        "parallelToolCalls": {
+          "providerSupport": "native",
+          "implementation": "implemented"
+        }
+      }
     },
     "deepseek/chat-completions": {
       "provider": "deepseek",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-deepseek",
+      "responseFormats": ["json_object"],
       "requestParameters": ["top_p", "stop"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {}

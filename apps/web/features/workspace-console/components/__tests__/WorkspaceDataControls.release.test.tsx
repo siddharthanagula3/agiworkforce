@@ -3,6 +3,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const mocks = vi.hoisted(() => ({
+  useTeamMembers: vi.fn(),
   useLegalHolds: vi.fn(),
   useCreateLegalHold: vi.fn(),
   useReleaseLegalHold: vi.fn(),
@@ -13,6 +14,10 @@ vi.mock('../../hooks/use-legal-holds', () => ({
   useLegalHolds: mocks.useLegalHolds,
   useCreateLegalHold: mocks.useCreateLegalHold,
   useReleaseLegalHold: mocks.useReleaseLegalHold,
+}));
+
+vi.mock('@/features/settings/hooks/use-settings-queries', () => ({
+  useTeamMembers: mocks.useTeamMembers,
 }));
 
 import { WorkspaceDataControls } from '../WorkspaceDataControls';
@@ -50,6 +55,13 @@ function backlog(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.useTeamMembers.mockReturnValue({
+    data: [],
+    isPending: false,
+    isError: false,
+    error: null,
+    refetch: vi.fn(),
+  });
   mocks.useLegalHolds.mockReturnValue({
     isPending: false,
     isError: false,
@@ -127,12 +139,19 @@ describe('releasing a legal hold asks first, and names what it costs', () => {
         backlog: backlog(),
       },
     });
+    mocks.useTeamMembers.mockReturnValue({
+      data: [{ userId: 'user_42', name: 'Dana Ruiz', email: 'dana@example.com', avatarUrl: null }],
+      isPending: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    });
     const user = userEvent.setup();
     render(<WorkspaceDataControls />);
 
     await user.click(screen.getByRole('button', { name: 'Release hold' }));
 
-    expect(await screen.findByRole('alertdialog')).toHaveTextContent('user_42');
+    expect(await screen.findByRole('alertdialog')).toHaveTextContent('Dana Ruiz');
   });
 
   it('offers no release control on a hold that is already released', () => {

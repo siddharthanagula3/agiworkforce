@@ -67,7 +67,13 @@
     "sharedFrom": "AGI से साझा किया गया",
     "sharedWithWorkspace": "आपके कार्यक्षेत्र के साथ साझा किया गया",
     "renderFailed": "यह आर्टिफ़ैक्ट प्रस्तुत नहीं किया जा सका: {{error}}",
-    "svgUnavailable": "इस SVG में ऐसा कुछ नहीं था जिसे सुरक्षित रूप से दिखाया जा सके।"
+    "svgUnavailable": "इस SVG में ऐसा कुछ नहीं था जिसे सुरक्षित रूप से दिखाया जा सके।",
+    "runtimeSignIn": "इस ऐप की AI और सहेजे गए डेटा का उपयोग करने के लिए साइन इन करें।",
+    "runtimeSignInAction": "साइन इन करें",
+    "runtimeConsentLabel": "AI अनुमति",
+    "runtimeConsent": "यह ऐप आपके खाते से AI का उपयोग करना चाहता है। हर अनुरोध आपके प्लान के उपयोग में गिना जाता है।",
+    "runtimeAllow": "अनुमति दें",
+    "runtimeDecline": "अनुमति न दें"
   },
   "sidebar": {
     "activeConversation": "सक्रिय बातचीत",

@@ -286,21 +286,6 @@ export const CONNECTOR_LOGOS: Record<
     width: 32,
     height: 32,
   },
-  postgresql: {
-    url: 'https://www.google.com/s2/favicons?domain=postgresql.org&sz=64',
-    width: 32,
-    height: 32,
-  },
-  mongodb: {
-    url: 'https://www.google.com/s2/favicons?domain=mongodb.com&sz=64',
-    width: 32,
-    height: 32,
-  },
-  redis: {
-    url: 'https://www.google.com/s2/favicons?domain=redis.io&sz=64',
-    width: 32,
-    height: 32,
-  },
   elasticsearch: {
     url: 'https://www.google.com/s2/favicons?domain=elastic.co&sz=64',
     width: 32,
