@@ -1,3 +1,12 @@
+import {
+  ArtifactRuntimeCompleteResponseSchema,
+  ArtifactRuntimeErrorResponseSchema,
+  artifactRuntimeCompletePath,
+  artifactRuntimeStoragePath,
+  parseArtifactStorageResponse,
+  type ArtifactRuntimeCompleteRequest,
+  type ArtifactStorageRequest,
+} from '@agiworkforce/cloud-contracts';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import type { ArtifactRuntimeRequest } from '@/lib/artifact-sandbox';
 
@@ -11,7 +20,9 @@ export class ArtifactRuntimeSignInRequiredError extends Error {
 const REQUEST_FAILED = 'The request failed. Try again.';
 const VALUE_TOO_LARGE = 'That value is too large to save.';
 
-function storageBody(request: Exclude<ArtifactRuntimeRequest, { op: 'complete' }>) {
+function storageBody(
+  request: Exclude<ArtifactRuntimeRequest, { op: 'complete' }>,
+): ArtifactStorageRequest {
   switch (request.op) {
     case 'storage.get':
       return { op: 'get', key: request.key, shared: request.shared };
@@ -24,41 +35,46 @@ function storageBody(request: Exclude<ArtifactRuntimeRequest, { op: 'complete' }
   }
 }
 
-function errorMessage(payload: unknown): string | null {
-  if (!payload || typeof payload !== 'object') return null;
-  const error = (payload as { error?: unknown }).error;
-  if (typeof error === 'string') return error;
-  if (error && typeof error === 'object') {
-    const message = (error as { message?: unknown }).message;
-    if (typeof message === 'string' && message.trim()) return message;
+async function post(path: string, body: ArtifactRuntimeCompleteRequest | ArtifactStorageRequest) {
+  const response = await fetch(path, {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(body),
+  });
+  if (response.status === 401) throw new ArtifactRuntimeSignInRequiredError();
+  const payload: unknown = await response.json().catch(() => null);
+  if (!response.ok) {
+    const refusal = ArtifactRuntimeErrorResponseSchema.safeParse(payload);
+    throw new Error(
+      refusal.success
+        ? refusal.data.error.message
+        : response.status === 413
+          ? VALUE_TOO_LARGE
+          : REQUEST_FAILED,
+    );
   }
-  return null;
+  return payload;
 }
 
 export async function callArtifactRuntime(
   token: string,
   request: ArtifactRuntimeRequest,
 ): Promise<unknown> {
-  const path = request.op === 'complete' ? 'complete' : 'storage';
-  const response = await fetch(`/api/artifacts/runtime/${encodeURIComponent(token)}/${path}`, {
-    method: 'POST',
-    credentials: 'same-origin',
-    headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
-    body: JSON.stringify(
-      request.op === 'complete'
-        ? { prompt: request.prompt, connectors: request.connectors }
-        : storageBody(request),
-    ),
-  });
-  if (response.status === 401) throw new ArtifactRuntimeSignInRequiredError();
-  const payload: unknown = await response.json().catch(() => null);
-  if (!response.ok) {
-    throw new Error(
-      errorMessage(payload) ?? (response.status === 413 ? VALUE_TOO_LARGE : REQUEST_FAILED),
-    );
+  if (request.op === 'complete') {
+    const payload = await post(artifactRuntimeCompletePath(token), {
+      prompt: request.prompt,
+      connectors: request.connectors,
+    });
+    const parsed = ArtifactRuntimeCompleteResponseSchema.safeParse(payload);
+    if (!parsed.success) throw new Error(REQUEST_FAILED);
+    return parsed.data.text;
   }
-  if (request.op !== 'complete') return payload;
-  const text = payload && typeof payload === 'object' ? (payload as { text?: unknown }).text : null;
-  if (typeof text !== 'string') throw new Error(REQUEST_FAILED);
-  return text;
+  const body = storageBody(request);
+  const parsed = parseArtifactStorageResponse(
+    body.op,
+    await post(artifactRuntimeStoragePath(token), body),
+  );
+  if (parsed === undefined) throw new Error(REQUEST_FAILED);
+  return parsed;
 }

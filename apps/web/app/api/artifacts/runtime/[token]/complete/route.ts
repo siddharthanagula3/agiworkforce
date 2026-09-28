@@ -1,7 +1,11 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import {
+  ARTIFACT_RUNTIME_MAX_PROMPT_CHARS,
+  ArtifactRuntimeCompleteRequestSchema,
+  type ArtifactRuntimeCompleteResponse,
+} from '@agiworkforce/cloud-contracts';
 import { applySecretHandlingToTexts } from '@/app/api/llm/v1/chat/completions/lib/secret-handling-gate';
 import { assertAccountActive } from '@/lib/api-auth';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -15,9 +19,6 @@ import { moderateManagedPrompt } from '@/lib/moderation';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import {
-  ARTIFACT_CONNECTOR_ID_PATTERN,
-  ARTIFACT_RUNTIME_MAX_CONNECTORS,
-  ARTIFACT_RUNTIME_MAX_PROMPT_CHARS,
   ArtifactRuntimeRouteUnavailableError,
   buildArtifactConnectorPlan,
   completeArtifactPrompt,
@@ -41,14 +42,6 @@ export const runtime = 'nodejs';
 export const maxDuration = 300;
 
 const NO_STORE = { 'Cache-Control': 'private, no-store' };
-
-const CompleteSchema = z.object({
-  prompt: z.string().min(1).max(ARTIFACT_RUNTIME_MAX_PROMPT_CHARS),
-  connectors: z
-    .array(z.string().regex(ARTIFACT_CONNECTOR_ID_PATTERN))
-    .max(ARTIFACT_RUNTIME_MAX_CONNECTORS)
-    .default([]),
-});
 
 type RouteContext = { params: Promise<{ token: string }> };
 
@@ -79,7 +72,9 @@ async function handlePost(request: NextRequest, context: RouteContext): Promise<
   const limited = await withRateLimit(request, 'llm-completion', `user:${scoped.userId}`);
   if (limited) return limited;
 
-  const parsed = CompleteSchema.safeParse(await request.json().catch(() => null));
+  const parsed = ArtifactRuntimeCompleteRequestSchema.safeParse(
+    await request.json().catch(() => null),
+  );
   if (!parsed.success) {
     return refusal(
       400,
@@ -223,7 +218,8 @@ async function handlePost(request: NextRequest, context: RouteContext): Promise<
       signal: request.signal,
       plan,
     });
-    return NextResponse.json({ text }, { headers: NO_STORE });
+    const body: ArtifactRuntimeCompleteResponse = { text };
+    return NextResponse.json(body, { headers: NO_STORE });
   } catch (error) {
     if (error instanceof ManagedUsageRequestError) {
       return refusal(error.status, error.code, error.message);

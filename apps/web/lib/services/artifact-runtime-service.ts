@@ -55,13 +55,9 @@ import {
 import type { ToolApprovalPolicy } from '@shared/types/toolApprovalPolicy';
 import { logger } from '@/lib/logger';
 
-export const ARTIFACT_RUNTIME_MAX_PROMPT_CHARS = 100_000;
 export const ARTIFACT_STORAGE_SCOPE_LIMIT_BYTES = 20 * 1024 * 1024;
 export const ARTIFACT_STORAGE_VALUE_LIMIT_BYTES = 4 * 1024 * 1024;
 export const ARTIFACT_STORAGE_LIST_LIMIT = 1_000;
-export const ARTIFACT_STORAGE_KEY_PATTERN = /^[^\s/\\'"]{1,200}$/u;
-export const ARTIFACT_RUNTIME_MAX_CONNECTORS = 10;
-export const ARTIFACT_CONNECTOR_ID_PATTERN = /^[a-z0-9][a-z0-9_.-]{0,63}$/;
 
 const MAX_OUTPUT_TOKENS = 4_096;
 
