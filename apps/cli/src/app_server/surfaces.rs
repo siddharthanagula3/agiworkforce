@@ -8,13 +8,15 @@ use agiworkforce_app_server::DeveloperSessionHostError;
 use agiworkforce_command_registry::{CommandSource, RegistryCommand};
 use agiworkforce_protocol::developer_session::{
     CommandSourceKind, ContextInstructionsResponse, DeveloperAgentMode, DeveloperReasoningEffort,
-    HookConfigScope, HookListResponse, HookSummary, InstructionFile, InstructionFileKind,
-    LocalModelProvider, LocalServerHealth, LocalServerStatus, McpPromptArgumentSummary,
-    McpPromptSummary, McpResourceSummary, McpServerConfiguredStatus, McpServerListResponse,
+    HookAddParams, HookConfigScope, HookListResponse, HookRemoveParams, HookSummary,
+    InstructionFile, InstructionFileKind, LocalModelProvider, LocalServerHealth, LocalServerStatus,
+    McpAddParams, McpPromptArgumentSummary, McpPromptSummary, McpRemoteTransport,
+    McpResourceSummary, McpServerConfiguredStatus, McpServerListResponse, McpServerParams,
     McpServerScope, McpServerSummary, McpServerTestResponse, McpServerToolsResponse,
-    McpToolSummary, MemoryAddParams, MemoryAddResponse, MemoryScope, PluginListResponse,
-    PluginScope, PluginSummary, SettingsReadResponse, SettingsWriteParams, SkillCatalogScope,
-    SkillConsentResponse, SkillListResponse, SkillSummary, SlashCommandListResponse,
+    McpToolSummary, MemoryAddParams, MemoryAddResponse, MemoryScope, PluginInstallParams,
+    PluginListResponse, PluginRemoveParams, PluginScope, PluginSummary, SettingsReadResponse,
+    SettingsWriteParams, SkillCatalogScope, SkillConsentResponse, SkillInstallParams,
+    SkillListResponse, SkillRemoveParams, SkillSummary, SlashCommandListResponse,
     SlashCommandResultKind, SlashCommandRunResponse, SlashCommandSummary,
 };
 use std::path::{Path, PathBuf};
@@ -264,13 +266,14 @@ pub fn list_hooks(workspace_root: &Path) -> HookListResponse {
     let mut events: Vec<&String> = user_hooks.hooks.keys().collect();
     events.sort();
     for event in events {
-        for hook in &user_hooks.hooks[event] {
+        for (index, hook) in user_hooks.hooks[event].iter().enumerate() {
             summaries.push(HookSummary {
                 event: event.clone(),
                 command: hook.command.clone(),
                 scope: HookConfigScope::User,
                 trusted: true,
                 source: hooks::hooks_path().ok().as_deref().map(display),
+                position: u32::try_from(index + 1).ok(),
             });
         }
     }
@@ -288,6 +291,7 @@ pub fn list_hooks(workspace_root: &Path) -> HookListResponse {
                     scope: HookConfigScope::Plugin,
                     trusted: !from_project_dir,
                     source: None,
+                    position: None,
                 });
             }
         }
@@ -721,6 +725,182 @@ pub async fn mcp_server_tools(
             .collect(),
         warnings,
     })
+}
+
+pub fn install_skill(
+    workspace_root: &Path,
+    params: SkillInstallParams,
+) -> Result<SkillListResponse, DeveloperSessionHostError> {
+    let source = crate::path_security::expand_home(params.source.trim());
+    skills::import_skill(Path::new(&source)).map_err(invalid)?;
+    Ok(list_skills(workspace_root))
+}
+
+pub fn remove_skill(
+    workspace_root: &Path,
+    params: SkillRemoveParams,
+) -> Result<SkillListResponse, DeveloperSessionHostError> {
+    crate::installs::remove_skill(workspace_root, params.name.trim())
+        .map_err(|error| invalid(format!("{error:#}")))?;
+    Ok(list_skills(workspace_root))
+}
+
+pub fn install_plugin(
+    workspace_root: &Path,
+    params: PluginInstallParams,
+) -> Result<PluginListResponse, DeveloperSessionHostError> {
+    use crate::features::plugins::plugins::{
+        PluginInstallOutcome, PluginIntegrity, PluginSignaturePolicy,
+    };
+    let integrity = match params.integrity.as_deref().map(str::trim) {
+        Some(claim) if claim.starts_with("sha256:") => {
+            PluginIntegrity::PinnedSha256(claim.to_string())
+        }
+        Some(claim) => {
+            return Err(invalid(format!(
+                "Unsupported integrity claim '{claim}'; use sha256:<hex>"
+            )))
+        }
+        None => PluginIntegrity::PublisherSignature,
+    };
+    let signature = PluginSignaturePolicy::configured(false).map_err(invalid)?;
+    match crate::installs::install_plugin(
+        params.source.trim(),
+        params.name.as_deref(),
+        integrity,
+        signature,
+    )
+    .map_err(invalid)?
+    {
+        PluginInstallOutcome::Installed { .. } | PluginInstallOutcome::AlreadyInstalled { .. } => {
+            Ok(list_plugins(workspace_root))
+        }
+        PluginInstallOutcome::Failed { error } => Err(invalid(error)),
+    }
+}
+
+pub fn remove_plugin(
+    workspace_root: &Path,
+    params: PluginRemoveParams,
+) -> Result<PluginListResponse, DeveloperSessionHostError> {
+    let plugin = list_plugins(workspace_root)
+        .plugins
+        .into_iter()
+        .find(|plugin| plugin.id == params.id)
+        .ok_or_else(|| {
+            DeveloperSessionHostError::not_found(format!("No plugin '{}' is installed", params.id))
+        })?;
+    if plugin.source == PluginScope::Project {
+        return Err(DeveloperSessionHostError::conflict(format!(
+            "'{}' comes from this workspace's plugin folder; remove it from the repository instead",
+            plugin.id
+        )));
+    }
+    crate::installs::remove_plugin(&plugin.id).map_err(|error| invalid(format!("{error:#}")))?;
+    Ok(list_plugins(workspace_root))
+}
+
+pub fn add_mcp_server(
+    workspace_root: &Path,
+    params: McpAddParams,
+) -> Result<McpServerListResponse, DeveloperSessionHostError> {
+    let target = match (params.command, params.url) {
+        (Some(command), None) => crate::installs::McpServerTarget::Stdio {
+            command,
+            args: params.args,
+        },
+        (None, Some(url)) => crate::installs::McpServerTarget::Remote {
+            url,
+            sse: params.transport == Some(McpRemoteTransport::Sse),
+        },
+        _ => {
+            return Err(invalid(
+                "mcp/add takes a command for a local server or a url for a remote one",
+            ))
+        }
+    };
+    let pairs = |map: std::collections::BTreeMap<String, String>| {
+        map.into_iter()
+            .map(|(key, value)| (key.trim().to_string(), value))
+            .collect::<Vec<_>>()
+    };
+    let env = pairs(params.env);
+    let headers = pairs(params.headers);
+    if env
+        .iter()
+        .chain(headers.iter())
+        .any(|(key, _)| key.is_empty())
+    {
+        return Err(invalid("An environment variable or header needs a name"));
+    }
+    crate::installs::add_mcp_server(&crate::installs::McpServerSpec {
+        name: params.name.trim().to_string(),
+        target,
+        env,
+        headers,
+        overwrite: params.overwrite,
+    })
+    .map_err(|error| invalid(format!("{error:#}")))?;
+    Ok(list_mcp_servers(workspace_root))
+}
+
+pub fn remove_mcp_server(
+    workspace_root: &Path,
+    params: McpServerParams,
+) -> Result<McpServerListResponse, DeveloperSessionHostError> {
+    let server = crate::mcp::discover_servers(workspace_root)
+        .into_iter()
+        .find(|server| server.name == params.name)
+        .ok_or_else(|| {
+            DeveloperSessionHostError::not_found(format!(
+                "No MCP server named '{}' is configured",
+                params.name
+            ))
+        })?;
+    match server.origin {
+        McpServerOrigin::Project => {
+            return Err(DeveloperSessionHostError::conflict(format!(
+                "'{}' comes from this workspace's .mcp.json; remove it there",
+                params.name
+            )))
+        }
+        McpServerOrigin::Plugin => {
+            return Err(DeveloperSessionHostError::conflict(format!(
+                "'{}' comes from a plugin; remove or disable that plugin",
+                params.name
+            )))
+        }
+        McpServerOrigin::User => {}
+    }
+    crate::installs::remove_mcp_server(&params.name)
+        .map_err(|error| invalid(format!("{error:#}")))?;
+    Ok(list_mcp_servers(workspace_root))
+}
+
+pub fn add_hook(
+    workspace_root: &Path,
+    params: HookAddParams,
+) -> Result<HookListResponse, DeveloperSessionHostError> {
+    let event = params.event.trim();
+    if event.is_empty() || event.contains(char::is_whitespace) {
+        return Err(invalid("A hook needs a single event name"));
+    }
+    hooks::apply_hooks_command(&format!("add {event} {}", params.command.trim()))
+        .map_err(|error| invalid(format!("{error:#}")))?;
+    Ok(list_hooks(workspace_root))
+}
+
+pub fn remove_hook(
+    workspace_root: &Path,
+    params: HookRemoveParams,
+) -> Result<HookListResponse, DeveloperSessionHostError> {
+    let event = params.event.trim();
+    if event.is_empty() || event.contains(char::is_whitespace) {
+        return Err(invalid("A hook needs a single event name"));
+    }
+    hooks::apply_hooks_command(&format!("remove {event} {}", params.position))
+        .map_err(|error| invalid(format!("{error:#}")))?;
+    Ok(list_hooks(workspace_root))
 }
 
 pub fn expand_prompt_command(text: &str) -> Result<Option<String>, DeveloperSessionHostError> {

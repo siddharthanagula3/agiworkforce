@@ -164,6 +164,20 @@ fn export_typescript_bindings() {
         .expect("export developer-session mcp test graph");
     agiworkforce_protocol::developer_session::McpServerToolsResponse::export_all_to(dir)
         .expect("export developer-session mcp tools graph");
+    agiworkforce_protocol::developer_session::HookAddParams::export_all_to(dir)
+        .expect("export developer-session hook add params graph");
+    agiworkforce_protocol::developer_session::HookRemoveParams::export_all_to(dir)
+        .expect("export developer-session hook remove params graph");
+    agiworkforce_protocol::developer_session::SkillInstallParams::export_all_to(dir)
+        .expect("export developer-session skill install params graph");
+    agiworkforce_protocol::developer_session::SkillRemoveParams::export_all_to(dir)
+        .expect("export developer-session skill remove params graph");
+    agiworkforce_protocol::developer_session::PluginInstallParams::export_all_to(dir)
+        .expect("export developer-session plugin install params graph");
+    agiworkforce_protocol::developer_session::PluginRemoveParams::export_all_to(dir)
+        .expect("export developer-session plugin remove params graph");
+    agiworkforce_protocol::developer_session::McpAddParams::export_all_to(dir)
+        .expect("export developer-session mcp add params graph");
 
     // One versioned agent event envelope (W5 discipline-wave item 4), not
     // reachable from any root above (a new, independent top-level type), so
