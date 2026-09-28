@@ -4,16 +4,14 @@ import rehypeKatex from 'rehype-katex';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
 import * as Tooltip from '@radix-ui/react-tooltip';
-import { reportClientFailure } from '../../lib/client-failures';
 import { cn } from '../../lib/utils';
 import { MARKDOWN_SANITIZE_SCHEMA } from './markdownSanitizeSchema';
 import { preprocessMath } from './preprocessMath';
 import { reactNodeText } from './reactNodeText';
-import { MermaidDiagram } from './MermaidDiagram';
 import { MarkdownTable } from './MarkdownTable';
-import { HighlightedCode } from './HighlightedCode';
+import { CodeBlock } from './CodeBlock';
 import { LITERAL_HTML_REMARK_PLUGINS, REMARK_PLUGINS } from './remarkPlugins';
-import { StreamTailContext, useIsStreamTail } from './streamTailContext';
+import { StreamTailContext } from './streamTailContext';
 import {
   CITATION_GROUP_HREF_PATTERN,
   CITATION_HREF_PATTERN,
@@ -25,88 +23,8 @@ import {
 import { CitationChip, CitationsContext, useMarkdownCitations } from './CitationChip';
 import type { CitationItem, MarkdownCitation } from './CitationChip';
 import type { Components } from 'react-markdown';
-import { Button } from '@agiworkforce/ui';
-import { Copy, Check, ImageOff } from 'lucide-react';
+import { Check, ImageOff } from 'lucide-react';
 import 'katex/dist/katex.min.css';
-import './codeBlock.css';
-
-export const CodeBlock = ({
-  className,
-  children,
-}: {
-  className?: string;
-  children: React.ReactNode;
-}) => {
-  const [copied, setCopied] = useState(false);
-  const isStreamTail = useIsStreamTail();
-  const match = /language-(\w+)/.exec(className || '');
-  const language = match?.[1] ?? '';
-  const codeString = reactNodeText(children).replace(/\n$/, '');
-
-  const [copyFailed, setCopyFailed] = useState(false);
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(codeString);
-      setCopyFailed(false);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      reportClientFailure({ failure: 'code_copy', detail: 'permission_denied' });
-      setCopyFailed(true);
-      setTimeout(() => setCopyFailed(false), 4000);
-    }
-  };
-
-  if (language === 'mermaid') {
-    return (
-      <MermaidDiagram
-        source={codeString}
-        isStreaming={isStreamTail}
-        className="mermaid-block my-4"
-      />
-    );
-  }
-
-  if (!match) {
-    return (
-      <code className="rounded-md bg-[var(--chat-surface-hover)] px-1.5 py-0.5 font-mono text-[13px] text-[var(--chat-text-primary)]">
-        {children}
-      </code>
-    );
-  }
-
-  return (
-    <div className="code-block-container group relative my-4">
-      <div className="code-block-header-bar">
-        <span className="code-block-lang-label">{language}</span>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={handleCopy}
-          className="h-8 gap-1.5 px-2.5 text-xs text-[var(--chat-code-lang-label)] hover:text-[var(--chat-code-copy-hover-fg)] hover:bg-[var(--chat-code-copy-hover-bg)]"
-          aria-label={copyFailed ? 'Copying code failed' : copied ? 'Code copied' : 'Copy code'}
-        >
-          {copied ? (
-            <Check className="h-3.5 w-3.5" aria-hidden="true" />
-          ) : (
-            <Copy className="h-3.5 w-3.5" aria-hidden="true" />
-          )}
-          {copyFailed ? 'Copy failed' : copied ? 'Copied' : 'Copy'}
-        </Button>
-      </div>
-      <div className="code-block-body">
-        <pre tabIndex={0} aria-label={`${language} code block`}>
-          <HighlightedCode
-            code={codeString}
-            language={language}
-            enabled={!isStreamTail}
-            className={className}
-          />
-        </pre>
-      </div>
-    </div>
-  );
-};
 
 function isNavigableImageSource(src: string): boolean {
   const trimmed = src.trim();
