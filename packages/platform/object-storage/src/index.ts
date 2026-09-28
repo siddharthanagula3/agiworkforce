@@ -10,6 +10,7 @@ export type {
   ObjectStore,
   PendingMultipartUpload,
   PresignPutInput,
+  PresignUploadPartInput,
   PutObjectInput,
   StoredObjectBytes,
   StoredObjectHead,
@@ -80,10 +81,13 @@ export {
 
 export {
   bindPresignedUpload,
+  bindPresignedUploadPart,
   isPresignedUrlExpired,
   presignedUrlExpiresAt,
+  MAX_MULTIPART_PART_NUMBER,
   PRESIGNED_URL_MAX_TTL_SECONDS,
   type BoundPresignUpload,
+  type BoundPresignUploadPart,
 } from './presign';
 
 export {

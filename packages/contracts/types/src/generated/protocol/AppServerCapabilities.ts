@@ -35,4 +35,10 @@ export type AppServerCapabilities = {
    * Threads carry a writer lease, and `thread/writer/*` hand it over.
    */
   writerLease?: boolean;
+  threadUnarchive?: boolean;
+  threadSearch?: boolean;
+  forkAtMessage?: boolean;
+  promptCommands?: boolean;
+  maxTurns?: boolean;
+  memory?: boolean;
 };

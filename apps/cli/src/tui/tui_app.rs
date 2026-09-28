@@ -818,6 +818,12 @@ impl TuiApp {
                 self.active_overlay = None;
                 resume_session(&reference, self);
             }
+            ViewAction::SideAction(tag) if tag.starts_with("rewind:") => {
+                let arg = tag.trim_start_matches("rewind:").to_string();
+                self.overlay_scroll = 0;
+                self.active_overlay = None;
+                apply_rewind(self, &arg);
+            }
             ViewAction::SideAction(tag) if tag.starts_with("mention:") => {
                 let path = tag.trim_start_matches("mention:").to_string();
                 self.insert_mention(&path);
@@ -1009,6 +1015,7 @@ fn approval_choice_to_decision(
         ApprovalChoice::AlwaysAllow => ApprovalDecision::AlwaysAllow,
         ApprovalChoice::No => ApprovalDecision::Deny,
         ApprovalChoice::DenyAll => ApprovalDecision::Cancel,
+        ApprovalChoice::AllowAll => ApprovalDecision::AllowOnce,
     }
 }
 
@@ -1047,7 +1054,10 @@ fn run_tui_approval_modal(
     terminal: &mut Terminal<CrosstermBackend<Stdout>>,
     ctx: &FrameCtx,
     request: &crate::tui::approval_broker::ApprovalRequest,
-) -> Result<crate::tui::widgets::approval_overlay::ApprovalChoice> {
+) -> Result<(
+    crate::tui::widgets::approval_overlay::ApprovalChoice,
+    Option<String>,
+)> {
     use crate::tui::widgets::approval_overlay::ApprovalChoice;
     use crate::tui::widgets::interactive::{InteractiveView, ViewAction};
 
@@ -1071,13 +1081,48 @@ fn run_tui_approval_modal(
                         terminal.draw(|frame| {
                             draw_turn_chrome(frame, ctx);
                         })?;
-                        return Ok(overlay.result.unwrap_or(ApprovalChoice::No));
+                        let note = overlay.note();
+                        return Ok((overlay.result.unwrap_or(ApprovalChoice::No), note));
                     }
                     ViewAction::Continue | ViewAction::SideAction(_) => {}
                 },
-                Event::Paste(_) => {}
+                Event::Paste(text) => overlay.insert_note_text(&sanitize_terminal_text(&text)),
                 _ => {}
             }
+        }
+    }
+}
+
+fn run_tui_question_modal(
+    terminal: &mut Terminal<CrosstermBackend<Stdout>>,
+    ctx: &FrameCtx,
+    question: &str,
+    options: &[String],
+) -> Result<Option<String>> {
+    use crate::tui::widgets::interactive::{InteractiveView, ViewAction};
+
+    let mut overlay =
+        crate::tui::widgets::question_overlay::QuestionOverlayState::new(question, options);
+    loop {
+        terminal.draw(|frame| {
+            let chat_area = draw_turn_chrome(frame, ctx);
+            overlay.render_into(frame, chat_area);
+        })?;
+        if !event::poll(super::motion::FRAME_INTERVAL)? {
+            continue;
+        }
+        match event::read()? {
+            Event::Key(key) => match overlay.handle_key(crossterm_to_keyaction(key)) {
+                ViewAction::Submit(_) | ViewAction::Close => {
+                    terminal.draw(|frame| {
+                        draw_turn_chrome(frame, ctx);
+                    })?;
+                    return Ok(overlay.answer.take());
+                }
+                ViewAction::Continue | ViewAction::SideAction(_) => {}
+            },
+            Event::Paste(text) => overlay.insert_text(&sanitize_terminal_text(&text)),
+            _ => {}
         }
     }
 }
@@ -2957,6 +3002,56 @@ fn resume_session(reference: &str, app: &mut TuiApp) {
     });
 }
 
+fn open_checkpoint_picker(app: &mut TuiApp) {
+    use crate::tui::widgets::checkpoint_picker::{CheckpointEntry, CheckpointPickerView};
+
+    let summaries = app.session.checkpoint_summaries();
+    let entries: Vec<CheckpointEntry> = summaries
+        .iter()
+        .rev()
+        .enumerate()
+        .map(|(offset, summary)| CheckpointEntry {
+            steps: offset + 1,
+            label: sanitize_terminal_text(&format!(
+                "{}  {}  ({})",
+                summary.created_at.format("%H:%M"),
+                crate::repl::checkpoint_prompt_line(&summary.prompt),
+                crate::repl::checkpoint_files_label(summary.tracked_files)
+            ))
+            .into_owned(),
+            tracked_files: summary.tracked_files,
+        })
+        .collect();
+    app.open_overlay(Box::new(CheckpointPickerView::new(entries)));
+}
+
+fn apply_rewind(app: &mut TuiApp, arg: &str) {
+    let (message, rewound) = crate::repl::rewind_session(arg, &mut app.session);
+    let conversation_restored = rewound
+        .as_ref()
+        .is_some_and(|rewound| rewound.conversation_restored);
+    if conversation_restored {
+        rebuild_transcript_from_session(app);
+        app.tool_cells.clear();
+    }
+    app.chat_messages.push(ChatMessage {
+        role: ChatRole::System,
+        text: message.plain_message(),
+    });
+    let prompt = rewound
+        .filter(|rewound| rewound.conversation_restored && !rewound.prompt.trim().is_empty())
+        .map(|rewound| rewound.prompt);
+    if let Some(prompt) = prompt {
+        app.input = prompt;
+        app.cursor = app.input.len();
+        app.status_notice = Some((
+            "your prompt from that point is back in the composer".to_string(),
+            Instant::now(),
+        ));
+    }
+    app.sync_stats();
+}
+
 /// Rebuild the visible transcript from the session's own messages, so what the
 /// screen shows and what the model was sent cannot drift apart.
 fn rebuild_transcript_from_session(app: &mut TuiApp) {
@@ -4043,9 +4138,14 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
             }
         }
 
-        "/rewind" => SlashResult::SystemMessage(
-            crate::repl::rewind_session_for_display(arg, &mut app.session).plain_message(),
-        ),
+        "/rewind" => {
+            if arg.trim().is_empty() {
+                open_checkpoint_picker(app);
+            } else {
+                apply_rewind(app, arg);
+            }
+            SlashResult::SystemMessage(String::new())
+        }
 
         // ── Tools & plugins ──
         "/mcp" if !arg.is_empty() => SlashResult::RunMcp(arg.to_string()),
@@ -4683,6 +4783,7 @@ pub async fn run(
     auto_route_seed: Option<crate::routing::classify::AutoRouteSeed>,
 ) -> Result<()> {
     crate::tier_cache::ensure_plan_models_cached().await;
+    crate::tools::enable_interactive_questions();
     tokio::spawn(async {
         let Ok(release) = crate::update_check::fetch_latest_release().await else {
             return;
@@ -5823,20 +5924,38 @@ async fn send_message_with_prompt(
                             cost_str: turn_cost_str.clone(),
                             notice: turn_notice.as_deref(),
                         };
-                        let choice = run_tui_approval_modal(terminal, &approval_ctx, &req)?;
+                        if let crate::tui::approval_broker::ApprovalRequestKind::Question {
+                            question,
+                            options,
+                        } = &req.kind
+                        {
+                            let answer =
+                                run_tui_question_modal(terminal, &approval_ctx, question, options)?;
+                            terminal.clear()?;
+                            let decision = if answer.is_some() {
+                                crate::tui::approval_broker::ApprovalDecision::AllowOnce
+                            } else {
+                                crate::tui::approval_broker::ApprovalDecision::Cancel
+                            };
+                            broker.complete_with_note(req.id, decision, answer).await;
+                            continue;
+                        }
+                        let (choice, note) = run_tui_approval_modal(terminal, &approval_ctx, &req)?;
                         // The modal ran its own key loop over frames ratatui
                         // drew; force the next frame to repaint every cell so
                         // nothing the prompt covered survives it.
                         terminal.clear()?;
                         broker
-                            .complete(req.id, approval_choice_to_decision(choice))
+                            .complete_with_note(req.id, approval_choice_to_decision(choice), note)
                             .await;
-                        if matches!(
-                            choice,
-                            crate::tui::widgets::approval_overlay::ApprovalChoice::DenyAll
-                        ) {
-                            // Stop prompting for the rest of this turn.
-                            broker.deny_all_remaining().await;
+                        match choice {
+                            crate::tui::widgets::approval_overlay::ApprovalChoice::DenyAll => {
+                                broker.deny_all_remaining().await;
+                            }
+                            crate::tui::widgets::approval_overlay::ApprovalChoice::AllowAll => {
+                                broker.allow_all_remaining().await;
+                            }
+                            _ => {}
                         }
                     }
                 }

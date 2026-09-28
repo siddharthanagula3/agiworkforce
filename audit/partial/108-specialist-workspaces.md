@@ -104,20 +104,6 @@ Code: `apps/web/features/connectors/data/connectors.ts:1145-1154`, `apps/web/lib
 
 Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:860-867`, `apps/web/app/api/llm/v1/chat/completions/lib/research-loop.ts:1-8`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:111-116`
 
-## S108.19: Contract review.
-
-- Done when: A contract-review flow extracts clauses, flags risks and suggests redlines against a playbook.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Generic third-party connector (Definely) via the chat tool loop; no native workspace. | ui |
-| desktop | partial | Generic third-party connector (Definely) via the chat tool loop; no native workspace. | ui |
-| mobile | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/lib/connectors/directory/sources/vendor-directory.json:2108-2108`, `apps/web/features/connectors/hooks/use-connectors-settings-adapter.tsx:764-764`, `apps/web/lib/connectors/directory/connectable.ts:16-26`, `apps/web/app/api/connectors/custom/route.ts:130-150`
-
 ## S108.20: Scientific research workspace.
 
 - Done when: A scientific-research workspace searches literature/papers and produces cited syntheses.
@@ -172,43 +158,11 @@ Code: `apps/web/lib/connectors/directory/sources/vendor-directory.json:1728-1728
 
 - Done when: The user runs sales/CRM workflows (look up and update contacts, deals, pipelines) from the product.
 - Wave: 3
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | CRM work happens only as generic chat over the HubSpot connector (Salesforce also needs endpoint config). There is no sales workspace or prebuilt CRM workflows. | ui |
-| desktop | partial | CRM work happens only as generic chat over the HubSpot connector (Salesforce also needs endpoint config). There is no sales workspace or prebuilt CRM workflows. | ui |
-| mobile | partial | HubSpot can be connected on mobile and its tools reach mobile chat, but there is no sales workspace or prebuilt CRM workflow. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/connectors/data/connectors.ts:329-338`, `apps/web/lib/connectors/mcp-endpoints.ts:133-137`, `apps/mobile/src/features/settings/cloud-connectors/index.tsx:298-305`, `apps/mobile/src/features/settings/cloud-connectors/index.tsx:697-706`
-
-## S108.27: Customer-support workflows.
-
-- Done when: The user runs customer-support workflows (triage, reply, update tickets) from the product.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Support work is only generic chat over the Intercom connector. Zendesk and Freshdesk have no remote endpoint (not connectable). There is no support workspace or ticket workflow. | ui |
-| desktop | partial | Support work is only generic chat over the Intercom connector. Zendesk and Freshdesk have no remote endpoint (not connectable). There is no support workspace or ticket workflow. | ui |
-| mobile | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/connectors/data/connectors.ts:362-371`, `apps/web/lib/connectors/mcp-endpoints.ts:139-143`
-
-## S108.28: HR and recruiting workflows.
-
-- Done when: The user runs HR/recruiting workflows (job posts, candidate pipeline, interviews) from the product.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Generic third-party connector (Workable) via the chat tool loop; no native workspace. | ui |
-| desktop | partial | Generic third-party connector (Workable) via the chat tool loop; no native workspace. | ui |
-| mobile | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/lib/connectors/directory/sources/vendor-directory.json:7828-7828`, `apps/web/features/connectors/hooks/use-connectors-settings-adapter.tsx:764-764`, `apps/web/lib/connectors/directory/connectable.ts:16-26`, `apps/web/app/api/connectors/custom/route.ts:130-150`
 
 ## S108.29: Marketing and campaign workflows.
 

@@ -9,7 +9,7 @@ import type {
   ResolvedWorkspaceControls,
   WorkspaceFeature,
 } from '@agiworkforce/types';
-import { normalizeResearchDeliverable } from '@agiworkforce/types';
+import { normalizeResearchDeliverable, RESEARCH_GUIDANCE_MAX_CHARS } from '@agiworkforce/types';
 import {
   DATA_REGIONS,
   NON_US_VENDOR_TRANSPORTS,
@@ -552,6 +552,7 @@ export const ChatCompletionRequestSchema = z
           .max(50)
           .optional(),
         deliverable: z.unknown().optional(),
+        guidance: z.string().trim().min(1).max(RESEARCH_GUIDANCE_MAX_CHARS).optional(),
       })
       .optional(),
     code_execution: z.boolean().optional(),
@@ -1199,6 +1200,7 @@ export type ProcessedRequest = {
     approvedSteps: ResearchStep[];
     /** What the reader asked the approved run to produce. */
     deliverable: ResearchDeliverableSpec;
+    guidance?: string;
   };
   /** §24: the sources and site restriction this research run was given. */
   webSearchDomainPolicy?: ResearchDomainPolicy;
@@ -5368,6 +5370,9 @@ export async function processRequest(
             steps: (chatRequest.research_resume.steps ?? []) as ResearchStep[],
             approvedSteps: (chatRequest.research_resume.approved_steps ?? []) as ResearchStep[],
             deliverable: normalizeResearchDeliverable(chatRequest.research_resume.deliverable),
+            ...(chatRequest.research_resume.guidance
+              ? { guidance: chatRequest.research_resume.guidance }
+              : {}),
           },
         }
       : {}),
