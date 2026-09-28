@@ -119,6 +119,7 @@ import { useStore as useZustandStore } from 'zustand';
 import { _sharedArtifactStore } from '../stores/artifacts-store';
 import { useConversationBranches } from '../hooks/use-conversation-branches';
 import { useConversationDraftSync } from '../hooks/use-conversation-draft-sync';
+import { DraftConflictDialog } from '../components/DraftConflictDialog';
 import { useExplicitMemoryCommands } from '../hooks/use-explicit-memory-commands';
 import { uploadChatAttachments } from '../services/chat-attachment-upload';
 import { useKeyboardShortcuts } from '../hooks/use-keyboard-shortcuts';
@@ -1531,7 +1532,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     updateConversation,
     setActiveConversation,
   } = useConversations();
-  useConversationDraftSync();
+  const draftConflict = useConversationDraftSync();
   const adoptPendingComposerToggles = useChatStore((s) => s.adoptPendingComposerToggles);
   const parkBlockedSend = useChatStore((s) => s.parkBlockedSend);
   const {
@@ -5477,6 +5478,11 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       {destructiveConfirmDialog}
       {memoryCommandDialog}
       {keepTemporaryChatDialog}
+      <DraftConflictDialog
+        conflict={draftConflict.conflict}
+        onResolve={draftConflict.resolveConflict}
+        onClose={draftConflict.closeConflict}
+      />
       <GlobalSearchDialog open={searchDialogOpen} onOpenChange={setSearchDialogOpen} />
       <ComposerFeedbackDialog open={feedbackOpen} onOpenChange={setFeedbackOpen} hideTrigger />
       <KeyboardShortcutsDialog
@@ -5816,6 +5822,8 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                         placeholder={t('chat:placeholderEmpty')}
                         prefillText={composerPrefill}
                         onPrefillConsumed={handleComposerPrefillConsumed}
+                        draftReplacement={draftConflict.replacement}
+                        onDraftReplacementApplied={draftConflict.consumeReplacement}
                         onTypingChange={handleTypingChange}
                         clearSignal={composerClearSignal}
                         droppedFiles={restoredAttachments}
@@ -5929,6 +5937,8 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                         onEditLastMessage={editLastUserMessage}
                         prefillText={composerPrefill}
                         onPrefillConsumed={handleComposerPrefillConsumed}
+                        draftReplacement={draftConflict.replacement}
+                        onDraftReplacementApplied={draftConflict.consumeReplacement}
                         onTypingChange={handleTypingChange}
                         clearSignal={composerClearSignal}
                         droppedFiles={restoredAttachments}

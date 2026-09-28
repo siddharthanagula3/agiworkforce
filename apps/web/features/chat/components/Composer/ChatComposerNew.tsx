@@ -152,6 +152,7 @@ import {
   readPersistedDraft,
   writePersistedDraft,
 } from './composer-draft-storage';
+import type { DraftReplacement } from '@features/chat/hooks/use-conversation-draft-sync';
 import { modelSupportsResearch } from '@features/chat/lib/research-capability-gate';
 import { routeVisualRequest } from '@features/chat/components/artifacts/structuredVisualArtifact';
 import { useCoworkFolderStore, supportsDirectoryPicker } from '@shared/stores/cowork-folder-store';
@@ -382,6 +383,8 @@ interface ChatComposerProps {
   prefillText?: string;
   /** Callback fired after prefillText has been consumed and applied. */
   onPrefillConsumed?: () => void;
+  draftReplacement?: DraftReplacement | null;
+  onDraftReplacementApplied?: () => void;
   /** Files dropped onto the message area that should be added as attachments. */
   droppedFiles?: File[] | null;
   /** Callback fired after droppedFiles have been consumed and added to attachments. */
@@ -673,6 +676,8 @@ const ChatComposerNewComponent = ({
   disabled = false,
   prefillText,
   onPrefillConsumed,
+  draftReplacement = null,
+  onDraftReplacementApplied,
   droppedFiles,
   onDroppedFilesConsumed,
   attachmentUploadAttempt,
@@ -3281,6 +3286,17 @@ const ChatComposerNewComponent = ({
     setLocalNotice(RESTORED_DRAFT_NOTICE);
     clearDraftContent(conversationId);
   }, [clearDraftContent, conversationId, message, parkedDraft, writeComposerMessage]);
+
+  const appliedDraftReplacementRef = useRef(0);
+  useEffect(() => {
+    if (!draftReplacement || draftReplacement.nonce === appliedDraftReplacementRef.current) return;
+    if (draftReplacement.conversationId !== conversationId) return;
+    appliedDraftReplacementRef.current = draftReplacement.nonce;
+    seenParkedDraftRef.current = draftReplacement.content;
+    deferredHandbackRef.current = null;
+    writeComposerMessage(draftReplacement.content);
+    onDraftReplacementApplied?.();
+  }, [conversationId, draftReplacement, onDraftReplacementApplied, writeComposerMessage]);
 
   useEffect(() => {
     if (!deferredUnsentDraft || messageRef.current.trim()) return;
