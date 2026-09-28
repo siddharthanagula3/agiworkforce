@@ -14,9 +14,8 @@ nothing is left.
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | The design is code, so its source can be viewed, copied and downloaded; there is no inspect/spec mode (measurements, tokens, assets) for developers. `agi artifacts show --out` writes the source into the project. | ui |
-| chrome | partial | The design is code, so its source can be viewed, copied and downloaded; there is no inspect/spec mode (measurements, tokens, assets) for developers. The side panel can only copy the source. | surface-only |
 
-Code: `apps/cli/src/lib.rs:1034-1043`, `apps/cli/src/lib.rs:1942-1948`, `apps/extension/src/features/side-panel/artifactsDrawer.ts:194-205`, `apps/extension/src/features/side-panel/artifactsDrawer.ts:200-205`
+Code: `apps/cli/src/lib.rs:1034-1043`, `apps/cli/src/lib.rs:1942-1948`
 
 ## S32.30: Figma import/export integration.
 

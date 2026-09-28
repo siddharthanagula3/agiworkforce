@@ -198,14 +198,13 @@ Code: `apps/mobile/src/features/settings/personalization/index.tsx:269-281`
 
 - Done when: During setup the user is told about memory and chooses whether and how it is used, with the choice changeable later.
 - Wave: 3
-- Already works on: cli, vscode
+- Already works on: cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Add memory to mobile first run: memory screens exist only under Settings. | ui |
-| chrome | partial | The side-panel first-run overlay never mentions memory; memories are only listed and deleted in the panel menu. | ui |
 
-Code: `apps/mobile/app/(app)/settings/memory-import.tsx:130-135`, `apps/extension/src/side_panel.ts:7799-7806`
+Code: `apps/mobile/app/(app)/settings/memory-import.tsx:130-135`
 
 ## S3.27: Recommended-app connection flow.
 
