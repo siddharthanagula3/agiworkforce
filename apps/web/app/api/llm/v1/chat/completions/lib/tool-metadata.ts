@@ -391,8 +391,56 @@ const BANK_ACCOUNTS_TOOL_METADATA: Readonly<Record<string, ToolMetadata>> = Obje
   get_transactions: BANK_ACCOUNT_READ,
 });
 
+const GRAPH_READ: ToolMetadata = Object.freeze({
+  actionClass: 'read',
+  reversible: true,
+  acceptsUntrustedContent: true,
+  createsEgressPath: false,
+  declared: true,
+});
+
+const GRAPH_SEND: ToolMetadata = Object.freeze({
+  actionClass: 'external_send',
+  reversible: false,
+  acceptsUntrustedContent: false,
+  createsEgressPath: true,
+  declared: true,
+  externalDelivery: 'send',
+  retrySafety: 'at_most_once',
+});
+
+const OUTLOOK_TOOL_METADATA: Readonly<Record<string, ToolMetadata>> = Object.freeze({
+  search_mail: GRAPH_READ,
+  read_mail: GRAPH_READ,
+  list_events: GRAPH_READ,
+  send_mail: GRAPH_SEND,
+  create_event: GRAPH_SEND,
+});
+
+const ONEDRIVE_TOOL_METADATA: Readonly<Record<string, ToolMetadata>> = Object.freeze({
+  search_files: GRAPH_READ,
+  read_file: GRAPH_READ,
+});
+
+const SHAREPOINT_TOOL_METADATA: Readonly<Record<string, ToolMetadata>> = Object.freeze({
+  search_sites: GRAPH_READ,
+  search_files: GRAPH_READ,
+  read_file: GRAPH_READ,
+});
+
+const TEAMS_TOOL_METADATA: Readonly<Record<string, ToolMetadata>> = Object.freeze({
+  list_chats: GRAPH_READ,
+  read_chat_messages: GRAPH_READ,
+  list_teams: GRAPH_READ,
+  list_channels: GRAPH_READ,
+});
+
 const CONNECTOR_TOOL_METADATA: Readonly<Record<string, Readonly<Record<string, ToolMetadata>>>> =
   Object.freeze({
+    outlook: OUTLOOK_TOOL_METADATA,
+    onedrive: ONEDRIVE_TOOL_METADATA,
+    sharepoint: SHAREPOINT_TOOL_METADATA,
+    teams: TEAMS_TOOL_METADATA,
     'google-contacts': GOOGLE_CONTACTS_TOOL_METADATA,
     healthex: HEALTHEX_TOOL_METADATA,
     'bank-accounts': BANK_ACCOUNTS_TOOL_METADATA,
