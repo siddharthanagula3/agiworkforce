@@ -71,6 +71,7 @@ import {
   PLUGIN_INSTALLS_DISABLED_STATUS,
   PLUGIN_INSTALL_FAILED_COPY,
   PLUGIN_MARKETPLACES_PATH,
+  PLUGIN_SOURCE_KIND_AUTHORED,
   PLUGIN_SOURCE_KIND_REPOSITORY,
   PLUGIN_MARKETPLACE_ENTRIES_PATH,
   PLUGIN_MARKETPLACE_INSTALLATIONS_PATH,
@@ -606,6 +607,7 @@ export function toPluginDetail(
     ...(entry.permissions.length > 0 ? { permissions: entry.permissions } : {}),
     version: entry.version,
     ...(installed ? { enabled: pluginInstallationEnabled(entry, installs) } : {}),
+    customizable: installed && pluginInstallationEnabled(entry, installs),
     examplePrompts: entry.examplePrompts,
     components: toComponents(entry),
     installCommand: entry.installCommand,
@@ -629,6 +631,8 @@ export function toUserMarketplaceDetail(
   source: PluginMarketplaceSourceSummary | undefined,
   installs: PluginInstallState,
 ): DirectoryPluginDetail {
+  const installation = installs.byEntryId.get(entry.id);
+  const authored = source?.kind === PLUGIN_SOURCE_KIND_AUTHORED;
   return {
     kind: 'plugin',
     id: entry.id,
@@ -636,6 +640,9 @@ export function toUserMarketplaceDetail(
     ...(source ? { publisher: source.name } : {}),
     description: entry.description,
     ...(entry.permissions.length > 0 ? { permissions: entry.permissions } : {}),
+    ...(installation ? { enabled: installation.enabled } : {}),
+    editable: authored,
+    customizable: installation?.enabled === true && !authored,
     examplePrompts: entry.examplePrompts,
     components: {
       skills: entry.declaredSkills,
@@ -649,7 +656,7 @@ export function toUserMarketplaceDetail(
     ...(source ? { sourceLabel: source.name } : {}),
     sourceUrl: source?.repositoryUrl ?? null,
     updatedAt: entry.updatedAt,
-    installed: installs.byEntryId.has(entry.id),
+    installed: installation !== undefined,
     installable: true,
   };
 }

@@ -38,7 +38,11 @@ import {
   UPLOAD_DONE_LABEL,
 } from './constants';
 import { DIRECTORY_CREATE_BUTTON, DIRECTORY_FOCUS_RING } from './styles';
-import type { DirectoryPluginDraftSkill, DirectoryUploadResult } from './types';
+import type {
+  DirectoryPluginDraft,
+  DirectoryPluginDraftSkill,
+  DirectoryUploadResult,
+} from './types';
 
 const FIELD_CLASS =
   'w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground';
@@ -72,18 +76,28 @@ export function CreatePluginDialog({
   open,
   onClose,
   onSubmit,
+  initial,
+  title = CREATE_PLUGIN_LABEL,
+  intro = CREATE_PLUGIN_INTRO,
+  submitLabel = CREATE_PLUGIN_SUBMIT_LABEL,
+  failureCopy = CREATE_PLUGIN_FAILED_COPY,
 }: {
   open: boolean;
   onClose: () => void;
-  onSubmit: (draft: {
-    name: string;
-    description: string;
-    skills: readonly DirectoryPluginDraftSkill[];
-  }) => Promise<DirectoryUploadResult>;
+  onSubmit: (draft: DirectoryPluginDraft) => Promise<DirectoryUploadResult>;
+  initial?: DirectoryPluginDraft;
+  title?: string;
+  intro?: string;
+  submitLabel?: string;
+  failureCopy?: string;
 }) {
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [skills, setSkills] = useState<DirectoryPluginDraftSkill[]>([emptySkill()]);
+  const [name, setName] = useState(initial?.name ?? '');
+  const [description, setDescription] = useState(initial?.description ?? '');
+  const [skills, setSkills] = useState<DirectoryPluginDraftSkill[]>(
+    initial && initial.skills.length > 0
+      ? initial.skills.map((skill) => ({ ...skill }))
+      : [emptySkill()],
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<DirectoryUploadResult | null>(null);
@@ -126,11 +140,12 @@ export function CreatePluginDialog({
             name: skill.name.trim(),
             description: skill.description.trim(),
             body: skill.body.trim(),
+            ...(skill.path ? { path: skill.path } : {}),
           })),
         }),
       );
     } catch (caught) {
-      setError(toUserMessage(caught, CREATE_PLUGIN_FAILED_COPY));
+      setError(toUserMessage(caught, failureCopy));
     } finally {
       setBusy(false);
     }
@@ -145,8 +160,8 @@ export function CreatePluginDialog({
     >
       <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{result ? result.title : CREATE_PLUGIN_LABEL}</DialogTitle>
-          <DialogDescription>{result ? '' : CREATE_PLUGIN_INTRO}</DialogDescription>
+          <DialogTitle>{result ? result.title : title}</DialogTitle>
+          <DialogDescription>{result ? '' : intro}</DialogDescription>
         </DialogHeader>
 
         {result ? (
@@ -272,7 +287,7 @@ export function CreatePluginDialog({
                 className={cn(DIRECTORY_CREATE_BUTTON, 'gap-2 disabled:opacity-60')}
               >
                 {busy ? <Spinner aria-label={UPLOAD_BUSY_LABEL} className="size-4" /> : null}
-                {busy ? UPLOAD_BUSY_LABEL : CREATE_PLUGIN_SUBMIT_LABEL}
+                {busy ? UPLOAD_BUSY_LABEL : submitLabel}
               </button>
             </>
           )}
