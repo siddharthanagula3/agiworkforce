@@ -730,6 +730,29 @@ const ar = {
   'webview.alwaysAllowHint':
     'يحفظ قاعدة حتى يتوقف AGI عن السؤال عن هذا في كل الجلسات. يمكنك إدارتها من الموافقات المحفوظة.',
   'webview.alwaysAllowedOutcome': 'مسموح دائمًا. لن يسأل AGI عن هذا مرة أخرى.',
+  'mcpDetails.action': 'تفاصيل الخادم',
+  'mcpDetails.checking': 'AGI Workforce: جارٍ فحص {name}',
+  'mcpDetails.documentTitle': 'خادم MCP {name}',
+  'mcpDetails.health': 'الحالة',
+  'mcpDetails.responding': 'يستجيب',
+  'mcpDetails.notResponding': 'متصل، لكنه لم يرد على طلب ping',
+  'mcpDetails.notConnected': 'تعذر الاتصال',
+  'mcpDetails.connection': 'الاتصال',
+  'mcpDetails.live': 'نشط، ضمن جلسة قيد التشغيل',
+  'mcpDetails.probe': 'بدأ لهذا الفحص ثم توقف',
+  'mcpDetails.protocol': 'البروتوكول',
+  'mcpDetails.server': 'الخادم',
+  'mcpDetails.notReported': 'غير مذكور',
+  'mcpDetails.capabilities': 'القدرات',
+  'mcpDetails.noCapabilities': 'لم يُعلن عن أي قدرة',
+  'mcpDetails.error': 'الخطأ',
+  'mcpDetails.checkedAt': 'وقت الفحص: {time}',
+  'mcpDetails.instructions': 'التعليمات',
+  'mcpDetails.output': 'آخر المخرجات',
+  'mcpDetails.noOutput': 'لم يُخرج هذا الخادم أي شيء بعد.',
+  'mcpDetails.expired':
+    'لم تعد هذه التفاصيل محفوظة. شغّل AGI Workforce: Show MCP Servers واختر تفاصيل الخادم لفحص {name} مرة أخرى.',
+  'mcpDetails.field': '{label}: {value}',
 };
 
 export default ar;

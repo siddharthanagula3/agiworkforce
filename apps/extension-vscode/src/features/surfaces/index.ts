@@ -49,6 +49,7 @@ export {
   manageSavedApprovals,
   manageSkills,
 } from './capabilityManagement';
+export { MCP_SERVER_DETAILS_SCHEME, McpServerDetailsProvider } from './mcpServerDetails';
 export type {
   SessionListSource,
   SessionOrigin,

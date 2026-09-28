@@ -6,8 +6,13 @@ import type {
   PluginListResponse,
   SkillListResponse,
 } from '@agiworkforce/types/protocol';
-import type { McpServerProbe, SavedPermissionList } from '../../integrations/localRuntimeClient';
+import type {
+  McpServerInspection,
+  McpServerProbe,
+  SavedPermissionList,
+} from '../../integrations/localRuntimeClient';
 import { createSkill } from './skillAuthoring';
+import type { McpServerDetailsProvider } from './mcpServerDetails';
 import { t, tPlural } from '../../l10n';
 import {
   CLI_CAPABILITY_REQUIREMENT,
@@ -529,10 +534,28 @@ async function testMcpServer(adapter: CliCapabilityAdapter, name: string): Retur
   };
 }
 
-export async function manageMcpServers(adapter: CliCapabilityAdapter): Promise<void> {
-  const [installs, toolLists] = await Promise.all([
+async function showMcpServerDetails(
+  adapter: CliCapabilityAdapter,
+  details: McpServerDetailsProvider,
+  name: string,
+): ReturnType<ManagedRun> {
+  const result = await vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Notification, title: t('mcpDetails.checking', { name }) },
+    () => adapter.call<McpServerInspection>('mcpInspect', name),
+  );
+  if (result.status !== 'ok') return result;
+  await details.show(result.value);
+  return undefined;
+}
+
+export async function manageMcpServers(
+  adapter: CliCapabilityAdapter,
+  details: McpServerDetailsProvider,
+): Promise<void> {
+  const [installs, toolLists, inspects] = await Promise.all([
     adapter.offers('installs'),
     adapter.offers('mcpTools'),
+    adapter.offers('mcpInspect'),
   ]);
   return showManagedSurface(
     {
@@ -555,21 +578,40 @@ export async function manageMcpServers(adapter: CliCapabilityAdapter): Promise<v
             ]
           : [];
         for (const server of result.value.servers) {
-          const actions: ManagedAction[] = toolLists
-            ? [
-                {
-                  button: { iconPath: new vscode.ThemeIcon('list-tree'), tooltip: 'Show tools' },
-                  followUp: { run: () => showMcpServerTools(adapter, server.name), reopen: true },
-                },
-                {
-                  button: {
-                    iconPath: new vscode.ThemeIcon('debug-start'),
-                    tooltip: 'Test connection',
+          const actions: ManagedAction[] = [
+            ...(inspects
+              ? [
+                  {
+                    button: {
+                      iconPath: new vscode.ThemeIcon('info'),
+                      tooltip: t('mcpDetails.action'),
+                    },
+                    followUp: {
+                      run: () => showMcpServerDetails(adapter, details, server.name),
+                      reopen: false,
+                    },
                   },
-                  followUp: { run: () => testMcpServer(adapter, server.name), reopen: true },
-                },
-              ]
-            : [];
+                ]
+              : []),
+            ...(toolLists
+              ? [
+                  {
+                    button: { iconPath: new vscode.ThemeIcon('list-tree'), tooltip: 'Show tools' },
+                    followUp: {
+                      run: () => showMcpServerTools(adapter, server.name),
+                      reopen: true,
+                    },
+                  },
+                  {
+                    button: {
+                      iconPath: new vscode.ThemeIcon('debug-start'),
+                      tooltip: 'Test connection',
+                    },
+                    followUp: { run: () => testMcpServer(adapter, server.name), reopen: true },
+                  },
+                ]
+              : []),
+          ];
           if (installs && server.scope === 'user') {
             actions.push(
               removeAction(async () =>

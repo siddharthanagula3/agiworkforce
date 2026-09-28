@@ -476,6 +476,29 @@ const en = {
   'webview.alwaysAllowHint':
     'Saves a rule so AGI stops asking for this in every session. Manage it under Saved approvals.',
   'webview.alwaysAllowedOutcome': 'Always allowed. AGI will not ask again for this.',
+  'mcpDetails.action': 'Server details',
+  'mcpDetails.checking': 'AGI Workforce: checking {name}',
+  'mcpDetails.documentTitle': '{name} MCP server',
+  'mcpDetails.health': 'Health',
+  'mcpDetails.responding': 'Responding',
+  'mcpDetails.notResponding': 'Connected, but it did not answer a ping',
+  'mcpDetails.notConnected': 'Did not connect',
+  'mcpDetails.connection': 'Connection',
+  'mcpDetails.live': 'Live, in a running session',
+  'mcpDetails.probe': 'Started for this check, then stopped',
+  'mcpDetails.protocol': 'Protocol',
+  'mcpDetails.server': 'Server',
+  'mcpDetails.notReported': 'Not reported',
+  'mcpDetails.capabilities': 'Capabilities',
+  'mcpDetails.noCapabilities': 'None advertised',
+  'mcpDetails.error': 'Error',
+  'mcpDetails.checkedAt': 'Checked {time}',
+  'mcpDetails.instructions': 'Instructions',
+  'mcpDetails.output': 'Recent output',
+  'mcpDetails.noOutput': 'No output from this server yet.',
+  'mcpDetails.expired':
+    'These details are no longer held. Run AGI Workforce: Show MCP Servers and choose Server details to check {name} again.',
+  'mcpDetails.field': '{label}: {value}',
 };
 
 export default en;

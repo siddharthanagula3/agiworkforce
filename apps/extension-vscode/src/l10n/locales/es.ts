@@ -591,6 +591,29 @@ const es = {
   'webview.alwaysAllowHint':
     'Guarda una regla para que AGI deje de preguntar por esto en todas las sesiones. Adminístrela en Aprobaciones guardadas.',
   'webview.alwaysAllowedOutcome': 'Siempre permitido. AGI no volverá a preguntar por esto.',
+  'mcpDetails.action': 'Detalles del servidor',
+  'mcpDetails.checking': 'AGI Workforce: comprobando {name}',
+  'mcpDetails.documentTitle': 'Servidor MCP {name}',
+  'mcpDetails.health': 'Estado',
+  'mcpDetails.responding': 'Responde',
+  'mcpDetails.notResponding': 'Conectado, pero no respondió a un ping',
+  'mcpDetails.notConnected': 'No se conectó',
+  'mcpDetails.connection': 'Conexión',
+  'mcpDetails.live': 'Activa, en una sesión en curso',
+  'mcpDetails.probe': 'Iniciado para esta comprobación y detenido después',
+  'mcpDetails.protocol': 'Protocolo',
+  'mcpDetails.server': 'Servidor',
+  'mcpDetails.notReported': 'No indicado',
+  'mcpDetails.capabilities': 'Capacidades',
+  'mcpDetails.noCapabilities': 'No anuncia ninguna',
+  'mcpDetails.error': 'Error',
+  'mcpDetails.checkedAt': 'Comprobado: {time}',
+  'mcpDetails.instructions': 'Instrucciones',
+  'mcpDetails.output': 'Salida reciente',
+  'mcpDetails.noOutput': 'Este servidor todavía no ha producido salida.',
+  'mcpDetails.expired':
+    'Estos detalles ya no se conservan. Ejecute AGI Workforce: Show MCP Servers y elija Detalles del servidor para volver a comprobar {name}.',
+  'mcpDetails.field': '{label}: {value}',
 };
 
 export default es;
