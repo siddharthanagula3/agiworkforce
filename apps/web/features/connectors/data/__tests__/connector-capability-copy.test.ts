@@ -84,7 +84,14 @@ describe('CRIT-001 guard, one recorded resolution per connector', () => {
     const firstParty = Object.values(CONNECTOR_CAPABILITIES)
       .filter((r) => r.implementation === 'first-party')
       .map((r) => r.id);
-    expect(firstParty).toEqual(['github']);
+    expect(firstParty).toEqual([
+      'github',
+      'outlook',
+      'onedrive',
+      'teams',
+      'bank-accounts',
+      'sharepoint',
+    ]);
   });
 
   it('lists named actions only where an adapter exists', () => {
@@ -234,8 +241,15 @@ describe('CRIT-001 guard, an absent action list is attributed, not read as "none
       },
       {},
     );
-    expect(tally['declared']).toEqual(['github']);
-    expect(tally['runtime-discovered']?.length).toBe(85);
+    expect(tally['declared']).toEqual([
+      'github',
+      'outlook',
+      'onedrive',
+      'teams',
+      'bank-accounts',
+      'sharepoint',
+    ]);
+    expect(tally['runtime-discovered']?.length).toBe(80);
     expect(tally['device-local']?.length).toBe(5);
   });
 
@@ -267,7 +281,14 @@ describe('CRIT-001 guard, an absent action list is attributed, not read as "none
     ).map((c) => c.id);
     expect(handWritten).toEqual([]);
     expect(CONNECTORS.find((c) => c.id === 'github')?.actionCount).toBe(3);
-    expect(CONNECTORS.filter((c) => c.actionCount > 0).map((c) => c.id)).toEqual(['github']);
+    expect(CONNECTORS.filter((c) => c.actionCount > 0).map((c) => c.id)).toEqual([
+      'github',
+      'outlook',
+      'onedrive',
+      'teams',
+      'bank-accounts',
+      'sharepoint',
+    ]);
   });
 });
 

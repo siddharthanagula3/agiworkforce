@@ -228,6 +228,7 @@ export type AuditEventType =
   | 'api_key_revoked'
   | 'connector_added'
   | 'connector_removed'
+  | 'connector_authorization_started'
   /**
    * A setting on an already-connected connector changed. Distinct from adding
    * or removing one: the grant is unchanged, but what the product does with it
@@ -758,6 +759,7 @@ function inferResourceType(eventType: AuditEventType): string {
       return 'api_key';
     case 'connector_added':
     case 'connector_removed':
+    case 'connector_authorization_started':
     case 'connector_setting_changed':
       return 'connector';
     case 'code_session_lifecycle_changed':

@@ -59,12 +59,9 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Code artifacts open in a full-screen viewer; an ordinary code block in the answer cannot. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:364-364`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:56-56`
 
 ## S21.09: Highlighted changed lines.
 
@@ -129,16 +126,15 @@ Code: `packages/ui/unified-chat/src/components/markdown/CodeBlock.tsx:133-133`, 
 
 - Done when: Standard error is shown separately (and visibly distinguished) from stdout.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | stdout and stderr are merged into one output text; errors are not shown separately. | ui |
 | cli | partial | Only a single preview line is shown; stderr is not shown separately. | ui |
 | vscode | partial | Command output is shown as one body; stderr is not separated or styled differently. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/chat/components/ToolCallTimeline.tsx:415-415`, `apps/mobile/src/features/chat/utils/toolCallAccumulator.ts:116-116`, `apps/cli/src/tui/tui_app.rs:206-206`, `apps/cli/src/tui/tui_app.rs:1530-1530`
+Code: `apps/cli/src/tui/tui_app.rs:206-206`, `apps/cli/src/tui/tui_app.rs:1530-1530`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:5788-5788`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:5787-5787`
 
 ## S21.17: Execution-duration display.
 
@@ -157,15 +153,14 @@ Code: `apps/mobile/src/features/chat/components/ToolCallTimeline.tsx:415-415`, `
 
 - Done when: Each execution shows its outcome/exit status (success, failure with code).
 - Wave: 3
-- Already works on: web, desktop, vscode
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | A non-zero exit only flips the tool row to failed; the exit code itself is never shown. | ui |
 | cli | partial | A pass/fail glyph (✔/✗) is shown but not the exit code. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/chat/components/ToolCallTimeline.tsx:40-40`, `apps/mobile/src/features/chat/utils/toolCallAccumulator.ts:121-121`, `apps/cli/src/tui/tui_app.rs:176-176`, `apps/cli/src/tui/tui_app.rs:1530-1530`
+Code: `apps/cli/src/tui/tui_app.rs:176-176`, `apps/cli/src/tui/tui_app.rs:1530-1530`
 
 ## S21.20: Plot output.
 
@@ -189,12 +184,12 @@ Code: `apps/mobile/src/features/chat/components/ToolCallTimeline.tsx:40-40`, `ap
 | --- | --- | --- | --- |
 | web | partial | ChatGPT runs a code block in place; a Run control needs a server sandbox execution route first. | handler |
 | desktop | partial | ChatGPT runs a code block in place; a Run control needs a server sandbox execution route first. | handler |
-| mobile | partial | Web is partial on the strength of Regenerate; mobile's MessageBubble has the same 'Regenerate response' action, so the cell must match. |  |
+| mobile | partial | Matches web: Regenerate re-runs the whole answer; ChatGPT runs a code block in place, and a Run control needs a server sandbox execution route first. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | partial | Web and desktop are partial because Regenerate re-runs the whole answer; VS Code has the same class of control, a Retry button on a failed turn that resends lastSendPayload, and was scored missing. Same evidence, same status. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/messages/MessageBubble.tsx:2204-2204`
+Code: `apps/web/features/chat/components/messages/MessageBubble.tsx:2204-2204`, `apps/mobile/src/features/chat/components/MessageBubble.tsx:1180-1180`
 
 ## S21.22: Stop execution.
 
@@ -206,10 +201,10 @@ Code: `apps/web/features/chat/components/messages/MessageBubble.tsx:2204-2204`
 | --- | --- | --- | --- |
 | web | partial | Stop halts the whole reply and there is no stop on the running execution itself; neither leader's per-execution control could be confirmed (help.openai.com 403), so the cell stays partial. | ui |
 | desktop | partial | Stop halts the whole reply and there is no stop on the running execution itself; neither leader's per-execution control could be confirmed (help.openai.com 403), so the cell stays partial. | ui |
-| mobile | partial | Web is partial because Stop aborts the whole reply while server-side code runs; mobile has the identical mechanism (send button becomes 'Stop generating' and stopStreaming aborts the request) and code execution is done on mobile (S21.12), yet it was scored missing. |  |
+| mobile | partial | Matches web: Stop generating halts the whole reply and there is no stop on the running execution itself; neither leader's per-execution control could be confirmed from official pages. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:2768-2768`, `apps/web/features/chat/components/messages/MessageBubble.tsx:2204-2204`
+Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:2768-2768`, `apps/web/features/chat/components/messages/MessageBubble.tsx:2204-2204`, `apps/mobile/src/features/chat/components/SendButton.tsx:90-90`
 
 ## S21.23: Reset runtime.
 
