@@ -486,6 +486,7 @@
           "provider": "deepinfra",
           "harnessId": "deepinfra/chat-completions",
           "upstreamModelId": "deepseek-ai/DeepSeek-V4-Flash",
+          "responseFormats": ["json_object", "json_schema"],
           "cacheClass": "provider_implicit_prompt_cache",
           "commercialStatus": "experimental_only",
           "pricing": {
@@ -499,6 +500,7 @@
           "provider": "together",
           "harnessId": "together/chat-completions",
           "upstreamModelId": "deepseek-ai/DeepSeek-V4-Flash-0731",
+          "responseFormats": ["json_schema"],
           "cacheClass": "provider_implicit_prompt_cache",
           "commercialStatus": "experimental_only",
           "pricing": {
@@ -512,6 +514,7 @@
           "provider": "novita",
           "harnessId": "novita/chat-completions",
           "upstreamModelId": "deepseek/deepseek-v4-flash",
+          "responseFormats": ["json_schema"],
           "cacheClass": "provider_implicit_prompt_cache",
           "commercialStatus": "experimental_only",
           "pricing": {
@@ -614,6 +617,7 @@
           "provider": "deepinfra",
           "harnessId": "deepinfra/chat-completions",
           "upstreamModelId": "deepseek-ai/DeepSeek-V4-Pro",
+          "responseFormats": ["json_object", "json_schema"],
           "cacheClass": "provider_implicit_prompt_cache",
           "commercialStatus": "experimental_only",
           "pricing": {
@@ -627,6 +631,7 @@
           "provider": "together",
           "harnessId": "together/chat-completions",
           "upstreamModelId": "deepseek-ai/DeepSeek-V4-Pro-0813",
+          "responseFormats": ["json_schema"],
           "cacheClass": "provider_implicit_prompt_cache",
           "commercialStatus": "experimental_only",
           "pricing": {
@@ -640,6 +645,7 @@
           "provider": "novita",
           "harnessId": "novita/chat-completions",
           "upstreamModelId": "deepseek/deepseek-v4-pro-0813",
+          "responseFormats": ["json_schema"],
           "cacheClass": "provider_implicit_prompt_cache",
           "commercialStatus": "experimental_only",
           "pricing": {
@@ -790,6 +796,7 @@
           "provider": "deepinfra",
           "harnessId": "deepinfra/chat-completions",
           "upstreamModelId": "zai-org/GLM-5.3",
+          "responseFormats": ["json_object", "json_schema"],
           "cacheClass": "provider_implicit_prompt_cache",
           "commercialStatus": "experimental_only",
           "pricing": {
@@ -803,6 +810,7 @@
           "provider": "together",
           "harnessId": "together/chat-completions",
           "upstreamModelId": "zai-org/GLM-5.3",
+          "responseFormats": ["json_schema"],
           "cacheClass": "provider_implicit_prompt_cache",
           "commercialStatus": "experimental_only",
           "pricing": {
@@ -816,6 +824,7 @@
           "provider": "novita",
           "harnessId": "novita/chat-completions",
           "upstreamModelId": "zai-org/glm-5.3",
+          "responseFormats": ["json_schema"],
           "cacheClass": "provider_implicit_prompt_cache",
           "commercialStatus": "experimental_only",
           "pricing": {
@@ -906,6 +915,7 @@
           "provider": "deepinfra",
           "harnessId": "deepinfra/chat-completions",
           "upstreamModelId": "zai-org/GLM-5.3-Flash",
+          "responseFormats": ["json_object", "json_schema"],
           "cacheClass": "provider_implicit_prompt_cache",
           "commercialStatus": "experimental_only",
           "pricing": {
@@ -919,6 +929,7 @@
           "provider": "together",
           "harnessId": "together/chat-completions",
           "upstreamModelId": "zai-org/GLM-5.3-Flash",
+          "responseFormats": ["json_schema"],
           "cacheClass": "no_provider_cache",
           "commercialStatus": "experimental_only",
           "pricing": {
@@ -931,6 +942,7 @@
           "provider": "novita",
           "harnessId": "novita/chat-completions",
           "upstreamModelId": "zai-org/glm-5.3-flash",
+          "responseFormats": ["json_schema"],
           "cacheClass": "provider_implicit_prompt_cache",
           "commercialStatus": "experimental_only",
           "pricing": {
@@ -1033,6 +1045,7 @@
           "provider": "deepinfra",
           "harnessId": "deepinfra/chat-completions",
           "upstreamModelId": "moonshotai/Kimi-K3",
+          "responseFormats": ["json_object", "json_schema"],
           "cacheClass": "provider_implicit_prompt_cache",
           "commercialStatus": "experimental_only",
           "pricing": {
@@ -1046,6 +1059,7 @@
           "provider": "together",
           "harnessId": "together/chat-completions",
           "upstreamModelId": "moonshotai/Kimi-K3",
+          "responseFormats": ["json_schema"],
           "cacheClass": "provider_implicit_prompt_cache",
           "commercialStatus": "experimental_only",
           "pricing": {
@@ -1059,6 +1073,7 @@
           "provider": "novita",
           "harnessId": "novita/chat-completions",
           "upstreamModelId": "moonshotai/kimi-k3",
+          "responseFormats": ["json_schema"],
           "cacheClass": "provider_implicit_prompt_cache",
           "commercialStatus": "experimental_only",
           "pricing": {
@@ -1118,6 +1133,7 @@
           "provider": "deepinfra",
           "harnessId": "deepinfra/chat-completions",
           "upstreamModelId": "MiniMaxAI/MiniMax-M3",
+          "responseFormats": ["json_object", "json_schema"],
           "cacheClass": "provider_implicit_prompt_cache",
           "commercialStatus": "experimental_only",
           "pricing": {
@@ -1131,6 +1147,7 @@
           "provider": "together",
           "harnessId": "together/chat-completions",
           "upstreamModelId": "MiniMaxAI/MiniMax-M3",
+          "responseFormats": ["json_schema"],
           "cacheClass": "provider_implicit_prompt_cache",
           "commercialStatus": "experimental_only",
           "pricing": {
@@ -1144,6 +1161,7 @@
           "provider": "novita",
           "harnessId": "novita/chat-completions",
           "upstreamModelId": "minimax/minimax-m3",
+          "responseFormats": ["json_schema"],
           "cacheClass": "provider_implicit_prompt_cache",
           "commercialStatus": "experimental_only",
           "pricing": {
@@ -1288,6 +1306,7 @@
           "provider": "novita",
           "harnessId": "novita/chat-completions",
           "upstreamModelId": "qwen/qwen3.8-flash",
+          "responseFormats": ["json_schema"],
           "cacheClass": "provider_implicit_prompt_cache",
           "commercialStatus": "experimental_only",
           "pricing": {
