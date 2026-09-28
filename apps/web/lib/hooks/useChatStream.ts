@@ -52,11 +52,13 @@ import {
   runLocalTurn,
   toLocalChatMessages,
 } from '@features/chat/lib/local-turn';
+import { readLocalPersonalContext } from '@features/chat/lib/local-personal-context';
 import { logger } from '@shared/lib/logger';
 import { trackProductEvent } from '@shared/lib/product-analytics';
 import {
   getModelMetadataById,
   getModelReasoning,
+  managedMemoryLocalContextBlocks,
   resolveModelEffort,
   WEB_SEARCH_CITATION_DELTA_KEY,
   WEB_SEARCH_CITATION_KIND,
@@ -3658,6 +3660,32 @@ export function useChatStream(
       try {
         if (localModel) {
           connectingTicker.stop();
+          const chatState = useChatStore.getState();
+          const personalization = !(
+            isTemporaryConversation && !chatState.temporaryChatPersonalized
+          );
+          const personalContext = personalization
+            ? readLocalPersonalContext(
+                chatState.conversations.find((conversation) => conversation.id === conversationId)
+                  ?.projectId ?? null,
+              )
+            : null;
+          const styleInstruction =
+            options.styleInstruction ||
+            (options.styleMode && options.styleMode !== 'normal'
+              ? STYLE_SYSTEM_INSTRUCTIONS[options.styleMode]
+              : undefined);
+          const systemBlocks = [
+            ...(personalContext
+              ? managedMemoryLocalContextBlocks(personalContext, {
+                  temporary: isTemporaryConversation,
+                  memoryEnabled: options.memoryEnabled !== false,
+                  personalization,
+                })
+              : []),
+            styleInstruction,
+            options.artifactInstruction,
+          ].filter((block): block is string => Boolean(block));
           const localMessages = toLocalChatMessages(
             readConversationMessages(conversationId),
             assistantMessageId,
@@ -3666,9 +3694,11 @@ export function useChatStream(
             conversationId,
             assistantMessageId,
             model: localModel,
-            messages: options.artifactInstruction
-              ? [{ role: 'system', content: options.artifactInstruction }, ...localMessages]
-              : localMessages,
+            messages: [
+              ...systemBlocks.map((content) => ({ role: 'system' as const, content })),
+              ...localMessages,
+            ],
+            personalContextMissing: personalization && personalContext === null,
             signal: abortController.signal,
           });
           if (outcome.error) setError(outcome.error, conversationId);

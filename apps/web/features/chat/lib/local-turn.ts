@@ -72,6 +72,7 @@ export interface LocalTurnInput {
   assistantMessageId: string;
   model: LocalModel;
   messages: LocalChatMessage[];
+  personalContextMissing: boolean;
   signal: AbortSignal;
 }
 
@@ -128,6 +129,7 @@ export async function runLocalTurn(input: LocalTurnInput): Promise<LocalTurnOutc
           model: input.model.name,
           provider: input.model.serverLabel,
           finishReason: result.stopReason,
+          ...(input.personalContextMissing ? { localPersonalContextMissing: true } : {}),
           ...(result.thinking.trim() !== ''
             ? { thinkingContent: result.thinking, isThinkingStreaming: false }
             : {}),
