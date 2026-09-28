@@ -871,9 +871,9 @@
         "deprecated": false,
         "releasedOn": "2025-03-20",
         "deprecatedOn": null,
-        "stage": "registered",
-        "stagedOn": "2026-09-05",
-        "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog",
+        "stage": "promoted",
+        "stagedOn": "2026-09-27",
+        "stageSource": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.voice_speech",
         "replacedBy": null
       },
       "residencyRegions": ["us", "eu", "ae"],
@@ -40725,6 +40725,11 @@
           "modelKey": "gemini-3.5-flash-lite",
           "label": "Voice Rewrite",
           "description": "Shared voice rewrite route. Model and provider are selected by the canonical registry."
+        },
+        "voice_speech": {
+          "modelKey": "gpt-4o-mini-tts",
+          "label": "Voice Speech",
+          "description": "Shared voice speech route. Model and provider are selected by the canonical registry."
         },
         "general_balanced_pro": {
           "modelKey": "gpt-5.6-terra",
