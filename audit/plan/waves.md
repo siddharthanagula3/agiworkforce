@@ -34,14 +34,14 @@ Nothing left in this wave.
 
 ## Wave 2: switch on and wire up what is already built (flag off or not mounted)
 
-182 open items.
+181 open items.
 
 | Section | Items | File |
 | --- | ---: | --- |
 | 4. Signed-in application destinations | 2 | [partial/004-signed-in-application-destinations.md](../partial/004-signed-in-application-destinations.md) |
 | 5. Application shell and navigation components | 1 | [partial/005-application-shell-and-navigation-components.md](../partial/005-application-shell-and-navigation-components.md) |
 | 9. Compound interface components | 2 | [partial/009-compound-interface-components.md](../partial/009-compound-interface-components.md) |
-| 10. Modal and dialog inventory | 6 | [partial/010-modal-and-dialog-inventory.md](../partial/010-modal-and-dialog-inventory.md) |
+| 10. Modal and dialog inventory | 5 | [partial/010-modal-and-dialog-inventory.md](../partial/010-modal-and-dialog-inventory.md) |
 | 11. Accessibility and localization components | 3 | [partial/011-accessibility-and-localization-components.md](../partial/011-accessibility-and-localization-components.md) |
 | 12. New-chat experience | 1 | [partial/012-new-chat-experience.md](../partial/012-new-chat-experience.md) |
 | 13. Composer text interaction | 3 | [partial/013-composer-text-interaction.md](../partial/013-composer-text-interaction.md) |
@@ -79,7 +79,7 @@ Nothing left in this wave.
 
 ## Wave 3: finish half-built features
 
-1482 open items.
+1483 open items.
 
 | Section | Items | File |
 | --- | ---: | --- |
@@ -91,7 +91,7 @@ Nothing left in this wave.
 | 7. Layout systems | 16 | [partial/007-layout-systems.md](../partial/007-layout-systems.md) |
 | 8. Basic interactive elements | 24 | [partial/008-basic-interactive-elements.md](../partial/008-basic-interactive-elements.md) |
 | 9. Compound interface components | 27 | [partial/009-compound-interface-components.md](../partial/009-compound-interface-components.md) |
-| 10. Modal and dialog inventory | 31 | [partial/010-modal-and-dialog-inventory.md](../partial/010-modal-and-dialog-inventory.md) |
+| 10. Modal and dialog inventory | 32 | [partial/010-modal-and-dialog-inventory.md](../partial/010-modal-and-dialog-inventory.md) |
 | 11. Accessibility and localization components | 14 | [partial/011-accessibility-and-localization-components.md](../partial/011-accessibility-and-localization-components.md) |
 | 12. New-chat experience | 19 | [partial/012-new-chat-experience.md](../partial/012-new-chat-experience.md) |
 | 13. Composer text interaction | 24 | [partial/013-composer-text-interaction.md](../partial/013-composer-text-interaction.md) |
