@@ -10,6 +10,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
+import { fileTextPreviewKind } from '@/lib/server/file-text-preview';
 import {
   listLibraryAssets,
   sumLibraryStorageBytes,
@@ -47,6 +48,7 @@ function previewableForRow(row: LibraryAssetRow): boolean {
   if (mime.startsWith('image/') || mime.startsWith('video/') || mime === 'application/pdf') {
     return true;
   }
+  if (fileTextPreviewKind(fileNameForRow(row), row.mimeType)) return true;
   return row.metadata['previewable'] === true;
 }
 
