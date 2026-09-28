@@ -4,6 +4,7 @@ export const DYNAMIC_PAGE_ROUTES = [
   '/chat/from-share/[token]',
   '/chat/projects/[id]',
   '/code/[sessionId]',
+  '/code/shared/[token]',
   '/connect/[deviceType]',
   '/gallery/[templateId]',
   '/help/[slug]',
@@ -34,6 +35,7 @@ export const STATIC_SEGMENTS_BESIDE_PARAMS: Readonly<Record<string, readonly str
     'schedules',
     'study',
   ],
+  '/code': ['shared'],
   '/share': ['schedules'],
   '/settings': [
     'account',
