@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, Copy, Terminal } from 'lucide-react';
+import { Check, Copy, CopyPlus, Pencil, Terminal } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
@@ -39,6 +39,9 @@ import {
   PLUGIN_HOMEPAGE_LABEL,
   PLUGIN_HOOKS_LABEL,
   PLUGIN_HOOKS_VALUE,
+  CUSTOMIZE_PLUGIN_HINT,
+  CUSTOMIZE_PLUGIN_LABEL,
+  EDIT_PLUGIN_LABEL,
   PLUGIN_CATEGORY_LABEL,
   PLUGIN_COMMUNITY_NOTE,
   PLUGIN_PERMISSIONS_COPY,
@@ -577,6 +580,8 @@ export function PluginDetailView({
   onShowPublisher,
   onChangeVersion,
   onRepair,
+  onEdit,
+  onCustomize,
   busy,
 }: {
   detail: DirectoryPluginDetail;
@@ -593,6 +598,8 @@ export function PluginDetailView({
   onShowPublisher?: () => void;
   onChangeVersion?: (option: DirectoryPluginVersionOption) => void;
   onRepair?: (repair: DirectoryPluginRepair) => void;
+  onEdit?: () => void;
+  onCustomize?: () => void;
   busy?: boolean;
 }) {
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -661,6 +668,36 @@ export function PluginDetailView({
           busy={busy}
         />
       </div>
+
+      {onEdit || onCustomize ? (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          {onEdit ? (
+            <button
+              type="button"
+              onClick={onEdit}
+              disabled={busy}
+              className={cn(DIRECTORY_CREATE_BUTTON, 'gap-2 disabled:opacity-60')}
+            >
+              <Pencil aria-hidden className="size-3.5" />
+              {EDIT_PLUGIN_LABEL}
+            </button>
+          ) : null}
+          {onCustomize ? (
+            <>
+              <button
+                type="button"
+                onClick={onCustomize}
+                disabled={busy}
+                className={cn(DIRECTORY_CREATE_BUTTON, 'gap-2 disabled:opacity-60')}
+              >
+                <CopyPlus aria-hidden className="size-3.5" />
+                {CUSTOMIZE_PLUGIN_LABEL}
+              </button>
+              <span className="text-xs text-muted-foreground">{CUSTOMIZE_PLUGIN_HINT}</span>
+            </>
+          ) : null}
+        </div>
+      ) : null}
 
       {detail.community ? <p className={DETAIL_NOTICE}>{PLUGIN_COMMUNITY_NOTE}</p> : null}
 
