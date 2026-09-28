@@ -728,14 +728,18 @@ function activityEntrySummary(entry: AgentActivityEntry): string {
   return entry.message;
 }
 
-function boundedJson(value: unknown): string {
+function formattedJson(value: unknown): string {
   if (value === undefined) return '';
   try {
-    const formatted = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
-    return formatted.length > 8_000 ? `${formatted.slice(0, 8_000)}\n…` : formatted;
+    return typeof value === 'string' ? value : JSON.stringify(value, null, 2);
   } catch {
-    return String(value).slice(0, 8_000);
+    return String(value);
   }
+}
+
+function boundedJson(value: unknown): string {
+  const formatted = formattedJson(value);
+  return formatted.length > 8_000 ? `${formatted.slice(0, 8_000)}\n…` : formatted;
 }
 
 function appendActivitySources(
@@ -933,7 +937,7 @@ function buildAgentActivityStep(
       detailParts.push(`${t('spActivityRequestHeading')}\n${boundedJson(entry.input)}`);
     }
     if (entry.output !== undefined) {
-      detailParts.push(`${t('spActivityResultHeading')}\n${boundedJson(entry.output)}`);
+      detailParts.push(`${t('spActivityResultHeading')}\n${formattedJson(entry.output)}`);
     }
     if (entry.error) detailParts.push(entry.error);
     sources = entry.sources ?? [];
