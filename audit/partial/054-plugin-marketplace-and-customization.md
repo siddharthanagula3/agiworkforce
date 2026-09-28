@@ -56,17 +56,14 @@ nothing is left.
 
 - Done when: An organization has a private marketplace of plugins for its members.
 - Wave: 3
-- Already works on: web
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| desktop | partial | Admins can only approve/block plugin ids from the shared catalogue; an organization cannot publish its own private plugin catalogue to members. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/workspace-console/components/WorkspaceConnectorPolicy.tsx:214-222`, `apps/web/app/api/settings/organization/connector-policy/route.ts:38-45`
 
 ## S54.07: Repository-backed marketplace.
 
@@ -359,17 +356,14 @@ Code: `apps/web/features/plugins/server/directory/customize.ts:154-154`, `apps/w
 
 - Done when: An admin can assign plugins to an organization, its groups or members.
 - Wave: 3
-- Already works on: web
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| desktop | partial | Admins can approve or block plugins for the organization, but cannot assign/push a plugin to members or groups. | handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/workspace-console/components/WorkspaceConnectorPolicy.tsx:214-222`, `apps/web/app/api/settings/organization/connector-policy/route.ts:38-45`
 
 ## S54.32: Security-scan result.
 
@@ -429,30 +423,24 @@ Code: `apps/web/lib/server/tools/plugin-draft-tool.ts:101-101`, `apps/web/app/ap
 
 - Done when: A publisher can submit a plugin for review and track the review.
 - Wave: 3
-- Already works on: web
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| desktop | partial | Migration 0289 is now applied in production (2026-09-27). Still open: Submit/publish exist only as a platform-admin API (requirePlatformAdmin) with no UI; publishers cannot submit, and the version rows use pending migration 0289 columns. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/api/plugins/[id]/lifecycle/route.ts:7-60`, `apps/web/lib/services/plugin-lifecycle.ts:100-102`
 
 ## S54.37: Listing moderation.
 
 - Done when: Platform staff can moderate listings (suspend, deprecate).
 - Wave: 3
-- Already works on: web
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| desktop | partial | Migration 0289 is now applied in production (2026-09-27). Still open: Deprecate/suspend exist only as a platform-admin API with no operator screen, and they write pending migration 0289 columns. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/api/plugins/[id]/lifecycle/route.ts:7-60`, `apps/web/lib/services/plugin-lifecycle.ts:100-102`
