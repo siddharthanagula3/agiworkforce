@@ -404,6 +404,8 @@ import {
 import { loadSelectedMcpContext, McpContextError } from '@/lib/connectors/mcp-context-service';
 import { moderateManagedPrompt } from '@/lib/moderation';
 import { timePhase } from '@/lib/observability/phase-timer';
+import { assertCapabilityAvailable } from '@/lib/feature-flags/capability-gate';
+import { buildFlagSubject } from '@/lib/feature-flags/flag-evaluation-service';
 import { CHAT_TURN_PHASE } from './turn-phases';
 
 export const ChatCompletionRequestSchema = z
@@ -4119,6 +4121,20 @@ export async function processRequest(
     );
   }
 
+  if (chatRequest.research === true) {
+    const { organizationId: researchWorkspaceId } = await scopedDbPromise;
+    await assertCapabilityAvailable(
+      buildFlagSubject(request, {
+        userId,
+        workspaceId: researchWorkspaceId,
+        role: null,
+        plan: subscription.plan_tier,
+        surface: chatSurface,
+      }),
+      'canUseDeepResearch',
+      'Deep Research',
+    );
+  }
   const researchMode = researchModeAllowed(
     chatRequest,
     resolvedModelCaps,
