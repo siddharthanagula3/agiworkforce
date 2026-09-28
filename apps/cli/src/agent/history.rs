@@ -1,7 +1,7 @@
 use crate::compaction;
 use crate::models::{ContentBlock, Message, MessageContent, ToolCallResponse};
 
-use super::checkpoints::{self, Checkpoint, CheckpointSummary, RewindMode, RewindOutcome};
+use super::checkpoints::{self, CheckpointSummary, RewindMode, RewindOutcome};
 use super::AgentSession;
 
 impl AgentSession {
@@ -61,65 +61,111 @@ impl AgentSession {
     }
 
     pub fn save_checkpoint(&mut self) {
-        let (messages, prompt) = match self.messages.last() {
-            Some(last) if last.role == "user" => (
-                self.messages[..self.messages.len() - 1].to_vec(),
-                last.text_content(),
-            ),
-            _ => (self.messages.clone(), String::new()),
+        let (message_count, prompt) = match self.messages.last() {
+            Some(last) if last.role == "user" => (self.messages.len() - 1, last.text_content()),
+            _ => (self.messages.len(), String::new()),
         };
-        self.checkpoints.push(Checkpoint::new(messages, prompt));
-        if self.checkpoints.len() > checkpoints::MAX_CHECKPOINTS {
-            self.checkpoints.remove(0);
-        }
+        self.checkpoint_log.push(message_count, prompt);
+        self.report_unsaved_checkpoints();
     }
 
     #[allow(dead_code)]
     pub fn restore_checkpoint(&mut self) -> bool {
-        match self.checkpoints.pop() {
-            Some(saved) => {
-                self.messages = saved.messages;
-                true
-            }
-            None => false,
+        let Some(saved) = self.checkpoint_log.pop() else {
+            return false;
+        };
+        if checkpoints::prompt_position_matches(&self.messages, &saved) {
+            self.messages.truncate(saved.message_count);
         }
+        self.checkpoint_captures.clear();
+        true
     }
 
     pub fn checkpoint_count(&self) -> usize {
-        self.checkpoints.len()
+        self.checkpoint_log.len()
     }
 
     pub fn checkpoint_summaries(&self) -> Vec<CheckpointSummary> {
-        self.checkpoints
-            .iter()
-            .enumerate()
-            .map(|(index, checkpoint)| CheckpointSummary {
-                index,
-                created_at: checkpoint.created_at,
-                prompt: checkpoint.prompt.clone(),
-                tracked_files: checkpoints::tracked_files(&self.checkpoints[index..]),
-            })
-            .collect()
+        self.checkpoint_log.summaries(&self.messages)
     }
 
     pub fn rewind_to(&mut self, index: usize, mode: RewindMode) -> anyhow::Result<RewindOutcome> {
-        let Some(checkpoint) = self.checkpoints.get(index) else {
+        let Some(checkpoint) = self.checkpoint_log.checkpoints().get(index) else {
             anyhow::bail!("there is no checkpoint at that point");
         };
         let prompt = checkpoint.prompt.clone();
+        let message_count = checkpoint.message_count;
+        if mode.restores_conversation()
+            && !checkpoints::prompt_position_matches(&self.messages, checkpoint)
+        {
+            anyhow::bail!(
+                "the conversation before that prompt is no longer in this session (it was compacted or cleared), so only its code can be restored"
+            );
+        }
         let files = mode
             .restores_code()
-            .then(|| checkpoints::restore_files(&self.checkpoints[index..]));
+            .then(|| self.checkpoint_log.restore_files(index));
         if mode.restores_conversation() {
-            self.messages = self.checkpoints[index].messages.clone();
-            self.checkpoints.truncate(index);
+            self.messages.truncate(message_count);
+            self.checkpoint_log.truncate(index);
             self.checkpoint_captures.clear();
+            self.report_unsaved_checkpoints();
         }
         Ok(RewindOutcome {
             prompt,
             files,
             conversation_restored: mode.restores_conversation(),
-            remaining: self.checkpoints.len(),
+            remaining: self.checkpoint_log.len(),
+        })
+    }
+
+    pub fn rewind_to_message(
+        &mut self,
+        message_index: usize,
+        mode: RewindMode,
+    ) -> anyhow::Result<RewindOutcome> {
+        if let Some(index) = self
+            .checkpoint_summaries()
+            .iter()
+            .find(|summary| summary.message_index == Some(message_index))
+            .map(|summary| summary.index)
+        {
+            return self.rewind_to(index, mode);
+        }
+        anyhow::ensure!(
+            !mode.restores_code(),
+            "no checkpoint was saved for that message, so only the conversation can be restored"
+        );
+        let position = self
+            .messages
+            .iter()
+            .enumerate()
+            .filter(|(_, message)| !message.role.eq_ignore_ascii_case("system"))
+            .nth(message_index)
+            .map(|(position, _)| position)
+            .ok_or_else(|| {
+                anyhow::anyhow!("this thread has no message at index {message_index}")
+            })?;
+        let prompt = self.messages[position].text_content();
+        anyhow::ensure!(
+            self.messages[position].role == "user" && !prompt.trim().is_empty(),
+            "message {message_index} is not a prompt the user sent"
+        );
+        let kept = self
+            .checkpoint_log
+            .checkpoints()
+            .iter()
+            .take_while(|checkpoint| checkpoint.message_count < position)
+            .count();
+        self.messages.truncate(position);
+        self.checkpoint_log.truncate(kept);
+        self.checkpoint_captures.clear();
+        self.report_unsaved_checkpoints();
+        Ok(RewindOutcome {
+            prompt,
+            files: None,
+            conversation_restored: true,
+            remaining: self.checkpoint_log.len(),
         })
     }
 
@@ -130,18 +176,15 @@ impl AgentSession {
         args: &serde_json::Value,
         root: Option<&std::path::Path>,
     ) {
-        let paths = checkpoints::edited_paths(tool, args, root);
-        let Some(checkpoint) = self.checkpoints.last_mut() else {
-            return;
-        };
-        let captured: Vec<std::path::PathBuf> = paths
+        let captured: Vec<std::path::PathBuf> = checkpoints::edited_paths(tool, args, root)
             .into_iter()
-            .filter(|path| checkpoint.capture(path))
+            .filter(|path| self.checkpoint_log.capture(path))
             .collect();
         if !captured.is_empty() {
             self.checkpoint_captures
                 .insert(call_id.to_string(), captured);
         }
+        self.report_unsaved_checkpoints();
     }
 
     pub(crate) fn note_file_edit_finished(&mut self, call_id: &str, ok: bool) {
@@ -149,9 +192,14 @@ impl AgentSession {
             return;
         };
         if !ok {
-            if let Some(checkpoint) = self.checkpoints.last_mut() {
-                checkpoint.forget_unchanged(&captured);
-            }
+            self.checkpoint_log.forget_unchanged(&captured);
+            self.report_unsaved_checkpoints();
+        }
+    }
+
+    fn report_unsaved_checkpoints(&mut self) {
+        if let Some(problem) = self.checkpoint_log.take_unsaved() {
+            self.emit_turn_notice(format!("Rewind: {problem}."));
         }
     }
 }

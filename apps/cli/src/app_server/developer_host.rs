@@ -19,15 +19,16 @@ use agiworkforce_protocol::developer_session::{
     LocalModelProvider, LocalModelSummary, McpLoginParams, McpLoginResponse,
     McpServerConfiguredStatus, McpServerListResponse, MemoryAddParams, MemoryAddResponse,
     ModelListParams, PendingApprovalSnapshot, PluginListResponse, PluginSetEnabledParams,
-    SettingsReadResponse, SettingsWriteParams, SkillConsentParams, SkillConsentResponse,
-    SkillListResponse, SkillSetEnabledParams, SlashCommandListResponse, SlashCommandRunParams,
-    SlashCommandRunResponse, ThreadForkParams, ThreadHandoffAcceptParams, ThreadHandoffParams,
-    ThreadIdParams, ThreadListParams, ThreadListResponse, ThreadReadResponse,
-    ThreadReconnectResponse, ThreadSearchHit, ThreadSearchParams, ThreadSearchResponse,
-    ThreadStartParams, ThreadStatus, ThreadSummary, ThreadWriterChangedNotification,
-    ThreadWriterConflictData, TurnEndedNotification, TurnFailure, TurnFailureCode,
-    TurnInterruptParams, TurnModelNotification, TurnStartParams, TurnStatus, TurnSteerParams,
-    TurnSummary,
+    RewindSkippedFile, SettingsReadResponse, SettingsWriteParams, SkillConsentParams,
+    SkillConsentResponse, SkillListResponse, SkillSetEnabledParams, SlashCommandListResponse,
+    SlashCommandRunParams, SlashCommandRunResponse, ThreadCheckpoint, ThreadCheckpointsResponse,
+    ThreadForkParams, ThreadHandoffAcceptParams, ThreadHandoffParams, ThreadIdParams,
+    ThreadListParams, ThreadListResponse, ThreadPlanNotification, ThreadReadResponse,
+    ThreadReconnectResponse, ThreadRewindParams, ThreadRewindResponse, ThreadRewindRestore,
+    ThreadSearchHit, ThreadSearchParams, ThreadSearchResponse, ThreadStartParams, ThreadStatus,
+    ThreadSummary, ThreadWriterChangedNotification, ThreadWriterConflictData,
+    TurnEndedNotification, TurnFailure, TurnFailureCode, TurnInterruptParams,
+    TurnModelNotification, TurnStartParams, TurnStatus, TurnSteerParams, TurnSummary,
 };
 use agiworkforce_protocol::protocol::{NetworkPolicyRuleAction, ReviewDecision};
 use agiworkforce_protocol::task_state::AgentTaskState;
@@ -380,7 +381,7 @@ impl CliDeveloperSessionHost {
             approvals: true,
             tools: true,
             mcp: self.load_integrations,
-            checkpoints: false,
+            checkpoints: true,
             worktrees: false,
             models: true,
             account: true,
@@ -399,6 +400,7 @@ impl CliDeveloperSessionHost {
             prompt_commands: true,
             max_turns: true,
             memory: true,
+            plan: true,
         }
     }
 
@@ -1551,6 +1553,14 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 .iter()
                 .map(file_change_record)
                 .collect(),
+            plan: session
+                .current_plan
+                .as_ref()
+                .map(threads::plan_steps)
+                .unwrap_or_default(),
+            todos: threads::todo_items(&crate::plan_mode::TodoList::load_for_workspace(
+                &self.workspace_root,
+            )),
         })
     }
 
@@ -1821,6 +1831,125 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             });
         }
         Ok(ThreadSearchResponse { hits })
+    }
+
+    async fn list_checkpoints(
+        &self,
+        params: ThreadIdParams,
+    ) -> Result<ThreadCheckpointsResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        let store = self.store.clone();
+        let thread_id = params.thread_id;
+        let (session, log, unreadable) = tokio::task::spawn_blocking(move || {
+            let reference = ManagedSessionReference::SessionId(thread_id);
+            let resolved = store.resolve(reference.clone())?;
+            let session = store.load(reference)?;
+            let mut log = crate::agent::CheckpointLog::beside(&resolved.path);
+            let unreadable = log.take_unsaved();
+            anyhow::Ok((session, log, unreadable))
+        })
+        .await
+        .map_err(internal_error)?
+        .map_err(not_found_error)?;
+        self.validate_session_workspace(&session)?;
+        if let Some(problem) = unreadable {
+            return Err(DeveloperSessionHostError::internal(format!(
+                "Rewind: {problem}"
+            )));
+        }
+        let checkpoints = log
+            .summaries(&session.messages)
+            .into_iter()
+            .map(|summary| ThreadCheckpoint {
+                checkpoint_index: u32::try_from(summary.index).unwrap_or(u32::MAX),
+                created_at: summary.created_at.to_rfc3339(),
+                message_index: summary
+                    .message_index
+                    .and_then(|index| u32::try_from(index).ok()),
+                tracked_files: u32::try_from(summary.tracked_files).unwrap_or(u32::MAX),
+                prompt: summary.prompt,
+            })
+            .collect();
+        Ok(ThreadCheckpointsResponse { checkpoints })
+    }
+
+    async fn rewind_thread(
+        &self,
+        params: ThreadRewindParams,
+    ) -> Result<ThreadRewindResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        let mode = match params.restore.unwrap_or(ThreadRewindRestore::Both) {
+            ThreadRewindRestore::Both => crate::agent::RewindMode::CodeAndConversation,
+            ThreadRewindRestore::Conversation => crate::agent::RewindMode::Conversation,
+            ThreadRewindRestore::Code => crate::agent::RewindMode::Code,
+        };
+        let running_turns = self.running_turns.lock().await;
+        if running_turns.contains_key(&params.thread_id) {
+            return Err(DeveloperSessionHostError::conflict(
+                "Interrupt the running turn before rewinding its thread",
+            ));
+        }
+        let session = self.load_agent(&params.thread_id).await?;
+        let session_path = session
+            .lock()
+            .await
+            .managed_session_path
+            .clone()
+            .ok_or_else(|| {
+                DeveloperSessionHostError::internal("This thread has no persisted session file")
+            })?;
+        self.claim_writer_for_turn(&params.thread_id, &session_path)
+            .await?;
+        let (outcome, persisted) = {
+            let mut agent = session.lock().await;
+            let outcome = match (params.checkpoint_index, params.message_index) {
+                (Some(index), None) => agent.rewind_to(index as usize, mode),
+                (None, Some(index)) => agent.rewind_to_message(index as usize, mode),
+                _ => {
+                    return Err(DeveloperSessionHostError::invalid_request(
+                        "thread/rewind takes exactly one of checkpointIndex and messageIndex",
+                    ))
+                }
+            }
+            .map_err(invalid_request)?;
+            let persisted = if outcome.conversation_restored {
+                agent.persist_managed_session()
+            } else {
+                Ok(())
+            };
+            (outcome, persisted)
+        };
+        drop(running_turns);
+        persisted.map_err(internal_error)?;
+        let files = outcome.files.unwrap_or_default();
+        let display = |paths: Vec<PathBuf>| {
+            paths
+                .into_iter()
+                .map(|path| path.display().to_string())
+                .collect::<Vec<_>>()
+        };
+        self.emit(
+            "thread/rewound",
+            serde_json::json!({
+                "threadId": params.thread_id,
+                "conversationRestored": outcome.conversation_restored,
+            }),
+        );
+        Ok(ThreadRewindResponse {
+            thread: self.resume_thread_summary(&params.thread_id).await?,
+            prompt: outcome.prompt,
+            conversation_restored: outcome.conversation_restored,
+            restored_files: display(files.restored),
+            removed_files: display(files.removed),
+            skipped_files: files
+                .skipped
+                .into_iter()
+                .map(|(path, reason)| RewindSkippedFile {
+                    path: path.display().to_string(),
+                    reason,
+                })
+                .collect(),
+        })
     }
 
     async fn delete_thread(&self, params: ThreadIdParams) -> Result<(), DeveloperSessionHostError> {
@@ -2246,12 +2375,17 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                     task_pending.clone(),
                     task_notifications.clone(),
                 )));
-                agent.on_tool_event = Some(ToolEventSink(tool_event_callback(
+                agent.on_tool_event = Some(ToolEventSink(plan_tracking(
+                    tool_event_callback(
+                        task_thread_id.clone(),
+                        task_turn_id.clone(),
+                        task_event_sequence.clone(),
+                        task_notifications.clone(),
+                        task_activity.clone(),
+                    ),
                     task_thread_id.clone(),
-                    task_turn_id.clone(),
-                    task_event_sequence.clone(),
+                    task_workspace_root.clone(),
                     task_notifications.clone(),
-                    task_activity.clone(),
                 )));
                 agent.on_fallback = Some(crate::agent::FallbackSink(fallback_callback(
                     turn_model.clone(),
@@ -3362,6 +3496,78 @@ fn tool_event_callback(
                 &notifications,
                 AgentEvent::ArtifactProduced(artifact),
             );
+        }
+    })
+}
+
+fn plan_tracking(
+    inner: Arc<dyn Fn(crate::tui::app_event::TuiAppEvent) + Send + Sync>,
+    thread_id: String,
+    workspace_root: PathBuf,
+    notifications: broadcast::Sender<AppServerNotification>,
+) -> Arc<dyn Fn(crate::tui::app_event::TuiAppEvent) + Send + Sync> {
+    let proposed: Arc<StdMutex<HashMap<String, crate::plan_mode::Plan>>> =
+        Arc::new(StdMutex::new(HashMap::new()));
+    Arc::new(move |event| {
+        use crate::tui::app_event::{ToolStatus, TuiAppEvent};
+        let update = match &event {
+            TuiAppEvent::ToolStarted {
+                call_id,
+                name,
+                input,
+                ..
+            } => {
+                if crate::runtime::tool_catalog::canonical_tool_name(name) == "update_plan" {
+                    if let (Ok(plan), Ok(mut proposed)) = (
+                        serde_json::from_value::<crate::plan_mode::Plan>(input.clone()),
+                        proposed.lock(),
+                    ) {
+                        proposed.insert(call_id.clone(), plan);
+                    }
+                }
+                None
+            }
+            TuiAppEvent::ToolCompleted {
+                call_id,
+                name,
+                status,
+                ..
+            } => {
+                let plan = proposed
+                    .lock()
+                    .ok()
+                    .and_then(|mut proposed| proposed.remove(call_id));
+                match (
+                    crate::runtime::tool_catalog::canonical_tool_name(name),
+                    status,
+                ) {
+                    ("update_plan", ToolStatus::Succeeded) => {
+                        plan.map(|plan| ThreadPlanNotification {
+                            thread_id: thread_id.clone(),
+                            plan: Some(threads::plan_steps(&plan)),
+                            todos: None,
+                        })
+                    }
+                    ("todo_write", ToolStatus::Succeeded) => Some(ThreadPlanNotification {
+                        thread_id: thread_id.clone(),
+                        plan: None,
+                        todos: Some(threads::todo_items(
+                            &crate::plan_mode::TodoList::load_for_workspace(&workspace_root),
+                        )),
+                    }),
+                    _ => None,
+                }
+            }
+            _ => None,
+        };
+        inner(event);
+        if let Some(update) = update {
+            if let Ok(notification) = AppServerNotification::new(
+                agiworkforce_protocol::developer_session::method::THREAD_PLAN,
+                update,
+            ) {
+                let _ = notifications.send(notification);
+            }
         }
     })
 }
