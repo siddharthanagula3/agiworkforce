@@ -128,6 +128,12 @@ import {
   scheduleToolDefinition,
 } from '@/lib/server/tools/schedule-tool';
 import {
+  asksForPluginDraft,
+  isPluginDraftTool,
+  pluginDraftToolDefinition,
+} from '@/lib/server/tools/plugin-draft-tool';
+import { userSkillAuthoringEnabled } from '@/lib/services/user-skill-authoring';
+import {
   supportsOpenAIReasoningEffort,
   SYSTEM_PROMPT_CACHE_BOUNDARY,
   splitSystemPromptCacheBoundary,
@@ -876,6 +882,32 @@ export function applyScheduleToolCapability(
   request.tools = [
     ...(request.tools ?? []).filter((tool) => !isScheduleTool(tool.function.name)),
     scheduleToolDefinition(),
+  ];
+}
+
+export function applyPluginDraftToolCapability(
+  request: ChatCompletionRequest,
+  params: {
+    surface: CloudChatSurface;
+    toolsCapable: boolean;
+    isTemporary: boolean;
+    ambientToolsAllowed: boolean;
+    pluginDraftsAllowed: boolean;
+  },
+): void {
+  if (
+    !params.toolsCapable ||
+    !params.ambientToolsAllowed ||
+    !params.pluginDraftsAllowed ||
+    !request.stream ||
+    params.isTemporary ||
+    !MEMORY_COMMAND_CLIENT_SURFACES.has(params.surface)
+  ) {
+    return;
+  }
+  request.tools = [
+    ...(request.tools ?? []).filter((tool) => !isPluginDraftTool(tool.function.name)),
+    pluginDraftToolDefinition(),
   ];
 }
 
@@ -4295,6 +4327,18 @@ export async function processRequest(
     schedulesAllowed:
       asksForSchedule(lastUserText) &&
       (await buildWorkspaceFeatureGateResponse(userId, request, 'schedules', chatSurface)) === null,
+  });
+
+  applyPluginDraftToolCapability(chatRequest, {
+    surface: chatSurface,
+    toolsCapable: resolvedModelCaps?.tools ?? true,
+    isTemporary: conversationIsTemporary,
+    ambientToolsAllowed,
+    pluginDraftsAllowed:
+      userSkillAuthoringEnabled() &&
+      asksForPluginDraft(lastUserText) &&
+      (await buildWorkspaceFeatureGateResponse(userId, request, 'plugins', chatSurface)) === null &&
+      (await buildWorkspaceFeatureGateResponse(userId, request, 'skills', chatSurface)) === null,
   });
 
   const lastUserContent = lastUserMsg?.content;
