@@ -47,6 +47,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   translateUiPlural,
+  usePortalContainer,
 } from '@agiworkforce/ui';
 import { MarkdownContent, useChatProjectStore } from '@agiworkforce/unified-chat';
 import { uploadProjectKnowledgeFile } from '@features/projects/services/project-knowledge-upload';
@@ -359,6 +360,7 @@ export function ResearchReportView({
   const [savingToLibrary, setSavingToLibrary] = useState(false);
   const [savedToLibrary, setSavedToLibrary] = useState(false);
   const [reading, setReading] = useState(false);
+  const portalContainer = usePortalContainer();
   const readerRef = useRef<HTMLDivElement>(null);
   const readerToggleRef = useRef<HTMLButtonElement>(null);
   const wasReadingRef = useRef(false);
@@ -402,12 +404,13 @@ export function ResearchReportView({
     if (wasReadingRef.current && !reading) readerToggleRef.current?.focus();
     wasReadingRef.current = reading;
     if (!reading) return;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    const body = (portalContainer?.ownerDocument ?? document).body;
+    const previousOverflow = body.style.overflow;
+    body.style.overflow = 'hidden';
     return () => {
-      document.body.style.overflow = previousOverflow;
+      body.style.overflow = previousOverflow;
     };
-  }, [reading]);
+  }, [portalContainer, reading]);
 
   const scrollToHeading = useCallback((headingId: string) => {
     const target = bodyRef.current?.ownerDocument.getElementById(headingId);
@@ -870,6 +873,6 @@ export function ResearchReportView({
     >
       {view}
     </div>,
-    document.body,
+    portalContainer ?? document.body,
   );
 }
