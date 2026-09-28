@@ -1,4 +1,4 @@
-import { app, dialog, type BrowserWindow } from 'electron';
+import { app, type BrowserWindow } from 'electron';
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import {
@@ -21,6 +21,7 @@ import {
   isSingleUse,
   normalizeGrantDuration,
 } from './permissionCore';
+import { showDevicePrompt } from './devicePrompts';
 import { systemPermissionStatuses } from './systemPermissions';
 
 type StoredDecision = PermissionDecision & { label?: string };
@@ -378,9 +379,7 @@ export async function requestPermission(
     noLink: true,
   };
 
-  const result = window
-    ? await dialog.showMessageBox(window, options)
-    : await dialog.showMessageBox(options);
+  const result = await showDevicePrompt(window, options);
 
   if (result.response === 0) {
     recordDecision(capability, scope, 'denied', 'session', false, question.targetLabel);
