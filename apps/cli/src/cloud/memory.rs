@@ -66,6 +66,8 @@ pub struct MemoryPullResponse {
     pub cursor: String,
     #[serde(default)]
     pub has_more: bool,
+    #[serde(default)]
+    pub memory_enabled: Option<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -106,6 +108,8 @@ pub struct MemoryPushResponse {
 pub struct MemoryCache {
     #[serde(default)]
     pub entries: Vec<CachedMemory>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub account_memory_off: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -305,10 +309,12 @@ impl<'a> MemorySync<'a> {
             memories: Vec::new(),
             cursor: cursor.clone(),
             has_more: false,
+            memory_enabled: None,
         };
         loop {
             let page = self.pull(&cursor).await?;
             merged.memories.extend(page.memories.iter().cloned());
+            merged.memory_enabled = page.memory_enabled.or(merged.memory_enabled);
             let advanced = page.cursor != cursor;
             cursor = page.cursor.clone();
             merged.cursor = cursor.clone();
@@ -497,6 +503,7 @@ mod tests {
             memories: vec![delta("m1", "one", "8", false)],
             cursor: "8".to_string(),
             has_more: false,
+            memory_enabled: None,
         };
         apply_pull_response(&response, &mut state);
         assert_eq!(state.memories.base_version("m1"), "8");
