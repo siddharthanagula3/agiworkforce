@@ -475,9 +475,8 @@ pub struct Cli {
 
     /// Use automatic model routing (mutually exclusive with --model).
     ///
-    /// Resolves the economy profile through AGI's canonical model policy, then
-    /// sends the concrete provider model ID through the managed-cloud transport.
-    /// Responses disclose the selected provider/model provenance.
+    /// AGI Workforce picks the model for each message from the task, the tools
+    /// in play, your plan and cost, and the CLI names the model that answered.
     ///
     /// Only applies to managed-cloud sessions; BYOK and local (Ollama / LMStudio)
     /// providers always require an explicit --model.
@@ -2090,8 +2089,10 @@ async fn handle_code_command(action: &CodeSubcommand, output: Option<OutputForma
                 .await
                 .map_err(|error| anyhow::anyhow!("{error}"))?;
             let url = code_sessions::page_url(client.base(), id);
-            if crate::oauth::open_external_url(&url, crate::oauth::UserActionContext::user_initiated())
-            {
+            if crate::oauth::open_external_url(
+                &url,
+                crate::oauth::UserActionContext::user_initiated(),
+            ) {
                 println!("Opened {url}");
             } else {
                 println!("Open this link to continue the session: {url}");
@@ -2153,11 +2154,14 @@ async fn handle_image_command(
         return Ok(());
     }
     if command.clear_defaults {
-        output::print_info(&cloud::image::clear_defaults().map_err(|error| anyhow::anyhow!(error))?);
+        output::print_info(
+            &cloud::image::clear_defaults().map_err(|error| anyhow::anyhow!(error))?,
+        );
     }
     if command.save_defaults {
         output::print_info(
-            &cloud::image::save_defaults(&command.settings).map_err(|error| anyhow::anyhow!(error))?,
+            &cloud::image::save_defaults(&command.settings)
+                .map_err(|error| anyhow::anyhow!(error))?,
         );
     }
     if !command.retry && !command.again && command.prompt.is_none() {
@@ -5624,8 +5628,8 @@ async fn run_cli(cli: Cli) -> Result<()> {
     };
     if let Some((route, _, _)) = &auto_route {
         eprintln!(
-            "Auto route: managed_cloud -> {}/{} (harness: {})",
-            route.upstream_provider, route.provider_model_id, route.harness_id
+            "Auto: AGI Workforce picks the model for each message; starting with {}.",
+            model_catalog::display_name(&route.provider_model_id)
         );
     }
 
@@ -5733,6 +5737,22 @@ async fn run_cli(cli: Cli) -> Result<()> {
             None
         }
     });
+    // Seed interactive sessions with the Auto launch state so per-turn
+    // re-classification has full continuity (selection, model_key, task,
+    // trust, tier), see AgentSession::re_resolve_auto_route_for_turn.
+    let auto_route_seed =
+        auto_route
+            .as_ref()
+            .map(|(route, tier, task)| routing::classify::AutoRouteSeed {
+                state: crate::runtime::session::ManagedSessionAutoRouting {
+                    selection: "auto".to_string(),
+                    model_key: route.model_key.clone(),
+                    task_type: routing::classify::developer_task_type(*task),
+                    trust_mode: agiworkforce_model_registry::TrustMode::ManagedCloud,
+                },
+                tier: tier.clone(),
+            });
+
     if let Some(ref prompt) = effective_prompt {
         return run_oneshot(
             &app_config,
@@ -5757,6 +5777,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
             cli.json_events,
             cli.agent.clone(),
             model_fallback_chain.clone(),
+            auto_route_seed,
         )
         .await;
     }
@@ -5824,22 +5845,6 @@ async fn run_cli(cli: Cli) -> Result<()> {
 
     // Resolve team mode from --team flag or AGI_TEAM env var
     let team_mode = cli.team || std::env::var("AGI_TEAM").is_ok_and(|v| v == "1" || v == "true");
-
-    // Seed interactive sessions with the Auto launch state so per-turn
-    // re-classification has full continuity (selection, model_key, task,
-    // trust, tier), see AgentSession::re_resolve_auto_route_for_turn.
-    let auto_route_seed =
-        auto_route
-            .as_ref()
-            .map(|(route, tier, task)| routing::classify::AutoRouteSeed {
-                state: crate::runtime::session::ManagedSessionAutoRouting {
-                    selection: "auto".to_string(),
-                    model_key: route.model_key.clone(),
-                    task_type: routing::classify::developer_task_type(*task),
-                    trust_mode: agiworkforce_model_registry::TrustMode::ManagedCloud,
-                },
-                tier: tier.clone(),
-            });
 
     // Interactive mode: TUI (default) or classic REPL (--no-tui)
     if cli.no_tui || output::plain_output() {
@@ -6261,6 +6266,7 @@ pub async fn run_oneshot(
     json_events: bool,
     agent_name: Option<String>,
     fallback_chain: routing::fallback::FallbackChain,
+    auto_route_seed: Option<routing::classify::AutoRouteSeed>,
 ) -> Result<()> {
     crate::tier_cache::ensure_plan_models_cached().await;
     let resolved_provider_override = models::plan_first_provider_override(
@@ -6319,6 +6325,10 @@ pub async fn run_oneshot(
     // the managed session object exists.
     if let Some(ref sid) = session_id_override {
         session.override_session_id(sid)?;
+    }
+    if let Some(seed) = auto_route_seed {
+        session.auto_routing_tier = Some(seed.tier);
+        session.set_managed_auto_routing(Some(seed.state));
     }
     // Event-stream correlation id. `--no-session-persistence` suppresses the
     // managed session entirely, so an explicit `--session-id` has to be read

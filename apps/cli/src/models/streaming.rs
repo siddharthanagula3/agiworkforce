@@ -261,6 +261,7 @@ fn completion_result_from(outcome: ChatOutcome) -> CompletionResult {
         stop: outcome.stop,
         reasoning_output_tokens: outcome.usage.reasoning_output_tokens,
         managed_request_id: None,
+        resolved_model: None,
     }
 }
 
@@ -531,9 +532,15 @@ async fn run_spec_observing(
         ollama_think: None,
         idle_timeout: STREAM_IDLE_TIMEOUT,
     };
-    let mut on_event = stream_event_handler(on_chunk, pause);
-    match stream_chat(client, spec, &req, &mut on_event).await {
-        Ok(outcome) => Ok(completion_result_from(outcome)),
+    let mut resolved_model = None;
+    let mut on_event = stream_event_handler(on_chunk, pause, &mut resolved_model);
+    let outcome = stream_chat(client, spec, &req, &mut on_event).await;
+    drop(on_event);
+    match outcome {
+        Ok(outcome) => Ok(CompletionResult {
+            resolved_model,
+            ..completion_result_from(outcome)
+        }),
         Err(err) => Err(map_llm_error(err)),
     }
 }
@@ -541,11 +548,20 @@ async fn run_spec_observing(
 fn stream_event_handler<'a>(
     on_chunk: &'a mut StreamCallback,
     mut pause: Option<&'a mut ManagedApprovalPause>,
+    resolved_model: &'a mut Option<String>,
 ) -> impl FnMut(StreamEvent) + Send + 'a {
     move |event| match event {
         StreamEvent::TextDelta { text } => on_chunk(&text),
         StreamEvent::Vendor { event, data } if event == QUOTA_WARNING_EVENT => {
             notify_quota_warning(&data)
+        }
+        StreamEvent::Vendor { event, data } if event == agiworkforce_llm::RESOLVED_MODEL_EVENT => {
+            *resolved_model = data
+                .get("value")
+                .and_then(serde_json::Value::as_str)
+                .map(str::trim)
+                .filter(|model| !model.is_empty())
+                .map(str::to_string);
         }
         StreamEvent::Vendor { event, data } if event == crate::sources::SEARCH_RESULTS_EVENT => {
             crate::sources::record(crate::sources::from_search_results_delta(&data))
@@ -587,6 +603,9 @@ fn absorb_continuation(completed: &mut CompletionResult, next: CompletionResult)
     completed.reasoning_output_tokens += next.reasoning_output_tokens;
     completed.stop_reason = next.stop_reason;
     completed.stop = next.stop;
+    if next.resolved_model.is_some() {
+        completed.resolved_model = next.resolved_model;
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -646,7 +665,8 @@ async fn run_managed_cloud(
     while let Some((run_id, calls)) = pause.take_pending()? {
         let decisions = managed_approvals::decide(&calls).await;
         let body = serde_json::json!({ "run_id": run_id, "tool_approvals": decisions });
-        let mut on_event = stream_event_handler(on_chunk, Some(&mut pause));
+        let mut resolved_model = None;
+        let mut on_event = stream_event_handler(on_chunk, Some(&mut pause), &mut resolved_model);
         let next = agiworkforce_llm::post_openai_compat_stream(
             client,
             &managed_approval_resume_spec(jwt)?,
@@ -655,9 +675,16 @@ async fn run_managed_cloud(
             STREAM_IDLE_TIMEOUT,
             &mut on_event,
         )
-        .await
-        .map_err(map_llm_error)?;
-        absorb_continuation(&mut completed, completion_result_from(next));
+        .await;
+        drop(on_event);
+        let next = next.map_err(map_llm_error)?;
+        absorb_continuation(
+            &mut completed,
+            CompletionResult {
+                resolved_model,
+                ..completion_result_from(next)
+            },
+        );
     }
     Ok(completed)
 }

@@ -692,6 +692,10 @@ fn cli_dispatchable_model_id(model_key: &str, provider_model_id: &str) -> String
         .unwrap_or_else(|| provider_model_id.to_string())
 }
 
+pub fn served_model_id(model_key: &str) -> String {
+    cli_dispatchable_model_id(model_key, model_key)
+}
+
 pub fn default_model() -> &'static str {
     DEFAULT_MODEL_ID
         .get_or_init(|| {
