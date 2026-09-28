@@ -19,8 +19,12 @@ export interface OpenAIChatUserMessagePartImage {
   type: 'image_url';
   image_url: { url: string; detail?: 'auto' | 'low' | 'high' | 'original' };
 }
+export interface OpenAIChatUserMessagePartFile {
+  type: 'file';
+  file: { filename: string; file_data: string };
+}
 export type OpenAIChatUserMessagePart =
-  OpenAIChatUserMessagePartText | OpenAIChatUserMessagePartImage;
+  OpenAIChatUserMessagePartText | OpenAIChatUserMessagePartImage | OpenAIChatUserMessagePartFile;
 
 export interface OpenAIChatUserMessageParam {
   role: 'user';
@@ -69,6 +73,11 @@ export interface OpenAIChatCompletionCreateParams {
   temperature?: number;
   top_p?: number;
   stop?: string[];
+  seed?: number;
+  frequency_penalty?: number;
+  presence_penalty?: number;
+  logit_bias?: Record<string, number>;
+  user?: string;
   max_tokens?: number;
   max_completion_tokens?: number;
   reasoning_effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';

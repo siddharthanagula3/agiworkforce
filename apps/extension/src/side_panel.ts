@@ -8,6 +8,7 @@ import {
   createManagedCloudChatAttachmentsClient,
   MAX_CHAT_ATTACHMENT_BYTES,
   resolveChatAttachmentMimeType,
+  TOOL_APPROVAL_GUIDANCE_MAX_LENGTH,
   type GeneratedFileWire,
   type ManagedCloudAgentRunReference,
   type ManagedCloudChatAttachment,
@@ -39,8 +40,10 @@ import {
   resolveModelEffort,
   USAGE_CRITICAL_REMAINING_PERCENT,
   USAGE_WARNING_REMAINING_PERCENT,
+  type ClarifyState,
   type Effort,
   type InteractiveCard,
+  type InteractiveCardResponsePayload,
   type ManagedUsageWarning,
   type ModelSpeed,
   type RoutingTaskType,
@@ -99,6 +102,10 @@ import {
   resolveManagedArtifactUrl,
   type RegenerateModelOption,
 } from './features/side-panel/bubbles';
+import {
+  clarifyAnswerMessage,
+  clarifyAnswersFromResponse,
+} from './features/side-panel/interactiveCards';
 import type { AnswerFileAccess } from './features/side-panel/generatedFiles';
 import {
   answerSourceLists,
@@ -192,6 +199,7 @@ import {
   buildComputerUsePanel,
   COMPUTER_USE_PANEL_CSS,
   describeCancellationReason,
+  type ComputerUseApprovalDecision,
   type ComputerUsePanelAPI,
 } from './features/side-panel/computerUsePanel';
 import {
@@ -247,6 +255,7 @@ import {
   FREE_TRIAL_GATEWAY,
   getManagedUsageHistory,
   type ManagedChatSourcesDelta,
+  type ManagedCodeExecution,
   type ManagedModelAccess,
   type ManagedUsageHistory,
   type ManagedQuotaBlock,
@@ -696,6 +705,7 @@ interface ChatChunk {
   generatedFiles?: GeneratedFileWire[];
   interactiveCard?: InteractiveCard;
   sources?: ManagedChatSourcesDelta;
+  codeExecution?: ManagedCodeExecution;
   routing?: {
     modelKey: string;
     taskType: RoutingTaskType;
@@ -1044,6 +1054,9 @@ function serializeMessagesForHistory() {
       : {}),
     ...(message.role === 'assistant' && message.interactiveCards
       ? { interactiveCards: message.interactiveCards }
+      : {}),
+    ...(message.role === 'assistant' && message.codeExecution
+      ? { codeExecution: message.codeExecution }
       : {}),
     ...(message.role === 'assistant' && message.sources ? { sources: message.sources } : {}),
     ...(message.role === 'assistant' && message.citations ? { citations: message.citations } : {}),
@@ -2247,6 +2260,239 @@ function injectStyles(): void {
       font-size: var(--type-caption-size);
       line-height: var(--type-caption-height);
     }
+    .sp-code-run {
+      margin-top: 8px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-control);
+      background: var(--agi-ext-surface);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
+    .sp-code-run__summary {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      min-height: 32px;
+      padding: 0 10px;
+      color: var(--agi-ext-text);
+      font-weight: 600;
+      list-style: none;
+    }
+    details.sp-code-run > summary { cursor: pointer; }
+    details.sp-code-run > summary::-webkit-details-marker { display: none; }
+    .sp-code-run__title { flex: 1; min-width: 0; }
+    .sp-code-run__status--running svg { animation: sp-spin var(--duration-spin) linear infinite; }
+    .sp-code-run__status--passed { color: var(--agi-ext-success-text); }
+    .sp-code-run__status--failed { color: var(--agi-ext-danger-text); }
+    .sp-code-run__detail {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      padding: 8px 10px 10px;
+      border-top: 1px solid var(--agi-ext-border);
+    }
+    .sp-code-run__label { color: var(--agi-ext-text-muted); font-weight: 600; }
+    .sp-code-run__output {
+      max-height: 240px;
+      margin: 0;
+      overflow: auto;
+      padding: 7px 9px;
+      border-radius: var(--corner-compact);
+      background: var(--agi-ext-bg);
+      color: var(--agi-ext-text);
+      font-family: var(--type-code-family);
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+    .sp-code-run__output--error { border: 1px solid var(--agi-ext-danger-border); color: var(--agi-ext-danger-text); }
+    .sp-code-run__error { color: var(--agi-ext-danger-text); }
+    .sp-code-run > summary:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
+    .sp-interactive-card__meta {
+      margin-top: 4px;
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      overflow-wrap: anywhere;
+    }
+    .sp-interactive-card__link { color: var(--agi-ext-accent-text); text-decoration: underline; text-underline-offset: 2px; }
+    .sp-itinerary__stops {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin: 10px 0 0;
+      padding: 0;
+      list-style: none;
+    }
+    .sp-itinerary__stop { display: flex; gap: 9px; }
+    .sp-itinerary__pin {
+      display: grid;
+      flex: 0 0 22px;
+      height: 22px;
+      place-items: center;
+      border: 1px solid var(--agi-ext-border-strong);
+      border-radius: var(--corner-pill);
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+    .sp-itinerary__detail { min-width: 0; flex: 1; }
+    .sp-itinerary__time,
+    .sp-itinerary__address,
+    .sp-itinerary__missing {
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
+    .sp-itinerary__time { font-variant-numeric: tabular-nums; }
+    .sp-itinerary__address { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sp-itinerary__missing { display: flex; align-items: center; gap: 4px; }
+    .sp-itinerary__place { font-weight: 600; overflow-wrap: anywhere; }
+    .sp-itinerary__note { margin-top: 3px; font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
+    .sp-itinerary__route { margin-top: 10px; }
+    .sp-itinerary__legs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+    .sp-itinerary__leg,
+    .sp-comparison__buy {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      min-height: 28px;
+      padding: 0 10px;
+      border-radius: var(--corner-pill);
+      font-size: var(--type-caption-size);
+      font-weight: 600;
+      text-decoration: none;
+    }
+    .sp-itinerary__leg {
+      border: 1px solid var(--agi-ext-border-strong);
+      color: var(--agi-ext-text);
+    }
+    .sp-itinerary__leg:hover { background: var(--agi-ext-hover); }
+    .sp-comparison__products {
+      display: grid;
+      gap: 8px;
+      margin: 10px 0 0;
+      padding: 0;
+      list-style: none;
+    }
+    .sp-comparison__product {
+      display: flex;
+      min-width: 0;
+      flex-direction: column;
+      gap: 5px;
+      padding: 10px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-control);
+    }
+    .sp-comparison__name { font-weight: 600; overflow-wrap: anywhere; }
+    .sp-comparison__best-for,
+    .sp-comparison__merchant,
+    .sp-comparison__unlisted { color: var(--agi-ext-text-muted); font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
+    .sp-comparison__price { font-size: var(--type-body-large-size); font-weight: 650; font-variant-numeric: tabular-nums; }
+    .sp-comparison__merchant { margin-left: 6px; font-weight: 400; }
+    .sp-comparison__buy {
+      width: fit-content;
+      background: var(--agi-ext-accent);
+      color: var(--agi-ext-on-accent);
+    }
+    .sp-comparison__buy:hover { background: var(--agi-ext-accent-hover); }
+    .sp-comparison__sources {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 3px 10px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
+    .sp-comparison__source { display: inline-flex; min-height: 24px; align-items: center; gap: 4px; color: var(--agi-ext-text-muted); text-decoration: none; }
+    .sp-comparison__source:hover { color: var(--agi-ext-text); text-decoration: underline; }
+    .sp-comparison__source-number { font-variant-numeric: tabular-nums; }
+    .sp-comparison__specs {
+      margin: 10px -12px -12px;
+      overflow-x: auto;
+      border-top: 1px solid var(--agi-ext-border);
+    }
+    .sp-comparison__table { width: 100%; border-collapse: collapse; font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
+    .sp-comparison__table th,
+    .sp-comparison__table td { min-width: 96px; padding: 6px 12px; border-bottom: 1px solid var(--agi-ext-border); text-align: left; vertical-align: top; }
+    .sp-comparison__table tr:last-child th,
+    .sp-comparison__table tr:last-child td { border-bottom: 0; }
+    .sp-comparison__table th { color: var(--agi-ext-text-muted); font-weight: 600; }
+    .sp-clarify__question { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+    .sp-clarify__label { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; font-size: var(--type-body-size); line-height: var(--type-body-height); }
+    .sp-clarify__header {
+      padding: 0 6px;
+      border-radius: var(--corner-compact);
+      background: var(--agi-ext-hover);
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .sp-clarify__options { display: flex; flex-wrap: wrap; gap: 6px; }
+    .sp-clarify__option {
+      min-height: 28px;
+      padding: 0 11px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-pill);
+      background: transparent;
+      color: var(--agi-ext-text-muted);
+      cursor: pointer;
+      font: inherit;
+      font-size: var(--type-caption-size);
+    }
+    .sp-clarify__option:hover:not(:disabled) { color: var(--agi-ext-text); }
+    .sp-clarify__option[aria-pressed='true'] { border-color: var(--agi-ext-accent); color: var(--agi-ext-text); font-weight: 600; }
+    .sp-clarify__option:disabled { cursor: default; }
+    .sp-clarify__other {
+      box-sizing: border-box;
+      width: 100%;
+      padding: 5px 9px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-control);
+      background: var(--agi-ext-bg);
+      color: var(--agi-ext-text);
+      font: inherit;
+      font-size: var(--type-caption-size);
+    }
+    .sp-clarify__other::placeholder { color: var(--agi-ext-text-placeholder); }
+    .sp-clarify__answer { color: var(--agi-ext-text-muted); font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
+    .sp-clarify__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
+    .sp-clarify__send {
+      min-height: 28px;
+      padding: 0 12px;
+      border: 0;
+      border-radius: var(--corner-control);
+      background: var(--agi-ext-accent);
+      color: var(--agi-ext-on-accent);
+      cursor: pointer;
+      font: inherit;
+      font-size: var(--type-caption-size);
+      font-weight: 600;
+    }
+    .sp-clarify__send:disabled { cursor: default; opacity: 0.5; }
+    .sp-clarify__dismiss {
+      min-height: 28px;
+      padding: 0 8px;
+      border: 0;
+      background: transparent;
+      color: var(--agi-ext-text-muted);
+      cursor: pointer;
+      font: inherit;
+      font-size: var(--type-caption-size);
+    }
+    .sp-clarify__dismiss:hover { color: var(--agi-ext-text); }
+    .sp-itinerary__leg:focus-visible,
+    .sp-comparison__buy:focus-visible,
+    .sp-comparison__source:focus-visible,
+    .sp-clarify__option:focus-visible,
+    .sp-clarify__send:focus-visible,
+    .sp-clarify__dismiss:focus-visible,
+    .sp-clarify__other:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
+    .sp-comparison__specs:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
     .sp-interactive-card__places {
       display: flex;
       flex-direction: column;
@@ -2310,10 +2556,13 @@ function injectStyles(): void {
     .sp-map-preview__marker {
       position: absolute;
       display: grid;
-      width: 22px;
+      box-sizing: border-box;
+      min-width: 22px;
       height: 22px;
-      margin: -11px 0 0 -11px;
+      padding: 0 5px;
+      transform: translate(-50%, -50%);
       place-items: center;
+      white-space: nowrap;
       border: 2px solid var(--agi-ext-surface);
       border-radius: var(--corner-pill);
       background: var(--agi-ext-accent);
@@ -2604,6 +2853,35 @@ function injectStyles(): void {
     .sp-agent-approval__recorded { color: var(--agi-ext-accent-text); font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
     .sp-agent-approval__error { color: var(--agi-ext-danger-text); font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
     .sp-agent-approval__actions { display: flex; flex-wrap: wrap; gap: 6px; }
+    .sp-agent-approval__stakes {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 2px 10px;
+      margin: 0;
+      padding: 6px 8px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-control);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
+    .sp-agent-approval__stakes dt { color: var(--agi-ext-text-muted); }
+    .sp-agent-approval__stakes dd { margin: 0; color: var(--agi-ext-text); font-weight: 600; overflow-wrap: anywhere; }
+    .sp-agent-approval__guidance {
+      box-sizing: border-box;
+      width: 100%;
+      min-height: 52px;
+      padding: 6px 9px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-control);
+      background: var(--agi-ext-bg);
+      color: var(--agi-ext-text);
+      font: inherit;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      resize: vertical;
+    }
+    .sp-agent-approval__guidance::placeholder { color: var(--agi-ext-text-placeholder); }
+    .sp-agent-approval__guidance:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
     .sp-agent-approval__button {
       border: 1px solid var(--agi-ext-border);
       border-radius: var(--corner-control);
@@ -5419,6 +5697,44 @@ function scrollToBottom(): void {
   if (msgs) msgs.scrollTop = msgs.scrollHeight;
 }
 
+const toolsAllowedForChat = new Map<string, Set<string>>();
+const approvalGuidanceDrafts = new Map<string, string>();
+
+function setApprovalGuidanceDraft(toolCallId: string, guidance: string): void {
+  if (guidance.trim()) approvalGuidanceDrafts.set(toolCallId, guidance);
+  else approvalGuidanceDrafts.delete(toolCallId);
+}
+
+function approveToolsAllowedForChat(assistantMessageId: string): void {
+  const allowed = toolsAllowedForChat.get(_ctx.conversationId);
+  if (!allowed?.size) return;
+  const assistant = _ctx.messages.find(
+    (message) => message.id === assistantMessageId && message.role === 'assistant',
+  );
+  for (const entry of assistant?.agentActivity?.entries ?? []) {
+    if (
+      entry.kind !== 'tool' ||
+      entry.status !== 'awaiting-approval' ||
+      !entry.approval ||
+      entry.approval.decision ||
+      entry.approval.riskLevel === 'high' ||
+      entry.inputRequest ||
+      !allowed.has(entry.name) ||
+      assistant?.cloudApprovalDecisions?.[entry.toolCallId]
+    ) {
+      continue;
+    }
+    resolveManagedToolApproval(assistantMessageId, entry.toolCallId, 'approved');
+  }
+}
+
+function approveToolForChat(assistantMessageId: string, toolName: string): void {
+  const allowed = toolsAllowedForChat.get(_ctx.conversationId) ?? new Set<string>();
+  allowed.add(toolName);
+  toolsAllowedForChat.set(_ctx.conversationId, allowed);
+  approveToolsAllowedForChat(assistantMessageId);
+}
+
 function resolveManagedToolApproval(
   assistantMessageId: string,
   toolCallId: string,
@@ -5466,6 +5782,14 @@ function resolveManagedToolApproval(
     tool_call_id: entry.toolCallId,
     decision: assistant.cloudApprovalDecisions?.[entry.toolCallId] ?? ('rejected' as const),
   }));
+  const guidance = pendingCalls
+    .flatMap((entry) => {
+      const draft = approvalGuidanceDrafts.get(entry.toolCallId)?.trim();
+      approvalGuidanceDrafts.delete(entry.toolCallId);
+      return draft ? [draft] : [];
+    })
+    .join('\n\n')
+    .slice(0, TOOL_APPROVAL_GUIDANCE_MAX_LENGTH);
   assistant.streaming = true;
   _ctx.currentStreamId = assistant.id;
   ownerByStreamId.set(assistant.id, { ...owner });
@@ -5484,6 +5808,7 @@ function resolveManagedToolApproval(
       id: assistant.id,
       cloudRun: run,
       toolApprovals,
+      ...(guidance ? { guidance } : {}),
     },
     (response?: { success?: boolean; error?: string }) => {
       if (_ctx.currentStreamId !== assistant.id) return;
@@ -5497,6 +5822,72 @@ function resolveManagedToolApproval(
       }
     },
   );
+}
+
+function sendCardAnswer(text: string): void {
+  if (!canAdmitComposerMessage(text)) return;
+  _ctx.conversationGeneration += 1;
+  renderModelNotice(null);
+  const payload: TurnPayload = {
+    prompt: text,
+    pageText: null,
+    capturePage: false,
+    images: [],
+    files: [],
+  };
+  const userMsg: ChatMessage = {
+    id: `u-${Date.now()}`,
+    role: 'user',
+    content: text,
+    timestamp: Date.now(),
+    runtime: 'managed-cloud',
+  };
+  _ctx.messages.push(userMsg);
+  turnPayloadByMessageId.set(userMsg.id, payload);
+  trimLiveMessages();
+  _ctx.needsMessageRebuild = true;
+  saveMessages();
+  renderMessages();
+  dispatchTurn(userMsg, payload, _ctx.quickMode);
+}
+
+function respondToInteractiveCard(
+  messageId: string,
+  cardId: string,
+  payload: InteractiveCardResponsePayload,
+): void {
+  const message = _ctx.messages.find(
+    (candidate) => candidate.id === messageId && candidate.role === 'assistant',
+  );
+  const card = message?.interactiveCards?.find((candidate) => candidate.cardId === cardId);
+  if (
+    !message ||
+    !card?.recognized ||
+    card.kind !== 'clarify.v1' ||
+    card.body.state.status !== 'pending' ||
+    _ctx.isStreaming
+  ) {
+    return;
+  }
+  const settledAt = new Date().toISOString();
+  const settle = (state: ClarifyState): void => {
+    message.interactiveCards = (message.interactiveCards ?? []).map((candidate) =>
+      candidate.cardId === cardId ? { ...card, body: { ...card.body, state } } : candidate,
+    );
+    _ctx.needsMessageRebuild = true;
+    saveMessages();
+    renderMessages();
+  };
+  if (payload.kind === 'dismiss') {
+    settle({ status: 'dismissed', dismissedAt: settledAt });
+    document.getElementById('sp-input')?.focus();
+    return;
+  }
+  const answers = clarifyAnswersFromResponse(card.body, payload);
+  const text = clarifyAnswerMessage(card.body, answers);
+  if (!text || !canAdmitComposerMessage(text)) return;
+  settle({ status: 'answered', answeredAt: settledAt, answers });
+  sendCardAnswer(text);
 }
 
 function iconButton(attrs: Record<string, string>, icon: string): HTMLElement {
@@ -5620,8 +6011,11 @@ function renderMessages(): void {
         buildBubbleWithTools(msg, {
           approvalDecisions: msg.cloudApprovalDecisions,
           approvalError: msg.cloudApprovalError,
+          approvalGuidance: Object.fromEntries(approvalGuidanceDrafts),
           onResolveApproval: (toolCallId, decision) =>
             resolveManagedToolApproval(msg.id, toolCallId, decision),
+          onApproveForChat: (_toolCallId, toolName) => approveToolForChat(msg.id, toolName),
+          onApprovalGuidanceChange: setApprovalGuidanceDraft,
           onRetry: (messageId) => retryFailedMessage(messageId),
           onSwitchModel: () => document.getElementById('sp-model-selector-btn')?.click(),
           quotaRecovery: { label: quotaRecoveryLabel, open: openQuotaRecovery },
@@ -5638,6 +6032,12 @@ function renderMessages(): void {
                   turnPayloadByMessageId.get(msg.id)?.images.map((image) => image.dataUrl) ?? [],
               }
             : { fileAccess: answerFileAccess }),
+          ...(msg.role === 'assistant' && i === _ctx.messages.length - 1 && !_ctx.isStreaming
+            ? {
+                onRespondToCard: (cardId: string, payload: InteractiveCardResponsePayload) =>
+                  respondToInteractiveCard(msg.id, cardId, payload),
+              }
+            : {}),
         }),
       );
     }
@@ -11515,13 +11915,19 @@ function buildUI(): void {
       const toolName = typeof m['toolName'] === 'string' ? m['toolName'] : 'action';
       const description = typeof m['description'] === 'string' ? m['description'] : '';
       switchTab('computer-use');
-      cuPanel.showApprovalCard(toolName, description, (allowed: boolean) => {
-        void chrome.runtime.sendMessage({
-          type: 'AGI_CU_APPROVE_RESPONSE',
-          requestId,
-          allowed,
-        });
-      });
+      cuPanel.showApprovalCard(
+        toolName,
+        description,
+        m['canAllowForTask'] === true,
+        (decision: ComputerUseApprovalDecision) => {
+          void chrome.runtime.sendMessage({
+            type: 'AGI_CU_APPROVE_RESPONSE',
+            requestId,
+            allowed: decision !== 'skip',
+            forTask: decision === 'allow-for-task',
+          });
+        },
+      );
     }
   });
 
@@ -13375,6 +13781,16 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
     saveMessages();
   }
 
+  if (chunk.codeExecution) {
+    removeThinking();
+    const assistant = ensureStreamingAssistant(chunk.id, streamUsedQuick);
+    stampResolvedRoute(chunk.id, assistant);
+    assistant.codeExecution = { ...chunk.codeExecution };
+    _ctx.needsMessageRebuild = true;
+    renderMessages();
+    saveMessages();
+  }
+
   if ((chunk.generatedFiles?.length ?? 0) > 0 || chunk.interactiveCard) {
     removeThinking();
     const assistant = ensureStreamingAssistant(chunk.id, streamUsedQuick);
@@ -13480,6 +13896,7 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
     _ctx.needsMessageRebuild = true;
     saveMessages();
     renderMessages();
+    approveToolsAllowedForChat(chunk.id);
     sendNextFollowUp();
   }
 });

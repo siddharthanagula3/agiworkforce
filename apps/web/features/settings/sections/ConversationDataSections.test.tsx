@@ -295,10 +295,12 @@ describe('Web conversation data settings', () => {
   });
 
   it('downloads the reviewed export variant and reports a partial result', async () => {
-    const fetchMock = vi.spyOn(global, 'fetch').mockResolvedValueOnce(
-      new Response('{"export_metadata":{"completeness":{"status":"partial"}}}', {
-        headers: { 'X-Export-Status': 'partial', 'Content-Type': 'application/json' },
-      }),
+    const fetchMock = vi.spyOn(global, 'fetch').mockImplementation(async (input) =>
+      String(input) === '/api/user/data?download=true'
+        ? new Response('{"export_metadata":{"completeness":{"status":"partial"}}}', {
+            headers: { 'X-Export-Status': 'partial', 'Content-Type': 'application/json' },
+          })
+        : new Response('{}', { headers: { 'Content-Type': 'application/json' } }),
     );
     const createObjectURL = vi.fn(() => 'blob:https://agiworkforce.com/export');
     const revokeObjectURL = vi.fn();

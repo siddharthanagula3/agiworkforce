@@ -243,7 +243,9 @@ describe('workspace feature controls reach the turn', () => {
         (name) =>
           name.startsWith('device_') &&
           name !== 'device_read_file' &&
-          name !== 'device_list_folder',
+          name !== 'device_list_folder' &&
+          name !== 'device_find_files' &&
+          name !== 'device_search_text',
       ),
     ).toBe(false);
   });

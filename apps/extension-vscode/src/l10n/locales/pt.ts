@@ -435,6 +435,42 @@ const pt = {
   'webview.moreLinesHidden_one': 'Mais {count} linha não exibida',
   'webview.moreLinesHidden_many': 'Mais {count} de linhas não exibidas',
   'webview.moreLinesHidden_other': 'Mais {count} linhas não exibidas',
+  'mcp.connected_one': 'AGI Workforce: {name} se conectou em {ms} ms e oferece {count} ferramenta.',
+  'mcp.connected_many':
+    'AGI Workforce: {name} se conectou em {ms} ms e oferece {count} de ferramentas.',
+  'mcp.connected_other':
+    'AGI Workforce: {name} se conectou em {ms} ms e oferece {count} ferramentas.',
+  'checkpoints.trackedFiles_one': '{count} arquivo rastreado',
+  'checkpoints.trackedFiles_many': '{count} de arquivos rastreados',
+  'checkpoints.trackedFiles_other': '{count} arquivos rastreados',
+  'checkpoints.skippedFiles_one':
+    'AGI Workforce: não foi possível restaurar {count} arquivo: {files}',
+  'checkpoints.skippedFiles_many':
+    'AGI Workforce: não foi possível restaurar {count} de arquivos: {files}',
+  'checkpoints.skippedFiles_other':
+    'AGI Workforce: não foi possível restaurar {count} arquivos: {files}',
+  'checkpoints.filesRestored_one': 'AGI Workforce: {count} arquivo voltou ao ponto de verificação.',
+  'checkpoints.filesRestored_many':
+    'AGI Workforce: {count} de arquivos voltaram ao ponto de verificação.',
+  'checkpoints.filesRestored_other':
+    'AGI Workforce: {count} arquivos voltaram ao ponto de verificação.',
+  'webview.sources_one': '{count} fonte',
+  'webview.sources_many': '{count} de fontes',
+  'webview.sources_other': '{count} fontes',
+  'sessionSync.continuedIn':
+    'Esta sessão continuou em {client}. As mensagens mais recentes aparecem aqui.',
+  'sessionSync.continuedElsewhere':
+    'Esta sessão continuou em outro aplicativo. As mensagens mais recentes aparecem aqui.',
+  'sessionSync.heldBy': '{client} está usando esta sessão.',
+  'sessionSync.takeOverDetail':
+    'Assuma o controle para enviar sua mensagem daqui. Se {client} ainda estiver respondendo, interrompa-o lá primeiro: dois aplicativos escrevendo ao mesmo tempo deixam duas cópias da sessão.',
+  'sessionSync.takeOver': 'Assumir o controle e enviar',
+  'sessionSync.notSent':
+    'Não enviado: {client} está usando esta sessão. Envie de novo para assumir o controle daqui.',
+  'sessionSync.takeOverFailed':
+    'Não foi possível assumir o controle desta sessão. Envie de novo para tentar outra vez.',
+  'sessionSync.stopBeforeTerminal':
+    'Interrompa a resposta em andamento antes de continuar esta sessão no terminal.',
 };
 
 export default pt;

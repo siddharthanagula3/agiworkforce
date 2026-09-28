@@ -112,7 +112,15 @@ function releaseStageLabel(entry: ModelCatalogueEntry): string | null {
 }
 
 type CapabilityChipKey =
-  'vision' | 'reasoning' | 'tools' | 'search' | 'codeExecution' | 'imageOut' | 'videoOut' | 'audio';
+  | 'vision'
+  | 'reasoning'
+  | 'tools'
+  | 'search'
+  | 'codeExecution'
+  | 'imageOut'
+  | 'videoOut'
+  | 'audioIn'
+  | 'audioOut';
 
 const CAPABILITY_CHIPS: readonly {
   key: CapabilityChipKey;
@@ -143,10 +151,14 @@ const CAPABILITY_CHIPS: readonly {
     matches: (entry) => entry.capabilities.videoOutput === true,
   },
   {
-    key: 'audio',
-    label: 'Audio',
-    matches: (entry) =>
-      entry.capabilities.audioInput === true || entry.capabilities.audioOutput === true,
+    key: 'audioIn',
+    label: 'Audio in',
+    matches: (entry) => entry.capabilities.audioInput === true,
+  },
+  {
+    key: 'audioOut',
+    label: 'Audio out',
+    matches: (entry) => entry.capabilities.audioOutput === true,
   },
 ];
 

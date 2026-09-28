@@ -311,17 +311,14 @@ Code: `apps/mobile/src/features/chat/components/research/ResearchRunCard.tsx:289
 
 - Done when: The user can convert a research report into an interactive web page/app.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | partials/privacy 8b29e7304: a research turn now reaches later turns with its numbered sources, so asking in the same chat for an 'interactive artifact' or 'html artifact' builds an HTML artifact from the stored report with working links. The leaders' phrasing ('turn this report into a web page') still gets a plain html code block, because features/chat/lib/visual-intent.ts only attaches the artifact directive for 'html/web/interactive artifact' or 'artifact preview'; needs verb-anchored web-page phrases there (owner of visual-intent.ts) | ui |
-| desktop | partial | partials/privacy 8b29e7304: a research turn now reaches later turns with its numbered sources, so asking in the same chat for an 'interactive artifact' or 'html artifact' builds an HTML artifact from the stored report with working links. The leaders' phrasing ('turn this report into a web page') still gets a plain html code block, because features/chat/lib/visual-intent.ts only attaches the artifact directive for 'html/web/interactive artifact' or 'artifact preview'; needs verb-anchored web-page phrases there (owner of visual-intent.ts) | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/lib/hooks/useChatStream.ts:3675-3675`, `apps/web/features/chat/utils/research-plan.ts:97-97`
 
 ## S35.33: Notify on completion.
 

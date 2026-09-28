@@ -74,6 +74,13 @@ export interface CustomConnectorInput {
   oauthClientSecret?: string;
 }
 
+export interface CustomConnectorPreset {
+  name: string;
+  urlFormat: string;
+  hint: string;
+  documentationUrl: string;
+}
+
 export const CUSTOM_MCP_AUTH_TYPE = 'custom_mcp';
 
 export const CUSTOM_MCP_UNVERIFIED_NOTICE =
@@ -104,6 +111,7 @@ export interface SettingsDataAdapter {
   customConnectorAuthTokenSupported?: boolean;
   customConnectorOAuthClientSupported?: boolean;
   customConnectorOAuthRedirectUri?: string;
+  customConnectorPreset?: CustomConnectorPreset | null;
   openHref?: (href: string) => Promise<void> | void;
 
   skills?: SettingsSkill[];
