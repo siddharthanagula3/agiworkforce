@@ -1591,7 +1591,7 @@ export interface OrgSharedProject {
   name: string;
   ownerUserId: string;
   sharedByUserId: string;
-  defaultAccess: 'read' | 'write';
+  defaultAccess: 'read' | 'write' | 'none';
   createdAt: string;
   /** Explicit per-member overrides. Members not listed inherit `defaultAccess`. */
   memberGrants: { userId: string; access: OrgMemberProjectAccess }[];
@@ -1708,16 +1708,31 @@ async function sharingRequest(path: string, method: 'PUT' | 'PATCH' | 'DELETE', 
   return res.json() as Promise<unknown>;
 }
 
-/** Share one of the caller's own projects with their organization. */
-export function useShareProjectWithOrganization(): UseMutationResult<unknown, Error, string> {
+export type ProjectShareAudience = 'workspace' | 'invited';
+
+/**
+ * Share one of the caller's own projects with their organization, open to the
+ * whole workspace or only to the members given access.
+ */
+export function useShareProjectWithOrganization(): UseMutationResult<
+  unknown,
+  Error,
+  { projectId: string; audience: ProjectShareAudience }
+> {
   const queryClient: QueryClient = useQueryClient();
-  return useMutation<unknown, Error, string>({
-    mutationFn: (projectId: string) =>
-      sharingRequest(`/api/settings/organization/shared/projects/${projectId}`, 'PUT'),
-    onSuccess: () => {
+  return useMutation<unknown, Error, { projectId: string; audience: ProjectShareAudience }>({
+    mutationFn: ({ projectId, audience }) =>
+      sharingRequest(`/api/settings/organization/shared/projects/${projectId}`, 'PUT', {
+        audience,
+      }),
+    onSuccess: (_data, { audience }) => {
       queryClient.invalidateQueries({ queryKey: ORG_SHARED_QUERY_KEY });
       queryClient.invalidateQueries({ queryKey: ['projects'] });
-      toast.success('Project shared with your organization');
+      toast.success(
+        audience === 'invited'
+          ? 'Project shared with the people you invite'
+          : 'Project shared with your workspace',
+      );
     },
     onError: (error: Error) =>
       toast.error(toUserMessage(error, 'The request failed. Please try again.')),

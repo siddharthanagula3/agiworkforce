@@ -230,19 +230,6 @@ Code: `apps/cli/src/voice.rs:221-221`, `apps/cli/src/voice.rs:320-320`, `apps/cl
 
 Code: `apps/cli/src/tui/tui_app.rs:4766-4766`, `apps/cli/src/voice.rs:320-320`, `apps/cli/src/voice.rs:882-882`
 
-## S48.24: Type while speaking.
-
-- Done when: During a voice conversation the user can also type a message into the same conversation.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | blocked: the GPT-Live protocol (developers.openai.com/api/docs/guides/live-conversations, fetched 2026-09-27) documents no user text input event, only session.instructions/thinking/commentary.append | handler |
-| desktop | partial | The voice composer field sends a normal text turn to the chat model; the live voice model never sees it, so the spoken conversation does not know what was typed. | handler |
-| mobile | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/hooks/use-voice-session.ts:640-640`, `apps/web/features/chat/components/Voice/VoiceComposer.tsx:114-114`
-
 ## S48.26: View tool results during Voice.
 
 - Done when: Tool activity and results from a voice turn are viewable during the conversation.
@@ -295,19 +282,6 @@ Code: `apps/web/features/chat/components/Voice/VoiceChatDock.tsx:78-78`, `apps/c
 | mobile | partial | The turn-based inline voice bar has an attach button, but it closes voice before opening the attach sheet; nothing can be attached while voice continues. | handler |
 
 Code: `apps/mobile/src/features/voice/components/VoiceInlineBar.tsx:64-64`, `apps/mobile/app/(app)/chat/[id].tsx:1028-1028`
-
-## S48.30: Camera sharing.
-
-- Done when: The user can share the camera with the assistant during voice.
-- Wave: 2
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | blocked: GPT-Live documents no image or video frame input (live-conversations guide, fetched 2026-09-27); image input exists only in the separate Realtime API | mount, handler |
-| desktop | missing | Not built on this surface. |  |
-| mobile | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Voice/VoiceModeSurface.tsx:445-445`
 
 ## S48.38: Continue unfinished work in text.
 

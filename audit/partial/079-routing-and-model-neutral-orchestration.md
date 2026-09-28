@@ -26,51 +26,44 @@ Code: `apps/web/app/api/projects/[id]/route.ts:200-200`, `apps/web/app/api/llm/v
 
 - Done when: A speed-first routing profile can be applied that prefers the fastest eligible route.
 - Wave: 3
+- Already works on: web, desktop, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | A latency-weighted "instant" profile exists and is applied internally by task family, but no user can choose a speed-first mode. | ui |
-| desktop | partial | A latency-weighted "instant" profile exists and is applied internally by task family, but no user can choose a speed-first mode. | ui |
-| mobile | partial | A latency-weighted "instant" profile exists and is applied internally by task family, but no user can choose a speed-first mode. | ui |
+| mobile | partial | Picker rows and the on-device selection mapping are in post-codex/chat-gates-s79-routing-profile-mobile.patch (ModelPickerSheet.tsx and chatExecutionStore.ts are Codex-held). | ui |
 | cli | partial | /fast swaps to a configured cheaper model; it does not select a speed-first routing profile. | ui |
 | vscode | partial | A latency-weighted "instant" profile exists and is applied internally by task family, but no user can choose a speed-first mode. | ui |
 | chrome | partial | Quick mode routes to the economy (cheapest) alias, not a latency-optimised profile. | ui |
-| api | partial | A latency-weighted "instant" profile exists and is applied internally by task family, but no user can choose a speed-first mode. | ui |
 
-Code: `apps/web/features/chat/components/Composer/ComposerFooter.tsx:278-281`, `packages/ai/routing/src/profiles/index.ts:37-37`, `packages/ai/routing/src/auto.ts:32-32`, `apps/mobile/src/features/model-picker/components/ModelRow.tsx:166-170`
+Code: `packages/contracts/types/src/routing-profile-choice.ts:48-48`, `crates/agiworkforce-command-registry/src/lib.rs:178-178`, `apps/extension-vscode/src/features/model-picker/modelConstants.ts:239-249`, `apps/extension-vscode/src/utils/api.ts:581-586`
 
 ## S79.06: Quality-first profile.
 
 - Done when: A quality-first routing profile can be applied that prefers the most capable eligible route.
 - Wave: 3
+- Already works on: web, desktop, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The premium ("Best") profile is applied automatically by task and plan; a user can choose it only in voice mode's Intelligence setting. | ui |
-| desktop | partial | The premium ("Best") profile is applied automatically by task and plan; a user can choose it only in voice mode's Intelligence setting. | ui |
-| mobile | partial | The premium profile is applied automatically for coding/reasoning on higher plans; this surface offers no quality-first choice. | ui |
+| mobile | partial | Same post-codex patch as S79.05. | ui |
 | cli | partial | The premium profile is applied automatically for coding/reasoning on higher plans; this surface offers no quality-first choice. | ui |
 | vscode | partial | The premium profile is applied automatically for coding/reasoning on higher plans; this surface offers no quality-first choice. | ui |
 | chrome | partial | The premium profile is applied automatically for coding/reasoning on higher plans; this surface offers no quality-first choice. | ui |
-| api | partial | The premium ("Best") profile is applied automatically by task and plan; a user can choose it only in voice mode's Intelligence setting. | ui |
 
-Code: `apps/web/features/chat/components/Voice/VoiceSettingsModal.tsx:192-196`, `packages/ai/routing/src/auto.ts:32-32`, `apps/mobile/src/features/model-picker/components/ModelRow.tsx:166-170`, `apps/mobile/services/streaming.ts:167-167`
+Code: `packages/contracts/types/src/routing-profile-choice.ts:48-48`, `apps/cli/src/provider.rs:260-267`, `apps/cli/src/models/streaming.rs:234-234`, `packages/ai/routing/src/auto.ts:32-32`
 
 ## S79.07: Cost-first profile.
 
 - Done when: A cost-first routing profile can be applied that prefers the cheapest eligible route.
 - Wave: 3
-- Already works on: cli, chrome
+- Already works on: web, desktop, cli, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The economy profile can be chosen only in voice mode's Intelligence setting; the chat picker offers only Auto. | ui |
-| desktop | partial | The economy profile can be chosen only in voice mode's Intelligence setting; the chat picker offers only Auto. | ui |
-| mobile | partial | Mobile offers only Auto; the economy profile is applied by plan (Free/Basic), not chosen. | ui |
+| mobile | partial | Same post-codex patch as S79.05. | ui |
 | vscode | partial | VS Code offers only Auto; the economy profile is applied by plan, not chosen. | ui |
-| api | partial | auto-economy is accepted but /v1/models advertises only the default Auto alias in allowed_auto_modes. | api |
 
-Code: `apps/web/features/chat/components/Voice/VoiceSettingsModal.tsx:192-196`, `packages/ai/routing/src/auto.ts:32-32`, `apps/mobile/src/features/model-picker/components/ModelRow.tsx:166-170`, `apps/mobile/services/streaming.ts:167-167`
+Code: `packages/contracts/types/src/routing-profile-choice.ts:48-48`, `apps/extension-vscode/src/features/model-picker/modelConstants.ts:239-249`, `apps/extension-vscode/src/utils/api.ts:581-586`, `packages/ai/routing/src/auto.ts:32-32`
 
 ## S79.08: Privacy-first profile.
 
@@ -116,14 +109,9 @@ Code: `apps/cli/src/routing/classify.rs:1-9`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Migration 0293 is now applied in production (2026-09-27). Still open: The server honours a per-conversation provider pin, but no control sets it and its column exists only in pending migration 0293. | ui |
-| desktop | partial | Migration 0293 is now applied in production (2026-09-27). Still open: The server honours a per-conversation provider pin, but no control sets it and its column exists only in pending migration 0293. | ui |
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-| api | partial | Migration 0293 is now applied in production (2026-09-27). Still open: API callers can pin a route only through a conversation's selected route (pending migration 0293); there is no per-request route parameter. | api |
-
-Code: `apps/web/app/api/chat/conversations/[id]/route.ts:201-206`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:3481-3483`
 
 ## S79.18: Route lock.
 
@@ -132,15 +120,9 @@ Code: `apps/web/app/api/chat/conversations/[id]/route.ts:201-206`, `apps/web/app
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Migration 0293 is now applied in production (2026-09-27). Still open: The server honours a per-conversation provider pin, but no control sets it and its column exists only in pending migration 0293. | ui |
-| desktop | partial | Migration 0293 is now applied in production (2026-09-27). Still open: The server honours a per-conversation provider pin, but no control sets it and its column exists only in pending migration 0293. | ui |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | --provider chooses the provider for BYOK/local use; a managed-cloud route cannot be pinned. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-| api | partial | Migration 0293 is now applied in production (2026-09-27). Still open: API callers can pin a route only through a conversation's selected route (pending migration 0293); there is no per-request route parameter. | api |
-
-Code: `apps/web/app/api/chat/conversations/[id]/route.ts:201-206`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:3481-3483`, `apps/cli/src/lib.rs:203-205`
 
 ## S79.21: Explicit model-switch offer.
 
@@ -156,22 +138,6 @@ Code: `apps/web/app/api/chat/conversations/[id]/route.ts:201-206`, `apps/web/app
 
 Code: `apps/mobile/src/features/chat/actions/resolveMobileImageGenerationRequest.ts:183-186`, `apps/cli/src/errors.rs:475-479`, `apps/extension/src/features/cloud-bridge/managedModelPicker.ts:94-106`
 
-## S79.22: Advisor escalation.
-
-- Done when: A worker model can escalate to (consult) a stronger advisor model when needed.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Auto can escalate a conversation to a stronger model (escalation-only continuity) and web shows a receipt, but no advisor model is consulted mid-task by a worker model. | handler |
-| desktop | partial | Auto can escalate a conversation to a stronger model (escalation-only continuity) and web shows a receipt, but no advisor model is consulted mid-task by a worker model. | handler |
-| mobile | partial | Auto can escalate a conversation to a stronger model (escalation-only continuity) and web shows a receipt, but no advisor model is consulted mid-task by a worker model. | handler |
-| cli | partial | Auto can escalate a conversation to a stronger model (escalation-only continuity) and web shows a receipt, but no advisor model is consulted mid-task by a worker model. | handler |
-| chrome | partial | Auto can escalate a conversation to a stronger model (escalation-only continuity) and web shows a receipt, but no advisor model is consulted mid-task by a worker model. | handler |
-| api | partial | Auto can escalate a conversation to a stronger model (escalation-only continuity) and web shows a receipt, but no advisor model is consulted mid-task by a worker model. | handler |
-
-Code: `apps/web/features/chat/components/messages/MessageBubble.tsx:2656-2662`, `packages/ai/routing/src/index.ts:342-342`, `apps/mobile/src/features/model-picker/components/ModelRow.tsx:166-170`, `apps/mobile/services/streaming.ts:167-167`
-
 ## S79.23: Specialist worker selection.
 
 - Done when: Work is delegated to specialist workers that can use their own models.
@@ -180,12 +146,8 @@ Code: `apps/web/features/chat/components/messages/MessageBubble.tsx:2656-2662`, 
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Cloud agent runs cap subagent depth and fan-out, but subagents inherit the parent model; no specialist model is chosen per worker. | handler |
-| desktop | partial | Cloud agent runs cap subagent depth and fan-out, but subagents inherit the parent model; no specialist model is chosen per worker. | handler |
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/lib/services/cloud-agent-budget.ts:20-21`
 
 ## S79.24: Multi-model comparison.
 
@@ -202,22 +164,6 @@ Code: `apps/web/lib/services/cloud-agent-budget.ts:20-21`
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/web/features/models/components/ModelCatalogueBrowser.tsx:305-309`
-
-## S79.25: Confidence-based abstention.
-
-- Done when: When routing or the answer is low-confidence, the system abstains or asks rather than guessing.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Low classifier confidence only demotes a premium Auto choice to balanced; nothing abstains, asks a clarifying question or declines when unsure. | handler |
-| desktop | partial | Low classifier confidence only demotes a premium Auto choice to balanced; nothing abstains, asks a clarifying question or declines when unsure. | handler |
-| mobile | partial | Low classifier confidence only demotes a premium Auto choice to balanced; nothing abstains, asks a clarifying question or declines when unsure. | handler |
-| cli | partial | The agent has a tool to ask the user a clarifying question, but CLI routing never abstains or asks based on classifier confidence. | handler |
-| chrome | partial | Low classifier confidence only demotes a premium Auto choice to balanced; nothing abstains, asks a clarifying question or declines when unsure. | handler |
-| api | partial | Low classifier confidence only demotes a premium Auto choice to balanced; nothing abstains, asks a clarifying question or declines when unsure. | handler |
-
-Code: `apps/web/features/chat/components/Composer/ComposerFooter.tsx:278-281`, `apps/web/app/api/llm/v1/chat/completions/lib/route-selection.ts:26-34`, `apps/mobile/src/features/model-picker/components/ModelRow.tsx:166-170`, `apps/mobile/services/streaming.ts:167-167`
 
 ## S79.26: User-visible routing explanation.
 
@@ -258,31 +204,3 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1093-1093`, `apps/extension
 | api | partial | The routing policy is versioned in an append-only release ledger (policy version 16), but routing decisions do not record which version served them. | handler |
 
 Code: `apps/web/features/chat/components/Composer/ComposerFooter.tsx:278-281`, `packages/ai/routing/src/promotion/release-ledger.ts:65-69`, `apps/mobile/src/features/model-picker/components/ModelRow.tsx:166-170`, `apps/mobile/services/streaming.ts:167-167`
-
-## S79.29: Classification adapter, including Jev if chosen.
-
-- Done when: A pluggable classification adapter (e.g. Jev) can replace or augment the heuristic classifier.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | A model-based turn classifier runs only in shadow (logged, never used); no Jev adapter exists and the heuristic classifier decides. | handler |
-| desktop | partial | A model-based turn classifier runs only in shadow (logged, never used); no Jev adapter exists and the heuristic classifier decides. | handler |
-| mobile | partial | A model-based turn classifier runs only in shadow (logged, never used); no Jev adapter exists and the heuristic classifier decides. | handler |
-| cli | partial | A model-based turn classifier runs only in shadow (logged, never used); no Jev adapter exists and the heuristic classifier decides. | handler |
-| chrome | partial | A model-based turn classifier runs only in shadow (logged, never used); no Jev adapter exists and the heuristic classifier decides. | handler |
-| api | partial | A model-based turn classifier runs only in shadow (logged, never used); no Jev adapter exists and the heuristic classifier decides. | handler |
-
-Code: `apps/web/features/chat/components/Composer/ComposerFooter.tsx:278-281`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:3428-3438`, `apps/mobile/src/features/model-picker/components/ModelRow.tsx:166-170`, `apps/mobile/services/streaming.ts:167-167`
-
-## S79.31: Routing evaluation dashboard.
-
-- Done when: Operators can see a dashboard evaluating routing decisions and outcomes.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Operators get a route-economics panel (cost per route); model-rollout evaluation runs as a cron with no dashboard of routing quality. | ui |
-| desktop | partial | Operators get a route-economics panel (cost per route); model-rollout evaluation runs as a cron with no dashboard of routing quality. | ui |
-
-Code: `apps/web/features/admin/pages/OperatorDashboardPage.tsx:444-444`, `apps/web/app/api/cron/evaluate-model-rollout/route.ts:22-24`

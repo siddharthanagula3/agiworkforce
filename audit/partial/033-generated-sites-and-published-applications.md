@@ -10,16 +10,15 @@ nothing is left.
 
 - Done when: A dashboard lists the user's generated/published sites with their state and actions.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | `agi artifacts list` lists account artifacts, not published pages; render_published exists but no command calls it. | ui |
 | vscode | partial | The Artifacts view marks published rows and opens their page, but cannot unpublish or change audience. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/cli/src/lib.rs:1023-1032`, `apps/cli/src/cloud/artifacts.rs:538-541`, `apps/extension-vscode/src/features/artifacts/artifactsTree.ts:36-43`, `apps/extension-vscode/src/core/commandSetup.ts:2302-2306`
+Code: `apps/extension-vscode/src/features/artifacts/artifactsTree.ts:36-43`, `apps/extension-vscode/src/core/commandSetup.ts:2302-2306`
 
 ## S33.02: Application name and description.
 
@@ -107,15 +106,12 @@ Code: `apps/extension-vscode/package.json:597-599`, `apps/extension-vscode/src/c
 
 - Done when: The owner can restrict a site to members of their workspace.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | The CLI prints a page's audience after publishing but cannot set it. | ui |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:1986-1994`, `apps/cli/src/cloud/artifacts.rs:88-95`
 
 ## S33.13: Password or authentication options where offered.
 
