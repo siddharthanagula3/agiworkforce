@@ -5,7 +5,6 @@ import {
   EFFORT_LABEL,
   REMOTE_CODE_LIMITS,
   TOOL_APPROVAL_ACTION_LABELS,
-  toolCallStatusLabel,
   type AgentMode,
   type Effort,
 } from '@agiworkforce/types';
@@ -18,6 +17,7 @@ import {
 import type { ComposerFollowUpBehavior } from '../../platform/config';
 import { SURFACE_MENU_ITEMS } from '../surfaces/surfaceMenu';
 import type { SessionBinding } from '../../protocol/webviewMessages';
+import { webviewStringsScript } from './webviewStrings';
 
 export function escapeHtml(value: string): string {
   return value
@@ -2770,6 +2770,23 @@ export function getWebviewContent(
   <script nonce="${nonce}" src="${renderJsUri}"></script>
 
   <script nonce="${nonce}">
+    var L10N = ${webviewStringsScript()};
+
+    function fillText(template, values) {
+      return template.replace(/\\{([a-zA-Z]+)\\}/g, function (match, name) {
+        return Object.prototype.hasOwnProperty.call(values, name) ? String(values[name]) : match;
+      });
+    }
+
+    function pluralText(entry, count, values) {
+      var category = new Intl.PluralRules(entry.locale).select(count);
+      var template = entry.forms[category] || entry.forms.other || '';
+      return fillText(
+        template,
+        Object.assign({ count: new Intl.NumberFormat(entry.locale).format(count) }, values || {})
+      );
+    }
+
     const vscodeHost = acquireVsCodeApi();
     const sessionBinding = { origin: '${bindingOrigin}', epoch: ${bindingEpoch} };
     const vscode = {
@@ -3285,13 +3302,13 @@ export function getWebviewContent(
       if (meterCollapsedLabel) meterCollapsedLabel.textContent = 'Usage';
 
       if (activeAccountStatus === 'expired') {
-        meterText.textContent = 'AGI Cloud session expired';
-        meterReset.textContent = '· Local and provider BYOK remain available';
-        upgradeBtn.textContent = 'Sign in again';
+        meterText.textContent = L10N.cloudSessionExpired;
+        meterReset.textContent = L10N.localStillAvailable;
+        upgradeBtn.textContent = L10N.signInAgain;
         upgradeBtn.dataset.action = 'account';
         upgradeBtn.style.display = 'inline-block';
         usageMeterBanner.classList.add('warn');
-        if (meterCollapsedLabel) meterCollapsedLabel.textContent = 'Account needs attention';
+        if (meterCollapsedLabel) meterCollapsedLabel.textContent = L10N.accountNeedsAttention;
       } else if (payload.managedDeveloperEligible === false && payload.accountPlanTier) {
         meterCloudIcon.style.display = 'inline';
         var planLabel = payload.accountPlanLabel || payload.accountPlanTier;
@@ -3439,7 +3456,7 @@ export function getWebviewContent(
     function setRuntimeRetryBusy(busy) {
       if (!runtimeRetryBtn) return;
       runtimeRetryBtn.disabled = busy;
-      runtimeRetryBtn.textContent = busy ? 'Checking…' : 'Try again';
+      runtimeRetryBtn.textContent = busy ? L10N.checking : L10N.tryAgain;
     }
 
     function renderRuntimeProbing() {
@@ -3471,22 +3488,22 @@ export function getWebviewContent(
         var workspaceRequired = status === 'workspace-required';
         var workspaceUntrusted = status === 'workspace-untrusted';
         runtimeStatusTitleEl.textContent = workspaceRequired
-          ? 'Open a workspace to begin'
+          ? L10N.openWorkspaceToBegin
           : workspaceUntrusted
-            ? 'Workspace is in Restricted Mode'
-            : 'Developer runtime needs setup';
+            ? L10N.restrictedMode
+            : L10N.runtimeNeedsSetup;
         runtimeStatusMessageEl.textContent = message || (workspaceRequired
-          ? 'Open a folder or workspace to begin.'
+          ? L10N.openFolderToBegin
           : workspaceUntrusted
-            ? 'Trust this workspace before AGI can use project files or tools.'
-            : 'The AGI CLI is unavailable.');
+            ? L10N.trustWorkspaceFirst
+            : L10N.cliUnavailable);
         runtimeSettingsBtn.textContent = workspaceRequired
-          ? 'Open folder'
+          ? L10N.openFolder
           : workspaceUntrusted
-            ? 'Manage trust'
+            ? L10N.manageTrust
             : runtimeCliMissing
-              ? 'Install AGI CLI'
-              : 'Open setup';
+              ? L10N.installCli
+              : L10N.openSetup;
         runtimeStatusEl.style.display = 'flex';
         if (headline) headline.textContent = workspaceRequired
           ? 'Open a workspace'
@@ -3595,16 +3612,17 @@ export function getWebviewContent(
       if (typeof contextWindow !== 'number' || !isFinite(contextWindow) || contextWindow <= 0) {
         contextUsageEl.textContent = used + ' tok';
         contextUsageEl.className = 'context-usage visible';
-        contextUsageEl.title = 'Last turn used ' + usedTokens.toLocaleString() +
-          ' tokens. The context window for this model is not known here.';
+        contextUsageEl.title = pluralText(L10N.contextUsedUnknownWindow, usedTokens);
         return;
       }
       var pct = Math.min(100, Math.round((usedTokens / contextWindow) * 100));
       contextUsageEl.textContent = used + ' / ' + formatContextTokens(contextWindow);
       contextUsageEl.className = 'context-usage visible' +
         (pct >= 90 ? ' is-critical' : pct >= 75 ? ' is-high' : '');
-      contextUsageEl.title = 'Context after the last turn: ' + usedTokens.toLocaleString() +
-        ' of ' + contextWindow.toLocaleString() + ' tokens (' + pct + '%)';
+      contextUsageEl.title = pluralText(L10N.contextUsed, contextWindow, {
+        used: usedTokens.toLocaleString(),
+        percent: pct,
+      });
       announceContextLimit(pct);
     }
 
@@ -3625,7 +3643,7 @@ export function getWebviewContent(
           var retry = document.createElement('button');
           retry.type = 'button';
           retry.className = 'error-retry';
-          retry.textContent = 'Retry';
+          retry.textContent = L10N.retry;
           retry.addEventListener('click', function() {
             if (retry.disabled) return;
             retry.disabled = true;
@@ -3663,7 +3681,7 @@ export function getWebviewContent(
           chevron.textContent = '▸';
           chevron.setAttribute('aria-hidden', 'true');
           var toggleLabel = document.createElement('span');
-          toggleLabel.textContent = 'Details';
+          toggleLabel.textContent = L10N.details;
           toggle.appendChild(chevron);
           toggle.appendChild(toggleLabel);
           var body = document.createElement('div');
@@ -3724,12 +3742,12 @@ export function getWebviewContent(
 
     function settleMessageCopy(button, icon, copied) {
       icon.className = 'codicon ' + (copied ? 'codicon-check' : 'codicon-error');
-      button.setAttribute('aria-label', copied ? 'Copied' : 'Copy failed');
-      button.title = copied ? 'Copied' : 'Copy failed';
+      button.setAttribute('aria-label', copied ? L10N.copied : L10N.copyFailed);
+      button.title = copied ? L10N.copied : L10N.copyFailed;
       setTimeout(function () {
         icon.className = 'codicon codicon-copy';
-        button.setAttribute('aria-label', 'Copy response');
-        button.title = 'Copy';
+        button.setAttribute('aria-label', L10N.copyResponse);
+        button.title = L10N.copy;
       }, 1500);
     }
 
@@ -3742,7 +3760,7 @@ export function getWebviewContent(
         var button = buttons[i];
         var kind = button.dataset.rating;
         var pressed = kind === rating;
-        var label = pressed ? 'Remove rating' : kind === 'up' ? 'Good response' : 'Bad response';
+        var label = pressed ? L10N.removeRating : kind === 'up' ? L10N.goodResponse : L10N.badResponse;
         button.setAttribute('aria-pressed', pressed ? 'true' : 'false');
         button.setAttribute('aria-label', label);
         button.title = label;
@@ -3785,8 +3803,8 @@ export function getWebviewContent(
       var copy = document.createElement('button');
       copy.type = 'button';
       copy.className = 'message-action';
-      copy.setAttribute('aria-label', 'Copy response');
-      copy.title = 'Copy';
+      copy.setAttribute('aria-label', L10N.copyResponse);
+      copy.title = L10N.copy;
       var icon = document.createElement('span');
       icon.className = 'codicon codicon-copy';
       icon.setAttribute('aria-hidden', 'true');
@@ -3840,9 +3858,11 @@ export function getWebviewContent(
       return {
         label: payload.modelLabel,
         detail: tokens > 0
-          ? payload.modelLabel + ' · ' + tokens.toLocaleString() + ' tokens (' +
-            (payload.inputTokens || 0).toLocaleString() + ' in, ' +
-            (payload.outputTokens || 0).toLocaleString() + ' out)'
+          ? pluralText(L10N.answerTokens, tokens, {
+              model: payload.modelLabel,
+              input: (payload.inputTokens || 0).toLocaleString(),
+              output: (payload.outputTokens || 0).toLocaleString(),
+            })
           : payload.modelLabel,
       };
     }
@@ -4283,7 +4303,7 @@ export function getWebviewContent(
           }
           if (b.classList.contains('apply-btn')) {
             if (pendingApplyButton && pendingApplyButton !== b) {
-              settleApplyButton('Failed', 'A newer diff proposal replaced this request.');
+              settleApplyButton(L10N.failed, L10N.newerDiffReplaced);
             }
             pendingApplyButton = b;
             b.disabled = true;
@@ -4298,7 +4318,7 @@ export function getWebviewContent(
             return;
           }
           if (!navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') {
-            b.textContent = 'Failed';
+            b.textContent = L10N.failed;
             setTimeout(function() { b.textContent = 'Copy'; }, 1500);
             return;
           }
@@ -4306,7 +4326,7 @@ export function getWebviewContent(
             b.textContent = 'Copied!';
             setTimeout(function() { b.textContent = 'Copy'; }, 1500);
           }).catch(function() {
-            b.textContent = 'Failed';
+            b.textContent = L10N.failed;
             setTimeout(function() { b.textContent = 'Copy'; }, 1500);
           });
         });
@@ -4950,7 +4970,7 @@ export function getWebviewContent(
         menuAccountName.textContent = accountSignedIn
           ? (activeAccountIdentity && (activeAccountIdentity.email || activeAccountIdentity.displayName)) || 'Signed in'
           : activeAccountStatus === 'expired'
-            ? 'Session expired'
+            ? L10N.sessionExpired
             : 'Not signed in';
       }
       if (menuAccountPlan) {
@@ -6073,7 +6093,7 @@ export function getWebviewContent(
       }
 
       else if (msg.type === 'diffProposalFailed') {
-        settleApplyButton('Failed', msg.payload.message || 'Could not open the proposed diff.');
+        settleApplyButton(L10N.failed, msg.payload.message || L10N.couldNotOpenDiff);
       }
 
       else if (msg.type === 'contextMenuState') {
@@ -6453,19 +6473,19 @@ export function getWebviewContent(
       if (oldText !== '' || newText !== '') {
         var removed = oldText === '' ? 0 : oldText.split('\\n').length;
         var added = newText === '' ? 0 : newText.split('\\n').length;
-        return '+' + added + ' −' + removed + ' lines';
+        return fillText(L10N.lineDelta, { added: added, removed: removed });
       }
       if (key === 'apply_patch') {
         var patch = toolArgument(input, ['patch', 'diff', 'content']);
         if (patch !== '') {
           var counted = countPatchLines(patch);
-          return '+' + counted.added + ' −' + counted.removed + ' lines';
+          return fillText(L10N.lineDelta, { added: counted.added, removed: counted.removed });
         }
       }
       var content = toolArgument(input, ['content', 'contents', 'text']);
       if (content !== '') {
         var written = content.split('\\n').length;
-        return written + (written === 1 ? ' line written' : ' lines written');
+        return pluralText(L10N.linesWritten, written);
       }
       return '';
     }
@@ -6504,7 +6524,7 @@ export function getWebviewContent(
           var moreEl = document.createElement('div');
           moreEl.className = 'tool-call__exit';
           moreEl.dataset.failed = '0';
-          moreEl.textContent = snippet.hidden + ' more lines not shown';
+          moreEl.textContent = pluralText(L10N.moreLinesHidden, snippet.hidden);
           section.appendChild(moreEl);
         }
         return;
@@ -6519,28 +6539,25 @@ export function getWebviewContent(
       return (value / 1000).toFixed(value < 10000 ? 1 : 0) + ' s';
     }
 
-    var COMPLETED_LABEL = ${JSON.stringify(toolCallStatusLabel('completed'))};
-    var RUNNING_LABEL = ${JSON.stringify(toolCallStatusLabel('running'))};
-
     function updateActivitySummary(latestSummary, terminal) {
       if (!toolCallStack || !activityMeta || !activitySummaryButton || !activityIcon || !toolCallList) return;
       var total = toolCallList.querySelectorAll('.tool-call').length;
       var running = toolCallList.querySelectorAll('.tool-call--pending').length;
       var errors = toolCallList.querySelectorAll('.tool-call--error').length;
       var completed = Math.max(0, total - running - errors);
-      var parts = [total + (total === 1 ? ' action' : ' actions')];
+      var parts = [pluralText(L10N.actions, total)];
       if (terminal) {
         parts.push(
           errors > 0
-            ? errors + (errors === 1 ? ' error' : ' errors')
+            ? pluralText(L10N.errors, errors)
             : toolCallStackHasError
-              ? COMPLETED_LABEL + ' with errors'
-              : COMPLETED_LABEL
+              ? L10N.completedWithErrors
+              : L10N.completed
         );
       } else {
-        if (running > 0) parts.push(running + ' ' + RUNNING_LABEL.toLowerCase());
-        if (completed > 0) parts.push(completed + ' ' + COMPLETED_LABEL.toLowerCase());
-        if (errors > 0) parts.push(errors + (errors === 1 ? ' error' : ' errors'));
+        if (running > 0) parts.push(pluralText(L10N.runningCount, running));
+        if (completed > 0) parts.push(pluralText(L10N.completedCount, completed));
+        if (errors > 0) parts.push(pluralText(L10N.errors, errors));
       }
       if (latestSummary) parts.push(latestSummary);
       activityMeta.textContent = parts.join(' · ');
@@ -6550,8 +6567,8 @@ export function getWebviewContent(
         (status === 'error' ? 'error' : status === 'done' ? 'check' : 'loading');
       activitySummaryButton.setAttribute(
         'aria-label',
-        'Activity, ' + parts.join(', ') + '. ' +
-          (activitySummaryButton.getAttribute('aria-expanded') === 'true' ? 'Collapse details' : 'Expand details')
+        L10N.activity + ', ' + parts.join(', ') + '. ' +
+          (activitySummaryButton.getAttribute('aria-expanded') === 'true' ? L10N.collapseDetails : L10N.expandDetails)
       );
     }
 
@@ -6561,7 +6578,7 @@ export function getWebviewContent(
       var stackEl = document.createElement('section');
       stackEl.className = 'activity-group tool-call-stack';
       stackEl.dataset.status = 'working';
-      stackEl.setAttribute('aria-label', 'Activity');
+      stackEl.setAttribute('aria-label', L10N.activity);
 
       var summaryButton = document.createElement('button');
       summaryButton.type = 'button';
@@ -6572,10 +6589,10 @@ export function getWebviewContent(
       iconEl.setAttribute('aria-hidden', 'true');
       var titleEl = document.createElement('span');
       titleEl.className = 'activity-group__title';
-      titleEl.textContent = 'Activity';
+      titleEl.textContent = L10N.activity;
       var metaEl = document.createElement('span');
       metaEl.className = 'activity-group__meta';
-      metaEl.textContent = 'Starting…';
+      metaEl.textContent = L10N.starting;
       var chevronEl = document.createElement('span');
       chevronEl.className = 'activity-group__chevron';
       chevronEl.textContent = '▼';
