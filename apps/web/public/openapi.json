@@ -459,6 +459,14 @@
           "max_output": {
             "type": "integer"
           },
+          "image_detail": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["auto", "low", "high", "original"]
+            },
+            "description": "The image `detail` values this model accepts, from the model registry. Present only on models the registry records; a model without it accepts `auto`, `low` and `high`."
+          },
           "capabilities": {
             "type": "object",
             "description": "What the model accepts and produces, from the model registry. `null` means the registry has no verified answer.",
@@ -561,7 +569,7 @@
                   "enum": ["system", "user", "assistant", "tool", "function"]
                 },
                 "content": {
-                  "description": "A string, or the OpenAI content-part array (`text`, `image_url`, `file`).",
+                  "description": "A string, or the OpenAI content-part array (`text`, `image_url`, `file`). An `image_url` part may set `detail` to `auto`, `low` or `high`, or to `original` on a model the registry lists for original-resolution image inspection (listed in `image_detail` by `GET /llm/v1/models`). A detail value the model does not accept answers 400 `image_detail_unsupported`.",
                   "oneOf": [
                     {
                       "type": "string"

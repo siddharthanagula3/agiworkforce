@@ -87,7 +87,7 @@ export interface TextBlock {
 export interface ImageBlock {
   type: 'image';
   source: { type: 'base64'; mediaType: string; data: string } | { type: 'url'; url: string };
-  detail?: 'auto' | 'low' | 'high';
+  detail?: 'auto' | 'low' | 'high' | 'original';
 }
 
 export interface FileBlock {
