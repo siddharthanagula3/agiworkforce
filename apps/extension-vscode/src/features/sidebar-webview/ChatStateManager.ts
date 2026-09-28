@@ -28,6 +28,7 @@ import {
   type AgentEventToolCategory,
   type AgentMode,
   type DeveloperReasoningEffort,
+  type LocalModelListResponse,
   type LocalModelSummary,
   type ThreadReadResponse,
   type ThreadSummary,
@@ -85,6 +86,8 @@ import {
   type SessionSource,
 } from '../surfaces';
 import { resolveProjectsWorkspace } from '../projects/projectsClient';
+import { SHOW_ARCHIVED_SESSIONS_COMMAND } from '../trees/sessionPickers';
+import { rememberTypedText, typedTextFor } from './typedMessages';
 import {
   CONTINUE_IN_CLOUD_COMMAND,
   OPEN_CLOUD_CODE_SESSION_COMMAND,
@@ -296,6 +299,12 @@ export type WebviewToExtMessage =
   | { type: 'clearActiveProject' }
   | { type: 'openSurface'; payload: { surfaceId: string } }
   | { type: 'requestSessions'; payload: { source: SessionListSource } }
+  | { type: 'searchSessions'; payload: { query: string } }
+  | { type: 'openArchivedSessions' }
+  | {
+      type: 'messageAction';
+      payload: { action: 'resend' | 'branch'; text: string; occurrence: number };
+    }
   | { type: 'openSessionRow'; payload: { id: string; source: SessionSource } }
   | { type: 'requestSlashCommands' }
   | { type: 'continueInCloud' }
@@ -361,7 +370,12 @@ export type ExtToWebviewMessage =
         trustMode: Exclude<DeveloperSessionTrustMode, 'unknown'>;
         provider?: string;
         transcriptTruncated: boolean;
-        messages: Array<{ role: 'user' | 'assistant'; text: string; rating?: AnswerRating }>;
+        messages: Array<{
+          role: 'user' | 'assistant';
+          text: string;
+          index?: number;
+          rating?: AnswerRating;
+        }>;
         plan?: PlanVisualization;
       };
     }
@@ -370,7 +384,12 @@ export type ExtToWebviewMessage =
       payload: {
         conversation: {
           transcriptTruncated: boolean;
-          messages: Array<{ role: 'user' | 'assistant'; text: string; rating?: AnswerRating }>;
+          messages: Array<{
+            role: 'user' | 'assistant';
+            text: string;
+            index?: number;
+            rating?: AnswerRating;
+          }>;
           plan?: PlanVisualization;
         };
         notice: string;
@@ -510,6 +529,14 @@ export type ExtToWebviewMessage =
       payload: {
         source: SessionListSource;
         rows: SessionRow[];
+        unavailable?: string;
+      };
+    }
+  | {
+      type: 'sessionsSearchResults';
+      payload: {
+        query: string;
+        rows: Array<SessionRow & { snippet?: string }>;
         unavailable?: string;
       };
     }
@@ -747,6 +774,7 @@ export class ChatStateManager {
   private _attachmentSeq = 0;
   private _clientMessageSeq = 0;
   private readonly _localModelProviders = new Map<string, LocalModelSummary['provider']>();
+  private _localServers: NonNullable<LocalModelListResponse['localServers']> = [];
   private _runtimeReady = false;
   private readonly _cliCapabilities: CliCapabilityAdapter;
   private _skillCommands: ReadonlySet<string> = new Set();
@@ -1128,6 +1156,21 @@ export class ChatStateManager {
         break;
       }
 
+      case 'searchSessions': {
+        await this._searchSessions(msg.payload.query);
+        break;
+      }
+
+      case 'openArchivedSessions': {
+        await vscode.commands.executeCommand(SHOW_ARCHIVED_SESSIONS_COMMAND);
+        break;
+      }
+
+      case 'messageAction': {
+        await this._messageAction(msg.payload);
+        break;
+      }
+
       case 'openSessionRow': {
         if (msg.payload.source === 'local') {
           await vscode.commands.executeCommand('agi-workforce.openConversation', msg.payload.id);
@@ -1373,22 +1416,33 @@ export class ChatStateManager {
           label: 'On this device',
           description: 'Ollama and LM Studio stay inside the local runtime',
           boundary: 'local',
-          models:
-            localModels.length > 0
+          models: [
+            ...(localModels.length > 0
               ? localModels.map((model) => ({
                   id: model.id,
                   label: model.id,
                   description:
                     model.provider === 'ollama' ? 'Ollama · On device' : 'LM Studio · On device',
                 }))
-              : [
-                  {
-                    id: '__local_setup__',
-                    label: 'No local models found',
-                    description: 'Start Ollama or LM Studio and load a model',
-                    disabled: true,
-                  },
-                ],
+              : this._localServers.length > 0
+                ? []
+                : [
+                    {
+                      id: '__local_setup__',
+                      label: 'No local models found',
+                      description: 'Start Ollama or LM Studio and load a model',
+                      disabled: true,
+                    },
+                  ]),
+            ...this._localServers
+              .filter((server) => localModels.length === 0 || server.health !== 'running')
+              .map((server) => ({
+                id: `__local_setup__${server.provider}`,
+                label: LOCAL_SERVER_NAMES[server.provider],
+                description: localServerHealthText(server),
+                disabled: true,
+              })),
+          ],
         });
         let currentGroup:
           | {
@@ -1472,7 +1526,7 @@ export class ChatStateManager {
 
       case 'selectModel': {
         const { modelId } = (msg as { type: 'selectModel'; payload: { modelId: string } }).payload;
-        if (modelId === '__local_setup__') break;
+        if (modelId.startsWith('__local_setup__')) break;
         const normalized = this._normalizeModelSelection(modelId);
         const tier = await resolveTier(this._context);
         if (
@@ -1782,6 +1836,53 @@ export class ChatStateManager {
         },
       });
     }
+  }
+
+  private async _searchSessions(query: string): Promise<void> {
+    const provider = this._conversationTreeProvider;
+    if (provider === undefined) {
+      this._post({
+        type: 'sessionsSearchResults',
+        payload: { query, rows: [], unavailable: t('chatNotice.historyUnavailable') },
+      });
+      return;
+    }
+    const { items: hits, failures } = await provider.searchThreads(query);
+    const snippets = new Map(
+      hits.flatMap((hit) => {
+        const [first] = hit.matches;
+        return first === undefined ? [] : [[hit.thread.id, first.snippet] as const];
+      }),
+    );
+    const rows = mergeSessionRows(
+      hits.map((hit) => ({
+        id: hit.thread.id,
+        title: hit.thread.title,
+        updatedAt: hit.thread.updatedAt,
+        source: 'local' as const,
+        ...(hit.thread.createdBy === undefined ? {} : { origin: hit.thread.createdBy }),
+        ...(hit.thread.gitBranch === undefined ? {} : { branch: hit.thread.gitBranch }),
+      })),
+    ).map((row) => {
+      const snippet = snippets.get(row.id);
+      return snippet === undefined ? row : { ...row, snippet };
+    });
+    const [failure] = failures;
+    this._post({
+      type: 'sessionsSearchResults',
+      payload: {
+        query,
+        rows,
+        ...(failure === undefined || hits.length > 0
+          ? {}
+          : {
+              unavailable: t('sessionSearch.folderFailed', {
+                folder: failure.folderName,
+                reason: failure.reason,
+              }),
+            }),
+      },
+    });
   }
 
   private async _pushSlashCommands(): Promise<void> {
@@ -2545,6 +2646,7 @@ export class ChatStateManager {
       for (const model of response.models) {
         this._localModelProviders.set(model.id, model.provider);
       }
+      this._localServers = response.localServers ?? [];
       this._runtimeReady = true;
       this._post({ type: 'runtimeStatus', payload: { status: 'ready' } });
       return response.models;
@@ -3036,6 +3138,12 @@ export class ChatStateManager {
           }
         });
       };
+      let reloadedFromDisk = false;
+      const reloadSubscription = runtime.onNotification((notification) => {
+        if (notification.method !== 'thread/reloaded') return;
+        const params = notification.params as { threadId?: unknown } | undefined;
+        if (params?.threadId === thread.id) reloadedFromDisk = true;
+      });
       const eventSubscription = runtime.onEvent((event) => {
         if (event.type === 'runtime_disconnected') {
           if (this._thread?.runtime === runtime) delete this._thread;
@@ -3181,9 +3289,13 @@ export class ChatStateManager {
         if (this._cancelRequested && !terminal) await this._interruptActiveTurn();
         await completion;
         if (this._thread?.id === thread.id && this._thread.runtime === runtime) {
-          await this._refreshLoadedConversation(runtime, thread.id);
+          await this._refreshLoadedConversation(runtime, thread.id, reloadedFromDisk, {
+            typed: request.text,
+            runtimeText,
+          });
         }
       } finally {
+        reloadSubscription.dispose();
         eventSubscription.dispose();
         if (this._activeTurn?.turnId === activeTurnId) delete this._activeTurn;
       }
@@ -3205,9 +3317,12 @@ export class ChatStateManager {
   private async _refreshLoadedConversation(
     runtime: LocalRuntimeClient,
     threadId: string,
+    announce = false,
+    sent?: { typed: string; runtimeText: string },
   ): Promise<void> {
     try {
       const response = await runtime.readThread(threadId);
+      if (sent !== undefined) await this._rememberTypedText(threadId, response, sent);
       const current = this._thread;
       if (
         current === undefined ||
@@ -3230,8 +3345,134 @@ export class ChatStateManager {
         response.thread.trustMode,
         response,
       );
+      if (announce) {
+        this._post({
+          type: 'transcriptRefreshed',
+          payload: {
+            conversation: this._loadedConversation,
+            notice: t('sessionSync.continuedElsewhere'),
+          },
+        });
+      }
     } catch (error) {
       console.warn(`[AGI Workforce] failed to refresh developer session ${threadId}`, error);
+    }
+  }
+
+  private async _rememberTypedText(
+    threadId: string,
+    response: ThreadReadResponse,
+    sent: { typed: string; runtimeText: string },
+  ): Promise<void> {
+    const sentMessage = [...response.messages]
+      .reverse()
+      .find(
+        (message) =>
+          message.role.toLowerCase() === 'user' &&
+          message.index !== undefined &&
+          message.text.includes(sent.runtimeText),
+      );
+    if (sentMessage?.index === undefined) return;
+    await rememberTypedText(
+      this._context.workspaceState,
+      threadId,
+      sentMessage.index,
+      sentMessage.text,
+      sent.typed,
+    );
+  }
+
+  private async _messageAction(action: {
+    action: 'resend' | 'branch';
+    text: string;
+    occurrence: number;
+  }): Promise<void> {
+    const thread = this._thread;
+    const loaded = this._loadedConversation;
+    if (thread === undefined || loaded === undefined || loaded.threadId !== thread.id) {
+      void vscode.window.showWarningMessage(t('messageActions.notFound'));
+      return;
+    }
+    if (this.turnInFlight()) {
+      void vscode.window.showWarningMessage(t('messageActions.stopFirst'));
+      return;
+    }
+    const target = loaded.messages
+      .filter((message) => message.role === 'user' && message.text === action.text)
+      .at(action.occurrence);
+    if (target === undefined) {
+      void vscode.window.showWarningMessage(t('messageActions.notFound'));
+      return;
+    }
+    if (target.index === undefined) {
+      void vscode.window.showWarningMessage(t('messageActions.needsUpdate'));
+      return;
+    }
+    try {
+      if (action.action === 'resend') await this._resendMessage(thread, target.index, target.text);
+      else await this._branchFromMessage(thread, loaded.title, target.index, target.text);
+    } catch (error) {
+      void vscode.window.showErrorMessage(
+        t('messageActions.failed', {
+          reason: error instanceof Error ? error.message : String(error),
+        }),
+      );
+    }
+  }
+
+  private async _resendMessage(
+    thread: DeveloperThreadState,
+    messageIndex: number,
+    text: string,
+  ): Promise<void> {
+    if (!(await thread.runtime.offers('checkpoints'))) {
+      void vscode.window.showWarningMessage(t('messageActions.needsUpdate'));
+      return;
+    }
+    const resend = t('messageActions.resend');
+    const confirmed = await vscode.window.showWarningMessage(
+      t('messageActions.resendTitle'),
+      { modal: true, detail: t('messageActions.resendDetail') },
+      resend,
+    );
+    if (confirmed !== resend || this._thread !== thread || this.turnInFlight()) return;
+    const outcome = await thread.runtime.rewindThread({
+      threadId: thread.id,
+      messageIndex,
+      restore: 'conversation',
+    });
+    if (!outcome.conversationRestored) {
+      void vscode.window.showWarningMessage(t('messageActions.notFound'));
+      return;
+    }
+    if (await this.resumeConversation(thread.id)) {
+      this._post({ type: 'composerDraft', payload: { text, references: [], submit: true } });
+    }
+  }
+
+  private async _branchFromMessage(
+    thread: DeveloperThreadState,
+    title: string,
+    messageIndex: number,
+    text: string,
+  ): Promise<void> {
+    if (messageIndex === 0) {
+      this.resetConversation();
+      this._post({ type: 'composerDraft', payload: { text, references: [] } });
+      return;
+    }
+    if (!(await thread.runtime.offers('forkAtMessage'))) {
+      void vscode.window.showWarningMessage(t('messageActions.needsUpdate'));
+      return;
+    }
+    const forked = await thread.runtime.forkThread(
+      thread.id,
+      t('messageActions.branchTitle', { title }),
+      messageIndex - 1,
+    );
+    this._conversationTreeProvider?.refresh();
+    if (await this.resumeConversation(forked.id)) {
+      this._post({ type: 'composerDraft', payload: { text, references: [] } });
     }
   }
 
@@ -3242,7 +3483,13 @@ export class ChatStateManager {
   ): ConversationLoadedPayload {
     const plan = planFromThread(response.plan, response.todos);
     const messages = normalizeTranscriptMessages(response.messages).map((message) => {
-      if (message.role !== 'assistant') return message;
+      if (message.role === 'user') {
+        const typed =
+          message.index === undefined
+            ? undefined
+            : typedTextFor(this._context.workspaceState, summary.id, message.index, message.text);
+        return typed === undefined ? message : { ...message, text: typed };
+      }
       const rating = rememberedAnswerRating(
         this._context.globalState,
         answerRatingId(summary.id, message.text),
@@ -3593,15 +3840,43 @@ function unknownBoundaryMessage(): string {
 }
 
 function normalizeTranscriptMessages(
-  messages: ReadonlyArray<{ role: string; text: string }>,
-): Array<{ role: 'user' | 'assistant'; text: string }> {
-  const normalized: Array<{ role: 'user' | 'assistant'; text: string }> = [];
+  messages: ReadonlyArray<{ role: string; text: string; index?: number }>,
+): Array<{ role: 'user' | 'assistant'; text: string; index?: number }> {
+  const normalized: Array<{ role: 'user' | 'assistant'; text: string; index?: number }> = [];
   for (const message of messages) {
     const role = message.role.toLowerCase();
     if (role !== 'user' && role !== 'assistant') continue;
-    normalized.push({ role, text: message.text });
+    normalized.push({
+      role,
+      text: message.text,
+      ...(message.index === undefined ? {} : { index: message.index }),
+    });
   }
   return normalized;
+}
+
+const LOCAL_SERVER_NAMES: Readonly<Record<LocalModelSummary['provider'], string>> = {
+  ollama: 'Ollama',
+  lmstudio: 'LM Studio',
+};
+
+function localServerHealthText(
+  server: NonNullable<LocalModelListResponse['localServers']>[number],
+): string {
+  const provider = LOCAL_SERVER_NAMES[server.provider];
+  const reason = server.message ?? t('localServers.noReason');
+  switch (server.health) {
+    case 'running':
+      return server.modelCount === 0
+        ? t('localServers.runningEmpty', { provider })
+        : tPlural('localServers.running', server.modelCount, { provider });
+    case 'not_running':
+      return t('localServers.notRunning', { provider });
+    case 'unhealthy':
+      return t('localServers.unhealthy', { provider, reason });
+    case 'blocked':
+      return t('localServers.blocked', { provider, reason });
+  }
 }
 
 function sameTranscript(

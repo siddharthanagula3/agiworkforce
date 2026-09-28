@@ -262,7 +262,7 @@ describe('translateChatRequest', () => {
             },
           ],
         },
-        { compat, provider: 'openai' },
+        { compat, provider: 'deepseek' },
       ),
     ).toThrow(/brief\.pdf.*cannot read/);
   });

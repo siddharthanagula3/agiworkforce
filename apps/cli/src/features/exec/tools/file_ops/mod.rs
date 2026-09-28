@@ -657,7 +657,8 @@ pub(super) async fn execute_write_file(
                         "Allow this file write?",
                         file_write_detail(&shown_path, content, file_path, line_count),
                     )
-                    .with_proposal(content.clone()),
+                    .with_proposal(content.clone())
+                    .saving_always_allow(true),
                 )
                 .await
                 {
@@ -940,7 +941,8 @@ pub(super) async fn execute_edit_file(
                         "Allow this edit?",
                         vec![format!("- {}", old_preview), format!("+ {}", new_preview)],
                     )
-                    .with_proposal(new_contents.clone()),
+                    .with_proposal(new_contents.clone())
+                    .saving_always_allow(true),
                 )
                 .await
                 {
@@ -1063,7 +1065,8 @@ pub(super) async fn execute_apply_patch(
                         },
                         "Apply this patch?",
                         patch.lines().take(40).map(str::to_string).collect(),
-                    ),
+                    )
+                    .saving_always_allow(true),
                 )
                 .await
                 {
@@ -1244,7 +1247,8 @@ pub(super) async fn execute_multiedit(
                         "Allow these edits?",
                         diff.lines().take(40).map(str::to_string).collect(),
                     )
-                    .with_proposal(updated.clone()),
+                    .with_proposal(updated.clone())
+                    .saving_always_allow(true),
                 )
                 .await
                 {

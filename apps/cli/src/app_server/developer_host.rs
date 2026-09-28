@@ -12,15 +12,16 @@ use agiworkforce_protocol::developer_session::{
     AccountStatusResponse, AccountTokenResponse, ActiveTurnSnapshot, AppServerCapabilities,
     AppServerClientInfo, AppServerNotification, ApprovalResponseParams, ContextInstructionsParams,
     ContextInstructionsResponse, DeveloperAgentMode, DeveloperApprovalOutcome, DeveloperMessage,
-    DeveloperReasoningEffort, DeveloperRoutingTaskType, DeveloperSessionApproval,
-    DeveloperSessionHandoff, DeveloperSessionSource, DeveloperSessionTrustMode,
-    DeveloperSessionWriter, DeveloperSessionWriterChange, HandoffAdmission,
-    HandoffAdmissionContext, HandoffEnvironment, HandoffLastTurn, HandoffLocalResource,
-    HandoffRefusal, HandoffTurnState, HookAddParams, HookListResponse, HookRemoveParams,
-    HostModelSummary, LocalModelListResponse, LocalModelProvider, LocalModelSummary, McpAddParams,
-    McpLoginParams, McpLoginResponse, McpServerConfiguredStatus, McpServerListResponse,
-    McpServerParams, McpServerTestResponse, McpServerToolsResponse, MemoryAddParams,
-    MemoryAddResponse, ModelListParams, PendingApprovalSnapshot, PluginInstallParams,
+    DeveloperReasoningEffort, DeveloperRoutingProfile, DeveloperRoutingTaskType,
+    DeveloperSessionApproval, DeveloperSessionHandoff, DeveloperSessionSource,
+    DeveloperSessionTrustMode, DeveloperSessionWriter, DeveloperSessionWriterChange,
+    HandoffAdmission, HandoffAdmissionContext, HandoffEnvironment, HandoffLastTurn,
+    HandoffLocalResource, HandoffRefusal, HandoffTurnState, HookAddParams, HookListResponse,
+    HookRemoveParams, HostModelSummary, LocalModelListResponse, LocalModelProvider,
+    LocalModelSummary, McpAddParams, McpLoginParams, McpLoginResponse, McpServerConfiguredStatus,
+    McpServerInspectResponse, McpServerListResponse, McpServerParams, McpServerTestResponse,
+    McpServerToolsResponse, MemoryAddParams, MemoryAddResponse, ModelListParams,
+    PendingApprovalSnapshot, PermissionsListResponse, PermissionsRemoveParams, PluginInstallParams,
     PluginListResponse, PluginRemoveParams, PluginSetEnabledParams, RewindSkippedFile,
     SettingsReadResponse, SettingsWriteParams, SkillConsentParams, SkillConsentResponse,
     SkillInstallParams, SkillListResponse, SkillRemoveParams, SkillSetEnabledParams,
@@ -116,6 +117,11 @@ fn account_response(snapshot: account::AccountSnapshot) -> AccountStatusResponse
         purchased_credits: snapshot.purchased_credits,
         cached: snapshot.cached,
         source: AccountSource::Cli,
+        web_search_key: crate::tools::search_key_provider().map(str::to_string),
+        web_search_logins: crate::tools::SEARCH_KEY_PROVIDERS
+            .iter()
+            .map(|provider| provider.to_string())
+            .collect(),
     }
 }
 
@@ -428,6 +434,8 @@ impl CliDeveloperSessionHost {
             approval_edits: true,
             mcp_tools: self.load_integrations,
             installs: true,
+            saved_permissions: true,
+            mcp_inspect: self.load_integrations,
         }
     }
 
@@ -879,9 +887,11 @@ impl CliDeveloperSessionHost {
         let mut image_count = 0usize;
         let mut image_bytes = 0usize;
 
+        let mut typed_parts = Vec::new();
         for item in input {
             match item {
                 UserInput::Text { text, .. } => {
+                    typed_parts.push(text_parts.len());
                     push_bounded_text_part(&mut text_parts, text, &mut text_chars, &mut text_bytes)?
                 }
                 UserInput::Image { image_url } => {
@@ -926,13 +936,20 @@ impl CliDeveloperSessionHost {
             }
         }
 
+        if let Some(index) = typed_parts
+            .into_iter()
+            .find(|index| text_parts[*index].trim_start().starts_with('/'))
+        {
+            if let Some(expanded) = surfaces::expand_prompt_command(&text_parts[index])? {
+                text_parts[index] = expanded;
+            }
+        }
         let text = text_parts.join("\n\n");
         if text.trim().is_empty() && images.is_empty() {
             return Err(DeveloperSessionHostError::invalid_request(
                 "turn input must contain text, an image, a skill, or a mention",
             ));
         }
-        let text = surfaces::expand_prompt_command(&text)?.unwrap_or(text);
         Ok(PreparedInput { text, images })
     }
 
@@ -1132,7 +1149,7 @@ impl CliDeveloperSessionHost {
         }
     }
 
-    fn resolve_thread_model(
+    async fn resolve_thread_model(
         &self,
         requested: &str,
     ) -> Result<ResolvedThreadModel, DeveloperSessionHostError> {
@@ -1144,7 +1161,13 @@ impl CliDeveloperSessionHost {
             });
         }
 
-        self.resolve_auto_thread_model(requested, DeveloperRoutingTaskType::Coding, None)
+        let account_tier = crate::tier_cache::managed_auto_routing_tier().await;
+        self.resolve_auto_thread_model(
+            requested,
+            DeveloperRoutingTaskType::Coding,
+            None,
+            account_tier,
+        )
     }
 
     fn resolve_auto_thread_model(
@@ -1152,17 +1175,14 @@ impl CliDeveloperSessionHost {
         requested: &str,
         task_type: DeveloperRoutingTaskType,
         previous: Option<&ManagedSessionAutoRouting>,
+        account_tier: &str,
     ) -> Result<ResolvedThreadModel, DeveloperSessionHostError> {
         let trust_mode = if let Some(previous) = previous {
             previous.trust_mode
         } else {
             self.configured_auto_trust_mode()?
         };
-        let tier = if trust_mode == agiworkforce_model_registry::TrustMode::Byok {
-            "byok"
-        } else {
-            "free"
-        };
+        let tier = auto_routing_tier(trust_mode, account_tier);
         let routing_task_type = registry_task_type(task_type);
         let selection = crate::model_catalog::resolve_auto_model_with_context(
             requested,
@@ -1419,7 +1439,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             .unwrap_or_else(|| self.config.default.model.clone());
         let requested_provider = params.provider.map(LocalModelProvider::as_str);
         crate::tier_cache::ensure_plan_models_cached().await;
-        let resolved_model = self.resolve_thread_model(&requested_model)?;
+        let resolved_model = self.resolve_thread_model(&requested_model).await?;
         let model = resolved_model.provider_model_id.clone();
         let title = clean_title(params.title);
         let source = source_from_client(&client);
@@ -2256,6 +2276,16 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         self.refresh_from_disk(&params.thread_id, &session, taken_over)
             .await?;
         let activity = session.lock().await.session_activity.clone();
+        let routes_automatically = params
+            .model
+            .as_deref()
+            .is_some_and(agiworkforce_model_registry::is_auto_routing_selection)
+            || session.lock().await.managed_auto_routing().is_some();
+        let account_tier = if routes_automatically {
+            crate::tier_cache::managed_auto_routing_tier().await
+        } else {
+            "free"
+        };
 
         let mut refused_turn: Option<anyhow::Error> = None;
         {
@@ -2263,18 +2293,30 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             let snapshot = TurnSetupSnapshot::capture(&agent);
             let setup_result = (|| {
                 let previous_auto = agent.managed_auto_routing().cloned();
+                let reroute =
+                    params.routing_task_type.is_some() || params.routing_profile.is_some();
                 let requested_auto = params
                     .model
                     .as_deref()
                     .filter(|model| agiworkforce_model_registry::is_auto_routing_selection(model))
                     .map(str::to_owned)
                     .or_else(|| {
-                        params
-                            .routing_task_type
-                            .and(previous_auto.as_ref().map(|state| state.selection.clone()))
+                        previous_auto
+                            .as_ref()
+                            .filter(|_| reroute)
+                            .map(|state| state.selection.clone())
+                    })
+                    .map(|selection| match params.routing_profile {
+                        Some(profile) => routing_profile_selection(profile).to_string(),
+                        None => selection,
                     });
 
                 if let Some(selection) = requested_auto {
+                    if !agiworkforce_model_registry::is_auto_routing_selection(&selection) {
+                        return Err(DeveloperSessionHostError::invalid_request(format!(
+                            "The routing profile '{selection}' is not available in this model registry"
+                        )));
+                    }
                     let task_type = params
                         .routing_task_type
                         .or_else(|| previous_auto.as_ref().map(|state| state.task_type))
@@ -2283,6 +2325,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                         &selection,
                         task_type,
                         previous_auto.as_ref(),
+                        account_tier,
                     )?;
                     Self::apply_auto_thread_model(&mut agent, resolved)?;
                 } else if let Some(model) = params.model.as_deref() {
@@ -2307,6 +2350,17 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 }
                 apply_agent_controls(&mut agent, params.agent_mode, params.reasoning_effort);
                 agent.max_turns = max_turns;
+                agent.cloud_project = params
+                    .cloud_project_id
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|project| !project.is_empty())
+                    .map(str::to_string);
+                if let Some(trust_mode) = agent.managed_auto_routing().map(|state| state.trust_mode)
+                {
+                    agent.auto_routing_tier =
+                        Some(auto_routing_tier(trust_mode, account_tier).to_string());
+                }
                 if !context_files.is_empty() {
                     let report = agent.attach_context_files(
                         context_files
@@ -3133,6 +3187,33 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         .await
     }
 
+    async fn inspect_mcp_server(
+        &self,
+        params: McpServerParams,
+    ) -> Result<McpServerInspectResponse, DeveloperSessionHostError> {
+        let _guard = self.admit_request().await?;
+        let sessions: Vec<Arc<Mutex<AgentSession>>> =
+            self.sessions.lock().await.values().cloned().collect();
+        for session in sessions {
+            let Ok(mut agent) = session.try_lock() else {
+                continue;
+            };
+            if let Some(connection) = agent
+                .mcp_manager
+                .as_mut()
+                .and_then(|manager| manager.connection_mut(&params.name))
+            {
+                return Ok(surfaces::inspect_connection(&params.name, connection, true).await);
+            }
+        }
+        surfaces::inspect_mcp_server(
+            &self.workspace_root,
+            &params.name,
+            std::time::Duration::from_secs(MCP_LOAD_TIMEOUT_SECONDS),
+        )
+        .await
+    }
+
     async fn list_mcp_server_tools(
         &self,
         params: McpServerParams,
@@ -3328,6 +3409,23 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             serde_json::json!({ "worktree": summary }),
         );
         Ok(summary)
+    }
+
+    async fn list_permissions(&self) -> Result<PermissionsListResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        tokio::task::spawn_blocking(surfaces::list_saved_permissions)
+            .await
+            .map_err(internal_error)?
+    }
+
+    async fn remove_permission(
+        &self,
+        params: PermissionsRemoveParams,
+    ) -> Result<PermissionsListResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        tokio::task::spawn_blocking(move || surfaces::remove_saved_permission(&params.id))
+            .await
+            .map_err(internal_error)?
     }
 
     async fn list_worktrees(&self) -> Result<WorktreeListResponse, DeveloperSessionHostError> {
@@ -3587,6 +3685,25 @@ async fn worktree_summary(
     })
 }
 
+fn auto_routing_tier(
+    trust_mode: agiworkforce_model_registry::TrustMode,
+    account_tier: &str,
+) -> &str {
+    if trust_mode == agiworkforce_model_registry::TrustMode::Byok {
+        "byok"
+    } else {
+        account_tier
+    }
+}
+
+fn routing_profile_selection(profile: DeveloperRoutingProfile) -> &'static str {
+    match profile {
+        DeveloperRoutingProfile::Auto => "auto",
+        DeveloperRoutingProfile::Quality => "auto-premium",
+        DeveloperRoutingProfile::Speed | DeveloperRoutingProfile::Cost => "auto-economy",
+    }
+}
+
 fn validated_max_turns(requested: Option<u32>) -> Result<Option<usize>, DeveloperSessionHostError> {
     match requested {
         Some(0) => Err(DeveloperSessionHostError::invalid_request(
@@ -3688,6 +3805,7 @@ fn approval_callback(
                     .proposal
                     .clone()
                     .filter(|content| content.len() <= MAX_PROPOSED_CONTENT_BYTES),
+                always_allow_saved: request.saves_always_allow,
             };
             let (sender, receiver) = oneshot::channel();
             pending.lock().await.insert(
@@ -3720,6 +3838,7 @@ fn approval_callback(
                     "reversible": snapshot.reversible,
                     "proposedContent": snapshot.proposed_content,
                     "editable": snapshot.proposed_content.is_some(),
+                    "alwaysAllowSaved": snapshot.always_allow_saved,
                 }),
             ) {
                 let _ = notifications.send(notification);
@@ -4442,6 +4561,7 @@ fn review_to_approval_decision(decision: ReviewDecision) -> ApprovalDecision {
         ReviewDecision::Approved => ApprovalDecision::AllowOnce,
         ReviewDecision::ApprovedExecpolicyAmendment { .. } => ApprovalDecision::AlwaysAllow,
         ReviewDecision::ApprovedForSession => ApprovalDecision::AllowSession,
+        ReviewDecision::AlwaysAllow => ApprovalDecision::AlwaysAllow,
         ReviewDecision::NetworkPolicyAmendment {
             network_policy_amendment,
         } => match network_policy_amendment.action {
@@ -4965,6 +5085,8 @@ mod tests {
                 context_files: None,
                 client_turn_id: None,
                 max_turns: None,
+                routing_profile: None,
+                cloud_project_id: None,
             })
             .await
             .expect_err("unknown authority must not start a turn");
@@ -5844,7 +5966,12 @@ mod tests {
         )
         .expect("managed host");
         let previous = host
-            .resolve_auto_thread_model("auto-premium", DeveloperRoutingTaskType::General, None)
+            .resolve_auto_thread_model(
+                "auto-premium",
+                DeveloperRoutingTaskType::General,
+                None,
+                "free",
+            )
             .expect("general route")
             .auto_routing
             .expect("persisted general Auto state");
@@ -5854,6 +5981,7 @@ mod tests {
                 "auto-premium",
                 DeveloperRoutingTaskType::Coding,
                 Some(&previous),
+                "free",
             )
             .expect("coding route");
 
@@ -5902,6 +6030,7 @@ mod tests {
                 "auto-economy",
                 DeveloperRoutingTaskType::Coding,
                 Some(&previous),
+                "byok",
             )
             .expect("coding route");
 
@@ -6008,6 +6137,8 @@ mod tests {
                 context_files: None,
                 client_turn_id: None,
                 max_turns: None,
+                routing_profile: None,
+                cloud_project_id: None,
             })
             .await
             .expect("next Auto turn");
@@ -6174,6 +6305,8 @@ mod tests {
                 context_files: None,
                 client_turn_id: None,
                 max_turns: None,
+                routing_profile: None,
+                cloud_project_id: None,
             })
             .await;
         if result.is_ok() {
@@ -7160,6 +7293,8 @@ mod tests {
                 context_files: None,
                 client_turn_id: None,
                 max_turns: None,
+                routing_profile: None,
+                cloud_project_id: None,
             })
             .await
             .expect_err("a saturated host must refuse another turn");
@@ -7390,6 +7525,8 @@ mod tests {
                 context_files: None,
                 client_turn_id: None,
                 max_turns: None,
+                routing_profile: None,
+                cloud_project_id: None,
             })
             .await
             .expect_err("a live writer elsewhere must refuse the turn");
@@ -7505,6 +7642,8 @@ mod tests {
             context_files: None,
             client_turn_id: client_turn_id.map(str::to_string),
             max_turns: None,
+            routing_profile: None,
+            cloud_project_id: None,
         };
 
         let replayed = host
@@ -7588,6 +7727,7 @@ mod tests {
                     risk_level: Some(AgentEventApprovalRiskLevel::Medium),
                     reversible: Some(false),
                     proposed_content: None,
+                    always_allow_saved: false,
                 },
                 responder,
             },

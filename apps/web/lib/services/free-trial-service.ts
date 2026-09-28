@@ -24,6 +24,11 @@ import {
 import { LLMCostCalculator, type TokenUsage } from '@/lib/services/llm-cost-calculator';
 import { recordSettledProviderCost } from '@/lib/services/cogs-ledger-service';
 import { ledgerCentsFromMicrousd } from '@/lib/services/credit-service';
+import {
+  attemptErrorClass,
+  type GenerationAttempt,
+  type GenerationAttemptOutcome,
+} from '@/lib/services/generation-attempt';
 
 export const FREE_TRIAL_INTERNAL_USAGE_POLICY = Object.freeze({
   fiveHourBudgetMicrousd: getPlanFiveHourUsageBudgetMicrousd('free'),
@@ -48,6 +53,8 @@ export type FreeTrialReservation = {
 };
 
 type FreeTrialSettlementOutcome = 'completed' | 'failed' | 'cancelled';
+
+export const FREE_BUDGET_REACHED_ERROR_CLASS = 'free_trial_token_budget_reached';
 
 export type FreeTrialCost = { tokenMicrousd: number; toolMicrousd: number };
 
@@ -496,6 +503,36 @@ export async function freeTrialResetAt(userId: string): Promise<string | null> {
   }
 }
 
+async function insertFreeReservation(
+  tx: DatabaseAdapter,
+  params: {
+    userId: string;
+    requestId: string;
+    leaseSeconds: number;
+    provider: string;
+    model: string;
+    conversationId?: string;
+  },
+  reservedMicrousd: number,
+): Promise<void> {
+  const reserved = await tx.execute(
+    `insert into public.free_daily_usage_reservations
+       (user_id, request_id, window_started_at, reserved_microusd,
+        lease_expires_at, provider, model, conversation_id)
+     values ($1, $2, now(), $3, now() + make_interval(secs => $4), $5, $6, $7::uuid)`,
+    [
+      params.userId,
+      params.requestId,
+      reservedMicrousd,
+      params.leaseSeconds,
+      params.provider,
+      params.model,
+      params.conversationId ?? null,
+    ],
+  );
+  if (reserved !== 1) throw new Error('Free-tier usage reservation failed');
+}
+
 export async function beginFreeTrialRequest(params: {
   userId: string;
   requestId: string;
@@ -506,6 +543,7 @@ export async function beginFreeTrialRequest(params: {
   leaseSeconds: number;
   provider: string;
   model: string;
+  conversationId?: string;
 }): Promise<ReserveResult> {
   const db = createClaimedUserScopedDb(getNeonDb(), {
     userId: params.userId,
@@ -558,6 +596,7 @@ export async function beginFreeTrialRequest(params: {
       if (params.freePoolRoute !== true) {
         return { ok: false, code: 'budget_reached', resetAt: bindingResetAt(snapshot) };
       }
+      await insertFreeReservation(tx, params, 0);
       return {
         ok: true,
         reservation: {
@@ -570,21 +609,7 @@ export async function beginFreeTrialRequest(params: {
       };
     }
 
-    const reserved = await tx.execute(
-      `insert into public.free_daily_usage_reservations
-         (user_id, request_id, window_started_at, reserved_microusd,
-          lease_expires_at, provider, model)
-       values ($1, $2, now(), $3, now() + make_interval(secs => $4), $5, $6)`,
-      [
-        params.userId,
-        params.requestId,
-        reserveMicrousd,
-        params.leaseSeconds,
-        params.provider,
-        params.model,
-      ],
-    );
-    if (reserved !== 1) throw new Error('Free-tier usage reservation failed');
+    await insertFreeReservation(tx, params, reserveMicrousd);
 
     return {
       ok: true,
@@ -608,11 +633,45 @@ export async function beginFreeTrialRequest(params: {
 
   const eventBudget = await reserveEventSpend(userReservation.reservation.reservedMicrousd);
   if (!eventBudget) {
-    await settleFreeTrialRequest({ reservation: userReservation.reservation, outcome: 'failed' });
+    await settleFreeTrialRequest({
+      reservation: userReservation.reservation,
+      outcome: 'failed',
+      attempt: { outcome: 'failed', errorClass: FREE_BUDGET_REACHED_ERROR_CLASS },
+    });
     return { ok: false, code: 'budget_reached', resetAt: null };
   }
 
   return { ok: true, reservation: { ...userReservation.reservation, eventBudget } };
+}
+
+async function settleUnmeteredFreeTurn(
+  reservation: FreeTrialReservation,
+  outcome: FreeTrialSettlementOutcome,
+  attemptOutcome: GenerationAttemptOutcome | null,
+  errorClass: string | null,
+): Promise<void> {
+  const db = createClaimedUserScopedDb(getNeonDb(), {
+    userId: reservation.userId,
+    organizationId: null,
+  });
+  try {
+    await db.execute(
+      `update public.free_daily_usage_reservations
+          set actual_cost_microusd = 0,
+              outcome = $3,
+              settled_at = now(),
+              attempt_outcome = $4,
+              attempt_error_class = $5
+        where user_id = $1 and request_id = $2
+          and reserved_microusd = 0 and settled_at is null`,
+      [reservation.userId, reservation.requestId, outcome, attemptOutcome, errorClass],
+    );
+  } catch (error) {
+    logger.warn(
+      { error, userId: reservation.userId, requestId: reservation.requestId },
+      'Free-pool turn outcome could not be recorded',
+    );
+  }
 }
 
 export async function settleFreeTrialRequest(params: {
@@ -622,8 +681,15 @@ export async function settleFreeTrialRequest(params: {
   model?: string;
   usage?: TokenUsage;
   cost?: FreeTrialCost;
+  attempt?: GenerationAttempt | null;
 }): Promise<void> {
-  if (params.reservation.reservedMicrousd <= 0) return;
+  const attempt = params.attempt === undefined ? { outcome: params.outcome } : params.attempt;
+  const attemptOutcome = attempt?.outcome ?? null;
+  const errorClass = attempt ? attemptErrorClass(attempt) : null;
+  if (params.reservation.reservedMicrousd <= 0) {
+    await settleUnmeteredFreeTurn(params.reservation, params.outcome, attemptOutcome, errorClass);
+    return;
+  }
 
   const usage = params.usage ?? { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
   const tokens = Math.max(0, Math.floor(usage.totalTokens));
@@ -686,7 +752,9 @@ export async function settleFreeTrialRequest(params: {
            update public.free_daily_usage_reservations
            set actual_cost_microusd = $3,
                outcome = $4,
-               settled_at = now()
+               settled_at = now(),
+               attempt_outcome = $6,
+               attempt_error_class = $7
            where user_id = $1 and request_id = $2 and settled_at is null
            returning 1
          )
@@ -700,6 +768,8 @@ export async function settleFreeTrialRequest(params: {
           costMicrousd,
           params.outcome,
           metadata,
+          attemptOutcome,
+          errorClass,
         ],
       );
       settledCostMicrousd = costMicrousd;
@@ -757,7 +827,8 @@ export async function releaseExpiredFreeTrialReservations(
                  reservation.provider, reservation.model`,
       [limit],
     );
-    if (released.length > 0) {
+    const metered = released.filter((row) => toNonNegativeInteger(row.reserved_microusd) > 0);
+    if (metered.length > 0) {
       await tx.execute(
         `insert into public.usage_events (user_id, event_type, quantity, metadata)
          select released.user_id, 'website_auto_economy_trial_usage_settled', 0,
@@ -765,7 +836,7 @@ export async function releaseExpiredFreeTrialReservations(
                                    'recordedTokens', 0, 'leaseExpired', true)
            from unnest($1::text[], $2::text[]) as released(user_id, request_id)
          on conflict do nothing`,
-        [released.map((row) => row.user_id), released.map((row) => row.request_id)],
+        [metered.map((row) => row.user_id), metered.map((row) => row.request_id)],
       );
     }
     return released;
@@ -774,6 +845,7 @@ export async function releaseExpiredFreeTrialReservations(
   let absorbedMicrousd = 0;
   for (const row of rows) {
     const reservedMicrousd = toNonNegativeInteger(row.reserved_microusd);
+    if (reservedMicrousd === 0) continue;
     absorbedMicrousd += reservedMicrousd;
     await recordSettledProviderCost({
       userId: row.user_id,

@@ -95,8 +95,11 @@
       "name": "Services",
       "path": "services",
       "owner": "Backend/data lead",
-      "purpose": "API gateway, signaling server, future managed compute services",
-      "primaryChecks": ["pnpm --filter @agiworkforce/signaling-server test"],
+      "purpose": "API gateway, signaling server, upload malware scanner, future managed compute services",
+      "primaryChecks": [
+        "pnpm --filter @agiworkforce/signaling-server test",
+        "pnpm --filter @agiworkforce/upload-scanner test"
+      ],
       "rule": "Services must not import UI packages."
     },
     {
@@ -1161,6 +1164,17 @@
       "status": "active",
       "action": "keep",
       "evidence": ["services/signaling-server/src/index.ts"]
+    },
+    {
+      "path": "services/upload-scanner",
+      "kind": "service",
+      "canonicalOwner": "Security and privacy platform",
+      "consumers": ["apps/web"],
+      "deployability": "deployable-service",
+      "trustBoundary": "malware verdicts for user uploads without sending them to a third party",
+      "status": "active",
+      "action": "keep",
+      "evidence": ["services/upload-scanner/src/server.ts", "apps/web/lib/security/upload-scan.ts"]
     },
     {
       "path": "tools/skill-vetting",

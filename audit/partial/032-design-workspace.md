@@ -61,6 +61,6 @@ Code: `apps/cli/src/cloud/artifacts.rs:212-216`, `apps/cli/src/lib.rs:1034-1043`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Earlier versions can be paged through and restored (restore appends as newest); there is no side-by-side or diff comparison of two versions. | ui |
+| mobile | partial | billing/no-yearly 207d2a676e: the version diff is shared from @agiworkforce/artifacts and mobile has diff fill and text roles with contrast cases. The mobile viewer's Show changes toggle and diff view (word diff for prose, line diff for code, off each time a version opens, spoken markers for screen readers) are in post-codex/no-yearly-s32-34-mobile-show-changes.patch because ArtifactFullScreen is held; checked with git apply --check against the Codex working copy and typechecked against this branch | ui |
 
-Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:573-580`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:279-285`
+Code: `packages/platform/artifacts/src/artifact-changes.ts:166-166`, `apps/mobile/src/ui/theme/tokens.ts:38-38`, `apps/mobile/__tests__/theme-contrast.test.ts:77-77`

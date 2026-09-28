@@ -11,13 +11,14 @@ use agiworkforce_protocol::developer_session::{
     HookAddParams, HookConfigScope, HookListResponse, HookRemoveParams, HookSummary,
     InstructionFile, InstructionFileKind, LocalModelProvider, LocalServerHealth, LocalServerStatus,
     McpAddParams, McpPromptArgumentSummary, McpPromptSummary, McpRemoteTransport,
-    McpResourceSummary, McpServerConfiguredStatus, McpServerListResponse, McpServerParams,
-    McpServerScope, McpServerSummary, McpServerTestResponse, McpServerToolsResponse,
-    McpToolSummary, MemoryAddParams, MemoryAddResponse, MemoryScope, PluginInstallParams,
-    PluginListResponse, PluginRemoveParams, PluginScope, PluginSummary, SettingsReadResponse,
-    SettingsWriteParams, SkillCatalogScope, SkillConsentResponse, SkillInstallParams,
-    SkillListResponse, SkillRemoveParams, SkillSummary, SlashCommandListResponse,
-    SlashCommandResultKind, SlashCommandRunResponse, SlashCommandSummary,
+    McpResourceSummary, McpServerConfiguredStatus, McpServerInspectResponse, McpServerListResponse,
+    McpServerParams, McpServerScope, McpServerSummary, McpServerTestResponse,
+    McpServerToolsResponse, McpToolSummary, MemoryAddParams, MemoryAddResponse, MemoryScope,
+    PermissionsListResponse, PluginInstallParams, PluginListResponse, PluginRemoveParams,
+    PluginScope, PluginSummary, SavedPermission, SavedPermissionDecision, SavedPermissionKind,
+    SettingsReadResponse, SettingsWriteParams, SkillCatalogScope, SkillConsentResponse,
+    SkillInstallParams, SkillListResponse, SkillRemoveParams, SkillSummary,
+    SlashCommandListResponse, SlashCommandResultKind, SlashCommandRunResponse, SlashCommandSummary,
 };
 use std::path::{Path, PathBuf};
 
@@ -481,18 +482,31 @@ pub fn list_commands(workspace_root: &Path) -> SlashCommandListResponse {
         .map(|entry| entry.skill)
         .collect();
     let registry = registry_from_builtins_skills_and_prompts(&catalog, &[]);
+    let custom: std::collections::HashSet<String> =
+        crate::custom_commands::discover_custom_slash_commands()
+            .into_iter()
+            .map(|command| command.name.to_ascii_lowercase())
+            .collect();
 
     let mut commands: Vec<SlashCommandSummary> = registry
         .commands()
         .iter()
         .filter(|command| command.user_invocable)
-        .map(|command| SlashCommandSummary {
-            name: command.name.clone(),
-            description: command.description.clone(),
-            args_hint: command.argument_hint.clone(),
-            source: command_source(command),
-            aliases: command.aliases.clone(),
-            runnable: RUNNABLE_COMMANDS.contains(&command.name.as_str()),
+        .map(|command| {
+            let source = command_source(command);
+            SlashCommandSummary {
+                name: command.name.clone(),
+                description: command.description.clone(),
+                args_hint: command.argument_hint.clone(),
+                source,
+                aliases: command.aliases.clone(),
+                runnable: RUNNABLE_COMMANDS.contains(&command.name.as_str()),
+                prompt: source == CommandSourceKind::Skill
+                    || custom.contains(&command.name.to_ascii_lowercase())
+                    || BUILTIN_PROMPTS
+                        .iter()
+                        .any(|(name, _)| *name == command.name.as_str()),
+            }
         })
         .collect();
     commands.sort_by(|left, right| left.name.cmp(&right.name));
@@ -639,6 +653,79 @@ pub async fn test_mcp_server(
         elapsed_ms: elapsed_ms(started),
         tool_count,
         error,
+    })
+}
+
+pub async fn inspect_connection(
+    name: &str,
+    connection: &mut crate::mcp::McpConnection,
+    live: bool,
+) -> McpServerInspectResponse {
+    let responding = connection.responding().await;
+    let negotiated = connection.negotiated();
+    let mut capabilities: Vec<String> = negotiated
+        .capabilities
+        .as_object()
+        .map(|advertised| advertised.keys().cloned().collect())
+        .unwrap_or_default();
+    capabilities.sort();
+    let protocol_version =
+        Some(negotiated.protocol_version.clone()).filter(|version| !version.is_empty());
+    let server_name = negotiated
+        .server_info
+        .as_ref()
+        .map(|info| info.name.clone());
+    let server_version = negotiated
+        .server_info
+        .as_ref()
+        .map(|info| info.version.clone());
+    let instructions = negotiated.instructions.clone();
+    McpServerInspectResponse {
+        name: name.to_string(),
+        connected: true,
+        live,
+        responding,
+        protocol_version,
+        server_name,
+        server_version,
+        capabilities,
+        instructions,
+        logs: connection.recent_logs(),
+        error: None,
+    }
+}
+
+pub async fn inspect_mcp_server(
+    workspace_root: &Path,
+    name: &str,
+    limit: std::time::Duration,
+) -> Result<McpServerInspectResponse, DeveloperSessionHostError> {
+    let server = startable_server(workspace_root, name)?;
+    let outcome = tokio::time::timeout(limit, async {
+        let mut connection =
+            crate::mcp::McpConnection::connect(&server.name, &server.config).await?;
+        let report = inspect_connection(&server.name, &mut connection, false).await;
+        let _ = connection.shutdown().await;
+        anyhow::Ok(report)
+    })
+    .await;
+    let error = match outcome {
+        Ok(Ok(report)) => return Ok(report),
+        Ok(Err(error)) => format!("{error:#}"),
+        Err(_) => format!("it did not answer within {} seconds", limit.as_secs()),
+    };
+    Ok(McpServerInspectResponse {
+        name: server.name,
+        connected: false,
+        live: false,
+        responding: false,
+        protocol_version: None,
+        server_name: None,
+        server_version: None,
+        capabilities: Vec::new(),
+        instructions: None,
+        logs: Vec::new(),
+        error: Some(error),
     })
 }
 
@@ -903,6 +990,108 @@ pub fn remove_hook(
     Ok(list_hooks(workspace_root))
 }
 
+pub fn list_saved_permissions() -> Result<PermissionsListResponse, DeveloperSessionHostError> {
+    let store = crate::permissions::PermissionStore::load().map_err(internal)?;
+    let mut permissions = Vec::new();
+    for (scope, rules, decision) in [
+        ("allow", &store.always_allow, SavedPermissionDecision::Allow),
+        ("deny", &store.always_deny, SavedPermissionDecision::Deny),
+    ] {
+        let mut rules: Vec<&String> = rules.iter().collect();
+        rules.sort();
+        for rule in rules {
+            let (kind, label) = match rule
+                .strip_prefix("file:")
+                .and_then(|rest| rest.split_once(':'))
+            {
+                Some((operation, path)) => (
+                    SavedPermissionKind::File,
+                    format!("{} {path}", file_operation_label(operation)),
+                ),
+                None => (SavedPermissionKind::Command, rule.clone()),
+            };
+            permissions.push(SavedPermission {
+                id: saved_permission_id(scope, rule),
+                kind,
+                label,
+                decision,
+            });
+        }
+    }
+    for rule in crate::features::exec::exec_policy::user_approved_rules().map_err(internal)? {
+        permissions.push(SavedPermission {
+            id: saved_permission_id("exec_policy", &rule.line),
+            kind: SavedPermissionKind::ExecPolicy,
+            label: rule.prefix.join(" "),
+            decision: if rule.allow {
+                SavedPermissionDecision::Allow
+            } else {
+                SavedPermissionDecision::Deny
+            },
+        });
+    }
+    Ok(PermissionsListResponse { permissions })
+}
+
+pub fn remove_saved_permission(
+    id: &str,
+) -> Result<PermissionsListResponse, DeveloperSessionHostError> {
+    let mut store = crate::permissions::PermissionStore::load().map_err(internal)?;
+    let stored = [("allow", false), ("deny", true)]
+        .into_iter()
+        .find_map(|(scope, deny)| {
+            let rules = if deny {
+                &store.always_deny
+            } else {
+                &store.always_allow
+            };
+            rules
+                .iter()
+                .find(|rule| saved_permission_id(scope, rule) == id)
+                .map(|rule| (deny, rule.clone()))
+        });
+    let removed = if let Some((deny, rule)) = stored {
+        if deny {
+            store.always_deny.remove(&rule);
+        } else {
+            store.always_allow.remove(&rule);
+        }
+        store.save().map_err(internal)?;
+        true
+    } else {
+        match crate::features::exec::exec_policy::user_approved_rules()
+            .map_err(internal)?
+            .into_iter()
+            .find(|rule| saved_permission_id("exec_policy", &rule.line) == id)
+        {
+            Some(rule) => crate::features::exec::exec_policy::remove_user_approved_rule(&rule.line)
+                .map_err(internal)?,
+            None => false,
+        }
+    };
+    if !removed {
+        return Err(DeveloperSessionHostError::not_found(
+            "No saved approval has that id; list them again",
+        ));
+    }
+    list_saved_permissions()
+}
+
+fn saved_permission_id(scope: &str, rule: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let digest = Sha256::digest(format!("{scope}\n{rule}").as_bytes());
+    crate::hex::encode(&digest[..8])
+}
+
+fn file_operation_label(operation: &str) -> &str {
+    match operation {
+        "write" => "Write",
+        "edit" | "multiedit" => "Edit",
+        "patch" => "Patch",
+        other => other,
+    }
+}
+
 pub fn expand_prompt_command(text: &str) -> Result<Option<String>, DeveloperSessionHostError> {
     let invocation = text.trim_start();
     if !invocation.starts_with('/') {
@@ -914,11 +1103,34 @@ pub fn expand_prompt_command(text: &str) -> Result<Option<String>, DeveloperSess
     let (command, args) = invocation
         .split_once(char::is_whitespace)
         .unwrap_or((invocation, ""));
+    if let Some(prompt) = builtin_prompt_command(command.trim_start_matches('/'), args) {
+        return Ok(Some(prompt));
+    }
     match skills::skill_command_prompt(command.trim_start_matches('/'), args) {
         Some(Ok(prompt)) => Ok(Some(prompt)),
         Some(Err(reason)) => Err(invalid(reason)),
         None => Ok(None),
     }
+}
+
+const BUILTIN_PROMPTS: [(&str, fn(&str) -> String); 7] = [
+    ("review", crate::claude_parity::review_prompt),
+    (
+        "security-review",
+        crate::claude_parity::security_review_prompt,
+    ),
+    ("pr-comments", crate::claude_parity::pr_comments_prompt),
+    ("ultrareview", crate::claude_parity::ultrareview_prompt),
+    ("think-back", crate::claude_parity::think_back_prompt),
+    ("recap", crate::claude_parity::recap_prompt),
+    ("powerup", crate::claude_parity::powerup_prompt),
+];
+
+fn builtin_prompt_command(command: &str, args: &str) -> Option<String> {
+    BUILTIN_PROMPTS
+        .iter()
+        .find(|(name, _)| *name == command)
+        .map(|(_, prompt)| prompt(args))
 }
 
 // ---------------------------------------------------------------------------

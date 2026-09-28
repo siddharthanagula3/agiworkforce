@@ -202,6 +202,7 @@ async function refundFailedReservation(
     await settleFreeTrialRequest({
       reservation: processed.freeTrial,
       outcome: 'failed',
+      attempt: { outcome: 'failed', errorClass },
     });
     return;
   }
@@ -688,7 +689,12 @@ async function dispatchChatCompletions(
           isCancellationRequested: () =>
             isCloudAgentRunCancellationRequested(runDb, { userId, runId: run.id }),
           isPauseRequested: () => isCloudAgentRunPauseRequested(runDb, { userId, runId: run.id }),
-          takeSteerMessages: () => takeCloudAgentRunSteers(runDb, { userId, runId: run.id }),
+          takeSteerMessages: () =>
+            takeCloudAgentRunSteers(runDb, {
+              userId,
+              organizationId: processed.organizationId ?? null,
+              runId: run.id,
+            }),
           // AUDIT-FIX BUG-1: a client cancel now aborts the in-flight upstream
           // request instead of billing a full research run nobody sees.
           signal: request.signal,

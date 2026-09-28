@@ -1,7 +1,13 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import {
+  CONNECTOR_REF_PATTERN,
+  SaveConnectorCredentialRequestSchema,
+  type ConnectorCredentialStatusResponse,
+  type ConnectorProbeFailureResponse,
+  type SaveConnectorCredentialResponse,
+} from '@agiworkforce/cloud-contracts';
 
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -46,18 +52,14 @@ export const runtime = 'nodejs';
 
 const CONNECTOR_SCOPE = { resolveOrganization: false } as const;
 const RATE_LIMIT_BUCKET = 'chat-conversation';
-const CONNECTOR_REF_RE = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$/;
-const API_KEY_MAX_LENGTH = 4096;
 const HEADER_PLACEMENT = 'header';
 const CUSTOM_AUDIT_RESOURCE_TYPE = 'custom_mcp_connector';
 const DIRECTORY_AUDIT_SOURCE = 'directory';
 const NOT_FOUND_MESSAGE = 'Connector directory entry not found';
 
-const BodySchema = z.object({ apiKey: z.string().trim().min(1).max(API_KEY_MAX_LENGTH) });
-
 async function requireTarget(context: { params: Promise<{ connectorId: string }> }) {
   const { connectorId } = await context.params;
-  if (!CONNECTOR_REF_RE.test(connectorId))
+  if (!CONNECTOR_REF_PATTERN.test(connectorId))
     throw createError.validation('Invalid connector identifier');
   const target = await resolveDirectoryTarget(connectorId);
   if (!target) throw createError.notFound(NOT_FOUND_MESSAGE);
@@ -95,7 +97,7 @@ async function handleGet(
       documentationUrl: target.documentationUrl,
       connected: existing !== null,
       ...specView(spec),
-    },
+    } satisfies ConnectorCredentialStatusResponse,
     { headers: { 'Cache-Control': 'private, no-store' } },
   );
 }
@@ -132,7 +134,9 @@ async function handlePost(
   });
   if (!policyDecision.allowed) throw createError.forbidden(policyDecision.reason);
 
-  const parsedBody = BodySchema.safeParse(await request.json().catch(() => null));
+  const parsedBody = SaveConnectorCredentialRequestSchema.safeParse(
+    await request.json().catch(() => null),
+  );
   if (!parsedBody.success) throw createError.validation('apiKey is required');
   const { apiKey } = parsedBody.data;
 
@@ -167,7 +171,10 @@ async function handlePost(
         ? edgeBlockedMessage(target.name)
         : `${target.name} could not be reached: ${error.message}`;
       const code = error.edgeBlocked ? CONNECTOR_BLOCKED_CODE : CONNECTOR_UNREACHABLE_CODE;
-      return NextResponse.json({ error: { code, message }, message }, { status: 502 });
+      return NextResponse.json(
+        { error: { code, message }, message } satisfies ConnectorProbeFailureResponse,
+        { status: 502 },
+      );
     }
     throw error;
   }
@@ -228,7 +235,7 @@ async function handlePost(
       capabilityCounts: probe.capabilityCounts,
       protocolEra: probe.protocolEra,
       ...specView(spec),
-    },
+    } satisfies SaveConnectorCredentialResponse,
     { status: existing ? 200 : 201, headers: { 'Cache-Control': 'private, no-store' } },
   );
 }

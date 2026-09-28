@@ -5,6 +5,7 @@
  * @module features/settings/hooks/use-settings-queries
  */
 
+import { translateUiPlural } from '@agiworkforce/ui';
 import { useCallback, type ReactElement } from 'react';
 import { useRouter } from 'next/navigation';
 import { signedOutRedirectUrl, useSignOut } from '@/lib/identity/client';
@@ -1815,7 +1816,10 @@ export function useSetSharedProjectMembersAccess(): UseMutationResult<
     },
     onSuccess: (_result, { userIds }) => {
       toast.success(
-        userIds.length === 1 ? 'Access updated' : `Access updated for ${userIds.length} people`,
+        translateUiPlural('settings', 'counts.accessUpdated', userIds.length, {
+          one: 'Access updated',
+          other: 'Access updated for {{count}} people',
+        }),
       );
     },
     onError: (error: Error) =>

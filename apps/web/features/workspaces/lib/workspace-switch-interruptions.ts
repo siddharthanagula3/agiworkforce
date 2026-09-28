@@ -1,5 +1,6 @@
 'use client';
 
+import { translateUiPlural } from '@agiworkforce/ui';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { useToolStore } from '@shared/stores/tool-store';
 import { isArtifactPersistenceDegraded } from '@features/chat/stores/artifacts-store';
@@ -53,19 +54,24 @@ export function describeWorkspaceInterruptions(
   if (snapshot.unsentDraftCount > 0) {
     interruptions.push({
       kind: 'draft',
-      description:
-        snapshot.unsentDraftCount === 1
-          ? 'You have an unsent message.'
-          : `You have ${snapshot.unsentDraftCount} unsent messages.`,
+      description: translateUiPlural('common', 'counts.unsentMessages', snapshot.unsentDraftCount, {
+        one: 'You have an unsent message.',
+        other: 'You have {{count}} unsent messages.',
+      }),
     });
   }
   if (snapshot.activeUploadCount > 0) {
     interruptions.push({
       kind: 'upload',
-      description:
-        snapshot.activeUploadCount === 1
-          ? 'A file is still uploading.'
-          : `${snapshot.activeUploadCount} files are still uploading.`,
+      description: translateUiPlural(
+        'common',
+        'counts.filesUploading',
+        snapshot.activeUploadCount,
+        {
+          one: 'A file is still uploading.',
+          other: '{{count}} files are still uploading.',
+        },
+      ),
     });
   }
   if (snapshot.replyInFlight) {
@@ -83,10 +89,15 @@ export function describeWorkspaceInterruptions(
   if (snapshot.pendingApprovalCount > 0) {
     interruptions.push({
       kind: 'approval',
-      description:
-        snapshot.pendingApprovalCount === 1
-          ? 'A tool is waiting for your approval.'
-          : `${snapshot.pendingApprovalCount} tools are waiting for your approval.`,
+      description: translateUiPlural(
+        'common',
+        'counts.toolsAwaitingApproval',
+        snapshot.pendingApprovalCount,
+        {
+          one: 'A tool is waiting for your approval.',
+          other: '{{count}} tools are waiting for your approval.',
+        },
+      ),
     });
   }
   if (snapshot.artifactUnsaved) {

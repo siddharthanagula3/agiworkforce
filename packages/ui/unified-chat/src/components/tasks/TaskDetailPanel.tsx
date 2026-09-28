@@ -22,7 +22,7 @@ import {
   type LucideProps,
 } from 'lucide-react';
 import { useEffect, useRef, useState, type ComponentType, type RefObject } from 'react';
-import type { CloudAgentRun } from '@agiworkforce/cloud-contracts';
+import type { CloudAgentRun, CloudAgentRunSteer } from '@agiworkforce/cloud-contracts';
 import { formatDeliverableTypeLine } from '@agiworkforce/types';
 import type { AgentEventEnvelope, AgentEventToolCategory } from '@agiworkforce/types/protocol';
 import {
@@ -40,7 +40,7 @@ import {
   type AgentActivityState,
   type AgentActivityToolEntry,
 } from '@agiworkforce/client-runtime';
-import { Button } from '@agiworkforce/ui';
+import { Button, translateUiPlural } from '@agiworkforce/ui';
 import { cn } from '../../lib/utils';
 import {
   type AgiWorkExcludedTool,
@@ -361,7 +361,11 @@ function TaskCostSection({ run }: { run: CloudAgentRun }) {
             {usage.reasoningTokens > 0
               ? ` · ${formatTaskTokens(usage.reasoningTokens)} reasoning`
               : ''}{' '}
-            · {usage.providerCalls} model {usage.providerCalls === 1 ? 'call' : 'calls'}
+            ·{' '}
+            {translateUiPlural('chat', 'counts.modelCalls', usage.providerCalls, {
+              one: '{{count}} model call',
+              other: '{{count}} model calls',
+            })}
           </p>
           {live ? (
             <p className="mt-1.5 text-caption text-muted-foreground">
@@ -393,6 +397,7 @@ export interface TaskDetailPanelProps {
   onRerun?(goal: AgiWorkRerunGoal): void;
   onShare?(conversationId: string): void;
   onSteer?(message: string): Promise<void>;
+  onSendSteerAsMessage?(steer: CloudAgentRunSteer): Promise<void>;
 }
 
 export function TaskDetailPanel({
@@ -408,6 +413,7 @@ export function TaskDetailPanel({
   onRerun,
   onShare,
   onSteer,
+  onSendSteerAsMessage,
 }: TaskDetailPanelProps) {
   const isMobileTakeover = useIsNarrowViewport(MOBILE_TAKEOVER_QUERY);
   const panelRef = useRef<HTMLElement | null>(null);
@@ -787,7 +793,12 @@ export function TaskDetailPanel({
         </p>
       ) : null}
 
-      <TaskSteerSection key={run.id} run={run} onSteer={onSteer} />
+      <TaskSteerSection
+        key={run.id}
+        run={run}
+        onSteer={onSteer}
+        onSendAsMessage={onSendSteerAsMessage}
+      />
     </aside>
   );
 }

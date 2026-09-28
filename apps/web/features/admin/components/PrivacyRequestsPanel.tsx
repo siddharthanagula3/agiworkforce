@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Spinner, useConfirm } from '@agiworkforce/ui';
+import { Spinner, useConfirm, translateUiPlural } from '@agiworkforce/ui';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
 import type {
@@ -23,10 +23,17 @@ const DESTRUCTIVE_CLASS =
 
 function describeClock(deadline: OpenDataRightsRequest['deadline']): string {
   const days = Math.abs(deadline.daysRemaining);
-  const unit = days === 1 ? 'day' : 'days';
-  if (deadline.overdue) return `${days} ${unit} overdue`;
+  if (deadline.overdue) {
+    return translateUiPlural('settings', 'counts.daysOverdue', days, {
+      one: '{{count}} day overdue',
+      other: '{{count}} days overdue',
+    });
+  }
   if (deadline.daysRemaining === 0) return 'due today';
-  return `${days} ${unit} left`;
+  return translateUiPlural('settings', 'counts.daysLeft', days, {
+    one: '{{count}} day left',
+    other: '{{count}} days left',
+  });
 }
 
 const REQUEST_TYPE_LABEL: Record<DataRightsRequestType, string> = {

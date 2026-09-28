@@ -10,68 +10,64 @@ nothing is left.
 
 - Done when: One session identifier names the same coding session on every supported client.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Model accepted 2026-09-27, following Claude Code and Codex: a session stays where it runs and moves between local and cloud only through an explicit, reviewed hand-off. Local threads share one id across CLI, VS Code and desktop and reach the phone through Remote Control, and cloud Code sessions open by the same id on every client. Still open: list and open cloud Code sessions by that id on mobile and in the VS Code Cloud view. | surface-only |
 | vscode | partial | Model accepted 2026-09-27, following Claude Code and Codex: a session stays where it runs and moves between local and cloud only through an explicit, reviewed hand-off. Local threads share one id across CLI, VS Code and desktop and reach the phone through Remote Control, and cloud Code sessions open by the same id on every client. Still open: list and open cloud Code sessions by that id on mobile and in the VS Code Cloud view. | surface-only |
 
-Code: `apps/cli/src/lib.rs:829-835`, `apps/cli/src/tui/tui_app.rs:2708-2713`, `apps/cli/src/agent/mod.rs:1640-1649`, `apps/cli/src/lib.rs:1645-1652`
+Code: `apps/extension-vscode/src/core/commandSetup.ts:1243-1246`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:903-905`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:197-197`
 
 ## S68.02: Same conversation history.
 
 - Done when: Opening the session on any client shows the same conversation history.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Model accepted 2026-09-27, following Claude Code and Codex: a session stays where it runs and moves between local and cloud only through an explicit, reviewed hand-off. Local threads share one id across CLI, VS Code and desktop and reach the phone through Remote Control, and cloud Code sessions open by the same id on every client. Still open: list and open cloud Code sessions by that id on mobile and in the VS Code Cloud view. | surface-only |
 | vscode | partial | Model accepted 2026-09-27, following Claude Code and Codex: a session stays where it runs and moves between local and cloud only through an explicit, reviewed hand-off. Local threads share one id across CLI, VS Code and desktop and reach the phone through Remote Control, and cloud Code sessions open by the same id on every client. Still open: list and open cloud Code sessions by that id on mobile and in the VS Code Cloud view. | surface-only |
 
-Code: `apps/cli/src/lib.rs:829-835`, `apps/cli/src/tui/tui_app.rs:2708-2713`, `apps/cli/src/agent/mod.rs:1640-1649`, `apps/cli/src/lib.rs:1645-1652`
+Code: `apps/extension-vscode/src/core/commandSetup.ts:1243-1246`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:903-905`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:197-197`
 
 ## S68.03: Same active branch.
 
 - Done when: Every client shows and works on the same active git branch for the session.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Model accepted 2026-09-27, following Claude Code and Codex: a session stays where it runs and moves between local and cloud only through an explicit, reviewed hand-off. Local threads share one id across CLI, VS Code and desktop and reach the phone through Remote Control, and cloud Code sessions open by the same id on every client. Still open: list and open cloud Code sessions by that id on mobile and in the VS Code Cloud view. | surface-only |
 | vscode | partial | Model accepted 2026-09-27, following Claude Code and Codex: a session stays where it runs and moves between local and cloud only through an explicit, reviewed hand-off. Local threads share one id across CLI, VS Code and desktop and reach the phone through Remote Control, and cloud Code sessions open by the same id on every client. Still open: list and open cloud Code sessions by that id on mobile and in the VS Code Cloud view. | surface-only |
 
-Code: `apps/cli/src/lib.rs:829-835`, `apps/cli/src/tui/tui_app.rs:2708-2713`, `apps/extension-vscode/src/core/commandSetup.ts:1243-1246`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:903-905`
+Code: `apps/extension-vscode/src/core/commandSetup.ts:1243-1246`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:903-905`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:197-197`
 
 ## S68.04: Same repository association.
 
 - Done when: Every client associates the session with the same repository.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Model accepted 2026-09-27, following Claude Code and Codex: a session stays where it runs and moves between local and cloud only through an explicit, reviewed hand-off. Local threads share one id across CLI, VS Code and desktop and reach the phone through Remote Control, and cloud Code sessions open by the same id on every client. Still open: list and open cloud Code sessions by that id on mobile and in the VS Code Cloud view. | surface-only |
 | vscode | partial | Model accepted 2026-09-27, following Claude Code and Codex: a session stays where it runs and moves between local and cloud only through an explicit, reviewed hand-off. Local threads share one id across CLI, VS Code and desktop and reach the phone through Remote Control, and cloud Code sessions open by the same id on every client. Still open: list and open cloud Code sessions by that id on mobile and in the VS Code Cloud view. | surface-only |
 
-Code: `apps/cli/src/lib.rs:829-835`, `apps/cli/src/tui/tui_app.rs:2708-2713`, `apps/extension-vscode/src/core/commandSetup.ts:1243-1246`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:903-905`
+Code: `apps/extension-vscode/src/core/commandSetup.ts:1243-1246`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:903-905`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:197-197`
 
 ## S68.05: Same worktree association.
 
 - Done when: Every client associates the session with the same git worktree.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Threads can record a worktree root, but the app-server reports worktrees:false and no client shows or enforces it. | handler |
 | vscode | partial | The thread schema carries worktreeRoot, but the runtime reports worktrees:false and the extension never uses it. | handler |
 
-Code: `apps/cli/src/app_server/developer_host.rs:375-376`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:202-202`
+Code: `apps/extension-vscode/src/integrations/localRuntimeClient.ts:202-202`
 
 ## S68.06: Same model and instruction configuration.
 
@@ -108,9 +104,9 @@ Code: `apps/web/lib/services/cloud-code-agent-service.ts:790-790`, `apps/web/lib
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Works once AGI_E2B_EXECUTION is on in production | flag-off |
-| cli | partial | Approvals live in the process running the turn; another client on the same thread does not see them. | handler |
+| cli | partial | The TUI runs turns in its own process with a per-turn approval broker; another client on the same thread cannot see or answer them until a cross-process transport exists (TUI turns through the app-server, or Remote Control for local threads). | handler |
 
-Code: `apps/web/app/api/code/sessions/[sessionId]/agent/approvals/route.ts:139-139`, `apps/web/features/code/CloudCodePage.tsx:354-354`, `apps/cli/src/tui/widgets/approval_overlay.rs:335-335`
+Code: `apps/web/app/api/code/sessions/[sessionId]/agent/approvals/route.ts:139-139`, `apps/web/features/code/CloudCodePage.tsx:354-354`, `apps/cli/src/tui/tui_app.rs:5940-5940`
 
 ## S68.09: Same tool activity.
 
@@ -121,36 +117,22 @@ Code: `apps/web/app/api/code/sessions/[sessionId]/agent/approvals/route.ts:139-1
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Works once AGI_E2B_EXECUTION is on in production | flag-off |
-| cli | partial | Tool cells stream only in the terminal running the turn. | handler |
+| cli | partial | Tool events of a TUI-run turn reach only that terminal (and the JSON stream); streaming them to other attached clients needs the same cross-process transport as S68.08. | handler |
 
-Code: `apps/web/features/code/components/CodeTranscript.tsx:344-344`, `apps/cli/src/tui/tui_app.rs:4865-4870`
+Code: `apps/web/features/code/components/CodeTranscript.tsx:344-344`, `apps/cli/src/agent/chat.rs:2835-2835`
 
 ## S68.12: Execution-owner indicator.
 
 - Done when: Every client shows which client currently owns execution of the session.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | The app-server keeps a writer lease (holder label, expiry, takeover), but no client displays who holds it. | ui |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `crates/agiworkforce-protocol/src/developer_session.rs:438-448`
-
-## S68.13: Transfer control between clients.
-
-- Done when: The user hands control of a session from one client to another explicitly.
-- Wave: 3
-- Already works on: web, desktop, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | agi resume --cloud <id> explicitly pulls an account conversation from web or mobile into the CLI, but no CLI command hands a running local thread to another client. | ui |
-
-Code: `apps/cli/src/lib.rs:829-835`, `apps/cli/src/app_server/developer_host.rs:1203-1206`, `apps/cli/src/lib.rs:1645-1652`
 
 ## S68.15: Continue cloud execution from desktop.
 
@@ -237,15 +219,14 @@ Code: `apps/mobile/src/features/companion/components/DesktopInfoCard.tsx:21-26`,
 
 - Done when: Each machine advertises what it can host (local models, browser, MCP, computer use, code sessions).
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Only the code-sessions capability gates the AGI Code card. | surface-only |
-| cli | partial | CLI registers its device profile, but no client shows host capabilities for picking a host. | ui |
 | vscode | partial | The extension heartbeats its device profile only. | ui |
 
-Code: `apps/mobile/src/features/companion/components/DesktopInfoCard.tsx:73-76`, `apps/mobile/src/features/companion/remote-code/service.ts:33-35`, `apps/cli/src/device_registry.rs:32-34`, `apps/extension-vscode/src/features/device-registry/deviceHeartbeat.ts:35-37`
+Code: `apps/mobile/src/features/companion/components/DesktopInfoCard.tsx:73-76`, `apps/mobile/src/features/companion/remote-code/service.ts:33-35`, `apps/extension-vscode/src/features/device-registry/deviceHeartbeat.ts:35-37`
 
 ## S68.22: Device pairing.
 

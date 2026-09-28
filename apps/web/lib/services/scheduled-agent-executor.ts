@@ -4,6 +4,7 @@ import { createPostgresContextManifestStore, resolveContext } from '@agiworkforc
 import {
   classifyTaskLocally,
   detectIndicScript,
+  modelsPastDeprecationDate,
   resolveAutoRoute,
   type AutoRoutingRequest,
 } from '@agiworkforce/routing';
@@ -13,6 +14,7 @@ import {
 } from '@/lib/server/side-call-training-policy';
 import { modelKeepsInputsOutOfTraining } from '@/lib/server/provider-training-opt-out';
 import { openAIWireRequestToChatRequest } from '@agiworkforce/provider-protocol';
+import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import {
   DomainErrorCode,
   getModelMetadataById,
@@ -131,7 +133,7 @@ import type {
 
 const MAX_PROMPT_LENGTH = 50_000;
 const MAX_OUTPUT_CHARS = 100_000;
-const MAX_OUTPUT_TOKENS = 4_096;
+export const MAX_OUTPUT_TOKENS = 4_096;
 const MAX_APPROVAL_INPUT_CHARS = 4_000;
 
 const SCHEDULED_TASK_DIRECTIVE =
@@ -170,7 +172,7 @@ function validateAgentTask(task: ScheduleTask): string {
   return prompt;
 }
 
-interface ScheduledToolPlan {
+export interface ScheduledToolPlan {
   tools: unknown[];
   mcpTools: WebMcpToolDef[];
   connectorPermissions: ConnectorToolPermissions;
@@ -222,7 +224,7 @@ function runsWithoutAsking(
   );
 }
 
-async function buildScheduledToolPlan(input: {
+export async function buildScheduledToolPlan(input: {
   db: Parameters<typeof loadConnectorToolPermissions>[0];
   userId: string;
   organizationId?: string | null;
@@ -329,7 +331,7 @@ async function buildScheduledToolPlan(input: {
   };
 }
 
-function withheldToolsDirective(plan: ScheduledToolPlan): string | null {
+export function withheldToolsDirective(plan: ScheduledToolPlan): string | null {
   if (plan.withheldTools.length === 0) return null;
   const { label } = toolApprovalPolicyOption(plan.toolApprovalPolicy);
   return (
@@ -462,7 +464,7 @@ async function resolveScheduledContext(input: {
   };
 }
 
-interface ScheduledCompletion {
+export interface ScheduledCompletion {
   text: string;
   promptTokens: number;
   completionTokens: number;
@@ -472,7 +474,7 @@ interface ScheduledCompletion {
   approval?: ToolLoopApprovalCheckpoint;
 }
 
-type ScheduledMessages = ProcessedRequest['llmRequest']['messages'];
+export type ScheduledMessages = ProcessedRequest['llmRequest']['messages'];
 
 function buildScheduledProcessedRequest(input: {
   task: ScheduleTask;
@@ -534,7 +536,7 @@ function buildScheduledProcessedRequest(input: {
   };
 }
 
-async function runScheduledToolLoop(input: {
+export async function runScheduledToolLoop(input: {
   processed: ProcessedRequest;
   plan: ScheduledToolPlan;
   approvalMode: ToolLoopApprovalMode;
@@ -542,6 +544,8 @@ async function runScheduledToolLoop(input: {
   signal: AbortSignal;
   usage: ObservedProviderUsage;
   resume?: ScheduledRunResume;
+  onEnvelope?: (envelope: AgentEventEnvelope) => Promise<void>;
+  isCancellationRequested?: () => Promise<boolean>;
 }): Promise<ScheduledCompletion> {
   const usage = input.usage;
   const toolsUsed: string[] = [];
@@ -561,6 +565,9 @@ async function runScheduledToolLoop(input: {
     ...(input.plan.connectorExecutor ? { connectorExecutor: input.plan.connectorExecutor } : {}),
     usage,
     signal: input.signal,
+    ...(input.isCancellationRequested
+      ? { isCancellationRequested: input.isCancellationRequested }
+      : {}),
     ...(resume
       ? {
           resume: {
@@ -586,6 +593,7 @@ async function runScheduledToolLoop(input: {
     for (const envelope of extractManagedAgentEventEnvelopes(chunk)) {
       if (envelope.event.type === 'tool-execution-start') toolsUsed.push(envelope.event.name);
       if (envelope.event.type === 'error' && !reportedError) reportedError = envelope.event.message;
+      await input.onEnvelope?.(envelope);
     }
   }
 
@@ -607,7 +615,7 @@ async function runScheduledToolLoop(input: {
   };
 }
 
-async function runScheduledCompletion(input: {
+export async function runScheduledCompletion(input: {
   messages: ScheduledMessages;
   route: ScheduledRunRoute;
   signal: AbortSignal;
@@ -663,6 +671,7 @@ async function selectScheduledRoute(
     subscriptionTier,
     trustMode: 'managed_cloud',
     runtimeProfileId: 'web/cloud-chat',
+    retiredModelKeys: modelsPastDeprecationDate(),
   };
   const routing = await sideCallRoutingRequest(scope.db, scope.userId, baseRouting);
   if (!routing) throw new Error(NO_TRAINING_MODEL_MESSAGE);
@@ -692,7 +701,7 @@ function resumedRoute(route: ScheduledRunRoute): ScheduledRunRoute {
   return route;
 }
 
-function approvalToolCalls(
+export function approvalToolCalls(
   checkpoint: ToolLoopApprovalCheckpoint,
 ): ManagedCloudScheduleRunApprovalToolCall[] {
   return checkpoint.pendingToolCalls.map((call) => {

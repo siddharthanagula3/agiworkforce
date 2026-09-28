@@ -1,6 +1,14 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import {
+  CONNECTOR_OAUTH_RESULT_CONNECTOR_PARAM,
+  CONNECTOR_OAUTH_RESULT_STATUS_PARAM,
+  connectorCredentialsPath,
+  type ConnectorErrorResponse,
+  type ConnectorOAuthStartResponse,
+  type ConnectorOAuthStartStatus,
+} from '@agiworkforce/cloud-contracts';
 
 import { unauthorizedResponseFor } from '@/lib/api-auth-response';
 import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
@@ -53,22 +61,22 @@ import { scopeEscalation } from '@/lib/connectors/scopes-escalation';
 import { resolveRegistryAuthorization } from '@/lib/connectors/registry-authorization';
 import { McpPkceUnsupportedError } from '@/lib/connectors/mcp-oauth-provider';
 
-export const OAUTH_START_STATUS_NOT_CONFIGURED = 'not_configured';
-export const OAUTH_START_STATUS_REGISTRATION_REJECTED = 'registration_rejected';
-export const OAUTH_START_STATUS_REAUTHORIZE = 'reauthorize';
-export const OAUTH_START_STATUS_ERROR = 'error';
-export const OAUTH_START_STATUS_OPEN = 'open';
-export const OAUTH_START_STATUS_UNAVAILABLE = 'unavailable';
-export const OAUTH_START_STATUS_CREDENTIAL = 'credential';
-export const OAUTH_START_STATUS_POLICY_BLOCKED = 'policy_blocked';
-export const OAUTH_START_STATUS_SCOPE_RECONSENT = 'scope_reconsent';
+export const OAUTH_START_STATUS_NOT_CONFIGURED: ConnectorOAuthStartStatus = 'not_configured';
+export const OAUTH_START_STATUS_REGISTRATION_REJECTED: ConnectorOAuthStartStatus =
+  'registration_rejected';
+export const OAUTH_START_STATUS_REAUTHORIZE: ConnectorOAuthStartStatus = 'reauthorize';
+export const OAUTH_START_STATUS_ERROR: ConnectorOAuthStartStatus = 'error';
+export const OAUTH_START_STATUS_OPEN: ConnectorOAuthStartStatus = 'open';
+export const OAUTH_START_STATUS_UNAVAILABLE: ConnectorOAuthStartStatus = 'unavailable';
+export const OAUTH_START_STATUS_CREDENTIAL: ConnectorOAuthStartStatus = 'credential';
+export const OAUTH_START_STATUS_POLICY_BLOCKED: ConnectorOAuthStartStatus = 'policy_blocked';
+export const OAUTH_START_STATUS_SCOPE_RECONSENT: ConnectorOAuthStartStatus = 'scope_reconsent';
 
 const CONNECTORS_PATH = '/connectors';
-const CONNECTORS_PATH_API = '/api/connectors';
 const CREDENTIAL_HEADER_PLACEMENT = 'header';
 const DIRECTORY_OPEN_AUTH_MODE = 'none';
 
-const FAILURE_STATUS: Record<McpAuthorizationFailure, string> = {
+const FAILURE_STATUS: Record<McpAuthorizationFailure, ConnectorOAuthStartStatus> = {
   'no-client-identity': OAUTH_START_STATUS_NOT_CONFIGURED,
   'registration-rejected': OAUTH_START_STATUS_REGISTRATION_REJECTED,
   'authorization-server-changed': OAUTH_START_STATUS_REAUTHORIZE,
@@ -148,7 +156,10 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
       return unauthorizedResponseFor(authError);
     }
     if (wantsJson) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+      return NextResponse.json(
+        { error: 'Authentication required' } satisfies ConnectorErrorResponse,
+        { status: 401 },
+      );
     }
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('redirectTo', returnPath);
@@ -164,8 +175,8 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
         status: OAUTH_START_STATUS_CREDENTIAL,
         connectorName: credentialTarget.name,
         settingsHref,
-        credentialsPath: `${CONNECTORS_PATH_API}/${encodeURIComponent(credentialTarget.connectorId)}/credentials`,
-      });
+        credentialsPath: connectorCredentialsPath(credentialTarget.connectorId),
+      } satisfies ConnectorOAuthStartResponse);
     }
     return NextResponse.redirect(new URL(settingsHref, request.url));
   }
@@ -190,7 +201,11 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
         ? { mcpUrl: custom.url, name: custom.name, documentationUrl: null }
         : null;
 
-  const fail = (status: string, httpStatus: number, message: string): NextResponse => {
+  const fail = (
+    status: ConnectorOAuthStartStatus,
+    httpStatus: number,
+    message: string,
+  ): NextResponse => {
     if (wantsJson) {
       return NextResponse.json(
         {
@@ -201,13 +216,13 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
           ...(discovered
             ? { connectorName: discovered.name, documentationUrl: discovered.documentationUrl }
             : {}),
-        },
+        } satisfies ConnectorOAuthStartResponse,
         { status: httpStatus },
       );
     }
     const target = new URL(returnPath, request.url);
-    target.searchParams.set('connector', connectorId);
-    target.searchParams.set('status', status);
+    target.searchParams.set(CONNECTOR_OAUTH_RESULT_CONNECTOR_PARAM, connectorId);
+    target.searchParams.set(CONNECTOR_OAUTH_RESULT_STATUS_PARAM, status);
     return NextResponse.redirect(target);
   };
 
@@ -252,7 +267,10 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
 
     if (started.status === 'redirect') {
       if (wantsJson) {
-        return NextResponse.json({ connectorId, authorizeUrl: started.authorizationUrl });
+        return NextResponse.json({
+          connectorId,
+          authorizeUrl: started.authorizationUrl,
+        } satisfies ConnectorOAuthStartResponse);
       }
       return NextResponse.redirect(started.authorizationUrl);
     }
@@ -358,7 +376,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
       ...(needsReconsent
         ? { status: OAUTH_START_STATUS_SCOPE_RECONSENT, addedScopes: escalation.added }
         : {}),
-    });
+    } satisfies ConnectorOAuthStartResponse);
   }
   return NextResponse.redirect(authorizeUrl);
 }

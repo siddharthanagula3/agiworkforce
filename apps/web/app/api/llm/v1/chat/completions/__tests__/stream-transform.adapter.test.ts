@@ -272,6 +272,7 @@ describe('buildAdapterStreamResponse · billing reconciliation', () => {
     expect(mockFinalizeManagedUsageRequest).toHaveBeenCalledWith({
       ...makeProcessed().managedUsage,
       outcome: 'completed',
+      attempt: { outcome: 'completed' },
       actualCostMicrousd: 40000,
       providerCostMicrousd: 40000,
       usage: {
@@ -446,6 +447,7 @@ describe('buildAdapterStreamResponse · billing reconciliation', () => {
         requestId: 'req-adapter-001',
       },
       outcome: 'completed',
+      attempt: { outcome: 'completed' },
       provider: 'anthropic',
       model: 'fixture-model',
       cost: { tokenMicrousd: 40000, toolMicrousd: 0 },

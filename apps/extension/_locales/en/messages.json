@@ -1731,10 +1731,6 @@
       }
     }
   },
-  "spActivityStepNeedsInput": {
-    "message": "A connector asked for details before this step can continue.",
-    "description": "Activity step detail while a connector waits for details from the user"
-  },
   "spActivityRequestHeading": {
     "message": "Request",
     "description": "Heading above the input a tool received"
@@ -2700,5 +2696,561 @@
         "example": "execution_time_exceeded"
       }
     }
+  },
+  "spPersonalizationTitle": {
+    "message": "Personalization",
+    "description": "Drawer section title for the account personalization settings"
+  },
+  "spPersonalizationHelp": {
+    "message": "Your name, background, response style and custom instructions shape side-panel chats too. They are kept in your account settings.",
+    "description": "Explains that side-panel chats follow the account personalization settings"
+  },
+  "spPersonalizationOpen": {
+    "message": "Open personalization settings",
+    "description": "Button that opens the account personalization settings on the web"
+  },
+  "spMemoryScopePersonal": {
+    "message": "Showing your personal memory. Memory saved in a workspace stays in that workspace.",
+    "description": "Which memory the drawer lists when no workspace is active"
+  },
+  "spMemoryScopeWorkspace": {
+    "message": "Showing the memory for the $WORKSPACE$ workspace. Your personal memory is kept apart.",
+    "description": "Which memory the drawer lists when a workspace is active",
+    "placeholders": {
+      "workspace": {
+        "content": "$1",
+        "example": "Acme"
+      }
+    }
+  },
+  "spMemoryShowMore": {
+    "message": "Show more",
+    "description": "Button that loads the next page of saved memories"
+  },
+  "spMemoryShowing_one": {
+    "message": "$COUNT$ memory shown",
+    "description": "How many saved memories the drawer lists, one plural form",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "spMemoryShowing_other": {
+    "message": "$COUNT$ memories shown",
+    "description": "How many saved memories the drawer lists, every other plural form",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "12"
+      }
+    }
+  },
+  "spMemoryShowingMore_one": {
+    "message": "$COUNT$ memory shown, more are saved",
+    "description": "How many saved memories the drawer lists when more remain, one plural form",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "spMemoryShowingMore_other": {
+    "message": "$COUNT$ memories shown, more are saved",
+    "description": "How many saved memories the drawer lists when more remain, every other plural form",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "100"
+      }
+    }
+  },
+  "spMemoryOriginLearnedFromTitled": {
+    "message": "Learned from “$TITLE$”",
+    "description": "Provenance of a memory learned from a named conversation",
+    "placeholders": {
+      "title": {
+        "content": "$1",
+        "example": "Trip planning"
+      }
+    }
+  },
+  "spMemoryOriginLearnedFromChat": {
+    "message": "Learned from a chat",
+    "description": "Provenance of a memory learned from a conversation"
+  },
+  "spMemoryOriginImported": {
+    "message": "Imported",
+    "description": "Provenance of an imported memory"
+  },
+  "spMemoryOriginAdded": {
+    "message": "Added by you",
+    "description": "Provenance of a memory the user typed"
+  },
+  "spMemoryNeverRememberTitle": {
+    "message": "Never remember",
+    "description": "Title of the list of terms memory never saves"
+  },
+  "spMemoryNeverRememberHelp": {
+    "message": "New memories containing any of these terms are discarded before they are saved, on every device. Matching ignores case. This applies to new memories only, and anything already saved stays until you delete it.",
+    "description": "Explains the never remember list"
+  },
+  "spMemoryNeverRememberPlaceholder": {
+    "message": "e.g. my home address",
+    "description": "Example term for the never remember list"
+  },
+  "spMemoryNeverRememberInputLabel": {
+    "message": "Term to never remember",
+    "description": "Accessible name of the never remember input"
+  },
+  "spMemoryNeverRememberAdd": {
+    "message": "Add",
+    "description": "Button that adds a term to the never remember list"
+  },
+  "spMemoryNeverRememberRemove": {
+    "message": "Remove $TERM$",
+    "description": "Accessible name of the button that removes a never remember term",
+    "placeholders": {
+      "term": {
+        "content": "$1",
+        "example": "home address"
+      }
+    }
+  },
+  "spMemoryNeverRememberEmpty": {
+    "message": "No terms yet. Memory keeps anything you ask it to.",
+    "description": "Empty never remember list"
+  },
+  "spMemoryNeverRememberTooShort": {
+    "message": "Enter at least $COUNT$ characters, shorter terms match almost anything.",
+    "description": "A never remember term that is too short",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "3"
+      }
+    }
+  },
+  "spMemoryNeverRememberFull": {
+    "message": "You can store up to $COUNT$ terms.",
+    "description": "The never remember list is full",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "50"
+      }
+    }
+  },
+  "spMemoryNeverRememberSaveFailed": {
+    "message": "Could not save the never remember list. Try again.",
+    "description": "Saving the never remember list failed"
+  },
+  "spMemoryNeverRememberLoadFailed": {
+    "message": "Could not load the never remember list.",
+    "description": "Loading the never remember list failed"
+  },
+  "spMemorySignedOut": {
+    "message": "Sign in to your AGI account to change memory.",
+    "description": "Memory settings need a signed-in account"
+  },
+  "spMemoryConflictsTitle": {
+    "message": "When memories disagree",
+    "description": "Title of the replaced memories list"
+  },
+  "spMemoryConflictsRule": {
+    "message": "When two memories disagree, a pinned memory wins, then one you added over one learned from a chat, then the newer one. The replaced one is kept here so you can switch back.",
+    "description": "The rule that decides which of two conflicting memories is used"
+  },
+  "spMemoryConflictsListLabel": {
+    "message": "Replaced memories",
+    "description": "Accessible name of the replaced memories list"
+  },
+  "spMemoryConflictsEmpty": {
+    "message": "No memory has replaced another.",
+    "description": "Empty replaced memories list"
+  },
+  "spMemoryConflictUsing": {
+    "message": "Using: $MEMORY$",
+    "description": "The memory that won a conflict",
+    "placeholders": {
+      "memory": {
+        "content": "$1",
+        "example": "Prefers aisle seats"
+      }
+    }
+  },
+  "spMemoryConflictReplaced": {
+    "message": "Replaced: $MEMORY$",
+    "description": "The memory that lost a conflict",
+    "placeholders": {
+      "memory": {
+        "content": "$1",
+        "example": "Prefers window seats"
+      }
+    }
+  },
+  "spMemoryConflictRestore": {
+    "message": "Use the replaced one instead",
+    "description": "Button that switches back to the replaced memory"
+  },
+  "spMemoryConflictRestoreFailed": {
+    "message": "Could not switch back to that memory. Try again.",
+    "description": "Switching back to a replaced memory failed"
+  },
+  "spMemoryConflictsLoadFailed": {
+    "message": "Could not load replaced memories. Try again later.",
+    "description": "Loading replaced memories failed"
+  },
+  "spMemoryForgetPrompt_one": {
+    "message": "Forget $LIST$? Chats stop using it, and it cannot be restored.",
+    "description": "Asks before forgetting one memory the user asked to forget, one plural form",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
+      },
+      "list": {
+        "content": "$2",
+        "example": "“Lives in Austin”"
+      }
+    }
+  },
+  "spMemoryForgetPrompt_other": {
+    "message": "Forget $COUNT$ memories, $LIST$? Chats stop using them, and they cannot be restored.",
+    "description": "Asks before forgetting several memories the user asked to forget, every other plural form",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "2"
+      },
+      "list": {
+        "content": "$2",
+        "example": "“Lives in Austin” “Works at Acme”"
+      }
+    }
+  },
+  "spMemoryForgetConfirm": {
+    "message": "Forget",
+    "description": "Button that confirms forgetting the listed memories"
+  },
+  "spMemoryForgetKeep": {
+    "message": "Keep",
+    "description": "Button that keeps the listed memories"
+  },
+  "spMemoryNoticeDismiss": {
+    "message": "Dismiss",
+    "description": "Accessible name of the button that closes the memory notice"
+  },
+  "spMemoryCommandUnavailable": {
+    "message": "Memory did not answer, so nothing was changed.",
+    "description": "A remember or forget request could not reach memory"
+  },
+  "spTemporaryChatLabel": {
+    "message": "Temporary chat",
+    "description": "Menu item that makes the new chat temporary"
+  },
+  "spTemporaryChatExplanation": {
+    "message": "Stays out of your history, search, memory and Library.",
+    "description": "One-line consequence of a temporary chat, shown under the menu item"
+  },
+  "spTemporaryChatRetention": {
+    "message": "Won't be saved to your history or show up in search, and skips memory. Files you attach stay out of your Library, and a connector asks before every call even where you saved Always allow. A connector call still reaches that service, which keeps its own record.",
+    "description": "Full description of what a temporary chat does"
+  },
+  "spTemporaryChatActive": {
+    "message": "Temporary chat. Stays out of your history, search, memory and Library.",
+    "description": "Notice above the composer while the chat is temporary"
+  },
+  "spTemporaryChatTurnOff": {
+    "message": "Turn off",
+    "description": "Turns temporary chat off before any message was sent"
+  },
+  "spTemporaryChatEnd": {
+    "message": "End temporary chat",
+    "description": "Starts ending a temporary chat that has messages"
+  },
+  "spTemporaryChatEndPrompt": {
+    "message": "End this temporary chat? It is never written to your history, so every message goes and nobody can reopen or restore it. Copy out anything you still need first.",
+    "description": "Asks before a temporary chat is ended and discarded"
+  },
+  "spTemporaryChatEndConfirm": {
+    "message": "End and discard",
+    "description": "Confirms ending and discarding the temporary chat"
+  },
+  "spTemporaryChatKeep": {
+    "message": "Keep chatting",
+    "description": "Keeps the temporary chat open"
+  },
+  "spTemporaryChatUnavailable": {
+    "message": "The temporary chat could not start, so nothing was sent. Check your connection and try again.",
+    "description": "The temporary conversation could not be created"
+  },
+  "spSchedulesNew": {
+    "message": "New schedule",
+    "description": "Button that opens the new schedule form"
+  },
+  "spSchedulesFormLabel": {
+    "message": "New schedule",
+    "description": "Accessible name of the new schedule form"
+  },
+  "spSchedulesTemplatesLabel": {
+    "message": "Start from a template",
+    "description": "Accessible name of the schedule template buttons"
+  },
+  "spSchedulesNameLabel": {
+    "message": "Name",
+    "description": "Label of the schedule name field"
+  },
+  "spSchedulesPromptLabel": {
+    "message": "Instructions",
+    "description": "Label of the schedule prompt field"
+  },
+  "spSchedulesRepeatLabel": {
+    "message": "Repeat",
+    "description": "Label of the schedule recurrence field"
+  },
+  "spSchedulesRepeatDaily": {
+    "message": "Every day",
+    "description": "Daily schedule recurrence"
+  },
+  "spSchedulesRepeatWeekly": {
+    "message": "On chosen days of the week",
+    "description": "Weekly schedule recurrence"
+  },
+  "spSchedulesRepeatMonthly": {
+    "message": "Once a month",
+    "description": "Monthly schedule recurrence"
+  },
+  "spSchedulesDaysLabel": {
+    "message": "Days",
+    "description": "Label of the weekday choices of a weekly schedule"
+  },
+  "spSchedulesDayOfMonthLabel": {
+    "message": "Day of the month",
+    "description": "Label of the day of a monthly schedule"
+  },
+  "spSchedulesTimeLabel": {
+    "message": "Time",
+    "description": "Label of the time a schedule runs"
+  },
+  "spSchedulesTimeZoneLabel": {
+    "message": "Time zone",
+    "description": "Label of the time zone a schedule runs in"
+  },
+  "spSchedulesCreate": {
+    "message": "Create schedule",
+    "description": "Button that creates the schedule"
+  },
+  "spSchedulesCancel": {
+    "message": "Cancel",
+    "description": "Button that closes the new schedule form"
+  },
+  "spSchedulesNameRequired": {
+    "message": "Give the schedule a name.",
+    "description": "The schedule name is missing"
+  },
+  "spSchedulesPromptRequired": {
+    "message": "Say what the schedule should do.",
+    "description": "The schedule instructions are missing"
+  },
+  "spSchedulesDaysRequired": {
+    "message": "Choose at least one day.",
+    "description": "A weekly schedule has no days"
+  },
+  "spSchedulesDayOfMonthRequired": {
+    "message": "Choose a day from 1 to 31.",
+    "description": "A monthly schedule has no valid day"
+  },
+  "spSchedulesTimeRequired": {
+    "message": "Choose the time it runs.",
+    "description": "The schedule time is missing"
+  },
+  "spSchedulesCreated": {
+    "message": "Created $NAME$. It runs in the cloud even when this browser is closed.",
+    "description": "A schedule was created",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Daily briefing"
+      }
+    }
+  },
+  "spProjectsOpenChat": {
+    "message": "Open $TITLE$ on the web",
+    "description": "Tooltip of a project chat that opens on the web",
+    "placeholders": {
+      "title": {
+        "content": "$1",
+        "example": "Launch plan"
+      }
+    }
+  },
+  "spProjectsDescriptionPlaceholder": {
+    "message": "Description (optional)",
+    "description": "Placeholder of the project description field"
+  },
+  "spProjectsSave": {
+    "message": "Save",
+    "description": "Button that saves project edits"
+  },
+  "spProjectsSaved": {
+    "message": "Project saved.",
+    "description": "A project was edited"
+  },
+  "spProjectsEdit": {
+    "message": "Edit",
+    "description": "Button that edits the project name, description and instructions"
+  },
+  "spProjectsInstructions": {
+    "message": "Instructions",
+    "description": "Heading of the project instructions"
+  },
+  "spProjectsFileCount_one": {
+    "message": "$COUNT$ file",
+    "description": "Number of knowledge files in a project, one plural form",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "spProjectsFileCount_other": {
+    "message": "$COUNT$ files",
+    "description": "Number of knowledge files in a project, every other plural form",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "3"
+      }
+    }
+  },
+  "spAttachmentModelImageLimit_one": {
+    "message": "$MODEL$ accepts one image in a message. Remove the others to send.",
+    "description": "The chosen model accepts fewer images than are attached, one plural form",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
+      },
+      "model": {
+        "content": "$2",
+        "example": "the chosen model"
+      }
+    }
+  },
+  "spAttachmentModelImageLimit_other": {
+    "message": "$MODEL$ accepts up to $COUNT$ images in a message. Remove some to send.",
+    "description": "The chosen model accepts fewer images than are attached, every other plural form",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "100"
+      },
+      "model": {
+        "content": "$2",
+        "example": "the chosen model"
+      }
+    }
+  },
+  "spConnectorInputHeading": {
+    "message": "$SERVER$ needs your input",
+    "description": "Heading of a connector's request for details in the middle of a reply",
+    "placeholders": {
+      "server": {
+        "content": "$1",
+        "example": "GitHub"
+      }
+    }
+  },
+  "spConnectorInputForTool": {
+    "message": "For $TOOL$",
+    "description": "Names the connector tool that asked for details",
+    "placeholders": {
+      "tool": {
+        "content": "$1",
+        "example": "Create Issue"
+      }
+    }
+  },
+  "spConnectorInputCustomServer": {
+    "message": "Custom connector",
+    "description": "Name shown for a connector the user added themselves"
+  },
+  "spConnectorInputExpired": {
+    "message": "This request is no longer active.",
+    "description": "A connector's request for details can no longer be answered"
+  },
+  "spConnectorInputUnsupported": {
+    "message": "This request can’t be answered here.",
+    "description": "A connector asked for details in a form the side panel cannot show"
+  },
+  "spConnectorInputOptional": {
+    "message": "(optional)",
+    "description": "Marks a connector form field that may be left empty"
+  },
+  "spConnectorInputChooseOne": {
+    "message": "Choose one",
+    "description": "Placeholder of a required connector form choice"
+  },
+  "spConnectorInputNotSet": {
+    "message": "Not set",
+    "description": "Empty option of an optional connector form choice"
+  },
+  "spConnectorInputPunycode": {
+    "message": "This address uses characters that can imitate another site. Check the domain before you open it.",
+    "description": "Warning under a connector link whose domain uses lookalike characters"
+  },
+  "spConnectorInputOpenLink": {
+    "message": "Open $HOST$",
+    "description": "Button that opens the page a connector asked the user to visit",
+    "placeholders": {
+      "host": {
+        "content": "$1",
+        "example": "github.com"
+      }
+    }
+  },
+  "spConnectorInputLinkOpened": {
+    "message": "Finish in the new tab, then continue here.",
+    "description": "Shown after the user opens a connector's link"
+  },
+  "spConnectorInputLinkUnopenable": {
+    "message": "This link can’t be opened from here.",
+    "description": "A connector's link is not a secure web address the side panel will open"
+  },
+  "spConnectorInputOpenLinkFirst": {
+    "message": "Open the link to continue.",
+    "description": "Continue stays unavailable until the user opens the connector's link"
+  },
+  "spConnectorInputSent": {
+    "message": "Sent. The reply continues once every request in it is answered.",
+    "description": "The user answered this connector request while another in the same reply still waits"
+  },
+  "spConnectorInputSubmit": {
+    "message": "Submit",
+    "description": "Sends the details a connector asked for"
+  },
+  "spConnectorInputContinue": {
+    "message": "Continue",
+    "description": "Tells a connector the user finished the step on its page"
+  },
+  "spConnectorInputSending": {
+    "message": "Sending",
+    "description": "The answer to a connector request is being sent"
+  },
+  "spConnectorInputDecline": {
+    "message": "Decline",
+    "description": "Refuses to give a connector the details it asked for"
+  },
+  "spConnectorInputCancel": {
+    "message": "Cancel",
+    "description": "Dismisses a connector's request for details without answering"
+  },
+  "spConnectorInputSendFailed": {
+    "message": "Your answer could not be sent. Try again.",
+    "description": "The side panel could not hand the answer to a connector request to the background worker"
   }
 }
