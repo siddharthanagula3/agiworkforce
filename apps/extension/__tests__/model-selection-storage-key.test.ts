@@ -51,9 +51,12 @@ describe('side panel selected-model persistence', () => {
   it('persists the choice to storage when the user picks a model', () => {
     const start = sidePanel.indexOf("opt.addEventListener('click', () => {");
     const end = sidePanel.indexOf('\n    });', start);
-    const body = sidePanel.slice(start, end);
-    expect(body).toContain('_ctx.selectedModel = m.value;');
-    expect(body).toContain('chrome.storage.local.set({ [SELECTED_MODEL_STORAGE_KEY]: m.value })');
+    expect(sidePanel.slice(start, end)).toContain('applyModelSelection(m.value);');
+    const applyStart = sidePanel.indexOf('function applyModelSelection(value: string): void {');
+    const applyEnd = sidePanel.indexOf('\n}\n', applyStart);
+    const body = sidePanel.slice(applyStart, applyEnd);
+    expect(body).toContain('_ctx.selectedModel = value;');
+    expect(body).toContain('chrome.storage.local.set({ [SELECTED_MODEL_STORAGE_KEY]: value })');
   });
 
   it('restores the choice on load, alongside the existing thinking-preference read', () => {

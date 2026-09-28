@@ -78,12 +78,20 @@ import {
   takePendingResultConversation,
   OPEN_BROWSER_CONVERSATION_MESSAGE,
 } from './features/background/background-results';
-import { sanitizeHtml, renderMarkdown } from './features/side-panel/markdown';
 import { el } from './features/side-panel/dom';
-import { buildBubbleWithTools } from './features/side-panel/bubbles';
 import {
+  buildBubbleWithTools,
+  fillAnswerBubble,
+  resolveManagedArtifactUrl,
+  type RegenerateModelOption,
+} from './features/side-panel/bubbles';
+import type { AnswerFileAccess } from './features/side-panel/generatedFiles';
+import {
+  answerSourceLists,
   applyCanonicalAgentEvent,
   applyStreamFailure,
+  isEmptyAssistantTurn,
+  mergeMessageSources,
   streamFailureText,
   type StreamFailureDetail,
   hydrateStoredChatMessage,
@@ -94,6 +102,8 @@ import {
   trimChatMessages,
   type PageContextSource,
   type SidePanelChatMessage,
+  type SidePanelMessageAttachment,
+  type SidePanelPageReference,
 } from './features/side-panel/chat-state';
 import { buildMicrophoneNotice, setupVoiceInput } from './features/side-panel/voice';
 import {
@@ -206,6 +216,7 @@ import {
   MANAGED_CHAT_MAX_ATTACHMENT_FILE_BYTES,
   FREE_TRIAL_GATEWAY,
   getManagedUsageHistory,
+  type ManagedChatSourcesDelta,
   type ManagedModelAccess,
   type ManagedUsageHistory,
   type ManagedQuotaBlock,
@@ -648,6 +659,7 @@ interface ChatChunk {
   cloudRun?: ManagedCloudAgentRunReference;
   generatedFiles?: GeneratedFileWire[];
   interactiveCard?: InteractiveCard;
+  sources?: ManagedChatSourcesDelta;
   routing?: {
     modelKey: string;
     taskType: RoutingTaskType;
@@ -814,14 +826,14 @@ function managedOutboundEffortPayload(usePersistedSelection = false): { effort?:
   return effort === undefined ? {} : { effort };
 }
 
-function managedOutboundRoutingPayload(): {
+function managedOutboundRoutingPayload(quickMode = _ctx.quickMode): {
   effort?: Effort;
   currentModelKey?: string;
   previousTaskType?: RoutingTaskType;
 } {
-  if (_ctx.quickMode) return {};
+  if (quickMode) return {};
   return {
-    ...managedOutboundEffortPayload(),
+    ...managedOutboundEffortPayload(true),
     ...(_ctx.currentModelKey ? { currentModelKey: _ctx.currentModelKey } : {}),
     ...(_ctx.previousTaskType ? { previousTaskType: _ctx.previousTaskType } : {}),
   };
@@ -881,7 +893,28 @@ let isRecording = false;
 let recordingActionCount = 0;
 let recordingStartUrl: string | null = null;
 
-const pendingAttachments: string[] = [];
+interface ComposerImage {
+  dataUrl: string;
+  name: string;
+}
+
+interface ComposerFile {
+  assetId: string;
+  mimeType: string;
+  name: string;
+}
+
+interface TurnPayload {
+  prompt: string;
+  pageText: string | null;
+  capturePage: boolean;
+  images: ComposerImage[];
+  files: ComposerFile[];
+}
+
+const pendingAttachments: ComposerImage[] = [];
+const turnPayloadByMessageId = new Map<string, TurnPayload>();
+const streamStartedAtById = new Map<string, number>();
 interface ComposerDocument {
   key: string;
   file: File;
@@ -916,10 +949,18 @@ type SidePanelTab = 'chat' | 'workflows' | 'computer-use' | 'cloud-runs' | 'page
 const MAX_STORED_MESSAGES = 50;
 const MAX_STORED_GENERATED_FILES_PER_MESSAGE = 20;
 
+function pruneTurnPayloads(): void {
+  const live = new Set(_ctx.messages.map((message) => message.id));
+  for (const messageId of turnPayloadByMessageId.keys()) {
+    if (!live.has(messageId)) turnPayloadByMessageId.delete(messageId);
+  }
+}
+
 function trimLiveMessages(): void {
   if (trimChatMessages(_ctx.messages, MAX_STORED_MESSAGES) > 0) {
     _ctx.lastRenderedCount = 0;
     _ctx.needsMessageRebuild = true;
+    pruneTurnPayloads();
   }
 }
 
@@ -953,6 +994,13 @@ function serializeMessagesForHistory() {
     ...(message.role === 'assistant' && message.interactiveCards
       ? { interactiveCards: message.interactiveCards }
       : {}),
+    ...(message.role === 'assistant' && message.sources ? { sources: message.sources } : {}),
+    ...(message.role === 'assistant' && message.citations ? { citations: message.citations } : {}),
+    ...(message.role === 'assistant' && message.durationMs !== undefined
+      ? { durationMs: message.durationMs }
+      : {}),
+    ...(message.role === 'user' && message.attachments ? { attachments: message.attachments } : {}),
+    ...(message.role === 'user' && message.pages ? { pages: message.pages } : {}),
   }));
 }
 
@@ -1155,6 +1203,7 @@ function clearPendingPageContext(): void {
 
 function resetConversationView(): void {
   _ctx.messages.length = 0;
+  turnPayloadByMessageId.clear();
   _ctx.lastRenderedCount = 0;
   _ctx.needsMessageRebuild = true;
   clearPendingPageContext();
@@ -1188,6 +1237,8 @@ async function transitionManagedCloudOwner(nextOwner: ManagedCloudOwner | null):
   }
   _ctx.managedCloudOwner = nextOwner ? { ...nextOwner } : null;
   _ctx.messages.length = 0;
+  turnPayloadByMessageId.clear();
+  streamStartedAtById.clear();
   _ctx.lastRenderedCount = 0;
   _ctx.needsMessageRebuild = true;
   _ctx.isStreaming = false;
@@ -1703,6 +1754,266 @@ function injectStyles(): void {
     }
     .sp-copy-btn:hover { color: var(--agi-ext-text); background: var(--agi-ext-hover); }
     .sp-copy-btn.copied { color: var(--agi-ext-success-text); opacity: 1; }
+    .sp-answer-meta {
+      padding: 0 3px;
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
+    .sp-regenerate { position: relative; display: inline-flex; }
+    .sp-regenerate__menu {
+      position: absolute;
+      bottom: calc(100% + 4px);
+      left: 0;
+      z-index: var(--z-dropdown);
+      min-width: 210px;
+      max-height: 280px;
+      overflow-y: auto;
+      padding: 4px;
+      border: 1px solid var(--agi-ext-border-strong);
+      border-radius: var(--corner-menu);
+      background: var(--agi-ext-surface);
+      box-shadow: var(--agi-ext-elevation-2);
+    }
+    .sp-regenerate__menu[hidden] { display: none; }
+    .sp-regenerate__item {
+      display: flex;
+      width: 100%;
+      min-height: var(--control-lg);
+      align-items: center;
+      padding: 4px 10px;
+      border: 0;
+      border-radius: var(--corner-control);
+      background: transparent;
+      color: var(--agi-ext-text);
+      font: inherit;
+      font-size: var(--type-label-size);
+      line-height: var(--type-label-height);
+      text-align: left;
+      cursor: pointer;
+    }
+    .sp-regenerate__item:hover { background: var(--agi-ext-hover); }
+    .sp-regenerate__item:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
+    .sp-regenerate__heading {
+      padding: 6px 10px 2px;
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
+    #sp-messages.sp-messages--busy .sp-regenerate,
+    #sp-messages.sp-messages--busy .sp-resend-btn { display: none; }
+    .sp-msg-context {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 6px;
+      max-width: 100%;
+    }
+    .sp-msg-context__item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      max-width: 220px;
+      min-height: 32px;
+      padding: 4px 10px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-control);
+      background: var(--agi-ext-surface);
+      color: var(--agi-ext-text);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      text-decoration: none;
+    }
+    .sp-msg-context__item > .agi-icon { color: var(--agi-ext-text-muted); }
+    .sp-msg-context__item--thumb { padding: 0; overflow: hidden; }
+    .sp-msg-context__thumb { display: block; width: 64px; height: 64px; object-fit: cover; }
+    .sp-msg-context__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    a.sp-msg-context__page:hover { background: var(--agi-ext-hover); }
+    a.sp-msg-context__page:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
+    .sp-answer-files { display: flex; flex-direction: column; gap: 8px; width: min(100%, 420px); }
+    .sp-answer-file {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 52px;
+      padding: 8px 8px 8px 12px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-panel);
+      background: var(--agi-ext-surface);
+    }
+    .sp-answer-file__icon { display: inline-flex; flex-shrink: 0; color: var(--agi-ext-text-muted); }
+    .sp-answer-file__copy { display: flex; flex: 1; flex-direction: column; gap: 1px; min-width: 0; }
+    .sp-answer-file__name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--agi-ext-text);
+      font-size: var(--type-label-size);
+      line-height: var(--type-label-height);
+      font-weight: 550;
+    }
+    .sp-answer-file__meta,
+    .sp-answer-file__status {
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
+    .sp-answer-file__status:empty { display: none; }
+    .sp-answer-file__actions { display: inline-flex; flex-shrink: 0; gap: 2px; }
+    .sp-answer-file__action {
+      display: inline-flex;
+      width: var(--control-md);
+      height: var(--control-md);
+      align-items: center;
+      justify-content: center;
+      border: 0;
+      border-radius: var(--corner-control);
+      background: transparent;
+      color: var(--agi-ext-text-muted);
+      cursor: pointer;
+    }
+    .sp-answer-file__action:hover { background: var(--agi-ext-hover); color: var(--agi-ext-text); }
+    .sp-answer-file__action:disabled { opacity: 0.5; cursor: default; }
+    .sp-answer-file__action:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
+    .sp-answer-image { display: flex; flex-direction: column; gap: 6px; margin: 0; }
+    .sp-answer-image__frame {
+      display: flex;
+      min-height: 120px;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-panel);
+      background: var(--agi-ext-surface);
+    }
+    .sp-answer-image__frame img { display: block; max-width: 100%; height: auto; }
+    .sp-answer-image__status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 12px;
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
+    .sp-answer-image__frame[aria-busy='true'] .sp-answer-image__spinner svg { animation: sp-spin var(--duration-spin) linear infinite; }
+    .sp-answer-image__caption { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .sp-answer-image__caption .sp-answer-file__name { flex: 1; }
+    .sp-citation { position: relative; display: inline; }
+    .sp-bubble-assistant a.sp-citation__chip,
+    .sp-citation__chip {
+      display: inline-flex;
+      max-width: 160px;
+      align-items: center;
+      margin: 0 2px;
+      padding: 0 7px;
+      overflow: hidden;
+      border-radius: var(--corner-pill);
+      background: var(--agi-ext-overlay);
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      font-weight: 500;
+      text-decoration: none;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      vertical-align: baseline;
+    }
+    .sp-bubble-assistant a.sp-citation__chip:hover,
+    .sp-bubble-assistant a.sp-citation__chip:focus-visible { background: var(--agi-ext-hover); color: var(--agi-ext-text); }
+    .sp-citation__card {
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 0;
+      z-index: var(--z-popover);
+      display: none;
+      width: min(300px, calc(100vw - 32px));
+      flex-direction: column;
+      gap: 10px;
+      padding: 10px;
+      border: 1px solid var(--agi-ext-border-strong);
+      border-radius: var(--corner-menu);
+      background: var(--agi-ext-surface);
+      box-shadow: var(--agi-ext-elevation-2);
+      white-space: normal;
+    }
+    .sp-citation:hover .sp-citation__card,
+    .sp-citation:focus-within .sp-citation__card,
+    .sp-citation.open .sp-citation__card { display: flex; }
+    .sp-bubble-assistant a.sp-citation__source,
+    .sp-sources__link {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      color: var(--agi-ext-text);
+      text-decoration: none;
+    }
+    .sp-citation__source-site,
+    .sp-sources__link-site {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
+    .sp-citation__source-title,
+    .sp-sources__link-title {
+      color: var(--agi-ext-text);
+      font-size: var(--type-label-size);
+      line-height: var(--type-label-height);
+      font-weight: 550;
+    }
+    .sp-citation__source:hover .sp-citation__source-title,
+    .sp-sources__link:hover .sp-sources__link-title { text-decoration: underline; }
+    .sp-citation__source:focus-visible,
+    .sp-sources__link:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
+    .sp-citation__source-snippet,
+    .sp-sources__link-snippet {
+      display: -webkit-box;
+      overflow: hidden;
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 3;
+    }
+    .sp-citation__source-date,
+    .sp-sources__link-date {
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
+    .sp-sources { width: min(100%, 420px); }
+    .sp-sources__summary {
+      display: inline-flex;
+      min-height: 28px;
+      align-items: center;
+      gap: 6px;
+      padding: 0 10px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-pill);
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      cursor: pointer;
+      list-style: none;
+      user-select: none;
+    }
+    .sp-sources__summary::-webkit-details-marker { display: none; }
+    .sp-sources__summary:hover { background: var(--agi-ext-hover); color: var(--agi-ext-text); }
+    .sp-sources__summary:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
+    .sp-sources__list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin: 8px 0 0;
+      padding: 10px 12px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-panel);
+      background: var(--agi-ext-surface);
+      list-style: none;
+    }
 
     /* ── Markdown rendering inside assistant bubbles ── */
     .sp-bubble-assistant code {
@@ -2156,6 +2467,22 @@ function injectStyles(): void {
     }
     .sp-dot:nth-child(2) { animation-delay: calc(var(--duration-bounce) / 6); }
     .sp-dot:nth-child(3) { animation-delay: calc(var(--duration-bounce) / 3); }
+    .sp-thinking-label {
+      margin-left: 4px;
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
+    .sp-bubble-transient-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
+    .sp-bubble-transient-status__icon svg,
+    .sp-send-stopping-icon svg { animation: sp-spin var(--duration-spin) linear infinite; }
     @keyframes sp-bounce {
       0%, 100% { transform: translateY(0); opacity: 0.4; }
       50% { transform: translateY(-4px); opacity: 1; }
@@ -2630,6 +2957,15 @@ function injectStyles(): void {
       color: var(--agi-ext-text-muted);
       font-size: var(--type-caption-size);
       line-height: var(--type-caption-height);
+    }
+    .sp-attachment-notices {
+      display: flex;
+      flex: 1 1 100%;
+      flex-direction: column;
+      gap: 2px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
     }
 
     /* ── Composer bottom bar: persistent page-context chip ── */
@@ -4915,9 +5251,15 @@ function renderMessages(): void {
     _ctx.needsMessageRebuild = false;
   }
 
+  const lastUserIndex = lastUserMessageIndex();
+  const regenerateModels = regenerateModelOptions();
   for (let i = _ctx.lastRenderedCount; i < _ctx.messages.length; i++) {
     const msg = _ctx.messages[i];
     if (msg) {
+      const regenerable =
+        lastUserIndex >= 0 &&
+        (msg.role === 'user' ? i === lastUserIndex : i === _ctx.messages.length - 1) &&
+        i >= lastUserIndex;
       container.appendChild(
         buildBubbleWithTools(msg, {
           approvalDecisions: msg.cloudApprovalDecisions,
@@ -4927,6 +5269,19 @@ function renderMessages(): void {
           onRetry: (messageId) => retryFailedMessage(messageId),
           onSwitchModel: () => document.getElementById('sp-model-selector-btn')?.click(),
           quotaRecovery: { label: quotaRecoveryLabel, open: openQuotaRecovery },
+          ...(regenerable
+            ? {
+                onRegenerate: (messageId: string, modelSelection?: string) =>
+                  regenerateTurn(messageId, modelSelection),
+                regenerateModels,
+              }
+            : {}),
+          ...(msg.role === 'user'
+            ? {
+                imagePreviews:
+                  turnPayloadByMessageId.get(msg.id)?.images.map((image) => image.dataUrl) ?? [],
+              }
+            : { fileAccess: answerFileAccess }),
         }),
       );
     }
@@ -4936,17 +5291,81 @@ function renderMessages(): void {
   scrollToBottom();
 }
 
-function showThinking(): void {
+function lastUserMessageIndex(): number {
+  for (let index = _ctx.messages.length - 1; index >= 0; index -= 1) {
+    if (_ctx.messages[index]?.role === 'user') return index;
+  }
+  return -1;
+}
+
+function applyModelSelection(value: string): void {
+  if (_ctx.selectedModel !== value) {
+    _ctx.conversationGeneration += 1;
+    _ctx.currentModelKey = undefined;
+    _ctx.previousTaskType = undefined;
+    _ctx.reasoningEffort =
+      _ctx.quickMode || value === 'auto' || value.startsWith('auto-')
+        ? undefined
+        : resolveModelEffort(value, _ctx.reasoningEffort);
+  }
+  _ctx.selectedModel = value;
+  renderModelNotice(null);
+  chrome.storage.local.set({ [SELECTED_MODEL_STORAGE_KEY]: value }).catch(() => {});
+  refreshModelPickerUI();
+  saveMessages();
+}
+
+function regenerateModelOptions(): RegenerateModelOption[] {
+  if (!managedModelAccess) return [];
+  const options = getManagedModelPickerOptions(managedModelAccess);
+  const { primary } = partitionManagedModelOptions(options);
+  return [...options.filter((option) => option.value === 'auto'), ...primary].map((option) => ({
+    value: option.value,
+    label: option.label,
+  }));
+}
+
+async function fetchAnswerFile(url: string): Promise<Blob> {
+  const target = new URL(url);
+  const owner = _ctx.managedCloudOwner;
+  const headers =
+    owner && target.origin === new URL(FREE_TRIAL_GATEWAY).origin
+      ? await composerDocumentHeaders(owner)()
+      : {};
+  const response = await fetch(target.href, { headers, credentials: 'omit' });
+  if (!response.ok) throw new Error(`File request failed with ${response.status}`);
+  return response.blob();
+}
+
+const answerFileAccess: AnswerFileAccess = {
+  resolveUrl: resolveManagedArtifactUrl,
+  fetchFile: fetchAnswerFile,
+  openUrl: (url) => {
+    void chrome.tabs.create({ url });
+  },
+};
+
+function showThinking(label = t('spThinkingPreparing')): void {
   const container = document.getElementById('sp-messages')!;
 
-  const wrap = el('div', { class: 'sp-msg sp-msg-assistant sp-thinking-wrap' });
+  const wrap = el('div', {
+    class: 'sp-msg sp-msg-assistant sp-thinking-wrap',
+    role: 'status',
+    'aria-live': 'polite',
+  });
   const thinking = el('div', { class: 'sp-thinking' });
-  thinking.appendChild(el('div', { class: 'sp-dot' }));
-  thinking.appendChild(el('div', { class: 'sp-dot' }));
-  thinking.appendChild(el('div', { class: 'sp-dot' }));
+  thinking.appendChild(el('div', { class: 'sp-dot', 'aria-hidden': 'true' }));
+  thinking.appendChild(el('div', { class: 'sp-dot', 'aria-hidden': 'true' }));
+  thinking.appendChild(el('div', { class: 'sp-dot', 'aria-hidden': 'true' }));
+  thinking.appendChild(el('span', { class: 'sp-thinking-label' }, label));
   wrap.appendChild(thinking);
   container.appendChild(wrap);
   scrollToBottom();
+}
+
+function setThinkingLabel(label: string): void {
+  const target = document.querySelector('.sp-thinking-label');
+  if (target) target.textContent = label;
 }
 
 function removeThinking(): void {
@@ -4956,7 +5375,8 @@ function removeThinking(): void {
 function updateStreamingBubble(id: string, fullText: string, done: boolean): void {
   const bubble = document.getElementById(`sp-bubble-${id}`);
   if (!bubble) return;
-  bubble.innerHTML = sanitizeHtml(renderMarkdown(fullText));
+  const message = _ctx.messages.find((candidate) => candidate.id === id);
+  fillAnswerBubble(bubble, fullText, message ? answerSourceLists(message).markers : []);
   if (done) {
     bubble.classList.remove('sp-cursor');
   } else {
@@ -5033,7 +5453,15 @@ async function capturePageContext(): Promise<PageContextCapture> {
           const text = sanitizePageText(raw).slice(0, PAGE_CONTEXT_MAX_CHARS);
           resolve(
             text.trim()
-              ? { ok: true, text, source: { tabId: tab.id!, url: tab.url ?? '' } }
+              ? {
+                  ok: true,
+                  text,
+                  source: {
+                    tabId: tab.id!,
+                    url: tab.url ?? '',
+                    ...(tab.title ? { title: tab.title } : {}),
+                  },
+                }
               : { ok: false, reason: PAGE_CONTEXT_EMPTY_REASON },
           );
         },
@@ -5119,13 +5547,13 @@ function expandSlashCommand(
   return null;
 }
 
-function requestStreamCancellation(streamId: string): void {
+function requestStreamCancellation(streamId: string): Promise<void> {
   const owner = ownerByStreamId.get(streamId);
-  if (!owner) return;
+  if (!owner) return Promise.resolve();
   const cloudRun =
     cloudRunsByStreamId.get(streamId) ??
     _ctx.messages.find((message) => message.id === streamId)?.cloudAgentRun;
-  chrome.runtime
+  return chrome.runtime
     .sendMessage({
       type: 'CANCEL_STREAM',
       owner,
@@ -5133,6 +5561,7 @@ function requestStreamCancellation(streamId: string): void {
       id: streamId,
       ...(cloudRun ? { cloudRun } : {}),
     })
+    .then(() => undefined)
     .catch(() => {
       // The service worker may have restarted before receiving the cancellation.
     });
@@ -5199,6 +5628,7 @@ function beginManagedStream(quickMode: boolean): string {
   ownerByStreamId.set(streamId, { ...owner });
   quickModeByStreamId.set(streamId, quickMode);
   assistantCloudIdByStreamId.set(streamId, crypto.randomUUID());
+  streamStartedAtById.set(streamId, Date.now());
   _ctx.currentStreamId = streamId;
   _ctx.isStreaming = true;
   startManagedChatKeepalive();
@@ -5230,6 +5660,7 @@ function resumeManagedCloudRun(
   const assistant = _ctx.messages.find((message) => message.id === streamId);
   if (!assistant) return;
   assistant.streaming = true;
+  assistant.reconnecting = true;
   assistant.cloudAgentRun = { ...cloudRun };
   cloudRunsByStreamId.set(streamId, { ...cloudRun });
   ownerByStreamId.set(streamId, { ...owner });
@@ -5239,6 +5670,7 @@ function resumeManagedCloudRun(
   startManagedChatKeepalive();
   armManagedStreamInactivityWatchdog(streamId);
   updateSendButton();
+  _ctx.needsMessageRebuild = true;
   renderMessages();
   chrome.runtime.sendMessage(
     {
@@ -5270,9 +5702,24 @@ function resumeManagedCloudRun(
   );
 }
 
+let stoppingStreamId: string | null = null;
+
 function cancelCurrentManagedStream(preservePartialOutput: boolean): void {
   const streamId = _ctx.currentStreamId;
-  if (streamId) requestStreamCancellation(streamId);
+  if (streamId) {
+    const stopped = _ctx.messages.find((message) => message.id === streamId);
+    if (stopped && preservePartialOutput) stopped.stopping = true;
+    stoppingStreamId = streamId;
+    void requestStreamCancellation(streamId).finally(() => {
+      if (stopped) stopped.stopping = false;
+      if (stoppingStreamId === streamId) stoppingStreamId = null;
+      updateSendButton();
+      if (stopped && _ctx.messages.includes(stopped)) {
+        _ctx.needsMessageRebuild = true;
+        renderMessages();
+      }
+    });
+  }
   stopManagedChatKeepalive();
   if (_ctx.streamTimeoutHandle) {
     clearTimeout(_ctx.streamTimeoutHandle);
@@ -5284,15 +5731,41 @@ function cancelCurrentManagedStream(preservePartialOutput: boolean): void {
     resolvedRouteByStreamId.delete(streamId);
     quickModeByStreamId.delete(streamId);
     ownerByStreamId.delete(streamId);
+    streamStartedAtById.delete(streamId);
   }
   removeThinking();
   _ctx.isStreaming = false;
   _ctx.currentStreamId = null;
   updateSendButton();
   if (preservePartialOutput) {
+    _ctx.needsMessageRebuild = true;
     saveMessages();
     renderMessages();
   }
+}
+
+function mimeTypeOfDataUrl(dataUrl: string): string {
+  return /^data:([^;,]+)/.exec(dataUrl)?.[1] ?? 'image/png';
+}
+
+function turnAttachmentDescriptors(payload: TurnPayload): SidePanelMessageAttachment[] {
+  return [
+    ...payload.images.map((image): SidePanelMessageAttachment => ({
+      kind: 'image',
+      name: image.name,
+      mimeType: mimeTypeOfDataUrl(image.dataUrl),
+    })),
+    ...payload.files.map((file): SidePanelMessageAttachment => ({
+      kind: 'file',
+      name: file.name,
+      mimeType: file.mimeType,
+      assetId: file.assetId,
+    })),
+  ];
+}
+
+function pageReference(source: PageContextSource): SidePanelPageReference {
+  return { url: source.url, title: source.title || pageChipLabel(source.url) };
 }
 
 function sendMessage(text: string): void {
@@ -5302,7 +5775,6 @@ function sendMessage(text: string): void {
     pendingAttachmentCount(),
     pendingDocuments.length > 0 ? 'file' : 'image',
   )!;
-  const owner = _ctx.managedCloudOwner!;
   _ctx.conversationGeneration += 1;
   renderModelNotice(null);
 
@@ -5318,126 +5790,92 @@ function sendMessage(text: string): void {
   extensionSendQueue.dequeue();
 
   const slashCmd = expandSlashCommand(prompt);
-  if (slashCmd?.captureContext) {
-    const displayText = slashCmd.display;
-    const actualPrompt = slashCmd.prompt;
-    const pageContextAtAdmission = _ctx.pendingPageContext;
-    clearPendingPageContext();
-    const attachmentsToSend = pendingAttachments.slice();
-    pendingAttachments.length = 0;
-    const filesToSend = takeComposerDocuments();
-    composerAttachmentNotice = null;
-    composerContextNotice = null;
-    updateContextButton();
-    updateAttachmentPreview();
-
-    const userMsg: ChatMessage = {
-      id: `u-${Date.now()}`,
-      role: 'user',
-      content: displayText,
-      timestamp: Date.now(),
-      runtime: 'managed-cloud',
-    };
-    _ctx.messages.push(userMsg);
-    trimLiveMessages();
-    saveMessages();
-    renderMessages();
-
-    const streamId = beginManagedStream(_ctx.quickMode);
-    const pageAtAdmission = activePageSource;
-
-    capturePageContext()
-      .then((capture) => {
-        if (_ctx.currentStreamId !== streamId) return;
-        if (
-          capture.ok &&
-          !pageContextStillDescribes(pageAtAdmission, capture.source.tabId, capture.source.url)
-        ) {
-          handleStreamError(streamId, PAGE_CONTEXT_CHANGED_REASON);
-          return;
-        }
-        const pageCtx = capture.ok ? capture.text : pageContextAtAdmission;
-        if (!pageCtx) {
-          // This command is about the page. Answering without it would be an
-          // answer about nothing, dressed as an answer about this page.
-          handleStreamError(streamId, capture.ok ? PAGE_CONTEXT_EMPTY_REASON : capture.reason);
-          return;
-        }
-
-        const history = selectModelHistory(_ctx.messages, userMsg.id);
-
-        _ctx.messages.push({
-          id: streamId,
-          role: 'assistant',
-          content: '',
-          streaming: true,
-          timestamp: Date.now(),
-          runtime: 'managed-cloud',
-        });
-        lastStreamPersistAtMs = Date.now();
-        saveMessages();
-
-        chrome.runtime.sendMessage(
-          {
-            type: 'CHAT_MESSAGE',
-            owner,
-            clientInstanceId: SIDE_PANEL_CLIENT_INSTANCE_ID,
-            id: streamId,
-            text: actualPrompt,
-            pageContext: pageCtx,
-            conversationHistory: history,
-            attachments: attachmentsToSend.length > 0 ? attachmentsToSend : undefined,
-            fileAttachments: filesToSend.length > 0 ? filesToSend : undefined,
-            extendedThinking: _ctx.thinkingEnabled || undefined,
-            modelSelection: _ctx.selectedModel,
-            quickMode: _ctx.quickMode || undefined,
-            ...managedOutboundRoutingPayload(),
-            ...managedTurnPersistencePayload(streamId),
-          },
-          (response?: { success?: boolean; error?: string }) => {
-            if (chrome.runtime.lastError) {
-              handleStreamError(streamId, chrome.runtime.lastError.message ?? 'Extension error');
-            } else if (response?.success === false) {
-              handleStreamError(streamId, response.error ?? 'Managed Cloud request was rejected.');
-            }
-          },
-        );
-      })
-      .catch((err) => {
-        console.error('[SidePanel] Failed to capture page context for chat:', err);
-        if (_ctx.currentStreamId === streamId) {
-          handleStreamError(streamId, 'Unable to capture page context.');
-        }
-      });
-    return;
-  }
-
-  const userMsg: ChatMessage = {
-    id: `u-${Date.now()}`,
-    role: 'user',
-    content: prompt,
-    timestamp: Date.now(),
-    runtime: 'managed-cloud',
+  const capturePage = slashCmd?.captureContext === true;
+  const pageSource = _ctx.pendingPageContextSource;
+  const payload: TurnPayload = {
+    prompt: capturePage && slashCmd ? slashCmd.prompt : prompt,
+    pageText: _ctx.pendingPageContext,
+    capturePage,
+    images: pendingAttachments.splice(0),
+    files: takeComposerDocuments(),
   };
-  _ctx.messages.push(userMsg);
-  trimLiveMessages();
-  saveMessages();
-  renderMessages();
-
-  const pageCtx = _ctx.pendingPageContext;
   clearPendingPageContext();
-  const attachmentsToSend = pendingAttachments.slice();
-  pendingAttachments.length = 0;
-  const filesToSend = takeComposerDocuments();
-  composerAttachmentNotice = null;
+  composerAttachmentNotices = [];
   composerContextNotice = null;
   updateContextButton();
   updateAttachmentPreview();
 
-  const streamId = beginManagedStream(_ctx.quickMode);
+  const attachments = turnAttachmentDescriptors(payload);
+  const userMsg: ChatMessage = {
+    id: `u-${Date.now()}`,
+    role: 'user',
+    content: capturePage && slashCmd ? slashCmd.display : prompt,
+    timestamp: Date.now(),
+    runtime: 'managed-cloud',
+    ...(attachments.length > 0 ? { attachments } : {}),
+    ...(pageSource && payload.pageText ? { pages: [pageReference(pageSource)] } : {}),
+  };
+  _ctx.messages.push(userMsg);
+  turnPayloadByMessageId.set(userMsg.id, payload);
+  trimLiveMessages();
+  _ctx.needsMessageRebuild = true;
+  saveMessages();
+  renderMessages();
+  dispatchTurn(userMsg, payload, _ctx.quickMode);
+}
 
+function dispatchTurn(userMsg: ChatMessage, payload: TurnPayload, quickMode: boolean): void {
+  const owner = _ctx.managedCloudOwner!;
+  const streamId = beginManagedStream(quickMode);
+  if (!payload.capturePage) {
+    postTurn(userMsg, payload, streamId, owner, quickMode);
+    return;
+  }
+  const pageAtAdmission = activePageSource;
+  setThinkingLabel(t('spThinkingReadingPage'));
+  capturePageContext()
+    .then((capture) => {
+      if (_ctx.currentStreamId !== streamId) return;
+      if (
+        capture.ok &&
+        !pageContextStillDescribes(pageAtAdmission, capture.source.tabId, capture.source.url)
+      ) {
+        handleStreamError(streamId, PAGE_CONTEXT_CHANGED_REASON);
+        return;
+      }
+      const pageText = capture.ok ? capture.text : payload.pageText;
+      if (!pageText) {
+        // This command is about the page. Answering without it would be an
+        // answer about nothing, dressed as an answer about this page.
+        handleStreamError(streamId, capture.ok ? PAGE_CONTEXT_EMPTY_REASON : capture.reason);
+        return;
+      }
+      payload.pageText = pageText;
+      payload.capturePage = false;
+      if (capture.ok) {
+        userMsg.pages = [pageReference(capture.source)];
+        _ctx.needsMessageRebuild = true;
+        renderMessages();
+        showThinking();
+      }
+      postTurn(userMsg, payload, streamId, owner, quickMode);
+    })
+    .catch((err) => {
+      console.error('[SidePanel] Failed to capture page context for chat:', err);
+      if (_ctx.currentStreamId === streamId) {
+        handleStreamError(streamId, 'Unable to capture page context.');
+      }
+    });
+}
+
+function postTurn(
+  userMsg: ChatMessage,
+  payload: TurnPayload,
+  streamId: string,
+  owner: ManagedCloudOwner,
+  quickMode: boolean,
+): void {
   const history = selectModelHistory(_ctx.messages, userMsg.id);
-
   _ctx.messages.push({
     id: streamId,
     role: 'assistant',
@@ -5455,15 +5893,19 @@ function sendMessage(text: string): void {
       owner,
       clientInstanceId: SIDE_PANEL_CLIENT_INSTANCE_ID,
       id: streamId,
-      text: userMsg.content,
-      pageContext: pageCtx ?? undefined,
+      text: payload.prompt,
+      pageContext: payload.pageText ?? undefined,
       conversationHistory: history,
-      attachments: attachmentsToSend.length > 0 ? attachmentsToSend : undefined,
-      fileAttachments: filesToSend.length > 0 ? filesToSend : undefined,
+      attachments:
+        payload.images.length > 0 ? payload.images.map((image) => image.dataUrl) : undefined,
+      fileAttachments:
+        payload.files.length > 0
+          ? payload.files.map(({ assetId, mimeType }) => ({ assetId, mimeType }))
+          : undefined,
       extendedThinking: _ctx.thinkingEnabled || undefined,
       modelSelection: _ctx.selectedModel,
-      quickMode: _ctx.quickMode || undefined,
-      ...managedOutboundRoutingPayload(),
+      quickMode: quickMode || undefined,
+      ...managedOutboundRoutingPayload(quickMode),
       ...managedTurnPersistencePayload(streamId),
     },
     (response?: { success?: boolean; error?: string }) => {
@@ -5476,30 +5918,79 @@ function sendMessage(text: string): void {
   );
 }
 
-function retryFailedMessage(messageId: string): void {
-  if (_ctx.isStreaming) return;
+function replayableTurnPayload(userMsg: ChatMessage): TurnPayload | null {
+  const live = turnPayloadByMessageId.get(userMsg.id);
+  if (live) return live;
+  const attachments = userMsg.attachments ?? [];
+  if ((userMsg.pages?.length ?? 0) > 0) return null;
+  if (attachments.some((attachment) => attachment.kind === 'image' || !attachment.assetId)) {
+    return null;
+  }
+  const slashCmd = expandSlashCommand(userMsg.content);
+  return {
+    prompt: slashCmd?.captureContext ? slashCmd.prompt : userMsg.content,
+    pageText: null,
+    capturePage: slashCmd?.captureContext === true,
+    images: [],
+    files: attachments.map((attachment) => ({
+      assetId: attachment.assetId!,
+      mimeType: attachment.mimeType,
+      name: attachment.name,
+    })),
+  };
+}
 
-  const failedIndex = _ctx.messages.findIndex((message) => message.id === messageId);
-  if (failedIndex < 0) return;
+function restoreTurnToComposer(userMsg: ChatMessage): void {
+  const input = document.getElementById('sp-input') as HTMLTextAreaElement | null;
+  if (!input) return;
+  input.value = userMsg.content;
+  autoResizeInput(input);
+  composerContextNotice = t('spRetryNeedsAttachments');
+  updateAttachmentPreview();
+  input.focus();
+}
 
-  let promptText = '';
-  let promptIndex = -1;
-  for (let i = failedIndex - 1; i >= 0; i--) {
-    const candidate = _ctx.messages[i];
-    if (candidate?.role === 'user') {
-      promptText = candidate.content;
-      promptIndex = i;
+function canReplayTurn(): boolean {
+  return (
+    managedCloudChatState === 'ready' &&
+    _ctx.managedCloudOwner !== null &&
+    !_ctx.isStreaming &&
+    stoppingStreamId === null &&
+    !historyRestoreInProgress
+  );
+}
+
+function regenerateTurn(messageId: string, modelSelection?: string): void {
+  if (!canReplayTurn()) return;
+  const index = _ctx.messages.findIndex((message) => message.id === messageId);
+  if (index < 0) return;
+  let userIndex = -1;
+  for (let i = index; i >= 0; i -= 1) {
+    if (_ctx.messages[i]?.role === 'user') {
+      userIndex = i;
       break;
     }
   }
-  if (!promptText) return;
-
-  _ctx.messages.splice(promptIndex, failedIndex - promptIndex + 1);
+  if (userIndex < 0 || userIndex !== lastUserMessageIndex()) return;
+  const userMsg = _ctx.messages[userIndex]!;
+  const payload = replayableTurnPayload(userMsg);
+  if (!payload) {
+    restoreTurnToComposer(userMsg);
+    return;
+  }
+  if (modelSelection) applyModelSelection(modelSelection);
+  _ctx.messages.splice(userIndex + 1);
+  turnPayloadByMessageId.set(userMsg.id, payload);
+  _ctx.conversationGeneration += 1;
   _ctx.needsMessageRebuild = true;
+  renderModelNotice(null);
   saveMessages();
   renderMessages();
+  dispatchTurn(userMsg, payload, modelSelection ? false : _ctx.quickMode);
+}
 
-  sendMessage(promptText);
+function retryFailedMessage(messageId: string): void {
+  regenerateTurn(messageId);
 }
 
 function handleStreamError(
@@ -5535,6 +6026,7 @@ function handleStreamError(
   quickModeByStreamId.delete(id);
   ownerByStreamId.delete(id);
   assistantCloudIdByStreamId.delete(id);
+  streamStartedAtById.delete(id);
   stopManagedChatKeepalive();
   if (_ctx.streamTimeoutHandle) {
     clearTimeout(_ctx.streamTimeoutHandle);
@@ -5542,6 +6034,7 @@ function handleStreamError(
   }
   removeThinking();
   const existing = _ctx.messages.find((message) => message.id === id);
+  if (existing) existing.reconnecting = false;
   const canRetryApproval = existing?.agentActivity?.entries.some(
     (entry) =>
       entry.kind === 'tool' &&
@@ -5575,6 +6068,25 @@ function handleStreamError(
   _ctx.needsMessageRebuild = true;
   saveMessages();
   renderMessages();
+}
+
+function ensureStreamingAssistant(streamId: string, streamUsedQuick: boolean): ChatMessage {
+  const existing = _ctx.messages.find((message) => message.id === streamId);
+  if (existing) return existing;
+  const cloudRun = cloudRunsByStreamId.get(streamId);
+  const assistant: ChatMessage = {
+    id: streamId,
+    role: 'assistant',
+    content: '',
+    streaming: true,
+    timestamp: Date.now(),
+    runtime: 'managed-cloud',
+    ...(streamUsedQuick ? { managedQuickMode: true } : {}),
+    ...(cloudRun ? { cloudAgentRun: { ...cloudRun } } : {}),
+  };
+  _ctx.messages.push(assistant);
+  trimLiveMessages();
+  return assistant;
 }
 
 function updateConnectionStatus(): void {
@@ -5633,6 +6145,7 @@ function updateModelBadge(modelId: string): void {
 }
 
 function updateSendButton(): void {
+  document.getElementById('sp-messages')?.classList.toggle('sp-messages--busy', _ctx.isStreaming);
   const btn = document.getElementById('sp-send-btn') as HTMLButtonElement | null;
   if (!btn) return;
   if (_ctx.isStreaming) {
@@ -5643,6 +6156,14 @@ function updateSendButton(): void {
     btn.setAttribute('aria-label', t('spSendStopAria'));
     clearChildren(btn);
     btn.appendChild(renderIcon(Square, 14));
+  } else if (stoppingStreamId !== null) {
+    btn.disabled = true;
+    btn.hidden = false;
+    btn.setAttribute('data-mode', 'stopping');
+    btn.title = t('spStopping');
+    btn.setAttribute('aria-label', t('spStopping'));
+    clearChildren(btn);
+    btn.appendChild(renderIcon(Loader2, 14, 'sp-send-stopping-icon'));
   } else {
     const input = document.getElementById('sp-input') as HTMLTextAreaElement | null;
     const text = input?.value ?? '';
@@ -5673,6 +6194,7 @@ function canAdmitComposerMessage(text: string): boolean {
     managedCloudChatState === 'ready' &&
     _ctx.managedCloudOwner !== null &&
     !_ctx.isStreaming &&
+    stoppingStreamId === null &&
     !historyRestoreInProgress &&
     composerAttachmentIntakeCount === 0 &&
     composerDocumentsSettled() &&
@@ -5738,9 +6260,6 @@ const COMPOSER_ATTACHMENT_ACCEPT = [
 ].join(',');
 const COMPOSER_ATTACHMENT_DATA_URL =
   /^data:image\/(?:png|jpeg|webp|gif);base64,[a-z0-9+/]+={0,2}$/i;
-const COMPOSER_UNSUPPORTED_FILE_NOTICE =
-  'Attach a PNG, JPEG, WebP or GIF image, a PDF, or a text or Markdown file.';
-
 function composerAttachmentBytes(dataUrl: string): number {
   const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1);
   const padding = base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0;
@@ -5749,7 +6268,7 @@ function composerAttachmentBytes(dataUrl: string): number {
 
 function pendingAttachmentBytes(): number {
   let total = 0;
-  for (const dataUrl of pendingAttachments) total += composerAttachmentBytes(dataUrl);
+  for (const image of pendingAttachments) total += composerAttachmentBytes(image.dataUrl);
   return total;
 }
 
@@ -5761,7 +6280,7 @@ function composerDocumentsSettled(): boolean {
   return pendingDocuments.every((entry) => entry.phase === 'complete');
 }
 
-let composerAttachmentNotice: string | null = null;
+let composerAttachmentNotices: string[] = [];
 /** Why the last page-context capture produced nothing. Rendered in the same composer strip. */
 let composerContextNotice: string | null = null;
 
@@ -5769,23 +6288,27 @@ function attachmentBudgetLabel(bytes: number): string {
   return `${Math.round((bytes / (1024 * 1024)) * 10) / 10} MB`;
 }
 
-function admitComposerAttachment(dataUrl: string): boolean {
+function admitComposerAttachment(dataUrl: string, name: string): boolean {
   if (!COMPOSER_ATTACHMENT_DATA_URL.test(dataUrl)) {
-    composerAttachmentNotice = COMPOSER_UNSUPPORTED_FILE_NOTICE;
+    composerAttachmentNotices.push(t('spAttachmentUnsupported', [name]));
     return false;
   }
   if (pendingAttachmentCount() >= MANAGED_CHAT_MAX_ATTACHMENTS) {
-    composerAttachmentNotice = `Only ${MANAGED_CHAT_MAX_ATTACHMENTS} files can be sent with one message.`;
+    composerAttachmentNotices.push(
+      t('spAttachmentTooMany', [name, String(MANAGED_CHAT_MAX_ATTACHMENTS)]),
+    );
     return false;
   }
   if (
     pendingAttachmentBytes() + composerAttachmentBytes(dataUrl) >
     MANAGED_CHAT_MAX_ATTACHMENT_BYTES
   ) {
-    composerAttachmentNotice = `Attachments must total under ${attachmentBudgetLabel(MANAGED_CHAT_MAX_ATTACHMENT_BYTES)}.`;
+    composerAttachmentNotices.push(
+      t('spAttachmentOverBudget', [name, attachmentBudgetLabel(MANAGED_CHAT_MAX_ATTACHMENT_BYTES)]),
+    );
     return false;
   }
-  pendingAttachments.push(dataUrl);
+  pendingAttachments.push({ dataUrl, name });
   return true;
 }
 
@@ -5796,16 +6319,20 @@ function composerDocumentMimeType(file: File): string | null {
 
 function admitComposerDocument(file: File, mimeType: string): boolean {
   if (file.size === 0) {
-    composerAttachmentNotice = `${file.name} is empty.`;
+    composerAttachmentNotices.push(t('spAttachmentEmpty', [file.name]));
     return false;
   }
   if (pendingAttachmentCount() >= MANAGED_CHAT_MAX_ATTACHMENTS) {
-    composerAttachmentNotice = `Only ${MANAGED_CHAT_MAX_ATTACHMENTS} files can be sent with one message.`;
+    composerAttachmentNotices.push(
+      t('spAttachmentTooMany', [file.name, String(MANAGED_CHAT_MAX_ATTACHMENTS)]),
+    );
     return false;
   }
   const documentBytes = pendingDocuments.reduce((sum, entry) => sum + entry.file.size, 0);
   if (documentBytes + file.size > MAX_CHAT_ATTACHMENT_BYTES) {
-    composerAttachmentNotice = `Files must total under ${attachmentBudgetLabel(MAX_CHAT_ATTACHMENT_BYTES)}.`;
+    composerAttachmentNotices.push(
+      t('spAttachmentOverBudget', [file.name, attachmentBudgetLabel(MAX_CHAT_ATTACHMENT_BYTES)]),
+    );
     return false;
   }
   const entry: ComposerDocument = {
@@ -5885,7 +6412,7 @@ function removeComposerDocument(key: string): void {
   if (index < 0) return;
   pendingDocuments[index]!.controller.abort();
   pendingDocuments.splice(index, 1);
-  composerAttachmentNotice = null;
+  composerAttachmentNotices = [];
   updateAttachmentPreview();
 }
 
@@ -5895,34 +6422,51 @@ function discardComposerDocuments(): void {
   updateAttachmentPreview();
 }
 
-function takeComposerDocuments(): Array<{ assetId: string; mimeType: string }> {
+function takeComposerDocuments(): ComposerFile[] {
   const ready = pendingDocuments.flatMap((entry) =>
-    entry.attachment ? [{ assetId: entry.attachment.id, mimeType: entry.attachment.mimeType }] : [],
+    entry.attachment
+      ? [
+          {
+            assetId: entry.attachment.id,
+            mimeType: entry.attachment.mimeType,
+            name: entry.file.name,
+          },
+        ]
+      : [],
   );
   pendingDocuments.length = 0;
   return ready;
 }
 
 function acceptIncomingComposerFiles(files: File[] | FileList): void {
-  composerAttachmentNotice = null;
-  const candidates = Array.from(files);
+  composerAttachmentNotices = [];
   const incoming: File[] = [];
-  for (const file of candidates) {
+  for (const file of Array.from(files)) {
     if (!COMPOSER_ATTACHMENT_MIME_TYPES.has(file.type.toLowerCase())) {
       const documentMimeType = composerDocumentMimeType(file);
       if (!documentMimeType) {
-        composerAttachmentNotice = COMPOSER_UNSUPPORTED_FILE_NOTICE;
+        composerAttachmentNotices.push(t('spAttachmentUnsupported', [file.name]));
         continue;
       }
       if (file.size > MAX_CHAT_ATTACHMENT_BYTES) {
-        composerAttachmentNotice = `Each file must be under ${attachmentBudgetLabel(MAX_CHAT_ATTACHMENT_BYTES)}.`;
+        composerAttachmentNotices.push(
+          t('spAttachmentFileTooLarge', [
+            file.name,
+            attachmentBudgetLabel(MAX_CHAT_ATTACHMENT_BYTES),
+          ]),
+        );
         continue;
       }
       admitComposerDocument(file, documentMimeType);
       continue;
     }
     if (file.size > MANAGED_CHAT_MAX_ATTACHMENT_FILE_BYTES) {
-      composerAttachmentNotice = `Each image must be under ${attachmentBudgetLabel(MANAGED_CHAT_MAX_ATTACHMENT_FILE_BYTES)}.`;
+      composerAttachmentNotices.push(
+        t('spAttachmentFileTooLarge', [
+          file.name,
+          attachmentBudgetLabel(MANAGED_CHAT_MAX_ATTACHMENT_FILE_BYTES),
+        ]),
+      );
       continue;
     }
     incoming.push(file);
@@ -5936,18 +6480,14 @@ function acceptIncomingComposerFiles(files: File[] | FileList): void {
   updateAttachmentPreview();
   void Promise.all(incoming.map(readFileAsDataUrl))
     .then((results) => {
-      let readFailed = false;
-      for (const dataUrl of results) {
-        if (dataUrl) admitComposerAttachment(dataUrl);
-        else readFailed = true;
-      }
-      if (readFailed && !composerAttachmentNotice) {
-        composerAttachmentNotice =
-          results.length === 1 ? t('spAttachmentReadFailed') : t('spAttachmentReadMultipleFailed');
-      }
+      results.forEach((dataUrl, index) => {
+        const name = incoming[index]?.name || t('spAttachmentImageName');
+        if (dataUrl) admitComposerAttachment(dataUrl, name);
+        else composerAttachmentNotices.push(t('spAttachmentReadFailedNamed', [name]));
+      });
     })
     .catch(() => {
-      composerAttachmentNotice = t('spAttachmentReadAllFailed');
+      composerAttachmentNotices.push(t('spAttachmentReadAllFailed'));
     })
     .finally(() => {
       composerAttachmentIntakeCount = Math.max(0, composerAttachmentIntakeCount - 1);
@@ -6020,15 +6560,52 @@ function renderComposerDocumentChip(entry: ComposerDocument): HTMLElement {
   return chip;
 }
 
+function renderPendingPageChip(bar: HTMLElement): void {
+  const source = _ctx.pendingPageContextSource;
+  if (!_ctx.pendingPageContext || !source) return;
+  const label = source.title || pageChipLabel(source.url);
+  const chip = el('div', {
+    class: 'sp-attachment-chip sp-attachment-doc sp-attachment-page',
+    title: source.url,
+  });
+  const icon = el('span', { class: 'sp-attachment-doc-icon', 'aria-hidden': 'true' });
+  icon.appendChild(renderIcon(Globe, 16));
+  chip.appendChild(icon);
+  const copy = el('div', { class: 'sp-attachment-doc-copy' });
+  copy.appendChild(el('span', { class: 'sp-attachment-doc-name' }, label));
+  copy.appendChild(el('span', { class: 'sp-attachment-doc-status' }, pageChipLabel(source.url)));
+  chip.appendChild(copy);
+  const removeBtn = el(
+    'button',
+    {
+      class: 'sp-attachment-remove',
+      type: 'button',
+      title: t('spContextChipRemove', [label]),
+      'aria-label': t('spContextChipRemove', [label]),
+    },
+    '×',
+  );
+  removeBtn.addEventListener('click', () => {
+    clearPendingPageContext();
+    updateContextButton();
+    updateAttachmentPreview();
+    document.getElementById('sp-input')?.focus();
+  });
+  chip.appendChild(removeBtn);
+  bar.appendChild(chip);
+}
+
 function updateAttachmentPreview(): void {
   const bar = document.getElementById('sp-attachment-bar');
   if (!bar) return;
   clearChildren(bar);
+  const pageAttached = _ctx.pendingPageContext !== null && _ctx.pendingPageContextSource !== null;
   if (
     pendingAttachments.length === 0 &&
     pendingDocuments.length === 0 &&
-    !composerAttachmentNotice &&
+    composerAttachmentNotices.length === 0 &&
     !composerContextNotice &&
+    !pageAttached &&
     composerAttachmentIntakeCount === 0
   ) {
     bar.style.display = 'none';
@@ -6036,13 +6613,13 @@ function updateAttachmentPreview(): void {
     return;
   }
   bar.style.display = 'flex';
-  for (let i = 0; i < pendingAttachments.length; i++) {
-    const dataUrl = pendingAttachments[i]!;
-    const chip = el('div', { class: 'sp-attachment-chip' });
+  renderPendingPageChip(bar);
+  pendingAttachments.forEach((image, index) => {
+    const chip = el('div', { class: 'sp-attachment-chip', title: image.name });
     const thumb = el('img', {
       class: 'sp-attachment-thumb',
-      src: dataUrl,
-      alt: 'attachment',
+      src: image.dataUrl,
+      alt: image.name,
       width: '48',
       height: '48',
     }) as HTMLImageElement;
@@ -6050,21 +6627,21 @@ function updateAttachmentPreview(): void {
       'button',
       {
         class: 'sp-attachment-remove',
-        title: 'Remove',
-        'aria-label': `Remove attachment ${i + 1}`,
+        type: 'button',
+        title: t('spDocumentRemove', [image.name]),
+        'aria-label': t('spDocumentRemove', [image.name]),
       },
       '×',
     );
-    const idx = i;
     removeBtn.addEventListener('click', () => {
-      pendingAttachments.splice(idx, 1);
-      composerAttachmentNotice = null;
+      pendingAttachments.splice(index, 1);
+      composerAttachmentNotices = [];
       updateAttachmentPreview();
     });
     chip.appendChild(thumb);
     chip.appendChild(removeBtn);
     bar.appendChild(chip);
-  }
+  });
   for (const entry of pendingDocuments) bar.appendChild(renderComposerDocumentChip(entry));
   if (composerContextNotice) {
     bar.appendChild(
@@ -6080,14 +6657,16 @@ function updateAttachmentPreview(): void {
       ),
     );
   }
-  if (composerAttachmentNotice) {
-    bar.appendChild(
-      el(
-        'div',
-        { class: 'sp-attachment-notice', role: 'status', 'aria-live': 'polite' },
-        composerAttachmentNotice,
-      ),
-    );
+  if (composerAttachmentNotices.length > 0) {
+    const notices = el('ul', {
+      class: 'sp-attachment-notices',
+      role: 'status',
+      'aria-live': 'polite',
+    });
+    for (const notice of composerAttachmentNotices) {
+      notices.appendChild(el('li', { class: 'sp-attachment-notice' }, notice));
+    }
+    bar.appendChild(notices);
   } else if (composerAttachmentIntakeCount > 0) {
     bar.appendChild(
       el(
@@ -6095,11 +6674,6 @@ function updateAttachmentPreview(): void {
         { class: 'sp-attachment-retention', role: 'status', 'aria-live': 'polite' },
         t('spAttachmentAdding'),
       ),
-    );
-  }
-  if (pendingAttachments.length > 0 || pendingDocuments.length > 0) {
-    bar.appendChild(
-      el('div', { class: 'sp-attachment-retention' }, t('spAttachmentHistoryLimitation')),
     );
   }
   updateSendButton();
@@ -6768,25 +7342,10 @@ function buildUI(): void {
     if (isSelected) checkCell.appendChild(renderIcon(Check, 12));
     opt.appendChild(checkCell);
     opt.addEventListener('click', () => {
-      if (_ctx.selectedModel !== m.value) {
-        _ctx.conversationGeneration += 1;
-        _ctx.currentModelKey = undefined;
-        _ctx.previousTaskType = undefined;
-        _ctx.reasoningEffort =
-          _ctx.quickMode || m.value === 'auto' || m.value.startsWith('auto-')
-            ? undefined
-            : resolveModelEffort(m.value, _ctx.reasoningEffort);
-      }
-      _ctx.selectedModel = m.value;
-      renderModelNotice(null);
-      chrome.storage.local.set({ [SELECTED_MODEL_STORAGE_KEY]: m.value }).catch(() => {});
-      updateModelBadge(m.value);
-      renderModelDropdown();
-      refreshEffortUI();
+      applyModelSelection(m.value);
       modelDropdownEl.classList.remove('open');
       modelSelectorBtn.classList.remove('open');
       modelSelectorBtn.setAttribute('aria-expanded', 'false');
-      saveMessages();
       modelSelectorBtn.focus();
     });
 
@@ -7230,6 +7789,7 @@ function buildUI(): void {
         _ctx.streamTimeoutHandle = null;
       }
       _ctx.messages.length = 0;
+      turnPayloadByMessageId.clear();
       _ctx.lastRenderedCount = 0;
       _ctx.needsMessageRebuild = true;
       _ctx.isStreaming = false;
@@ -7783,10 +8343,15 @@ function buildUI(): void {
         quality: 90,
       })) as { success: boolean; data?: string; error?: string };
       if (res.success && res.data) {
-        composerAttachmentNotice = null;
-        const admitted = admitComposerAttachment(res.data);
+        composerAttachmentNotices = [];
+        const admitted = admitComposerAttachment(res.data, t('spScreenshotName'));
         updateAttachmentPreview();
-        if (!admitted) throw new Error(composerAttachmentNotice ?? 'Screenshot could not be added');
+        if (!admitted) {
+          throw new Error(
+            composerAttachmentNotices[composerAttachmentNotices.length - 1] ??
+              t('spAttachmentCaptureFailed'),
+          );
+        }
         drawerCaptureBtn.textContent = t('spDrawerCaptured');
         drawerCaptureBtn.classList.add('active');
         closeDrawer();
@@ -10757,7 +11322,7 @@ function buildUI(): void {
   screenshotItem.addEventListener('click', () => {
     attachMenu.classList.remove('open');
     attachBtn.setAttribute('aria-expanded', 'false');
-    composerAttachmentNotice = null;
+    composerAttachmentNotices = [];
     composerAttachmentIntakeCount += 1;
     updateAttachmentPreview();
     const finishScreenshotCapture = (
@@ -10765,9 +11330,9 @@ function buildUI(): void {
     ): void => {
       const runtimeError = chrome.runtime.lastError;
       if (runtimeError || !resp?.success || !resp.data) {
-        composerAttachmentNotice = resp?.error ?? t('spAttachmentCaptureFailed');
+        composerAttachmentNotices = [resp?.error ?? t('spAttachmentCaptureFailed')];
       } else {
-        admitComposerAttachment(resp.data);
+        admitComposerAttachment(resp.data, t('spScreenshotName'));
       }
       composerAttachmentIntakeCount = Math.max(0, composerAttachmentIntakeCount - 1);
       updateAttachmentPreview();
@@ -10778,7 +11343,7 @@ function buildUI(): void {
         finishScreenshotCapture,
       );
     } catch {
-      composerAttachmentNotice = t('spAttachmentCaptureFailed');
+      composerAttachmentNotices = [t('spAttachmentCaptureFailed')];
       composerAttachmentIntakeCount = Math.max(0, composerAttachmentIntakeCount - 1);
       updateAttachmentPreview();
     }
@@ -11683,6 +12248,12 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
   if (chunk.clientInstanceId !== SIDE_PANEL_CLIENT_INSTANCE_ID) return;
   if (chunk.id !== _ctx.currentStreamId) return;
   armManagedStreamInactivityWatchdog(chunk.id);
+  const reconnected = _ctx.messages.find((message) => message.id === chunk.id);
+  if (reconnected?.reconnecting) {
+    reconnected.reconnecting = false;
+    _ctx.needsMessageRebuild = true;
+    renderMessages();
+  }
   const streamUsedQuick = quickModeByStreamId.get(chunk.id) === true;
   const routeStamped = captureResolvedRoute(chunk.id, chunk.routing);
   const continuationChanged = !streamUsedQuick && applyRoutingContinuation(chunk.routing);
@@ -11777,23 +12348,7 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
 
   if ((chunk.generatedFiles?.length ?? 0) > 0 || chunk.interactiveCard) {
     removeThinking();
-    let assistant = _ctx.messages.find((message) => message.id === chunk.id);
-    if (!assistant) {
-      assistant = {
-        id: chunk.id,
-        role: 'assistant',
-        content: '',
-        streaming: true,
-        timestamp: Date.now(),
-        runtime: 'managed-cloud',
-        ...(streamUsedQuick ? { managedQuickMode: true } : {}),
-        ...(cloudRunsByStreamId.get(chunk.id)
-          ? { cloudAgentRun: { ...cloudRunsByStreamId.get(chunk.id)! } }
-          : {}),
-      };
-      _ctx.messages.push(assistant);
-      trimLiveMessages();
-    }
+    const assistant = ensureStreamingAssistant(chunk.id, streamUsedQuick);
     stampResolvedRoute(chunk.id, assistant);
     if (chunk.generatedFiles?.length) {
       const files = new Map((assistant.generatedFiles ?? []).map((file) => [file.id, file]));
@@ -11808,6 +12363,16 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
     _ctx.needsMessageRebuild = true;
     renderMessages();
     saveMessages();
+  }
+
+  if (chunk.sources) {
+    const assistant = ensureStreamingAssistant(chunk.id, streamUsedQuick);
+    if (chunk.sources.citations.length > 0) {
+      assistant.citations = mergeMessageSources(assistant.citations, chunk.sources.citations);
+    }
+    if (chunk.sources.results.length > 0) {
+      assistant.sources = mergeMessageSources(assistant.sources, chunk.sources.results);
+    }
   }
 
   if (!chunk.text && !chunk.done) return;
@@ -11863,13 +12428,20 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
       _ctx.streamTimeoutHandle = null;
     }
     const existing = _ctx.messages.find((m) => m.id === chunk.id);
+    const startedAt = streamStartedAtById.get(chunk.id);
     if (existing) {
       existing.streaming = false;
+      if (startedAt !== undefined) existing.durationMs = Math.max(0, Date.now() - startedAt);
       const cloudRun = cloudRunsByStreamId.get(chunk.id);
       if (cloudRun) existing.cloudAgentRun = { ...cloudRun };
       const assistantCloudId = assistantCloudIdByStreamId.get(chunk.id);
       if (assistantCloudId && !existing.cloudMessageId) existing.cloudMessageId = assistantCloudId;
+      if (isEmptyAssistantTurn(existing)) {
+        existing.error = true;
+        existing.errorText = t('spEmptyResponse');
+      }
     }
+    streamStartedAtById.delete(chunk.id);
     assistantCloudIdByStreamId.delete(chunk.id);
     cloudRunsByStreamId.delete(chunk.id);
     removeThinking();
