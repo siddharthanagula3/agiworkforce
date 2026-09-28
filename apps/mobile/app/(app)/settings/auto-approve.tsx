@@ -15,6 +15,7 @@ import {
 import { Text } from '@/components/ui/text';
 import { SettingsGroup, SettingsInfo, SettingsScreenShell } from '@/src/features/settings/common';
 import { useToolApprovalPolicySync } from '@/src/features/settings/tool-approvals/useToolApprovalPolicySync';
+import { ApprovalHistory } from '@/src/features/settings/tool-approvals/ApprovalHistory';
 import { useThemeColors } from '@/src/ui/theme';
 
 const POLICY_ICONS: Record<ToolApprovalPolicy, LucideIcon> = {
@@ -77,6 +78,8 @@ export default function AutoApproveScreen() {
             : `Current setting: ${selectedLabel}. AGI should never perform destructive, external, or expensive actions without a clear review step.`}
         </Text>
       </View>
+
+      {status === 'local' ? null : <ApprovalHistory />}
     </SettingsScreenShell>
   );
 }
