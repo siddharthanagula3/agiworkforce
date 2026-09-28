@@ -1,4 +1,4 @@
--- Reversal of 0324 : the AGI Workforce app in Slack is removed.
+-- Reversal of 0330 : the AGI Workforce app in Slack is removed.
 --
 -- WHAT THIS COSTS: every Slack installation and its sealed bot token, every
 -- linked Slack account, every pending link and every record of a Slack message
@@ -35,6 +35,6 @@ drop index if exists public.idx_slack_installations_installed_by;
 drop table if exists public.slack_installations;
 
 delete from public.schema_migrations
- where filename = '0324_slack_app.sql';
+ where filename = '0330_slack_app.sql';
 
 commit;
