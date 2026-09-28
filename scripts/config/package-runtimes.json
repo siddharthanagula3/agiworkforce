@@ -183,6 +183,7 @@
       "./circuit-breaker": "universal",
       "./composer-paste": "universal",
       "./control-receipts": "universal",
+      "./cron": "universal",
       "./crypto": "universal",
       "./display-name": "universal",
       "./fence": "universal",
