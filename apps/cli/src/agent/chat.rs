@@ -2637,6 +2637,8 @@ impl TurnHost for TurnHostAdapter<'_> {
                 if let Ok(mut activity) = self.session.session_activity.lock() {
                     activity.tool_started(id, name, args, workspace_root.as_deref());
                 }
+                self.session
+                    .note_file_edit_started(id, name, args, workspace_root.as_deref());
                 let raw_input = args.to_string();
                 let redacted_input = crate::agent_events::redact_args(&raw_input);
                 emit_tool_event(
@@ -2682,6 +2684,7 @@ impl TurnHost for TurnHostAdapter<'_> {
                         status
                     );
                 }
+                self.session.note_file_edit_finished(id, *ok);
                 let mut noticed = Vec::new();
                 if let Ok(mut activity) = self.session.session_activity.lock() {
                     for change in activity.tool_finished(id, *ok) {

@@ -17,6 +17,7 @@ use crate::subagent;
 use crate::teams;
 
 mod chat;
+mod checkpoints;
 mod executor;
 mod history;
 mod prompt;
@@ -24,6 +25,7 @@ mod tools;
 
 pub use crate::runtime::session::PrivacyMode;
 pub use chat::SideQuery;
+pub use checkpoints::{CheckpointSummary, RestoreReport, RewindMode, RewindOutcome};
 pub use executor::ToolCall;
 pub use prompt::assemble_system_prompt;
 pub(crate) use prompt::encode_untrusted_context;
@@ -187,7 +189,8 @@ pub struct AgentSession {
     pub fast_mode: bool,
     #[allow(dead_code)]
     pub(crate) original_model: Option<String>,
-    pub(crate) checkpoints: Vec<Vec<Message>>,
+    pub(crate) checkpoints: Vec<checkpoints::Checkpoint>,
+    pub(crate) checkpoint_captures: std::collections::HashMap<String, Vec<PathBuf>>,
     #[allow(dead_code)]
     pub session_name: Option<String>,
     /// Stable, filesystem-safe identifier for this process-local session run.
@@ -676,6 +679,7 @@ impl AgentSession {
             fast_mode: false,
             original_model: None,
             checkpoints: Vec::new(),
+            checkpoint_captures: std::collections::HashMap::new(),
             session_name: None,
             runtime_session_id: session_id,
             allowed_tools: None,
@@ -1340,6 +1344,7 @@ impl AgentSession {
         self.plan_approved = false;
         self.context_usage_anchor = None;
         self.checkpoints.clear();
+        self.checkpoint_captures.clear();
         self.recent_tool_calls.clear();
         self.loop_strike_count = 0;
         self.mcp_manager = None;

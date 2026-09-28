@@ -1,6 +1,7 @@
 use crate::compaction;
 use crate::models::{ContentBlock, Message, MessageContent, ToolCallResponse};
 
+use super::checkpoints::{self, Checkpoint, CheckpointSummary, RewindMode, RewindOutcome};
 use super::AgentSession;
 
 impl AgentSession {
@@ -59,26 +60,99 @@ impl AgentSession {
         lines.join("\n")
     }
 
-    /// Save a checkpoint of the current conversation state.
     pub fn save_checkpoint(&mut self) {
-        self.checkpoints.push(self.messages.clone());
-    }
-
-    /// Restore the most recent checkpoint, returning true if one was available.
-    #[allow(dead_code)]
-    pub fn restore_checkpoint(&mut self) -> bool {
-        if let Some(saved) = self.checkpoints.pop() {
-            self.messages = saved;
-            true
-        } else {
-            false
+        let (messages, prompt) = match self.messages.last() {
+            Some(last) if last.role == "user" => (
+                self.messages[..self.messages.len() - 1].to_vec(),
+                last.text_content(),
+            ),
+            _ => (self.messages.clone(), String::new()),
+        };
+        self.checkpoints.push(Checkpoint::new(messages, prompt));
+        if self.checkpoints.len() > checkpoints::MAX_CHECKPOINTS {
+            self.checkpoints.remove(0);
         }
     }
 
-    /// Number of saved checkpoints.
     #[allow(dead_code)]
+    pub fn restore_checkpoint(&mut self) -> bool {
+        match self.checkpoints.pop() {
+            Some(saved) => {
+                self.messages = saved.messages;
+                true
+            }
+            None => false,
+        }
+    }
+
     pub fn checkpoint_count(&self) -> usize {
         self.checkpoints.len()
+    }
+
+    pub fn checkpoint_summaries(&self) -> Vec<CheckpointSummary> {
+        self.checkpoints
+            .iter()
+            .enumerate()
+            .map(|(index, checkpoint)| CheckpointSummary {
+                index,
+                created_at: checkpoint.created_at,
+                prompt: checkpoint.prompt.clone(),
+                tracked_files: checkpoints::tracked_files(&self.checkpoints[index..]),
+            })
+            .collect()
+    }
+
+    pub fn rewind_to(&mut self, index: usize, mode: RewindMode) -> anyhow::Result<RewindOutcome> {
+        let Some(checkpoint) = self.checkpoints.get(index) else {
+            anyhow::bail!("there is no checkpoint at that point");
+        };
+        let prompt = checkpoint.prompt.clone();
+        let files = mode
+            .restores_code()
+            .then(|| checkpoints::restore_files(&self.checkpoints[index..]));
+        if mode.restores_conversation() {
+            self.messages = self.checkpoints[index].messages.clone();
+            self.checkpoints.truncate(index);
+            self.checkpoint_captures.clear();
+        }
+        Ok(RewindOutcome {
+            prompt,
+            files,
+            conversation_restored: mode.restores_conversation(),
+            remaining: self.checkpoints.len(),
+        })
+    }
+
+    pub(crate) fn note_file_edit_started(
+        &mut self,
+        call_id: &str,
+        tool: &str,
+        args: &serde_json::Value,
+        root: Option<&std::path::Path>,
+    ) {
+        let paths = checkpoints::edited_paths(tool, args, root);
+        let Some(checkpoint) = self.checkpoints.last_mut() else {
+            return;
+        };
+        let captured: Vec<std::path::PathBuf> = paths
+            .into_iter()
+            .filter(|path| checkpoint.capture(path))
+            .collect();
+        if !captured.is_empty() {
+            self.checkpoint_captures
+                .insert(call_id.to_string(), captured);
+        }
+    }
+
+    pub(crate) fn note_file_edit_finished(&mut self, call_id: &str, ok: bool) {
+        let Some(captured) = self.checkpoint_captures.remove(call_id) else {
+            return;
+        };
+        if !ok {
+            if let Some(checkpoint) = self.checkpoints.last_mut() {
+                checkpoint.forget_unchanged(&captured);
+            }
+        }
     }
 
     /// Normalize conversation history: ensure every tool_use call has a
