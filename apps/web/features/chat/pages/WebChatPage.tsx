@@ -2069,7 +2069,19 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         // the instance the restore was aimed at. A slot keyed by the send
         // rather than by any conversation survives both, and whichever
         // composer is on screen reads it on its next mount.
-        parkBlockedSend(sendFingerprint, content);
+        const blockedConversation = useChatStore
+          .getState()
+          .conversations.find((conversation) => conversation.id === sendGuardKey);
+        parkBlockedSend(
+          sendFingerprint,
+          content,
+          blockedConversation
+            ? blockedConversation.isTemporary === true
+            : resolveNewChatTemporary(
+                useChatStore.getState().pendingTemporaryChat,
+                useSettingsStore.getState().newChatsTemporary,
+              ) || localModelSelection !== null,
+        );
         if (options.attachments?.length) setRestoredAttachments(options.attachments);
         toast.error(BLOCKED_SEND_TOAST);
         lastSendGuardBlockedRef.current = true;
