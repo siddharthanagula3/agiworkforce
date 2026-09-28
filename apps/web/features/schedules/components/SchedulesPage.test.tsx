@@ -96,6 +96,7 @@ function createApi(overrides: Partial<ScheduleApi> = {}): ScheduleApi {
     deleteSchedule: vi.fn(async () => undefined),
     listRuns: vi.fn(async () => runsPage()),
     runNow: vi.fn(async () => ({ run: successfulRun, replay: false })),
+    resolveRunApproval: vi.fn(async () => successfulRun),
     ...overrides,
   };
 }

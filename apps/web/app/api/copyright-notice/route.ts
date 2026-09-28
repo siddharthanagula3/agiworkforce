@@ -11,7 +11,11 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getClientIp, logSecurityEvent } from '@/lib/security-audit';
-import { recordCopyrightNotice } from '@/lib/server/copyright-notices';
+import {
+  CONTENT_NOTICE_TYPES,
+  recordCopyrightNotice,
+  type ContentNoticeType,
+} from '@/lib/server/copyright-notices';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { getHandoffConfig } from '@/lib/support/handoff/config';
 import { sendSupportEmail } from '@/lib/support/handoff/resend-client';
@@ -31,24 +35,35 @@ import { getOptionalAuthUser } from '@/lib/api-auth';
 // POST /api/admin/takedown so an anonymous allegation cannot be used to take a
 // stranger's share offline.
 
-const NoticeSchema = z.object({
-  contentUrl: z.string().trim().min(1).max(2048),
-  reporterName: z.string().trim().min(1).max(200),
-  reporterEmail: z
-    .string()
-    .trim()
-    .email()
-    .max(254)
-    .transform((value) => value.toLowerCase()),
-  reporterPhone: z.string().trim().min(1).max(60),
-  reporterAddress: z.string().trim().min(1).max(500),
-  rightsHolder: z.string().trim().max(200).optional(),
-  workDescription: z.string().trim().min(1).max(2000),
-  signature: z.string().trim().min(1).max(200),
-  goodFaith: z.literal(true),
-  accurate: z.literal(true),
-  authorized: z.literal(true),
-});
+const NoticeSchema = z
+  .object({
+    noticeType: z.enum(CONTENT_NOTICE_TYPES).default('copyright'),
+    contentUrl: z.string().trim().min(1).max(2048),
+    reporterName: z.string().trim().min(1).max(200),
+    reporterEmail: z
+      .string()
+      .trim()
+      .email()
+      .max(254)
+      .transform((value) => value.toLowerCase()),
+    reporterPhone: z.string().trim().max(60).optional(),
+    reporterAddress: z.string().trim().max(500).optional(),
+    rightsHolder: z.string().trim().max(200).optional(),
+    workDescription: z.string().trim().min(1).max(2000),
+    signature: z.string().trim().min(1).max(200),
+    goodFaith: z.literal(true),
+    accurate: z.literal(true),
+    authorized: z.literal(true),
+  })
+  .superRefine((notice, context) => {
+    if (notice.noticeType === 'impersonation') return;
+    if (!notice.reporterPhone) {
+      context.addIssue({ code: 'custom', path: ['reporterPhone'], message: 'Required' });
+    }
+    if (!notice.reporterAddress) {
+      context.addIssue({ code: 'custom', path: ['reporterAddress'], message: 'Required' });
+    }
+  });
 
 type Notice = z.infer<typeof NoticeSchema>;
 
@@ -68,6 +83,34 @@ function generateReference(): string {
   return `IP-${out}`;
 }
 
+const NOTICE_TYPE_COPY: Record<
+  ContentNoticeType,
+  { label: string; holder: string; claim: string; goodFaith: string; authority: string }
+> = {
+  copyright: {
+    label: 'copyright notice',
+    holder: 'Acting for',
+    claim: 'THE WORK THEY SAY IS INFRINGED',
+    goodFaith: 'Good-faith belief the use is unauthorised: affirmed',
+    authority: 'Authorised to act for the rights holder: affirmed under penalty of perjury',
+  },
+  trademark: {
+    label: 'trademark notice',
+    holder: 'Acting for',
+    claim: 'THE MARK THEY SAY IS INFRINGED',
+    goodFaith: 'Good-faith belief the use is unauthorised: affirmed',
+    authority: 'Authorised to act for the mark owner: affirmed',
+  },
+  impersonation: {
+    label: 'impersonation report',
+    holder: 'Person or organisation impersonated',
+    claim: 'HOW THE MATERIAL IMPERSONATES THEM',
+    goodFaith: 'Good-faith belief the material impersonates them: affirmed',
+    authority:
+      'Is the person or organisation impersonated, or authorised to act for them: affirmed',
+  },
+};
+
 function escapeHtml(value: string): string {
   return value
     .replace(/&/gu, '&amp;')
@@ -84,10 +127,12 @@ async function alertOperators(input: {
   reporterUserId: string | null;
 }): Promise<boolean> {
   const { reference, notice, target } = input;
+  const copy = NOTICE_TYPE_COPY[notice.noticeType];
   const environment = process.env['VERCEL_ENV'] ?? process.env['NODE_ENV'] ?? 'unknown';
   const text = [
     `Environment: ${environment}`,
     `Reference: ${reference}`,
+    `Type: ${copy.label}`,
     `Reported URL: ${notice.contentUrl}`,
     '',
     'WHAT IT RESOLVES TO',
@@ -100,28 +145,28 @@ async function alertOperators(input: {
     'WHO SENT IT',
     `Name: ${notice.reporterName}`,
     `Email: ${notice.reporterEmail}`,
-    `Phone: ${notice.reporterPhone}`,
-    `Address: ${notice.reporterAddress}`,
-    `Acting for: ${notice.rightsHolder || '(themselves)'}`,
+    `Phone: ${notice.reporterPhone || '(not given)'}`,
+    `Address: ${notice.reporterAddress || '(not given)'}`,
+    `${copy.holder}: ${notice.rightsHolder || '(themselves)'}`,
     `Signed: ${notice.signature}`,
     `Reporter account: ${input.reporterUserId ?? '(not signed in)'}`,
     '',
-    'THE WORK THEY SAY IS INFRINGED',
+    copy.claim,
     notice.workDescription,
     '',
     'STATEMENTS',
-    'Good-faith belief the use is unauthorised: affirmed',
+    copy.goodFaith,
     'Information in the notice is accurate: affirmed',
-    'Authorised to act for the rights holder: affirmed under penalty of perjury',
+    copy.authority,
     '',
     'NEXT STEP',
     'Nothing has been unpublished. To remove it, POST /api/admin/takedown as an',
-    `admin with { "token": "${target.token}", "reason": "copyright notice ${reference}" }.`,
+    `admin with { "token": "${target.token}", "reason": "${copy.label} ${reference}" }.`,
   ].join('\n');
 
   const sent = await sendSupportEmail({
     to: getHandoffConfig().fallbackEmail,
-    subject: `[AGI IP] ${environment} copyright notice ${reference} (${target.kind})`,
+    subject: `[AGI IP] ${environment} ${copy.label} ${reference} (${target.kind})`,
     text,
     html: `<pre style="font-family:ui-monospace,monospace;white-space:pre-wrap">${escapeHtml(text)}</pre>`,
     replyTo: notice.reporterEmail,
@@ -175,6 +220,7 @@ async function handleNotice(request: NextRequest): Promise<NextResponse> {
 
   await recordCopyrightNotice(getNeonDb(), {
     reference,
+    noticeType: notice.noticeType,
     reporterName: notice.reporterName,
     reporterEmail: notice.reporterEmail,
     reporterOrganization: notice.rightsHolder ?? null,
@@ -195,6 +241,7 @@ async function handleNotice(request: NextRequest): Promise<NextResponse> {
     details: {
       action: 'copyright_notice_received',
       reference,
+      noticeType: notice.noticeType,
       kind: target.kind,
       token: target.token,
       ownerId: target.ownerId,
@@ -219,6 +266,7 @@ async function handleNotice(request: NextRequest): Promise<NextResponse> {
 
   return NextResponse.json({
     reference,
+    noticeType: notice.noticeType,
     kind: target.kind,
     operatorNotified,
   });

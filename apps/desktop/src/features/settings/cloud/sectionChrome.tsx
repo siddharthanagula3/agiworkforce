@@ -1,4 +1,3 @@
-
 export const SETTINGS_FOCUS_RING =
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background';
 
@@ -17,7 +16,7 @@ export function SectionHeading({
 }) {
   return (
     <div>
-      <h2 className="text-base font-semibold text-foreground">{title}</h2>
+      <h2 className="text-h4 text-foreground">{title}</h2>
       <p className="mt-1 text-sm leading-6 text-muted-foreground">{description}</p>
     </div>
   );

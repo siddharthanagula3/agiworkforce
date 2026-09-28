@@ -73,12 +73,12 @@ export function WindowSelector({ onConfirm, onCancel }: WindowSelectorProps) {
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-lg rounded-lg bg-background shadow-xl border border-border">
+      <div className="w-full max-w-lg rounded-lg bg-background shadow-e4 border border-border">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <div className="flex items-center gap-2">
             <Monitor className="h-5 w-5 text-primary" />
-            <h2 className="text-lg font-semibold">Select Window to Capture</h2>
+            <h2 className="text-h3">Select Window to Capture</h2>
           </div>
           <Button variant="ghost" size="icon" onClick={onCancel}>
             <X className="h-4 w-4" />

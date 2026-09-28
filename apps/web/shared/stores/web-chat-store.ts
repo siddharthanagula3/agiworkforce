@@ -743,6 +743,8 @@ interface ChatState {
    */
   pendingTemporaryChat: boolean | null;
 
+  temporaryChatPersonalized: boolean;
+
   // Actions - Conversations
   setConversations: (conversations: Conversation[]) => void;
   addConversation: (conversation: Conversation) => void;
@@ -751,6 +753,7 @@ interface ChatState {
   deleteConversation: (id: string) => void;
   setActiveConversation: (id: string | null) => void;
   setPendingTemporaryChat: (value: boolean | null) => void;
+  setTemporaryChatPersonalized: (value: boolean) => void;
   setActiveConversationWithMessages: (
     id: string,
     messages: Message[],
@@ -977,6 +980,7 @@ const initialState = {
   memoryDisabledByConversation: {} as Record<string, boolean>,
   workModeByConversation: {} as Record<string, CloudWorkMode>,
   pendingTemporaryChat: null,
+  temporaryChatPersonalized: true,
 };
 
 /**
@@ -2066,6 +2070,9 @@ export const useChatStore = create<ChatState>()(
 
         setPendingTemporaryChat: (value) =>
           set({ pendingTemporaryChat: value }, undefined, 'chat/setPendingTemporaryChat'),
+
+        setTemporaryChatPersonalized: (value) =>
+          set({ temporaryChatPersonalized: value }, undefined, 'chat/setTemporaryChatPersonalized'),
 
         // Reset
         resetOnWorkspaceSwitch: () =>

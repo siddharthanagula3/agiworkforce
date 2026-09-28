@@ -309,22 +309,6 @@ Code: `apps/web/features/schedules/components/ScheduleCard.tsx:356-356`, `apps/w
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S63.32: Required-approval behavior.
-
-- Done when: When an unattended run needs approval for an action, it pauses and asks the user, and resumes once approved.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | A run now pauses at a withheld step, notifies the owner (inbox, push and email) and resumes on approve or deny, with approval on web, desktop, mobile, CLI, VS Code and Chrome (schedule-service.ts, runs/[runId]/approval/route.ts), as ChatGPT tasks do. Still open: a lethal-trifecta re-ask in an unattended run fails the step instead of pausing; it needs a gate option in the tool loop. | ui |
-| desktop | partial | A run now pauses at a withheld step, notifies the owner (inbox, push and email) and resumes on approve or deny, with approval on web, desktop, mobile, CLI, VS Code and Chrome (schedule-service.ts, runs/[runId]/approval/route.ts), as ChatGPT tasks do. Still open: a lethal-trifecta re-ask in an unattended run fails the step instead of pausing; it needs a gate option in the tool loop. | ui |
-| mobile | partial | A run now pauses at a withheld step, notifies the owner (inbox, push and email) and resumes on approve or deny, with approval on web, desktop, mobile, CLI, VS Code and Chrome (schedule-service.ts, runs/[runId]/approval/route.ts), as ChatGPT tasks do. Still open: a lethal-trifecta re-ask in an unattended run fails the step instead of pausing; it needs a gate option in the tool loop. | ui |
-| cli | partial | A run now pauses at a withheld step, notifies the owner (inbox, push and email) and resumes on approve or deny, with approval on web, desktop, mobile, CLI, VS Code and Chrome (schedule-service.ts, runs/[runId]/approval/route.ts), as ChatGPT tasks do. Still open: a lethal-trifecta re-ask in an unattended run fails the step instead of pausing; it needs a gate option in the tool loop. | ui |
-| vscode | partial | A run now pauses at a withheld step, notifies the owner (inbox, push and email) and resumes on approve or deny, with approval on web, desktop, mobile, CLI, VS Code and Chrome (schedule-service.ts, runs/[runId]/approval/route.ts), as ChatGPT tasks do. Still open: a lethal-trifecta re-ask in an unattended run fails the step instead of pausing; it needs a gate option in the tool loop. | ui |
-| chrome | partial | A run now pauses at a withheld step, notifies the owner (inbox, push and email) and resumes on approve or deny, with approval on web, desktop, mobile, CLI, VS Code and Chrome (schedule-service.ts, runs/[runId]/approval/route.ts), as ChatGPT tasks do. Still open: a lethal-trifecta re-ask in an unattended run fails the step instead of pausing; it needs a gate option in the tool loop. | ui |
-
-Code: `apps/web/lib/services/scheduled-agent-executor.ts:453-453`, `apps/web/lib/services/scheduled-agent-executor.ts:222-222`, `apps/web/features/schedules/components/ScheduleRunHistory.tsx:104-104`, `apps/web/lib/services/scheduled-agent-executor.ts:593-593`
-
 ## S63.33: Missed-run explanation.
 
 - Done when: When a scheduled occurrence is missed or skipped, the run history says so and why.

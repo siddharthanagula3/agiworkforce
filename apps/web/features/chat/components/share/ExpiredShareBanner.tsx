@@ -13,7 +13,7 @@ export function ExpiredShareBanner({ reason = 'expired' }: { reason?: 'expired' 
         >
           <LockKeyhole className="h-7 w-7" />
         </div>
-        <h1 className="mb-2 text-2xl font-bold text-foreground">
+        <h1 className="mb-2 text-h1 text-foreground">
           {unavailable ? 'Shared conversation unavailable' : 'Shared conversation expired'}
         </h1>
         <p className="mb-6 text-muted-foreground">

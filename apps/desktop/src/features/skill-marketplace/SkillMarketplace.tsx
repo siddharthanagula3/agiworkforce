@@ -114,7 +114,7 @@ export function SkillMarketplace() {
               <Sparkles className="h-4 w-4 text-primary" />
             </div>
             <div>
-              <h2 className="text-base font-semibold text-foreground">Skill Marketplace</h2>
+              <h2 className="text-h4 text-foreground">Skill Marketplace</h2>
               <p className="text-xs text-muted-foreground">
                 {isLoading ? 'Loading skills…' : `${totalCount} AI skills available`}
               </p>

@@ -58,8 +58,8 @@ function publishedPrecedence(): PublishedRank[] {
     );
   return rows.map((cells) => {
     const published = cells[2] ?? '';
-    const escalates = /deny when unattended/.test(published);
-    const attended = published.split(',')[0]!.trim();
+    const escalates = /unattended: .*else deny/.test(published);
+    const attended = published.split(/[;,]/)[0]!.trim();
     if (attended !== 'allow' && attended !== 'ask' && attended !== 'deny') {
       throw new Error(`section 1.1 publishes an unreadable verdict "${published}"`);
     }

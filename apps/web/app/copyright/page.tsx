@@ -174,7 +174,29 @@ export default function CopyrightPage() {
           </Stack>
         </Section>
 
-        <Section id="misuse" labelledBy="agi-copyright-misuse-title" rule ground="2">
+        <Section id="impersonation" labelledBy="agi-copyright-impersonation-title" rule ground="2">
+          <Stack gap="loose">
+            <h2 className="agi-ds-h2" id="agi-copyright-impersonation-title">
+              Impersonation.
+            </h2>
+            <Prose>
+              If a shared conversation or published artifact presents itself as you or your
+              organisation, choose Impersonation on the{' '}
+              <Link href="/copyright/report?type=impersonation" className="agi-ds-link">
+                report form
+              </Link>
+              . Say who is being impersonated and what in the material claims to be them. You get a
+              reference, a person reviews the report, and material that impersonates someone is
+              disabled under the{' '}
+              <Link href="/acceptable-use" className="agi-ds-link">
+                acceptable use policy
+              </Link>
+              . A telephone number and mailing address are optional for this kind of report.
+            </Prose>
+          </Stack>
+        </Section>
+
+        <Section id="misuse" labelledBy="agi-copyright-misuse-title" rule>
           <Stack gap="loose">
             <h2 className="agi-ds-h2" id="agi-copyright-misuse-title">
               Misuse of this process.

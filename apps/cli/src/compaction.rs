@@ -47,14 +47,24 @@ pub struct ContextUsage {
     pub near_limit: bool,
 }
 
-/// Compatibility view used by `/context` and session metadata. Runtime
-/// compaction uses the richer provider-anchored budget directly.
-pub fn context_usage(messages: &[Message], model: &str) -> ContextUsage {
-    let limit_tokens = context_limit(model);
-    let budget = agiworkforce_agent_core::context::context_budget(messages, limit_tokens, 0, None);
+/// What `/context` and the status line report: the same provider-anchored
+/// budget compaction acts on, measured against the input the model can take
+/// once the reply is reserved.
+pub fn context_usage(
+    messages: &[Message],
+    model: &str,
+    reserved_output_tokens: usize,
+    usage_anchor: Option<agiworkforce_agent_core::context::ContextUsageAnchor>,
+) -> ContextUsage {
+    let budget = agiworkforce_agent_core::context::context_budget(
+        messages,
+        context_limit(model),
+        reserved_output_tokens,
+        usage_anchor,
+    );
     ContextUsage {
         used_tokens: budget.used_tokens,
-        limit_tokens,
+        limit_tokens: budget.usable_input_tokens,
         fraction: budget.used_fraction,
         near_limit: budget.near_limit(),
     }
@@ -182,7 +192,12 @@ mod tests {
 
     #[test]
     fn context_usage_uses_catalog_limit() {
-        let usage = context_usage(&[Message::text("user", "x".repeat(400))], "unknown-model");
+        let usage = context_usage(
+            &[Message::text("user", "x".repeat(400))],
+            "unknown-model",
+            0,
+            None,
+        );
         assert_eq!(usage.used_tokens, 104);
         assert!(usage.limit_tokens > usage.used_tokens);
         assert!(!usage.near_limit);

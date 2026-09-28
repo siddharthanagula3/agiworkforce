@@ -19,6 +19,12 @@ import { useThemeColors } from '@/src/ui/theme';
 import { lucideRNToolIcon, lucideRNIconByName } from './toolIconRN';
 import { WebSearchResultCard } from './WebSearchResultCard';
 import { WebSearchToolCard, isWebSearchTool } from './WebSearchToolCard';
+import {
+  CloudToolApprovalControls,
+  cloudToolApprovalPreview,
+  parseToolArguments,
+  type ResolveCloudToolApproval,
+} from './CloudToolApprovalControls';
 import { toolStatusColor } from '@/src/features/chat/utils/toolStatusTone';
 import {
   getToolDisplayLabel,
@@ -157,7 +163,7 @@ function ToolCallTimelineRow({
   isFirst: boolean;
   isLast: boolean;
   onOpenFullScreen: (tool: ToolCall) => void;
-  onResolveApproval?: (toolCallId: string, decision: 'approved' | 'rejected') => void;
+  onResolveApproval?: ResolveCloudToolApproval;
   approvalExpired?: boolean;
   onResendApproval?: () => void;
 }) {
@@ -174,6 +180,12 @@ function ToolCallTimelineRow({
   const chip = trailingChipLabel(tool);
   const hasBody = Boolean(tool.searchResults?.length || tool.input || tool.output || tool.command);
   const isSearch = isWebSearchTool(tool.name);
+  const highRiskApproval =
+    tool.approvalRiskLevel === 'high' && !approvalExpired && !tool.approvalDecision;
+  const approvalArgs = tool.requiresApproval ? parseToolArguments(tool.input) : undefined;
+  const approvalPreview = cloudToolApprovalPreview(tool.name, approvalArgs);
+  const showRawApprovalInput =
+    Boolean(tool.input) && approvalPreview.stakes.length === 0 && !approvalPreview.diff;
   const statusLabel = TOOL_STATUS_PRESENTATION[status].label;
   const statusTone = TOOL_STATUS_PRESENTATION[status].tone;
   const spokenStatus = chip?.startsWith(statusLabel)
@@ -252,8 +264,14 @@ function ToolCallTimelineRow({
         <View style={{ paddingLeft: 20, paddingBottom: 10 }}>
           <View
             style={{
-              backgroundColor: approvalExpired ? colors.surfaceOverlay : colors.warningSurface,
+              backgroundColor: approvalExpired
+                ? colors.surfaceOverlay
+                : highRiskApproval
+                  ? colors.dangerSurface
+                  : colors.warningSurface,
               borderRadius: 8,
+              borderWidth: highRiskApproval ? 1 : 0,
+              borderColor: highRiskApproval ? colors.dangerBorder : 'transparent',
               padding: 10,
               gap: 8,
             }}
@@ -296,7 +314,7 @@ function ToolCallTimelineRow({
                       }`
                     : `${nameText} wants to run. Review the request before allowing it to proceed.`}
                 </Text>
-                {tool.input ? (
+                {showRawApprovalInput ? (
                   <Text
                     numberOfLines={4}
                     style={{ fontFamily: 'monospace', fontSize: 11, color: colors.textSecondary }}
@@ -304,44 +322,15 @@ function ToolCallTimelineRow({
                     {tool.input}
                   </Text>
                 ) : null}
-                <View style={{ flexDirection: 'row', gap: 8 }}>
-                  <Pressable
-                    onPress={() => onResolveApproval?.(tool.toolCallId!, 'rejected')}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${TOOL_APPROVAL_ACTION_LABELS.deny} ${nameText}`}
-                    style={{
-                      flex: 1,
-                      paddingVertical: 8,
-                      borderRadius: 8,
-                      alignItems: 'center',
-                      backgroundColor: colors.surfaceOverlay,
-                    }}
-                  >
-                    <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textSecondary }}>
-                      {tool.approvalDecision === 'rejected'
-                        ? TOOL_APPROVAL_ACTION_LABELS.denied
-                        : TOOL_APPROVAL_ACTION_LABELS.deny}
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => onResolveApproval?.(tool.toolCallId!, 'approved')}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${TOOL_APPROVAL_ACTION_LABELS.allow} ${nameText}`}
-                    style={{
-                      flex: 1,
-                      paddingVertical: 8,
-                      borderRadius: 8,
-                      alignItems: 'center',
-                      backgroundColor: colors.agentWarning,
-                    }}
-                  >
-                    <Text style={{ fontSize: 13, fontWeight: '600', color: colors.surfaceBase }}>
-                      {tool.approvalDecision === 'approved'
-                        ? TOOL_APPROVAL_ACTION_LABELS.allowed
-                        : TOOL_APPROVAL_ACTION_LABELS.allow}
-                    </Text>
-                  </Pressable>
-                </View>
+                <CloudToolApprovalControls
+                  toolCallId={tool.toolCallId}
+                  toolName={tool.name}
+                  summary={nameText}
+                  args={approvalArgs}
+                  riskLevel={tool.approvalRiskLevel}
+                  decision={tool.approvalDecision}
+                  onResolve={onResolveApproval}
+                />
               </>
             )}
           </View>
@@ -574,7 +563,7 @@ export function ToolCallTimeline({
   messageId: string;
   toolCalls: ToolCall[];
   summary: string;
-  onResolveApproval?: (toolCallId: string, decision: 'approved' | 'rejected') => void;
+  onResolveApproval?: ResolveCloudToolApproval;
   approvalExpired?: boolean;
   onResendApproval?: () => void;
 }) {

@@ -24,7 +24,7 @@ export function CoworkTab() {
       <header>
         <div className="flex items-center gap-2">
           <Laptop className="h-5 w-5 text-primary" aria-hidden="true" />
-          <h2 className="text-xl font-semibold">Cowork</h2>
+          <h2 className="text-h2">Cowork</h2>
         </div>
         <p className="mt-1 text-sm text-muted-foreground">
           Control whether a paired phone can start new agent tasks on this Desktop.
@@ -41,7 +41,7 @@ export function CoworkTab() {
               <Radio className="h-4 w-4" aria-hidden="true" />
             </span>
             <div className="space-y-1">
-              <h3 id="cowork-dispatch-heading" className="text-sm font-semibold">
+              <h3 id="cowork-dispatch-heading" className="text-h5">
                 Dispatch
               </h3>
               <p className="max-w-xl text-sm leading-relaxed text-muted-foreground">
@@ -93,7 +93,7 @@ export function CoworkTab() {
       <div className="flex items-start gap-3 rounded-lg border border-border/70 bg-muted/30 p-4">
         <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-success-text" aria-hidden="true" />
         <div className="space-y-1">
-          <h3 className="text-sm font-medium">Local execution authority</h3>
+          <h3 className="text-h5">Local execution authority</h3>
           <p className="text-xs leading-relaxed text-muted-foreground">
             Pairing is not enough to start work: Dispatch must also be enabled here. Turning it off
             rejects new remote tasks; tasks already running remain visible and can still be

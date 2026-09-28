@@ -72,10 +72,7 @@ export function ConversationHeader({
           className="min-w-0 flex-1 rounded-compact border border-[var(--chat-border)] bg-[var(--chat-input-bg)] px-2 py-1 text-sm text-[var(--chat-fg)] focus:outline-none focus:ring-2 focus:ring-[var(--chat-focus-ring)]"
         />
       ) : (
-        <h2
-          title={title}
-          className="min-w-0 flex-1 truncate text-sm font-medium text-[var(--chat-fg)]"
-        >
+        <h2 title={title} className="min-w-0 flex-1 truncate text-h5 text-[var(--chat-fg)]">
           {title}
         </h2>
       )}

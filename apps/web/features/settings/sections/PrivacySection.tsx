@@ -25,6 +25,7 @@ import {
 import { SettingsPageLink, SettingsSectionLink } from '../components/SettingsSectionLink';
 import { toUserMessage } from '@/lib/user-error-message';
 import { SaveStatusLine } from '../components/SaveStatusLine';
+import { HelpArticleLink } from '@/features/support/components/HelpArticleLink';
 
 const NAMESPACE = 'privacy';
 
@@ -402,6 +403,9 @@ export function PrivacySection() {
         >
           Privacy
         </h1>
+        <div style={{ marginTop: 'var(--space-2)' }}>
+          <HelpArticleLink docId="privacy-controls" label="How privacy controls work" />
+        </div>
         {loadingPreferences || savingPreferences || preferenceError || hasChanged ? (
           <SaveStatusLine
             failed={preferenceError !== null}
@@ -488,7 +492,14 @@ export function PrivacySection() {
             >
               /subprocessors
             </SettingsPageLink>
-            .
+            . On the Free plan, requests are served by providers&rsquo; free models, and those
+            providers&rsquo; terms may allow them to train on what you send.
+          </p>
+          <p style={{ margin: 'var(--space-2) 0 0' }}>
+            How long we keep it: a chat stays in your history until you delete it, and a deleted
+            chat stays in Recently deleted until you restore it. A temporary chat and its
+            attachments are removed after 30 days. When you delete your account, erasure starts 24
+            hours after you confirm, and you can cancel until then.
           </p>
         </ExpandableSection>
 

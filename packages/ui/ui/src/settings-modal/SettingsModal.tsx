@@ -259,7 +259,7 @@ function ConnectorDetail({
             size="lg"
           />
           <div className="min-w-0">
-            <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
+            <h2 className="flex items-center gap-2 text-h4 text-foreground">
               <span className="truncate">{connector.name}</span>
               {connection && connection.status !== 'warning' && (
                 <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary/15">
@@ -553,7 +553,7 @@ function AddCustomConnectorForm({
       </button>
 
       <div>
-        <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
+        <h2 className="flex items-center gap-2 text-h4 text-foreground">
           Add custom connector
           <span className="rounded-full bg-accent px-2 py-0.5 text-caption font-semibold uppercase tracking-wider text-accent-foreground">
             Beta
@@ -1012,7 +1012,7 @@ function ConnectorsPanel({
     <div className="flex flex-col gap-4">
       {/* Header */}
       <div>
-        <h2 className="text-base font-semibold text-foreground">Connectors</h2>
+        <h2 className="text-h4 text-foreground">Connectors</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           Connect your tools and give the assistant access to your apps.
         </p>
@@ -1315,7 +1315,7 @@ function SkillsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h2 className="text-base font-semibold text-foreground">Skills</h2>
+        <h2 className="text-h4 text-foreground">Skills</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           {canAuthor
             ? 'Portable instruction sets for focused workflows. Select one in chat with / or @, write your own, or download a bundled SKILL.md.'
@@ -1547,7 +1547,7 @@ function PluginsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h2 className="text-base font-semibold text-foreground">Plugins</h2>
+        <h2 className="text-h4 text-foreground">Plugins</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           Add reviewed skill packs now, with more community integrations coming later.
         </p>

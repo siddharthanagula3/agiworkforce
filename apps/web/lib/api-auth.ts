@@ -400,3 +400,15 @@ export async function getOptionalAuthUser(
     throw error;
   }
 }
+
+export async function getSuspendedAccountUser(request: NextRequest): Promise<{ userId: string }> {
+  const { subject, sessionId } = await getRequestIdentity();
+  const account = subject === null ? null : await accountForSubject(subject, request);
+  if (!account) throw createError.unauthorized();
+  await assertSessionWithinAbsoluteLifetime(sessionId, account.accountId);
+  const decision = accountAccessDecision(await readAccountStatus(account.accountId));
+  if (decision.allowed || decision.reason !== 'suspended') {
+    throw createError.forbidden('Only a suspended account can appeal its suspension.');
+  }
+  return { userId: account.accountId };
+}

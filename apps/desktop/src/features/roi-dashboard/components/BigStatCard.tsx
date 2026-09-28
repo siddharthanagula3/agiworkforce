@@ -21,7 +21,7 @@ export function BigStatCard({
   loading = false,
 }: BigStatCardProps) {
   return (
-    <Card className="relative overflow-hidden group transition-all duration-200 hover:shadow-lg">
+    <Card className="relative overflow-hidden group transition-all duration-200 hover:shadow-e3">
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
         <Icon className={cn('h-4 w-4', iconColor)} />

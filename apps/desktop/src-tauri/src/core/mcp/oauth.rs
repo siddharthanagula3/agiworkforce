@@ -3,6 +3,8 @@ use anyhow::anyhow;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 use super::config::{
     decrypt_oauth_token, encrypt_oauth_token, open_mcp_settings_db, upsert_settings_v2_value,
@@ -66,15 +68,15 @@ impl TokenStore for DesktopTokenStore {
 }
 
 pub struct DesktopBrowser {
-    pub interactive: bool,
+    pub interactive: Arc<AtomicBool>,
 }
 
 impl BrowserAuthorizer for DesktopBrowser {
     fn is_interactive(&self) -> bool {
-        self.interactive
+        self.interactive.load(Ordering::SeqCst)
     }
 
     fn open_url(&self, url: &str) -> bool {
-        self.interactive && open::that_detached(url).is_ok()
+        self.is_interactive() && open::that_detached(url).is_ok()
     }
 }

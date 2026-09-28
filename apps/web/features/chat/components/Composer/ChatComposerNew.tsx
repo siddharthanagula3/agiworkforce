@@ -1450,6 +1450,11 @@ const ChatComposerNewComponent = ({
     void hydrateStylesFromServer();
   }, [hydrateStylesFromServer]);
 
+  const bindStyleConversation = useStyleStore((s) => s.bindConversation);
+  useLayoutEffect(() => {
+    bindStyleConversation(toggleBucketKey);
+  }, [bindStyleConversation, toggleBucketKey]);
+
   const responseStyle = useStyleStore((s) => s.style);
   const responseLength = useStyleStore((s) => s.length);
   const activeCustomStyleId = useStyleStore((s) => s.activeCustomStyleId);

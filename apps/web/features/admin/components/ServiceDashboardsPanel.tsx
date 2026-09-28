@@ -77,7 +77,7 @@ export default function ServiceDashboardsPanel() {
   return (
     <section className="flex flex-col gap-4" aria-labelledby="service-dashboards-title">
       <div>
-        <h2 id="service-dashboards-title" className="text-sm font-medium">
+        <h2 id="service-dashboards-title" className="text-h5">
           Service dashboards
         </h2>
         <p className="mt-1 text-xs text-muted-foreground">
@@ -117,7 +117,7 @@ export default function ServiceDashboardsPanel() {
                 className={CARD_CLASS}
                 aria-labelledby={`service-dashboard-${dashboard.id}`}
               >
-                <h3 id={`service-dashboard-${dashboard.id}`} className="text-sm font-medium">
+                <h3 id={`service-dashboard-${dashboard.id}`} className="text-h5">
                   {dashboard.title}
                 </h3>
                 <ul className="mt-4 flex flex-col gap-3">

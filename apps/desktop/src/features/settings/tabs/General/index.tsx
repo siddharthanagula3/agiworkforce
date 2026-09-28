@@ -54,7 +54,7 @@ function AppModeSection() {
 
   return (
     <div>
-      <h3 className="text-lg font-semibold mb-1">Mode</h3>
+      <h3 className="text-h3 mb-1">Mode</h3>
       <p className="text-sm text-muted-foreground mb-4">
         Run models locally or with your own provider keys (BYOK). {DESKTOP_CLOUD_TAGLINE}
       </p>
@@ -148,7 +148,7 @@ function RestartOnboardingSection() {
 
   return (
     <div>
-      <h3 className="text-lg font-semibold mb-1">Onboarding</h3>
+      <h3 className="text-h3 mb-1">Onboarding</h3>
       <p className="text-sm text-muted-foreground mb-4">
         Re-run the first-run setup to choose Local Mode, BYOK, or Cloud Mode.
       </p>
@@ -340,7 +340,7 @@ export function GeneralTab({
 
       {isTauri && (
         <div className="pt-6 border-t border-border">
-          <h3 className="text-lg font-semibold mb-4">Window Preferences</h3>
+          <h3 className="text-h3 mb-4">Window Preferences</h3>
           <p className="text-sm text-muted-foreground mb-6">
             Configure window behavior and appearance
           </p>
@@ -423,7 +423,7 @@ export function GeneralTab({
 
       {isTauri && (
         <div className="pt-6 border-t border-border">
-          <h3 className="text-lg font-semibold mb-4">Network</h3>
+          <h3 className="text-h3 mb-4">Network</h3>
           <p className="text-sm text-muted-foreground mb-4">
             Configure corporate proxy, authentication, bypass, and trust settings for model traffic.
           </p>
@@ -435,7 +435,7 @@ export function GeneralTab({
 
       {isTauri && (
         <div className="pt-6 border-t border-border">
-          <h3 className="text-lg font-semibold mb-4">System Resources</h3>
+          <h3 className="text-h3 mb-4">System Resources</h3>
           <p className="mb-4 text-sm text-muted-foreground">
             Device-only CPU, memory, and runtime controls. These do not change your Managed Cloud
             allowance or cloud sandbox resources.
@@ -448,7 +448,7 @@ export function GeneralTab({
 
       {isTauri && (
         <div className="pt-6 border-t border-border">
-          <h3 className="text-lg font-semibold mb-4">Agent Permissions</h3>
+          <h3 className="text-h3 mb-4">Agent Permissions</h3>
           <p className="text-sm text-muted-foreground mb-4">
             macOS permissions for actions performed on this device. Managed Cloud tool approvals and
             sandbox permissions are enforced separately by your account policy.
@@ -474,7 +474,7 @@ export function GeneralTab({
       )}
 
       <div className="pt-6 border-t border-border">
-        <h3 className="text-lg font-semibold mb-4">Keybindings</h3>
+        <h3 className="text-h3 mb-4">Keybindings</h3>
         <Suspense fallback={<Fallback label="Loading keybindings..." />}>
           <LazyKeybindingsSettings />
         </Suspense>

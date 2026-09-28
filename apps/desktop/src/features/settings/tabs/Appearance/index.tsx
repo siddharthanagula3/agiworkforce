@@ -31,7 +31,7 @@ export function AppearanceTab() {
           <LazyCustomInstructionsSettings />
         </div>
         <div className="pt-6 border-t border-border">
-          <h3 className="text-lg font-semibold mb-4">Themes</h3>
+          <h3 className="text-h3 mb-4">Themes</h3>
           <LazyThemeSettings />
         </div>
       </>

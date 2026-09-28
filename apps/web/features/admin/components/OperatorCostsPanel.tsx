@@ -57,7 +57,7 @@ function CostWindowCard({ costWindow }: { costWindow: OperatorCostWindow }) {
   return (
     <div className={CARD_CLASS}>
       <div className="flex items-baseline justify-between gap-3">
-        <h3 className="text-sm font-medium">Last {costWindow.days} days</h3>
+        <h3 className="text-h5">Last {costWindow.days} days</h3>
         <span className="text-xs text-muted-foreground">
           {formatDateTime(costWindow.from)} to {formatDateTime(costWindow.to)}
         </span>
@@ -200,7 +200,7 @@ export default function OperatorCostsPanel() {
 
       <div className="flex flex-col gap-3">
         <div className="flex flex-wrap items-baseline justify-between gap-3">
-          <h3 className="text-sm font-medium">Cost breakdown, last 24 hours</h3>
+          <h3 className="text-h5">Cost breakdown, last 24 hours</h3>
           <div role="tablist" aria-label="Cost breakdown dimension" className="flex gap-2">
             {DIMENSIONS.map((value) => (
               <button
@@ -284,7 +284,7 @@ export default function OperatorCostsPanel() {
       </div>
 
       <div className={CARD_CLASS}>
-        <h3 className="text-sm font-medium">Explain one request</h3>
+        <h3 className="text-h5">Explain one request</h3>
         <p className="mt-1 text-xs text-muted-foreground">
           The breakdown above aggregates; this answers what one request actually did, which route
           served it, whether it fell back and why, and what it cost against retail.

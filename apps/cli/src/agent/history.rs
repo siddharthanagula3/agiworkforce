@@ -4,10 +4,17 @@ use crate::models::{ContentBlock, Message, MessageContent, ToolCallResponse};
 use super::AgentSession;
 
 impl AgentSession {
-    /// Return a formatted context usage report.
-    pub fn context_report(&self) -> String {
-        let usage = compaction::context_usage(&self.messages, &self.model);
-        compaction::format_context_report(&usage)
+    pub fn context_usage(&self, reserved_output_tokens: usize) -> compaction::ContextUsage {
+        compaction::context_usage(
+            &self.messages,
+            &self.model,
+            reserved_output_tokens,
+            self.context_usage_anchor,
+        )
+    }
+
+    pub fn context_report(&self, reserved_output_tokens: usize) -> String {
+        compaction::format_context_report(&self.context_usage(reserved_output_tokens))
     }
 
     /// Save a checkpoint of the current conversation state.

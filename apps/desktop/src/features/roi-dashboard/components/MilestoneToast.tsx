@@ -92,7 +92,7 @@ export function MilestoneToast() {
 
       toast.custom(
         (_t) => (
-          <div className="bg-background border border-border rounded-lg shadow-lg p-4 w-[400px]">
+          <div className="bg-background border border-border rounded-lg shadow-e3 p-4 w-[400px]">
             <MilestoneToastContent
               milestone={milestone}
               onAcknowledge={handleAcknowledge}

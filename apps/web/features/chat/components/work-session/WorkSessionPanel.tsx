@@ -253,7 +253,7 @@ export function WorkSessionToggleButton({
         'relative flex h-9 w-9 items-center justify-center rounded-lg transition-colors motion-reduce:transition-none',
         open
           ? 'bg-primary/15 text-primary'
-          : 'bg-card/60 text-muted-foreground shadow-sm backdrop-blur-sm hover:bg-muted/60 hover:text-foreground',
+          : 'bg-card/60 text-muted-foreground shadow-e1 backdrop-blur-sm hover:bg-muted/60 hover:text-foreground',
       )}
       aria-label={`${open ? CLOSE_ACTION_VERB : OPEN_ACTION_VERB} ${panelLabel}`}
       title={panelLabel}
@@ -624,7 +624,7 @@ export function WorkSessionPanel({
         <div className="flex items-center gap-2 border-b border-border/30 px-4 py-3">
           <PanelRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <div className="min-w-0 flex-1">
-            <h2 className="truncate text-sm font-semibold text-foreground" title={dockTitle}>
+            <h2 className="truncate text-h5 text-foreground" title={dockTitle}>
               {dockTitle}
             </h2>
             {agiWork && <p className="text-caption text-muted-foreground">{AGI_WORK_LABEL}</p>}

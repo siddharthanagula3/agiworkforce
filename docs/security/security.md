@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead, with Legal/compliance co-owning section 1
-Last updated: 2026-09-20
+Last updated: 2026-09-27
 Rotation cadence: every 12 months per key, plus immediately on suspected exposure
 
 The single security document for this repository. Four live policies live here as
@@ -46,20 +46,23 @@ The gate is `resolveToolCallGate()` in
 `apps/web/app/api/llm/v1/chat/completions/lib/tool-call-gate.ts`, a table of
 ranks that `tool-loop.ts` calls once per tool call. Precedence, highest first:
 
-| Rank | Condition                                                                               | Verdict                   | Machine reason               |
-| ---- | --------------------------------------------------------------------------------------- | ------------------------- | ---------------------------- |
-| 1    | User saved `deny` for the tool                                                          | deny                      | `blocked_by_user_permission` |
-| 2    | A device-step tool on a turn that carries a device host                                 | allow                     | `auto_approval_mode`         |
-| 3    | User saved `allow`, and the trifecta triple holds                                       | ask, deny when unattended | `lethal_trifecta`            |
-| 4    | User saved `allow`                                                                      | allow                     | `always_allow`               |
-| 5    | User saved `ask`                                                                        | ask                       | `user_requires_approval`     |
-| 6    | `approvalMode` is `manual`, no trifecta, and the account policy auto-approves this tool | allow                     | `account_default_read_only`  |
-| 7    | `approvalMode` is `manual`                                                              | ask                       | `manual_approval_mode`       |
-| 8    | Trifecta triple holds                                                                   | ask, deny when unattended | `lethal_trifecta`            |
-| 9    | otherwise                                                                               | allow                     | `auto_approval_mode`         |
+| Rank | Condition                                                                               | Verdict                                                | Machine reason               |
+| ---- | --------------------------------------------------------------------------------------- | ------------------------------------------------------ | ---------------------------- |
+| 1    | User saved `deny` for the tool                                                          | deny                                                   | `blocked_by_user_permission` |
+| 2    | A device-step tool on a turn that carries a device host                                 | allow                                                  | `auto_approval_mode`         |
+| 3    | User saved `allow`, and the trifecta triple holds                                       | ask; unattended: pause if it can checkpoint, else deny | `lethal_trifecta`            |
+| 4    | User saved `allow`                                                                      | allow                                                  | `always_allow`               |
+| 5    | User saved `ask`                                                                        | ask                                                    | `user_requires_approval`     |
+| 6    | `approvalMode` is `manual`, no trifecta, and the account policy auto-approves this tool | allow                                                  | `account_default_read_only`  |
+| 7    | `approvalMode` is `manual`                                                              | ask                                                    | `manual_approval_mode`       |
+| 8    | Trifecta triple holds                                                                   | ask; unattended: pause if it can checkpoint, else deny | `lethal_trifecta`            |
+| 9    | otherwise                                                                               | allow                                                  | `auto_approval_mode`         |
 
-An escalation on an unattended run has nobody to ask, so `escalatedGate` denies
-rather than falling through to an allow.
+Ranks 3 and 8 have the outcome `escalate`, which `resolveToolCallGate` turns
+into a verdict. An attended turn asks. An unattended run has nobody to ask, so
+it pauses at an approval checkpoint when the run can save one
+(`unattendedEscalationPauses` with an `onApprovalCheckpoint` in `tool-loop.ts`),
+and otherwise denies. An escalation never falls through to an allow.
 
 `approvalMode` comes from `classifyToolLoopInputs` in `tool-loop-routing.ts`. It
 is `manual` when the turn offers an MCP or connector tool, and also whenever any

@@ -37,7 +37,7 @@ export function MapSearchCard({ body, ctx }: MapSearchCardProps) {
     <section
       aria-label={body.title}
       data-testid="interactive-card-map-search"
-      className="my-3 overflow-hidden rounded-2xl border border-[var(--chat-border-strong)] bg-[var(--chat-surface-elevated)] shadow-sm"
+      className="my-3 overflow-hidden rounded-2xl border border-[var(--chat-border-strong)] bg-[var(--chat-surface-elevated)] shadow-e1"
     >
       {showMap && tileState.status === 'ready' ? (
         <div className="relative">
@@ -57,7 +57,7 @@ export function MapSearchCard({ body, ctx }: MapSearchCardProps) {
                 <span
                   title={place?.label}
                   className={cn(
-                    'grid size-6 place-items-center rounded-full text-xs font-semibold shadow-md ring-2 ring-[var(--chat-surface-elevated)]',
+                    'grid size-6 place-items-center rounded-full text-xs font-semibold shadow-e2 ring-2 ring-[var(--chat-surface-elevated)]',
                     place?.confident === false
                       ? 'bg-warning-fill text-warning-on-fill'
                       : 'bg-[var(--chat-accent-primary)] text-[color:var(--chat-accent-on-primary)]',
@@ -72,7 +72,7 @@ export function MapSearchCard({ body, ctx }: MapSearchCardProps) {
                 so the result reads as a map rather than as a form with a
                 picture in it. */}
             <div className="pointer-events-none absolute left-3 top-3 z-[var(--z-panel-backdrop)] max-w-[60%]">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--chat-surface-elevated)] px-3 py-1.5 text-sm font-semibold text-[color:var(--chat-text-primary)] shadow-sm">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--chat-surface-elevated)] px-3 py-1.5 text-sm font-semibold text-[color:var(--chat-text-primary)] shadow-e1">
                 <MapPinned
                   className="size-3.5 shrink-0 text-[color:var(--chat-accent-primary-text)]"
                   aria-hidden="true"
@@ -89,7 +89,7 @@ export function MapSearchCard({ body, ctx }: MapSearchCardProps) {
                   type="button"
                   onClick={() => ctx.onOpenUrl?.(primaryAction.url)}
                   disabled={!ctx.onOpenUrl}
-                  className="inline-flex min-h-8 w-full items-center justify-center gap-1.5 rounded-xl border border-[var(--chat-border-strong)] bg-[var(--chat-surface-elevated)] px-3 text-xs font-semibold text-[color:var(--chat-text-primary)] shadow-sm transition-colors hover:bg-[var(--chat-surface-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex min-h-8 w-full items-center justify-center gap-1.5 rounded-xl border border-[var(--chat-border-strong)] bg-[var(--chat-surface-elevated)] px-3 text-xs font-semibold text-[color:var(--chat-text-primary)] shadow-e1 transition-colors hover:bg-[var(--chat-surface-hover)] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Navigation
                     className="size-3.5 text-[color:var(--chat-accent-primary-text)]"
@@ -102,7 +102,7 @@ export function MapSearchCard({ body, ctx }: MapSearchCardProps) {
             {places.map((place, index) => (
               <li
                 key={`${place.latitude},${place.longitude}`}
-                className="flex items-center gap-2.5 rounded-xl border border-[var(--chat-border-strong)] bg-[var(--chat-surface-elevated)] px-2.5 py-2 shadow-sm"
+                className="flex items-center gap-2.5 rounded-xl border border-[var(--chat-border-strong)] bg-[var(--chat-surface-elevated)] px-2.5 py-2 shadow-e1"
               >
                 <span
                   className={cn(
@@ -138,7 +138,7 @@ export function MapSearchCard({ body, ctx }: MapSearchCardProps) {
         </div>
       ) : (
         <div className="flex items-center gap-3 p-4">
-          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[var(--chat-accent-primary)] text-[color:var(--chat-accent-on-primary)] shadow-sm">
+          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[var(--chat-accent-primary)] text-[color:var(--chat-accent-on-primary)] shadow-e1">
             <MapPinned className="size-5" aria-hidden="true" />
           </span>
           <div className="min-w-0">

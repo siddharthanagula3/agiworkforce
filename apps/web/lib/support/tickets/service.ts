@@ -7,7 +7,10 @@ import { resolveSupportPriority } from '@/lib/support/handoff/priority';
 import type { SupportDiagnostics } from '@/lib/support/diagnostics/types';
 
 import { notifyIncident } from '@/lib/server/incident/dispatch';
-import { sendTicketOpenedEmail } from '@/lib/support/handoff/escalation-email';
+import {
+  sendCustomerTicketEmail,
+  sendTicketOpenedEmail,
+} from '@/lib/support/handoff/escalation-email';
 import { generateReferenceId } from '@/lib/support/handoff/reference-id';
 
 import {
@@ -39,7 +42,9 @@ import {
   pagesOnCall,
   severityForPriority,
   statusAfterStaffReply,
+  ticketFollowPath,
   type EscalationTracker,
+  type StaffSupportTicket,
   type StaffTicketPage,
   type StaffTicketThread,
   type SupportTicket,
@@ -121,6 +126,30 @@ async function notifySupportTeam(ticket: SupportTicket, userId: string): Promise
     );
   }
   return false;
+}
+
+async function emailStaffReply(ticket: StaffSupportTicket, reply: SupportTicketReply) {
+  try {
+    const sent = await sendCustomerTicketEmail({
+      to: ticket.email,
+      ticketId: ticket.id,
+      subject: `Re: ${ticket.subject}`,
+      body: `Support replied to your ticket "${ticket.subject}":\n\n${reply.message}`,
+      followPath: ticketFollowPath(ticket.subject),
+      idempotencyKey: `support-ticket-reply-${reply.id}`,
+    });
+    if (!sent.delivered) {
+      logger.error(
+        { ticketId: ticket.id, reason: sent.reason },
+        '[support-ticket] customer was not emailed a staff reply',
+      );
+    }
+  } catch (error) {
+    logger.error(
+      { ticketId: ticket.id, error },
+      '[support-ticket] customer was not emailed a staff reply',
+    );
+  }
 }
 
 /**
@@ -363,6 +392,7 @@ export async function replyToTicketAsStaff(input: {
     message: clamp(input.message, MAX_TICKET_MESSAGE_CHARS),
   });
   if (!reply) throw new TicketNotFoundError();
+  await emailStaffReply(ticket, reply);
 
   const to = statusAfterStaffReply(ticket.status, input.resolve);
   if (to !== ticket.status && canTransition(ticket.status, to)) {

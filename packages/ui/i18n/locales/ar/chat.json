@@ -226,6 +226,9 @@
     "shareConversation": "مشاركة المحادثة",
     "temporaryChat": "محادثة مؤقتة",
     "temporaryChatRetentionNote": "لن يتم حفظها في سجلك ويتم تخطي الذاكرة لهذه الجولة.",
+    "temporaryChatPersonalized": "مخصّصة",
+    "temporaryChatUnpersonalized": "غير مخصّصة",
+    "temporaryChatPersonalizationHint": "المخصّصة تستخدم ملفك الشخصي وتعليماتك وأسلوب الردود. غير المخصّصة تتركها جانبًا.",
     "toggleArtifacts": "تبديل لوحة العناصر",
     "toggleArtifactsCount": "تبديل لوحة العناصر ({{count}})",
     "toggleStats": "الإحصائيات"

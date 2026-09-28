@@ -248,7 +248,7 @@ export function Menu({
               'absolute z-[var(--z-dropdown)] mt-1 max-h-[min(24rem,60vh)]',
               side === 'top' ? 'bottom-full mb-1 mt-0' : 'top-full',
             ),
-        'min-w-[12rem] overflow-y-auto overscroll-contain rounded-md border p-1 shadow-lg',
+        'min-w-[12rem] overflow-y-auto overscroll-contain rounded-md border p-1 shadow-e3',
         'border-border bg-popover text-popover-foreground',
         menuClassName,
       )}
@@ -413,7 +413,7 @@ export function MenuSubmenu({ label, icon, children }: MenuSubmenuProps) {
           triggerRef.current?.focus();
         }
       }}
-      className="fixed z-[var(--z-popover)] w-52 overflow-y-auto overscroll-contain rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-lg"
+      className="fixed z-[var(--z-popover)] w-52 overflow-y-auto overscroll-contain rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-e3"
     >
       {children}
     </div>

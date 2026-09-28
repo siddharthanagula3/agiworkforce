@@ -29,6 +29,8 @@ const CARRIED_COLUMNS = [
   'default_model_id',
   'imported_from',
   'uses_global_memory',
+  'uses_account_instructions',
+  'uses_account_style',
 ] as const;
 
 function isSchemaNotReady(error: unknown): boolean {

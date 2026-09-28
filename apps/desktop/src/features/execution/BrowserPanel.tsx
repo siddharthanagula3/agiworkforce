@@ -71,7 +71,7 @@ export function BrowserPanel({ className }: BrowserPanelProps) {
       <div className="border-b border-border px-4 py-3">
         <div className="flex items-center justify-between">
           <div className="min-w-0 flex-1">
-            <h3 className="text-sm font-semibold text-foreground">Browser Automation</h3>
+            <h3 className="text-h5 text-foreground">Browser Automation</h3>
             {currentUrl && (
               <div className="mt-1 flex items-center gap-2">
                 <Globe className="h-3 w-3 text-muted-foreground" />

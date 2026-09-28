@@ -366,7 +366,7 @@ export function TaskDetailPanel({
             <ListChecks className="h-5 w-5" />
           </span>
           <div className="space-y-1.5">
-            <h2 className="text-sm font-semibold text-foreground">Select a task</h2>
+            <h2 className="text-h5 text-foreground">Select a task</h2>
             <p className="text-sm leading-5 text-muted-foreground">
               Review progress, outputs, and durable context without leaving this page.
             </p>

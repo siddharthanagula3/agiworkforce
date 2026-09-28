@@ -97,7 +97,7 @@ export const ResearchHistory = memo(function ResearchHistory({
       <div className="flex items-center justify-between pb-4 border-b">
         <div className="flex items-center gap-2">
           <History className="h-5 w-5 text-primary" />
-          <h2 className="text-lg font-semibold">Research History</h2>
+          <h2 className="text-h3">Research History</h2>
           <span className="text-sm text-muted-foreground">({history.length})</span>
         </div>
         <AlertDialog>

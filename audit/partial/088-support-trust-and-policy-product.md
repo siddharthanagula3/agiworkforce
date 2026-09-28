@@ -10,17 +10,16 @@ nothing is left.
 
 - Done when: Screens that need explaining link straight to the matching help or docs article for that feature.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Security, Account, Workspace and Roles link to their help article; other feature screens still link only to general pages | ui |
-| desktop | partial | Security, Account, Workspace and Roles link to their help article; other feature screens still link only to general pages | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | partial | Permissions, configuration and custom-instructions screens link to /docs?topic=..., but the docs page ignores the topic parameter and opens the general index. | states |
 | chrome | partial | Only the prompt-injection onboarding has a contextual "Learn more" (to /security); every other help entry is the generic help centre link. | ui |
 
-Code: `apps/web/features/settings/sections/SecuritySection.tsx:121-121`, `apps/web/features/settings/sections/AccountSection.tsx:392-392`, `apps/web/features/settings/sections/TeamSection.tsx:432-432`, `apps/web/features/workspace-console/components/WorkspaceRoles.tsx:234-234`
+Code: `apps/extension-vscode/src/features/settings/SettingsPanel.ts:31-35`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:906-910`, `apps/extension/src/side_panel.ts:5589-5592`, `apps/extension/src/side_panel.ts:7140-7149`
 
 ## S88.02: Searchable help center.
 
@@ -204,18 +203,6 @@ Code: `apps/web/features/settings/sections/PrivacySection.tsx:801-806`, `apps/we
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S88.19: Copyright/impersonation reporting.
-
-- Done when: Anyone can report copyright infringement or impersonation in hosted content and get a reference.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | A copyright and trademark notice form exists, but there is no way to report impersonation. | ui |
-| desktop | partial | A copyright and trademark notice form exists, but there is no way to report impersonation. | ui |
-
-Code: `apps/web/app/copyright/report/CopyrightNoticeForm.tsx:85-90`, `apps/web/app/api/copyright-notice/route.ts:147-159`
-
 ## S88.20: Safety-warning appeal.
 
 - Done when: When a response is refused for safety reasons, the user can appeal or report the refusal from that notice.
@@ -233,17 +220,14 @@ Code: `apps/web/app/copyright/report/CopyrightNoticeForm.tsx:85-90`, `apps/web/a
 
 - Done when: A suspended user is told why and can appeal from where they are blocked, with a way to follow the appeal.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | A suspended user is shown a "Contact support" email link with an appeal subject; there is no in-product appeal form or status. | handler |
-| desktop | partial | A suspended user is shown a "Contact support" email link with an appeal subject; there is no in-product appeal form or status. | handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/auth/AuthNoticeStep.tsx:59-64`, `apps/web/lib/api-auth.ts:144-150`
 
 ## S88.23: Accessibility feedback.
 
