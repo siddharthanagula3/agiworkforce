@@ -45,7 +45,7 @@ export function AuditLogPanel() {
     >
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border/60 px-5 py-4">
         <div>
-          <h2 id="security-audit-log-heading" className="text-sm font-semibold text-foreground">
+          <h2 id="security-audit-log-heading" className="text-h5 text-foreground">
             Security activity
           </h2>
           <p className="mt-1 text-xs text-muted-foreground">

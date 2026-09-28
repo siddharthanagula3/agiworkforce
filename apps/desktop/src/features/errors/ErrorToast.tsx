@@ -1,4 +1,5 @@
 import { AlertCircle, AlertTriangle, CheckCircle, Info, X, RefreshCw } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useShallow } from 'zustand/react/shallow';
 import useErrorStore, { type AppError, type ErrorSeverity } from '../../stores/ui';
 import { getErrorMessage } from '../../constants/errorMessages';
@@ -47,11 +48,12 @@ interface ErrorToastItemProps {
 function ErrorToastItem({ error, onDismiss, onRetry }: ErrorToastItemProps) {
   const config = severityConfig[error.severity];
   const Icon = config.icon;
-  const errorDef = getErrorMessage(error.type);
+  const { t } = useTranslation();
+  const errorDef = getErrorMessage(error.type, t);
 
   return (
     <div
-      className={`mb-3 flex items-start gap-3 rounded-lg border p-4 shadow-lg transition-all ${config.bgClass} ${config.borderClass}`}
+      className={`mb-3 flex items-start gap-3 rounded-lg border p-4 shadow-e3 transition-all ${config.bgClass} ${config.borderClass}`}
       role="alert"
     >
       <Icon className={`mt-0.5 h-5 w-5 shrink-0 ${config.iconClass}`} />
@@ -72,7 +74,7 @@ function ErrorToastItem({ error, onDismiss, onRetry }: ErrorToastItemProps) {
             {import.meta.env.DEV && error.details && (
               <details className="mt-2">
                 <summary className="cursor-pointer text-xs text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200">
-                  Show details (development only)
+                  {t('errors:toast.showDetails')}
                 </summary>
                 <p className="mt-1 text-xs font-mono text-gray-600 dark:text-gray-400 whitespace-pre-wrap">
                   {error.details}
@@ -80,7 +82,7 @@ function ErrorToastItem({ error, onDismiss, onRetry }: ErrorToastItemProps) {
               </details>
             )}
 
-            {errorDef.suggestions && errorDef.suggestions.length > 0 && (
+            {errorDef.suggestions.length > 0 && (
               <ul className="mt-2 space-y-1 text-xs text-gray-600 dark:text-gray-400">
                 {errorDef.suggestions.slice(0, 2).map((suggestion, idx) => (
                   <li key={idx} className="flex items-start gap-1">
@@ -96,7 +98,7 @@ function ErrorToastItem({ error, onDismiss, onRetry }: ErrorToastItemProps) {
             type="button"
             onClick={onDismiss}
             className="shrink-0 rounded p-1 text-gray-500 hover:bg-gray-200 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-300"
-            aria-label="Dismiss"
+            aria-label={t('errors:toast.dismiss')}
           >
             <X className="h-4 w-4" />
           </button>
@@ -111,7 +113,7 @@ function ErrorToastItem({ error, onDismiss, onRetry }: ErrorToastItemProps) {
                 className="flex items-center gap-1 rounded bg-white dark:bg-gray-800 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-700"
               >
                 <RefreshCw className="h-3 w-3" />
-                Retry
+                {t('errors:toast.retry')}
               </button>
             )}
 
@@ -122,7 +124,7 @@ function ErrorToastItem({ error, onDismiss, onRetry }: ErrorToastItemProps) {
                 rel="noopener noreferrer"
                 className="rounded bg-white dark:bg-gray-800 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-700"
               >
-                Learn more
+                {t('errors:toast.learnMore')}
               </a>
             )}
           </div>

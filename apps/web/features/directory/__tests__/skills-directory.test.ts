@@ -43,10 +43,10 @@ describe('skillPublisher', () => {
     expect(skillPublisher('workspace')).toBe('Yours');
   });
 
-  it('names the managed layer and falls back to the product', () => {
+  it('names the managed layer, a plugin, and falls back to the product', () => {
     expect(skillPublisher('managed-local')).toBe('Managed');
     expect(skillPublisher('bundled')).toBe('Made by AGI');
-    expect(skillPublisher('extra')).toBe('Made by AGI');
+    expect(skillPublisher('extra')).toBe('From a plugin');
   });
 });
 

@@ -21,7 +21,8 @@
  */
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
+import { useGuardedRouter } from '@shared/hooks/use-guarded-router';
 import { useTranslation } from 'react-i18next';
 import { useCurrentUser, useSignOut } from '@/lib/identity/client';
 import { ChevronUp, Menu } from '@agiworkforce/icons';
@@ -60,6 +61,7 @@ import {
   conversationShareHref,
   projectDeleteConfirm,
   runSessionRowAction,
+  toggleConversationArchive,
 } from '@shared/components/layout/sidebar-session-actions';
 import {
   copyProjectLink,
@@ -74,6 +76,7 @@ import { isBillingPolicyReady } from '@shared/stores/billing-policy';
 import { useIsWorkspaceAdmin } from '@shared/hooks/use-workspace-admin';
 import { useDisabledWorkspaceFeatures } from '@shared/hooks/use-workspace-policy';
 import { useUnreadConversations } from '@shared/hooks/use-unread-conversations';
+import { AGI_WORK_MODE, useChatStore } from '@shared/stores/web-chat-store';
 import {
   getBillingPlanPricing,
   hasSelfServeUpgradePath,
@@ -115,7 +118,7 @@ interface WebAppShellProps {
 }
 
 export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppShellProps) {
-  const router = useRouter();
+  const router = useGuardedRouter();
   const pathname = usePathname();
   const { openSettings } = useSettingsModal();
   const identitySignOut = useSignOut();
@@ -255,10 +258,27 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
   const setStoreProjects = useProjectStore((s) => s.setProjects);
 
   const { isUnread, toggleUnread } = useUnreadConversations();
+  const loadingConversationIds = useChatStore((state) => state.loadingConversationIds);
+  const streamingConversationIds = useChatStore((state) => state.streamingConversationIds);
+  const workModeByConversation = useChatStore((state) => state.workModeByConversation);
+  const runningConversationIds = useMemo(
+    () => new Set([...loadingConversationIds, ...streamingConversationIds]),
+    [loadingConversationIds, streamingConversationIds],
+  );
 
   const sidebarSessions = useMemo<SidebarSession[]>(
-    () => toSidebarSessions(conversations, { isUnread }),
-    [conversations, isUnread],
+    () =>
+      toSidebarSessions(conversations, {
+        isUnread,
+        decorate: (c) => ({
+          ...(c.workMode === AGI_WORK_MODE || workModeByConversation[c.id] === AGI_WORK_MODE
+            ? { agiWork: true }
+            : {}),
+          ...(runningConversationIds.has(c.id) ? { runState: 'running' as const } : {}),
+          ...(c.needsYou ? { needsYou: true } : {}),
+        }),
+      }),
+    [conversations, isUnread, runningConversationIds, workModeByConversation],
   );
 
   const sidebarProjects = useMemo<SidebarProject[]>(
@@ -323,11 +343,13 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
     (id: string) => {
       const convo = conversations.find((c) => c.id === id);
       if (!convo) return;
-      void runSessionRowAction(convo.isArchived ? 'restore' : 'archive', () =>
-        updateConversation(id, { archived: !convo.isArchived }),
+      void toggleConversationArchive(
+        convo.isArchived ?? false,
+        (archived) => updateConversation(id, { archived }),
+        () => openShellSettings('archived'),
       );
     },
-    [conversations, updateConversation],
+    [conversations, openShellSettings, updateConversation],
   );
   const handleMarkUnreadSession = useCallback((id: string) => toggleUnread(id), [toggleUnread]);
   const handleShareSession = useCallback(

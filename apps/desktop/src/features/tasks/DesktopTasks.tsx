@@ -7,9 +7,10 @@ import { selectHasCloudAccountSession, useAuthStore } from '@/stores/auth';
 export interface DesktopTasksProps {
   onOpenConversation: (conversationId: string) => void;
   onStartChat?: () => void;
+  onRerunWork?: (draft: string) => void;
 }
 
-export function DesktopTasks({ onOpenConversation, onStartChat }: DesktopTasksProps) {
+export function DesktopTasks({ onOpenConversation, onStartChat, onRerunWork }: DesktopTasksProps) {
   const isSignedIn = useAuthStore(selectHasCloudAccountSession);
 
   const transport = useMemo<TasksTransport>(
@@ -18,8 +19,26 @@ export function DesktopTasks({ onOpenConversation, onStartChat }: DesktopTasksPr
       openConversation: onOpenConversation,
       notifyError: (message) => toast.error(message),
       startWork: onStartChat,
+      ...(onRerunWork
+        ? {
+            rerunWork: (goal) => {
+              onRerunWork(
+                [
+                  goal.goal,
+                  goal.constraints ? `Constraints: ${goal.constraints}` : null,
+                  goal.deliverable ? `Deliverable: ${goal.deliverable}` : null,
+                ]
+                  .filter(Boolean)
+                  .join('\n'),
+              );
+              toast.success(
+                'Loaded this task into a new AGI Work chat. Edit it if you like, then send to run it again.',
+              );
+            },
+          }
+        : {}),
     }),
-    [onOpenConversation, onStartChat],
+    [onOpenConversation, onStartChat, onRerunWork],
   );
 
   if (!isSignedIn) {

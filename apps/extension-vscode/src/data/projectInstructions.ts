@@ -1,41 +1,35 @@
 import * as vscode from 'vscode';
+import {
+  PROJECT_INSTRUCTION_FILES,
+  PROJECT_INSTRUCTION_MAX_SOURCES,
+  projectInstruction,
+  type ProjectInstruction,
+} from '@agiworkforce/types';
+import { getActiveWorkspaceFolderSync } from '../platform/workspaceFolders';
 
-const MAX_FILE_BYTES = 8_192;
-const INSTRUCTION_FILES = ['AGENTS.md', 'CLAUDE.md', '.agiworkforce/instructions.md'] as const;
-
-export interface ProjectInstructionSource {
-  fileName: (typeof INSTRUCTION_FILES)[number];
+export interface ProjectInstructionSource extends ProjectInstruction {
   uri: vscode.Uri;
-  content: string;
-  truncated: boolean;
+}
+
+export function projectInstructionFolder(): vscode.WorkspaceFolder | undefined {
+  return getActiveWorkspaceFolderSync() ?? vscode.workspace.workspaceFolders?.[0];
 }
 
 export async function loadProjectInstructionSources(): Promise<ProjectInstructionSource[]> {
-  const workspaceFolders = vscode.workspace.workspaceFolders;
-  if (!workspaceFolders || workspaceFolders.length === 0) return [];
+  const folder = projectInstructionFolder();
+  if (folder === undefined) return [];
 
-  const root = workspaceFolders[0]!.uri;
   const sources: ProjectInstructionSource[] = [];
-
-  for (const fileName of INSTRUCTION_FILES) {
-    if (sources.length >= 2) break;
-
-    const uri = vscode.Uri.joinPath(root, fileName);
+  for (const fileName of PROJECT_INSTRUCTION_FILES) {
+    if (sources.length >= PROJECT_INSTRUCTION_MAX_SOURCES) break;
+    const uri = vscode.Uri.joinPath(folder.uri, fileName);
     try {
       const bytes = await vscode.workspace.fs.readFile(uri);
-      if (bytes.byteLength === 0) continue;
-
-      const raw = Buffer.from(bytes).toString('utf8');
-      const truncated = raw.length > MAX_FILE_BYTES;
-      const content = truncated
-        ? raw.slice(0, MAX_FILE_BYTES) +
-          `\n\n[...truncated, file is ${raw.length} chars, showing first ${MAX_FILE_BYTES}]`
-        : raw;
-      sources.push({ fileName, uri, content, truncated });
-    } catch (err) {
-      void err;
+      const instruction = projectInstruction(fileName, Buffer.from(bytes).toString('utf8'));
+      if (instruction !== null) sources.push({ ...instruction, uri });
+    } catch {
+      continue;
     }
   }
-
   return sources;
 }

@@ -14,6 +14,8 @@ import {
   evaluateModelEnvironment,
   PROVIDER_DISPLAY,
   type ModelAvailability,
+  type DeveloperReasoningEffort,
+  type ModelSpeed,
   type ProviderId,
   type EnvironmentAvailability,
   type ModelEnvironment,
@@ -239,6 +241,15 @@ export function buildGroupedQuickPickItems(
 
       const descriptionParts: string[] = [getPickerCapabilityLabel(opt.id, opt.detail)];
       if (metadata?.capabilities.thinking ?? false) descriptionParts.push('Thinking');
+      if (metadata != null) descriptionParts.push(MODEL_SPEED_LABELS[metadata.speed]);
+      const limits = [
+        metadata?.contextWindow === undefined
+          ? null
+          : `${formatTokenLimit(metadata.contextWindow)} context`,
+        metadata?.maxOutputTokens === undefined
+          ? null
+          : `${formatTokenLimit(metadata.maxOutputTokens)} output`,
+      ].filter((part): part is string => part !== null);
 
       const lock = modelLockForRoute(opt.id, provider, tier, route);
       const codicon =
@@ -246,7 +257,7 @@ export function buildGroupedQuickPickItems(
       const item: GroupedQuickPickItem = {
         label: `${codicon} ${opt.label}`,
         description: descriptionParts.join(' · '),
-        detail: opt.id,
+        detail: [opt.id, ...limits].join(' · '),
         modelId: opt.id,
         ...(lock === undefined ? {} : { disabled: true, lock }),
       };
@@ -275,6 +286,68 @@ export function buildGroupedQuickPickItems(
     items.push(...bucket.items);
   }
   return items;
+}
+
+const MODEL_SPEED_LABELS: Record<ModelSpeed, string> = {
+  'very-fast': 'Fastest',
+  fast: 'Fast',
+  medium: 'Medium speed',
+  slow: 'Slower',
+};
+
+function formatTokenLimit(tokens: number): string {
+  if (tokens >= 1_000_000) return `${Number((tokens / 1_000_000).toFixed(1))}M`;
+  if (tokens >= 1_000) return `${Math.round(tokens / 1_000)}K`;
+  return String(tokens);
+}
+
+export function describeModelSwitchLosses(fromModelId: string, toModelId: string): string[] {
+  const from = getModelMetadataById(fromModelId);
+  const to = getModelMetadataById(toModelId);
+  if (from == null || to == null) return [];
+  const losses: string[] = [];
+  if (from.capabilities.tools && !to.capabilities.tools) {
+    losses.push('cannot use tools, so it cannot read or edit files or run commands');
+  }
+  if (from.capabilities.vision && !to.capabilities.vision) {
+    losses.push('cannot read images you attach');
+  }
+  if (
+    from.contextWindow !== undefined &&
+    to.contextWindow !== undefined &&
+    to.contextWindow < from.contextWindow
+  ) {
+    losses.push(
+      `holds ${formatTokenLimit(to.contextWindow)} of context instead of ${formatTokenLimit(from.contextWindow)}, so a long chat may be trimmed`,
+    );
+  }
+  return losses;
+}
+
+const DEVELOPER_EFFORTS: readonly DeveloperReasoningEffort[] = ['low', 'medium', 'high', 'max'];
+
+export function registryEffortLevels(modelId: string): DeveloperReasoningEffort[] | null {
+  const reasoning = getModelMetadataById(modelId)?.reasoning;
+  if (reasoning === undefined) return null;
+  if (!reasoning.capable) return [];
+  const supported = reasoning.supportedEfforts;
+  if (supported === undefined) return null;
+  return DEVELOPER_EFFORTS.filter((effort) => supported.includes(effort));
+}
+
+export function supportedEffort(
+  modelId: string,
+  effort: DeveloperReasoningEffort,
+): DeveloperReasoningEffort {
+  const levels = registryEffortLevels(modelId);
+  if (levels === null || levels.length === 0 || levels.includes(effort)) return effort;
+  const wanted = DEVELOPER_EFFORTS.indexOf(effort);
+  return levels.reduce((best, level) =>
+    Math.abs(DEVELOPER_EFFORTS.indexOf(level) - wanted) <
+    Math.abs(DEVELOPER_EFFORTS.indexOf(best) - wanted)
+      ? level
+      : best,
+  );
 }
 
 export interface ModelProviderInfo {

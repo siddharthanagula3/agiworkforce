@@ -117,20 +117,6 @@ Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:70-74`, `
 
 Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:70-74`, `apps/web/features/chat/pages/WebChatPage.tsx:2020-2026`, `apps/web/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration.ts:435-446`, `apps/web/lib/security/upload-scan.ts:272-283`
 
-## S43.10: Crop-and-zoom inspection.
-
-- Done when: User can zoom into, or crop, part of an image to inspect detail (and ask about the crop).
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Attachment lightbox zooms up to 3x, but there is no crop, and no way to send a zoomed crop back to the model. | ui |
-| desktop | partial | Hosted web: lightbox zoom only; no crop or crop-and-ask. | ui |
-| mobile | partial | Full-screen viewer has pinch and double-tap zoom; no crop and no crop-and-ask. | ui |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/messages/MessageBubble.tsx:2308-2315`, `apps/web/features/chat/components/ImageLightbox.tsx:21-23`, `apps/web/features/chat/components/ImageLightbox.tsx:52-56`, `apps/mobile/src/features/chat/components/MessageBubble.tsx:728-732`
-
 ## S43.12: Object counting.
 
 - Done when: User asks how many of something appear in an image and the vision model answers.
@@ -173,39 +159,6 @@ Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:70-74`, `
 
 Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:70-74`, `apps/web/features/chat/pages/WebChatPage.tsx:2020-2026`, `apps/web/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration.ts:435-446`, `apps/web/lib/security/upload-scan.ts:272-283`
 
-## S43.15: Image-to-structured-data extraction.
-
-- Done when: User turns an image (receipt, form, card) into structured fields (JSON/CSV/rows) they can reuse.
-- Wave: 2
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | No extraction action or schema: only by asking in words with Create Office files on (CSV/XLSX), and image uploads need the production upload scanner. | ui, flag-off |
-| desktop | partial | Hosted web: CSV/XLSX only via the Create Office files toggle; no extraction action; upload scanner gate. | ui, flag-off |
-| mobile | partial | Office-file toggle can return CSV/XLSX when asked; no extraction action; cloud image uploads need the upload scanner. | ui, flag-off |
-| cli | partial | No extraction command; works only by asking the agent to write a JSON/CSV file from an attached image. | ui |
-| vscode | partial | No extraction command; only by asking the local agent to write the file. | ui |
-| chrome | missing | Not built on this surface. |  |
-| api | partial | json_object is prompt-only and json_schema is refused, so structured output from an image is not enforced. | handler |
-
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:85-87`, `apps/web/lib/services/managed-office-file-service.ts:150-159`, `apps/web/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration.ts:435-446`, `apps/mobile/stores/chat/chatExecutionStore.ts:1752-1757`
-
-## S43.16: Image-to-table workflow.
-
-- Done when: User turns a table in an image into an editable table or spreadsheet in a guided step.
-- Wave: 2
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | No image-to-table action; a spreadsheet comes only from asking with Create Office files on, and image uploads need the upload scanner. | ui, flag-off |
-| desktop | partial | Hosted web: same as web. | ui, flag-off |
-| mobile | partial | Office-file toggle can return XLSX/CSV when asked; no image-to-table step; cloud uploads need the scanner. | ui, flag-off |
-| cli | partial | No image-to-table command; only by asking the agent to write a CSV from an attached image. | ui |
-| vscode | partial | No image-to-table command; only by asking the local agent. | ui |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:85-87`, `apps/web/lib/services/managed-office-file-service.ts:150-159`, `apps/web/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration.ts:435-446`, `apps/mobile/stores/chat/chatExecutionStore.ts:1752-1757`
-
 ## S43.17: Reference-image selection for another task.
 
 - Done when: User picks an existing image (upload, library item or earlier output) as the reference input for a generation or edit.
@@ -221,6 +174,7 @@ Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:85-87`, `
 
 - Done when: Images are processed at a resolution suited to the task, with a high-detail vs reduced-detail choice honoured end to end.
 - Wave: 3
+- Already works on: api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -228,8 +182,6 @@ Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:85-87`, `
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | Images are always resized to fit before sending; there is no high-detail option. | ui |
-| vscode | partial | The local app-server resizes local images to fit; no detail choice in the webview. | ui |
 | chrome | missing | Not built on this surface. |  |
-| api | partial | image_url.detail (low/high/auto) is accepted but never forwarded to a provider; make it change the resolution sent. | handler |
 
-Code: `apps/cli/src/lib.rs:4695-4703`, `apps/cli/src/tui/tui_app.rs:3703-3710`, `apps/cli/src/app_server/developer_host.rs:855-861`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:4962-4967`
+Code: `apps/cli/src/lib.rs:4695-4703`, `apps/cli/src/tui/tui_app.rs:3703-3710`

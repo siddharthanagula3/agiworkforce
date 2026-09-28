@@ -47,6 +47,7 @@ export const UNAUDITED_MUTATING_ROUTES: readonly UnauditedRoute[] = [
   { route: 'chat/conversations/route.ts', reason: 'own_content' },
   { route: 'chat/sync/route.ts', reason: 'no_governed_state' },
   { route: 'claim-offer/route.ts', reason: 'pre_account' },
+  { route: 'code/local-sessions/activity/route.ts', reason: 'no_governed_state' },
   { route: 'consent/route.ts', reason: 'dedicated_record' },
   { route: 'device/poll/route.ts', reason: 'no_governed_state' },
   { route: 'devices/heartbeat/route.ts', reason: 'no_governed_state' },
@@ -151,8 +152,16 @@ export const REQUIRED_ROUTE_AUDIT_EVENTS: readonly RequiredRouteAuditEvents[] = 
     eventTypes: ['connector_setting_changed'],
   },
   {
+    route: 'llm/v1/chat/completions/approve/route.ts',
+    eventTypes: ['tool_approval_decided'],
+  },
+  {
     route: 'llm/v1/chat/completions/runs/[runId]/archive/route.ts',
     eventTypes: ['agent_run_lifecycle_changed'],
+  },
+  {
+    route: 'voice/live/sessions/[sessionId]/tools/route.ts',
+    eventTypes: ['tool_approval_decided'],
   },
   {
     route: 'llm/v1/chat/completions/runs/[runId]/pause/route.ts',

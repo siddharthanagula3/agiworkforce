@@ -11,6 +11,8 @@ const preferences: Awaited<ReturnType<ElectronHostBridge['readPreferences']>> = 
     voiceShortcut: '',
     showInMenuBar: true,
     cliPath: '',
+    sessionCompletionAlerts: 'background',
+    sessionApprovalAlerts: true,
   },
   shortcutStatus: { quickAsk: 'off', screenshot: 'off', voice: 'off' },
 };

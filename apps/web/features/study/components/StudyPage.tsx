@@ -6,6 +6,7 @@ import { BookOpen } from '@agiworkforce/icons';
 import { Spinner } from '@agiworkforce/ui';
 
 import { toUserMessage } from '@/lib/user-error-message';
+import { addCsrfHeaders } from '@/lib/client/csrf';
 
 import {
   MAX_STUDY_TOPIC_LENGTH,
@@ -37,7 +38,7 @@ async function createConversationForStudy(title: string): Promise<string> {
   const response = await fetch('/api/chat/conversations', {
     method: 'POST',
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
+    headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ title }),
   });
   const body: unknown = await response.json().catch(() => null);
@@ -109,9 +110,9 @@ export function StudyPage({
   const past = (sessions ?? []).filter((session) => session.endedAt !== null);
 
   return (
-    <div className="mx-auto flex w-full max-w-[768px] flex-col gap-8 px-4 py-8">
+    <div className="mx-auto flex w-full max-w-[768px] flex-col gap-8 px-gutter-compact py-8 md:px-gutter-regular">
       <header className="flex flex-col gap-2">
-        <h1 className="flex items-center gap-2 text-xl font-semibold text-foreground">
+        <h1 className="flex items-center gap-2 text-h2 text-foreground">
           <BookOpen aria-hidden="true" className="h-5 w-5" />
           Study
         </h1>
@@ -122,7 +123,7 @@ export function StudyPage({
       </header>
 
       <section aria-labelledby="study-start" className="flex flex-col gap-4">
-        <h2 id="study-start" className="text-sm font-medium text-foreground">
+        <h2 id="study-start" className="text-h5 text-foreground">
           Start a session
         </h2>
 
@@ -204,7 +205,7 @@ export function StudyPage({
       </section>
 
       <section aria-labelledby="study-history" className="flex flex-col gap-3">
-        <h2 id="study-history" className="text-sm font-medium text-foreground">
+        <h2 id="study-history" className="text-h5 text-foreground">
           Your sessions
         </h2>
 

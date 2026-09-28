@@ -24,15 +24,16 @@ describe('ConnectorScopeList', () => {
     expect(screen.queryByText('Permissions requested')).toBeNull();
   });
 
-  it('says an unreviewed provider has not been reviewed yet', () => {
+  it('explains an unreviewed provider in plain language and points to its consent screen', () => {
     render(<ConnectorScopeList connectorId="calendly" />);
 
-    expect(screen.getByText(/have not been reviewed yet/)).toBeVisible();
+    expect(screen.getByText(/can also change it/)).toBeVisible();
+    expect(screen.getByText(/own consent screen/)).toBeVisible();
   });
 
-  it('renders nothing for a connector with no scope ceiling at all', () => {
-    const { container } = render(<ConnectorScopeList connectorId="github" />);
+  it('explains what a connector with no scope ceiling can do', () => {
+    render(<ConnectorScopeList connectorId="github" />);
 
-    expect(container).toBeEmptyDOMElement();
+    expect(screen.getByLabelText('What this connector can do')).toBeVisible();
   });
 });

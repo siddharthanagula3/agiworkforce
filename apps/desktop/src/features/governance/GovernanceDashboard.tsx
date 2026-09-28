@@ -365,7 +365,7 @@ export const GovernanceDashboard: React.FC = () => {
                 <Shield className="h-5 w-5" />
               </div>
               <div>
-                <h2 className="text-base font-semibold text-zinc-100">Governance workspace</h2>
+                <h2 className="text-h4 text-zinc-100">Governance workspace</h2>
                 <p className="text-sm text-zinc-400">
                   Approvals, audit trails, integrity checks, and policy controls.
                 </p>
@@ -464,7 +464,7 @@ export const GovernanceDashboard: React.FC = () => {
                 return (
                   <div
                     key={card.title}
-                    className={cn('rounded-xl border p-4 shadow-sm', CARD_TONE_STYLES[card.tone])}
+                    className={cn('rounded-xl border p-4 shadow-e1', CARD_TONE_STYLES[card.tone])}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div>
@@ -486,7 +486,7 @@ export const GovernanceDashboard: React.FC = () => {
             <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <h3 className="text-sm font-semibold text-zinc-100">Operational alerts</h3>
+                  <h3 className="text-h5 text-zinc-100">Operational alerts</h3>
                   <p className="text-sm text-zinc-400">
                     Items that need review before teams rely on this workspace.
                   </p>

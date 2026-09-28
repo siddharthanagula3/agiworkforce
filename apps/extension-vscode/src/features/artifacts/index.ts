@@ -15,6 +15,8 @@ export {
   ArtifactContentProvider,
   OPEN_ARTIFACT_ON_WEB_COMMAND,
   SAVE_ARTIFACT_COMMAND,
+  COPY_ARTIFACT_COMMAND,
+  copyArtifactContent,
   artifactUri,
   artifactsWebUrl,
   openArtifactReadOnly,

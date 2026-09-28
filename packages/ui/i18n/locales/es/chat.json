@@ -117,6 +117,8 @@
     "renameProject": "Renombrar proyecto",
     "restore": "Restaurar",
     "running": "En ejecución",
+    "unread": "No leído",
+    "needsYou": "Te necesita",
     "searchConversations": "Buscar conversaciones",
     "searchConversationsDescription": "Busca tu historial de conversaciones y abre la conversación coincidente.",
     "share": "Compartir",
@@ -199,6 +201,7 @@
     "voiceUnsupportedHint": "La entrada de voz no es compatible con este navegador. Prueba Chrome o Edge."
   },
   "bubble": {
+    "assistantSaid": "AGI dijo:",
     "assistantThinking": "El asistente está pensando",
     "cancelEdit": "Cancelar",
     "copied": "Copiado",
@@ -210,7 +213,8 @@
     "messageAttachments": "Archivos adjuntos del mensaje",
     "retryResponse": "Reintentar esta respuesta",
     "saveEdit": "Guardar",
-    "toolResult": "Resultado"
+    "toolResult": "Resultado",
+    "userSaid": "Tú dijiste:"
   },
   "goalHandoff": {
     "action": "Ejecutar como tarea",
@@ -226,9 +230,13 @@
     "shareConversation": "Compartir conversación",
     "temporaryChat": "Chat temporal",
     "temporaryChatRetentionNote": "No se guardará en tu historial y omite la memoria en este turno.",
+    "temporaryChatPersonalized": "Personalizado",
+    "temporaryChatUnpersonalized": "Sin personalizar",
+    "temporaryChatPersonalizationHint": "Personalizado usa tu perfil, tus instrucciones y tu estilo de respuesta. Sin personalizar los deja fuera.",
     "toggleArtifacts": "Alternar panel de artefactos",
     "toggleArtifactsCount": "Alternar panel de artefactos ({{count}})",
-    "toggleStats": "Estadísticas"
+    "toggleStats": "Estadísticas",
+    "untitledConversation": "Conversación"
   },
   "interface": {
     "closeRewindCheckpoints": "Cerrar puntos de retroceso",
@@ -302,5 +310,42 @@
     "morningNamed": "Buenos días, {{name}}",
     "afternoonNamed": "Buenas tardes, {{name}}",
     "eveningNamed": "Buenas noches, {{name}}"
+  },
+  "counts": {
+    "shortcutsOff_one": "{{count}} atajo desactivado",
+    "shortcutsOff_other": "{{count}} atajos desactivados",
+    "searchHistoryCleared_one": "Se borró {{count}} búsqueda del historial",
+    "searchHistoryCleared_other": "Se borraron {{count}} búsquedas del historial",
+    "searches_one": "{{count}} búsqueda",
+    "searches_other": "{{count}} búsquedas",
+    "searchesOf_one": "{{count}} de {{max}} búsquedas",
+    "searchesOf_other": "{{count}} de {{max}} búsquedas",
+    "sources_one": "{{count}} fuente",
+    "sources_other": "{{count}} fuentes",
+    "intermediateSteps_one": "{{count}} paso intermedio",
+    "intermediateSteps_other": "{{count}} pasos intermedios",
+    "conversations_one": "{{count}} conversación",
+    "conversations_other": "{{count}} conversaciones",
+    "tools_one": "{{count}} herramienta",
+    "tools_other": "{{count}} herramientas",
+    "citations_one": "{{count}} cita",
+    "citations_other": "{{count}} citas",
+    "checkpoints_one": "{{count}} punto de control",
+    "checkpoints_other": "{{count}} puntos de control",
+    "usedTools_one": "Se usó {{count}} herramienta",
+    "usedTools_other": "Se usaron {{count}} herramientas",
+    "runningTools_one": "Ejecutando {{count}} herramienta",
+    "runningTools_other": "Ejecutando {{count}} herramientas",
+    "runningToolsOf_one": "Ejecutando {{running}}/{{count}} herramienta: {{name}}",
+    "runningToolsOf_other": "Ejecutando {{running}}/{{count}} herramientas: {{name}}"
+  },
+  "markdownTable": {
+    "label": "Tabla",
+    "expand": "Ampliar tabla",
+    "copy": "Copiar tabla",
+    "copied": "Tabla copiada",
+    "copyFailed": "No se pudo copiar, el portapapeles no está disponible",
+    "download": "Descargar como CSV",
+    "close": "Cerrar tabla ampliada"
   }
 }

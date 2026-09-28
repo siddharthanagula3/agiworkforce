@@ -1,5 +1,7 @@
 import {
   buildVsCodeCloudTaskHandoffUri,
+  buildVsCodeDeveloperSessionHandoffUri,
+  CLOUD_CODE_LIMITS,
   CLOUD_CODE_SESSION_STATUS_FILTERS,
   CLOUD_CODE_SESSION_COPY,
   cloudCodeRepositoryLabel,
@@ -33,12 +35,12 @@ export function codeSessionPath(sessionId: string): string {
 }
 
 export const CODE_LIMITS = {
-  title: 120,
+  title: CLOUD_CODE_LIMITS.title,
   repositoryUrl: 500,
   repositoryBranch: 255,
   commitMessage: 500,
   command: 2000,
-  task: 8000,
+  task: CLOUD_CODE_LIMITS.task,
   extraHosts: 200,
 } as const;
 
@@ -242,7 +244,20 @@ export const CODE_COPY = {
   creatingPullRequest: 'Opening the pull request',
   pullRequestNeedsBranch: 'A pull request needs a repository and a working branch.',
   pullRequestNeedsOpenSession: 'A closed or archived session cannot open a pull request.',
+  checksPassing: 'Checks passing',
+  checksFailing: 'Checks failing',
+  checksPending: 'Checks running',
+  checksNone: 'No checks reported',
+  checksUnavailable: 'Check status is unavailable',
+  checksRefresh: 'Refresh the checks',
+  checksLoading: 'Loading the checks',
+  pullRequestMerged: 'Merged',
+  pullRequestClosed: 'Closed without merging',
+  reviewApproved: 'Approved',
+  reviewChangesRequested: 'Changes requested',
   continueInVsCode: 'Continue in VS Code',
+  continueElsewhere: 'Continue in VS Code or the terminal',
+  resumeInTerminal: 'To continue in the terminal, run this in the same folder:',
   continueInVsCodeHelp:
     'Opens this session in VS Code and offers to check out its branch in the folder you have open. Commit and push first so your computer can fetch it.',
   changesSettings: 'Changes settings',
@@ -330,6 +345,26 @@ export function continueInVsCodeHref(
   } catch {
     return null;
   }
+}
+
+export function continueLocalSessionInVsCodeHref(session: {
+  id: string;
+  cwd: string;
+}): string | null {
+  try {
+    return buildVsCodeDeveloperSessionHandoffUri({ threadId: session.id, cwd: session.cwd });
+  } catch {
+    return null;
+  }
+}
+
+const SHELL_SAFE_ARGUMENT = /^[A-Za-z0-9._:-]+$/;
+
+export function localSessionResumeCommand(sessionId: string): string {
+  const argument = SHELL_SAFE_ARGUMENT.test(sessionId)
+    ? sessionId
+    : `'${sessionId.replace(/'/g, `'\\''`)}'`;
+  return `agi --resume ${argument}`;
 }
 
 export function parseExtraHosts(value: string): string[] {

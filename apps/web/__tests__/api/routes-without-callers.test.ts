@@ -75,7 +75,6 @@ const CALLERLESS: ReadonlyArray<{ url: string; why: string }> = [
     url: '/api/download-beta',
     why: 'subscriber beta installer, reached by a link sent outside the product',
   },
-  { url: '/api/llm/v1/chat/completions/resume-input', why: 'a tool approval resumes a run here' },
 
   // Platform-admin procedures are deliberately API-only. They are used during
   // incidents and maintenance, not exposed as ordinary product controls.
@@ -115,36 +114,16 @@ const CALLERLESS: ReadonlyArray<{ url: string; why: string }> = [
     why: 'authenticated GitHub integration API for issue readers and comment clients',
   },
   {
-    url: '/api/media/image/cancel',
-    why: 'cross-surface durable image-job protocol cancels a server-owned job',
-  },
-  {
     url: '/api/media/image/retry',
     why: 'cross-surface durable image-job protocol retries the existing billed reservation',
-  },
-  {
-    url: '/api/memory/commands',
-    why: 'cross-surface explicit remember and confirmed-forget command protocol',
   },
   {
     url: '/api/completion',
     why: 'retired managed-execution endpoint kept so an old client gets one fixed refusal; only registries name it',
   },
   {
-    url: '/api/me/routing-preferences',
-    why: 'the chat request path reads these preferences server side; no settings control calls the route yet',
-  },
-  {
-    url: '/api/settings/identities',
-    why: 'lists and unlinks sign-in methods behind step-up; the settings pane that calls it is not built yet',
-  },
-  {
-    url: '/api/settings/organization/keys',
-    why: 'enrols, rotates, replaces and revokes the workspace encryption key; the settings pane that calls it is not built yet',
-  },
-  {
-    url: '/api/settings/organization/keys/rewrap',
-    why: 'moves ciphertext off a retired key version and retires it; the settings pane that calls it is not built yet',
+    url: '/api/admin/data-region',
+    why: 'platform staff record a workspace region cutover through the API; no product screen calls it',
   },
   {
     url: '/api/settings/security/compromise',

@@ -20,22 +20,6 @@ nothing is left.
 
 Code: `apps/extension/src/side_panel.ts:8120-8122`
 
-## S84.02: Timezone.
-
-- Done when: The user can see and set the timezone used for schedules, reminders and quiet hours.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Time focus and Reflect use the browser timezone automatically; there is no control to choose a different timezone. | ui |
-| desktop | partial | Same as web: browser timezone only, no picker. | ui |
-| mobile | partial | Quiet hours use the device timezone (deviceTimezone); no timezone picker. | ui |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/settings/sections/TimeFocusSection.tsx:35-42`, `apps/mobile/stores/notificationPrefsStore.ts:22-25`
-
 ## S84.03: Theme.
 
 - Done when: The user can choose light, dark or system theme and it applies and persists.
@@ -98,15 +82,14 @@ Code: `apps/extension/src/side_panel.ts:3111-3111`
 
 - Done when: The user can set a default reasoning effort used for new turns.
 - Wave: 3
-- Already works on: web, desktop, vscode
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Effort is picked per turn from the composer model chip; there is no saved default. | ui |
-| cli | partial | TUI /effort changes effort for the session only; a default needs reasoning_effort in config.toml. | ui |
 | chrome | partial | Only an extended-thinking on/off toggle is saved; no effort levels. | ui |
 
-Code: `apps/mobile/src/features/chat/components/ModelSelectorButton.tsx:1-16`, `apps/cli/src/tui/tui_app.rs:3871-3890`, `apps/cli/src/config.rs:74-120`, `apps/extension/src/side_panel.ts:6195-6198`
+Code: `apps/mobile/src/features/chat/components/ModelSelectorButton.tsx:1-16`, `apps/extension/src/side_panel.ts:6195-6198`
 
 ## S84.12: Default mode.
 
@@ -170,19 +153,3 @@ Code: `apps/extension/src/options.ts:1012-1016`, `apps/extension/src/options.ts:
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/cli/src/lib.rs:853-854`
-
-## S84.26: Restore defaults.
-
-- Done when: Settings offer a restore-defaults action that resets preferences.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Only keyboard shortcuts have Restore defaults; no general reset for appearance or other preferences. | ui |
-| desktop | partial | Same as web: only shortcut defaults can be restored. | ui |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/dialogs/KeyboardShortcutsDialog.tsx:153-165`, `apps/web/features/chat/components/dialogs/KeyboardShortcutsDialog.tsx:34-37`

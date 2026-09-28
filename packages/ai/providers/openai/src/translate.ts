@@ -48,7 +48,7 @@ function translateUserContent(blocks: ContentBlock[]): string | OpenAIChatUserMe
         b.source.type === 'base64'
           ? `data:${b.source.mediaType};base64,${b.source.data}`
           : b.source.url;
-      return [{ type: 'image_url', image_url: { url } }];
+      return [{ type: 'image_url', image_url: b.detail ? { url, detail: b.detail } : { url } }];
     }
     if (b.type === 'file') {
       // The Chat Completions wire format has no file part at all, so a
@@ -256,6 +256,18 @@ export interface TranslateOptions {
   provider: string;
 }
 
+function translateResponseFormat(
+  req: ChatRequest,
+): OpenAIChatCompletionCreateParams['response_format'] {
+  const format = req.responseFormat;
+  if (!format) return undefined;
+  if (format.type === 'json_object') return { type: 'json_object' };
+  return {
+    type: 'json_schema',
+    json_schema: { name: format.name, schema: format.schema, strict: format.strict },
+  };
+}
+
 export function translateChatRequest(
   req: ChatRequest,
   options: TranslateOptions,
@@ -283,6 +295,7 @@ export function translateChatRequest(
   ];
   const toolChoice = translateToolChoice(req.toolChoice);
   const promptCacheKey = derivePromptCacheKey(req);
+  const responseFormat = provider === 'openai' ? translateResponseFormat(req) : undefined;
 
   const params: OpenAIChatCompletionCreateParams = {
     model: req.model,
@@ -296,6 +309,7 @@ export function translateChatRequest(
     ...(req.stopSequences ? { stop: req.stopSequences } : {}),
     ...(req.metadata ? { metadata: req.metadata as Record<string, string> } : {}),
     ...(promptCacheKey ? { prompt_cache_key: promptCacheKey } : {}),
+    ...(responseFormat ? { response_format: responseFormat } : {}),
   };
 
   if (req.maxOutputTokens !== undefined) {

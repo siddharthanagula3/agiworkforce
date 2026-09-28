@@ -27,6 +27,7 @@ pub use crate::runtime::session::PrivacyMode;
 pub use chat::SideQuery;
 pub use checkpoints::{CheckpointSummary, RestoreReport, RewindMode, RewindOutcome};
 pub use executor::ToolCall;
+pub(crate) use executor::value_to_legacy_args;
 pub use prompt::assemble_system_prompt;
 pub(crate) use prompt::encode_untrusted_context;
 
@@ -1827,6 +1828,12 @@ impl AgentSession {
 
     pub(crate) fn take_memory_consolidation_tasks(&mut self) -> Vec<tokio::task::JoinHandle<()>> {
         std::mem::take(&mut self.memory_consolidation_tasks)
+    }
+
+    pub(crate) async fn refresh_mcp_tools(&mut self) {
+        if let Some(manager) = self.mcp_manager.as_mut() {
+            manager.refresh_changed_servers().await;
+        }
     }
 
     /// Return MCP tool metadata (if any MCP servers are connected).

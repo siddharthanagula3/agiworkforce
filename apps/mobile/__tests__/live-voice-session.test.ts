@@ -142,6 +142,7 @@ async function startSession(cb = callbacks()) {
   const session = await LiveVoiceSession.start({
     voice: null,
     conversationId: 'conv_1',
+    language: null,
     callbacks: cb,
   });
   return { session, cb };

@@ -32,10 +32,11 @@ import { recordAuditEvent } from '@/lib/security-audit';
 import { evaluateActiveWorkspacePolicy } from '@/lib/services/organization-policy-gate';
 import { isPolicyUnavailable } from '@/lib/services/organization-policy-evaluator';
 import { getNeonDb } from '@/lib/server/neon-db';
-import { getUserScopedDb } from '@/lib/server/rls-db';
-import type { SubscriptionRow } from '@/lib/server/neon-types';
+import { getUserScopedDb, type UserScopedDb } from '@/lib/server/rls-db';
+import { resolveBillingCustomerId, type BillingOwnerRow } from '@/lib/server/billing-owner-row';
 import { isStripeCustomerId, isStripeSubscriptionId } from '@/lib/server/stripe-resource-ids';
 import { getStripeClient } from '@/lib/server/stripe-client';
+import { resolveSubscriptionBillingSource } from '@/lib/server/subscription-billing-owner';
 
 const TopUpRequestSchema = z
   .object({
@@ -55,6 +56,37 @@ async function resolveSubscriptionCurrency(subscriptionId: string): Promise<stri
     throw createError.serviceUnavailable(
       'Your billing currency could not be verified. No charge was made; please retry.',
     );
+  }
+}
+
+async function resolveStoreBilledTopUpCustomer(
+  db: UserScopedDb['db'],
+  userId: string,
+  billing: BillingOwnerRow,
+): Promise<string> {
+  const existing = await resolveBillingCustomerId(db, userId, billing);
+  if (existing) return existing;
+  try {
+    const [profile] = await db.query<{ email: string | null }>(
+      'select email from public.profiles where id = $1 limit 1',
+      [userId],
+    );
+    const customer = await getStripeClient().customers.create(
+      { ...(profile?.email ? { email: profile.email } : {}), metadata: { user_id: userId } },
+      { idempotencyKey: `topup-customer:${userId}` },
+    );
+    await db.execute(
+      'update public.profiles set stripe_customer_id = $1 where id = $2 and stripe_customer_id is null',
+      [customer.id, userId],
+    );
+    return customer.id;
+  } catch (error) {
+    logger.error({ error, userId }, 'Top-up refused: could not prepare a payment customer');
+    throw createError
+      .serviceUnavailable(
+        'Your payment details could not be prepared. No charge was made; please retry.',
+      )
+      .asUserSafe();
   }
 }
 
@@ -110,10 +142,6 @@ async function handleTopUp(request: NextRequest): Promise<NextResponse> {
 
   const idempotencyKey = request.headers.get(IDEMPOTENCY_KEY_HEADER)?.trim() ?? '';
 
-  type BillingRow = Pick<
-    SubscriptionRow,
-    'plan_tier' | 'status' | 'stripe_customer_id' | 'stripe_subscription_id'
-  >;
   const [storage] = await db.query<{ ready: boolean }>(
     `select (
        to_regprocedure('public.handle_top_up_refund(text,integer,text)') is not null
@@ -126,30 +154,45 @@ async function handleTopUp(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const [billing] = await db.query<BillingRow>(
-    `select plan_tier, status, stripe_customer_id, stripe_subscription_id
+  const [billing] = await db.query<BillingOwnerRow>(
+    `select plan_tier, status, stripe_customer_id, stripe_subscription_id,
+            apple_original_transaction_id, google_purchase_token, current_period_end
      from subscriptions where user_id = $1 limit 1`,
     [userId],
   );
 
+  const billingSource = resolveSubscriptionBillingSource(billing);
   if (
     !billing ||
     isFreeBillingPlanTier(billing.plan_tier) ||
     !['active', 'trialing'].includes(billing.status) ||
-    !isStripeCustomerId(billing.stripe_customer_id) ||
-    !isStripeSubscriptionId(billing.stripe_subscription_id)
+    !['stripe', 'apple', 'google'].includes(billingSource)
   ) {
     throw createError.validation(
-      'Top-ups are available for active plans billed by AGI Workforce. Start or restore your plan first.',
+      'Top-ups are available on active paid plans. Start or restore your plan first.',
     );
   }
 
-  const subscriptionCurrency = await resolveSubscriptionCurrency(billing.stripe_subscription_id);
-  if (subscriptionCurrency !== 'usd') {
-    throw createError.validation(
-      `Top-ups are billed in USD and your plan is billed in ${subscriptionCurrency.toUpperCase()}. ` +
-        'No charge was made. Upgrade your plan for more included usage, or contact support.',
-    );
+  let customerId: string;
+  if (billingSource === 'apple' || billingSource === 'google') {
+    customerId = await resolveStoreBilledTopUpCustomer(db, userId, billing);
+  } else {
+    if (
+      !isStripeCustomerId(billing.stripe_customer_id) ||
+      !isStripeSubscriptionId(billing.stripe_subscription_id)
+    ) {
+      throw createError.validation(
+        'Top-ups are available on active paid plans. Start or restore your plan first.',
+      );
+    }
+    const subscriptionCurrency = await resolveSubscriptionCurrency(billing.stripe_subscription_id);
+    if (subscriptionCurrency !== 'usd') {
+      throw createError.validation(
+        `Top-ups are billed in USD and your plan is billed in ${subscriptionCurrency.toUpperCase()}. ` +
+          'No charge was made. Upgrade your plan for more included usage, or contact support.',
+      );
+    }
+    customerId = billing.stripe_customer_id;
   }
 
   const [purchasedToday] = await db.query<{ purchased_microusd: string | number | null }>(
@@ -188,7 +231,7 @@ async function handleTopUp(request: NextRequest): Promise<NextResponse> {
       mode: 'payment',
       locale: 'auto',
       currency: 'usd',
-      customer: billing.stripe_customer_id,
+      customer: customerId,
       client_reference_id: userId,
       line_items: [
         {

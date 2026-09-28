@@ -2,7 +2,7 @@ use anyhow::{Context, Result, anyhow, bail};
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::net::TcpListener;
+use tokio::net::{TcpListener, TcpStream};
 
 use super::pkce::{generate_pkce, generate_random_string};
 use crate::config::OAuthConfig;
@@ -12,6 +12,7 @@ use crate::security::{self, ValidatedEndpoint};
 pub const CLIENT_METADATA_DOCUMENT_PATH: &str = "/.well-known/oauth-client-metadata";
 
 const OAUTH_INTERACTIVE_TIMEOUT: Duration = Duration::from_secs(120);
+const CALLBACK_READ_TIMEOUT: Duration = Duration::from_secs(5);
 const CALLBACK_PATH: &str = "/callback";
 
 pub fn client_metadata_document_url(origin: &str, surface: &str) -> Option<String> {
@@ -575,14 +576,21 @@ pub async fn start_pkce_flow(
         );
     }
 
-    let response = tokio::time::timeout(OAUTH_INTERACTIVE_TIMEOUT, wait_for_callback(listener))
-        .await
-        .map_err(|_| {
-            anyhow!(
-                "OAuth flow timed out after {}s waiting for the browser sign-in",
-                OAUTH_INTERACTIVE_TIMEOUT.as_secs()
-            )
-        })??;
+    let redirect_path = reqwest::Url::parse(&redirect_uri)
+        .with_context(|| format!("parse redirect URI {redirect_uri}"))?
+        .path()
+        .to_string();
+    let response = tokio::time::timeout(
+        OAUTH_INTERACTIVE_TIMEOUT,
+        wait_for_callback(listener, &redirect_path),
+    )
+    .await
+    .map_err(|_| {
+        anyhow!(
+            "OAuth flow timed out after {}s waiting for the browser sign-in",
+            OAUTH_INTERACTIVE_TIMEOUT.as_secs()
+        )
+    })??;
     let code = accept_authorization_response(
         response,
         &state,
@@ -614,7 +622,11 @@ pub async fn start_pkce_flow(
     ))
 }
 
-pub async fn refresh_token(token: &OAuthToken, oauth_cfg: &OAuthConfig) -> Result<OAuthToken> {
+pub async fn refresh_token(
+    token: &OAuthToken,
+    oauth_cfg: &OAuthConfig,
+    server_url: &str,
+) -> Result<OAuthToken> {
     let refresh = token
         .refresh_token
         .as_deref()
@@ -644,15 +656,17 @@ pub async fn refresh_token(token: &OAuthToken, oauth_cfg: &OAuthConfig) -> Resul
         .unwrap_or_default();
     let endpoint = checked_endpoint(token_url, "token endpoint", anchor).await?;
     let client = pinned_client(&endpoint, "refresh")?;
+    let resource = match token.resource.clone() {
+        Some(resource) => resource,
+        None => canonical_resource(server_url)?,
+    };
 
     let mut form: Vec<(&str, &str)> = vec![
         ("grant_type", "refresh_token"),
         ("refresh_token", refresh),
         ("client_id", client_id),
+        ("resource", &resource),
     ];
-    if let Some(resource) = token.resource.as_deref() {
-        form.push(("resource", resource));
-    }
     if let Some(secret) = client_secret {
         form.push(("client_secret", secret));
     }
@@ -682,7 +696,7 @@ pub async fn refresh_token(token: &OAuthToken, oauth_cfg: &OAuthConfig) -> Resul
             client_id,
             requested_scope: token.scope.as_deref(),
             issuer: token.issuer.as_deref(),
-            resource: token.resource.as_deref(),
+            resource: Some(&resource),
         },
     );
     if refreshed.refresh_token.is_none() {
@@ -788,13 +802,49 @@ struct AuthorizationResponse {
     error_description: Option<String>,
 }
 
-async fn wait_for_callback(listener: TcpListener) -> Result<AuthorizationResponse> {
-    let (mut stream, _peer) = listener
-        .accept()
-        .await
-        .context("accept loopback OAuth callback")?;
-    let (read_half, mut write_half) = stream.split();
-    let mut reader = BufReader::new(read_half);
+async fn wait_for_callback(
+    listener: TcpListener,
+    redirect_path: &str,
+) -> Result<AuthorizationResponse> {
+    loop {
+        let (mut stream, _peer) = listener
+            .accept()
+            .await
+            .context("accept loopback OAuth callback")?;
+        let Ok(Ok(request_line)) =
+            tokio::time::timeout(CALLBACK_READ_TIMEOUT, read_request_head(&mut stream)).await
+        else {
+            continue;
+        };
+        if !is_redirect_request(&request_line, redirect_path) {
+            let _ = stream
+                .write_all(
+                    b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                )
+                .await;
+            let _ = stream.shutdown().await;
+            continue;
+        }
+
+        let body = "<!doctype html><html><body style=\"font-family:system-ui;text-align:center;padding:3rem;\">\
+                    <h1>Authorization complete</h1>\
+                    <p>You can close this tab and return to your terminal.</p>\
+                    </body></html>";
+        let resp = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\n\
+             Content-Length: {}\r\nConnection: close\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        let _ = stream.write_all(resp.as_bytes()).await;
+        let _ = stream.shutdown().await;
+
+        return parse_authorization_response(&request_line);
+    }
+}
+
+async fn read_request_head(stream: &mut TcpStream) -> Result<String> {
+    let mut reader = BufReader::new(stream);
     let mut request_line = String::new();
     reader
         .read_line(&mut request_line)
@@ -812,21 +862,15 @@ async fn wait_for_callback(listener: TcpListener) -> Result<AuthorizationRespons
             break;
         }
     }
+    Ok(request_line)
+}
 
-    let body = "<!doctype html><html><body style=\"font-family:system-ui;text-align:center;padding:3rem;\">\
-                <h1>Authorization complete</h1>\
-                <p>You can close this tab and return to your terminal.</p>\
-                </body></html>";
-    let resp = format!(
-        "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\n\
-         Content-Length: {}\r\nConnection: close\r\n\r\n{}",
-        body.len(),
-        body
-    );
-    let _ = write_half.write_all(resp.as_bytes()).await;
-    let _ = write_half.shutdown().await;
-
-    parse_authorization_response(&request_line)
+fn is_redirect_request(request_line: &str, redirect_path: &str) -> bool {
+    let mut parts = request_line.split_whitespace();
+    parts.next() == Some("GET")
+        && parts
+            .next()
+            .is_some_and(|target| target.split('?').next() == Some(redirect_path))
 }
 
 fn parse_authorization_response(request_line: &str) -> Result<AuthorizationResponse> {
@@ -956,6 +1000,17 @@ fn url_encode(input: &str) -> String {
         }
     }
     out
+}
+
+pub async fn discover_token_endpoint(server_url: &str) -> Result<String> {
+    let (_, prm) = discover_protected_resource(server_url, None).await?;
+    let issuer = prm
+        .authorization_servers
+        .first()
+        .ok_or_else(|| anyhow!("no authorization_servers in protected-resource metadata"))?;
+    Ok(discover_authorization_server(issuer, server_url)
+        .await?
+        .token_endpoint)
 }
 
 pub async fn perform_full_oauth(
@@ -1316,7 +1371,7 @@ mod tests {
     #[tokio::test]
     async fn refresh_refuses_a_private_token_url() {
         let token = token_with("http://10.0.0.5/token");
-        let err = refresh_token(&token, &OAuthConfig::default())
+        let err = refresh_token(&token, &OAuthConfig::default(), REMOTE_SERVER)
             .await
             .expect_err("a private-network token endpoint must not receive the refresh token");
         let msg = format!("{err:#}");
@@ -1326,7 +1381,7 @@ mod tests {
     #[tokio::test]
     async fn refresh_refuses_a_cleartext_remote_token_url() {
         let token = token_with("http://as.example.com/token");
-        let err = refresh_token(&token, &OAuthConfig::default())
+        let err = refresh_token(&token, &OAuthConfig::default(), REMOTE_SERVER)
             .await
             .expect_err("credentials must not cross the network in cleartext");
         assert!(format!("{err:#}").contains("must use HTTPS"));
@@ -1340,7 +1395,7 @@ mod tests {
             client_secret: Some("s3cret".into()),
             ..Default::default()
         };
-        let err = refresh_token(&token, &cfg)
+        let err = refresh_token(&token, &cfg, REMOTE_SERVER)
             .await
             .expect_err("a poisoned cached token endpoint must not override the configured one");
         assert!(format!("{err:#}").contains("does not match the pinned origin"));
@@ -1349,7 +1404,7 @@ mod tests {
     #[tokio::test]
     async fn refresh_refuses_a_loopback_token_url_when_the_server_is_remote() {
         let token = token_with("http://127.0.0.1:9200/token");
-        let err = refresh_token(&token, &OAuthConfig::default())
+        let err = refresh_token(&token, &OAuthConfig::default(), REMOTE_SERVER)
             .await
             .expect_err("a remote server's token must never be refreshed against this machine");
         let msg = format!("{err:#}");
@@ -1364,7 +1419,7 @@ mod tests {
             client_secret: Some("configured-secret".into()),
             ..Default::default()
         };
-        let err = refresh_token(&token, &cfg)
+        let err = refresh_token(&token, &cfg, REMOTE_SERVER)
             .await
             .expect_err("a user-held secret must not go to a discovered endpoint");
         assert!(format!("{err:#}").contains("set [auth.token_url]"));
@@ -1385,7 +1440,7 @@ mod tests {
         let addr = spawn(app).await;
         let local_server = format!("http://{addr}/mcp");
         let token = token_from(&local_server, &format!("http://{addr}/token"));
-        let refreshed = refresh_token(&token, &OAuthConfig::default())
+        let refreshed = refresh_token(&token, &OAuthConfig::default(), &local_server)
             .await
             .expect("loopback refresh must keep working");
         assert_eq!(refreshed.access_token, "fresh-access");

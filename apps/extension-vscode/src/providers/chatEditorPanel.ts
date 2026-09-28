@@ -6,6 +6,7 @@ import {
   type ExtToWebviewMessage,
 } from '../features/sidebar-webview/ChatStateManager';
 import { getNonce, getWebviewContent } from '../features/sidebar-webview/webviewContent';
+import { alertSessionActivity } from '../features/sidebar-webview/sessionActivityAlert';
 import { parseBoundWebviewMessage } from '../protocol/webviewMessages';
 import { type ConversationTreeProvider } from '../features/trees';
 import { type LocalRuntimePool } from '../integrations/localRuntimePool';
@@ -132,7 +133,17 @@ export class ChatEditorPanel {
     this.stateManager = new ChatStateManager(
       secrets,
       context,
-      (message: ExtToWebviewMessage) => void this.panel.webview.postMessage(message),
+      (message: ExtToWebviewMessage) => {
+        alertSessionActivity(message, {
+          reveal: () => this.panel.reveal(),
+          respond: (requestId, decision) =>
+            void this.stateManager.handleMessage({
+              type: 'respondToApproval',
+              payload: { requestId, decision },
+            }),
+        });
+        void this.panel.webview.postMessage(message);
+      },
       conversationTreeProvider,
       context.workspaceState,
       localRuntimes,

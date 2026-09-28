@@ -177,8 +177,8 @@ export const MessagingIntegrations: React.FC<{ userId: string }> = ({ userId }) 
   return (
     <div className="p-6 max-w-4xl mx-auto">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold mb-2">Messaging Integrations</h1>
-        <p className="text-gray-600">
+        <h1 className="text-h1 mb-2">Messaging Integrations</h1>
+        <p className="text-muted-foreground">
           Connect AGI Workforce to messaging platforms like Slack, WhatsApp, and Microsoft Teams
         </p>
       </div>
@@ -193,7 +193,9 @@ export const MessagingIntegrations: React.FC<{ userId: string }> = ({ userId }) 
         <Card className="p-6 text-center">
           <div className="text-4xl mb-2">💬</div>
           <h3 className="font-semibold mb-2">Slack</h3>
-          <p className="text-sm text-gray-600 mb-4">Connect to Slack workspaces and channels</p>
+          <p className="text-sm text-muted-foreground mb-4">
+            Connect to Slack workspaces and channels
+          </p>
           <Button onClick={() => setShowSlackModal(true)} className="w-full">
             Connect Slack
           </Button>
@@ -202,7 +204,7 @@ export const MessagingIntegrations: React.FC<{ userId: string }> = ({ userId }) 
         <Card className="p-6 text-center">
           <div className="text-4xl mb-2">📱</div>
           <h3 className="font-semibold mb-2">WhatsApp</h3>
-          <p className="text-sm text-gray-600 mb-4">Connect WhatsApp Business API</p>
+          <p className="text-sm text-muted-foreground mb-4">Connect WhatsApp Business API</p>
           <Button onClick={() => setShowWhatsAppModal(true)} className="w-full">
             Connect WhatsApp
           </Button>
@@ -211,7 +213,7 @@ export const MessagingIntegrations: React.FC<{ userId: string }> = ({ userId }) 
         <Card className="p-6 text-center">
           <div className="text-4xl mb-2">👥</div>
           <h3 className="font-semibold mb-2">Microsoft Teams</h3>
-          <p className="text-sm text-gray-600 mb-4">Connect to Microsoft Teams</p>
+          <p className="text-sm text-muted-foreground mb-4">Connect to Microsoft Teams</p>
           <Button onClick={() => setShowTeamsModal(true)} className="w-full">
             Connect Teams
           </Button>
@@ -219,9 +221,11 @@ export const MessagingIntegrations: React.FC<{ userId: string }> = ({ userId }) 
       </div>
 
       <div className="mt-8">
-        <h2 className="text-xl font-semibold mb-4">Connected Platforms</h2>
+        <h2 className="text-h2 mb-4">Connected Platforms</h2>
         {connections.length === 0 ? (
-          <div className="text-center text-gray-500 py-8">No messaging platforms connected yet</div>
+          <div className="text-center text-muted-foreground py-8">
+            No messaging platforms connected yet
+          </div>
         ) : (
           <div className="space-y-3">
             {connections.map((connection) => (
@@ -231,9 +235,11 @@ export const MessagingIntegrations: React.FC<{ userId: string }> = ({ userId }) 
                   <div>
                     <div className="font-medium">{connection.platform}</div>
                     {connection.workspace_name && (
-                      <div className="text-sm text-gray-600">{connection.workspace_name}</div>
+                      <div className="text-sm text-muted-foreground">
+                        {connection.workspace_name}
+                      </div>
                     )}
-                    <div className="text-xs text-gray-500">
+                    <div className="text-xs text-muted-foreground">
                       Connected {new Date(connection.created_at * 1000).toLocaleDateString()}
                     </div>
                   </div>
@@ -243,7 +249,7 @@ export const MessagingIntegrations: React.FC<{ userId: string }> = ({ userId }) 
                     className={`px-2 py-1 rounded text-xs ${
                       connection.is_active
                         ? 'bg-success-fill/10 text-success-text'
-                        : 'bg-gray-100 text-gray-700'
+                        : 'bg-muted text-muted-foreground'
                     }`}
                   >
                     {connection.is_active ? 'Active' : 'Inactive'}

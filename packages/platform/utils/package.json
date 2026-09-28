@@ -22,6 +22,7 @@
     "./privacy-handoff": "./src/privacyHandoff.ts",
     "./reasoning": "./src/reasoning.ts",
     "./retry-policy": "./src/retryPolicy.ts",
+    "./source-url": "./src/sourceUrl.ts",
     "./signaling": "./src/signaling.ts",
     "./uuidv7": "./src/uuidv7.ts",
     "./voice": "./src/voice.ts"
@@ -75,6 +76,9 @@
       ],
       "retry-policy": [
         "./src/retryPolicy.ts"
+      ],
+      "source-url": [
+        "./src/sourceUrl.ts"
       ],
       "signaling": [
         "./src/signaling.ts"

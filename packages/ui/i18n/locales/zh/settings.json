@@ -99,5 +99,17 @@
     "groupSettings": "设置",
     "groupCustomize": "自定义",
     "groupDesktop": "桌面应用"
+  },
+  "counts": {
+    "customCommands_one": "{{count}} 个自定义命令",
+    "customCommands_other": "{{count}} 个自定义命令",
+    "allArchivedChats_one": "全部 {{count}} 个已归档对话",
+    "allArchivedChats_other": "全部 {{count}} 个已归档对话",
+    "followUps_one": "{{count}} 次跟进",
+    "followUps_other": "{{count}} 次跟进",
+    "members_one": "{{count}} 名成员",
+    "members_other": "{{count}} 名成员",
+    "models_one": "{{count}} 个模型",
+    "models_other": "{{count}} 个模型"
   }
 }

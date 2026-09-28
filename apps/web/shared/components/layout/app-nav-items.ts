@@ -23,6 +23,7 @@ import {
   BookOpen,
   CalendarClock,
   FolderOpen,
+  Image,
   LibraryBig,
   MessageSquare,
   ShieldCheck,
@@ -36,6 +37,7 @@ import type { WorkspaceFeature } from '@agiworkforce/types';
  * not claim it; every other `/chat/...` path is a conversation and IS Chat.
  */
 const CHAT_SECTION_PREFIXES = [
+  '/chat/images',
   '/chat/projects',
   '/chat/artifacts',
   '/chat/library',
@@ -92,6 +94,15 @@ export const APP_NAV_DESTINATIONS: readonly AppNavDestination[] = [
     icon: MessageSquare,
     href: '/chat',
     isActive: (pathname) => isUnder(pathname, '/chat') && !isChatSectionPath(pathname),
+  },
+  {
+    id: 'images',
+    label: 'Images',
+    labelKey: 'navImages',
+    icon: Image,
+    href: '/chat/images',
+    isActive: (pathname) => isUnder(pathname, '/chat/images'),
+    hideable: true,
   },
   // Persistent Projects entry (claude.ai parity). The Projects *section* in the
   // sidebar body only renders once the user has at least one project, so a

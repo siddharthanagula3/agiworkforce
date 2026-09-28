@@ -7,6 +7,7 @@ import {
   DialogTitle,
   DialogDescription,
   Switch,
+  useUiTranslation,
 } from '@agiworkforce/ui';
 import { Separator } from '@agiworkforce/ui';
 import { Keyboard } from 'lucide-react';
@@ -27,6 +28,7 @@ function KeyboardShortcutsDialogImpl({
   onOpenChange,
   shortcuts,
 }: KeyboardShortcutsDialogProps) {
+  const { plural } = useUiTranslation('chat');
   const isMac = safePlatform.isMac();
   const hostShortcuts = useHostShortcuts();
 
@@ -71,7 +73,7 @@ function KeyboardShortcutsDialogImpl({
         <div className="space-y-6">
           {Object.entries(groupedShortcuts).map(([category, categoryShortcuts]) => (
             <div key={category}>
-              <h3 className="mb-3 text-sm font-semibold text-foreground">
+              <h3 className="mb-3 text-h5 text-foreground">
                 {categoryLabels[category] || category}
               </h3>
 
@@ -124,7 +126,7 @@ function KeyboardShortcutsDialogImpl({
           {hostShortcuts.length > 0 ? (
             <div>
               <Separator className="my-4" />
-              <h3 className="mb-3 text-sm font-semibold text-foreground">Desktop app</h3>
+              <h3 className="mb-3 text-h5 text-foreground">Desktop app</h3>
               {/*
                 No switch on these rows: the shell's menu owns the chord and the
                 page cannot stop it firing, so a control here would be a promise
@@ -153,7 +155,10 @@ function KeyboardShortcutsDialogImpl({
         {disabledIds.length > 0 ? (
           <div className="mt-4 flex items-center justify-between rounded-lg border border-border p-3 text-xs">
             <span className="text-muted-foreground">
-              {disabledIds.length} shortcut{disabledIds.length === 1 ? '' : 's'} turned off
+              {plural('counts.shortcutsOff', disabledIds.length, {
+                one: '{{count}} shortcut turned off',
+                other: '{{count}} shortcuts turned off',
+              })}
             </span>
             <button
               type="button"

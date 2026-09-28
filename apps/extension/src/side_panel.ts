@@ -1,14 +1,21 @@
 import { QueueFullError, type AgentActivityToolEntry } from '@agiworkforce/client-runtime';
-import type {
-  GeneratedFileWire,
-  ManagedCloudAgentRunReference,
+import {
+  createManagedCloudChatAttachmentsClient,
+  MAX_CHAT_ATTACHMENT_BYTES,
+  resolveChatAttachmentMimeType,
+  type GeneratedFileWire,
+  type ManagedCloudAgentRunReference,
+  type ManagedCloudChatAttachment,
+  type ManagedCloudChatAttachmentUploadPhase,
 } from '@agiworkforce/cloud-contracts';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import {
   dataTransferCarriesFiles,
   filesFromDataTransfer,
 } from '@agiworkforce/utils/composer-paste';
+import { agiCornerCssVars, agiMotionCssVars, cssVarsToString } from '@agiworkforce/design-tokens';
 import { getExtensionTokensCssAuto } from './tokens';
+import { followThemePreference } from './features/appearance/themePreference';
 import { t } from './i18n';
 import { pageChipLabel } from './utils';
 import {
@@ -71,12 +78,20 @@ import {
   takePendingResultConversation,
   OPEN_BROWSER_CONVERSATION_MESSAGE,
 } from './features/background/background-results';
-import { sanitizeHtml, renderMarkdown } from './features/side-panel/markdown';
 import { el } from './features/side-panel/dom';
-import { buildBubbleWithTools } from './features/side-panel/bubbles';
 import {
+  buildBubbleWithTools,
+  fillAnswerBubble,
+  resolveManagedArtifactUrl,
+  type RegenerateModelOption,
+} from './features/side-panel/bubbles';
+import type { AnswerFileAccess } from './features/side-panel/generatedFiles';
+import {
+  answerSourceLists,
   applyCanonicalAgentEvent,
   applyStreamFailure,
+  isEmptyAssistantTurn,
+  mergeMessageSources,
   streamFailureText,
   type StreamFailureDetail,
   hydrateStoredChatMessage,
@@ -87,8 +102,10 @@ import {
   trimChatMessages,
   type PageContextSource,
   type SidePanelChatMessage,
+  type SidePanelMessageAttachment,
+  type SidePanelPageReference,
 } from './features/side-panel/chat-state';
-import { setupVoiceInput } from './features/side-panel/voice';
+import { buildMicrophoneNotice, setupVoiceInput } from './features/side-panel/voice';
 import {
   dictationLanguageChoices,
   readDictationLanguage,
@@ -128,6 +145,7 @@ import {
   Mic,
   Camera,
   FileImage,
+  FileText,
   Zap,
   FileEdit,
   Square,
@@ -198,6 +216,7 @@ import {
   MANAGED_CHAT_MAX_ATTACHMENT_FILE_BYTES,
   FREE_TRIAL_GATEWAY,
   getManagedUsageHistory,
+  type ManagedChatSourcesDelta,
   type ManagedModelAccess,
   type ManagedUsageHistory,
   type ManagedQuotaBlock,
@@ -246,6 +265,7 @@ import {
 } from './features/cloud-bridge/managedCloudAuthority';
 import { normalizeShortcutStartUrl } from './features/shortcuts/origin';
 import { withTimeout } from './utils';
+import { platformRequestHeaders } from './platformHeaders';
 import { installSidePanelErrorReporting } from './features/observability/errorReporting';
 
 installSidePanelErrorReporting();
@@ -639,6 +659,7 @@ interface ChatChunk {
   cloudRun?: ManagedCloudAgentRunReference;
   generatedFiles?: GeneratedFileWire[];
   interactiveCard?: InteractiveCard;
+  sources?: ManagedChatSourcesDelta;
   routing?: {
     modelKey: string;
     taskType: RoutingTaskType;
@@ -805,14 +826,14 @@ function managedOutboundEffortPayload(usePersistedSelection = false): { effort?:
   return effort === undefined ? {} : { effort };
 }
 
-function managedOutboundRoutingPayload(): {
+function managedOutboundRoutingPayload(quickMode = _ctx.quickMode): {
   effort?: Effort;
   currentModelKey?: string;
   previousTaskType?: RoutingTaskType;
 } {
-  if (_ctx.quickMode) return {};
+  if (quickMode) return {};
   return {
-    ...managedOutboundEffortPayload(),
+    ...managedOutboundEffortPayload(true),
     ...(_ctx.currentModelKey ? { currentModelKey: _ctx.currentModelKey } : {}),
     ...(_ctx.previousTaskType ? { previousTaskType: _ctx.previousTaskType } : {}),
   };
@@ -872,7 +893,38 @@ let isRecording = false;
 let recordingActionCount = 0;
 let recordingStartUrl: string | null = null;
 
-const pendingAttachments: string[] = [];
+interface ComposerImage {
+  dataUrl: string;
+  name: string;
+}
+
+interface ComposerFile {
+  assetId: string;
+  mimeType: string;
+  name: string;
+}
+
+interface TurnPayload {
+  prompt: string;
+  pageText: string | null;
+  capturePage: boolean;
+  images: ComposerImage[];
+  files: ComposerFile[];
+}
+
+const pendingAttachments: ComposerImage[] = [];
+const turnPayloadByMessageId = new Map<string, TurnPayload>();
+const streamStartedAtById = new Map<string, number>();
+interface ComposerDocument {
+  key: string;
+  file: File;
+  mimeType: string;
+  phase: ManagedCloudChatAttachmentUploadPhase;
+  error?: string;
+  attachment?: ManagedCloudChatAttachment;
+  controller: AbortController;
+}
+const pendingDocuments: ComposerDocument[] = [];
 let composerAttachmentIntakeCount = 0;
 const cloudRunsByStreamId = new Map<string, ManagedCloudAgentRunReference>();
 const resolvedRouteByStreamId = new Map<string, { model: string; provider: string }>();
@@ -897,10 +949,18 @@ type SidePanelTab = 'chat' | 'workflows' | 'computer-use' | 'cloud-runs' | 'page
 const MAX_STORED_MESSAGES = 50;
 const MAX_STORED_GENERATED_FILES_PER_MESSAGE = 20;
 
+function pruneTurnPayloads(): void {
+  const live = new Set(_ctx.messages.map((message) => message.id));
+  for (const messageId of turnPayloadByMessageId.keys()) {
+    if (!live.has(messageId)) turnPayloadByMessageId.delete(messageId);
+  }
+}
+
 function trimLiveMessages(): void {
   if (trimChatMessages(_ctx.messages, MAX_STORED_MESSAGES) > 0) {
     _ctx.lastRenderedCount = 0;
     _ctx.needsMessageRebuild = true;
+    pruneTurnPayloads();
   }
 }
 
@@ -934,6 +994,13 @@ function serializeMessagesForHistory() {
     ...(message.role === 'assistant' && message.interactiveCards
       ? { interactiveCards: message.interactiveCards }
       : {}),
+    ...(message.role === 'assistant' && message.sources ? { sources: message.sources } : {}),
+    ...(message.role === 'assistant' && message.citations ? { citations: message.citations } : {}),
+    ...(message.role === 'assistant' && message.durationMs !== undefined
+      ? { durationMs: message.durationMs }
+      : {}),
+    ...(message.role === 'user' && message.attachments ? { attachments: message.attachments } : {}),
+    ...(message.role === 'user' && message.pages ? { pages: message.pages } : {}),
   }));
 }
 
@@ -1136,6 +1203,7 @@ function clearPendingPageContext(): void {
 
 function resetConversationView(): void {
   _ctx.messages.length = 0;
+  turnPayloadByMessageId.clear();
   _ctx.lastRenderedCount = 0;
   _ctx.needsMessageRebuild = true;
   clearPendingPageContext();
@@ -1169,11 +1237,14 @@ async function transitionManagedCloudOwner(nextOwner: ManagedCloudOwner | null):
   }
   _ctx.managedCloudOwner = nextOwner ? { ...nextOwner } : null;
   _ctx.messages.length = 0;
+  turnPayloadByMessageId.clear();
+  streamStartedAtById.clear();
   _ctx.lastRenderedCount = 0;
   _ctx.needsMessageRebuild = true;
   _ctx.isStreaming = false;
   _ctx.currentStreamId = null;
   clearPendingPageContext();
+  discardComposerDocuments();
   _ctx.conversationId = createBrowserConversationId();
   _ctx.activeProject = null;
   delete _ctx.pendingProjectBinding;
@@ -1214,7 +1285,72 @@ function injectStyles(): void {
     /* ── AGI design tokens (dark) ── */
     ${getExtensionTokensCssAuto()}
 
+    :root {
+      ${cssVarsToString(agiCornerCssVars)}
+      ${cssVarsToString(agiMotionCssVars)}
+      --duration-spin: 800ms;
+      --duration-pulse: 1000ms;
+      --duration-blink: 700ms;
+      --duration-bounce: 1200ms;
+      --z-dropdown: 10;
+      --z-popover: 20;
+      --z-sheet: 30;
+      --z-drawer-backdrop: 40;
+      --z-drawer: 41;
+      --z-notice: 50;
+      --z-modal: 60;
+      --z-modal-raised: 61;
+      --control-sm: 30px;
+      --control-md: 32px;
+      --control-lg: 34px;
+      --sp-reading-column: 768px;
+      --pressed: color-mix(in srgb, var(--agi-ext-text) 12%, transparent);
+      --paragraph-gap: 0.75em;
+      --type-h1-size: 20px;
+      --type-h1-height: 1.25;
+      --type-h2-size: 18px;
+      --type-h2-height: 1.3;
+      --type-h3-size: 16px;
+      --type-h3-height: 1.3;
+      --type-title-size: 15px;
+      --type-title-height: 1.35;
+      --type-body-large-size: 14px;
+      --type-body-large-height: 1.5;
+      --type-prose-size: 13.5px;
+      --type-prose-height: 1.58;
+      --type-body-size: 13px;
+      --type-body-height: 1.5;
+      --type-body-small-size: 12px;
+      --type-body-small-height: 1.5;
+      --type-label-size: 12px;
+      --type-label-height: 1.3;
+      --type-caption-size: 12px;
+      --type-caption-height: 1.4;
+      --type-code-family: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', Consolas, monospace;
+      --type-code-size: 12px;
+      --type-code-height: 1.5;
+    }
+
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    button:not(:disabled):active,
+    #sp-auth-save-btn:not(:disabled):active,
+    #sp-cloud-gate-action:not(:disabled):active,
+    #sp-drawer-back:not(:disabled):active,
+    #sp-drawer-close:not(:disabled):active,
+    #sp-mic-btn:not(:disabled):active,
+    #sp-model-badge:not(:disabled):active,
+    #sp-model-selector-btn:not(:disabled):active,
+    #sp-onboarding-skip:not(:disabled):active,
+    #sp-project-chip:not(:disabled):active,
+    #sp-project-chip-clear:not(:disabled):active,
+    #sp-recents-close:not(:disabled):active,
+    #sp-send-btn:not(:disabled):active,
+    [role="button"]:not([aria-disabled="true"]):active,
+    [role="menuitem"]:not([aria-disabled="true"]):active,
+    [role="option"]:not([aria-disabled="true"]):active {
+      background-image: linear-gradient(var(--pressed), var(--pressed));
+    }
 
     button:focus-visible,
     [role="button"]:focus-visible {
@@ -1230,23 +1366,24 @@ function injectStyles(): void {
       display: flex;
       flex-direction: column;
       overflow: hidden;
-      font-size: 13px;
+      font-size: var(--type-body-size);
+      line-height: var(--type-body-height);
     }
 
     #sp-tab-group-notice {
       position: fixed;
       top: 52px;
       right: 10px;
-      z-index: 9000;
+      z-index: var(--z-notice);
       max-width: min(300px, calc(100vw - 20px));
       padding: 8px 10px;
       border: 1px solid var(--agi-ext-success-border);
-      border-radius: 7px;
+      border-radius: var(--corner-control);
       background: var(--agi-ext-success-bg);
       color: var(--agi-ext-success-text);
-      box-shadow: 0 8px 24px var(--agi-ext-modal-shadow);
-      font-size: 11px;
-      line-height: 1.4;
+      box-shadow: var(--agi-ext-elevation-3);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
     }
     #sp-tab-group-notice[data-kind='error'] {
       border-color: var(--agi-ext-danger-border);
@@ -1259,7 +1396,7 @@ function injectStyles(): void {
     .sp-context-handoff-overlay {
       position: fixed;
       inset: 0;
-      z-index: 10000;
+      z-index: var(--z-modal-raised);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -1276,19 +1413,19 @@ function injectStyles(): void {
       gap: 10px;
       padding: 16px;
       border: 1px solid var(--agi-ext-border);
-      border-radius: 12px;
+      border-radius: var(--corner-surface);
       background: var(--agi-ext-surface);
-      box-shadow: 0 18px 48px color-mix(in srgb, black 38%, transparent);
+      box-shadow: var(--agi-ext-elevation-4);
     }
-    .sp-context-handoff-dialog h2 { font-size: 16px; color: var(--agi-ext-text); }
-    .sp-context-handoff-dialog p { line-height: 1.45; color: var(--agi-ext-text-muted); }
+    .sp-context-handoff-dialog h2 { font-size: var(--type-h3-size); line-height: var(--type-h3-height); color: var(--agi-ext-text); }
+    .sp-context-handoff-dialog p { line-height: var(--type-body-small-height); color: var(--agi-ext-text-muted); }
     .sp-context-handoff-destination { color: var(--agi-ext-text) !important; font-weight: 600; }
     .sp-context-handoff-preview {
       max-height: 220px;
       overflow: auto;
       padding: 10px;
       border: 1px solid var(--agi-ext-border);
-      border-radius: 8px;
+      border-radius: var(--corner-field);
       background: var(--agi-ext-bg);
       color: var(--agi-ext-text);
       font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -1296,16 +1433,16 @@ function injectStyles(): void {
       overflow-wrap: anywhere;
       user-select: text;
     }
-    .sp-context-handoff-source { font-size: 11px; overflow-wrap: anywhere; }
-    .sp-context-handoff-redaction { color: var(--agi-ext-accent-text) !important; font-size: 12px; }
-    .sp-context-handoff-status { min-height: 18px; font-size: 12px; }
+    .sp-context-handoff-source { font-size: var(--type-caption-size); line-height: var(--type-caption-height); overflow-wrap: anywhere; }
+    .sp-context-handoff-redaction { color: var(--agi-ext-accent-text) !important; font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
+    .sp-context-handoff-status { min-height: 18px; font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
     .sp-context-handoff-actions { display: flex; justify-content: flex-end; gap: 8px; }
     .sp-context-handoff-destinations { flex-wrap: wrap; justify-content: flex-start; }
     .sp-context-handoff-secondary {
       min-height: 34px;
       padding: 7px 11px;
       border: 1px solid var(--agi-ext-border);
-      border-radius: 7px;
+      border-radius: var(--corner-control);
       cursor: pointer;
       font: inherit;
       text-decoration: none;
@@ -1320,10 +1457,10 @@ function injectStyles(): void {
       outline-offset: 2px;
     }
     .sp-context-handoff-actions button {
-      min-height: 34px;
+      min-height: var(--control-lg);
       padding: 7px 11px;
       border: 1px solid var(--agi-ext-border);
-      border-radius: 7px;
+      border-radius: var(--corner-control);
       cursor: pointer;
       color: var(--agi-ext-text);
       background: var(--agi-ext-hover);
@@ -1349,7 +1486,8 @@ function injectStyles(): void {
       background: var(--agi-ext-surface);
       border-bottom: 1px solid var(--agi-ext-border);
       color: var(--agi-ext-text-muted);
-      font-size: 12px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       flex-shrink: 0;
     }
     #sp-project-chip[hidden] { display: none; }
@@ -1366,10 +1504,10 @@ function injectStyles(): void {
       height: 20px;
       line-height: 1;
       border: 1px solid var(--agi-ext-border);
-      border-radius: 5px;
+      border-radius: var(--corner-control);
       background: none;
       color: var(--agi-ext-text-muted);
-      font-size: 12px;
+      font-size: var(--type-caption-size);
       cursor: pointer;
     }
     #sp-project-chip-clear:hover {
@@ -1393,11 +1531,12 @@ function injectStyles(): void {
       gap: 8px;
     }
     #sp-model-badge {
-      font-size: 10px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       color: var(--agi-ext-accent-text);
       background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent);
       border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent);
-      border-radius: 4px;
+      border-radius: var(--corner-compact);
       padding: 1px 6px;
       white-space: nowrap;
       min-width: 0;
@@ -1416,16 +1555,16 @@ function injectStyles(): void {
       border: none;
       cursor: pointer;
       color: var(--agi-ext-text-muted);
-      border-radius: 7px;
-      width: 30px;
-      height: 30px;
+      border-radius: var(--corner-control);
+      width: var(--control-sm);
+      height: var(--control-sm);
       padding: 0;
-      font-size: 13px;
+      font-size: var(--type-body-size);
       line-height: 1;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      transition: color 0.15s, background 0.15s;
+      transition: color var(--duration-quick), background var(--duration-quick);
     }
     .sp-icon-btn:hover { color: var(--agi-ext-text); background: var(--agi-ext-hover); }
 
@@ -1441,7 +1580,7 @@ function injectStyles(): void {
     }
     #sp-messages::-webkit-scrollbar { width: 4px; }
     #sp-messages::-webkit-scrollbar-track { background: transparent; }
-    #sp-messages::-webkit-scrollbar-thumb { background: var(--agi-ext-border); border-radius: 4px; }
+    #sp-messages::-webkit-scrollbar-thumb { background: var(--agi-ext-border); border-radius: var(--corner-compact); }
 
     #sp-empty {
       display: flex;
@@ -1470,12 +1609,27 @@ function injectStyles(): void {
       order: -1;
       padding: 10px 12px;
       border: 1px solid var(--agi-ext-border);
-      border-radius: 10px;
+      border-radius: var(--corner-menu);
       background: var(--agi-ext-surface);
     }
     #sp-blocked.visible { display: flex; }
     .sp-blocked-copy { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-    #sp-blocked-desc { font-size: 11px; color: var(--agi-ext-text-muted); line-height: 1.45; }
+    #sp-blocked-desc { font-size: var(--type-caption-size); color: var(--agi-ext-text-muted); line-height: var(--type-caption-height); }
+
+    .sp-visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      margin: -1px;
+      padding: 0;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+      border: 0;
+    }
+    :where(#sp-drawer-title, #sp-recents-title, .sp-drawer-section-title, .sp-bt-title, .sp-runs-detail-title) {
+      margin: 0;
+    }
 
     /* ── Message bubbles ── */
     .sp-msg {
@@ -1494,22 +1648,22 @@ function injectStyles(): void {
     }
     .sp-bubble {
       padding: 8px 11px;
-      border-radius: 12px;
-      line-height: 1.55;
-      font-size: 13px;
+      border-radius: var(--corner-surface);
+      line-height: var(--type-body-height);
+      font-size: var(--type-body-size);
       word-break: break-word;
       white-space: pre-wrap;
     }
     .sp-bubble-user {
       background: color-mix(in srgb, var(--agi-ext-accent) 18%, transparent);
       color: var(--agi-ext-text);
-      border-bottom-right-radius: 3px;
+      border-bottom-right-radius: var(--corner-compact);
     }
     .sp-bubble-assistant {
       background: var(--agi-ext-surface);
       color: var(--agi-ext-text);
       border: 1px solid var(--agi-ext-border);
-      border-bottom-left-radius: 3px;
+      border-bottom-left-radius: var(--corner-compact);
     }
     .sp-bubble-error {
       background: var(--agi-ext-danger-bg);
@@ -1528,20 +1682,21 @@ function injectStyles(): void {
       border-top: 1px solid var(--agi-ext-danger-border);
     }
     .sp-bubble-error-text {
-      font-size: 11px;
-      line-height: 1.45;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       color: var(--agi-ext-danger-text);
       overflow-wrap: anywhere;
     }
     .sp-bubble-retry-btn {
       flex-shrink: 0;
       padding: 3px 10px;
-      font-size: 11px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       font-weight: 600;
       color: var(--agi-ext-text);
       background: var(--agi-ext-surface);
       border: 1px solid var(--agi-ext-border-strong);
-      border-radius: 999px;
+      border-radius: var(--corner-pill);
       cursor: pointer;
     }
     .sp-bubble-retry-btn:hover:not(:disabled) { background: var(--agi-ext-hover); }
@@ -1558,8 +1713,8 @@ function injectStyles(): void {
       border-top: 1px solid var(--agi-ext-border);
     }
     .sp-bubble-interrupted-text {
-      font-size: 11px;
-      line-height: 1.45;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       color: var(--agi-ext-text-muted);
       overflow-wrap: anywhere;
     }
@@ -1572,7 +1727,8 @@ function injectStyles(): void {
     }
     .sp-msg-user .sp-bubble-actions { justify-content: flex-end; }
     .sp-timestamp {
-      font-size: 10px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       color: var(--agi-ext-text-muted);
       padding: 0 3px;
     }
@@ -1585,9 +1741,9 @@ function injectStyles(): void {
       color: var(--agi-ext-text-muted);
       cursor: pointer;
       padding: 2px;
-      border-radius: 3px;
+      border-radius: var(--corner-compact);
       opacity: 0;
-      transition: opacity 0.15s, color 0.15s, background 0.15s;
+      transition: opacity var(--duration-quick), color var(--duration-quick), background var(--duration-quick);
     }
     .sp-msg:hover .sp-copy-btn { opacity: 1; }
     /* Keyboard users tab to an opacity:0 control and cannot see where focus is;
@@ -1598,26 +1754,288 @@ function injectStyles(): void {
     }
     .sp-copy-btn:hover { color: var(--agi-ext-text); background: var(--agi-ext-hover); }
     .sp-copy-btn.copied { color: var(--agi-ext-success-text); opacity: 1; }
+    .sp-answer-meta {
+      padding: 0 3px;
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
+    .sp-regenerate { position: relative; display: inline-flex; }
+    .sp-regenerate__menu {
+      position: absolute;
+      bottom: calc(100% + 4px);
+      left: 0;
+      z-index: var(--z-dropdown);
+      min-width: 210px;
+      max-height: 280px;
+      overflow-y: auto;
+      padding: 4px;
+      border: 1px solid var(--agi-ext-border-strong);
+      border-radius: var(--corner-menu);
+      background: var(--agi-ext-surface);
+      box-shadow: var(--agi-ext-elevation-2);
+    }
+    .sp-regenerate__menu[hidden] { display: none; }
+    .sp-regenerate__item {
+      display: flex;
+      width: 100%;
+      min-height: var(--control-lg);
+      align-items: center;
+      padding: 4px 10px;
+      border: 0;
+      border-radius: var(--corner-control);
+      background: transparent;
+      color: var(--agi-ext-text);
+      font: inherit;
+      font-size: var(--type-label-size);
+      line-height: var(--type-label-height);
+      text-align: left;
+      cursor: pointer;
+    }
+    .sp-regenerate__item:hover { background: var(--agi-ext-hover); }
+    .sp-regenerate__item:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
+    .sp-regenerate__heading {
+      padding: 6px 10px 2px;
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
+    #sp-messages.sp-messages--busy .sp-regenerate,
+    #sp-messages.sp-messages--busy .sp-resend-btn { display: none; }
+    .sp-msg-context {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 6px;
+      max-width: 100%;
+    }
+    .sp-msg-context__item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      max-width: 220px;
+      min-height: 32px;
+      padding: 4px 10px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-control);
+      background: var(--agi-ext-surface);
+      color: var(--agi-ext-text);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      text-decoration: none;
+    }
+    .sp-msg-context__item > .agi-icon { color: var(--agi-ext-text-muted); }
+    .sp-msg-context__item--thumb { padding: 0; overflow: hidden; }
+    .sp-msg-context__thumb { display: block; width: 64px; height: 64px; object-fit: cover; }
+    .sp-msg-context__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    a.sp-msg-context__page:hover { background: var(--agi-ext-hover); }
+    a.sp-msg-context__page:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
+    .sp-answer-files { display: flex; flex-direction: column; gap: 8px; width: min(100%, 420px); }
+    .sp-answer-file {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 52px;
+      padding: 8px 8px 8px 12px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-panel);
+      background: var(--agi-ext-surface);
+    }
+    .sp-answer-file__icon { display: inline-flex; flex-shrink: 0; color: var(--agi-ext-text-muted); }
+    .sp-answer-file__copy { display: flex; flex: 1; flex-direction: column; gap: 1px; min-width: 0; }
+    .sp-answer-file__name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--agi-ext-text);
+      font-size: var(--type-label-size);
+      line-height: var(--type-label-height);
+      font-weight: 550;
+    }
+    .sp-answer-file__meta,
+    .sp-answer-file__status {
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
+    .sp-answer-file__status:empty { display: none; }
+    .sp-answer-file__actions { display: inline-flex; flex-shrink: 0; gap: 2px; }
+    .sp-answer-file__action {
+      display: inline-flex;
+      width: var(--control-md);
+      height: var(--control-md);
+      align-items: center;
+      justify-content: center;
+      border: 0;
+      border-radius: var(--corner-control);
+      background: transparent;
+      color: var(--agi-ext-text-muted);
+      cursor: pointer;
+    }
+    .sp-answer-file__action:hover { background: var(--agi-ext-hover); color: var(--agi-ext-text); }
+    .sp-answer-file__action:disabled { opacity: 0.5; cursor: default; }
+    .sp-answer-file__action:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
+    .sp-answer-image { display: flex; flex-direction: column; gap: 6px; margin: 0; }
+    .sp-answer-image__frame {
+      display: flex;
+      min-height: 120px;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-panel);
+      background: var(--agi-ext-surface);
+    }
+    .sp-answer-image__frame img { display: block; max-width: 100%; height: auto; }
+    .sp-answer-image__status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 12px;
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
+    .sp-answer-image__frame[aria-busy='true'] .sp-answer-image__spinner svg { animation: sp-spin var(--duration-spin) linear infinite; }
+    .sp-answer-image__caption { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .sp-answer-image__caption .sp-answer-file__name { flex: 1; }
+    .sp-citation { position: relative; display: inline; }
+    .sp-bubble-assistant a.sp-citation__chip,
+    .sp-citation__chip {
+      display: inline-flex;
+      max-width: 160px;
+      align-items: center;
+      margin: 0 2px;
+      padding: 0 7px;
+      overflow: hidden;
+      border-radius: var(--corner-pill);
+      background: var(--agi-ext-overlay);
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      font-weight: 500;
+      text-decoration: none;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      vertical-align: baseline;
+    }
+    .sp-bubble-assistant a.sp-citation__chip:hover,
+    .sp-bubble-assistant a.sp-citation__chip:focus-visible { background: var(--agi-ext-hover); color: var(--agi-ext-text); }
+    .sp-citation__card {
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 0;
+      z-index: var(--z-popover);
+      display: none;
+      width: min(300px, calc(100vw - 32px));
+      flex-direction: column;
+      gap: 10px;
+      padding: 10px;
+      border: 1px solid var(--agi-ext-border-strong);
+      border-radius: var(--corner-menu);
+      background: var(--agi-ext-surface);
+      box-shadow: var(--agi-ext-elevation-2);
+      white-space: normal;
+    }
+    .sp-citation:hover .sp-citation__card,
+    .sp-citation:focus-within .sp-citation__card,
+    .sp-citation.open .sp-citation__card { display: flex; }
+    .sp-bubble-assistant a.sp-citation__source,
+    .sp-sources__link {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      color: var(--agi-ext-text);
+      text-decoration: none;
+    }
+    .sp-citation__source-site,
+    .sp-sources__link-site {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
+    .sp-citation__source-title,
+    .sp-sources__link-title {
+      color: var(--agi-ext-text);
+      font-size: var(--type-label-size);
+      line-height: var(--type-label-height);
+      font-weight: 550;
+    }
+    .sp-citation__source:hover .sp-citation__source-title,
+    .sp-sources__link:hover .sp-sources__link-title { text-decoration: underline; }
+    .sp-citation__source:focus-visible,
+    .sp-sources__link:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
+    .sp-citation__source-snippet,
+    .sp-sources__link-snippet {
+      display: -webkit-box;
+      overflow: hidden;
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 3;
+    }
+    .sp-citation__source-date,
+    .sp-sources__link-date {
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
+    .sp-sources { width: min(100%, 420px); }
+    .sp-sources__summary {
+      display: inline-flex;
+      min-height: 28px;
+      align-items: center;
+      gap: 6px;
+      padding: 0 10px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-pill);
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      cursor: pointer;
+      list-style: none;
+      user-select: none;
+    }
+    .sp-sources__summary::-webkit-details-marker { display: none; }
+    .sp-sources__summary:hover { background: var(--agi-ext-hover); color: var(--agi-ext-text); }
+    .sp-sources__summary:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
+    .sp-sources__list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin: 8px 0 0;
+      padding: 10px 12px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-panel);
+      background: var(--agi-ext-surface);
+      list-style: none;
+    }
 
     /* ── Markdown rendering inside assistant bubbles ── */
     .sp-bubble-assistant code {
       background: var(--agi-ext-bg);
       border: 1px solid var(--agi-ext-border);
-      border-radius: 3px;
+      border-radius: var(--corner-compact);
       padding: 1px 4px;
-      font-family: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', Consolas, monospace;
-      font-size: 11px;
+      font-family: var(--type-code-family);
+      font-size: var(--type-code-size);
+      line-height: var(--type-code-height);
       color: var(--agi-ext-accent-text);
     }
     .sp-bubble-assistant pre {
       background: var(--agi-ext-bg);
       border: 1px solid var(--agi-ext-border);
-      border-radius: 6px;
+      border-radius: var(--corner-control);
       padding: 10px;
       overflow-x: auto;
       margin: 4px 0;
-      font-family: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', Consolas, monospace;
-      font-size: 11px;
+      font-family: var(--type-code-family);
+      font-size: var(--type-code-size);
+      line-height: var(--type-code-height);
       color: var(--agi-ext-text);
       white-space: pre;
     }
@@ -1640,9 +2058,9 @@ function injectStyles(): void {
       color: var(--agi-ext-text);
       margin: 6px 0 3px;
     }
-    .sp-bubble-assistant h1 { font-size: 15px; }
-    .sp-bubble-assistant h2 { font-size: 14px; }
-    .sp-bubble-assistant h3 { font-size: 13px; }
+    .sp-bubble-assistant h1 { font-size: var(--type-title-size); line-height: var(--type-title-height); }
+    .sp-bubble-assistant h2 { font-size: var(--type-body-large-size); line-height: var(--type-body-large-height); }
+    .sp-bubble-assistant h3 { font-size: var(--type-body-size); line-height: var(--type-body-height); }
     .sp-bubble-assistant blockquote {
       border-left: 3px solid var(--agi-ext-accent);
       padding-left: 8px;
@@ -1654,6 +2072,23 @@ function injectStyles(): void {
       border-top: 1px solid var(--agi-ext-border);
       margin: 6px 0;
     }
+    .sp-bubble-assistant { white-space: normal; }
+    .sp-bubble-assistant p + p { margin-top: var(--paragraph-gap); }
+    .sp-bubble-assistant table {
+      display: block;
+      max-width: 100%;
+      margin: 6px 0;
+      overflow-x: auto;
+      border-collapse: collapse;
+    }
+    .sp-bubble-assistant th,
+    .sp-bubble-assistant td {
+      padding: 4px 10px;
+      border: 1px solid var(--agi-ext-border);
+      text-align: left;
+      vertical-align: top;
+    }
+    .sp-bubble-assistant th { background: var(--agi-ext-overlay); font-weight: 600; }
 
     /* ── Validated structured result cards ── */
     .sp-interactive-card-stack {
@@ -1667,10 +2102,10 @@ function injectStyles(): void {
       overflow: hidden;
       padding: 12px;
       border: 1px solid var(--agi-ext-border-strong);
-      border-radius: 16px;
+      border-radius: var(--corner-panel);
       background: var(--agi-ext-surface);
       color: var(--agi-ext-text);
-      box-shadow: 0 10px 28px color-mix(in srgb, black 10%, transparent);
+      box-shadow: var(--agi-ext-elevation-2);
     }
     .sp-interactive-card__heading {
       display: flex;
@@ -1683,16 +2118,16 @@ function injectStyles(): void {
     }
     .sp-interactive-card__headline {
       min-width: 0;
-      font-size: 12.5px;
+      font-size: var(--type-body-size);
       font-weight: 650;
-      line-height: 1.35;
+      line-height: var(--type-body-height);
       overflow-wrap: anywhere;
     }
     .sp-interactive-card__text {
       margin-top: 5px;
       color: var(--agi-ext-text-muted);
-      font-size: 11.5px;
-      line-height: 1.5;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       white-space: pre-wrap;
       overflow-wrap: anywhere;
     }
@@ -1701,8 +2136,8 @@ function injectStyles(): void {
       padding-top: 8px;
       border-top: 1px solid var(--agi-ext-border);
       color: var(--agi-ext-warning-text);
-      font-size: 10.5px;
-      line-height: 1.4;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
     }
     .sp-interactive-card__places {
       display: flex;
@@ -1719,7 +2154,8 @@ function injectStyles(): void {
       gap: 6px;
       align-items: center;
       color: var(--agi-ext-text);
-      font-size: 11px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       counter-increment: sp-card-place;
     }
     .sp-interactive-card__places li::before {
@@ -1728,17 +2164,18 @@ function injectStyles(): void {
       width: 18px;
       height: 18px;
       place-items: center;
-      border-radius: 999px;
+      border-radius: var(--corner-pill);
       background: color-mix(in srgb, var(--agi-ext-accent) 18%, transparent);
       color: var(--agi-ext-accent-text);
-      font-size: 9px;
+      font-size: var(--type-caption-size);
       font-weight: 700;
     }
     .sp-interactive-card__places li > span {
       grid-column: 2;
       margin-top: -5px;
       color: var(--agi-ext-text-muted);
-      font-size: 9.5px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       text-transform: capitalize;
     }
     .sp-interactive-card__actions {
@@ -1752,18 +2189,19 @@ function injectStyles(): void {
     .sp-interactive-card__action {
       display: flex;
       width: 100%;
-      min-height: 34px;
+      min-height: var(--control-lg);
       align-items: center;
       justify-content: space-between;
       gap: 8px;
       padding: 6px 9px;
       border: 1px solid var(--agi-ext-border);
-      border-radius: 10px;
+      border-radius: var(--corner-menu);
       background: var(--agi-ext-bg);
       color: var(--agi-ext-text);
       cursor: pointer;
       font: inherit;
-      font-size: 11px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       font-weight: 550;
       text-align: left;
     }
@@ -1777,9 +2215,9 @@ function injectStyles(): void {
     /* ── Cursor blink for streaming ── */
     .sp-cursor::after {
       content: '▋';
-      animation: sp-blink 0.7s steps(1) infinite;
+      animation: sp-blink var(--duration-blink) steps(1) infinite;
       color: var(--agi-ext-accent-text);
-      font-size: 12px;
+      font-size: var(--type-caption-size);
     }
     @keyframes sp-blink { 0%, 100% { opacity: 1; }
     50% { opacity: 0; }
@@ -1790,7 +2228,8 @@ function injectStyles(): void {
       display: flex;
       flex-direction: column;
       gap: 2px;
-      font-size: 13px;
+      font-size: var(--type-body-size);
+      line-height: var(--type-body-height);
       color: var(--agi-ext-text-muted);
     }
     .tool-call__bar {
@@ -1801,8 +2240,8 @@ function injectStyles(): void {
       padding: 0 4px;
       cursor: pointer;
       user-select: none;
-      border-radius: 5px;
-      transition: background 120ms ease;
+      border-radius: var(--corner-control);
+      transition: background var(--duration-instant) var(--curve-standard);
     }
     .tool-call__bar:hover { background: var(--agi-ext-hover); }
     .tool-call__icon {
@@ -1813,10 +2252,11 @@ function injectStyles(): void {
       opacity: 0.7;
     }
     .tool-call__icon svg { width: 14px; height: 14px; }
-    .tool-call__label { color: var(--agi-ext-text-muted); font-weight: 400; font-size: 12px; }
+    .tool-call__label { color: var(--agi-ext-text-muted); font-weight: 400; font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
     .tool-call__summary {
       color: var(--agi-ext-text-muted);
-      font-size: 11px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       margin-left: 4px;
       max-width: 260px;
       white-space: nowrap;
@@ -1829,7 +2269,7 @@ function injectStyles(): void {
       color: var(--agi-ext-text-muted);
       opacity: 0.6;
       margin-left: auto;
-      transition: transform 160ms ease;
+      transition: transform var(--duration-quick) var(--curve-standard);
       flex-shrink: 0;
     }
     .tool-call__chevron svg { width: 12px; height: 12px; }
@@ -1838,10 +2278,11 @@ function injectStyles(): void {
       display: none;
       background: var(--agi-ext-bg);
       border: 1px solid var(--agi-ext-border);
-      border-radius: 6px;
+      border-radius: var(--corner-control);
       padding: 10px 12px;
-      font-family: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', Consolas, monospace;
-      font-size: 11px;
+      font-family: var(--type-code-family);
+      font-size: var(--type-code-size);
+      line-height: var(--type-code-height);
       color: var(--agi-ext-text);
       overflow-x: auto;
       max-height: 320px;
@@ -1861,7 +2302,7 @@ function injectStyles(): void {
     }
     /* spinner rotation for pending/running state */
     .tool-call--running .tool-call__icon { color: var(--agi-ext-text-muted); }
-    .tool-call--running .tool-call__icon svg { animation: sp-spin 0.8s linear infinite; }
+    .tool-call--running .tool-call__icon svg { animation: sp-spin var(--duration-spin) linear infinite; }
     @keyframes sp-spin { to { transform: rotate(360deg); }
     }
     .tool-call--error .tool-call__label { color: var(--agi-ext-danger-text); }
@@ -1871,7 +2312,8 @@ function injectStyles(): void {
     .sp-agent-activity {
       width: min(100%, 420px);
       color: var(--agi-ext-text-muted);
-      font-size: 12px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
     }
     .sp-agent-activity > summary {
       display: flex;
@@ -1882,13 +2324,13 @@ function injectStyles(): void {
       cursor: pointer;
       list-style: none;
       user-select: none;
-      border-radius: 6px;
+      border-radius: var(--corner-control);
     }
     .sp-agent-activity > summary::-webkit-details-marker { display: none; }
     .sp-agent-activity > summary:hover { background: var(--agi-ext-hover); }
     .sp-agent-activity__chevron {
       margin-left: auto;
-      transition: transform 160ms ease;
+      transition: transform var(--duration-quick) var(--curve-standard);
     }
     .sp-agent-activity[open] .sp-agent-activity__chevron { transform: rotate(90deg); }
     .sp-agent-activity__timeline {
@@ -1901,7 +2343,7 @@ function injectStyles(): void {
     }
     .sp-agent-step {
       min-width: 0;
-      border-radius: 6px;
+      border-radius: var(--corner-control);
     }
     .sp-agent-step > summary,
     .sp-agent-step__row {
@@ -1916,7 +2358,7 @@ function injectStyles(): void {
     .sp-agent-step > summary::-webkit-details-marker { display: none; }
     .sp-agent-step > summary:hover { background: var(--agi-ext-hover); }
     .sp-agent-step__icon { flex: 0 0 14px; opacity: 0.78; }
-    .sp-agent-step--running .sp-agent-step__icon { animation: sp-spin 0.8s linear infinite; }
+    .sp-agent-step--running .sp-agent-step__icon { animation: sp-spin var(--duration-spin) linear infinite; }
     .sp-agent-step--failed .sp-agent-step__icon { color: var(--agi-ext-danger-text); }
     .sp-agent-step--completed .sp-agent-step__icon { color: var(--agi-ext-success-text); }
     .sp-agent-step__summary {
@@ -1926,12 +2368,12 @@ function injectStyles(): void {
       text-overflow: ellipsis;
       white-space: nowrap;
     }
-    .sp-agent-step__elapsed { font-size: 10px; opacity: 0.65; }
+    .sp-agent-step__elapsed { font-size: var(--type-caption-size); line-height: var(--type-caption-height); opacity: 0.65; }
     .sp-agent-step__detail {
       margin: 0 5px 6px 26px;
       padding: 8px;
       border: 1px solid var(--agi-ext-border);
-      border-radius: 6px;
+      border-radius: var(--corner-control);
       background: var(--agi-ext-bg);
       color: var(--agi-ext-text-muted);
       white-space: pre-wrap;
@@ -1947,7 +2389,7 @@ function injectStyles(): void {
       max-width: 100%;
       padding: 3px 7px;
       border: 1px solid var(--agi-ext-border);
-      border-radius: 999px;
+      border-radius: var(--corner-pill);
       color: var(--agi-ext-text-muted);
       text-decoration: none;
       background: var(--agi-ext-surface);
@@ -1967,7 +2409,8 @@ function injectStyles(): void {
     .sp-agent-artifact-unavailable {
       margin-top: 8px;
       color: var(--agi-ext-text-muted);
-      font-size: 10px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       white-space: normal;
     }
     .sp-agent-approval {
@@ -1979,18 +2422,18 @@ function injectStyles(): void {
       border-top: 1px solid var(--agi-ext-border);
       white-space: normal;
     }
-    .sp-agent-approval__summary { color: var(--agi-ext-text); line-height: 1.4; }
-    .sp-agent-approval__recorded { color: var(--agi-ext-accent-text); font-size: 10px; }
-    .sp-agent-approval__error { color: var(--agi-ext-danger-text); font-size: 10px; }
+    .sp-agent-approval__summary { color: var(--agi-ext-text); line-height: var(--type-body-height); }
+    .sp-agent-approval__recorded { color: var(--agi-ext-accent-text); font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
+    .sp-agent-approval__error { color: var(--agi-ext-danger-text); font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
     .sp-agent-approval__actions { display: flex; flex-wrap: wrap; gap: 6px; }
     .sp-agent-approval__button {
       border: 1px solid var(--agi-ext-border);
-      border-radius: 6px;
+      border-radius: var(--corner-control);
       background: var(--agi-ext-surface);
       color: var(--agi-ext-text);
       cursor: pointer;
       font: inherit;
-      font-size: 11px;
+      font-size: var(--type-label-size); line-height: var(--type-label-height);
       padding: 4px 9px;
     }
     .sp-agent-approval__button:hover { background: var(--agi-ext-hover); }
@@ -2012,18 +2455,34 @@ function injectStyles(): void {
       padding: 8px 12px;
       background: var(--agi-ext-surface);
       border: 1px solid var(--agi-ext-border);
-      border-radius: 12px;
-      border-bottom-left-radius: 3px;
+      border-radius: var(--corner-surface);
+      border-bottom-left-radius: var(--corner-compact);
     }
     .sp-dot {
       width: 6px;
       height: 6px;
-      border-radius: 50%;
+      border-radius: var(--corner-pill);
       background: var(--agi-ext-accent);
-      animation: sp-bounce 1.2s infinite;
+      animation: sp-bounce var(--duration-bounce) infinite;
     }
-    .sp-dot:nth-child(2) { animation-delay: 0.2s; }
-    .sp-dot:nth-child(3) { animation-delay: 0.4s; }
+    .sp-dot:nth-child(2) { animation-delay: calc(var(--duration-bounce) / 6); }
+    .sp-dot:nth-child(3) { animation-delay: calc(var(--duration-bounce) / 3); }
+    .sp-thinking-label {
+      margin-left: 4px;
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
+    .sp-bubble-transient-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
+    .sp-bubble-transient-status__icon svg,
+    .sp-send-stopping-icon svg { animation: sp-spin var(--duration-spin) linear infinite; }
     @keyframes sp-bounce {
       0%, 100% { transform: translateY(0); opacity: 0.4; }
       50% { transform: translateY(-4px); opacity: 1; }
@@ -2045,12 +2504,13 @@ function injectStyles(): void {
       gap: 5px;
       background: var(--agi-ext-surface);
       border: 1px solid var(--agi-ext-border);
-      border-radius: 6px;
+      border-radius: var(--corner-control);
       color: var(--agi-ext-text-muted);
-      font-size: 11px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       padding: 4px 9px;
       cursor: pointer;
-      transition: color 0.15s, border-color 0.15s, background 0.15s;
+      transition: color var(--duration-quick), border-color var(--duration-quick), background var(--duration-quick);
       white-space: nowrap;
       flex-shrink: 0;
     }
@@ -2062,9 +2522,9 @@ function injectStyles(): void {
     /* ── Mic pulsing indicator ── */
     .sp-mic-pulse {
       width: 8px; height: 8px;
-      border-radius: 50%;
+      border-radius: var(--corner-pill);
       background: var(--agi-ext-danger);
-      animation: sp-pulse 1s infinite;
+      animation: sp-pulse var(--duration-pulse) infinite;
     }
     @keyframes sp-pulse {
       0%, 100% { transform: scale(1); opacity: 1; }
@@ -2084,10 +2544,10 @@ function injectStyles(): void {
       overflow-y: auto;
       background: var(--agi-ext-surface);
       border: 1px solid var(--agi-ext-border);
-      border-radius: 8px;
+      border-radius: var(--corner-field);
       padding: 4px;
-      z-index: 100;
-      box-shadow: var(--agi-ext-shadow-panel);
+      z-index: var(--z-dropdown);
+      box-shadow: var(--agi-ext-elevation-2);
     }
     #sp-shortcuts-dropdown.open { display: block; }
     .sp-shortcut-item {
@@ -2095,12 +2555,12 @@ function injectStyles(): void {
       align-items: center;
       justify-content: space-between;
       padding: 6px 8px;
-      border-radius: 5px;
+      border-radius: var(--corner-control);
       cursor: pointer;
-      transition: background 0.12s;
+      transition: background var(--duration-instant);
     }
     .sp-shortcut-item:hover { background: var(--agi-ext-hover); }
-    .sp-shortcut-name { font-size: 12px; color: var(--agi-ext-text); flex: 1; }
+    .sp-shortcut-name { font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--agi-ext-text); flex: 1; }
     .sp-shortcut-actions {
       display: flex;
       gap: 4px;
@@ -2109,16 +2569,17 @@ function injectStyles(): void {
       background: none;
       border: none;
       cursor: pointer;
-      font-size: 12px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       padding: 2px 4px;
-      border-radius: 3px;
-      transition: background 0.12s;
+      border-radius: var(--corner-compact);
+      transition: background var(--duration-instant);
     }
     .sp-shortcut-action-btn:hover { background: var(--agi-ext-overlay); }
     .sp-shortcuts-status {
       padding: 6px 10px;
-      font-size: 11px;
-      line-height: 1.4;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       border-top: 1px solid var(--agi-ext-border);
     }
     .sp-shortcuts-status[data-kind='error'] { color: var(--agi-ext-danger-text); }
@@ -2128,7 +2589,8 @@ function injectStyles(): void {
     .sp-shortcuts-empty {
       padding: 10px 8px;
       color: var(--agi-ext-text-muted);
-      font-size: 11px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       text-align: center;
     }
     .sp-save-shortcut-row {
@@ -2141,9 +2603,10 @@ function injectStyles(): void {
       flex: 1;
       background: var(--agi-ext-bg);
       border: 1px solid var(--agi-ext-border);
-      border-radius: 4px;
+      border-radius: var(--corner-compact);
       color: var(--agi-ext-text);
-      font-size: 11px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       padding: 4px 6px;
       outline: none;
     }
@@ -2153,9 +2616,10 @@ function injectStyles(): void {
       background: var(--agi-ext-accent);
       color: var(--agi-ext-on-accent);
       border: none;
-      border-radius: 4px;
+      border-radius: var(--corner-compact);
       padding: 4px 8px;
-      font-size: 11px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       cursor: pointer;
       white-space: nowrap;
     }
@@ -2175,7 +2639,7 @@ function injectStyles(): void {
       margin: 0 0 6px;
       padding: 9px 10px;
       border: 1px solid var(--agi-ext-border);
-      border-radius: 10px;
+      border-radius: var(--corner-menu);
       background: var(--agi-ext-surface);
     }
     #sp-cloud-gate.visible { display: flex; }
@@ -2185,25 +2649,26 @@ function injectStyles(): void {
     }
     #sp-cloud-gate-title {
       color: var(--agi-ext-text);
-      font-size: 11px;
+      font-size: var(--type-caption-size);
       font-weight: 600;
-      line-height: 1.3;
+      line-height: var(--type-caption-height);
     }
     #sp-cloud-gate-message {
       color: var(--agi-ext-text-muted);
-      font-size: 10px;
-      line-height: 1.4;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       margin-top: 2px;
     }
     #sp-cloud-gate-action {
       flex-shrink: 0;
       border: 0;
-      border-radius: 7px;
+      border-radius: var(--corner-control);
       background: var(--agi-ext-accent);
       color: var(--agi-ext-on-accent);
       cursor: pointer;
       font: inherit;
-      font-size: 10px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       font-weight: 600;
       padding: 6px 9px;
     }
@@ -2216,14 +2681,16 @@ function injectStyles(): void {
       margin: 0 0 6px;
       padding: 7px 10px;
       border: 1px solid var(--agi-ext-border);
-      border-radius: 10px;
+      border-radius: var(--corner-menu);
       background: var(--agi-ext-surface);
       color: var(--agi-ext-text-muted);
-      font-size: 10px;
-      line-height: 1.4;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
     }
     .sp-composer-notice.visible { display: flex; }
     .sp-composer-notice > span { flex: 1; min-width: 0; }
+    #sp-mic-notice { flex-wrap: wrap; justify-content: flex-end; color: var(--agi-ext-text); }
+    #sp-mic-notice > span { flex-basis: 100%; }
     #sp-usage-warning[data-severity='warning'] {
       border-color: var(--agi-ext-warning-border);
       background: var(--agi-ext-warning-bg);
@@ -2238,7 +2705,7 @@ function injectStyles(): void {
       flex-shrink: 0;
       background: none;
       border: 1px solid currentColor;
-      border-radius: 5px;
+      border-radius: var(--corner-control);
       color: inherit;
       font: inherit;
       padding: 2px 8px;
@@ -2252,13 +2719,13 @@ function injectStyles(): void {
     #sp-composer-shell {
       background: var(--agi-ext-surface);
       border: 1px solid var(--agi-ext-border);
-      border-radius: 18px;
+      border-radius: var(--corner-panel);
       min-height: 106px;
       padding: 10px 10px 7px;
       display: flex;
       flex-direction: column;
       gap: 8px;
-      transition: border-color 0.15s, box-shadow 0.15s;
+      transition: border-color var(--duration-quick), box-shadow var(--duration-quick);
     }
     #sp-composer-shell:has(#sp-input:focus) {
       border-color: color-mix(in srgb, var(--agi-ext-accent) 50%, transparent);
@@ -2278,12 +2745,12 @@ function injectStyles(): void {
       background: transparent;
       border: none;
       color: var(--agi-ext-text);
-      font-size: 14px;
+      font-size: var(--type-body-large-size);
       padding: 3px 4px;
       resize: none;
       outline: none;
       font-family: inherit;
-      line-height: 1.5;
+      line-height: var(--type-body-large-height);
       max-height: 120px;
       min-height: 52px;
       overflow-y: auto;
@@ -2299,8 +2766,8 @@ function injectStyles(): void {
       padding: 4px;
       background: var(--agi-ext-surface);
       border: 1px solid var(--agi-ext-border);
-      border-radius: 10px;
-      box-shadow: var(--agi-ext-modal-shadow);
+      border-radius: var(--corner-menu);
+      box-shadow: var(--agi-ext-elevation-2);
       max-height: 214px;
       overflow-y: auto;
     }
@@ -2310,7 +2777,7 @@ function injectStyles(): void {
       flex-direction: column;
       gap: 1px;
       padding: 7px 9px;
-      border-radius: 7px;
+      border-radius: var(--corner-control);
       cursor: pointer;
       border: none;
       background: transparent;
@@ -2319,21 +2786,21 @@ function injectStyles(): void {
     }
     .sp-slash-item:hover, .sp-slash-item.active { background: var(--agi-ext-hover); }
     .sp-slash-item.active { outline: 1px solid var(--agi-ext-focus); outline-offset: -1px; }
-    .sp-slash-name { color: var(--agi-ext-text); font-size: 13px; font-weight: 600; }
-    .sp-slash-hint { color: var(--agi-ext-text-muted); font-size: 11.5px; line-height: 1.35; }
+    .sp-slash-name { color: var(--agi-ext-text); font-size: var(--type-body-size); line-height: var(--type-body-height); font-weight: 600; }
+    .sp-slash-hint { color: var(--agi-ext-text-muted); font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
     #sp-send-btn {
       background: var(--agi-ext-accent);
       color: var(--agi-ext-on-accent);
       border: none;
-      border-radius: 50%;
-      width: 32px;
-      height: 32px;
+      border-radius: var(--corner-pill);
+      width: var(--control-md);
+      height: var(--control-md);
       display: flex;
       align-items: center;
       justify-content: center;
       cursor: pointer;
       flex-shrink: 0;
-      transition: background 0.15s, transform 0.1s;
+      transition: background var(--duration-quick), transform var(--duration-instant);
     }
     #sp-send-btn:hover:not(:disabled) { background: var(--agi-ext-accent-hover); transform: scale(1.05); }
     #sp-send-btn:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
@@ -2344,21 +2811,21 @@ function injectStyles(): void {
     /* ── Attachment + button and menu ── */
     .sp-attach-wrapper { position: relative; flex-shrink: 0; }
     .sp-attach-btn {
-      width: 32px;
-      height: 32px;
+      width: var(--control-md);
+      height: var(--control-md);
       display: flex;
       align-items: center;
       justify-content: center;
       background: transparent;
       border: none;
-      border-radius: 6px;
+      border-radius: var(--corner-control);
       color: var(--agi-ext-text-muted);
       font-size: 18px;
       font-weight: 300;
       line-height: 1;
       cursor: pointer;
       flex-shrink: 0;
-      transition: color 0.15s, background 0.15s;
+      transition: color var(--duration-quick), background var(--duration-quick);
     }
     .sp-attach-btn:hover { color: var(--agi-ext-accent-text); background: color-mix(in srgb, var(--agi-ext-accent) 8%, transparent); }
     #sp-attach-menu {
@@ -2369,10 +2836,10 @@ function injectStyles(): void {
       min-width: 190px;
       background: var(--agi-ext-surface);
       border: 1px solid var(--agi-ext-border);
-      border-radius: 8px;
+      border-radius: var(--corner-field);
       padding: 4px;
-      z-index: 150;
-      box-shadow: var(--agi-ext-shadow-panel);
+      z-index: var(--z-dropdown);
+      box-shadow: var(--agi-ext-elevation-2);
     }
     #sp-attach-menu.open { display: block; }
     .sp-attach-menu-item {
@@ -2380,11 +2847,12 @@ function injectStyles(): void {
       align-items: center;
       gap: 8px;
       padding: 8px 10px;
-      border-radius: 5px;
+      border-radius: var(--corner-control);
       cursor: pointer;
-      font-size: 12px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       color: var(--agi-ext-text-muted);
-      transition: background 0.12s, color 0.12s;
+      transition: background var(--duration-instant), color var(--duration-instant);
       user-select: none;
       width: 100%;
       border: 0;
@@ -2406,7 +2874,7 @@ function injectStyles(): void {
     .sp-attachment-chip {
       position: relative;
       display: inline-flex;
-      border-radius: 6px;
+      border-radius: var(--corner-control);
       overflow: visible;
       border: 1px solid var(--agi-ext-border);
     }
@@ -2414,7 +2882,7 @@ function injectStyles(): void {
       width: 48px;
       height: 48px;
       object-fit: cover;
-      border-radius: 5px;
+      border-radius: var(--corner-control);
       display: block;
     }
     .sp-attachment-remove {
@@ -2425,29 +2893,79 @@ function injectStyles(): void {
       height: 16px;
       background: var(--agi-ext-hover);
       border: 1px solid var(--agi-ext-border-strong);
-      border-radius: 50%;
+      border-radius: var(--corner-pill);
       color: var(--agi-ext-text-muted);
-      font-size: 10px;
+      font-size: var(--type-caption-size);
       line-height: 1;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
       padding: 0;
-      transition: background 0.12s, color 0.12s;
+      transition: background var(--duration-instant), color var(--duration-instant);
     }
     .sp-attachment-remove:hover { background: var(--agi-ext-danger-bg); color: var(--agi-ext-danger-text); border-color: var(--agi-ext-danger-border); }
+    .sp-attachment-doc {
+      align-items: center;
+      gap: 8px;
+      max-width: 240px;
+      min-height: 48px;
+      padding: 6px 14px 6px 8px;
+      background: var(--agi-ext-surface);
+    }
+    .sp-attachment-doc[data-phase='failed'] { border-color: var(--agi-ext-danger-border); }
+    .sp-attachment-doc-icon { display: inline-flex; flex-shrink: 0; color: var(--agi-ext-text-muted); }
+    .sp-attachment-doc[aria-busy='true'] .sp-attachment-doc-icon svg { animation: sp-spin var(--duration-spin) linear infinite; }
+    .sp-attachment-doc-copy { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; }
+    .sp-attachment-doc-name {
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--agi-ext-text);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      font-weight: 500;
+    }
+    .sp-attachment-doc-status {
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
+    .sp-attachment-doc[data-phase='failed'] .sp-attachment-doc-status { color: var(--agi-ext-danger-text); white-space: normal; }
+    .sp-attachment-doc-retry {
+      padding: 2px 8px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-control);
+      background: none;
+      color: var(--agi-ext-accent-text);
+      font: inherit;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      cursor: pointer;
+      transition: background var(--duration-instant);
+    }
+    .sp-attachment-doc-retry:hover { background: var(--agi-ext-hover); }
     .sp-attachment-notice {
       flex: 1 1 100%;
       color: var(--agi-ext-danger-text);
-      font-size: 11px;
-      line-height: 1.4;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
     }
     .sp-attachment-retention {
       flex: 1 1 100%;
       color: var(--agi-ext-text-muted);
-      font-size: 10px;
-      line-height: 1.4;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
+    .sp-attachment-notices {
+      display: flex;
+      flex: 1 1 100%;
+      flex-direction: column;
+      gap: 2px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
     }
 
     /* ── Composer bottom bar: persistent page-context chip ── */
@@ -2473,9 +2991,9 @@ function injectStyles(): void {
       gap: 5px;
       height: 22px;
       padding: 0 8px;
-      font-size: 11px;
+      font-size: var(--type-label-size); line-height: var(--type-label-height);
       font-weight: 600;
-      border-radius: 999px;
+      border-radius: var(--corner-pill);
       cursor: pointer;
       white-space: nowrap;
       background: var(--agi-ext-success-bg);
@@ -2519,13 +3037,14 @@ function injectStyles(): void {
       flex: 1;
       background: var(--agi-ext-surface);
       border: 1px solid var(--agi-ext-border);
-      border-radius: 6px;
+      border-radius: var(--corner-control);
       color: var(--agi-ext-text);
-      font-size: 11px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       padding: 5px 9px;
       outline: none;
       font-family: inherit;
-      transition: border-color 0.15s;
+      transition: border-color var(--duration-quick);
       min-width: 0;
     }
     #sp-auth-input:focus { border-color: var(--agi-ext-focus); }
@@ -2535,12 +3054,13 @@ function injectStyles(): void {
       background: var(--agi-ext-accent);
       color: var(--agi-ext-on-accent);
       border: none;
-      border-radius: 6px;
+      border-radius: var(--corner-control);
       padding: 5px 10px;
-      font-size: 11px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       cursor: pointer;
       flex-shrink: 0;
-      transition: background 0.15s;
+      transition: background var(--duration-quick);
       white-space: nowrap;
     }
     #sp-auth-save-btn:hover { background: var(--agi-ext-accent-hover); }
@@ -2551,8 +3071,9 @@ function injectStyles(): void {
       display: flex;
       align-items: center;
       gap: 5px;
-      font-size: 10px;
-      border-radius: 10px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      border-radius: var(--corner-menu);
       padding: 3px 8px;
       flex-shrink: 0;
       font-weight: 500;
@@ -2572,7 +3093,7 @@ function injectStyles(): void {
     .sp-status-dot {
       width: 6px;
       height: 6px;
-      border-radius: 50%;
+      border-radius: var(--corner-pill);
       flex-shrink: 0;
     }
     #sp-status-pill.connected .sp-status-dot { background: var(--agi-ext-success); }
@@ -2592,7 +3113,7 @@ function injectStyles(): void {
       padding: 6px 12px;
       background: color-mix(in srgb, var(--agi-ext-danger) 8%, transparent);
       border-top: 1px solid var(--agi-ext-danger-border);
-      font-size: 11px;
+      font-size: var(--type-caption-size); line-height: var(--type-caption-height);
       color: var(--agi-ext-danger-text);
       flex-shrink: 0;
     }
@@ -2600,22 +3121,22 @@ function injectStyles(): void {
     #sp-bridge-notice-dot {
       width: 6px;
       height: 6px;
-      border-radius: 50%;
+      border-radius: var(--corner-pill);
       background: var(--agi-ext-danger);
       flex-shrink: 0;
     }
-    #sp-bridge-notice-text { flex: 1; line-height: 1.4; }
+    #sp-bridge-notice-text { flex: 1; line-height: var(--type-caption-height); }
     #sp-bridge-notice-reconnect {
       background: none;
       border: 1px solid var(--agi-ext-danger-border);
       color: var(--agi-ext-danger-text);
-      border-radius: 5px;
+      border-radius: var(--corner-control);
       padding: 2px 8px;
-      font-size: 10px;
+      font-size: var(--type-caption-size); line-height: var(--type-caption-height);
       cursor: pointer;
       white-space: nowrap;
       flex-shrink: 0;
-      transition: background 0.12s;
+      transition: background var(--duration-instant);
     }
     #sp-bridge-notice-reconnect:hover {
       background: color-mix(in srgb, var(--agi-ext-danger) 12%, transparent);
@@ -2644,7 +3165,8 @@ function injectStyles(): void {
       border: none;
       border-bottom: 2px solid transparent;
       color: var(--agi-ext-text-muted);
-      font-size: 12px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       font-weight: 500;
       padding: 9px 4px;
       cursor: pointer;
@@ -2652,7 +3174,7 @@ function injectStyles(): void {
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      transition: color 0.15s, border-color 0.15s;
+      transition: color var(--duration-quick), border-color var(--duration-quick);
     }
     .sp-tab:hover { color: var(--agi-ext-text); }
     .sp-tab.sp-tab-active { color: var(--agi-ext-accent-text); border-bottom-color: var(--agi-ext-accent); }
@@ -2662,134 +3184,134 @@ function injectStyles(): void {
     #sp-workflows.sp-tab-visible { display: flex; }
     #sp-workflows::-webkit-scrollbar { width: 4px; }
     #sp-workflows::-webkit-scrollbar-track { background: transparent; }
-    #sp-workflows::-webkit-scrollbar-thumb { background: var(--agi-ext-border); border-radius: 4px; }
-    .sp-wf-section { background: var(--agi-ext-surface); border: 1px solid var(--agi-ext-border); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+    #sp-workflows::-webkit-scrollbar-thumb { background: var(--agi-ext-border); border-radius: var(--corner-compact); }
+    .sp-wf-section { background: var(--agi-ext-surface); border: 1px solid var(--agi-ext-border); border-radius: var(--corner-menu); padding: 12px; display: flex; flex-direction: column; gap: 10px; }
     .sp-wf-section-header { display: flex; align-items: center; justify-content: space-between; }
-    .sp-wf-section-title { font-size: 11px; font-weight: 600; color: var(--agi-ext-text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
-    .sp-wf-empty { color: var(--agi-ext-text-muted); font-size: 11px; line-height: 1.55; padding: 4px 0; }
+    .sp-wf-section-title { font-size: var(--type-caption-size); line-height: var(--type-caption-height); font-weight: 600; color: var(--agi-ext-text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+    .sp-wf-empty { color: var(--agi-ext-text-muted); font-size: var(--type-caption-size); line-height: var(--type-caption-height); padding: 4px 0; }
     .sp-wf-shortcuts-list { display: flex; flex-direction: column; gap: 6px; }
-    .sp-wf-shortcut-item { display: flex; align-items: center; gap: 8px; padding: 7px 9px; background: var(--agi-ext-bg); border: 1px solid var(--agi-ext-border); border-radius: 7px; }
+    .sp-wf-shortcut-item { display: flex; align-items: center; gap: 8px; padding: 7px 9px; background: var(--agi-ext-bg); border: 1px solid var(--agi-ext-border); border-radius: var(--corner-control); }
     .sp-wf-shortcut-icon { font-size: 14px; flex-shrink: 0; }
     .sp-wf-shortcut-info { flex: 1; min-width: 0; }
-    .sp-wf-shortcut-name { font-size: 12px; font-weight: 500; color: var(--agi-ext-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .sp-wf-shortcut-meta { font-size: 10px; color: var(--agi-ext-text-muted); margin-top: 1px; }
+    .sp-wf-shortcut-name { font-size: var(--type-caption-size); line-height: var(--type-caption-height); font-weight: 500; color: var(--agi-ext-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sp-wf-shortcut-meta { font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--agi-ext-text-muted); margin-top: 1px; }
     .sp-wf-shortcut-btns { display: flex; gap: 4px; flex-shrink: 0; }
-    .sp-wf-btn-replay { background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent); color: var(--agi-ext-accent-text); font-size: 11px; padding: 3px 9px; border-radius: 5px; cursor: pointer; transition: background 0.12s; }
+    .sp-wf-btn-replay { background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent); color: var(--agi-ext-accent-text); font-size: var(--type-caption-size); line-height: var(--type-caption-height); padding: 3px 9px; border-radius: var(--corner-control); cursor: pointer; transition: background var(--duration-instant); }
     .sp-wf-btn-replay:hover { background: color-mix(in srgb, var(--agi-ext-accent) 22%, transparent); }
     .sp-wf-btn-replay:disabled { cursor: wait; opacity: 0.6; }
-    .sp-wf-btn-delete { background: none; border: 1px solid var(--agi-ext-border); color: var(--agi-ext-text-muted); font-size: 11px; padding: 3px 7px; border-radius: 5px; cursor: pointer; transition: color 0.12s, border-color 0.12s; }
+    .sp-wf-btn-delete { background: none; border: 1px solid var(--agi-ext-border); color: var(--agi-ext-danger-text); font-size: var(--type-caption-size); line-height: var(--type-caption-height); padding: 3px 7px; border-radius: var(--corner-control); cursor: pointer; transition: color var(--duration-instant), border-color var(--duration-instant); }
     .sp-wf-btn-delete:hover { color: var(--agi-ext-danger-text); border-color: var(--agi-ext-danger-border); }
     .sp-wf-btn-delete:disabled, .sp-wf-task-delete:disabled { cursor: wait; opacity: 0.55; }
     .sp-wf-tasks-list { display: flex; flex-direction: column; gap: 6px; }
-    .sp-wf-task-item { display: flex; align-items: center; gap: 8px; padding: 7px 9px; background: var(--agi-ext-bg); border: 1px solid var(--agi-ext-border); border-radius: 7px; }
+    .sp-wf-task-item { display: flex; align-items: center; gap: 8px; padding: 7px 9px; background: var(--agi-ext-bg); border: 1px solid var(--agi-ext-border); border-radius: var(--corner-control); }
     .sp-wf-task-info { flex: 1; min-width: 0; }
-    .sp-wf-task-name { font-size: 12px; font-weight: 500; color: var(--agi-ext-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .sp-wf-task-schedule-badge { display: inline-block; font-size: 9px; color: var(--agi-ext-accent-text); background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent); border-radius: 3px; padding: 1px 5px; margin-top: 2px; }
-    .sp-wf-task-toggle { appearance: none; width: 30px; height: 16px; border-radius: 8px; background: var(--agi-ext-hover); position: relative; cursor: pointer; transition: background 0.2s; flex-shrink: 0; }
+    .sp-wf-task-name { font-size: var(--type-caption-size); line-height: var(--type-caption-height); font-weight: 500; color: var(--agi-ext-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sp-wf-task-schedule-badge { display: inline-block; font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--agi-ext-accent-text); background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent); border-radius: var(--corner-compact); padding: 1px 5px; margin-top: 2px; }
+    .sp-wf-task-toggle { appearance: none; width: 30px; height: 16px; border-radius: var(--corner-pill); background: var(--agi-ext-hover); position: relative; cursor: pointer; transition: background var(--duration-quick); flex-shrink: 0; }
     .sp-wf-task-toggle:checked { background: var(--agi-ext-accent); }
     .sp-wf-task-toggle:disabled { cursor: wait; opacity: 0.55; }
-    .sp-wf-task-toggle::after { content: ''; position: absolute; width: 12px; height: 12px; border-radius: 50%; background: var(--agi-ext-toggle-knob); top: 2px; left: 2px; transition: transform 0.2s; }
+    .sp-wf-task-toggle::after { content: ''; position: absolute; width: 12px; height: 12px; border-radius: var(--corner-pill); background: var(--agi-ext-toggle-knob); top: 2px; left: 2px; transition: transform var(--duration-quick); }
     .sp-wf-task-toggle:checked::after { transform: translateX(14px); }
-    .sp-wf-task-delete { background: none; border: 1px solid var(--agi-ext-border); color: var(--agi-ext-text-muted); font-size: 11px; padding: 3px 7px; border-radius: 5px; cursor: pointer; transition: color 0.12s, border-color 0.12s; }
+    .sp-wf-task-delete { background: none; border: 1px solid var(--agi-ext-border); color: var(--agi-ext-danger-text); font-size: var(--type-caption-size); line-height: var(--type-caption-height); padding: 3px 7px; border-radius: var(--corner-control); cursor: pointer; transition: color var(--duration-instant), border-color var(--duration-instant); }
     .sp-wf-task-delete:hover { color: var(--agi-ext-danger-text); border-color: var(--agi-ext-danger-border); }
-    .sp-wf-task-result { background: none; border: 1px solid var(--agi-ext-border); color: var(--agi-ext-text-muted); font-size: 11px; padding: 3px 7px; border-radius: 5px; cursor: pointer; transition: color 0.12s, border-color 0.12s; }
+    .sp-wf-task-result { background: none; border: 1px solid var(--agi-ext-border); color: var(--agi-ext-text-muted); font-size: var(--type-caption-size); line-height: var(--type-caption-height); padding: 3px 7px; border-radius: var(--corner-control); cursor: pointer; transition: color var(--duration-instant), border-color var(--duration-instant); }
     .sp-wf-task-result:hover { color: var(--agi-ext-accent-text); border-color: var(--agi-ext-focus); }
-    .sp-wf-new-task-btn { background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent); color: var(--agi-ext-accent-text); font-size: 11px; padding: 4px 10px; border-radius: 5px; cursor: pointer; transition: background 0.12s; }
+    .sp-wf-new-task-btn { background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent); color: var(--agi-ext-accent-text); font-size: var(--type-caption-size); line-height: var(--type-caption-height); padding: 4px 10px; border-radius: var(--corner-control); cursor: pointer; transition: background var(--duration-instant); }
     .sp-wf-new-task-btn:hover { background: color-mix(in srgb, var(--agi-ext-accent) 22%, transparent); }
-    .sp-wf-new-task-form { display: none; flex-direction: column; gap: 7px; padding: 10px; background: var(--agi-ext-bg); border: 1px solid var(--agi-ext-border); border-radius: 7px; }
+    .sp-wf-new-task-form { display: none; flex-direction: column; gap: 7px; padding: 10px; background: var(--agi-ext-bg); border: 1px solid var(--agi-ext-border); border-radius: var(--corner-control); }
     .sp-wf-new-task-form.open { display: flex; }
-    .sp-wf-form-label { font-size: 10px; color: var(--agi-ext-text-muted); margin-bottom: 1px; }
-    .sp-wf-form-input { background: var(--agi-ext-surface); border: 1px solid var(--agi-ext-border); border-radius: 5px; color: var(--agi-ext-text); font-size: 12px; padding: 5px 8px; outline: none; font-family: inherit; transition: border-color 0.15s; width: 100%; }
+    .sp-wf-form-label { font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--agi-ext-text-muted); margin-bottom: 1px; }
+    .sp-wf-form-input { background: var(--agi-ext-surface); border: 1px solid var(--agi-ext-border); border-radius: var(--corner-control); color: var(--agi-ext-text); font-size: var(--type-caption-size); line-height: var(--type-caption-height); padding: 5px 8px; outline: none; font-family: inherit; transition: border-color var(--duration-quick); width: 100%; }
     .sp-wf-form-input:focus { border-color: var(--agi-ext-focus); }
     .sp-wf-form-input:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
     .sp-wf-form-input::placeholder { color: var(--agi-ext-text-placeholder); }
-    .sp-wf-form-select { background: var(--agi-ext-surface); border: 1px solid var(--agi-ext-border); border-radius: 5px; color: var(--agi-ext-text); font-size: 12px; padding: 5px 8px; outline: none; font-family: inherit; width: 100%; }
+    .sp-wf-form-select { background: var(--agi-ext-surface); border: 1px solid var(--agi-ext-border); border-radius: var(--corner-control); color: var(--agi-ext-text); font-size: var(--type-caption-size); line-height: var(--type-caption-height); padding: 5px 8px; outline: none; font-family: inherit; width: 100%; }
     .sp-wf-form-select:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
-    .sp-wf-form-save-btn { background: var(--agi-ext-accent); color: var(--agi-ext-on-accent); border: none; border-radius: 5px; padding: 6px 14px; font-size: 12px; cursor: pointer; align-self: flex-end; transition: background 0.12s; }
+    .sp-wf-form-save-btn { background: var(--agi-ext-accent); color: var(--agi-ext-on-accent); border: none; border-radius: var(--corner-control); padding: 6px 14px; font-size: var(--type-caption-size); line-height: var(--type-caption-height); cursor: pointer; align-self: flex-end; transition: background var(--duration-instant); }
     .sp-wf-form-save-btn:hover { background: var(--agi-ext-accent-hover); }
     .sp-wf-form-save-btn:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
     .sp-wf-form-save-btn:disabled { cursor: wait; opacity: 0.6; }
-    .sp-wf-form-cancel-btn { background: none; border: 1px solid var(--agi-ext-border); color: var(--agi-ext-text-muted); border-radius: 5px; padding: 6px 10px; font-size: 12px; cursor: pointer; align-self: flex-end; transition: color 0.12s; }
+    .sp-wf-form-cancel-btn { background: none; border: 1px solid var(--agi-ext-border); color: var(--agi-ext-text-muted); border-radius: var(--corner-control); padding: 6px 10px; font-size: var(--type-caption-size); line-height: var(--type-caption-height); cursor: pointer; align-self: flex-end; transition: color var(--duration-instant); }
     .sp-wf-form-cancel-btn:hover { color: var(--agi-ext-text); }
     .sp-wf-form-actions { display: flex; gap: 6px; justify-content: flex-end; }
-    .sp-wf-form-error { min-height: 15px; color: var(--agi-ext-danger-text); font-size: 11px; line-height: 1.35; }
+    .sp-wf-form-error { min-height: 15px; color: var(--agi-ext-danger-text); font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
     .sp-wf-mutation-status {
       min-height: 18px;
       padding: 0 14px;
       color: var(--agi-ext-text-muted);
-      font-size: 11px;
-      line-height: 1.4;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
     }
     .sp-wf-mutation-status[data-kind="success"] { color: var(--agi-ext-success-text); }
     .sp-wf-mutation-status[data-kind="error"] { color: var(--agi-ext-danger-text); }
-    .sp-wf-create-shortcut-btn { background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent); color: var(--agi-ext-accent-text); font-size: 11px; padding: 4px 10px; border-radius: 5px; cursor: pointer; transition: background 0.12s; }
+    .sp-wf-create-shortcut-btn { background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent); color: var(--agi-ext-accent-text); font-size: var(--type-caption-size); line-height: var(--type-caption-height); padding: 4px 10px; border-radius: var(--corner-control); cursor: pointer; transition: background var(--duration-instant); }
     .sp-wf-create-shortcut-btn:hover { background: color-mix(in srgb, var(--agi-ext-accent) 22%, transparent); }
-    .sp-create-shortcut-overlay { display: none; position: fixed; inset: 0; background: var(--agi-ext-scrim); z-index: 9999; align-items: center; justify-content: center; }
+    .sp-create-shortcut-overlay { display: none; position: fixed; inset: 0; background: var(--agi-ext-scrim); z-index: var(--z-modal); align-items: center; justify-content: center; }
     .sp-create-shortcut-overlay.open { display: flex; }
-    .sp-create-shortcut-modal { background: var(--agi-ext-surface); border: 1px solid var(--agi-ext-border); border-radius: 10px; padding: 18px 18px 14px; width: 290px; max-width: 95vw; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 8px 32px var(--agi-ext-modal-shadow); }
+    .sp-create-shortcut-modal { background: var(--agi-ext-surface); border: 1px solid var(--agi-ext-border); border-radius: var(--corner-menu); padding: 18px 18px 14px; width: 290px; max-width: 95vw; display: flex; flex-direction: column; gap: 12px; box-shadow: var(--agi-ext-elevation-4); }
     .sp-create-shortcut-header { display: flex; align-items: center; justify-content: space-between; }
-    .sp-create-shortcut-title { font-size: 13px; font-weight: 600; color: var(--agi-ext-text); }
-    .sp-create-shortcut-close { background: none; border: none; color: var(--agi-ext-text-muted); font-size: 16px; cursor: pointer; padding: 0 2px; line-height: 1; transition: color 0.12s; }
+    .sp-create-shortcut-title { font-size: var(--type-body-size); line-height: var(--type-body-height); font-weight: 600; color: var(--agi-ext-text); }
+    .sp-create-shortcut-close { background: none; border: none; color: var(--agi-ext-text-muted); font-size: 16px; cursor: pointer; padding: 0 2px; line-height: 1; transition: color var(--duration-instant); }
     .sp-create-shortcut-close:hover { color: var(--agi-ext-text); }
     .sp-create-shortcut-field { display: flex; flex-direction: column; gap: 4px; }
-    .sp-create-shortcut-label { font-size: 10px; font-weight: 600; color: var(--agi-ext-text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
-    .sp-create-shortcut-input { background: var(--agi-ext-bg); border: 1px solid var(--agi-ext-border); border-radius: 5px; color: var(--agi-ext-text); font-size: 12px; padding: 6px 9px; outline: none; font-family: inherit; transition: border-color 0.15s; width: 100%; box-sizing: border-box; }
+    .sp-create-shortcut-label { font-size: var(--type-caption-size); line-height: var(--type-caption-height); font-weight: 600; color: var(--agi-ext-text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+    .sp-create-shortcut-input { background: var(--agi-ext-bg); border: 1px solid var(--agi-ext-border); border-radius: var(--corner-control); color: var(--agi-ext-text); font-size: var(--type-caption-size); line-height: var(--type-caption-height); padding: 6px 9px; outline: none; font-family: inherit; transition: border-color var(--duration-quick); width: 100%; box-sizing: border-box; }
     .sp-create-shortcut-input:focus { border-color: var(--agi-ext-focus); }
     .sp-create-shortcut-input:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
     .sp-create-shortcut-input::placeholder { color: var(--agi-ext-text-placeholder); }
-    .sp-create-shortcut-textarea { background: var(--agi-ext-bg); border: 1px solid var(--agi-ext-border); border-radius: 5px; color: var(--agi-ext-text); font-size: 12px; padding: 6px 9px; outline: none; font-family: inherit; transition: border-color 0.15s; width: 100%; box-sizing: border-box; resize: none; height: 70px; line-height: 1.4; }
+    .sp-create-shortcut-textarea { background: var(--agi-ext-bg); border: 1px solid var(--agi-ext-border); border-radius: var(--corner-control); color: var(--agi-ext-text); font-size: var(--type-caption-size); padding: 6px 9px; outline: none; font-family: inherit; transition: border-color var(--duration-quick); width: 100%; box-sizing: border-box; resize: none; height: 70px; line-height: var(--type-caption-height); }
     .sp-create-shortcut-textarea:focus { border-color: var(--agi-ext-focus); }
     .sp-create-shortcut-textarea:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
     .sp-create-shortcut-textarea::placeholder { color: var(--agi-ext-text-placeholder); }
     .sp-create-shortcut-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 2px; }
-    .sp-create-shortcut-cancel { background: none; border: 1px solid var(--agi-ext-border); color: var(--agi-ext-text-muted); border-radius: 5px; padding: 6px 14px; font-size: 12px; cursor: pointer; transition: color 0.12s; }
+    .sp-create-shortcut-cancel { background: none; border: 1px solid var(--agi-ext-border); color: var(--agi-ext-text-muted); border-radius: var(--corner-control); padding: 6px 14px; font-size: var(--type-caption-size); line-height: var(--type-caption-height); cursor: pointer; transition: color var(--duration-instant); }
     .sp-create-shortcut-cancel:hover { color: var(--agi-ext-text); }
-    .sp-create-shortcut-save { background: var(--agi-ext-accent); color: var(--agi-ext-on-accent); border: none; border-radius: 5px; padding: 6px 14px; font-size: 12px; cursor: pointer; transition: background 0.12s; }
+    .sp-create-shortcut-save { background: var(--agi-ext-accent); color: var(--agi-ext-on-accent); border: none; border-radius: var(--corner-control); padding: 6px 14px; font-size: var(--type-caption-size); line-height: var(--type-caption-height); cursor: pointer; transition: background var(--duration-instant); }
     .sp-create-shortcut-save:hover { background: var(--agi-ext-accent-hover); }
     .sp-create-shortcut-save:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
-    .sp-wf-group-desc { font-size: 11px; color: var(--agi-ext-text-muted); line-height: 1.55; }
+    .sp-wf-group-desc { font-size: var(--type-caption-size); color: var(--agi-ext-text-muted); line-height: var(--type-caption-height); }
     .sp-wf-group-btns { display: flex; gap: 8px; flex-wrap: wrap; }
-    .sp-wf-group-action-btn { display: flex; align-items: center; gap: 5px; background: var(--agi-ext-surface); border: 1px solid var(--agi-ext-border); border-radius: 6px; color: var(--agi-ext-text-muted); font-size: 11px; padding: 5px 11px; cursor: pointer; transition: color 0.15s, border-color 0.15s, background 0.15s; }
+    .sp-wf-group-action-btn { display: flex; align-items: center; gap: 5px; background: var(--agi-ext-surface); border: 1px solid var(--agi-ext-border); border-radius: var(--corner-control); color: var(--agi-ext-text-muted); font-size: var(--type-caption-size); line-height: var(--type-caption-height); padding: 5px 11px; cursor: pointer; transition: color var(--duration-quick), border-color var(--duration-quick), background var(--duration-quick); }
     .sp-wf-group-action-btn:hover { color: var(--agi-ext-accent-text); border-color: var(--agi-ext-accent); background: color-mix(in srgb, var(--agi-ext-accent) 8%, transparent); }
     .sp-wf-group-action-btn.active { color: var(--agi-ext-success-text); border-color: var(--agi-ext-success-border); background: var(--agi-ext-success-bg); }
     .sp-wf-group-action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
     .sp-wf-record-bar { display: flex; align-items: center; gap: 8px; }
-    .sp-wf-record-btn { display: flex; align-items: center; gap: 6px; background: var(--agi-ext-danger); border: none; color: var(--agi-ext-on-danger); font-size: 12px; font-weight: 600; padding: 8px 16px; border-radius: 8px; cursor: pointer; transition: background 0.15s, transform 0.1s; flex-shrink: 0; }
+    .sp-wf-record-btn { display: flex; align-items: center; gap: 6px; background: var(--agi-ext-danger); border: none; color: var(--agi-ext-on-danger); font-size: var(--type-caption-size); line-height: var(--type-caption-height); font-weight: 600; padding: 8px 16px; border-radius: var(--corner-field); cursor: pointer; transition: background var(--duration-quick), transform var(--duration-instant); flex-shrink: 0; }
     .sp-wf-record-btn:hover { background: var(--agi-ext-danger-hover); transform: scale(1.02); }
-    .sp-wf-record-btn.recording { background: var(--agi-ext-danger-bg); border: 1px solid var(--agi-ext-danger); color: var(--agi-ext-danger-text); animation: sp-record-pulse 1.5s infinite; }
+    .sp-wf-record-btn.recording { background: var(--agi-ext-danger-bg); border: 1px solid var(--agi-ext-danger); color: var(--agi-ext-danger-text); animation: sp-record-pulse calc(var(--duration-pulse) * 1.5) infinite; }
     .sp-wf-record-btn.recording:hover { background: var(--agi-ext-danger-bg); }
     @keyframes sp-record-pulse { 0%, 100% { box-shadow: 0 0 0 0 var(--agi-ext-transparent-shadow); }
-    50% { box-shadow: 0 0 0 6px var(--agi-ext-transparent-shadow); }
+    50% { box-shadow: 0 0 0 6px var(--agi-ext-danger-shadow); }
     }
-    .sp-wf-record-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--agi-ext-on-danger); flex-shrink: 0; }
-    .sp-wf-record-btn.recording .sp-wf-record-dot { background: var(--agi-ext-danger); animation: sp-pulse 1s infinite; }
-    .sp-wf-action-counter { font-size: 11px; color: var(--agi-ext-text-muted); flex: 1; }
+    .sp-wf-record-dot { width: 8px; height: 8px; border-radius: var(--corner-pill); background: var(--agi-ext-on-danger); flex-shrink: 0; }
+    .sp-wf-record-btn.recording .sp-wf-record-dot { background: var(--agi-ext-danger); animation: sp-pulse var(--duration-pulse) infinite; }
+    .sp-wf-action-counter { font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--agi-ext-text-muted); flex: 1; }
     .sp-wf-action-counter strong { color: var(--agi-ext-text); }
-    .sp-wf-record-status { min-height: 18px; margin-top: 7px; color: var(--agi-ext-text-muted); font-size: 11px; line-height: 1.4; }
+    .sp-wf-record-status { min-height: 18px; margin-top: 7px; color: var(--agi-ext-text-muted); font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
     .sp-wf-record-status[data-kind="error"] { color: var(--agi-ext-danger-text); }
-    .sp-wf-capture-values { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 11px; color: var(--agi-ext-text-muted); cursor: pointer; }
+    .sp-wf-capture-values { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--agi-ext-text-muted); cursor: pointer; }
     .sp-wf-capture-values input { cursor: pointer; }
-    .sp-wf-save-dialog { display: none; flex-direction: column; gap: 6px; padding: 10px; background: var(--agi-ext-bg); border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent); border-radius: 8px; }
+    .sp-wf-save-dialog { display: none; flex-direction: column; gap: 6px; padding: 10px; background: var(--agi-ext-bg); border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent); border-radius: var(--corner-field); }
     .sp-wf-save-dialog.open { display: flex; }
-    .sp-wf-save-dialog-title { font-size: 12px; font-weight: 600; color: var(--agi-ext-accent-text); }
-    .sp-wf-count-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; font-size: 10px; font-weight: 600; background: color-mix(in srgb, var(--agi-ext-accent) 20%, transparent); color: var(--agi-ext-accent-text); border-radius: 9px; padding: 0 5px; }
+    .sp-wf-save-dialog-title { font-size: var(--type-caption-size); line-height: var(--type-caption-height); font-weight: 600; color: var(--agi-ext-accent-text); }
+    .sp-wf-count-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; font-size: var(--type-caption-size); line-height: var(--type-caption-height); font-weight: 600; background: color-mix(in srgb, var(--agi-ext-accent) 20%, transparent); color: var(--agi-ext-accent-text); border-radius: var(--corner-field); padding: 0 5px; }
     .sp-model-selector-wrap { position: relative; min-width: 0; }
-    #sp-model-selector-btn { display: flex; align-items: center; gap: 4px; background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent); border-radius: 5px; padding: 3px 8px; color: var(--agi-ext-accent-text); font-size: 10px; font-weight: 500; cursor: pointer; transition: background 0.12s, border-color 0.12s; white-space: nowrap; min-width: 0; max-width: 100%; overflow: hidden; }
+    #sp-model-selector-btn { display: flex; align-items: center; gap: 4px; background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent); border-radius: var(--corner-control); padding: 3px 8px; color: var(--agi-ext-accent-text); font-size: var(--type-caption-size); line-height: var(--type-caption-height); font-weight: 500; cursor: pointer; transition: background var(--duration-instant), border-color var(--duration-instant); white-space: nowrap; min-width: 0; max-width: 100%; overflow: hidden; }
     #sp-model-selector-btn:hover { background: color-mix(in srgb, var(--agi-ext-accent) 22%, transparent); border-color: var(--agi-ext-accent); }
     #sp-model-selector-btn:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
-    #sp-model-dropdown { display: none; position: absolute; top: 100%; left: 0; right: auto; margin-top: 4px; min-width: 200px; max-width: calc(100vw - 24px); max-height: 280px; overflow-y: auto; background: var(--agi-ext-surface); border: 1px solid var(--agi-ext-border); border-radius: 8px; padding: 4px; z-index: 200; box-shadow: 0 4px 16px var(--agi-ext-modal-shadow); }
+    #sp-model-dropdown { display: none; position: absolute; top: 100%; left: 0; right: auto; margin-top: 4px; min-width: 200px; max-width: calc(100vw - 24px); max-height: 280px; overflow-y: auto; background: var(--agi-ext-surface); border: 1px solid var(--agi-ext-border); border-radius: var(--corner-field); padding: 4px; z-index: var(--z-popover); box-shadow: var(--agi-ext-elevation-3); }
     #sp-model-dropdown.open { display: block; }
-    .sp-model-option { display: flex; align-items: center; gap: 8px; width: 100%; padding: 7px 9px; border: 0; border-radius: 5px; cursor: pointer; background: transparent; transition: background 0.12s; font: inherit; font-size: 11px; color: var(--agi-ext-text-muted); text-align: left; }
+    .sp-model-option { display: flex; align-items: center; gap: 8px; width: 100%; padding: 7px 9px; border: 0; border-radius: var(--corner-control); cursor: pointer; background: transparent; transition: background var(--duration-instant); font: inherit; font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--agi-ext-text-muted); text-align: left; }
     .sp-model-option:hover { background: var(--agi-ext-hover); color: var(--agi-ext-text); }
     .sp-model-option.selected { color: var(--agi-ext-accent-text); background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent); }
-    .sp-model-option-check { width: 14px; text-align: center; font-size: 10px; flex-shrink: 0; }
+    .sp-model-option-check { width: 14px; text-align: center; font-size: var(--type-caption-size); flex-shrink: 0; }
     .sp-model-option-label { flex: 1; }
 
     /* ── Enhanced model picker ── */
     .sp-model-option-logo {
       width: 16px;
       height: 16px;
-      border-radius: 3px;
+      border-radius: var(--corner-compact);
       flex-shrink: 0;
       object-fit: contain;
       display: block;
@@ -2797,7 +3319,7 @@ function injectStyles(): void {
     .sp-model-option-logo-placeholder {
       width: 16px;
       height: 16px;
-      border-radius: 3px;
+      border-radius: var(--corner-compact);
       background: var(--agi-ext-hover);
       flex-shrink: 0;
     }
@@ -2809,14 +3331,16 @@ function injectStyles(): void {
       min-width: 0;
     }
     .sp-model-option-name {
-      font-size: 11px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       color: inherit;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
     .sp-model-option-sublabel {
-      font-size: 9px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       color: var(--agi-ext-text-muted);
       white-space: nowrap;
     }
@@ -2827,13 +3351,14 @@ function injectStyles(): void {
     .sp-model-option.premium-gated { opacity: 0.75; }
     .sp-model-option.premium-gated:hover { background: var(--agi-ext-hover); color: var(--agi-ext-text); opacity: 1; cursor: pointer; }
     .sp-model-upgrade-tag {
-      font-size: 8px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       font-weight: 700;
       letter-spacing: 0.06em;
       text-transform: uppercase;
       color: var(--agi-ext-on-accent);
       background: var(--agi-ext-accent);
-      border-radius: 3px;
+      border-radius: var(--corner-compact);
       padding: 1px 5px;
       flex-shrink: 0;
       white-space: nowrap;
@@ -2852,13 +3377,14 @@ function injectStyles(): void {
     .sp-model-auto-dot {
       width: 16px;
       height: 16px;
-      border-radius: 50%;
+      border-radius: var(--corner-pill);
       background: linear-gradient(135deg, var(--agi-ext-accent), var(--agi-ext-accent-secondary));
       flex-shrink: 0;
     }
 
     .sp-model-group-header {
-      font-size: 9px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       font-weight: 600;
       color: var(--agi-ext-text-muted);
       text-transform: uppercase;
@@ -2887,7 +3413,7 @@ function injectStyles(): void {
       position: fixed;
       inset: 0;
       background: var(--agi-ext-scrim);
-      z-index: 1000;
+      z-index: var(--z-drawer-backdrop);
     }
     #sp-drawer-overlay.open { display: block; }
     #sp-drawer {
@@ -2903,8 +3429,8 @@ function injectStyles(): void {
       flex-direction: column;
       overflow: hidden;
       transform: translateX(100%);
-      transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
-      z-index: 1001;
+      transition: transform var(--duration-quick) var(--curve-standard);
+      z-index: var(--z-drawer);
     }
     #sp-drawer.open { transform: translateX(0); }
     #sp-drawer-header {
@@ -2916,7 +3442,8 @@ function injectStyles(): void {
       flex-shrink: 0;
     }
     #sp-drawer-title {
-      font-size: 13px;
+      font-size: var(--type-body-size);
+      line-height: var(--type-body-height);
       font-weight: 600;
       color: var(--agi-ext-text);
     }
@@ -2928,8 +3455,8 @@ function injectStyles(): void {
       line-height: 1;
       cursor: pointer;
       padding: 2px 6px;
-      border-radius: 4px;
-      transition: color 0.12s, background 0.12s;
+      border-radius: var(--corner-compact);
+      transition: color var(--duration-instant), background var(--duration-instant);
     }
     #sp-drawer-close:hover { color: var(--agi-ext-text); background: var(--agi-ext-hover); }
     #sp-drawer-body {
@@ -2939,14 +3466,15 @@ function injectStyles(): void {
     }
     #sp-drawer-body::-webkit-scrollbar { width: 4px; }
     #sp-drawer-body::-webkit-scrollbar-track { background: transparent; }
-    #sp-drawer-body::-webkit-scrollbar-thumb { background: var(--agi-ext-border); border-radius: 4px; }
+    #sp-drawer-body::-webkit-scrollbar-thumb { background: var(--agi-ext-border); border-radius: var(--corner-compact); }
     /* Drawer sections */
     .sp-drawer-section {
       padding: 12px 14px;
       border-bottom: 1px solid var(--agi-ext-border);
     }
     .sp-drawer-section-title {
-      font-size: 9px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       font-weight: 700;
       color: var(--agi-ext-text-muted);
       text-transform: uppercase;
@@ -2961,22 +3489,23 @@ function injectStyles(): void {
       width: 100%;
       background: var(--agi-ext-surface);
       border: 1px solid var(--agi-ext-border);
-      border-radius: 8px;
+      border-radius: var(--corner-field);
       padding: 10px 12px;
       color: var(--agi-ext-text-muted);
-      font-size: 12px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       font-weight: 500;
       cursor: pointer;
-      transition: color 0.15s, border-color 0.15s, background 0.15s;
+      transition: color var(--duration-quick), border-color var(--duration-quick), background var(--duration-quick);
       text-align: left;
       margin-bottom: 6px;
     }
     .sp-drawer-launcher-btn:last-child { margin-bottom: 0; }
     .sp-drawer-launcher-btn:hover { color: var(--agi-ext-accent-text); border-color: var(--agi-ext-accent); background: color-mix(in srgb, var(--agi-ext-accent) 8%, transparent); }
-    .sp-drawer-launcher-icon { flex-shrink: 0; display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 6px; background: var(--agi-ext-hover); }
+    .sp-drawer-launcher-icon { flex-shrink: 0; display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: var(--corner-control); background: var(--agi-ext-hover); }
     .sp-drawer-launcher-label { flex: 1; }
-    .sp-drawer-launcher-desc { font-size: 10px; color: var(--agi-ext-text-muted); margin-top: 1px; font-weight: 400; }
-    .sp-drawer-launcher-chevron { font-size: 10px; color: var(--agi-ext-text-muted); flex-shrink: 0; }
+    .sp-drawer-launcher-desc { font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--agi-ext-text-muted); margin-top: 1px; font-weight: 400; }
+    .sp-drawer-launcher-chevron { font-size: var(--type-caption-size); color: var(--agi-ext-text-muted); flex-shrink: 0; }
     /* Tools row */
     .sp-drawer-tools-row {
       display: flex;
@@ -2989,12 +3518,13 @@ function injectStyles(): void {
       gap: 6px;
       background: var(--agi-ext-surface);
       border: 1px solid var(--agi-ext-border);
-      border-radius: 7px;
+      border-radius: var(--corner-control);
       color: var(--agi-ext-text-muted);
-      font-size: 11px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       padding: 6px 11px;
       cursor: pointer;
-      transition: color 0.15s, border-color 0.15s, background 0.15s;
+      transition: color var(--duration-quick), border-color var(--duration-quick), background var(--duration-quick);
       flex-shrink: 0;
     }
     .sp-drawer-tool-btn:hover { color: var(--agi-ext-accent-text); border-color: var(--agi-ext-accent); background: color-mix(in srgb, var(--agi-ext-accent) 8%, transparent); }
@@ -3016,11 +3546,12 @@ function injectStyles(): void {
       margin-top: 7px;
       padding: 7px 9px;
       border: 1px solid var(--agi-ext-border);
-      border-radius: 7px;
+      border-radius: var(--corner-control);
       background: var(--agi-ext-surface);
       color: var(--agi-ext-text);
       font: inherit;
-      font-size: 11px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
     }
     #sp-drawer-history-search::placeholder { color: var(--agi-ext-text-placeholder); }
     #sp-drawer-history-search:focus {
@@ -3032,15 +3563,15 @@ function injectStyles(): void {
     .sp-drawer-history-error {
       margin-top: 6px;
       color: var(--agi-ext-danger-text);
-      font-size: 10px;
-      line-height: 1.35;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
     }
-    .sp-drawer-history-empty { font-size: 11px; color: var(--agi-ext-text-muted); padding: 4px 2px; }
+    .sp-drawer-history-empty { font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--agi-ext-text-muted); padding: 4px 2px; }
     .sp-drawer-history-item {
       display: flex;
       align-items: center;
       gap: 2px;
-      border-radius: 5px;
+      border-radius: var(--corner-control);
       background: var(--agi-ext-surface);
       border: 1px solid var(--agi-ext-border);
     }
@@ -3051,7 +3582,7 @@ function injectStyles(): void {
       min-width: 0;
       padding: 6px 8px;
       border: none;
-      border-radius: 4px;
+      border-radius: var(--corner-compact);
       background: transparent;
       cursor: pointer;
       width: 100%;
@@ -3067,25 +3598,27 @@ function injectStyles(): void {
     .sp-drawer-history-open:disabled:hover { background: transparent; }
     .sp-drawer-history-text { flex: 1; min-width: 0; }
     .sp-drawer-history-title {
-      font-size: 11px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       color: var(--agi-ext-text);
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
-    .sp-drawer-history-date { font-size: 9px; color: var(--agi-ext-text-muted); margin-top: 1px; }
+    .sp-drawer-history-date { font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--agi-ext-text-muted); margin-top: 1px; }
     .sp-drawer-history-delete {
       background: none;
       border: none;
-      color: var(--agi-ext-text-muted);
-      font-size: 12px;
+      color: var(--agi-ext-danger-text);
+      font-size: var(--type-caption-size);
       cursor: pointer;
       padding: 2px 4px;
       margin-right: 4px;
-      border-radius: 3px;
+      border-radius: var(--corner-compact);
       line-height: 1;
       flex-shrink: 0;
     }
+    .sp-drawer-history-delete:hover { background: var(--agi-ext-danger-bg); }
     /* Connection / pairing */
     .sp-drawer-pairing-row {
       display: flex;
@@ -3093,18 +3626,18 @@ function injectStyles(): void {
       justify-content: space-between;
       margin-bottom: 6px;
     }
-    .sp-drawer-pairing-label { font-size: 12px; color: var(--agi-ext-text-muted); }
+    .sp-drawer-pairing-label { font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--agi-ext-text-muted); }
     .sp-drawer-pairing-fingerprint {
-      font-size: 10px;
-      font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+      font-size: var(--type-code-size);
+      font-family: var(--type-code-family);
       color: var(--agi-ext-success-text);
       background: var(--agi-ext-success-bg);
       border: 1px solid var(--agi-ext-success-border);
-      border-radius: 4px;
+      border-radius: var(--corner-compact);
       padding: 1px 6px;
     }
     .sp-drawer-pairing-error {
-      font-size: 11px;
+      font-size: var(--type-caption-size); line-height: var(--type-caption-height);
       color: var(--agi-ext-danger-text);
       min-height: 16px;
       margin-bottom: 6px;
@@ -3116,14 +3649,15 @@ function injectStyles(): void {
       margin-bottom: 8px;
     }
     .sp-drawer-pairing-code-row[hidden] { display: none; }
-    .sp-drawer-pairing-hint { font-size: 11px; color: var(--agi-ext-text-muted); }
+    .sp-drawer-pairing-hint { font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--agi-ext-text-muted); }
     .sp-drawer-pairing-code-input {
-      font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
-      font-size: 15px;
+      font-family: var(--type-code-family);
+      font-size: var(--type-title-size);
+      line-height: var(--type-title-height);
       letter-spacing: 0.18em;
       text-transform: uppercase;
       padding: 6px 8px;
-      border-radius: 6px;
+      border-radius: var(--corner-control);
       border: 1px solid var(--agi-ext-border);
       background: var(--agi-ext-surface);
       color: var(--agi-ext-text);
@@ -3132,12 +3666,13 @@ function injectStyles(): void {
     .sp-drawer-btn {
       background: var(--agi-ext-surface);
       border: 1px solid var(--agi-ext-border);
-      border-radius: 6px;
+      border-radius: var(--corner-control);
       color: var(--agi-ext-text-muted);
-      font-size: 11px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       padding: 5px 12px;
       cursor: pointer;
-      transition: color 0.15s, border-color 0.15s, background 0.15s;
+      transition: color var(--duration-quick), border-color var(--duration-quick), background var(--duration-quick);
     }
     .sp-drawer-btn:hover { color: var(--agi-ext-accent-text); border-color: var(--agi-ext-accent); }
     .sp-drawer-btn:disabled { opacity: 0.45; cursor: not-allowed; }
@@ -3146,7 +3681,7 @@ function injectStyles(): void {
     .sp-drawer-btn-danger { color: var(--agi-ext-danger-text); border-color: var(--agi-ext-danger-border); }
     .sp-drawer-btn-danger:hover { background: var(--agi-ext-danger-bg); color: var(--agi-ext-danger-text); border-color: var(--agi-ext-danger-border); }
     /* Allowlist */
-    .sp-drawer-allowlist-help { font-size: 11px; color: var(--agi-ext-text-muted); line-height: 1.5; margin-bottom: 8px; }
+    .sp-drawer-allowlist-help { font-size: var(--type-caption-size); color: var(--agi-ext-text-muted); line-height: var(--type-caption-height); margin-bottom: 8px; }
     .sp-drawer-allowlist-current-row {
       display: flex;
       align-items: center;
@@ -3155,8 +3690,9 @@ function injectStyles(): void {
     }
     .sp-drawer-allowlist-origin {
       flex: 1;
-      font-size: 11px;
-      font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+      font-size: var(--type-code-size);
+      line-height: var(--type-code-height);
+      font-family: var(--type-code-family);
       color: var(--agi-ext-text);
       overflow: hidden;
       text-overflow: ellipsis;
@@ -3165,13 +3701,14 @@ function injectStyles(): void {
     .sp-drawer-allowlist-toggle-btn {
       background: var(--agi-ext-surface);
       border: 1px solid var(--agi-ext-border);
-      border-radius: 5px;
+      border-radius: var(--corner-control);
       color: var(--agi-ext-text-muted);
-      font-size: 11px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       padding: 3px 10px;
       cursor: pointer;
       flex-shrink: 0;
-      transition: color 0.12s, border-color 0.12s, background 0.12s;
+      transition: color var(--duration-instant), border-color var(--duration-instant), background var(--duration-instant);
     }
     .sp-drawer-allowlist-toggle-btn:hover { color: var(--agi-ext-accent-text); border-color: var(--agi-ext-accent); }
     .sp-drawer-allowlist-toggle-btn.is-remove { color: var(--agi-ext-danger-text); border-color: var(--agi-ext-danger-border); }
@@ -3185,13 +3722,14 @@ function injectStyles(): void {
       padding: 5px 8px;
       background: var(--agi-ext-surface);
       border: 1px solid var(--agi-ext-border);
-      border-radius: 5px;
-      font-size: 11px;
+      border-radius: var(--corner-control);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
     }
     .sp-drawer-allowlist-item.is-current { border-color: var(--agi-ext-accent); }
     .sp-drawer-allowlist-item-origin {
       flex: 1;
-      font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+      font-family: var(--type-code-family);
       color: var(--agi-ext-text);
       overflow: hidden;
       text-overflow: ellipsis;
@@ -3200,29 +3738,30 @@ function injectStyles(): void {
     .sp-drawer-allowlist-item-remove {
       background: none;
       border: none;
-      color: var(--agi-ext-text-muted);
-      font-size: 10px;
+      color: var(--agi-ext-danger-text);
+      font-size: var(--type-caption-size);
       cursor: pointer;
       padding: 1px 5px;
-      border-radius: 3px;
-      transition: color 0.12s, background 0.12s;
+      border-radius: var(--corner-compact);
+      transition: color var(--duration-instant), background var(--duration-instant);
       flex-shrink: 0;
     }
     .sp-drawer-allowlist-item-remove:hover { color: var(--agi-ext-danger-text); background: var(--agi-ext-danger-bg); }
-    .sp-drawer-allowlist-empty { font-size: 11px; color: var(--agi-ext-text-muted); padding: 4px 0; }
-    .sp-drawer-allowlist-status { font-size: 11px; color: var(--agi-ext-danger-text); line-height: 1.5; padding: 4px 0; }
+    .sp-drawer-allowlist-empty { font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--agi-ext-text-muted); padding: 4px 0; }
+    .sp-drawer-allowlist-status { font-size: var(--type-caption-size); color: var(--agi-ext-danger-text); line-height: var(--type-caption-height); padding: 4px 0; }
     .sp-drawer-allowlist-status[hidden] { display: none; }
     /* Memory */
-    .sp-drawer-memory-help { font-size: 11px; color: var(--agi-ext-text-muted); line-height: 1.5; margin-bottom: 8px; }
+    .sp-drawer-memory-help { font-size: var(--type-caption-size); color: var(--agi-ext-text-muted); line-height: var(--type-caption-height); margin-bottom: 8px; }
     .sp-drawer-memory-add-btn {
       background: var(--agi-ext-surface);
       border: 1px solid var(--agi-ext-border);
-      border-radius: 6px;
+      border-radius: var(--corner-control);
       color: var(--agi-ext-text-muted);
-      font-size: 11px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       padding: 5px 12px;
       cursor: pointer;
-      transition: color 0.12s, border-color 0.12s;
+      transition: color var(--duration-instant), border-color var(--duration-instant);
       margin-bottom: 8px;
     }
     .sp-drawer-memory-add-btn:hover { color: var(--agi-ext-accent-text); border-color: var(--agi-ext-accent); }
@@ -3231,15 +3770,15 @@ function injectStyles(): void {
     .sp-drawer-memory-textarea {
       background: var(--agi-ext-surface);
       border: 1px solid var(--agi-ext-border);
-      border-radius: 6px;
+      border-radius: var(--corner-control);
       color: var(--agi-ext-text);
-      font-size: 12px;
+      font-size: var(--type-caption-size);
       padding: 6px 9px;
       outline: none;
       font-family: inherit;
       resize: none;
       height: 64px;
-      line-height: 1.4;
+      line-height: var(--type-caption-height);
       width: 100%;
       box-sizing: border-box;
     }
@@ -3250,56 +3789,57 @@ function injectStyles(): void {
     .sp-drawer-memory-item {
       background: var(--agi-ext-surface);
       border: 1px solid var(--agi-ext-border);
-      border-radius: 6px;
+      border-radius: var(--corner-control);
       padding: 7px 10px;
       display: flex;
       flex-direction: column;
       gap: 3px;
     }
-    .sp-drawer-memory-item-content { font-size: 11px; color: var(--agi-ext-text); line-height: 1.4; }
-    .sp-drawer-memory-item-meta { font-size: 9px; color: var(--agi-ext-text-muted); }
+    .sp-drawer-memory-item-content { font-size: var(--type-caption-size); color: var(--agi-ext-text); line-height: var(--type-caption-height); }
+    .sp-drawer-memory-item-meta { font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--agi-ext-text-muted); }
     .sp-drawer-memory-item-row { display: flex; gap: 5px; margin-top: 2px; }
     .sp-drawer-memory-item-edit-btn {
-      background: none; border: 1px solid var(--agi-ext-border); border-radius: 4px;
-      color: var(--agi-ext-text-muted); font-size: 10px; padding: 2px 6px; cursor: pointer;
-      transition: color 0.12s, border-color 0.12s;
+      background: none; border: 1px solid var(--agi-ext-border); border-radius: var(--corner-compact);
+      color: var(--agi-ext-text-muted); font-size: var(--type-caption-size); line-height: var(--type-caption-height); padding: 2px 6px; cursor: pointer;
+      transition: color var(--duration-instant), border-color var(--duration-instant);
     }
     .sp-drawer-memory-item-edit-btn:hover { color: var(--agi-ext-accent-text); border-color: var(--agi-ext-accent); }
     .sp-drawer-memory-item-delete-btn {
-      background: none; border: 1px solid var(--agi-ext-border); border-radius: 4px;
-      color: var(--agi-ext-text-muted); font-size: 10px; padding: 2px 6px; cursor: pointer;
-      transition: color 0.12s, border-color 0.12s, background 0.12s;
+      background: none; border: 1px solid var(--agi-ext-danger-border); border-radius: var(--corner-compact);
+      color: var(--agi-ext-danger-text); font-size: var(--type-caption-size); line-height: var(--type-caption-height); padding: 2px 6px; cursor: pointer;
+      transition: color var(--duration-instant), border-color var(--duration-instant), background var(--duration-instant);
     }
-    .sp-drawer-memory-item-delete-btn:hover { color: var(--agi-ext-danger-text); border-color: var(--agi-ext-danger-border); }
+    .sp-drawer-memory-item-delete-btn:hover { color: var(--agi-ext-danger-text); border-color: var(--agi-ext-danger-border); background: var(--agi-ext-danger-bg); }
     .sp-drawer-memory-item-delete-btn.is-confirm { color: var(--agi-ext-on-danger); background: var(--agi-ext-danger); border-color: var(--agi-ext-danger); }
     .sp-drawer-history-delete.is-confirm { color: var(--agi-ext-danger-text); border-color: var(--agi-ext-danger); background: color-mix(in srgb, var(--agi-ext-danger) 12%, transparent); }
     .sp-drawer-memory-item-textarea {
       background: var(--agi-ext-bg);
       border: 1px solid var(--agi-ext-border);
-      border-radius: 5px;
+      border-radius: var(--corner-control);
       color: var(--agi-ext-text);
-      font-size: 11px;
+      font-size: var(--type-caption-size);
       padding: 5px 7px;
       outline: none;
       font-family: inherit;
       resize: none;
       height: 52px;
-      line-height: 1.4;
+      line-height: var(--type-caption-height);
       width: 100%;
       box-sizing: border-box;
     }
     .sp-drawer-memory-item-textarea:focus { border-color: var(--agi-ext-focus); }
-    .sp-drawer-memory-empty { font-size: 11px; color: var(--agi-ext-text-muted); padding: 4px 0; }
-    .sp-drawer-memory-status { font-size: 11px; color: var(--agi-ext-text-muted); line-height: 1.5; padding: 4px 0; }
+    .sp-drawer-memory-empty { font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--agi-ext-text-muted); padding: 4px 0; }
+    .sp-drawer-memory-status { font-size: var(--type-caption-size); color: var(--agi-ext-text-muted); line-height: var(--type-caption-height); padding: 4px 0; }
     .sp-drawer-memory-retry-btn {
       align-self: flex-start;
       margin-top: 4px;
       padding: 4px 8px;
-      font-size: 11px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       color: var(--agi-ext-text);
       background: transparent;
       border: 1px solid var(--agi-ext-border);
-      border-radius: 6px;
+      border-radius: var(--corner-control);
       cursor: pointer;
     }
     .sp-drawer-memory-retry-btn:hover { color: var(--agi-ext-accent-text); border-color: var(--agi-ext-accent); }
@@ -3322,16 +3862,16 @@ function injectStyles(): void {
       align-items: center;
       justify-content: space-between;
     }
-    .sp-drawer-toggle-label { font-size: 12px; color: var(--agi-ext-text-muted); }
+    .sp-drawer-toggle-label { font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--agi-ext-text-muted); }
     .sp-drawer-toggle-switch {
       appearance: none;
-      width: 34px;
+      width: var(--control-lg);
       height: 18px;
-      border-radius: 9px;
+      border-radius: var(--corner-field);
       background: var(--agi-ext-hover);
       position: relative;
       cursor: pointer;
-      transition: background 0.2s;
+      transition: background var(--duration-quick);
       flex-shrink: 0;
       border: none;
       outline: none;
@@ -3343,7 +3883,7 @@ function injectStyles(): void {
       position: absolute;
       width: 13px;
       height: 13px;
-      border-radius: 50%;
+      border-radius: var(--corner-pill);
       background: var(--agi-ext-toggle-knob);
       /* Definition ring. The OFF track is --agi-ext-hover, which is #f0f0f0 in
          the light theme, a plain white knob on it was ~1.05:1 and the OFF
@@ -3352,15 +3892,15 @@ function injectStyles(): void {
       box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.28), 0 1px 2px rgba(0, 0, 0, 0.28);
       top: 2.5px;
       left: 2.5px;
-      transition: transform 0.2s;
+      transition: transform var(--duration-quick);
     }
     .sp-drawer-toggle-switch:checked::after { transform: translateX(16px); }
     .sp-drawer-toggle-status {
       min-height: 15px;
       margin-top: 5px;
       color: var(--agi-ext-text-muted);
-      font-size: 10px;
-      line-height: 1.4;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
     }
     .sp-drawer-toggle-status[data-kind="error"] { color: var(--agi-ext-danger-text); }
     /* Bridge URL inside drawer */
@@ -3369,18 +3909,19 @@ function injectStyles(): void {
       flex: 1;
       background: var(--agi-ext-surface);
       border: 1px solid var(--agi-ext-border);
-      border-radius: 6px;
+      border-radius: var(--corner-control);
       color: var(--agi-ext-text);
-      font-size: 11px;
+      font-size: var(--type-code-size);
+      line-height: var(--type-code-height);
       padding: 5px 8px;
       outline: none;
-      font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
-      transition: border-color 0.15s;
+      font-family: var(--type-code-family);
+      transition: border-color var(--duration-quick);
       min-width: 0;
     }
     .sp-drawer-bridge-input:focus { border-color: var(--agi-ext-focus); }
     .sp-drawer-bridge-input::placeholder { color: var(--agi-ext-text-placeholder); }
-    .sp-drawer-bridge-error { font-size: 10px; color: var(--agi-ext-danger-text); padding: 2px 0; margin-top: 2px; }
+    .sp-drawer-bridge-error { font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--agi-ext-danger-text); padding: 2px 0; margin-top: 2px; }
     /* Cloud unlock */
     .sp-drawer-cloud-btn {
       display: flex;
@@ -3390,13 +3931,14 @@ function injectStyles(): void {
       width: 100%;
       background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent);
       border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent);
-      border-radius: 7px;
+      border-radius: var(--corner-control);
       color: var(--agi-ext-accent-text);
-      font-size: 12px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       font-weight: 500;
       padding: 8px 14px;
       cursor: pointer;
-      transition: background 0.15s, border-color 0.15s;
+      transition: background var(--duration-quick), border-color var(--duration-quick);
     }
     .sp-drawer-cloud-btn:hover { background: color-mix(in srgb, var(--agi-ext-accent) 20%, transparent); border-color: var(--agi-ext-accent); }
 
@@ -3414,13 +3956,14 @@ function injectStyles(): void {
     .sp-cloud-avatar {
       width: 24px;
       height: 24px;
-      border-radius: 50%;
+      border-radius: var(--corner-pill);
       background: color-mix(in srgb, var(--agi-ext-accent) 20%, transparent);
       border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 35%, transparent);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 11px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       font-weight: 700;
       color: var(--agi-ext-accent-text);
       flex-shrink: 0;
@@ -3430,7 +3973,8 @@ function injectStyles(): void {
       min-width: 0;
     }
     .sp-cloud-user-label {
-      font-size: 11px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       font-weight: 600;
       color: var(--agi-ext-text);
       white-space: nowrap;
@@ -3438,24 +3982,27 @@ function injectStyles(): void {
       text-overflow: ellipsis;
     }
     .sp-cloud-user-tier {
-      font-size: 10px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       color: var(--agi-ext-text-muted);
     }
     .sp-cloud-signout-btn {
       background: transparent;
       border: 1px solid var(--agi-ext-border-strong);
-      border-radius: 5px;
+      border-radius: var(--corner-control);
       color: var(--agi-ext-text-muted);
-      font-size: 10px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       padding: 3px 7px;
       cursor: pointer;
       flex-shrink: 0;
-      transition: color 0.15s, border-color 0.15s;
+      transition: color var(--duration-quick), border-color var(--duration-quick);
     }
     .sp-cloud-signout-btn:hover { color: var(--agi-ext-danger-text); border-color: var(--agi-ext-danger); }
     .sp-cloud-signout-status {
       width: 100%;
-      font-size: 10px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       color: var(--agi-ext-danger-text);
     }
     .sp-cloud-signout-status:empty { display: none; }
@@ -3470,24 +4017,24 @@ function injectStyles(): void {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      font-size: 10px;
+      font-size: var(--type-caption-size); line-height: var(--type-caption-height);
       color: var(--agi-ext-text-muted);
     }
     .sp-quota-bar-model {
-      font-size: 9px;
+      font-size: var(--type-caption-size); line-height: var(--type-caption-height);
       color: var(--agi-ext-text-muted);
     }
     .sp-quota-bar-bg {
       height: 4px;
-      border-radius: 2px;
+      border-radius: var(--corner-detail);
       background: var(--agi-ext-border);
       overflow: hidden;
     }
     .sp-quota-bar-fill {
       height: 100%;
-      border-radius: 2px;
+      border-radius: var(--corner-detail);
       background: var(--agi-ext-accent);
-      transition: width 0.3s ease;
+      transition: width var(--duration-moved) var(--curve-standard);
     }
     .sp-quota-bar-fill.exhausted {
       background: var(--agi-ext-danger);
@@ -3498,17 +4045,18 @@ function injectStyles(): void {
       justify-content: space-between;
       gap: 8px;
     }
+    .sp-quota-exhausted-label { color: var(--agi-ext-danger-text); font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
     .sp-quota-upgrade-btn {
-      font-size: 10px;
+      font-size: var(--type-label-size); line-height: var(--type-label-height);
       font-weight: 600;
       color: var(--agi-ext-accent-text);
       background: color-mix(in srgb, var(--agi-ext-accent) 10%, transparent);
       border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 25%, transparent);
-      border-radius: 5px;
+      border-radius: var(--corner-control);
       padding: 3px 8px;
       cursor: pointer;
       white-space: nowrap;
-      transition: background 0.12s;
+      transition: background var(--duration-instant);
     }
     .sp-quota-upgrade-btn:hover { background: color-mix(in srgb, var(--agi-ext-accent) 18%, transparent); }
     .sp-quota-windows {
@@ -3528,13 +4076,13 @@ function injectStyles(): void {
       text-align: right;
     }
     .sp-quota-window-reset {
-      font-size: 10px;
+      font-size: var(--type-caption-size); line-height: var(--type-caption-height);
       color: var(--agi-ext-text-muted);
     }
     .sp-quota-bar-fill.warning { background: var(--agi-ext-warning); }
     .sp-quota-notice {
-      font-size: 10px;
-      line-height: 1.4;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       color: var(--agi-ext-text);
     }
     .sp-quota-notice:empty { display: none; }
@@ -3547,12 +4095,12 @@ function injectStyles(): void {
     }
     .sp-quota-models:empty { display: none; }
     .sp-quota-models-heading {
-      font-size: 10px;
+      font-size: var(--type-label-size); line-height: var(--type-label-height);
       font-weight: 600;
       color: var(--agi-ext-text);
     }
     .sp-plan-compare > summary {
-      font-size: 10px;
+      font-size: var(--type-label-size); line-height: var(--type-label-height);
       font-weight: 600;
       color: var(--agi-ext-text);
       cursor: pointer;
@@ -3567,8 +4115,8 @@ function injectStyles(): void {
       display: flex;
       flex-direction: column;
       gap: 2px;
-      font-size: 10px;
-      line-height: 1.4;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
     }
     .sp-plan-compare-name {
       font-weight: 600;
@@ -3579,8 +4127,8 @@ function injectStyles(): void {
     }
     .sp-cloud-link-hint {
       color: var(--agi-ext-text-muted);
-      font-size: 9px;
-      line-height: 1.4;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
     }
     .sp-cloud-link-row {
       display: flex;
@@ -3590,10 +4138,11 @@ function injectStyles(): void {
     .sp-cloud-link-btn {
       background: var(--agi-ext-surface);
       border: 1px solid var(--agi-ext-border);
-      border-radius: 5px;
+      border-radius: var(--corner-control);
       color: var(--agi-ext-text-muted);
       cursor: pointer;
-      font-size: 10px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       padding: 4px 7px;
     }
     .sp-cloud-link-btn:hover {
@@ -3608,9 +4157,9 @@ function injectStyles(): void {
       gap: 8px;
     }
     .sp-cloud-signin-desc {
-      font-size: 11px;
+      font-size: var(--type-caption-size);
       color: var(--agi-ext-text-muted);
-      line-height: 1.45;
+      line-height: var(--type-caption-height);
     }
     .sp-cloud-signin-btn {
       display: flex;
@@ -3620,13 +4169,14 @@ function injectStyles(): void {
       width: 100%;
       background: var(--agi-ext-accent);
       border: none;
-      border-radius: 7px;
+      border-radius: var(--corner-control);
       color: var(--agi-ext-on-accent);
-      font-size: 12px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       font-weight: 600;
       padding: 8px 14px;
       cursor: pointer;
-      transition: opacity 0.15s;
+      transition: opacity var(--duration-quick);
     }
     .sp-cloud-signin-btn:hover { opacity: 0.88; }
     .sp-cloud-token-row {
@@ -3638,34 +4188,36 @@ function injectStyles(): void {
       flex: 1;
       background: var(--agi-ext-bg);
       border: 1px solid var(--agi-ext-border-strong);
-      border-radius: 6px;
+      border-radius: var(--corner-control);
       color: var(--agi-ext-text);
-      font-size: 10px;
-      font-family: 'SF Mono', Monaco, Consolas, monospace;
+      font-size: var(--type-code-size);
+      line-height: var(--type-code-height);
+      font-family: var(--type-code-family);
       padding: 5px 8px;
       outline: none;
       min-width: 0;
-      transition: border-color 0.15s;
+      transition: border-color var(--duration-quick);
     }
     .sp-cloud-token-input:focus { border-color: var(--agi-ext-focus); }
     .sp-cloud-token-input::placeholder { color: var(--agi-ext-text-placeholder); }
     .sp-cloud-token-save-btn {
       background: var(--agi-ext-surface);
       border: 1px solid var(--agi-ext-border-strong);
-      border-radius: 6px;
+      border-radius: var(--corner-control);
       color: var(--agi-ext-text);
-      font-size: 10px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       font-weight: 600;
       padding: 5px 9px;
       cursor: pointer;
       flex-shrink: 0;
-      transition: background 0.12s;
+      transition: background var(--duration-instant);
     }
     .sp-cloud-token-save-btn:hover { background: var(--agi-ext-hover); }
     .sp-cloud-token-hint {
-      font-size: 9px;
+      font-size: var(--type-caption-size);
       color: var(--agi-ext-text-muted);
-      line-height: 1.4;
+      line-height: var(--type-caption-height);
     }
 
     /* Quota badge in the chat header */
@@ -3673,13 +4225,13 @@ function injectStyles(): void {
       display: none;
       align-items: center;
       gap: 4px;
-      font-size: 10px;
+      font-size: var(--type-label-size); line-height: var(--type-label-height);
       font-weight: 600;
-      border-radius: 10px;
+      border-radius: var(--corner-pill);
       padding: 2px 7px;
       white-space: nowrap;
       cursor: pointer;
-      transition: opacity 0.15s;
+      transition: opacity var(--duration-quick);
          renders as a badge. */
       border: none;
       background: none;
@@ -3710,7 +4262,8 @@ function injectStyles(): void {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      font-size: 10px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       color: var(--agi-ext-text-muted);
       gap: 4px;
     }
@@ -3719,7 +4272,7 @@ function injectStyles(): void {
       text-overflow: ellipsis;
       white-space: nowrap;
       max-width: 140px;
-      font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+      font-family: var(--type-code-family);
     }
     /* ⋮ button in header */
     #sp-menu-btn {
@@ -3731,7 +4284,7 @@ function injectStyles(): void {
       display: none;
       position: fixed;
       inset: 0;
-      z-index: 9999;
+      z-index: var(--z-modal);
       background: var(--agi-ext-bg);
       flex-direction: column;
       align-items: stretch;
@@ -3752,10 +4305,11 @@ function injectStyles(): void {
       border: none;
       cursor: pointer;
       color: var(--agi-ext-text-muted);
-      font-size: 11px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       padding: 4px 8px;
-      border-radius: 5px;
-      transition: color 0.15s, background 0.15s;
+      border-radius: var(--corner-control);
+      transition: color var(--duration-quick), background var(--duration-quick);
     }
     #sp-onboarding-skip:hover { color: var(--agi-ext-text); background: var(--agi-ext-hover); }
     #sp-onboarding-skip:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
@@ -3792,7 +4346,8 @@ function injectStyles(): void {
     .sp-ob-hero svg { width: 80px; height: 80px; display: block; }
 
     .sp-ob-title {
-      font-size: 15px;
+      font-size: var(--type-title-size);
+      line-height: var(--type-title-height);
       font-weight: 700;
       color: var(--agi-ext-text);
       text-align: center;
@@ -3814,7 +4369,7 @@ function injectStyles(): void {
       gap: 10px;
       background: var(--agi-ext-surface);
       border: 1px solid var(--agi-ext-border);
-      border-radius: 10px;
+      border-radius: var(--corner-menu);
       padding: 10px 12px;
     }
     .sp-ob-row-icon {
@@ -3830,9 +4385,9 @@ function injectStyles(): void {
     .sp-ob-row-icon svg { width: 16px; height: 16px; display: block; }
     .sp-ob-row-icon.danger { color: var(--agi-ext-danger-text); }
     .sp-ob-row-text {
-      font-size: 12px;
+      font-size: var(--type-caption-size);
       color: var(--agi-ext-text-muted);
-      line-height: 1.5;
+      line-height: var(--type-caption-height);
     }
     .sp-ob-row-text.danger { color: var(--agi-ext-danger-text); }
     .sp-ob-learn-more {
@@ -3841,7 +4396,8 @@ function injectStyles(): void {
       cursor: pointer;
       background: none;
       border: none;
-      font-size: 12px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       padding: 0;
       display: inline;
       font-family: inherit;
@@ -3851,9 +4407,9 @@ function injectStyles(): void {
 
     /* Steps 2-5 body text */
     .sp-ob-body {
-      font-size: 12px;
+      font-size: var(--type-caption-size);
       color: var(--agi-ext-text-muted);
-      line-height: 1.6;
+      line-height: var(--type-caption-height);
       text-align: center;
       max-width: 300px;
       flex-shrink: 0;
@@ -3877,13 +4433,13 @@ function injectStyles(): void {
     .sp-ob-dot {
       width: 6px;
       height: 6px;
-      border-radius: 50%;
+      border-radius: var(--corner-pill);
       background: var(--agi-ext-border-strong);
-      transition: background 0.2s, width 0.2s;
+      transition: background var(--duration-quick), width var(--duration-quick);
     }
     .sp-ob-dot.active {
       width: 18px;
-      border-radius: 3px;
+      border-radius: var(--corner-compact);
       background: var(--agi-ext-accent);
     }
 
@@ -3896,13 +4452,14 @@ function injectStyles(): void {
     .sp-ob-btn-back {
       flex: 1;
       padding: 8px 14px;
-      border-radius: 8px;
+      border-radius: var(--corner-field);
       border: 1px solid var(--agi-ext-border-strong);
       background: transparent;
       color: var(--agi-ext-text-muted);
-      font-size: 12px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       cursor: pointer;
-      transition: background 0.12s, color 0.12s;
+      transition: background var(--duration-instant), color var(--duration-instant);
       font-family: inherit;
     }
     .sp-ob-btn-back:hover { background: var(--agi-ext-hover); color: var(--agi-ext-text); }
@@ -3912,14 +4469,15 @@ function injectStyles(): void {
     .sp-ob-btn-next {
       flex: 2;
       padding: 8px 14px;
-      border-radius: 8px;
+      border-radius: var(--corner-field);
       border: none;
       background: var(--agi-ext-accent);
       color: var(--agi-ext-on-accent);
-      font-size: 12px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       font-weight: 600;
       cursor: pointer;
-      transition: background 0.12s;
+      transition: background var(--duration-instant);
       font-family: inherit;
     }
     .sp-ob-btn-next:hover { background: var(--agi-ext-accent-hover); }
@@ -3945,15 +4503,15 @@ function injectStyles(): void {
     }
     #sp-header-right { flex: 0 0 auto; }
     .sp-icon-btn {
-      width: 32px;
-      height: 32px;
-      border-radius: 10px;
+      width: var(--control-md);
+      height: var(--control-md);
+      border-radius: var(--corner-menu);
     }
     #sp-model-selector-btn {
-      min-height: 30px;
+      min-height: var(--control-sm);
       padding: 5px 7px;
       border: 0;
-      border-radius: 9px;
+      border-radius: var(--corner-field);
       background: transparent;
       color: var(--agi-ext-text-muted);
     }
@@ -3970,12 +4528,13 @@ function injectStyles(): void {
       border-radius: 0;
       background: transparent;
       color: inherit;
-      font-size: 11px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       font-weight: 500;
     }
 
     #sp-messages {
-      padding: 18px 14px 10px;
+      padding: 18px max(14px, calc((100% - var(--sp-reading-column)) / 2)) 10px;
       gap: 18px;
     }
     #sp-empty {
@@ -3994,14 +4553,14 @@ function injectStyles(): void {
     .sp-msg-assistant { max-width: 100%; }
     .sp-bubble {
       padding: 9px 12px;
-      border-radius: 17px;
-      font-size: 13.5px;
-      line-height: 1.58;
+      border-radius: var(--corner-panel);
+      font-size: var(--type-prose-size);
+      line-height: var(--type-prose-height);
     }
     .sp-bubble-user {
       background: var(--agi-ext-overlay);
       border: 1px solid color-mix(in srgb, var(--agi-ext-border) 76%, transparent);
-      border-bottom-right-radius: 17px;
+      border-bottom-right-radius: var(--corner-panel);
     }
     .sp-bubble-assistant {
       padding: 4px 2px;
@@ -4020,7 +4579,7 @@ function injectStyles(): void {
       padding: 10px 10px 6px;
       gap: 6px;
       border-color: var(--agi-ext-border-strong);
-      border-radius: 16px;
+      border-radius: var(--corner-panel);
       background: var(--agi-ext-surface);
       box-shadow: none;
     }
@@ -4032,8 +4591,8 @@ function injectStyles(): void {
     #sp-input {
       min-height: 40px;
       padding: 2px 4px 4px;
-      font-size: 14px;
-      line-height: 1.5;
+      font-size: var(--type-body-large-size);
+      line-height: var(--type-body-large-height);
     }
     #sp-composer-bar {
       display: flex;
@@ -4055,11 +4614,11 @@ function injectStyles(): void {
     .sp-composer-controls-end { flex: 0 0 auto; }
     .sp-attach-btn,
     #sp-mic-btn {
-      width: 32px;
-      height: 32px;
+      width: var(--control-md);
+      height: var(--control-md);
       padding: 0;
       border: 0;
-      border-radius: 10px;
+      border-radius: var(--corner-menu);
       background: transparent;
       color: var(--agi-ext-text-muted);
       justify-content: center;
@@ -4076,10 +4635,10 @@ function injectStyles(): void {
       height: 20px;
       padding: 0 4px 0 7px;
       border-color: transparent;
-      border-radius: 7px;
+      border-radius: var(--corner-control);
       background: transparent;
       color: var(--agi-ext-text-muted);
-      font-size: 10.5px;
+      font-size: var(--type-label-size); line-height: var(--type-label-height);
       font-weight: 550;
     }
     /* The chip is 20px by design and the pointer target may not be. The
@@ -4100,14 +4659,14 @@ function injectStyles(): void {
       position: absolute;
       right: 0;
       bottom: calc(100% + 8px);
-      z-index: 100;
+      z-index: var(--z-popover);
       display: none;
       width: min(270px, calc(100vw - 24px));
       padding: 7px;
       border: 1px solid var(--agi-ext-border-strong);
-      border-radius: 14px;
+      border-radius: var(--corner-surface);
       background: var(--agi-ext-surface);
-      box-shadow: 0 18px 46px var(--agi-ext-modal-shadow);
+      box-shadow: var(--agi-ext-elevation-3);
     }
     #sp-autonomy-popover.open { display: block; }
     .sp-autonomy-option {
@@ -4117,7 +4676,7 @@ function injectStyles(): void {
       gap: 9px;
       padding: 9px;
       border: 0;
-      border-radius: 9px;
+      border-radius: var(--corner-field);
       background: transparent;
       color: var(--agi-ext-text-muted);
       cursor: pointer;
@@ -4128,15 +4687,15 @@ function injectStyles(): void {
     .sp-autonomy-option-warning.selected,
     .sp-autonomy-option-warning:hover { color: var(--agi-ext-warning-text); }
     .sp-autonomy-option-copy { display: flex; flex: 1; flex-direction: column; gap: 2px; }
-    .sp-autonomy-option-copy strong { font-size: 11.5px; font-weight: 600; }
+    .sp-autonomy-option-copy strong { font-size: var(--type-label-size); line-height: var(--type-label-height); font-weight: 600; }
     .sp-autonomy-option-copy small {
       color: var(--agi-ext-text-muted);
-      font-size: 12px;
-      line-height: 1.35;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
     }
     #sp-send-btn {
-      width: 32px;
-      height: 32px;
+      width: var(--control-md);
+      height: var(--control-md);
       box-shadow: none;
     }#sp-model-dropdown,
 #sp-attach-menu,
@@ -4144,21 +4703,21 @@ function injectStyles(): void {
 #sp-shortcuts-dropdown {
       padding: 6px;
       border-color: var(--agi-ext-border-strong);
-      border-radius: 14px;
-      box-shadow: 0 18px 46px var(--agi-ext-modal-shadow);
+      border-radius: var(--corner-surface);
+      box-shadow: var(--agi-ext-elevation-3);
     }
     #sp-model-dropdown { margin-top: 8px; min-width: min(232px, calc(100vw - 24px)); }
     .sp-model-option,
     .sp-attach-menu-item,
     .sp-slash-item,
-    .sp-shortcut-item { border-radius: 9px; }
+    .sp-shortcut-item { border-radius: var(--corner-field); }
     .sp-model-option { padding: 9px; }
 
     #sp-cloud-gate,
     #sp-blocked,
     .sp-agent-approval,
     .sp-create-shortcut-modal,
-    .sp-ob-row { border-radius: 14px; }
+    .sp-ob-row { border-radius: var(--corner-panel); }
     #sp-cloud-gate.visible {
       flex-direction: column;
       align-items: center;
@@ -4167,11 +4726,11 @@ function injectStyles(): void {
       padding: 22px 18px 20px;
       text-align: center;
     }
-    #sp-cloud-gate-title { font-size: 14px; }
-    #sp-cloud-gate-message { font-size: 12px; line-height: 1.5; max-width: 260px; }
-    #sp-cloud-gate-action { min-height: 34px; padding: 8px 18px; border-radius: 9px; font-size: 12px; }
+    #sp-cloud-gate-title { font-size: var(--type-body-large-size); line-height: var(--type-body-large-height); }
+    #sp-cloud-gate-message { font-size: var(--type-caption-size); line-height: var(--type-caption-height); max-width: 260px; }
+    #sp-cloud-gate-action { min-height: var(--control-lg); padding: 8px 18px; border-radius: var(--corner-field); font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
     #sp-drawer-header { min-height: 56px; padding: 10px 14px; }
-    .sp-drawer-section { border-radius: 14px; }
+    .sp-drawer-section { border-radius: var(--corner-surface); }
 
 
     /* ── 2026-09 side panel: one quiet header, one glyph, one composer card ── */
@@ -4202,18 +4761,18 @@ function injectStyles(): void {
       opacity: 0.7;
     }
     #sp-blocked-desc {
-      font-size: 12px;
-      line-height: 1.4;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       color: var(--agi-ext-text-muted);
     }
 
     #sp-composer-shell {
       min-height: 104px;
       padding: 10px 12px 9px;
-      border-radius: 16px;
+      border-radius: var(--corner-panel);
       gap: 2px;
     }
-    #sp-input { min-height: 46px; font-size: 14px; }
+    #sp-input { min-height: 46px; font-size: var(--type-body-large-size); line-height: var(--type-body-large-height); }
     #sp-composer-bar {
       padding: 0;
       gap: 4px;
@@ -4227,12 +4786,12 @@ function injectStyles(): void {
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      min-height: 30px;
+      min-height: var(--control-sm);
       min-width: 0;
       max-width: 100%;
       padding: 4px 8px;
       border: 0;
-      border-radius: 9px;
+      border-radius: var(--corner-field);
       background: transparent;
       cursor: pointer;
       overflow: hidden;
@@ -4246,7 +4805,8 @@ function injectStyles(): void {
       border-radius: 0;
       background: transparent;
       color: var(--agi-ext-text);
-      font-size: 13px;
+      font-size: var(--type-body-size);
+      line-height: var(--type-body-height);
       font-weight: 400;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -4254,18 +4814,19 @@ function injectStyles(): void {
     }
     #sp-model-effort-badge {
       color: var(--agi-ext-text-muted);
-      font-size: 13px;
+      font-size: var(--type-body-size);
+      line-height: var(--type-body-height);
       white-space: nowrap;
     }
 
     .sp-autonomy-chip {
       justify-content: center;
       gap: 0;
-      width: 30px;
-      height: 30px;
+      width: var(--control-sm);
+      height: var(--control-sm);
       padding: 0;
       border: 1px solid var(--agi-ext-border);
-      border-radius: 9px;
+      border-radius: var(--corner-field);
       background: transparent;
       color: var(--agi-ext-text-muted);
     }
@@ -4277,7 +4838,7 @@ function injectStyles(): void {
     .sp-autonomy-chip:hover { filter: none; background: var(--agi-ext-hover); }
     #sp-autonomy-icon { display: inline-flex; }
     .sp-autonomy-option { align-items: flex-start; }
-    .sp-autonomy-option-copy strong { font-size: 13px; font-weight: 500; }
+    .sp-autonomy-option-copy strong { font-size: var(--type-body-size); line-height: var(--type-body-height); font-weight: 500; }
     .sp-autonomy-option-check {
       display: inline-flex;
       align-items: center;
@@ -4288,9 +4849,10 @@ function injectStyles(): void {
 
     #sp-attach-menu { min-width: 224px; }
     .sp-attach-menu-item {
-      min-height: 34px;
+      min-height: var(--control-lg);
       color: var(--agi-ext-text);
-      font-size: 13px;
+      font-size: var(--type-body-size);
+      line-height: var(--type-body-height);
     }
     .sp-attach-menu-label { flex: 1; min-width: 0; }
     .sp-attach-menu-check {
@@ -4301,7 +4863,7 @@ function injectStyles(): void {
       color: var(--agi-ext-accent-text);
     }
 
-    .sp-model-option { font-size: 13px; }
+    .sp-model-option { font-size: var(--type-body-size); line-height: var(--type-body-height); }
     .sp-model-option.selected {
       background: var(--agi-ext-hover);
       color: var(--agi-ext-text);
@@ -4317,35 +4879,37 @@ function injectStyles(): void {
       font-weight: 400;
       opacity: 1;
     }
-    .sp-model-option-name { font-size: 13px; }
-    .sp-model-option-sublabel { font-size: 12px; }
-    .sp-model-group-header { font-size: 12px; text-transform: none; letter-spacing: 0; }
+    .sp-model-option-name { font-size: var(--type-body-size); line-height: var(--type-body-height); }
+    .sp-model-option-sublabel { font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
+    .sp-model-group-header { font-size: var(--type-caption-size); line-height: var(--type-caption-height); text-transform: none; letter-spacing: 0; }
     .sp-menu-heading {
       padding: 9px 10px 3px;
       margin-top: 4px;
       border-top: 1px solid var(--agi-ext-border);
       color: var(--agi-ext-text-muted);
-      font-size: 12px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
     }
     .sp-menu-note {
       padding: 4px 10px 8px;
       color: var(--agi-ext-text-muted);
-      font-size: 12px;
-      line-height: 1.4;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
     }
     .sp-effort-option {
       display: flex;
       align-items: center;
       gap: 8px;
       width: 100%;
-      min-height: 32px;
+      min-height: var(--control-md);
       padding: 6px 10px;
       border: 0;
-      border-radius: 9px;
+      border-radius: var(--corner-field);
       background: transparent;
       color: var(--agi-ext-text);
       font: inherit;
-      font-size: 13px;
+      font-size: var(--type-body-size);
+      line-height: var(--type-body-height);
       text-align: left;
       cursor: pointer;
     }
@@ -4355,10 +4919,11 @@ function injectStyles(): void {
     .sp-effort-option-label { flex: 1; min-width: 0; }
     .sp-effort-option-badge {
       padding: 1px 6px;
-      border-radius: 6px;
+      border-radius: var(--corner-control);
       background: var(--agi-ext-overlay);
       color: var(--agi-ext-text-muted);
-      font-size: 12px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
     }
     .sp-menu-toggle-row {
       display: flex;
@@ -4369,19 +4934,19 @@ function injectStyles(): void {
       border-top: 1px solid var(--agi-ext-border);
     }
     .sp-menu-toggle-copy { display: flex; flex: 1; flex-direction: column; gap: 1px; min-width: 0; }
-    .sp-menu-toggle-label { color: var(--agi-ext-text); font-size: 13px; cursor: pointer; }
-    .sp-menu-toggle-desc { color: var(--agi-ext-text-muted); font-size: 12px; line-height: 1.35; }
+    .sp-menu-toggle-label { color: var(--agi-ext-text); font-size: var(--type-body-size); line-height: var(--type-body-height); cursor: pointer; }
+    .sp-menu-toggle-desc { color: var(--agi-ext-text-muted); font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
     .sp-menu-toggle {
       appearance: none;
       position: relative;
-      width: 34px;
+      width: var(--control-lg);
       height: 20px;
       flex-shrink: 0;
       border: none;
-      border-radius: 999px;
+      border-radius: var(--corner-pill);
       background: var(--agi-ext-border-strong);
       cursor: pointer;
-      transition: background 0.15s;
+      transition: background var(--duration-quick);
     }
     .sp-menu-toggle:checked { background: var(--agi-ext-accent); }
     .sp-menu-toggle:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
@@ -4392,23 +4957,23 @@ function injectStyles(): void {
       left: 2px;
       width: 16px;
       height: 16px;
-      border-radius: 50%;
+      border-radius: var(--corner-pill);
       background: var(--agi-ext-toggle-knob);
-      transition: transform 0.15s;
+      transition: transform var(--duration-quick);
     }
     .sp-menu-toggle:checked::after { transform: translateX(14px); }
 
     #sp-recents {
       position: fixed;
       inset: 8px;
-      z-index: 240;
+      z-index: var(--z-sheet);
       display: flex;
       flex-direction: column;
       padding: 6px 12px 12px;
       border: 1px solid var(--agi-ext-border);
-      border-radius: 16px;
+      border-radius: var(--corner-panel);
       background: var(--agi-ext-surface);
-      box-shadow: 0 18px 46px var(--agi-ext-modal-shadow);
+      box-shadow: var(--agi-ext-elevation-3);
     }
     #sp-recents[hidden] { display: none; }
     #sp-recents-header {
@@ -4420,7 +4985,8 @@ function injectStyles(): void {
     }
     #sp-recents-title {
       color: var(--agi-ext-text);
-      font-size: 20px;
+      font-size: var(--type-h1-size);
+      line-height: var(--type-h1-height);
       font-weight: 600;
       letter-spacing: -0.02em;
     }
@@ -4432,7 +4998,7 @@ function injectStyles(): void {
       height: 32px;
       flex-shrink: 0;
       border: 1px solid var(--agi-ext-border);
-      border-radius: 9px;
+      border-radius: var(--corner-field);
       background: transparent;
       color: var(--agi-ext-text-muted);
       cursor: pointer;
@@ -4445,17 +5011,17 @@ function injectStyles(): void {
       overflow-y: auto;
       max-height: none;
     }
-    #sp-recents #sp-drawer-history-search { margin-bottom: 8px; font-size: 13px; }
+    #sp-recents #sp-drawer-history-search { margin-bottom: 8px; font-size: var(--type-body-size); line-height: var(--type-body-height); }
     .sp-drawer-history-bullet {
       width: 6px;
       height: 6px;
       flex-shrink: 0;
-      border-radius: 50%;
+      border-radius: var(--corner-pill);
       background: var(--agi-ext-accent);
     }
     .sp-drawer-history-open { min-height: 40px; gap: 10px; }
-    .sp-drawer-history-title { font-size: 13px; }
-    .sp-drawer-history-date { font-size: 12px; }
+    .sp-drawer-history-title { font-size: var(--type-body-size); line-height: var(--type-body-height); }
+    .sp-drawer-history-date { font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
 
     #sp-drawer-menu { display: flex; flex-direction: column; }
     #sp-drawer-menu[hidden],
@@ -4473,7 +5039,8 @@ function injectStyles(): void {
       background: transparent;
       color: var(--agi-ext-text);
       font: inherit;
-      font-size: 14px;
+      font-size: var(--type-body-large-size);
+      line-height: var(--type-body-large-height);
       text-align: left;
       cursor: pointer;
     }
@@ -4489,7 +5056,7 @@ function injectStyles(): void {
       height: 28px;
       flex-shrink: 0;
       border: none;
-      border-radius: 8px;
+      border-radius: var(--corner-field);
       background: transparent;
       color: var(--agi-ext-text-muted);
       cursor: pointer;
@@ -4501,7 +5068,8 @@ function injectStyles(): void {
     .sp-drawer-section-title {
       text-transform: none;
       letter-spacing: 0;
-      font-size: 13px;
+      font-size: var(--type-body-size);
+      line-height: var(--type-body-height);
     }
     .sp-drawer-group > .sp-drawer-section:first-child { margin-top: 0; }
 
@@ -4514,7 +5082,7 @@ function injectStyles(): void {
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
-        font-size: 9px;
+        font-size: var(--type-label-size); line-height: var(--type-label-height);
       }
       #sp-model-badge { max-width: 82px; }
       #sp-messages { padding-inline: 11px; }
@@ -4683,9 +5251,15 @@ function renderMessages(): void {
     _ctx.needsMessageRebuild = false;
   }
 
+  const lastUserIndex = lastUserMessageIndex();
+  const regenerateModels = regenerateModelOptions();
   for (let i = _ctx.lastRenderedCount; i < _ctx.messages.length; i++) {
     const msg = _ctx.messages[i];
     if (msg) {
+      const regenerable =
+        lastUserIndex >= 0 &&
+        (msg.role === 'user' ? i === lastUserIndex : i === _ctx.messages.length - 1) &&
+        i >= lastUserIndex;
       container.appendChild(
         buildBubbleWithTools(msg, {
           approvalDecisions: msg.cloudApprovalDecisions,
@@ -4695,6 +5269,19 @@ function renderMessages(): void {
           onRetry: (messageId) => retryFailedMessage(messageId),
           onSwitchModel: () => document.getElementById('sp-model-selector-btn')?.click(),
           quotaRecovery: { label: quotaRecoveryLabel, open: openQuotaRecovery },
+          ...(regenerable
+            ? {
+                onRegenerate: (messageId: string, modelSelection?: string) =>
+                  regenerateTurn(messageId, modelSelection),
+                regenerateModels,
+              }
+            : {}),
+          ...(msg.role === 'user'
+            ? {
+                imagePreviews:
+                  turnPayloadByMessageId.get(msg.id)?.images.map((image) => image.dataUrl) ?? [],
+              }
+            : { fileAccess: answerFileAccess }),
         }),
       );
     }
@@ -4704,17 +5291,81 @@ function renderMessages(): void {
   scrollToBottom();
 }
 
-function showThinking(): void {
+function lastUserMessageIndex(): number {
+  for (let index = _ctx.messages.length - 1; index >= 0; index -= 1) {
+    if (_ctx.messages[index]?.role === 'user') return index;
+  }
+  return -1;
+}
+
+function applyModelSelection(value: string): void {
+  if (_ctx.selectedModel !== value) {
+    _ctx.conversationGeneration += 1;
+    _ctx.currentModelKey = undefined;
+    _ctx.previousTaskType = undefined;
+    _ctx.reasoningEffort =
+      _ctx.quickMode || value === 'auto' || value.startsWith('auto-')
+        ? undefined
+        : resolveModelEffort(value, _ctx.reasoningEffort);
+  }
+  _ctx.selectedModel = value;
+  renderModelNotice(null);
+  chrome.storage.local.set({ [SELECTED_MODEL_STORAGE_KEY]: value }).catch(() => {});
+  refreshModelPickerUI();
+  saveMessages();
+}
+
+function regenerateModelOptions(): RegenerateModelOption[] {
+  if (!managedModelAccess) return [];
+  const options = getManagedModelPickerOptions(managedModelAccess);
+  const { primary } = partitionManagedModelOptions(options);
+  return [...options.filter((option) => option.value === 'auto'), ...primary].map((option) => ({
+    value: option.value,
+    label: option.label,
+  }));
+}
+
+async function fetchAnswerFile(url: string): Promise<Blob> {
+  const target = new URL(url);
+  const owner = _ctx.managedCloudOwner;
+  const headers =
+    owner && target.origin === new URL(FREE_TRIAL_GATEWAY).origin
+      ? await composerDocumentHeaders(owner)()
+      : {};
+  const response = await fetch(target.href, { headers, credentials: 'omit' });
+  if (!response.ok) throw new Error(`File request failed with ${response.status}`);
+  return response.blob();
+}
+
+const answerFileAccess: AnswerFileAccess = {
+  resolveUrl: resolveManagedArtifactUrl,
+  fetchFile: fetchAnswerFile,
+  openUrl: (url) => {
+    void chrome.tabs.create({ url });
+  },
+};
+
+function showThinking(label = t('spThinkingPreparing')): void {
   const container = document.getElementById('sp-messages')!;
 
-  const wrap = el('div', { class: 'sp-msg sp-msg-assistant sp-thinking-wrap' });
+  const wrap = el('div', {
+    class: 'sp-msg sp-msg-assistant sp-thinking-wrap',
+    role: 'status',
+    'aria-live': 'polite',
+  });
   const thinking = el('div', { class: 'sp-thinking' });
-  thinking.appendChild(el('div', { class: 'sp-dot' }));
-  thinking.appendChild(el('div', { class: 'sp-dot' }));
-  thinking.appendChild(el('div', { class: 'sp-dot' }));
+  thinking.appendChild(el('div', { class: 'sp-dot', 'aria-hidden': 'true' }));
+  thinking.appendChild(el('div', { class: 'sp-dot', 'aria-hidden': 'true' }));
+  thinking.appendChild(el('div', { class: 'sp-dot', 'aria-hidden': 'true' }));
+  thinking.appendChild(el('span', { class: 'sp-thinking-label' }, label));
   wrap.appendChild(thinking);
   container.appendChild(wrap);
   scrollToBottom();
+}
+
+function setThinkingLabel(label: string): void {
+  const target = document.querySelector('.sp-thinking-label');
+  if (target) target.textContent = label;
 }
 
 function removeThinking(): void {
@@ -4724,7 +5375,8 @@ function removeThinking(): void {
 function updateStreamingBubble(id: string, fullText: string, done: boolean): void {
   const bubble = document.getElementById(`sp-bubble-${id}`);
   if (!bubble) return;
-  bubble.innerHTML = sanitizeHtml(renderMarkdown(fullText));
+  const message = _ctx.messages.find((candidate) => candidate.id === id);
+  fillAnswerBubble(bubble, fullText, message ? answerSourceLists(message).markers : []);
   if (done) {
     bubble.classList.remove('sp-cursor');
   } else {
@@ -4801,7 +5453,15 @@ async function capturePageContext(): Promise<PageContextCapture> {
           const text = sanitizePageText(raw).slice(0, PAGE_CONTEXT_MAX_CHARS);
           resolve(
             text.trim()
-              ? { ok: true, text, source: { tabId: tab.id!, url: tab.url ?? '' } }
+              ? {
+                  ok: true,
+                  text,
+                  source: {
+                    tabId: tab.id!,
+                    url: tab.url ?? '',
+                    ...(tab.title ? { title: tab.title } : {}),
+                  },
+                }
               : { ok: false, reason: PAGE_CONTEXT_EMPTY_REASON },
           );
         },
@@ -4887,13 +5547,13 @@ function expandSlashCommand(
   return null;
 }
 
-function requestStreamCancellation(streamId: string): void {
+function requestStreamCancellation(streamId: string): Promise<void> {
   const owner = ownerByStreamId.get(streamId);
-  if (!owner) return;
+  if (!owner) return Promise.resolve();
   const cloudRun =
     cloudRunsByStreamId.get(streamId) ??
     _ctx.messages.find((message) => message.id === streamId)?.cloudAgentRun;
-  chrome.runtime
+  return chrome.runtime
     .sendMessage({
       type: 'CANCEL_STREAM',
       owner,
@@ -4901,6 +5561,7 @@ function requestStreamCancellation(streamId: string): void {
       id: streamId,
       ...(cloudRun ? { cloudRun } : {}),
     })
+    .then(() => undefined)
     .catch(() => {
       // The service worker may have restarted before receiving the cancellation.
     });
@@ -4967,6 +5628,7 @@ function beginManagedStream(quickMode: boolean): string {
   ownerByStreamId.set(streamId, { ...owner });
   quickModeByStreamId.set(streamId, quickMode);
   assistantCloudIdByStreamId.set(streamId, crypto.randomUUID());
+  streamStartedAtById.set(streamId, Date.now());
   _ctx.currentStreamId = streamId;
   _ctx.isStreaming = true;
   startManagedChatKeepalive();
@@ -4998,6 +5660,7 @@ function resumeManagedCloudRun(
   const assistant = _ctx.messages.find((message) => message.id === streamId);
   if (!assistant) return;
   assistant.streaming = true;
+  assistant.reconnecting = true;
   assistant.cloudAgentRun = { ...cloudRun };
   cloudRunsByStreamId.set(streamId, { ...cloudRun });
   ownerByStreamId.set(streamId, { ...owner });
@@ -5007,6 +5670,7 @@ function resumeManagedCloudRun(
   startManagedChatKeepalive();
   armManagedStreamInactivityWatchdog(streamId);
   updateSendButton();
+  _ctx.needsMessageRebuild = true;
   renderMessages();
   chrome.runtime.sendMessage(
     {
@@ -5038,9 +5702,24 @@ function resumeManagedCloudRun(
   );
 }
 
+let stoppingStreamId: string | null = null;
+
 function cancelCurrentManagedStream(preservePartialOutput: boolean): void {
   const streamId = _ctx.currentStreamId;
-  if (streamId) requestStreamCancellation(streamId);
+  if (streamId) {
+    const stopped = _ctx.messages.find((message) => message.id === streamId);
+    if (stopped && preservePartialOutput) stopped.stopping = true;
+    stoppingStreamId = streamId;
+    void requestStreamCancellation(streamId).finally(() => {
+      if (stopped) stopped.stopping = false;
+      if (stoppingStreamId === streamId) stoppingStreamId = null;
+      updateSendButton();
+      if (stopped && _ctx.messages.includes(stopped)) {
+        _ctx.needsMessageRebuild = true;
+        renderMessages();
+      }
+    });
+  }
   stopManagedChatKeepalive();
   if (_ctx.streamTimeoutHandle) {
     clearTimeout(_ctx.streamTimeoutHandle);
@@ -5052,21 +5731,50 @@ function cancelCurrentManagedStream(preservePartialOutput: boolean): void {
     resolvedRouteByStreamId.delete(streamId);
     quickModeByStreamId.delete(streamId);
     ownerByStreamId.delete(streamId);
+    streamStartedAtById.delete(streamId);
   }
   removeThinking();
   _ctx.isStreaming = false;
   _ctx.currentStreamId = null;
   updateSendButton();
   if (preservePartialOutput) {
+    _ctx.needsMessageRebuild = true;
     saveMessages();
     renderMessages();
   }
 }
 
+function mimeTypeOfDataUrl(dataUrl: string): string {
+  return /^data:([^;,]+)/.exec(dataUrl)?.[1] ?? 'image/png';
+}
+
+function turnAttachmentDescriptors(payload: TurnPayload): SidePanelMessageAttachment[] {
+  return [
+    ...payload.images.map((image): SidePanelMessageAttachment => ({
+      kind: 'image',
+      name: image.name,
+      mimeType: mimeTypeOfDataUrl(image.dataUrl),
+    })),
+    ...payload.files.map((file): SidePanelMessageAttachment => ({
+      kind: 'file',
+      name: file.name,
+      mimeType: file.mimeType,
+      assetId: file.assetId,
+    })),
+  ];
+}
+
+function pageReference(source: PageContextSource): SidePanelPageReference {
+  return { url: source.url, title: source.title || pageChipLabel(source.url) };
+}
+
 function sendMessage(text: string): void {
   if (!canAdmitComposerMessage(text)) return;
-  const prompt = resolveComposerPrompt(text, pendingAttachments.length)!;
-  const owner = _ctx.managedCloudOwner!;
+  const prompt = resolveComposerPrompt(
+    text,
+    pendingAttachmentCount(),
+    pendingDocuments.length > 0 ? 'file' : 'image',
+  )!;
   _ctx.conversationGeneration += 1;
   renderModelNotice(null);
 
@@ -5082,123 +5790,92 @@ function sendMessage(text: string): void {
   extensionSendQueue.dequeue();
 
   const slashCmd = expandSlashCommand(prompt);
-  if (slashCmd?.captureContext) {
-    const displayText = slashCmd.display;
-    const actualPrompt = slashCmd.prompt;
-    const pageContextAtAdmission = _ctx.pendingPageContext;
-    clearPendingPageContext();
-    const attachmentsToSend = pendingAttachments.slice();
-    pendingAttachments.length = 0;
-    composerAttachmentNotice = null;
-    composerContextNotice = null;
-    updateContextButton();
-    updateAttachmentPreview();
-
-    const userMsg: ChatMessage = {
-      id: `u-${Date.now()}`,
-      role: 'user',
-      content: displayText,
-      timestamp: Date.now(),
-      runtime: 'managed-cloud',
-    };
-    _ctx.messages.push(userMsg);
-    trimLiveMessages();
-    saveMessages();
-    renderMessages();
-
-    const streamId = beginManagedStream(_ctx.quickMode);
-    const pageAtAdmission = activePageSource;
-
-    capturePageContext()
-      .then((capture) => {
-        if (_ctx.currentStreamId !== streamId) return;
-        if (
-          capture.ok &&
-          !pageContextStillDescribes(pageAtAdmission, capture.source.tabId, capture.source.url)
-        ) {
-          handleStreamError(streamId, PAGE_CONTEXT_CHANGED_REASON);
-          return;
-        }
-        const pageCtx = capture.ok ? capture.text : pageContextAtAdmission;
-        if (!pageCtx) {
-          // This command is about the page. Answering without it would be an
-          // answer about nothing, dressed as an answer about this page.
-          handleStreamError(streamId, capture.ok ? PAGE_CONTEXT_EMPTY_REASON : capture.reason);
-          return;
-        }
-
-        const history = selectModelHistory(_ctx.messages, userMsg.id);
-
-        _ctx.messages.push({
-          id: streamId,
-          role: 'assistant',
-          content: '',
-          streaming: true,
-          timestamp: Date.now(),
-          runtime: 'managed-cloud',
-        });
-        lastStreamPersistAtMs = Date.now();
-        saveMessages();
-
-        chrome.runtime.sendMessage(
-          {
-            type: 'CHAT_MESSAGE',
-            owner,
-            clientInstanceId: SIDE_PANEL_CLIENT_INSTANCE_ID,
-            id: streamId,
-            text: actualPrompt,
-            pageContext: pageCtx,
-            conversationHistory: history,
-            attachments: attachmentsToSend.length > 0 ? attachmentsToSend : undefined,
-            extendedThinking: _ctx.thinkingEnabled || undefined,
-            modelSelection: _ctx.selectedModel,
-            quickMode: _ctx.quickMode || undefined,
-            ...managedOutboundRoutingPayload(),
-            ...managedTurnPersistencePayload(streamId),
-          },
-          (response?: { success?: boolean; error?: string }) => {
-            if (chrome.runtime.lastError) {
-              handleStreamError(streamId, chrome.runtime.lastError.message ?? 'Extension error');
-            } else if (response?.success === false) {
-              handleStreamError(streamId, response.error ?? 'Managed Cloud request was rejected.');
-            }
-          },
-        );
-      })
-      .catch((err) => {
-        console.error('[SidePanel] Failed to capture page context for chat:', err);
-        if (_ctx.currentStreamId === streamId) {
-          handleStreamError(streamId, 'Unable to capture page context.');
-        }
-      });
-    return;
-  }
-
-  const userMsg: ChatMessage = {
-    id: `u-${Date.now()}`,
-    role: 'user',
-    content: prompt,
-    timestamp: Date.now(),
-    runtime: 'managed-cloud',
+  const capturePage = slashCmd?.captureContext === true;
+  const pageSource = _ctx.pendingPageContextSource;
+  const payload: TurnPayload = {
+    prompt: capturePage && slashCmd ? slashCmd.prompt : prompt,
+    pageText: _ctx.pendingPageContext,
+    capturePage,
+    images: pendingAttachments.splice(0),
+    files: takeComposerDocuments(),
   };
-  _ctx.messages.push(userMsg);
-  trimLiveMessages();
-  saveMessages();
-  renderMessages();
-
-  const pageCtx = _ctx.pendingPageContext;
   clearPendingPageContext();
-  const attachmentsToSend = pendingAttachments.slice();
-  pendingAttachments.length = 0;
-  composerAttachmentNotice = null;
+  composerAttachmentNotices = [];
   composerContextNotice = null;
   updateContextButton();
   updateAttachmentPreview();
 
-  const streamId = beginManagedStream(_ctx.quickMode);
+  const attachments = turnAttachmentDescriptors(payload);
+  const userMsg: ChatMessage = {
+    id: `u-${Date.now()}`,
+    role: 'user',
+    content: capturePage && slashCmd ? slashCmd.display : prompt,
+    timestamp: Date.now(),
+    runtime: 'managed-cloud',
+    ...(attachments.length > 0 ? { attachments } : {}),
+    ...(pageSource && payload.pageText ? { pages: [pageReference(pageSource)] } : {}),
+  };
+  _ctx.messages.push(userMsg);
+  turnPayloadByMessageId.set(userMsg.id, payload);
+  trimLiveMessages();
+  _ctx.needsMessageRebuild = true;
+  saveMessages();
+  renderMessages();
+  dispatchTurn(userMsg, payload, _ctx.quickMode);
+}
 
+function dispatchTurn(userMsg: ChatMessage, payload: TurnPayload, quickMode: boolean): void {
+  const owner = _ctx.managedCloudOwner!;
+  const streamId = beginManagedStream(quickMode);
+  if (!payload.capturePage) {
+    postTurn(userMsg, payload, streamId, owner, quickMode);
+    return;
+  }
+  const pageAtAdmission = activePageSource;
+  setThinkingLabel(t('spThinkingReadingPage'));
+  capturePageContext()
+    .then((capture) => {
+      if (_ctx.currentStreamId !== streamId) return;
+      if (
+        capture.ok &&
+        !pageContextStillDescribes(pageAtAdmission, capture.source.tabId, capture.source.url)
+      ) {
+        handleStreamError(streamId, PAGE_CONTEXT_CHANGED_REASON);
+        return;
+      }
+      const pageText = capture.ok ? capture.text : payload.pageText;
+      if (!pageText) {
+        // This command is about the page. Answering without it would be an
+        // answer about nothing, dressed as an answer about this page.
+        handleStreamError(streamId, capture.ok ? PAGE_CONTEXT_EMPTY_REASON : capture.reason);
+        return;
+      }
+      payload.pageText = pageText;
+      payload.capturePage = false;
+      if (capture.ok) {
+        userMsg.pages = [pageReference(capture.source)];
+        _ctx.needsMessageRebuild = true;
+        renderMessages();
+        showThinking();
+      }
+      postTurn(userMsg, payload, streamId, owner, quickMode);
+    })
+    .catch((err) => {
+      console.error('[SidePanel] Failed to capture page context for chat:', err);
+      if (_ctx.currentStreamId === streamId) {
+        handleStreamError(streamId, 'Unable to capture page context.');
+      }
+    });
+}
+
+function postTurn(
+  userMsg: ChatMessage,
+  payload: TurnPayload,
+  streamId: string,
+  owner: ManagedCloudOwner,
+  quickMode: boolean,
+): void {
   const history = selectModelHistory(_ctx.messages, userMsg.id);
-
   _ctx.messages.push({
     id: streamId,
     role: 'assistant',
@@ -5216,14 +5893,19 @@ function sendMessage(text: string): void {
       owner,
       clientInstanceId: SIDE_PANEL_CLIENT_INSTANCE_ID,
       id: streamId,
-      text: userMsg.content,
-      pageContext: pageCtx ?? undefined,
+      text: payload.prompt,
+      pageContext: payload.pageText ?? undefined,
       conversationHistory: history,
-      attachments: attachmentsToSend.length > 0 ? attachmentsToSend : undefined,
+      attachments:
+        payload.images.length > 0 ? payload.images.map((image) => image.dataUrl) : undefined,
+      fileAttachments:
+        payload.files.length > 0
+          ? payload.files.map(({ assetId, mimeType }) => ({ assetId, mimeType }))
+          : undefined,
       extendedThinking: _ctx.thinkingEnabled || undefined,
       modelSelection: _ctx.selectedModel,
-      quickMode: _ctx.quickMode || undefined,
-      ...managedOutboundRoutingPayload(),
+      quickMode: quickMode || undefined,
+      ...managedOutboundRoutingPayload(quickMode),
       ...managedTurnPersistencePayload(streamId),
     },
     (response?: { success?: boolean; error?: string }) => {
@@ -5236,30 +5918,79 @@ function sendMessage(text: string): void {
   );
 }
 
-function retryFailedMessage(messageId: string): void {
-  if (_ctx.isStreaming) return;
+function replayableTurnPayload(userMsg: ChatMessage): TurnPayload | null {
+  const live = turnPayloadByMessageId.get(userMsg.id);
+  if (live) return live;
+  const attachments = userMsg.attachments ?? [];
+  if ((userMsg.pages?.length ?? 0) > 0) return null;
+  if (attachments.some((attachment) => attachment.kind === 'image' || !attachment.assetId)) {
+    return null;
+  }
+  const slashCmd = expandSlashCommand(userMsg.content);
+  return {
+    prompt: slashCmd?.captureContext ? slashCmd.prompt : userMsg.content,
+    pageText: null,
+    capturePage: slashCmd?.captureContext === true,
+    images: [],
+    files: attachments.map((attachment) => ({
+      assetId: attachment.assetId!,
+      mimeType: attachment.mimeType,
+      name: attachment.name,
+    })),
+  };
+}
 
-  const failedIndex = _ctx.messages.findIndex((message) => message.id === messageId);
-  if (failedIndex < 0) return;
+function restoreTurnToComposer(userMsg: ChatMessage): void {
+  const input = document.getElementById('sp-input') as HTMLTextAreaElement | null;
+  if (!input) return;
+  input.value = userMsg.content;
+  autoResizeInput(input);
+  composerContextNotice = t('spRetryNeedsAttachments');
+  updateAttachmentPreview();
+  input.focus();
+}
 
-  let promptText = '';
-  let promptIndex = -1;
-  for (let i = failedIndex - 1; i >= 0; i--) {
-    const candidate = _ctx.messages[i];
-    if (candidate?.role === 'user') {
-      promptText = candidate.content;
-      promptIndex = i;
+function canReplayTurn(): boolean {
+  return (
+    managedCloudChatState === 'ready' &&
+    _ctx.managedCloudOwner !== null &&
+    !_ctx.isStreaming &&
+    stoppingStreamId === null &&
+    !historyRestoreInProgress
+  );
+}
+
+function regenerateTurn(messageId: string, modelSelection?: string): void {
+  if (!canReplayTurn()) return;
+  const index = _ctx.messages.findIndex((message) => message.id === messageId);
+  if (index < 0) return;
+  let userIndex = -1;
+  for (let i = index; i >= 0; i -= 1) {
+    if (_ctx.messages[i]?.role === 'user') {
+      userIndex = i;
       break;
     }
   }
-  if (!promptText) return;
-
-  _ctx.messages.splice(promptIndex, failedIndex - promptIndex + 1);
+  if (userIndex < 0 || userIndex !== lastUserMessageIndex()) return;
+  const userMsg = _ctx.messages[userIndex]!;
+  const payload = replayableTurnPayload(userMsg);
+  if (!payload) {
+    restoreTurnToComposer(userMsg);
+    return;
+  }
+  if (modelSelection) applyModelSelection(modelSelection);
+  _ctx.messages.splice(userIndex + 1);
+  turnPayloadByMessageId.set(userMsg.id, payload);
+  _ctx.conversationGeneration += 1;
   _ctx.needsMessageRebuild = true;
+  renderModelNotice(null);
   saveMessages();
   renderMessages();
+  dispatchTurn(userMsg, payload, modelSelection ? false : _ctx.quickMode);
+}
 
-  sendMessage(promptText);
+function retryFailedMessage(messageId: string): void {
+  regenerateTurn(messageId);
 }
 
 function handleStreamError(
@@ -5295,6 +6026,7 @@ function handleStreamError(
   quickModeByStreamId.delete(id);
   ownerByStreamId.delete(id);
   assistantCloudIdByStreamId.delete(id);
+  streamStartedAtById.delete(id);
   stopManagedChatKeepalive();
   if (_ctx.streamTimeoutHandle) {
     clearTimeout(_ctx.streamTimeoutHandle);
@@ -5302,6 +6034,7 @@ function handleStreamError(
   }
   removeThinking();
   const existing = _ctx.messages.find((message) => message.id === id);
+  if (existing) existing.reconnecting = false;
   const canRetryApproval = existing?.agentActivity?.entries.some(
     (entry) =>
       entry.kind === 'tool' &&
@@ -5335,6 +6068,25 @@ function handleStreamError(
   _ctx.needsMessageRebuild = true;
   saveMessages();
   renderMessages();
+}
+
+function ensureStreamingAssistant(streamId: string, streamUsedQuick: boolean): ChatMessage {
+  const existing = _ctx.messages.find((message) => message.id === streamId);
+  if (existing) return existing;
+  const cloudRun = cloudRunsByStreamId.get(streamId);
+  const assistant: ChatMessage = {
+    id: streamId,
+    role: 'assistant',
+    content: '',
+    streaming: true,
+    timestamp: Date.now(),
+    runtime: 'managed-cloud',
+    ...(streamUsedQuick ? { managedQuickMode: true } : {}),
+    ...(cloudRun ? { cloudAgentRun: { ...cloudRun } } : {}),
+  };
+  _ctx.messages.push(assistant);
+  trimLiveMessages();
+  return assistant;
 }
 
 function updateConnectionStatus(): void {
@@ -5393,6 +6145,7 @@ function updateModelBadge(modelId: string): void {
 }
 
 function updateSendButton(): void {
+  document.getElementById('sp-messages')?.classList.toggle('sp-messages--busy', _ctx.isStreaming);
   const btn = document.getElementById('sp-send-btn') as HTMLButtonElement | null;
   if (!btn) return;
   if (_ctx.isStreaming) {
@@ -5403,11 +6156,19 @@ function updateSendButton(): void {
     btn.setAttribute('aria-label', t('spSendStopAria'));
     clearChildren(btn);
     btn.appendChild(renderIcon(Square, 14));
+  } else if (stoppingStreamId !== null) {
+    btn.disabled = true;
+    btn.hidden = false;
+    btn.setAttribute('data-mode', 'stopping');
+    btn.title = t('spStopping');
+    btn.setAttribute('aria-label', t('spStopping'));
+    clearChildren(btn);
+    btn.appendChild(renderIcon(Loader2, 14, 'sp-send-stopping-icon'));
   } else {
     const input = document.getElementById('sp-input') as HTMLTextAreaElement | null;
     const text = input?.value ?? '';
     btn.disabled = !canAdmitComposerMessage(text);
-    btn.hidden = text.trim().length === 0 && pendingAttachments.length === 0;
+    btn.hidden = text.trim().length === 0 && pendingAttachmentCount() === 0;
     btn.setAttribute('data-mode', 'send');
     btn.title = t('spSendSend');
     btn.setAttribute('aria-label', t('spSendSendAria'));
@@ -5433,9 +6194,11 @@ function canAdmitComposerMessage(text: string): boolean {
     managedCloudChatState === 'ready' &&
     _ctx.managedCloudOwner !== null &&
     !_ctx.isStreaming &&
+    stoppingStreamId === null &&
     !historyRestoreInProgress &&
     composerAttachmentIntakeCount === 0 &&
-    resolveComposerPrompt(text, pendingAttachments.length) !== null
+    composerDocumentsSettled() &&
+    resolveComposerPrompt(text, pendingAttachmentCount()) !== null
   );
 }
 
@@ -5483,10 +6246,20 @@ const COMPOSER_ATTACHMENT_MIME_TYPES: ReadonlySet<string> = new Set([
   'image/webp',
   'image/gif',
 ]);
-const COMPOSER_ATTACHMENT_ACCEPT = Array.from(COMPOSER_ATTACHMENT_MIME_TYPES).join(',');
+const COMPOSER_DOCUMENT_MIME_TYPES: ReadonlySet<string> = new Set([
+  'application/pdf',
+  'text/plain',
+  'text/markdown',
+]);
+const COMPOSER_ATTACHMENT_ACCEPT = [
+  ...COMPOSER_ATTACHMENT_MIME_TYPES,
+  ...COMPOSER_DOCUMENT_MIME_TYPES,
+  '.pdf',
+  '.txt',
+  '.md',
+].join(',');
 const COMPOSER_ATTACHMENT_DATA_URL =
   /^data:image\/(?:png|jpeg|webp|gif);base64,[a-z0-9+/]+={0,2}$/i;
-
 function composerAttachmentBytes(dataUrl: string): number {
   const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1);
   const padding = base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0;
@@ -5495,11 +6268,19 @@ function composerAttachmentBytes(dataUrl: string): number {
 
 function pendingAttachmentBytes(): number {
   let total = 0;
-  for (const dataUrl of pendingAttachments) total += composerAttachmentBytes(dataUrl);
+  for (const image of pendingAttachments) total += composerAttachmentBytes(image.dataUrl);
   return total;
 }
 
-let composerAttachmentNotice: string | null = null;
+function pendingAttachmentCount(): number {
+  return pendingAttachments.length + pendingDocuments.length;
+}
+
+function composerDocumentsSettled(): boolean {
+  return pendingDocuments.every((entry) => entry.phase === 'complete');
+}
+
+let composerAttachmentNotices: string[] = [];
 /** Why the last page-context capture produced nothing. Rendered in the same composer strip. */
 let composerContextNotice: string | null = null;
 
@@ -5507,37 +6288,185 @@ function attachmentBudgetLabel(bytes: number): string {
   return `${Math.round((bytes / (1024 * 1024)) * 10) / 10} MB`;
 }
 
-function admitComposerAttachment(dataUrl: string): boolean {
+function admitComposerAttachment(dataUrl: string, name: string): boolean {
   if (!COMPOSER_ATTACHMENT_DATA_URL.test(dataUrl)) {
-    composerAttachmentNotice = 'Only PNG, JPEG, WebP, and GIF images can be attached.';
+    composerAttachmentNotices.push(t('spAttachmentUnsupported', [name]));
     return false;
   }
-  if (pendingAttachments.length >= MANAGED_CHAT_MAX_ATTACHMENTS) {
-    composerAttachmentNotice = `Only ${MANAGED_CHAT_MAX_ATTACHMENTS} images can be sent with one message.`;
+  if (pendingAttachmentCount() >= MANAGED_CHAT_MAX_ATTACHMENTS) {
+    composerAttachmentNotices.push(
+      t('spAttachmentTooMany', [name, String(MANAGED_CHAT_MAX_ATTACHMENTS)]),
+    );
     return false;
   }
   if (
     pendingAttachmentBytes() + composerAttachmentBytes(dataUrl) >
     MANAGED_CHAT_MAX_ATTACHMENT_BYTES
   ) {
-    composerAttachmentNotice = `Attachments must total under ${attachmentBudgetLabel(MANAGED_CHAT_MAX_ATTACHMENT_BYTES)}.`;
+    composerAttachmentNotices.push(
+      t('spAttachmentOverBudget', [name, attachmentBudgetLabel(MANAGED_CHAT_MAX_ATTACHMENT_BYTES)]),
+    );
     return false;
   }
-  pendingAttachments.push(dataUrl);
+  pendingAttachments.push({ dataUrl, name });
   return true;
 }
 
+function composerDocumentMimeType(file: File): string | null {
+  const mimeType = resolveChatAttachmentMimeType(file.name, file.type);
+  return mimeType && COMPOSER_DOCUMENT_MIME_TYPES.has(mimeType) ? mimeType : null;
+}
+
+function admitComposerDocument(file: File, mimeType: string): boolean {
+  if (file.size === 0) {
+    composerAttachmentNotices.push(t('spAttachmentEmpty', [file.name]));
+    return false;
+  }
+  if (pendingAttachmentCount() >= MANAGED_CHAT_MAX_ATTACHMENTS) {
+    composerAttachmentNotices.push(
+      t('spAttachmentTooMany', [file.name, String(MANAGED_CHAT_MAX_ATTACHMENTS)]),
+    );
+    return false;
+  }
+  const documentBytes = pendingDocuments.reduce((sum, entry) => sum + entry.file.size, 0);
+  if (documentBytes + file.size > MAX_CHAT_ATTACHMENT_BYTES) {
+    composerAttachmentNotices.push(
+      t('spAttachmentOverBudget', [file.name, attachmentBudgetLabel(MAX_CHAT_ATTACHMENT_BYTES)]),
+    );
+    return false;
+  }
+  const entry: ComposerDocument = {
+    key: crypto.randomUUID(),
+    file,
+    mimeType,
+    phase: 'preparing',
+    controller: new AbortController(),
+  };
+  pendingDocuments.push(entry);
+  void uploadComposerDocument(entry);
+  return true;
+}
+
+function composerDocumentHeaders(owner: ManagedCloudOwner): () => Promise<HeadersInit> {
+  return async () => {
+    const auth = await getManagedCloudAuthContext();
+    if (!auth) throw new Error(t('spDocumentSignInRequired'));
+    if (
+      !sameManagedCloudOwner(auth.owner, owner) ||
+      !sameManagedCloudOwner(_ctx.managedCloudOwner, owner)
+    ) {
+      throw new Error(t('spDocumentAccountChanged'));
+    }
+    return {
+      Authorization: `Bearer ${auth.token}`,
+      'X-Requested-With': 'XMLHttpRequest',
+      ...platformRequestHeaders(),
+    };
+  };
+}
+
+async function uploadComposerDocument(entry: ComposerDocument): Promise<void> {
+  const owner = _ctx.managedCloudOwner;
+  entry.phase = 'preparing';
+  entry.error = undefined;
+  entry.attachment = undefined;
+  if (entry.controller.signal.aborted) entry.controller = new AbortController();
+  const { signal } = entry.controller;
+  updateAttachmentPreview();
+  if (!owner) {
+    entry.phase = 'failed';
+    entry.error = t('spDocumentSignInRequired');
+    updateAttachmentPreview();
+    return;
+  }
+  const client = createManagedCloudChatAttachmentsClient({
+    baseUrl: FREE_TRIAL_GATEWAY,
+    getHeaders: composerDocumentHeaders(owner),
+  });
+  try {
+    const [attachment] = await client.upload([entry.file], {
+      signal,
+      onStatus: (status) => {
+        if (signal.aborted || status.phase === 'failed' || status.phase === 'complete') return;
+        entry.phase = status.phase;
+        updateAttachmentPreview();
+      },
+    });
+    if (signal.aborted) return;
+    if (!attachment) throw new Error(t('spDocumentUploadFailed', [entry.file.name]));
+    entry.attachment = attachment;
+    entry.phase = 'complete';
+  } catch (error) {
+    if (signal.aborted) return;
+    entry.phase = 'failed';
+    entry.error =
+      error instanceof Error && error.message
+        ? error.message
+        : t('spDocumentUploadFailed', [entry.file.name]);
+  }
+  updateAttachmentPreview();
+}
+
+function removeComposerDocument(key: string): void {
+  const index = pendingDocuments.findIndex((entry) => entry.key === key);
+  if (index < 0) return;
+  pendingDocuments[index]!.controller.abort();
+  pendingDocuments.splice(index, 1);
+  composerAttachmentNotices = [];
+  updateAttachmentPreview();
+}
+
+function discardComposerDocuments(): void {
+  for (const entry of pendingDocuments) entry.controller.abort();
+  pendingDocuments.length = 0;
+  updateAttachmentPreview();
+}
+
+function takeComposerDocuments(): ComposerFile[] {
+  const ready = pendingDocuments.flatMap((entry) =>
+    entry.attachment
+      ? [
+          {
+            assetId: entry.attachment.id,
+            mimeType: entry.attachment.mimeType,
+            name: entry.file.name,
+          },
+        ]
+      : [],
+  );
+  pendingDocuments.length = 0;
+  return ready;
+}
+
 function acceptIncomingComposerFiles(files: File[] | FileList): void {
-  composerAttachmentNotice = null;
-  const candidates = Array.from(files);
+  composerAttachmentNotices = [];
   const incoming: File[] = [];
-  for (const file of candidates) {
+  for (const file of Array.from(files)) {
     if (!COMPOSER_ATTACHMENT_MIME_TYPES.has(file.type.toLowerCase())) {
-      composerAttachmentNotice = 'Only PNG, JPEG, WebP, and GIF images can be attached.';
+      const documentMimeType = composerDocumentMimeType(file);
+      if (!documentMimeType) {
+        composerAttachmentNotices.push(t('spAttachmentUnsupported', [file.name]));
+        continue;
+      }
+      if (file.size > MAX_CHAT_ATTACHMENT_BYTES) {
+        composerAttachmentNotices.push(
+          t('spAttachmentFileTooLarge', [
+            file.name,
+            attachmentBudgetLabel(MAX_CHAT_ATTACHMENT_BYTES),
+          ]),
+        );
+        continue;
+      }
+      admitComposerDocument(file, documentMimeType);
       continue;
     }
     if (file.size > MANAGED_CHAT_MAX_ATTACHMENT_FILE_BYTES) {
-      composerAttachmentNotice = `Each image must be under ${attachmentBudgetLabel(MANAGED_CHAT_MAX_ATTACHMENT_FILE_BYTES)}.`;
+      composerAttachmentNotices.push(
+        t('spAttachmentFileTooLarge', [
+          file.name,
+          attachmentBudgetLabel(MANAGED_CHAT_MAX_ATTACHMENT_FILE_BYTES),
+        ]),
+      );
       continue;
     }
     incoming.push(file);
@@ -5551,18 +6480,14 @@ function acceptIncomingComposerFiles(files: File[] | FileList): void {
   updateAttachmentPreview();
   void Promise.all(incoming.map(readFileAsDataUrl))
     .then((results) => {
-      let readFailed = false;
-      for (const dataUrl of results) {
-        if (dataUrl) admitComposerAttachment(dataUrl);
-        else readFailed = true;
-      }
-      if (readFailed && !composerAttachmentNotice) {
-        composerAttachmentNotice =
-          results.length === 1 ? t('spAttachmentReadFailed') : t('spAttachmentReadMultipleFailed');
-      }
+      results.forEach((dataUrl, index) => {
+        const name = incoming[index]?.name || t('spAttachmentImageName');
+        if (dataUrl) admitComposerAttachment(dataUrl, name);
+        else composerAttachmentNotices.push(t('spAttachmentReadFailedNamed', [name]));
+      });
     })
     .catch(() => {
-      composerAttachmentNotice = t('spAttachmentReadAllFailed');
+      composerAttachmentNotices.push(t('spAttachmentReadAllFailed'));
     })
     .finally(() => {
       composerAttachmentIntakeCount = Math.max(0, composerAttachmentIntakeCount - 1);
@@ -5570,14 +6495,117 @@ function acceptIncomingComposerFiles(files: File[] | FileList): void {
     });
 }
 
+function composerDocumentStatusLabel(entry: ComposerDocument): string {
+  switch (entry.phase) {
+    case 'preparing':
+    case 'uploading':
+      return t('spDocumentUploading');
+    case 'verifying':
+      return t('spDocumentVerifying');
+    case 'complete':
+      return t('spDocumentReady');
+    case 'failed':
+      return entry.error ?? t('spDocumentUploadFailed', [entry.file.name]);
+  }
+}
+
+function renderComposerDocumentChip(entry: ComposerDocument): HTMLElement {
+  const busy = entry.phase !== 'complete' && entry.phase !== 'failed';
+  const chip = el('div', {
+    class: 'sp-attachment-chip sp-attachment-doc',
+    'data-phase': entry.phase,
+    'aria-busy': String(busy),
+  });
+  const icon = el('span', { class: 'sp-attachment-doc-icon', 'aria-hidden': 'true' });
+  icon.appendChild(renderIcon(busy ? Loader2 : FileText, 16));
+  chip.appendChild(icon);
+  const copy = el('div', { class: 'sp-attachment-doc-copy' });
+  copy.appendChild(
+    el('span', { class: 'sp-attachment-doc-name', title: entry.file.name }, entry.file.name),
+  );
+  copy.appendChild(
+    el(
+      'span',
+      {
+        class: 'sp-attachment-doc-status',
+        role: entry.phase === 'failed' ? 'alert' : 'status',
+      },
+      composerDocumentStatusLabel(entry),
+    ),
+  );
+  if (entry.phase === 'failed') {
+    const retryBtn = el(
+      'button',
+      { class: 'sp-attachment-doc-retry', type: 'button' },
+      t('spDocumentRetry'),
+    );
+    retryBtn.addEventListener('click', () => {
+      void uploadComposerDocument(entry);
+    });
+    copy.appendChild(retryBtn);
+  }
+  chip.appendChild(copy);
+  const removeBtn = el(
+    'button',
+    {
+      class: 'sp-attachment-remove',
+      type: 'button',
+      title: 'Remove',
+      'aria-label': t('spDocumentRemove', [entry.file.name]),
+    },
+    '×',
+  );
+  removeBtn.addEventListener('click', () => removeComposerDocument(entry.key));
+  chip.appendChild(removeBtn);
+  return chip;
+}
+
+function renderPendingPageChip(bar: HTMLElement): void {
+  const source = _ctx.pendingPageContextSource;
+  if (!_ctx.pendingPageContext || !source) return;
+  const label = source.title || pageChipLabel(source.url);
+  const chip = el('div', {
+    class: 'sp-attachment-chip sp-attachment-doc sp-attachment-page',
+    title: source.url,
+  });
+  const icon = el('span', { class: 'sp-attachment-doc-icon', 'aria-hidden': 'true' });
+  icon.appendChild(renderIcon(Globe, 16));
+  chip.appendChild(icon);
+  const copy = el('div', { class: 'sp-attachment-doc-copy' });
+  copy.appendChild(el('span', { class: 'sp-attachment-doc-name' }, label));
+  copy.appendChild(el('span', { class: 'sp-attachment-doc-status' }, pageChipLabel(source.url)));
+  chip.appendChild(copy);
+  const removeBtn = el(
+    'button',
+    {
+      class: 'sp-attachment-remove',
+      type: 'button',
+      title: t('spContextChipRemove', [label]),
+      'aria-label': t('spContextChipRemove', [label]),
+    },
+    '×',
+  );
+  removeBtn.addEventListener('click', () => {
+    clearPendingPageContext();
+    updateContextButton();
+    updateAttachmentPreview();
+    document.getElementById('sp-input')?.focus();
+  });
+  chip.appendChild(removeBtn);
+  bar.appendChild(chip);
+}
+
 function updateAttachmentPreview(): void {
   const bar = document.getElementById('sp-attachment-bar');
   if (!bar) return;
   clearChildren(bar);
+  const pageAttached = _ctx.pendingPageContext !== null && _ctx.pendingPageContextSource !== null;
   if (
     pendingAttachments.length === 0 &&
-    !composerAttachmentNotice &&
+    pendingDocuments.length === 0 &&
+    composerAttachmentNotices.length === 0 &&
     !composerContextNotice &&
+    !pageAttached &&
     composerAttachmentIntakeCount === 0
   ) {
     bar.style.display = 'none';
@@ -5585,13 +6613,13 @@ function updateAttachmentPreview(): void {
     return;
   }
   bar.style.display = 'flex';
-  for (let i = 0; i < pendingAttachments.length; i++) {
-    const dataUrl = pendingAttachments[i]!;
-    const chip = el('div', { class: 'sp-attachment-chip' });
+  renderPendingPageChip(bar);
+  pendingAttachments.forEach((image, index) => {
+    const chip = el('div', { class: 'sp-attachment-chip', title: image.name });
     const thumb = el('img', {
       class: 'sp-attachment-thumb',
-      src: dataUrl,
-      alt: 'attachment',
+      src: image.dataUrl,
+      alt: image.name,
       width: '48',
       height: '48',
     }) as HTMLImageElement;
@@ -5599,21 +6627,22 @@ function updateAttachmentPreview(): void {
       'button',
       {
         class: 'sp-attachment-remove',
-        title: 'Remove',
-        'aria-label': `Remove attachment ${i + 1}`,
+        type: 'button',
+        title: t('spDocumentRemove', [image.name]),
+        'aria-label': t('spDocumentRemove', [image.name]),
       },
       '×',
     );
-    const idx = i;
     removeBtn.addEventListener('click', () => {
-      pendingAttachments.splice(idx, 1);
-      composerAttachmentNotice = null;
+      pendingAttachments.splice(index, 1);
+      composerAttachmentNotices = [];
       updateAttachmentPreview();
     });
     chip.appendChild(thumb);
     chip.appendChild(removeBtn);
     bar.appendChild(chip);
-  }
+  });
+  for (const entry of pendingDocuments) bar.appendChild(renderComposerDocumentChip(entry));
   if (composerContextNotice) {
     bar.appendChild(
       el(
@@ -5628,14 +6657,16 @@ function updateAttachmentPreview(): void {
       ),
     );
   }
-  if (composerAttachmentNotice) {
-    bar.appendChild(
-      el(
-        'div',
-        { class: 'sp-attachment-notice', role: 'status', 'aria-live': 'polite' },
-        composerAttachmentNotice,
-      ),
-    );
+  if (composerAttachmentNotices.length > 0) {
+    const notices = el('ul', {
+      class: 'sp-attachment-notices',
+      role: 'status',
+      'aria-live': 'polite',
+    });
+    for (const notice of composerAttachmentNotices) {
+      notices.appendChild(el('li', { class: 'sp-attachment-notice' }, notice));
+    }
+    bar.appendChild(notices);
   } else if (composerAttachmentIntakeCount > 0) {
     bar.appendChild(
       el(
@@ -5643,11 +6674,6 @@ function updateAttachmentPreview(): void {
         { class: 'sp-attachment-retention', role: 'status', 'aria-live': 'polite' },
         t('spAttachmentAdding'),
       ),
-    );
-  }
-  if (pendingAttachments.length > 0) {
-    bar.appendChild(
-      el('div', { class: 'sp-attachment-retention' }, t('spAttachmentHistoryLimitation')),
     );
   }
   updateSendButton();
@@ -6316,25 +7342,10 @@ function buildUI(): void {
     if (isSelected) checkCell.appendChild(renderIcon(Check, 12));
     opt.appendChild(checkCell);
     opt.addEventListener('click', () => {
-      if (_ctx.selectedModel !== m.value) {
-        _ctx.conversationGeneration += 1;
-        _ctx.currentModelKey = undefined;
-        _ctx.previousTaskType = undefined;
-        _ctx.reasoningEffort =
-          _ctx.quickMode || m.value === 'auto' || m.value.startsWith('auto-')
-            ? undefined
-            : resolveModelEffort(m.value, _ctx.reasoningEffort);
-      }
-      _ctx.selectedModel = m.value;
-      renderModelNotice(null);
-      chrome.storage.local.set({ [SELECTED_MODEL_STORAGE_KEY]: m.value }).catch(() => {});
-      updateModelBadge(m.value);
-      renderModelDropdown();
-      refreshEffortUI();
+      applyModelSelection(m.value);
       modelDropdownEl.classList.remove('open');
       modelSelectorBtn.classList.remove('open');
       modelSelectorBtn.setAttribute('aria-expanded', 'false');
-      saveMessages();
       modelSelectorBtn.focus();
     });
 
@@ -6778,6 +7789,7 @@ function buildUI(): void {
         _ctx.streamTimeoutHandle = null;
       }
       _ctx.messages.length = 0;
+      turnPayloadByMessageId.clear();
       _ctx.lastRenderedCount = 0;
       _ctx.needsMessageRebuild = true;
       _ctx.isStreaming = false;
@@ -6928,7 +7940,7 @@ function buildUI(): void {
   drawerBack.setAttribute('aria-label', t('spMenuBack'));
   drawerBack.appendChild(renderIcon(ChevronRight, 14));
   drawerHeader.appendChild(drawerBack);
-  const drawerTitle = el('div', { id: 'sp-drawer-title' }, t('spMenuTitle'));
+  const drawerTitle = el('h2', { id: 'sp-drawer-title' }, t('spMenuTitle'));
   drawerHeader.appendChild(drawerTitle);
   const drawerClose = el('button', { id: 'sp-drawer-close' });
   drawerClose.setAttribute('aria-label', t('spMenuClose'));
@@ -7174,7 +8186,7 @@ function buildUI(): void {
   recentsSheet.hidden = true;
   recentsSheet.setAttribute('aria-label', t('spRecentsTitle'));
   const recentsHeader = el('div', { id: 'sp-recents-header' });
-  recentsHeader.appendChild(el('div', { id: 'sp-recents-title' }, t('spRecentsTitle')));
+  recentsHeader.appendChild(el('h2', { id: 'sp-recents-title' }, t('spRecentsTitle')));
   const recentsClose = el('button', { id: 'sp-recents-close', type: 'button' });
   recentsClose.setAttribute('aria-label', t('spRecentsClose'));
   recentsClose.appendChild(renderIcon(X, 14));
@@ -7331,10 +8343,15 @@ function buildUI(): void {
         quality: 90,
       })) as { success: boolean; data?: string; error?: string };
       if (res.success && res.data) {
-        composerAttachmentNotice = null;
-        const admitted = admitComposerAttachment(res.data);
+        composerAttachmentNotices = [];
+        const admitted = admitComposerAttachment(res.data, t('spScreenshotName'));
         updateAttachmentPreview();
-        if (!admitted) throw new Error(composerAttachmentNotice ?? 'Screenshot could not be added');
+        if (!admitted) {
+          throw new Error(
+            composerAttachmentNotices[composerAttachmentNotices.length - 1] ??
+              t('spAttachmentCaptureFailed'),
+          );
+        }
         drawerCaptureBtn.textContent = t('spDrawerCaptured');
         drawerCaptureBtn.classList.add('active');
         closeDrawer();
@@ -7654,7 +8671,7 @@ function buildUI(): void {
   }
 
   const inPageSection = el('div', { class: 'sp-drawer-section' });
-  inPageSection.appendChild(el('div', { class: 'sp-drawer-section-title' }, 'In-Page Panel'));
+  inPageSection.appendChild(el('h3', { class: 'sp-drawer-section-title' }, 'In-Page Panel'));
   const inPageRow = el('div', { class: 'sp-drawer-toggle-row' });
   inPageRow.appendChild(
     el('span', { class: 'sp-drawer-toggle-label' }, t('spPageAssistantOverlay')),
@@ -7710,7 +8727,7 @@ function buildUI(): void {
 
   const dictationSection = el('div', { class: 'sp-drawer-section' });
   dictationSection.appendChild(
-    el('div', { class: 'sp-drawer-section-title' }, t('spDictationSectionTitle')),
+    el('h3', { class: 'sp-drawer-section-title' }, t('spDictationSectionTitle')),
   );
   const dictationRow = el('div', { class: 'sp-drawer-toggle-row' });
   dictationRow.appendChild(
@@ -7764,7 +8781,7 @@ function buildUI(): void {
   settingsGroupBody.appendChild(dictationSection);
 
   const allowlistSection = el('div', { class: 'sp-drawer-section' });
-  allowlistSection.appendChild(el('div', { class: 'sp-drawer-section-title' }, 'Site Allowlist'));
+  allowlistSection.appendChild(el('h3', { class: 'sp-drawer-section-title' }, 'Site Allowlist'));
   allowlistSection.appendChild(
     el(
       'p',
@@ -7948,7 +8965,7 @@ function buildUI(): void {
   });
 
   const memorySection = el('div', { class: 'sp-drawer-section' });
-  memorySection.appendChild(el('div', { class: 'sp-drawer-section-title' }, 'Memory'));
+  memorySection.appendChild(el('h3', { class: 'sp-drawer-section-title' }, 'Memory'));
   memorySection.appendChild(
     el(
       'p',
@@ -8240,7 +9257,7 @@ function buildUI(): void {
   });
 
   const bridgeSection = el('div', { class: 'sp-drawer-section' });
-  bridgeSection.appendChild(el('div', { class: 'sp-drawer-section-title' }, 'Bridge URL'));
+  bridgeSection.appendChild(el('h3', { class: 'sp-drawer-section-title' }, 'Bridge URL'));
   const drawerBridgeInput = el('input', {
     class: 'sp-drawer-bridge-input',
     id: 'sp-drawer-bridge-input',
@@ -8299,7 +9316,7 @@ function buildUI(): void {
   });
 
   const cloudSection = el('div', { class: 'sp-drawer-section' });
-  cloudSection.appendChild(el('div', { class: 'sp-drawer-section-title' }, 'AGI Cloud'));
+  cloudSection.appendChild(el('h3', { class: 'sp-drawer-section-title' }, 'AGI Cloud'));
 
   const cloudAccountEl = el('div', { class: 'sp-cloud-account', id: 'sp-cloud-account' });
 
@@ -8425,7 +9442,7 @@ function buildUI(): void {
   });
   const quotaExhaustedLabel = el(
     'span',
-    { style: 'font-size:10px;color:var(--agi-ext-danger-text)' },
+    { class: 'sp-quota-exhausted-label' },
     t('spQuotaFreeElsewhere'),
   );
   const quotaUpgradeBtn = el(
@@ -9248,7 +10265,7 @@ function buildUI(): void {
 
   const recordSection = el('div', { class: 'sp-wf-section' });
   const recordHeader = el('div', { class: 'sp-wf-section-header' });
-  recordHeader.appendChild(el('div', { class: 'sp-wf-section-title' }, 'Recording'));
+  recordHeader.appendChild(el('h2', { class: 'sp-wf-section-title' }, 'Recording'));
   recordSection.appendChild(recordHeader);
   const recordBar = el('div', { class: 'sp-wf-record-bar' });
   const recordBtn = el('button', { class: 'sp-wf-record-btn', id: 'sp-wf-record-btn' });
@@ -9487,7 +10504,7 @@ function buildUI(): void {
 
   const shortcutsSection = el('div', { class: 'sp-wf-section' });
   const shortcutsSectionHeader = el('div', { class: 'sp-wf-section-header' });
-  const shortcutsTitle = el('div', { class: 'sp-wf-section-title' });
+  const shortcutsTitle = el('h2', { class: 'sp-wf-section-title' });
   shortcutsTitle.appendChild(document.createTextNode('Saved Shortcuts '));
   shortcutsTitle.appendChild(
     createElementWith({
@@ -9668,7 +10685,7 @@ function buildUI(): void {
 
   const tasksSection = el('div', { class: 'sp-wf-section' });
   const tasksSectionHeader = el('div', { class: 'sp-wf-section-header' });
-  const tasksTitle = el('div', { class: 'sp-wf-section-title' });
+  const tasksTitle = el('h2', { class: 'sp-wf-section-title' });
   tasksTitle.appendChild(document.createTextNode('Scheduled Tasks '));
   tasksTitle.appendChild(
     createElementWith({
@@ -9815,7 +10832,7 @@ function buildUI(): void {
   groupsSection.appendChild(
     (() => {
       const h = el('div', { class: 'sp-wf-section-header' });
-      h.appendChild(el('div', { class: 'sp-wf-section-title' }, 'Tab Groups'));
+      h.appendChild(el('h2', { class: 'sp-wf-section-title' }, 'Tab Groups'));
       return h;
     })(),
   );
@@ -9857,6 +10874,16 @@ function buildUI(): void {
   document.body.appendChild(runsPanel.panelEl);
 
   document.body.appendChild(pagePanel.panelEl);
+
+  for (const [tabBtn, panel] of [
+    [chatTabBtn, chatPanel],
+    [workflowsTabBtn, workflowsPanel],
+    [cuTabBtn, cuPanel.panelEl],
+    [runsTabBtn, runsPanel.panelEl],
+    [pageTabBtn, pagePanel.panelEl],
+  ] as const) {
+    panel.prepend(el('h1', { class: 'sp-visually-hidden' }, tabBtn.textContent ?? ''));
+  }
 
   chrome.runtime.onMessage.addListener((msg: unknown) => {
     if (!msg || typeof msg !== 'object') return;
@@ -10295,7 +11322,7 @@ function buildUI(): void {
   screenshotItem.addEventListener('click', () => {
     attachMenu.classList.remove('open');
     attachBtn.setAttribute('aria-expanded', 'false');
-    composerAttachmentNotice = null;
+    composerAttachmentNotices = [];
     composerAttachmentIntakeCount += 1;
     updateAttachmentPreview();
     const finishScreenshotCapture = (
@@ -10303,9 +11330,9 @@ function buildUI(): void {
     ): void => {
       const runtimeError = chrome.runtime.lastError;
       if (runtimeError || !resp?.success || !resp.data) {
-        composerAttachmentNotice = resp?.error ?? t('spAttachmentCaptureFailed');
+        composerAttachmentNotices = [resp?.error ?? t('spAttachmentCaptureFailed')];
       } else {
-        admitComposerAttachment(resp.data);
+        admitComposerAttachment(resp.data, t('spScreenshotName'));
       }
       composerAttachmentIntakeCount = Math.max(0, composerAttachmentIntakeCount - 1);
       updateAttachmentPreview();
@@ -10316,7 +11343,7 @@ function buildUI(): void {
         finishScreenshotCapture,
       );
     } catch {
-      composerAttachmentNotice = t('spAttachmentCaptureFailed');
+      composerAttachmentNotices = [t('spAttachmentCaptureFailed')];
       composerAttachmentIntakeCount = Math.max(0, composerAttachmentIntakeCount - 1);
       updateAttachmentPreview();
     }
@@ -10329,10 +11356,13 @@ function buildUI(): void {
     role: 'menuitem',
   });
   fileItem.appendChild(renderIcon(FileImage, 16));
-  fileItem.appendChild(el('span', { class: 'sp-attach-menu-label' }, 'Add an image'));
+  fileItem.appendChild(
+    el('span', { class: 'sp-attach-menu-label' }, t('spAttachUploadFromDevice')),
+  );
   const fileInput = el('input', {
     type: 'file',
     accept: COMPOSER_ATTACHMENT_ACCEPT,
+    multiple: '',
     class: 'sp-attach-file-input',
     id: 'sp-attach-file-input',
   }) as HTMLInputElement;
@@ -10654,6 +11684,8 @@ function buildUI(): void {
   inputArea.appendChild(modelNotice);
   inputArea.appendChild(cloudGate);
   inputArea.appendChild(bridgeNotice);
+  const microphoneNotice = buildMicrophoneNotice();
+  inputArea.appendChild(microphoneNotice.element);
   inputArea.appendChild(attachmentBar);
   inputArea.appendChild(composerShell);
   document.body.appendChild(inputArea);
@@ -10688,10 +11720,16 @@ function buildUI(): void {
     acceptIncomingComposerFiles(filesFromDataTransfer(event.dataTransfer));
   });
 
-  setupVoiceInput(micBtn, inputEl, autoResizeInput, (message) => {
-    composerContextNotice = message;
-    updateAttachmentPreview();
-  });
+  setupVoiceInput(
+    micBtn,
+    inputEl,
+    autoResizeInput,
+    (message) => {
+      composerContextNotice = message;
+      updateAttachmentPreview();
+    },
+    microphoneNotice,
+  );
   renderMessages();
 
   switchTab('chat');
@@ -11210,6 +12248,12 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
   if (chunk.clientInstanceId !== SIDE_PANEL_CLIENT_INSTANCE_ID) return;
   if (chunk.id !== _ctx.currentStreamId) return;
   armManagedStreamInactivityWatchdog(chunk.id);
+  const reconnected = _ctx.messages.find((message) => message.id === chunk.id);
+  if (reconnected?.reconnecting) {
+    reconnected.reconnecting = false;
+    _ctx.needsMessageRebuild = true;
+    renderMessages();
+  }
   const streamUsedQuick = quickModeByStreamId.get(chunk.id) === true;
   const routeStamped = captureResolvedRoute(chunk.id, chunk.routing);
   const continuationChanged = !streamUsedQuick && applyRoutingContinuation(chunk.routing);
@@ -11304,23 +12348,7 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
 
   if ((chunk.generatedFiles?.length ?? 0) > 0 || chunk.interactiveCard) {
     removeThinking();
-    let assistant = _ctx.messages.find((message) => message.id === chunk.id);
-    if (!assistant) {
-      assistant = {
-        id: chunk.id,
-        role: 'assistant',
-        content: '',
-        streaming: true,
-        timestamp: Date.now(),
-        runtime: 'managed-cloud',
-        ...(streamUsedQuick ? { managedQuickMode: true } : {}),
-        ...(cloudRunsByStreamId.get(chunk.id)
-          ? { cloudAgentRun: { ...cloudRunsByStreamId.get(chunk.id)! } }
-          : {}),
-      };
-      _ctx.messages.push(assistant);
-      trimLiveMessages();
-    }
+    const assistant = ensureStreamingAssistant(chunk.id, streamUsedQuick);
     stampResolvedRoute(chunk.id, assistant);
     if (chunk.generatedFiles?.length) {
       const files = new Map((assistant.generatedFiles ?? []).map((file) => [file.id, file]));
@@ -11335,6 +12363,16 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
     _ctx.needsMessageRebuild = true;
     renderMessages();
     saveMessages();
+  }
+
+  if (chunk.sources) {
+    const assistant = ensureStreamingAssistant(chunk.id, streamUsedQuick);
+    if (chunk.sources.citations.length > 0) {
+      assistant.citations = mergeMessageSources(assistant.citations, chunk.sources.citations);
+    }
+    if (chunk.sources.results.length > 0) {
+      assistant.sources = mergeMessageSources(assistant.sources, chunk.sources.results);
+    }
   }
 
   if (!chunk.text && !chunk.done) return;
@@ -11390,13 +12428,20 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
       _ctx.streamTimeoutHandle = null;
     }
     const existing = _ctx.messages.find((m) => m.id === chunk.id);
+    const startedAt = streamStartedAtById.get(chunk.id);
     if (existing) {
       existing.streaming = false;
+      if (startedAt !== undefined) existing.durationMs = Math.max(0, Date.now() - startedAt);
       const cloudRun = cloudRunsByStreamId.get(chunk.id);
       if (cloudRun) existing.cloudAgentRun = { ...cloudRun };
       const assistantCloudId = assistantCloudIdByStreamId.get(chunk.id);
       if (assistantCloudId && !existing.cloudMessageId) existing.cloudMessageId = assistantCloudId;
+      if (isEmptyAssistantTurn(existing)) {
+        existing.error = true;
+        existing.errorText = t('spEmptyResponse');
+      }
     }
+    streamStartedAtById.delete(chunk.id);
     assistantCloudIdByStreamId.delete(chunk.id);
     cloudRunsByStreamId.delete(chunk.id);
     removeThinking();
@@ -11410,6 +12455,7 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
 });
 
 injectStyles();
+followThemePreference();
 watchCloudMirroringEnabled();
 void readCloudMirroringEnabled().then(() => refreshActivePersistenceState());
 buildUI();

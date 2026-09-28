@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import {
   Archive,
@@ -23,6 +23,7 @@ import { cn } from '../../lib/utils';
 import { toUserMessageWithStatus } from '../../lib/network-error';
 import { getManagedModelPresentationLabel } from '../../lib/modelInfo';
 import { TaskDetailPanel } from './TaskDetailPanel';
+import { TasksBoard } from './TasksBoard';
 import {
   TASK_TONE_BADGE_CLASS,
   type AgentTaskState,
@@ -38,7 +39,7 @@ import {
   workModeLabel,
 } from './task-display';
 
-type TaskFilter = 'active' | 'all' | 'archived';
+type TaskFilter = 'active' | 'needs_you' | 'all' | 'archived';
 
 const ALL_STATES: AgentTaskState[] = [
   'queued',
@@ -56,15 +57,54 @@ const PAGE_SIZE = 25;
 
 const ARCHIVED_STATES: AgentTaskState[] = ['archived'];
 
+const NEEDS_INPUT_STATES: readonly AgentTaskState[] = [
+  'awaiting_input',
+  'awaiting_approval',
+  'paused',
+];
+
+function needsInput(run: CloudAgentRun): boolean {
+  return NEEDS_INPUT_STATES.includes(runWorkState(run));
+}
+
 const FILTERS: ReadonlyArray<{ value: TaskFilter; label: string }> = [
   { value: 'active', label: 'Active' },
+  { value: 'needs_you', label: 'Needs you' },
   { value: 'all', label: 'All' },
   { value: 'archived', label: 'Archived' },
 ];
 
+type TaskLayout = 'list' | 'board';
+
+const LAYOUTS: ReadonlyArray<{ value: TaskLayout; label: string }> = [
+  { value: 'list', label: 'List' },
+  { value: 'board', label: 'Board' },
+];
+
+const TASK_LAYOUT_STORAGE_KEY = 'agi-tasks-layout';
+
+function loadTaskLayout(): TaskLayout {
+  if (typeof window === 'undefined') return 'list';
+  try {
+    return window.localStorage.getItem(TASK_LAYOUT_STORAGE_KEY) === 'board' ? 'board' : 'list';
+  } catch {
+    return 'list';
+  }
+}
+
+function saveTaskLayout(layout: TaskLayout): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(TASK_LAYOUT_STORAGE_KEY, layout);
+  } catch {
+    return;
+  }
+}
+
 function statesForFilter(filter: TaskFilter): AgentTaskState[] | undefined {
   if (filter === 'all') return ALL_STATES;
   if (filter === 'archived') return ARCHIVED_STATES;
+  if (filter === 'needs_you') return [...NEEDS_INPUT_STATES];
   return undefined;
 }
 
@@ -156,6 +196,7 @@ export interface TasksTransport {
   notifyError(message: string): void;
   startWork?: () => void;
   rerunWork?(goal: AgiWorkRerunGoal): void;
+  shareConversation?(conversationId: string): void;
   /**
    * Shelve a finished run, or bring one back. Optional because a surface that
    * cannot reach the archive route must not paint the control: an Archive
@@ -171,6 +212,7 @@ export interface TasksPageProps {
 
 export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
   const [filter, setFilter] = useState<TaskFilter>('active');
+  const [layout, setLayout] = useState<TaskLayout>('list');
   const [runs, setRuns] = useState<CloudAgentRun[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -188,6 +230,10 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
   const journalRef = useRef<TaskJournalSnapshot | null>(null);
 
   const getClient = useCallback(() => transport.client, [transport.client]);
+  const orderedRuns = useMemo(
+    () => [...runs.filter(needsInput), ...runs.filter((run) => !needsInput(run))],
+    [runs],
+  );
 
   const load = useCallback(
     async (nextFilter: TaskFilter, cursor: string | null) => {
@@ -217,6 +263,15 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
   useEffect(() => {
     void load(filter, null);
   }, [filter, load]);
+
+  useEffect(() => {
+    setLayout(loadTaskLayout());
+  }, []);
+
+  const changeLayout = useCallback((next: TaskLayout) => {
+    setLayout(next);
+    saveTaskLayout(next);
+  }, []);
 
   const loadJournal = useCallback(
     async (runId: string, signal?: AbortSignal, options?: { background?: boolean }) => {
@@ -367,6 +422,7 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
             .filter((r) => {
               if (filter === 'archived') return r.state === 'archived';
               if (filter === 'active') return r.state !== 'archived';
+              if (filter === 'needs_you') return needsInput(r);
               return true;
             }),
         );
@@ -456,26 +512,36 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
   return (
     <div
       data-testid="tasks-view"
-      className="mx-auto flex h-full w-full max-w-5xl flex-col px-4 py-6"
+      className={cn(
+        'mx-auto flex h-full w-full flex-col px-4 py-6',
+        layout === 'board' ? 'max-w-7xl' : 'max-w-5xl',
+      )}
     >
       <header className="mb-4 flex flex-col gap-1">
         <div className="flex items-center gap-2">
           <ListChecks className="h-5 w-5 text-primary" />
-          <h1 className="font-[var(--chat-font-sans)] text-[28px] font-medium">Work history</h1>
+          <h1 className="font-[var(--chat-font-sans)] text-display">Work history</h1>
         </div>
         <p className="text-sm text-muted-foreground">Your Managed Cloud work sessions</p>
       </header>
 
-      <SegmentedControl
-        className="mb-4"
-        aria-label="Filter work sessions"
-        options={FILTERS}
-        value={filter}
-        onValueChange={(next) => {
-          setFilter(next);
-          setSelectedRunId(null);
-        }}
-      />
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <SegmentedControl
+          aria-label="Filter work sessions"
+          options={FILTERS}
+          value={filter}
+          onValueChange={(next) => {
+            setFilter(next);
+            setSelectedRunId(null);
+          }}
+        />
+        <SegmentedControl
+          aria-label="Task layout"
+          options={LAYOUTS}
+          value={layout}
+          onValueChange={changeLayout}
+        />
+      </div>
 
       {loading ? (
         <div className="flex flex-1 items-center justify-center py-16">
@@ -501,23 +567,86 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
             <ListChecks className="h-7 w-7 text-[var(--chat-accent-primary-text)]" />
           </div>
           <p className="text-base font-semibold text-foreground">
-            No {filter === 'all' ? '' : `${filter} `}work sessions yet
+            {filter === 'needs_you'
+              ? 'Nothing needs you right now'
+              : `No ${filter === 'all' ? '' : `${filter} `}work sessions yet`}
           </p>
           <p className="max-w-sm text-sm text-muted-foreground">
             {filter === 'archived'
               ? 'A finished task moves here when you archive it, and stays until you restore it.'
-              : 'Runs from AGI Work, Research, and long tool sessions show up here.'}
+              : filter === 'needs_you'
+                ? 'A work session that is waiting for your approval, an answer or a resume shows up here.'
+                : 'Runs from AGI Work, Research, and long tool sessions show up here.'}
           </p>
-          {transport.startWork && filter !== 'archived' ? (
+          {transport.startWork && filter !== 'archived' && filter !== 'needs_you' ? (
             <Button size="sm" onClick={transport.startWork}>
               Start AGI Work
             </Button>
           ) : null}
         </div>
+      ) : layout === 'board' ? (
+        <div
+          className={cn('grid min-h-0 gap-4', selectedRun && 'lg:grid-cols-[minmax(0,1fr)_360px]')}
+        >
+          <div className="flex min-w-0 flex-col gap-3">
+            <TasksBoard
+              runs={runs}
+              showEmptyStages={filter !== 'archived'}
+              selectedRunId={selectedRunId}
+              runTitle={runTitle}
+              cancellingId={cancellingId}
+              pausingId={pausingId}
+              archivingId={archivingId}
+              resolvingApprovalId={resolvingApprovalId}
+              canArchive={Boolean(transport.setRunArchived)}
+              onSelect={setSelectedRunId}
+              onOpenConversation={openConversation}
+              onApprove={(run) => void handleApproval(run, 'approved')}
+              onDeny={(run) => void handleApproval(run, 'rejected')}
+              onPause={(runId) => void handlePause(runId)}
+              onResume={(runId) => void handleResume(runId)}
+              onCancel={(runId) => void handleCancel(runId)}
+              onArchive={(run, archived) => void handleArchive(run, archived)}
+            />
+            {nextCursor ? (
+              <div className="flex justify-center">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={loadingMore}
+                  onClick={() => void load(filter, nextCursor)}
+                >
+                  {loadingMore ? <Spinner size="sm" aria-label="Loading more tasks" /> : null}
+                  Show more
+                </Button>
+              </div>
+            ) : null}
+          </div>
+          {selectedRun ? (
+            <TaskDetailPanel
+              run={selectedRun}
+              events={journal?.events ?? []}
+              loading={journalLoading}
+              error={journalError}
+              truncated={journal?.truncated}
+              autoRefreshing={autoRefreshing && !journalError}
+              onRefresh={() => {
+                if (selectedRunId) void loadJournal(selectedRunId);
+              }}
+              onClose={() => setSelectedRunId(null)}
+              onOpenConversation={(conversationId) => transport.openConversation(conversationId)}
+              onRerun={
+                transport.rerunWork && selectedRun?.workMode === 'agiwork'
+                  ? (goal) => transport.rerunWork?.(goal)
+                  : undefined
+              }
+            />
+          ) : null}
+        </div>
       ) : (
         <div className="grid min-h-0 gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
           <div className="flex min-w-0 flex-col gap-2">
-            {runs.map((run) => {
+            {orderedRuns.map((run) => {
               const workState = runWorkState(run);
               const tone = taskStateTone(workState);
               const cancellable = isCancellableState(workState);
@@ -799,6 +928,12 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
                 ? (goal) => transport.rerunWork?.(goal)
                 : undefined
             }
+            {...(transport.shareConversation
+              ? {
+                  onShare: (conversationId: string) =>
+                    transport.shareConversation?.(conversationId),
+                }
+              : {})}
           />
         </div>
       )}

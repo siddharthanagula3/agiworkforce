@@ -192,6 +192,7 @@ export type {
 } from './inference';
 
 export {
+  DEFAULT_SESSION_COMPLETION_ALERTS,
   DESKTOP_DEEP_LINK_SCHEME,
   DESKTOP_DEEP_LINK_TARGETS,
   HOST_COMMANDS,
@@ -201,6 +202,8 @@ export {
   HOST_SHORTCUT_PREFERENCE_KEYS,
   HOST_SHORTCUT_STATUSES,
   NO_HOST_SHORTCUT,
+  SESSION_COMPLETION_ALERT_LABELS,
+  SESSION_COMPLETION_ALERTS,
   defaultHostShortcut,
   describeAccelerator,
   describeHostPlatform,
@@ -223,6 +226,7 @@ export type {
   HostShortcutKey,
   HostShortcutStatus,
   HostUpdateAvailability,
+  SessionCompletionAlerts,
 } from './host-bridge';
 
 export {

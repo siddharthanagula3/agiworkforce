@@ -6,87 +6,49 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S17.01: Assistant/model identity.
-
-- Done when: Assistant turns are distinguishable from the user's visually and to assistive tech, ideally naming the assistant/model (R-n).
-- Wave: 3
-- Already works on: web, desktop, mobile, cli
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Assistant turns differ only by styling in the sidebar; add a per-message author/model label that screen readers announce (the provider badge sits in the header). | ui |
-| chrome | partial | Assistant bubbles are only left-aligned; add a per-message author/model label for screen readers (the served model is stored on the message but never shown). | ui |
-
-Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:517-520`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:5041-5045`, `apps/extension/src/features/side-panel/bubbles.ts:225-227`, `apps/extension/src/side_panel.ts:627-632`
-
 ## S17.06: Source citations.
 
 - Done when: Claims in an answer carry citation markers that link to the sources the answer used.
 - Wave: 3
-- Already works on: web, desktop, mobile, api
+- Already works on: web, desktop, mobile, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | With 'Browse web' on, the prompt only asks the model to write source URLs into its text; add structured citation markers/links from search results. | ui |
-| chrome | partial | Sources appear only as links on search steps inside the agent-activity timeline; answers have no inline citation markers. | ui |
-
-Code: `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:2405-2408`, `apps/extension/src/features/side-panel/bubbles.ts:406-432`, `apps/extension/src/side_panel.ts:4427-4427`
 
 ## S17.07: Sources footer.
 
 - Done when: A finished answer that used sources ends with a sources footer/list the user can open.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Source links sit inside each search step of the agent-activity timeline; add a sources list at the end of the answer. | ui |
-
-Code: `apps/extension/src/features/side-panel/bubbles.ts:406-432`, `apps/extension/src/side_panel.ts:4427-4427`
-
-## S17.08: Generated-file cards.
-
-- Done when: Files the assistant produced appear as cards on the answer with name/type and open/download.
-- Wave: 3
-- Already works on: web, desktop, mobile
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Files the agent writes show only as tool rows naming the path; add a per-answer list of produced files with an open action. | ui |
-| vscode | partial | Edited/created files surface as diff proposals to accept or reject; there is no file card on the answer itself. | ui |
-| chrome | partial | Generated files arrive and are stored on the message but the bubble never renders them; only artifact steps inside the activity timeline get an 'Open or download' link. | ui |
-
-Code: `apps/cli/src/tui/tui_app.rs:169-180`, `apps/cli/src/tui/tui_app.rs:4865-4880`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:5377-5383`, `apps/extension/src/side_panel.ts:10791-10796`
 
 ## S17.09: Artifact launch cards.
 
 - Done when: An answer that created an artifact shows a card that opens the artifact viewer/panel.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | `/artifacts` lists cloud artifacts as a system message; answers carry no per-answer artifact link. | ui |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Artifacts are reachable from the Artifacts drawer and from artifact steps in the activity timeline, not from a card on the answer. | ui |
 
-Code: `apps/cli/src/tui/tui_app.rs:3312-3312`, `apps/cli/src/tui/tui_app.rs:4713-4722`, `apps/extension/src/features/side-panel/bubbles.ts:434-456`, `apps/extension/src/side_panel.ts:7021-7023`
+Code: `apps/cli/src/tui/tui_app.rs:3312-3312`, `apps/cli/src/tui/tui_app.rs:4713-4722`
 
 ## S17.10: Image results.
 
 - Done when: Images the assistant generated or returned render inline in the answer (viewable/downloadable).
 - Wave: 3
-- Already works on: web, desktop, mobile, cli
+- Already works on: web, desktop, mobile, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Generated images arrive as generatedFiles on the message but are not rendered, and markdown <img> is stripped by the sanitizer; render image results in the bubble. | ui |
-
-Code: `apps/extension/src/side_panel.ts:10791-10796`, `apps/extension/src/features/side-panel/markdown.ts:59-71`
 
 ## S17.12: Video results.
 
@@ -109,9 +71,8 @@ Code: `apps/extension/src/side_panel.ts:10791-10796`, `apps/extension/src/featur
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | Only MCP elicitation forms and approval prompts are interactive in the terminal; answer cards (choices, maps) are not rendered. | ui |
-| vscode | partial | Only plan cards and tool-approval cards are interactive; answer cards (choices, maps, actions) are not supported. | ui |
 
-Code: `apps/cli/src/tui/tui_app.rs:945-952`, `apps/cli/src/tui/tui_app.rs:953-960`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:5576-5580`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:5401-5409`
+Code: `apps/cli/src/tui/tui_app.rs:945-952`, `apps/cli/src/tui/tui_app.rs:953-960`
 
 ## S17.14: Follow-up suggestions.
 
@@ -124,7 +85,6 @@ Code: `apps/cli/src/tui/tui_app.rs:945-952`, `apps/cli/src/tui/tui_app.rs:953-96
 | desktop | partial | Same as web (hosted): Follow-up suggestions are off by default (FOLLOW_UP_SUGGESTIONS_ENABLED_DEFAULT = false, never overridden); they appear only after a web-searched answer. Turn them on for ordinary answers. | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | Only the native @agi Chat participant offers follow-ups, and they are three fixed commands (/explain, /fix, /tests) regardless of the answer; the sidebar offers none. | ui |
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/web/features/chat/components/messages/ChatMessageList.tsx:1006-1006`, `apps/web/features/chat/components/messages/ChatMessageList.tsx:1280-1288`, `apps/web/features/chat/components/messages/ChatMessageList.tsx:1820-1830`, `apps/web/features/chat/pages/WebChatPage.tsx:5747-5747`
@@ -145,60 +105,51 @@ Code: `apps/web/features/chat/components/messages/ChatMessageList.tsx:1006-1006`
 
 - Done when: A completed answer can be regenerated in place, producing a new attempt for the same prompt.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | Only the command-palette 'Retry Last Message' re-sends the last prompt as a new turn; add a Regenerate control on the answer. | ui |
-| chrome | partial | Retry is offered only on failed or stopped answers; a completed answer cannot be regenerated. | ui |
-
-Code: `apps/extension-vscode/src/features/chat/retry.ts:59-69`, `apps/extension-vscode/src/core/commandSetup.ts:2385-2389`, `apps/extension/src/features/side-panel/bubbles.ts:185-208`, `apps/extension/src/side_panel.ts:4974-4997`
 
 ## S17.20: Retry failed answer.
 
 - Done when: A failed answer shows a Retry control that re-runs the turn and replaces the failure with the new outcome.
 - Wave: 3
-- Already works on: mobile, vscode
+- Already works on: mobile, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Keep one failure state: after a retry is refused before streaming the page restores the earlier failed answer, so the alert shows the new error while the transcript and details still show the old one (LQA-05). | states |
 | desktop | partial | Same as web (hosted): Keep one failure state: after a retry is refused before streaming the page restores the earlier failed answer, so the alert shows the new error while the transcript and details still show the old one (LQA-05). | states |
 | cli | missing | Not built on this surface. |  |
-| chrome | partial | retryFailedMessage splices out the failed pair and calls sendMessage(promptText) with the user text only: attachments and the captured page context of the failed turn are dropped, so the retried turn is not the same turn. The same auditor rated this exact handler partial (miss handler) for S16.16 chrome; the two cells must agree. Partial, miss handler; remaining: re-send the original attachments/page context on retry. |  |
 
-Code: `apps/web/features/chat/pages/WebChatPage.tsx:5074-5087`, `apps/web/lib/hooks/useChatStream.ts:4428-4436`, `apps/web/features/chat/lib/turn-error-notice.ts:243-248`, `apps/extension/src/features/side-panel/bubbles.ts:147-167`
+Code: `apps/web/features/chat/pages/WebChatPage.tsx:5074-5087`, `apps/web/lib/hooks/useChatStream.ts:4428-4436`, `apps/web/features/chat/lib/turn-error-notice.ts:243-248`
 
 ## S17.21: Continue truncated answer.
 
 - Done when: An answer cut off by the output limit offers Continue, which resumes the same answer.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | A cut answer is kept and flagged ('reached this model's maximum length'), but the only advice is to ask for a shorter answer; add a continue command. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/agent/chat.rs:318-320`, `apps/cli/src/errors.rs:92-94`
 
 ## S17.22: Rewrite with another model.
 
 - Done when: From an answer, the user can regenerate it with a different model in one step.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | A 'Switch model' link appears only on failed answers and just opens the model picker; add 'try again with model X' on any answer. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | 'Switch model' appears only on failed answers and opens the model menu; the user must then retry. Add one-step regenerate with another model. | ui |
 
-Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:1082-1096`, `apps/mobile/app/(app)/chat/[id].tsx:1441-1441`, `apps/extension/src/features/side-panel/bubbles.ts:168-180`, `apps/extension/src/side_panel.ts:4433-4433`
+Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:1082-1096`, `apps/mobile/app/(app)/chat/[id].tsx:1441-1441`
 
 ## S17.23: Shorten answer.
 
@@ -365,30 +316,27 @@ Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1528-1542
 
 - Done when: A single answer can be exported to a file (e.g. PDF, Markdown, text).
 - Wave: 3
-- Already works on: mobile
+- Already works on: mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Export covers the whole conversation (Export dialog); add exporting a single answer. | ui |
 | desktop | partial | Same as web (hosted): Export covers the whole conversation (Export dialog); add exporting a single answer. | ui |
-| cli | partial | /export writes the whole conversation (markdown by default); add exporting one answer. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/pages/WebChatPage.tsx:5469-5469`, `apps/web/features/chat/pages/WebChatPage.tsx:5851-5856`, `apps/cli/src/tui/tui_app.rs:3581-3589`, `apps/cli/src/tui/tui_app.rs:3581-3582`
+Code: `apps/web/features/chat/pages/WebChatPage.tsx:5469-5469`, `apps/web/features/chat/pages/WebChatPage.tsx:5851-5856`
 
 ## S17.36: Actual-model and usage details.
 
 - Done when: For each answer the user can see which model actually answered and its usage (tokens/cost/time).
 - Wave: 3
-- Already works on: web, desktop, api
+- Already works on: web, desktop, vscode, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | The answering model is shown per answer; token/cost usage is shown only as tokens-per-second for on-device models, not for cloud answers. | ui |
 | cli | partial | The cited /usage and /cost print session-wide totals (total_input_tokens, cost_ledger.total_usd, turn_count) and the session model; nothing is stored or shown per answer (ChatMessage is role+text). The criterion is per-answer model and usage. Partial, miss ui; remaining: record and show per-turn model/tokens/cost (e.g. a trailing line after each answer or /usage --last). |  |
-| vscode | partial | Only the header provider badge and a session token counter (status bar) exist; add per-answer model and usage. | ui |
-| chrome | partial | The served model is stamped on each answer but never displayed, and no usage is shown; render model and usage per answer. | ui |
 
 Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:1101-1104`, `apps/mobile/src/features/chat/components/MessageBubble.tsx:1113-1124`, `apps/mobile/src/features/chat/components/MessageList.tsx:92-92`, `apps/cli/src/tui/tui_app.rs:3897-3910`
 
@@ -416,15 +364,3 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1994-1994`, `apps/mobile/st
 | mobile | partial | Stopping settles agent/research turns as 'Cancelled after …', but a plain answer stopped mid-stream shows no stopped marker and looks complete. | states |
 
 Code: `apps/mobile/stores/chat/chatExecutionStore.ts:2840-2850`, `apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx:92-92`
-
-## S17.40: Empty-output error state.
-
-- Done when: A turn that returns nothing shows an explicit 'no response' error with retry, not an empty bubble.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | The panel has no empty-turn check of its own; it shows an error only when the gateway sends an empty_response stream error (agentic tool-loop path), otherwise a finished empty turn renders as an empty bubble. | states |
-
-Code: `apps/extension/src/features/cloud-bridge/freeTrialClient.ts:615-618`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:2949-2949`

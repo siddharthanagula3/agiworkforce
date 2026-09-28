@@ -134,7 +134,6 @@ const WORKSPACE_SCOPE_BASELINE = new Map([
   ['apps/web/lib/user-connector-tools.ts', 4],
   ['apps/web/lib/services/product-link-resolver.ts', 3],
   ['apps/web/lib/server/video-generation-transcript.ts', 3],
-  ['apps/web/lib/services/retrieval-index-service.ts', 2],
   ['apps/web/lib/server/video-generation-jobs.ts', 2],
   ['apps/web/app/api/llm/v1/chat/completions/lib/context-compaction.ts', 2],
   ['apps/web/lib/triggers/trigger-service.ts', 1],
@@ -248,6 +247,15 @@ const ALLOWLIST = [
       'the same pre-account rows the api/waitlist entry retires, reached through the service ' +
       'rather than the route: a waitlist row is an email captured before any account exists, ' +
       'so there is no owner to constrain by',
+  },
+  {
+    match: /lib\/support\/tickets\/recovery\.ts$/,
+    tables: ['profiles'],
+    reason:
+      'an account-recovery request comes from someone who has lost access, so there is no ' +
+      'session to scope by: the email names the account, the caller gets the same answer ' +
+      'whether or not a profile matches, and the matched id only files a support ticket and a ' +
+      'security event for staff review',
   },
   {
     match: /lib\/server\/security-log-retention\.ts$/,
@@ -860,6 +868,14 @@ const ALLOWLIST = [
       'buildPredicate binds organizationId as the first, mandatory parameter and always seeds ' +
       'the where clause with `organization_id = $1`; callers cannot omit it, and the route ' +
       '(api/settings/organization/audit) is additionally gated by isOrgAdminRole',
+  },
+  {
+    match: /lib\/services\/schedule-share-service\.ts$/,
+    tables: ['scheduled_task_shares'],
+    reason:
+      'getSharedSchedule reads a share by its unguessable token and skips revoked rows; a public ' +
+      'schedule link has no viewer subject to constrain by, and every other statement in the ' +
+      'service runs on the caller-scoped adapter',
   },
   {
     match: /lib\/services\/org-shared-session-service\.ts$/,

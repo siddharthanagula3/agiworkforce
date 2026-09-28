@@ -118,14 +118,14 @@ Code: `apps/mobile/src/features/voice/components/AudioRoutePicker.tsx:46-52`, `a
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Members appear only as raw user ids with a per-project access select in Workspace > Sharing; add a people picker (search by name or email) for sharing and assigning. | ui |
-| desktop | partial | Members appear only as raw user ids with a per-project access select in Workspace > Sharing; add a people picker (search by name or email) for sharing and assigning. | ui |
+| web | partial | b420b0a10 a0b18189f: MemberPicker on p-privacy's roster for sharing and delegation, delegation member list loads with its workspace id; no Share button on the project page, legal-hold member field still free text | share entry on the project page, legal-hold member field |
+| desktop | partial | b420b0a10 a0b18189f: MemberPicker on p-privacy's roster for sharing and delegation, delegation member list loads with its workspace id; no Share button on the project page, legal-hold member field still free text | share entry on the project page, legal-hold member field |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/settings/sections/OrganizationSharingSection.tsx:292-316`, `apps/web/features/settings/sections/OrganizationSharingSection.tsx:317-332`, `apps/web/app/workspace/sharing/page.tsx:16-16`
+Code: `apps/web/shared/components/people/MemberPicker.tsx:99-99`, `apps/web/features/settings/sections/OrganizationSharingSection.tsx:282-282`, `apps/web/features/workspace-console/components/WorkspaceDelegation.tsx:288-288`, `apps/web/features/workspace-console/components/WorkspaceDelegation.tsx:124-124`
 
 ## S9.13: File browser.
 
@@ -136,10 +136,9 @@ Code: `apps/web/features/settings/sections/OrganizationSharingSection.tsx:292-31
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | Only generated artifacts are listed (Artifacts view); uploaded and library files cannot be browsed from VS Code. | ui |
 | chrome | partial | Only generated artifacts are listed in the drawer; uploaded and library files cannot be browsed from the side panel. | ui |
 
-Code: `apps/extension-vscode/src/features/artifacts/artifactsTree.ts:98-110`, `apps/extension-vscode/src/core/chatSetup.ts:105-105`, `apps/extension/src/features/side-panel/artifactsDrawer.ts:230-236`, `apps/extension/src/side_panel.ts:7021-7021`
+Code: `apps/extension/src/features/side-panel/artifactsDrawer.ts:230-236`, `apps/extension/src/side_panel.ts:7021-7021`
 
 ## S9.14: Folder tree.
 
@@ -162,11 +161,10 @@ Code: `apps/extension-vscode/src/features/artifacts/artifactsTree.ts:98-110`, `a
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Tables in answers render as static rows; there is no sortable data table for tabular results. | ui |
-| cli | partial | Markdown tables print as bordered static text with 40-character column caps; no sorting or scrolling of wide tables. | ui |
-| vscode | partial | Markdown tables render static through markdown-it in the sidebar; no sortable data table. | ui |
+| cli | partial | Tables now wrap without losing text; there is still no sorting or horizontal scrolling. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/chat/components/MessageContentRenderer.tsx:306-332`, `apps/cli/src/tui/markdown_renderer.rs:276-290`, `apps/extension-vscode/src/webview/render.ts:5-10`
+Code: `apps/mobile/src/features/chat/components/MessageContentRenderer.tsx:306-332`, `apps/cli/src/tui/markdown_renderer.rs:448-448`
 
 ## S9.17: Media gallery.
 
@@ -197,17 +195,14 @@ Code: `apps/cli/src/tui/tui_app.rs:3278-3295`
 
 - Done when: Tasks are laid out as a board with a column per status so the user sees and manages work by stage.
 - Wave: 3
+- Already works on: web, desktop, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Tasks are a filtered list; add a board with a column per status (queued, running, needs approval, done) that the user can scan and move work across. | ui |
-| desktop | partial | Tasks are a filtered list; add a board with a column per status (queued, running, needs approval, done) that the user can scan and move work across. | ui |
 | mobile | partial | Tasks are a filtered list; add a board with a column per status (queued, running, needs approval, done) that the user can scan and move work across. | ui |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | The Cloud Tasks view is one flat tree of runs with state icons; add a status-grouped board or at least grouping by stage. | ui |
-| chrome | partial | Tasks are a filtered list; add a board with a column per status (queued, running, needs approval, done) that the user can scan and move work across. | ui |
 
-Code: `packages/ui/unified-chat/src/components/tasks/TasksPage.tsx:468-477`, `apps/web/app/tasks/page.tsx:12-17`, `apps/mobile/src/features/tasks/CloudTasksScreen.tsx:448-458`, `apps/extension-vscode/src/features/cloud-tasks/cloudTasksTree.ts:102-104`
+Code: `apps/mobile/src/features/tasks/CloudTasksScreen.tsx:448-458`
 
 ## S9.22: Stepper.
 
@@ -260,17 +255,16 @@ Code: `apps/mobile/app/(app)/_layout.tsx:15-15`, `apps/mobile/src/shared/hooks/u
 
 - Done when: A panel lists a resource's saved versions (when, what) and lets the user open or restore one.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Versions are paged one at a time (vN/M with Restore); add a panel listing every version with when and what changed. | ui |
-| desktop | partial | Versions are paged one at a time (vN/M with Restore); add a panel listing every version with when and what changed. | ui |
 | mobile | partial | Versions are paged one at a time (vN/M with Restore); add a panel listing every version with when and what changed. | ui |
 | cli | partial | /rewind only steps back N checkpoints blind; add a list of checkpoints (time, last message) to pick from. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1273-1273`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1313-1313`, `apps/web/features/chat/components/artifacts/ArtifactsPanel.tsx:643-643`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:556-556`
+Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:556-556`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:575-575`, `apps/cli/src/tui/tui_app.rs:3591-3591`, `apps/cli/src/repl/registry.rs:872-872`
 
 ## S9.27: Diff viewer.
 
@@ -323,14 +317,13 @@ Code: `apps/extension/src/side_panel.ts:8368-8368`, `apps/extension/src/features
 
 - Done when: One view states in plain language what the assistant or a connected app is allowed to do (scopes, autonomy, allowed sites or tools).
 - Wave: 3
-- Already works on: web, desktop, mobile, chrome
+- Already works on: web, desktop, mobile, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | The TUI /status shows mode and sandbox, but the allow/deny rule list only prints in the `agi --no-tui` REPL; show the rules in the TUI. | ui |
 | vscode | partial | The header pill names the trust boundary and the mode picker sets autonomy, but nothing lists what a session may do (tools, folders, commands) in one place. | ui |
 
-Code: `apps/cli/src/tui/tui_app.rs:3408-3408`, `apps/cli/src/tui/tui_app.rs:3636-3636`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2181-2181`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2866-2866`
+Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2181-2181`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2866-2866`
 
 ## S9.33: Integration connection card.
 
@@ -340,10 +333,9 @@ Code: `apps/cli/src/tui/tui_app.rs:3408-3408`, `apps/cli/src/tui/tui_app.rs:3636
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | /mcp lists only servers that loaded, each hard-coded "Connected"; show failed or needs-auth servers and the account's cloud connectors with a connect action. | ui |
-| vscode | partial | Connectors list with status in a quick pick, but connecting or disconnecting opens the web app; add in-extension connect. | surface-only |
+| cli | partial | Configured servers now show their real state; the account's cloud connectors with a connect action are still not listed. | ui |
 
-Code: `apps/cli/src/tui/tui_app.rs:3613-3613`, `apps/cli/src/tui/tui_app.rs:3625-3625`, `apps/extension-vscode/src/features/connectors/connectorPresentation.ts:10-10`, `apps/extension-vscode/src/core/commandSetup.ts:2307-2307`
+Code: `apps/cli/src/tui/tui_app.rs:4021-4021`
 
 ## S9.34: Capability-warning card.
 

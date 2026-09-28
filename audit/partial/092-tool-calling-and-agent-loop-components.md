@@ -6,50 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S92.04: Tool argument validator.
-
-- Done when: Every tool call's arguments are validated against the tool's declared schema before execution, and invalid calls are rejected with a reason.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | The loop only JSON-parses arguments (malformed JSON still runs as {_raw}); validation is left to each tool (zod in office/clarify), and MCP/connector calls are forwarded unchecked. Add one schema check before dispatch. | handler |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:1723-1730`
-
-## S92.09: Large-result reference service.
-
-- Done when: Oversized tool results are stored once and referenced by id, so the model and user can fetch the full result later.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Hosted results are only truncated (capOutput, a 200k history cap, 16 KB idempotency snapshot); nothing stores the full result or hands back a reference. Only the CLI saves overflow to a file. | handler, persistence |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:353-353`, `apps/cli/src/features/exec/tools/common/mod.rs:151-157`
-
-## S92.12: Dependency-aware execution.
-
-- Done when: Calls whose inputs depend on other calls' outputs are ordered or scheduled by those dependencies.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Calls are split only into parallel-safe and serial groups in model order; there is no dependency graph between calls, so the model must sequence dependent calls across steps. | handler |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:3947-3959`
-
-## S92.19: External-outcome reconciliation.
-
-- Done when: When an external action's outcome is unknown (timeout, crash), the runtime checks the external system and records the real outcome before retrying or reporting.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Unknown outcomes are never reconciled against the external system: at_most_once tools are only deduped by key, and automation outcome telemetry records client-side verification checks. Add a post-timeout check for send/pay/post tools. | handler |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-idempotency.ts:119-131`, `apps/web/app/api/automation/outcomes/route.ts:37-41`
-
 ## S92.21: Agent definition store.
 
 - Done when: Agent definitions (name, instructions, tools, model) are stored and can be run by the runtime.
@@ -71,17 +27,6 @@ Code: `apps/cli/src/agents.rs:331-335`, `apps/web/app/api/agents/execute/route.t
 | platform | partial | Subagents run only in the CLI runtime (task tool, subagent_v2); the hosted loop has depth/fan-out budget constants but no subagent spawning. | handler |
 
 Code: `apps/cli/src/agent/chat.rs:1710-1718`, `apps/web/lib/services/cloud-agent-budget.ts:20-21`
-
-## S92.26: Completion-condition evaluator.
-
-- Done when: One evaluator decides whether a turn finished, came back empty, was blocked, cancelled or cut off, for every path that persists a turn.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | The chat tool loop and stream/response builders decide completion through turn-completeness, but the research loop persists its report with its own inline empty and blocked rules and never uses it. | handler |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/turn-completeness.ts:14-25`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:115-121`, `apps/web/app/api/llm/v1/chat/completions/lib/research-loop.ts:2313-2317`
 
 ## S92.27: Human-input queue.
 

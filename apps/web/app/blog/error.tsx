@@ -25,7 +25,7 @@ export default function BlogError({
         <AlertTriangle className="h-10 w-10 text-danger-text" />
       </div>
 
-      <h1 className="text-2xl font-bold text-foreground mb-3">Unable to Load Blog</h1>
+      <h1 className="text-h1 text-foreground mb-3">Unable to Load Blog</h1>
       <p className="text-muted-foreground max-w-sm mx-auto mb-2">
         An unexpected error occurred while loading this post or page. Please try again.
       </p>

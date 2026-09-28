@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   listAccounts: vi.fn<(...args: unknown[]) => Promise<unknown[]>>(async () => []),
   targetByUrl: vi.fn(),
   credentialSpec: vi.fn(),
+  beginAuthorization: vi.fn(),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -28,7 +29,9 @@ vi.mock('@/lib/connectors/oauth-store', () => ({
   createPendingAuthorization: vi.fn(),
   upsertConnectorOAuthGrant: vi.fn(),
 }));
-vi.mock('@/lib/connectors/mcp-discovery', () => ({ beginMcpAuthorization: vi.fn() }));
+vi.mock('@/lib/connectors/mcp-discovery', () => ({
+  beginMcpAuthorization: (...a: unknown[]) => mocks.beginAuthorization(...a),
+}));
 vi.mock('@/lib/connectors/mcp-directory-targets', () => ({
   isDirectoryServerId: vi.fn(() => false),
   normalizeRemoteUrl: vi.fn((url: string) => url),
@@ -65,6 +68,11 @@ beforeEach(() => {
   });
   mocks.targetByUrl.mockResolvedValue({ connectorId: DIRECTORY_ID, name: 'Sentry' });
   mocks.credentialSpec.mockResolvedValue({ placement: 'header', headerName: 'Authorization' });
+  mocks.beginAuthorization.mockResolvedValue({
+    status: 'redirect',
+    authorizationUrl: 'https://auth.example.com/authorize',
+    state: 'state-1',
+  });
 });
 
 describe('GET /api/connectors/oauth/start, API-key reconnect', () => {
@@ -100,12 +108,17 @@ describe('GET /api/connectors/oauth/start, API-key reconnect', () => {
     expect(mocks.targetByUrl).not.toHaveBeenCalled();
   });
 
-  it('leaves a hand-entered endpoint on the ordinary not-configured path', async () => {
+  it('signs a hand-entered endpoint in at its own URL', async () => {
     mocks.targetByUrl.mockResolvedValue(null);
 
     const response = await GET(request(`?mode=json&connectorId=${SERVER_ID}`));
+    const body = (await response.json()) as Record<string, string>;
 
-    expect(response.status).toBe(501);
+    expect(response.status).toBe(200);
+    expect(body['authorizeUrl']).toBe('https://auth.example.com/authorize');
+    expect(mocks.beginAuthorization).toHaveBeenCalledWith(
+      expect.objectContaining({ connectorId: SERVER_ID, mcpUrl: 'https://mcp.sentry.dev/mcp' }),
+    );
     expect(mocks.credentialSpec).not.toHaveBeenCalled();
   });
 
@@ -113,8 +126,10 @@ describe('GET /api/connectors/oauth/start, API-key reconnect', () => {
     mocks.credentialSpec.mockResolvedValue({ placement: 'query', headerName: 'Authorization' });
 
     const response = await GET(request(`?mode=json&connectorId=${SERVER_ID}`));
+    const body = (await response.json()) as Record<string, string>;
 
-    expect(response.status).toBe(501);
+    expect(body['status']).not.toBe(OAUTH_START_STATUS_CREDENTIAL);
+    expect(mocks.beginAuthorization).toHaveBeenCalled();
   });
 
   it('leaves every non-custom connector id untouched', async () => {

@@ -30,6 +30,9 @@ vi.mock('@features/settings/hooks/use-settings-queries', async (importOriginal) 
   };
 });
 
+vi.mock('@features/settings/components/Settings/SignInMethodsPanel', () => ({
+  SignInMethodsPanel: () => null,
+}));
 vi.mock('@features/settings/components/AuditLogPanel', () => ({
   AuditLogPanel: () => <div>Security activity</div>,
 }));

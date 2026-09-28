@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import type { ChatMessage, MessageRouting } from '../lib/types';
 import { getModelPresentationLabel } from '../lib/modelInfo';
 import { resolveModelEscalation } from '../lib/modelEscalation';
+import { useUiTranslation } from '@agiworkforce/ui';
 
 export interface ProvenanceFooterProps {
   message: Pick<
@@ -32,6 +33,7 @@ export function ProvenanceFooter({
   conversationModelId,
   onPinModel,
 }: ProvenanceFooterProps) {
+  const { plural } = useUiTranslation('chat');
   const parts = useMemo(() => {
     const out: string[] = [];
     const modelLabel = getModelPresentationLabel(message.model);
@@ -40,17 +42,33 @@ export function ProvenanceFooter({
       out.push(String(message.provider));
     }
     const toolCount = message.toolCalls?.length ?? 0;
-    if (toolCount > 0) out.push(`${toolCount} tool${toolCount === 1 ? '' : 's'}`);
+    if (toolCount > 0) {
+      out.push(
+        plural('counts.tools', toolCount, { one: '{{count}} tool', other: '{{count}} tools' }),
+      );
+    }
     const citationCount = message.citations?.length ?? 0;
     if (citationCount > 0) {
-      out.push(`${citationCount} citation${citationCount === 1 ? '' : 's'}`);
+      out.push(
+        plural('counts.citations', citationCount, {
+          one: '{{count}} citation',
+          other: '{{count}} citations',
+        }),
+      );
     }
     if (message.createdAt) {
       const rel = formatRelativeTime(message.createdAt);
       if (rel) out.push(rel);
     }
     return out;
-  }, [message.model, message.provider, message.toolCalls, message.citations, message.createdAt]);
+  }, [
+    plural,
+    message.model,
+    message.provider,
+    message.toolCalls,
+    message.citations,
+    message.createdAt,
+  ]);
 
   const routing = message.routing;
   const isAuto = routing?.source === 'auto';

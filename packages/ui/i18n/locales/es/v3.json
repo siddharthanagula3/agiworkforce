@@ -100,7 +100,10 @@
     "noArchived": "No hay chats archivados",
     "noConversations": "Aún no hay conversaciones",
     "showActive": "Volver a los chats activos",
-    "showArchived": "Mostrar chats archivados ({{count}})"
+    "showArchived": "Mostrar chats archivados ({{count}})",
+    "archivedToast": "Chat archivado",
+    "archivedUndo": "Deshacer",
+    "archivedView": "Ver archivados"
   },
   "emptyChat": {
     "neutralHeadline": "¿En qué puedo ayudarte hoy?",
@@ -381,6 +384,9 @@
       "constraintsPlaceholder": "Límites, cosas a evitar, fuentes preferidas…",
       "deliverableLabel": "Entregable",
       "deliverablePlaceholder": "El resultado concreto que esperas (un archivo, una tabla, un resumen…)",
+      "toolsLabel": "Herramientas que puede usar esta tarea",
+      "toolWebSearch": "Búsqueda web y navegación",
+      "toolCodeExecution": "Ejecución de código",
       "palette": {
         "label": "Herramientas de AGI Work",
         "searchPlaceholder": "Buscar complementos, carpetas y habilidades",
@@ -404,6 +410,8 @@
     "weeksAgo": "hace {{count}} semanas"
   },
   "canvas": {
-    "sessionOnlyNotice": "Por ahora los bocetos solo duran la sesión: al cerrar la app se borra el lienzo."
+    "sessionOnlyNotice": "Por ahora los bocetos solo duran la sesión: al cerrar la app se borra el lienzo.",
+    "elementCount_one": "{{count}} elemento",
+    "elementCount_other": "{{count}} elementos"
   }
 }

@@ -49,7 +49,7 @@ export default function ModelRolloutPanel() {
   return (
     <section className="flex flex-col gap-4" aria-labelledby="model-rollout-title">
       <div>
-        <h2 id="model-rollout-title" className="text-sm font-medium">
+        <h2 id="model-rollout-title" className="text-h5">
           Model rollout
         </h2>
         <p className="mt-1 text-xs text-muted-foreground">

@@ -9,6 +9,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  translateUi,
 } from '@agiworkforce/ui';
 
 interface Props {
@@ -98,8 +99,10 @@ class ErrorBoundary extends Component<Props, State> {
             <AlertTriangle className="mb-2 h-6 w-6 text-danger" />
             <p className="mb-2 text-sm text-danger">
               {this.props.componentName
-                ? `${this.props.componentName} failed to load`
-                : 'Something went wrong'}
+                ? translateUi('errors', 'boundary.sectionFailed', '{{name}} failed to load', {
+                    name: this.props.componentName,
+                  })
+                : translateUi('errors', 'boundary.title', 'Something went wrong')}
             </p>
             <Button
               onClick={this.handleRetry}
@@ -108,7 +111,7 @@ class ErrorBoundary extends Component<Props, State> {
               className="flex items-center gap-1.5"
             >
               <RefreshCw className="h-3 w-3" />
-              Try Again
+              {translateUi('errors', 'boundary.tryAgain', 'Try again')}
             </Button>
           </div>
         );
@@ -121,19 +124,30 @@ class ErrorBoundary extends Component<Props, State> {
               <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10">
                 <AlertTriangle className="h-8 w-8 text-danger" />
               </div>
-              <CardTitle className="text-2xl">Something went wrong</CardTitle>
+              <CardTitle className="text-2xl">
+                {translateUi('errors', 'boundary.title', 'Something went wrong')}
+              </CardTitle>
               <CardDescription>
-                We&apos;re sorry, but something unexpected happened.
+                {translateUi(
+                  'errors',
+                  'boundary.message',
+                  "We're sorry, but something unexpected happened.",
+                )}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               {this.state.errorId && (
                 <div className="rounded-lg bg-muted p-3">
                   <p className="text-sm text-muted-foreground">
-                    Error ID: <code className="font-mono">{this.state.errorId}</code>
+                    {translateUi('errors', 'boundary.errorIdLabel', 'Error ID:')}{' '}
+                    <code className="font-mono">{this.state.errorId}</code>
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Please include this ID when contacting support.
+                    {translateUi(
+                      'errors',
+                      'boundary.includeId',
+                      'Please include this ID when contacting support.',
+                    )}
                   </p>
                 </div>
               )}
@@ -164,7 +178,7 @@ class ErrorBoundary extends Component<Props, State> {
                   className="flex items-center gap-2"
                 >
                   <RefreshCw className="h-4 w-4" />
-                  Try Again
+                  {translateUi('errors', 'boundary.tryAgain', 'Try again')}
                 </Button>
                 <Button
                   onClick={this.handleReload}
@@ -172,7 +186,7 @@ class ErrorBoundary extends Component<Props, State> {
                   className="flex items-center gap-2"
                 >
                   <RefreshCw className="h-4 w-4" />
-                  Reload Page
+                  {translateUi('errors', 'boundary.reload', 'Reload page')}
                 </Button>
                 <Button
                   onClick={this.handleGoHome}
@@ -180,15 +194,15 @@ class ErrorBoundary extends Component<Props, State> {
                   className="flex items-center gap-2"
                 >
                   <Home className="h-4 w-4" />
-                  Go Home
+                  {translateUi('errors', 'boundary.goHome', 'Go home')}
                 </Button>
               </div>
 
               <div className="text-center text-sm text-muted-foreground">
                 <p>
-                  If this problem persists, please{' '}
+                  {translateUi('errors', 'boundary.keepsHappening', 'If this keeps happening,')}{' '}
                   <a href="/contact-sales" className="text-primary hover:underline">
-                    contact our support team
+                    {translateUi('errors', 'boundary.contactSupport', 'contact support')}
                   </a>
                   .
                 </p>

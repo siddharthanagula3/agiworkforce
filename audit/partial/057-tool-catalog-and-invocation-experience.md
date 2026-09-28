@@ -10,27 +10,14 @@ nothing is left.
 
 - Done when: The assistant can call a web-search tool during a turn and the searches and their sources are shown to the user.
 - Wave: 3
-- Already works on: web, desktop, mobile, chrome
+- Already works on: web, desktop, mobile, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | The CLI web_search tool only works after the user exports their own SEARCH_API_KEY (Brave or Tavily); there is no in-product way to supply a key or use the hosted search. | handler |
+| cli | partial | Hosted search needs the gateway web_search flag carried on the shared agiworkforce-llm ChatRequest (desktop also constructs it) or a hosted search endpoint; BYOK/Local still need SEARCH_API_KEY. | handler |
 | vscode | partial | The VS Code chat runs the local CLI, whose web_search needs a SEARCH_API_KEY environment variable the user must set outside the product. | handler |
-| api | partial | The /api/llm/v1/chat/completions body accepts `web_search` and runs the hosted tool, but the flag is not in the published openapi.json ChatCompletionRequest, so developers cannot rely on it; document it. | api |
 
-Code: `apps/cli/src/features/exec/tools/mod.rs:567-567`, `apps/cli/src/features/exec/tools/web/mod.rs:286-293`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:2836-2845`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:402-402`
-
-## S57.02: Fetch-page tool.
-
-- Done when: The assistant can call a tool that fetches a given web page and reads its content, with the fetch shown in the transcript.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| api | partial | The /api/llm/v1/chat/completions body accepts `web_fetch` and runs the hosted tool, but the flag is not in the published openapi.json ChatCompletionRequest, so developers cannot rely on it; document it. | api |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:3973-3985`
+Code: `apps/cli/src/features/exec/tools/web/mod.rs:286-286`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:2836-2845`, `apps/cli/src/features/exec/tools/web/mod.rs:286-293`
 
 ## S57.03: Source-reader tool.
 
@@ -39,30 +26,28 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:3973-39
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | No tool opens a document source by reference: url_fetch refuses PDFs and other non-text types, and uploaded documents are only extracted up front; add a reader tool for PDF/Office sources. | handler |
-| desktop | partial | No tool opens a document source by reference: url_fetch refuses PDFs and other non-text types, and uploaded documents are only extracted up front; add a reader tool for PDF/Office sources. | handler |
-| mobile | partial | No tool opens a document source by reference: url_fetch refuses PDFs and other non-text types, and uploaded documents are only extracted up front; add a reader tool for PDF/Office sources. | handler |
-| cli | partial | read_file and web_fetch read plain text sources only; there is no PDF or Office reader in the CLI tool set. | handler |
+| web | partial | url_fetch now reads PDFs and Word, Excel and PowerPoint files by URL (d67ced36f), but the served tool description is still v1, which says binary content is unsupported; tool.url_fetch_description@2 is recorded on the internal channel and needs a canary advance to stable. Uploaded files and connector sources are still not opened by reference. | handler |
+| desktop | partial | url_fetch now reads PDFs and Word, Excel and PowerPoint files by URL (d67ced36f), but the served tool description is still v1, which says binary content is unsupported; tool.url_fetch_description@2 is recorded on the internal channel and needs a canary advance to stable. Uploaded files and connector sources are still not opened by reference. | handler |
+| mobile | partial | url_fetch now reads PDFs and Word, Excel and PowerPoint files by URL (d67ced36f), but the served tool description is still v1, which says binary content is unsupported; tool.url_fetch_description@2 is recorded on the internal channel and needs a canary advance to stable. Uploaded files and connector sources are still not opened by reference. | handler |
+| cli | partial | No PDF/Office text extraction in the CLI; adding a PDF crate changes Cargo.lock (lead-owned). | handler |
 | vscode | partial | Runs the CLI tools: read_file and web_fetch read plain text only; no PDF or Office source reader. | handler |
 | chrome | partial | No tool opens a document source by reference: url_fetch refuses PDFs and other non-text types, and uploaded documents are only extracted up front; add a reader tool for PDF/Office sources. | handler |
-| api | partial | Only the undocumented web_fetch flag reads a page, and it refuses PDFs and other non-text types; no source reader is exposed. | api |
+| api | partial | url_fetch now reads PDFs and Word, Excel and PowerPoint files by URL (d67ced36f), but the served tool description is still v1, which says binary content is unsupported; tool.url_fetch_description@2 is recorded on the internal channel and needs a canary advance to stable. Uploaded files and connector sources are still not opened by reference. | handler |
 
-Code: `apps/web/lib/url-fetch/url-fetch-tool.ts:547-553`, `apps/web/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration.ts:107-111`, `apps/cli/src/features/exec/tools/mod.rs:365-372`, `apps/cli/src/features/exec/tools/mod.rs:568-568`
+Code: `apps/web/lib/url-fetch/url-fetch-tool.ts:479-479`, `apps/web/lib/prompts/prompt-manifest.ts:97-97`, `apps/cli/src/features/exec/tools/mod.rs:365-372`, `apps/cli/src/features/exec/tools/mod.rs:568-568`
 
 ## S57.04: File-search tool.
 
 - Done when: The assistant can call a tool that searches the user's files (by name or content) and returns matching paths or snippets.
 - Wave: 3
-- Already works on: cli, vscode
+- Already works on: web, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | No model-callable search over the user's own files: project and library files are retrieved automatically before the turn, and the sandbox list_files tool only lists (and is behind AGI_E2B_EXECUTION). | handler |
-| desktop | partial | Electron can glob and grep a granted folder (file_glob, file_grep) but no device step offers search to the model; only device_list_folder lists entries. | handler |
-| mobile | partial | No model-callable search over the user's own files: project and library files are retrieved automatically before the turn, and the sandbox list_files tool only lists (and is behind AGI_E2B_EXECUTION). | handler |
+| desktop | partial | search_files also runs in the desktop app over the account's files; searching a granted local folder as a device step (file_glob/file_grep) belongs to p-sessions. | handler |
 | chrome | partial | No model-callable search over the user's own files: project and library files are retrieved automatically before the turn, and the sandbox list_files tool only lists (and is behind AGI_E2B_EXECUTION). | handler |
 
-Code: `apps/web/lib/e2b/execution-tools.ts:17-17`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:2009-2015`, `apps/desktop/electron/runtime/dispatcher.ts:742-747`, `packages/contracts/local-runtime/src/device-steps.ts:78-83`
+Code: `apps/web/lib/server/tools/file-search-tool.ts:64-64`, `apps/web/lib/e2b/execution-tools.ts:17-17`
 
 ## S57.05: File-read tool.
 
@@ -75,7 +60,7 @@ Code: `apps/web/lib/e2b/execution-tools.ts:17-17`, `apps/web/app/api/llm/v1/chat
 | web | partial | The chat sandbox read_file tool runs only when AGI_E2B_EXECUTION=1 (default 0) with an E2B key and compute price set; until then the loop answers "not available". | flag-off |
 | mobile | partial | The chat sandbox read_file tool runs only when AGI_E2B_EXECUTION=1 (default 0) with an E2B key and compute price set; until then the loop answers "not available". | flag-off |
 | chrome | partial | The chat sandbox read_file tool runs only when AGI_E2B_EXECUTION=1 (default 0) with an E2B key and compute price set; until then the loop answers "not available". | flag-off |
-| api | partial | Reachable only through the undocumented code_execution flag, and the sandbox file tools are off unless AGI_E2B_EXECUTION=1. | flag-off, api |
+| api | partial | code_execution and its sandbox file tools are now documented; read_file still runs only when AGI_E2B_EXECUTION=1 (switched on by the lead at run end). | flag-off |
 
 Code: `apps/web/lib/e2b/execution-tools.ts:16-16`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:2009-2015`, `apps/web/lib/e2b/gate.ts:16-18`, `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1754`
 
@@ -90,7 +75,7 @@ Code: `apps/web/lib/e2b/execution-tools.ts:16-16`, `apps/web/app/api/llm/v1/chat
 | web | partial | The chat sandbox write_file tool runs only when AGI_E2B_EXECUTION=1 (default 0) with an E2B key and compute price set; until then the loop answers "not available". | flag-off |
 | mobile | partial | The chat sandbox write_file tool runs only when AGI_E2B_EXECUTION=1 (default 0) with an E2B key and compute price set; until then the loop answers "not available". | flag-off |
 | chrome | partial | The chat sandbox write_file tool runs only when AGI_E2B_EXECUTION=1 (default 0) with an E2B key and compute price set; until then the loop answers "not available". | flag-off |
-| api | partial | Reachable only through the undocumented code_execution flag, and the sandbox file tools are off unless AGI_E2B_EXECUTION=1. | flag-off, api |
+| api | partial | Documented; write_file still runs only when AGI_E2B_EXECUTION=1. | flag-off |
 
 Code: `apps/web/lib/e2b/execution-tools.ts:14-14`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:2009-2015`, `apps/web/lib/e2b/gate.ts:16-18`, `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1754`
 
@@ -98,56 +83,46 @@ Code: `apps/web/lib/e2b/execution-tools.ts:14-14`, `apps/web/app/api/llm/v1/chat
 
 - Done when: The assistant can call a tool that creates a spreadsheet file (xlsx) the user can open or download.
 - Wave: 3
-- Already works on: web, desktop, mobile, chrome
+- Already works on: web, desktop, mobile, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| api | partial | The /api/llm/v1/chat/completions body accepts `office_creation` and returns the generated file, but the flag is not in openapi.json; document it. | api |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:458-458`
 
 ## S57.08: Document tool.
 
 - Done when: The assistant can call a tool that creates a document file (docx) the user can open or download.
 - Wave: 3
-- Already works on: web, desktop, mobile, chrome
+- Already works on: web, desktop, mobile, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| api | partial | The /api/llm/v1/chat/completions body accepts `office_creation` and returns the generated file, but the flag is not in openapi.json; document it. | api |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:458-458`
 
 ## S57.09: Presentation tool.
 
 - Done when: The assistant can call a tool that creates a presentation file (pptx) the user can open or download.
 - Wave: 3
-- Already works on: web, desktop, mobile, chrome
+- Already works on: web, desktop, mobile, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| api | partial | The /api/llm/v1/chat/completions body accepts `office_creation` and returns the generated file, but the flag is not in openapi.json; document it. | api |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:458-458`
 
 ## S57.10: Code-execution tool.
 
 - Done when: The assistant can call a tool that runs code it wrote and returns the output in the transcript.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode
+- Already works on: web, desktop, mobile, cli, vscode, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | chrome | partial | Default path is provider-native code execution (resolveTurnCodeExecutionTools 236-244; the E2B tools need AGI_E2B_EXECUTION=1). Its output arrives as x_code_result (stream-transform 462-470). The Chrome stream parser only lists that key as recognized (freeTrialClient 623-636) and parses x_agent_event, x_generated_files and x_interactive_card; no code in apps/extension/src reads x_code_result or codeExecutionResult. So the code runs but its output never reaches the side-panel transcript, unlike web (MessageBubble) and mobile (toolCallAccumulator). remaining: 'Render x_code_result stdout/stderr as a step in the side panel, or ship the E2B path whose tool steps it already renders.' miss: ui. |  |
-| api | partial | The body accepts `code_execution` and runs provider or sandbox code, but the flag is not in openapi.json; document it. | api |
 
-Code: `apps/extension/src/features/side-panel/bubbles.ts:537-538`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:588-594`, `apps/web/lib/e2b/execution-tools.ts:194-212`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:457-457`
+Code: `apps/extension/src/features/side-panel/bubbles.ts:537-538`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:588-594`, `apps/web/lib/e2b/execution-tools.ts:194-212`
 
 ## S57.11: Shell tool.
 
@@ -175,7 +150,7 @@ Code: `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:84-87`, `apps/w
 | desktop | partial | Device steps can only replace a whole file (device_write_file); there is no targeted edit or patch step on the Mac. | handler |
 | mobile | partial | The chat sandbox edit_file tool runs only when AGI_E2B_EXECUTION=1 (default 0) with an E2B key and compute price set; until then the loop answers "not available". | flag-off |
 | chrome | partial | The chat sandbox edit_file tool runs only when AGI_E2B_EXECUTION=1 (default 0) with an E2B key and compute price set; until then the loop answers "not available". | flag-off |
-| api | partial | Reachable only through the undocumented code_execution flag, and edit_file runs only when AGI_E2B_EXECUTION=1. | flag-off, api |
+| api | partial | Documented; edit_file still runs only when AGI_E2B_EXECUTION=1. | flag-off |
 
 Code: `apps/web/lib/e2b/execution-tools.ts:18-18`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:2009-2015`, `apps/web/lib/e2b/gate.ts:16-18`, `packages/contracts/local-runtime/src/device-steps.ts:85-90`
 
@@ -229,12 +204,12 @@ Code: `apps/web/features/desktop-host/components/BrowserToolsDialog.tsx:56-56`, 
 | web | partial | Images are generated when the user's message is classified as an image request or Image mode is chosen; the model cannot call image generation as a tool mid-turn or inside AGI Work. | handler |
 | desktop | partial | Images are generated when the user's message is classified as an image request or Image mode is chosen; the model cannot call image generation as a tool mid-turn or inside AGI Work. | handler |
 | mobile | partial | Images are generated when the user's message is classified as an image request or Image mode is chosen; the model cannot call image generation as a tool mid-turn or inside AGI Work. | handler |
-| cli | partial | Images are generated only by the user's /image command or `agi image`; the agent has no image tool. | handler |
+| cli | partial | Expose cloud::image::generate as an agent tool for Managed sessions. | handler |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 | api | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/pages/WebChatPage.tsx:3409-3422`, `apps/web/lib/hooks/useMediaGeneration.ts:253-253`, `apps/mobile/app/(app)/chat/[id].tsx:113-113`, `apps/cli/src/cloud/image.rs:17-17`
+Code: `apps/web/features/chat/pages/WebChatPage.tsx:3409-3422`, `apps/web/lib/hooks/useMediaGeneration.ts:253-253`, `apps/mobile/app/(app)/chat/[id].tsx:113-113`, `apps/cli/src/cloud/image.rs:556-556`
 
 ## S57.17: Image-editing tool.
 
@@ -260,126 +235,45 @@ Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:194-194`, 
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Videos are generated only from the user's Video mode; the model cannot call a video tool during a turn. | handler |
-| desktop | partial | Videos are generated only from the user's Video mode; the model cannot call a video tool during a turn. | handler |
-| mobile | partial | Videos are generated only from the user's Video mode; the model cannot call a video tool during a turn. | handler |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-| api | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:1218-1220`, `apps/web/features/media/services/media-api-service.ts:195-195`, `apps/mobile/app/(app)/chat/[id].tsx:386-386`, `apps/mobile/src/features/video/services/videogen.ts:65-65`
-
-## S57.19: Transcription tool.
-
-- Done when: The assistant can transcribe an audio recording into text (a transcription tool or endpoint), beyond composer dictation.
-- Wave: 3
-- Already works on: api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Only the user's own dictation is transcribed into the composer; the assistant has no tool to transcribe an audio or video file it is given. | handler |
-| desktop | partial | Only the user's own dictation is transcribed into the composer; the assistant has no tool to transcribe an audio or video file it is given. | handler |
-| mobile | partial | Only the user's own dictation is transcribed into the composer; the assistant has no tool to transcribe an audio or video file it is given. | handler |
-| cli | partial | Dictation only (/voice), and it needs the user's own OPENAI_API_KEY or a local whisper binary; no transcription tool for files. | handler |
-| vscode | missing | Not built on this surface. |  |
-| chrome | partial | Only the user's own dictation is transcribed into the composer; the assistant has no tool to transcribe an audio or video file it is given. Chrome uses the browser's own SpeechRecognition. | handler |
-
-Code: `apps/web/features/chat/stores/voice-input-store.ts:150-150`, `apps/mobile/src/features/chat/components/ChatInput.tsx:571-571`, `apps/cli/src/voice.rs:4-5`, `apps/extension/src/features/side-panel/voice.ts:49-50`
-
-## S57.20: Speech-generation tool.
-
-- Done when: The assistant can generate spoken audio from text (a speech tool or endpoint) and play or return it.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Replies can be read aloud on request (device speech), but the assistant cannot call a speech-generation tool or produce an audio file. | handler |
-| desktop | partial | Replies can be read aloud on request (device speech), but the assistant cannot call a speech-generation tool or produce an audio file. | handler |
-| mobile | partial | Replies can be read aloud on request (device speech), but the assistant cannot call a speech-generation tool or produce an audio file. | handler |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-| api | missing | Not built on this surface. |  |
-
-Code: `apps/web/lib/hooks/useTTS.ts:76-76`, `apps/web/features/chat/components/messages/ChatMessageList.tsx:391-391`, `apps/mobile/src/features/chat/components/MessageBubble.tsx:427-433`
 
 ## S57.21: Memory tool.
 
 - Done when: The assistant can call a memory tool to save, recall or delete a remembered fact during a turn.
 - Wave: 3
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Memory is extracted and injected automatically around the turn; the model cannot call a memory tool to save, look up or forget a fact on request. | handler |
-| desktop | partial | Memory is extracted and injected automatically around the turn; the model cannot call a memory tool to save, look up or forget a fact on request. | handler |
-| mobile | partial | Memory is extracted and injected automatically around the turn; the model cannot call a memory tool to save, look up or forget a fact on request. | handler |
-| cli | partial | Memories are managed by the user's /memory command and the automatic pipeline; the agent has no memory tool. | handler |
 | vscode | partial | The CLI runtime injects and saves memory automatically; the agent has no memory tool. | handler |
 | chrome | partial | Memory is extracted and injected automatically around the turn; the model cannot call a memory tool to save, look up or forget a fact on request. | handler |
 
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:3056-3064`, `apps/cli/src/tui/widgets/command_popup.rs:233-233`
+Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:3056-3064`
 
 ## S57.22: Calendar tool.
 
 - Done when: The assistant can call a calendar tool to read or create events in the user's calendar.
 - Wave: 3
+- Already works on: cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Lane ruling (R-t clarification): an MCP endpoint that exists only through CONNECTOR_OAUTH_PROVIDERS_JSON is a feature gate, so the cell is partial/flag-off, not unverified. google-calendar, outlook and calendly are mcpConnector catalog entries (catalog.ts 154/164/174) with no MCP_ENDPOINTS record (0 hits), so getMcpEndpoint returns null (177-179) until the operator JSON supplies one. miss: flag-off. remaining: 'Calendar connectors ship no MCP endpoint; supply one in CONNECTOR_OAUTH_PROVIDERS_JSON (Codex queue: confirm the production env).' |  |
 | desktop | partial | Lane ruling (R-t clarification): an MCP endpoint that exists only through CONNECTOR_OAUTH_PROVIDERS_JSON is a feature gate, so the cell is partial/flag-off, not unverified. google-calendar, outlook and calendly are mcpConnector catalog entries (catalog.ts 154/164/174) with no MCP_ENDPOINTS record (0 hits), so getMcpEndpoint returns null (177-179) until the operator JSON supplies one. miss: flag-off. remaining: 'Calendar connectors ship no MCP endpoint; supply one in CONNECTOR_OAUTH_PROVIDERS_JSON (Codex queue: confirm the production env).' |  |
 | mobile | partial | Lane ruling (R-t clarification): an MCP endpoint that exists only through CONNECTOR_OAUTH_PROVIDERS_JSON is a feature gate, so the cell is partial/flag-off, not unverified. google-calendar, outlook and calendly are mcpConnector catalog entries (catalog.ts 154/164/174) with no MCP_ENDPOINTS record (0 hits), so getMcpEndpoint returns null (177-179) until the operator JSON supplies one. miss: flag-off. remaining: 'Calendar connectors ship no MCP endpoint; supply one in CONNECTOR_OAUTH_PROVIDERS_JSON (Codex queue: confirm the production env).' |  |
-| cli | partial | No calendar tool ships; the user can only register a third-party calendar MCP server themselves (agi mcp add). | handler |
-| vscode | partial | No calendar tool ships in the CLI runtime; only a user-registered MCP server could add one. | handler |
 | chrome | partial | Lane ruling (R-t clarification): an MCP endpoint that exists only through CONNECTOR_OAUTH_PROVIDERS_JSON is a feature gate, so the cell is partial/flag-off, not unverified. google-calendar, outlook and calendly are mcpConnector catalog entries (catalog.ts 154/164/174) with no MCP_ENDPOINTS record (0 hits), so getMcpEndpoint returns null (177-179) until the operator JSON supplies one. miss: flag-off. remaining: 'Calendar connectors ship no MCP endpoint; supply one in CONNECTOR_OAUTH_PROVIDERS_JSON (Codex queue: confirm the production env).' |  |
 | api | partial | Lane ruling (R-t clarification): an MCP endpoint that exists only through CONNECTOR_OAUTH_PROVIDERS_JSON is a feature gate, so the cell is partial/flag-off, not unverified. google-calendar, outlook and calendly are mcpConnector catalog entries (catalog.ts 154/164/174) with no MCP_ENDPOINTS record (0 hits), so getMcpEndpoint returns null (177-179) until the operator JSON supplies one. miss: flag-off. remaining: 'Calendar connectors ship no MCP endpoint; supply one in CONNECTOR_OAUTH_PROVIDERS_JSON (Codex queue: confirm the production env).' API turns load the same catalog. |  |
-
-Code: `apps/cli/src/lib.rs:1338-1341`
-
-## S57.23: Messaging tool.
-
-- Done when: The assistant can call a messaging tool to read or send messages on a connected service (e.g. Slack) after approval.
-- Wave: 3
-- Already works on: web, desktop, mobile, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | send_message only messages the user's own agent teammates; no external messaging tool ships unless the user registers an MCP server. | handler |
-| vscode | partial | The CLI runtime's send_message reaches only agent teammates; no external messaging tool. | handler |
-| api | partial | API-key turns run the account's connector tools server-side, but connectors, approvals and /approve are not documented in openapi.json. | api |
-
-Code: `apps/cli/src/platform/runtime/tool_catalog.rs:337-340`, `apps/web/app/api/llm/v1/chat/completions/route.ts:686-686`
 
 ## S57.24: Scheduling tool.
 
 - Done when: The assistant can call a tool that creates, lists or deletes a scheduled task for the user.
 - Wave: 3
-- Already works on: cli, vscode
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Schedules are created only from the Schedules screen; the assistant cannot create or change a schedule as a tool during chat. | handler |
-| desktop | partial | Schedules are created only from the Schedules screen; the assistant cannot create or change a schedule as a tool during chat. | handler |
-| mobile | partial | Schedules are created only from the Schedules screen; the assistant cannot create or change a schedule as a tool during chat. | handler |
 | chrome | partial | Schedules are created only from the Schedules screen; the assistant cannot create or change a schedule as a tool during chat. | handler |
 
-Code: `apps/web/app/chat/schedules/page.tsx:12-12`, `apps/mobile/lib/v1FeatureFlags.ts:16-16`, `apps/extension/src/side_panel.ts:9307-9307`
-
-## S57.25: Agent-delegation tool.
-
-- Done when: The assistant can call a tool that delegates a sub-task to another agent and uses its result.
-- Wave: 3
-- Already works on: cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Cloud turns run one model loop; the assistant cannot hand a sub-task to another agent (no subagent tool in the tool loop). | handler |
-| desktop | partial | Cloud turns run one model loop; the assistant cannot hand a sub-task to another agent (no subagent tool in the tool loop). | handler |
-| mobile | partial | Cloud turns run one model loop; the assistant cannot hand a sub-task to another agent (no subagent tool in the tool loop). | handler |
-| chrome | partial | Cloud turns run one model loop; the assistant cannot hand a sub-task to another agent (no subagent tool in the tool loop). | handler |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:2614-2618`, `apps/web/lib/services/cloud-agent-budget.ts:20-21`
+Code: `apps/extension/src/side_panel.ts:9307-9307`
 
 ## S57.26: Clarification/input tool.
 
@@ -395,47 +289,15 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:2614-2618`, `ap
 
 Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1756-1756`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:713-713`, `apps/cli/src/features/exec/tools/task_registry/mod.rs:489-492`, `apps/extension-vscode/src/features/permissions/approvalScope.ts:15-15`
 
-## S57.27: Approval-request tool.
-
-- Done when: The assistant can call a tool that explicitly asks the user to approve a plan or decision and waits for the answer.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Approvals are raised by the server gate per tool call (and by Deep Research plan review); the model has no tool to ask the user to approve a plan or decision before it continues. | handler |
-| desktop | partial | Approvals are raised by the server gate per tool call (and by Deep Research plan review); the model has no tool to ask the user to approve a plan or decision before it continues. | handler |
-| mobile | partial | Approvals are raised by the server gate per tool call (and by Deep Research plan review); the model has no tool to ask the user to approve a plan or decision before it continues. | handler |
-| cli | partial | Only in plan mode: the model submits update_plan and waits for /plan approve; in normal mode it cannot ask for approval itself. | handler |
-| vscode | partial | Only runtime-raised approvals (per tool) reach the sidebar; the model has no approval-request tool. | handler |
-| chrome | partial | Approvals are raised by the server gate per tool call (and by Deep Research plan review); the model has no tool to ask the user to approve a plan or decision before it continues. | handler |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-call-gate.ts:136-144`, `apps/mobile/src/features/chat/components/research/ResearchRunCard.tsx:181-181`, `apps/cli/src/agent/chat.rs:2191-2194`, `apps/cli/src/repl/slash_commands.rs:332-332`
-
-## S57.28: Tool discovery.
-
-- Done when: When more tools are connected than fit in a turn, the model is told which others exist and can load them on demand.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| api | partial | API-key turns get the same deferred-tool directory for the account's connectors, but connector tools and load_connector_tools are undocumented in openapi.json. | api |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-schema-loader.ts:152-160`, `apps/web/app/api/llm/v1/chat/completions/route.ts:686-686`
-
 ## S57.29: Tool search.
 
 - Done when: The model or user can search the available tools by keyword and get matching tools with their descriptions.
 - Wave: 3
-- Already works on: cli, vscode
+- Already works on: web, desktop, mobile, cli, vscode, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The model sees a name list of deferred connector tools and loads schemas by exact name (load_connector_tools); it cannot search tools by keyword, and the user has no tool search. | handler |
-| desktop | partial | The model sees a name list of deferred connector tools and loads schemas by exact name (load_connector_tools); it cannot search tools by keyword, and the user has no tool search. | handler |
-| mobile | partial | The model sees a name list of deferred connector tools and loads schemas by exact name (load_connector_tools); it cannot search tools by keyword, and the user has no tool search. | handler |
 | chrome | partial | The model sees a name list of deferred connector tools and loads schemas by exact name (load_connector_tools); it cannot search tools by keyword, and the user has no tool search. | handler |
-| api | partial | Only the exact-name loader exists, and it is undocumented for API callers. | api |
 
 Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-schema-loader.ts:152-160`
 
@@ -443,59 +305,14 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-schema-loader.ts:152-16
 
 - Done when: Each tool carries a readable description and typed parameter schema that the model uses and the user can inspect.
 - Wave: 3
-- Already works on: api
+- Already works on: web, desktop, cli, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Every tool reaches the model with a description and typed input schema, but the user has no view of what each tool does or what parameters it takes; connector settings list tool names only. | ui |
-| desktop | partial | Every tool reaches the model with a description and typed input schema, but the user has no view of what each tool does or what parameters it takes; connector settings list tool names only. | ui |
 | mobile | partial | Every tool reaches the model with a description and typed input schema, but the user has no view of what each tool does or what parameters it takes; connector settings list tool names only. | ui |
-| cli | partial | The catalog gives the model descriptions and input schemas, but no command shows a tool's description or parameters to the user. | ui |
-| vscode | partial | The runtime's tools carry schemas for the model; the sidebar never shows a tool's description or parameters. | ui |
 | chrome | partial | Every tool reaches the model with a description and typed input schema, but the user has no view of what each tool does or what parameters it takes; connector settings list tool names only. | ui |
 
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-metadata.ts:344-349`, `apps/cli/src/features/exec/tools/mod.rs:581-588`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:2836-2845`
-
-## S57.32: Tool-call progress.
-
-- Done when: While a tool runs the transcript shows it as running (with elapsed time), then completed or failed.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | The cited apply_tool_event shows a running row that becomes complete/failed, but the criterion's elapsed time is absent: ToolCompleted carries duration_ms (app_event.rs 61-67) and the handler discards it with '..' (4884-4896); ToolCell has no timing field and transcript_cell.rs never prints one. Every other surface shows per-tool elapsed time. remaining: 'Show per-tool elapsed time on the TUI tool row (duration_ms is already emitted).' miss: ui. |  |
-| api | partial | Streamed turns carry tool status and agent events (x_tool_status, x_agent_event) but these extensions are not documented in openapi.json. | api |
-
-Code: `apps/cli/src/tui/tui_app.rs:4865-4883`, `apps/cli/src/features/exec/tools/mod.rs:549-551`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:4048-4049`
-
-## S57.34: Tool result expansion.
-
-- Done when: The user can expand a tool call to see its full arguments and result, and collapse it again.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | TUI rows show a one-line output preview only; there is no control to expand a tool call to its full output (overflow is saved to a file path). | ui |
-
-Code: `apps/cli/src/tui/tui_app.rs:4902-4906`
-
-## S57.35: Tool error and retry.
-
-- Done when: A failed tool call shows its error, the error goes back to the model so it can retry or explain, and the user can retry.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | The cited Resend (ToolCallCard 450-460) renders only inside showExpiredApproval ('This approval request expired'), and onRetryTurn (ToolTimeline 463-469) only feeds ConnectorConnectCard. A failed tool call shows its error and the error goes back to the model, but no control retries it; the user must send a new message, the same gap the auditor rated partial on chrome. remaining: 'Failed tool calls show the error but offer no retry control; add a retry action on the failed card.' miss: ui. |  |
-| desktop | partial | Hosted-web mirror of the web cell: the only Resend is the expired-approval one (ToolCallCard 450-460); nothing retries a failed tool call. remaining: 'Failed tool calls show the error but offer no retry control; add a retry action on the failed card.' miss: ui. |  |
-| mobile | partial | The cited 'Resend' (ToolCallTimeline 258-273) is inside the approvalExpired branch of the approval card; a tool that ended failed shows its error (statusTone error) with no retry control. remaining: 'Failed tool calls show the error but offer no retry control; add a retry action on the failed row.' miss: ui. |  |
-| cli | partial | apply_tool_event only flips the row to Failed (tui_app 4884-4896); no slash command or key retries a failed tool (no retry/resend handling anywhere in tui_app.rs), and 'the user retries by asking again' is not a control under R-k. Chrome got partial for exactly this, so cli must match. remaining: 'No retry control for a failed tool call in the TUI; add /retry or a key on the failed row.' miss: ui. |  |
-| vscode | partial | The only Retry in the sidebar (webviewContent 3343-3349) is for a retryable turn-error presentation; a toolCallEnd with isError (5109-5113) marks the card red and continues the turn with no retry control. Same gap the auditor rated partial on chrome, so vscode must match. remaining: 'Failed tool calls show the error but offer no retry control; add a retry action on the failed card.' miss: ui. notes: needs-local-cli. |  |
-| chrome | partial | Chrome shows the tool's error text, but has no retry control for a failed tool call; the user must send a new message. | ui |
-
-Code: `packages/ui/unified-chat/src/components/ToolCallCard.tsx:320-329`, `packages/ui/unified-chat/src/components/ToolCallCard.tsx:457-460`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:2614-2618`, `apps/mobile/src/features/chat/components/ToolCallTimeline.tsx:267-273`
+Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-metadata.ts:344-349`
 
 ## S57.36: Large-result references.
 
@@ -516,30 +333,11 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:353-353`, `apps
 
 - Done when: After tool calls run, the user can later review a record of which tool ran, with what input, and its outcome.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli, vscode, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | The transcript keeps each tool's input and output, but mobile has no call log or receipt view for connector actions. | ui |
-| cli | partial | Approvals are appended to an audit log and tool rows stay in the session transcript, but there is no receipt view of past tool outcomes. | ui |
-| vscode | partial | Tool cards persist only in the current sidebar session; no receipt or call log view. | ui |
 | chrome | partial | Tool steps show in the transcript only; Chrome has no call log or receipt view. | ui |
-| api | partial | GET /api/connectors/calls returns the connector call log but is not in openapi.json. | api |
 
-Code: `apps/mobile/src/features/chat/components/ToolCallTimeline.tsx:368-386`, `apps/cli/src/approval_audit.rs:12-16`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:5908-5913`, `apps/extension/src/features/side-panel/bubbles.ts:537-538`
-
-## S57.38: Per-tool cost and usage where exposed.
-
-- Done when: Where the product exposes costs, the user can see the cost or usage attributable to each tool call.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Cost is shown per task or run, never per tool call; web search and sandbox charges are metered server-side but not itemized to the user. | ui |
-| desktop | partial | Cost is shown per task or run, never per tool call; web search and sandbox charges are metered server-side but not itemized to the user. | ui |
-| mobile | missing | Not built on this surface. |  |
-| cli | partial | The cost ledger records each provider request of a tool loop, not each tool call. | ui |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `packages/ui/unified-chat/src/components/tasks/TaskDetailPanel.tsx:292-298`, `apps/cli/src/cost_ledger.rs:95-97`
+Code: `apps/mobile/src/features/chat/components/ToolCallTimeline.tsx:368-386`, `apps/extension/src/features/side-panel/bubbles.ts:537-538`

@@ -49,7 +49,11 @@ function blocksToInputContent(blocks: ContentBlock[]): ResponsesInputContent[] {
         b.source.type === 'base64'
           ? `data:${b.source.mediaType};base64,${b.source.data}`
           : b.source.url;
-      out.push({ type: 'input_image', image_url });
+      out.push(
+        b.detail
+          ? { type: 'input_image', image_url, detail: b.detail }
+          : { type: 'input_image', image_url },
+      );
     } else if (isFileBlock(b)) {
       out.push({
         type: 'input_file',
@@ -295,6 +299,7 @@ export function translateChatRequestToResponses(
     ...(options.serviceTier ? { service_tier: options.serviceTier } : {}),
     ...(req.metadata ? { metadata: req.metadata as Record<string, string> } : {}),
     ...(promptCacheKey ? { prompt_cache_key: promptCacheKey } : {}),
+    ...(req.responseFormat ? { text: { format: req.responseFormat } } : {}),
   };
 
   return params;

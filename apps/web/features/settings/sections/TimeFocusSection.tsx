@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Button, Switch } from '@agiworkforce/ui';
+import { Button, Switch, useUnsavedChangesGuard } from '@agiworkforce/ui';
 import {
   BREAK_REMINDER_MINUTES,
   TIME_FOCUS_PREFERENCES_NAMESPACE,
@@ -112,6 +112,12 @@ export function TimeFocusSection() {
     }
   }
 
+  const { dialog: discardDialog } = useUnsavedChangesGuard({
+    dirty: dirty && !saving,
+    description:
+      'Your time and focus changes have not been saved. If you leave now, they will be lost.',
+  });
+
   const status = loading
     ? 'Loading account settings...'
     : saving
@@ -124,6 +130,7 @@ export function TimeFocusSection() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
+      {discardDialog}
       <header>
         <h1
           style={{
@@ -214,7 +221,8 @@ export function TimeFocusSection() {
               Quiet hours
             </div>
             <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
-              Add light friction when you open AGI during time you set aside.
+              Hold notifications, and add light friction when you open AGI, during time you set
+              aside. Approval requests and failures still come through.
             </div>
           </div>
           <Switch

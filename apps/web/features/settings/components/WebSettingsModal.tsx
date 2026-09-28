@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { usePathname } from 'next/navigation';
 import { useSession } from '@/lib/identity/client';
 import {
+  confirmNavigation,
   SettingsModal,
   SETTINGS_NAV_GROUP_CUSTOMIZE,
   SETTINGS_NAV_GROUP_DESKTOP,
@@ -48,6 +49,7 @@ import { ReflectSection } from '../sections/ReflectSection';
 import { TimeFocusSection } from '../sections/TimeFocusSection';
 import { HelpSection } from '../sections/HelpSection';
 import { SettingsSectionNavigationProvider } from './SettingsSectionLink';
+import { loadOnboardingSeed } from '@/features/onboarding/lib/onboarding-preferences';
 import {
   HOSTED_SETTINGS_NAV_GROUPS,
   WEB_SETTINGS_NAV_GROUPS,
@@ -142,6 +144,11 @@ export function WebSettingsModal({
     if (next !== null) replaceSettingsHash(next);
   }, []);
 
+  const handleSectionLink = useCallback(
+    (key: string) => confirmNavigation(() => handleSectionChange(key)),
+    [handleSectionChange],
+  );
+
   const [customConnectorOpen, setCustomConnectorOpen] = useState(false);
 
   useEffect(() => {
@@ -214,9 +221,25 @@ export function WebSettingsModal({
     // connectors / skills / plugins fall through to adapter-driven built-in panels
   };
 
+  const [workRole, setWorkRole] = useState<string | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    loadOnboardingSeed()
+      .then((seed) => {
+        if (!cancelled) setWorkRole(seed.workDescription || null);
+      })
+      .catch(() => {
+        if (!cancelled) setWorkRole(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
   return (
     <Suspense fallback={<SectionSkeleton />}>
-      <SettingsSectionNavigationProvider onNavigate={handleSectionChange} onExit={onClose}>
+      <SettingsSectionNavigationProvider onNavigate={handleSectionLink} onExit={onClose}>
         <SettingsModal
           open={open}
           onClose={onClose}
@@ -229,6 +252,7 @@ export function WebSettingsModal({
           navBadges={connectors.navBadges}
           openCustomConnector={customConnectorOpen}
           onCustomConnectorOpenChange={handleCustomConnectorOpenChange}
+          workRole={workRole}
         />
         <ToolPermissionsPanel
           connector={connectors.toolPermissionsConnector}

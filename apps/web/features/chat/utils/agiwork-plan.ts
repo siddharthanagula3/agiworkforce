@@ -1,10 +1,5 @@
-
 export type AgiWorkPlanStepStatus =
-  | 'pending'
-  | 'in_progress'
-  | 'completed'
-  | 'failed'
-  | 'cancelled';
+  'pending' | 'in_progress' | 'completed' | 'failed' | 'cancelled';
 
 export interface AgiWorkPlanStep {
   id: string;
@@ -12,15 +7,23 @@ export interface AgiWorkPlanStep {
   status: AgiWorkPlanStepStatus;
 }
 
+export const AGIWORK_EXCLUDABLE_TOOLS = ['web_search', 'code_execution'] as const;
+export type AgiWorkExcludableTool = (typeof AGIWORK_EXCLUDABLE_TOOLS)[number];
+
 export interface AgiWorkGoalInput {
   goal: string;
   constraints?: string;
   deliverable?: string;
+  excludedTools?: AgiWorkExcludableTool[];
 }
 
 export function buildAgiWorkGoalInput(
   message: string,
-  fields?: { constraints?: string; deliverable?: string },
+  fields?: {
+    constraints?: string;
+    deliverable?: string;
+    excludedTools?: readonly AgiWorkExcludableTool[];
+  },
 ): AgiWorkGoalInput | undefined {
   const goal = message.trim();
   if (!goal) return undefined;
@@ -30,6 +33,7 @@ export function buildAgiWorkGoalInput(
     goal,
     ...(constraints ? { constraints } : {}),
     ...(deliverable ? { deliverable } : {}),
+    ...(fields?.excludedTools?.length ? { excludedTools: [...fields.excludedTools] } : {}),
   };
 }
 
@@ -85,5 +89,39 @@ export function agiWorkPlanProgress(steps: AgiWorkPlanStep[] | undefined): {
   return {
     completed: list.filter((step) => step.status === 'completed').length,
     total: list.length,
+  };
+}
+
+export interface AgiWorkPlanReview {
+  goal: AgiWorkGoalInput;
+  awaitingApproval: boolean;
+}
+
+function optionalText(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value : undefined;
+}
+
+export function parseAgiWorkPlanReview(payload: unknown): AgiWorkPlanReview | null {
+  if (!payload || typeof payload !== 'object') return null;
+  const record = payload as { goal?: unknown; awaiting_approval?: unknown };
+  if (!record.goal || typeof record.goal !== 'object') return null;
+  const goal = record.goal as Record<string, unknown>;
+  const text = optionalText(goal['goal']);
+  if (!text) return null;
+  const constraints = optionalText(goal['constraints']);
+  const deliverable = optionalText(goal['deliverable']);
+  const excludedTools = Array.isArray(goal['excludedTools'])
+    ? goal['excludedTools'].filter((tool): tool is AgiWorkExcludableTool =>
+        (AGIWORK_EXCLUDABLE_TOOLS as readonly unknown[]).includes(tool),
+      )
+    : [];
+  return {
+    goal: {
+      goal: text,
+      ...(constraints ? { constraints } : {}),
+      ...(deliverable ? { deliverable } : {}),
+      ...(excludedTools.length > 0 ? { excludedTools } : {}),
+    },
+    awaitingApproval: record.awaiting_approval === true,
   };
 }

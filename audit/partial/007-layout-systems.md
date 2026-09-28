@@ -22,28 +22,25 @@ Code: `apps/cli/src/tui/tui_app.rs:1460-1463`, `apps/cli/src/tui/tui_app.rs:1448
 
 - Done when: Message text is constrained to a readable column width that stays centred when the window is wide.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| vscode | partial | Messages fill the webview width; in the wide "Open Chat in Editor" tab lines run the full editor width. Cap the message column and centre it. | ui |
-| chrome | partial | Bubbles are capped at a percentage (88%) of the panel, not a readable measure, so a wide side panel yields very long lines; add a max character width. | ui |
+| chrome | partial | b21db27be: messages in a centred 768px column; composer still full panel width | composer width |
 
-Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:482-484`, `apps/extension-vscode/src/providers/chatEditorPanel.ts:48-50`, `apps/extension/src/side_panel.ts:1318-1323`
+Code: `apps/extension/src/side_panel.ts:1237-1237`, `apps/extension/src/side_panel.ts:4138-4138`
 
 ## S7.03: Full-width data-analysis layout.
 
 - Done when: Data work (tables, charts, spreadsheets) can be viewed in a layout that uses the full window width instead of the reading column.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Spreadsheet and chart artifacts can be expanded to full screen from the artifact panel, but the conversation has no wide data-analysis layout: tables in answers stay in the reading column. | ui |
-| desktop | partial | Spreadsheet and chart artifacts can be expanded to full screen from the artifact panel, but the conversation has no wide data-analysis layout: tables in answers stay in the reading column. | ui |
 | mobile | partial | Artifacts, including tables, open in a full-screen modal on the phone, but there is no wide data layout for tablets or for tables inside answers. | ui |
-| vscode | partial | Tabular artifacts open as plain text in a full-width editor tab; there is no table or chart view. | ui |
 
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:967-967`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1182-1182`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:938-941`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:313-316`
+Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:313-316`
 
 ## S7.04: Conversation plus artifact split view.
 
@@ -131,18 +128,6 @@ Code: `apps/desktop/electron/appMenu.ts:210-212`, `apps/desktop/electron/main.ts
 
 Code: `apps/desktop/electron/appMenu.ts:210-212`, `apps/desktop/electron/main.ts:1081-1082`
 
-## S7.11: Resizable right inspector.
-
-- Done when: The right-hand inspector pane can be resized by drag or keyboard, and the conversation reflows.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Only the Artifacts panel resizes; the Research (360px) and Work (380px) panels that share the right slot have fixed widths. | ui |
-| desktop | partial | Only the Artifacts panel resizes; the Research (360px) and Work (380px) panels that share the right slot have fixed widths. | ui |
-
-Code: `apps/web/features/chat/components/artifacts/ArtifactsPanel.tsx:468-478`, `apps/web/features/chat/components/artifacts/ArtifactsPanel.tsx:426-434`, `apps/web/features/chat/components/research/ResearchPanel.tsx:329-329`
-
 ## S7.13: Dockable panels.
 
 - Done when: Panels can be moved to a different edge or region of the window (docked) and stay there.
@@ -170,31 +155,26 @@ Code: `apps/desktop/electron/appMenu.ts:212-214`, `apps/desktop/electron/main.ts
 
 - Done when: An editor (prompt, document or source) can take over the whole screen for focused editing and return to the chat.
 - Wave: 3
-- Already works on: mobile, vscode
+- Already works on: mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Artifact source can be edited and the artifact card expanded to full screen, but the full-screen control appears only for renderable (HTML/React/SVG/Mermaid) artifacts; code artifacts and the composer have no full-screen editor. | ui |
-| desktop | partial | Artifact source can be edited and the artifact card expanded to full screen, but the full-screen control appears only for renderable (HTML/React/SVG/Mermaid) artifacts; code artifacts and the composer have no full-screen editor. | ui |
-| cli | partial | The keybindings screen advertises "Ctrl+E Open external editor for current input", but the TUI binds no Ctrl+E: unbound control chords are dropped. Wire Ctrl+E to $EDITOR or remove the line. | handler |
+| web | partial | d9d61d48e: code artifacts get full screen; full-screen composer unverified against ChatGPT (help.openai.com 403), owner call | full-screen composer |
+| desktop | partial | d9d61d48e: code artifacts get full screen; full-screen composer unverified against ChatGPT (help.openai.com 403), owner call | full-screen composer |
 
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1348-1348`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1594-1595`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1182-1182`, `apps/cli/src/tui/widgets/screen_renderers.rs:886-887`
+Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1611-1611`
 
 ## S7.16: Full-screen report reader.
 
 - Done when: A long report (e.g. a research report) can be read in a full-screen reading view.
 - Wave: 3
-- Already works on: mobile
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Research reports open only inside the 360px research panel beside the chat; add a full-screen or full-width reading view. | ui |
-| desktop | partial | Research reports open only inside the 360px research panel beside the chat; add a full-screen or full-width reading view. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/research/ResearchReportsGallery.tsx:139-139`, `apps/web/features/chat/components/research/ResearchPanel.tsx:329-329`, `apps/web/features/chat/components/research/ResearchPanel.tsx:361-361`
 
 ## S7.17: Full-screen media viewer.
 
@@ -211,14 +191,11 @@ Code: `apps/extension/src/features/side-panel/computerUsePanel.ts:1008-1016`, `a
 ## S7.19: Compact companion mode.
 
 - Done when: A compact companion mode shows a reduced chat UI (no sidebar or side panels) sized for quick questions.
-- Wave: 2
+- Wave: 3
 - Already works on: desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The compact chat exists at /quick-ask, but no web nav entry, link or command opens it; reachable only by direct URL (it is meant for the desktop panel). | mount |
-
-Code: `apps/web/app/quick-ask/page.tsx:4-4`, `apps/web/features/chat/pages/WebChatPage.tsx:5332-5332`, `apps/web/features/chat/pages/WebChatPage.tsx:891-891`
 
 ## S7.24: Sticky table headers.
 
@@ -236,11 +213,10 @@ Code: `apps/web/app/quick-ask/page.tsx:4-4`, `apps/web/features/chat/pages/WebCh
 
 - Done when: Printing a conversation or report produces a print-specific layout: no app chrome, the whole content, paper-friendly colours and sensible page breaks.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The print stylesheet and Print action exist, but the action does not expand the virtualised transcript (printConversation is called without onExpand), so a long conversation prints only the rows currently rendered. | states |
-| desktop | partial | The print stylesheet and Print action exist, but the action does not expand the virtualised transcript (printConversation is called without onExpand), so a long conversation prints only the rows currently rendered. | states |
 | mobile | partial | Conversations export to a paper-styled PDF (dark text on white) that can be printed from the share sheet, but there is no Print action and no page-break rules. | ui |
 
-Code: `apps/web/app/globals.css:1883-1890`, `apps/web/features/chat/pages/WebChatPage.tsx:5468-5468`, `apps/web/features/chat/lib/print-conversation.ts:5-10`, `apps/web/features/chat/components/messages/ChatMessageList.tsx:20-20`
+Code: `apps/mobile/src/features/chat/components/ConversationExportSheet.tsx:35-36`, `apps/mobile/services/fileCreation.ts:197-198`

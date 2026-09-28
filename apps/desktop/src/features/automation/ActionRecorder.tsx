@@ -347,7 +347,7 @@ export function ActionRecorder({ onSkillCreated, onClose }: ActionRecorderProps)
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-primary" aria-hidden="true" />
-              <h2 id="record-title" className="text-sm font-semibold">
+              <h2 id="record-title" className="text-h5">
                 Record a skill
               </h2>
             </div>
@@ -375,7 +375,7 @@ export function ActionRecorder({ onSkillCreated, onClose }: ActionRecorderProps)
               <CircleDot className="h-6 w-6 text-primary" aria-hidden="true" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold tracking-tight">Show AGI how you work</h3>
+              <h3 className="text-h3">Show AGI how you work</h3>
               <p className="mt-2 text-sm leading-6 text-muted-foreground">
                 While recording, AGI captures mouse clicks and typing across your desktop. Review
                 every captured step before it becomes a reusable local skill.
@@ -412,7 +412,7 @@ export function ActionRecorder({ onSkillCreated, onClose }: ActionRecorderProps)
             ) : (
               <Sparkles className="h-4 w-4 text-primary" aria-hidden="true" />
             )}
-            <h2 id="recorder-title" className="truncate text-sm font-semibold">
+            <h2 id="recorder-title" className="truncate text-h5">
               {isRecording ? 'Capturing your workflow' : 'Record a skill'}
             </h2>
           </div>
@@ -475,7 +475,7 @@ export function ActionRecorder({ onSkillCreated, onClose }: ActionRecorderProps)
             className="mb-4 rounded-xl border border-warning-fill/30 bg-warning-fill/5 p-4"
             role="alert"
           >
-            <h3 className="text-sm font-semibold">That recording has nothing to learn from</h3>
+            <h3 className="text-h5">That recording has nothing to learn from</h3>
             <p className="mt-1 text-xs leading-5 text-muted-foreground">
               Desktop received no click or keyboard steps, so it did not create a skill or pretend
               the capture succeeded.
@@ -502,7 +502,7 @@ export function ActionRecorder({ onSkillCreated, onClose }: ActionRecorderProps)
 
         {permissions && missingPermissions.length > 0 && !isRecording && (
           <div className="mb-4 rounded-xl border border-warning-fill/30 bg-warning-fill/5 p-4">
-            <h3 className="text-sm font-medium">Allow Desktop control to record and replay</h3>
+            <h3 className="text-h5">Allow Desktop control to record and replay</h3>
             <p className="mt-1 text-xs leading-5 text-muted-foreground">
               macOS requires these permissions. After granting them, return here and check again.
             </p>
@@ -527,7 +527,7 @@ export function ActionRecorder({ onSkillCreated, onClose }: ActionRecorderProps)
 
         {replayNeedsScreenRecording && !isRecording && (
           <div className="mb-4 rounded-xl border border-border bg-muted/40 p-4">
-            <h3 className="text-sm font-medium">Replaying this skill needs Screen Recording</h3>
+            <h3 className="text-h5">Replaying this skill needs Screen Recording</h3>
             <p className="mt-1 text-xs leading-5 text-muted-foreground">
               Capture only reads clicks and keystrokes, so you can record without it. When AGI
               replays the saved skill it checks the live screen against your steps, and macOS hands
@@ -548,7 +548,7 @@ export function ActionRecorder({ onSkillCreated, onClose }: ActionRecorderProps)
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-muted">
                 <MousePointer2 className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
               </div>
-              <h3 className="mt-4 text-sm font-medium">
+              <h3 className="mt-4 text-h5">
                 {isRecording ? 'Perform the workflow now' : 'No workflow recorded'}
               </h3>
               <p className="mt-1 max-w-xs text-xs leading-5 text-muted-foreground">

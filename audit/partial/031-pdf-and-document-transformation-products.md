@@ -10,49 +10,47 @@ nothing is left.
 
 - Done when: The user can turn a text document (Word, text, markdown) into a PDF file.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Conversations export to PDF; an attached Word or text file is converted only by the assistant rewriting its extracted text with the office-file tool (formatting, images and layout lost); no convert-this-file action. | ui |
-| desktop | partial | Conversations export to PDF; an attached Word or text file is converted only by the assistant rewriting its extracted text with the office-file tool (formatting, images and layout lost); no convert-this-file action. | ui |
 | mobile | partial | A message or conversation can be exported as PDF, and text/CSV attachments can be rewritten as a PDF by the office-file tool; Word/Excel files cannot be attached on mobile and there is no convert-this-file action. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:868-875`, `apps/web/features/chat/components/messages/MessageBubble.tsx:2286-2301`, `apps/web/lib/services/managed-office-file-service.ts:644-664`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:1868-1880`
+Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1756`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:195-203`, `apps/web/lib/services/managed-office-file-service.ts:644-664`, `apps/mobile/services/docParser.ts:106-110`
 
 ## S31.02: Spreadsheet to PDF conversion.
 
 - Done when: The user can turn a spreadsheet into a PDF file.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | An attached spreadsheet is read as text and the assistant can write a PDF whose tables are flattened to text rows; no sheet-to-PDF conversion keeps the grid, formatting or charts. | ui |
-| desktop | partial | An attached spreadsheet is read as text and the assistant can write a PDF whose tables are flattened to text rows; no sheet-to-PDF conversion keeps the grid, formatting or charts. | ui |
 | mobile | partial | A message or conversation can be exported as PDF, and text/CSV attachments can be rewritten as a PDF by the office-file tool; Word/Excel files cannot be attached on mobile and there is no convert-this-file action. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:868-875`, `apps/web/features/chat/components/messages/MessageBubble.tsx:2286-2301`, `apps/web/lib/services/managed-office-file-service.ts:644-664`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:1868-1880`
+Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1756`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:195-203`, `apps/web/lib/services/managed-office-file-service.ts:644-664`, `apps/mobile/services/docParser.ts:106-110`
 
 ## S31.03: Presentation to PDF conversion.
 
 - Done when: The user can turn a slide deck into a PDF with one page per slide.
-- Wave: 3
+- Wave: 2
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | An attached .pptx is read as slide text and the assistant can write a PDF of that text; slides, layout and images are not rendered, so it is not a page-per-slide conversion. | ui |
-| desktop | partial | An attached .pptx is read as slide text and the assistant can write a PDF of that text; slides, layout and images are not rendered, so it is not a page-per-slide conversion. | ui |
+| web | partial | renders slides to PDF in the E2B sandbox with LibreOffice once AGI_E2B_EXECUTION is on; the public code-interpreter-v1 template has no LibreOffice, so the owner builds agi-office-interpreter with apps/web/scripts/build-e2b-office-template.mjs and sets AGI_E2B_CHAT_TEMPLATE=agi-office-interpreter | flag-off |
+| desktop | partial | renders slides to PDF in the E2B sandbox with LibreOffice once AGI_E2B_EXECUTION is on; the public code-interpreter-v1 template has no LibreOffice, so the owner builds agi-office-interpreter with apps/web/scripts/build-e2b-office-template.mjs and sets AGI_E2B_CHAT_TEMPLATE=agi-office-interpreter | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:868-875`, `apps/web/features/chat/components/messages/MessageBubble.tsx:2286-2301`, `apps/web/lib/services/managed-office-file-service.ts:644-664`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:1868-1880`
+Code: `apps/web/scripts/build-e2b-office-template.mjs:21-21`, `apps/web/lib/e2b/chat-template.ts:3-3`, `apps/web/lib/e2b/runtime.ts:801-801`, `apps/web/lib/e2b/execution-tools.ts:30-30`
 
 ## S31.04: PDF summarization.
 
@@ -82,65 +80,55 @@ Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:868-875`,
 
 - Done when: The user can ask about a specific page of a PDF and the answer uses that page.
 - Wave: 3
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Chat attachments are joined without page labels, so "page 7" answers are guesses; project knowledge files carry page locators only when excerpted, not when included whole. Add page markers everywhere. | handler |
-| desktop | partial | Chat attachments are joined without page labels, so "page 7" answers are guesses; project knowledge files carry page locators only when excerpted, not when included whole. Add page markers everywhere. | handler |
-| mobile | partial | Chat attachments are joined without page labels, so "page 7" answers are guesses; project knowledge files carry page locators only when excerpted, not when included whole. Add page markers everywhere. | handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:5228-5236`, `apps/web/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration.ts:450-466`, `apps/web/lib/server/pdf-attachment-content.ts:150-167`, `apps/mobile/app/(app)/chat/[id].tsx:849-856`
 
 ## S31.07: PDF text extraction.
 
 - Done when: The user can get the plain text of a PDF.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Text is extracted only as model input; there is no action to show, copy or download the extracted text, and the assistant must retype it within its output limit. | ui |
-| desktop | partial | Text is extracted only as model input; there is no action to show, copy or download the extracted text, and the assistant must retype it within its output limit. | ui |
 | mobile | partial | Text is extracted only as model input; there is no action to show, copy or download the extracted text, and the assistant must retype it within its output limit. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:5228-5236`, `apps/web/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration.ts:450-466`, `apps/web/lib/server/pdf-attachment-content.ts:150-167`, `apps/mobile/app/(app)/chat/[id].tsx:849-856`
+Code: `apps/mobile/app/(app)/chat/[id].tsx:849-856`, `apps/mobile/stores/chat/chatExecutionStore.ts:1095-1118`, `apps/web/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration.ts:450-466`
 
 ## S31.08: Scanned-document OCR.
 
 - Done when: Text in a scanned (image-only) PDF is recognised and usable.
 - Wave: 3
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | A PDF with no text layer at all is read by a vision model from page images (first 10 pages, one image each; project files are transcribed and stored with a warning); mixed PDFs lose their scanned pages and long scans are cut off. | handler |
-| desktop | partial | A PDF with no text layer at all is read by a vision model from page images (first 10 pages, one image each; project files are transcribed and stored with a warning); mixed PDFs lose their scanned pages and long scans are cut off. | handler |
-| mobile | partial | A PDF with no text layer at all is read by a vision model from page images (first 10 pages, one image each; project files are transcribed and stored with a warning); mixed PDFs lose their scanned pages and long scans are cut off. The on-device path rejects image-only PDFs. | handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:5228-5236`, `apps/web/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration.ts:450-466`, `apps/web/lib/server/pdf-attachment-content.ts:150-167`, `apps/web/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration.ts:466-480`
 
 ## S31.09: Table extraction.
 
 - Done when: Tables in a PDF come out as structured rows and columns the user can use.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | PDF text is flattened (cell text joined by spaces), so table structure is guessed by the model; it can then write CSV or XLSX with the office-file tool. No table extractor exists. | handler |
-| desktop | partial | PDF text is flattened (cell text joined by spaces), so table structure is guessed by the model; it can then write CSV or XLSX with the office-file tool. No table extractor exists. | handler |
 | mobile | partial | PDF text is flattened (cell text joined by spaces), so table structure is guessed by the model; it can then write CSV or XLSX with the office-file tool. No table extractor exists. | handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:5228-5236`, `apps/web/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration.ts:450-466`, `apps/web/lib/server/pdf-attachment-content.ts:150-167`, `apps/web/lib/server/pdf-attachment-content.ts:156-163`
+Code: `apps/mobile/app/(app)/chat/[id].tsx:849-856`, `apps/mobile/stores/chat/chatExecutionStore.ts:1095-1118`, `apps/web/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration.ts:450-466`, `apps/web/lib/server/pdf-attachment-content.ts:156-163`
 
 ## S31.23: Signature-service integration.
 
@@ -162,14 +150,11 @@ Code: `apps/web/lib/connectors/directory/sources/vendor-directory.json:2322-2341
 
 - Done when: Before a file is exported, the user sees a preview that matches the exported file.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Generated PDFs open in an in-app PDF viewer before download, so the preview is the real file; DOCX, PPTX and XLSX files are download chips with no preview, and conversation export shows only a summary box. | ui |
-| desktop | partial | Generated PDFs open in an in-app PDF viewer before download, so the preview is the real file; DOCX, PPTX and XLSX files are download chips with no preview, and conversation export shows only a summary box. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/messages/MessageBubble.tsx:1243-1251`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1075-1088`

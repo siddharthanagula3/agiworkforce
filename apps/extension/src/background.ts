@@ -4955,6 +4955,7 @@ async function handleChatMessage(
         systemPrompt,
         conversationHistory: message.conversationHistory,
         attachments: message.attachments,
+        fileAttachments: message.fileAttachments,
         extendedThinking: message.extendedThinking,
         currentModelKey: message.currentModelKey,
         previousTaskType: message.previousTaskType,
@@ -4992,6 +4993,12 @@ async function handleChatMessage(
               text: '',
               done: false,
               interactiveCard: chunk.card,
+            }),
+          onSources: (chunk) =>
+            publishManagedChatChunk(streamKey, activeStream, id, {
+              text: '',
+              done: false,
+              sources: { citations: chunk.citations, results: chunk.results },
             }),
           onRunReference: async (cloudRun) => {
             if (activeChatStreams.get(streamKey) !== activeStream) return;
@@ -5276,6 +5283,12 @@ async function handleResolveChatApproval(
                 text: '',
                 done: false,
                 interactiveCard: chunk.card,
+              }),
+            onSources: (chunk) =>
+              publishManagedChatChunk(streamKey, activeStream, id, {
+                text: '',
+                done: false,
+                sources: { citations: chunk.citations, results: chunk.results },
               }),
             onRunReference: (cloudRun) => {
               if (activeChatStreams.get(streamKey) !== activeStream) return;

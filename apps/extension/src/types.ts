@@ -7,6 +7,7 @@ import type {
 } from '@agiworkforce/cloud-contracts';
 import type { ManagedCloudOwner } from './features/cloud-bridge/managedCloudAuthority';
 import type {
+  ManagedChatSourcesDelta,
   ManagedQuotaBlock,
   ManagedQuotaWarningSignal,
 } from './features/cloud-bridge/freeTrialClient';
@@ -494,6 +495,7 @@ export interface ChatMessageMessage extends BaseMessage {
   pageContext?: string;
   conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>;
   attachments?: string[];
+  fileAttachments?: Array<{ assetId: string; mimeType: string }>;
   extendedThinking?: boolean;
   modelSelection?: string;
   quickMode?: boolean;
@@ -557,6 +559,7 @@ export interface ChatChunkMessage {
   routing?: ChromeManagedRoutingMetadata;
   generatedFiles?: GeneratedFileWire[];
   interactiveCard?: InteractiveCard;
+  sources?: ManagedChatSourcesDelta;
 }
 
 export interface ChatMessageResponse {

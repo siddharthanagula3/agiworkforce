@@ -125,7 +125,7 @@ const RealtimeROIDashboardComponent: React.FC = () => {
   return (
     <div className="p-6 space-y-6 bg-gray-50 dark:bg-gray-900 min-h-screen">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Your ROI Dashboard</h1>
+        <h1 className="text-display text-gray-900 dark:text-white">Your ROI Dashboard</h1>
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 bg-success-fill rounded-full animate-pulse" />
           <span className="text-sm text-gray-600 dark:text-gray-400">Live</span>
@@ -186,9 +186,7 @@ const RealtimeROIDashboardComponent: React.FC = () => {
       {}
       {currentStats.top_automations.length > 0 && (
         <Card className="p-6">
-          <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
-            Top Performers
-          </h2>
+          <h2 className="text-h2 mb-4 text-gray-900 dark:text-white">Top Performers</h2>
           <div className="space-y-3">
             {topAutomations.map((automation, index) => (
               <div

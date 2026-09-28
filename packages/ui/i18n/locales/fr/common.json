@@ -95,6 +95,7 @@
   "navLogOut": "Se déconnecter",
   "navProjects": "Projets",
   "navLibrary": "Bibliothèque",
+  "navImages": "Images",
   "navModels": "Modèles",
   "navSchedules": "Planifications",
   "navAdmin": "Administration",
@@ -122,5 +123,40 @@
   "previous": "Précédent",
   "previousSlide": "Diapositive précédente",
   "rowsPerPage": "Lignes par page",
-  "rowsSelected": "{{selected}} ligne(s) sur {{total}} sélectionnée(s)."
+  "rowsSelected": "{{selected}} ligne(s) sur {{total}} sélectionnée(s).",
+  "support": {
+    "waitRemaining_one": "J'attends encore {{count}} seconde, puis j'envoie ceci par e-mail.",
+    "waitRemaining_other": "J'attends encore {{count}} secondes, puis j'envoie ceci par e-mail."
+  },
+  "counts": {
+    "results_one": "{{count}} résultat",
+    "results_other": "{{count}} résultats",
+    "messages_one": "{{count}} message",
+    "messages_other": "{{count}} messages",
+    "agentsConfigured_one": "{{count}} agent configuré",
+    "agentsConfigured_other": "{{count}} agents configurés",
+    "skills_one": "{{count}} compétence",
+    "skills_other": "{{count}} compétences",
+    "agents_one": "{{count}} agent",
+    "agents_other": "{{count}} agents"
+  },
+  "relative": {
+    "minutesAgo_one": "il y a {{count}} minute",
+    "minutesAgo_other": "il y a {{count}} minutes",
+    "hoursAgo_one": "il y a {{count}} heure",
+    "hoursAgo_other": "il y a {{count}} heures",
+    "daysAgo_one": "il y a {{count}} jour",
+    "daysAgo_other": "il y a {{count}} jours"
+  },
+  "unsavedChanges": {
+    "title": "Abandonner les modifications non enregistrées ?",
+    "description": "Vos modifications n'ont pas été enregistrées. Si vous partez maintenant, elles seront perdues.",
+    "discard": "Abandonner",
+    "keepEditing": "Continuer à modifier"
+  },
+  "chipInput": {
+    "full": "Cette liste contient au maximum {{count}} entrées.",
+    "rejected": "{{value}} n'a pas été ajouté. {{reason}}",
+    "remove": "Retirer {{value}}"
+  }
 }

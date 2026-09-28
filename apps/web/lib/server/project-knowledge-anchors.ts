@@ -47,6 +47,30 @@ export function joinPagesWithAnchors(pages: readonly string[]): {
   return { text: parts.join(PAGE_SEPARATOR), anchors };
 }
 
+export function withPageMarkers(
+  text: string,
+  textStart: number,
+  anchors: readonly KnowledgeAnchor[],
+): string {
+  const pageStarts = anchors
+    .filter(
+      (anchor) =>
+        anchor.page !== undefined &&
+        anchor.start >= textStart &&
+        anchor.start < textStart + text.length,
+    )
+    .sort((a, b) => a.start - b.start);
+  if (pageStarts.length === 0) return text;
+  let marked = '';
+  let cursor = 0;
+  for (const anchor of pageStarts) {
+    const offset = anchor.start - textStart;
+    marked += `${text.slice(cursor, offset)}[Page ${anchor.page}]\n`;
+    cursor = offset;
+  }
+  return marked + text.slice(cursor);
+}
+
 /** Record every markdown-style heading in the stored text, in document order. */
 export function headingAnchors(text: string): KnowledgeAnchor[] {
   const anchors: KnowledgeAnchor[] = [];

@@ -15,6 +15,7 @@ import type { ArtifactsWorkspace } from './artifactsClient';
 export const ARTIFACT_SCHEME = 'agi-artifact';
 export const SAVE_ARTIFACT_COMMAND = 'agi-workforce.saveArtifactToWorkspace';
 export const OPEN_ARTIFACT_ON_WEB_COMMAND = 'agi-workforce.openArtifactOnWeb';
+export const COPY_ARTIFACT_COMMAND = 'agi-workforce.copyArtifact';
 
 const MESSAGE_PAGE_LIMIT = 500;
 
@@ -100,6 +101,29 @@ export async function openArtifactReadOnly(
   const document = await vscode.workspace.openTextDocument(artifactUri(artifact));
   await vscode.languages.setTextDocumentLanguage(document, artifactEditorLanguage(artifact));
   await vscode.window.showTextDocument(document, { preview: true });
+}
+
+export async function copyArtifactContent(
+  workspace: ArtifactsWorkspace,
+  artifact: ManagedCloudArtifactIndexEntry,
+): Promise<void> {
+  let content: string | undefined;
+  try {
+    content = await readArtifactContent(workspace, artifact);
+  } catch (error) {
+    void vscode.window.showErrorMessage(
+      `AGI Workforce: the artifact was not copied, ${describeArtifactFailure(error)}`,
+    );
+    return;
+  }
+  if (content === undefined) {
+    void vscode.window.showWarningMessage(
+      `AGI Workforce: "${artifactTitle(artifact)}" is indexed but its message no longer produces it, so there is nothing to copy.`,
+    );
+    return;
+  }
+  await vscode.env.clipboard.writeText(content);
+  void vscode.window.showInformationMessage(`AGI Workforce: copied "${artifactTitle(artifact)}".`);
 }
 
 export async function saveArtifactToWorkspace(

@@ -6,7 +6,13 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 
-export type DraftSaveResult = 'saved' | 'failed' | 'conflict';
+export interface DraftConflict {
+  kind: 'conflict';
+  theirs: string;
+  theirsRevision: string | null;
+}
+
+export type DraftSaveResult = 'saved' | 'failed' | DraftConflict;
 
 const observedDraftRevisions = new Map<string, string | null>();
 
@@ -17,6 +23,13 @@ export function observeConversationDraftRevision(
   if (draftUpdatedAt === undefined) return;
   const observed = observedDraftRevisions.get(conversationId);
   if (observed && (!draftUpdatedAt || Date.parse(draftUpdatedAt) < Date.parse(observed))) return;
+  observedDraftRevisions.set(conversationId, draftUpdatedAt);
+}
+
+export function adoptConversationDraftRevision(
+  conversationId: string,
+  draftUpdatedAt: string | null,
+): void {
   observedDraftRevisions.set(conversationId, draftUpdatedAt);
 }
 
@@ -51,7 +64,7 @@ export async function saveConversationDraft(
         draftUpdatedAt: observedDraftRevisions.get(conversationId) ?? null,
       }),
     });
-    if (response.status === 409) return 'conflict';
+    if (response.status === 409) return readDraftConflict(await response.json());
     if (!response.ok) return 'failed';
     const payload: unknown = await response.json();
     if (!payload || typeof payload !== 'object' || !('saved' in payload) || !payload.saved) {
@@ -66,4 +79,17 @@ export async function saveConversationDraft(
   } catch {
     return 'failed';
   }
+}
+
+function readDraftConflict(payload: unknown): DraftSaveResult {
+  if (!payload || typeof payload !== 'object' || !('current' in payload)) return 'failed';
+  const current = payload.current;
+  if (!current || typeof current !== 'object') return 'failed';
+  const theirs = 'draft' in current ? current.draft : undefined;
+  const revision = 'draftUpdatedAt' in current ? current.draftUpdatedAt : undefined;
+  if (typeof theirs !== 'string') return 'failed';
+  if (revision !== null && (typeof revision !== 'string' || Number.isNaN(Date.parse(revision)))) {
+    return 'failed';
+  }
+  return { kind: 'conflict', theirs, theirsRevision: revision };
 }

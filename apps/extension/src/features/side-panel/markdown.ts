@@ -85,6 +85,60 @@ export function sanitizeHtml(dirty: string): string {
   });
 }
 
+const TABLE_DELIMITER = /^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)*\|?\s*$/;
+
+function tableCells(row: string): string[] {
+  let trimmed = row.trim();
+  if (trimmed.startsWith('|')) trimmed = trimmed.slice(1);
+  if (trimmed.endsWith('|')) trimmed = trimmed.slice(0, -1);
+  return trimmed.split('|').map((cell) => cell.trim());
+}
+
+function renderTableBlocks(text: string): string {
+  const lines = text.split('\n');
+  const out: string[] = [];
+  let index = 0;
+  while (index < lines.length) {
+    const header = lines[index] ?? '';
+    const delimiter = lines[index + 1];
+    const headCells = tableCells(header);
+    if (
+      header.includes('|') &&
+      delimiter !== undefined &&
+      TABLE_DELIMITER.test(delimiter) &&
+      tableCells(delimiter).length === headCells.length
+    ) {
+      const rows: string[][] = [];
+      index += 2;
+      while (index < lines.length && (lines[index] ?? '').includes('|')) {
+        rows.push(tableCells(lines[index] ?? ''));
+        index += 1;
+      }
+      const head = `<thead><tr>${headCells.map((cell) => `<th>${cell}</th>`).join('')}</tr></thead>`;
+      const body = rows.length
+        ? `<tbody>${rows
+            .map(
+              (row) =>
+                `<tr>${headCells.map((_cell, column) => `<td>${row[column] ?? ''}</td>`).join('')}</tr>`,
+            )
+            .join('')}</tbody>`
+        : '';
+      out.push('', `<table>${head}${body}</table>`, '');
+      continue;
+    }
+    out.push(header);
+    index += 1;
+  }
+  return out.join('\n');
+}
+
+function renderTables(html: string): string {
+  return html
+    .split(/(<pre><code>[\s\S]*?<\/code><\/pre>)/)
+    .map((segment, position) => (position % 2 === 1 ? segment : renderTableBlocks(segment)))
+    .join('');
+}
+
 export function renderMarkdown(text: string): string {
   let html = closeUnterminatedCodeFence(text)
     .replace(/&/g, '&amp;')
@@ -129,12 +183,14 @@ export function renderMarkdown(text: string): string {
     },
   );
 
+  html = renderTables(html);
+
   html = html
     .split(/\n{2,}/)
     .map((block) => {
       const trimmed = block.trim();
       if (!trimmed) return '';
-      if (/^<(h[1-6]|ul|ol|li|pre|blockquote|hr)/.test(trimmed)) return trimmed;
+      if (/^<(h[1-6]|ul|ol|li|pre|blockquote|hr|table)/.test(trimmed)) return trimmed;
       return `<p>${trimmed.replace(/\n/g, '<br>')}</p>`;
     })
     .join('\n');

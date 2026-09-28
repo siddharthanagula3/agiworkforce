@@ -95,6 +95,7 @@
   "navLogOut": "退出登录",
   "navProjects": "项目",
   "navLibrary": "资料库",
+  "navImages": "图片",
   "navModels": "模型",
   "navSchedules": "计划任务",
   "navAdmin": "管理",
@@ -122,5 +123,40 @@
   "previous": "上一步",
   "previousSlide": "上一张幻灯片",
   "rowsPerPage": "每页行数",
-  "rowsSelected": "已选择 {{selected}} / {{total}} 行。"
+  "rowsSelected": "已选择 {{selected}} / {{total}} 行。",
+  "support": {
+    "waitRemaining_one": "我会再等 {{count}} 秒，然后改为通过电子邮件发送。",
+    "waitRemaining_other": "我会再等 {{count}} 秒，然后改为通过电子邮件发送。"
+  },
+  "counts": {
+    "results_one": "{{count}} 个结果",
+    "results_other": "{{count}} 个结果",
+    "messages_one": "{{count}} 条消息",
+    "messages_other": "{{count}} 条消息",
+    "agentsConfigured_one": "已配置 {{count}} 个智能体",
+    "agentsConfigured_other": "已配置 {{count}} 个智能体",
+    "skills_one": "{{count}} 个技能",
+    "skills_other": "{{count}} 个技能",
+    "agents_one": "{{count}} 个智能体",
+    "agents_other": "{{count}} 个智能体"
+  },
+  "relative": {
+    "minutesAgo_one": "{{count}} 分钟前",
+    "minutesAgo_other": "{{count}} 分钟前",
+    "hoursAgo_one": "{{count}} 小时前",
+    "hoursAgo_other": "{{count}} 小时前",
+    "daysAgo_one": "{{count}} 天前",
+    "daysAgo_other": "{{count}} 天前"
+  },
+  "unsavedChanges": {
+    "title": "放弃未保存的更改？",
+    "description": "你的更改尚未保存。现在离开将会丢失。",
+    "discard": "放弃",
+    "keepEditing": "继续编辑"
+  },
+  "chipInput": {
+    "full": "此列表最多可包含 {{count}} 项。",
+    "rejected": "未添加 {{value}}。{{reason}}",
+    "remove": "移除 {{value}}"
+  }
 }

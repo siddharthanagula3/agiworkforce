@@ -25,7 +25,7 @@ export function UnavailableArtifact() {
         >
           <LockKeyhole className="h-7 w-7" />
         </div>
-        <h1 className="mb-2 text-2xl font-bold text-foreground">Shared artifact unavailable</h1>
+        <h1 className="mb-2 text-h1 text-foreground">Shared artifact unavailable</h1>
         <p className="mb-6 text-muted-foreground">
           This link may have expired, been unpublished, or been entered incorrectly. Ask the sender
           for a new link.

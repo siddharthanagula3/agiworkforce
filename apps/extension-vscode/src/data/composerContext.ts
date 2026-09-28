@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { getContextBuilder } from './contextBuilder';
 import { CONTEXT_ATTACHMENT_KINDS, type ContextAttachmentKind } from '../protocol/webviewMessages';
 import { Config } from '../platform/config';
+import { MAX_TOTAL_REFERENCE_CHARS } from '../features/chat-participant/promptReferences';
 
 export interface ContextMenuItemState {
   kind: ContextAttachmentKind;
@@ -77,6 +78,63 @@ function gitDetail(trusted: boolean, changes: { name: string } | undefined): str
   return changes === undefined ? 'No uncommitted changes' : 'Status and diff of the working tree';
 }
 
+const HTML_BLOCK_TAGS = /<\/(?:p|div|li|h[1-6]|tr|section|article|header|footer)>|<br\s*\/?>/giu;
+const HTML_DROPPED = /<(script|style|noscript|svg)[\s\S]*?<\/\1>/giu;
+
+function pageText(html: string): string {
+  return html
+    .replace(HTML_DROPPED, ' ')
+    .replace(HTML_BLOCK_TAGS, '\n')
+    .replace(/<[^>]+>/gu, ' ')
+    .replace(/&nbsp;/gu, ' ')
+    .replace(/&amp;/gu, '&')
+    .replace(/&lt;/gu, '<')
+    .replace(/&gt;/gu, '>')
+    .replace(/&quot;/gu, '"')
+    .replace(/&#39;/gu, "'")
+    .replace(/[ \t]+/gu, ' ')
+    .replace(/\s*\n\s*/gu, '\n')
+    .trim();
+}
+
+async function webPage(): Promise<ContextAttachment | undefined> {
+  const input = await vscode.window.showInputBox({
+    title: 'AGI Workforce, Attach a web page',
+    prompt: 'The page is read once now and its text is attached to your next message',
+    placeHolder: 'https://',
+    ignoreFocusOut: true,
+    validateInput: (value) => {
+      try {
+        const url = new URL(value.trim());
+        return url.protocol === 'https:' || url.protocol === 'http:'
+          ? null
+          : 'Use an http or https link.';
+      } catch {
+        return 'Paste a full link, starting with https://';
+      }
+    },
+  });
+  if (input === undefined || input.trim() === '') return undefined;
+  const url = input.trim();
+  try {
+    const response = await fetch(url, { redirect: 'follow' });
+    if (!response.ok) throw new Error(`the page answered HTTP ${response.status}`);
+    const type = response.headers.get('content-type') ?? '';
+    const body = await response.text();
+    const text = type.includes('html') ? pageText(body) : body;
+    const clipped =
+      text.length > MAX_TOTAL_REFERENCE_CHARS
+        ? `${text.slice(0, MAX_TOTAL_REFERENCE_CHARS)}\n... (truncated)`
+        : text;
+    return { name: new URL(url).host, text: `Content of ${url}:\n${clipped}` };
+  } catch (error) {
+    void vscode.window.showErrorMessage(
+      `AGI Workforce: ${url} could not be read, ${error instanceof Error ? error.message : String(error)}.`,
+    );
+    return undefined;
+  }
+}
+
 export async function resolveContextMenuState(): Promise<ContextMenuItemState[]> {
   const selection = activeSelection();
   const editors = openFiles();
@@ -110,6 +168,11 @@ export async function resolveContextMenuState(): Promise<ContextMenuItemState[]>
       available: trusted && changes !== undefined,
       detail: gitDetail(trusted, changes),
     },
+    url: {
+      kind: 'url',
+      available: true,
+      detail: 'Read a page by its link and attach its text',
+    },
   };
 
   return CONTEXT_ATTACHMENT_KINDS.map((kind) => details[kind]);
@@ -131,6 +194,8 @@ export async function buildContextAttachment(
     }
     case 'git-diff':
       return gitChanges();
+    case 'url':
+      return webPage();
   }
 }
 
@@ -159,6 +224,18 @@ function basename(relativePath: string): string {
   return separator === -1 ? relativePath : relativePath.slice(separator + 1);
 }
 
+function unsavedBuffer(relativePath: string, languageId: string): string | undefined {
+  const document = vscode.window.activeTextEditor?.document;
+  if (document === undefined || (!document.isDirty && !document.isUntitled)) return undefined;
+  const text = document.getText();
+  const clipped =
+    text.length > MAX_TOTAL_REFERENCE_CHARS
+      ? `${text.slice(0, MAX_TOTAL_REFERENCE_CHARS)}\n... (truncated)`
+      : text;
+  const state = document.isUntitled ? 'Unsaved new file' : 'Unsaved edits in';
+  return `${state} ${relativePath} (${languageId}), as it is in the editor now:\n${clipped}`;
+}
+
 export function resolveEditorContext(dismissed: ReadonlySet<string>): EditorContextSnapshot {
   if (!Config.editorContextAutoAttach()) return EMPTY_EDITOR_CONTEXT;
   const context = getContextBuilder().getActiveFileContext();
@@ -172,7 +249,9 @@ export function resolveEditorContext(dismissed: ReadonlySet<string>): EditorCont
       kind: 'active-file',
       label: basename(context.relativePath),
     });
-    snapshot.contextFiles.push(context.filePath);
+    const buffer = unsavedBuffer(context.relativePath, context.languageId);
+    if (buffer === undefined) snapshot.contextFiles.push(context.filePath);
+    else snapshot.texts.push(buffer);
   }
 
   const selection = activeSelection();

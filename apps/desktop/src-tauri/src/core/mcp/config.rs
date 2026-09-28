@@ -194,6 +194,7 @@ fn map_http_transport_credentials<F: Fn(&str) -> Option<String>>(
         if let Some(TransportConfig::Http(http)) = server.transport.as_mut() {
             apply(&mut http.api_key);
             apply(&mut http.bearer_token);
+            apply(&mut http.oauth_client_secret);
             for value in http.headers.values_mut() {
                 let next = transform(value);
                 if let Some(next) = next {
@@ -686,28 +687,6 @@ impl McpServersConfig {
                     env.insert(
                         "GOOGLE_ACCESS_TOKEN".to_string(),
                         "<from_oauth:google>".to_string(),
-                    );
-                    env
-                },
-                enabled: false,
-                transport: None,
-            },
-        );
-
-        mcp_servers.insert(
-            "slack".to_string(),
-            McpServerConfig {
-                command: "npx".to_string(),
-                args: vec![
-                    "-y".to_string(),
-                    "@modelcontextprotocol/server-slack".to_string(),
-                ],
-                env: {
-                    let mut env = HashMap::new();
-                    // Use OAuth token first, fall back to legacy credential manager
-                    env.insert(
-                        "SLACK_BOT_TOKEN".to_string(),
-                        "<from_oauth:slack>".to_string(),
                     );
                     env
                 },

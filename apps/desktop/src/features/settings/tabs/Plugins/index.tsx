@@ -18,7 +18,7 @@ export function PluginsTab() {
   return (
     <div className="space-y-6">
       <div className="border-b border-border/80 pb-4">
-        <h3 className="text-lg font-semibold">Plugins</h3>
+        <h3 className="text-h3">Plugins</h3>
         <p className="mt-1 text-sm text-muted-foreground">
           Installed AGI plugins and compatible local plugin resources.
         </p>

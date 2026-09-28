@@ -63,6 +63,11 @@ export function remoteControlState(): RemoteControlState {
   return host?.state() ?? { ...IDLE_REMOTE_CONTROL_STATE };
 }
 
+export function remoteControlActive(): boolean {
+  const { status } = remoteControlState();
+  return status === 'waiting' || status === 'connected' || status === 'reconnecting';
+}
+
 export function startRemoteControl(args: Record<string, unknown>): RemoteControlState {
   if (!host)
     return { ...IDLE_REMOTE_CONTROL_STATE, status: 'error', error: 'Remote Control is not ready.' };

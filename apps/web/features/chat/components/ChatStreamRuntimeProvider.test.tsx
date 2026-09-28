@@ -23,6 +23,7 @@ describe('ChatStreamRuntimeProvider', () => {
       continueGeneration: vi.fn(),
       resumeInteractiveCardTurn: vi.fn(),
       resolveToolApproval: vi.fn(),
+      resolveToolInput: vi.fn(),
       isStreaming: true,
     });
   });

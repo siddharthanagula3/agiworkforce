@@ -22,8 +22,34 @@ export interface CloudRunListClient {
 }
 
 export type CloudRunClientResolution =
-  | { status: 'ready'; client: CloudRunListClient }
-  | { status: 'signed-out' };
+  { status: 'ready'; client: CloudRunListClient } | { status: 'signed-out' };
+
+type CloudRunStage = 'needs-you' | 'working' | 'review' | 'done' | 'stopped';
+
+const RUN_STAGES: Record<CloudAgentRun['state'], CloudRunStage> = {
+  awaiting_input: 'needs-you',
+  awaiting_approval: 'needs-you',
+  paused: 'needs-you',
+  queued: 'working',
+  planning: 'working',
+  running: 'working',
+  resuming: 'working',
+  ready_for_review: 'review',
+  completed: 'done',
+  archived: 'done',
+  partial: 'stopped',
+  failed: 'stopped',
+  cancelled: 'stopped',
+  timed_out: 'stopped',
+};
+
+const STAGE_GROUPS: readonly { stage: CloudRunStage; label: string; icon: string }[] = [
+  { stage: 'needs-you', label: 'Needs you', icon: 'bell-dot' },
+  { stage: 'working', label: 'Working', icon: 'sync' },
+  { stage: 'review', label: 'Ready for review', icon: 'eye' },
+  { stage: 'done', label: 'Done', icon: 'pass' },
+  { stage: 'stopped', label: 'Stopped', icon: 'circle-slash' },
+];
 
 export class CloudRunTreeItem extends vscode.TreeItem {
   constructor(readonly run: CloudAgentRun) {
@@ -42,6 +68,21 @@ export class CloudRunTreeItem extends vscode.TreeItem {
       title: 'Open Cloud Task',
       arguments: [run.id],
     };
+  }
+}
+
+export class CloudTasksGroupItem extends vscode.TreeItem {
+  constructor(
+    label: string,
+    readonly runs: readonly CloudAgentRun[],
+    icon: string,
+  ) {
+    super(label, vscode.TreeItemCollapsibleState.Expanded);
+    this.id = `cloud-tasks-group:${label}`;
+    this.description = String(runs.length);
+    this.iconPath = new vscode.ThemeIcon(icon);
+    this.contextValue = 'cloudTasksGroup';
+    this.accessibilityInformation = { label: `${label}, ${runs.length}`, role: 'treeitem' };
   }
 }
 
@@ -86,6 +127,9 @@ export class CloudTasksTreeProvider
   }
 
   async getChildren(element?: vscode.TreeItem): Promise<vscode.TreeItem[]> {
+    if (element instanceof CloudTasksGroupItem) {
+      return element.runs.map((run) => new CloudRunTreeItem(run));
+    }
     if (element !== undefined) return [];
     const resolution = await this.resolveClient();
     if (resolution.status === 'signed-out') {
@@ -101,7 +145,12 @@ export class CloudTasksTreeProvider
 
     try {
       const page = await resolution.client.listRuns({ limit: CLOUD_TASKS_PAGE_LIMIT });
-      return page.runs.map((run) => new CloudRunTreeItem(run));
+      const stageOf = (run: CloudAgentRun): CloudRunStage =>
+        run.pendingApproval === undefined ? RUN_STAGES[run.workState ?? run.state] : 'needs-you';
+      return STAGE_GROUPS.flatMap(({ stage, label, icon }) => {
+        const runs = page.runs.filter((run) => stageOf(run) === stage);
+        return runs.length === 0 ? [] : [new CloudTasksGroupItem(label, runs, icon)];
+      });
     } catch (error) {
       return [
         new CloudTasksNoticeItem(

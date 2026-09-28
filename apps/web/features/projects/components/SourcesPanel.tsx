@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useMemo } from 'react';
 import { ALLOWED_ATTACHMENT_ACCEPT, type ProjectKnowledgeFile } from '@agiworkforce/types';
-import { HardDrive, MessageSquare, Upload, Trash2 } from 'lucide-react';
+import { HardDrive, Upload, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useConfirmAction } from '@agiworkforce/ui';
 import { FilePreviewModal } from './FilePreviewModal';
@@ -13,7 +13,9 @@ import {
   uploadProjectKnowledgeFile,
 } from '../services/project-knowledge-upload';
 import { toUserMessage } from '@/lib/user-error-message';
+import { addCsrfHeaders } from '@/lib/client/csrf';
 import { beginActiveUpload } from '@/features/workspaces/lib/active-uploads';
+import { fetchGoogleDrivePickerConfig, pickGoogleDriveFiles } from '../lib/google-drive-picker';
 
 type SortOrder = 'newest' | 'oldest';
 
@@ -141,6 +143,59 @@ export function SourcesPanel({ projectId, readOnly = false }: Props) {
       setUploadState({
         status: 'error',
         message: toUserMessage(err, 'Upload failed.'),
+      });
+      throw err;
+    }
+  }
+
+  async function handleAddFromGoogleDrive(): Promise<'added' | 'connect'> {
+    const config = await fetchGoogleDrivePickerConfig();
+    if (config.status === 'not-configured') {
+      throw new Error('Adding files from Google Drive is not available yet.');
+    }
+    if (config.status !== 'ready') return 'connect';
+    const fileIds = await pickGoogleDriveFiles(config);
+    if (fileIds.length === 0) return 'added';
+
+    setUploadState({ status: 'uploading', fileName: 'Google Drive files', progress: 0 });
+    try {
+      const response = await fetch(
+        `/api/projects/${encodeURIComponent(projectId)}/knowledge-files/google-drive`,
+        {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ fileIds }),
+        },
+      );
+      const body = (await response.json().catch(() => ({}))) as {
+        results?: { status: 'added' | 'failed'; message?: string }[];
+        error?: { message?: string };
+      };
+      if (response.status === 409) {
+        setUploadState({ status: 'idle' });
+        return 'connect';
+      }
+      const results = body.results ?? [];
+      const failed = results.filter((result) => result.status === 'failed');
+      if (!response.ok && results.length === 0) {
+        throw new Error(body.error?.message ?? 'Google Drive files could not be added.');
+      }
+      setUploadState({ status: 'idle' });
+      setLoadState('loading');
+      setRetryToken((token) => token + 1);
+      if (failed.length > 0) {
+        toast.error(
+          failed.length === results.length
+            ? (failed[0]?.message ?? 'Google Drive files could not be added.')
+            : `${results.length - failed.length} of ${results.length} files were added. ${failed[0]?.message ?? ''}`.trim(),
+        );
+      }
+      return 'added';
+    } catch (err) {
+      setUploadState({
+        status: 'error',
+        message: toUserMessage(err, 'Google Drive files could not be added.'),
       });
       throw err;
     }
@@ -316,9 +371,6 @@ export function SourcesPanel({ projectId, readOnly = false }: Props) {
             <SourceTypeIcon>
               <HardDrive style={{ width: 18, height: 18 }} aria-hidden="true" />
             </SourceTypeIcon>
-            <SourceTypeIcon>
-              <MessageSquare style={{ width: 18, height: 18 }} aria-hidden="true" />
-            </SourceTypeIcon>
           </div>
 
           <h2
@@ -343,7 +395,7 @@ export function SourcesPanel({ projectId, readOnly = false }: Props) {
           >
             {readOnly
               ? 'The owner of this project has not added any sources yet. Only they can add or remove them.'
-              : 'Upload sources, link drives, or connect apps to give AGI deeper context about your project.'}
+              : 'Upload files, paste text or add files from Google Drive to give AGI deeper context about your project.'}
           </p>
 
           {readOnly ? null : (
@@ -592,6 +644,7 @@ export function SourcesPanel({ projectId, readOnly = false }: Props) {
         onClose={() => setAddSourcesOpen(false)}
         onUploadFile={handleUpload}
         onUploadText={handleUploadText}
+        onAddFromGoogleDrive={handleAddFromGoogleDrive}
         isUploading={isUploading}
         accept={ALLOWED_ATTACHMENT_ACCEPT}
       />

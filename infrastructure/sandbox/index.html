@@ -363,10 +363,14 @@
 
           const reactRoot = document.createElement('div');
           reactRoot.id = 'react-root';
+          reactRoot.textContent = 'Loading React…';
           rootEl.appendChild(reactRoot);
 
           REACT_RUNTIME_SCRIPTS.forEach(function (cfg) {
-            appendPinnedScript(cfg, rootEl);
+            const script = appendPinnedScript(cfg, rootEl);
+            script.addEventListener('error', function () {
+              reportRenderError('The React runtime could not be loaded from ' + cfg.src);
+            });
           });
 
           const codeScript = document.createElement('script');
@@ -379,7 +383,7 @@
             ' (typeof Component !== "undefined" && Component);' +
             ' if (App) { ReactDOM.createRoot(document.getElementById("react-root"))' +
             '.render(React.createElement(App)); } } catch (e) {' +
-            ' document.getElementById("react-root").innerText = String(e); }';
+            ' window.reportRenderError(e && e.message ? e.message : String(e)); }';
           rootEl.appendChild(codeScript);
         }
 
@@ -486,6 +490,21 @@
         }
 
         let parentOrigin = null;
+
+        function reportRenderError(message) {
+          showError('Render error: ' + message);
+          postToParent({ type: 'render-error', error: message });
+        }
+        window.reportRenderError = reportRenderError;
+
+        window.addEventListener('error', function (event) {
+          if (event.target && event.target !== window) return;
+          reportRenderError(event.message || 'The artifact threw an error.');
+        });
+        window.addEventListener('unhandledrejection', function (event) {
+          const reason = event.reason;
+          reportRenderError(reason && reason.message ? reason.message : String(reason));
+        });
 
         function postToParent(msg) {
           if (parentOrigin && window.parent && window.parent !== window) {

@@ -7,6 +7,7 @@ import {
   VoiceOrb as SharedVoiceOrb,
   VoiceOrbCanvas as SharedVoiceOrbCanvas,
   VOICE_SESSION_STATUS,
+  type VoiceOrbLevelSource,
   type VoiceSessionStatus,
 } from '@agiworkforce/unified-chat';
 
@@ -18,6 +19,7 @@ export interface VoiceOrbProps {
   reducedMotion: boolean;
   onClick: () => void;
   className?: string;
+  level?: VoiceOrbLevelSource;
 }
 
 function orbStateFor(status: VoiceSessionStatus, backendBusy: boolean) {
@@ -34,6 +36,7 @@ export function VoiceOrb({
   reducedMotion,
   onClick,
   className,
+  level,
 }: VoiceOrbProps) {
   const orbState = orbStateFor(status, backendBusy);
   return (
@@ -45,6 +48,7 @@ export function VoiceOrb({
       reducedMotion={reducedMotion}
       onClick={onClick}
       className={className}
+      {...(level ? { level } : {})}
     />
   );
 }

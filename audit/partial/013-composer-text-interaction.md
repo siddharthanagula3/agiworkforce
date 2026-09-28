@@ -24,28 +24,23 @@ nothing is left.
 
 - Done when: The user can open the draft in a full-screen (or external) editor and return it to the composer.
 - Wave: 3
-- Already works on: mobile
+- Already works on: mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
-| cli | partial | Implement the advertised Ctrl+E external-editor binding; the Keybindings screen lists it, but the TUI swallows every unbound Ctrl chord, so nothing opens. | handler |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/tui/widgets/screen_renderers.rs:886-891`, `apps/cli/src/tui/tui_app.rs:2502-2505`
 
 ## S13.10: Undo and redo.
 
 - Done when: Standard undo/redo shortcuts (Cmd/Ctrl+Z, Shift+Cmd/Ctrl+Z) revert and reapply edits in the composer.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Add undo/redo to the default full-screen TUI composer; only the classic REPL (--no-tui) has line-editor undo (rustyline Ctrl-_ or vi u), and nothing binds Ctrl+Z. | ui |
-
-Code: `apps/cli/src/repl/mod.rs:34-38`, `apps/cli/src/lib.rs:4609-4611`
 
 ## S13.13: Code-paste formatting.
 
@@ -64,15 +59,12 @@ Code: `apps/cli/src/repl/mod.rs:34-38`, `apps/cli/src/lib.rs:4609-4611`
 
 - Done when: Very long input is handled deliberately (turned into an attachment, collapsed, or clearly limited with feedback) instead of flooding the composer.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Collapse or attach very long pastes and warn about length; today long input goes inline into a composer that shows at most 8 rows. | handler |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/tui/tui_app.rs:1830-1835`
 
 ## S13.15: Character or token indicators where useful.
 
@@ -128,17 +120,6 @@ Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:565-565`, 
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S13.19: Prompt history in terminal interfaces.
-
-- Done when: In the terminal, Up/Down (and a search key) recall previously sent prompts into the composer.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Bring prompt history to the default full-screen TUI; today only the classic REPL (--no-tui) recalls and searches past prompts, while the TUI uses Up/Down to move the cursor or scroll. | ui |
-
-Code: `apps/cli/src/repl/mod.rs:212-231`, `apps/cli/src/tui/tui_app.rs:2555-2563`
-
 ## S13.20: Prompt suggestions.
 
 - Done when: The product offers prompt suggestions (e.g. follow-up questions) that the user can pick to fill or send the next message.
@@ -173,13 +154,11 @@ Code: `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:15
 
 - Done when: The user can explicitly invoke a Skill from the composer so the next message runs with it.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | The criterion is invoking a skill from the composer. The cited ui anchor is the Skills screen; the composer's Add-to-chat sheet lists Camera, Photos, File, Library, Model, Image, Video, Deep research, Project and Choose style with no Skills entry, and the '/' palette has four commands (/image, /voice, /compare, /export). The skill chip and skill_name plumbing are real, so partial. |  |
-| cli | partial | Apply a chosen skill directly; today /<skill> in the TUI is sent as plain text and loading the skill is left to the model's skill tool. | handler |
-| vscode | partial | Make choosing a skill in the "/" menu apply it; today it is listed but the click runs a CLI command that the app server cannot run, so only a warning appears. | handler |
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/mobile/src/features/skills/SkillsScreen.tsx:536-544`, `apps/mobile/app/(app)/(tabs)/chat.tsx:417-420`, `apps/mobile/stores/chat/chatExecutionStore.ts:1761-1761`, `apps/mobile/app/(app)/skills/index.tsx:4-4`
@@ -188,17 +167,14 @@ Code: `apps/mobile/src/features/skills/SkillsScreen.tsx:536-544`, `apps/mobile/a
 
 - Done when: The user can address a message to a specific agent or assistant by mentioning or selecting it in the composer.
 - Wave: 3
-- Already works on: vscode
+- Already works on: cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Add an inline @agent mention; today an agent is chosen in the /agents picker and then applies to the whole session. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/tui/tui_app.rs:2947-2962`
 
 ## S13.25: Project mention.
 
@@ -209,7 +185,6 @@ Code: `apps/cli/src/tui/tui_app.rs:2947-2962`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Blind re-search on project_id: the synced session snapshot carries project_id from linked_cloud_project(), which reads the directory link made by `agi projects link`. So CLI chats can be scoped to a hosted project, just not from the composer; partial rather than missing. |  |
 | vscode | partial | Blind re-search with the repo's own vocabulary (activeProject, projectContextStrip): VS Code can scope turns to a hosted project via 'Use in chat' (applyProjectToChat -> setActiveCloudProject), shows it as an 'Active project' chip in the composer strip, and prepends its instructions through customInstructions.ts. Not a typed mention and no knowledge files, so partial, not missing. |  |
 | chrome | partial | Blind re-search: the auditor's own S13.31 chrome evidence names renderProjectChip. The Projects drawer's 'Use' button sets the active project, the chip renders it, and persistMessages passes the binding to upsertConversation so the chat is scoped to the project. Picker rather than mention, so partial. |  |
 
@@ -232,16 +207,16 @@ Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:2351-2357`
 
 - Done when: Typing a mention in the composer can reference a folder, whose contents are made available to the message.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | partial | Let the composer mention a folder; in the desktop app a granted local folder can be browsed to attach files ("Attach from local folder"), but not referenced as a folder. | ui |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Accept folders in @ mentions; today the popup lists files and a mentioned directory is skipped with "not a file in this workspace". | handler |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:691-708`, `apps/desktop/electron/runtime/dispatcher.ts:704-720`, `apps/cli/src/mentions.rs:262-275`
+Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:691-708`, `apps/desktop/electron/runtime/dispatcher.ts:704-720`
 
 ## S13.29: Browser-tab mention.
 
@@ -251,7 +226,7 @@ Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:691-708`,
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | desktop | partial | Let the user pick which tab; the desktop "Use the browser" dialog can read the paired browser's current page and attach it, but not choose or mention other tabs. | ui |
-| cli | partial | Let the user pick or mention a specific tab; today the agent can only read the active tab of the paired Chrome through its browser_read_page tool. | ui |
+| cli | partial | Needs a list-tabs call in the Chrome bridge protocol and extension before the composer can offer tabs. | ui, api |
 | chrome | partial | Let the user choose other tabs; today only the current tab's page can be attached ("Add the browser page"). | ui |
 
 Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:5255-5259`, `apps/web/features/desktop-host/components/BrowserToolsDialog.tsx:44-60`, `apps/cli/src/features/exec/tools/mod.rs:685-689`, `apps/cli/src/platform/runtime/tool_catalog.rs:180-182`
@@ -266,7 +241,7 @@ Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:5255-5259`
 | web | partial | Add an inline mention of connected apps; today a connector's prompt or resources are picked in its capabilities panel and appear as chips in the composer. | ui |
 | desktop | partial | Same as web: selection happens in the connector panel, not inline. | ui |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Add @ mentions of MCP resources; today only MCP prompts can be run as /mcp:<server>:<prompt> commands. | ui |
+| cli | partial | Needs McpManager::list_resources/read_resource in apps/cli/src/mcp (p-mcp-rust's files); the crate client already has both (crates/agiworkforce-mcp/src/client.rs:168,182). | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
@@ -276,15 +251,14 @@ Code: `apps/web/features/connectors/components/ConnectorCapabilitiesPanel.tsx:13
 
 - Done when: Sources chosen for the next message (e.g. web search, connector resources, a page) are shown as chips before sending.
 - Wave: 3
-- Already works on: web, desktop, vscode
+- Already works on: web, desktop, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Show chosen sources as chips; the composer only shows tool status chips (Research, Code), not which sources a message will use. | ui |
 | cli | missing | Not built on this surface. |  |
-| chrome | partial | Show the attached page as a chip in the composer; today it appears only as a checked item inside the + menu. | ui |
 
-Code: `apps/mobile/src/features/chat/components/ChatInput.tsx:210-231`, `apps/extension/src/side_panel.ts:5099-5114`
+Code: `apps/mobile/src/features/chat/components/ChatInput.tsx:210-231`
 
 ## S13.33: Selected-tool chips.
 
@@ -307,50 +281,37 @@ Code: `apps/mobile/src/features/chat/components/ChatInput.tsx:210-231`, `apps/ex
 | web | partial | Add a per-message output-format choice; today the composer offers tone/length (Style) and an Office-files toggle, and "preferred formatting" exists only in Settings. | ui |
 | desktop | partial | Same as web. | ui |
 | mobile | partial | Add an output-format choice; the style picker covers tone and length only (Normal, Concise, Detailed, Creative). | ui |
-| cli | partial | Add a per-message format choice; /output-style changes the session's answer style only. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:869-876`, `apps/web/features/chat/stores/style-store.ts:187-195`, `apps/mobile/src/features/chat/components/StyleSelector.tsx:16-19`, `apps/cli/src/claude_parity.rs:125-125`
-
-## S13.35: Attachment menu.
-
-- Done when: A "+" (attach) menu in the composer lists the ways to add files, media and context.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Give the terminal one command that lists every way to add context; today /attach covers images only (path or clipboard) and files are added separately with @path. | ui |
-
-Code: `apps/cli/src/tui/tui_app.rs:3704-3710`, `apps/cli/src/tui/tui_app.rs:2786-2788`, `apps/cli/src/lib.rs:4636-4636`
+Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:869-876`, `apps/web/features/chat/stores/style-store.ts:187-195`, `apps/mobile/src/features/chat/components/StyleSelector.tsx:16-19`
 
 ## S13.36: Dictation control.
 
 - Done when: A microphone control dictates speech into the composer text (without sending) for review.
-- Wave: 3
+- Wave: 2
 - Already works on: web, desktop, mobile, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Add dictation into the composer; /voice runs a separate record-transcribe-send loop that needs the user's own OPENAI_API_KEY or a local whisper. | ui, api |
+| cli | partial | Code done: /dictate records into the composer without sending, transcribing on the account for Managed sessions. Stays flag-off until the voice cargo feature ships. | flag-off |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/cli/src/tui/tui_app.rs:4654-4665`
+Code: `apps/cli/src/tui/tui_app.rs:4945-4945`, `apps/cli/src/voice.rs:299-299`
 
 ## S13.37: Voice-conversation control.
 
 - Done when: A control starts a hands-free voice conversation (speak, hear the reply) from the composer.
-- Wave: 3
+- Wave: 2
 - Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Give /voice a transcription path that works with an AGI account; today it needs the user's OPENAI_API_KEY or a local whisper binary. | api |
+| cli | partial | Account transcription added in 572286763; flag-off until the voice cargo feature ships. | flag-off |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `crates/agiworkforce-command-registry/src/lib.rs:386-392`, `apps/cli/src/voice.rs:300-330`
+Code: `apps/cli/src/voice.rs:320-320`, `apps/cli/src/voice.rs:880-880`
 
 ## S13.38: Queued next prompt.
 
@@ -367,29 +328,27 @@ Code: `crates/agiworkforce-command-registry/src/lib.rs:386-392`, `apps/cli/src/v
 
 - Done when: A queued message can be edited or cancelled before it is sent.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Add Edit for queued messages; each queued message can only be cancelled. | ui |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | Add per-message Edit/Cancel for queued follow-ups; today they are only dropped all together by Clear Conversation, New Chat or switching sessions. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/chat/components/ChatInput.tsx:871-887`, `apps/mobile/src/features/chat/components/ChatInput.tsx:409-412`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:840-845`
+Code: `apps/mobile/src/features/chat/components/ChatInput.tsx:871-887`, `apps/mobile/src/features/chat/components/ChatInput.tsx:409-412`
 
 ## S13.40: Mid-task steering input.
 
 - Done when: While an agent is working, the user can send guidance that steers the running task without stopping it.
 - Wave: 3
-- Already works on: vscode
+- Already works on: cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Let users steer a running turn from the composer; today guidance can be added only when approving or denying a tool step, and typed messages wait in the queue. | ui, handler |
 | desktop | partial | Same as web: guidance only at approval checkpoints. | ui, handler |
 | mobile | partial | Let users steer a running mobile chat; steering exists only for a paired desktop's code session ("Steer this run" in Remote), while mobile chats queue messages. | ui |
-| cli | partial | Expose steering in the terminal UI; the CLI engine can steer a running turn (app-server turn steer, used by VS Code), but the TUI parks the composer during a turn. | ui |
 | chrome | partial | Let users steer a running chat or run from the panel; today guidance can be attached only to an approval decision in the Work runs panel. | ui, handler |
 
 Code: `apps/web/features/chat/components/approvals/ApprovalInbox.tsx:223-235`, `apps/web/features/chat/components/approvals/ApprovalInbox.tsx:125-132`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:177-190`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:85-97`
@@ -398,14 +357,12 @@ Code: `apps/web/features/chat/components/approvals/ApprovalInbox.tsx:223-235`, `
 
 - Done when: The user can ask a side question that is answered without being added to (or changing) the main task.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Make /btw work in the default TUI; only the classic REPL (--no-tui) runs it as a forked side query, while the TUI sends the /btw text into the main conversation (and its composer is disabled mid-turn). | handler |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/repl/mod.rs:399-418`, `apps/cli/src/agent/chat.rs:1127-1144`, `apps/cli/src/tui/tui_app.rs:3840-3848`

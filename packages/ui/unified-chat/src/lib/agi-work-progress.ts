@@ -6,6 +6,7 @@ import type { AgentActivityEntry } from '@agiworkforce/client-runtime';
  */
 export const AGIWORK_GOAL_PROGRESS_ID = 'agiwork:goal';
 export const AGIWORK_PLAN_PROGRESS_ID_PREFIX = 'agiwork:plan:';
+export const AGIWORK_PLAN_OVERVIEW_PROGRESS_ID = 'agiwork:plan-overview';
 
 const PLAN_STEP_ORDINAL = /^\s*\d+\.\s*/;
 
@@ -22,4 +23,8 @@ export function agiWorkPlanSentence(entries: readonly AgentActivityEntry[]): str
   if (!first || first.kind !== 'progress') return undefined;
   const sentence = first.summary.replace(PLAN_STEP_ORDINAL, '').trim();
   return sentence.length > 0 ? sentence : undefined;
+}
+
+export function isAgiWorkPlanOverviewEntry(entry: AgentActivityEntry): boolean {
+  return entry.kind === 'progress' && entry.progressId === AGIWORK_PLAN_OVERVIEW_PROGRESS_ID;
 }

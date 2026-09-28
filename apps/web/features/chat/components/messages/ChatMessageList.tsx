@@ -7,6 +7,7 @@ import React, {
   useState,
   useCallback,
   useMemo,
+  useSyncExternalStore,
   memo,
 } from 'react';
 import { MessageSearch } from './MessageSearch';
@@ -32,6 +33,7 @@ import { openModelPicker } from '@features/chat/lib/model-picker-trigger';
 import { pickStandardModel } from '@features/chat/lib/eligible-model';
 import { hasCompatibleFreeErrorRecoveryModel } from '../../lib/free-error-model-recovery';
 import type { ResearchPlanDecision, ResearchPlanOptions } from '../research/ResearchActivity';
+import type { AgiWorkPlanDecision } from '../work-session/AgiWorkPlanReview';
 import {
   InlinePaywallCard,
   normalizePaywallFeature,
@@ -63,6 +65,7 @@ import {
   withTurnErrorReference,
   type IncompleteTurnCause,
 } from '../../lib/turn-error-notice';
+import { translateUi } from '@agiworkforce/ui/translate';
 
 const STREAM_ERROR_CONNECTION_DETAIL = 'the connection to the model was interrupted.';
 
@@ -120,7 +123,9 @@ function streamErrorReason(message: ChatMessage): string {
   const code = streamErrorCode(message);
   const cause = code ? INCOMPLETE_TURN_CAUSE_BY_ERROR_CODE[code] : undefined;
   return withTurnErrorReference(
-    cause ? STREAM_ERROR_REASON_BY_CAUSE[cause] : STREAM_ERROR_CONNECTION_DETAIL,
+    cause
+      ? translateUi('errors', `turn.reason.${cause}`, STREAM_ERROR_REASON_BY_CAUSE[cause])
+      : translateUi('errors', 'turn.reason.connection', STREAM_ERROR_CONNECTION_DETAIL),
     message,
   );
 }
@@ -159,6 +164,7 @@ export interface ChatMessageListProps {
     decision: ResearchPlanDecision,
     options?: ResearchPlanOptions,
   ) => void;
+  onAgiWorkPlanDecision?: (id: string, decision: AgiWorkPlanDecision) => void;
   retryingResearchMessageId?: string | null;
   onContinue?: (messageId: string) => void;
   onEdit?: (messageId: string, newContent: string) => void;
@@ -345,7 +351,7 @@ const ScrollToBottomButton = memo(({ onClick }: { onClick: () => void }) => {
       exit={prefersReducedMotion ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.8 }}
       transition={prefersReducedMotion ? { duration: 0 } : { duration: 0.15 }}
       onClick={onClick}
-      className="flex h-11 w-11 items-center justify-center rounded-full border border-border/60 bg-popover/95 shadow-md backdrop-blur-sm transition-colors hover:bg-muted"
+      className="flex h-11 w-11 items-center justify-center rounded-full border border-border/60 bg-popover/95 shadow-e2 backdrop-blur-sm transition-colors hover:bg-muted"
       aria-label="Scroll to bottom"
     >
       <ChevronDown className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
@@ -365,6 +371,7 @@ interface MessageGroupRowProps {
     decision: ResearchPlanDecision,
     options?: ResearchPlanOptions,
   ) => void;
+  onAgiWorkPlanDecision?: (id: string, decision: AgiWorkPlanDecision) => void;
   retryingResearchMessageId?: string | null;
   onEdit?: (id: string) => void;
   onDelete?: (id: string) => void;
@@ -411,6 +418,7 @@ interface MessageRowProps {
     decision: ResearchPlanDecision,
     options?: ResearchPlanOptions,
   ) => void;
+  onAgiWorkPlanDecision?: (id: string, decision: AgiWorkPlanDecision) => void;
   retryingResearchMessageId?: string | null;
   onEdit?: (id: string) => void;
   onDelete?: (id: string) => void;
@@ -611,6 +619,7 @@ const MessageRow = memo(function MessageRow({
   onRegenerate,
   onRetryResearch,
   onResearchPlanDecision,
+  onAgiWorkPlanDecision,
   retryingResearchMessageId,
   onEdit,
   onDelete,
@@ -771,6 +780,11 @@ const MessageRow = memo(function MessageRow({
           ? onResearchPlanDecision
           : undefined
       }
+      onAgiWorkPlanDecision={
+        onAgiWorkPlanDecision && displayRole === 'assistant' && message.metadata?.['agiWorkPlan']
+          ? onAgiWorkPlanDecision
+          : undefined
+      }
       isRetryingResearch={retryingResearchMessageId === message.id}
       onEdit={onEdit && displayRole === 'user' ? handleEdit : undefined}
       onDelete={onDelete ? handleDelete : undefined}
@@ -830,6 +844,7 @@ const MessageGroupRow = memo(
     onRegenerate,
     onRetryResearch,
     onResearchPlanDecision,
+    onAgiWorkPlanDecision,
     retryingResearchMessageId,
     onEdit,
     onDelete,
@@ -873,6 +888,7 @@ const MessageGroupRow = memo(
             onRegenerate={onRegenerate}
             onRetryResearch={onRetryResearch}
             onResearchPlanDecision={onResearchPlanDecision}
+            onAgiWorkPlanDecision={onAgiWorkPlanDecision}
             retryingResearchMessageId={retryingResearchMessageId}
             onEdit={onEdit}
             onDelete={onDelete}
@@ -910,6 +926,7 @@ const MessageGroupRow = memo(
       prev.onRegenerate === next.onRegenerate &&
       prev.onRetryResearch === next.onRetryResearch &&
       prev.onResearchPlanDecision === next.onResearchPlanDecision &&
+      prev.onAgiWorkPlanDecision === next.onAgiWorkPlanDecision &&
       prev.retryingResearchMessageId === next.retryingResearchMessageId &&
       prev.onEdit === next.onEdit &&
       prev.onDelete === next.onDelete &&
@@ -1067,8 +1084,24 @@ export function buildStreamAnnouncement(message: ChatMessage | undefined): strin
   if (message.metadata?.['finishReason'] === 'stopped') {
     return 'Response cancelled. Partial response saved.';
   }
-  const text = message.content.trim();
-  return text ? `Response complete. ${text}` : 'Response complete';
+  return 'Response complete';
+}
+
+function subscribeToPrintScope(onChange: () => void): () => void {
+  const observer = new MutationObserver(onChange);
+  observer.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['data-print-scope'],
+  });
+  return () => observer.disconnect();
+}
+
+function readTranscriptPrintScope(): boolean {
+  return document.documentElement.getAttribute('data-print-scope') === 'transcript';
+}
+
+function readServerPrintScope(): boolean {
+  return false;
 }
 
 const ChatMessageListComponent = ({
@@ -1080,6 +1113,7 @@ const ChatMessageListComponent = ({
   onRegenerate,
   onRetryResearch,
   onResearchPlanDecision,
+  onAgiWorkPlanDecision,
   retryingResearchMessageId = null,
   onContinue,
   onEdit,
@@ -1145,6 +1179,11 @@ const ChatMessageListComponent = ({
     key: virtualizationKey,
   });
   const virtualRowCount = groups.length + 2;
+  const printingTranscript = useSyncExternalStore(
+    subscribeToPrintScope,
+    readTranscriptPrintScope,
+    readServerPrintScope,
+  );
   const virtualRowCountRef = useRef(virtualRowCount);
   virtualRowCountRef.current = virtualRowCount;
 
@@ -1691,6 +1730,7 @@ const ChatMessageListComponent = ({
       onRegenerate: handleRegenerate,
       onRetryResearch,
       onResearchPlanDecision,
+      onAgiWorkPlanDecision,
       retryingResearchMessageId,
       onEdit: handleEdit,
       onDelete: handleDelete,
@@ -1732,6 +1772,7 @@ const ChatMessageListComponent = ({
       handleRegenerateImage,
       onRetryResearch,
       onResearchPlanDecision,
+      onAgiWorkPlanDecision,
       retryingResearchMessageId,
       isReadAloudSupported,
       isSpeaking,
@@ -1758,7 +1799,7 @@ const ChatMessageListComponent = ({
     () => (
       <>
         {showContinue && lastMessage && (
-          <div className="mx-auto w-full max-w-3xl px-4 pt-1">
+          <div className="mx-auto w-full max-w-3xl px-gutter-compact pt-1">
             <button
               type="button"
               onClick={() => onContinue?.(lastMessage.id)}
@@ -1772,7 +1813,7 @@ const ChatMessageListComponent = ({
         )}
 
         {showStoppedNotice && lastMessage && (
-          <div className="mx-auto w-full max-w-3xl px-4 pt-1">
+          <div className="mx-auto w-full max-w-3xl px-gutter-compact pt-1">
             <TranscriptNotice
               tone="neutral"
               icon={Square}
@@ -1788,7 +1829,7 @@ const ChatMessageListComponent = ({
         )}
 
         {showRefusalNotice && lastMessage && (
-          <div className="mx-auto w-full max-w-3xl px-4 pt-1">
+          <div className="mx-auto w-full max-w-3xl px-gutter-compact pt-1">
             <TranscriptNotice
               icon={ShieldAlert}
               message="The model declined to finish this response for safety reasons."
@@ -1834,7 +1875,10 @@ const ChatMessageListComponent = ({
         </AnimatePresence>
 
         {showFollowUps && lastMessage && (
-          <div className="mx-auto w-full max-w-3xl px-4" data-testid="follow-up-suggestions-shell">
+          <div
+            className="mx-auto w-full max-w-3xl px-gutter-compact"
+            data-testid="follow-up-suggestions-shell"
+          >
             <FollowUpSuggestions
               lastAssistantContent={lastMessage.content}
               lastUserContent={lastUserContent}
@@ -1902,8 +1946,9 @@ const ChatMessageListComponent = ({
     >
       {/* AUDIT-FIX GOV-29: the ONLY live region on this surface. Off-screen,
           atomic, and carrying one short phrase per generation state change.
-          so a screen reader hears "Generating response" and then the finished
-          answer, instead of the transcript being re-read on every re-render. */}
+          so a screen reader hears "Generating response" and then "Response
+          complete"; the answer itself is read once, by the streaming announcer
+          in the bubble, instead of the transcript being re-read. */}
       <p role="status" aria-live="polite" aria-atomic="true" className="sr-only">
         {streamAnnouncement}
       </p>
@@ -1925,7 +1970,7 @@ const ChatMessageListComponent = ({
         rowHeight={dynamicRowHeight}
         rowProps={rowProps}
         defaultHeight={DEFAULT_TRANSCRIPT_VIEWPORT_HEIGHT}
-        overscanCount={6}
+        overscanCount={printingTranscript ? virtualRowCount : 6}
         onResize={({ height }) => setViewportHeight(height)}
         role="log"
         aria-live="off"
@@ -1981,6 +2026,7 @@ export const ChatMessageList = memo(ChatMessageListComponent, (prev, next) => {
     prev.onRegenerate === next.onRegenerate &&
     prev.onRetryResearch === next.onRetryResearch &&
     prev.onResearchPlanDecision === next.onResearchPlanDecision &&
+    prev.onAgiWorkPlanDecision === next.onAgiWorkPlanDecision &&
     prev.retryingResearchMessageId === next.retryingResearchMessageId &&
     prev.onContinue === next.onContinue &&
     prev.onDelete === next.onDelete &&
