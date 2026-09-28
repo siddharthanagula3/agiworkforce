@@ -2585,12 +2585,26 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                     ),
                 );
                 let turn_config = turn_config_pinned_to_session_route(&task_config, &agent);
-                let result = crate::mcp::collect_sign_in_required(agent.send(
-                    &turn_config,
-                    &input.text,
-                    on_chunk,
-                ))
-                .await;
+                let (result, reconnects) =
+                    crate::cloud::connectors::collecting(crate::mcp::collect_sign_in_required(
+                        agent.send(&turn_config, &input.text, on_chunk),
+                    ))
+                    .await;
+                for reconnect in reconnects {
+                    if let Ok(notification) = AppServerNotification::new(
+                        agiworkforce_protocol::developer_session::method::MCP_AUTH_REQUIRED,
+                        McpAuthRequiredNotification {
+                            thread_id: task_thread_id.clone(),
+                            turn_id: task_turn_id.clone(),
+                            tool_call_id: reconnect.tool_call_id,
+                            server: reconnect.connector_name,
+                            scope: None,
+                            connect_url: reconnect.connect_url,
+                        },
+                    ) {
+                        let _ = task_notifications.send(notification);
+                    }
+                }
                 agent.on_tool_approval = None;
                 agent.on_tool_event = None;
                 agent.on_continuation_chunk = None;
@@ -4097,6 +4111,7 @@ fn mcp_sign_in_tracking(
                     tool_call_id: call_id.clone(),
                     server: required.server,
                     scope: required.scope,
+                    connect_url: None,
                 }
             }),
             _ => None,

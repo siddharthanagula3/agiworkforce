@@ -615,6 +615,11 @@ fn stream_event_handler<'a>(
         StreamEvent::Vendor { event, data } if event == crate::sources::SEARCH_RESULTS_EVENT => {
             crate::sources::record(crate::sources::from_search_results_delta(&data))
         }
+        StreamEvent::Vendor { event, data }
+            if event == crate::cloud::connectors::TOOL_RESULT_EVENT =>
+        {
+            crate::cloud::connectors::observe_tool_result(&data)
+        }
         StreamEvent::Vendor { event, data } => {
             if let Some(pause) = pause.as_deref_mut() {
                 pause.observe(&event, &data);
