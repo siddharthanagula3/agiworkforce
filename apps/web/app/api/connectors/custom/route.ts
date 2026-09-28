@@ -6,6 +6,8 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { logger } from '@/lib/logger';
+import { recordExternalResourceReferences } from '@/lib/server/external-resource-references';
 import { evaluateConnectorPolicyForUser } from '@/lib/services/connector-policy-gate';
 import { validateHttpsMcpUrl } from '@/lib/mcp-url-validation';
 import { bearerCredential, sealCustomConnectorCredential } from '@/lib/custom-connector-crypto';
@@ -199,6 +201,22 @@ async function handlePost(request: NextRequest) {
     oauthClient: oauthClientId
       ? { clientId: oauthClientId, clientSecret: oauthClientSecret || null }
       : null,
+  });
+
+  await recordExternalResourceReferences(db, { userId, organizationId: null }, [
+    {
+      kind: 'mcp_server',
+      provider: 'custom',
+      uri: saved.url,
+      title: saved.name,
+      access: 'connector',
+      connectorId: customConnectorId(saved.short_id),
+    },
+  ]).catch((error: unknown) => {
+    logger.warn(
+      { error, userId, connectorId: customConnectorId(saved.short_id) },
+      '[connectors] the custom connector server was not recorded',
+    );
   });
 
   await recordAuditEvent({
