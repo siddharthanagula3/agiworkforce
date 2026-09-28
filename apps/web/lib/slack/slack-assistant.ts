@@ -327,6 +327,7 @@ async function answerMessage(
         channelId: event.channelId,
         requesterId: event.userId,
         botUserId: installation.botUserId,
+        appId: installation.appId,
         text: event.text,
         ts: event.ts,
         threadTs: event.threadTs,
