@@ -67,11 +67,21 @@ function routeSource(specPath: string): string {
     .join('\n');
 }
 
+function declaredScopes(source: string): string[] {
+  return [...source.matchAll(/apiKeyScope:\s*'([^']+)'/g)].flatMap((match) => match[1] ?? []);
+}
+
+const authGateScopes = declaredScopes(
+  readFileSync(path.join(v1Dir, 'chat/completions/lib/auth-gate.ts'), 'utf8'),
+);
+
 const scopesByRoute = new Map<string, Set<string>>();
 for (const file of sourceFiles(apiDir)) {
-  const scopes = [...readFileSync(file, 'utf8').matchAll(/apiKeyScope:\s*'([^']+)'/g)].flatMap(
-    (match) => match[1] ?? [],
-  );
+  const source = readFileSync(file, 'utf8');
+  const scopes = [
+    ...declaredScopes(source),
+    ...(/\brunAuthGate\(/.test(source) ? authGateScopes : []),
+  ];
   if (scopes.length === 0) continue;
   const routeDir = nearestRouteDir(file);
   if (!routeDir) continue;
@@ -147,9 +157,12 @@ describe('published OpenAPI spec', () => {
         [...(scopesByRoute.get(specPath) ?? [])],
         `${specPath} advertises ${String(scope)} but the route requires a different scope`,
       ).toContain(scope);
-      expect(routeSource(specPath), `${specPath} does not require ${String(scope)}`).toContain(
-        `apiKeyScope: '${String(scope)}'`,
-      );
+      const source = routeSource(specPath);
+      expect(
+        source.includes(`apiKeyScope: '${String(scope)}'`) ||
+          (/\brunAuthGate\(/.test(source) && authGateScopes.includes(String(scope))),
+        `${specPath} does not require ${String(scope)}`,
+      ).toBe(true);
     }
   });
 

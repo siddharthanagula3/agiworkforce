@@ -10,17 +10,15 @@ nothing is left.
 
 - Done when: A dashboard lists the user's generated/published sites with their state and actions.
 - Wave: 3
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Settings > Shared links lists published pages with Open/Copy/Unpublish, but it does not show each page's audience and its copy says every page is public even when workspace-only. | ui |
-| desktop | partial | Settings > Shared links lists published pages with Open/Copy/Unpublish, but it does not show each page's audience and its copy says every page is public even when workspace-only. | ui |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | `agi artifacts list` lists account artifacts, not published pages; render_published exists but no command calls it. | ui |
 | vscode | partial | The Artifacts view marks published rows and opens their page, but cannot unpublish or change audience. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/settings/sections/PublishedArtifactsSection.tsx:118-134`, `apps/web/features/settings/components/WebSettingsModal.tsx:202-202`, `apps/web/app/api/artifacts/publish/route.ts:405-433`, `apps/cli/src/lib.rs:1023-1032`
+Code: `apps/extension-vscode/src/features/artifacts/artifactsTree.ts:36-43`, `apps/extension-vscode/src/core/commandSetup.ts:2302-2306`
 
 ## S33.02: Application name and description.
 
@@ -29,13 +27,10 @@ Code: `apps/web/features/settings/sections/PublishedArtifactsSection.tsx:118-134
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The page title is the artifact title sent at publish time; there is no field to name or describe the published app. | ui |
-| desktop | partial | The page title is the artifact title sent at publish time; there is no field to name or describe the published app. | ui |
-| mobile | partial | The page title is the artifact title sent at publish time; there is no field to name or describe the published app. | ui |
 | cli | partial | The page title is the artifact title sent at publish time; there is no field to name or describe the published app. | ui |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/web/app/api/artifacts/publish/route.ts:30-37`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1562-1572`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:405-418`, `apps/mobile/src/features/chat/services/artifactPublishing.ts:13-25`
+Code: `apps/cli/src/lib.rs:1053-1068`, `apps/cli/src/cloud/artifacts.rs:391-400`
 
 ## S33.04: Prompt-based creation.
 
@@ -57,13 +52,10 @@ Code: `apps/cli/src/lib.rs:1053-1068`, `apps/cli/src/cloud/artifacts.rs:391-400`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Single-file source view with an editor; no multi-file project workspace for a site. | ui |
-| desktop | partial | Single-file source view with an editor; no multi-file project workspace for a site. | ui |
-| mobile | partial | Mobile shows the source read-only (Source toggle); it cannot edit it. | ui |
 | cli | partial | `agi artifacts show` prints or saves the source; an edited file cannot be pushed back to the artifact. | ui |
 | vscode | partial | VS Code opens the source as a read-only document; edits go to a separate workspace copy. | ui |
 
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1342-1356`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:488-496`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:370-378`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:146-152`
+Code: `apps/cli/src/lib.rs:1053-1068`, `apps/cli/src/lib.rs:1942-1948`, `apps/extension-vscode/src/features/artifacts/artifactActions.ts:99-102`, `apps/extension-vscode/src/core/commandSetup.ts:2292-2296`
 
 ## S33.07: Preview deployment.
 
@@ -82,13 +74,10 @@ Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1342-1356
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Publishing makes one share link; there is no separate production stage or stable domain distinct from the preview. | ui |
-| desktop | partial | Publishing makes one share link; there is no separate production stage or stable domain distinct from the preview. | ui |
-| mobile | partial | Publishing makes one share link; there is no separate production stage or stable domain distinct from the preview. | ui |
 | cli | partial | Publishing makes one share link; there is no separate production stage or stable domain distinct from the preview. | ui |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1562-1572`, `apps/web/features/chat/components/artifacts/publishArtifactClient.ts:89-101`, `apps/web/app/api/artifacts/publish/route.ts:182-205`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:405-418`
+Code: `apps/cli/src/lib.rs:1053-1068`, `apps/cli/src/cloud/artifacts.rs:391-400`
 
 ## S33.09: Deployment history.
 
@@ -97,14 +86,9 @@ Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1562-1572
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The server keeps every published version (GET /api/artifacts/publish?versionsOf=) but no UI calls it, so owners cannot see publish history. | ui |
-| desktop | partial | The server keeps every published version (GET /api/artifacts/publish?versionsOf=) but no UI calls it, so owners cannot see publish history. | ui |
-| mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/api/artifacts/publish/route.ts:279-311`, `apps/web/app/api/artifacts/publish/route.ts:135-150`
 
 ## S33.10: Public URL.
 
@@ -122,15 +106,12 @@ Code: `apps/extension-vscode/package.json:597-599`, `apps/extension-vscode/src/c
 
 - Done when: The owner can restrict a site to members of their workspace.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | The CLI prints a page's audience after publishing but cannot set it. | ui |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:1986-1994`, `apps/cli/src/cloud/artifacts.rs:88-95`
 
 ## S33.13: Password or authentication options where offered.
 
@@ -139,13 +120,8 @@ Code: `apps/cli/src/lib.rs:1986-1994`, `apps/cli/src/cloud/artifacts.rs:88-95`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The only authenticated option is workspace-only (viewer must sign in as a workspace member); there is no password protection. | ui |
-| desktop | partial | The only authenticated option is workspace-only (viewer must sign in as a workspace member); there is no password protection. | ui |
-| mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1705-1724`, `apps/web/app/api/artifacts/publish/[token]/route.ts:106-125`, `apps/web/app/shared-artifact/[token]/page.tsx:31-38`
 
 ## S33.19: Usage and hosting limits.
 
@@ -154,13 +130,10 @@ Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1705-1724
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Limits are enforced (200 live pages per user, 1,000,000 characters, share-create rate limit) and returned as errors, but no screen shows usage against them. | ui |
-| desktop | partial | Limits are enforced (200 live pages per user, 1,000,000 characters, share-create rate limit) and returned as errors, but no screen shows usage against them. | ui |
-| mobile | partial | Limits are enforced (200 live pages per user, 1,000,000 characters, share-create rate limit) and returned as errors, but no screen shows usage against them. | ui |
 | cli | partial | Limits are enforced (200 live pages per user, 1,000,000 characters, share-create rate limit) and returned as errors, but no screen shows usage against them. | ui |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/services/published-artifact-service.ts:316-319`, `apps/web/app/api/artifacts/publish/route.ts:186-187`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:405-418`, `apps/mobile/src/features/chat/services/artifactPublishing.ts:13-25`
+Code: `apps/cli/src/lib.rs:1053-1068`, `apps/cli/src/cloud/artifacts.rs:391-400`
 
 ## S33.23: Rollback.
 

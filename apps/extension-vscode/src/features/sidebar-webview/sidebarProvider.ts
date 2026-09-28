@@ -12,6 +12,7 @@ import { resolveTierSync } from '../../integrations/tierResolver';
 import { type WorkspaceFileReference } from '../chat-participant/promptReferences';
 import { type ChatTurn } from '../chat/retry';
 import { AttentionState } from './attentionBadge';
+import { alertSessionActivity } from './sessionActivityAlert';
 import { markInUse } from '../../core/startupWork';
 
 export { getWebviewContent, getNonce, escapeHtml } from './webviewContent';
@@ -141,10 +142,11 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   private _postToWebview(message: ExtToWebviewMessage): Thenable<boolean> | undefined {
     if (message.type === 'approvalRequested') this._attention.record('approval-requested');
     else if (message.type === 'approvalResolved') this._attention.record('approval-resolved');
-    else if (message.type === 'done' || message.type === 'error') {
+    else if ((message.type === 'done' && !message.payload?.stopped) || message.type === 'error') {
       this._attention.record('turn-finished');
     }
     this._refreshBadge();
+    alertSessionActivity(message, () => this.reveal());
     return this._view?.webview.postMessage(message);
   }
 
@@ -179,6 +181,10 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
 
   public activeThreadId(): string | undefined {
     return this._stateManager.activeThreadId();
+  }
+
+  public activeThreadReceipt(): ReturnType<ChatStateManager['activeThreadReceipt']> {
+    return this._stateManager.activeThreadReceipt();
   }
 
   public chatTranscript(): readonly ChatTurn[] {

@@ -379,6 +379,23 @@ export function Sidebar({
     [deleteProject],
   );
 
+  const handleArchiveConversation = useCallback(
+    (id: string) => {
+      archiveConversation(id);
+      toast(t('sidebar.archivedToast'), {
+        action: { label: t('sidebar.archivedUndo'), onClick: () => restoreConversation(id) },
+        cancel: {
+          label: t('sidebar.archivedView'),
+          onClick: () => {
+            setShowArchived(true);
+            setShowAll(false);
+          },
+        },
+      });
+    },
+    [archiveConversation, restoreConversation, t],
+  );
+
   const handleArchiveProject = useCallback(
     (id: string) => {
       void archiveProject(id).catch((error) => {
@@ -764,7 +781,7 @@ export function Sidebar({
                   onRename={renameConversation}
                   onDelete={deleteConversation}
                   onTogglePin={togglePinnedConversation}
-                  onArchive={archiveConversation}
+                  onArchive={handleArchiveConversation}
                   onRestore={restoreConversation}
                   projects={moveTargetProjects.map((project) => ({
                     id: project.id,

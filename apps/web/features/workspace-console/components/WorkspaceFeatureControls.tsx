@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useConfirmAction } from '@agiworkforce/ui';
+import { useConfirmAction, useUnsavedChangesGuard } from '@agiworkforce/ui';
 import {
   WORKSPACE_FEATURE_LABELS,
   WORKSPACE_POLICY_OVERRIDE_SUBJECT_LABELS,
@@ -27,6 +27,7 @@ import {
   useWorkspaceGroups,
   useWorkspaceRoles,
 } from '../hooks/use-workspace-roles';
+import { WorkspacePolicyDiagnostics } from './WorkspacePolicyDiagnostics';
 
 export const GOVERNED_FEATURES: readonly WorkspaceFeature[] = [
   'work',
@@ -131,6 +132,11 @@ function WorkspaceDefaults({
 
   const next: WorkspaceControls = { ...draft, allowedCountries: parseCountries(countries) };
   const dirty = JSON.stringify(next) !== JSON.stringify(controls);
+  const { dialog: discardDialog } = useUnsavedChangesGuard({
+    dirty: dirty && !update.isPending,
+    description:
+      'Your changes to the workspace features and defaults have not been saved. If you leave now, they will be lost.',
+  });
   const liveModels = (models.data?.catalog.models ?? []).filter((model) => model.live);
 
   return (
@@ -138,7 +144,7 @@ function WorkspaceDefaults({
       <div className="border-b px-5 py-3.5" style={{ borderColor: 'var(--settings-border)' }}>
         <h2
           id="workspace-feature-controls-heading"
-          className="text-sm font-semibold"
+          className="text-h5"
           style={{ color: 'var(--text-1)' }}
         >
           Features and defaults
@@ -253,6 +259,7 @@ function WorkspaceDefaults({
           </button>
         </div>
       ) : null}
+      {discardDialog}
     </section>
   );
 }
@@ -321,7 +328,7 @@ function PolicyExceptions({ organizationId }: { organizationId: string }) {
       <div className="border-b px-5 py-3.5" style={{ borderColor: 'var(--settings-border)' }}>
         <h2
           id="workspace-policy-exceptions-heading"
-          className="text-sm font-semibold"
+          className="text-h5"
           style={{ color: 'var(--text-1)' }}
         >
           Exceptions
@@ -487,6 +494,9 @@ export function WorkspaceFeatureControls() {
       />
       {overview.canManagePolicy && overview.configured ? (
         <PolicyExceptions organizationId={overview.organizationId} />
+      ) : null}
+      {overview.canManagePolicy ? (
+        <WorkspacePolicyDiagnostics organizationId={overview.organizationId} />
       ) : null}
     </div>
   );

@@ -14,11 +14,11 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | `/voice` starts push-to-talk voice turns in the current agent session. Works only in builds compiled with the off-by-default `voice` cargo feature, and needs the user's own OPENAI_API_KEY or a local whisper binary for transcription. | flag-off |
+| cli | partial | Code done; cell stays flag-off until the lead enables the `voice` cargo feature for release builds (apps/cli/Cargo.toml:118), per decisions.md. | flag-off |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`, `apps/cli/src/voice.rs:164-164`
+Code: `apps/cli/src/voice.rs:75-75`, `apps/cli/src/voice.rs:320-320`, `apps/cli/src/voice.rs:882-882`
 
 ## S48.02: Start a new voice conversation.
 
@@ -28,11 +28,11 @@ Code: `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`, `a
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | `/voice` reuses the current session; `/new` then `/voice` gives a fresh one. Works only in builds compiled with the off-by-default `voice` cargo feature, and needs the user's own OPENAI_API_KEY or a local whisper binary for transcription. | flag-off |
+| cli | partial | Code done; cell stays flag-off until the lead enables the `voice` cargo feature for release builds (apps/cli/Cargo.toml:118), per decisions.md. | flag-off |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`, `apps/cli/src/voice.rs:164-164`
+Code: `apps/cli/src/voice.rs:75-75`, `apps/cli/src/voice.rs:320-320`, `apps/cli/src/voice.rs:882-882`
 
 ## S48.03: Integrated voice-and-text layout.
 
@@ -42,9 +42,9 @@ Code: `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`, `a
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Voice turns print inline in the terminal, but the TUI drops the alt-screen for voice and the turns are not added back to the TUI transcript. Works only in builds compiled with the off-by-default `voice` cargo feature, and needs the user's own OPENAI_API_KEY or a local whisper binary for transcription. | flag-off |
+| cli | partial | Code done; cell stays flag-off until the lead enables the `voice` cargo feature for release builds (apps/cli/Cargo.toml:118), per decisions.md. | flag-off |
 
-Code: `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`, `apps/cli/src/tui/tui_app.rs:4659-4659`
+Code: `apps/cli/src/tui/tui_app.rs:4766-4766`, `apps/cli/src/tui/tui_app.rs:2804-2804`, `apps/cli/src/voice.rs:320-320`, `apps/cli/src/voice.rs:882-882`
 
 ## S48.05: Listening indicator.
 
@@ -54,9 +54,9 @@ Code: `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`, `a
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | A recording indicator shows while SPACE is held. Works only in builds compiled with the off-by-default `voice` cargo feature, and needs the user's own OPENAI_API_KEY or a local whisper binary for transcription. | flag-off |
+| cli | partial | Code done; cell stays flag-off until the lead enables the `voice` cargo feature for release builds (apps/cli/Cargo.toml:118), per decisions.md. | flag-off |
 
-Code: `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`, `apps/cli/src/voice.rs:511-511`
+Code: `apps/cli/src/voice.rs:684-684`, `apps/cli/src/voice.rs:320-320`, `apps/cli/src/voice.rs:882-882`
 
 ## S48.07: Thinking/working indicator.
 
@@ -66,23 +66,22 @@ Code: `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`, `a
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | A "Thinking..." spinner shows while the turn runs. Works only in builds compiled with the off-by-default `voice` cargo feature, and needs the user's own OPENAI_API_KEY or a local whisper binary for transcription. | flag-off |
+| cli | partial | Code done; cell stays flag-off until the lead enables the `voice` cargo feature for release builds (apps/cli/Cargo.toml:118), per decisions.md. | flag-off |
 
-Code: `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`, `apps/cli/src/voice.rs:235-235`
+Code: `apps/cli/src/voice.rs:254-254`, `apps/cli/src/voice.rs:320-320`, `apps/cli/src/voice.rs:882-882`
 
 ## S48.08: Waveform or amplitude visualization.
 
 - Done when: A waveform or amplitude visual follows the live microphone or reply audio level during voice.
 - Wave: 2
-- Already works on: mobile
+- Already works on: web, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The voice-mode orb animates by state only; wire the microphone and reply audio level into it (only composer dictation has a live waveform). | ui |
 | desktop | partial | Same as web: the voice-mode orb is state-driven, not amplitude-driven. | ui |
-| cli | partial | Only an animated recording indicator; no level meter. Works only in builds compiled with the off-by-default `voice` cargo feature, and needs the user's own OPENAI_API_KEY or a local whisper binary for transcription. | flag-off |
+| cli | partial | Code done; cell stays flag-off until the lead enables the `voice` cargo feature for release builds (apps/cli/Cargo.toml:118), per decisions.md. | flag-off |
 
-Code: `packages/ui/unified-chat/src/components/VoiceOrb.tsx:119-119`, `apps/web/features/chat/components/Composer/DictationStrip.tsx:111-111`, `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`
+Code: `packages/ui/unified-chat/src/components/VoiceOrb.tsx:119-119`, `apps/cli/src/voice.rs:684-684`, `apps/cli/src/voice.rs:764-764`, `apps/cli/src/voice.rs:320-320`
 
 ## S48.10: End conversation.
 
@@ -92,22 +91,22 @@ Code: `packages/ui/unified-chat/src/components/VoiceOrb.tsx:119-119`, `apps/web/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | ESC exits voice mode back to the prompt. Works only in builds compiled with the off-by-default `voice` cargo feature, and needs the user's own OPENAI_API_KEY or a local whisper binary for transcription. | flag-off |
+| cli | partial | Code done; cell stays flag-off until the lead enables the `voice` cargo feature for release builds (apps/cli/Cargo.toml:118), per decisions.md. | flag-off |
 
-Code: `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`, `apps/cli/src/voice.rs:172-172`
+Code: `apps/cli/src/voice.rs:178-178`, `apps/cli/src/voice.rs:320-320`, `apps/cli/src/voice.rs:882-882`
 
 ## S48.11: Pause/resume.
 
 - Done when: The user can pause the whole voice conversation (mic and assistant) and resume it later without ending it.
 - Wave: 3
+- Already works on: web
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only a microphone mute exists; the assistant keeps talking and the session keeps running and billing. Add a pause that holds both and the meter. | ui |
 | desktop | partial | Same as web: mute only, no pause of the session. | ui |
 | mobile | partial | Mute (live bar and companion) only stops listening; there is no pause that holds a spoken reply and resumes it. | ui |
 
-Code: `apps/web/features/chat/components/Voice/VoiceComposer.tsx:124-124`, `apps/web/features/chat/hooks/use-voice-session.ts:449-449`, `apps/mobile/src/features/voice/components/LiveVoiceBar.tsx:226-226`, `apps/mobile/src/features/voice/hooks/useVoiceConversation.ts:256-256`
+Code: `apps/web/features/chat/components/Voice/VoiceComposer.tsx:124-124`, `apps/mobile/src/features/voice/components/LiveVoiceBar.tsx:226-226`, `apps/mobile/src/features/voice/hooks/useVoiceConversation.ts:256-256`
 
 ## S48.12: Push-to-talk.
 
@@ -119,9 +118,9 @@ Code: `apps/web/features/chat/components/Voice/VoiceComposer.tsx:124-124`, `apps
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
-| cli | partial | Hold SPACE to record; release stops recording. Works only in builds compiled with the off-by-default `voice` cargo feature, and needs the user's own OPENAI_API_KEY or a local whisper binary for transcription. | flag-off |
+| cli | partial | Code done; cell stays flag-off until the lead enables the `voice` cargo feature for release builds (apps/cli/Cargo.toml:118), per decisions.md. | flag-off |
 
-Code: `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`, `apps/cli/src/voice.rs:628-628`
+Code: `apps/cli/src/voice.rs:661-661`, `apps/cli/src/voice.rs:320-320`, `apps/cli/src/voice.rs:882-882`
 
 ## S48.13: Hands-free mode.
 
@@ -152,24 +151,23 @@ Code: `apps/mobile/src/features/voice/components/VoicePickerSheet.tsx:207-207`, 
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The live-voice carousel has no sample; the only Preview button (Settings, read-aloud) plays a browser speech voice, not a live voice. | ui |
+| web | partial | needs recorded samples of each live voice (owner asset); the live API has no preview endpoint | ui |
 | desktop | partial | Same as web: no live-voice sample. | ui |
 | mobile | partial | Settings previews on-device voices, which the companion uses, but live voice ignores the chosen voice (starts with voice null). | handler |
 
-Code: `apps/web/features/chat/components/Voice/VoiceSettingsModal.tsx:256-256`, `apps/web/features/settings/sections/GeneralSection.tsx:1362-1362`, `apps/mobile/src/features/settings/voice-language/index.tsx:102-102`, `apps/mobile/src/features/voice/hooks/useLiveVoiceSession.ts:130-130`
+Code: `apps/web/features/chat/lib/live-voices.ts:9-9`, `apps/web/features/chat/components/Voice/VoiceSettingsModal.tsx:256-256`, `apps/mobile/src/features/settings/voice-language/index.tsx:102-102`, `apps/mobile/src/features/voice/hooks/useLiveVoiceSession.ts:130-130`
 
 ## S48.17: Language selection.
 
 - Done when: The user can choose the spoken language of the voice conversation, and it is applied to recognition.
 - Wave: 2
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The speech language setting drives on-device recognition (companion, inline voice), but live voice never sends a language, so it auto-detects. | handler |
-| cli | partial | `/voice <lang>` validates and applies the language to transcription. Works only in builds compiled with the off-by-default `voice` cargo feature, and needs the user's own OPENAI_API_KEY or a local whisper binary for transcription. | flag-off |
+| cli | partial | Code done; cell stays flag-off until the lead enables the `voice` cargo feature for release builds (apps/cli/Cargo.toml:118), per decisions.md. | flag-off |
 
-Code: `apps/mobile/app/(app)/voice.tsx:192-192`, `apps/mobile/src/features/voice/services/liveVoiceSession.ts:216-216`, `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`
+Code: `apps/cli/src/voice.rs:89-89`, `apps/cli/src/voice.rs:320-320`, `apps/cli/src/voice.rs:882-882`
 
 ## S48.18: Input-device selection.
 
@@ -216,9 +214,9 @@ Code: `apps/mobile/src/features/voice/components/AudioRoutePicker.tsx:48-48`, `a
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Prints "You said:" and the streamed reply text. Works only in builds compiled with the off-by-default `voice` cargo feature, and needs the user's own OPENAI_API_KEY or a local whisper binary for transcription. | flag-off |
+| cli | partial | Code done; cell stays flag-off until the lead enables the `voice` cargo feature for release builds (apps/cli/Cargo.toml:118), per decisions.md. | flag-off |
 
-Code: `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`, `apps/cli/src/voice.rs:213-213`
+Code: `apps/cli/src/voice.rs:221-221`, `apps/cli/src/voice.rs:320-320`, `apps/cli/src/voice.rs:882-882`
 
 ## S48.22: Transcript display.
 
@@ -228,23 +226,9 @@ Code: `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`, `a
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Voice turns are printed but not added back to the TUI transcript after voice mode returns. Works only in builds compiled with the off-by-default `voice` cargo feature, and needs the user's own OPENAI_API_KEY or a local whisper binary for transcription. | flag-off |
+| cli | partial | Code done; cell stays flag-off until the lead enables the `voice` cargo feature for release builds (apps/cli/Cargo.toml:118), per decisions.md. | flag-off |
 
-Code: `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`, `apps/cli/src/tui/tui_app.rs:4671-4671`
-
-## S48.23: Transcript editing where appropriate.
-
-- Done when: Where appropriate, the user can correct a spoken turn's transcript before or after it is acted on.
-- Wave: 2
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Spoken turns go straight to the live model with no chance to correct them; saved voice turns can only be edited afterwards as ordinary messages. | ui |
-| desktop | partial | Spoken turns go straight to the live model with no chance to correct them; saved voice turns can only be edited afterwards as ordinary messages. | ui |
-| mobile | partial | Live and companion turns are sent as heard; only composer dictation (S49.02) is editable before send. | ui |
-| cli | partial | After each recording the transcript is shown with ENTER to send, r to re-record or ESC to discard; the text itself cannot be edited. Works only in builds compiled with the off-by-default `voice` cargo feature, and needs the user's own OPENAI_API_KEY or a local whisper binary for transcription. | flag-off |
-
-Code: `apps/web/features/chat/lib/live-voice-session.ts:543-543`, `apps/web/features/chat/pages/WebChatPage.tsx:5729-5729`, `apps/mobile/src/features/voice/hooks/useVoiceConversation.ts:101-101`, `apps/cli/Cargo.toml:118-118`
+Code: `apps/cli/src/tui/tui_app.rs:4766-4766`, `apps/cli/src/voice.rs:320-320`, `apps/cli/src/voice.rs:882-882`
 
 ## S48.24: Type while speaking.
 
@@ -253,25 +237,25 @@ Code: `apps/web/features/chat/lib/live-voice-session.ts:543-543`, `apps/web/feat
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The voice composer field sends a normal text turn to the chat model; the live voice model never sees it, so the spoken conversation does not know what was typed. | handler |
+| web | partial | blocked: the GPT-Live protocol (developers.openai.com/api/docs/guides/live-conversations, fetched 2026-09-27) documents no user text input event, only session.instructions/thinking/commentary.append | handler |
 | desktop | partial | The voice composer field sends a normal text turn to the chat model; the live voice model never sees it, so the spoken conversation does not know what was typed. | handler |
 | mobile | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/Voice/VoiceComposer.tsx:114-114`, `apps/web/features/chat/hooks/use-voice-session.ts:468-468`
+Code: `apps/web/features/chat/hooks/use-voice-session.ts:640-640`, `apps/web/features/chat/components/Voice/VoiceComposer.tsx:114-114`
 
 ## S48.26: View tool results during Voice.
 
 - Done when: Tool activity and results from a voice turn are viewable during the conversation.
 - Wave: 2
+- Already works on: web
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Voice shows only a generic busy state: the per-tool labels the session computes are never wired (onToolActivity unset) and tool results are folded into speech. The Activity panel only covers typed turns. | ui, handler |
 | desktop | partial | Voice shows only a generic busy state: the per-tool labels the session computes are never wired (onToolActivity unset) and tool results are folded into speech; the Activity panel only covers typed turns. | ui, handler |
 | mobile | partial | Only "Working on your request" is shown while a delegated tool runs; no tool name or result. | ui |
-| cli | partial | A voice turn is a normal agent turn, so tool calls print in the terminal like typed turns. Works only in builds compiled with the off-by-default `voice` cargo feature, and needs the user's own OPENAI_API_KEY or a local whisper binary for transcription. | flag-off |
+| cli | partial | Code done; cell stays flag-off until the lead enables the `voice` cargo feature for release builds (apps/cli/Cargo.toml:118), per decisions.md. | flag-off |
 
-Code: `apps/web/features/chat/lib/live-voice-session.ts:649-649`, `apps/web/features/chat/hooks/use-voice-session.ts:272-272`, `apps/mobile/src/features/voice/components/LiveVoiceBar.tsx:193-193`, `apps/cli/Cargo.toml:118-118`
+Code: `apps/web/features/chat/hooks/use-voice-session.ts:272-272`, `apps/mobile/src/features/voice/components/LiveVoiceBar.tsx:193-193`, `apps/cli/src/voice.rs:254-254`, `apps/cli/src/voice.rs:320-320`
 
 ## S48.27: Approve an action during Voice.
 
@@ -281,23 +265,23 @@ Code: `apps/web/features/chat/lib/live-voice-session.ts:649-649`, `apps/web/feat
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | A voice turn runs through the normal agent loop, whose approval prompts appear in the terminal. Works only in builds compiled with the off-by-default `voice` cargo feature, and needs the user's own OPENAI_API_KEY or a local whisper binary for transcription. | flag-off |
+| cli | partial | Code done; cell stays flag-off until the lead enables the `voice` cargo feature for release builds (apps/cli/Cargo.toml:118), per decisions.md. | flag-off |
 
-Code: `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`, `apps/cli/src/voice.rs:240-240`
+Code: `apps/cli/src/voice.rs:254-254`, `apps/cli/src/voice.rs:320-320`, `apps/cli/src/voice.rs:882-882`
 
 ## S48.28: Open a generated document from Voice.
 
 - Done when: A document generated during voice can be opened from the voice view.
 - Wave: 2
+- Already works on: web
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Voice turns cannot generate documents (only web_search and code_interpreter are reachable); the dock only links to the Library, which navigates away from the chat. | handler |
 | desktop | partial | Same as web. | handler |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | A voice turn is a normal agent turn, so files the agent writes land in the workspace like typed turns. Works only in builds compiled with the off-by-default `voice` cargo feature, and needs the user's own OPENAI_API_KEY or a local whisper binary for transcription. | flag-off |
+| cli | partial | Code done; cell stays flag-off until the lead enables the `voice` cargo feature for release builds (apps/cli/Cargo.toml:118), per decisions.md. | flag-off |
 
-Code: `apps/web/features/chat/components/Voice/VoiceChatDock.tsx:78-78`, `apps/web/lib/voice/live-voice-tools.ts:111-111`, `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`
+Code: `apps/web/features/chat/components/Voice/VoiceChatDock.tsx:78-78`, `apps/cli/src/voice.rs:254-254`, `apps/cli/src/voice.rs:320-320`, `apps/cli/src/voice.rs:882-882`
 
 ## S48.29: Attach image during Voice.
 
@@ -319,23 +303,11 @@ Code: `apps/mobile/src/features/voice/components/VoiceInlineBar.tsx:64-64`, `app
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | A camera toggle and preview are built into the voice surface but only render when a frame sink is passed, and WebChatPage never passes one; the live session has no path for frames. Wire a frame sink into the live session. | mount, handler |
+| web | partial | blocked: GPT-Live documents no image or video frame input (live-conversations guide, fetched 2026-09-27); image input exists only in the separate Realtime API | mount, handler |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/Voice/VoiceModeSurface.tsx:258-258`, `apps/web/features/chat/pages/WebChatPage.tsx:5051-5051`
-
-## S48.36: Reconnection state.
-
-- Done when: When the voice connection drops, a reconnecting state is shown and the session reconnects (or says it could not).
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | A dropped live session shows an error with Try again, but there is no reconnecting state or automatic reconnect (the mobile hook passes no onConnectionLost). | handler |
-
-Code: `apps/mobile/src/features/voice/components/LiveVoiceBar.tsx:132-132`, `apps/mobile/src/features/voice/hooks/useLiveVoiceSession.ts:218-218`
+Code: `apps/web/features/chat/components/Voice/VoiceModeSurface.tsx:445-445`
 
 ## S48.38: Continue unfinished work in text.
 
@@ -345,9 +317,9 @@ Code: `apps/mobile/src/features/voice/components/LiveVoiceBar.tsx:132-132`, `app
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | ESC returns to the same session prompt. Works only in builds compiled with the off-by-default `voice` cargo feature, and needs the user's own OPENAI_API_KEY or a local whisper binary for transcription. | flag-off |
+| cli | partial | Code done; cell stays flag-off until the lead enables the `voice` cargo feature for release builds (apps/cli/Cargo.toml:118), per decisions.md. | flag-off |
 
-Code: `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`, `apps/cli/src/voice.rs:172-172`
+Code: `apps/cli/src/voice.rs:178-178`, `apps/cli/src/voice.rs:320-320`, `apps/cli/src/voice.rs:882-882`
 
 ## S48.39: Resume a previous voice conversation.
 
@@ -357,9 +329,9 @@ Code: `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`, `a
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | `/resume` a session, then `/voice`; voice turns join that session's context. Works only in builds compiled with the off-by-default `voice` cargo feature, and needs the user's own OPENAI_API_KEY or a local whisper binary for transcription. | flag-off |
+| cli | partial | Code done; cell stays flag-off until the lead enables the `voice` cargo feature for release builds (apps/cli/Cargo.toml:118), per decisions.md. | flag-off |
 
-Code: `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`, `apps/cli/src/voice.rs:240-240`
+Code: `apps/cli/src/voice.rs:254-254`, `apps/cli/src/voice.rs:320-320`, `apps/cli/src/voice.rs:882-882`
 
 ## S48.40: Remote coding-session voice control.
 
@@ -371,19 +343,18 @@ Code: `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`, `a
 | web | partial | Only composer dictation exists in the /code composer; there is no voice mode for coding sessions, and web cloud sessions are flag-off. | surface-only |
 | desktop | partial | Same as web: dictation into the hosted /code composer only. | surface-only |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | `/voice` drives the local coding agent session by voice (local, not remote). Works only in builds compiled with the off-by-default `voice` cargo feature, and needs the user's own OPENAI_API_KEY or a local whisper binary for transcription. | flag-off |
+| cli | partial | Voice drives the local session only; steering a session on another device needs the same remote-session relay S72.30 lacks. | handler, flag-off |
 
-Code: `apps/web/features/code/components/CodeComposer.tsx:1201-1201`, `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`, `apps/cli/src/voice.rs:240-240`
+Code: `apps/web/features/code/components/CodeComposer.tsx:1201-1201`, `apps/cli/src/voice.rs:75-75`
 
 ## S48.41: Separate spoken-response cancellation from task cancellation.
 
 - Done when: The user can stop the spoken reply without cancelling the underlying task, and cancel the task separately.
 - Wave: 3
+- Already works on: web, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The session can cancel a delegated tool turn (cancelBackendWork) but no control calls it; the only stop is leaving voice, which ends both. | ui |
 | desktop | partial | The session can cancel a delegated tool turn (cancelBackendWork) but no control calls it; the only stop is leaving voice, which ends both. | ui |
-| mobile | partial | In the companion, tapping the orb while it speaks stops only the speech; a turn still thinking cannot be cancelled from voice, and the live bar has neither control. | ui |
 
-Code: `apps/web/features/chat/hooks/use-voice-session.ts:459-459`, `apps/web/features/chat/components/Voice/VoiceComposer.tsx:162-162`, `apps/mobile/src/features/voice/hooks/useVoiceConversation.ts:231-231`, `apps/mobile/app/(app)/voice.tsx:267-267`
+Code: `apps/web/features/chat/hooks/use-voice-session.ts:459-459`

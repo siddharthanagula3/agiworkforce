@@ -1,4 +1,5 @@
 import type { ChatMessage } from '@agiworkforce/unified-chat';
+import { translateUi, translateUiPlural } from '@agiworkforce/ui/translate';
 import { hasStreamError, hasVisibleContent, isMessageContinuable } from './continue-generation';
 
 /**
@@ -167,7 +168,12 @@ export function withTurnErrorReference(
   message: ChatMessage | undefined | null,
 ): string {
   const reference = turnErrorReference(message);
-  return reference ? `${text} Reference: ${reference}` : text;
+  return reference
+    ? translateUi('errors', 'turn.reference', '{{text}} Reference: {{reference}}', {
+        text,
+        reference,
+      })
+    : text;
 }
 
 /**
@@ -178,28 +184,41 @@ export function withTurnErrorReference(
  */
 const MAX_STATED_RETRY_AFTER_SECONDS = 86_400;
 
-function counted(value: number, unit: string): string {
-  return `${value} ${unit}${value === 1 ? '' : 's'}`;
-}
-
 export function turnErrorRetryAfter(message: ChatMessage | undefined | null): string | null {
   const raw = (message?.metadata as { streamError?: { retryAfterSeconds?: unknown } } | undefined)
     ?.streamError?.retryAfterSeconds;
   if (typeof raw !== 'number' || !Number.isFinite(raw)) return null;
   const seconds = Math.round(raw);
   if (seconds < 1 || seconds > MAX_STATED_RETRY_AFTER_SECONDS) return null;
-  if (seconds < 90) return `about ${counted(seconds, 'second')}`;
+  if (seconds < 90) {
+    return translateUiPlural('errors', 'turn.wait.seconds', seconds, {
+      one: 'about {{count}} second',
+      other: 'about {{count}} seconds',
+    });
+  }
   const minutes = Math.round(seconds / 60);
-  if (minutes < 90) return `about ${counted(minutes, 'minute')}`;
-  return `about ${counted(Math.round(seconds / 3600), 'hour')}`;
+  if (minutes < 90) {
+    return translateUiPlural('errors', 'turn.wait.minutes', minutes, {
+      one: 'about {{count}} minute',
+      other: 'about {{count}} minutes',
+    });
+  }
+  return translateUiPlural('errors', 'turn.wait.hours', Math.round(seconds / 3600), {
+    one: 'about {{count}} hour',
+    other: 'about {{count}} hours',
+  });
 }
 
 export function incompleteTurnNoticeMessage(message: ChatMessage | undefined | null): string {
   return withTurnErrorReference(incompleteTurnCauseMessage(message), message);
 }
 
+function causeMessage(cause: IncompleteTurnCause): string {
+  return translateUi('errors', `turn.cause.${cause}`, INCOMPLETE_TURN_MESSAGE_BY_CAUSE[cause]);
+}
+
 function incompleteTurnCauseMessage(message: ChatMessage | undefined | null): string {
-  if (message?.role === 'user') return INCOMPLETE_TURN_MESSAGE_BY_CAUSE.emptyResponse;
+  if (message?.role === 'user') return causeMessage('emptyResponse');
 
   const errorCode = (message?.metadata as { errorCode?: unknown } | undefined)?.errorCode;
   const cause =
@@ -207,17 +226,22 @@ function incompleteTurnCauseMessage(message: ChatMessage | undefined | null): st
   if (cause === 'rateLimit') {
     const wait = turnErrorRetryAfter(message);
     return wait
-      ? `This model is receiving too many requests right now. Try again in ${wait}, or switch to another model if your plan has one.`
-      : INCOMPLETE_TURN_MESSAGE_BY_CAUSE.rateLimit;
+      ? translateUi(
+          'errors',
+          'turn.rateLimitWait',
+          'This model is receiving too many requests right now. Try again in {{wait}}, or switch to another model if your plan has one.',
+          { wait },
+        )
+      : causeMessage('rateLimit');
   }
-  if (cause) return INCOMPLETE_TURN_MESSAGE_BY_CAUSE[cause];
+  if (cause) return causeMessage(cause);
 
   const truncated = (message?.metadata as { truncated?: unknown } | undefined)?.truncated === true;
   if (truncated && !hasVisibleContent(message?.content)) {
-    return INCOMPLETE_TURN_MESSAGE_BY_CAUSE.emptyResponse;
+    return causeMessage('emptyResponse');
   }
 
-  return INCOMPLETE_TURN_DEFAULT_MESSAGE;
+  return translateUi('errors', 'turn.incomplete', INCOMPLETE_TURN_DEFAULT_MESSAGE);
 }
 
 export const INCOMPLETE_TURN_GRACE_MS = 45_000;

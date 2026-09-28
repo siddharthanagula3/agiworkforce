@@ -1,10 +1,30 @@
-import type { LibraryItem } from '@agiworkforce/cloud-contracts';
+import {
+  MANAGED_MEDIA_IMAGE_ASPECT_RATIOS,
+  type LibraryItem,
+  type ManagedMediaImageAspectRatio,
+} from '@agiworkforce/cloud-contracts';
 import { libraryItemToFile } from '@features/chat/components/Composer/ComposerFilesMenu';
 import { PENDING_CONVERSATION_KEY, useChatStore } from '@shared/stores/web-chat-store';
 
 export type LibraryHandoffMode = 'chat' | 'agiwork';
 
 let stagedAttachments: File[] | null = null;
+
+const ASPECT_RATIO_TOLERANCE = 0.02;
+
+async function imageAspectRatio(file: File): Promise<ManagedMediaImageAspectRatio | null> {
+  if (typeof createImageBitmap !== 'function') return null;
+  const bitmap = await createImageBitmap(file).catch(() => null);
+  if (!bitmap) return null;
+  const ratio = bitmap.width / bitmap.height;
+  bitmap.close();
+  return (
+    MANAGED_MEDIA_IMAGE_ASPECT_RATIOS.find((candidate) => {
+      const [width, height] = candidate.split(':').map(Number);
+      return Math.abs(width! / height! - ratio) <= ASPECT_RATIO_TOLERANCE;
+    }) ?? null
+  );
+}
 
 export async function stageLibraryItemForNewChat(
   item: LibraryItem,
@@ -33,7 +53,12 @@ export async function stageLibraryItemForImageRemix(item: LibraryItem): Promise<
   stagedAttachments = [file];
   const store = useChatStore.getState();
   store.setComposerToggles(
-    { workMode: 'chat', imageMode: true, videoMode: false },
+    {
+      workMode: 'chat',
+      imageMode: true,
+      videoMode: false,
+      pendingImageSettings: { modelId: item.model, aspectRatio: await imageAspectRatio(file) },
+    },
     PENDING_CONVERSATION_KEY,
   );
   store.setDraftContent(item.prompt ?? '', PENDING_CONVERSATION_KEY);

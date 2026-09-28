@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button } from '@agiworkforce/ui';
+import { Button, translateUiPlural } from '@agiworkforce/ui';
 import {
   MANAGED_CLOUD_REFLECT_PATH,
   ManagedCloudReflectRecapSchema,
@@ -38,7 +38,10 @@ function describeOngoingWork(item: {
   lastActiveAt: string;
 }): string {
   const span = item.spanDays > 1 ? `Active over ${item.spanDays} days` : 'Active on one day';
-  const followUps = `${item.followUps} follow-up${item.followUps === 1 ? '' : 's'}`;
+  const followUps = translateUiPlural('settings', 'counts.followUps', item.followUps, {
+    one: '{{count}} follow-up',
+    other: '{{count}} follow-ups',
+  });
   const lastActive = new Date(item.lastActiveAt).toLocaleDateString(undefined, {
     month: 'short',
     day: 'numeric',
@@ -121,7 +124,7 @@ export function ReflectSection() {
     <div className="space-y-8">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">Reflect</h1>
+          <h1 className="text-h1 text-foreground">Reflect</h1>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
             See patterns in how you use AGI, without scores or judgment. Your recap is built only
             when you open this page.
@@ -166,7 +169,7 @@ export function ReflectSection() {
 
       {memoryRequired ? (
         <div className="rounded-xl border border-border/50 bg-muted/20 p-6">
-          <h2 className="text-base font-semibold text-foreground">Memory is off</h2>
+          <h2 className="text-h4 text-foreground">Memory is off</h2>
           <p className="mt-2 text-sm text-muted-foreground">
             Reflect uses the same account chat history controls as Memory. Turn on Memory and
             Generate from past chats to create a recap.
@@ -182,7 +185,7 @@ export function ReflectSection() {
 
       {error ? (
         <div className="rounded-xl border border-destructive/40 bg-destructive/5 p-6" role="alert">
-          <h2 className="text-base font-semibold text-foreground">Reflect could not load</h2>
+          <h2 className="text-h4 text-foreground">Reflect could not load</h2>
           <p className="mt-2 text-sm text-muted-foreground">{error}</p>
           <Button
             type="button"
@@ -198,7 +201,7 @@ export function ReflectSection() {
 
       {recap?.stats.totalConversations === 0 ? (
         <div className="rounded-xl border border-border/50 bg-muted/20 p-8">
-          <h2 className="text-lg font-semibold text-foreground">{recap.summary.headline}</h2>
+          <h2 className="text-h3 text-foreground">{recap.summary.headline}</h2>
           <p className="mt-2 text-sm text-muted-foreground">{recap.summary.body}</p>
         </div>
       ) : null}
@@ -209,16 +212,14 @@ export function ReflectSection() {
             <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
               {recap.period.label}
             </p>
-            <h2 className="mt-2 text-2xl font-semibold text-foreground">
-              {recap.summary.headline}
-            </h2>
+            <h2 className="mt-2 text-h1 text-foreground">{recap.summary.headline}</h2>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">{recap.summary.body}</p>
           </section>
 
           <section aria-labelledby="reflect-time-heading" className="space-y-4">
             <div className="flex items-end justify-between gap-4">
               <div>
-                <h2 id="reflect-time-heading" className="text-lg font-semibold text-foreground">
+                <h2 id="reflect-time-heading" className="text-h3 text-foreground">
                   Your time with AGI
                 </h2>
                 <p className="text-xs text-muted-foreground">
@@ -287,7 +288,7 @@ export function ReflectSection() {
           </section>
 
           <section aria-labelledby="reflect-topics-heading" className="space-y-4">
-            <h2 id="reflect-topics-heading" className="text-lg font-semibold text-foreground">
+            <h2 id="reflect-topics-heading" className="text-h3 text-foreground">
               What you spent time on
             </h2>
             <div>
@@ -298,7 +299,7 @@ export function ReflectSection() {
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div>
-                      <h3 className="text-sm font-medium text-foreground">{topic.label}</h3>
+                      <h3 className="text-h5 text-foreground">{topic.label}</h3>
                       <p className="mt-1 text-xs text-muted-foreground">{topic.description}</p>
                     </div>
                     <span className="text-sm font-semibold text-foreground">
@@ -318,7 +319,7 @@ export function ReflectSection() {
 
           {recap.ongoingWork && recap.ongoingWork.length > 0 ? (
             <section aria-labelledby="reflect-ongoing-heading" className="space-y-4">
-              <h2 id="reflect-ongoing-heading" className="text-lg font-semibold text-foreground">
+              <h2 id="reflect-ongoing-heading" className="text-h3 text-foreground">
                 Work in progress
               </h2>
               <ul>
@@ -344,7 +345,7 @@ export function ReflectSection() {
 
           <section aria-labelledby="reflect-insights-heading" className="space-y-4">
             <div>
-              <h2 id="reflect-insights-heading" className="text-lg font-semibold text-foreground">
+              <h2 id="reflect-insights-heading" className="text-h3 text-foreground">
                 Expanding your skills
               </h2>
               <p className="mt-1 text-xs text-muted-foreground">
@@ -357,7 +358,7 @@ export function ReflectSection() {
                   <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                     {insight.dimension}
                   </p>
-                  <h3 className="mt-2 text-sm font-semibold text-foreground">{insight.title}</h3>
+                  <h3 className="mt-2 text-h5 text-foreground">{insight.title}</h3>
                   <p className="mt-2 text-sm text-muted-foreground">{insight.observation}</p>
                   <p className="mt-3 text-sm text-foreground">{insight.nextStep}</p>
                   {insight.href ? (

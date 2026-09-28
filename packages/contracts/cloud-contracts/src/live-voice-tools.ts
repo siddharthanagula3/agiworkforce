@@ -18,8 +18,19 @@ export const LiveVoiceToolApprovalSchema = z.object({
   input: z.string().max(LIVE_VOICE_TOOL_INPUT_PREVIEW_MAX_CHARS).nullable(),
 });
 
+export const LiveVoiceToolFileSchema = z.object({
+  name: z.string().min(1).max(500),
+  uri: z.string().min(1).max(2_048),
+});
+export type LiveVoiceToolFile = z.infer<typeof LiveVoiceToolFileSchema>;
+
 export const LiveVoiceToolCallResponseSchema = z.discriminatedUnion('status', [
-  z.object({ status: z.literal('completed'), output: z.string(), isError: z.boolean() }),
+  z.object({
+    status: z.literal('completed'),
+    output: z.string(),
+    isError: z.boolean(),
+    files: z.array(LiveVoiceToolFileSchema).max(20).optional(),
+  }),
   z.object({ status: z.literal('approval_required'), approval: LiveVoiceToolApprovalSchema }),
   z.object({ status: z.literal('declined'), output: z.string() }),
   z.object({ status: z.literal('blocked'), output: z.string() }),
@@ -59,11 +70,20 @@ export function liveVoiceFunctionCallOf(event: unknown): LiveVoiceFunctionCall |
   };
 }
 
+export interface LiveVoiceToolResult {
+  callId: string;
+  name: string;
+  output: string;
+  isError: boolean;
+  files: readonly LiveVoiceToolFile[];
+}
+
 export interface LiveVoiceToolBridgeOptions {
   callTool: (request: LiveVoiceToolCallRequest) => Promise<LiveVoiceToolCallResponse>;
   send: (event: Record<string, unknown>) => void;
   onApprovalsChanged: (approvals: readonly LiveVoicePendingApproval[]) => void;
   onToolCompleted?: (name: string) => void;
+  onToolResult?: (result: LiveVoiceToolResult) => void;
 }
 
 interface OpenFunctionCall extends LiveVoiceFunctionCall {
@@ -151,6 +171,13 @@ export class LiveVoiceToolBridge {
     if (response.status === 'completed' && !response.isError) {
       this.options.onToolCompleted?.(call.name);
     }
+    this.options.onToolResult?.({
+      callId: call.callId,
+      name: call.name,
+      output: response.output,
+      isError: response.status !== 'completed' || response.isError,
+      files: response.status === 'completed' ? (response.files ?? []) : [],
+    });
     this.publish();
     this.flush();
   }

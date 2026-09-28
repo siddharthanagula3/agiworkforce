@@ -6,8 +6,12 @@ export const CLI_CAPABILITY_REQUIREMENT = 'Needs AGI CLI 1.8';
 
 export const CLI_CAPABILITY_METHODS = {
   skills: 'listSkills',
+  skillsSetEnabled: 'setSkillEnabled',
+  skillsConsent: 'setProjectSkillConsent',
   plugins: 'listPlugins',
+  pluginsSetEnabled: 'setPluginEnabled',
   mcpServers: 'listMcpServers',
+  mcpLogin: 'loginMcpServer',
   hooks: 'listHooks',
   instructions: 'contextInstructions',
   commands: 'listCommands',
@@ -29,8 +33,12 @@ type AdvertisedFamily = keyof Pick<
 
 const CLI_CAPABILITY_FAMILIES: Record<CliCapability, AdvertisedFamily> = {
   skills: 'skills',
+  skillsSetEnabled: 'skills',
+  skillsConsent: 'skills',
   plugins: 'plugins',
+  pluginsSetEnabled: 'plugins',
   mcpServers: 'mcp',
+  mcpLogin: 'mcp',
   hooks: 'hooks',
   instructions: 'instructions',
   commands: 'commands',

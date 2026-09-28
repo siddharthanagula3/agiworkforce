@@ -75,6 +75,7 @@
   --color-surface-subtle: var(--surface-subtle);
   --color-surface-elevated: var(--surface-elevated);
   --color-surface-hover: var(--surface-hover);
+  --color-surface-active: var(--surface-active);
 
   --color-text-primary: var(--text-primary);
   --color-text-secondary: var(--text-secondary);
@@ -860,9 +861,9 @@
   /* Inner content column constrained to readable width - desktop max-w-3xl centred.
      The gutter lives here rather than on .message-row so message text shares its
      exact left/right edge with the composer and the follow-up rail, which are
-     siblings of the row and carry the same `max-w-3xl px-4`. */
+     siblings of the row and carry the same `max-w-3xl px-gutter-compact`. */
   .message-inner {
-    @apply max-w-3xl mx-auto flex gap-3 px-4;
+    @apply max-w-3xl mx-auto flex gap-3 px-gutter-compact;
   }
 
   /* Avatar - 32 × 32 circle matching desktop .message-avatar */
@@ -1875,10 +1876,24 @@ html[data-contrast='more'] *:focus-visible {
     overflow: visible !important;
   }
 
-  html[data-print-scope='transcript'] [data-testid='chat-message-list'] {
+  html[data-print-scope='transcript'] [data-testid='chat-message-list'],
+  html[data-print-scope='transcript'] [data-testid='chat-message-list'] > [role='log'] {
     height: auto !important;
     max-height: none !important;
     overflow: visible !important;
+  }
+
+  html[data-print-scope='transcript'] [data-testid='chat-message-list'] > [role='log'] > * {
+    position: static !important;
+    transform: none !important;
+  }
+
+  html[data-print-scope='transcript']
+    [data-testid='chat-message-list']
+    > [role='log']
+    > [aria-hidden='true'],
+  html[data-print-scope='transcript'] [data-testid='transcript-top-spacer'] {
+    display: none !important;
   } /* Keep a message from being split across a page break mid-sentence. */
   html[data-print-scope='transcript'] [data-message-id] {
     break-inside: avoid;

@@ -213,19 +213,77 @@ export function formatCustomInstructionsBlock(instructions: string | null): stri
   });
 }
 
+export interface AccountPersonalizationScope {
+  instructions: boolean;
+  responseStyle: boolean;
+}
+
+const FULL_ACCOUNT_PERSONALIZATION: AccountPersonalizationScope = {
+  instructions: true,
+  responseStyle: true,
+};
+
+export async function readProjectPersonalizationScope(
+  db: DatabaseAdapter,
+  userId: string,
+  projectId: string | null | undefined,
+): Promise<AccountPersonalizationScope> {
+  if (!projectId) return FULL_ACCOUNT_PERSONALIZATION;
+  const [row] = await db.query<{ instructions: boolean | null; response_style: boolean | null }>(
+    `select (to_jsonb(p)->>'uses_account_instructions')::boolean as instructions,
+            (to_jsonb(p)->>'uses_account_style')::boolean as response_style
+       from public.user_projects p
+      where p.id = $1::uuid
+        and p.deleted_at is null
+        and (
+          p.user_id = $2
+          or exists (
+            select 1
+              from public.organization_shared_projects s
+              join public.organization_members m
+                on m.organization_id = s.organization_id
+              left join public.organization_project_access a
+                on a.organization_id = s.organization_id
+               and a.project_id = s.project_id
+               and a.user_id = $2
+             where s.project_id = p.id
+               and m.user_id = $2
+               and coalesce(a.access, s.default_access) <> 'none'
+          )
+        )
+      limit 1`,
+    [projectId, userId],
+  );
+  return {
+    instructions: row?.instructions !== false,
+    responseStyle: row?.response_style !== false,
+  };
+}
+
 export async function buildCustomInstructionsPreamble(
   db: DatabaseAdapter,
   userId: string,
+  options: { projectId?: string | null } = {},
 ): Promise<string | null> {
   // Two namespaces, because two surfaces write them: 'general' is what web
   // settings collects, 'personalization' is what mobile's style controls
   // collect. The mobile namespace synced to the account and was read by
   // NOTHING at inference time, so every slider a mobile user moved was stored
   // and discarded.
-  const [namespace, personalization] = await Promise.all([
+  const [namespace, personalization, scope] = await Promise.all([
     readIdentityNamespace(db, userId),
     readSettingsNamespace(db, userId, PERSONALIZATION_SETTINGS_NAMESPACE),
+    readProjectPersonalizationScope(db, userId, options.projectId),
   ]);
+  if (!scope.instructions && !scope.responseStyle) return null;
+  if (!scope.instructions) {
+    return formatPersonalizationBlock({
+      preferredName: null,
+      workDescription: null,
+      instructions: null,
+      responseStyle: formatResponseStyleLines(personalization),
+    });
+  }
   return formatPersonalizationBlock({
     preferredName:
       normalizeText(namespace['preferredName'], 60) ??
@@ -237,7 +295,7 @@ export async function buildCustomInstructionsPreamble(
       normalizeText(namespace['aboutYou'], MAX_ABOUT_YOU_LENGTH) ??
       normalizeText(personalization['aboutYou'], MAX_ABOUT_YOU_LENGTH),
     instructions: firstActiveInstruction(readAccountInstructionBlocks(namespace, personalization)),
-    responseStyle: formatResponseStyleLines(personalization),
+    responseStyle: scope.responseStyle ? formatResponseStyleLines(personalization) : [],
   });
 }
 

@@ -10,6 +10,7 @@ export const metadata: Metadata = {
 export default function WorkspaceConnectorsPage() {
   return (
     <ConsolePage
+      help={{ docId: 'connectors-and-mcp', label: 'How connectors work' }}
       title="Connectors"
       description="Which integrations members may use. Applied where the tool catalog is assembled, so a blocked connector is never offered to the model, from chat, a scheduled task, or an agent run."
     >

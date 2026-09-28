@@ -138,7 +138,7 @@ export function NotificationBell() {
         className="w-[min(22rem,calc(100vw-2rem))] p-0"
       >
         <div className="flex items-center justify-between border-b border-[var(--chat-border-subtle)] px-3 py-2">
-          <h2 className="text-sm font-medium text-[var(--chat-text-primary)]">{PANEL_TITLE}</h2>
+          <h2 className="text-h5 text-[var(--chat-text-primary)]">{PANEL_TITLE}</h2>
           {feed.unreadCount > 0 && (
             <button
               type="button"

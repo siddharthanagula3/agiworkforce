@@ -22,15 +22,14 @@ Code: `apps/extension-vscode/src/core/commandSetup.ts:1243-1278`
 
 - Done when: A destination lists the user's archived conversations and lets them open, restore or delete them.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Sessions can be archived and unarchived by id (`agi session archive\|unarchive`), but no command lists archived sessions; add an archived listing. | ui |
 | vscode | partial | A session can be archived from the tree, but the tree lists threads with includeArchived: false and nothing lists or restores archived sessions. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/cli/src/lib.rs:1255-1258`, `apps/cli/src/lib.rs:2847-2866`, `apps/extension-vscode/src/core/commandSetup.ts:1168-1182`, `apps/extension-vscode/src/features/trees/conversationTreeProvider.ts:109-113`
+Code: `apps/extension-vscode/src/core/commandSetup.ts:1168-1182`, `apps/extension-vscode/src/features/trees/conversationTreeProvider.ts:109-113`
 
 ## S4.05: Pinned conversations.
 
@@ -48,28 +47,26 @@ Code: `apps/cli/src/lib.rs:1255-1258`, `apps/cli/src/lib.rs:2847-2866`, `apps/ex
 
 - Done when: Opening a project shows its home: name, description/instructions summary, and entry points to its chats and files.
 - Wave: 2
-- Already works on: web, desktop, vscode, chrome
+- Already works on: web, desktop, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | The cloud project screen shows only the name plus Chats and Sources tabs; the summary header (description, instructions, members, last used) renders only after fetchProject, which is blocked while FEATURES.crossDeviceSync is off. | flag-off |
-| cli | partial | `agi projects list` prints each project's id, name and description; add a command that shows one project (instructions, files, chats). | ui |
 
-Code: `apps/mobile/app/(app)/projects/[id].tsx:222-226`, `apps/mobile/app/(app)/projects/[id].tsx:170-175`, `apps/cli/src/lib.rs:1831-1851`
+Code: `apps/mobile/app/(app)/projects/[id].tsx:222-226`, `apps/mobile/app/(app)/projects/[id].tsx:170-175`
 
 ## S4.08: Project conversations.
 
 - Done when: Within a project, a list of the project's conversations that open when selected.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | The project quick pick lists recent project conversations, but selecting one does nothing; make the rows open the conversation. | handler |
 | chrome | partial | The Projects drawer lists a project's chat titles as plain text; make them open the conversation in the side panel. | handler |
 
-Code: `apps/extension-vscode/src/features/projects/projectActions.ts:92-106`, `apps/extension-vscode/src/features/projects/projectActions.ts:138-141`, `apps/extension/src/features/side-panel/projectsDrawer.ts:333-358`
+Code: `apps/extension/src/features/side-panel/projectsDrawer.ts:333-358`
 
 ## S4.09: Project files and sources.
 
@@ -80,10 +77,7 @@ Code: `apps/extension-vscode/src/features/projects/projectActions.ts:92-106`, `a
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | The project quick pick lists knowledge files read-only and sends the user to the web to add or remove them ("Knowledge files and project settings are edited there"). | surface-only |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/extension-vscode/src/features/projects/projectActions.ts:78-90`, `apps/extension-vscode/src/features/projects/projectActions.ts:134-137`
 
 ## S4.10: Project instructions.
 
@@ -138,10 +132,9 @@ Code: `apps/web/features/projects/components/ProjectSettingsDialog.tsx:250-262`,
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | The Cloud Tasks view lists AGI Work runs and lets the user approve or stop them, but no command starts an AGI Work run from VS Code. | ui |
 | chrome | partial | The Work runs tab shows runs started on other devices, but side-panel chat always sends workMode "chat" (managedChatHandler.ts:487), so an AGI Work run cannot be started here. | ui |
 
-Code: `apps/extension-vscode/src/core/commandSetup.ts:2196-2199`, `apps/extension-vscode/src/features/cloud-tasks/cloudTasksTree.ts:100-104`, `apps/extension/src/side_panel.ts:8589-8589`, `apps/extension/src/features/cloud-bridge/managedChatHandler.ts:487-487`
+Code: `apps/extension/src/side_panel.ts:8589-8589`, `apps/extension/src/features/cloud-bridge/managedChatHandler.ts:487-487`
 
 ## S4.14: Active-task dashboard.
 
@@ -167,30 +160,16 @@ Code: `apps/extension-vscode/src/core/commandSetup.ts:2196-2199`, `apps/extensio
 
 - Done when: An approvals inbox gathers every pending approval across the user's tasks and lets them approve or reject each.
 - Wave: 3
-- Already works on: mobile
+- Already works on: mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Pending approvals appear only inline on each waiting run in Work history (filters are Active/All/Archived); add an inbox or filter that gathers everything awaiting a decision. | ui |
 | desktop | partial | Pending approvals appear only inline on each waiting run in Work history (filters are Active/All/Archived); add an inbox or filter that gathers everything awaiting a decision. | ui |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | Runs awaiting approval are marked in the Cloud Tasks list and can be approved inline, but there is no inbox or filter gathering pending approvals. | ui |
 | chrome | partial | Approve/Reject buttons appear on each waiting run in the Work runs tab (filters are Active/All only); add an inbox or filter for runs awaiting a decision. | ui |
 
-Code: `packages/ui/unified-chat/src/components/tasks/TasksPage.tsx:57-61`, `packages/ui/unified-chat/src/components/tasks/TasksPage.tsx:726-740`, `packages/ui/unified-chat/src/components/tasks/TasksPage.tsx:391-408`, `apps/extension-vscode/src/features/cloud-tasks/cloudTasksTree.ts:35-35`
-
-## S4.17: Scheduled-task manager.
-
-- Done when: A scheduled-task manager lists the user's schedules with cadence/status and lets them create, edit, pause/resume, run now and delete.
-- Wave: 3
-- Already works on: web, desktop, mobile, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | `agi schedules` can list, create (optionally paused), delete and show runs, but cannot edit, pause or resume an existing schedule or run it now. | handler |
-| vscode | partial | VS Code lists schedules and can pause, resume, run now and show runs, but creating or editing a schedule sends the user to the web. | surface-only |
-
-Code: `apps/cli/src/lib.rs:1092-1096`, `apps/cli/src/lib.rs:2135-2180`, `apps/extension-vscode/src/core/commandSetup.ts:2210-2238`, `apps/extension-vscode/src/features/schedules/scheduleActions.ts:82-110`
+Code: `packages/ui/unified-chat/src/components/tasks/TasksPage.tsx:57-61`, `packages/ui/unified-chat/src/components/tasks/TasksPage.tsx:726-740`, `packages/ui/unified-chat/src/components/tasks/TasksPage.tsx:391-408`, `apps/extension/src/features/side-panel/cloudRunsPanel.ts:677-680`
 
 ## S4.18: Routine details.
 
@@ -262,10 +241,9 @@ Code: `apps/mobile/src/features/companion/components/CodeSessionsCard.tsx:39-85`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | `agi artifacts list` lists only the account's artifacts; uploaded files and generated images/videos are not browsable there. | ui |
-| vscode | partial | The Artifacts view lists only the account's artifacts; uploaded files and generated images/videos are not browsable there. | ui |
 | chrome | partial | The Artifacts drawer lists only the account's artifacts; uploaded files and generated images/videos are not browsable there. | ui |
 
-Code: `apps/cli/src/lib.rs:1023-1024`, `apps/cli/src/lib.rs:1888-1900`, `apps/extension-vscode/src/core/commandSetup.ts:2285-2285`, `apps/extension-vscode/src/features/artifacts/artifactsTree.ts:98-115`
+Code: `apps/cli/src/lib.rs:1023-1024`, `apps/cli/src/lib.rs:1888-1900`, `apps/extension/src/side_panel.ts:7022-7024`, `apps/extension/src/features/side-panel/artifactsDrawer.ts:234-238`
 
 ## S4.24: Shared-with-me resources.
 
@@ -321,22 +299,6 @@ Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:72-73`, `
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S4.29: Video studio.
-
-- Done when: A dedicated video studio where the user prompts, configures and generates videos and sees results/history in one place.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Videos are generated from a chat composer mode ("Create video") as in-chat cards; there is no dedicated video studio page. | ui |
-| desktop | partial | Videos are generated from a chat composer mode ("Create video") as in-chat cards; there is no dedicated video studio page. | ui |
-| mobile | partial | Videos are generated from the chat composer with an in-chat progress card; there is no dedicated video studio screen. | ui |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:72-73`, `apps/web/app/api/media/video/generate/route.ts:1642-1643`, `apps/mobile/src/features/chat/actions/runVideoGenerationTurn.ts:65-80`, `apps/mobile/src/features/chat/components/VideoGenProgress.tsx:1-40`
-
 ## S4.30: Media job history.
 
 - Done when: A media job history lists image/video generation jobs with their status (queued, running, failed, done) and links to results.
@@ -385,17 +347,15 @@ Code: `apps/web/features/code/CloudCodePage.tsx:1122-1127`, `apps/web/features/n
 
 - Done when: A signed-in destination lists the user's custom assistants (GPT/Gem-style) and lets them open, create, edit and delete them.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | /agents lists, shows, creates and validates file-based agents, but has no edit or delete subcommand; users edit or remove the markdown file by hand. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/tui/tui_app.rs:3647-3662`, `apps/cli/src/agents.rs:395-420`
 
 ## S4.34: Custom-assistant builder.
 
@@ -422,10 +382,10 @@ Code: `apps/cli/src/agents.rs:625-645`, `apps/cli/src/agents.rs:421-434`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Mobile Skills screen only browses the cloud catalog and inserts a skill into chat; installing, removing, toggling or authoring skills is web-only. | handler |
-| vscode | partial | "Show Skills" only lists the skills the local CLI loads in a quick pick; no install, toggle or remove from VS Code. | handler |
+| vscode | partial | Skills toggle on and off and project skills can be allowed (bc346586d). Install and remove still need the agi CLI; the app-server has no skills install/remove calls (p-desktop-cli). | handler |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:115-121`, `apps/mobile/src/features/skills/service.ts:20-26`, `apps/mobile/src/features/skills/SkillsScreen.tsx:290-298`, `apps/extension-vscode/src/core/commandSetup.ts:2309-2310`
+Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:115-121`, `apps/mobile/src/features/skills/service.ts:20-26`, `apps/mobile/src/features/skills/SkillsScreen.tsx:290-298`, `apps/extension-vscode/src/features/surfaces/capabilityManagement.ts:99-99`
 
 ## S4.36: Plugins manager.
 
@@ -436,10 +396,10 @@ Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:115-121`, `a
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| vscode | partial | "Show Plugins" only lists the local CLI's installed plugins in a quick pick; no install, update or remove from VS Code. | handler |
+| vscode | partial | Plugins toggle on and off (bc346586d). Install, update and remove still need agi plugin; the app-server has no plugin install/remove calls (p-desktop-cli). | handler |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/extension-vscode/src/core/commandSetup.ts:2309-2311`, `apps/extension-vscode/src/features/surfaces/index.ts:381-397`
+Code: `apps/extension-vscode/src/features/surfaces/capabilityManagement.ts:124-124`
 
 ## S4.37: Connected accounts.
 
@@ -450,9 +410,6 @@ Code: `apps/extension-vscode/src/core/commandSetup.ts:2309-2311`, `apps/extensio
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | VS Code lists the account's connectors and their status in a quick pick; connecting or disconnecting opens web settings. | surface-only |
-
-Code: `apps/extension-vscode/src/core/commandSetup.ts:2307-2307`, `apps/extension-vscode/src/features/connectors/connectorsTree.ts:103-120`, `apps/extension-vscode/src/features/connectors/connectorsTree.ts:27-29`
 
 ## S4.38: Model catalog.
 
@@ -464,7 +421,6 @@ Code: `apps/extension-vscode/src/core/commandSetup.ts:2307-2307`, `apps/extensio
 | --- | --- | --- | --- |
 | web | partial | The /models catalog page has no navigation entry; paid users reach the catalog via the composer "All models" row, but Free users (row hidden) can only type the URL. | mount |
 | desktop | partial | Same as web: /models has no navigation entry and the composer "All models" row is hidden on Free. | mount |
-| vscode | partial | Only a "Select Model" quick pick grouped by tier with lock/reachability; no catalog view with capabilities, context size or pricing. | ui |
 | chrome | partial | Only the side-panel model dropdown (Auto, primary, more); no catalog view with capabilities, context size or pricing. | ui |
 
 Code: `apps/web/app/models/page.tsx:12-18`, `apps/web/features/models/components/ModelsPage.tsx:12-27`, `apps/web/features/chat/lib/use-model-catalogue.ts:1-10`, `apps/web/features/chat/components/Composer/ComposerFooter.tsx:1494-1504`
@@ -473,14 +429,13 @@ Code: `apps/web/app/models/page.tsx:12-18`, `apps/web/features/models/components
 
 - Done when: A usage dashboard shows current usage against plan limits per window (session/weekly/credits), reset times and recent usage history.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli, api
+- Already works on: web, desktop, mobile, cli, vscode, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| vscode | partial | "Account & usage" shows one cloud-usage percentage and the sidebar meter shows the binding window; no per-window breakdown or usage history view. | ui |
 | chrome | partial | Side panel shows a single remaining-usage line with reset time; the full usage dashboard opens on web ("Manage usage"). | surface-only |
 
-Code: `apps/extension-vscode/src/core/commandSetup.ts:2050-2058`, `apps/extension-vscode/src/utils/api.ts:716-735`, `apps/extension/src/side_panel.ts:8360-8369`, `apps/extension/src/side_panel.ts:8127-8132`
+Code: `apps/extension/src/side_panel.ts:8360-8369`, `apps/extension/src/side_panel.ts:8127-8132`, `apps/extension/src/features/cloud-bridge/freeTrialClient.ts:58-58`
 
 ## S4.40: Billing settings.
 
@@ -492,22 +447,9 @@ Code: `apps/extension-vscode/src/core/commandSetup.ts:2050-2058`, `apps/extensio
 | web | partial | Migration 0281 is now applied in production (2026-09-27). Still open: Plan, invoices, payment methods and the Stripe portal work; the overage toggle's accounting needs pending migration 0281 (see S81), and paid checkout sits behind the beta_redemptions waitlist gate. | flag-off |
 | desktop | partial | Migration 0281 is now applied in production (2026-09-27). Still open: Plan, invoices, payment methods and the Stripe portal work; the overage toggle's accounting needs pending migration 0281 (see S81), and paid checkout sits behind the beta_redemptions waitlist gate. | flag-off |
 | mobile | partial | Subscription screen shows the plan, but FEATURES.billing is false in v1, so the portal, plan changes and Stripe management are off; native IAP depends on an unset store catalog. | flag-off |
-| vscode | partial | The Account & usage pick shows the plan and subscription attention state; invoices, payment method and plan changes open web settings/billing. | surface-only |
 | chrome | partial | Side panel shows plan tier and past-due/canceled status; all billing management opens web settings/billing. | surface-only |
 
 Code: `apps/web/app/settings/billing/page.tsx:1-7`, `apps/web/features/settings/components/WebSettingsModal.tsx:203-204`, `apps/web/features/settings/sections/BillingSection.tsx:304-318`, `apps/web/features/settings/sections/BillingSection.tsx:436-450`
-
-## S4.41: Personal settings.
-
-- Done when: A personal settings destination lets the signed-in user view and change their own preferences (profile, appearance, personalization, notifications) and saves them.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | In the default TUI /config only displays the config; /config get/set (saved) works only in the --no-tui REPL, and other settings each have their own command (/theme, /statusline). | ui |
-
-Code: `apps/cli/src/tui/tui_app.rs:3486-3488`, `apps/cli/src/repl/registry.rs:1751-1790`
 
 ## S4.42: Workspace administration.
 

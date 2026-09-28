@@ -75,9 +75,7 @@ export const AnalyticsSettings = () => {
     <div className="w-full max-w-4xl mx-auto p-6 space-y-8">
       {}
       <div>
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-          Analytics & Privacy Settings
-        </h2>
+        <h2 className="text-h1 text-gray-900 dark:text-white mb-2">Analytics & Privacy Settings</h2>
         <p className="text-sm text-gray-600 dark:text-gray-400">
           Control how we collect and use your data. We're committed to protecting your privacy.
         </p>
@@ -85,9 +83,7 @@ export const AnalyticsSettings = () => {
 
       {}
       <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-        <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2">
-          Privacy First
-        </h3>
+        <h3 className="text-h5 text-blue-900 dark:text-blue-100 mb-2">Privacy First</h3>
         <p className="text-sm text-blue-800 dark:text-blue-200">
           We never collect personally identifiable information (PII). All analytics are anonymous
           and used solely to improve the product. You have full control over what data is collected.
@@ -120,9 +116,7 @@ export const AnalyticsSettings = () => {
 
       {}
       <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-          What Data Do We Collect?
-        </h3>
+        <h3 className="text-h3 text-gray-900 dark:text-white mb-4">What Data Do We Collect?</h3>
         <div role="list" className="space-y-3 text-sm text-gray-600 dark:text-gray-400">
           <DataCollectionItem
             label="Usage Events"
@@ -149,9 +143,7 @@ export const AnalyticsSettings = () => {
 
       {}
       <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-          What We Never Collect
-        </h3>
+        <h3 className="text-h3 text-gray-900 dark:text-white mb-4">What We Never Collect</h3>
         <div className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
           <div className="flex items-center gap-2">
             <span className="text-danger-text">✗</span>
@@ -178,9 +170,7 @@ export const AnalyticsSettings = () => {
 
       {}
       <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-          Your Data Rights
-        </h3>
+        <h3 className="text-h3 text-gray-900 dark:text-white mb-4">Your Data Rights</h3>
         <div className="space-y-4">
           {}
           <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
@@ -245,7 +235,7 @@ export const AnalyticsSettings = () => {
       {showDeleteConfirm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md mx-4">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+            <h3 className="text-h3 text-gray-900 dark:text-white mb-4">
               Delete All Analytics Data?
             </h3>
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">

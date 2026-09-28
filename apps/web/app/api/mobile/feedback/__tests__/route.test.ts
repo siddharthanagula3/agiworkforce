@@ -7,6 +7,7 @@ const { mockAuth, mockOptionalUser, mockNeonQuery } = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/api-auth', () => ({
+  getSuspendedAccountUser: vi.fn(async () => null),
   getOptionalAuthUser: mockOptionalUser,
   getClerkAuthUser: vi.fn(),
   assertAccountActive: vi.fn(),

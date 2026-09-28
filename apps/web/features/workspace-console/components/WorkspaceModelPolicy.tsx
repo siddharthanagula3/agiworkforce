@@ -10,6 +10,7 @@ import {
   type ModelPolicyLists,
 } from '../hooks/use-model-policy';
 import { toUserMessage } from '@/lib/user-error-message';
+import { useUnsavedChangesGuard } from '@agiworkforce/ui';
 
 const cardStyle = {
   border: '1px solid var(--settings-border)',
@@ -109,6 +110,12 @@ export function WorkspaceModelPolicy() {
     return norm(saved) !== norm(draft);
   }, [data, draft]);
 
+  const { dialog: discardDialog } = useUnsavedChangesGuard({
+    dirty: dirty && !update.isPending,
+    description:
+      'Your changes to the model policy have not been saved. If you leave now, they will be lost.',
+  });
+
   if (isPending) {
     return (
       <div
@@ -174,13 +181,10 @@ export function WorkspaceModelPolicy() {
 
   return (
     <div className="flex flex-col gap-6">
+      {discardDialog}
       <section style={cardStyle} aria-labelledby="providers-heading">
         <div className="border-b px-5 py-3.5" style={{ borderColor: 'var(--settings-border)' }}>
-          <h2
-            id="providers-heading"
-            className="text-sm font-semibold"
-            style={{ color: 'var(--text-1)' }}
-          >
+          <h2 id="providers-heading" className="text-h5" style={{ color: 'var(--text-1)' }}>
             Providers
           </h2>
           <p className="mt-1 text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>
@@ -260,11 +264,7 @@ export function WorkspaceModelPolicy() {
           style={{ borderColor: 'var(--settings-border)' }}
         >
           <div className="min-w-0">
-            <h2
-              id="models-heading"
-              className="text-sm font-semibold"
-              style={{ color: 'var(--text-1)' }}
-            >
+            <h2 id="models-heading" className="text-h5" style={{ color: 'var(--text-1)' }}>
               Models
             </h2>
             <p className="mt-1 text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>

@@ -9,10 +9,17 @@ import {
   ManagedCloudScheduleRunApprovalResponseSchema,
   ManagedCloudScheduleRunListResponseSchema,
   ManagedCloudScheduleRunResponseSchema,
+  ManagedCloudScheduleShareResponseSchema,
+  ManagedCloudScheduleRecentRunListResponseSchema,
+  MANAGED_CLOUD_SCHEDULE_RECENT_RUNS_PATH,
+  managedCloudScheduleSharedPath,
+  managedCloudScheduleSharePath,
   managedCloudSchedulePath,
   managedCloudScheduleRunApprovalPath,
   managedCloudScheduleRunsPath,
+  type ManagedCloudScheduleRecentRun,
   type ManagedCloudScheduleRunApproval,
+  type ManagedCloudScheduleShare,
 } from '@agiworkforce/cloud-contracts';
 import { getCsrfToken as getBrowserCsrfToken } from '@/lib/client/csrf';
 import type { ScheduleMutation, ScheduleRun, ScheduleTask } from '../types';
@@ -78,6 +85,14 @@ export interface ScheduleApi {
     approval: ManagedCloudScheduleRunApproval,
     signal?: AbortSignal,
   ): Promise<ScheduleRun>;
+  listRecentRuns(input: PageInput): Promise<{
+    runs: ManagedCloudScheduleRecentRun[];
+    pagination: { limit: number; offset: number };
+    hasMore: boolean;
+  }>;
+  shareSchedule(scheduleId: string, signal?: AbortSignal): Promise<ManagedCloudScheduleShare>;
+  unshareSchedule(scheduleId: string, signal?: AbortSignal): Promise<void>;
+  getSharedSchedule(token: string, signal?: AbortSignal): Promise<ManagedCloudScheduleShare>;
 }
 
 async function responseBody(response: Response): Promise<unknown> {
@@ -247,6 +262,20 @@ export function createScheduleApi(dependencies: ScheduleApiDependencies = {}): S
       };
     },
 
+    async listRecentRuns({ limit, offset, signal }) {
+      const body = await request(
+        `${MANAGED_CLOUD_SCHEDULE_RECENT_RUNS_PATH}?limit=${limit}&offset=${offset}`,
+        { credentials: 'include', signal },
+        ManagedCloudScheduleRecentRunListResponseSchema,
+        'Recent schedule results returned an invalid response.',
+      );
+      return {
+        runs: body.runs,
+        pagination: body.pagination,
+        hasMore: body.runs.length === body.pagination.limit,
+      };
+    },
+
     async runNow(scheduleId, idempotencyKey, signal) {
       if (!idempotencyKey.trim()) {
         throw new ScheduleApiError('A manual run idempotency key is required.', 400);
@@ -282,6 +311,35 @@ export function createScheduleApi(dependencies: ScheduleApiDependencies = {}): S
         'The approval returned an invalid response.',
       );
       return body.run as ScheduleRun;
+    },
+
+    async shareSchedule(scheduleId, signal) {
+      const body = await request(
+        managedCloudScheduleSharePath(scheduleId),
+        { method: 'POST', credentials: 'include', headers: await mutationHeaders(false), signal },
+        ManagedCloudScheduleShareResponseSchema,
+        'Sharing the schedule returned an invalid response.',
+      );
+      return body.share;
+    },
+
+    async unshareSchedule(scheduleId, signal) {
+      await request(
+        managedCloudScheduleSharePath(scheduleId),
+        { method: 'DELETE', credentials: 'include', headers: await mutationHeaders(false), signal },
+        ManagedCloudScheduleDeleteResponseSchema,
+        'Stopping the schedule share returned an invalid response.',
+      );
+    },
+
+    async getSharedSchedule(token, signal) {
+      const body = await request(
+        managedCloudScheduleSharedPath(token),
+        { credentials: 'include', signal },
+        ManagedCloudScheduleShareResponseSchema,
+        'The shared schedule returned an invalid response.',
+      );
+      return body.share;
     },
   };
 }

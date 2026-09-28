@@ -3,6 +3,7 @@ import { MODEL_LOCKED_HINT, getModelPickerOptionsForTier } from '../model-picker
 import {
   AGENT_MODE_LABEL,
   EFFORT_LABEL,
+  REMOTE_CODE_LIMITS,
   TOOL_APPROVAL_ACTION_LABELS,
   toolCallStatusLabel,
   type AgentMode,
@@ -603,6 +604,15 @@ export function getWebviewContent(
       background: var(--hover);
       color: var(--text-primary);
     }
+    .message-action--regenerate { display: none; }
+    .message.assistant.message--latest .message-action--regenerate { display: inline-flex; }
+    .message-meta {
+      align-self: center;
+      margin-left: 6px;
+      color: var(--text-secondary);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
 
     /* A failed turn is a notice in the transcript, not an input-validation
        box. The error border and the Activity row carry the signal; a saturated
@@ -739,6 +749,18 @@ export function getWebviewContent(
       flex-wrap: wrap;
       gap: 6px;
       margin-top: 10px;
+    }
+    .approval-card__guidance {
+      width: 100%;
+      margin-top: 8px;
+      padding: 5px 8px;
+      background: var(--vscode-input-background, var(--bg-elevated));
+      border: 1px solid var(--vscode-input-border, var(--border));
+      border-radius: var(--corner-field);
+      color: var(--vscode-input-foreground, var(--text-primary));
+      font: inherit;
+      font-size: var(--type-label-size);
+      line-height: var(--type-label-height);
     }
     .approval-card__action {
       min-height: var(--control-md);
@@ -1953,6 +1975,8 @@ export function getWebviewContent(
       background: var(--bg-elevated);
     }
     .sessions-sheet-title { font-size: var(--type-body-size); line-height: var(--type-body-height); font-weight: 600; }
+    .sessions-sheet-actions { display: flex; align-items: center; gap: 2px; }
+    .sessions-sheet-actions .icon-btn[hidden] { display: none; }
 
     .sessions-sheet-toggle {
       display: flex;
@@ -2371,9 +2395,21 @@ export function getWebviewContent(
   <section class="sessions-sheet" id="sessionsSheet" hidden aria-label="Sessions">
     <div class="sessions-sheet-head">
       <span class="sessions-sheet-title">Sessions</span>
-      <button class="icon-btn" id="sessionsSheetClose" title="Close" aria-label="Close sessions">
-        <span class="codicon codicon-close" aria-hidden="true"></span>
-      </button>
+      <div class="sessions-sheet-actions">
+        <button
+          class="icon-btn"
+          id="sessionsContinueInCloud"
+          type="button"
+          title="Continue in the cloud"
+          aria-label="Continue in the cloud"
+          hidden
+        >
+          <span class="codicon codicon-cloud-upload" aria-hidden="true"></span>
+        </button>
+        <button class="icon-btn" id="sessionsSheetClose" title="Close" aria-label="Close sessions">
+          <span class="codicon codicon-close" aria-hidden="true"></span>
+        </button>
+      </div>
     </div>
     <div class="sessions-sheet-toggle" role="tablist" aria-label="Session source">
       <button type="button" role="tab" id="sessionsTabLocal" aria-selected="true">Local</button>
@@ -2703,6 +2739,7 @@ export function getWebviewContent(
     const sessionsSearch = document.getElementById('sessionsSearch');
     const sessionsTabLocal = document.getElementById('sessionsTabLocal');
     const sessionsTabCloud = document.getElementById('sessionsTabCloud');
+    const sessionsContinueInCloud = document.getElementById('sessionsContinueInCloud');
     const slashBtn = document.getElementById('slashBtn');
     const slashMenu = document.getElementById('slashMenu');
     const composerStatusBoundary = document.getElementById('composerStatusBoundary');
@@ -3581,6 +3618,7 @@ export function getWebviewContent(
         '<div class="empty-state-copy" id="emptyStateCopy">Ask about this workspace, edit files, run commands and tests.</div>';
       messagesEl.appendChild(mounted);
       emptyStateEl = mounted;
+      syncStartSuggestions();
     }
 
     var assistantSources = new WeakMap();
@@ -3596,7 +3634,7 @@ export function getWebviewContent(
       }, 1500);
     }
 
-    function appendMessageActions(messageEl, sourceText) {
+    function appendMessageActions(messageEl, sourceText, meta) {
       if (!messageEl || !sourceText) return;
       assistantSources.set(messageEl, sourceText);
       var previous = messagesEl.querySelectorAll('.message.assistant.message--latest');
@@ -3625,7 +3663,40 @@ export function getWebviewContent(
         );
       });
       row.appendChild(copy);
+      var regenerate = document.createElement('button');
+      regenerate.type = 'button';
+      regenerate.className = 'message-action message-action--regenerate';
+      regenerate.setAttribute('aria-label', 'Regenerate response');
+      regenerate.title = 'Regenerate';
+      var regenerateIcon = document.createElement('span');
+      regenerateIcon.className = 'codicon codicon-refresh';
+      regenerateIcon.setAttribute('aria-hidden', 'true');
+      regenerate.appendChild(regenerateIcon);
+      regenerate.addEventListener('click', function () {
+        vscode.postMessage({ type: 'regenerate' });
+      });
+      row.appendChild(regenerate);
+      if (meta && meta.label) {
+        var metaEl = document.createElement('span');
+        metaEl.className = 'message-meta';
+        metaEl.textContent = meta.label;
+        if (meta.detail) metaEl.title = meta.detail;
+        row.appendChild(metaEl);
+      }
       messageEl.appendChild(row);
+    }
+
+    function answerMeta(payload) {
+      if (!payload || !payload.modelLabel) return null;
+      var tokens = (payload.inputTokens || 0) + (payload.outputTokens || 0);
+      return {
+        label: payload.modelLabel,
+        detail: tokens > 0
+          ? payload.modelLabel + ' · ' + tokens.toLocaleString() + ' tokens (' +
+            (payload.inputTokens || 0).toLocaleString() + ' in, ' +
+            (payload.outputTokens || 0).toLocaleString() + ' out)'
+          : payload.modelLabel,
+      };
     }
 
     function addMessage(role, text) {
@@ -4098,6 +4169,7 @@ export function getWebviewContent(
       if (isFollowUp) userMessageEl.setAttribute('data-delivery-state', 'queued');
       userInput.value = '';
       userInput.style.height = 'auto';
+      saveComposerDraft();
 
       if (!isFollowUp) {
         showTyping();
@@ -4200,7 +4272,25 @@ export function getWebviewContent(
       }
     });
 
-    userInput.addEventListener('input', function() { autoResize(); detectMention(); });
+    function saveComposerDraft() {
+      var state = vscode.getState() || {};
+      state.composerDraft = userInput.value;
+      vscode.setState(state);
+    }
+
+    userInput.addEventListener('input', function() {
+      autoResize();
+      detectMention();
+      saveComposerDraft();
+    });
+
+    (function restoreComposerDraft() {
+      var state = vscode.getState() || {};
+      if (typeof state.composerDraft === 'string' && state.composerDraft && !userInput.value) {
+        userInput.value = state.composerDraft;
+        autoResize();
+      }
+    })();
 
     function closeActionsMenu() {
       if (!actionsMenu) return;
@@ -4331,7 +4421,7 @@ export function getWebviewContent(
         loading.setAttribute('role', 'status');
         loading.textContent = sessionsSource === 'local'
           ? 'Loading developer sessions…'
-          : 'Loading cloud chats…';
+          : 'Loading cloud sessions…';
         sessionsSheetList.appendChild(loading);
         return;
       }
@@ -4355,7 +4445,7 @@ export function getWebviewContent(
         empty.className = 'sessions-sheet-empty';
         empty.textContent = sessionsSource === 'local'
           ? 'No developer sessions in this workspace yet'
-          : 'No cloud chats yet';
+          : 'No cloud chats or AGI Code sessions yet';
         sessionsSheetList.appendChild(empty);
         return;
       }
@@ -4413,6 +4503,7 @@ export function getWebviewContent(
       if (sessionsSearch) sessionsSearch.hidden = true;
       if (sessionsTabLocal) sessionsTabLocal.setAttribute('aria-selected', String(source === 'local'));
       if (sessionsTabCloud) sessionsTabCloud.setAttribute('aria-selected', String(source === 'cloud'));
+      if (sessionsContinueInCloud) sessionsContinueInCloud.hidden = source !== 'cloud';
       renderSessionsRows();
       vscode.postMessage({ type: 'requestSessions', payload: { source: source } });
     }
@@ -4433,6 +4524,11 @@ export function getWebviewContent(
 
     if (sessionsBtn) sessionsBtn.addEventListener('click', openSessionsSheet);
     if (sessionsSheetClose) sessionsSheetClose.addEventListener('click', closeSessionsSheet);
+    if (sessionsContinueInCloud) {
+      sessionsContinueInCloud.addEventListener('click', function () {
+        vscode.postMessage({ type: 'continueInCloud' });
+      });
+    }
     if (sessionsTabLocal) {
       sessionsTabLocal.addEventListener('click', function () { requestSessions('local'); });
     }
@@ -4530,6 +4626,7 @@ export function getWebviewContent(
             if (userInput.value.trim().indexOf('/') === 0) {
               userInput.value = '';
               autoResize();
+              saveComposerDraft();
             }
             vscode.postMessage({ type: 'runSlashCommand', payload: { name: entry.name } });
           });
@@ -4892,6 +4989,21 @@ export function getWebviewContent(
           actions.appendChild(button);
         })(APPROVAL_ACTIONS[i]);
       }
+      var guidance = document.createElement('input');
+      guidance.type = 'text';
+      guidance.className = 'approval-card__guidance';
+      guidance.maxLength = ${REMOTE_CODE_LIMITS.guidanceLength};
+      guidance.placeholder = 'Or deny and tell AGI what to do instead, then press Enter';
+      guidance.setAttribute('aria-label', 'Deny and tell AGI what to do instead');
+      guidance.addEventListener('keydown', function (event) {
+        if (event.key !== 'Enter' || !guidance.value.trim()) return;
+        event.preventDefault();
+        vscode.postMessage({
+          type: 'respondToApproval',
+          payload: { requestId: payload.requestId, decision: 'deny', guidance: guidance.value.trim() },
+        });
+      });
+      actions.appendChild(guidance);
       card.appendChild(actions);
 
       approvalCards[payload.requestId] = { el: card, actions: actions };
@@ -5246,7 +5358,7 @@ export function getWebviewContent(
           // token is flushed, then bind actions on any code blocks.
           currentAssistantEl.innerHTML = renderAssistant(accumulatedContent);
           bindCodeBlockActions(currentAssistantEl);
-          appendMessageActions(currentAssistantEl, accumulatedContent);
+          appendMessageActions(currentAssistantEl, accumulatedContent, answerMeta(msg.payload));
         }
         finalizeToolCallStack();
         if (msg.payload && msg.payload.providerLabel) {
@@ -5447,6 +5559,7 @@ export function getWebviewContent(
 
       else if (msg.type === 'composerDraft') {
         userInput.value = msg.payload.text || '';
+        saveComposerDraft();
         pendingFileReferences = (msg.payload.references || []).map(function(reference) {
           var range = reference.range;
           var endLine = range && range.endCharacter === 0 && range.endLine > range.startLine
@@ -5510,6 +5623,11 @@ export function getWebviewContent(
       else if (msg.type === 'recentConversations') {
         recentChats = msg.payload;
         syncRecentChats();
+      }
+
+      else if (msg.type === 'startSuggestions') {
+        startSuggestions = msg.payload;
+        syncStartSuggestions();
       }
 
       else if (msg.type === 'activeProject') {
@@ -6316,6 +6434,69 @@ export function getWebviewContent(
     }
 
     var recentChats = { conversations: [], total: 0 };
+    var startSuggestions = { projects: [], skills: [], connectors: [] };
+
+    function prefillComposer(text) {
+      userInput.value = text;
+      autoResize();
+      saveComposerDraft();
+      userInput.focus();
+      userInput.setSelectionRange(text.length, text.length);
+    }
+
+    function buildSuggestionRow(label, detail, onPick) {
+      var row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'recent-chat-row';
+      row.title = detail || label;
+      var title = document.createElement('span');
+      title.className = 'recent-chat-title';
+      title.textContent = label;
+      row.appendChild(title);
+      if (detail) {
+        var sub = document.createElement('span');
+        sub.className = 'recent-chat-age';
+        sub.textContent = detail;
+        row.appendChild(sub);
+      }
+      row.addEventListener('click', onPick);
+      return row;
+    }
+
+    function appendSuggestionGroup(block, heading, rows) {
+      if (rows.length === 0) return;
+      var title = document.createElement('div');
+      title.className = 'recent-chats-title';
+      title.textContent = heading;
+      block.appendChild(title);
+      for (var i = 0; i < rows.length; i++) block.appendChild(rows[i]);
+    }
+
+    function syncStartSuggestions() {
+      if (!emptyStateEl) return;
+      var mounted = emptyStateEl.querySelector('.start-suggestions');
+      if (mounted) mounted.parentNode.removeChild(mounted);
+      var block = document.createElement('div');
+      block.className = 'recent-chats start-suggestions';
+      appendSuggestionGroup(block, 'Projects', startSuggestions.projects.map(function (project) {
+        return buildSuggestionRow(project.name, 'Use in this chat', function () {
+          vscode.postMessage({ type: 'openSuggestedProject', payload: { projectId: project.id } });
+        });
+      }));
+      appendSuggestionGroup(block, 'Skills', startSuggestions.skills.map(function (skill) {
+        return buildSuggestionRow(skill.name, skill.description, function () {
+          prefillComposer('Use the ' + skill.name + ' skill to ');
+        });
+      }));
+      appendSuggestionGroup(block, 'Connected apps', startSuggestions.connectors.map(function (connector) {
+        return buildSuggestionRow(connector.name, 'Ask with it', function () {
+          prefillComposer('Using ' + connector.name + ', ');
+        });
+      }));
+      if (!block.firstChild) return;
+      emptyStateEl.classList.add('empty-state--has-recents');
+      emptyStateEl.appendChild(block);
+    }
 
     function buildRecentChatRow(conversation) {
       var row = document.createElement('button');
@@ -6345,7 +6526,7 @@ export function getWebviewContent(
       if (mounted) mounted.parentNode.removeChild(mounted);
       emptyStateEl.classList.toggle(
         'empty-state--has-recents',
-        recentChats.conversations.length > 0,
+        recentChats.conversations.length > 0 || Boolean(emptyStateEl.querySelector('.start-suggestions')),
       );
       if (recentChats.conversations.length === 0) return;
       var block = document.createElement('div');

@@ -84,7 +84,7 @@ export function FilesPanel({ className }: FilesPanelProps) {
       <div className="w-80 border-r border-border">
         {}
         <div className="border-b border-border px-4 py-3">
-          <h3 className="text-sm font-semibold text-foreground">File Changes</h3>
+          <h3 className="text-h5 text-foreground">File Changes</h3>
           <div className="mt-2 flex items-center gap-4 text-xs">
             <span className="text-muted-foreground">
               Pending: <span className="font-medium text-foreground">{pendingCount}</span>

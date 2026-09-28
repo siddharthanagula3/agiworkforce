@@ -82,17 +82,13 @@ Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:868-875`,
 
 - Done when: The user can ask about a specific page of a PDF and the answer uses that page.
 - Wave: 3
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Chat attachments are joined without page labels, so "page 7" answers are guesses; project knowledge files carry page locators only when excerpted, not when included whole. Add page markers everywhere. | handler |
-| desktop | partial | Chat attachments are joined without page labels, so "page 7" answers are guesses; project knowledge files carry page locators only when excerpted, not when included whole. Add page markers everywhere. | handler |
-| mobile | partial | Chat attachments are joined without page labels, so "page 7" answers are guesses; project knowledge files carry page locators only when excerpted, not when included whole. Add page markers everywhere. | handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:5228-5236`, `apps/web/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration.ts:450-466`, `apps/web/lib/server/pdf-attachment-content.ts:150-167`, `apps/mobile/app/(app)/chat/[id].tsx:849-856`
 
 ## S31.07: PDF text extraction.
 

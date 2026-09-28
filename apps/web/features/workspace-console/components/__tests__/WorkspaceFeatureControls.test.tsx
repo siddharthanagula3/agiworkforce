@@ -32,6 +32,7 @@ vi.mock('../../hooks/use-workspace-roles', () => ({
   useWorkspaceGroups: () => ({ data: { groups: [] } }),
   useUpsertPolicyOverride: () => ({ mutate: mocks.upsertOverride, isPending: false, error: null }),
   useDeletePolicyOverride: () => ({ mutate: mocks.deleteOverride, isPending: false, error: null }),
+  usePolicyDiagnosis: () => ({ data: undefined, error: null, isFetching: false }),
 }));
 
 import { GOVERNED_FEATURES, WorkspaceFeatureControls } from '../WorkspaceFeatureControls';
@@ -138,7 +139,13 @@ describe('WorkspaceFeatureControls', () => {
     fireEvent.change(screen.getByLabelText('Who the exception applies to'), {
       target: { value: 'user-9' },
     });
-    const researchRow = screen.getAllByText('Research').at(-1)!.closest('label') as HTMLElement;
+    const exceptions = screen
+      .getByRole('button', { name: 'Save exception' })
+      .closest('section') as HTMLElement;
+    const researchRow = within(exceptions)
+      .getAllByText('Research')
+      .at(-1)!
+      .closest('label') as HTMLElement;
     fireEvent.change(within(researchRow).getByRole('combobox'), { target: { value: 'off' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save exception' }));
 

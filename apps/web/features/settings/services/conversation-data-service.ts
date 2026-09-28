@@ -221,6 +221,7 @@ const PublishedArtifactSchema = z.object({
   updatedAt: z.string(),
   shareUrl: z.string().url(),
   sandboxed: z.boolean(),
+  visibility: z.enum(['public', 'organization']),
 });
 
 const PublishedArtifactListResponseSchema = z.object({

@@ -30,31 +30,27 @@ nothing is left.
 
 - Done when: User picks a style preset (photo, illustration, etc.) that changes the generated look.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The request accepts a style string but no surface offers presets and every provider adapter ignores it (_style). | ui, handler |
-| desktop | partial | Hosted web: same as web; style is accepted and ignored. | ui, handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `packages/contracts/cloud-contracts/src/managed-media.ts:92-94`, `apps/web/app/api/media/image/lib/image-generation-provider.ts:536-544`
 
 ## S44.04: Reference-image slots.
 
 - Done when: User attaches one or more reference images in dedicated slots that guide the generation.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | One reference image (plus an optional mask) per request; no multiple reference slots. | ui |
-| desktop | partial | One reference image (plus an optional mask) per request; no multiple reference slots. | ui |
 | mobile | partial | Exactly one reference photo, only with an edit-capable model; no slots. | ui |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:1116-1119`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:2862-2878`, `packages/contracts/cloud-contracts/src/managed-media.ts:97-99`, `apps/mobile/src/features/chat/actions/resolveMobileImageGenerationRequest.ts:163-169`
+Code: `apps/mobile/src/features/chat/actions/resolveMobileImageGenerationRequest.ts:163-169`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:376-380`
 
 ## S44.06: Prompt enhancement with user control.
 
@@ -84,140 +80,33 @@ Code: `apps/mobile/src/features/chat/components/GeneratedImage.tsx:165-170`
 
 Code: `apps/cli/src/lib.rs:950-953`, `apps/cli/src/cloud/image.rs:277-283`
 
-## S44.08: Size/resolution selector.
-
-- Done when: User picks the output size or resolution of the image.
-- Wave: 3
-- Already works on: cli
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Route and hook accept size (256-1792px presets) but the composer never offers or sends it. | ui |
-| desktop | partial | Hosted web: no size control. | ui |
-| mobile | partial | Route accepts size; the Add-to-chat sheet offers only model and aspect ratio. | ui |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/lib/hooks/useMediaGeneration.ts:89-91`, `packages/contracts/cloud-contracts/src/managed-media.ts:91-93`
-
-## S44.09: Quality selector.
-
-- Done when: User picks a quality level (standard/HD) for the image.
-- Wave: 3
-- Already works on: cli
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Route maps quality standard/hd to the OpenAI quality; no web control sends it. | ui |
-| desktop | partial | Hosted web: no quality control. | ui |
-| mobile | partial | Route supports quality; mobile offers no control. | ui |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `packages/contracts/cloud-contracts/src/managed-media.ts:94-96`, `apps/web/app/api/media/image/lib/image-generation-provider.ts:455-458`
-
-## S44.10: Output-count selector.
-
-- Done when: User picks how many images to generate and sees all of them.
-- Wave: 3
-- Already works on: cli
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Route generates up to 4 (n) but the composer sends none and the hook keeps only images[0]. | ui |
-| desktop | partial | Hosted web: one image per turn. | ui |
-| mobile | partial | Route supports n up to 4; mobile sends one and shows one. | ui |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/lib/hooks/useMediaGeneration.ts:319-322`, `packages/contracts/cloud-contracts/src/managed-media.ts:93-95`
-
 ## S44.11: Background transparency option.
 
 - Done when: User asks for a transparent background on the generated image.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Transparent toggle appears only when editing an attached image with an edit-capable model; plain text-to-image has no option. | ui |
-| desktop | partial | Hosted web: edit-only transparent toggle. | ui |
 | mobile | partial | Route supports transparent_background on OpenAI edits; mobile never sends it. | ui |
 | cli | partial | No flag; the CLI request has no transparent_background field. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:4776-4790`, `apps/web/app/api/media/image/lib/image-generation-provider.ts:463-465`, `packages/contracts/cloud-contracts/src/managed-media.ts:99-101`, `apps/cli/src/cloud/image.rs:27-38`
-
-## S44.13: Supported negative-prompt control.
-
-- Done when: User enters a negative prompt (what to avoid) on models that support it.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Route accepts negative_prompt (used only by Imagen) but no web control sends it. | ui |
-| desktop | partial | Hosted web: no negative prompt control. | ui |
-| mobile | partial | Route accepts negative_prompt; mobile offers no control. | ui |
-| cli | partial | No --negative flag; the CLI request omits negative_prompt. | ui |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `packages/contracts/cloud-contracts/src/managed-media.ts:95-97`, `apps/web/app/api/media/image/lib/image-generation-provider.ts:563-567`, `apps/cli/src/cloud/image.rs:27-38`
-
-## S44.14: Generation-cost indication.
-
-- Done when: Before or after generating, the user sees what the image costs (credits or money).
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | The route estimates cost to reserve credits, but no screen shows the cost of an image. | ui |
-| desktop | partial | Hosted web: cost never displayed. | ui |
-| mobile | partial | Server estimates cost; mobile shows none (cost_estimate typed but unread). | ui |
-| cli | partial | Server estimates cost; the CLI prints only model and provider. | ui |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/api/media/image/generate/route.ts:719-722`, `apps/mobile/src/features/image/services/imagegen.ts:18-20`, `apps/cli/src/lib.rs:1751-1753`
-
-## S44.15: Remaining-generation allowance.
-
-- Done when: User sees how many image generations remain in their allowance before hitting a limit.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Allowance is enforced at reservation; only a paywall after refusal, never a remaining count. | ui |
-| desktop | partial | Hosted web: no remaining count. | ui |
-| mobile | partial | Server enforces; mobile shows no remaining image count. | ui |
-| cli | partial | Server enforces; the CLI shows no remaining image count. | ui |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/api/media/image/generate/route.ts:771-780`
-
-## S44.16: Generation queue.
-
-- Done when: User can queue several image generations and see their status in a queue view.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Durable image jobs exist server-side, but web runs one image turn per conversation and has no queue view. | ui |
-| desktop | partial | Hosted web: no queue view. | ui |
-| mobile | partial | Durable jobs server-side; mobile has no queue view. | ui |
-| cli | partial | One blocking generation per command; no queue. | ui |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/api/media/image/lib/image-job-drive-queue.ts:8-15`, `apps/web/features/chat/pages/WebChatPage.tsx:2473-2477`
+Code: `packages/contracts/cloud-contracts/src/managed-media.ts:99-101`, `apps/cli/src/cloud/image.rs:27-38`
 
 ## S44.18: Cancel generation.
 
 - Done when: User stops an image generation in progress and the job is cancelled (not billed further).
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | /api/media/image/cancel exists but nothing calls it; the generating card has no stop control. | ui |
-| desktop | partial | Hosted web: no stop control. | ui |
 | mobile | partial | Stop only marks the message stopped on the phone; it never calls the cancel route, so the server job continues. | handler |
 | cli | partial | Ctrl-C only stops waiting; the CLI never calls the cancel route. | ui, handler |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/app/api/media/image/cancel/route.ts:26-30`, `apps/mobile/stores/chat/chatMessageStore.ts:885-893`
+Code: `apps/mobile/stores/chat/chatMessageStore.ts:885-893`, `apps/web/app/api/media/image/cancel/route.ts:26-30`
 
 ## S44.19: Retry generation.
 
@@ -268,16 +157,15 @@ Code: `apps/cli/src/tui/tui_app.rs:3307-3310`, `apps/cli/src/cloud/image.rs:261-
 
 - Done when: User can see the prompt and generation settings (model, ratio, size, quality) used for an image.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Prompt (user turn) and model label are shown; ratio only inside the revise panel; size/quality are never shown. | ui |
-| desktop | partial | Hosted web: prompt and model only. | ui |
 | mobile | partial | Prompt shows in the full-screen viewer and Library; model and settings are not shown for the image. | ui |
 | cli | partial | Prints model and provider; size, quality and ratio are not reported back. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/ImageGenerationCard.tsx:968-972`, `apps/web/features/chat/pages/WebChatPage.tsx:2309-2315`, `apps/mobile/src/features/chat/components/ImageFullScreen.tsx:220-224`, `apps/cli/src/lib.rs:1751-1753`
+Code: `apps/mobile/src/features/chat/components/ImageFullScreen.tsx:220-224`, `apps/cli/src/lib.rs:1751-1753`
 
 ## S44.24: Reuse prompt.
 
@@ -297,16 +185,15 @@ Code: `apps/cli/src/lib.rs:939-951`, `apps/cli/src/tui/tui_app.rs:3307-3310`
 
 - Done when: User regenerates with the same settings (model, ratio) as an earlier image.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Revise panel reuses the card's model and ratio, but Library Remix restores only the prompt and image, not model or ratio. | ui |
-| desktop | partial | Hosted web: same as web. | ui |
 | mobile | partial | Model and ratio stay selected in the sheet, but an earlier image's settings cannot be restored. | ui |
 | cli | partial | Flags must be retyped; no saved settings. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/ImageGenerationCard.tsx:439-445`, `apps/web/features/library/lib/library-chat-handoff.ts:15-19`, `apps/mobile/src/features/chat/actions/mediaMode.ts:48-55`, `apps/cli/src/lib.rs:942-963`
+Code: `apps/mobile/src/features/chat/actions/mediaMode.ts:48-55`, `apps/cli/src/lib.rs:942-963`
 
 ## S44.27: Save to Library.
 
@@ -322,16 +209,13 @@ Code: `apps/web/features/chat/components/ImageGenerationCard.tsx:439-445`, `apps
 
 - Done when: User adds a generated image to a Project.
 - Wave: 3
-- Already works on: web
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| desktop | partial | Hosted web: same storage-cap defect. | handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/library/components/LibraryView.tsx:211-218`
 
 ## S44.29: Download full-quality image.
 
@@ -350,31 +234,15 @@ Code: `apps/mobile/src/features/chat/components/ImageFullScreen.tsx:175-183`, `a
 
 - Done when: User copies the image itself to the clipboard.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Copy puts the image URL on the clipboard, not the image; add a ClipboardItem image copy. | ui, handler |
-| desktop | partial | Hosted web: copies the URL only. | ui, handler |
 | mobile | partial | Only via the OS share sheet; no Copy image action. | ui |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/ImageGenerationCard.tsx:906-912`, `apps/web/features/chat/components/ImageGenerationCard.tsx:815-819`, `apps/mobile/services/fileCreation.ts:395-408`, `apps/mobile/src/features/chat/components/ImageFullScreen.tsx:175-183`
-
-## S44.31: Share image.
-
-- Done when: User shares a generated image with someone else (link or file to another app).
-- Wave: 3
-- Already works on: mobile
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Share copies a workspace-only link (and offers download); there is no public or external share. | ui, handler |
-| desktop | partial | Hosted web: workspace-only link. | ui, handler |
-| cli | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/ImageGenerationCard.tsx:336-340`, `apps/web/features/chat/components/ImageGenerationCard.tsx:247-252`
+Code: `apps/mobile/services/fileCreation.ts:395-408`, `apps/mobile/src/features/chat/components/ImageFullScreen.tsx:175-183`
 
 ## S44.33: Edit image.
 

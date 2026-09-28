@@ -497,7 +497,7 @@ export function ExtensionsSettings() {
       {confirmDialog}
 
       <div>
-        <h3 className="text-lg font-semibold mb-2">Extensions</h3>
+        <h3 className="text-h3 mb-2">Extensions</h3>
         <p className="text-sm text-muted-foreground mb-4">
           Install and manage MCP extensions to add new capabilities to AGI Workforce. Extensions can
           provide tools for email, calendars, databases, and more.

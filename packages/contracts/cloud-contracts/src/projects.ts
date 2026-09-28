@@ -19,6 +19,9 @@ export const ManagedCloudProjectSchema = z.object({
   instructions: z.string().nullable().optional(),
   color: z.string().nullable().optional(),
   isArchived: z.boolean().optional(),
+  usesGlobalMemory: z.boolean().optional(),
+  usesAccountInstructions: z.boolean().optional(),
+  usesAccountStyle: z.boolean().optional(),
   metadata: z.record(z.string(), z.unknown()).nullable().optional(),
   defaultPrivacyMode: PrivacyModeSchema,
   defaultProviderMode: ProviderModeSchema,
@@ -78,6 +81,8 @@ export const ManagedCloudProjectUpdateRequestSchema = z.object({
   starred: z.boolean().optional(),
   /** False confines this project's chats to its own memories. */
   usesGlobalMemory: z.boolean().optional(),
+  usesAccountInstructions: z.boolean().optional(),
+  usesAccountStyle: z.boolean().optional(),
   ...ManagedCloudProjectWriteFields,
 });
 export type ManagedCloudProjectUpdateRequest = z.infer<

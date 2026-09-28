@@ -6,17 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S97.03: Reference-asset manager.
-
-- Done when: Reference assets (library images) are stored, listed and resolved as inputs that guide new generations.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Library images can be reused only as the single source of an edit (by asset id); add saved reference sets and multi-image or style references for new generations. | handler |
-
-Code: `apps/web/app/api/media/image/lib/image-generation-provider.ts:410-439`, `packages/contracts/cloud-contracts/src/managed-media.ts:120-126`
-
 ## S97.04: Mask-processing service.
 
 - Done when: Masks for inpaint/outpaint are validated and normalised (size, alpha) before they reach the provider.
@@ -27,17 +16,6 @@ Code: `apps/web/app/api/media/image/lib/image-generation-provider.ts:410-439`, `
 | platform | partial | A user-supplied mask file is forwarded to OpenAI unchanged; add mask validation and conversion (dimensions, alpha channel) and a way to draw one. | handler |
 
 Code: `apps/web/app/api/media/image/lib/image-generation-provider.ts:470-475`, `packages/contracts/cloud-contracts/src/managed-media.ts:127-134`
-
-## S97.13: Subtitle/transcript generation.
-
-- Done when: Media gets a generated transcript or timed subtitles (SRT/VTT).
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Transcription returns plain text for an uploaded audio clip only; add timed subtitle output (SRT/VTT) and transcripts for generated or uploaded videos. | handler |
-
-Code: `apps/web/app/api/llm/v1/audio/transcriptions/route.ts:474-481`
 
 ## S97.17: Text-to-speech service.
 
@@ -72,17 +50,6 @@ Code: `apps/web/app/api/voice/live/sessions/route.ts:337-340`
 
 Code: `apps/web/features/chat/lib/live-voice-session.ts:668-676`
 
-## S97.24: Voice-to-tool bridge.
-
-- Done when: Voice turns can call product tools and return the results into the spoken conversation, under the user's approval policy.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Voice now offers connector tools, operator MCP tools, url_fetch and create_office_file through the chat gate (live-voice-tool-runner.ts). Still open: the sandbox file tools and E2B code execution, which wait on a single-call executor from the tool loop. | handler |
-
-Code: `apps/web/lib/voice/live-voice-tools.ts:194-203`, `apps/web/lib/voice/live-voice-tools.ts:68-78`
-
 ## S97.26: Visual-frame ingestion.
 
 - Done when: Camera or screen frames are captured and delivered to the realtime model during a voice session.
@@ -90,17 +57,6 @@ Code: `apps/web/lib/voice/live-voice-tools.ts:194-203`, `apps/web/lib/voice/live
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | Frame capture exists in the voice surface but no caller passes a frame sink and the live session has no path to send frames; wire capture into the session. | handler, mount |
+| platform | partial | blocked: GPT-Live has no documented frame input (fetched 2026-09-27) | handler, mount |
 
-Code: `apps/web/features/chat/components/Voice/VoiceModeSurface.tsx:125-129`
-
-## S97.28: Voice session persistence.
-
-- Done when: Voice sessions are persisted with their settings and status so they can be audited and resumed.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Sessions are stored, but mobile never sends its surface so its sessions are recorded as web, and GET /sessions/active has no caller, so nothing resumes from the record. | handler |
-
-Code: `apps/web/app/api/voice/live/sessions/lib/voice-session-store.ts:133-137`, `apps/web/app/api/voice/live/sessions/route.ts:210-210`, `apps/web/db/neon/0260_voice_sessions.sql:27-35`
+Code: `apps/web/features/chat/components/Voice/VoiceModeSurface.tsx:445-445`

@@ -118,7 +118,7 @@ export default function SecurityOperationsPanel() {
           <p className="font-mono text-xs uppercase text-sky-700 dark:text-sky-300">
             Live administration
           </p>
-          <h2 id="security-operations-title" className="mt-1 text-xl font-medium text-foreground">
+          <h2 id="security-operations-title" className="mt-1 text-h2 text-foreground">
             Security operations
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -167,7 +167,7 @@ export default function SecurityOperationsPanel() {
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <div className="flex items-center gap-2">
               <ShieldAlert className="h-4 w-4 text-sky-700 dark:text-sky-300" aria-hidden="true" />
-              <h3 className="text-sm font-medium text-foreground">Recent security events</h3>
+              <h3 className="text-h5 text-foreground">Recent security events</h3>
             </div>
             <span className="text-xs text-muted-foreground">Latest 25</span>
           </div>
@@ -218,7 +218,7 @@ export default function SecurityOperationsPanel() {
 
         <div className="space-y-4">
           <div className="rounded-md border border-border bg-card p-4">
-            <h3 className="text-sm font-medium text-foreground">Active alerts</h3>
+            <h3 className="text-h5 text-foreground">Active alerts</h3>
             <div className="mt-3 space-y-2">
               {triggeredAlerts.map((alert) => (
                 <div
@@ -240,7 +240,7 @@ export default function SecurityOperationsPanel() {
           </div>
 
           <div className="rounded-md border border-border bg-card p-4">
-            <h3 className="text-sm font-medium text-foreground">Top source IPs · 24h</h3>
+            <h3 className="text-h5 text-foreground">Top source IPs · 24h</h3>
             <ol className="mt-3 space-y-2">
               {(dashboard?.top_ips ?? []).map((item) => (
                 <li key={item.ip_address} className="flex justify-between gap-3 text-sm">
@@ -262,7 +262,7 @@ export default function SecurityOperationsPanel() {
       >
         <div className="flex items-center gap-2">
           <UserRoundCog className="h-4 w-4 text-sky-700 dark:text-sky-300" aria-hidden="true" />
-          <h3 className="text-sm font-medium text-foreground">Account control</h3>
+          <h3 className="text-h5 text-foreground">Account control</h3>
         </div>
         <p className="mt-2 text-xs leading-5 text-muted-foreground">
           Every action is authenticated, CSRF-protected, and written to the security audit log. Your

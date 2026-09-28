@@ -37,6 +37,7 @@ pub(crate) fn shared_runtime_command_names() -> &'static [&'static str] {
         "new",
         "mcp",
         "output-style",
+        "tools",
         "fallback",
         "replay",
         "insights",
@@ -123,6 +124,7 @@ pub fn handle_shared_command(
         }
         "/mcp" => ParityCommandResult::SystemMessage(render_mcp(session)),
         "/output-style" => ParityCommandResult::SystemMessage(handle_output_style(session, arg)),
+        "/tools" => handle_tools(session, arg),
         "/fallback" => ParityCommandResult::SystemMessage(render_fallback(session)),
         "/replay" => ParityCommandResult::SystemMessage(render_replay()),
         "/insights" => ParityCommandResult::SystemMessage(render_insights(session)),
@@ -868,30 +870,262 @@ pub fn render_mcp(session: &AgentSession) -> String {
 }
 
 pub fn handle_output_style(session: &mut AgentSession, arg: &str) -> String {
-    if arg.trim().is_empty() {
-        let mut lines = vec![
-            format!("Active output style: {}", session.output_style),
-            "Available styles:".to_string(),
-        ];
-        for style in crate::output_styles::load_all() {
-            let marker = if style.name == session.output_style {
-                "*"
-            } else {
-                " "
-            };
-            lines.push(format!(
-                "  {marker} {:<14} {}",
-                style.name, style.description
-            ));
+    let arg = arg.trim();
+    let (action, rest) = arg.split_once(char::is_whitespace).unwrap_or((arg, ""));
+    match action {
+        "" => output_style_overview(session),
+        "new" | "create" => {
+            let (name, instructions) = rest
+                .trim()
+                .split_once(char::is_whitespace)
+                .unwrap_or((rest.trim(), ""));
+            let description = instructions.lines().next().unwrap_or_default();
+            match crate::output_styles::create(name, description, instructions) {
+                Ok(path) => format!(
+                    "Created output style {name} at {}. Switch with /output-style {name}; edit the file to refine it.",
+                    path.display()
+                ),
+                Err(reason) => reason,
+            }
         }
-        lines.push("Switch with: /output-style <name>".to_string());
-        return lines.join("\n");
+        "delete" | "remove" => {
+            let name = rest.trim();
+            match crate::output_styles::delete(name) {
+                Ok(path) => {
+                    let mut message = format!("Deleted output style {name} ({}).", path.display());
+                    if session.output_style == name {
+                        session.apply_output_style("default");
+                        message.push_str(" This session is back on the default style.");
+                    }
+                    message
+                }
+                Err(reason) => reason,
+            }
+        }
+        name => {
+            let session_only = rest.trim() == "--session";
+            session.apply_output_style(name);
+            if session_only {
+                format!(
+                    "Output style: {} for this session only; your saved default is unchanged.",
+                    session.output_style
+                )
+            } else {
+                format!(
+                    "Output style: {} (applies on next turn)",
+                    session.output_style
+                )
+            }
+        }
     }
+}
 
-    session.apply_output_style(arg.trim());
-    format!(
-        "Output style: {} (applies on next turn)",
-        session.output_style
+pub fn output_style_arg_persists(arg: &str) -> bool {
+    let mut words = arg.split_whitespace();
+    matches!(
+        (words.next(), words.next()),
+        (Some(name), None) if !matches!(name, "new" | "create" | "delete" | "remove")
+    )
+}
+
+fn output_style_overview(session: &AgentSession) -> String {
+    let styles = crate::output_styles::load_all();
+    let active = styles
+        .iter()
+        .find(|style| style.name == session.output_style);
+    let mut lines = vec!["In effect for this session:".to_string()];
+    lines.push(format!(
+        "  Output style   {} ({})",
+        session.output_style,
+        active
+            .map(|style| style.origin.as_str())
+            .unwrap_or("built-in")
+    ));
+    let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    for (tier, path, exists) in crate::memory::MemoryManager::new(&cwd).list() {
+        if exists {
+            lines.push(format!("  Instructions   {tier}: {}", path.display()));
+        }
+    }
+    if let Some(tools) = session.allowed_tools.as_ref() {
+        lines.push(format!("  Tool allowlist {}", tools.join(", ")));
+    }
+    lines.push(if session.privacy_mode == PrivacyMode::Managed {
+        "  Account        your personalization and custom instructions (see /personalize)".to_string()
+    } else {
+        format!(
+            "  Account        not applied: this session is {}, account preferences reach Managed Cloud turns only",
+            session.privacy_mode.label()
+        )
+    });
+    lines.push(String::new());
+    lines.push("Available styles:".to_string());
+    for style in &styles {
+        let marker = if style.name == session.output_style {
+            "*"
+        } else {
+            " "
+        };
+        lines.push(format!(
+            "  {marker} {:<14} {}",
+            style.name, style.description
+        ));
+    }
+    lines.push(
+        "Switch with /output-style <name> (add --session to leave your default alone) · /output-style new <name> <instructions> · /output-style delete <name>"
+            .to_string(),
+    );
+    lines.join("\n")
+}
+
+struct ToolRun {
+    name: String,
+    input: serde_json::Value,
+    result: Option<(String, bool)>,
+}
+
+fn session_tool_runs(session: &AgentSession) -> Vec<ToolRun> {
+    use crate::models::{ContentBlock, MessageContent};
+    let mut runs: Vec<(String, ToolRun)> = Vec::new();
+    for message in &session.messages {
+        let MessageContent::Blocks(blocks) = &message.content else {
+            continue;
+        };
+        for block in blocks {
+            match block {
+                ContentBlock::ToolUse { id, name, input } => runs.push((
+                    id.clone(),
+                    ToolRun {
+                        name: name.clone(),
+                        input: input.clone(),
+                        result: None,
+                    },
+                )),
+                ContentBlock::ToolResult {
+                    tool_use_id,
+                    content,
+                    is_error,
+                } => {
+                    if let Some((_, run)) = runs.iter_mut().find(|(id, _)| id == tool_use_id) {
+                        run.result = Some((content.clone(), *is_error));
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    runs.into_iter().map(|(_, run)| run).collect()
+}
+
+fn one_line(text: &str, limit: usize) -> String {
+    let line = text
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .unwrap_or("");
+    let clipped: String = line.chars().take(limit).collect();
+    if line.chars().count() > limit {
+        format!("{clipped}…")
+    } else {
+        clipped
+    }
+}
+
+fn handle_tools(session: &AgentSession, arg: &str) -> ParityCommandResult {
+    let arg = arg.trim();
+    let (action, rest) = arg.split_once(char::is_whitespace).unwrap_or((arg, ""));
+    let message = match action {
+        "" => {
+            let tools = session.effective_tool_definitions();
+            let mut lines = vec![format!(
+                "Tools the model can call in this session ({}):",
+                tools.len()
+            )];
+            for tool in &tools {
+                lines.push(format!(
+                    "  {:<24} {}",
+                    tool.name,
+                    one_line(&tool.description, 90)
+                ));
+            }
+            lines.push(
+                "/tools <name> shows a tool's parameters · /tools log lists the calls made · /tools retry reruns the last failed call"
+                    .to_string(),
+            );
+            lines.join("\n")
+        }
+        "log" => {
+            let runs = session_tool_runs(session);
+            if runs.is_empty() {
+                "No tool calls in this session yet.".to_string()
+            } else if let Ok(index) = rest.trim().parse::<usize>() {
+                match runs.get(index.wrapping_sub(1)) {
+                    Some(run) => format!(
+                        "{index}. {}\nInput:\n{}\nResult{}:\n{}",
+                        run.name,
+                        serde_json::to_string_pretty(&run.input).unwrap_or_default(),
+                        match run.result {
+                            Some((_, true)) => " (failed)",
+                            _ => "",
+                        },
+                        run.result
+                            .as_ref()
+                            .map(|(content, _)| content.as_str())
+                            .unwrap_or("(no result recorded)")
+                    ),
+                    None => format!("There is no call {index}; /tools log lists {}.", runs.len()),
+                }
+            } else {
+                let mut lines = vec![format!("Tool calls in this session ({}):", runs.len())];
+                for (index, run) in runs.iter().enumerate() {
+                    let outcome = match &run.result {
+                        Some((content, true)) => format!("failed: {}", one_line(content, 70)),
+                        Some((content, false)) => format!("ok: {}", one_line(content, 70)),
+                        None => "no result".to_string(),
+                    };
+                    lines.push(format!(
+                        "  {:>3}. {:<20} {:<40} {}",
+                        index + 1,
+                        run.name,
+                        one_line(&run.input.to_string(), 40),
+                        outcome
+                    ));
+                }
+                lines.push("/tools log <n> shows one call in full.".to_string());
+                lines.join("\n")
+            }
+        }
+        "retry" => {
+            return match session_tool_runs(session)
+                .into_iter()
+                .rev()
+                .find(|run| matches!(run.result, Some((_, true))))
+            {
+                Some(run) => ParityCommandResult::Prompt(format!(
+                    "The {} tool call with input {} failed. Run it again now, adjusting the input only if the error shows the input was wrong, and report the result.",
+                    run.name, run.input
+                )),
+                None => ParityCommandResult::SystemMessage(
+                    "No failed tool call in this session to retry.".to_string(),
+                ),
+            };
+        }
+        name => match session
+            .effective_tool_definitions()
+            .into_iter()
+            .find(|tool| tool.name == name)
+        {
+            Some(tool) => format!(
+                "{}\n\n{}\n\nParameters:\n{}",
+                tool.name,
+                tool.description,
+                serde_json::to_string_pretty(&tool.input_schema).unwrap_or_default()
+            ),
+            None => format!("No tool named {name} in this session. /tools lists them."),
+        },
+    };
+    ParityCommandResult::SystemMessage(
+        crate::terminal_text::sanitize_terminal_text(&message).into_owned(),
     )
 }
 
@@ -1201,7 +1435,7 @@ pub fn pr_comments_prompt(arg: &str) -> String {
         arg.trim()
     };
     format!(
-        "Inspect actionable review comments for {scope}. Summarize unresolved comments, identify required code changes, then implement the fixes if repository access is available."
+        "Fetch the review comments on {scope} with the GitHub CLI: `gh pr view <pr> --json number,url,headRepository,reviewDecision` names it, `gh api repos/{{owner}}/{{repo}}/pulls/<number>/comments` returns the line comments and `gh api repos/{{owner}}/{{repo}}/issues/<number>/comments` the conversation. Show each unresolved comment with its file, line and author, identify the code changes it asks for, then implement them if repository access is available. If gh is missing or not signed in, say so and stop."
     )
 }
 

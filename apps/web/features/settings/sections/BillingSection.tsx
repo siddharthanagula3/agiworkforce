@@ -47,6 +47,7 @@ import { AgiMark } from '@shared/components/agi/AgiMark';
 import { SettingsPageLink } from '../components/SettingsSectionLink';
 import { EnterpriseCollectionBanner } from '../components/EnterpriseCollectionBanner';
 import { toUserMessage } from '@/lib/user-error-message';
+import { HelpArticleLink } from '@/features/support/components/HelpArticleLink';
 
 interface PaymentMethod {
   id: string;
@@ -379,7 +380,9 @@ export function BillingSection() {
             ? 'Resolve the current billing status in Manage billing before changing plans.'
             : 'Billing ownership is not verified. Refresh your account before changing plans.';
   const hasStripeBilling = billingInitialized && billingSource === 'stripe';
-  const canBuyTopUps = isManagedPaid && billingSource === 'stripe';
+  const canBuyTopUps =
+    isManagedPaid &&
+    (billingSource === 'stripe' || billingSource === 'apple' || billingSource === 'google');
   const readsPlanState = hasStripeBilling && isManagedPaid;
   const endingSoon = planState
     ? planState.cancelAt !== null
@@ -641,6 +644,9 @@ export function BillingSection() {
         <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>
           Your plan, credits, and payment details.
         </p>
+        <div style={{ marginTop: 'var(--space-2)' }}>
+          <HelpArticleLink docId="billing-and-plans" label="How plans and billing work" />
+        </div>
       </div>
 
       <EnterpriseCollectionBanner />
@@ -939,7 +945,7 @@ export function BillingSection() {
 
       {canBuyTopUps || isFreeTier ? <TopUpPanel tier={tier} canBuy={canBuyTopUps} /> : null}
 
-      {canBuyTopUps ? (
+      {canBuyTopUps && billingSource === 'stripe' ? (
         <AutoReloadPanel
           onAddPaymentMethod={() => void openPortal()}
           portalPending={portalPending}

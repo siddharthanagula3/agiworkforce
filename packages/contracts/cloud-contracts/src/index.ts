@@ -36,6 +36,7 @@ export * from './tool-approval-resume';
 export * from './cloud-code-sessions';
 export * from './managed-cloud-code-client';
 export * from './cloud-code-transcript';
+export * from './local-code-session-activity';
 export * from './device-steps';
 export * from './connectors';
 export * from './capability-handshake';

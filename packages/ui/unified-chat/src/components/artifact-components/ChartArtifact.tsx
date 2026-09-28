@@ -1,15 +1,22 @@
 import { type AgiThemeMode } from '@agiworkforce/design-tokens';
-import { BarChart3 } from 'lucide-react';
-import React, { Suspense, lazy, useEffect, useMemo, useState } from 'react';
+import { BarChart3, Download } from 'lucide-react';
+import React, { Suspense, lazy, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { cn } from '../../lib/utils';
 import type { Artifact } from '../../lib/types';
-import { CHART_ROW_CAP, chartChrome, chartSeriesPalette, parseChartArtifact } from './chart-spec';
+import {
+  CHART_ROW_CAP,
+  chartChrome,
+  chartSeriesPalette,
+  parseChartArtifact,
+  summarizeChart,
+} from './chart-spec';
 
 /** recharts is heavier than every other artifact renderer in this package and a
  *  chart is rare, so the drawing surface is a separate chunk. */
 const ChartCanvas = lazy(() => import('./ChartCanvas'));
 
 const CHART_HEIGHT_PX = 320;
+const EXPORT_SCALE = 2;
 const DARK_CLASS = 'dark';
 const LIGHT_CLASS = 'light';
 const THEME_ATTR = 'data-theme';
@@ -79,6 +86,56 @@ function useReducedMotion(): boolean {
   return reduced;
 }
 
+function chartFileName(name: string): string {
+  const slug = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return `${slug || 'chart'}.png`;
+}
+
+async function downloadChartPng(
+  container: HTMLElement,
+  background: string,
+  fileName: string,
+): Promise<void> {
+  const svg = container.querySelector('svg');
+  if (!svg) throw new Error('The chart has not been drawn yet.');
+  const { width, height } = svg.getBoundingClientRect();
+  const clone = svg.cloneNode(true) as SVGSVGElement;
+  clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+  clone.setAttribute('width', String(width));
+  clone.setAttribute('height', String(height));
+  const source = new XMLSerializer().serializeToString(clone);
+  const svgUrl = URL.createObjectURL(new Blob([source], { type: 'image/svg+xml' }));
+  try {
+    const image = new Image();
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error('The chart could not be converted to an image.'));
+      image.src = svgUrl;
+    });
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(width * EXPORT_SCALE);
+    canvas.height = Math.round(height * EXPORT_SCALE);
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('The chart could not be converted to an image.');
+    context.fillStyle = background;
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    const png = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+    if (!png) throw new Error('The chart could not be converted to an image.');
+    const pngUrl = URL.createObjectURL(png);
+    const link = document.createElement('a');
+    link.href = pngUrl;
+    link.download = fileName;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(pngUrl), 60_000);
+  } finally {
+    URL.revokeObjectURL(svgUrl);
+  }
+}
+
 function ChartFallback({
   reason,
   content,
@@ -142,6 +199,9 @@ export function ChartArtifact({ artifact, className, isDark }: ChartArtifactProp
   const parsed = useMemo(() => parseChartArtifact(artifact.content), [artifact.content]);
   const palette = useMemo(() => chartSeriesPalette(mode), [mode]);
   const chrome = useMemo(() => chartChrome(mode), [mode]);
+  const summaryId = useId();
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   if (!parsed.ok) {
     return (
@@ -150,13 +210,20 @@ export function ChartArtifact({ artifact, className, isDark }: ChartArtifactProp
   }
 
   const { kind, rows, series, totalRows } = parsed.spec;
+  const chartName = parsed.spec.title || artifact.title?.trim() || `${kind} chart`;
 
   return (
     <div
       className={cn('flex flex-col bg-background border rounded-lg overflow-hidden', className)}
       data-testid="chart-artifact"
       data-chart-kind={kind}
+      role="figure"
+      aria-label={chartName}
+      aria-describedby={summaryId}
     >
+      <p id={summaryId} className="sr-only" data-testid="chart-artifact-summary">
+        {summarizeChart(parsed.spec, artifact.title)}
+      </p>
       <div className="flex items-center justify-between px-2 py-1.5 border-b bg-muted/30">
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1.5 px-2 py-1 rounded-compact bg-primary/10 text-primary text-xs font-medium">
@@ -167,9 +234,32 @@ export function ChartArtifact({ artifact, className, isDark }: ChartArtifactProp
             {rows.length} {rows.length === 1 ? 'point' : 'points'} · {series.length} series
           </span>
         </div>
+        <button
+          type="button"
+          onClick={() => {
+            if (!canvasRef.current) return;
+            setExportError(null);
+            downloadChartPng(canvasRef.current, chrome.surface, chartFileName(chartName)).catch(
+              (error: unknown) =>
+                setExportError(
+                  error instanceof Error ? error.message : 'The chart could not be downloaded.',
+                ),
+            );
+          }}
+          className="flex h-7 items-center gap-1.5 rounded-compact px-2 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground pointer-coarse:h-11"
+          aria-label={`Download ${chartName} as PNG`}
+        >
+          <Download className="h-3.5 w-3.5" aria-hidden="true" />
+          <span>PNG</span>
+        </button>
       </div>
+      {exportError ? (
+        <p role="alert" className="border-b px-3 py-1.5 text-xs text-danger-text">
+          {exportError}
+        </p>
+      ) : null}
 
-      <div className="p-3" style={{ height: CHART_HEIGHT_PX }}>
+      <div ref={canvasRef} className="p-3" style={{ height: CHART_HEIGHT_PX }}>
         <ChartErrorBoundary
           resetKey={artifact.content}
           fallback={

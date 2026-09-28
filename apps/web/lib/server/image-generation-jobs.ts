@@ -29,6 +29,8 @@ export interface ImageGenerationPlan {
   transparentBackground: boolean;
   sourceAssetId?: string;
   maskAssetId?: string;
+  referenceAssetIds?: string[];
+  referencesInline?: boolean;
 }
 
 export interface ImageGenerationJob {
@@ -151,6 +153,10 @@ function parsePlan(value: unknown): ImageGenerationPlan {
     ...(plan?.negativePrompt ? { negativePrompt: plan.negativePrompt } : {}),
     ...(plan?.sourceAssetId ? { sourceAssetId: plan.sourceAssetId } : {}),
     ...(plan?.maskAssetId ? { maskAssetId: plan.maskAssetId } : {}),
+    ...(Array.isArray(plan?.referenceAssetIds) && plan.referenceAssetIds.length > 0
+      ? { referenceAssetIds: plan.referenceAssetIds }
+      : {}),
+    ...(plan?.referencesInline === true ? { referencesInline: true } : {}),
   };
 }
 

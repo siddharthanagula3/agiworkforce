@@ -6,94 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S2.04: Agentic work product page.
-
-- Done when: A public page presents agentic work (AGI Work) and a way to start; signed-in visitors reach the product without error.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Signed-in visit to /agi-work is rewritten to /chat without the identity provider (same defect as /), so it crashes instead of opening AGI Work. | states |
-
-Code: `apps/web/app/sitemap-page/page.tsx:26-26`, `apps/web/app/agi-work/page.tsx:55-55`, `apps/web/features/marketing/components/system/nav.ts:60-64`, `apps/web/proxy.ts:110-112`
-
-## S2.05: Coding-agent product page.
-
-- Done when: A public page presents the coding agent (AGI Code: CLI + VS Code) and how to get it.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Signed-in visit to /agi-code is rewritten to /code without the identity provider (same defect as /), so it crashes instead of opening Code. | states |
-
-Code: `apps/web/app/cli/page.tsx:103-103`, `apps/web/app/agi-code/page.tsx:21-21`, `apps/web/proxy.ts:114-116`
-
-## S2.09: Desktop application page.
-
-- Done when: A public page describes the desktop app truthfully (what it does, availability, download).
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Copy contradicts behaviour: /desktop says "Every device step asks" but computer use takes one grant for the whole session; nav still says Desktop does local models and keys though the page says it is cloud-only. | ui |
-
-Code: `apps/web/features/marketing/components/system/nav.ts:31-35`, `apps/web/app/desktop/page.tsx:137-148`, `apps/web/app/desktop/page.tsx:64-64`, `apps/desktop/electron/runtime/permissionManager.ts:299-305`
-
-## S2.16: Skill directory.
-
-- Done when: A logged-out visitor can browse a public directory of skills.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Public /skills shows only a sign-in prompt; skills are listed only inside signed-in settings. Add a logged-out skill listing. | ui |
-
-Code: `apps/web/app/skills/page.tsx:12-14`, `apps/web/app/skills/SignedOutSkills.tsx:9-11`
-
-## S2.21: Individual template preview pages.
-
-- Done when: Each template has its own previewable page (addressable URL).
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Template previews open only as a drawer inside /gallery; there is no per-template page or shareable URL. | ui |
-
-Code: `apps/web/app/gallery/GalleryClient.tsx:1509-1517`, `apps/web/app/gallery/GalleryClient.tsx:1520-1523`
-
-## S2.22: Consumer pricing page.
-
-- Done when: A public pricing page lists individual plans with prices and lets a visitor buy one; its plan copy matches enforcement.
-- Wave: 2
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Paid checkout refuses anyone without a beta_redemptions waitlist code; plan rows say Chrome needs a Pro-tier plan though the server lets Free use Chrome (managed_chat). | flag-off, ui |
-
-Code: `apps/web/features/marketing/components/system/nav.ts:158-158`, `apps/web/app/pricing/page.tsx:1613-1615`, `apps/web/app/api/checkout/route.ts:208-220`, `apps/web/app/pricing/page.tsx:216-218`
-
-## S2.23: Team pricing page.
-
-- Done when: A public page shows Team per-seat pricing and lets a buyer choose seats and purchase.
-- Wave: 2
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Team checkout goes through the same waitlist gate: a buyer without a beta_redemptions code is refused. | flag-off |
-
-Code: `apps/web/app/teams/page.tsx:50-50`, `apps/web/app/pricing/page.tsx:358-360`, `apps/web/app/api/checkout/route.ts:208-220`
-
-## S2.25: Plan-comparison table.
-
-- Done when: A plan-comparison table lists plans against features, and each cell matches enforcement.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Developer-surfaces row lists Chrome as a Pro-tier feature ("No managed access" on Free) while the server gates Chrome as managed_chat, which Free has; fix the row. | ui |
-
-Code: `apps/web/app/pricing/page.tsx:126-142`, `apps/web/app/pricing/page.tsx:216-218`, `apps/web/lib/free-chat-surface-policy.ts:91-98`
-
 ## S2.28: Changelog and release notes.
 
 - Done when: A public changelog lists dated releases.
@@ -106,17 +18,6 @@ Code: `apps/web/app/pricing/page.tsx:126-142`, `apps/web/app/pricing/page.tsx:21
 
 Code: `apps/cli/src/claude_parity.rs:194-196`, `apps/cli/src/claude_parity.rs:1138-1146`, `apps/cli/src/tui/tui_app.rs:4090-4091`
 
-## S2.29: Product announcement pages.
-
-- Done when: Individual product announcements have their own public pages.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Blog has no posts and /blog/[slug] always 404s; announcements exist only as entries on the changelog page. | ui |
-
-Code: `apps/web/app/blog/[slug]/page.tsx:1-5`, `apps/web/app/blog/page.tsx:39-41`
-
 ## S2.35: Contact and support page.
 
 - Done when: A contact / support page lets a visitor reach the company.
@@ -125,14 +26,3 @@ Code: `apps/web/app/blog/[slug]/page.tsx:1-5`, `apps/web/app/blog/page.tsx:39-41
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-
-## S2.39: Regional and language selectors.
-
-- Done when: A visitor can choose language and region on the public site.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Public pages have no language or region selector and marketing copy is English-only; language is changeable only in signed-in Settings and price currency is picked automatically. | ui |
-
-Code: `apps/web/features/settings/sections/GeneralSection.tsx:854-854`, `apps/web/app/pricing/page.tsx:403-403`

@@ -16,12 +16,17 @@ import {
   type UserCustomConnectorSummary,
 } from '@/lib/user-connector-tools';
 import { findDirectoryTargetByRemoteUrl } from '@/lib/connectors/mcp-directory-targets';
+import { mcpServerPublishesProtectedResource } from '@/lib/connectors/mcp-discovery';
+import { disconnectConnectorOAuthGrant } from '@/lib/connectors/oauth-access';
+import { resolveClientRedirectUri } from '@/lib/connectors/mcp-client-metadata';
+import { getUserConnectorOAuthGrantSummaries } from '@/lib/connectors/oauth-store';
 import {
   assertConnectorToolCapacity,
   assertCustomConnectorCapacity,
   clearConnectorToolPermissions,
   customConnectorId,
   deleteCustomConnectorRows,
+  edgeBlockedMessage,
   insertCustomConnector,
   McpProbeError,
   probeMcpServer,
@@ -38,12 +43,19 @@ const NAME_MAX_LENGTH = 200;
 const AUTH_TOKEN_MAX_LENGTH = 4096;
 const AUDIT_RESOURCE_TYPE = 'custom_mcp_connector';
 const AUDIT_SOURCE = 'custom_mcp';
+const OAUTH_CLIENT_ID_MAX_LENGTH = 512;
+const OAUTH_CLIENT_SECRET_MAX_LENGTH = 4096;
+const OAUTH_CLIENT_WITH_TOKEN_MESSAGE =
+  'Use either an access token or OAuth client credentials for a custom connector, not both.';
+const OAUTH_SECRET_WITHOUT_ID_MESSAGE = 'An OAuth client secret needs its OAuth client ID.';
 
 async function withDirectoryLink(
   summary: UserCustomConnectorSummary,
-): Promise<UserCustomConnectorSummary & { directoryId?: string }> {
+  signedIn: ReadonlySet<string>,
+): Promise<UserCustomConnectorSummary & { directoryId?: string; signedIn: boolean }> {
   const linked = await findDirectoryTargetByRemoteUrl(summary.url);
-  return linked ? { ...summary, directoryId: linked.connectorId } : summary;
+  const signIn = { ...summary, signedIn: signedIn.has(customConnectorId(summary.shortId)) };
+  return linked ? { ...signIn, directoryId: linked.connectorId } : signIn;
 }
 
 async function handleGet(request: NextRequest) {
@@ -53,9 +65,17 @@ async function handleGet(request: NextRequest) {
   if (rateLimitResponse) return rateLimitResponse;
 
   const summaries = await getUserCustomConnectorSummaries(db, userId);
-  const connectors = await Promise.all(summaries.map(withDirectoryLink));
+  const signedIn = new Set(
+    (await getUserConnectorOAuthGrantSummaries(userId))
+      .filter((grant) => !grant.needsReauthorization)
+      .map((grant) => grant.connectorId),
+  );
+  const connectors = await Promise.all(
+    summaries.map((summary) => withDirectoryLink(summary, signedIn)),
+  );
 
-  return NextResponse.json({ connectors });
+  const oauthRedirectUri = resolveClientRedirectUri();
+  return NextResponse.json({ connectors, ...(oauthRedirectUri ? { oauthRedirectUri } : {}) });
 }
 
 interface CreateBody {
@@ -63,6 +83,8 @@ interface CreateBody {
   url?: string;
   transport?: 'sse' | 'streamable-http';
   authToken?: string;
+  oauthClientId?: string;
+  oauthClientSecret?: string;
 }
 
 async function handlePost(request: NextRequest) {
@@ -125,7 +147,23 @@ async function handlePost(request: NextRequest) {
   }
   const credential = authToken ? bearerCredential(authToken) : null;
 
-  let probe: McpProbeResult;
+  const oauthClientId = typeof body.oauthClientId === 'string' ? body.oauthClientId.trim() : '';
+  const oauthClientSecret =
+    typeof body.oauthClientSecret === 'string' ? body.oauthClientSecret.trim() : '';
+  if (
+    oauthClientId.length > OAUTH_CLIENT_ID_MAX_LENGTH ||
+    oauthClientSecret.length > OAUTH_CLIENT_SECRET_MAX_LENGTH
+  ) {
+    throw createError.validation('OAuth client credentials are too long');
+  }
+  if (oauthClientSecret && !oauthClientId) {
+    throw createError.validation(OAUTH_SECRET_WITHOUT_ID_MESSAGE);
+  }
+  if (credential && oauthClientId) {
+    throw createError.validation(OAUTH_CLIENT_WITH_TOKEN_MESSAGE);
+  }
+
+  let probe: McpProbeResult | null = null;
   try {
     probe = await probeMcpServer({
       serverName: name,
@@ -135,13 +173,20 @@ async function handlePost(request: NextRequest) {
       authorizationContext: `user:${userId}:custom-url:${url}`,
     });
   } catch (error) {
-    if (error instanceof McpProbeError) {
-      throw createError.serviceUnavailable(`Failed to connect to MCP server: ${error.message}`);
+    if (!(error instanceof McpProbeError)) throw error;
+    if (!error.authChallenge || credential) {
+      throw createError.serviceUnavailable(
+        error.edgeBlocked
+          ? edgeBlockedMessage(name)
+          : `Failed to connect to MCP server: ${error.message}`,
+      );
     }
-    throw error;
   }
 
-  assertConnectorToolCapacity(capacity.planTier, probe.toolCount);
+  const signInRequired =
+    !credential && (probe === null || (await mcpServerPublishesProtectedResource(url)));
+
+  if (probe) assertConnectorToolCapacity(capacity.planTier, probe.toolCount);
 
   const saved = await insertCustomConnector(db, {
     userId,
@@ -150,6 +195,10 @@ async function handlePost(request: NextRequest) {
     transport,
     credentialEnc: credential ? sealCustomConnectorCredential(credential) : null,
     connectorLimit: capacity.connectorLimit,
+    signInRequired,
+    oauthClient: oauthClientId
+      ? { clientId: oauthClientId, clientSecret: oauthClientSecret || null }
+      : null,
   });
 
   await recordAuditEvent({
@@ -163,6 +212,8 @@ async function handlePost(request: NextRequest) {
       connectorId: customConnectorId(saved.short_id),
       transport: saved.transport,
       source: AUDIT_SOURCE,
+      signInRequired,
+      oauthClientSupplied: oauthClientId.length > 0,
     },
   });
 
@@ -178,9 +229,14 @@ async function handlePost(request: NextRequest) {
         createdAt: view.createdAt,
         updatedAt: view.updatedAt,
       },
-      toolCount: probe.toolCount,
-      capabilityCounts: probe.capabilityCounts,
-      protocolEra: probe.protocolEra,
+      signInRequired,
+      ...(probe
+        ? {
+            toolCount: probe.toolCount,
+            capabilityCounts: probe.capabilityCounts,
+            protocolEra: probe.protocolEra,
+          }
+        : {}),
     },
     { status: 201 },
   );
@@ -205,6 +261,7 @@ async function handleDelete(request: NextRequest) {
 
   for (const row of deleted) {
     await evictCustomConnectorCaches(userId, row.id);
+    await disconnectConnectorOAuthGrant(userId, customConnectorId(row.short_id));
     await clearConnectorToolPermissions(db, userId, customConnectorId(row.short_id));
     await recordAuditEvent({
       userId,

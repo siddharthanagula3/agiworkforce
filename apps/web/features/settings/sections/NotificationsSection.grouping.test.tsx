@@ -128,6 +128,7 @@ describe('NotificationsSection grouping', () => {
         browserReplyReady: true,
         emailScheduleDone: true,
         mobilePushScheduleDone: true,
+        emailSecurityAlerts: true,
       }),
     );
   });
@@ -154,6 +155,7 @@ describe('NotificationsSection grouping', () => {
         browserReplyReady: true,
         emailScheduleDone: false,
         mobilePushScheduleDone: false,
+        emailSecurityAlerts: true,
       }),
     );
   });

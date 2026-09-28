@@ -96,7 +96,7 @@ function ServerConfigDialog({ server, open, onClose, onSave }: ServerConfigDialo
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <div className="p-6">
-        <h2 className="text-xl font-semibold mb-4">Configure {server.name}</h2>
+        <h2 className="text-h2 mb-4">Configure {server.name}</h2>
 
         <div className="space-y-4">
           <div>
@@ -189,7 +189,7 @@ function ServerCard({
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-2">
             <Server className="w-5 h-5 text-blue-500" />
-            <h3 className="font-semibold text-lg">{server.name}</h3>
+            <h3 className="text-h3">{server.name}</h3>
             {getStatusBadge()}
           </div>
 
@@ -413,7 +413,7 @@ export function MCPServerManager() {
       <div className="mb-6">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h1 className="text-2xl font-bold">Tool Manager</h1>
+            <h1 className="text-h1">Tool Manager</h1>
             <p className="text-gray-600 mt-1">
               Manage integrations and connect external tools to extend AGI Workforce
             </p>
@@ -445,7 +445,7 @@ export function MCPServerManager() {
 
       <div className="mb-8">
         <div className="mb-3">
-          <h2 className="text-lg font-semibold">Curated Tool Marketplace</h2>
+          <h2 className="text-h3">Curated Tool Marketplace</h2>
           <p className="text-sm text-gray-600">
             Enable the core tools we recommend for automation.
           </p>
@@ -490,7 +490,7 @@ export function MCPServerManager() {
           ) : servers.length === 0 ? (
             <div className="text-center py-12">
               <Server className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No Tools Connected</h3>
+              <h3 className="text-h3 mb-2">No Tools Connected</h3>
               <p className="text-gray-600 mb-4">Get started by browsing the tool registry</p>
               <Button className="flex items-center gap-2">
                 <Download className="w-4 h-4" />
@@ -522,7 +522,7 @@ export function MCPServerManager() {
           {connectedServers.length === 0 ? (
             <div className="text-center py-12">
               <PowerOff className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No Running Servers</h3>
+              <h3 className="text-h3 mb-2">No Running Servers</h3>
               <p className="text-gray-600">Start a server from the Installed Servers tab</p>
             </div>
           ) : (
@@ -550,7 +550,7 @@ export function MCPServerManager() {
           {availableServers.length === 0 ? (
             <div className="text-center py-12">
               <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold mb-2">All Servers Running</h3>
+              <h3 className="text-h3 mb-2">All Servers Running</h3>
               <p className="text-gray-600">All installed servers are currently running</p>
             </div>
           ) : (

@@ -31,7 +31,7 @@ export const NAV_GROUPS: readonly NavGroupDefinition[] = [
       {
         href: '/desktop',
         label: 'AGI Desktop',
-        description: 'Local models, keys and connectors on your machine',
+        description: 'Cloud AI on your desktop, with the folders and screen you allow',
       },
       { href: '/cli', label: 'AGI CLI', description: 'A Rust agent for the shell, sandboxed' },
       {

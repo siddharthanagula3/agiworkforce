@@ -6,6 +6,7 @@ import type {
 import type { InteractiveCard } from '@agiworkforce/types';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import type { ManagedQuotaRecovery } from '../cloud-bridge/freeTrialClient';
+import { t, tPlural } from '../../i18n';
 
 export interface SidePanelChatMessage {
   id: string;
@@ -203,19 +204,15 @@ export function trimChatMessages(messages: SidePanelChatMessage[], maximum: numb
  */
 const MAX_STATED_RETRY_AFTER_SECONDS = 86_400;
 
-function counted(value: number, unit: string): string {
-  return `${value} ${unit}${value === 1 ? '' : 's'}`;
-}
-
 export function statedWait(retryAfterSeconds: unknown): string | undefined {
   if (typeof retryAfterSeconds !== 'number' || !Number.isFinite(retryAfterSeconds))
     return undefined;
   const seconds = Math.round(retryAfterSeconds);
   if (seconds < 1 || seconds > MAX_STATED_RETRY_AFTER_SECONDS) return undefined;
-  if (seconds < 90) return `about ${counted(seconds, 'second')}`;
+  if (seconds < 90) return tPlural('spWaitSeconds', seconds);
   const minutes = Math.round(seconds / 60);
-  if (minutes < 90) return `about ${counted(minutes, 'minute')}`;
-  return `about ${counted(Math.round(seconds / 3600), 'hour')}`;
+  if (minutes < 90) return tPlural('spWaitMinutes', minutes);
+  return tPlural('spWaitHours', Math.round(seconds / 3600));
 }
 
 export interface StreamFailureDetail {
@@ -235,9 +232,10 @@ export interface StreamFailureDetail {
  */
 export function streamFailureText(errorText: string, detail: StreamFailureDetail = {}): string {
   const wait = statedWait(detail.retryAfterSeconds);
-  const withWait = wait && !/\d/.test(errorText) ? `${errorText} Try again in ${wait}.` : errorText;
+  const withWait =
+    wait && !/\d/.test(errorText) ? t('spStreamTryAgainIn', [errorText, wait]) : errorText;
   const withReset = detail.resetLabel ? `${withWait} ${detail.resetLabel}.` : withWait;
-  return detail.requestId ? `${withReset} Reference: ${detail.requestId}` : withReset;
+  return detail.requestId ? t('spStreamReference', [withReset, detail.requestId]) : withReset;
 }
 
 export function applyStreamFailure(

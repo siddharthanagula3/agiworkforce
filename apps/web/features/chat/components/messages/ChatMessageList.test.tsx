@@ -317,7 +317,7 @@ describe('ChatMessageList rendering', () => {
       'mx-auto',
       'w-full',
       'max-w-3xl',
-      'px-4',
+      'px-gutter-compact',
     );
   });
 
@@ -539,7 +539,7 @@ describe('ChatMessageList rendering', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByRole('status')).toHaveTextContent('Response complete. all done');
+      expect(screen.getByRole('status')).toHaveTextContent('Response complete');
     });
   });
 

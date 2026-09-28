@@ -48,19 +48,19 @@ const CLARIFY_OFFER_CODE_FENCE_RE = /```/;
 export interface ClarifyOfferContext {
   userMessage: string;
   hasAttachment: boolean;
-  webSearch: boolean;
   research: boolean;
+  agiWork?: boolean;
 }
 
 export function shouldOfferClarifyTool(context: ClarifyOfferContext): boolean {
-  if (context.webSearch || context.research) return false;
+  if (context.research) return false;
   const trimmed = context.userMessage.trim();
   if (trimmed.length === 0) return false;
   if (trimmed.length > CLARIFY_OFFER_MAX_MESSAGE_LENGTH) return false;
   if (context.hasAttachment) return false;
   if (CLARIFY_OFFER_URL_RE.test(trimmed)) return false;
   if (CLARIFY_OFFER_CODE_FENCE_RE.test(trimmed)) return false;
-  if (CLARIFY_OFFER_OPENING_VERB_RE.test(trimmed)) return false;
+  if (!context.agiWork && CLARIFY_OFFER_OPENING_VERB_RE.test(trimmed)) return false;
   return true;
 }
 
@@ -210,8 +210,7 @@ export function createClarifyToolDefinition() {
 }
 
 export type ClarifyToolOutcome =
-  | { ok: true; content: string; card: InteractiveCard }
-  | { ok: false; content: string };
+  { ok: true; content: string; card: InteractiveCard } | { ok: false; content: string };
 
 export function executeClarifyTool(
   args: Record<string, unknown>,

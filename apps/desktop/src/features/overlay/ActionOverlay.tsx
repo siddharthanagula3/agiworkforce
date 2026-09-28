@@ -75,7 +75,7 @@ function TypingOverlay({ effect }: { effect: TypingEffect }) {
       className="pointer-events-none absolute -translate-x-1/2 -translate-y-full transform"
       style={{ left: x, top: y }}
     >
-      <div className="rounded-md bg-background/90 px-3 py-1 text-xs font-medium text-foreground shadow-xl ring-1 ring-primary/40 backdrop-blur">
+      <div className="rounded-md bg-background/90 px-3 py-1 text-xs font-medium text-foreground shadow-e4 ring-1 ring-primary/40 backdrop-blur">
         {effect.text}
       </div>
       <div className="mx-auto mt-1 h-3 w-px animate-[overlay-caret_700ms_step-end_infinite] bg-primary/70" />

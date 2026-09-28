@@ -35,9 +35,11 @@ import {
 import {
   agiWorkPlanSentence,
   isAgiWorkGoalEntry,
+  isAgiWorkPlanOverviewEntry,
   isAgiWorkPlanEntry,
 } from '../lib/agi-work-progress';
 import { ConnectorConnectCard } from './ConnectorConnectCard';
+import { translateUiPlural } from '@agiworkforce/ui';
 
 const ACTIVITY_PAGE_SIZE = 40;
 const TOKEN_NUMBER_FORMAT = new Intl.NumberFormat('en-US');
@@ -64,6 +66,7 @@ export interface AgentActivityTimelineProps {
   className?: string;
   defaultExpanded?: boolean;
   onApprove?: (toolCallId: string) => void;
+  onApproveForChat?: (toolCallId: string) => void;
   onReject?: (toolCallId: string) => void;
   onCancel?: (toolCallId: string) => void;
   onResend?: (toolCallId: string) => void;
@@ -128,6 +131,7 @@ function lastStepFailed(activity: Pick<AgentActivityState, 'entries'>): boolean 
     if (!entry) continue;
     if (entry.kind === 'error') return true;
     if (entry.kind !== 'tool' && entry.kind !== 'progress') continue;
+    if (isAgiWorkPlanOverviewEntry(entry)) continue;
     if (entry.status === 'pending' || entry.status === 'running') continue;
     return entry.status === 'failed';
   }
@@ -162,7 +166,10 @@ const WEB_SEARCH_CANCELLED_SUMMARY = 'Search stopped';
 const WEB_SEARCH_IN_PROGRESS_PREFIX = 'Searching';
 
 function sourceCountLabel(sourceCount: number): string {
-  return `${sourceCount} source${sourceCount === 1 ? '' : 's'}`;
+  return translateUiPlural('chat', 'counts.sources', sourceCount, {
+    one: '{{count}} source',
+    other: '{{count}} sources',
+  });
 }
 
 function webSearchCompletedLabel(sourceCount: number): string {
@@ -596,14 +603,14 @@ function sourcesFoundLabel(count: number, query: string | undefined): string {
 function ProgressRow({ entry }: { entry: Extract<AgentActivityEntry, { kind: 'progress' }> }) {
   return (
     <div className="relative pl-8 py-1.5">
-      <span className="absolute left-0 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-background text-muted-foreground">
+      <span className="absolute left-0 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--chat-surface-base)] text-muted-foreground">
         {entry.status === 'running' ? (
           <Loader2
             className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none"
             aria-hidden="true"
           />
         ) : entry.status === 'failed' || entry.status === 'cancelled' ? (
-          <AlertCircle className="h-3.5 w-3.5 text-danger" aria-hidden="true" />
+          <AlertCircle className="h-3.5 w-3.5 text-danger-text" aria-hidden="true" />
         ) : (
           <Clock3 className="h-3.5 w-3.5" aria-hidden="true" />
         )}
@@ -692,8 +699,8 @@ function StaticRow({
 
   return (
     <div className="relative pl-8 py-1.5">
-      <AlertCircle className="absolute left-0 top-2 h-4 w-4 text-danger" aria-hidden="true" />
-      <p className="break-words text-sm text-danger">{entry.message}</p>
+      <AlertCircle className="absolute left-0 top-2 h-4 w-4 text-danger-text" aria-hidden="true" />
+      <p className="break-words text-sm text-danger-text">{entry.message}</p>
       {entry.retryable && (
         <p className="mt-0.5 text-caption text-muted-foreground">Retry available</p>
       )}
@@ -763,7 +770,7 @@ function RunStatusIcon({
     return <PauseCircle className="h-4 w-4" aria-hidden="true" />;
   }
   if (status === 'failed') {
-    return <AlertCircle className="h-4 w-4 text-danger" aria-hidden="true" />;
+    return <AlertCircle className="h-4 w-4 text-danger-text" aria-hidden="true" />;
   }
   if (status === 'cancelled') {
     return <Square className="h-4 w-4 text-muted-foreground" aria-hidden="true" />;
@@ -780,6 +787,7 @@ export function AgentActivityTimeline({
   className,
   defaultExpanded = false,
   onApprove,
+  onApproveForChat,
   onReject,
   onCancel,
   onResend,
@@ -920,7 +928,10 @@ export function AgentActivityTimeline({
   // echo it back.
   const planLineEntryIndex = planSentence ? activity.entries.findIndex(isAgiWorkPlanEntry) : -1;
   const rowEntries = activity.entries.filter(
-    (entry, index) => index !== planLineEntryIndex && !isAgiWorkGoalEntry(entry),
+    (entry, index) =>
+      index !== planLineEntryIndex &&
+      !isAgiWorkGoalEntry(entry) &&
+      !isAgiWorkPlanOverviewEntry(entry),
   );
   const visibleEntryCount =
     entryVisibility.turnId === activity.turnId ? entryVisibility.count : ACTIVITY_PAGE_SIZE;
@@ -1068,6 +1079,7 @@ export function AgentActivityTimeline({
                     }
                     expired={isApprovalExpired?.(entry.toolCallId) ?? false}
                     onApprove={onApprove}
+                    onApproveForChat={onApproveForChat}
                     onReject={onReject}
                     onCancel={onCancel}
                     onResend={onResend}

@@ -100,7 +100,10 @@
     "noArchived": "Keine archivierten Chats",
     "noConversations": "Noch keine Unterhaltungen",
     "showActive": "Zurück zu aktiven Chats",
-    "showArchived": "Archivierte Chats anzeigen ({{count}})"
+    "showArchived": "Archivierte Chats anzeigen ({{count}})",
+    "archivedToast": "Chat archiviert",
+    "archivedUndo": "Rückgängig",
+    "archivedView": "Archiv anzeigen"
   },
   "emptyChat": {
     "neutralHeadline": "Wie kann ich dir heute helfen?",
@@ -163,8 +166,8 @@
     "provenance": "Provenance is preserved",
     "provenanceDesc": "Recipients see which model generated this, no spoofing.",
     "htmlPreview": "HTML preview",
-    "fileCount_one": "{{count}} file",
-    "fileCount_other": "{{count}} files",
+    "fileCount_one": "{{count}} Datei",
+    "fileCount_other": "{{count}} Dateien",
     "mcpManage": "Manage",
     "mcpConnected": "Connected:"
   },
@@ -381,6 +384,9 @@
       "constraintsPlaceholder": "Grenzen, zu Vermeidendes, bevorzugte Quellen…",
       "deliverableLabel": "Ergebnis",
       "deliverablePlaceholder": "Das konkrete erwartete Ergebnis (eine Datei, eine Tabelle, eine Zusammenfassung…)",
+      "toolsLabel": "Werkzeuge für diese Aufgabe",
+      "toolWebSearch": "Websuche und Browsen",
+      "toolCodeExecution": "Codeausführung",
       "palette": {
         "label": "AGI Work-Werkzeuge",
         "searchPlaceholder": "Plugins, Ordner und Skills suchen",
@@ -404,6 +410,8 @@
     "weeksAgo": "{{count}} weeks ago"
   },
   "canvas": {
-    "sessionOnlyNotice": "Skizzen gelten vorerst nur für diese Sitzung, beim Schließen der App wird die Fläche geleert."
+    "sessionOnlyNotice": "Skizzen gelten vorerst nur für diese Sitzung, beim Schließen der App wird die Fläche geleert.",
+    "elementCount_one": "{{count}} Element",
+    "elementCount_other": "{{count}} Elemente"
   }
 }

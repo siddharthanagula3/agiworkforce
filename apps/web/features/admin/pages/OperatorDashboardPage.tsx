@@ -86,7 +86,7 @@ function GrowthChart({ points }: { points: OperatorOverview['growth'] }) {
   return (
     <div className="rounded-2xl border border-border bg-card p-5">
       <div className="flex items-baseline justify-between">
-        <h2 className="text-sm font-medium">Signups, last 30 days</h2>
+        <h2 className="text-h5">Signups, last 30 days</h2>
         <span className="text-sm text-muted-foreground">
           {total} total · peak {max}/day
         </span>
@@ -306,7 +306,7 @@ export function OperatorDashboardPage() {
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 py-10">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Operator dashboard</h1>
+          <h1 className="text-display">Operator dashboard</h1>
           <p className="mt-2 text-sm text-muted-foreground">
             Feedback, accounts, and growth, read straight from the database.
           </p>

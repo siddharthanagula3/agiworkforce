@@ -250,9 +250,10 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
     if (stored && !saved) {
       const [current] = await db.query<{
         id: string;
+        draft: string | null;
         draft_updated_at: string | Date | null;
       }>(
-        `select id, draft_updated_at
+        `select id, draft, draft_updated_at
            from web_conversations
           where id = $1
             and user_id = $2
@@ -266,6 +267,7 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
           saved: false,
           conflict: true,
           current: {
+            draft: current.draft ?? '',
             draftUpdatedAt: current.draft_updated_at,
           },
         },

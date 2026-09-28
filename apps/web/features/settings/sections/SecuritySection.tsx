@@ -17,6 +17,7 @@ import {
 import { TwoFactorPanel } from '@features/settings/components/Settings/TwoFactor';
 import { TwoFactorEnrollmentPanel } from '@features/settings/components/Settings/TwoFactorEnrollment';
 import { PasskeysPanel } from '@features/settings/components/Settings/PasskeysPanel';
+import { SignInMethodsPanel } from '@features/settings/components/Settings/SignInMethodsPanel';
 import { AuditLogPanel } from '@features/settings/components/AuditLogPanel';
 import { DeviceSignInToggle } from '@features/settings/components/DeviceSignInToggle';
 import type { TwoFactorStatus } from '@features/settings/services/user-preferences';
@@ -115,12 +116,14 @@ export function SecuritySection() {
           Security
         </h1>
         <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>
-          Passkeys, two-factor authentication, session timeout, and password.
+          Sign-in methods, passkeys, two-factor authentication, session timeout, and password.
         </p>
         <div style={{ marginTop: 'var(--space-2)' }}>
           <HelpArticleLink docId="account-security" label="How account security works" />
         </div>
       </div>
+
+      <SignInMethodsPanel />
 
       <PasskeysPanel />
 

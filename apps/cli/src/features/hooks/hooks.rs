@@ -482,6 +482,53 @@ pub struct TriggerConfig {
     /// Glob pattern to filter watched files (for file_watcher triggers).
     #[serde(default)]
     pub watch_glob: Option<String>,
+
+    #[serde(default, skip_serializing_if = "TriggerFilter::is_empty")]
+    pub filter: TriggerFilter,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct TriggerFilter {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub events: Vec<String>,
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub conditions: std::collections::BTreeMap<String, serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub quiet_period_secs: Option<u64>,
+}
+
+impl TriggerFilter {
+    pub fn is_empty(&self) -> bool {
+        self == &Self::default()
+    }
+
+    pub fn allows_event(&self, event: Option<&str>) -> bool {
+        self.events.is_empty()
+            || event.is_some_and(|event| {
+                self.events
+                    .iter()
+                    .any(|allowed| allowed.eq_ignore_ascii_case(event))
+            })
+    }
+
+    pub fn allows_payload(&self, body: &str) -> bool {
+        if self.conditions.is_empty() {
+            return true;
+        }
+        let Ok(payload) = serde_json::from_str::<serde_json::Value>(body) else {
+            return false;
+        };
+        self.conditions.iter().all(|(pointer, expected)| {
+            payload.pointer(pointer).is_some_and(|actual| {
+                actual == expected
+                    || matches!(
+                        (actual, expected),
+                        (serde_json::Value::Number(_) | serde_json::Value::Bool(_), serde_json::Value::String(text))
+                            if &actual.to_string() == text
+                    )
+            })
+        })
+    }
 }
 
 fn default_enabled() -> bool {
@@ -520,9 +567,28 @@ fn default_max_parallel() -> usize {
     4
 }
 
+pub fn triggers_path() -> Result<std::path::PathBuf> {
+    Ok(crate::config::CliConfig::config_dir()?.join("triggers.json"))
+}
+
+pub fn save_triggers(config: &TriggersConfig) -> Result<std::path::PathBuf> {
+    let path = triggers_path()?;
+    let body = serde_json::to_string_pretty(config).context("Failed to serialize triggers")?;
+    let temporary = path.with_extension("json.tmp");
+    std::fs::write(&temporary, format!("{body}\n")).context("Failed to write triggers.json")?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&temporary, std::fs::Permissions::from_mode(0o600))
+            .context("Failed to restrict triggers.json")?;
+    }
+    std::fs::rename(&temporary, &path).context("Failed to replace triggers.json")?;
+    Ok(path)
+}
+
 /// Load triggers configuration from ~/.agiworkforce/triggers.json.
 pub fn load_triggers() -> Result<Option<TriggersConfig>> {
-    let path = crate::config::CliConfig::config_dir()?.join("triggers.json");
+    let path = triggers_path()?;
 
     if !path.exists() {
         return Ok(None);

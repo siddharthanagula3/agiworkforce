@@ -58,7 +58,7 @@ export const OutcomesDashboard: React.FC = () => {
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold">Process Outcomes</h2>
+        <h2 className="text-h1">Process Outcomes</h2>
         <button
           type="button"
           onClick={loadProcessStatistics}
@@ -88,10 +88,8 @@ const ProcessStatCard: React.FC<{ stat: ProcessStat }> = ({ stat }) => {
   const averageScorePercent = (stat.average_score * 100).toFixed(1);
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-xs hover:shadow-md transition-shadow">
-      <h3 className="font-semibold text-lg mb-3 text-gray-800">
-        {formatProcessType(stat.process_type)}
-      </h3>
+    <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-xs hover:shadow-e2 transition-shadow">
+      <h3 className="text-h3 mb-3 text-gray-800">{formatProcessType(stat.process_type)}</h3>
 
       <div className="space-y-2">
         <div className="flex justify-between items-center">

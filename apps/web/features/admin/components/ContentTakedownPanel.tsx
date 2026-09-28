@@ -117,7 +117,7 @@ export default function ContentTakedownPanel() {
   return (
     <section className="flex flex-col gap-4" aria-labelledby="content-takedown-title">
       <div>
-        <h2 id="content-takedown-title" className="text-sm font-medium">
+        <h2 id="content-takedown-title" className="text-h5">
           Public content takedown
         </h2>
         <p className="mt-1 text-xs text-muted-foreground">

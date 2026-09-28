@@ -74,3 +74,4 @@ export function readAuthRouteContext(
     authRetry: params.authRetry === AUTH_RETRY_ON,
   };
 }
+export const ACCOUNT_RECOVERY_PATH = '/recover';

@@ -18,7 +18,9 @@ import {
   upgradePlanMidCycle,
   type CheckoutTrialTerms,
   type UpgradeChargeBreakdown,
+  type UpgradePromotionSummary,
 } from '../services/stripe-payments';
+import { UpgradePromotionCode } from './UpgradePromotionCode';
 import {
   getBillingPlanDisplay,
   formatCatalogPrice,
@@ -85,8 +87,14 @@ export function UpgradeConfirmDialog({
     trial: CheckoutTrialTerms | null;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [promotion, setPromotion] = useState<UpgradePromotionSummary | null>(null);
+  const [promotionPending, setPromotionPending] = useState(false);
+  const [promotionError, setPromotionError] = useState<string | null>(null);
+  const [previewKey, setPreviewKey] = useState(0);
 
   useEffect(() => {
+    setPromotion(null);
+    setPromotionError(null);
     if (!request) {
       setAmountDue(null);
       setError(null);
@@ -138,7 +146,7 @@ export function UpgradeConfirmDialog({
     return () => {
       cancelled = true;
     };
-  }, [request]);
+  }, [request, previewKey]);
 
   if (!request) return null;
 
@@ -150,6 +158,38 @@ export function UpgradeConfirmDialog({
     unitPriceUsd === null
       ? `the ${request.billingInterval} ${planLabel} price`
       : `${formatCatalogPrice(unitPriceUsd * (request.seats ?? 1))}/${intervalWord}`;
+
+  async function applyPromotion(code: string) {
+    if (!request) return;
+    setPromotionPending(true);
+    setPromotionError(null);
+    try {
+      const result = await previewUpgrade({
+        plan: request.plan,
+        billingInterval: request.billingInterval,
+        ...(request.seats === undefined ? {} : { seats: request.seats }),
+        promotionCode: code,
+      });
+      setAmountDue({
+        cents: result.amountDueNowCents,
+        currency: result.currency,
+        previewToken: result.previewToken,
+        charge: result.charge,
+        grandfatheredNotice: result.grandfatheredNotice,
+      });
+      setPromotion(result.promotion);
+    } catch (cause) {
+      setPromotionError(toUserMessage(cause, 'That promotion code could not be applied.'));
+    } finally {
+      setPromotionPending(false);
+    }
+  }
+
+  function removePromotion() {
+    setPromotion(null);
+    setPromotionError(null);
+    setPreviewKey((value) => value + 1);
+  }
 
   async function handleConfirm() {
     if (!request) return;
@@ -170,6 +210,7 @@ export function UpgradeConfirmDialog({
         billingInterval: request.billingInterval,
         previewToken: amountDue.previewToken,
         ...(request.seats === undefined ? {} : { seats: request.seats }),
+        ...(promotion ? { promotionCode: promotion.code } : {}),
       });
       onConfirmed();
     } catch (e) {
@@ -238,7 +279,9 @@ export function UpgradeConfirmDialog({
               </div>
               {amountDue.charge.discountCents !== 0 ? (
                 <div className="flex justify-between gap-4">
-                  <dt className="text-[color:var(--text-2)]">Discount</dt>
+                  <dt className="text-[color:var(--text-2)]">
+                    Discount{promotion ? ` (${promotion.code})` : ''}
+                  </dt>
                   <dd className="tabular-nums">
                     {formatMoney(-amountDue.charge.discountCents, amountDue.currency)}
                   </dd>
@@ -297,6 +340,17 @@ export function UpgradeConfirmDialog({
                 : `Then ${recurringPrice} plus tax at each renewal.`}
             </p>
           </section>
+        ) : null}
+
+        {amountDue && !previewing && !checkoutRequired ? (
+          <UpgradePromotionCode
+            inputId="upgrade-dialog-promotion-code"
+            promotion={promotion}
+            pending={promotionPending}
+            error={promotionError}
+            onApply={(code) => void applyPromotion(code)}
+            onRemove={removePromotion}
+          />
         ) : null}
 
         {amountDue?.grandfatheredNotice ? (

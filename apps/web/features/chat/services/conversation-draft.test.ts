@@ -52,19 +52,26 @@ describe('conversation draft server revisions', () => {
 
   it('keeps its revision and text local when the server reports a conflict', async () => {
     observeConversationDraftRevision(CONVERSATION_ID, INITIAL_REVISION);
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(
-        new Response(JSON.stringify({ saved: false, conflict: true }), { status: 409 }),
-      );
+    const fetchMock = vi.fn().mockImplementation(
+      async () =>
+        new Response(
+          JSON.stringify({
+            saved: false,
+            conflict: true,
+            current: { draft: 'their text', draftUpdatedAt: NEXT_REVISION },
+          }),
+          { status: 409 },
+        ),
+    );
     vi.stubGlobal('fetch', fetchMock);
+    const conflict = { kind: 'conflict', theirs: 'their text', theirsRevision: NEXT_REVISION };
 
-    expect(await saveConversationDraft(CONVERSATION_ID, 'local text', async () => ({}))).toBe(
-      'conflict',
+    expect(await saveConversationDraft(CONVERSATION_ID, 'local text', async () => ({}))).toEqual(
+      conflict,
     );
-    expect(await saveConversationDraft(CONVERSATION_ID, 'more local text', async () => ({}))).toBe(
-      'conflict',
-    );
+    expect(
+      await saveConversationDraft(CONVERSATION_ID, 'more local text', async () => ({})),
+    ).toEqual(conflict);
     expect(JSON.parse(fetchMock.mock.calls[1]?.[1]?.body as string).draftUpdatedAt).toBe(
       INITIAL_REVISION,
     );

@@ -1,4 +1,3 @@
-
 import { Lock, Loader2, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
@@ -9,13 +8,7 @@ import { Button } from '@/ui/Button';
 import { Label } from '@/ui/Label';
 import { Input } from '@/ui/Input';
 import { Textarea } from '@/ui/Textarea';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/ui/Select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/ui/Select';
 
 const INHERIT_OPTION = { value: '', label: 'Inherit from settings', provider: undefined };
 
@@ -174,7 +167,7 @@ export function CustomAgentEditor({ initialAgent, onClose }: CustomAgentEditorPr
     <div className="space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold">
+        <h3 className="text-h3">
           {isEditing ? `Edit Agent: ${initialAgent?.name}` : 'Create Custom Agent'}
         </h3>
         {isEditing && (

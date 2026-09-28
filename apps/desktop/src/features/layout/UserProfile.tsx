@@ -107,7 +107,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({ collapsed = false }) =
           side="top"
           align="start"
           sideOffset={8}
-          className="z-50 w-72 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--popover))] shadow-2xl backdrop-blur-xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
+          className="z-50 w-72 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--popover))] shadow-e4 backdrop-blur-xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
         >
           {/* Header: email + plan */}
           <div className="border-b border-[hsl(var(--border))] px-4 py-3">

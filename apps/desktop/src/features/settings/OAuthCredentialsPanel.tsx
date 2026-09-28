@@ -309,7 +309,7 @@ export function OAuthCredentialsPanel() {
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-semibold mb-1">OAuth App Credentials</h3>
+        <h3 className="text-h3 mb-1">OAuth App Credentials</h3>
         <p className="text-sm text-muted-foreground mb-6">
           Register your own OAuth apps with each provider so the Connectors feature can request
           permissions on behalf of your users. Credentials are stored encrypted via SecretManager.

@@ -10,6 +10,7 @@ import { recordModelUsage, toOtelAttributes } from '@/lib/cost-tracker';
 import { buildCpstUsageFields } from '@/lib/cpst-telemetry';
 import { getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { settleJsonObjectCompletion, wantsJsonObject } from './json-object-mode';
+import { settleJsonSchemaCompletion, wantsJsonSchema } from './json-schema-mode';
 import { mapClassifiedUpstreamError, type UpstreamErrorShape } from './upstream-error-copy';
 import { compactionUsageFields } from './context-window';
 import { addRouteLaneHeader } from '@/lib/services/free-lane/plan';
@@ -297,6 +298,31 @@ export async function buildNonStreamResponse(
             code: settlement.code,
           },
         },
+        {
+          status: settlement.status,
+          headers: { ...getCorsHeaders(request), ...getSecurityHeaders() },
+        },
+      );
+    }
+    llmResponse.content = settlement.content;
+  }
+
+  const jsonSchemaFormat = wantsJsonSchema(chatRequest.response_format)
+    ? chatRequest.response_format?.json_schema
+    : undefined;
+  if (jsonSchemaFormat) {
+    const settlement = settleJsonSchemaCompletion(
+      llmResponse.content ?? '',
+      llmResponse.finishReason ?? null,
+      jsonSchemaFormat,
+    );
+    if (!settlement.ok) {
+      logger.warn(
+        { requestId, model: responseModel, code: settlement.code },
+        'json_schema mode: model output did not satisfy the schema',
+      );
+      return NextResponse.json(
+        { error: { message: settlement.message, type: settlement.type, code: settlement.code } },
         {
           status: settlement.status,
           headers: { ...getCorsHeaders(request), ...getSecurityHeaders() },

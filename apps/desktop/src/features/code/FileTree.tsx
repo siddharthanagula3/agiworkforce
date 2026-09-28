@@ -579,7 +579,7 @@ export function FileTree({ rootPath, onFileSelect, selectedFile, className }: Fi
         <div className="fixed inset-0 z-40">
           <div
             ref={contextMenuRef}
-            className="absolute z-50 w-52 rounded-md border border-border bg-background p-1 shadow-lg"
+            className="absolute z-50 w-52 rounded-md border border-border bg-background p-1 shadow-e3"
             style={{ left: contextMenu.x, top: contextMenu.y }}
             role="menu"
             aria-label="File actions menu"

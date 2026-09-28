@@ -83,3 +83,45 @@ build it, and the audit cell is recorded as not applicable by this decision.
 - **In-app display language, text size and reduced motion on mobile (S84.01,
   S84.05, S84.07).** The mobile apps follow the device settings, as ChatGPT and
   Claude do (D-2026-09-15-03).
+- **Time zone picker and general settings resets (S84.02, S84.26, S85.25).**
+  Both take the time zone from the device and offer no general reset.
+- **Attaching to a turn running in another process (S68.11 cli, VS Code,
+  desktop).** Neither Claude nor Codex does it; work moves by reviewed hand-off.
+- **Connector extras (S55.12, S55.15, S55.19, S55.31, S56.06, S57.19, S57.20, S57.25,
+  S57.27, S57.35, S57.38, S58.04).** One account per connector, no sync time,
+  no member approval requests, no Gmail labels, no transcription or speech
+  tools, no subagent or approval-request tool, no retry or per-tool cost, and
+  custom servers are removed and re-added instead of edited.
+- **Project extras (S23.04, S23.10, S23.18, S23.19, S23.26, S23.27, S23.31,
+  S23.38).** Claude and ChatGPT projects have no cover image, notes editor,
+  linked folder or repo, copy-chat, save-answer-to-knowledge,
+  full export or import, or parent steering conversation.
+- **VS Code extras (S4.09, S4.13, S4.17, S4.23, S4.37, S4.38, S4.40).** Claude Code
+  in VS Code has no projects, library, AGI Work, schedule creation, account
+  connection, model catalog or billing; it hands those to the web.
+- **Dedicated artifact editors (S27.34, S27.39-41, S28.02, S28.09, S28.28, S28.30,
+  S29.01-04, S29.10-11, S30.01, S30.03, S30.18-19, S30.23, S30.26, S32.06,
+  S32.26-28, S32.30, S33.02, S33.05, S33.08-09, S33.13, S33.19).** ChatGPT
+  Canvas and Claude artifacts change files by prompt and have no spreadsheet,
+  slide, design, email-send or deployment editor.
+- **Library extras (S24.01, S24.10, S24.11, S24.32, S25.13, S25.21, S25.22).** No
+  shared-with-me view, folders, version history, project files in All, or
+  page-level PDF controls; files open in the browser viewer.
+- **Voice and media platform extras (S49.04, S97.03, S97.13).** No interim
+  dictation text, saved reference sets or subtitle files, as in ChatGPT and
+  Claude.
+- **Onboarding extras (S3.22, S3.25).** No language, time zone or memory step at
+  sign-up.
+- **Video studio destination (S4.29).** Video is generated in chat and kept in the
+  Library; ChatGPT's video studio is the separate Sora app and Claude has none.
+- **Periodic usage recap (S42.20).** Neither delivers one; Reflect builds a recap
+  on demand.
+- **Search domain, source-type and per-answer source controls (S34.08, S34.09,
+  S34.18, S34.28, S34.29, S34.30).** Claude's and ChatGPT's consumer search
+  offer none. Domain filters stay available on the API, as in both APIs.
+- **Image and video edit controls** (S43.10, S43.15-16, S44.08-10, S45.12-14,
+  S45.20-21, S45.25-27, S46.10-13, S47.11). ChatGPT and Gemini edit and generate
+  by prompt; Claude has no image generation. The select-an-area edit tool is
+  built, because ChatGPT has one. Per-image cost and remaining image counts
+  (S44.14, S44.15), negative prompts (S44.13), a generation queue view (S44.16,
+  S46.25), external image sharing (S44.31) and adding videos to projects (S46.34) are declined too.

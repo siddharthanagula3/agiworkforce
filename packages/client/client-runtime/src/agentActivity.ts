@@ -422,6 +422,8 @@ function stopStatus(reason: AgentEventStopReason): AgentActivityRunStatus {
  * some work failed it is Partial, and if everything that was attempted failed
  * it is Failed.
  */
+const PLAN_OVERVIEW_PROGRESS_ID = 'agiwork:plan-overview';
+
 export function deriveRunOutcome(
   stopped: AgentActivityRunStatus,
   entries: readonly AgentActivityEntry[],
@@ -437,6 +439,7 @@ export function deriveRunOutcome(
       continue;
     }
     if (entry.kind !== 'tool' && entry.kind !== 'progress') continue;
+    if (entry.kind === 'progress' && entry.progressId === PLAN_OVERVIEW_PROGRESS_ID) continue;
     if (entry.status === 'pending' || entry.status === 'running') continue;
     attempted += 1;
     if (entry.status === 'failed') failed += 1;

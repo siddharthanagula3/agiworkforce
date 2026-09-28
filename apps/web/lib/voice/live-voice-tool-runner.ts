@@ -5,6 +5,7 @@ import {
   LIVE_VOICE_TOOL_INPUT_PREVIEW_MAX_CHARS,
   type LiveVoiceToolCallRequest,
   type LiveVoiceToolCallResponse,
+  type LiveVoiceToolFile,
 } from '@agiworkforce/cloud-contracts';
 import type { AgentEventToolCategory } from '@agiworkforce/types/protocol';
 import { loadConnectorToolPermissions } from '@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions';
@@ -13,11 +14,12 @@ import { loadToolApprovalPolicy } from '@/app/api/llm/v1/chat/completions/lib/to
 import {
   applyToolResultSecretPolicy,
   canonicalToolSummary,
+  executeOfferedToolCall,
   recordToolCallAudit,
 } from '@/app/api/llm/v1/chat/completions/lib/tool-loop';
 import { policyAutoApprovesTool } from '@/app/api/llm/v1/chat/completions/lib/tool-metadata';
 import { bindMcpTask } from '@/lib/connectors/mcp-state-store';
-import { capOutput } from '@/lib/e2b/execution-tools';
+import { capOutput, EXECUTE_CODE_TOOL, isExecutionTool } from '@/lib/e2b/execution-tools';
 import { logger } from '@/lib/logger';
 import { executeWebMcpTool, parseQualifiedToolName } from '@/lib/mcp-tool-executor';
 import { persistGeneratedFileBytes } from '@/lib/server/generated-file-persist';
@@ -41,6 +43,7 @@ const MESSAGE = {
 interface ToolRunResult {
   content: string;
   isError: boolean;
+  files?: LiveVoiceToolFile[];
 }
 
 export interface LiveVoiceToolCallInput {
@@ -67,6 +70,8 @@ function parseArguments(raw: string): Record<string, unknown> | null {
 
 function toolCategory(name: string): AgentEventToolCategory {
   if (name === URL_FETCH_TOOL) return 'web-fetch';
+  if (name === EXECUTE_CODE_TOOL) return 'code-execution';
+  if (isExecutionTool(name)) return 'filesystem';
   if (isManagedOfficeFileTool(name)) return 'artifact';
   return parseQualifiedToolName(name) ? 'connector' : 'other';
 }
@@ -120,6 +125,7 @@ async function runOfficeFile(
   });
   if (!persisted.ok) return { content: 'The Office file could not be saved.', isError: true };
   return {
+    files: [{ name: persisted.file.file_name, uri: persisted.file.uri }],
     content: JSON.stringify({
       ok: true,
       file: {
@@ -199,6 +205,36 @@ async function runTool(
   }
 }
 
+async function runSandboxTool(
+  input: LiveVoiceToolCallInput,
+  args: Record<string, unknown>,
+): Promise<ToolRunResult> {
+  const result = await executeOfferedToolCall({
+    call: { id: input.call.callId, qualifiedName: input.call.name, args },
+    offeredTools: new Set(input.offeredTools),
+    userId: input.userId,
+    organizationId: input.organizationId,
+    conversationId: input.conversationId,
+    model: input.modelId,
+    requestId: `voice:${input.conversationId}`,
+    planTier: null,
+    surface: VOICE_TOOL_SURFACE,
+    ...(input.signal ? { signal: input.signal } : {}),
+  });
+  const files = (result.generatedFiles ?? []).map((file) => ({
+    name: file.file_name,
+    uri: file.uri,
+  }));
+  return {
+    content:
+      files.length > 0
+        ? `${result.content}\n\nSaved to the Library: ${files.map((file) => file.name).join(', ')}`
+        : result.content,
+    isError: result.isError,
+    ...(files.length > 0 ? { files } : {}),
+  };
+}
+
 async function auditCall(
   input: LiveVoiceToolCallInput,
   status: 'completed' | 'failed' | 'blocked',
@@ -276,9 +312,24 @@ export async function handleLiveVoiceToolCall(
     return { status: 'declined', output: MESSAGE.declined };
   }
 
+  if (isExecutionTool(call.name)) {
+    const result = await runSandboxTool(input, args);
+    return {
+      status: 'completed',
+      output: boundedOutput(result.content),
+      isError: result.isError,
+      ...(result.files ? { files: result.files } : {}),
+    };
+  }
+
   const startedAt = Date.now();
   const result = await runTool(input, args);
   const output = await applyToolResultSecretPolicy(input.userId, call.name, result.content);
   await auditCall(input, result.isError ? 'failed' : 'completed', Date.now() - startedAt);
-  return { status: 'completed', output: boundedOutput(output), isError: result.isError };
+  return {
+    status: 'completed',
+    output: boundedOutput(output),
+    isError: result.isError,
+    ...(result.files ? { files: result.files } : {}),
+  };
 }

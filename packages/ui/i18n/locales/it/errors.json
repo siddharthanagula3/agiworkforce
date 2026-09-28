@@ -218,5 +218,156 @@
       "Controlla i log degli errori per i dettagli",
       "Segnala questo problema se persiste"
     ]
+  },
+  "network": {
+    "offline": "Sembra che tu sia offline. Controlla la connessione.",
+    "unreachable": "Impossibile raggiungere il server."
+  },
+  "http": {
+    "sessionExpired": "La sessione è scaduta. Accedi di nuovo per continuare.",
+    "forbidden": "Non hai accesso a questo contenuto.",
+    "notFound": "Non è più disponibile.",
+    "timeout": "Il server ha impiegato troppo tempo a rispondere. Riprova.",
+    "rateLimited": "Stai andando un po’ troppo veloce. Attendi un momento e riprova.",
+    "server": "Qualcosa è andato storto da parte nostra. Riprova tra poco."
+  },
+  "boundary": {
+    "title": "Qualcosa è andato storto",
+    "message": "Ci dispiace, si è verificato un imprevisto.",
+    "sectionFailed": "Impossibile caricare {{name}}",
+    "tryAgain": "Riprova",
+    "goHome": "Vai alla home",
+    "goToChat": "Vai alla chat",
+    "signIn": "Accedi",
+    "supportReference": "Riferimento per l'assistenza: {{reference}}",
+    "errorId": "ID errore: {{reference}}",
+    "errorIdLabel": "ID errore:",
+    "includeId": "Includi questo ID quando contatti l'assistenza.",
+    "keepsHappening": "Se il problema persiste,",
+    "contactSupport": "contatta l'assistenza",
+    "reload": "Ricarica la pagina",
+    "reloadLabel": "Ricarica l'intera pagina",
+    "desktopMessage": "L'applicazione ha riscontrato un errore imprevisto. Puoi ricaricare la pagina o reimpostare la vista.",
+    "reportSent": "Segnalazione inviata. Grazie per aiutarci a migliorare!",
+    "recoveryActions": "Azioni di ripristino",
+    "resetView": "Reimposta vista",
+    "resetViewLabel": "Reimposta la vista corrente per ripristinare dall'errore",
+    "copy": "Copia errore",
+    "copied": "Copiato",
+    "copyLabel": "Copia i dettagli dell'errore negli appunti",
+    "copiedLabel": "Dettagli dell'errore copiati negli appunti",
+    "report": "Segnala errore",
+    "reportLabel": "Invia una segnalazione per aiutare a migliorare l'applicazione",
+    "chatTitle": "Errore della chat",
+    "chatMessage": "L'interfaccia della chat ha riscontrato un errore. La cronologia delle conversazioni è al sicuro. Riavvia la chat per continuare.",
+    "restartChat": "Riavvia chat"
+  },
+  "chatFailure": {
+    "offlineTitle": "Sei offline",
+    "title": "Impossibile visualizzare la chat",
+    "offlineDescription": "Questa conversazione non può essere caricata senza connessione. I tuoi messaggi sono salvati: riconnettiti e riprova.",
+    "networkDescription": "{{network}} I tuoi messaggi sono salvati: riprova o apri un’altra conversazione.",
+    "description": "Si è verificato un problema durante la visualizzazione di questa conversazione. I tuoi messaggi sono salvati: riprova o apri un’altra conversazione.",
+    "backToChat": "Torna alla chat"
+  },
+  "toast": {
+    "dismiss": "Ignora",
+    "retry": "Riprova",
+    "learnMore": "Scopri di più",
+    "showDetails": "Mostra dettagli (solo sviluppo)"
+  },
+  "turn": {
+    "cause": {
+      "rateLimit": "Questo modello sta ricevendo troppe richieste in questo momento. Attendi un momento e riprova, oppure passa a un altro modello se il tuo piano lo include.",
+      "providerOutage": "Il fornitore del modello è temporaneamente irraggiungibile. Riprova, oppure passa a un altro modello se il tuo piano lo include.",
+      "timeout": "Il modello ha impiegato troppo tempo a rispondere. Riprova, oppure scegli un modello più veloce dal selettore dei modelli.",
+      "modelRestriction": "Il modello selezionato non è riuscito a completare questa richiesta. Riprova, oppure scegli un modello diverso.",
+      "contextLength": "Questa conversazione è troppo lunga per il modello selezionato. Avvia una nuova chat, rimuovi alcuni allegati oppure scegli un modello con una finestra di contesto più ampia.",
+      "outputLimit": "La risposta ha raggiunto la lunghezza massima di questo modello e si è fermata. Chiedi una risposta più breve oppure dividi la richiesta.",
+      "attachment": "Questo modello non è riuscito a leggere uno degli allegati. Rimuovilo, oppure scegli un modello che accetti quel tipo di file.",
+      "toolCall": "Il modello ha prodotto una chiamata a uno strumento che questa richiesta non poteva accettare. Riprova, oppure disattiva gli strumenti che non servono per questo turno.",
+      "contentFiltered": "Il sistema di sicurezza ha interrotto questa risposta. Riformula la richiesta oppure prova un modello diverso.",
+      "planRestriction": "Il modello selezionato non è incluso nel tuo piano. Scegli un modello incluso nel tuo piano.",
+      "workspacePolicy": "L'amministratore del tuo spazio di lavoro ha disattivato questa funzione per il tuo account. Chiedi a un amministratore se ti serve.",
+      "twoFactorRequired": "Il tuo spazio di lavoro richiede l'autenticazione a due fattori. Attivala nelle Impostazioni, quindi riprova.",
+      "sessionExpired": "La sessione è terminata prima che questo turno fosse completato. Accedi di nuovo, quindi riprova.",
+      "accountLimit": "Hai raggiunto un limite di utilizzo del tuo account. Apri Utilizzo per vedere quando si reimposta, quindi riprova.",
+      "sharedFreeAllowance": "Il modello gratuito ha esaurito la quota condivisa da tutti gli utenti del piano Free, quindi non è un limite del tuo account. Si reimposta secondo la pianificazione del fornitore. Riprova più tardi, oppure usa la tua chiave del fornitore.",
+      "interrupted": "La risposta si è interrotta a metà. La parte ricevuta è conservata qui sopra. Riprova per ottenere una risposta completa.",
+      "emptyResponse": "Il modello non ha restituito alcuna risposta per questo turno. Riprova, oppure riformula il messaggio."
+    },
+    "rateLimitWait": "Questo modello sta ricevendo troppe richieste in questo momento. Riprova tra {{wait}}, oppure passa a un altro modello se il tuo piano lo include.",
+    "incomplete": "Questo turno non è stato completato. Non è stata ricevuta alcuna risposta.",
+    "reference": "{{text}} Riferimento: {{reference}}",
+    "reason": {
+      "connection": "la connessione al modello si è interrotta.",
+      "rateLimit": "questo modello sta ricevendo troppe richieste in questo momento.",
+      "providerOutage": "questo modello non è disponibile al momento per un motivo da parte nostra.",
+      "timeout": "il modello ha impiegato troppo tempo a rispondere.",
+      "modelRestriction": "il modello selezionato non è riuscito a completare questa richiesta.",
+      "contextLength": "questa conversazione è troppo lunga per il modello selezionato.",
+      "outputLimit": "la risposta ha raggiunto la lunghezza massima di questo modello e si è fermata.",
+      "attachment": "questo modello non è riuscito a leggere uno degli allegati.",
+      "toolCall": "il modello ha prodotto una chiamata a uno strumento che questa richiesta non poteva accettare.",
+      "contentFiltered": "il sistema di sicurezza ha interrotto questa risposta.",
+      "planRestriction": "il modello selezionato non è incluso nel tuo piano.",
+      "workspacePolicy": "l'amministratore del tuo spazio di lavoro ha disattivato questa funzione per il tuo account.",
+      "twoFactorRequired": "il tuo spazio di lavoro richiede l'autenticazione a due fattori.",
+      "sessionExpired": "la sessione è terminata prima che questo turno fosse completato.",
+      "accountLimit": "hai raggiunto un limite di utilizzo del tuo account.",
+      "interrupted": "la risposta si è interrotta a metà; la parte ricevuta è conservata qui sopra.",
+      "sharedFreeAllowance": "il modello gratuito ha esaurito la quota condivisa da tutti gli utenti del piano Free, che non è un limite del tuo account.",
+      "emptyResponse": "non è stata restituita alcuna risposta."
+    },
+    "wait": {
+      "seconds_one": "circa {{count}} secondo",
+      "seconds_other": "circa {{count}} secondi",
+      "minutes_one": "circa {{count}} minuto",
+      "minutes_other": "circa {{count}} minuti",
+      "hours_one": "circa {{count}} ora",
+      "hours_other": "circa {{count}} ore"
+    }
+  },
+  "friendly": {
+    "server": {
+      "title": "Qualcosa è andato storto",
+      "message": "Stiamo riscontrando problemi tecnici.",
+      "suggestion": "Il nostro team è stato avvisato. Riprova tra qualche minuto."
+    },
+    "rateLimit": {
+      "title": "Rallenta",
+      "message": "Stai inviando richieste troppo velocemente.",
+      "suggestion": "Attendi un momento prima di riprovare."
+    },
+    "fallback": {
+      "title": "Qualcosa è andato storto",
+      "message": "Non siamo riusciti a completare la tua richiesta.",
+      "suggestion": "Riprova. Se il problema persiste, contatta l'assistenza."
+    },
+    "apiKey": {
+      "title": "Problema con la chiave API",
+      "message": "Si è verificato un problema con la configurazione della chiave API.",
+      "suggestion": "Controlla la chiave API nelle Impostazioni e riprova."
+    },
+    "network": {
+      "title": "Problema di connessione",
+      "message": "Impossibile raggiungere il server.",
+      "suggestion": "Controlla la connessione a Internet e riprova."
+    },
+    "timeout": {
+      "title": "Ci sta mettendo troppo",
+      "message": "La richiesta sta richiedendo più tempo del previsto.",
+      "suggestion": "Riprova tra un momento. Se il problema persiste, contatta l'assistenza."
+    },
+    "accessDenied": {
+      "title": "Accesso negato",
+      "message": "Il tuo account non ha l’autorizzazione per questa operazione. Non è stato modificato nulla.",
+      "suggestion": "Chiedi l'accesso a un amministratore dello spazio di lavoro. Riprovare non servirà."
+    },
+    "signIn": {
+      "title": "Accesso richiesto",
+      "message": "La sessione è scaduta. Il lavoro salvato non è stato toccato.",
+      "suggestion": "Accedi di nuovo per continuare."
+    }
   }
 }

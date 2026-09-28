@@ -17,6 +17,7 @@ const SERIES_LABEL_KEYS = ['name', 'label', 'title'] as const;
 const SERIES_COLOR_KEYS = ['color', 'fill', 'stroke'] as const;
 const ROWS_KEYS = ['data', 'rows', 'values', 'points'] as const;
 const LEGEND_KEYS = ['showLegend', 'show_legend', 'legend'] as const;
+const TITLE_KEYS = ['title', 'caption'] as const;
 
 const HEX_SHORTHAND_LENGTH = 3;
 const HEX_CHANNEL_OFFSETS = [0, 2, 4] as const;
@@ -44,6 +45,9 @@ export interface ChartSpec {
   series: ChartSeriesSpec[];
   showLegend: boolean;
   totalRows: number;
+  title?: string;
+  xLabel?: string;
+  yLabel?: string;
 }
 
 export interface ChartChrome {
@@ -164,6 +168,14 @@ function readAxis(
     if (isRecord(value)) return value;
   }
   return undefined;
+}
+
+function readAxisLabel(
+  spec: Record<string, unknown>,
+  containers: readonly string[],
+): string | undefined {
+  const axis = readAxis(spec, containers);
+  return axis ? readString(axis, SERIES_LABEL_KEYS) : undefined;
 }
 
 function readAxisKey(
@@ -302,6 +314,58 @@ export function parseChartArtifact(content: string): ChartParseResult {
       series,
       showLegend: readBoolean(spec, LEGEND_KEYS) ?? (series.length > 1 || kind === 'pie'),
       totalRows: allRows.length,
+      title: readString(spec, TITLE_KEYS),
+      xLabel: readAxisLabel(spec, AXIS_CONTAINER_KEYS.x),
+      yLabel: readAxisLabel(spec, AXIS_CONTAINER_KEYS.y),
     },
   };
+}
+
+function formatChartValue(value: ChartCellValue | undefined): string {
+  if (typeof value === 'number') return value.toLocaleString();
+  return value ?? '';
+}
+
+function describeSeries(spec: ChartSpec, entry: ChartSeriesSpec): string | null {
+  const points = spec.rows
+    .map((row) => ({ category: row[spec.xKey], value: row[entry.dataKey] }))
+    .filter(
+      (point): point is { category: ChartCellValue | undefined; value: number } =>
+        typeof point.value === 'number',
+    );
+  const first = points[0];
+  const last = points[points.length - 1];
+  if (!first || !last) return null;
+  const label = entry.name ?? entry.dataKey;
+  const at = (point: { category: ChartCellValue | undefined; value: number }) =>
+    `${formatChartValue(point.value)} at ${formatChartValue(point.category)}`;
+  const lowest = points.reduce((low, point) => (point.value < low.value ? point : low));
+  const highest = points.reduce((high, point) => (point.value > high.value ? point : high));
+  if (spec.kind === 'pie') {
+    const total = points.reduce((sum, point) => sum + point.value, 0);
+    return `${label}: total ${formatChartValue(total)}, largest ${at(highest)}, smallest ${at(lowest)}.`;
+  }
+  return `${label}: starts at ${at(first)}, ends at ${at(last)}, lowest ${at(lowest)}, highest ${at(highest)}.`;
+}
+
+export function summarizeChart(spec: ChartSpec, fallbackTitle?: string): string {
+  const title = (spec.title ?? fallbackTitle?.trim())?.replace(/[.!?]+$/, '');
+  const xAxis = spec.xLabel ?? spec.xKey;
+  const pointCount = `${spec.rows.length} ${spec.rows.length === 1 ? 'point' : 'points'}`;
+  const plotted =
+    spec.kind === 'pie'
+      ? `Pie chart of ${pointCount}, one slice per ${xAxis}.`
+      : `${spec.kind === 'bar' ? 'Bar' : 'Line'} chart of ${pointCount}, ${xAxis} on the horizontal axis${spec.yLabel ? ` and ${spec.yLabel} on the vertical axis` : ''}.`;
+  const truncated =
+    spec.totalRows > spec.rows.length
+      ? `Showing the first ${spec.rows.length} of ${spec.totalRows} points.`
+      : null;
+  return [
+    title ? `${title}.` : null,
+    plotted,
+    truncated,
+    ...spec.series.map((entry) => describeSeries(spec, entry)),
+  ]
+    .filter((part): part is string => Boolean(part))
+    .join(' ');
 }

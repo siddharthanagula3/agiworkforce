@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Spinner, useConfirmAction } from '@agiworkforce/ui';
 import {
   canonicalOrganizationPermission,
@@ -14,8 +14,13 @@ import {
 import { useTeamMembers, type TeamMember } from '@/features/settings/hooks/use-settings-queries';
 import { toUserMessage } from '@/lib/user-error-message';
 import {
+  useCreateWorkspaceGroup,
   useCreateWorkspaceRole,
+  useDeleteWorkspaceGroup,
   useDeleteWorkspaceRole,
+  useRenameWorkspaceGroup,
+  useSetWorkspaceGroupMembers,
+  useWorkspaceGroupMembers,
   useSetGroupManagers,
   useSetGroupRoles,
   useSetMemberRoles,
@@ -80,7 +85,7 @@ const primaryButton =
 function CardHeader({ id, title, children }: { id: string; title: string; children: string }) {
   return (
     <div className="border-b px-5 py-3.5" style={{ borderColor: 'var(--settings-border)' }}>
-      <h2 id={id} className="text-sm font-semibold" style={{ color: 'var(--text-1)' }}>
+      <h2 id={id} className="text-h5" style={{ color: 'var(--text-1)' }}>
         {title}
       </h2>
       <p className="mt-1 text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>
@@ -408,7 +413,137 @@ function MemberRoles({ data }: { data: WorkspaceRolesResult }) {
 type DirectoryGroup = WorkspaceDirectoryGroup;
 
 function sourceLabel(group: DirectoryGroup): string {
-  return group.source?.connectionName?.trim() || 'your identity provider';
+  const source = group.source;
+  return (
+    (source?.kind === 'directory' && source.connectionName?.trim()) || 'your identity provider'
+  );
+}
+
+function isWorkspaceGroup(group: DirectoryGroup): boolean {
+  return group.source?.kind === 'workspace';
+}
+
+function WorkspaceGroupFields({
+  group,
+  members,
+  onMembers,
+}: {
+  group: DirectoryGroup;
+  members: TeamMember[];
+  onMembers: (userIds: string[] | null) => void;
+}) {
+  const current = useWorkspaceGroupMembers(group.id, true);
+  const rename = useRenameWorkspaceGroup();
+  const remove = useDeleteWorkspaceGroup();
+  const { confirm, dialog } = useConfirmAction();
+  const [name, setName] = useState(group.displayName);
+  const [selected, setSelected] = useState<string[] | null>(null);
+
+  useEffect(() => {
+    if (current.data) setSelected(current.data.userIds);
+  }, [current.data]);
+
+  useEffect(() => {
+    const saved = current.data?.userIds ?? [];
+    const dirty =
+      selected !== null &&
+      JSON.stringify([...selected].sort()) !== JSON.stringify([...saved].sort());
+    onMembers(dirty ? selected : null);
+  }, [current.data, selected, onMembers]);
+
+  return (
+    <div className="flex flex-col gap-2">
+      {dialog}
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          aria-label={`Name of ${group.displayName}`}
+          value={name}
+          maxLength={255}
+          onChange={(event) => setName(event.target.value)}
+          style={{ ...controlStyle, minWidth: 0, flex: 1 }}
+        />
+        <button
+          type="button"
+          className={secondaryButton}
+          style={{ borderColor: 'var(--settings-border)', color: 'var(--text-1)' }}
+          disabled={!name.trim() || name.trim() === group.displayName || rename.isPending}
+          onClick={() => rename.mutate({ groupId: group.id, name: name.trim() })}
+        >
+          Rename
+        </button>
+        <button
+          type="button"
+          className={secondaryButton}
+          style={{
+            borderColor: 'var(--settings-border)',
+            color: 'var(--settings-destructive-text)',
+          }}
+          disabled={remove.isPending}
+          onClick={() =>
+            confirm({
+              title: `Delete ${group.displayName}?`,
+              description:
+                'Its members lose the roles and policy exceptions they held through this group on their next request. The members stay in the workspace.',
+              confirmLabel: 'Delete group',
+              destructive: true,
+              onConfirm: () => remove.mutate({ groupId: group.id }),
+            })
+          }
+        >
+          Delete
+        </button>
+      </div>
+      <label className="flex flex-col gap-1 text-xs" style={{ color: 'var(--text-3)' }}>
+        Members
+        <select
+          multiple
+          value={selected ?? []}
+          disabled={current.isPending}
+          onChange={(event) =>
+            setSelected(Array.from(event.target.selectedOptions, (option) => option.value))
+          }
+          style={{ ...controlStyle, minHeight: 96 }}
+        >
+          {members.map((member) => (
+            <option key={member.userId} value={member.userId}>
+              {member.name || member.email}
+            </option>
+          ))}
+        </select>
+      </label>
+      <ErrorLine error={current.error ?? rename.error ?? remove.error} />
+    </div>
+  );
+}
+
+function CreateWorkspaceGroup() {
+  const create = useCreateWorkspaceGroup();
+  const [name, setName] = useState('');
+
+  return (
+    <form
+      className="flex flex-wrap items-center gap-2 border-b px-5 py-3"
+      style={{ borderColor: 'var(--settings-border)' }}
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (!name.trim()) return;
+        create.mutate({ name: name.trim() }, { onSuccess: () => setName('') });
+      }}
+    >
+      <input
+        aria-label="New group name"
+        placeholder="New group name"
+        value={name}
+        maxLength={255}
+        onChange={(event) => setName(event.target.value)}
+        style={{ ...controlStyle, minWidth: 0, flex: 1 }}
+      />
+      <button type="submit" className={primaryButton} disabled={!name.trim() || create.isPending}>
+        Create group
+      </button>
+      <ErrorLine error={create.error} />
+    </form>
+  );
 }
 
 function GroupRow({
@@ -424,6 +559,9 @@ function GroupRow({
 }) {
   const setRoles = useSetGroupRoles();
   const setManagers = useSetGroupManagers();
+  const setMembers = useSetWorkspaceGroupMembers();
+  const [memberIds, setMemberIds] = useState<string[] | null>(null);
+  const workspaceGroup = isWorkspaceGroup(group);
   const [roleIds, setRoleIds] = useState(group.roleIds);
   const [managerIds, setManagerIds] = useState(group.managerUserIds);
   const held = expandOrganizationPermissions(data.currentUserPermissions);
@@ -443,10 +581,16 @@ function GroupRow({
           {group.memberCount} member{group.memberCount === 1 ? '' : 's'}
         </span>
       </p>
-      <p className="text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>
-        Managed by {sourceLabel(group)}. Its name and members are read-only here and are replaced by
-        the next sync; only the roles below are yours to set.
-      </p>
+      {workspaceGroup ? (
+        canManageGroups ? (
+          <WorkspaceGroupFields group={group} members={members} onMembers={setMemberIds} />
+        ) : null
+      ) : (
+        <p className="text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>
+          Managed by {sourceLabel(group)}. Its name and members are read-only here and are replaced
+          by the next sync; only the roles below are yours to set.
+        </p>
+      )}
       <div className="flex flex-wrap gap-x-4 gap-y-1">
         {data.roles
           .filter((role) => role.assignable)
@@ -489,20 +633,23 @@ function GroupRow({
           </select>
         </label>
       ) : null}
-      {rolesDirty || managersDirty ? (
+      {rolesDirty || managersDirty || memberIds !== null ? (
         <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
             className={primaryButton}
-            disabled={setRoles.isPending || setManagers.isPending}
+            disabled={setRoles.isPending || setManagers.isPending || setMembers.isPending}
             onClick={() => {
               if (rolesDirty) setRoles.mutate({ groupId: group.id, roleIds });
               if (managersDirty) setManagers.mutate({ groupId: group.id, userIds: managerIds });
+              if (memberIds !== null) {
+                setMembers.mutate({ groupId: group.id, userIds: memberIds });
+              }
             }}
           >
             Save group
           </button>
-          <ErrorLine error={setRoles.error ?? setManagers.error} />
+          <ErrorLine error={setRoles.error ?? setManagers.error ?? setMembers.error} />
         </div>
       ) : null}
     </li>
@@ -513,15 +660,17 @@ function DirectoryGroupRoles({ data }: { data: WorkspaceRolesResult }) {
   const groups = useWorkspaceGroups();
   const members = useTeamMembers(groups.data?.canManageGroups ? data.organizationId : undefined);
   const result = groups.data;
-  if (groups.isPending || !result || result.groups.length === 0) return null;
+  if (groups.isPending || !result) return null;
+  if (result.groups.length === 0 && !result.canManageGroups) return null;
 
   return (
     <section style={cardStyle} aria-labelledby="workspace-group-roles-heading">
-      <CardHeader id="workspace-group-roles-heading" title="Directory groups">
-        Every active member your identity provider places in a group holds the roles checked for
-        that group, and loses them when the provider removes them. Membership belongs to the
-        provider: it cannot be edited here, and a change made there wins.
+      <CardHeader id="workspace-group-roles-heading" title="Groups">
+        Every member of a group holds the roles checked for that group and any policy exception set
+        for it. Groups created here are yours to name and fill. Groups your identity provider syncs
+        keep the membership the provider sends, and a change made there wins.
       </CardHeader>
+      {result.canManageGroups ? <CreateWorkspaceGroup /> : null}
       <ul className="flex flex-col">
         {result.groups.map((group) => (
           <GroupRow

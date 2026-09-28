@@ -158,16 +158,21 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
       requestedScopes: pending.requestedScopes,
       resource,
     });
-    await upsertConnectorOAuthGrant(userId, pending.connectorId, {
-      accessToken: tokens.accessToken,
-      refreshToken: tokens.refreshToken,
-      tokenType: tokens.tokenType,
-      grantedScopes: tokens.grantedScopes,
-      accessTokenExpiresAt: tokens.accessTokenExpiresAt,
-      tokenEndpoint: provider.tokenUrl,
-      issuer: pending.issuer ?? null,
-      resourceUrl: resource,
-    });
+    await upsertConnectorOAuthGrant(
+      userId,
+      pending.connectorId,
+      {
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+        tokenType: tokens.tokenType,
+        grantedScopes: tokens.grantedScopes,
+        accessTokenExpiresAt: tokens.accessTokenExpiresAt,
+        tokenEndpoint: provider.tokenUrl,
+        issuer: pending.issuer ?? null,
+        resourceUrl: resource,
+      },
+      { accountLabel: tokens.accountLabel },
+    );
     grantedScopes = tokens.grantedScopes;
   } catch (error) {
     if (error instanceof ConnectorOAuthStoreUnavailableError) {

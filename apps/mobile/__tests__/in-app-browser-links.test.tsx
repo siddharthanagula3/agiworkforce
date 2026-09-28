@@ -187,12 +187,22 @@ describe('inline search and citation links route through the in-app browser', ()
     expect(mockLinkingOpenURL).not.toHaveBeenCalled();
   });
 
+  function openCitationFromPreview(title: string, host: string) {
+    const call = (Alert.alert as jest.Mock).mock.calls.find(
+      ([alertTitle, message]) => alertTitle === title && message === host,
+    );
+    const buttons = (call?.[2] ?? []) as { text: string; onPress?: () => void }[];
+    buttons.find((button) => button.text === 'Open page')?.onPress?.();
+  }
+
   it('keeps an inline citation inside the app', () => {
     const screen = render(
       <CitationChip index={2} title="Citation title" url="https://docs.example.com/citation" />,
     );
 
     fireEvent.press(screen.getByLabelText('Citation 2: Citation title'));
+    expect(mockOpenBrowserAsync).not.toHaveBeenCalled();
+    openCitationFromPreview('Citation title', 'docs.example.com');
 
     expect(mockOpenBrowserAsync).toHaveBeenCalledWith(
       'https://docs.example.com/citation',
@@ -209,6 +219,7 @@ describe('inline search and citation links route through the in-app browser', ()
     );
 
     fireEvent.press(screen.getByLabelText('Citation 1: Offline source'));
+    openCitationFromPreview('Offline source', 'example.com');
 
     await screen.findByText('[1]');
     expect(Alert.alert).toHaveBeenCalledWith(

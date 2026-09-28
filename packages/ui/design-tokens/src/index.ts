@@ -550,6 +550,10 @@ export const agiExtensionCssVars = {
     '--agi-ext-info-text': agiPalette.dark.stateText.info,
     '--agi-ext-modal-shadow': 'rgba(0, 0, 0, 0.5)',
     '--agi-ext-scrim': 'rgba(0, 0, 0, 0.6)',
+    '--agi-ext-elevation-1': agiElevation.dark[1],
+    '--agi-ext-elevation-2': agiElevation.dark[2],
+    '--agi-ext-elevation-3': agiElevation.dark[3],
+    '--agi-ext-elevation-4': agiElevation.dark[4],
   },
   light: {
     '--agi-ext-bg': agiPalette.light.surface.base,
@@ -590,6 +594,10 @@ export const agiExtensionCssVars = {
     '--agi-ext-info-text': agiPalette.light.stateText.info,
     '--agi-ext-modal-shadow': 'rgba(0, 0, 0, 0.32)',
     '--agi-ext-scrim': 'rgba(0, 0, 0, 0.45)',
+    '--agi-ext-elevation-1': agiElevation.light[1],
+    '--agi-ext-elevation-2': agiElevation.light[2],
+    '--agi-ext-elevation-3': agiElevation.light[3],
+    '--agi-ext-elevation-4': agiElevation.light[4],
   },
 } as const satisfies Record<AgiThemeMode, CssVariableMap>;
 

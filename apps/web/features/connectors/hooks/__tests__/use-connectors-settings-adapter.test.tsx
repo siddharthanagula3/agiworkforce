@@ -33,6 +33,9 @@ vi.mock('@/features/connectors/components/ConnectorScopeList', () => ({
   ConnectorScopeList: ({ connectorId }: { connectorId: string }) => (
     <div data-testid="scopes" data-id={connectorId} />
   ),
+  ConnectorGrantedScopeList: ({ scopes }: { scopes: readonly string[] }) => (
+    <div data-testid="granted-scopes" data-count={scopes.length} />
+  ),
 }));
 
 import { useConnectorsSettingsAdapter } from '../use-connectors-settings-adapter';
