@@ -218,6 +218,7 @@ export * from './McpPromptSummary';
 export * from './McpRemoteTransport';
 export * from './McpResourceSummary';
 export * from './McpServerConfiguredStatus';
+export * from './McpServerInspectResponse';
 export * from './McpServerListResponse';
 export * from './McpServerParams';
 export * from './McpServerScope';

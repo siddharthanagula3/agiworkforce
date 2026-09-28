@@ -347,6 +347,7 @@ fn capabilities() -> AppServerCapabilities {
         mcp_tools: false,
         installs: false,
         saved_permissions: false,
+        mcp_inspect: false,
     }
 }
 

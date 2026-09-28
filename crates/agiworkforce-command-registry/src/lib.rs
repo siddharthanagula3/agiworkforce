@@ -244,7 +244,13 @@ pub fn builtin_slash_registry_commands() -> Vec<RegistryCommand> {
             vec![],
         ),
         RegistryCommand::builtin_slash("rewind", "Undo last code changes", false, false, vec![]),
-        RegistryCommand::builtin_slash("mcp", "List MCP servers and tools", true, false, vec![]),
+        RegistryCommand::builtin_slash(
+            "mcp",
+            "List MCP servers and tools (/mcp info <server>, /mcp logs <server>)",
+            true,
+            false,
+            vec![],
+        ),
         RegistryCommand::builtin_slash("skills", "Browse available skills", true, false, vec![]),
         RegistryCommand::builtin_slash("agents", "Browse and manage agents", true, false, vec![]),
         RegistryCommand::builtin_slash(
