@@ -639,7 +639,7 @@ pub fn permissions_for_display(arg: &str) -> CommandOutcome {
     match subcommand {
         "" => permissions_tab("allow"),
         "help" | "-h" | "--help" => CommandOutcome::Block(format!(
-            "{}\n  /permissions\n  /permissions allow <command-prefix>\n  /permissions deny <command-prefix>\n  /permissions session <command-prefix>\n  /permissions remove <allow|deny|session> <command-prefix>\n  /permissions reset",
+            "{}\n  /permissions\n  /permissions allow <command-prefix>\n  /permissions deny <command-prefix>\n  /permissions session <command-prefix>\n  /permissions remove <allow|deny|session> <command-prefix>\n  /permissions reset\n\nWebsites: a rule of the form domain:<host> decides which sites the agent may fetch with web_fetch or open in the browser. /permissions deny domain:example.com blocks that site, domain:*.example.com covers its subdomains, and domain:* covers every site. An allow rule that names a host on this computer or your network skips the prompt for it.",
             ts::accent_header("Permissions:")
         )),
         "reset" => match crate::permissions::PermissionStore::load() {
@@ -939,34 +939,144 @@ pub async fn handle_compact(arg: &str, session: &mut AgentSession, config: &CliC
     ));
 }
 
-/// Rewind the session, returning what to tell the user.
+const REWIND_USAGE: &str = "Usage: /rewind [list] · /rewind <n> [both|conversation|code], where n counts back from your latest prompt (1 is the latest).";
+
 pub fn rewind_session_for_display(arg: &str, session: &mut AgentSession) -> CommandOutcome {
-    let count = if arg.is_empty() {
-        1usize
-    } else {
-        arg.parse::<usize>().unwrap_or(1)
+    rewind_session(arg, session).0
+}
+
+pub fn rewind_session(
+    arg: &str,
+    session: &mut AgentSession,
+) -> (CommandOutcome, Option<crate::agent::RewindOutcome>) {
+    let mut words = arg.split_whitespace();
+    let first = words.next().unwrap_or("");
+    if first.is_empty() || first == "list" {
+        return (checkpoint_list(session), None);
+    }
+    let (Ok(steps), Some(mode)) = (
+        first.parse::<usize>(),
+        crate::agent::RewindMode::parse(words.next().unwrap_or("")),
+    ) else {
+        return (CommandOutcome::Warn(REWIND_USAGE.to_string()), None);
     };
-
-    let mut rewound = 0;
-    for _ in 0..count {
-        if session.restore_checkpoint() {
-            rewound += 1;
-        } else {
-            break;
+    let available = session.checkpoint_count();
+    if available == 0 || steps == 0 {
+        return (
+            CommandOutcome::Warn("No checkpoints available to rewind to.".to_string()),
+            None,
+        );
+    }
+    let steps = steps.min(available);
+    match session.rewind_to(available - steps, mode) {
+        Ok(outcome) => {
+            if outcome.conversation_restored {
+                let _ = session.persist_managed_session();
+            }
+            let text = describe_rewind(steps, &outcome, session.messages.len());
+            (CommandOutcome::Info(text), Some(outcome))
         }
+        Err(error) => (
+            CommandOutcome::Error(format!("Could not rewind: {error}")),
+            None,
+        ),
     }
+}
 
-    if rewound == 0 {
-        CommandOutcome::Warn("No checkpoints available to rewind to.".to_string())
-    } else {
-        CommandOutcome::Info(format!(
-            "Rewound {} checkpoint{}. {} remaining. ({} messages in context)",
-            rewound,
-            if rewound == 1 { "" } else { "s" },
-            session.checkpoint_count(),
-            session.messages.len()
-        ))
+fn checkpoint_list(session: &AgentSession) -> CommandOutcome {
+    let summaries = session.checkpoint_summaries();
+    if summaries.is_empty() {
+        return CommandOutcome::Warn("No checkpoints available to rewind to.".to_string());
     }
+    let mut lines = vec![
+        "Checkpoints, newest first. Each is the moment before that prompt was sent.".to_string(),
+    ];
+    for (steps, summary) in summaries
+        .iter()
+        .rev()
+        .enumerate()
+        .map(|(offset, summary)| (offset + 1, summary))
+    {
+        lines.push(format!(
+            "  {steps:>3}  {}  {}  ({})",
+            summary.created_at.format("%H:%M"),
+            checkpoint_prompt_line(&summary.prompt),
+            checkpoint_files_label(summary.tracked_files)
+        ));
+    }
+    lines.push(REWIND_USAGE.to_string());
+    CommandOutcome::Block(sanitize_terminal_text(&lines.join("\n")).into_owned())
+}
+
+pub(crate) fn checkpoint_prompt_line(prompt: &str) -> String {
+    let line = prompt.split_whitespace().collect::<Vec<_>>().join(" ");
+    if line.is_empty() {
+        return "(no prompt text)".to_string();
+    }
+    if line.chars().count() <= 60 {
+        return line;
+    }
+    let mut clipped: String = line.chars().take(59).collect();
+    clipped.push('…');
+    clipped
+}
+
+pub(crate) fn checkpoint_files_label(tracked_files: usize) -> String {
+    match tracked_files {
+        0 => "no file edits since".to_string(),
+        1 => "1 edited file can be restored".to_string(),
+        count => format!("{count} edited files can be restored"),
+    }
+}
+
+fn describe_rewind(steps: usize, outcome: &crate::agent::RewindOutcome, messages: usize) -> String {
+    let mut lines = Vec::new();
+    if outcome.conversation_restored {
+        lines.push(format!(
+            "Rewound {steps} checkpoint{}. {} remaining. ({messages} messages in context)",
+            if steps == 1 { "" } else { "s" },
+            outcome.remaining
+        ));
+    } else {
+        lines.push(format!(
+            "Restored the code to how it was before prompt {steps}; the conversation is unchanged."
+        ));
+    }
+    if let Some(files) = &outcome.files {
+        let names = |paths: &[std::path::PathBuf]| {
+            paths
+                .iter()
+                .map(|path| path.display().to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        };
+        if files.restored.is_empty() && files.removed.is_empty() && files.skipped.is_empty() {
+            lines.push("No edits made through the agent's file tools needed undoing.".to_string());
+        }
+        if !files.restored.is_empty() {
+            lines.push(format!("Restored: {}", names(&files.restored)));
+        }
+        if !files.removed.is_empty() {
+            lines.push(format!(
+                "Removed files the agent created: {}",
+                names(&files.removed)
+            ));
+        }
+        for (path, reason) in &files.skipped {
+            lines.push(format!("Skipped {} ({reason})", path.display()));
+        }
+        lines.push(
+            "Changes made by shell commands or outside the agent are not tracked; use git for those."
+                .to_string(),
+        );
+    }
+    if outcome.conversation_restored && !outcome.prompt.trim().is_empty() {
+        lines.push(format!(
+            "Your prompt from that point: {}",
+            checkpoint_prompt_line(&outcome.prompt)
+        ));
+    }
+    sanitize_terminal_text(&lines.join("\n")).into_owned()
 }
 
 pub fn handle_rewind(arg: &str, session: &mut AgentSession) {
