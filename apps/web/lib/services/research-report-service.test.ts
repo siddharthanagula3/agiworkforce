@@ -254,6 +254,7 @@ describe('listResearchReports', () => {
 
     await listResearchReports(db, {
       userId: 'user-1',
+      organizationId: null,
       conversationId: 'conv-1',
       limit: 5_000,
     });
@@ -263,14 +264,15 @@ describe('listResearchReports', () => {
     expect(params).toEqual(['user-1', 'conv-1', 100]);
   });
 
-  it('falls back to the user-wide list with a default limit', async () => {
+  it('falls back to the active workspace list with a default limit', async () => {
     const db = database();
 
-    await listResearchReports(db, { userId: 'user-1' });
+    await listResearchReports(db, { userId: 'user-1', organizationId: null });
 
     const [sql, params] = db.query.mock.calls[0] as [string, unknown[]];
     expect(sql).toContain('conversation.is_temporary');
-    expect(params).toEqual(['user-1', 20]);
+    expect(sql).toContain('conversation.organization_id is not distinct from $2::uuid');
+    expect(params).toEqual(['user-1', null, 20]);
   });
 });
 

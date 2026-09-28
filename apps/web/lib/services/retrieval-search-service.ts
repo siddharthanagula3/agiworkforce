@@ -234,6 +234,8 @@ function candidateSql(options: {
       left join media_assets asset on asset.id = d.media_asset_id
       ${joins.join('\n      ')}
      where (${present.join(' or ')})
+       and c.user_id = $1
+       and c.organization_id is not distinct from $2::uuid
        and artifact.deleted_at is null
        and origin.deleted_at is null
        and coalesce(origin.is_temporary, false) = false
