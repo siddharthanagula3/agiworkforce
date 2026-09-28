@@ -50,6 +50,21 @@ export class CloudRunTreeItem extends vscode.TreeItem {
   }
 }
 
+export class CloudTasksGroupItem extends vscode.TreeItem {
+  constructor(
+    label: string,
+    readonly runs: readonly CloudAgentRun[],
+    icon: string,
+  ) {
+    super(label, vscode.TreeItemCollapsibleState.Expanded);
+    this.id = `cloud-tasks-group:${label}`;
+    this.description = String(runs.length);
+    this.iconPath = new vscode.ThemeIcon(icon);
+    this.contextValue = 'cloudTasksGroup';
+    this.accessibilityInformation = { label: `${label}, ${runs.length}`, role: 'treeitem' };
+  }
+}
+
 class CloudTasksNoticeItem extends vscode.TreeItem {
   constructor(label: string, tooltip: string, icon: string, command?: vscode.Command) {
     super(label, vscode.TreeItemCollapsibleState.None);
@@ -91,6 +106,9 @@ export class CloudTasksTreeProvider
   }
 
   async getChildren(element?: vscode.TreeItem): Promise<vscode.TreeItem[]> {
+    if (element instanceof CloudTasksGroupItem) {
+      return element.runs.map((run) => new CloudRunTreeItem(run));
+    }
     if (element !== undefined) return [];
     const resolution = await this.resolveClient();
     if (resolution.status === 'signed-out') {
@@ -107,9 +125,13 @@ export class CloudTasksTreeProvider
     try {
       const page = await resolution.client.listRuns({ limit: CLOUD_TASKS_PAGE_LIMIT });
       const needsYou = (run: CloudAgentRun) => NEEDS_YOU_STATES.has(run.workState ?? run.state);
-      return [...page.runs.filter(needsYou), ...page.runs.filter((run) => !needsYou(run))].map(
-        (run) => new CloudRunTreeItem(run),
-      );
+      const waiting = page.runs.filter(needsYou);
+      if (waiting.length === 0) return page.runs.map((run) => new CloudRunTreeItem(run));
+      const others = page.runs.filter((run) => !needsYou(run));
+      return [
+        new CloudTasksGroupItem('Needs you', waiting, 'bell-dot'),
+        ...(others.length === 0 ? [] : [new CloudTasksGroupItem('Recent', others, 'history')]),
+      ];
     } catch (error) {
       return [
         new CloudTasksNoticeItem(
