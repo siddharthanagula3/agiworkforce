@@ -550,6 +550,7 @@ export interface Message {
    */
   turnDetachable?: boolean;
   secretRedactionCount?: number;
+  truncatedAttachments?: string[];
   /**
    * Per-turn usage as PERSISTED on the messages row (`input_tokens` /
    * `output_tokens`), written by the server's assistant-turn persistence and

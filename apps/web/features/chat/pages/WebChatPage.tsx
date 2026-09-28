@@ -587,6 +587,7 @@ export function toChatMessage(m: Message, conversationId: string): ChatMessage {
     routeLane ||
     m.requestedModel ||
     m.secretRedactionCount ||
+    m.truncatedAttachments?.length ||
     m.turnDetachable !== undefined ||
     tokensUsed !== undefined
       ? {
@@ -597,6 +598,9 @@ export function toChatMessage(m: Message, conversationId: string): ChatMessage {
           ...(m.requestedModel ? { requestedModel: m.requestedModel } : {}),
           ...(m.turnDetachable !== undefined ? { turnDetachable: m.turnDetachable } : {}),
           ...(m.secretRedactionCount ? { secretRedactionCount: m.secretRedactionCount } : {}),
+          ...(m.truncatedAttachments?.length
+            ? { truncatedAttachments: m.truncatedAttachments }
+            : {}),
           ...(inputTokens !== undefined ? { inputTokens } : {}),
           ...(outputTokens !== undefined ? { outputTokens } : {}),
           ...(tokensUsed !== undefined ? { tokensUsed } : {}),
