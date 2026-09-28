@@ -1031,8 +1031,6 @@ export interface TierPolicy {
   computerUseSoftCap?: number;
   computerUseHardCap?: number;
 
-  allowDeepResearch?: boolean;
-
   allowVoice?: boolean;
   voiceMinutesPerMonth?: number | null;
 }
@@ -1173,7 +1171,6 @@ const TIER_POLICIES_DEFINITION: Record<ProductTier, TierPolicy> = {
     allowVideoGeneration: false,
     allowToolUse: true,
     allowMCP: 'one_custom_remote',
-    allowDeepResearch: false,
     allowVoice: true,
     voiceMinutesPerMonth: 30,
     tokenCapPerMonth: null,
@@ -1266,7 +1263,6 @@ const TIER_POLICIES_DEFINITION: Record<ProductTier, TierPolicy> = {
     videoSecondsPerMonth: 300,
     computerUseSoftCap: 1_000,
     computerUseHardCap: 2_500,
-    allowDeepResearch: true,
     allowToolUse: 'unlimited',
     allowMCP: 'unlimited',
     tokenCapPerMonth: 100_000_000,
@@ -1315,7 +1311,6 @@ const TIER_POLICIES_DEFINITION: Record<ProductTier, TierPolicy> = {
     imageSyntheticTokenCost: 50_000,
     allowVoice: true,
     voiceMinutesPerMonth: null,
-    allowDeepResearch: true,
     allowToolUse: 'unlimited',
     allowMCP: 'unlimited',
     tokenCapPerMonth: null,

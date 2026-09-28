@@ -112,9 +112,9 @@ Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:894-902`, `app
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Agent/research turns say 'Cancelled after …', but a plain answer stopped mid-stream shows no stopped marker. | states |
+| mobile | partial | Same change as S17.39 in post-codex/chat-gates-s16.09-s17.38-s17.39-s20.26-mobile-bubble.patch. | ui |
 
-Code: `apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx:92-92`, `apps/mobile/stores/chat/chatExecutionStore.ts:2840-2850`
+Code: `apps/mobile/stores/chat/chatExecutionStore.ts:2876-2876`
 
 ## S19.19: Reconnecting.
 
@@ -143,18 +143,6 @@ Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:684-700`
 | vscode | partial | Opening a session reloads its transcript (conversationLoaded); a turn that was running is not re-attached. | states |
 
 Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:777-790`, `apps/mobile/src/features/chat/components/MessageList.tsx:101-102`, `apps/cli/src/tui/tui_app.rs:3550-3558`, `apps/cli/src/tui/tui_app.rs:2708-2712`
-
-## S19.26: Failed with recoverable input.
-
-- Done when: A turn that fails because of the user's input (too long, bad attachment) explains what to change so the user can fix and resend.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Shows the gateway's failure text; only context length is warned about in advance (chip), with no input-specific recovery on the failed turn. | states |
-
-Code: `apps/mobile/app/(app)/chat/[id].tsx:1458-1464`, `apps/mobile/src/features/chat/utils/messageStreamError.ts:160-172`
 
 ## S19.29: Background work continuing after UI closure.
 

@@ -178,17 +178,16 @@ Code: `apps/web/lib/e2b/execution-tools.ts:18-18`, `apps/web/app/api/llm/v1/chat
 
 - Done when: The assistant can call an image-generation tool during a turn and the generated image appears in the transcript.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | 3261f2780 renders image.v1 cards on mobile (GeneratedImage with full screen and share), so images made in a web turn show on the phone. New mobile turns still need image.v1 declared in chatExecutionStore.ts, held by Codex: post-codex/p-mcp-web-S57.16-mobile-image-v1.patch. It touches the same line as no-yearly-s108-33-mobile-itinerary.patch; combined, the line is supported: ['image.v1', 'itinerary.v1', 'map-search.v1']. | handler |
-| cli | partial | Not in this lane: exposing cloud::image::generate as an agent tool for Managed CLI sessions belongs to p-desktop-cli. | handler |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 | api | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/chat/components/InteractiveCardBlock.tsx:586-586`, `apps/cli/src/cloud/image.rs:556-556`
+Code: `apps/mobile/src/features/chat/components/InteractiveCardBlock.tsx:586-586`
 
 ## S57.17: Image-editing tool.
 

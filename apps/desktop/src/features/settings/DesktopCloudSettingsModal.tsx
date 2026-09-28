@@ -32,7 +32,7 @@
  * which is what used to let a section land silently on `/login` while the app
  * showed the user as signed in.
  *
- * Three sections are not inline API renders, for stated reasons rather than
+ * Four sections are not inline API renders, for stated reasons rather than
  * convenience:
  *   plugins → no plugin contract exists on ANY surface (web renders a static
  *             catalogue preview with `plugins: []`), and the old bridged path
@@ -42,6 +42,9 @@
  *   referrals → the invite link, friend progress and bonus credits are a web
  *               account page; the section opens `/settings/referrals` in the
  *               system browser, see `cloud/CloudReferralsSection.tsx`.
+ *   slack    → adding the Slack app is a Slack OAuth flow in the browser;
+ *              the section opens `/settings/slack` in the system browser,
+ *              see `cloud/CloudSlackSection.tsx`.
  *   security → the READ half (2FA status, recent activity) is inline; only
  *              Clerk-owned credential enrollment stays bridged, with the
  *              explicit re-auth affordance.
@@ -73,8 +76,6 @@ import {
   customConnectorShortId,
   customConnectorSignInUrl,
   getCustomConnectorOAuthRedirectUri,
-  type CloudConnectorEntry,
-  type CloudConnectorGrantedPermission,
 } from '../../api/cloudConnectors';
 import { completeDesktopCloudConnectorInstall } from '../../services/desktopCloudConnectorInstall';
 import { listCloudSkills } from '../../api/cloudSkills';
@@ -113,7 +114,11 @@ import {
   type ManagedUsageCreditWindow,
   type ManagedUsagePurchasedCredits,
 } from '@agiworkforce/types';
-import type { MeFeatureFlagsSchema } from '@agiworkforce/cloud-contracts';
+import type {
+  ConnectorConnection,
+  ConnectorGrantedPermission,
+  MeFeatureFlagsSchema,
+} from '@agiworkforce/cloud-contracts';
 import { getDesktopSubscriptionOwnerPolicy } from '../../lib/subscriptionOwnership';
 import { CreditTopUp } from './CreditTopUp';
 
@@ -273,6 +278,9 @@ const LazyCloudTeam = lazy(() =>
 );
 const LazyCloudReferrals = lazy(() =>
   import('./cloud/CloudReferralsSection').then((m) => ({ default: m.CloudReferralsSection })),
+);
+const LazyCloudSlack = lazy(() =>
+  import('./cloud/CloudSlackSection').then((m) => ({ default: m.CloudSlackSection })),
 );
 
 function DesktopBillingSection({ onOpenPlans }: { onOpenPlans: () => void }) {
@@ -708,7 +716,7 @@ function toDesktopConnectorId(serverId: string): string {
   return SERVER_TO_DESKTOP_CONNECTOR_ID[serverId] ?? serverId;
 }
 
-function toDisplayConnectorId(connector: CloudConnectorEntry): string {
+function toDisplayConnectorId(connector: ConnectorConnection): string {
   return connector.source === 'custom'
     ? `custom-${connector.id}`
     : toDesktopConnectorId(connector.connectorId);
@@ -721,7 +729,7 @@ const CUSTOM_CONNECTOR_OAUTH_CLIENT_HINT =
   'If the server gave you an OAuth client, add it again with its Client ID and Secret under Advanced settings.';
 
 const GRANTED_PERMISSIONS_HEADING = 'Permissions granted';
-const PERMISSION_ACCESS_LABEL: Record<CloudConnectorGrantedPermission['access'], string> = {
+const PERMISSION_ACCESS_LABEL: Record<ConnectorGrantedPermission['access'], string> = {
   read: 'Read',
   write: 'Write',
 };
@@ -729,7 +737,7 @@ const PERMISSION_ACCESS_LABEL: Record<CloudConnectorGrantedPermission['access'],
 function GrantedPermissions({
   permissions,
 }: {
-  permissions: readonly CloudConnectorGrantedPermission[];
+  permissions: readonly ConnectorGrantedPermission[];
 }) {
   return (
     <section
@@ -751,7 +759,7 @@ function GrantedPermissions({
   );
 }
 
-function customSignInPending(connector: CloudConnectorEntry): boolean {
+function customSignInPending(connector: ConnectorConnection): boolean {
   return (
     connector.source === 'custom' &&
     connector.needsReauthorization === true &&
@@ -798,7 +806,7 @@ export function DesktopCloudSettingsModal({
     if (open) setActiveSection(resolveCloudSettingsSection(initialTab));
   }, [open, initialTab]);
 
-  const [cloudConnectors, setCloudConnectors] = useState<CloudConnectorEntry[] | undefined>(
+  const [cloudConnectors, setCloudConnectors] = useState<ConnectorConnection[] | undefined>(
     undefined,
   );
   const [availableConnectorIds, setAvailableConnectorIds] = useState<ReadonlySet<string>>(
@@ -1231,6 +1239,11 @@ export function DesktopCloudSettingsModal({
       plugins: (
         <Suspense fallback={<SectionSkeleton />}>
           <LazyCloudPlugins onOpenSection={setActiveSection} />
+        </Suspense>
+      ),
+      slack: (
+        <Suspense fallback={<SectionSkeleton />}>
+          <LazyCloudSlack />
         </Suspense>
       ),
       memory: (

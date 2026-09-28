@@ -14,6 +14,7 @@ import { useRouter } from 'expo-router';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import {
   ArrowLeft,
+  Ban,
   Brain,
   FileText,
   GitCompareArrows,
@@ -243,6 +244,10 @@ export default function MemoryScreen() {
     router.push('/(app)/settings/memory-conflicts' as Parameters<typeof router.push>[0]);
   }, [router]);
 
+  const handleExclusionsPress = useCallback(() => {
+    router.push('/(app)/settings/memory-exclusions' as Parameters<typeof router.push>[0]);
+  }, [router]);
+
   const handleResetPress = useCallback(() => {
     const actionScope = activeScopeRef.current;
     if (!isScopeCurrent(actionScope)) return;
@@ -451,6 +456,9 @@ export default function MemoryScreen() {
             icon={GitCompareArrows}
             onPress={handleConflictsPress}
           />
+          {currentIsCloud ? (
+            <SettingsRow label="Never remember" icon={Ban} onPress={handleExclusionsPress} />
+          ) : null}
           <SettingsRow
             label="Reset memory"
             icon={Trash2}

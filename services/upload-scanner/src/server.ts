@@ -1,16 +1,28 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 
-import { readSignatureStatus, scanStream, type ClamdAddress } from './clamd.ts';
+import {
+  readSignatureStatus,
+  scanStream,
+  type ClamdAddress,
+  type SignatureStatus,
+} from './clamd.ts';
 import { log } from './log.ts';
 
 export const MAX_SCAN_BYTES = 25 * 1024 * 1024;
 export const SIGNATURE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const SCAN_DEADLINE_MS = 14_000;
 const HEALTH_DEADLINE_MS = 3_000;
+const HEALTH_CACHE_MS = 30_000;
 const HEADERS_TIMEOUT_MS = 10_000;
 const REQUEST_TIMEOUT_MS = 20_000;
 const HOUR_MS = 60 * 60 * 1000;
+const SCAN_INCOMPLETE = 'The scanner could not complete the scan';
+const ENCRYPTED_SIGNATURE_PREFIX = 'Heuristics.Encrypted.';
+const EICAR_PROBE = Buffer.from(
+  ['X5O!P%@AP[4\\PZX54(P^)7CC)7}$', 'EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*'].join(''),
+  'latin1',
+);
 
 export interface ScannerOptions {
   tokens: readonly string[];
@@ -18,6 +30,12 @@ export interface ScannerOptions {
   maxBytes?: number;
   scanDeadlineMs?: number;
   now?: () => number;
+  probe?: () => Promise<ClamdHealth>;
+}
+
+export interface ClamdHealth {
+  scanning: boolean;
+  signatures: SignatureStatus | null;
 }
 
 function respond(
@@ -26,6 +44,7 @@ function respond(
   body: object,
   headers: Record<string, string> = {},
 ): void {
+  if (res.headersSent) return;
   const payload = JSON.stringify(body);
   res.writeHead(status, {
     'Content-Type': 'application/json',
@@ -77,7 +96,7 @@ async function scan(
   const deadline = new AbortController();
   const timer = setTimeout(() => {
     deadline.abort();
-    if (!req.complete) req.destroy();
+    refuse(res, 503, SCAN_INCOMPLETE);
   }, deadlineMs);
   try {
     const verdict = await scanStream(clamd, req, deadline.signal);
@@ -88,7 +107,13 @@ async function scan(
     }
     if (verdict.kind === 'infected') {
       log('warn', 'scan_infected', { bytes, ms, signature: verdict.signature });
-      return respond(res, 200, { safe: false, detail: `ClamAV detected ${verdict.signature}` });
+      return respond(res, 200, {
+        safe: false,
+        detail: `ClamAV detected ${verdict.signature}`,
+        ...(verdict.signature.startsWith(ENCRYPTED_SIGNATURE_PREFIX)
+          ? { reason: 'encrypted' }
+          : {}),
+      });
     }
     log('error', 'scan_failed', { bytes, ms, reason: verdict.reason });
   } catch (error) {
@@ -96,31 +121,54 @@ async function scan(
   } finally {
     clearTimeout(timer);
   }
-  refuse(res, 503, 'The scanner could not complete the scan');
+  refuse(res, 503, SCAN_INCOMPLETE);
+}
+
+async function probeClamd(clamd: ClamdAddress): Promise<ClamdHealth> {
+  const signal = AbortSignal.timeout(HEALTH_DEADLINE_MS);
+  const [verdict, signatures] = await Promise.all([
+    scanStream(clamd, [EICAR_PROBE], signal).catch(() => null),
+    readSignatureStatus(clamd, signal).catch(() => null),
+  ]);
+  return { scanning: verdict?.kind === 'infected', signatures };
+}
+
+export function clamdProbe(clamd: ClamdAddress): () => Promise<ClamdHealth> {
+  let last: { at: number; health: Promise<ClamdHealth> } | null = null;
+  return () => {
+    const at = Date.now();
+    if (!last || at - last.at >= HEALTH_CACHE_MS) last = { at, health: probeClamd(clamd) };
+    return last.health;
+  };
 }
 
 async function health(
   res: ServerResponse,
-  clamd: ClamdAddress,
+  probe: () => Promise<ClamdHealth>,
   now: () => number,
   requireFresh: boolean,
+  authorized: boolean,
 ): Promise<void> {
-  try {
-    const status = await readSignatureStatus(clamd, AbortSignal.timeout(HEALTH_DEADLINE_MS));
-    const age = now() - status.publishedAt.getTime();
-    const fresh = age <= SIGNATURE_MAX_AGE_MS;
-    respond(res, fresh || !requireFresh ? 200 : 503, {
-      status: fresh ? 'ok' : 'stale',
-      engine: status.engine,
-      signatures: {
-        version: status.version,
-        publishedAt: status.publishedAt.toISOString(),
-        ageHours: Math.floor(age / HOUR_MS),
-      },
-    });
-  } catch {
-    respond(res, 503, { status: 'unavailable' });
-  }
+  const { scanning, signatures } = await probe();
+  if (!scanning || !signatures) return respond(res, 503, { status: 'unavailable' });
+  const age = now() - signatures.publishedAt.getTime();
+  const fresh = age <= SIGNATURE_MAX_AGE_MS;
+  const status = fresh ? 'ok' : 'stale';
+  respond(
+    res,
+    fresh || !requireFresh ? 200 : 503,
+    authorized
+      ? {
+          status,
+          engine: signatures.engine,
+          signatures: {
+            version: signatures.version,
+            publishedAt: signatures.publishedAt.toISOString(),
+            ageHours: Math.floor(age / HOUR_MS),
+          },
+        }
+      : { status },
+  );
 }
 
 export function createScannerServer(options: ScannerOptions): Server {
@@ -128,6 +176,7 @@ export function createScannerServer(options: ScannerOptions): Server {
   const maxBytes = options.maxBytes ?? MAX_SCAN_BYTES;
   const deadlineMs = options.scanDeadlineMs ?? SCAN_DEADLINE_MS;
   const now = options.now ?? Date.now;
+  const probe = options.probe ?? clamdProbe(options.clamd);
 
   const server = createServer((req, res) => {
     const path = (req.url ?? '/').split('?', 1)[0];
@@ -143,7 +192,13 @@ export function createScannerServer(options: ScannerOptions): Server {
       (path === '/health' || path === '/health/signatures') &&
       (req.method === 'GET' || req.method === 'HEAD')
     ) {
-      void health(res, options.clamd, now, path === '/health/signatures');
+      void health(
+        res,
+        probe,
+        now,
+        path === '/health/signatures',
+        isAuthorized(req.headers.authorization),
+      );
       return;
     }
     refuse(res, 404, 'Not found');

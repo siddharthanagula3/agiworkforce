@@ -9,6 +9,8 @@ export interface SyncConversationRecord {
   updatedAt: string;
   messageCount: number;
   pinned: boolean;
+  starred?: boolean;
+  archived?: boolean;
   model?: string;
   projectId?: string;
   activeLeafMessageId?: string | null;
@@ -61,6 +63,8 @@ export function applyConversationDeltas(
       updatedAt: d.updated_at,
       messageCount: existing?.messageCount ?? 0,
       pinned: d.pinned,
+      ...(d.starred !== undefined ? { starred: d.starred } : {}),
+      ...(d.archived !== undefined ? { archived: d.archived } : {}),
       model: d.model ?? undefined,
       projectId: d.project_id ?? undefined,
       ...branchPointer,

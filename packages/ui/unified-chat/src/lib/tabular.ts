@@ -33,10 +33,11 @@ export function numericValue(value: string): number {
 }
 
 function sniffDelimiter(firstLine: string): ',' | '\t' | ';' {
+  const unquoted = firstLine.replace(/"(?:[^"]|"")*"/g, '');
   const counts: Array<[',' | '\t' | ';', number]> = [
-    [',', (firstLine.match(/,/g) ?? []).length],
-    ['\t', (firstLine.match(/\t/g) ?? []).length],
-    [';', (firstLine.match(/;/g) ?? []).length],
+    [',', (unquoted.match(/,/g) ?? []).length],
+    ['\t', (unquoted.match(/\t/g) ?? []).length],
+    [';', (unquoted.match(/;/g) ?? []).length],
   ];
   counts.sort((a, b) => b[1] - a[1]);
   return counts[0]![1] > 0 ? counts[0]![0] : ',';

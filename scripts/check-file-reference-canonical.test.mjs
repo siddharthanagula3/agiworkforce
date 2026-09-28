@@ -121,10 +121,20 @@ test('a new module declaring its own extracted-text cap fails', () => {
 
 test('a baseline entry that has been fixed is reported as stale', () => {
   const root = scratchRepository();
-  const [first] = Object.keys(TEXT_LIMIT_BASELINE);
-  const source = fs.readFileSync(path.join(root, first), 'utf8');
-  write(root, first, source.replace(/export const MAX_[A-Z_]*TEXT_CHARS\s*=\s*[0-9_]+\s*;/, ''));
-  const { failures } = evaluate(root);
+  const file = 'apps/web/lib/server/legacy-extraction.ts';
+  const textLimitBaseline = { ...TEXT_LIMIT_BASELINE, [file]: 'kept its own cap for now' };
+  write(
+    root,
+    file,
+    'export const MAX_LEGACY_TEXT_CHARS = 1_000;\nexport const bytes = new Uint8Array(1);\n',
+  );
+  assert.ok(
+    !evaluate(root, { textLimitBaseline }).failures.some((failure) =>
+      failure.includes('stale baseline entry'),
+    ),
+  );
+  write(root, file, 'export const bytes = new Uint8Array(1);\n');
+  const { failures } = evaluate(root, { textLimitBaseline });
   assert.ok(failures.some((failure) => failure.includes('stale baseline entry')));
   fs.rmSync(root, { recursive: true, force: true });
 });

@@ -10,17 +10,16 @@ nothing is left.
 
 - Done when: One resolver combines model, plan, surface and operator switches to say whether each feature is available here, and the surface's controls read it.
 - Wave: 3
-- Already works on: mobile
+- Already works on: mobile, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | partials/platform 86d1f2aeeb to 2c38d6c7fc: the web runtime provider now holds the /api/me capability document and useCapability resolves every capability through it, so web search, cloud code execution, image generation (composer and Image Studio), voice mode, slash commands and the desktop-only affordances follow the server's model, plan, surface and operator-switch decision; the document now denies image generation to plans without it. Still open: the Research toggle reads only the model catalogue because TierPolicy, and so the document, allows Research only on Max and Enterprise while the chat route runs it on every plan (ruling requested); video generation and AGI Work stay plan checks because the capability vocabulary has no id for them | ui |
-| desktop | partial | partials/platform 86d1f2aeeb to 2c38d6c7fc: the web runtime provider now holds the /api/me capability document and useCapability resolves every capability through it, so web search, cloud code execution, image generation (composer and Image Studio), voice mode, slash commands and the desktop-only affordances follow the server's model, plan, surface and operator-switch decision; the document now denies image generation to plans without it. Still open: the Research toggle reads only the model catalogue because TierPolicy, and so the document, allows Research only on Max and Enterprise while the chat route runs it on every plan (ruling requested); video generation and AGI Work stay plan checks because the capability vocabulary has no id for them | ui |
+| web | partial | partials/platform 62f0721b9f: Deep Research is the billing plan capability deep_research, on Pro, Max, Max 20x, Team and Enterprise with Basic and Free excluded (D-2026-09-28-11). The capability document, the web composer toggle and the desktop entitlement all read it. Still open: video generation and AGI Work stay plan checks, because the capability vocabulary has no id for either | ui |
+| desktop | partial | partials/platform 62f0721b9f: Deep Research is the billing plan capability deep_research, on Pro, Max, Max 20x, Team and Enterprise with Basic and Free excluded (D-2026-09-28-11). The capability document, the web composer toggle and the desktop entitlement all read it. Still open: video generation and AGI Work stay plan checks, because the capability vocabulary has no id for either | ui |
 | cli | partial | Commands and indicators are now gated per model and privacy mode, but there is still no single feature resolver, and the CLI reads operator kill switches only indirectly through the managed model list. | handler |
 | vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
 
-Code: `packages/contracts/types/src/capability-handshake/evaluator.ts:120-120`, `packages/ui/unified-chat/src/lib/capabilities.tsx:36-36`, `packages/ui/unified-chat/src/lib/capabilities.tsx:56-56`, `apps/web/shared/stores/web-auth-store.ts:138-138`
+Code: `packages/contracts/types/src/billing-catalog.ts:225-225`, `apps/web/lib/services/capability-handshake-service.ts:105-105`, `apps/desktop/src/services/desktopCloudEntitlements.ts:60-60`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:1398-1398`
 
 ## S78.03: Model-dependent accepted-file types.
 
@@ -44,11 +43,11 @@ Code: `apps/mobile/src/features/model-picker/localModelRuntime.ts:60-62`, `apps/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | agi image refuses transparency for a model that cannot do it and prints a model's ratios when it refuses one, but /api/media/availability does not publish each model's ratios and sizes, so they cannot be narrowed before the request (server change). | handler |
+| cli | partial | billing/no-yearly d75b94c7b4: the server half is done. /api/media/availability now publishes per model aspect_ratios and max_images (image, read from the tables the unsupported_aspect_ratio and unsupported_image_count refusals use) and output_sizes (video: resolution, aspect_ratio, width, height, duration_secs per requestable and priced pair) plus supports_audio. The cli cell closes when agi image narrows --aspect-ratio and -n from the admission before the request (p-mcp-rust); chrome stays missing until the extension has a media surface (p-chrome). | handler |
 | vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
+| chrome | partial | billing/no-yearly d75b94c7b4: the server half is done. /api/media/availability now publishes per model aspect_ratios and max_images (image, read from the tables the unsupported_aspect_ratio and unsupported_image_count refusals use) and output_sizes (video: resolution, aspect_ratio, width, height, duration_secs per requestable and priced pair) plus supports_audio. The cli cell closes when agi image narrows --aspect-ratio and -n from the admission before the request (p-mcp-rust); chrome stays missing until the extension has a media surface (p-chrome). | handler |
 
-Code: `apps/cli/src/cloud/image.rs:446-446`
+Code: `packages/contracts/cloud-contracts/src/managed-media.ts:188-188`, `packages/contracts/cloud-contracts/src/managed-media.ts:211-211`, `packages/contracts/cloud-contracts/src/managed-media.ts:214-214`, `packages/contracts/cloud-contracts/src/managed-media.ts:215-215`
 
 ## S78.10: Role restrictions.
 

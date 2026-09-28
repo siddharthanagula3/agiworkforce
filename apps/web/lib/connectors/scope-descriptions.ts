@@ -273,6 +273,20 @@ const SCOPE_DESCRIPTIONS: Readonly<Record<string, ScopeDescription>> = {
   item_download: { sentence: 'Downloads your files.', access: READ },
   item_upload: { sentence: 'Uploads new files.', access: WRITE },
 
+  signature: {
+    sentence:
+      'Creates, sends and updates envelopes for signature, and reads your envelopes, templates, recipients and account.',
+    access: WRITE,
+  },
+  adm_store_unified_repo_read: {
+    sentence: 'Reads your agreements and their details in Docusign Navigator.',
+    access: READ,
+  },
+  aow_manage: {
+    sentence: 'Lists, starts, pauses, resumes and cancels your Docusign Maestro workflows.',
+    access: WRITE,
+  },
+
   instagram_basic: { sentence: 'Reads your profile and media.', access: READ },
   instagram_manage_insights: {
     sentence: 'Reads engagement and audience insights.',

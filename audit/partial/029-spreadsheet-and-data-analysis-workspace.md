@@ -77,11 +77,8 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Only the assistant office-file tool can add one chart per sheet at creation; no in-app chart insertion. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1756`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:195-203`, `apps/web/lib/services/managed-office-file-service.ts:67-80`, `apps/web/lib/services/managed-workbook-builder.ts:218-231`
 
 ## S29.18: Chart-type selector.
 
@@ -91,11 +88,8 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1756`, `apps/mobile/sr
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Chart type is chosen by the assistant (bar/line/pie); no user selector. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1756`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:195-203`, `apps/web/lib/services/managed-office-file-service.ts:221-226`
 
 ## S29.19: Chart data-range editor.
 
@@ -105,11 +99,8 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1756`, `apps/mobile/sr
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Range set only by the assistant in the tool call; no editor. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1756`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:195-203`, `apps/web/lib/services/managed-office-file-service.ts:227-234`, `apps/web/lib/services/managed-workbook-builder.ts:75-86`
 
 ## S29.27: Python analysis panel.
 
@@ -146,11 +137,8 @@ Code: `apps/mobile/src/features/chat/utils/toolCallAccumulator.ts:97-110`, `apps
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | An .xlsx comes only from the assistant tool; no export action on tables. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1756`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:195-203`, `apps/web/lib/services/managed-office-file-service.ts:106-111`
 
 ## S29.35: Export CSV.
 
@@ -189,11 +177,8 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1756`, `apps/mobile/sr
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Report only via the assistant office-file tool; no dedicated action. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1756`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:195-203`, `apps/web/lib/services/managed-office-file-service.ts:408-412`, `apps/web/lib/services/managed-office-file-service.ts:644-648`
 
 ## S29.39: Generate slides from analysis.
 
@@ -203,8 +188,5 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1756`, `apps/mobile/sr
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Deck only via the assistant office-file tool (bullets only); no dedicated action. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1756`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:195-203`, `apps/web/lib/services/managed-office-file-service.ts:513-524`, `apps/web/lib/services/managed-office-file-service.ts:59-63`
