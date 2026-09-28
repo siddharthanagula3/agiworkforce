@@ -71,30 +71,6 @@ Code: `packages/contracts/types/src/routing-profile-choice.ts:48-48`
 
 Code: `apps/extension/src/features/cloud-bridge/managedChatRouting.ts:28-30`, `packages/ai/routing/src/auto.ts:1070-1079`
 
-## S79.10: Classification of required tools.
-
-- Done when: Which tools a request needs (research, agentic work, code execution) changes the routing task.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | The CLI classifier reads only the prompt text (tool/agent phrases); enabled tools do not change its routing task. | handler |
-
-Code: `apps/cli/src/routing/classify.rs:1-9`
-
-## S79.12: Complexity/effort classification.
-
-- Done when: Requests are classified by complexity so routing can set a quality floor or effort.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | The CLI classifies task type only; the task-family quality floor runs only in the server resolver. | handler |
-
-Code: `apps/cli/src/routing/classify.rs:1-9`
-
 ## S79.17: Provider lock.
 
 - Done when: The user can lock requests to one provider for the chosen model.
