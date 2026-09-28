@@ -245,6 +245,7 @@ export const CONNECTOR_CAPABILITIES: Readonly<Record<string, ConnectorCapability
   ]),
   dropbox: mcpConnector('dropbox', 'oauth2', 'read-write'),
   box: mcpConnector('box', 'oauth2', 'read-write'),
+  docusign: mcpConnector('docusign', 'oauth2', 'high-impact'),
   sharepoint: firstPartyConnector('sharepoint', 'oauth2', 'read-only', [
     'search_sites',
     'search_files',
