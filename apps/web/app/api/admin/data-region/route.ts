@@ -10,7 +10,11 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getNeonDb } from '@/lib/server/neon-db';
-import { completeOrganizationRegionMove, listPendingRegionMoves } from '@/lib/server/data-region';
+import {
+  RegionMoveNotRequestedError,
+  completeOrganizationRegionMove,
+  listPendingRegionMoves,
+} from '@/lib/server/data-region';
 
 const CompleteSchema = z
   .object({

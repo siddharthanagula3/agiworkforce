@@ -353,6 +353,8 @@ export const UNDELETED_USER_TABLES: Readonly<Record<string, string>> = {
     'Cascades from organization_members (0200). Grants this user issued to other members keep granted_by_user_id as provenance.',
   organization_group_roles:
     'A directory group grant is organization configuration (0200); granted_by_user_id is provenance, not personal content.',
+  organization_group_members:
+    'Cascades from organization_members (0314). added_by_user_id on rows this user added is provenance.',
   organization_group_managers:
     'Cascades from organization_members (0200). Delegations this user issued keep granted_by_user_id as provenance.',
   organization_admin_api_keys:
