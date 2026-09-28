@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { randomUUID } from 'node:crypto';
+import { editMaskProblem } from '../lib/edit-mask';
 import { NextRequest, NextResponse, after } from 'next/server';
 import {
   ManagedMediaImageGenerationRequestSchema,
@@ -690,6 +691,24 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
             type: 'invalid_request_error',
             code: 'invalid_source_image',
             param,
+          },
+        },
+        {
+          status: 422,
+          headers: { ...getCorsHeaders(request), ...getSecurityHeaders() },
+        },
+      );
+    }
+
+    const maskProblem = maskBytes ? editMaskProblem(sourceBytes, maskBytes) : null;
+    if (maskProblem) {
+      return NextResponse.json(
+        {
+          error: {
+            message: maskProblem,
+            type: 'invalid_request_error',
+            code: 'invalid_mask_image',
+            param: 'mask_image',
           },
         },
         {
