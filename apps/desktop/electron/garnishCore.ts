@@ -19,12 +19,13 @@ import {
  */
 export type GarnishShortcuts = Pick<
   HostPreferences,
-  'quickAskShortcut' | 'screenshotShortcut' | 'voiceShortcut'
+  'quickAskShortcut' | 'screenshotShortcut' | 'windowShotShortcut' | 'voiceShortcut'
 >;
 
 export const DEFAULT_SHORTCUTS: GarnishShortcuts = {
   quickAskShortcut: defaultHostShortcut('quickAsk'),
   screenshotShortcut: defaultHostShortcut('screenshot'),
+  windowShotShortcut: defaultHostShortcut('windowShot'),
   voiceShortcut: defaultHostShortcut('voice'),
 };
 
@@ -38,6 +39,7 @@ export function normalizeShortcuts(raw: unknown): GarnishShortcuts {
   return {
     quickAskShortcut: readAccelerator(source, 'quickAskShortcut'),
     screenshotShortcut: readAccelerator(source, 'screenshotShortcut'),
+    windowShotShortcut: readAccelerator(source, 'windowShotShortcut'),
     voiceShortcut: readAccelerator(source, 'voiceShortcut'),
   };
 }
@@ -59,6 +61,7 @@ export function hostShortcutKeyFor(key: ShortcutKey): HostShortcutKey {
 export const SHORTCUT_LABELS: Record<ShortcutKey, string> = {
   quickAskShortcut: 'Quick Ask',
   screenshotShortcut: 'Screenshot to Chat',
+  windowShotShortcut: 'Window to Chat',
   voiceShortcut: 'Dictation',
 };
 
@@ -76,6 +79,7 @@ function readAccelerator(source: Record<string, unknown>, key: ShortcutKey): str
 export const SHORTCUT_CHOICES: Record<ShortcutKey, readonly string[]> = {
   quickAskShortcut: HOST_SHORTCUT_CHOICES.quickAsk,
   screenshotShortcut: HOST_SHORTCUT_CHOICES.screenshot,
+  windowShotShortcut: HOST_SHORTCUT_CHOICES.windowShot,
   voiceShortcut: HOST_SHORTCUT_CHOICES.voice,
 };
 
