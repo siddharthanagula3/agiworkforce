@@ -98,6 +98,7 @@ import { getAccountMemoryStore } from '../memory/accountMemoryStore';
 import { ChatEditorPanel } from '../providers/chatEditorPanel';
 import { type LocalRuntimePool } from '../integrations/localRuntimePool';
 import { installCli } from '../integrations/cliInstaller';
+import { managePersonalization } from '../features/personalization/personalization';
 import {
   admitDeveloperSessionHandoff,
   describeHandoffRefusal,
@@ -2468,6 +2469,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     }),
     register('agi-workforce.showConnectors', () => openConnectorsSurface(connectorsTreeProvider)),
     register('agi-workforce.showContextFiles', () => openContextSurface(contextPanelProvider)),
+    register('agi-workforce.personalize', () => managePersonalization(context.secrets)),
     register('agi-workforce.showSkills', () => manageSkills(cliCapabilities)),
     register('agi-workforce.showPlugins', () => managePlugins(cliCapabilities)),
     register('agi-workforce.showMcpServers', () => manageMcpServers(cliCapabilities)),
