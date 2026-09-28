@@ -6,9 +6,14 @@ import type {
   PluginListResponse,
   SkillListResponse,
 } from '@agiworkforce/types/protocol';
-import type { McpServerProbe } from '../../integrations/localRuntimeClient';
+import type {
+  McpServerInspection,
+  McpServerProbe,
+  SavedPermissionList,
+} from '../../integrations/localRuntimeClient';
 import { createSkill } from './skillAuthoring';
-import { tPlural } from '../../l10n';
+import type { McpServerDetailsProvider } from './mcpServerDetails';
+import { t, tPlural } from '../../l10n';
 import {
   CLI_CAPABILITY_REQUIREMENT,
   type CliCapabilityAdapter,
@@ -529,10 +534,28 @@ async function testMcpServer(adapter: CliCapabilityAdapter, name: string): Retur
   };
 }
 
-export async function manageMcpServers(adapter: CliCapabilityAdapter): Promise<void> {
-  const [installs, toolLists] = await Promise.all([
+async function showMcpServerDetails(
+  adapter: CliCapabilityAdapter,
+  details: McpServerDetailsProvider,
+  name: string,
+): ReturnType<ManagedRun> {
+  const result = await vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Notification, title: t('mcpDetails.checking', { name }) },
+    () => adapter.call<McpServerInspection>('mcpInspect', name),
+  );
+  if (result.status !== 'ok') return result;
+  await details.show(result.value);
+  return undefined;
+}
+
+export async function manageMcpServers(
+  adapter: CliCapabilityAdapter,
+  details: McpServerDetailsProvider,
+): Promise<void> {
+  const [installs, toolLists, inspects] = await Promise.all([
     adapter.offers('installs'),
     adapter.offers('mcpTools'),
+    adapter.offers('mcpInspect'),
   ]);
   return showManagedSurface(
     {
@@ -555,21 +578,40 @@ export async function manageMcpServers(adapter: CliCapabilityAdapter): Promise<v
             ]
           : [];
         for (const server of result.value.servers) {
-          const actions: ManagedAction[] = toolLists
-            ? [
-                {
-                  button: { iconPath: new vscode.ThemeIcon('list-tree'), tooltip: 'Show tools' },
-                  followUp: { run: () => showMcpServerTools(adapter, server.name), reopen: true },
-                },
-                {
-                  button: {
-                    iconPath: new vscode.ThemeIcon('debug-start'),
-                    tooltip: 'Test connection',
+          const actions: ManagedAction[] = [
+            ...(inspects
+              ? [
+                  {
+                    button: {
+                      iconPath: new vscode.ThemeIcon('info'),
+                      tooltip: t('mcpDetails.action'),
+                    },
+                    followUp: {
+                      run: () => showMcpServerDetails(adapter, details, server.name),
+                      reopen: false,
+                    },
                   },
-                  followUp: { run: () => testMcpServer(adapter, server.name), reopen: true },
-                },
-              ]
-            : [];
+                ]
+              : []),
+            ...(toolLists
+              ? [
+                  {
+                    button: { iconPath: new vscode.ThemeIcon('list-tree'), tooltip: 'Show tools' },
+                    followUp: {
+                      run: () => showMcpServerTools(adapter, server.name),
+                      reopen: true,
+                    },
+                  },
+                  {
+                    button: {
+                      iconPath: new vscode.ThemeIcon('debug-start'),
+                      tooltip: 'Test connection',
+                    },
+                    followUp: { run: () => testMcpServer(adapter, server.name), reopen: true },
+                  },
+                ]
+              : []),
+          ];
           if (installs && server.scope === 'user') {
             actions.push(
               removeAction(async () =>
@@ -671,5 +713,47 @@ export async function manageHooks(adapter: CliCapabilityAdapter): Promise<void> 
       },
     },
     'hooks',
+  );
+}
+
+const SAVED_PERMISSION_KINDS = {
+  command: 'savedApprovals.kindCommand',
+  file: 'savedApprovals.kindFile',
+  exec_policy: 'savedApprovals.kindPolicy',
+} as const;
+
+export async function manageSavedApprovals(adapter: CliCapabilityAdapter): Promise<void> {
+  return showManagedSurface(
+    {
+      title: t('savedApprovals.title'),
+      placeholder: t('savedApprovals.placeholder'),
+      empty: t('savedApprovals.empty'),
+      load: async () => {
+        const result = await adapter.call<SavedPermissionList>('savedPermissions');
+        if (result.status !== 'ok') return result;
+        const items: ManagedItem[] = result.value.permissions.map((permission) => {
+          const allowed = permission.decision === 'allow';
+          return {
+            label: `$(${allowed ? 'pass' : 'circle-slash'}) ${permission.label}`,
+            description: allowed ? t('savedApprovals.allowed') : t('savedApprovals.denied'),
+            detail: t(SAVED_PERMISSION_KINDS[permission.kind]),
+            actions: [
+              removeAction(async () =>
+                (await confirmRemoval(
+                  t('savedApprovals.removeTitle'),
+                  allowed
+                    ? t('savedApprovals.removeAllowed', { label: permission.label })
+                    : t('savedApprovals.removeDenied', { label: permission.label }),
+                ))
+                  ? adapter.call('savedPermissionsRemove', permission.id)
+                  : undefined,
+              ),
+            ],
+          };
+        });
+        return { status: 'ok', value: items };
+      },
+    },
+    t('savedApprovals.noun'),
   );
 }

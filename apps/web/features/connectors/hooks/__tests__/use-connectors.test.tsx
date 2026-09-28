@@ -292,6 +292,7 @@ describe('useConnectors, OAuth grants', () => {
         )
         .mockResolvedValueOnce(
           jsonResponse(409, {
+            error: 'This connector connects through OAuth authorization, not a directory toggle.',
             connectorId: 'linear',
             oauthStartPath: '/api/connectors/oauth/start?connectorId=linear',
           }),
