@@ -268,14 +268,13 @@ Code: `apps/mobile/src/features/chat/components/ToolCallTimeline.tsx:84-87`, `pa
 
 - Done when: When a task needs a scope the grant lacks, the product asks the user to grant that permission.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Reconnect on the connector screen re-requests the wider scopes, but chat never shows which permission is missing (no connect card on mobile). | ui |
-| cli | partial | The MCP crate parses insufficient_scope challenges, but no CLI path re-runs login with the extra scope; the user must run `agi mcp login` again by hand. | handler |
 
-Code: `apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx:318-348`, `apps/web/app/api/connectors/oauth/start/route.ts:261-271`, `crates/agiworkforce-mcp/src/oauth/flow.rs:185-193`, `apps/cli/src/lib.rs:2542-2556`
+Code: `apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx:318-348`, `apps/web/app/api/connectors/oauth/start/route.ts:261-271`
 
 ## S55.32: Private-network setup where offered.
 
