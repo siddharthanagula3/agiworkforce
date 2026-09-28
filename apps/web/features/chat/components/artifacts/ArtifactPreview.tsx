@@ -36,6 +36,7 @@ import {
   FolderPlus,
   Globe,
   Library,
+  List,
   Pencil,
   GitFork,
   Sparkles,
@@ -44,6 +45,7 @@ import type { PublishResult } from '@agiworkforce/artifacts';
 import { isSupportedChatAttachment } from '@agiworkforce/cloud-contracts';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { exportDocument } from '@features/chat/services/document-export-service';
+import { extractMarkdownHeadings } from '@features/chat/components/research/ResearchReportView';
 import {
   summarizeGeneratedFileBundle,
   type ArtifactManifest,
@@ -193,6 +195,68 @@ interface ArtifactPreviewProps {
   publishedLink?: string;
   projectLink?: ArtifactProjectLink;
   projectSave?: ArtifactProjectSave;
+}
+
+const OUTLINE_MIN_HEADINGS = 3;
+
+function MarkdownDocumentPreview({ content, className }: { content: string; className: string }) {
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const headings = useMemo(() => extractMarkdownHeadings(content), [content]);
+
+  useEffect(() => {
+    const rendered = bodyRef.current?.querySelectorAll<HTMLElement>('h1, h2, h3, h4');
+    if (!rendered) return;
+    headings.forEach((heading, index) => {
+      const element = rendered[index];
+      if (element) element.id = `artifact-${heading.id}`;
+    });
+  }, [headings]);
+
+  return (
+    <div
+      className={cn('overflow-auto bg-background px-6 py-5', className)}
+      data-testid="artifact-markdown-preview"
+    >
+      <div className="mx-auto max-w-3xl">
+        {headings.length >= OUTLINE_MIN_HEADINGS && (
+          <nav
+            className="mb-4 rounded-lg border border-border/30 bg-muted/20 p-3"
+            aria-label="Document outline"
+          >
+            <p className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <List className="h-3.5 w-3.5" aria-hidden="true" />
+              Outline
+            </p>
+            <ol className="space-y-0.5" data-testid="artifact-document-outline">
+              {headings.map((heading) => (
+                <li
+                  key={heading.id}
+                  style={{
+                    paddingLeft: `${(heading.level - (headings[0]?.level ?? 1)) * 12}px`,
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() =>
+                      bodyRef.current?.ownerDocument
+                        .getElementById(`artifact-${heading.id}`)
+                        ?.scrollIntoView?.({ block: 'start' })
+                    }
+                    className="block w-full truncate text-left text-xs text-muted-foreground transition-colors hover:text-primary"
+                  >
+                    {heading.text}
+                  </button>
+                </li>
+              ))}
+            </ol>
+          </nav>
+        )}
+        <div ref={bodyRef}>
+          <MarkdownContent content={content} />
+        </div>
+      </div>
+    </div>
+  );
 }
 
 const MARKDOWN_SHORTCUTS: Readonly<
@@ -1206,14 +1270,7 @@ if (__AgiApp) {
   );
 
   const renderMarkdownPreview = (containerClassName: string) => (
-    <div
-      className={cn('overflow-auto bg-background px-6 py-5', containerClassName)}
-      data-testid="artifact-markdown-preview"
-    >
-      <div className="mx-auto max-w-3xl">
-        <MarkdownContent content={activeContent} />
-      </div>
-    </div>
+    <MarkdownDocumentPreview content={activeContent} className={containerClassName} />
   );
 
   const renderSharedPreview = (containerClassName: string) => (
