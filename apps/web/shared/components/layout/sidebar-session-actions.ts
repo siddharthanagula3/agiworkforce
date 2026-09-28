@@ -50,6 +50,26 @@ export async function runSessionRowAction(
   return succeeded;
 }
 
+export async function toggleConversationArchive(
+  archived: boolean,
+  setArchived: (archived: boolean) => Promise<boolean>,
+  openArchived: () => void,
+): Promise<boolean> {
+  const succeeded = await runSessionRowAction(archived ? 'restore' : 'archive', () =>
+    setArchived(!archived),
+  );
+  if (succeeded && !archived) {
+    toast('Chat archived', {
+      action: {
+        label: 'Undo',
+        onClick: () => void runSessionRowAction('restore', () => setArchived(false)),
+      },
+      cancel: { label: 'View archived', onClick: openArchived },
+    });
+  }
+  return succeeded;
+}
+
 export function conversationHref(conversationId: string): string {
   return `/chat/${encodeURIComponent(conversationId)}`;
 }

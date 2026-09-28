@@ -100,7 +100,10 @@
     "noArchived": "Архивных чатов нет",
     "noConversations": "Бесед пока нет",
     "showActive": "Вернуться к активным чатам",
-    "showArchived": "Показать архивные чаты ({{count}})"
+    "showArchived": "Показать архивные чаты ({{count}})",
+    "archivedToast": "Чат перемещён в архив",
+    "archivedUndo": "Отменить",
+    "archivedView": "Открыть архив"
   },
   "emptyChat": {
     "neutralHeadline": "Чем я могу помочь сегодня?",

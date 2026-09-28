@@ -100,7 +100,10 @@
     "noArchived": "Nessuna chat archiviata",
     "noConversations": "Ancora nessuna conversazione",
     "showActive": "Torna alle chat attive",
-    "showArchived": "Mostra le chat archiviate ({{count}})"
+    "showArchived": "Mostra le chat archiviate ({{count}})",
+    "archivedToast": "Chat archiviata",
+    "archivedUndo": "Annulla",
+    "archivedView": "Vedi archiviate"
   },
   "emptyChat": {
     "neutralHeadline": "Come posso aiutarti oggi?",
