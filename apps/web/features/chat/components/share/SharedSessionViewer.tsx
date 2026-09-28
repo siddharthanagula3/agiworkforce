@@ -26,6 +26,7 @@ interface Message {
 
 export interface SharedSession {
   title: string;
+  shared_by?: string;
   model_id?: string;
   provider?: string;
   messages: Message[];
@@ -52,10 +53,13 @@ export function SharedSessionViewer({ session, token }: { session: SharedSession
             <h1 className="truncate text-h3" title={session.title}>
               {session.title}
             </h1>
-            <div className="mt-1 flex items-center gap-3 text-sm text-muted-foreground">
+            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
               {session.model_id && (
                 <ModelBadge label={getManagedModelPresentationLabel(session.model_id)} />
               )}
+              {session.shared_by ? (
+                <span className="max-w-full truncate">Shared by {session.shared_by}</span>
+              ) : null}
               <span>{session.total_messages} messages</span>
               <span>
                 Expires {formatDistanceToNow(new Date(session.expires_at), { addSuffix: true })}

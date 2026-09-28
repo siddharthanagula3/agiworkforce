@@ -16,8 +16,8 @@ vi.mock('./doc-index', () => ({
 }));
 
 describe('DocsPage', () => {
-  it('uses the public design system, link lists, and shared footer', () => {
-    const { container } = render(<DocsPage />);
+  it('uses the public design system, link lists, and shared footer', async () => {
+    const { container } = render(await DocsPage({ searchParams: Promise.resolve({}) }));
 
     expect(
       screen.getByRole('heading', { level: 1, name: 'Build with every AGI surface.' }),
