@@ -5537,7 +5537,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden sm:min-w-[360px]"
         >
           {!compact && (
-            <div
+            <header
               data-app-header=""
               className={cn(
                 'relative flex h-12 shrink-0 items-center justify-between gap-2 px-4',
@@ -5546,6 +5546,13 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                   : 'border-b border-[var(--chat-border-subtle)]',
               )}
             >
+              {hasMessages ? (
+                <h1 className="sr-only">
+                  {activeConversationTitle && activeConversationTitle !== NEW_CHAT_TITLE
+                    ? activeConversationTitle
+                    : t('chat:header.untitledConversation', 'Conversation')}
+                </h1>
+              ) : null}
               {/* Title left, actions right, the arrangement both leaders use. The
                 chevron menu carries the row actions (rename, move, share,
                 print, export, branch, delete); Share keeps its own control in
@@ -5718,7 +5725,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                 />
                 <ArtifactsToggleButton onToggle={() => toggleSecondaryPanel('artifacts')} />
               </div>
-            </div>
+            </header>
           )}
 
           {/* A render failure inside the transcript used to reach the route
