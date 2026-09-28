@@ -119,7 +119,7 @@
     },
     {
       "doc": "search",
-      "sha256": "419f9da94eddf0b6f121834f1a97355a70392af4407ada1765b1ea612bef9c50"
+      "indexed": true
     },
     {
       "doc": "sharing-conversations",
@@ -3942,6 +3942,124 @@
           "kind": "copy",
           "file": "packages/contracts/cloud-contracts/src/account-security.ts",
           "text": "undoHours: 48"
+        }
+      ]
+    },
+    {
+      "id": "search-no-switch",
+      "doc": "search",
+      "section": "Searching the web from a chat",
+      "kind": "prose",
+      "sentence": "There is no search switch to find.",
+      "implementation": ["apps/web/features/chat/components/Composer/ChatComposerNew.tsx"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+          "text": "setComposerToggles({ webSearchEnabled: modelSupportsSearch });"
+        }
+      ]
+    },
+    {
+      "id": "search-ambient",
+      "doc": "search",
+      "section": "Searching the web from a chat",
+      "kind": "prose",
+      "sentence": "Managed web search is ambient: it stays on whenever the selected model and deployment have a real search path, and turns off only when no such path exists.",
+      "implementation": ["apps/web/features/chat/components/Composer/ChatComposerNew.tsx"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+          "text": "if (webSearchEnabled !== modelSupportsSearch) {"
+        }
+      ]
+    },
+    {
+      "id": "search-workspace-site-rules",
+      "doc": "search",
+      "section": "Searching the web from a chat",
+      "kind": "prose",
+      "sentence": "Results from other sites are left out, and a page outside the allowed sites is not fetched.",
+      "implementation": [
+        "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts",
+        "apps/web/app/api/llm/v1/chat/completions/lib/research-sources.ts"
+      ],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts",
+          "text": "readWorkspaceWebDomainPolicy(scoped.db, scoped.organizationId)"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/llm/v1/chat/completions/lib/__tests__/research-sources.test.ts",
+          "name": "admits a domain and its subdomains under an allowlist"
+        }
+      ]
+    },
+    {
+      "id": "search-deep-research-model-refusal",
+      "doc": "search",
+      "section": "Deep Research",
+      "kind": "prose",
+      "sentence": "It is not available on every model: choosing one that cannot do it says \"Deep Research isn't available for this model. Choose Auto or a model that supports Deep Research.\" Availability also depends on your plan, and an ineligible plan shows \"Upgrade to use Deep Research\".",
+      "implementation": ["apps/web/features/chat/components/Composer/ChatComposerNew.tsx"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+          "text": "Deep Research isn't available for this model. Choose Auto or a model that supports Deep Research."
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+          "text": "'Upgrade to use Deep Research'"
+        }
+      ]
+    },
+    {
+      "id": "search-recent-searches-clear",
+      "doc": "search",
+      "section": "Finding your own conversations",
+      "kind": "prose",
+      "sentence": "Your recent searches are kept; clearing them warns that it cannot be undone.",
+      "implementation": ["apps/web/features/chat/components/dialogs/GlobalSearchDialog.tsx"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/features/chat/components/dialogs/GlobalSearchDialog.tsx",
+          "text": "This removes your recent searches. This cannot be undone."
+        }
+      ]
+    },
+    {
+      "id": "search-past-chats-setting",
+      "doc": "search",
+      "section": "Letting AGI search your past chats",
+      "kind": "prose",
+      "sentence": "Settings, Memory holds **Search past chats**: \"Let AGI look up excerpts from your other conversations when answering.\" It is never used in temporary chats.",
+      "implementation": ["apps/web/features/settings/sections/MemorySection.tsx"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/features/settings/sections/MemorySection.tsx",
+          "text": "Let AGI look up excerpts from your other conversations when answering. Never used in temporary chats."
+        }
+      ]
+    },
+    {
+      "id": "search-help-no-match",
+      "doc": "search",
+      "section": "Searching the help centre",
+      "kind": "prose",
+      "sentence": "If nothing matches, it says so rather than guessing, and points at contact@agiworkforce.com.",
+      "implementation": ["apps/web/features/support/components/HelpSearch.tsx"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/features/support/components/HelpSearch.tsx",
+          "text": "Nothing here covers that yet. Email contact@agiworkforce.com for support."
         }
       ]
     }
