@@ -27,6 +27,7 @@ import {
   uploadUnsafePathMessage,
   uploadUnusableNameMessage,
   CLAUDE_MARKETPLACE_MANIFEST_PATH,
+  CLAUDE_PLUGIN_COMMANDS_DIRECTORY,
   CLAUDE_PLUGIN_METADATA_PATH,
   CLAUDE_PLUGIN_SKILLS_DIRECTORY,
   CLAUDE_SKILL_FILE_NAME,
@@ -46,6 +47,7 @@ import { displayVersion, lastSegment, neutralizeCopy } from './entries';
 import { parsePluginMetadata } from './inspection';
 import { parseClaudeMarketplaceManifest } from './official-marketplace';
 import { parseSkillFile } from './skill-files';
+import { buildSkillMarkdown } from '@agiworkforce/skills';
 
 const PATH_SEPARATOR = '/';
 const WINDOWS_SEPARATOR = '\\';
@@ -58,6 +60,8 @@ const PLUGIN_KEY_DISALLOWED = /[^a-z0-9._-]+/g;
 const PLUGIN_KEY_EDGE_TRIM = /^[^a-z0-9]+|[^a-z0-9._-]+$/g;
 const SKILL_FILE_SUFFIX = `${PATH_SEPARATOR}${CLAUDE_SKILL_FILE_NAME}`;
 const RELATIVE_SOURCE_PREFIX = /^\.\/+/;
+const MARKDOWN_SUFFIX = '.md';
+const COMMAND_NAME_SEPARATOR = ':';
 
 export interface UploadedSkillFile {
   path: string;
@@ -359,10 +363,128 @@ async function readSkills(
   return { skills, omittedFiles };
 }
 
-function declaredDependencies(json: unknown): unknown {
+function manifestField(json: unknown, key: string): unknown {
   return json && typeof json === 'object' && !Array.isArray(json)
-    ? (json as Record<string, unknown>)['dependencies']
+    ? (json as Record<string, unknown>)[key]
     : undefined;
+}
+
+function declaredDependencies(json: unknown): unknown {
+  return manifestField(json, 'dependencies');
+}
+
+interface CommandSource {
+  name: string;
+  path: string | null;
+  content: string | null;
+}
+
+function pluginBase(directory: string): string {
+  return directory.length > 0 ? `${directory}${PATH_SEPARATOR}` : '';
+}
+
+function markdownUnder(members: Map<string, ArchiveMember>, prefix: string): string[] {
+  return [...members.keys()]
+    .filter((path) => path.startsWith(prefix) && path.endsWith(MARKDOWN_SUFFIX))
+    .sort();
+}
+
+function commandsIn(members: Map<string, ArchiveMember>, root: string): CommandSource[] {
+  return markdownUnder(members, root).map((path) => ({
+    name: path
+      .slice(root.length, -MARKDOWN_SUFFIX.length)
+      .split(PATH_SEPARATOR)
+      .join(COMMAND_NAME_SEPARATOR),
+    path,
+    content: null,
+  }));
+}
+
+function commandSources(
+  members: Map<string, ArchiveMember>,
+  directory: string,
+  declared: unknown,
+): CommandSource[] {
+  const base = pluginBase(directory);
+  if (declared === undefined || declared === null) {
+    return commandsIn(members, `${base}${CLAUDE_PLUGIN_COMMANDS_DIRECTORY}${PATH_SEPARATOR}`);
+  }
+  const listed = typeof declared === 'string' ? [declared] : declared;
+  if (Array.isArray(listed)) {
+    return listed.flatMap((entry) => {
+      if (typeof entry !== 'string') return [];
+      const relative = `${base}${entry.trim().replace(RELATIVE_SOURCE_PREFIX, '').replace(/\/+$/, '')}`;
+      if (unsafeArchivePath(relative)) return [];
+      if (!relative.endsWith(MARKDOWN_SUFFIX)) {
+        return commandsIn(members, `${relative}${PATH_SEPARATOR}`);
+      }
+      const file = relative.slice(relative.lastIndexOf(PATH_SEPARATOR) + 1);
+      return members.has(relative)
+        ? [{ name: file.slice(0, -MARKDOWN_SUFFIX.length), path: relative, content: null }]
+        : [];
+    });
+  }
+  if (!declared || typeof declared !== 'object') return [];
+  return Object.entries(declared as Record<string, unknown>).flatMap(
+    ([name, spec]): CommandSource[] => {
+      const source = manifestField(spec, 'source');
+      const content = manifestField(spec, 'content');
+      if (typeof content === 'string') {
+        const description = manifestField(spec, 'description');
+        return [
+          {
+            name,
+            path: null,
+            content: buildSkillMarkdown({
+              name,
+              description: typeof description === 'string' ? description : name,
+              body: content,
+            }),
+          },
+        ];
+      }
+      if (typeof source !== 'string') return [];
+      const path = `${base}${source.trim().replace(RELATIVE_SOURCE_PREFIX, '')}`;
+      return !unsafeArchivePath(path) && members.has(path) ? [{ name, path, content: null }] : [];
+    },
+  );
+}
+
+async function readCommands(
+  members: Map<string, ArchiveMember>,
+  directory: string,
+  declared: unknown,
+  skills: readonly UploadedSkill[],
+): Promise<UploadedSkill[]> {
+  const taken = new Set(skills.map((skill) => skill.name));
+  const commands: UploadedSkill[] = [];
+  for (const source of commandSources(members, directory, declared)) {
+    if (!source.name || source.name.includes(PATH_SEPARATOR) || taken.has(source.name)) continue;
+    const path = `${pluginBase(directory)}${CLAUDE_PLUGIN_SKILLS_DIRECTORY}${PATH_SEPARATOR}${source.name}${SKILL_FILE_SUFFIX}`;
+    if (members.has(path)) continue;
+    const member = source.path ? members.get(source.path) : undefined;
+    const content = source.content ?? (member ? await readText(member) : null);
+    const command = content === null ? null : parseSkillFile(path, content);
+    if (!command || !content || taken.has(command.name)) continue;
+    taken.add(command.name);
+    commands.push({
+      name: command.name,
+      description: command.description,
+      path,
+      content,
+      files: [],
+    });
+  }
+  return commands;
+}
+
+function withinSkillLimit(pluginName: string, skills: readonly UploadedSkill[]): UploadedSkill[] {
+  if (skills.length > PLUGIN_DIRECTORY_MAX_SKILLS_PER_INSTALL) {
+    throw new PluginArchiveError([
+      uploadTooManySkillsMessage(pluginName, PLUGIN_DIRECTORY_MAX_SKILLS_PER_INSTALL),
+    ]);
+  }
+  return [...skills];
 }
 
 function readableDependencies(
@@ -398,7 +520,12 @@ async function singlePlugin(
     name,
     parsePluginDependencies(declaredDependencies(metadataJson)),
   );
-  const { skills, omittedFiles } = await readSkills(members, paths, name);
+  const read = await readSkills(members, paths, name);
+  const skills = withinSkillLimit(name, [
+    ...read.skills,
+    ...(await readCommands(members, '', manifestField(metadataJson, 'commands'), read.skills)),
+  ]);
+  const { omittedFiles } = read;
   if (skills.length === 0) throw new PluginArchiveError([UPLOAD_NO_SKILLS_MESSAGE]);
   return {
     key,
@@ -430,11 +557,21 @@ async function marketplacePlugins(
       .map((skill) => `${directory}${PATH_SEPARATOR}${lastSegmentPath(skill)}`)
       .filter((path) => members.has(path));
     const resolved = paths.length > 0 ? paths : skillPathsUnder(members, directory);
-    const { skills, omittedFiles } = await readSkills(members, resolved, name);
-    if (skills.length === 0) continue;
     const pluginJson = await readJson(
       members.get(`${directory}${PATH_SEPARATOR}${CLAUDE_PLUGIN_METADATA_PATH}`),
     );
+    const read = await readSkills(members, resolved, name);
+    const skills = withinSkillLimit(name, [
+      ...read.skills,
+      ...(await readCommands(
+        members,
+        directory,
+        declared['commands'] ?? manifestField(pluginJson, 'commands'),
+        read.skills,
+      )),
+    ]);
+    const { omittedFiles } = read;
+    if (skills.length === 0) continue;
     claimed.add(key);
     plugins.push({
       key,
@@ -551,7 +688,9 @@ export async function readPluginArchive(
   }
 
   const hasMetadata = members.has(CLAUDE_PLUGIN_METADATA_PATH);
-  const hasSkills = skillPathsUnder(members, '').length > 0;
+  const hasSkills =
+    skillPathsUnder(members, '').length > 0 ||
+    markdownUnder(members, `${CLAUDE_PLUGIN_COMMANDS_DIRECTORY}${PATH_SEPARATOR}`).length > 0;
   if (!hasMetadata && !hasSkills) throw new PluginArchiveError([UPLOAD_NO_PLUGIN_MESSAGE]);
 
   const plugin = await singlePlugin(members, fallbackName);
