@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   AGIWORK_GOAL_PROGRESS_ID,
+  AGIWORK_PLAN_OVERVIEW_PROGRESS_ID,
   AGIWORK_PLAN_PROGRESS_ID_PREFIX,
   advanceAgiWorkPlan,
   agiWorkGoalProgressEvent,
@@ -120,15 +121,20 @@ describe('durable journal events', () => {
     }
   });
 
-  it('carries each plan step under the reserved plan prefix', () => {
-    const events = agiWorkPlanProgressEvents(buildAgiWorkPlan(['a', 'b']));
+  it('journals only started steps, plus an overview of the whole plan', () => {
+    const plan = advanceAgiWorkPlan(buildAgiWorkPlan(['a', 'b']), 'start');
+    const events = agiWorkPlanProgressEvents(plan);
     expect(events).toHaveLength(2);
-    for (const event of events) {
-      expect(event.type).toBe('progress-update');
-      if (event.type === 'progress-update') {
-        expect(event.progressId.startsWith(AGIWORK_PLAN_PROGRESS_ID_PREFIX)).toBe(true);
-      }
-    }
+    expect(events[0]).toMatchObject({
+      type: 'progress-update',
+      progressId: `${AGIWORK_PLAN_PROGRESS_ID_PREFIX}agiwork-plan-1`,
+      status: 'running',
+    });
+    expect(events[1]).toMatchObject({
+      type: 'progress-update',
+      progressId: AGIWORK_PLAN_OVERVIEW_PROGRESS_ID,
+      detail: '1. a\n2. b',
+    });
   });
 });
 
