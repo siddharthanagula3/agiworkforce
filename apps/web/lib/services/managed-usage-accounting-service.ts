@@ -17,6 +17,7 @@ import type { CpstUsageFields } from '@/lib/cpst-telemetry';
 import {
   estimateMicrousdOf,
   finalizeManagedUsageRequest,
+  type ManagedUsageAttempt,
   type ManagedUsageFinalization,
   type ManagedUsageRequestReservation,
 } from '@/lib/services/managed-usage-request-service';
@@ -478,6 +479,7 @@ export interface FinalizeObservedManagedUsageInput {
   reason: string;
   cancelled?: boolean;
   cpst?: CpstUsageFields;
+  attempt?: ManagedUsageAttempt | null;
 }
 
 export function finalizeObservedManagedUsage(
@@ -488,6 +490,7 @@ export function finalizeObservedManagedUsage(
   if (input.cancelled && !observed) {
     return finalizeManagedUsageRequest({
       ...input.reservation,
+      ...(input.attempt !== undefined ? { attempt: input.attempt } : {}),
       outcome: 'failed',
       actualCostMicrousd: 0,
       usage: {
@@ -502,6 +505,7 @@ export function finalizeObservedManagedUsage(
   if (!observed) {
     return finalizeManagedUsageRequest({
       ...input.reservation,
+      ...(input.attempt !== undefined ? { attempt: input.attempt } : {}),
       outcome: 'completed',
       actualCostMicrousd: estimateMicrousdOf(input.reservation),
       usage: {
@@ -531,6 +535,7 @@ export function finalizeObservedManagedUsage(
 
   return finalizeManagedUsageRequest({
     ...input.reservation,
+    ...(input.attempt !== undefined ? { attempt: input.attempt } : {}),
     outcome: 'completed',
     actualCostMicrousd,
     providerCostMicrousd,

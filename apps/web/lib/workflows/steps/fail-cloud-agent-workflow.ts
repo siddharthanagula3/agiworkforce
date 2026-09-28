@@ -67,7 +67,12 @@ export async function failCloudAgentWorkflow(
     });
   }
 
-  await settleWorkflowInvocation(input, 'failed');
+  await settleWorkflowInvocation(
+    input,
+    'failed',
+    undefined,
+    failure.code || CLOUD_AGENT_WORKFLOW_FAILED_CODE,
+  );
 
   await writeDurableFrames(
     input.runId,
