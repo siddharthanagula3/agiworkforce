@@ -156,7 +156,7 @@ export function ReminderList({
       <div className="flex items-center justify-between border-b px-4 py-3">
         <div className="flex items-center gap-2">
           <Bell className="h-5 w-5 text-primary" />
-          <h2 className="text-lg font-semibold">Reminders</h2>
+          <h2 className="text-h3">Reminders</h2>
           {jobs.length > 0 && (
             <span className="text-sm text-muted-foreground">
               ({jobs.filter((j) => j.status === 'active').length} active)
@@ -266,7 +266,7 @@ export function ReminderList({
                   <div className="rounded-full bg-muted p-4 mb-4">
                     <Bell className="h-8 w-8 text-muted-foreground" />
                   </div>
-                  <h3 className="font-medium text-lg mb-1">No reminders yet</h3>
+                  <h3 className="text-h3 mb-1">No reminders yet</h3>
                   <p className="text-sm text-muted-foreground mb-4 max-w-[300px]">
                     {activeFilter === 'all'
                       ? 'Create your first reminder to get started with scheduled tasks.'
