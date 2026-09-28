@@ -10,13 +10,12 @@ nothing is left.
 
 - Done when: The registry records whether (and how many) images a model accepts in one request, and requests are checked against it.
 - Wave: 3
-- Already works on: web, desktop, api
+- Already works on: web, desktop, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | The client-side check is written as the post-codex patch chat-gates-s76.04-mobile-image-limit.patch (applies after chat-gates-s79.05-mobile-speed-first.patch): after cloud dispatch resolves the model, chatExecutionStore refuses a send with more images than that model reads in one message (model override, else its default managed route's harness limit), naming the model, the limit and how many to remove, before anything uploads. ChatInput.tsx itself could not be patched: the three-way merge of integration and Codex's copy conflicts. Mobile still gets the server's 400 until the patch lands. | handler |
 | cli | partial | Mobile and Chrome cloud chat reach the same server check and get its 400; their own composers do not read the limit before sending. The CLI resolves its own routes and does not read mediaInput. | handler |
-| chrome | partial | Mobile and Chrome cloud chat reach the same server check and get its 400; their own composers do not read the limit before sending. The CLI resolves its own routes and does not read mediaInput. | handler |
 
 Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4058-4058`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4042-4042`
 

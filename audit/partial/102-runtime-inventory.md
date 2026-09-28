@@ -46,6 +46,6 @@ Code: `apps/cli/src/terminals.rs:173-173`, `apps/cli/src/features/exec/tools/bas
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | billing/no-yearly fe4c6faae and 8b22ed468 build the runtime Claude documents for published artifacts: window.agi.complete billed to the signed-in viewer (never the author) and window.agi.storage with 20 MB of personal and 20 MB of shared text per artifact, relayed by postMessage with the sandbox CSP still connect-src 'none'. Left: the viewer's connected apps inside a published app (Claude allows them), and telling models that window.agi exists, which needs a new chat system prompt version for the lead to pin | handler |
+| platform | partial | billing/no-yearly df61037ce2: chat.system@3 (unpinned, internal channel) tells models about window.agi.complete and window.agi.storage. Left: connected apps inside published artifacts, which Claude documents (support.claude.com/en/articles/9487310, fetched 2026-09-28: artifacts read and write the viewer's own connected apps after the viewer approves the apps and tools, and Team and Enterprise owners can turn it off); being built next | handler |
 
-Code: `infrastructure/sandbox/index.html:346-346`, `infrastructure/sandbox/index.html:484-484`, `apps/web/features/chat/components/SandboxedIframe.tsx:183-183`, `apps/web/app/shared-artifact/[token]/PublishedArtifactView.tsx:150-150`
+Code: `apps/web/lib/prompts/chat-system-prompt.ts:130-130`, `apps/web/app/api/llm/v1/chat/completions/lib/capability-preamble.ts:218-218`
