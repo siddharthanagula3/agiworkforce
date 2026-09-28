@@ -39,10 +39,7 @@ function OverrideDot({ show }: OverrideDotProps) {
         <Tooltip.Trigger asChild>
           <span
             aria-hidden="true"
-            className={cn(
-              'absolute -top-0.5 -right-0.5 h-1.5 w-1.5 rounded-full',
-              'bg-warning-fill',
-            )}
+            className={cn('absolute -top-0.5 -end-0.5 h-1.5 w-1.5 rounded-full', 'bg-warning-fill')}
           />
         </Tooltip.Trigger>
         <Tooltip.Portal>
@@ -134,7 +131,7 @@ function ModeChip({ conversationId, projectId }: ModeChipProps) {
                       type="button"
                       onClick={() => selectMode(mode)}
                       className={cn(
-                        'flex w-full items-start gap-2 rounded-lg px-2.5 py-2 text-left',
+                        'flex w-full items-start gap-2 rounded-lg px-2.5 py-2 text-start',
                         'transition-colors duration-instant',
                         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]',
                         isSelected

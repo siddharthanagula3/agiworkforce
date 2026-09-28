@@ -150,16 +150,16 @@ Code: `apps/web/features/code/CloudCodePage.tsx:124-124`, `apps/web/features/cod
 
 - Done when: The user explicitly hands a local session over to cloud execution, seeing what moves.
 - Wave: 2
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | /continue-with-cloud moves the CONVERSATION to the managed cloud model with a reviewed payload; tools still run locally, and the app-server's cloud handoff record has no client that issues or accepts it. | handler |
 | vscode | partial | Continue in the Cloud now also sits in the Sessions sheet header on the Cloud tab (044fdca03). Session creation needs AGI_E2B_EXECUTION on in production. | flag-off |
 
-Code: `apps/cli/src/claude_parity.rs:169-179`, `apps/cli/src/claude_parity.rs:399-411`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:4431-4431`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:996-996`
+Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:4431-4431`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:996-996`, `apps/extension-vscode/src/extension.ts:199-199`
 
 ## S68.17: Bring cloud results back to local workspace.
 
@@ -175,16 +175,13 @@ Code: `apps/cli/src/claude_parity.rs:169-179`, `apps/cli/src/claude_parity.rs:39
 
 - Done when: Before a transfer, the user reviews which files, context and environment will move.
 - Wave: 3
-- Already works on: vscode
+- Already works on: cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | The cloud-continuation draft lists included/omitted messages and the destination for review before sending; files and environment are never listed. | ui |
-
-Code: `apps/cli/src/claude_parity.rs:428-436`
 
 ## S68.19: Remote-machine discovery.
 

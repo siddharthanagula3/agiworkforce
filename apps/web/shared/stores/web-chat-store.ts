@@ -38,7 +38,7 @@ import type {
 } from '@agiworkforce/types';
 import type { PastChatCitation } from '@/lib/past-chat-citation';
 import type { ChatOutputFormat } from '@/lib/chat-output-format';
-import type { CloudWorkMode } from '@agiworkforce/types';
+import type { AgentEventSource, CloudWorkMode, ManagedMemoryCitations } from '@agiworkforce/types';
 import type { ManagedMediaImageAspectRatio } from '@agiworkforce/cloud-contracts';
 import type {
   PaywallSlot,
@@ -237,6 +237,8 @@ export interface MessageMetadata {
   /** Explicit trust-boundary labels for cross-mode handoff and persisted evidence. */
   privacyMode?: 'local' | 'byok' | 'managed';
   providerMode?: 'Local' | 'DirectByok' | 'ManagedGateway' | 'ManagedNative';
+  localPersonalContextMissing?: boolean;
+  sharedAttachments?: Array<{ name: string; type?: string; mimeType?: string }>;
   /** Provider model label when persisted with metadata rather than the top-level message. */
   model?: string;
   /** Provider that served the turn, written into metadata by turn persistence. */
@@ -302,6 +304,7 @@ export interface MessageMetadata {
    * client only carries it.
    */
   pastChatSources?: PastChatCitation[];
+  memoryCitations?: ManagedMemoryCitations;
   /**
    * The client's post-stream metadata save failed and was not retried, so what
    * is on screen is richer than what a reload will show.
@@ -859,9 +862,14 @@ interface ChatState {
     sources: PastChatCitation[] | undefined,
     conversationId?: string,
   ) => void;
+  setMemoryCitations: (
+    id: string,
+    citations: ManagedMemoryCitations | undefined,
+    conversationId?: string,
+  ) => void;
   setSearchResults: (
     id: string,
-    results: Array<{ url: string; title: string; snippet: string }>,
+    results: Array<AgentEventSource & { snippet: string }>,
     conversationId?: string,
   ) => void;
   setExecutingCode: (id: string, isExecuting: boolean, conversationId?: string) => void;
@@ -1550,6 +1558,14 @@ export const useChatStore = create<ChatState>()(
               patchMessageMetadata(state, conversationId, id, { pastChatSources: sources }),
             undefined,
             'chat/setPastChatSources',
+          ),
+
+        setMemoryCitations: (id, citations, conversationId) =>
+          set(
+            (state) =>
+              patchMessageMetadata(state, conversationId, id, { memoryCitations: citations }),
+            undefined,
+            'chat/setMemoryCitations',
           ),
 
         setSearchResults: (id, results, conversationId) =>

@@ -49,11 +49,12 @@ async function connectedApps(
 export async function resolveStartSuggestions(
   secrets: vscode.SecretStorage,
   adapter: CliCapabilityAdapter,
+  allowed: { connectors: boolean },
 ): Promise<StartSuggestions> {
   const [projects, skills, connectors] = await Promise.all([
     recentProjects(secrets),
     enabledSkills(adapter),
-    connectedApps(secrets),
+    allowed.connectors ? connectedApps(secrets) : [],
   ]);
   return { projects, skills, connectors };
 }

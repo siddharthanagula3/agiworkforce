@@ -75,7 +75,7 @@ export function TranscriptNotice({
       />
       <span>{message}</span>
       {hasTrailing && (
-        <div className="ml-auto flex shrink-0 items-center gap-2">
+        <div className="ms-auto flex shrink-0 items-center gap-2">
           {actionSlot}
           {action && (
             <button

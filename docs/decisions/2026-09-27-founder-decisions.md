@@ -274,3 +274,40 @@ Cloud coding sessions here keep their command view and journal and do not add
 an interactive sandbox terminal (S66.15). The Library filters files by where
 they came from, uploads or generated, and has no filter by product surface,
 which neither leader documents (S24.15). Checked 2026-09-28.
+
+## D-2026-09-28-15 Branching and the email widget stay off the phone
+
+ChatGPT offers conversation branching and its email widget on the web only, and
+Claude's apps have neither, so the mobile app does not add them (S16.10, S17.27
+and S22.25 mobile). Checked 2026-09-28.
+
+## D-2026-09-28-16 Phone file handling follows Claude's apps
+
+Claude's apps open files in the system preview or another app, do not change
+artifact sharing settings on iOS or Android, and send document editing to the
+web or desktop (support.claude.com/en/articles/12111783, 9547008 and 16923645,
+checked 2026-09-28); Gemini also keeps export to Sheets off its mobile app. The
+mobile app therefore keeps in-app file viewers, sharing settings, document
+editing, export to Sheets and dedicated report or deck actions off the phone
+(S25.02-S25.04, S26.31, S29.17-S29.19, S29.34, S29.38 and S29.39 mobile).
+
+## D-2026-09-28-17 No memory profile summary
+
+Claude lists memory as topics and shows no generated profile summary of the
+person (support.claude.com/en/articles/11817273, checked 2026-09-28), and the
+web and desktop apps show none either, so the mobile app does not add one
+(S39.07 mobile).
+
+## D-2026-09-28-18 Artifact engines follow the leaders
+
+Code artifacts get a code editor and document templates get direct editing,
+because Gemini and Claude's template documents edit in place
+(support.google.com/gemini/answer/16047321, support.claude.com/en/articles/17153992),
+and images get a select-an-area edit as ChatGPT offers
+(learn.chatgpt.com/docs/image-generation). A spreadsheet grid editor (S104.05)
+is not built: both leaders only download or regenerate tables
+(support.claude.com/en/articles/12111783, learn.chatgpt.com/docs/artifacts-viewer).
+Video editing (S104.08) is not built: neither leader documents one. An
+integrated terminal on the web (S104.T09) is not built: ChatGPT offers it only
+in its desktop app and Claude Code on the web has no terminal input. Checked
+2026-09-28.

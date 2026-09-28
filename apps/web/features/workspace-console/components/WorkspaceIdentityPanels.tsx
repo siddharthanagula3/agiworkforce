@@ -93,7 +93,7 @@ export function WorkspaceIdentityPanels() {
           Not yet available
         </p>
         <ul
-          className="mt-2 flex list-disc flex-col gap-1.5 pl-4 text-xs leading-relaxed"
+          className="mt-2 flex list-disc flex-col gap-1.5 ps-4 text-xs leading-relaxed"
           style={{ color: 'var(--text-3)' }}
         >
           <li>

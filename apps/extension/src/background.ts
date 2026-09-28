@@ -173,6 +173,7 @@ import {
 } from './features/cloud-bridge/freeTrialClient';
 import {
   abortConversationSyncForOwnerChange,
+  ensureCloudConversation,
   queueCloudConversationDeletion,
   scheduleConversationSync,
   sweepConversationSync,
@@ -4046,6 +4047,27 @@ async function handleMessageAsync(
       return { success: true } as ExtensionResponse;
     }
 
+    case 'ENSURE_CLOUD_CONVERSATION': {
+      const ensureMsg = message as import('./types').EnsureCloudConversationMessage;
+      const ensureOwner = normalizeManagedCloudOwner(ensureMsg.owner);
+      if (!ensureOwner || isRetiredManagedCloudOwner(ensureOwner)) {
+        return { success: false, error: 'Invalid Managed Cloud owner' } as ExtensionResponse;
+      }
+      if (typeof ensureMsg.conversationId !== 'string' || ensureMsg.conversationId.length === 0) {
+        return { success: false, error: 'conversationId is required' } as ExtensionResponse;
+      }
+      const cloudConversationId = await ensureCloudConversation(
+        ensureOwner,
+        ensureMsg.conversationId,
+      );
+      return cloudConversationId
+        ? ({ success: true, cloudConversationId } as ExtensionResponse)
+        : ({
+            success: false,
+            error: 'This chat is not saved to your account yet.',
+          } as ExtensionResponse);
+    }
+
     case 'DELETE_CLOUD_CONVERSATION' as ExtensionMessage['type']: {
       const delCloudMsg = message as import('./types').DeleteCloudConversationMessage;
       const delOwner = normalizeManagedCloudOwner(delCloudMsg.owner);
@@ -5202,6 +5224,9 @@ async function handleChatMessage(
         fileAttachments: message.fileAttachments,
         extendedThinking: message.extendedThinking,
         ...(message.workMode === 'agiwork' ? { workMode: 'agiwork' as const } : {}),
+        ...(message.workMode === 'agiwork' && message.agiWorkPlan
+          ? { agiWorkPlan: message.agiWorkPlan }
+          : {}),
         ...(message.webSearch === false ? { webSearch: false } : {}),
         currentModelKey: message.currentModelKey,
         previousTaskType: message.previousTaskType,

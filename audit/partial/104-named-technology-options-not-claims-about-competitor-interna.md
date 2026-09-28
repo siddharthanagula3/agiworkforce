@@ -24,9 +24,6 @@ Code: `packages/ui/unified-chat/src/composer-editor/extensions/index.ts:18-29`, 
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | Only the VS Code extension opens a terminal, and that is VS Code's own. Web and Electron desktop have no terminal UI; xterm.js ships only in the internal Tauri app. Add one if web/desktop should run commands. | surface-only |
-
-Code: `apps/extension-vscode/src/providers/terminalProvider.ts:96-104`
 
 ## S104.01: Code editor engine.
 
@@ -46,9 +43,6 @@ Code: `apps/extension-vscode/src/providers/diffDecorationProvider.ts:346-348`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | Tables show in a hand-built read-only grid (sort, keyboard selection, copy, 500-row cap). No cell editing, formula evaluation or large-sheet virtualization; formulas exist only inside generated .xlsx files. | ui |
-
-Code: `packages/ui/unified-chat/src/components/artifact-components/SpreadsheetArtifact.tsx:10-14`, `apps/web/lib/services/managed-office-file-service.ts:620-620`
 
 ## S104.07: Image editor/canvas engine.
 
@@ -68,9 +62,6 @@ Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:187-196`, 
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | Generated videos play in the native HTML video player; there is no video editing engine (no trim, cut or combine) anywhere. | ui, handler |
-
-Code: `apps/web/features/chat/components/messages/MessageBubble.tsx:2518-2527`, `apps/web/app/api/media/video/generate/route.ts:132-132`
 
 ## S104.24: Sandbox provider.
 

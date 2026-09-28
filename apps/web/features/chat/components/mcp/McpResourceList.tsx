@@ -85,7 +85,7 @@ function ResourceRow({
     <li style={rowStyle}>
       <button
         type="button"
-        className="flex w-full flex-col gap-0.5 rounded-md px-3 py-2 text-left transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="flex w-full flex-col gap-0.5 rounded-md px-3 py-2 text-start transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         style={{ minHeight: 44 }}
         onClick={() => onOpenResource(resource.uri)}
       >

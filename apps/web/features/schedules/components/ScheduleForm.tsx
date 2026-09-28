@@ -137,7 +137,7 @@ export function ScheduleForm({
         onSubmit();
       }}
     >
-      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-1 pb-6 pr-3">
+      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-1 pb-6 pe-3">
         <div className="space-y-2 rounded-xl border border-border/70 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
           <p>
             Scheduled runs use Managed Cloud and return text. Choose below what each run can read
@@ -726,11 +726,11 @@ export function ScheduleForm({
         <Button type="submit" disabled={saving} aria-busy={saving}>
           {saving ? (
             <Loader2
-              className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none"
+              className="me-2 h-4 w-4 animate-spin motion-reduce:animate-none"
               aria-hidden="true"
             />
           ) : (
-            <CalendarClock className="mr-2 h-4 w-4" aria-hidden="true" />
+            <CalendarClock className="me-2 h-4 w-4" aria-hidden="true" />
           )}
           {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Create Schedule'}
         </Button>

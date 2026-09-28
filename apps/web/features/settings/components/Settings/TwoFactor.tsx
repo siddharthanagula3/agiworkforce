@@ -101,9 +101,9 @@ export const TwoFactorPanel: React.FC<TwoFactorPanelProps> = ({
           <div className="flex justify-end">
             <Button type="submit" disabled={isSaving || !securityForm.formState.isDirty}>
               {isUpdateSettingsPending ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Loader2 className="me-2 h-4 w-4 animate-spin" />
               ) : (
-                <Save className="mr-2 h-4 w-4" />
+                <Save className="me-2 h-4 w-4" />
               )}
               Save Security Settings
             </Button>
@@ -158,7 +158,7 @@ export const TwoFactorPanel: React.FC<TwoFactorPanelProps> = ({
                         {...field}
                         type={showNewPassword ? 'text' : 'password'}
                         autoComplete="new-password"
-                        className="border-border bg-background pr-10 text-foreground"
+                        className="border-border bg-background pe-10 text-foreground"
                         placeholder="Enter new password"
                       />
                       <button
@@ -166,7 +166,7 @@ export const TwoFactorPanel: React.FC<TwoFactorPanelProps> = ({
                         onClick={onToggleShowNewPassword}
                         aria-label={showNewPassword ? 'Hide new password' : 'Show new password'}
                         aria-pressed={showNewPassword}
-                        className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center text-muted-foreground hover:text-foreground"
+                        className="absolute end-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center text-muted-foreground hover:text-foreground"
                       >
                         {showNewPassword ? (
                           <EyeOff className="h-4 w-4" />
@@ -195,7 +195,7 @@ export const TwoFactorPanel: React.FC<TwoFactorPanelProps> = ({
                       <Input
                         {...field}
                         type={showConfirmPassword ? 'text' : 'password'}
-                        className="border-border bg-background pr-10 text-foreground"
+                        className="border-border bg-background pe-10 text-foreground"
                         placeholder="Confirm new password"
                       />
                       <button
@@ -207,7 +207,7 @@ export const TwoFactorPanel: React.FC<TwoFactorPanelProps> = ({
                             : 'Show confirmed password'
                         }
                         aria-pressed={showConfirmPassword}
-                        className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center text-muted-foreground hover:text-foreground"
+                        className="absolute end-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center text-muted-foreground hover:text-foreground"
                       >
                         {showConfirmPassword ? (
                           <EyeOff className="h-4 w-4" />
@@ -233,9 +233,9 @@ export const TwoFactorPanel: React.FC<TwoFactorPanelProps> = ({
               className="w-full border-border"
             >
               {isChangePasswordPending ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Loader2 className="me-2 h-4 w-4 animate-spin" />
               ) : (
-                <Key className="mr-2 h-4 w-4" />
+                <Key className="me-2 h-4 w-4" />
               )}
               {hasPassword ? 'Change Password' : 'Set password'}
             </Button>

@@ -43,12 +43,7 @@ const BORROWED_IDENTITY =
  * Modules that still declare their own copy of the extracted-text cap. Each
  * names why it is not fixed here; the guard refuses a new one.
  */
-export const TEXT_LIMIT_BASELINE = Object.freeze({
-  'apps/web/lib/server/pdf-attachment-content.ts':
-    'owned by the pdf extraction lane; change MAX_PDF_TEXT_CHARS to MAX_FILE_TEXT_CHARS there',
-  'apps/web/lib/server/project-knowledge-extraction.ts':
-    'owned by the project knowledge lane; change MAX_EXTRACTED_PROJECT_TEXT_CHARS to MAX_FILE_TEXT_CHARS there',
-});
+export const TEXT_LIMIT_BASELINE = Object.freeze({});
 
 const TEXT_LIMIT_DECLARATION = /export const MAX_[A-Z_]*TEXT_CHARS\s*=\s*([0-9_]+)\s*;/;
 
@@ -139,7 +134,7 @@ export function mintedIdentities(source) {
   return identities;
 }
 
-export function evaluate(scanRoot) {
+export function evaluate(scanRoot, { textLimitBaseline = TEXT_LIMIT_BASELINE } = {}) {
   const failures = [];
   const contractSource = read(scanRoot, CONTRACT);
   const modelSource = read(scanRoot, MODEL);
@@ -193,7 +188,7 @@ export function evaluate(scanRoot) {
     if (!limit) continue;
     if (relativePath === CONTRACT) continue;
     if (!READS_FILE_BYTES.test(source)) continue;
-    if (Object.hasOwn(TEXT_LIMIT_BASELINE, relativePath)) continue;
+    if (Object.hasOwn(textLimitBaseline, relativePath)) continue;
     if (/MAX_FILE_TEXT_CHARS/.test(source)) continue;
     failures.push(
       `${relativePath} declares its own extracted-text cap (${limit[1]}); import ` +
@@ -201,7 +196,7 @@ export function evaluate(scanRoot) {
     );
   }
 
-  for (const stale of Object.keys(TEXT_LIMIT_BASELINE)) {
+  for (const stale of Object.keys(textLimitBaseline)) {
     const source = read(scanRoot, stale);
     if (
       source === null ||

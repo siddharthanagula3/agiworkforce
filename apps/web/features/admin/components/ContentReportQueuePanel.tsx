@@ -173,7 +173,7 @@ export default function ContentReportQueuePanel() {
                   Past SLA · due {formatTimestamp(report.dueAt)}
                 </span>
               ) : null}
-              <span className="ml-auto text-xs text-muted-foreground">
+              <span className="ms-auto text-xs text-muted-foreground">
                 {formatTimestamp(report.createdAt)}
               </span>
             </div>

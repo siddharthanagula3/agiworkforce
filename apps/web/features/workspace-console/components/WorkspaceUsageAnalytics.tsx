@@ -127,14 +127,14 @@ function BreakdownTable({
         </p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs" style={{ borderCollapse: 'collapse' }}>
+          <table className="w-full text-start text-xs" style={{ borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ color: 'var(--text-3)' }}>
                 <th className="px-5 py-2 font-medium">Name</th>
-                <th className="px-5 py-2 text-right font-medium">Turns</th>
-                <th className="px-5 py-2 text-right font-medium">Tokens in</th>
-                <th className="px-5 py-2 text-right font-medium">Tokens out</th>
-                <th className="px-5 py-2 text-right font-medium">Credits</th>
+                <th className="px-5 py-2 text-end font-medium">Turns</th>
+                <th className="px-5 py-2 text-end font-medium">Tokens in</th>
+                <th className="px-5 py-2 text-end font-medium">Tokens out</th>
+                <th className="px-5 py-2 text-end font-medium">Credits</th>
               </tr>
             </thead>
             <tbody>
@@ -147,25 +147,25 @@ function BreakdownTable({
                     {labelFor ? labelFor(row.key) : row.key}
                   </td>
                   <td
-                    className="px-5 py-2.5 text-right tabular-nums"
+                    className="px-5 py-2.5 text-end tabular-nums"
                     style={{ color: 'var(--text-2)' }}
                   >
                     {compact(row.requests)}
                   </td>
                   <td
-                    className="px-5 py-2.5 text-right tabular-nums"
+                    className="px-5 py-2.5 text-end tabular-nums"
                     style={{ color: 'var(--text-2)' }}
                   >
                     {compact(row.inputTokens)}
                   </td>
                   <td
-                    className="px-5 py-2.5 text-right tabular-nums"
+                    className="px-5 py-2.5 text-end tabular-nums"
                     style={{ color: 'var(--text-2)' }}
                   >
                     {compact(row.outputTokens)}
                   </td>
                   <td
-                    className="px-5 py-2.5 text-right tabular-nums"
+                    className="px-5 py-2.5 text-end tabular-nums"
                     style={{ color: 'var(--text-1)' }}
                   >
                     {formatCredits(row.credits)}

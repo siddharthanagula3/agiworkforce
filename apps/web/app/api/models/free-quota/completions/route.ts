@@ -7,6 +7,7 @@ import { runQwenQuotaProbe, streamQwenQuotaChat } from '@agiworkforce/providers-
 import {
   getModelMetadataById,
   getProviderOffering,
+  MANAGED_MEMORY_CITATIONS_HEADER,
   type ProviderOffering,
 } from '@agiworkforce/types';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -17,6 +18,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { logger } from '@/lib/logger';
 import { persistFreeOfferingUser } from '@/lib/server/persist-free-offering-user';
 import { resolveFreeOfferingPersonalContext } from '@/lib/services/turn-context-service';
+import { toMemoryCitationsHeaderValue } from '@/lib/chat-project-sources';
 import { moderateGeneratedMedia, moderateManagedPrompt } from '@/lib/moderation';
 import { enforceManagedContentSafetyPreference } from '@/lib/services/managed-content-safety-service';
 import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
@@ -591,6 +593,7 @@ async function handlePost(request: NextRequest): Promise<Response> {
     .update(`${body.assistant_message_id}\n${request.headers.get('Idempotency-Key') ?? 'send'}`)
     .digest('hex')
     .slice(0, TURN_ID_LENGTH);
+  let memoryCitationsHeader: string | null = null;
   if (offering.quotaProbeProtocol === 'chat') {
     const personalContext = await resolveFreeOfferingPersonalContext(scoped.db, {
       turnId,
@@ -603,7 +606,10 @@ async function handlePost(request: NextRequest): Promise<Response> {
       personalization: body.personalization,
       query: latestUserPrompt ? freeOfferingContentText(latestUserPrompt.content) : '',
     });
-    messages.unshift(...personalContext.map((content) => ({ role: 'system' as const, content })));
+    messages.unshift(
+      ...personalContext.blocks.map((content) => ({ role: 'system' as const, content })),
+    );
+    memoryCitationsHeader = toMemoryCitationsHeaderValue(personalContext.memoryCitations);
   }
 
   const egress = await buildProviderEgressGateResponse({
@@ -681,6 +687,7 @@ async function handlePost(request: NextRequest): Promise<Response> {
     'X-AGI-Resolved-Model': entry.offeringKey,
     'X-AGI-Resolved-Provider': offering.provider,
     'X-AGI-Route-Lane': 'free',
+    ...(memoryCitationsHeader ? { [MANAGED_MEMORY_CITATIONS_HEADER]: memoryCitationsHeader } : {}),
   };
 
   if (offering.quotaProbeProtocol === 'chat') {

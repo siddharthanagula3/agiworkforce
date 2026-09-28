@@ -484,13 +484,13 @@ export function WorkspaceDataControls() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs" style={{ borderCollapse: 'collapse' }}>
+            <table className="w-full text-start text-xs" style={{ borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ color: 'var(--text-3)' }}>
                   <th className="px-5 py-2 font-medium">When</th>
                   <th className="px-5 py-2 font-medium">Outcome</th>
-                  <th className="px-5 py-2 text-right font-medium">Deleted</th>
-                  <th className="px-5 py-2 text-right font-medium">Held</th>
+                  <th className="px-5 py-2 text-end font-medium">Deleted</th>
+                  <th className="px-5 py-2 text-end font-medium">Held</th>
                   <th className="px-5 py-2 font-medium">Note</th>
                 </tr>
               </thead>
@@ -507,13 +507,13 @@ export function WorkspaceDataControls() {
                       <OutcomeChip sweep={sweep} />
                     </td>
                     <td
-                      className="px-5 py-2.5 text-right tabular-nums"
+                      className="px-5 py-2.5 text-end tabular-nums"
                       style={{ color: 'var(--text-1)' }}
                     >
                       {sweep.conversationsDeleted}
                     </td>
                     <td
-                      className="px-5 py-2.5 text-right tabular-nums"
+                      className="px-5 py-2.5 text-end tabular-nums"
                       style={{ color: 'var(--text-1)' }}
                     >
                       {sweep.conversationsHeld}

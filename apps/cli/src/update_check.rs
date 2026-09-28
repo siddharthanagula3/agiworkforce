@@ -34,11 +34,70 @@ pub struct CliReleaseDownload {
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct CliReleaseNotes {
+    #[serde(default)]
+    pub summary: Option<String>,
+    pub url: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CliRelease {
     pub version: String,
     pub published_at: String,
     #[serde(default)]
     pub downloads: Vec<CliReleaseDownload>,
+    #[serde(default)]
+    pub release_notes: Option<CliReleaseNotes>,
+}
+
+static LATEST_RELEASE: std::sync::OnceLock<CliRelease> = std::sync::OnceLock::new();
+const RELEASE_NOTES_SEEN_FILE: &str = "release-notes-seen";
+
+pub fn remember_latest_release(release: &CliRelease) {
+    let _ = LATEST_RELEASE.set(release.clone());
+}
+
+pub fn latest_known_release() -> Option<&'static CliRelease> {
+    LATEST_RELEASE.get()
+}
+
+pub fn release_notes_lines(release: &CliRelease) -> Vec<String> {
+    let Some(notes) = &release.release_notes else {
+        return Vec::new();
+    };
+    let sanitize = |text: &str| crate::terminal_text::sanitize_terminal_text(text).into_owned();
+    notes
+        .summary
+        .as_deref()
+        .map(|summary| format!("What's new in {}: {}", release.version, sanitize(summary)))
+        .into_iter()
+        .chain(std::iter::once(format!(
+            "Release notes: {}",
+            sanitize(&notes.url)
+        )))
+        .collect()
+}
+
+pub fn unseen_release_notes(release: &CliRelease) -> Option<Vec<String>> {
+    if compare_versions(running_version(), &release.version) != UpdateVerdict::UpToDate {
+        return None;
+    }
+    let path = crate::config::CliConfig::config_dir()
+        .ok()?
+        .join(RELEASE_NOTES_SEEN_FILE);
+    let seen = std::fs::read_to_string(&path).unwrap_or_default();
+    if seen.trim() == release.version {
+        return None;
+    }
+    let lines = release_notes_lines(release);
+    if lines.is_empty() {
+        return None;
+    }
+    if let Err(error) = std::fs::write(&path, &release.version) {
+        tracing::debug!("[update_check] could not record the release notes as seen: {error}");
+    }
+    Some(lines)
 }
 
 pub fn running_version() -> &'static str {
@@ -80,9 +139,13 @@ pub fn render_verdict(running: &str, release: &CliRelease, install_command: &str
         ),
     ];
     match compare_versions(running, &release.version) {
-        UpdateVerdict::UpToDate => lines.push("This is the newest published release.".to_string()),
+        UpdateVerdict::UpToDate => {
+            lines.push("This is the newest published release.".to_string());
+            lines.extend(release_notes_lines(release));
+        }
         UpdateVerdict::Available => {
             lines.push(format!("An update is available. Install it with: {install_command}"));
+            lines.extend(release_notes_lines(release));
         }
         UpdateVerdict::AheadOfPublished => lines.push(
             "This build is newer than the newest published release, so there is nothing to install."
@@ -428,6 +491,7 @@ mod tests {
             version: version.to_string(),
             published_at: "2026-09-12T10:00:00Z".to_string(),
             downloads: vec![],
+            release_notes: None,
         }
     }
 
@@ -489,6 +553,7 @@ mod tests {
             version: "9.9.9".to_string(),
             published_at: "2026-09-12T10:00:00Z".to_string(),
             downloads: vec![],
+            release_notes: None,
         };
         let lines = render_verdict("1.0.0", &release, &install_command());
         assert!(lines.iter().any(|line| line.contains(&install_command())));

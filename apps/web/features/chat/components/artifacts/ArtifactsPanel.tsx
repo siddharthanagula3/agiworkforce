@@ -439,9 +439,9 @@ export function ArtifactsPanel() {
         tabIndex={isModalOverlay ? -1 : undefined}
         style={layout === 'desktop' ? { width: panelWidth } : undefined}
         className={cn(
-          'flex flex-col border-l border-border/30 outline-none',
+          'flex flex-col border-s border-border/30 outline-none',
           'bg-card/95 backdrop-blur-xl',
-          'fixed inset-y-0 right-0 z-[var(--z-panel)] w-full',
+          'fixed inset-y-0 end-0 z-[var(--z-panel)] w-full',
           'sm:relative sm:inset-auto sm:z-auto sm:w-full md:w-1/2 lg:w-[480px] sm:min-w-[280px] sm:shrink',
           'animate-in slide-in-from-right duration-moved',
         )}
@@ -509,7 +509,7 @@ export function ArtifactsPanel() {
                 aria-label="Download all artifacts as zip"
               >
                 <FolderDown className="h-3.5 w-3.5" />
-                <span className="ml-1 hidden @[26rem]:inline">Download all</span>
+                <span className="ms-1 hidden @[26rem]:inline">Download all</span>
               </Button>
             )}
             {/* Show Close here only when the viewer toolbar is not visible
@@ -583,7 +583,7 @@ export function ArtifactsPanel() {
                 data-testid="artifact-conflict-notice"
               >
                 <span className="min-w-0 text-xs">{ARTIFACT_CONFLICT_NOTICE}</span>
-                <div className="ml-auto flex shrink-0 items-center gap-3">
+                <div className="ms-auto flex shrink-0 items-center gap-3">
                   <button
                     type="button"
                     onClick={() => resolveArtifactConflict(selectedConflict.id, 'mine')}
@@ -652,7 +652,7 @@ export function ArtifactsToggleButton({ onToggle }: { onToggle?: () => void } = 
       <Code2 className="h-4 w-4" />
       {/* Badge showing count */}
       {artifacts.length > 0 && !panelOpen && (
-        <span className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-caption font-bold text-primary-foreground">
+        <span className="absolute -end-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-caption font-bold text-primary-foreground">
           {artifacts.length}
         </span>
       )}

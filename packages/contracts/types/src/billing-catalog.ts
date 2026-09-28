@@ -200,6 +200,7 @@ export type BillingPlanCapability =
   | 'skills_connectors'
   | 'cloud_sync'
   | 'agi_work'
+  | 'deep_research'
   | 'image_generation'
   | 'video_generation'
   | 'managed_api'
@@ -221,6 +222,7 @@ export const BILLING_PLAN_CAPABILITY_TIERS: Readonly<
   skills_connectors: CLOUD_CHAT_TIERS,
   cloud_sync: CLOUD_CHAT_TIERS,
   agi_work: PRO_TIERS,
+  deep_research: PRO_TIERS,
   image_generation: PRO_TIERS,
   video_generation: ['max_15x', 'enterprise'],
   managed_api: PRO_TIERS,
@@ -255,6 +257,7 @@ export const BILLING_PLAN_CAPABILITY_LABELS: Readonly<Record<BillingPlanCapabili
     skills_connectors: 'Skills and connectors',
     cloud_sync: 'Sync across devices',
     agi_work: 'AGI Work',
+    deep_research: 'Deep Research',
     image_generation: 'Image generation',
     video_generation: 'Video generation',
     managed_api: 'Managed API access',

@@ -74,7 +74,10 @@
     "runtimeConsent": "Diese App möchte KI mit deinem Konto nutzen. Jede Anfrage zählt zur Nutzung deines Tarifs.",
     "runtimeConsentConnectors": "Diese App möchte KI mit deinem Konto nutzen und Daten in {{apps}} lesen oder ändern. Sie sieht, was diese Apps zurückgeben, und jede Anfrage zählt zur Nutzung deines Tarifs.",
     "runtimeAllow": "Zulassen",
-    "runtimeDecline": "Nicht zulassen"
+    "runtimeDecline": "Nicht zulassen",
+    "saveCopy": "Eine Kopie in meinen Chats speichern",
+    "saveCopyBusy": "Wird kopiert…",
+    "saveCopyFailed": "Dieses Artefakt konnte nicht kopiert werden."
   },
   "sidebar": {
     "activeConversation": "Aktive Unterhaltung",
@@ -440,7 +443,13 @@
     "videoModeAttachments_one": "Die Videogenerierung nutzt nur Ihre Eingabeaufforderung. Angehängte Dateien werden nicht an das Videomodell gesendet. Verlassen Sie zuerst den Videomodus, wenn Sie diese Datei an das Chat-Modell senden möchten.",
     "videoModeAttachments_other": "Die Videogenerierung nutzt nur Ihre Eingabeaufforderung. Angehängte Dateien werden nicht an das Videomodell gesendet. Verlassen Sie zuerst den Videomodus, wenn Sie diese Dateien an das Chat-Modell senden möchten.",
     "viewSources_one": "{{count}} Quelle ansehen",
-    "viewSources_other": "{{count}} Quellen ansehen"
+    "viewSources_other": "{{count}} Quellen ansehen",
+    "folderFilesLeftOut_one": "{{count}} Datei in {{folder}} wurde nicht angehängt. Hängen Sie sie aus einem lokalen Ordner an.",
+    "folderFilesLeftOut_other": "{{count}} Dateien in {{folder}} wurden nicht angehängt. Hängen Sie sie aus einem lokalen Ordner an.",
+    "savedMemoriesUsed_one": "{{count}} gespeicherte Erinnerung verwendet",
+    "savedMemoriesUsed_other": "{{count}} gespeicherte Erinnerungen verwendet",
+    "moreSavedMemories_one": "Und {{count}} weitere",
+    "moreSavedMemories_other": "Und {{count}} weitere"
   },
   "markdownTable": {
     "label": "Tabelle",
@@ -462,7 +471,9 @@
     "expand": "Code vergrößern",
     "close": "Vergrößerten Code schließen",
     "codeTitle": "{{language}}-Code",
-    "codeBlockLabel": "{{language}}-Codeblock"
+    "codeBlockLabel": "{{language}}-Codeblock",
+    "edit": "Bearbeiten",
+    "editLabel": "Diesen Code neben dem Chat bearbeiten"
   },
   "streaming": {
     "reconnecting": "Verbindung wird wiederhergestellt…",

@@ -85,7 +85,7 @@ describe('Desktop Cloud entitlement projection', () => {
     const auto = getAutoRoutingProfiles()[0]?.id;
     expect(auto).toBeTruthy();
     expect(canUseDesktopCloudResearch('free', auto)).toBe(false);
-    expect(canUseDesktopCloudResearch('basic', auto)).toBe(true);
+    expect(canUseDesktopCloudResearch('basic', auto)).toBe(false);
     expect(canUseDesktopCloudResearch('pro', auto)).toBe(true);
     expect(canUseDesktopCloudResearch('team', auto)).toBe(true);
     expect(canUseDesktopCloudResearch('max', auto)).toBe(true);

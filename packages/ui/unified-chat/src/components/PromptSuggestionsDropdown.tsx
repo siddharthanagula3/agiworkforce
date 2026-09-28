@@ -41,7 +41,7 @@ const PromptSuggestionsDropdownComponent: React.FC<PromptSuggestionsDropdownProp
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.15 }}
-            className="absolute bottom-full left-0 right-0 mb-2 rounded-xl bg-popover border border-border shadow-e3 overflow-hidden z-[var(--z-dropdown)]"
+            className="absolute bottom-full start-0 end-0 mb-2 rounded-xl bg-popover border border-border shadow-e3 overflow-hidden z-[var(--z-dropdown)]"
             role="listbox"
             aria-label="Prompt suggestions"
             aria-expanded={isVisible}
@@ -66,7 +66,7 @@ const PromptSuggestionsDropdownComponent: React.FC<PromptSuggestionsDropdownProp
                   onClick={() => onSelectSuggestion(suggestion)}
                   onMouseEnter={() => onMouseEnterSuggestion?.(index)}
                   className={cn(
-                    'w-full text-left px-4 py-3 transition-colors border-b border-border/50 last:border-b-0 flex items-center justify-between gap-3 group',
+                    'w-full text-start px-4 py-3 transition-colors border-b border-border/50 last:border-b-0 flex items-center justify-between gap-3 group',
                     index === selectedIndex ? 'bg-primary/10' : 'hover:bg-accent',
                   )}
                   whileHover={{ x: 4 }}

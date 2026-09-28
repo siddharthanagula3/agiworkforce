@@ -115,7 +115,7 @@ export function ResearchStatusChip({ status }: { status: MessageResearchStatus }
         {label}
       </span>
       {counts.length > 0 && (
-        <span className="ml-auto shrink-0 tabular-nums" data-testid="research-status-counts">
+        <span className="ms-auto shrink-0 tabular-nums" data-testid="research-status-counts">
           {counts.join(' · ')}
         </span>
       )}

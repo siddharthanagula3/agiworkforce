@@ -14,7 +14,7 @@ interface RecentState {
   status: 'idle' | 'loading' | 'success' | 'error';
   runs: RecentRun[];
   error: string | null;
-  hasMore: boolean;
+  nextCursor: string | null;
   loadingMore: boolean;
 }
 
@@ -22,7 +22,7 @@ const INITIAL: RecentState = {
   status: 'idle',
   runs: [],
   error: null,
-  hasMore: false,
+  nextCursor: null,
   loadingMore: false,
 };
 
@@ -52,13 +52,13 @@ export function RecentScheduleResults({
       try {
         const page = await api.listRecentRuns({
           limit: MANAGED_CLOUD_SCHEDULE_RUNS_DEFAULT_PAGE_SIZE,
-          offset: append ? state.runs.length : 0,
+          cursor: append ? state.nextCursor : null,
         });
         setState((current) => ({
           status: 'success',
           runs: append ? [...current.runs, ...page.runs] : page.runs,
           error: null,
-          hasMore: page.hasMore,
+          nextCursor: page.nextCursor,
           loadingMore: false,
         }));
       } catch (error) {
@@ -70,7 +70,7 @@ export function RecentScheduleResults({
         }));
       }
     },
-    [api, state.runs.length],
+    [api, state.nextCursor],
   );
 
   const toggle = () => {
@@ -135,7 +135,7 @@ export function RecentScheduleResults({
                 })}
               </ul>
               {state.error ? <p className="mt-2 text-sm text-danger">{state.error}</p> : null}
-              {state.hasMore ? (
+              {state.nextCursor ? (
                 <Button
                   type="button"
                   variant="outline"
