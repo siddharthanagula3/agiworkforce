@@ -268,10 +268,19 @@ export type ManagedCloudScheduleRecentRun = z.infer<typeof ManagedCloudScheduleR
 
 export const ManagedCloudScheduleRecentRunListResponseSchema = z.object({
   runs: z.array(ManagedCloudScheduleRecentRunSchema),
-  pagination: ManagedCloudSchedulePaginationSchema,
+  nextCursor: z.string().min(1).nullable(),
 });
+export type ManagedCloudScheduleRecentRunListResponse = z.infer<
+  typeof ManagedCloudScheduleRecentRunListResponseSchema
+>;
 
 export const MANAGED_CLOUD_SCHEDULE_RECENT_RUNS_PATH = '/api/schedules/runs';
+
+export function managedCloudScheduleRecentRunsPath(limit: number, cursor?: string | null): string {
+  const query = new URLSearchParams({ limit: String(limit) });
+  if (cursor) query.set('cursor', cursor);
+  return `${MANAGED_CLOUD_SCHEDULE_RECENT_RUNS_PATH}?${query.toString()}`;
+}
 
 export const ManagedCloudScheduleRunResponseSchema = z.object({
   run: ManagedCloudScheduleRunSchema,
@@ -366,6 +375,18 @@ export interface ManagedCloudSchedulesPageInput {
   signal?: AbortSignal;
 }
 
+export interface ManagedCloudScheduleRecentRunsPageInput {
+  limit: number;
+  cursor?: string | null;
+  signal?: AbortSignal;
+}
+
+export interface ManagedCloudScheduleRecentRunsPage {
+  runs: ManagedCloudScheduleRecentRun[];
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
 export interface ManagedCloudSchedulesClient {
   listSchedules(input: ManagedCloudSchedulesPageInput): Promise<{
     schedules: ManagedCloudScheduleTask[];
@@ -407,11 +428,9 @@ export interface ManagedCloudSchedulesClient {
     input: ManagedCloudScheduleRunApproval,
     signal?: AbortSignal,
   ): Promise<ManagedCloudScheduleRun>;
-  listRecentRuns(input: ManagedCloudSchedulesPageInput): Promise<{
-    runs: ManagedCloudScheduleRecentRun[];
-    pagination: { limit: number; offset: number };
-    hasMore: boolean;
-  }>;
+  listRecentRuns(
+    input: ManagedCloudScheduleRecentRunsPageInput,
+  ): Promise<ManagedCloudScheduleRecentRunsPage>;
   shareSchedule(scheduleId: string, signal?: AbortSignal): Promise<ManagedCloudScheduleShare>;
   unshareSchedule(scheduleId: string, signal?: AbortSignal): Promise<void>;
 }
@@ -633,18 +652,17 @@ export function createManagedCloudSchedulesClient(
       );
       return result.run;
     },
-    async listRecentRuns({ limit, offset, signal }) {
-      const query = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+    async listRecentRuns({ limit, cursor, signal }) {
       const result = await request(
-        `${MANAGED_CLOUD_SCHEDULE_RECENT_RUNS_PATH}?${query.toString()}`,
+        managedCloudScheduleRecentRunsPath(limit, cursor),
         'GET',
         ManagedCloudScheduleRecentRunListResponseSchema,
         { signal, label: 'recent runs' },
       );
       return {
         runs: result.runs,
-        pagination: result.pagination,
-        hasMore: result.runs.length === result.pagination.limit,
+        nextCursor: result.nextCursor,
+        hasMore: result.nextCursor !== null,
       };
     },
     async shareSchedule(scheduleId, signal) {

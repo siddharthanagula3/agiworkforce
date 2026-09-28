@@ -123,7 +123,6 @@ test('the real allowlist has an entry for every currently-ungated managed-comput
     'apps/web/app/api/llm/v1/embeddings/route.ts',
     'apps/web/app/api/llm/v1/audio/transcriptions/route.ts',
     'apps/web/app/api/media/video/generate/route.ts',
-    'apps/web/app/api/media/image/generate/route.ts',
   ];
   const allowlist = JSON.parse(
     readFileSync(

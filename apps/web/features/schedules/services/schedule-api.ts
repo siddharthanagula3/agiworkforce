@@ -11,13 +11,14 @@ import {
   ManagedCloudScheduleRunResponseSchema,
   ManagedCloudScheduleShareResponseSchema,
   ManagedCloudScheduleRecentRunListResponseSchema,
-  MANAGED_CLOUD_SCHEDULE_RECENT_RUNS_PATH,
+  managedCloudScheduleRecentRunsPath,
   managedCloudScheduleSharedPath,
   managedCloudScheduleSharePath,
   managedCloudSchedulePath,
   managedCloudScheduleRunApprovalPath,
   managedCloudScheduleRunsPath,
-  type ManagedCloudScheduleRecentRun,
+  type ManagedCloudScheduleRecentRunsPage,
+  type ManagedCloudScheduleRecentRunsPageInput,
   type ManagedCloudScheduleRunApproval,
   type ManagedCloudScheduleShare,
 } from '@agiworkforce/cloud-contracts';
@@ -85,11 +86,9 @@ export interface ScheduleApi {
     approval: ManagedCloudScheduleRunApproval,
     signal?: AbortSignal,
   ): Promise<ScheduleRun>;
-  listRecentRuns(input: PageInput): Promise<{
-    runs: ManagedCloudScheduleRecentRun[];
-    pagination: { limit: number; offset: number };
-    hasMore: boolean;
-  }>;
+  listRecentRuns(
+    input: ManagedCloudScheduleRecentRunsPageInput,
+  ): Promise<ManagedCloudScheduleRecentRunsPage>;
   shareSchedule(scheduleId: string, signal?: AbortSignal): Promise<ManagedCloudScheduleShare>;
   unshareSchedule(scheduleId: string, signal?: AbortSignal): Promise<void>;
   getSharedSchedule(token: string, signal?: AbortSignal): Promise<ManagedCloudScheduleShare>;
@@ -262,18 +261,14 @@ export function createScheduleApi(dependencies: ScheduleApiDependencies = {}): S
       };
     },
 
-    async listRecentRuns({ limit, offset, signal }) {
+    async listRecentRuns({ limit, cursor, signal }) {
       const body = await request(
-        `${MANAGED_CLOUD_SCHEDULE_RECENT_RUNS_PATH}?limit=${limit}&offset=${offset}`,
+        managedCloudScheduleRecentRunsPath(limit, cursor),
         { credentials: 'include', signal },
         ManagedCloudScheduleRecentRunListResponseSchema,
         'Recent schedule results returned an invalid response.',
       );
-      return {
-        runs: body.runs,
-        pagination: body.pagination,
-        hasMore: body.runs.length === body.pagination.limit,
-      };
+      return { runs: body.runs, nextCursor: body.nextCursor, hasMore: body.nextCursor !== null };
     },
 
     async runNow(scheduleId, idempotencyKey, signal) {
