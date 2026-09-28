@@ -203,6 +203,9 @@ export const CODE_COPY = {
   branchSearchPlaceholder: 'Search or type a branch name',
   branchTruncated: 'Some branches are not listed. Type the full name to use one.',
   branchUseTyped: 'Use branch',
+  branchSwitchFailed: 'That branch could not be checked out.',
+  branchSwitchHelp:
+    'Switching checks the branch out in this folder. Uncommitted changes come along when git allows it.',
 
   repositorySearchLabel: 'Search repositories',
   repositorySearchPlaceholder: 'Search repositories',
