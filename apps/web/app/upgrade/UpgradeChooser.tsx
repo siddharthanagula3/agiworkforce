@@ -93,7 +93,7 @@ export function UpgradeChooser() {
         ← Back
       </Link>
 
-      <h1 className="mt-6 text-3xl font-semibold tracking-tight">Upgrade</h1>
+      <h1 className="mt-6 text-display">Upgrade</h1>
       {showProrationNote ? (
         <p className="mt-2 text-sm text-muted-foreground">
           See what changes before you switch. An upgrade starts a new billing period today: you pay
@@ -120,9 +120,7 @@ export function UpgradeChooser() {
               Your plan
             </p>
             <div className="mt-2 flex items-baseline justify-between gap-4">
-              <h2 className="text-2xl font-semibold tracking-tight">
-                {currentDisplay.pricing.label}
-              </h2>
+              <h2 className="text-h1">{currentDisplay.pricing.label}</h2>
               <span className="text-sm text-muted-foreground">
                 {priceLabel(currentDisplay.monthlyPriceUsd)}
               </span>
@@ -197,7 +195,7 @@ export function UpgradeChooser() {
                   Recommended next step
                 </p>
                 <div className="mt-3 flex items-baseline justify-between gap-4">
-                  <h2 id="upgrade-recommended-title" className="text-xl font-semibold">
+                  <h2 id="upgrade-recommended-title" className="text-h2">
                     {nextDisplay.pricing.label}
                   </h2>
                   <span className="text-lg font-semibold tracking-tight">

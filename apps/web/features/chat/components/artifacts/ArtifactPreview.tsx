@@ -57,6 +57,7 @@ import {
   ChartArtifact,
   GeneratedFileCard,
   MarkdownContent,
+  toggleMarkdownTask,
   MermaidDiagram,
   SpreadsheetArtifact,
   PresentationArtifact,
@@ -199,7 +200,17 @@ interface ArtifactPreviewProps {
 
 const OUTLINE_MIN_HEADINGS = 3;
 
-function MarkdownDocumentPreview({ content, className }: { content: string; className: string }) {
+function MarkdownDocumentPreview({
+  content,
+  className,
+  onTaskToggle,
+  pendingChecklistSave,
+}: {
+  content: string;
+  className: string;
+  onTaskToggle?: (index: number) => void;
+  pendingChecklistSave?: boolean;
+}) {
   const bodyRef = useRef<HTMLDivElement>(null);
   const headings = useMemo(() => extractMarkdownHeadings(content), [content]);
 
@@ -218,6 +229,12 @@ function MarkdownDocumentPreview({ content, className }: { content: string; clas
       data-testid="artifact-markdown-preview"
     >
       <div className="mx-auto max-w-3xl">
+        <p
+          role="status"
+          className={pendingChecklistSave ? 'mb-2 text-xs text-muted-foreground' : 'sr-only'}
+        >
+          {pendingChecklistSave ? 'Checklist changes save as a new version when you pause.' : ''}
+        </p>
         {headings.length >= OUTLINE_MIN_HEADINGS && (
           <nav
             className="mb-4 rounded-lg border border-border/30 bg-muted/20 p-3"
@@ -252,7 +269,7 @@ function MarkdownDocumentPreview({ content, className }: { content: string; clas
           </nav>
         )}
         <div ref={bodyRef}>
-          <MarkdownContent content={content} />
+          <MarkdownContent content={content} {...(onTaskToggle ? { onTaskToggle } : {})} />
         </div>
       </div>
     </div>
@@ -269,6 +286,7 @@ const MARKDOWN_SHORTCUTS: Readonly<
 
 const ARTIFACT_DRAFT_STORAGE_PREFIX = 'agi.artifact-draft:';
 const ARTIFACT_DRAFT_AUTOSAVE_MS = 800;
+const CHECKLIST_COMMIT_IDLE_MS = 4_000;
 
 function readStoredDraft(key: string): string | null {
   try {
@@ -652,12 +670,14 @@ export function ArtifactPreview({
 
   const draftStorageKey = `${ARTIFACT_DRAFT_STORAGE_PREFIX}${artifact.id}`;
   const [draftStatus, setDraftStatus] = useState<'saved' | 'unsaved' | null>(null);
+  const [draftOrigin, setDraftOrigin] = useState<'editor' | 'checklist' | null>(null);
 
   useEffect(() => {
     if (!canEditSource) return;
     const kept = readStoredDraft(draftStorageKey);
     if (kept === null || kept === activeContent) return;
     setSourceDraft(kept);
+    setDraftOrigin('editor');
     setActiveTab('code');
     setDraftStatus('saved');
     toast.message('Restored your unsaved edits to this artifact');
@@ -691,6 +711,7 @@ export function ArtifactPreview({
   const endSourceEdit = useCallback(() => {
     removeStoredDraft(draftStorageKey);
     setDraftStatus(null);
+    setDraftOrigin(null);
     setSourceDraft(null);
   }, [draftStorageKey]);
 
@@ -703,6 +724,20 @@ export function ArtifactPreview({
     }
     endSourceEdit();
   }, [artifact.id, endSourceEdit, sourceDraft, upsertArtifact]);
+
+  const handleTaskToggle = useCallback(
+    (index: number) => {
+      setSourceDraft((current) => toggleMarkdownTask(current ?? activeContent, index));
+      setDraftOrigin((origin) => origin ?? 'checklist');
+    },
+    [activeContent],
+  );
+
+  useEffect(() => {
+    if (draftOrigin !== 'checklist' || sourceDraft === null) return;
+    const timer = setTimeout(saveSourceEdit, CHECKLIST_COMMIT_IDLE_MS);
+    return () => clearTimeout(timer);
+  }, [draftOrigin, saveSourceEdit, sourceDraft]);
 
   // AUDIT-FIX ART-6 / ART-14: the security banner is DERIVED, never latched,
   // and it now states what actually happened per renderer:
@@ -1274,7 +1309,12 @@ if (__AgiApp) {
   );
 
   const renderMarkdownPreview = (containerClassName: string) => (
-    <MarkdownDocumentPreview content={activeContent} className={containerClassName} />
+    <MarkdownDocumentPreview
+      content={sourceDraft ?? activeContent}
+      className={containerClassName}
+      {...(canEditSource ? { onTaskToggle: handleTaskToggle } : {})}
+      pendingChecklistSave={draftOrigin === 'checklist' && sourceDraft !== null}
+    />
   );
 
   const renderSharedPreview = (containerClassName: string) => (
@@ -1577,7 +1617,10 @@ if (__AgiApp) {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => setSourceDraft(activeContent)}
+                  onClick={() => {
+                    setSourceDraft(activeContent);
+                    setDraftOrigin('editor');
+                  }}
                   className="h-7 px-2"
                   aria-label="Edit artifact source"
                   title="Edit"
