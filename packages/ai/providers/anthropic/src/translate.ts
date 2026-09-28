@@ -306,6 +306,9 @@ export function translateChatRequest(req: ChatRequest): AnthropicTranslatedReque
             : undefined;
 
   const rejectsSamplingParameters = reasoning?.rejectsSamplingParameters === true;
+  const requestMetadata = req.endUserId
+    ? { ...req.metadata, user_id: req.endUserId }
+    : req.metadata;
 
   return {
     model: req.model,
@@ -322,7 +325,7 @@ export function translateChatRequest(req: ChatRequest): AnthropicTranslatedReque
     ...(req.stopSequences ? { stop_sequences: req.stopSequences } : {}),
     ...(thinking ? { thinking } : {}),
     ...(req.effort ? { output_config: { effort: req.effort } } : {}),
-    ...(req.metadata ? { metadata: req.metadata } : {}),
+    ...(requestMetadata ? { metadata: requestMetadata } : {}),
   };
 }
 

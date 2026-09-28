@@ -167,15 +167,13 @@ Code: `apps/web/features/chat/components/Composer/AttachmentPreview.tsx:200-200`
 
 - Done when: When only part of a file could be read or it was cut to a size limit, the user is told.
 - Wave: 3
-- Already works on: cli, vscode
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | hydration marks truncation only in the model's text; the client needs it: hydration returns the cut files (p-contrast), request-processor sends them to the client with the turn (p-chat-gates), useChatStream keeps them on the user message (p-mcp-web), and the bubble shows the notice (p-contrast). | ui, handler |
-| desktop | partial | hydration marks truncation only in the model's text; the client needs it: hydration returns the cut files (p-contrast), request-processor sends them to the client with the turn (p-chat-gates), useChatStream keeps them on the user message (p-mcp-web), and the bubble shows the notice (p-contrast). | ui, handler |
 | mobile | partial | Tell the user when a document was cut to 100,000 characters or could not be read on the device; today only the model sees "[truncated]" or "could not be extracted". | ui |
 
-Code: `apps/web/lib/server/office-document-text.ts:95-95`, `apps/web/lib/server/pdf-attachment-content.ts:139-139`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:3165-3166`, `apps/mobile/services/attachmentContext.ts:15-29`
+Code: `apps/mobile/services/attachmentContext.ts:15-29`
 
 ## S14.25: Password-protected-file notice.
 

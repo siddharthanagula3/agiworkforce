@@ -112,14 +112,24 @@ function isAbsoluteWebUrl(url: string): boolean {
   return /^https?:\/\//i.test(url);
 }
 
+type ResumeSource = { url: string; title?: string; snippet?: string; retrievedAt?: string };
+
 export function researchResumeSources(
-  sourcesForRetry: Array<{ url: string; title?: string; snippet?: string }> | undefined,
+  sourcesForRetry: ResumeSource[] | undefined,
   searchResults: WebSearchResults | undefined,
-): Array<{ url: string; title?: string; snippet?: string }> {
+): ResumeSource[] {
   const gathered =
     sourcesForRetry ??
     (Array.isArray(searchResults) ? searchResults : (searchResults?.results ?? [])).map(
-      (result) => ({ url: result.url, title: result.title, snippet: result.snippet }),
+      (result) => {
+        const retrievedAt = result.retrievedAt ?? result.provenance?.retrievedAt;
+        return {
+          url: result.url,
+          title: result.title,
+          snippet: result.snippet,
+          ...(retrievedAt ? { retrievedAt } : {}),
+        };
+      },
     );
   return gathered.filter((source) => isAbsoluteWebUrl(source.url));
 }

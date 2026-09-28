@@ -1,3 +1,5 @@
+import type { DeveloperStepStatus } from '@agiworkforce/types/protocol';
+
 export type PlanStepStatus = 'pending' | 'in_progress' | 'completed';
 
 export interface PlanVisualizationStep {
@@ -42,6 +44,35 @@ export function parsePlanVisualization(input: unknown): PlanVisualization | unde
       : '';
   if (explanation.length > MAX_EXPLANATION_CHARS) return undefined;
   return { ...(explanation === '' ? {} : { explanation }), plan };
+}
+
+const THREAD_STEP_STATUS: Readonly<Record<DeveloperStepStatus, PlanStepStatus | undefined>> = {
+  pending: 'pending',
+  in_progress: 'in_progress',
+  done: 'completed',
+  blocked: 'pending',
+  skipped: 'completed',
+  superseded: undefined,
+};
+
+export function planFromThread(
+  plan: ReadonlyArray<{ description: string; status: DeveloperStepStatus }> | undefined,
+  todos: ReadonlyArray<{ content: string; status: DeveloperStepStatus }> | undefined,
+): PlanVisualization | undefined {
+  const source =
+    plan !== undefined && plan.length > 0
+      ? plan.map((step) => ({ text: step.description, status: step.status }))
+      : (todos ?? []).map((todo) => ({ text: todo.content, status: todo.status }));
+  const steps = source
+    .flatMap(({ text, status }) => {
+      const mapped = THREAD_STEP_STATUS[status];
+      const step = text.replace(/\s+/gu, ' ').trim();
+      return mapped === undefined || step === ''
+        ? []
+        : [{ step: step.slice(0, MAX_STEP_CHARS), status: mapped }];
+    })
+    .slice(0, MAX_PLAN_STEPS);
+  return steps.length === 0 ? undefined : { plan: steps };
 }
 
 function escapeMarkdownText(value: string): string {

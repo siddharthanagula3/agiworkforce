@@ -183,6 +183,7 @@ export class ChatEditorPanel {
       }),
       this.panel.onDidChangeViewState((event) => {
         if (event.webviewPanel.active) ChatEditorPanel.mostRecent = this;
+        if (event.webviewPanel.visible) void this.stateManager.syncStoredTranscript();
       }),
     );
     this.panel.onDidDispose(() => this.dispose(), null, this.disposables);

@@ -66,6 +66,8 @@ export const FreeOfferingRequestSchema = z.object({
   office_creation: z.literal(false).optional(),
   skill_name: z.undefined().optional(),
   mcp_context: z.undefined().optional(),
+  memory_enabled: z.boolean().optional(),
+  personalization: z.boolean().optional(),
 });
 
 export type FreeOfferingMessage = z.infer<typeof FreeOfferingRequestSchema>['messages'][number];
