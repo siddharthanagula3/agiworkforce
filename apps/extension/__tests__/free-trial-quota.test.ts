@@ -1080,7 +1080,7 @@ describe('streamFreeChat, SSE happy path', () => {
     expect(headers['Authorization']).toBe('Bearer my-clerk-token');
   });
 
-  it('advertises exactly the display-only map card Chrome can render', async () => {
+  it('advertises exactly the cards Chrome can render and answer', async () => {
     fetchMock.mockResolvedValueOnce(
       makeStreamResponse([
         JSON.stringify({ choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }] }),
@@ -1092,8 +1092,8 @@ describe('streamFreeChat, SSE happy path', () => {
     const [, fetchOpts] = fetchMock.mock.calls[0] as [string, RequestInit];
     const body = JSON.parse(fetchOpts.body as string) as Record<string, unknown>;
     expect(body[INTERACTIVE_CARD_REQUEST_KEY]).toEqual({
-      supported: ['map-search.v1'],
-      canRespond: false,
+      supported: ['clarify.v1', 'itinerary.v1', 'map-search.v1', 'product-comparison.v1'],
+      canRespond: true,
     });
   });
 

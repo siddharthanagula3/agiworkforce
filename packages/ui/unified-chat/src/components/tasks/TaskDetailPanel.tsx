@@ -55,6 +55,7 @@ import {
   workModeLabel,
   taskResultText,
 } from './task-display';
+import { TaskSteerSection } from './TaskSteerSection';
 
 // Below `lg` the list and this panel can no longer sit side by side, so
 // selecting a task switches it from a sticky sidebar to a `fixed inset-0`
@@ -391,6 +392,7 @@ export interface TaskDetailPanelProps {
   onOpenConversation(conversationId: string): void;
   onRerun?(goal: AgiWorkRerunGoal): void;
   onShare?(conversationId: string): void;
+  onSteer?(message: string): Promise<void>;
 }
 
 export function TaskDetailPanel({
@@ -405,6 +407,7 @@ export function TaskDetailPanel({
   onOpenConversation,
   onRerun,
   onShare,
+  onSteer,
 }: TaskDetailPanelProps) {
   const isMobileTakeover = useIsNarrowViewport(MOBILE_TAKEOVER_QUERY);
   const panelRef = useRef<HTMLElement | null>(null);
@@ -783,6 +786,8 @@ export function TaskDetailPanel({
           complete transcript.
         </p>
       ) : null}
+
+      <TaskSteerSection key={run.id} run={run} onSteer={onSteer} />
     </aside>
   );
 }

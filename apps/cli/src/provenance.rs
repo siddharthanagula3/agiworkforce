@@ -168,6 +168,10 @@ fn tool_result_provenance(tool_name: &str, args: &Value) -> ContextProvenance {
             insert_arg(&mut origin, args, "command", "command");
             ("host_execution", "host_output")
         }
+        "command_output" | "command_stop" => {
+            insert_arg(&mut origin, args, "id", "background_command");
+            ("host_execution", "host_output")
+        }
         "read_file" | "write_file" | "edit_file" | "multiedit" => {
             insert_arg(&mut origin, args, "path", "path");
             insert_arg(&mut origin, args, "file_path", "path");

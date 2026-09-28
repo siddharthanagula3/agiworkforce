@@ -25,30 +25,26 @@ Code: `apps/mobile/src/features/settings/personalization/index.tsx:334-334`, `ap
 
 - Done when: The user can write custom instructions on the surface and they are applied to that surface's chats until changed or switched off.
 - Wave: 3
-- Already works on: mobile, cli, vscode
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Instructions apply to every Managed Cloud chat, but not when a free promotional (free-pool) model is picked: /api/models/free-quota and /experiential-free build no personalization preamble. | handler |
-| desktop | partial | Same as web: instructions are skipped for free promotional (free-pool) models. | handler |
 | chrome | partial | Chrome cannot view or edit custom instructions; ones saved on web or mobile are applied by the server to Chrome Managed Cloud chats. | ui |
 
-Code: `apps/web/features/settings/components/WebSettingsModal.tsx:186-211`, `apps/web/features/settings/sections/GeneralSection.tsx:721-766`, `apps/web/features/settings/sections/GeneralSection.tsx:313-326`, `apps/web/lib/server/user-identity.ts:205-228`
+Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2453-2461`, `apps/web/app/api/llm/v1/chat/completions/lib/request-surface.ts:24-33`
 
 ## S85.03: Communication style.
 
 - Done when: The user can choose how the assistant communicates (tone, length, formatting) on the surface and replies follow it.
 - Wave: 3
-- Already works on: mobile, cli
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Response style, technical level, formatting and language apply to Managed Cloud chats but are dropped for free promotional (free-pool) models. | handler |
-| desktop | partial | Same as web: style is dropped for free promotional (free-pool) models. | handler |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | Chrome has no style control; the style saved on web or mobile is applied by the server to Chrome Managed Cloud chats. | ui |
 
-Code: `apps/web/features/settings/sections/GeneralSection.tsx:603-625`, `apps/web/features/settings/sections/GeneralSection.tsx:313-326`, `apps/web/lib/server/user-identity.ts:214-227`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2453-2461`
+Code: `apps/web/lib/server/user-identity.ts:214-227`, `apps/web/app/api/llm/v1/chat/completions/lib/request-surface.ts:24-33`
 
 ## S85.04: Writing-style personalization.
 
@@ -69,33 +65,29 @@ Code: `apps/cli/src/output_styles.rs:1-20`, `apps/cli/src/agent/mod.rs:1264-1279
 
 - Done when: The user can see, add, edit and delete saved memories on the surface and turn memory on or off, and saved memories are used in that surface's chats.
 - Wave: 3
-- Already works on: vscode
+- Already works on: web, desktop, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Memory is read into Managed Cloud chats, but not when a free promotional (free-pool) model is picked (those routes load no memory); and a failed memory load shows an empty list with no error (PG-WEBSET-03). | handler |
-| desktop | partial | Same as web: free promotional (free-pool) model chats load no memory. | handler |
 | mobile | partial | In Cloud mode the "Memory" switch is only stored on the phone (never synced), so turning it off does not stop the server from reading or learning account memories; the "Search and reference chats" switch is what actually writes the account memory setting. | handler |
 | cli | partial | F1: the cited MemorySubcommand enum (lib.rs:1072-1089) has List, Add and Forget only; there is no edit and no way to turn account memory on or off in the CLI (no memory key in config.rs), while the criterion requires edit and an on/off switch. Memories are used (context_prompt injected into the system prompt), so partial. |  |
 | chrome | partial | F1: the cited side-panel memory section only lists, adds, edits and deletes memories; the extension has no memory on/off switch (no memory_enabled/memoryEnabled anywhere in apps/extension/src) and never sets chatRequest.memory_enabled, so the server-side 'memory_enabled === false' gate is unreachable from Chrome. The criterion requires an on/off control: partial. |  |
 
-Code: `apps/web/features/settings/components/WebSettingsModal.tsx:186-211`, `apps/web/features/settings/sections/MemorySection.tsx:180-230`, `apps/web/features/settings/sections/MemorySection.tsx:350-358`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:1198-1215`
+Code: `apps/mobile/src/features/memory/components/MemoryControlsCard.tsx:41-72`, `apps/mobile/stores/settings/cloudSettingsStore.ts:79-84`, `apps/mobile/services/cloudSettingsMapping.ts:133-139`, `apps/cli/src/lib.rs:1072-1089`
 
 ## S85.06: Past-chat reference.
 
 - Done when: The user can let the assistant search or reference their other chats when answering, and switch it off; temporary chats are never referenced.
 - Wave: 3
-- Already works on: mobile
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Works for Managed Cloud chats (temporary chats excluded); a free promotional (free-pool) model chat never searches past chats. | handler |
-| desktop | partial | Same as web: not applied to free promotional (free-pool) model chats. | handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | Chrome has no switch; if "Search past chats" is on in web settings the server adds past-chat excerpts to Chrome Managed Cloud chats. | ui |
 
-Code: `apps/web/features/settings/sections/MemorySection.tsx:284-293`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:1233-1259`, `apps/web/lib/services/past-chat-context-service.ts:290-297`, `apps/web/features/chat/lib/free-quota-selection.ts:35-42`
+Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:1233-1259`, `apps/web/app/api/llm/v1/chat/completions/lib/request-surface.ts:24-33`
 
 ## S85.07: Project Memory preferences.
 
@@ -114,17 +106,14 @@ Code: `apps/web/features/settings/sections/MemorySection.tsx:284-293`, `apps/web
 
 - Done when: The user can choose whether their chats are kept in history (and synced to the account) or not saved.
 - Wave: 3
-- Already works on: cli
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The "start new chats as temporary" default exists, but temporary chats still leak: /api/search returns their titles and messages, and the first turn of a new temporary chat is saved to history (LQA-01), contradicting the Privacy copy. | handler |
-| desktop | partial | Same as web: temporary chats still appear in global search (LQA-01). | handler |
-| mobile | partial | The Temporary Chat switch works, but the server search (/api/search) still returns temporary chats' titles and messages (LQA-01). | handler |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | F1: the cited toggle is 'Save Managed Cloud chats to my account' (cloud mirroring); with it off, flushConversation skips the account sync but chats are still written to the extension's local history in chrome.storage, and the extension has no temporary/not-saved option. The criterion is 'kept in history ... or not saved'; only the sync half exists: partial. |  |
 
-Code: `apps/web/features/settings/sections/PrivacySection.tsx:736-752`, `apps/web/lib/hooks/useConversations.ts:450-461`, `apps/web/app/api/search/route.ts:256-262`, `apps/mobile/src/features/settings/general/index.tsx:48-54`
+Code: `apps/extension/src/features/options/data-handling-section.ts:147-158`, `apps/extension/src/features/cloud-bridge/conversationSync.ts:120-130`
 
 ## S85.16: Temporary-chat preferences.
 

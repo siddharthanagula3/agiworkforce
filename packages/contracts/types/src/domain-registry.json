@@ -530,6 +530,10 @@
       "capabilities": ["canUseMarketplace", "canUsePlugins"],
       "concepts": [],
       "tables": [
+        "organization_plugin_files",
+        "organization_plugin_group_settings",
+        "organization_plugin_members",
+        "organization_plugins",
         "plugin_installations",
         "plugin_marketplace_entries",
         "plugin_marketplace_entry_files",
@@ -538,7 +542,10 @@
         "plugin_package_scans",
         "plugin_registry_entries",
         "plugin_registry_lifecycle_events",
-        "plugin_registry_versions"
+        "plugin_registry_versions",
+        "plugin_submission_files",
+        "plugin_submission_installs",
+        "plugin_submissions"
       ]
     },
     {

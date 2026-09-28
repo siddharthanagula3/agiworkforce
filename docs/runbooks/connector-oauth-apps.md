@@ -106,11 +106,13 @@ One Google Cloud project and one OAuth client serve all four connectors.
    create a project named `AGI Workforce Connectors`, signed in with the same
    Google account.
 3. **Enable the APIs.** In APIs and Services, Library, enable the Gmail API,
-   Google Calendar API, Google Drive API and BigQuery API. Then follow each MCP
-   server's setup page, which says what else the project needs for that server:
+   Google Calendar API, Google Drive API, People API and BigQuery API. Then
+   follow each MCP server's setup page, which says what else the project needs
+   for that server:
    [Gmail](https://developers.google.com/workspace/gmail/api/guides/configure-mcp-server),
    [Calendar](https://developers.google.com/workspace/calendar/api/guides/configure-mcp-server),
    [Drive](https://developers.google.com/workspace/drive/api/guides/configure-mcp-server),
+   [People](https://developers.google.com/workspace/guides/configure-mcp-servers),
    [BigQuery](https://cloud.google.com/bigquery/docs/use-bigquery-mcp).
 4. **Branding.** In Google Auth Platform, Branding
    ([guide](https://support.google.com/cloud/answer/10311615)): user type
@@ -122,10 +124,11 @@ One Google Cloud project and one OAuth client serve all four connectors.
 
    | Connector       | Scopes (all prefixed `https://www.googleapis.com/auth/` except OpenID) |
    | --------------- | ---------------------------------------------------------------------- |
-   | all four        | `openid`, `profile`, `email`, `userinfo.email`, `userinfo.profile`     |
+   | all five        | `openid`, `profile`, `email`, `userinfo.email`, `userinfo.profile`     |
    | Gmail           | `gmail.readonly`, `gmail.send`                                         |
    | Google Calendar | `calendar.readonly`, `calendar.events`                                 |
    | Google Drive    | `drive.file`, `drive.metadata.readonly`                                |
+   | Google Contacts | `contacts.readonly`, `directory.readonly`                              |
    | BigQuery        | `bigquery.readonly`, `devstorage.read_only`                            |
 
    The console labels each scope non-sensitive, sensitive or restricted when
@@ -137,7 +140,8 @@ One Google Cloud project and one OAuth client serve all four connectors.
    **Web application**, named `AGI Workforce web`, with the authorized redirect
    URI `https://agiworkforce.com/api/connectors/oauth/callback`. Copy the
    client ID and secret straight into the Vercel variables for `gmail`,
-   `google-calendar`, `google-drive` and `bigquery` (the same pair in all four).
+   `google-calendar`, `google-drive`, `google-contacts` and `bigquery` (the
+   same pair in all five).
 7. **Publish and verify.** In Audience, move the app from Testing to **In
    production**, then submit verification
    ([requirements](https://support.google.com/cloud/answer/13464321)). Google
@@ -355,7 +359,7 @@ pair. The fields, and the exact endpoints and scopes for each vendor, are in
 [`docs/development/connectors-setup.md`](../development/connectors-setup.md).
 
 - First-party descriptors: `gmail`, `google-drive`, `google-calendar`,
-  `github-mcp` and `microsoft-365`. `notion`, `linear` and `airtable` are
+  `google-contacts`, `github-mcp` and `microsoft-365`. `notion`, `linear` and `airtable` are
   optional, because those servers register themselves.
 - Pre-registered directory connectors: `asana`, `box`, `dropbox`, `figma`,
   `hubspot`, `intercom`, `pagerduty`, `slack`, `square` and `vercel`.
