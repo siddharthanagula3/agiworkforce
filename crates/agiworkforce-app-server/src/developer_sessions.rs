@@ -8,20 +8,21 @@ use agiworkforce_protocol::developer_session::{
     HookListResponse, HookRemoveParams, InitializeParams, InitializeResponse,
     LocalModelListResponse, McpAddParams, McpLoginParams, McpLoginResponse, McpServerListResponse,
     McpServerParams, McpServerTestResponse, McpServerToolsResponse, MemoryAddParams,
-    MemoryAddResponse, ModelListParams, PluginInstallParams, PluginListResponse,
-    PluginRemoveParams, PluginSetEnabledParams, ProtocolVersionUnsupportedData,
-    SettingsReadResponse, SettingsWriteParams, SkillConsentParams, SkillConsentResponse,
-    SkillInstallParams, SkillListResponse, SkillRemoveParams, SkillSetEnabledParams,
-    SlashCommandListResponse, SlashCommandRunParams, SlashCommandRunResponse,
-    ThreadCheckpointsResponse, ThreadForkParams, ThreadHandoffAcceptParams, ThreadHandoffParams,
-    ThreadIdParams, ThreadListParams, ThreadListResponse, ThreadReadResponse,
-    ThreadReconnectResponse, ThreadRewindParams, ThreadRewindResponse, ThreadSearchParams,
-    ThreadSearchResponse, ThreadStartParams, ThreadStartResponse, ThreadSummary,
-    ThreadWriterConflictData, TurnInterruptParams, TurnStartParams, TurnStartResponse,
-    TurnSteerParams, TurnSummary, WorktreeCreateParams, WorktreeListResponse, WorktreeRemoveParams,
-    WorktreeSummary, LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION,
-    MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION, PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE,
-    SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS, THREAD_WRITER_CONFLICT_ERROR_CODE,
+    MemoryAddResponse, ModelListParams, PermissionsListResponse, PermissionsRemoveParams,
+    PluginInstallParams, PluginListResponse, PluginRemoveParams, PluginSetEnabledParams,
+    ProtocolVersionUnsupportedData, SettingsReadResponse, SettingsWriteParams, SkillConsentParams,
+    SkillConsentResponse, SkillInstallParams, SkillListResponse, SkillRemoveParams,
+    SkillSetEnabledParams, SlashCommandListResponse, SlashCommandRunParams,
+    SlashCommandRunResponse, ThreadCheckpointsResponse, ThreadForkParams,
+    ThreadHandoffAcceptParams, ThreadHandoffParams, ThreadIdParams, ThreadListParams,
+    ThreadListResponse, ThreadReadResponse, ThreadReconnectResponse, ThreadRewindParams,
+    ThreadRewindResponse, ThreadSearchParams, ThreadSearchResponse, ThreadStartParams,
+    ThreadStartResponse, ThreadSummary, ThreadWriterConflictData, TurnInterruptParams,
+    TurnStartParams, TurnStartResponse, TurnSteerParams, TurnSummary, WorktreeCreateParams,
+    WorktreeListResponse, WorktreeRemoveParams, WorktreeSummary,
+    LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION, MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION,
+    PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE, SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS,
+    THREAD_WRITER_CONFLICT_ERROR_CODE,
 };
 use anyhow::Result;
 use async_trait::async_trait;
@@ -397,6 +398,17 @@ pub trait DeveloperSessionHost: Send + Sync {
 
     async fn list_worktrees(&self) -> Result<WorktreeListResponse, DeveloperSessionHostError> {
         Err(unsupported(method::WORKTREE_LIST))
+    }
+
+    async fn list_permissions(&self) -> Result<PermissionsListResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::PERMISSIONS_LIST))
+    }
+
+    async fn remove_permission(
+        &self,
+        _params: PermissionsRemoveParams,
+    ) -> Result<PermissionsListResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::PERMISSIONS_REMOVE))
     }
 
     /// Stop accepting work, cancel every active host operation, and wait until
@@ -1069,6 +1081,22 @@ impl DeveloperSessionProcessor {
                     return *response;
                 }
                 self.host.list_worktrees().await.map(serde_json::to_value)
+            }
+            method::PERMISSIONS_LIST => {
+                if let Err(response) = parse_optional_params::<NoParams>(&request) {
+                    return *response;
+                }
+                self.host.list_permissions().await.map(serde_json::to_value)
+            }
+            method::PERMISSIONS_REMOVE => {
+                let params = match parse_params::<PermissionsRemoveParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .remove_permission(params)
+                    .await
+                    .map(serde_json::to_value)
             }
             method::MEMORY_ADD => {
                 let params = match parse_params::<MemoryAddParams>(&request) {

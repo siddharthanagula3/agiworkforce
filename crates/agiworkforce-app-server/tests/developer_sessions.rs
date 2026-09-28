@@ -223,6 +223,7 @@ impl DeveloperSessionHost for FakeHost {
                     risk_level: Some(AgentEventApprovalRiskLevel::Medium),
                     reversible: Some(true),
                     proposed_content: None,
+                    always_allow_saved: false,
                 }],
             }),
         })
@@ -345,6 +346,7 @@ fn capabilities() -> AppServerCapabilities {
         approval_edits: false,
         mcp_tools: false,
         installs: false,
+        saved_permissions: false,
     }
 }
 
@@ -1783,6 +1785,7 @@ fn handoff_record(to: HandoffEnvironment) -> DeveloperSessionHandoff {
             risk_level: Some(AgentEventApprovalRiskLevel::Medium),
             reversible: Some(true),
             proposed_content: None,
+            always_allow_saved: false,
         }],
         last_turn: Some(HandoffLastTurn {
             turn_id: "turn-9".to_string(),

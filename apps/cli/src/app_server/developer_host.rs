@@ -21,19 +21,19 @@ use agiworkforce_protocol::developer_session::{
     LocalModelSummary, McpAddParams, McpLoginParams, McpLoginResponse, McpServerConfiguredStatus,
     McpServerListResponse, McpServerParams, McpServerTestResponse, McpServerToolsResponse,
     MemoryAddParams, MemoryAddResponse, ModelListParams, PendingApprovalSnapshot,
-    PluginInstallParams, PluginListResponse, PluginRemoveParams, PluginSetEnabledParams,
-    RewindSkippedFile, SettingsReadResponse, SettingsWriteParams, SkillConsentParams,
-    SkillConsentResponse, SkillInstallParams, SkillListResponse, SkillRemoveParams,
-    SkillSetEnabledParams, SlashCommandListResponse, SlashCommandRunParams,
-    SlashCommandRunResponse, ThreadCheckpoint, ThreadCheckpointsResponse, ThreadForkParams,
-    ThreadHandoffAcceptParams, ThreadHandoffParams, ThreadIdParams, ThreadListParams,
-    ThreadListResponse, ThreadPlanNotification, ThreadReadResponse, ThreadReconnectResponse,
-    ThreadRewindParams, ThreadRewindResponse, ThreadRewindRestore, ThreadSearchHit,
-    ThreadSearchParams, ThreadSearchResponse, ThreadStartParams, ThreadStatus, ThreadSummary,
-    ThreadWriterChangedNotification, ThreadWriterConflictData, TurnEndedNotification, TurnFailure,
-    TurnFailureCode, TurnInterruptParams, TurnModelNotification, TurnStartParams, TurnStatus,
-    TurnSteerParams, TurnSummary, WorktreeCreateParams, WorktreeListResponse, WorktreeRemoveParams,
-    WorktreeSummary,
+    PermissionsListResponse, PermissionsRemoveParams, PluginInstallParams, PluginListResponse,
+    PluginRemoveParams, PluginSetEnabledParams, RewindSkippedFile, SettingsReadResponse,
+    SettingsWriteParams, SkillConsentParams, SkillConsentResponse, SkillInstallParams,
+    SkillListResponse, SkillRemoveParams, SkillSetEnabledParams, SlashCommandListResponse,
+    SlashCommandRunParams, SlashCommandRunResponse, ThreadCheckpoint, ThreadCheckpointsResponse,
+    ThreadForkParams, ThreadHandoffAcceptParams, ThreadHandoffParams, ThreadIdParams,
+    ThreadListParams, ThreadListResponse, ThreadPlanNotification, ThreadReadResponse,
+    ThreadReconnectResponse, ThreadRewindParams, ThreadRewindResponse, ThreadRewindRestore,
+    ThreadSearchHit, ThreadSearchParams, ThreadSearchResponse, ThreadStartParams, ThreadStatus,
+    ThreadSummary, ThreadWriterChangedNotification, ThreadWriterConflictData,
+    TurnEndedNotification, TurnFailure, TurnFailureCode, TurnInterruptParams,
+    TurnModelNotification, TurnStartParams, TurnStatus, TurnSteerParams, TurnSummary,
+    WorktreeCreateParams, WorktreeListResponse, WorktreeRemoveParams, WorktreeSummary,
 };
 use agiworkforce_protocol::protocol::{NetworkPolicyRuleAction, ReviewDecision};
 use agiworkforce_protocol::task_state::AgentTaskState;
@@ -429,6 +429,7 @@ impl CliDeveloperSessionHost {
             approval_edits: true,
             mcp_tools: self.load_integrations,
             installs: true,
+            saved_permissions: true,
         }
     }
 
@@ -3362,6 +3363,23 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         Ok(summary)
     }
 
+    async fn list_permissions(&self) -> Result<PermissionsListResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        tokio::task::spawn_blocking(surfaces::list_saved_permissions)
+            .await
+            .map_err(internal_error)?
+    }
+
+    async fn remove_permission(
+        &self,
+        params: PermissionsRemoveParams,
+    ) -> Result<PermissionsListResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        tokio::task::spawn_blocking(move || surfaces::remove_saved_permission(&params.id))
+            .await
+            .map_err(internal_error)?
+    }
+
     async fn list_worktrees(&self) -> Result<WorktreeListResponse, DeveloperSessionHostError> {
         let _admission = self.admit_request().await?;
         let mut worktrees = Vec::new();
@@ -3739,6 +3757,7 @@ fn approval_callback(
                     .proposal
                     .clone()
                     .filter(|content| content.len() <= MAX_PROPOSED_CONTENT_BYTES),
+                always_allow_saved: request.saves_always_allow,
             };
             let (sender, receiver) = oneshot::channel();
             pending.lock().await.insert(
@@ -3771,6 +3790,7 @@ fn approval_callback(
                     "reversible": snapshot.reversible,
                     "proposedContent": snapshot.proposed_content,
                     "editable": snapshot.proposed_content.is_some(),
+                    "alwaysAllowSaved": snapshot.always_allow_saved,
                 }),
             ) {
                 let _ = notifications.send(notification);
@@ -4493,6 +4513,7 @@ fn review_to_approval_decision(decision: ReviewDecision) -> ApprovalDecision {
         ReviewDecision::Approved => ApprovalDecision::AllowOnce,
         ReviewDecision::ApprovedExecpolicyAmendment { .. } => ApprovalDecision::AlwaysAllow,
         ReviewDecision::ApprovedForSession => ApprovalDecision::AllowSession,
+        ReviewDecision::AlwaysAllow => ApprovalDecision::AlwaysAllow,
         ReviewDecision::NetworkPolicyAmendment {
             network_policy_amendment,
         } => match network_policy_amendment.action {
@@ -7652,6 +7673,7 @@ mod tests {
                     risk_level: Some(AgentEventApprovalRiskLevel::Medium),
                     reversible: Some(false),
                     proposed_content: None,
+                    always_allow_saved: false,
                 },
                 responder,
             },
