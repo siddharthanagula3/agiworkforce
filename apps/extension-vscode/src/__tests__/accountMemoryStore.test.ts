@@ -58,15 +58,14 @@ function makeClient(overrides: Partial<AccountMemoryClient> = {}): AccountMemory
   return {
     pull: vi.fn(async () => ({ memories: [], cursor: INITIAL_CURSOR, hasMore: false })),
     pullAll: vi.fn(async () => ({ memories: [], cursor: INITIAL_CURSOR, hasMore: false })),
-    push: vi.fn(
-      async (): Promise<MemoryPushResponse> => ({
-        protocolVersion: 2,
-        applied: [],
-        conflicts: [],
-        rejected: [],
-        cursor: INITIAL_CURSOR,
-      }),
-    ),
+    readScope: vi.fn(async () => ({ organizationId: null, workspaceName: null })),
+    push: vi.fn(async (): Promise<MemoryPushResponse> => ({
+      protocolVersion: 2,
+      applied: [],
+      conflicts: [],
+      rejected: [],
+      cursor: INITIAL_CURSOR,
+    })),
     ...overrides,
   };
 }
@@ -157,15 +156,13 @@ describe('AccountMemoryStore', () => {
 
   it('sends an update at the version the account last reported', async () => {
     const storage = makeMemento();
-    const push = vi.fn(
-      async (items: MemoryPushItem[]): Promise<MemoryPushResponse> => ({
-        protocolVersion: 2,
-        applied: items.map((item) => ({ id: item.id, server_version: '9' })),
-        conflicts: [],
-        rejected: [],
-        cursor: '9',
-      }),
-    );
+    const push = vi.fn(async (items: MemoryPushItem[]): Promise<MemoryPushResponse> => ({
+      protocolVersion: 2,
+      applied: items.map((item) => ({ id: item.id, server_version: '9' })),
+      conflicts: [],
+      rejected: [],
+      cursor: '9',
+    }));
     const client = makeClient({
       pullAll: vi.fn(async () => ({ memories: [delta()], cursor: '7', hasMore: false })),
       push,
