@@ -15,16 +15,16 @@ Two workspaces in one repository:
   `services/*`, `infrastructure/*`.
 - **Cargo** over `apps/desktop/src-tauri`, `apps/cli`, `crates/*`.
 
-| Root              | Holds                                                           |
-| ----------------- | --------------------------------------------------------------- |
-| `apps/`           | The six shipping client surfaces                                |
-| `packages/`       | Shared TypeScript, grouped by role                              |
-| `crates/`         | Shared Rust used by both the desktop and the CLI                |
-| `services/`       | Deployable backend services (currently `signaling-server` only) |
-| `infrastructure/` | Deploy targets that are not products (`sandbox`)                |
-| `scripts/`        | Repository guards, generators, release and database tooling     |
-| `tools/`          | Internal tooling: evals, skill vetting                          |
-| `docs/`           | Durable knowledge (see `AGENTS.md` §11 for the taxonomy)        |
+| Root              | Holds                                                             |
+| ----------------- | ----------------------------------------------------------------- |
+| `apps/`           | The six shipping client surfaces                                  |
+| `packages/`       | Shared TypeScript, grouped by role                                |
+| `crates/`         | Shared Rust used by both the desktop and the CLI                  |
+| `services/`       | Deployable backend services: `signaling-server`, `upload-scanner` |
+| `infrastructure/` | Deploy targets that are not products (`sandbox`)                  |
+| `scripts/`        | Repository guards, generators, release and database tooling       |
+| `tools/`          | Internal tooling: evals, skill vetting                            |
+| `docs/`           | Durable knowledge (see `AGENTS.md` §11 for the taxonomy)          |
 
 ## Surfaces
 

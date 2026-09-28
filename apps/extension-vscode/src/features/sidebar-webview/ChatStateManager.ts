@@ -3036,6 +3036,12 @@ export class ChatStateManager {
           }
         });
       };
+      let reloadedFromDisk = false;
+      const reloadSubscription = runtime.onNotification((notification) => {
+        if (notification.method !== 'thread/reloaded') return;
+        const params = notification.params as { threadId?: unknown } | undefined;
+        if (params?.threadId === thread.id) reloadedFromDisk = true;
+      });
       const eventSubscription = runtime.onEvent((event) => {
         if (event.type === 'runtime_disconnected') {
           if (this._thread?.runtime === runtime) delete this._thread;
@@ -3181,9 +3187,10 @@ export class ChatStateManager {
         if (this._cancelRequested && !terminal) await this._interruptActiveTurn();
         await completion;
         if (this._thread?.id === thread.id && this._thread.runtime === runtime) {
-          await this._refreshLoadedConversation(runtime, thread.id);
+          await this._refreshLoadedConversation(runtime, thread.id, reloadedFromDisk);
         }
       } finally {
+        reloadSubscription.dispose();
         eventSubscription.dispose();
         if (this._activeTurn?.turnId === activeTurnId) delete this._activeTurn;
       }
@@ -3205,6 +3212,7 @@ export class ChatStateManager {
   private async _refreshLoadedConversation(
     runtime: LocalRuntimeClient,
     threadId: string,
+    announce = false,
   ): Promise<void> {
     try {
       const response = await runtime.readThread(threadId);
@@ -3230,6 +3238,15 @@ export class ChatStateManager {
         response.thread.trustMode,
         response,
       );
+      if (announce) {
+        this._post({
+          type: 'transcriptRefreshed',
+          payload: {
+            conversation: this._loadedConversation,
+            notice: t('sessionSync.continuedElsewhere'),
+          },
+        });
+      }
     } catch (error) {
       console.warn(`[AGI Workforce] failed to refresh developer session ${threadId}`, error);
     }

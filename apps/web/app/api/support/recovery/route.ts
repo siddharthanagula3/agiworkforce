@@ -1,11 +1,12 @@
 import 'server-only';
 
-import { NextResponse, type NextRequest } from 'next/server';
+import { NextResponse, after, type NextRequest } from 'next/server';
 import { z } from 'zod';
 
 import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
+import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { readJsonBody } from '@/lib/read-json-body';
 import { requireHumanCaller } from '@/lib/security/bot-challenge';
@@ -38,7 +39,12 @@ async function handleRecovery(request: NextRequest) {
     throw createError.validation('Invalid recovery request', parsed.error);
   }
 
-  await submitAccountRecoveryRequest({ ...parsed.data, request });
+  const recoveryRequest = { ...parsed.data, request };
+  after(() =>
+    submitAccountRecoveryRequest(recoveryRequest).catch((error: unknown) => {
+      logger.error({ error }, '[support-recovery] a recovery request could not be filed');
+    }),
+  );
   return NextResponse.json(
     { received: true },
     { status: 202, headers: { 'cache-control': 'no-store' } },
