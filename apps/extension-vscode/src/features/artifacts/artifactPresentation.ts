@@ -1,4 +1,8 @@
-import type { ManagedCloudArtifactIndexEntry } from '@agiworkforce/cloud-contracts';
+import type {
+  ManagedCloudArtifactIndexEntry,
+  ManagedCloudPublishedArtifact,
+} from '@agiworkforce/cloud-contracts';
+import type { ResourceVisibility } from '@agiworkforce/types';
 
 const ARTIFACT_FAILURE_REASON_MAX_LENGTH = 240;
 
@@ -105,27 +109,39 @@ export function artifactFileName(artifact: ManagedCloudArtifactIndexEntry): stri
   return `${base === '' ? 'artifact' : base}.${artifactFileExtension(artifact)}`;
 }
 
+const PUBLISHED_LABELS: Record<ResourceVisibility, string> = {
+  public: 'published publicly',
+  organization: 'shared with your workspace',
+  private: 'published, only you',
+};
+
+const PUBLISHED_EXPLANATIONS: Record<ResourceVisibility, string> = {
+  public: 'A published copy of this artifact has a public link anyone can open.',
+  organization: 'A published copy of this artifact opens only for people in your workspace.',
+  private: 'A published copy of this artifact opens only for you.',
+};
+
 export function artifactDescription(
   artifact: ManagedCloudArtifactIndexEntry,
-  published: boolean,
+  published: Pick<ManagedCloudPublishedArtifact, 'visibility'> | undefined,
 ): string {
   const parts = [artifact.type];
   if (artifact.language !== null && artifact.language !== '') parts.push(artifact.language);
   parts.push(formatTimestamp(artifact.createdAt));
-  if (published) parts.push('published');
+  if (published !== undefined) parts.push(PUBLISHED_LABELS[published.visibility]);
   return parts.join(' · ');
 }
 
 export function artifactTooltipLines(
   artifact: ManagedCloudArtifactIndexEntry,
-  published: boolean,
+  published: Pick<ManagedCloudPublishedArtifact, 'visibility'> | undefined,
 ): string[] {
   const lines = [
     artifactTitle(artifact),
     artifactDescription(artifact, published),
     `Opens read-only, re-derived from the message that produced it`,
   ];
-  if (published) lines.push('A published copy of this artifact has a public link.');
+  if (published !== undefined) lines.push(PUBLISHED_EXPLANATIONS[published.visibility]);
   return lines;
 }
 

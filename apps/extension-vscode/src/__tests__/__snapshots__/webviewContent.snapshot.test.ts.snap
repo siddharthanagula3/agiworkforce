@@ -506,7 +506,27 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       line-height: var(--type-caption-height);
       text-align: right;
     }
+    .message.user[data-delivery-state='sending']::after { content: 'Sending'; }
     .message.user[data-delivery-state='queued']::after { content: 'Queued'; }
+    .message-attachments {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 6px;
+    }
+    .message-attachment {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      max-width: 100%;
+      padding: 1px 6px;
+      border: 1px solid var(--border);
+      border-radius: var(--corner-pill);
+      color: var(--text-secondary);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      overflow-wrap: anywhere;
+    }
     .message.user[data-delivery-state='running']::after { content: 'Running'; }
     .message.user[data-delivery-state='steered']::after { content: 'Steered'; }
     .message.user[data-delivery-state='failed'] {
@@ -2247,6 +2267,18 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       overflow: hidden;
       text-overflow: ellipsis;
       flex: 1 1 auto;
+    }
+    .attachment-chip__thumb {
+      width: 16px;
+      height: 16px;
+      object-fit: cover;
+      border-radius: 3px;
+      flex-shrink: 0;
+    }
+    .attachment-chip__size {
+      color: var(--text-secondary);
+      font-size: var(--type-caption-size);
+      white-space: nowrap;
     }
     .attachment-chip__remove {
       background: none;
@@ -4200,6 +4232,55 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
     }
 
     // ── Send ──────────────────────────────────────────────────────────────────
+    var sendingClientMessageId = null;
+
+    function settleSending(state) {
+      if (!sendingClientMessageId) return;
+      setUserMessageState(sendingClientMessageId, state || '');
+      sendingClientMessageId = null;
+    }
+
+    function sentContextEntries() {
+      var entries = [];
+      var strips = [attachmentStrip, editorContextStrip];
+      for (var s = 0; s < strips.length; s++) {
+        if (!strips[s]) continue;
+        var chips = strips[s].querySelectorAll('.attachment-chip:not(.failed)');
+        for (var c = 0; c < chips.length; c++) {
+          var chipName = chips[c].querySelector('.attachment-chip__name');
+          var chipIcon = chips[c].querySelector('.codicon');
+          if (!chipName || !chipName.textContent) continue;
+          entries.push({
+            label: chipName.textContent,
+            icon: chipIcon ? chipIcon.className : 'codicon codicon-file-media',
+          });
+        }
+      }
+      if (browseWebEnabled) entries.push({ label: 'Browse the web', icon: 'codicon codicon-globe' });
+      return entries;
+    }
+
+    function appendSentContext(messageEl) {
+      var entries = sentContextEntries();
+      if (entries.length === 0) return;
+      var row = document.createElement('div');
+      row.className = 'message-attachments';
+      row.setAttribute('aria-label', 'Sent with ' + entries.map(function (e) { return e.label; }).join(', '));
+      for (var i = 0; i < entries.length; i++) {
+        var item = document.createElement('span');
+        item.className = 'message-attachment';
+        var icon = document.createElement('span');
+        icon.className = entries[i].icon;
+        icon.setAttribute('aria-hidden', 'true');
+        var label = document.createElement('span');
+        label.textContent = entries[i].label;
+        item.appendChild(icon);
+        item.appendChild(label);
+        row.appendChild(item);
+      }
+      messageEl.appendChild(row);
+    }
+
     function sendMessage(oneTurnBehavior) {
       if (runtimeBlock !== null) return;
       const isFollowUp = streaming;
@@ -4216,7 +4297,14 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       var clientMessageId = 'msg-' + Date.now() + '-' + (++clientMessageSeq);
       var userMessageEl = addMessage('user', text);
       userMessageEl.setAttribute('data-client-message-id', clientMessageId);
-      if (isFollowUp) userMessageEl.setAttribute('data-delivery-state', 'queued');
+      userMessageEl.setAttribute('aria-label', 'You said: ' + text);
+      appendSentContext(userMessageEl);
+      if (isFollowUp) {
+        userMessageEl.setAttribute('data-delivery-state', 'queued');
+      } else {
+        userMessageEl.setAttribute('data-delivery-state', 'sending');
+        sendingClientMessageId = clientMessageId;
+      }
       userInput.value = '';
       userInput.style.height = 'auto';
       saveComposerDraft();
@@ -5263,18 +5351,53 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       renderAttachmentStrip();
     }
 
-    function makeAttachmentChip(name, state) {
+    var FILE_ICON_BY_EXTENSION = {
+      png: 'file-media', jpg: 'file-media', jpeg: 'file-media', gif: 'file-media', webp: 'file-media', svg: 'file-media',
+      pdf: 'file-pdf',
+      zip: 'file-zip', gz: 'file-zip', tar: 'file-zip',
+      md: 'markdown', txt: 'file-text',
+      json: 'json', yaml: 'file-code', yml: 'file-code', toml: 'file-code', xml: 'file-code',
+      ts: 'file-code', tsx: 'file-code', js: 'file-code', jsx: 'file-code', py: 'file-code', rs: 'file-code',
+      go: 'file-code', java: 'file-code', rb: 'file-code', c: 'file-code', cpp: 'file-code', cs: 'file-code',
+      css: 'file-code', html: 'file-code', sh: 'terminal', csv: 'table',
+    };
+
+    function fileIconFor(name) {
+      var dot = name.lastIndexOf('.');
+      var extension = dot === -1 ? '' : name.slice(dot + 1).toLowerCase();
+      return FILE_ICON_BY_EXTENSION[extension] || 'file';
+    }
+
+    function formatFileSize(bytes) {
+      if (!bytes) return '';
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    function makeAttachmentChip(name, state, file) {
       var chip = document.createElement('span');
       chip.className = 'attachment-chip' + (state ? ' ' + state : '');
       chip.setAttribute('role', 'listitem');
+      chip.setAttribute('data-source-name', name);
 
-      var icon = document.createElement('span');
-      icon.className = 'codicon codicon-file';
-      icon.setAttribute('aria-hidden', 'true');
+      var icon;
+      if (file && file.type && file.type.indexOf('image/') === 0 && typeof URL.createObjectURL === 'function') {
+        icon = document.createElement('img');
+        icon.className = 'attachment-chip__thumb';
+        icon.alt = '';
+        icon.src = URL.createObjectURL(file);
+      } else {
+        icon = document.createElement('span');
+        icon.className = 'codicon codicon-' + fileIconFor(name);
+        icon.setAttribute('aria-hidden', 'true');
+      }
 
       var label = document.createElement('span');
       label.className = 'attachment-chip__name';
       label.textContent = name;
+      var size = file ? formatFileSize(file.size) : '';
+      if (size) chip.title = name + ', ' + size;
 
       var removeBtn = document.createElement('button');
       removeBtn.type = 'button';
@@ -5300,6 +5423,12 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
 
       chip.appendChild(icon);
       chip.appendChild(label);
+      if (size) {
+        var sizeEl = document.createElement('span');
+        sizeEl.className = 'attachment-chip__size';
+        sizeEl.textContent = size;
+        chip.appendChild(sizeEl);
+      }
       chip.appendChild(removeBtn);
       return chip;
     }
@@ -5329,7 +5458,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
           if (attachmentStrip) attachmentStrip.appendChild(failChip);
           continue;
         }
-        var chip = makeAttachmentChip(f.name, 'uploading');
+        var chip = makeAttachmentChip(f.name, 'uploading', f);
         if (attachmentStrip) attachmentStrip.appendChild(chip);
         pendingAttachmentChips[batchKey].push({ name: f.name, chip: chip });
       }
@@ -5445,6 +5574,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
 
       else if (msg.type === 'token') {
         removeTyping();
+        settleSending('');
         if (!currentAssistantEl) {
           currentAssistantEl = addMessage('assistant', '');
           accumulatedContent = '';
@@ -5460,6 +5590,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
 
       else if (msg.type === 'done') {
         removeTyping();
+        settleSending('');
         if (currentAssistantEl && accumulatedContent) {
           // Content is already rendered; re-render once to ensure the final
           // token is flushed, then bind actions on any code blocks.
@@ -5501,6 +5632,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
 
       else if (msg.type === 'toolCallStart') {
         removeTyping();
+        settleSending('');
         createToolCallEl(
           msg.payload.toolUseId,
           msg.payload.name,
@@ -5536,6 +5668,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
           finalizeToolCallStack();
         }
         addErrorMessage(msg.payload);
+        settleSending('failed');
         setStreaming(false);
         if (activeQueuedClientMessageId) {
           setUserMessageState(activeQueuedClientMessageId, 'failed');
@@ -5853,13 +5986,13 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
         for (var a = 0; a < (ack.added || []).length; a++) {
           var addedEntry = ack.added[a] || {};
           if (!addedIdsByName[addedEntry.name]) addedIdsByName[addedEntry.name] = [];
-          addedIdsByName[addedEntry.name].push(addedEntry.id);
+          addedIdsByName[addedEntry.name].push(addedEntry);
         }
         var allChips = attachmentStrip ? attachmentStrip.querySelectorAll('.attachment-chip.uploading') : [];
         for (var c = 0; c < allChips.length; c++) {
           var chipEl = allChips[c];
           var nameEl = chipEl.querySelector('.attachment-chip__name');
-          var attachName = nameEl ? (nameEl.textContent || '') : '';
+          var attachName = chipEl.getAttribute('data-source-name') || (nameEl ? (nameEl.textContent || '') : '');
           if (skippedByName[attachName]) {
             chipEl.classList.remove('uploading');
             chipEl.classList.add('failed');
@@ -5867,7 +6000,15 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
           } else {
             chipEl.classList.remove('uploading');
             var idQueue = addedIdsByName[attachName];
-            var attachId = idQueue && idQueue.length > 0 ? idQueue.shift() : '';
+            var addedAck = idQueue && idQueue.length > 0 ? idQueue.shift() : null;
+            var attachId = addedAck ? addedAck.id : '';
+            if (addedAck && addedAck.truncatedAt && nameEl) {
+              var truncatedNote = document.createElement('span');
+              truncatedNote.className = 'attachment-chip__size';
+              truncatedNote.textContent = 'first ' + addedAck.truncatedAt.toLocaleString() + ' characters';
+              nameEl.parentNode.insertBefore(truncatedNote, nameEl.nextSibling);
+              chipEl.title = attachName + ': only the first ' + addedAck.truncatedAt.toLocaleString() + ' characters are sent';
+            }
             if (attachId && chipEl.getAttribute('data-remove-requested') === '1') {
               // The user dismissed this chip while it was still uploading:
               // honour it now that the host id exists.
@@ -7175,7 +7316,27 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       line-height: var(--type-caption-height);
       text-align: right;
     }
+    .message.user[data-delivery-state='sending']::after { content: 'Sending'; }
     .message.user[data-delivery-state='queued']::after { content: 'Queued'; }
+    .message-attachments {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 6px;
+    }
+    .message-attachment {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      max-width: 100%;
+      padding: 1px 6px;
+      border: 1px solid var(--border);
+      border-radius: var(--corner-pill);
+      color: var(--text-secondary);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      overflow-wrap: anywhere;
+    }
     .message.user[data-delivery-state='running']::after { content: 'Running'; }
     .message.user[data-delivery-state='steered']::after { content: 'Steered'; }
     .message.user[data-delivery-state='failed'] {
@@ -8916,6 +9077,18 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       overflow: hidden;
       text-overflow: ellipsis;
       flex: 1 1 auto;
+    }
+    .attachment-chip__thumb {
+      width: 16px;
+      height: 16px;
+      object-fit: cover;
+      border-radius: 3px;
+      flex-shrink: 0;
+    }
+    .attachment-chip__size {
+      color: var(--text-secondary);
+      font-size: var(--type-caption-size);
+      white-space: nowrap;
     }
     .attachment-chip__remove {
       background: none;
@@ -10869,6 +11042,55 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
     }
 
     // ── Send ──────────────────────────────────────────────────────────────────
+    var sendingClientMessageId = null;
+
+    function settleSending(state) {
+      if (!sendingClientMessageId) return;
+      setUserMessageState(sendingClientMessageId, state || '');
+      sendingClientMessageId = null;
+    }
+
+    function sentContextEntries() {
+      var entries = [];
+      var strips = [attachmentStrip, editorContextStrip];
+      for (var s = 0; s < strips.length; s++) {
+        if (!strips[s]) continue;
+        var chips = strips[s].querySelectorAll('.attachment-chip:not(.failed)');
+        for (var c = 0; c < chips.length; c++) {
+          var chipName = chips[c].querySelector('.attachment-chip__name');
+          var chipIcon = chips[c].querySelector('.codicon');
+          if (!chipName || !chipName.textContent) continue;
+          entries.push({
+            label: chipName.textContent,
+            icon: chipIcon ? chipIcon.className : 'codicon codicon-file-media',
+          });
+        }
+      }
+      if (browseWebEnabled) entries.push({ label: 'Browse the web', icon: 'codicon codicon-globe' });
+      return entries;
+    }
+
+    function appendSentContext(messageEl) {
+      var entries = sentContextEntries();
+      if (entries.length === 0) return;
+      var row = document.createElement('div');
+      row.className = 'message-attachments';
+      row.setAttribute('aria-label', 'Sent with ' + entries.map(function (e) { return e.label; }).join(', '));
+      for (var i = 0; i < entries.length; i++) {
+        var item = document.createElement('span');
+        item.className = 'message-attachment';
+        var icon = document.createElement('span');
+        icon.className = entries[i].icon;
+        icon.setAttribute('aria-hidden', 'true');
+        var label = document.createElement('span');
+        label.textContent = entries[i].label;
+        item.appendChild(icon);
+        item.appendChild(label);
+        row.appendChild(item);
+      }
+      messageEl.appendChild(row);
+    }
+
     function sendMessage(oneTurnBehavior) {
       if (runtimeBlock !== null) return;
       const isFollowUp = streaming;
@@ -10885,7 +11107,14 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       var clientMessageId = 'msg-' + Date.now() + '-' + (++clientMessageSeq);
       var userMessageEl = addMessage('user', text);
       userMessageEl.setAttribute('data-client-message-id', clientMessageId);
-      if (isFollowUp) userMessageEl.setAttribute('data-delivery-state', 'queued');
+      userMessageEl.setAttribute('aria-label', 'You said: ' + text);
+      appendSentContext(userMessageEl);
+      if (isFollowUp) {
+        userMessageEl.setAttribute('data-delivery-state', 'queued');
+      } else {
+        userMessageEl.setAttribute('data-delivery-state', 'sending');
+        sendingClientMessageId = clientMessageId;
+      }
       userInput.value = '';
       userInput.style.height = 'auto';
       saveComposerDraft();
@@ -11932,18 +12161,53 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       renderAttachmentStrip();
     }
 
-    function makeAttachmentChip(name, state) {
+    var FILE_ICON_BY_EXTENSION = {
+      png: 'file-media', jpg: 'file-media', jpeg: 'file-media', gif: 'file-media', webp: 'file-media', svg: 'file-media',
+      pdf: 'file-pdf',
+      zip: 'file-zip', gz: 'file-zip', tar: 'file-zip',
+      md: 'markdown', txt: 'file-text',
+      json: 'json', yaml: 'file-code', yml: 'file-code', toml: 'file-code', xml: 'file-code',
+      ts: 'file-code', tsx: 'file-code', js: 'file-code', jsx: 'file-code', py: 'file-code', rs: 'file-code',
+      go: 'file-code', java: 'file-code', rb: 'file-code', c: 'file-code', cpp: 'file-code', cs: 'file-code',
+      css: 'file-code', html: 'file-code', sh: 'terminal', csv: 'table',
+    };
+
+    function fileIconFor(name) {
+      var dot = name.lastIndexOf('.');
+      var extension = dot === -1 ? '' : name.slice(dot + 1).toLowerCase();
+      return FILE_ICON_BY_EXTENSION[extension] || 'file';
+    }
+
+    function formatFileSize(bytes) {
+      if (!bytes) return '';
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    function makeAttachmentChip(name, state, file) {
       var chip = document.createElement('span');
       chip.className = 'attachment-chip' + (state ? ' ' + state : '');
       chip.setAttribute('role', 'listitem');
+      chip.setAttribute('data-source-name', name);
 
-      var icon = document.createElement('span');
-      icon.className = 'codicon codicon-file';
-      icon.setAttribute('aria-hidden', 'true');
+      var icon;
+      if (file && file.type && file.type.indexOf('image/') === 0 && typeof URL.createObjectURL === 'function') {
+        icon = document.createElement('img');
+        icon.className = 'attachment-chip__thumb';
+        icon.alt = '';
+        icon.src = URL.createObjectURL(file);
+      } else {
+        icon = document.createElement('span');
+        icon.className = 'codicon codicon-' + fileIconFor(name);
+        icon.setAttribute('aria-hidden', 'true');
+      }
 
       var label = document.createElement('span');
       label.className = 'attachment-chip__name';
       label.textContent = name;
+      var size = file ? formatFileSize(file.size) : '';
+      if (size) chip.title = name + ', ' + size;
 
       var removeBtn = document.createElement('button');
       removeBtn.type = 'button';
@@ -11969,6 +12233,12 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
 
       chip.appendChild(icon);
       chip.appendChild(label);
+      if (size) {
+        var sizeEl = document.createElement('span');
+        sizeEl.className = 'attachment-chip__size';
+        sizeEl.textContent = size;
+        chip.appendChild(sizeEl);
+      }
       chip.appendChild(removeBtn);
       return chip;
     }
@@ -11998,7 +12268,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
           if (attachmentStrip) attachmentStrip.appendChild(failChip);
           continue;
         }
-        var chip = makeAttachmentChip(f.name, 'uploading');
+        var chip = makeAttachmentChip(f.name, 'uploading', f);
         if (attachmentStrip) attachmentStrip.appendChild(chip);
         pendingAttachmentChips[batchKey].push({ name: f.name, chip: chip });
       }
@@ -12114,6 +12384,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
 
       else if (msg.type === 'token') {
         removeTyping();
+        settleSending('');
         if (!currentAssistantEl) {
           currentAssistantEl = addMessage('assistant', '');
           accumulatedContent = '';
@@ -12129,6 +12400,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
 
       else if (msg.type === 'done') {
         removeTyping();
+        settleSending('');
         if (currentAssistantEl && accumulatedContent) {
           // Content is already rendered; re-render once to ensure the final
           // token is flushed, then bind actions on any code blocks.
@@ -12170,6 +12442,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
 
       else if (msg.type === 'toolCallStart') {
         removeTyping();
+        settleSending('');
         createToolCallEl(
           msg.payload.toolUseId,
           msg.payload.name,
@@ -12205,6 +12478,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
           finalizeToolCallStack();
         }
         addErrorMessage(msg.payload);
+        settleSending('failed');
         setStreaming(false);
         if (activeQueuedClientMessageId) {
           setUserMessageState(activeQueuedClientMessageId, 'failed');
@@ -12522,13 +12796,13 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
         for (var a = 0; a < (ack.added || []).length; a++) {
           var addedEntry = ack.added[a] || {};
           if (!addedIdsByName[addedEntry.name]) addedIdsByName[addedEntry.name] = [];
-          addedIdsByName[addedEntry.name].push(addedEntry.id);
+          addedIdsByName[addedEntry.name].push(addedEntry);
         }
         var allChips = attachmentStrip ? attachmentStrip.querySelectorAll('.attachment-chip.uploading') : [];
         for (var c = 0; c < allChips.length; c++) {
           var chipEl = allChips[c];
           var nameEl = chipEl.querySelector('.attachment-chip__name');
-          var attachName = nameEl ? (nameEl.textContent || '') : '';
+          var attachName = chipEl.getAttribute('data-source-name') || (nameEl ? (nameEl.textContent || '') : '');
           if (skippedByName[attachName]) {
             chipEl.classList.remove('uploading');
             chipEl.classList.add('failed');
@@ -12536,7 +12810,15 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
           } else {
             chipEl.classList.remove('uploading');
             var idQueue = addedIdsByName[attachName];
-            var attachId = idQueue && idQueue.length > 0 ? idQueue.shift() : '';
+            var addedAck = idQueue && idQueue.length > 0 ? idQueue.shift() : null;
+            var attachId = addedAck ? addedAck.id : '';
+            if (addedAck && addedAck.truncatedAt && nameEl) {
+              var truncatedNote = document.createElement('span');
+              truncatedNote.className = 'attachment-chip__size';
+              truncatedNote.textContent = 'first ' + addedAck.truncatedAt.toLocaleString() + ' characters';
+              nameEl.parentNode.insertBefore(truncatedNote, nameEl.nextSibling);
+              chipEl.title = attachName + ': only the first ' + addedAck.truncatedAt.toLocaleString() + ' characters are sent';
+            }
             if (attachId && chipEl.getAttribute('data-remove-requested') === '1') {
               // The user dismissed this chip while it was still uploading:
               // honour it now that the host id exists.
@@ -13844,7 +14126,27 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       line-height: var(--type-caption-height);
       text-align: right;
     }
+    .message.user[data-delivery-state='sending']::after { content: 'Sending'; }
     .message.user[data-delivery-state='queued']::after { content: 'Queued'; }
+    .message-attachments {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 6px;
+    }
+    .message-attachment {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      max-width: 100%;
+      padding: 1px 6px;
+      border: 1px solid var(--border);
+      border-radius: var(--corner-pill);
+      color: var(--text-secondary);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      overflow-wrap: anywhere;
+    }
     .message.user[data-delivery-state='running']::after { content: 'Running'; }
     .message.user[data-delivery-state='steered']::after { content: 'Steered'; }
     .message.user[data-delivery-state='failed'] {
@@ -15585,6 +15887,18 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       overflow: hidden;
       text-overflow: ellipsis;
       flex: 1 1 auto;
+    }
+    .attachment-chip__thumb {
+      width: 16px;
+      height: 16px;
+      object-fit: cover;
+      border-radius: 3px;
+      flex-shrink: 0;
+    }
+    .attachment-chip__size {
+      color: var(--text-secondary);
+      font-size: var(--type-caption-size);
+      white-space: nowrap;
     }
     .attachment-chip__remove {
       background: none;
@@ -17538,6 +17852,55 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
     }
 
     // ── Send ──────────────────────────────────────────────────────────────────
+    var sendingClientMessageId = null;
+
+    function settleSending(state) {
+      if (!sendingClientMessageId) return;
+      setUserMessageState(sendingClientMessageId, state || '');
+      sendingClientMessageId = null;
+    }
+
+    function sentContextEntries() {
+      var entries = [];
+      var strips = [attachmentStrip, editorContextStrip];
+      for (var s = 0; s < strips.length; s++) {
+        if (!strips[s]) continue;
+        var chips = strips[s].querySelectorAll('.attachment-chip:not(.failed)');
+        for (var c = 0; c < chips.length; c++) {
+          var chipName = chips[c].querySelector('.attachment-chip__name');
+          var chipIcon = chips[c].querySelector('.codicon');
+          if (!chipName || !chipName.textContent) continue;
+          entries.push({
+            label: chipName.textContent,
+            icon: chipIcon ? chipIcon.className : 'codicon codicon-file-media',
+          });
+        }
+      }
+      if (browseWebEnabled) entries.push({ label: 'Browse the web', icon: 'codicon codicon-globe' });
+      return entries;
+    }
+
+    function appendSentContext(messageEl) {
+      var entries = sentContextEntries();
+      if (entries.length === 0) return;
+      var row = document.createElement('div');
+      row.className = 'message-attachments';
+      row.setAttribute('aria-label', 'Sent with ' + entries.map(function (e) { return e.label; }).join(', '));
+      for (var i = 0; i < entries.length; i++) {
+        var item = document.createElement('span');
+        item.className = 'message-attachment';
+        var icon = document.createElement('span');
+        icon.className = entries[i].icon;
+        icon.setAttribute('aria-hidden', 'true');
+        var label = document.createElement('span');
+        label.textContent = entries[i].label;
+        item.appendChild(icon);
+        item.appendChild(label);
+        row.appendChild(item);
+      }
+      messageEl.appendChild(row);
+    }
+
     function sendMessage(oneTurnBehavior) {
       if (runtimeBlock !== null) return;
       const isFollowUp = streaming;
@@ -17554,7 +17917,14 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       var clientMessageId = 'msg-' + Date.now() + '-' + (++clientMessageSeq);
       var userMessageEl = addMessage('user', text);
       userMessageEl.setAttribute('data-client-message-id', clientMessageId);
-      if (isFollowUp) userMessageEl.setAttribute('data-delivery-state', 'queued');
+      userMessageEl.setAttribute('aria-label', 'You said: ' + text);
+      appendSentContext(userMessageEl);
+      if (isFollowUp) {
+        userMessageEl.setAttribute('data-delivery-state', 'queued');
+      } else {
+        userMessageEl.setAttribute('data-delivery-state', 'sending');
+        sendingClientMessageId = clientMessageId;
+      }
       userInput.value = '';
       userInput.style.height = 'auto';
       saveComposerDraft();
@@ -18601,18 +18971,53 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       renderAttachmentStrip();
     }
 
-    function makeAttachmentChip(name, state) {
+    var FILE_ICON_BY_EXTENSION = {
+      png: 'file-media', jpg: 'file-media', jpeg: 'file-media', gif: 'file-media', webp: 'file-media', svg: 'file-media',
+      pdf: 'file-pdf',
+      zip: 'file-zip', gz: 'file-zip', tar: 'file-zip',
+      md: 'markdown', txt: 'file-text',
+      json: 'json', yaml: 'file-code', yml: 'file-code', toml: 'file-code', xml: 'file-code',
+      ts: 'file-code', tsx: 'file-code', js: 'file-code', jsx: 'file-code', py: 'file-code', rs: 'file-code',
+      go: 'file-code', java: 'file-code', rb: 'file-code', c: 'file-code', cpp: 'file-code', cs: 'file-code',
+      css: 'file-code', html: 'file-code', sh: 'terminal', csv: 'table',
+    };
+
+    function fileIconFor(name) {
+      var dot = name.lastIndexOf('.');
+      var extension = dot === -1 ? '' : name.slice(dot + 1).toLowerCase();
+      return FILE_ICON_BY_EXTENSION[extension] || 'file';
+    }
+
+    function formatFileSize(bytes) {
+      if (!bytes) return '';
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    function makeAttachmentChip(name, state, file) {
       var chip = document.createElement('span');
       chip.className = 'attachment-chip' + (state ? ' ' + state : '');
       chip.setAttribute('role', 'listitem');
+      chip.setAttribute('data-source-name', name);
 
-      var icon = document.createElement('span');
-      icon.className = 'codicon codicon-file';
-      icon.setAttribute('aria-hidden', 'true');
+      var icon;
+      if (file && file.type && file.type.indexOf('image/') === 0 && typeof URL.createObjectURL === 'function') {
+        icon = document.createElement('img');
+        icon.className = 'attachment-chip__thumb';
+        icon.alt = '';
+        icon.src = URL.createObjectURL(file);
+      } else {
+        icon = document.createElement('span');
+        icon.className = 'codicon codicon-' + fileIconFor(name);
+        icon.setAttribute('aria-hidden', 'true');
+      }
 
       var label = document.createElement('span');
       label.className = 'attachment-chip__name';
       label.textContent = name;
+      var size = file ? formatFileSize(file.size) : '';
+      if (size) chip.title = name + ', ' + size;
 
       var removeBtn = document.createElement('button');
       removeBtn.type = 'button';
@@ -18638,6 +19043,12 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
 
       chip.appendChild(icon);
       chip.appendChild(label);
+      if (size) {
+        var sizeEl = document.createElement('span');
+        sizeEl.className = 'attachment-chip__size';
+        sizeEl.textContent = size;
+        chip.appendChild(sizeEl);
+      }
       chip.appendChild(removeBtn);
       return chip;
     }
@@ -18667,7 +19078,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
           if (attachmentStrip) attachmentStrip.appendChild(failChip);
           continue;
         }
-        var chip = makeAttachmentChip(f.name, 'uploading');
+        var chip = makeAttachmentChip(f.name, 'uploading', f);
         if (attachmentStrip) attachmentStrip.appendChild(chip);
         pendingAttachmentChips[batchKey].push({ name: f.name, chip: chip });
       }
@@ -18783,6 +19194,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
 
       else if (msg.type === 'token') {
         removeTyping();
+        settleSending('');
         if (!currentAssistantEl) {
           currentAssistantEl = addMessage('assistant', '');
           accumulatedContent = '';
@@ -18798,6 +19210,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
 
       else if (msg.type === 'done') {
         removeTyping();
+        settleSending('');
         if (currentAssistantEl && accumulatedContent) {
           // Content is already rendered; re-render once to ensure the final
           // token is flushed, then bind actions on any code blocks.
@@ -18839,6 +19252,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
 
       else if (msg.type === 'toolCallStart') {
         removeTyping();
+        settleSending('');
         createToolCallEl(
           msg.payload.toolUseId,
           msg.payload.name,
@@ -18874,6 +19288,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
           finalizeToolCallStack();
         }
         addErrorMessage(msg.payload);
+        settleSending('failed');
         setStreaming(false);
         if (activeQueuedClientMessageId) {
           setUserMessageState(activeQueuedClientMessageId, 'failed');
@@ -19191,13 +19606,13 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
         for (var a = 0; a < (ack.added || []).length; a++) {
           var addedEntry = ack.added[a] || {};
           if (!addedIdsByName[addedEntry.name]) addedIdsByName[addedEntry.name] = [];
-          addedIdsByName[addedEntry.name].push(addedEntry.id);
+          addedIdsByName[addedEntry.name].push(addedEntry);
         }
         var allChips = attachmentStrip ? attachmentStrip.querySelectorAll('.attachment-chip.uploading') : [];
         for (var c = 0; c < allChips.length; c++) {
           var chipEl = allChips[c];
           var nameEl = chipEl.querySelector('.attachment-chip__name');
-          var attachName = nameEl ? (nameEl.textContent || '') : '';
+          var attachName = chipEl.getAttribute('data-source-name') || (nameEl ? (nameEl.textContent || '') : '');
           if (skippedByName[attachName]) {
             chipEl.classList.remove('uploading');
             chipEl.classList.add('failed');
@@ -19205,7 +19620,15 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
           } else {
             chipEl.classList.remove('uploading');
             var idQueue = addedIdsByName[attachName];
-            var attachId = idQueue && idQueue.length > 0 ? idQueue.shift() : '';
+            var addedAck = idQueue && idQueue.length > 0 ? idQueue.shift() : null;
+            var attachId = addedAck ? addedAck.id : '';
+            if (addedAck && addedAck.truncatedAt && nameEl) {
+              var truncatedNote = document.createElement('span');
+              truncatedNote.className = 'attachment-chip__size';
+              truncatedNote.textContent = 'first ' + addedAck.truncatedAt.toLocaleString() + ' characters';
+              nameEl.parentNode.insertBefore(truncatedNote, nameEl.nextSibling);
+              chipEl.title = attachName + ': only the first ' + addedAck.truncatedAt.toLocaleString() + ' characters are sent';
+            }
             if (attachId && chipEl.getAttribute('data-remove-requested') === '1') {
               // The user dismissed this chip while it was still uploading:
               // honour it now that the host id exists.

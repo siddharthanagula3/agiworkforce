@@ -639,6 +639,11 @@
         "title": "AGI Workforce: Open Artifact"
       },
       {
+        "command": "agi-workforce.copyArtifact",
+        "title": "AGI Workforce: Copy Artifact Content",
+        "icon": "$(copy)"
+      },
+      {
         "command": "agi-workforce.saveArtifactToWorkspace",
         "title": "AGI Workforce: Save Artifact into Workspace",
         "icon": "$(save)"
@@ -1052,6 +1057,10 @@
         },
         {
           "command": "agi-workforce.saveArtifactToWorkspace",
+          "when": "false"
+        },
+        {
+          "command": "agi-workforce.copyArtifact",
           "when": "false"
         },
         {
