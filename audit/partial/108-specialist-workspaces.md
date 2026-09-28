@@ -104,20 +104,6 @@ Code: `apps/web/features/connectors/data/connectors.ts:1145-1154`, `apps/web/lib
 
 Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:860-867`, `apps/web/app/api/llm/v1/chat/completions/lib/research-loop.ts:1-8`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:111-116`
 
-## S108.19: Contract review.
-
-- Done when: A contract-review flow extracts clauses, flags risks and suggests redlines against a playbook.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Generic third-party connector (Definely) via the chat tool loop; no native workspace. | ui |
-| desktop | partial | Generic third-party connector (Definely) via the chat tool loop; no native workspace. | ui |
-| mobile | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/lib/connectors/directory/sources/vendor-directory.json:2108-2108`, `apps/web/features/connectors/hooks/use-connectors-settings-adapter.tsx:764-764`, `apps/web/lib/connectors/directory/connectable.ts:16-26`, `apps/web/app/api/connectors/custom/route.ts:130-150`
-
 ## S108.20: Scientific research workspace.
 
 - Done when: A scientific-research workspace searches literature/papers and produces cited syntheses.
@@ -172,43 +158,11 @@ Code: `apps/web/lib/connectors/directory/sources/vendor-directory.json:1728-1728
 
 - Done when: The user runs sales/CRM workflows (look up and update contacts, deals, pipelines) from the product.
 - Wave: 3
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | CRM work happens only as generic chat over the HubSpot connector (Salesforce also needs endpoint config). There is no sales workspace or prebuilt CRM workflows. | ui |
-| desktop | partial | CRM work happens only as generic chat over the HubSpot connector (Salesforce also needs endpoint config). There is no sales workspace or prebuilt CRM workflows. | ui |
-| mobile | partial | HubSpot can be connected on mobile and its tools reach mobile chat, but there is no sales workspace or prebuilt CRM workflow. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/connectors/data/connectors.ts:329-338`, `apps/web/lib/connectors/mcp-endpoints.ts:133-137`, `apps/mobile/src/features/settings/cloud-connectors/index.tsx:298-305`, `apps/mobile/src/features/settings/cloud-connectors/index.tsx:697-706`
-
-## S108.27: Customer-support workflows.
-
-- Done when: The user runs customer-support workflows (triage, reply, update tickets) from the product.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Support work is only generic chat over the Intercom connector. Zendesk and Freshdesk have no remote endpoint (not connectable). There is no support workspace or ticket workflow. | ui |
-| desktop | partial | Support work is only generic chat over the Intercom connector. Zendesk and Freshdesk have no remote endpoint (not connectable). There is no support workspace or ticket workflow. | ui |
-| mobile | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/connectors/data/connectors.ts:362-371`, `apps/web/lib/connectors/mcp-endpoints.ts:139-143`
-
-## S108.28: HR and recruiting workflows.
-
-- Done when: The user runs HR/recruiting workflows (job posts, candidate pipeline, interviews) from the product.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Generic third-party connector (Workable) via the chat tool loop; no native workspace. | ui |
-| desktop | partial | Generic third-party connector (Workable) via the chat tool loop; no native workspace. | ui |
-| mobile | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/lib/connectors/directory/sources/vendor-directory.json:7828-7828`, `apps/web/features/connectors/hooks/use-connectors-settings-adapter.tsx:764-764`, `apps/web/lib/connectors/directory/connectable.ts:16-26`, `apps/web/app/api/connectors/custom/route.ts:130-150`
 
 ## S108.29: Marketing and campaign workflows.
 
@@ -242,12 +196,11 @@ Code: `apps/web/features/chat/components/cards/index.tsx:37-45`, `apps/web/featu
 
 - Done when: The user plans a trip (itinerary, places, routes) and can make reservations from the product.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | search_maps renders place/route cards; reservations only via generic third-party connectors (Booking.com, Expedia) through the chat tool loop; itinerary.v1 never produced or rendered; no native workspace. | ui |
-| desktop | partial | search_maps renders place/route cards; reservations only via generic third-party connectors (Booking.com, Expedia) through the chat tool loop; itinerary.v1 never produced or rendered; no native workspace. | ui |
-| mobile | partial | Mobile renders search_maps place and route cards. There is no itinerary builder and no bookings or reservations. | ui |
-| chrome | partial | The side panel renders search_maps place and route cards. There is no itinerary builder and no bookings or reservations. | ui |
+| mobile | partial | billing/no-yearly fd41d3eda renders itinerary cards natively on mobile (synced cloud chats show them now); mobile turns produce them once post-codex/no-yearly-s108-33-mobile-itinerary.patch adds itinerary.v1 to x_interactive_cards.supported in apps/mobile/stores/chat/chatExecutionStore.ts, which Codex holds | handler |
+| chrome | partial | server offers plan_itinerary to chrome once the side panel declares itinerary.v1; p-chrome adds it to supported in apps/extension/src/features/cloud-bridge/freeTrialClient.ts and an itinerary.v1 builder in apps/extension/src/features/side-panel/bubbles.ts | ui |
 
-Code: `apps/web/features/chat/components/messages/InteractiveCardBlock.tsx:37-37`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:744-762`, `apps/web/lib/services/map-search-tool-service.ts:41-50`, `apps/web/lib/connectors/directory/sources/vendor-directory.json:908-908`
+Code: `apps/mobile/src/features/chat/components/InteractiveCardBlock.tsx:361-361`, `apps/mobile/src/features/chat/components/InteractiveCardBlock.tsx:554-554`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:950-950`

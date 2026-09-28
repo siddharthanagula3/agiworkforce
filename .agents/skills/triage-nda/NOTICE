@@ -1,0 +1,13 @@
+AGI Workforce bundles this skill from a third-party project.
+
+Skill: triage-nda
+Upstream: https://github.com/anthropics/knowledge-work-plugins
+Commit: da38ec1ee89d41e5380e652a97382695003396e7
+Path: legal/skills/triage-nda
+Publisher: Anthropic, the author the legal plugin declares.
+License: Apache License 2.0, reproduced from the plugin's own LICENSE file in LICENSE in this directory.
+
+Changes made by AGI Workforce: a top-level version field set to the upstream
+commit was added to the SKILL.md frontmatter, and SKILL.md was formatted with
+this repository's Prettier configuration. The instructions are otherwise
+unchanged.
