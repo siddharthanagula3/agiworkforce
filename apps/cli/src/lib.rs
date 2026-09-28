@@ -904,6 +904,9 @@ enum Command {
         /// Show only the conversations stored in your AGI Workforce account.
         #[arg(long)]
         cloud: bool,
+        /// Show only the account conversations filed under this project (id or name).
+        #[arg(long)]
+        project: Option<String>,
     },
     /// Sync dotfiles and settings across devices.
     Sync {
@@ -1019,6 +1022,24 @@ enum ProjectsSubcommand {
         /// Optional description.
         #[arg(long)]
         description: Option<String>,
+    },
+    /// Show one project: description, instructions, knowledge files and conversation count.
+    Show {
+        /// Project id or name.
+        project: String,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Rename a project or change its description or instructions.
+    Edit {
+        /// Project id or name.
+        project: String,
+        #[arg(long)]
+        name: Option<String>,
+        #[arg(long)]
+        description: Option<String>,
+        #[arg(long)]
+        instructions: Option<String>,
     },
     /// Link this directory to an account project by id or name.
     Link {
@@ -1377,6 +1398,9 @@ enum SessionAction {
     List {
         #[arg(long, default_value = "20")]
         limit: usize,
+        /// List archived sessions instead.
+        #[arg(long)]
+        archived: bool,
     },
     /// Show the turn-by-turn transcript of a session.
     Show { session_id: String },
@@ -1841,6 +1865,40 @@ async fn adopt_hosted_conversation(conversation_id: &str) -> Result<String> {
 /// Print the account's conversations under the device list. A boundary (signed
 /// out, Local mode) is stated, never swallowed and never shown as an empty
 /// account.
+async fn print_project_history(project: &str, limit: usize) -> Result<()> {
+    let privacy = account_privacy_mode();
+    let projects = cloud::refresh_projects(privacy)
+        .await
+        .map_err(|error| anyhow::anyhow!("{error}"))?;
+    let found = projects
+        .find(project)
+        .with_context(|| format!("No project '{project}' in your AGI Workforce account"))?;
+    let conversations = cloud::hosted_conversations(privacy)
+        .await
+        .map_err(|error| anyhow::anyhow!("{error}"))?;
+    let filed: Vec<_> = conversations
+        .iter()
+        .filter(|conversation| conversation.project_id.as_deref() == Some(found.id.as_str()))
+        .collect();
+    if filed.is_empty() {
+        println!("No conversations are filed under {} yet.", found.name);
+        return Ok(());
+    }
+    println!("Conversations in {}:", found.name);
+    for conversation in filed.iter().take(limit) {
+        println!(
+            "  {}  {}  {} messages  {}",
+            conversation.id,
+            conversation.title,
+            conversation.messages.len(),
+            conversation.updated_at
+        );
+    }
+    println!();
+    println!("Resume one with `agi resume --cloud <id>`.");
+    Ok(())
+}
+
 async fn print_hosted_history(limit: usize) {
     let privacy = account_privacy_mode();
     match cloud::hosted_conversations(privacy).await {
@@ -2013,6 +2071,110 @@ async fn handle_projects_command(
                     println!("  {description}");
                 }
             }
+            Ok(())
+        }
+        ProjectsSubcommand::Show { project, json } => {
+            let cache = cloud::refresh_projects(privacy)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            let found = cache
+                .find(project)
+                .with_context(|| format!("No project '{project}' in your AGI Workforce account"))?;
+            let (detail, files) = cloud::project_detail(privacy, &found.id)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            if *json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(
+                        &serde_json::json!({ "project": detail, "files": files })
+                    )?
+                );
+                return Ok(());
+            }
+            let text = |key: &str| {
+                detail
+                    .get(key)
+                    .and_then(serde_json::Value::as_str)
+                    .map(|value| terminal_text::sanitize_terminal_text(value).into_owned())
+            };
+            println!("{}  {}", found.id, text("name").unwrap_or_default());
+            if let Some(description) = text("description") {
+                println!("  {description}");
+            }
+            println!(
+                "  Conversations: {}{}",
+                detail
+                    .get("conversationCount")
+                    .and_then(serde_json::Value::as_u64)
+                    .unwrap_or(0),
+                if found.is_archived {
+                    "  (archived)"
+                } else {
+                    ""
+                }
+            );
+            match text("instructions") {
+                Some(instructions) => println!(
+                    "  Instructions:\n    {}",
+                    instructions.replace('\n', "\n    ")
+                ),
+                None => println!("  Instructions: none"),
+            }
+            if files.is_empty() {
+                println!("  Knowledge files: none");
+            } else {
+                println!("  Knowledge files ({}):", files.len());
+                for file in &files {
+                    let name = file
+                        .get("fileName")
+                        .or_else(|| file.get("name"))
+                        .and_then(serde_json::Value::as_str)
+                        .unwrap_or("(unnamed)");
+                    println!("    {}", terminal_text::sanitize_terminal_text(name));
+                }
+            }
+            println!(
+                "\n`agi history --project {}` lists its conversations.",
+                found.id
+            );
+            Ok(())
+        }
+        ProjectsSubcommand::Edit {
+            project,
+            name,
+            description,
+            instructions,
+        } => {
+            let mut patch = serde_json::Map::new();
+            if let Some(name) = name.as_deref().map(str::trim) {
+                if name.is_empty() {
+                    anyhow::bail!("A project needs a name");
+                }
+                patch.insert("name".to_string(), serde_json::json!(name));
+            }
+            if let Some(description) = description {
+                patch.insert("description".to_string(), serde_json::json!(description));
+            }
+            if let Some(instructions) = instructions {
+                patch.insert("instructions".to_string(), serde_json::json!(instructions));
+            }
+            if patch.is_empty() {
+                anyhow::bail!("Nothing to change: pass --name, --description or --instructions.");
+            }
+            let cache = cloud::refresh_projects(privacy)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            let found = cache
+                .find(project)
+                .with_context(|| format!("No project '{project}' in your AGI Workforce account"))?;
+            cloud::update_project(privacy, &found.id, &serde_json::Value::Object(patch))
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            cloud::refresh_projects(privacy)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            println!("Updated project {}.", found.id);
             Ok(())
         }
         ProjectsSubcommand::Create { name, description } => {
@@ -3209,16 +3371,37 @@ fn handle_approvals_command(action: &ApprovalsSubcommand) -> Result<()> {
 
 async fn handle_session_action(action: SessionAction) -> Result<()> {
     match action {
-        SessionAction::List { limit } => {
-            let mut summaries =
-                runtime::session_control::list_active_managed_sessions().unwrap_or_default();
+        SessionAction::List { limit, archived } => {
+            let mut summaries = if archived {
+                runtime::session_control::ManagedSessionStore::user_config()?
+                    .list()?
+                    .into_iter()
+                    .filter(|summary| summary.archived_at.is_some())
+                    .collect()
+            } else {
+                runtime::session_control::list_active_managed_sessions().unwrap_or_default()
+            };
             summaries.sort_by(|a, b| b.created_at.cmp(&a.created_at));
             summaries.truncate(limit);
             if summaries.is_empty() {
-                println!("No sessions found.");
+                println!(
+                    "{}",
+                    if archived {
+                        "No archived sessions. `agi session archive <id>` archives one."
+                    } else {
+                        "No sessions found."
+                    }
+                );
                 return Ok(());
             }
-            println!("{}", ts::accent_header("Recent sessions:"));
+            println!(
+                "{}",
+                ts::accent_header(if archived {
+                    "Archived sessions (agi session unarchive <id> restores one):"
+                } else {
+                    "Recent sessions:"
+                })
+            );
             for s in summaries {
                 println!(
                     "  {}  {:>9}  {}",
@@ -4392,7 +4575,12 @@ pub async fn run_main() -> Result<()> {
                 action: None,
                 limit,
                 cloud,
+                project,
             } => {
+                if let Some(project) = project {
+                    print_project_history(project, *limit).await?;
+                    return Ok(());
+                }
                 if !cloud {
                     let conn = sessions::open_db()?;
                     let list = sessions::list_sessions(&conn, *limit)?;
