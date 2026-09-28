@@ -25,6 +25,7 @@ import {
 import { SettingsPageLink, SettingsSectionLink } from '../components/SettingsSectionLink';
 import { toUserMessage } from '@/lib/user-error-message';
 import { SaveStatusLine } from '../components/SaveStatusLine';
+import { UsOnlyRoutingPanel } from '../components/UsOnlyRoutingPanel';
 import { HelpArticleLink } from '@/features/support/components/HelpArticleLink';
 
 const NAMESPACE = 'privacy';
@@ -601,6 +602,8 @@ export function PrivacySection() {
           </div>
         ))}
       </div>
+
+      <UsOnlyRoutingPanel />
 
       {/* Your data */}
       <div>
