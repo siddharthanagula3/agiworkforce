@@ -10,50 +10,42 @@ nothing is left.
 
 - Done when: The registry records whether (and how many) images a model accepts in one request, and requests are checked against it.
 - Wave: 3
+- Already works on: web, desktop, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The registry records only yes/no image input; it has no per-model image count or multi-image limit, so extra images are sent to any vision model unchecked. | handler |
-| desktop | partial | The registry records only yes/no image input; it has no per-model image count or multi-image limit, so extra images are sent to any vision model unchecked. | handler |
-| mobile | partial | The registry records only yes/no image input; it has no per-model image count or multi-image limit, so extra images are sent to any vision model unchecked. | handler |
-| cli | partial | The registry records only yes/no image input; it has no per-model image count or multi-image limit, so extra images are sent to any vision model unchecked. | handler |
-| chrome | partial | The registry records only yes/no image input; it has no per-model image count or multi-image limit, so extra images are sent to any vision model unchecked. | handler |
-| api | partial | The registry records only yes/no image input; it has no per-model image count or multi-image limit, so extra images are sent to any vision model unchecked. | handler |
+| mobile | partial | Mobile and Chrome cloud chat reach the same server check and get its 400; their own composers do not read the limit before sending. The CLI resolves its own routes and does not read mediaInput. | handler |
+| cli | partial | Mobile and Chrome cloud chat reach the same server check and get its 400; their own composers do not read the limit before sending. The CLI resolves its own routes and does not read mediaInput. | handler |
+| chrome | partial | Mobile and Chrome cloud chat reach the same server check and get its 400; their own composers do not read the limit before sending. The CLI resolves its own routes and does not read mediaInput. | handler |
 
-Code: `apps/web/features/chat/components/Composer/ModelCatalogue.tsx:64-64`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:3611-3623`, `apps/mobile/src/features/model-picker/components/ModelRow.tsx:166-170`, `apps/mobile/services/streaming.ts:167-167`
+Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4042-4042`
 
 ## S76.06: Native PDF/document input.
 
 - Done when: The registry records native PDF input per model and PDFs go natively to models that accept them.
 - Wave: 3
+- Already works on: web, desktop, mobile, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Six models are marked pdf-capable, but chat always extracts PDF text or page images; the flag never routes a PDF to native document input. | handler |
-| desktop | partial | Six models are marked pdf-capable, but chat always extracts PDF text or page images; the flag never routes a PDF to native document input. | handler |
-| mobile | partial | Six models are marked pdf-capable, but chat always extracts PDF text or page images; the flag never routes a PDF to native document input. | handler |
 | cli | partial | CLI reads the pdf modality into supports_pdf but only a reserved, unwired detail view shows it and nothing gates on it. | ui, handler |
-| chrome | partial | Six models are marked pdf-capable, but chat always extracts PDF text or page images; the flag never routes a PDF to native document input. | handler |
-| api | partial | Six models are marked pdf-capable, but chat always extracts PDF text or page images; the flag never routes a PDF to native document input. | handler |
 
-Code: `apps/web/features/chat/components/Composer/ComposerFooter.tsx:1379-1383`, `apps/web/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration.ts:450-466`, `packages/contracts/types/src/model-catalog.ts:587-587`, `apps/mobile/src/features/model-picker/components/ModelRow.tsx:166-170`
+Code: `apps/cli/src/provider.rs:19-22`, `apps/cli/src/model_catalog.rs:938-938`
 
 ## S76.07: Audio understanding.
 
 - Done when: The registry records audio input per model and the product uses it to show or gate audio understanding.
 - Wave: 3
-- Already works on: api
+- Already works on: web, desktop, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | audioInput is recorded but only feeds a web catalogue chip that merges audio in and out; no request path checks it. | handler |
-| desktop | partial | audioInput is recorded but only feeds a web catalogue chip that merges audio in and out; no request path checks it. | handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | CLI loads supports_audio_input but only a reserved, unwired detail view shows it; nothing gates on it. | ui, handler |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/Composer/ModelCatalogue.tsx:88-91`, `apps/cli/src/provider.rs:16-19`
+Code: `apps/cli/src/provider.rs:16-19`
 
 ## S76.08: Audio transcription.
 
@@ -84,18 +76,17 @@ Code: `apps/cli/src/voice.rs:354-354`
 
 - Done when: The registry records which models produce speech and spoken output uses a registry-chosen model.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Read-aloud uses the browser/OS speech voices; the three registry TTS models are never used. Only live voice speaks through a registry model. | handler |
-| desktop | partial | Read-aloud uses the browser/OS speech voices; the three registry TTS models are never used. Only live voice speaks through a registry model. | handler |
 | mobile | partial | Read-aloud uses expo-speech (OS voices); registry TTS models unused. Live voice speaks through the registry voice_live model. | handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 | api | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/Voice/VoiceModeSurface.tsx:82-85`, `apps/web/app/api/voice/live/sessions/route.ts:140-145`, `apps/web/lib/hooks/useTTS.ts:76-78`, `apps/mobile/src/features/voice/components/LiveVoiceComposer.tsx:33-36`
+Code: `apps/mobile/src/features/voice/components/LiveVoiceComposer.tsx:33-36`, `apps/mobile/src/features/voice/services/liveVoiceSession.ts:11-11`, `apps/mobile/src/features/voice/services/tts.ts:1-1`
 
 ## S76.11: Realtime speech-to-speech.
 
@@ -160,16 +151,13 @@ Code: `apps/web/features/chat/components/Voice/VoiceModeSurface.tsx:82-85`, `app
 
 - Done when: The registry records whether a model supports parallel tool calls and the tool loop uses it.
 - Wave: 3
+- Already works on: web, desktop, mobile, vscode, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Upgrade to partial (miss: handler): the product does run parallel tool calls, so "missing" misreports it. The server tool loop executes read-only tool calls concurrently for every model (tool-loop.ts) and the CLI agent core drives a parallel tool batch through join_all; what is missing is the registry fact: no parallel-tool-calls field exists in registry.schema.json capabilities, so the loop never consults the model. Remaining: add a per-model parallelToolCalls fact and gate the concurrent branch on it. The web chat posts to the same route (useChatStream.ts). |  |
-| desktop | partial | Consistency with the web upgrade: desktop renders the hosted web app, so the same server tool loop runs parallel read-only tool calls (hosted-web). Partial, miss handler, same remaining as web. |  |
-| mobile | partial | Upgrade to partial (miss: handler): the product does run parallel tool calls, so "missing" misreports it. The server tool loop executes read-only tool calls concurrently for every model (tool-loop.ts) and the CLI agent core drives a parallel tool batch through join_all; what is missing is the registry fact: no parallel-tool-calls field exists in registry.schema.json capabilities, so the loop never consults the model. Remaining: add a per-model parallelToolCalls fact and gate the concurrent branch on it. |  |
-| cli | partial | Upgrade to partial (miss: handler): the product does run parallel tool calls, so "missing" misreports it. The server tool loop executes read-only tool calls concurrently for every model (tool-loop.ts) and the CLI agent core drives a parallel tool batch through join_all; what is missing is the registry fact: no parallel-tool-calls field exists in registry.schema.json capabilities, so the loop never consults the model. Remaining: add a per-model parallelToolCalls fact and gate the concurrent branch on it. |  |
-| vscode | partial | Upgrade to partial (miss: handler): the product does run parallel tool calls, so "missing" misreports it. The server tool loop executes read-only tool calls concurrently for every model (tool-loop.ts) and the CLI agent core drives a parallel tool batch through join_all; what is missing is the registry fact: no parallel-tool-calls field exists in registry.schema.json capabilities, so the loop never consults the model. Remaining: add a per-model parallelToolCalls fact and gate the concurrent branch on it. VS Code sidebar turns run through the local CLI runtime (needs-local-cli), whose agent core owns the parallel branch. |  |
-| chrome | partial | Upgrade to partial (miss: handler): the product does run parallel tool calls, so "missing" misreports it. The server tool loop executes read-only tool calls concurrently for every model (tool-loop.ts) and the CLI agent core drives a parallel tool batch through join_all; what is missing is the registry fact: no parallel-tool-calls field exists in registry.schema.json capabilities, so the loop never consults the model. Remaining: add a per-model parallelToolCalls fact and gate the concurrent branch on it. |  |
-| api | partial | Upgrade to partial (miss: handler): the product does run parallel tool calls, so "missing" misreports it. The server tool loop executes read-only tool calls concurrently for every model (tool-loop.ts) and the CLI agent core drives a parallel tool batch through join_all; what is missing is the registry fact: no parallel-tool-calls field exists in registry.schema.json capabilities, so the loop never consults the model. Remaining: add a per-model parallelToolCalls fact and gate the concurrent branch on it. |  |
+| cli | partial | The CLI agent core runs its parallel tool batch through join_all for every model; it needs to read the harness parallelToolCalls feature from the shared registry (p-desktop-cli). | handler |
+
+Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:4477-4477`
 
 ## S76.24: Structured JSON output.
 

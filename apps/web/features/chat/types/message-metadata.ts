@@ -1,6 +1,7 @@
 import type { SearchResponse, SearchResult } from './search-media';
 import type { CloudWorkMode } from '@agiworkforce/types';
 import type { ArtifactDerivationPolicy } from '@agiworkforce/artifacts';
+import { isChatOutputFormat, type ChatOutputFormat } from '@/lib/chat-output-format';
 export type { SearchResponse, SearchResult, MediaGenerationResult } from './search-media';
 export type WebSearchResults = SearchResponse | SearchResult[];
 export type WebChatStyleMode = 'concise' | 'formal' | 'explanatory';
@@ -24,6 +25,7 @@ export interface SendReplayMetadata {
   thinkingEnabled?: boolean;
   codeExecutionEnabled?: boolean;
   officeCreationEnabled?: boolean;
+  officeOutputFormat?: ChatOutputFormat;
   workMode?: CloudWorkMode;
   styleMode?: WebChatStyleMode;
   hasSkillInstruction?: boolean;
@@ -63,6 +65,7 @@ export function createSendReplayMetadata(params: {
   thinkingEnabled?: boolean;
   codeExecutionEnabled?: boolean;
   officeCreationEnabled?: boolean;
+  officeOutputFormat?: ChatOutputFormat;
   workMode?: CloudWorkMode;
   styleMode?: string;
   hasSkillInstruction?: boolean;
@@ -77,6 +80,9 @@ export function createSendReplayMetadata(params: {
   }
   if (typeof params.officeCreationEnabled === 'boolean') {
     replay.officeCreationEnabled = params.officeCreationEnabled;
+  }
+  if (isChatOutputFormat(params.officeOutputFormat)) {
+    replay.officeOutputFormat = params.officeOutputFormat;
   }
   if (params.workMode === 'chat' || params.workMode === 'agiwork') {
     replay.workMode = params.workMode;

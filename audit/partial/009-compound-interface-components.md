@@ -101,17 +101,14 @@ Code: `apps/mobile/src/features/voice/components/AudioRoutePicker.tsx:46-52`, `a
 
 - Done when: The user can pick one or more people (workspace members or recipients) by name or email to share with, invite or assign.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | b420b0a10 a0b18189f: MemberPicker on p-privacy's roster for sharing and delegation, delegation member list loads with its workspace id; no Share button on the project page, legal-hold member field still free text | share entry on the project page, legal-hold member field |
-| desktop | partial | b420b0a10 a0b18189f: MemberPicker on p-privacy's roster for sharing and delegation, delegation member list loads with its workspace id; no Share button on the project page, legal-hold member field still free text | share entry on the project page, legal-hold member field |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/shared/components/people/MemberPicker.tsx:99-99`, `apps/web/features/settings/sections/OrganizationSharingSection.tsx:282-282`, `apps/web/features/workspace-console/components/WorkspaceDelegation.tsx:288-288`, `apps/web/features/workspace-console/components/WorkspaceDelegation.tsx:124-124`
 
 ## S9.13: File browser.
 

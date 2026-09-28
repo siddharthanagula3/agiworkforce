@@ -14,6 +14,8 @@ import {
   type RetentionBacklog,
   type RetentionSweepRecord,
 } from '../hooks/use-legal-holds';
+import { MemberPicker, memberDisplayName } from '@shared/components/people/MemberPicker';
+import { useTeamMembers } from '@/features/settings/hooks/use-settings-queries';
 import { toUserMessage } from '@/lib/user-error-message';
 
 const cardStyle = {
@@ -153,10 +155,12 @@ function HoldExportLink({ hold }: { hold: LegalHold }) {
 
 function HoldRow({
   hold,
+  subject,
   onRelease,
   releasing,
 }: {
   hold: LegalHold;
+  subject: string;
   onRelease: (hold: LegalHold) => void;
   releasing: boolean;
 }) {
@@ -172,9 +176,7 @@ function HoldRow({
           {hold.name}
         </p>
         <p className="mt-1 text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>
-          {hold.scope === 'organization'
-            ? 'Whole workspace'
-            : `Member ${hold.subjectUserId ?? 'unknown'}`}
+          {hold.scope === 'organization' ? 'Whole workspace' : `Member ${subject}`}
           {' · '}
           Placed {when(hold.createdAt)}
           {released ? ` · Released ${when(hold.releasedAt as string)}` : ''}
@@ -214,6 +216,13 @@ export function WorkspaceDataControls() {
   const { data, isPending, isError, error, refetch } = useLegalHolds();
   const create = useCreateLegalHold();
   const release = useReleaseLegalHold();
+  const members = useTeamMembers(data?.organizationId);
+  const memberById = new Map((members.data ?? []).map((member) => [member.userId, member]));
+  const subjectOf = (hold: LegalHold): string => {
+    if (!hold.subjectUserId) return 'unknown';
+    const member = memberById.get(hold.subjectUserId);
+    return member ? memberDisplayName(member) : hold.subjectUserId;
+  };
 
   const [name, setName] = useState('');
   const [reason, setReason] = useState('');
@@ -231,7 +240,7 @@ export function WorkspaceDataControls() {
       description:
         hold.scope === 'organization'
           ? 'Every record this hold was preserving for the whole workspace becomes eligible for the retention sweep again, and the sweep deletes on its own schedule. Releasing cannot be undone, and a new hold does not bring back what has already been swept.'
-          : `Every record this hold was preserving for ${hold.subjectUserId ?? 'that member'} becomes eligible for the retention sweep again, and the sweep deletes on its own schedule. Releasing cannot be undone, and a new hold does not bring back what has already been swept.`,
+          : `Every record this hold was preserving for ${hold.subjectUserId ? subjectOf(hold) : 'that member'} becomes eligible for the retention sweep again, and the sweep deletes on its own schedule. Releasing cannot be undone, and a new hold does not bring back what has already been swept.`,
       confirmLabel: 'Release hold',
       cancelLabel: 'Keep hold',
       destructive: true,
@@ -332,6 +341,7 @@ export function WorkspaceDataControls() {
               <HoldRow
                 key={hold.id}
                 hold={hold}
+                subject={subjectOf(hold)}
                 releasing={release.isPending && releasingId === hold.id}
                 onRelease={askToRelease}
               />
@@ -368,13 +378,33 @@ export function WorkspaceDataControls() {
               <option value="member">One member</option>
             </select>
             {scope === 'member' ? (
-              <input
-                value={subjectUserId}
-                onChange={(event) => setSubjectUserId(event.target.value)}
-                placeholder="Member user id"
-                aria-label="Held member user id"
-                style={{ ...controlStyle, flex: '1 1 200px' }}
-              />
+              <div className="min-w-0" style={{ flex: '1 1 240px' }}>
+                {members.isError ? (
+                  <p
+                    role="alert"
+                    className="text-xs"
+                    style={{ color: 'var(--settings-destructive-text)' }}
+                  >
+                    {toUserMessage(members.error, 'Workspace members could not be loaded.')}{' '}
+                    <button
+                      type="button"
+                      onClick={() => void members.refetch()}
+                      className="underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      Try again
+                    </button>
+                  </p>
+                ) : (
+                  <MemberPicker
+                    label="Held member"
+                    multiple={false}
+                    members={members.data ?? []}
+                    selectedIds={subjectUserId ? [subjectUserId] : []}
+                    onChange={(userIds) => setSubjectUserId(userIds[0] ?? '')}
+                    disabled={members.isPending}
+                  />
+                )}
+              </div>
             ) : null}
           </div>
           <input

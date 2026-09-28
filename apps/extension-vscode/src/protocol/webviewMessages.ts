@@ -37,6 +37,7 @@ const sendMessage = z.object({
 });
 
 const ready = z.object({ type: z.literal('ready') });
+const viewFocused = z.object({ type: z.literal('viewFocused') });
 const getModel = z.object({ type: z.literal('getModel') });
 const openSettings = z.object({ type: z.literal('openSettings') });
 const openWorkspace = z.object({ type: z.literal('openWorkspace') });
@@ -255,6 +256,7 @@ const removePendingAttachment = z.object({
 export const WebviewToExtSchema = z.discriminatedUnion('type', [
   sendMessage,
   ready,
+  viewFocused,
   getModel,
   openSettings,
   openWorkspace,

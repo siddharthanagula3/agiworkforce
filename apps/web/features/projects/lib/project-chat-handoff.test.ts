@@ -41,6 +41,7 @@ const meta: Required<ComposerSendMeta> = {
   thinkingEnabled: true,
   codeExecutionEnabled: true,
   officeCreationEnabled: true,
+  officeOutputFormat: 'docx',
   researchEnabled: true,
   searchRequested: true,
   styleInstruction: 'Use a concise project brief.',
