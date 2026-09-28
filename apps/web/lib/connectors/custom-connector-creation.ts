@@ -9,6 +9,7 @@ import { validateHttpsMcpUrl } from '@/lib/mcp-url-validation';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { evaluateConnectorPolicyForUser } from '@/lib/services/connector-policy-gate';
 
+import { accountUrlProblem } from './account-url-connectors';
 import {
   assertConnectorToolCapacity,
   assertCustomConnectorCapacity,
@@ -68,6 +69,8 @@ export async function createCustomConnector(
   const capacity = await assertCustomConnectorCapacity(db, userId);
 
   const parsedUrl = await validateHttpsMcpUrl(input.url);
+  const accountProblem = accountUrlProblem(parsedUrl);
+  if (accountProblem) throw createError.validation(accountProblem);
   const url = parsedUrl.toString();
   const transport = transportForUrl(parsedUrl, input.transport);
 
