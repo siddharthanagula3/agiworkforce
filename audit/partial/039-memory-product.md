@@ -101,18 +101,6 @@ Code: `apps/mobile/app/(app)/settings/memory-summary.tsx:36-60`, `apps/mobile/sr
 
 Code: `apps/extension/src/side_panel.ts:7928-7938`
 
-## S39.12: Automatic Memory update.
-
-- Done when: After ordinary conversations the assistant automatically saves new durable facts to memory (when allowed).
-- Wave: 2
-- Already works on: web, desktop, mobile, cli, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Memory is learned only when the local CLI runtime archives a thread. Learning during ordinary turns needs the CLI app-server to run memory extraction per turn (p-desktop-cli). | mount |
-
-Code: `apps/cli/src/app_server/developer_host.rs:1691-1691`
-
 ## S39.15: Delete all Memory.
 
 - Done when: One action deletes every saved memory, after a confirmation, and afterwards none remain.

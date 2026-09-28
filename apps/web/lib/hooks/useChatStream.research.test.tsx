@@ -210,8 +210,8 @@ describe('useChatStream deep research handling', () => {
       elapsedMs: 1500,
     });
     expect(msg?.metadata?.searchResults).toEqual([
-      { url: 'https://a.com', title: 'A', snippet: '' },
-      { url: 'https://b.com', title: 'B', snippet: '' },
+      { url: 'https://a.com', title: 'A', snippet: '', retrievedAt: expect.any(String) },
+      { url: 'https://b.com', title: 'B', snippet: '', retrievedAt: expect.any(String) },
     ]);
   });
 
@@ -233,9 +233,9 @@ describe('useChatStream deep research handling', () => {
 
     const msg = assistantMessage();
     expect(msg?.metadata?.searchResults).toEqual([
-      { url: 'https://a.com', title: 'A', snippet: '' },
-      { url: 'https://b.com', title: 'B', snippet: '' },
-      { url: 'https://c.com', title: 'C', snippet: '' },
+      { url: 'https://a.com', title: 'A', snippet: '', retrievedAt: expect.any(String) },
+      { url: 'https://b.com', title: 'B', snippet: '', retrievedAt: expect.any(String) },
+      { url: 'https://c.com', title: 'C', snippet: '', retrievedAt: expect.any(String) },
     ]);
   });
 
@@ -257,9 +257,9 @@ describe('useChatStream deep research handling', () => {
 
     const msg = assistantMessage();
     expect(msg?.metadata?.searchResults).toEqual([
-      { url: 'https://a.com', title: 'A', snippet: '' },
-      { url: 'https://b.com', title: 'B', snippet: '' },
-      { url: 'https://d.com', title: 'D', snippet: '' },
+      { url: 'https://a.com', title: 'A', snippet: '', retrievedAt: expect.any(String) },
+      { url: 'https://b.com', title: 'B', snippet: '', retrievedAt: expect.any(String) },
+      { url: 'https://d.com', title: 'D', snippet: '', retrievedAt: expect.any(String) },
     ]);
   });
 
@@ -386,8 +386,8 @@ describe('useChatStream research plan reduction', () => {
     });
 
     expect(assistantMessage()?.metadata?.research?.sourcesForRetry).toEqual([
-      { url: 'https://a.com', title: 'A', snippet: '' },
-      { url: 'https://b.com', title: 'B', snippet: '' },
+      { url: 'https://a.com', title: 'A', snippet: '', retrievedAt: expect.any(String) },
+      { url: 'https://b.com', title: 'B', snippet: '', retrievedAt: expect.any(String) },
     ]);
   });
 });

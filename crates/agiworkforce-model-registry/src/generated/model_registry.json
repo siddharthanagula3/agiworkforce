@@ -23590,6 +23590,7 @@
       "provider": "openai",
       "apiFamily": "responses",
       "adapter": "@agiworkforce/providers-openai",
+      "requestParameters": ["top_p", "user"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {
         "webSearch": { "providerSupport": "native", "implementation": "implemented" },
@@ -23612,6 +23613,15 @@
       "provider": "openai",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-openai",
+      "requestParameters": [
+        "top_p",
+        "stop",
+        "seed",
+        "frequency_penalty",
+        "presence_penalty",
+        "logit_bias",
+        "user"
+      ],
       "trustModes": ["managed_cloud", "byok"],
       "features": {},
       "protocol": "provider_native",
@@ -23630,6 +23640,7 @@
       "provider": "anthropic",
       "apiFamily": "messages",
       "adapter": "@agiworkforce/providers-anthropic",
+      "requestParameters": ["top_p", "stop", "user"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {
         "webSearch": { "providerSupport": "native", "implementation": "implemented" },
@@ -23642,6 +23653,7 @@
       "provider": "google",
       "apiFamily": "generate_content",
       "adapter": "@agiworkforce/providers-google",
+      "requestParameters": ["top_p", "stop"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {
         "webSearch": { "providerSupport": "native", "implementation": "implemented" },
@@ -23690,6 +23702,14 @@
       "provider": "xai",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-xai",
+      "requestParameters": [
+        "top_p",
+        "stop",
+        "seed",
+        "frequency_penalty",
+        "presence_penalty",
+        "user"
+      ],
       "trustModes": ["managed_cloud", "byok"],
       "features": {},
       "protocol": "provider_native",
@@ -23699,6 +23719,7 @@
       "provider": "deepseek",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-deepseek",
+      "requestParameters": ["top_p", "stop"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {},
       "protocol": "provider_native",
@@ -23708,6 +23729,7 @@
       "provider": "minimax",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-minimax",
+      "requestParameters": ["top_p"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {},
       "protocol": "provider_native",
@@ -23717,6 +23739,7 @@
       "provider": "qwen",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-qwen",
+      "requestParameters": ["top_p", "stop", "seed", "presence_penalty"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {
         "webSearch": { "providerSupport": "native", "implementation": "unwired" },
@@ -23729,6 +23752,7 @@
       "provider": "moonshot",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-moonshot",
+      "requestParameters": ["stop"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {},
       "protocol": "provider_native",
@@ -23738,6 +23762,7 @@
       "provider": "mistral",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-mistral",
+      "requestParameters": ["top_p", "stop", "frequency_penalty", "presence_penalty"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {},
       "protocol": "provider_native",
@@ -23747,6 +23772,7 @@
       "provider": "zhipu",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-zhipu",
+      "requestParameters": ["top_p", "stop"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {},
       "protocol": "provider_native",
@@ -23756,6 +23782,7 @@
       "provider": "perplexity",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-perplexity",
+      "requestParameters": ["top_p", "stop"],
       "trustModes": ["managed_cloud", "byok"],
       "features": { "webSearch": { "providerSupport": "native", "implementation": "implemented" } },
       "protocol": "provider_native",
@@ -23765,6 +23792,7 @@
       "provider": "groq",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-groq",
+      "requestParameters": ["top_p", "stop", "seed", "user"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {},
       "protocol": "provider_native",
@@ -23774,6 +23802,15 @@
       "provider": "open_router",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-openrouter",
+      "requestParameters": [
+        "top_p",
+        "stop",
+        "seed",
+        "frequency_penalty",
+        "presence_penalty",
+        "logit_bias",
+        "user"
+      ],
       "trustModes": ["byok"],
       "features": {
         "zeroDataRetentionOnRequest": {
@@ -23788,6 +23825,15 @@
       "provider": "open_router",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-openrouter",
+      "requestParameters": [
+        "top_p",
+        "stop",
+        "seed",
+        "frequency_penalty",
+        "presence_penalty",
+        "logit_bias",
+        "user"
+      ],
       "trustModes": ["managed_cloud", "byok"],
       "features": {
         "zeroDataRetentionOnRequest": {
@@ -23811,6 +23857,7 @@
       "provider": "vercel_gateway",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-vercel-gateway",
+      "requestParameters": ["top_p", "stop", "frequency_penalty", "presence_penalty"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {
         "zeroDataRetentionOnRequest": {
@@ -23825,6 +23872,7 @@
       "provider": "nvidia_nim",
       "apiFamily": "chat_completions",
       "adapter": "desktop-direct-api",
+      "requestParameters": ["top_p", "stop", "frequency_penalty", "presence_penalty"],
       "trustModes": ["byok"],
       "features": {},
       "protocol": "provider_native",
@@ -23843,6 +23891,7 @@
       "provider": "cheaperinference",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-openai",
+      "requestParameters": ["top_p", "stop"],
       "trustModes": ["managed_cloud"],
       "features": {},
       "protocol": "openai_chat",
@@ -23853,6 +23902,7 @@
       "provider": "cheaperinference_anthropic",
       "apiFamily": "messages",
       "adapter": "@agiworkforce/providers-anthropic",
+      "requestParameters": ["top_p", "stop"],
       "trustModes": ["managed_cloud"],
       "features": {},
       "protocol": "anthropic_messages",
@@ -23863,6 +23913,7 @@
       "provider": "deepseek_anthropic",
       "apiFamily": "messages",
       "adapter": "@agiworkforce/providers-anthropic",
+      "requestParameters": ["top_p", "stop", "user"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {},
       "protocol": "anthropic_messages",
@@ -23874,6 +23925,7 @@
       "provider": "moonshot_anthropic",
       "apiFamily": "messages",
       "adapter": "@agiworkforce/providers-anthropic",
+      "requestParameters": ["stop", "user"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {},
       "protocol": "anthropic_messages",
@@ -23896,6 +23948,7 @@
       "provider": "deepinfra",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-openai",
+      "requestParameters": ["top_p", "stop", "frequency_penalty", "presence_penalty"],
       "trustModes": ["managed_cloud"],
       "features": {},
       "protocol": "openai_chat",
@@ -23906,6 +23959,14 @@
       "provider": "together",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-openai",
+      "requestParameters": [
+        "top_p",
+        "stop",
+        "seed",
+        "frequency_penalty",
+        "presence_penalty",
+        "logit_bias"
+      ],
       "trustModes": ["managed_cloud"],
       "features": {},
       "protocol": "openai_chat",
@@ -23916,6 +23977,14 @@
       "provider": "novita",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-openai",
+      "requestParameters": [
+        "top_p",
+        "stop",
+        "seed",
+        "frequency_penalty",
+        "presence_penalty",
+        "logit_bias"
+      ],
       "trustModes": ["managed_cloud"],
       "features": {},
       "protocol": "openai_chat",
@@ -23926,6 +23995,7 @@
       "provider": "experientiallabs",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-openai",
+      "requestParameters": ["top_p"],
       "trustModes": ["managed_cloud"],
       "features": {},
       "protocol": "openai_chat",
@@ -23936,6 +24006,7 @@
       "provider": "experientiallabs_anthropic",
       "apiFamily": "messages",
       "adapter": "@agiworkforce/providers-anthropic",
+      "requestParameters": ["top_p"],
       "trustModes": ["managed_cloud"],
       "features": {},
       "protocol": "anthropic_messages",
@@ -39301,6 +39372,20 @@
       "verifiedBy": "official-openai-images-vision-guide",
       "status": "CORRECTION",
       "notes": "GPT-6 Astra accepts the image detail value original. developers.openai.com/api/docs/guides/images-vision, retrieved 2026-09-27, lists gpt-6-astra with the gpt-5.6 series among the models that take original detail, so its imageInput now records the same detail values as gpt-5.6."
+    },
+    {
+      "id": "verification/2026-09-28/53",
+      "date": "2026-09-28",
+      "verifiedBy": "official-anthropic-messages-api-reference",
+      "status": "CORRECTION",
+      "notes": "Claude Sonnet 5 rejects sampling parameters. platform.claude.com/docs/en/api/messages, retrieved 2026-09-28, says models released after Claude Opus 4.6 accept only a temperature of 1.0 and do not accept top_p or top_k, rejecting other values with a 400. Sonnet 5 was released on 2026-06-30, so its reasoning now records rejectsSamplingParameters as Opus 5 and Fable 5.1 already did."
+    },
+    {
+      "id": "verification/2026-09-28/54",
+      "date": "2026-09-28",
+      "verifiedBy": "official-xai-chat-completions-reference",
+      "status": "CORRECTION",
+      "notes": "Grok 4.6 is a reasoning model and rejects stop, frequency_penalty and presence_penalty. docs.x.ai/developers/rest-api-reference/inference/chat-completions, retrieved 2026-09-28, marks stop and frequency_penalty with 'Reasoning models don't support this parameter' and presence_penalty as unsupported for reasoning models, so its reasoning records them as unsupportedRequestParameters."
     }
   ],
   "retiredModels": {

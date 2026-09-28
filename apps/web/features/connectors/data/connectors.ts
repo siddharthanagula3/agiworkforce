@@ -192,6 +192,17 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
     iconEmoji: '📁',
   },
   {
+    id: 'google-contacts',
+    name: 'Google Contacts',
+    capabilitySummary: 'contact and directory lookups for names, email addresses and phone numbers',
+    category: 'Productivity',
+    authType: 'oauth',
+    phase: 1,
+    iconBg: 'from-blue-500 to-blue-600',
+    iconText: 'C',
+    iconEmoji: '👤',
+  },
+  {
     id: 'notion',
     name: 'Notion',
     capabilitySummary: 'page search, content edits, and database management',
@@ -1006,13 +1017,26 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'plaid',
-    name: 'Plaid',
-    capabilitySummary: 'bank account linking and financial data access',
+    name: 'Plaid Dashboard',
+    capabilitySummary:
+      "a Plaid customer's developer dashboard data, such as Link analytics and item debugging",
     category: 'Finance',
     authType: 'oauth',
     phase: 7,
     iconBg: 'from-indigo-500 to-blue-700',
     iconText: 'PL',
+    iconEmoji: '🏦',
+  },
+  {
+    id: 'bank-accounts',
+    name: 'Bank accounts',
+    capabilitySummary:
+      'read-only balances and transactions from your own bank accounts, connected with Plaid, in the United States',
+    category: 'Finance',
+    authType: 'oauth',
+    phase: 1,
+    iconBg: 'from-emerald-500 to-green-700',
+    iconText: 'BA',
     iconEmoji: '🏦',
   },
 
@@ -1184,6 +1208,18 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
     iconBg: 'from-blue-600 to-indigo-800',
     iconText: 'CN',
     iconEmoji: '🏥',
+  },
+  {
+    id: 'healthex',
+    name: 'HealthEx',
+    capabilitySummary:
+      'read-only access to your own health records from your care providers, in the United States',
+    category: 'Healthcare',
+    authType: 'oauth',
+    phase: 1,
+    iconBg: 'from-teal-500 to-emerald-700',
+    iconText: 'HX',
+    iconEmoji: '🩺',
   },
 ];
 

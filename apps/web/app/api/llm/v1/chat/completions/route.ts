@@ -130,6 +130,7 @@ import {
   saveCloudAgentApprovalCheckpoint,
   saveCloudAgentDeviceCheckpoint,
   saveCloudAgentInputCheckpoint,
+  takeCloudAgentRunSteers,
 } from '@/lib/services/cloud-agent-run-service';
 import type {
   CloudAgentOriginSurface,
@@ -636,6 +637,7 @@ async function dispatchChatCompletions(
                   url: source.url,
                   title: source.title ?? source.url,
                   ...(source.snippet ? { snippet: source.snippet } : {}),
+                  ...(source.retrieved_at ? { retrievedAt: source.retrieved_at } : {}),
                 })),
                 priorSteps: processed.researchResume.steps,
                 approvedPlan: processed.researchResume.approvedSteps,
@@ -1071,6 +1073,7 @@ async function dispatchChatCompletions(
         },
         isCancellationRequested: () =>
           isCloudAgentRunCancellationRequested(runDb, { userId, runId: run.id }),
+        takeSteerMessages: () => takeCloudAgentRunSteers(runDb, { userId, runId: run.id }),
         onApprovalCheckpoint: async (checkpoint) => {
           await saveCloudAgentApprovalCheckpoint(runDb, {
             userId,

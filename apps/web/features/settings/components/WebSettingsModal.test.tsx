@@ -578,19 +578,20 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     });
     fireEvent.click(within(diffGroup).getByRole('button', { name: 'Allow' }));
 
-    await waitFor(() =>
-      expect(fetchMock).toHaveBeenCalledWith(
-        '/api/connectors/permissions',
+    await waitFor(() => {
+      const request = (fetchMock.mock.calls as unknown[][])
+        .filter(([input]) => String(input) === '/api/connectors/permissions')
+        .map(([, init]) => init as RequestInit | undefined)
+        .find((init) => init?.method === 'PUT');
+      expect(request).toBeDefined();
+      expect(JSON.parse(String(request?.body))).toEqual(
         expect.objectContaining({
-          method: 'PUT',
-          body: JSON.stringify({
-            connectorId: 'github',
-            toolName: 'get_pull_request_diff',
-            level: 'allow',
-          }),
+          connectorId: 'github',
+          toolName: 'get_pull_request_diff',
+          level: 'allow',
         }),
-      ),
-    );
+      );
+    });
     // Renders the whole modal and a dialog, with three 5s waits: 5s overall is too tight under load.
   }, 20_000);
 

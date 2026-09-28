@@ -108,17 +108,13 @@ Code: `apps/extension/src/features/side-panel/projectsDrawer.ts:239-245`, `apps/
 
 - Done when: A project memory view shows what has been remembered for that project, with scope controls, separately from account memory.
 - Wave: 3
-- Already works on: cli
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Project-scoped memory works (project settings choose the scope; Settings > Memory labels facts "Only in <project>"), but there is no memory view inside the project that lists just that project's memories. | ui |
-| desktop | partial | Project-scoped memory works (project settings choose the scope; Settings > Memory labels facts "Only in <project>"), but there is no memory view inside the project that lists just that project's memories. | ui |
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/projects/components/ProjectSettingsDialog.tsx:250-262`, `packages/ui/unified-chat/src/components/MemoryEditor.tsx:296-301`, `apps/web/lib/services/managed-memory-context-service.ts:956-970`
 
 ## S4.13: Work-task home.
 
@@ -369,15 +365,14 @@ Code: `apps/cli/src/agents.rs:625-645`, `apps/cli/src/agents.rs:421-434`
 
 - Done when: A skills manager lists installed and available skills and lets the user install, enable/disable, author and remove them.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Mobile Skills screen only browses the cloud catalog and inserts a skill into chat; installing, removing, toggling or authoring skills is web-only. | handler |
-| vscode | partial | Skills toggle on and off and project skills can be allowed (bc346586d). Install and remove still need the agi CLI; the app-server has no skills install/remove calls (p-desktop-cli). | handler |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:115-121`, `apps/mobile/src/features/skills/service.ts:20-26`, `apps/mobile/src/features/skills/SkillsScreen.tsx:290-298`, `apps/extension-vscode/src/features/surfaces/capabilityManagement.ts:99-99`
+Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:115-121`, `apps/mobile/src/features/skills/service.ts:20-26`, `apps/mobile/src/features/skills/SkillsScreen.tsx:290-298`
 
 ## S4.36: Plugins manager.
 
@@ -388,10 +383,10 @@ Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:115-121`, `a
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| vscode | partial | Plugins toggle on and off (bc346586d). Install, update and remove still need agi plugin; the app-server has no plugin install/remove calls (p-desktop-cli). | handler |
+| vscode | partial | Install (Git URL or folder, signature or sha256 pin) and remove now work in VS Code (e2e0bf339, 21d44e9df). Update needs a plugins/update app-server method (p-desktop-cli). | update |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/extension-vscode/src/features/surfaces/capabilityManagement.ts:124-124`
+Code: `apps/extension-vscode/src/features/surfaces/capabilityManagement.ts:293-293`, `apps/extension-vscode/src/features/surfaces/capabilityManagement.ts:316-316`
 
 ## S4.37: Connected accounts.
 
