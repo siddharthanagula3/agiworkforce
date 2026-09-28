@@ -22,6 +22,12 @@ export interface ApprovalHistorySection {
   loaded: Promise<void>;
 }
 
+export interface ApprovalHistoryPage {
+  entries: ApprovalHistoryEntry[];
+  hasMore: boolean;
+  nextCursor: string | null;
+}
+
 const PAGE_SIZE = 20;
 
 function readEntry(value: unknown): ApprovalHistoryEntry | null {
@@ -47,6 +53,17 @@ export function parseApprovalHistory(body: unknown): ApprovalHistoryEntry[] {
     const parsed = readEntry(entry);
     return parsed ? [parsed] : [];
   });
+}
+
+export function parseApprovalHistoryPage(body: unknown): ApprovalHistoryPage {
+  const record = body as { hasMore?: unknown; nextCursor?: unknown } | null;
+  const nextCursor =
+    typeof record?.nextCursor === 'string' && record.nextCursor ? record.nextCursor : null;
+  return {
+    entries: parseApprovalHistory(body),
+    hasMore: record?.hasMore === true && nextCursor !== null,
+    nextCursor,
+  };
 }
 
 function formatTimestamp(value: string): string {
@@ -103,7 +120,9 @@ export function createApprovalHistorySection(
 
   element.append(label, hint, status, list, pager, retry);
 
-  let offset = 0;
+  const pageCursors: Array<string | null> = [null];
+  let page = 0;
+  let nextCursor: string | null = null;
   let generation = 0;
 
   const renderEntries = (entries: readonly ApprovalHistoryEntry[]): void => {
@@ -163,22 +182,25 @@ export function createApprovalHistorySection(
         status.textContent = 'Sign in to see the approvals you decided on every device.';
         return;
       }
-      const params = new URLSearchParams({ limit: String(PAGE_SIZE + 1), offset: String(offset) });
+      const params = new URLSearchParams({ limit: String(PAGE_SIZE) });
+      const cursor = pageCursors[page];
+      if (cursor) params.set('cursor', cursor);
       const response = await (deps.fetchImpl ?? fetch)(
         `${deps.gateway}${MANAGED_CLOUD_APPROVAL_HISTORY_PATH}?${params.toString()}`,
         { headers: { Authorization: `Bearer ${token}`, ...(deps.headers?.() ?? {}) } },
       );
       if (!response.ok) throw new Error(`AGI Workforce answered HTTP ${response.status}.`);
-      const entries = parseApprovalHistory(await response.json());
+      const answer = parseApprovalHistoryPage(await response.json());
       if (run !== generation) return;
-      renderEntries(entries.slice(0, PAGE_SIZE));
+      const { entries, hasMore } = answer;
+      nextCursor = answer.nextCursor;
+      renderEntries(entries);
       list.hidden = entries.length === 0;
-      const hasMore = entries.length > PAGE_SIZE;
-      pager.hidden = offset === 0 && !hasMore;
-      newer.disabled = offset === 0;
+      pager.hidden = page === 0 && !hasMore;
+      newer.disabled = page === 0;
       older.disabled = !hasMore;
       status.textContent =
-        entries.length > 0 ? '' : offset === 0 ? 'No tool approvals yet.' : 'No older approvals.';
+        entries.length > 0 ? '' : page === 0 ? 'No tool approvals yet.' : 'No older approvals.';
     } catch (error) {
       if (run !== generation) return;
       list.hidden = true;
@@ -192,11 +214,13 @@ export function createApprovalHistorySection(
   };
 
   newer.addEventListener('click', () => {
-    offset = Math.max(0, offset - PAGE_SIZE);
+    page = Math.max(0, page - 1);
     void load();
   });
   older.addEventListener('click', () => {
-    offset += PAGE_SIZE;
+    if (!nextCursor) return;
+    pageCursors[page + 1] = nextCursor;
+    page += 1;
     void load();
   });
   retry.addEventListener('click', () => void load());
