@@ -69,6 +69,12 @@ import {
   ProjectSourcesToggleButton,
 } from '@features/projects/components/ProjectSourcesPanel';
 import {
+  ProjectAnswerSaveProvider,
+  projectAnswerFileName,
+  type ProjectAnswerSave,
+} from '@features/projects/components/project-answer-save';
+import { uploadProjectKnowledgeFile } from '@features/projects/services/project-knowledge-upload';
+import {
   EMPTY_VARIANT_INFO,
   resolveLeafForSibling,
   resolveSurvivingLeaf,
@@ -5067,6 +5073,23 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       ? s.disabledConnectorIdsByConversation[displayedConversationId]
       : undefined,
   );
+  const conversationTitle = displayedConversation?.title ?? null;
+  const projectAnswerSave = useMemo<ProjectAnswerSave | null>(() => {
+    if (!conversationProject) return null;
+    if (conversationProject.isOrgShared === true && conversationProject.sharedAccess !== 'write') {
+      return null;
+    }
+    return {
+      projectName: conversationProject.name,
+      save: async (content) => {
+        const file = new File([content], projectAnswerFileName(conversationTitle), {
+          type: 'text/markdown',
+        });
+        await uploadProjectKnowledgeFile({ projectId: conversationProject.id, file });
+      },
+    };
+  }, [conversationProject, conversationTitle]);
+
   const researchRunControls = useMemo<ResearchRunControls>(
     () => ({
       act: handleResearchRunAction,
@@ -6309,45 +6332,47 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                       <MessageInlineEditProvider value={messageInlineEdit}>
                         <InteractiveCardResumeProvider value={resumeInteractiveCardTurn}>
                           <ResearchRunControlsProvider value={researchRunControls}>
-                            <ChatMessageList
-                              messages={chatMessages}
-                              transcriptPatch={chatMessageProjection.patch}
-                              currentTier={currentTier}
-                              conversationId={displayedConversationId}
-                              isLoading={isLoading && !isStreaming}
-                              isUserTyping={isUserTyping}
-                              onRegenerate={handleRegenerateMessage}
-                              onRetryResearch={handleRetryResearch}
-                              onResearchPlanDecision={handleResearchPlanDecision}
-                              onAgiWorkPlanDecision={handleAgiWorkPlanDecision}
-                              retryingResearchMessageId={retryingResearchMessageId}
-                              onContinue={handleContinueMessage}
-                              onEdit={handleEditMessage}
-                              onDelete={handleDeleteMessage}
-                              onDeleteVariant={handleDeleteVariant}
-                              countVariantFollowers={countVariantFollowers}
-                              onReact={handleReactMessage}
-                              onPin={handlePinMessage}
-                              branchGroupsByMessageId={branchGroupsByMessageId}
-                              branchingMessageId={branchingMessageId}
-                              onBranch={createBranch}
-                              onSwitchBranch={switchBranch}
-                              variantInfoByMessageId={variantInfoByMessageId}
-                              onSelectVariant={handleSelectVariant}
-                              activeLeafId={activeLeafId}
-                              variantAnchorMessageId={variantAnchorMessageId}
-                              isConversationStreaming={isStreaming}
-                              onRegenerateImage={handleRegenerateImageInPlace}
-                              onResumeVideo={handleResumeVideo}
-                              onRetryVideo={handleRetryVideo}
-                              onSendMessage={setComposerPrefill}
-                              onPaywallUpgrade={handlePaywallRecovery}
-                              onPaywallDismiss={handlePaywallDismiss}
-                              onRegenerateWithModel={handleRegenerateWithModel}
-                              regenerateModelOptions={regenerateModelOptions}
-                              turnErrorActive={turnErrorNotice !== null}
-                              temporaryChat={temporaryChatActive}
-                            />
+                            <ProjectAnswerSaveProvider value={projectAnswerSave}>
+                              <ChatMessageList
+                                messages={chatMessages}
+                                transcriptPatch={chatMessageProjection.patch}
+                                currentTier={currentTier}
+                                conversationId={displayedConversationId}
+                                isLoading={isLoading && !isStreaming}
+                                isUserTyping={isUserTyping}
+                                onRegenerate={handleRegenerateMessage}
+                                onRetryResearch={handleRetryResearch}
+                                onResearchPlanDecision={handleResearchPlanDecision}
+                                onAgiWorkPlanDecision={handleAgiWorkPlanDecision}
+                                retryingResearchMessageId={retryingResearchMessageId}
+                                onContinue={handleContinueMessage}
+                                onEdit={handleEditMessage}
+                                onDelete={handleDeleteMessage}
+                                onDeleteVariant={handleDeleteVariant}
+                                countVariantFollowers={countVariantFollowers}
+                                onReact={handleReactMessage}
+                                onPin={handlePinMessage}
+                                branchGroupsByMessageId={branchGroupsByMessageId}
+                                branchingMessageId={branchingMessageId}
+                                onBranch={createBranch}
+                                onSwitchBranch={switchBranch}
+                                variantInfoByMessageId={variantInfoByMessageId}
+                                onSelectVariant={handleSelectVariant}
+                                activeLeafId={activeLeafId}
+                                variantAnchorMessageId={variantAnchorMessageId}
+                                isConversationStreaming={isStreaming}
+                                onRegenerateImage={handleRegenerateImageInPlace}
+                                onResumeVideo={handleResumeVideo}
+                                onRetryVideo={handleRetryVideo}
+                                onSendMessage={setComposerPrefill}
+                                onPaywallUpgrade={handlePaywallRecovery}
+                                onPaywallDismiss={handlePaywallDismiss}
+                                onRegenerateWithModel={handleRegenerateWithModel}
+                                regenerateModelOptions={regenerateModelOptions}
+                                turnErrorActive={turnErrorNotice !== null}
+                                temporaryChat={temporaryChatActive}
+                              />
+                            </ProjectAnswerSaveProvider>
                           </ResearchRunControlsProvider>
                         </InteractiveCardResumeProvider>
                       </MessageInlineEditProvider>
