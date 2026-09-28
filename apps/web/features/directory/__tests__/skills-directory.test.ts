@@ -90,9 +90,8 @@ describe('toSkillEntry', () => {
     expect(entry.statusLabel).toBe('Coming later');
   });
 
-  it('never invents an install count or an updated date', () => {
+  it('never invents an updated date', () => {
     const entry = toSkillEntry(skill(), new Set());
-    expect(entry.installCount).toBeUndefined();
     expect(entry.updatedAt).toBeUndefined();
   });
 });

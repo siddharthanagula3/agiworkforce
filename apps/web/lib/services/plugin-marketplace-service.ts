@@ -32,6 +32,7 @@ import {
   type PluginMarketplaceSourceKind,
   type PluginMarketplaceSourceSummary,
   type PluginPackageRefusalDetails,
+  type PluginScanSummary,
 } from '@agiworkforce/cloud-contracts';
 
 import {
@@ -983,6 +984,51 @@ export async function listMarketplaceEntriesForUser(
     [userId],
   );
   return rows.map(mapEntryRow);
+}
+
+const MARKETPLACE_ENTRY_ID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+async function scannedContentHash(
+  db: DatabaseAdapter,
+  userId: string,
+  pluginId: string,
+): Promise<string | null> {
+  if (MARKETPLACE_ENTRY_ID_PATTERN.test(pluginId)) {
+    return (await getMarketplaceEntryForUser(db, userId, pluginId))?.contentHash ?? null;
+  }
+  const rows = await db.query<{ sha256: string | null }>(
+    `select versions.sha256
+       from public.plugin_registry_entries entry
+       left join public.plugin_installations installation
+              on installation.plugin_id = entry.id and installation.user_id = $2
+       join public.plugin_registry_versions versions
+         on versions.plugin_id = entry.id
+        and versions.version = coalesce(installation.installed_version, entry.version)
+      where entry.id = $1`,
+    [pluginId, userId],
+  );
+  return rows[0]?.sha256 ?? null;
+}
+
+export async function findPluginScanForUser(
+  db: DatabaseAdapter,
+  userId: string,
+  pluginId: string,
+): Promise<PluginScanSummary | null> {
+  const contentHash = await scannedContentHash(db, userId, pluginId);
+  const scan = contentHash ? await readPluginPackageScan(db, contentHash) : null;
+  if (!scan) return null;
+  return {
+    verdict: scan.verdict,
+    findings: scan.findings.map(({ path, line, message, severity }) => ({
+      path,
+      line,
+      message,
+      severity,
+    })),
+    scannedAt: scan.scannedAt,
+  };
 }
 
 export async function getMarketplaceEntryForUser(

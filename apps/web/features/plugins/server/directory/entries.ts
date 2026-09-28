@@ -11,7 +11,6 @@ import {
   DASH_PATTERN,
   DASH_REPLACEMENT,
   MARKETPLACE_EXTERNAL_PLUGINS_DIRECTORY,
-  OFFICIAL_MARKETPLACE_NAME,
   PARTNER_PUBLISHER_ID,
   PARTNER_PUBLISHER_NAME,
   PLUGIN_CAPABILITY_MCP,
@@ -246,7 +245,7 @@ export function marketplaceDirectoryEntry(input: MarketplaceEntryInput): PluginD
     createdAt: input.firstSeenAt,
     updatedAt: input.now,
     sourceFacet: SOURCE_FACET_MARKETPLACE,
-    verified: marketplace.source.name === OFFICIAL_MARKETPLACE_NAME || card?.verified === true,
+    verified: false,
     installs: card?.installs ?? null,
     worksWith: worksWithFor(card, runtime.webInstallable),
     repositoryUrl: location?.repositoryUrl ?? null,
@@ -300,14 +299,16 @@ export function publicOnlyDirectoryEntry(input: PublicOnlyEntryInput): PluginDir
     createdAt: input.firstSeenAt,
     updatedAt: input.now,
     sourceFacet: claudeCode ? SOURCE_FACET_MARKETPLACE : SOURCE_FACET_PARTNER,
-    verified: card.verified,
+    verified: false,
     installs: card.installs,
     worksWith: [...card.worksWith],
     repositoryUrl: detail?.repositoryUrl ?? null,
     marketplace: target
       ? { name: target.marketplaceName, repositoryUrl: null, manifestUrl: null, contentHash: null }
       : null,
-    installCommand: detail?.installCommand ?? null,
+    installCommand: target
+      ? marketplaceInstallCommand(target.pluginName, target.marketplaceName)
+      : null,
     runtime,
     sourceLocation: null,
   };

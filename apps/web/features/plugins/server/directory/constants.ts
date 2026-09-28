@@ -14,6 +14,7 @@ export const CLAUDE_PLUGIN_AGENTS_DIRECTORY = 'agents';
 export const CLAUDE_SKILL_FILE_NAME = 'SKILL.md';
 
 export const CLAUDE_CLI_INSTALL_COMMAND = 'claude plugin install';
+export const AGI_CLI_PLUGIN_INSTALL_COMMAND = 'agi plugin install';
 
 export const PUBLIC_DIRECTORY_URL = 'https://claude.com/plugins';
 export const PUBLIC_DIRECTORY_PAGE_LIMIT = 20;
