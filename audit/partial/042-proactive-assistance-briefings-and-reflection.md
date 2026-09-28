@@ -134,14 +134,13 @@ Code: `apps/cli/src/repl/mod.rs:598-598`
 
 - Done when: Past briefings and proactive outputs are kept as a browsable history.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only a per-schedule run history showing each run's text output; there is no combined history of briefings or saved editions. | ui |
-| desktop | partial | Only a per-schedule run history showing each run's text output; there is no combined history of briefings or saved editions. | ui |
 | mobile | partial | Only a per-schedule run history. | ui |
 | cli | partial | Only a per-schedule run list (agi schedules runs). | ui |
 | vscode | partial | Only a per-schedule run list. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/schedules/components/ScheduleRunHistory.tsx:110-110`, `apps/web/features/schedules/components/ScheduleCard.tsx:288-288`, `apps/mobile/src/features/schedules/components/ScheduleRunHistory.tsx:124-124`, `apps/cli/src/lib.rs:1140-1140`
+Code: `apps/mobile/src/features/schedules/components/ScheduleRunHistory.tsx:124-124`, `apps/cli/src/lib.rs:1140-1140`, `apps/extension-vscode/src/core/commandSetup.ts:2237-2237`, `apps/extension-vscode/src/features/schedules/scheduleActions.ts:126-126`
