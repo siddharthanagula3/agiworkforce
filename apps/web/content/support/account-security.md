@@ -3,7 +3,7 @@ id: account-security
 title: Passkeys, two-factor and active sessions
 path: /security
 category: account
-tags: passkey, two factor, 2fa, mfa, totp, authenticator, backup codes, recovery codes, change password, forgot password, sessions, log out all devices, revoke session, api keys
+tags: passkey, two factor, 2fa, mfa, totp, authenticator, backup codes, recovery codes, advanced account security, security key, recovery key, change password, forgot password, sessions, log out all devices, revoke session, api keys
 updated: 2026-09-28
 scope: public
 ---
@@ -21,13 +21,36 @@ Settings, Security manages passkeys and two-factor authentication. Passkeys sign
 you in. Authenticator apps (TOTP) and backup codes are temporarily unavailable:
 Settings, Security shows **Temporarily unavailable** where you would set one up
 or replace your backup codes, and a workspace cannot start requiring
-multi-factor authentication until they return. Hardware security keys and SMS
-MFA are not part of the current account contract, so they are not offered rather
-than silently ignored.
+multi-factor authentication until they return. SMS MFA is not part of the
+current account contract, so it is not offered rather than silently ignored.
+Hardware security keys work with Advanced Account Security.
 
 No device skips the sign-in checks. Devices you linked, such as the CLI, VS
 Code, the Chrome extension or the desktop app, are listed in Settings, Account
 under **Linked devices**, where you can unlink each one.
+
+## Advanced Account Security
+
+Advanced Account Security is an optional setting in Settings, Security for
+accounts at higher risk of targeted attacks. Signing in needs one of your
+passkeys or security keys. A password or an email code alone no longer gets in.
+To turn it on, add at least two passkeys or security keys, including one that
+works across devices, such as a passkey synced by your password manager or a
+hardware security key, then save your recovery keys. Every other device is
+signed out when you turn it on.
+
+Email account recovery no longer restores access. A recovery key starts
+recovery, and the account unlocks 48 hours later. Each recovery key works once,
+and replacing your recovery keys stops the old ones from working. Every new
+sign-in is emailed to you, and sessions end sooner, so you confirm with your
+passkey or security key more often. AGI support cannot turn this off or add a
+sign-in method for you.
+
+Turning it off asks you to confirm with one of your passkeys or security keys.
+Your passkeys and security keys stay on the account, and your recovery keys are
+removed. Advanced Account Security is not available for an account your
+organization manages or for an account on a domain an organization has
+verified.
 
 ## Password
 
@@ -66,6 +89,11 @@ minutes, so a second change right after the first does not ask again.
   back in, and there is no screen from which support can remove a second factor.
   Email contact@agiworkforce.com from the address on the account, with your
   **User ID** if you have it.
+- **Lost every passkey and security key with Advanced Account Security on.** On
+  the screen that asks for your passkey, choose to use a recovery key. We email
+  you that recovery started, and you finish it on the same device once the 48
+  hours are up. Then add a new passkey or security key and replace your
+  recovery keys.
 
 ## Active sessions
 
