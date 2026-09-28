@@ -23590,6 +23590,7 @@
       "provider": "openai",
       "apiFamily": "responses",
       "adapter": "@agiworkforce/providers-openai",
+      "responseFormats": ["json_object", "json_schema"],
       "mediaInput": { "maxImagesPerRequest": 1500, "documentMediaTypes": ["application/pdf"] },
       "requestParameters": ["top_p", "user"],
       "trustModes": ["managed_cloud", "byok"],
@@ -23615,6 +23616,7 @@
       "provider": "openai",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-openai",
+      "responseFormats": ["json_object", "json_schema"],
       "mediaInput": { "maxImagesPerRequest": 1500, "documentMediaTypes": ["application/pdf"] },
       "requestParameters": [
         "top_p",
@@ -23645,6 +23647,7 @@
       "provider": "anthropic",
       "apiFamily": "messages",
       "adapter": "@agiworkforce/providers-anthropic",
+      "responseFormats": ["json_schema"],
       "mediaInput": {
         "maxImagesPerRequest": 600,
         "documentMediaTypes": ["application/pdf"],
@@ -23664,6 +23667,7 @@
       "provider": "google",
       "apiFamily": "generate_content",
       "adapter": "@agiworkforce/providers-google",
+      "responseFormats": ["json_object", "json_schema"],
       "mediaInput": {
         "maxImagesPerRequest": 3600,
         "documentMediaTypes": ["application/pdf"],
@@ -23719,6 +23723,7 @@
       "provider": "xai",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-xai",
+      "responseFormats": ["json_object", "json_schema"],
       "requestParameters": [
         "top_p",
         "stop",
@@ -23738,6 +23743,7 @@
       "provider": "deepseek",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-deepseek",
+      "responseFormats": ["json_object"],
       "requestParameters": ["top_p", "stop"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {},
@@ -34284,9 +34290,11 @@
     "qwen": {
       "dataRetentionClass": "unknown",
       "zeroDataRetentionAvailability": "unknown",
-      "trainsOnInputs": "unknown",
+      "trainsOnInputs": "never",
       "residencyRegions": null,
-      "note": "Checked and could not read: https://www.alibabacloud.com/help/en/model-studio/user-privacy-protection (404), https://www.alibabacloud.com/help/en/model-studio/data-security (404), https://qwen.ai/privacy (client-rendered shell, no policy text recoverable). Qwen routes through Alibaba Cloud Model Studio at dashscope.aliyuncs.com; its documentation pages are heavily client-rendered and returned no policy text to automated fetch this session.",
+      "source": "https://www.alibabacloud.com/help/en/model-studio/privacy-notice",
+      "verifiedOn": "2026-09-28",
+      "note": "Training: the Model Studio privacy notice (Security certifications and privacy, last updated 2026-09-28) states \"Alibaba Cloud strictly protects your data privacy and will never use your data for model training.\", and the QwenCloud account FAQ (https://docs.qwencloud.com/resources/faq-account, read 2026-09-28) states \"We strictly protect data privacy and never use your data for model training.\" Retention stays unknown: the notice says \"Alibaba Cloud Model Studio stores data generated from model and application calls.\" with no period and no zero-retention option, and neither page names a processing region. Qwen is served through the Alibaba Cloud Model Studio (DashScope) account behind this provider id. Earlier reads failed at https://www.alibabacloud.com/help/en/model-studio/user-privacy-protection (404), https://www.alibabacloud.com/help/en/model-studio/data-security (404) and https://qwen.ai/privacy (client-rendered).",
       "cacheTokenBillingClass": "unknown"
     },
     "moonshot": {

@@ -13,17 +13,6 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | partials/chat-gates 74e515dab, anchored after merge 05a3bc8a0: json_object and json_schema now reach OpenAI (response_format on chat completions, text.format on responses) and Gemini (responseMimeType plus responseJsonSchema on tool-less turns) as native structured output when the registry marks the dispatched model structuredOutput. Anthropic and the OpenAI-compatible providers still get the enforced directive plus validation; queued as S91.13 in this lane's batch 5. | handler |
+| platform | partial | partials/chat-gates 9e702dd23: native structured output is in place for OpenAI (chat completions and responses), Gemini, xAI and DeepSeek, and for Anthropic through output_config.format when the schema fits its documented subset. The other chat-completions harnesses (Mistral, Groq, Together, DeepInfra, Novita, Perplexity, Qwen, Moonshot, Zhipu, MiniMax, OpenRouter, Vercel gateway, NVIDIA NIM, Workers AI, and the two relay gateways) list no response formats yet, so they still get the directive; each needs its provider's own page checked before it is listed. Queued in this lane. | handler |
 
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/json-schema-mode.ts:58-58`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:5090-5090`, `apps/web/app/api/llm/v1/chat/completions/lib/canonical-request.ts:140-140`, `packages/ai/providers/openai/src/translate.ts:298-298`
-
-## S91.23: Exact-selection enforcement.
-
-- Done when: An explicitly selected model is enforced end to end (never silently replaced).
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Chat completions keep an explicit model and check the plan, but the Code agent route runs whatever model it is sent with no plan-tier check (F24), and the Code page sends claude-sonnet-5 for Auto. | handler |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:1744-1749`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:118-144`
+Code: `apps/web/app/api/llm/v1/chat/completions/lib/canonical-request.ts:154-161`, `packages/ai/providers/openai/src/translate.ts:279-279`, `packages/ai/providers/anthropic/src/translate.ts:282-297`, `packages/ai/providers/google/src/translate.ts:170-170`

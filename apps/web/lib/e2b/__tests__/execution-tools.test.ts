@@ -120,10 +120,19 @@ describe('routeExecutionTool, output cap', () => {
     expect(result.output).toMatch(/output truncated/i);
   });
 
+  it('hands back the redacted output beyond the cap so it can be kept', async () => {
+    const big = `${'a'.repeat(MAX_EXECUTION_OUTPUT_BYTES)} tail E2B_API_KEY`;
+    const executor = mockExecutor({ runCode: vi.fn(async () => ({ ok: true, output: big })) });
+    const result = await routeExecutionTool(executor, EXECUTE_CODE_TOOL, { code: 'x' });
+    expect(result.overflow?.totalChars).toBe(big.length);
+    expect(result.overflow?.kept.endsWith(' tail the sandbox credential')).toBe(true);
+  });
+
   it('passes through small output unchanged', async () => {
     const executor = mockExecutor({ runCode: vi.fn(async () => ({ ok: true, output: 'small' })) });
     const result = await routeExecutionTool(executor, EXECUTE_CODE_TOOL, { code: 'x' });
     expect(result.output).toBe('small');
+    expect(result.overflow).toBeUndefined();
   });
 });
 

@@ -34,6 +34,7 @@ const cloudModules = [
   'managed-cloud-project-knowledge-client',
   'resumable-uploads',
   'managed-cloud-resumable-upload-client',
+  'data-export',
   'domain-events',
   'tool-events',
   'agent-events',

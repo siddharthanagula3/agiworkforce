@@ -9,6 +9,7 @@ export type {
   ObjectStorageProvider,
   ObjectStore,
   PendingMultipartUpload,
+  PresignGetInput,
   PresignPutInput,
   PresignUploadPartInput,
   PutObjectInput,
@@ -80,12 +81,14 @@ export {
 } from './adapters/s3';
 
 export {
+  bindPresignedDownload,
   bindPresignedUpload,
   bindPresignedUploadPart,
   isPresignedUrlExpired,
   presignedUrlExpiresAt,
   MAX_MULTIPART_PART_NUMBER,
   PRESIGNED_URL_MAX_TTL_SECONDS,
+  type BoundPresignDownload,
   type BoundPresignUpload,
   type BoundPresignUploadPart,
 } from './presign';

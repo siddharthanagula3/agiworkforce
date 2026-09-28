@@ -6,17 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S95.08: OCR worker.
-
-- Done when: Scanned (image-only) pages are OCR-ed.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Scanned PDF pages in project knowledge are read by a vision model, but the OCR budget uses the uploader's own subscription row (subscription?.plan_tier), so Free/Team-seat members resolve to the wrong tier; chat attachments get no OCR. | handler |
-
-Code: `apps/web/lib/server/scanned-document-text.ts:66-70`, `apps/web/app/api/projects/[id]/knowledge-files/route.ts:430-442`
-
 ## S95.12: Preview generator.
 
 - Done when: Previews are generated for non-image files.
@@ -24,39 +13,3 @@ Code: `apps/web/lib/server/scanned-document-text.ts:66-70`, `apps/web/app/api/pr
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | Previews are rendered in the browser only (mammoth DOCX, iframe PDF, CSV grid for generated artifacts); nothing generates stored previews for uploaded files. | handler |
-
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:284-299`
-
-## S95.21: Export packaging.
-
-- Done when: Exports are packaged (archive of files and metadata).
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Account export is a JSON of metadata with authenticated media download links, and project export is JSON with extracted text; nothing packages original bytes into an archive. | handler |
-
-Code: `apps/web/app/api/user/export/route.ts:314-320`, `apps/web/app/api/projects/[id]/export/route.ts:65-82`
-
-## S95.22: File conversion.
-
-- Done when: Files can be converted between formats server-side.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Conversion exists only for generated content (client-side PDF/DOCX export of artifacts, server workbook builder for generated spreadsheets); there is no service to convert an uploaded file. | handler |
-
-Code: `apps/web/features/chat/services/document-export-service.ts:467-470`, `apps/web/lib/services/managed-office-file-service.ts:26-26`
-
-## S95.23: Storage-quota accounting.
-
-- Done when: Storage use is accounted against the plan allowance.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Only project knowledge storage is summed against a cap, and the cap reads the uploader's own subscription row (Free/Team seats resolve to 0 bytes, live E034); Library media has no storage accounting at all. | handler |
-
-Code: `apps/web/app/api/projects/[id]/knowledge-files/route.ts:381-402`

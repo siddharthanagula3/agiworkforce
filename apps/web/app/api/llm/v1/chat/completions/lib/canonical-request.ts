@@ -12,6 +12,7 @@ import {
 } from '@agiworkforce/provider-protocol';
 import {
   getGatewayHarness,
+  getHarnessResponseFormats,
   getModelMetadataById,
   getModelRegistryFacts,
   getRegistryRoute,
@@ -152,7 +153,9 @@ export function toCanonicalChatRequest(processed: ProcessedRequest): ChatRequest
   applyRequestParameters(chatRequest, llmRequest.requestParameters, llmRequest.model, harnessId);
   if (
     llmRequest.responseFormat &&
-    getModelMetadataById(llmRequest.model)?.capabilities.json === true
+    harnessId &&
+    getModelMetadataById(llmRequest.model)?.capabilities.json === true &&
+    getHarnessResponseFormats(harnessId).includes(llmRequest.responseFormat.type)
   ) {
     chatRequest.responseFormat = llmRequest.responseFormat;
   }

@@ -322,17 +322,26 @@ asks for. Admitting the manage scope is an owner decision, like `gmail.modify`
 and Box's `root_readwrite`.
 
 Snowflake and Databricks host MCP servers per account, so there is no single
-endpoint to pin; a user adds one by URL as a custom connector, with the OAuth
-client they registered at the vendor under Advanced settings. Neither page says
-whether the server publishes MCP authorization metadata, which the custom
-connector sign-in needs, so that part is unverified. Snowflake-managed
-servers (GA) live at
+endpoint to pin; a user adds one by URL as a custom connector, as in Claude
+(support.claude.com/en/articles/11175166, read 2026-09-28). Connecting the
+Snowflake or Databricks card opens the custom connector form with the vendor's
+name, its URL format, a link to its documentation and the OAuth fields open
+(`apps/web/lib/connectors/account-url-connectors.ts`), and a URL on either
+vendor's hosts is refused unless its path is that vendor's MCP path. Neither
+vendor registers clients dynamically, so the user signs in with an OAuth client
+their administrator created at the vendor, with this deployment's redirect URI,
+or with a personal access token as the bearer token. Neither page says whether
+the server publishes MCP authorization metadata, which the custom connector
+sign-in needs, so the OAuth path is unverified until tried against a real
+account. Snowflake-managed servers (GA) live at
 `https://<account_url>/api/v2/databases/<db>/schemas/<schema>/mcp-servers/<name>`
-and use Snowflake OAuth
+and use Snowflake OAuth or a programmatic access token
 (https://docs.snowflake.com/en/user-guide/snowflake-cortex/cortex-agents-mcp).
-Databricks managed servers (Public Preview) live on the workspace host, for
-example `https://<workspace-hostname>/api/2.0/mcp/sql`, with a scope per server
-(https://docs.databricks.com/aws/en/generative-ai/mcp/managed-mcp).
+Databricks managed servers (Public Preview, page updated 2026-09-21) live on
+the workspace host, for example `https://<workspace-hostname>/api/2.0/mcp/sql`,
+with a scope per server
+(https://docs.databricks.com/aws/en/generative-ai/mcp/managed-mcp and
+/agents/mcp-tools/connect-clients).
 
 ### Notion
 

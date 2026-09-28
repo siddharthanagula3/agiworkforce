@@ -1,5 +1,6 @@
 import countryToCurrency, { type Countries } from 'country-to-currency';
 import {
+  currencyMinorUnitDigits,
   getPublishedPlanPriceCents,
   type BillingInterval,
   type BillingPlanTier,
@@ -90,5 +91,5 @@ export function formatLocalizedPrice(
     currencyDisplay: 'narrowSymbol',
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
-  }).format(amountMinor / 100);
+  }).format(amountMinor / 10 ** currencyMinorUnitDigits(normalizedCurrency));
 }

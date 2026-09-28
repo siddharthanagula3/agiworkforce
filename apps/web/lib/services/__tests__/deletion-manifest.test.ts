@@ -208,6 +208,8 @@ describe('accountErasureProgress', () => {
     backupObjectsFailed: 0,
     knowledgeObjectsDeleted: 0,
     knowledgeObjectsFailed: 0,
+    exportObjectsDeleted: 0,
+    exportObjectsFailed: 0,
     avatarObjectsDeleted: 0,
     avatarObjectsFailed: 0,
     cacheKeysDeleted: 0,
