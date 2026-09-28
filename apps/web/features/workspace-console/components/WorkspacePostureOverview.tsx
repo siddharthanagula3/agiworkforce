@@ -1,5 +1,6 @@
 'use client';
 
+import { translateUiPlural } from '@agiworkforce/ui';
 import Link from 'next/link';
 import { AlertTriangle, ArrowRight, Check, Minus } from 'lucide-react';
 
@@ -231,7 +232,10 @@ export function WorkspacePostureOverview() {
           Read live from this workspace&rsquo;s configuration on{' '}
           {new Date(posture.generatedAt).toLocaleString()}.{' '}
           {attentionCount > 0
-            ? `${attentionCount} ${attentionCount === 1 ? 'item needs' : 'items need'} attention.`
+            ? translateUiPlural('settings', 'counts.itemsNeedAttention', attentionCount, {
+                one: '{{count}} item needs attention.',
+                other: '{{count}} items need attention.',
+              })
             : 'Nothing is currently flagged.'}
         </p>
       </header>

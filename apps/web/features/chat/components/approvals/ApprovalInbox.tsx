@@ -2,7 +2,14 @@
 
 import { useCallback, useMemo, useState } from 'react';
 import { Check, ChevronRight, Loader2, ShieldCheck, X } from 'lucide-react';
-import { Button, Popover, PopoverContent, PopoverTrigger, Textarea } from '@agiworkforce/ui';
+import {
+  Button,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  Textarea,
+  translateUiPlural,
+} from '@agiworkforce/ui';
 import { TOOL_APPROVAL_GUIDANCE_MAX_LENGTH } from '@agiworkforce/cloud-contracts';
 import { TOOL_APPROVAL_ACTION_LABELS } from '@agiworkforce/types';
 import type { Message } from '@shared/stores/web-chat-store';
@@ -167,7 +174,10 @@ export function ApprovalInbox({
             <p className="text-xs text-muted-foreground">
               {approvals.length === 0
                 ? 'No tools are waiting for a decision.'
-                : `${approvals.length} tool ${approvals.length === 1 ? 'request needs' : 'requests need'} your review.`}
+                : translateUiPlural('chat', 'counts.toolRequestsNeedReview', approvals.length, {
+                    one: '{{count}} tool request needs your review.',
+                    other: '{{count}} tool requests need your review.',
+                  })}
             </p>
           </div>
           <ShieldCheck className="h-4 w-4 text-muted-foreground" aria-hidden="true" />

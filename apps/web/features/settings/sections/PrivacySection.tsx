@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
 import { useRouter } from 'next/navigation';
-import { Switch, useConfirm } from '@agiworkforce/ui';
+import { Switch, useConfirm, translateUiPlural } from '@agiworkforce/ui';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import {
@@ -342,7 +342,10 @@ export function PrivacySection() {
         }
       }
       setConversationActionNotice(
-        affectedCount === 1 ? 'Archived 1 chat.' : `Archived ${affectedCount} chats.`,
+        translateUiPlural('settings', 'counts.archivedChats', affectedCount, {
+          one: 'Archived {{count}} chat.',
+          other: 'Archived {{count}} chats.',
+        }),
       );
     } catch (caught) {
       setConversationActionError(toUserMessage(caught, 'Failed to archive chats'));
@@ -368,7 +371,11 @@ export function PrivacySection() {
     const scope =
       chatCount === null
         ? 'Every chat in the current workspace, active and archived, will be removed from your history'
-        : `All ${chatCount} chat${chatCount === 1 ? '' : 's'} in the current workspace, active and archived, will be removed from your history`;
+        : translateUiPlural('settings', 'counts.allChatsRemoved', chatCount, {
+            one: 'All {{count}} chat in the current workspace, active and archived, will be removed from your history',
+            other:
+              'All {{count}} chats in the current workspace, active and archived, will be removed from your history',
+          });
     const confirmed = await confirmDestructive({
       title: 'Delete all chats in this workspace?',
       description: `${scope}. You can restore them from Settings > Privacy > Recently deleted for 30 days. Memories learned from these chats stay until you delete them in Settings > Memory.`,
@@ -387,7 +394,10 @@ export function PrivacySection() {
       }
       router.replace('/chat');
       setConversationActionNotice(
-        affectedCount === 1 ? 'Deleted 1 chat.' : `Deleted ${affectedCount} chats.`,
+        translateUiPlural('settings', 'counts.deletedChats', affectedCount, {
+          one: 'Deleted {{count}} chat.',
+          other: 'Deleted {{count}} chats.',
+        }),
       );
     } catch (caught) {
       setConversationActionError(toUserMessage(caught, 'Failed to delete chats'));

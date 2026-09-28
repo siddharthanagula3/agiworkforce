@@ -19,6 +19,7 @@ import {
   Label,
   Spinner,
   useConfirmAction,
+  translateUiPlural,
 } from '@agiworkforce/ui';
 import { toast } from 'sonner';
 
@@ -49,7 +50,13 @@ function parseLimit(value: string): LimitField {
 }
 
 function keyCountLabel(count: number): string {
-  return count === 1 ? '1 key' : `${count.toLocaleString()} keys`;
+  return translateUiPlural(
+    'settings',
+    'counts.apiKeys',
+    count,
+    { one: '{{value}} key', other: '{{value}} keys' },
+    { value: count.toLocaleString() },
+  );
 }
 
 function projectUsageLabel(
@@ -189,7 +196,17 @@ export function ProjectsPanel() {
       title: `Archive ${project.name}?`,
       description:
         keys > 0
-          ? `Its ${keyCountLabel(keys)} ${keys === 1 ? 'is' : 'are'} revoked, and requests made with ${keys === 1 ? 'it' : 'them'} stop working at once. An archived project cannot be restored.`
+          ? translateUiPlural(
+              'settings',
+              'counts.archiveProjectKeys',
+              keys,
+              {
+                one: 'Its {{value}} key is revoked, and requests made with it stop working at once. An archived project cannot be restored.',
+                other:
+                  'Its {{value}} keys are revoked, and requests made with them stop working at once. An archived project cannot be restored.',
+              },
+              { value: keys.toLocaleString() },
+            )
           : 'An archived project cannot be restored, and no new key can be created in it.',
       confirmLabel: 'Archive project',
       onConfirm: async () => {

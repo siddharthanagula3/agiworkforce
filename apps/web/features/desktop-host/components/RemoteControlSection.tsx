@@ -7,7 +7,7 @@ import {
   getHostBridge,
   type RemoteControlState,
 } from '@agiworkforce/local-runtime-contract';
-import { Spinner, useConfirmAction } from '@agiworkforce/ui';
+import { Spinner, useConfirmAction, translateUiPlural } from '@agiworkforce/ui';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
 import { useDesktopHost } from '../lib/host';
@@ -200,7 +200,10 @@ export function RemoteControlSection() {
         <p className="text-xs text-foreground" aria-live="polite">
           {`Connected to ${state?.phoneName ?? 'your phone'}`}
           {state && state.attachedSessions > 0
-            ? ` · ${state.attachedSessions} ${state.attachedSessions === 1 ? 'session' : 'sessions'} open on the phone`
+            ? ` · ${translateUiPlural('settings', 'counts.phoneSessions', state.attachedSessions, {
+                one: '{{count}} session open on the phone',
+                other: '{{count}} sessions open on the phone',
+              })}`
             : ''}
         </p>
       ) : null}

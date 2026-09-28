@@ -83,5 +83,9 @@
     "thinkingState": "Thinking: {{state}}",
     "unavailable": "Unavailable",
     "visionCapability": "Vision"
+  },
+  "counts": {
+    "concurrentAnswers_one": "Your plan runs {{count}} answer at a time, so the rest start as each one finishes.",
+    "concurrentAnswers_other": "Your plan runs {{count}} answers at a time, so the rest start as each one finishes."
   }
 }

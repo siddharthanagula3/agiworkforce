@@ -1,5 +1,6 @@
 'use client';
 
+import { translateUiPlural } from '@agiworkforce/ui';
 import { useState } from 'react';
 import { BarChart3, Download } from 'lucide-react';
 import { formatCredits } from '@agiworkforce/types';
@@ -290,9 +291,17 @@ export function WorkspaceUsageAnalytics() {
           </p>
           {usage.freshness.unsettledRequests > 0 ? (
             <p role="status" className="mt-1">
-              {compact(usage.freshness.unsettledRequests)}{' '}
-              {usage.freshness.unsettledRequests === 1 ? 'request is' : 'requests are'} awaiting
-              settlement. Their final usage is not included above.
+              {translateUiPlural(
+                'settings',
+                'counts.requestsAwaitingSettlement',
+                usage.freshness.unsettledRequests,
+                {
+                  one: '{{value}} request is awaiting settlement. Their final usage is not included above.',
+                  other:
+                    '{{value}} requests are awaiting settlement. Their final usage is not included above.',
+                },
+                { value: compact(usage.freshness.unsettledRequests) },
+              )}
             </p>
           ) : null}
         </div>
