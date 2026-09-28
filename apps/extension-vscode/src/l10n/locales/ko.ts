@@ -448,6 +448,13 @@ const ko = {
     '터미널에서 해당 API 키를 입력하세요. 내 키 세션과 로컬 세션은 이 키로 검색하며, 관리형 세션에는 필요하지 않습니다.',
   'webSearchSetup.unavailable':
     'AGI Workforce: 이 AGI CLI는 저장할 수 있는 검색 키를 알려 주지 않습니다. VS Code에서 웹 검색을 설정하려면 AGI CLI를 업데이트하세요.',
+  'pluginUpdate.action': '업데이트',
+  'pluginUpdate.progress': 'AGI Workforce: {name} 업데이트 중',
+  'pluginUpdate.upToDate': 'AGI Workforce: {name}은(는) 이미 최신 상태입니다.',
+  'pluginUpdate.updated': 'AGI Workforce: {name}을(를) 업데이트했습니다.',
+  'pluginUpdate.updatedTo': 'AGI Workforce: {name}을(를) {to}(으)로 업데이트했습니다.',
+  'pluginUpdate.updatedFromTo':
+    'AGI Workforce: {name}을(를) {from}에서 {to}(으)로 업데이트했습니다.',
 };
 
 export default ko;

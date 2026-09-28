@@ -681,6 +681,12 @@ const ru = {
     'Введите его ключ API в терминале. Сеансы с вашим ключом и локальные сеансы ищут с ним; управляемым сеансам ключ не нужен.',
   'webSearchSetup.unavailable':
     'AGI Workforce: эта AGI CLI не сообщает, какие ключи поиска она может сохранить. Обновите AGI CLI, чтобы настроить веб-поиск из VS Code.',
+  'pluginUpdate.action': 'Обновить',
+  'pluginUpdate.progress': 'AGI Workforce: обновление {name}',
+  'pluginUpdate.upToDate': 'AGI Workforce: {name} уже обновлён.',
+  'pluginUpdate.updated': 'AGI Workforce: {name} обновлён.',
+  'pluginUpdate.updatedTo': 'AGI Workforce: {name} обновлён до {to}.',
+  'pluginUpdate.updatedFromTo': 'AGI Workforce: {name} обновлён с {from} до {to}.',
 };
 
 export default ru;

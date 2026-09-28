@@ -761,6 +761,12 @@ const ar = {
     'أدخل مفتاح API الخاص بها في الطرفية. تبحث به جلسات مفتاحك والجلسات المحلية، ولا تحتاج الجلسات المُدارة إليه.',
   'webSearchSetup.unavailable':
     'AGI Workforce: لا يذكر AGI CLI هذا مفاتيح البحث التي يمكنه حفظها. حدّث AGI CLI لإعداد البحث على الويب من VS Code.',
+  'pluginUpdate.action': 'تحديث',
+  'pluginUpdate.progress': 'AGI Workforce: جارٍ تحديث {name}',
+  'pluginUpdate.upToDate': 'AGI Workforce: {name} محدّث بالفعل.',
+  'pluginUpdate.updated': 'AGI Workforce: تم تحديث {name}.',
+  'pluginUpdate.updatedTo': 'AGI Workforce: تم تحديث {name} إلى {to}.',
+  'pluginUpdate.updatedFromTo': 'AGI Workforce: تم تحديث {name} من {from} إلى {to}.',
 };
 
 export default ar;

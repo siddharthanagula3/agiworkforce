@@ -507,6 +507,12 @@ const en = {
     'Enter its API key in the terminal. Your key and Local sessions search with it; Managed sessions do not need one.',
   'webSearchSetup.unavailable':
     'AGI Workforce: this AGI CLI does not say which search keys it can save. Update the AGI CLI to set up web search from VS Code.',
+  'pluginUpdate.action': 'Update',
+  'pluginUpdate.progress': 'AGI Workforce: updating {name}',
+  'pluginUpdate.upToDate': 'AGI Workforce: {name} is already up to date.',
+  'pluginUpdate.updated': 'AGI Workforce: {name} was updated.',
+  'pluginUpdate.updatedTo': 'AGI Workforce: {name} was updated to {to}.',
+  'pluginUpdate.updatedFromTo': 'AGI Workforce: {name} was updated from {from} to {to}.',
 };
 
 export default en;

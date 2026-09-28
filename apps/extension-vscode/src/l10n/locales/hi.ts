@@ -516,6 +516,12 @@ const hi = {
     'टर्मिनल में उसकी API कुंजी डालें। आपकी कुंजी वाले और लोकल सत्र इससे खोजते हैं; प्रबंधित सत्रों को इसकी ज़रूरत नहीं है।',
   'webSearchSetup.unavailable':
     'AGI Workforce: यह AGI CLI नहीं बताता कि वह कौन-सी खोज कुंजियाँ सहेज सकता है। VS Code से वेब खोज सेट अप करने के लिए AGI CLI अपडेट करें।',
+  'pluginUpdate.action': 'अपडेट करें',
+  'pluginUpdate.progress': 'AGI Workforce: {name} अपडेट हो रहा है',
+  'pluginUpdate.upToDate': 'AGI Workforce: {name} पहले से अप टू डेट है।',
+  'pluginUpdate.updated': 'AGI Workforce: {name} अपडेट हो गया।',
+  'pluginUpdate.updatedTo': 'AGI Workforce: {name} {to} पर अपडेट हो गया।',
+  'pluginUpdate.updatedFromTo': 'AGI Workforce: {name} {from} से {to} पर अपडेट हो गया।',
 };
 
 export default hi;

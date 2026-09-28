@@ -400,6 +400,12 @@ const zh = {
     '在终端中输入其 API 密钥。使用你自己密钥的会话和本地会话会用它搜索；托管会话不需要。',
   'webSearchSetup.unavailable':
     'AGI Workforce：此 AGI CLI 未说明可以保存哪些搜索密钥。请更新 AGI CLI，以便在 VS Code 中设置网页搜索。',
+  'pluginUpdate.action': '更新',
+  'pluginUpdate.progress': 'AGI Workforce：正在更新 {name}',
+  'pluginUpdate.upToDate': 'AGI Workforce：{name} 已是最新版本。',
+  'pluginUpdate.updated': 'AGI Workforce：{name} 已更新。',
+  'pluginUpdate.updatedTo': 'AGI Workforce：{name} 已更新到 {to}。',
+  'pluginUpdate.updatedFromTo': 'AGI Workforce：{name} 已从 {from} 更新到 {to}。',
 };
 
 export default zh;

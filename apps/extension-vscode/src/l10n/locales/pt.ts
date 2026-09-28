@@ -621,6 +621,12 @@ const pt = {
     'Digite a chave de API no terminal. As sessões com sua chave e as locais pesquisam com ela; as sessões gerenciadas não precisam de uma.',
   'webSearchSetup.unavailable':
     'AGI Workforce: esta AGI CLI não informa quais chaves de pesquisa pode salvar. Atualize a AGI CLI para configurar a pesquisa na web pelo VS Code.',
+  'pluginUpdate.action': 'Atualizar',
+  'pluginUpdate.progress': 'AGI Workforce: atualizando {name}',
+  'pluginUpdate.upToDate': 'AGI Workforce: {name} já está atualizado.',
+  'pluginUpdate.updated': 'AGI Workforce: {name} foi atualizado.',
+  'pluginUpdate.updatedTo': 'AGI Workforce: {name} foi atualizado para {to}.',
+  'pluginUpdate.updatedFromTo': 'AGI Workforce: {name} foi atualizado de {from} para {to}.',
 };
 
 export default pt;

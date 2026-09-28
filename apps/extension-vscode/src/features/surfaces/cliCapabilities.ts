@@ -35,6 +35,7 @@ export const CLI_CAPABILITY_METHODS = {
   savedPermissions: 'listSavedPermissions',
   savedPermissionsRemove: 'removeSavedPermission',
   mcpInspect: 'inspectMcpServer',
+  pluginsUpdate: 'updatePlugin',
 } as const;
 
 export type CliCapability = keyof typeof CLI_CAPABILITY_METHODS;
@@ -53,6 +54,7 @@ export type CliFamily = keyof Pick<
   | 'mcpTools'
   | 'savedPermissions'
   | 'mcpInspect'
+  | 'pluginUpdates'
 >;
 
 const CLI_CAPABILITY_FAMILIES: Record<CliCapability, CliFamily> = {
@@ -86,6 +88,7 @@ const CLI_CAPABILITY_FAMILIES: Record<CliCapability, CliFamily> = {
   savedPermissions: 'savedPermissions',
   savedPermissionsRemove: 'savedPermissions',
   mcpInspect: 'mcpInspect',
+  pluginsUpdate: 'pluginUpdates',
 };
 
 const CLI_FAMILY_LABELS: Record<CliFamily, string> = {
@@ -101,6 +104,7 @@ const CLI_FAMILY_LABELS: Record<CliFamily, string> = {
   mcpTools: 'MCP server tool lists',
   savedPermissions: 'saved approvals',
   mcpInspect: 'MCP server details',
+  pluginUpdates: 'updating plugins',
 };
 
 export function cliCapabilityNotOffered(capability: CliCapability): string {
