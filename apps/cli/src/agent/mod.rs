@@ -497,10 +497,11 @@ impl AgentSession {
         Self::new_with_provider(model, sys_context, custom_system_prompt, provider)
     }
 
-    /// Refresh the account memory cache before a session is built, so the
-    /// system prompt carries what the account holds right now rather than what
-    /// this device last saw. Managed sessions only, and best effort: a session
-    /// still starts when the account is unreachable, with the cached copy.
+    /// Refresh the account memory cache and the workspace policy before a
+    /// session is built, so the system prompt carries what the account holds
+    /// right now rather than what this device last saw. Managed sessions only,
+    /// and best effort: a session still starts when the account is
+    /// unreachable, with the cached copy.
     pub async fn prime_account_memory(model: &str, provider_override: Option<&str>) {
         let Ok(provider) = models::resolve_selected_provider(model, provider_override) else {
             return;
@@ -517,12 +518,23 @@ impl AgentSession {
                 }
             }
         }
-        match crate::cloud::refresh_memory(PrivacyMode::Managed).await {
+        let (memory, policy) = tokio::join!(
+            crate::cloud::refresh_memory(PrivacyMode::Managed),
+            crate::cloud::workspace_policy::refresh(PrivacyMode::Managed),
+        );
+        match memory {
             Ok(_) => {}
             Err(error) if error.is_boundary() => crate::cloud::report_boundary_once(&error),
             Err(error) => crate::output::print_warn(&format!(
                 "using the account memory this device already had: {error}"
             )),
+        }
+        if let Err(error) = policy {
+            if !error.is_boundary() && crate::cloud::workspace_policy::governed() {
+                crate::output::print_warn(&format!(
+                    "using the workspace policy this device already had: {error}"
+                ));
+            }
         }
     }
 
@@ -802,6 +814,15 @@ impl AgentSession {
                 self.allowed_tools.as_deref(),
                 mcp_tool_definitions.as_deref(),
             );
+
+        if !planning_locked
+            && self.privacy_mode == PrivacyMode::Managed
+            && crate::plans::cached_plan_allows("image_generation")
+        {
+            tool_definitions.extend(crate::runtime::tool_catalog::image_tool_definitions(
+                self.allowed_tools.as_deref(),
+            ));
+        }
 
         if !self.disallowed_tools.is_empty() {
             tool_definitions.retain(|tool_definition| {
@@ -1748,6 +1769,9 @@ impl AgentSession {
             return vec!["Session: not saved, so no other client can open it".to_string()];
         };
         let mut lines = vec![format!("Session: {}", managed.session_id)];
+        if let Some(state) = managed.auto_routing.as_ref() {
+            lines.push(format!("Routing: {}", state.selection));
+        }
         if let Some(path) = self.managed_session_path.as_deref() {
             lines.push(format!(
                 "Writing: {}",
@@ -1779,6 +1803,94 @@ impl AgentSession {
             }
         }
         lines
+    }
+
+    pub(crate) fn routing_profile(&mut self, arg: &str) -> String {
+        use agiworkforce_model_registry::{RoutingTaskType, TrustMode};
+        let options = crate::models::gateway_models::cached_routing_profiles();
+        let describe = |id: &str| {
+            options
+                .iter()
+                .find(|option| option.id == id)
+                .map(|option| format!("{} ({id}): {}", option.label, option.description))
+                .unwrap_or_else(|| id.to_string())
+        };
+        let arg = arg.trim();
+        if arg.is_empty() {
+            let mut lines = vec![match self.managed_auto_routing() {
+                Some(state) => format!(
+                    "Routing: {} is choosing the model for each message; now {}.",
+                    state.selection,
+                    crate::model_catalog::display_name(&self.model)
+                ),
+                None => format!(
+                    "Routing: off. Every message goes to {}.",
+                    crate::model_catalog::display_name(&self.model)
+                ),
+            }];
+            lines.push("Profiles:".to_string());
+            for id in crate::routing::profile::PROFILE_IDS {
+                lines.push(format!("  {}", describe(id)));
+            }
+            lines.push("Choose one with /route <profile>.".to_string());
+            return lines.join("\n");
+        }
+        let Some(profile) = crate::routing::profile::parse(arg) else {
+            return format!(
+                "Unknown routing profile `{arg}`. Profiles: {}.",
+                crate::routing::profile::PROFILE_IDS.join(", ")
+            );
+        };
+        if self.privacy_mode != PrivacyMode::Managed
+            || !matches!(self.provider, models::Provider::ManagedCloud)
+        {
+            return format!(
+                "Routing profiles choose among your plan's cloud models, and this session runs {}. Switch to Managed with /model first.",
+                self.privacy_mode.trust_word()
+            );
+        }
+        if self.managed_session.is_none() || !self.session_persistence {
+            return "Routing profiles are kept with the saved session, and session saving is off for this run.".to_string();
+        }
+        let selection = crate::routing::profile::auto_selection(profile);
+        let tier = self
+            .auto_routing_tier
+            .clone()
+            .or_else(|| {
+                crate::tier_cache::read_tier_cache()
+                    .map(|cached| cached.tier.managed_auto_routing_tier().to_string())
+            })
+            .unwrap_or_else(|| "free".to_string());
+        let task_type = self
+            .managed_auto_routing()
+            .map(|state| crate::routing::classify::registry_task_type(state.task_type))
+            .unwrap_or(RoutingTaskType::SimpleChat);
+        match crate::model_catalog::resolve_auto_model(
+            selection,
+            task_type,
+            &tier,
+            TrustMode::ManagedCloud,
+        ) {
+            Ok(route) => {
+                self.model = route.provider_model_id.clone();
+                self.fallback_chain = None;
+                self.auto_routing_tier = Some(tier);
+                self.set_managed_auto_routing(Some(
+                    crate::runtime::session::ManagedSessionAutoRouting {
+                        selection: selection.to_string(),
+                        model_key: route.model_key,
+                        task_type: crate::routing::classify::developer_task_type(task_type),
+                        trust_mode: TrustMode::ManagedCloud,
+                    },
+                ));
+                format!(
+                    "Routing set to {}. The next message goes to {}, and each later one is routed again for its task.",
+                    describe(crate::routing::profile::id(profile)),
+                    crate::model_catalog::display_name(&self.model)
+                )
+            }
+            Err(error) => format!("That routing profile cannot run on your plan: {error}"),
+        }
     }
 
     pub(crate) fn session_control(&self, arg: &str) -> String {
@@ -2353,7 +2465,7 @@ mod tests {
     #[test]
     fn test_build_tool_definitions_count() {
         let defs = build_tool_definitions();
-        assert_eq!(defs.len(), 62);
+        assert_eq!(defs.len(), 65);
         assert!(defs.iter().any(|definition| definition.name == "skill"));
         assert!(defs.iter().any(|definition| definition.name == "agent"));
         assert!(defs

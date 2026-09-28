@@ -123,6 +123,15 @@ export const LibraryListResponseSchema = z.object({
 });
 export type LibraryListResponse = z.infer<typeof LibraryListResponseSchema>;
 
+export const FILE_TEXT_PREVIEW_KINDS = ['table', 'text'] as const;
+
+export const FileTextPreviewSchema = z.object({
+  kind: z.enum(FILE_TEXT_PREVIEW_KINDS),
+  text: z.string(),
+  truncated: z.boolean(),
+});
+export type FileTextPreview = z.infer<typeof FileTextPreviewSchema>;
+
 export const MEDIA_JOB_STATUSES = ['queued', 'running', 'failed', 'done', 'cancelled'] as const;
 export const MEDIA_JOB_KINDS = ['image', 'video'] as const;
 export const MEDIA_JOB_HISTORY_MAX = 50;

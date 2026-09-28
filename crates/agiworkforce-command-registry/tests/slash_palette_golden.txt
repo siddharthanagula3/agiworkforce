@@ -18,6 +18,9 @@
 /mcp
 /skills
 /agents
+/route
+/control
+/team [teams]
 /permissions [perms, approvals]
 /hooks
 /chrome
@@ -46,6 +49,7 @@
 /memory [mem]
 /btw
 /voice [v]
+/image [imagine]
 /theme
 /login
 /logout

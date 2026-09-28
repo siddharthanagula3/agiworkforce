@@ -72,6 +72,7 @@
     "runtimeSignInAction": "登录",
     "runtimeConsentLabel": "AI 权限",
     "runtimeConsent": "此应用想使用您的账户调用 AI。每次请求都会计入您的套餐用量。",
+    "runtimeConsentConnectors": "此应用想使用您的账户调用 AI，并读取或更改 {{apps}} 中的数据。它能看到这些应用返回的内容，每次请求都会计入您的套餐用量。",
     "runtimeAllow": "允许",
     "runtimeDecline": "不允许"
   },

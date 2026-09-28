@@ -124,11 +124,15 @@ function buildSettingsLayerGrant(
 ): CapabilityLayerGrant {
   const granted = allCapabilities();
   for (const capability of closedCapabilities) granted.delete(capability);
-  const sourceId =
-    closedCapabilities.length === 0
-      ? 'settings:none-configured'
-      : `kill-switch:${[...closedCapabilities].sort().join(',')}`;
-  return { layer: 'settings', sourceId, granted };
+  if (closedCapabilities.length === 0) {
+    return { layer: 'settings', sourceId: 'settings:none-configured', granted };
+  }
+  return {
+    layer: 'settings',
+    sourceId: `kill-switch:${[...closedCapabilities].sort().join(',')}`,
+    granted,
+    denialReason: 'temporarily_unavailable',
+  };
 }
 
 export interface CapabilityLimitResets {

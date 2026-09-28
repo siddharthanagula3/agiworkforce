@@ -69,25 +69,19 @@ Code: `apps/cli/src/lib.rs:3936-3940`, `apps/cli/src/oauth.rs:451-466`, `apps/we
 
 - Done when: A user of an SSO-enabled organization can start enterprise single sign-on from the sign-in screen and land signed in.
 - Wave: 3
-- Already works on: web
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| desktop | partial | Okta, OneLogin and PingOne sign-in now finish inside the desktop window (windowPolicy.ts:22-32), but an identity provider on a customer-owned domain opens in the system browser and cannot hand the session back. Move desktop sign-in to the system browser with a deep-link or loopback handoff, as the Claude and ChatGPT desktop apps do. | handler |
-
-Code: `apps/web/features/auth/identityAuthAdapter.tsx:267-269`, `apps/web/features/auth/identityAuthAdapter.tsx:185-197`, `apps/desktop/electron/windowPolicy.ts:16-22`, `apps/desktop/electron/windowPolicy.ts:56-72`
 
 ## S3.10: Organization-domain discovery.
 
 - Done when: Entering a work email discovers the organization's sign-in by the email domain and routes the user to it.
 - Wave: 3
-- Already works on: web
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| desktop | partial | Domain discovery works, but the organization identity provider it routes to opens in the system browser unless it is Google/Microsoft/Apple hosted, so the desktop sign-in stalls. | handler |
-
-Code: `apps/web/features/auth/identityAuthAdapter.tsx:267-269`, `apps/desktop/electron/windowPolicy.ts:16-22`, `apps/desktop/electron/windowPolicy.ts:56-72`
 
 ## S3.11: Passkey enrollment.
 

@@ -1,21 +1,19 @@
 export const CONNECTOR_SURFACES = ['web', 'mobile', 'desktop', 'cli', 'extension'] as const;
 export type ConnectorSurface = (typeof CONNECTOR_SURFACES)[number];
 
-export const CONNECTOR_SOURCES = ['user', 'github-app', 'custom', 'oauth'] as const;
-export type ConnectorSource = (typeof CONNECTOR_SOURCES)[number];
+import type {
+  ConnectorHealthState,
+  ConnectorSource,
+  ConnectorToolPermissionLevel,
+} from '@agiworkforce/types';
 
-export const CONNECTOR_HEALTH_STATES = [
-  'connected',
-  'connectable',
-  'needs-reauthorization',
-  'not-responding',
-  'not-configured',
-  'unsupported-here',
-] as const;
-export type ConnectorHealth = (typeof CONNECTOR_HEALTH_STATES)[number];
-
-export const CONNECTOR_TOOL_PERMISSION_LEVELS = ['allow', 'ask', 'deny'] as const;
-export type ConnectorToolPermissionLevel = (typeof CONNECTOR_TOOL_PERMISSION_LEVELS)[number];
+export {
+  CONNECTOR_HEALTH_STATES,
+  CONNECTOR_SOURCES,
+  CONNECTOR_TOOL_PERMISSION_LEVELS,
+} from '@agiworkforce/types';
+export type { ConnectorSource, ConnectorToolPermissionLevel };
+export type ConnectorHealth = ConnectorHealthState;
 
 export interface ConnectedConnector {
   id: string;
