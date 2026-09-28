@@ -18,7 +18,7 @@ nothing is left.
 | desktop | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
 | mobile | partial | Cloud images go through the same upload scanner gate (UPLOAD_SCAN_WEBHOOK_URL); Local mode only OCRs text. | flag-off |
 
-Code: `services/upload-scanner/src/server.ts:129-129`, `services/upload-scanner/src/server.ts:87-87`, `services/upload-scanner/src/server.ts:99-99`, `services/upload-scanner/src/clamd.ts:94-94`
+Code: `services/upload-scanner/src/server.ts:134-134`, `services/upload-scanner/src/server.ts:87-87`, `services/upload-scanner/src/server.ts:99-99`, `services/upload-scanner/src/clamd.ts:96-96`
 
 ## S43.02: Multiple-image comparison.
 
@@ -32,7 +32,7 @@ Code: `services/upload-scanner/src/server.ts:129-129`, `services/upload-scanner/
 | desktop | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
 | mobile | partial | Up to 5 photos per pick, but cloud images need the upload scanner (UPLOAD_SCAN_WEBHOOK_URL) in production. | flag-off |
 
-Code: `services/upload-scanner/src/server.ts:129-129`, `services/upload-scanner/src/server.ts:87-87`, `services/upload-scanner/src/server.ts:99-99`, `services/upload-scanner/src/clamd.ts:94-94`
+Code: `services/upload-scanner/src/server.ts:134-134`, `services/upload-scanner/src/server.ts:87-87`, `services/upload-scanner/src/server.ts:99-99`, `services/upload-scanner/src/clamd.ts:96-96`
 
 ## S43.03: Screenshot interpretation.
 
@@ -46,7 +46,7 @@ Code: `services/upload-scanner/src/server.ts:129-129`, `services/upload-scanner/
 | desktop | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
 | mobile | partial | Cloud images go through the same upload scanner gate (UPLOAD_SCAN_WEBHOOK_URL); Local mode only OCRs text. | flag-off |
 
-Code: `services/upload-scanner/src/server.ts:129-129`, `services/upload-scanner/src/server.ts:87-87`, `services/upload-scanner/src/server.ts:99-99`, `services/upload-scanner/src/clamd.ts:94-94`
+Code: `services/upload-scanner/src/server.ts:134-134`, `services/upload-scanner/src/server.ts:87-87`, `services/upload-scanner/src/server.ts:99-99`, `services/upload-scanner/src/clamd.ts:96-96`
 
 ## S43.04: Document-image interpretation.
 
@@ -60,7 +60,7 @@ Code: `services/upload-scanner/src/server.ts:129-129`, `services/upload-scanner/
 | desktop | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
 | mobile | partial | Cloud images go through the same upload scanner gate (UPLOAD_SCAN_WEBHOOK_URL); Local mode only OCRs text. | flag-off |
 
-Code: `services/upload-scanner/src/server.ts:129-129`, `services/upload-scanner/src/server.ts:87-87`, `services/upload-scanner/src/server.ts:99-99`, `services/upload-scanner/src/clamd.ts:94-94`
+Code: `services/upload-scanner/src/server.ts:134-134`, `services/upload-scanner/src/server.ts:87-87`, `services/upload-scanner/src/server.ts:99-99`, `services/upload-scanner/src/clamd.ts:96-96`
 
 ## S43.05: Chart interpretation.
 
@@ -74,7 +74,7 @@ Code: `services/upload-scanner/src/server.ts:129-129`, `services/upload-scanner/
 | desktop | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
 | mobile | partial | Cloud images go through the same upload scanner gate (UPLOAD_SCAN_WEBHOOK_URL); Local mode only OCRs text. | flag-off |
 
-Code: `services/upload-scanner/src/server.ts:129-129`, `services/upload-scanner/src/server.ts:87-87`, `services/upload-scanner/src/server.ts:99-99`, `services/upload-scanner/src/clamd.ts:94-94`
+Code: `services/upload-scanner/src/server.ts:134-134`, `services/upload-scanner/src/server.ts:87-87`, `services/upload-scanner/src/server.ts:99-99`, `services/upload-scanner/src/clamd.ts:96-96`
 
 ## S43.06: Diagram interpretation.
 
@@ -88,7 +88,7 @@ Code: `services/upload-scanner/src/server.ts:129-129`, `services/upload-scanner/
 | desktop | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
 | mobile | partial | Cloud images go through the same upload scanner gate (UPLOAD_SCAN_WEBHOOK_URL); Local mode only OCRs text. | flag-off |
 
-Code: `services/upload-scanner/src/server.ts:129-129`, `services/upload-scanner/src/server.ts:87-87`, `services/upload-scanner/src/server.ts:99-99`, `services/upload-scanner/src/clamd.ts:94-94`
+Code: `services/upload-scanner/src/server.ts:134-134`, `services/upload-scanner/src/server.ts:87-87`, `services/upload-scanner/src/server.ts:99-99`, `services/upload-scanner/src/clamd.ts:96-96`
 
 ## S43.07: Handwriting recognition.
 
@@ -102,7 +102,7 @@ Code: `services/upload-scanner/src/server.ts:129-129`, `services/upload-scanner/
 | desktop | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
 | mobile | partial | Cloud images go through the same upload scanner gate (UPLOAD_SCAN_WEBHOOK_URL); Local mode only OCRs text. | flag-off |
 
-Code: `services/upload-scanner/src/server.ts:129-129`, `services/upload-scanner/src/server.ts:87-87`, `services/upload-scanner/src/server.ts:99-99`, `services/upload-scanner/src/clamd.ts:94-94`
+Code: `services/upload-scanner/src/server.ts:134-134`, `services/upload-scanner/src/server.ts:87-87`, `services/upload-scanner/src/server.ts:99-99`, `services/upload-scanner/src/clamd.ts:96-96`
 
 ## S43.08: Visual text extraction.
 
@@ -115,7 +115,7 @@ Code: `services/upload-scanner/src/server.ts:129-129`, `services/upload-scanner/
 | web | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
 | desktop | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
 
-Code: `services/upload-scanner/src/server.ts:129-129`, `services/upload-scanner/src/server.ts:87-87`, `services/upload-scanner/src/server.ts:99-99`, `services/upload-scanner/src/clamd.ts:94-94`
+Code: `services/upload-scanner/src/server.ts:134-134`, `services/upload-scanner/src/server.ts:87-87`, `services/upload-scanner/src/server.ts:99-99`, `services/upload-scanner/src/clamd.ts:96-96`
 
 ## S43.12: Object counting.
 
@@ -129,7 +129,7 @@ Code: `services/upload-scanner/src/server.ts:129-129`, `services/upload-scanner/
 | desktop | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
 | mobile | partial | Cloud images go through the same upload scanner gate (UPLOAD_SCAN_WEBHOOK_URL); Local mode only OCRs text. | flag-off |
 
-Code: `services/upload-scanner/src/server.ts:129-129`, `services/upload-scanner/src/server.ts:87-87`, `services/upload-scanner/src/server.ts:99-99`, `services/upload-scanner/src/clamd.ts:94-94`
+Code: `services/upload-scanner/src/server.ts:134-134`, `services/upload-scanner/src/server.ts:87-87`, `services/upload-scanner/src/server.ts:99-99`, `services/upload-scanner/src/clamd.ts:96-96`
 
 ## S43.13: Scene comparison.
 
@@ -143,7 +143,7 @@ Code: `services/upload-scanner/src/server.ts:129-129`, `services/upload-scanner/
 | desktop | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
 | mobile | partial | Cloud images go through the same upload scanner gate (UPLOAD_SCAN_WEBHOOK_URL); Local mode only OCRs text. | flag-off |
 
-Code: `services/upload-scanner/src/server.ts:129-129`, `services/upload-scanner/src/server.ts:87-87`, `services/upload-scanner/src/server.ts:99-99`, `services/upload-scanner/src/clamd.ts:94-94`
+Code: `services/upload-scanner/src/server.ts:134-134`, `services/upload-scanner/src/server.ts:87-87`, `services/upload-scanner/src/server.ts:99-99`, `services/upload-scanner/src/clamd.ts:96-96`
 
 ## S43.14: Visual troubleshooting.
 
@@ -157,7 +157,7 @@ Code: `services/upload-scanner/src/server.ts:129-129`, `services/upload-scanner/
 | desktop | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
 | mobile | partial | Cloud images go through the same upload scanner gate (UPLOAD_SCAN_WEBHOOK_URL); Local mode only OCRs text. | flag-off |
 
-Code: `services/upload-scanner/src/server.ts:129-129`, `services/upload-scanner/src/server.ts:87-87`, `services/upload-scanner/src/server.ts:99-99`, `services/upload-scanner/src/clamd.ts:94-94`
+Code: `services/upload-scanner/src/server.ts:134-134`, `services/upload-scanner/src/server.ts:87-87`, `services/upload-scanner/src/server.ts:99-99`, `services/upload-scanner/src/clamd.ts:96-96`
 
 ## S43.17: Reference-image selection for another task.
 

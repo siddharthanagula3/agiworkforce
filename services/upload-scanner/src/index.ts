@@ -1,14 +1,14 @@
+import { LOCAL_CLAMD } from './clamd.ts';
 import { loadConfig } from './config.ts';
 import { refreshSignatures, startClamd, startFreshclam, type Daemon } from './daemons.ts';
 import { log } from './log.ts';
 import { createScannerServer } from './server.ts';
 
 const LISTEN_HOST = '0.0.0.0';
-const CLAMD = { host: '127.0.0.1', port: 3310 };
 const SHUTDOWN_GRACE_MS = 15_000;
 
 const config = loadConfig(process.env);
-const server = createScannerServer({ tokens: config.tokens, clamd: CLAMD });
+const server = createScannerServer({ tokens: config.tokens, clamd: LOCAL_CLAMD });
 const daemons: Daemon[] = [];
 let stopping = false;
 

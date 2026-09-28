@@ -54,7 +54,6 @@ function raisedEvents(): Set<string> {
  * entry here is a debt with an address, and a new one is a failure.
  */
 const UNRAISED: Readonly<Record<string, string>> = {
-  new_sign_in: 'the sign-in path records a login audit row and raises no notice',
   new_device: 'device_registrations is written by the device registration route without a notice',
   new_location: 'nothing compares the request location against previous sessions',
   passkey_added: 'passkeys are created by the provider SDK in the browser, with no server call',
@@ -64,7 +63,6 @@ const UNRAISED: Readonly<Record<string, string>> = {
   identity_linked:
     'lib/server/identity-account.ts audits the link at the authentication boundary, where no notification transport is available',
   sso_connection_changed: 'no route edits an enterprise connection',
-  recovery_requested: 'account recovery is started at the identity provider',
   account_deletion_scheduled:
     'app/api/user/delete-account/route.ts schedules the deletion and raises no notice',
 };

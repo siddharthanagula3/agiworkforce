@@ -99,12 +99,17 @@ async function scan(
   refuse(res, 503, 'The scanner could not complete the scan');
 }
 
-async function health(res: ServerResponse, clamd: ClamdAddress, now: () => number): Promise<void> {
+async function health(
+  res: ServerResponse,
+  clamd: ClamdAddress,
+  now: () => number,
+  requireFresh: boolean,
+): Promise<void> {
   try {
     const status = await readSignatureStatus(clamd, AbortSignal.timeout(HEALTH_DEADLINE_MS));
     const age = now() - status.publishedAt.getTime();
     const fresh = age <= SIGNATURE_MAX_AGE_MS;
-    respond(res, fresh ? 200 : 503, {
+    respond(res, fresh || !requireFresh ? 200 : 503, {
       status: fresh ? 'ok' : 'stale',
       engine: status.engine,
       signatures: {
@@ -134,8 +139,11 @@ export function createScannerServer(options: ScannerOptions): Server {
       void scan(req, res, options.clamd, maxBytes, deadlineMs);
       return;
     }
-    if (path === '/health' && (req.method === 'GET' || req.method === 'HEAD')) {
-      void health(res, options.clamd, now);
+    if (
+      (path === '/health' || path === '/health/signatures') &&
+      (req.method === 'GET' || req.method === 'HEAD')
+    ) {
+      void health(res, options.clamd, now, path === '/health/signatures');
       return;
     }
     refuse(res, 404, 'Not found');
