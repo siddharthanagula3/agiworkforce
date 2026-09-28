@@ -29,6 +29,8 @@ export type ChatFont = 'default' | 'sans' | 'serif' | 'dyslexic';
 
 export type VoiceSpeed = 'slow' | 'normal' | 'fast';
 
+export type FollowUpBehavior = 'queue' | 'steer';
+
 /**
  * SpeechSynthesisUtterance.rate. 1.05 was the hardcoded value before this was
  * a preference, so 'normal' keeps exactly what everyone already hears.
@@ -56,6 +58,8 @@ interface SettingsState {
   /** Composer microphone dictation. Read by the composer's dictation entry point. */
   dictationEnabled: boolean;
   codeBlockWrap: boolean;
+  followUpSuggestionsEnabled: boolean;
+  followUpBehavior: FollowUpBehavior;
   accentColor: AccentColor;
   highContrast: boolean;
   customCommands: CustomCommand[];
@@ -70,6 +74,8 @@ interface SettingsState {
   setNewChatsTemporary: (temporary: boolean) => void;
   setDictationEnabled: (enabled: boolean) => void;
   setCodeBlockWrap: (wrap: boolean) => void;
+  setFollowUpSuggestionsEnabled: (enabled: boolean) => void;
+  setFollowUpBehavior: (behavior: FollowUpBehavior) => void;
   setAccentColor: (accent: AccentColor) => void;
   setHighContrast: (on: boolean) => void;
   addCustomCommand: (cmd: Omit<CustomCommand, 'id'>) => void;
@@ -89,6 +95,8 @@ export const useSettingsStore = create<SettingsState>()(
       newChatsTemporary: false,
       dictationEnabled: true,
       codeBlockWrap: false,
+      followUpSuggestionsEnabled: true,
+      followUpBehavior: 'queue',
       accentColor: 'default',
       highContrast: false,
       customCommands: [],
@@ -117,6 +125,8 @@ export const useSettingsStore = create<SettingsState>()(
               : [...s.hiddenNavIds, id],
         })),
       setCodeBlockWrap: (wrap) => set({ codeBlockWrap: wrap }),
+      setFollowUpSuggestionsEnabled: (enabled) => set({ followUpSuggestionsEnabled: enabled }),
+      setFollowUpBehavior: (followUpBehavior) => set({ followUpBehavior }),
       setAccentColor: (accent) => set({ accentColor: accent }),
       setHighContrast: (on) => set({ highContrast: on }),
       addCustomCommand: (cmd) =>

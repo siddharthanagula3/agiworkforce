@@ -1,11 +1,7 @@
 import 'server-only';
 
 import { createError } from '@/lib/errors';
-import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
-import {
-  getKnowledgeStorageLimitBytes,
-  getKnowledgeStorageLimitErrorMessage,
-} from '@/lib/services/free-plan-entitlements';
+import { assertFileStorageAvailable, resolveFileStorageAllowance } from '@/lib/server/file-storage';
 import { logger } from '@/lib/logger';
 import { mapKnowledgeFileRow } from '@/lib/projects';
 import type { getUserScopedDb } from '@/lib/server/rls-db';
@@ -230,35 +226,10 @@ export async function checkProjectKnowledgeCapacity(
     throw createError.conflict(`This file is already in the project as "${duplicate.file_name}".`);
   }
 
-  const planTier = await resolveEntitledPlanTier(db, userId, {
-    workspaceOrganizationId: organizationId,
-  });
-  const storageLimitBytes = getKnowledgeStorageLimitBytes(planTier);
-  if (storageLimitBytes !== null) {
-    let usedBytes = 0;
-    try {
-      const [usage] = await db.query<{ total: string | number | null }>(
-        `select coalesce(sum(k.byte_count), 0) as total
-          from project_knowledge_files k
-           join user_projects p on p.id = k.project_id
-            and p.deleted_at is null
-          where p.user_id = $1
-            and p.organization_id is not distinct from $2::uuid
-            and k.deleted_at is null
-            and k.superseded_at is null`,
-        [userId, organizationId],
-      );
-      usedBytes = Number(usage?.total ?? 0);
-    } catch (error) {
-      if (!isSchemaNotReady(error)) throw error;
-    }
-    if (usedBytes + body.byteCount > storageLimitBytes) {
-      throw createError.validation(
-        getKnowledgeStorageLimitErrorMessage(planTier, storageLimitBytes),
-      );
-    }
-  }
-  return { status: 'ready', planTier };
+  const storageScope = { db, userId, organizationId };
+  const allowance = await resolveFileStorageAllowance(storageScope);
+  await assertFileStorageAvailable(storageScope, body.byteCount, allowance);
+  return { status: 'ready', planTier: allowance.planTier };
 }
 
 export async function findProjectKnowledgeFileByChecksum(

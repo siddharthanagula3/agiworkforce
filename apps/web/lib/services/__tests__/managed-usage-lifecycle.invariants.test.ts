@@ -92,6 +92,9 @@ interface RequestRow {
   finalErrorCode: string | null;
   providerStartedAtMs: number | null;
   clientDeliveredAtMs: number | null;
+  conversationId: string | null;
+  attemptOutcome: string | null;
+  attemptErrorClass: string | null;
 }
 
 interface ExtensionRow {
@@ -215,6 +218,23 @@ class LedgerDatabase {
     if (this.statementBarrier) await this.statementBarrier();
     const rows = this.dispatch(sql, params);
     return rows as T[];
+  }
+
+  async execute(sql: string, params: unknown[] = []): Promise<void> {
+    if (this.statementBarrier) await this.statementBarrier();
+    const request = this.requestFor(String(params[0]), String(params[1]));
+    if (sql.includes('set attempt_outcome = $3, attempt_error_class = $4')) {
+      if (request && request.attemptOutcome === null) {
+        request.attemptOutcome = String(params[2]);
+        request.attemptErrorClass = params[3] === null ? null : String(params[3]);
+      }
+      return;
+    }
+    if (sql.includes('set conversation_id = $3::uuid')) {
+      if (request && request.conversationId === null) request.conversationId = String(params[2]);
+      return;
+    }
+    throw new Error(`unhandled statement: ${sql.slice(0, 80)}`);
   }
 
   private dispatch(sql: string, params: unknown[]): Record<string, unknown>[] {
@@ -569,6 +589,9 @@ class LedgerDatabase {
         finalErrorCode: null,
         providerStartedAtMs: null,
         clientDeliveredAtMs: null,
+        conversationId: null,
+        attemptOutcome: null,
+        attemptErrorClass: null,
       };
       this.requests.set(`${userId}:${idempotencyKey}`, request);
     }
@@ -1600,6 +1623,116 @@ function meteredFeatures(): string[] {
   expect(unresolved, 'a metered feature name that cannot be resolved to its value').toEqual([]);
   return [...features].sort();
 }
+
+describe('how each generation attempt ended', () => {
+  let ledger: LedgerDatabase;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    ledger = new LedgerDatabase();
+    ledger.openAccount({ userId: USER_ID, allocatedMicrousd: 50_000_000 });
+  });
+
+  function requestRow(key: string): RequestRow {
+    const row = [...ledger.requests.values()].find((request) => request.idempotencyKey === key);
+    if (!row) throw new Error(`no request row for ${key}`);
+    return row;
+  }
+
+  it('links the attempt to the conversation it answered', async () => {
+    await reserveManagedUsageRequest({
+      ...reservationInput(ledger, 'attempt-conversation', 400_000),
+      conversationId: '0190a000-0000-7000-8000-0000000000c1',
+    });
+    expect(requestRow('attempt-conversation').conversationId).toBe(
+      '0190a000-0000-7000-8000-0000000000c1',
+    );
+  });
+
+  it('records a completed, a failed and a cancelled attempt, with the failure class', async () => {
+    const completed = await reserveManagedUsageRequest(
+      reservationInput(ledger, 'attempt-completed', 400_000),
+    );
+    await markManagedUsageProviderStarted(completed);
+    await finalizeManagedUsageRequest({
+      ...completed,
+      outcome: 'completed',
+      actualCostMicrousd: 300_000,
+    });
+
+    const failed = await reserveManagedUsageRequest(
+      reservationInput(ledger, 'attempt-failed', 400_000),
+    );
+    await markManagedUsageProviderStarted(failed);
+    await finalizeManagedUsageRequest({
+      ...failed,
+      outcome: 'failed',
+      attempt: { outcome: 'failed', errorClass: 'rate_limit' },
+      actualCostMicrousd: 0,
+    });
+
+    const cancelled = await reserveManagedUsageRequest(
+      reservationInput(ledger, 'attempt-cancelled', 400_000),
+    );
+    await markManagedUsageProviderStarted(cancelled);
+    await finalizeManagedUsageRequest({
+      ...cancelled,
+      outcome: 'failed',
+      attempt: { outcome: 'cancelled', errorClass: 'aborted' },
+      actualCostMicrousd: 0,
+    });
+
+    expect(requestRow('attempt-completed')).toMatchObject({
+      attemptOutcome: 'completed',
+      attemptErrorClass: null,
+    });
+    expect(requestRow('attempt-failed')).toMatchObject({
+      attemptOutcome: 'failed',
+      attemptErrorClass: 'rate_limit',
+    });
+    expect(requestRow('attempt-cancelled')).toMatchObject({
+      attemptOutcome: 'cancelled',
+      attemptErrorClass: null,
+    });
+    assertLedgerInvariants(ledger);
+  });
+
+  it('keeps the first recorded outcome when the turn is finalized again', async () => {
+    const reservation = await reserveManagedUsageRequest(
+      reservationInput(ledger, 'attempt-twice', 400_000),
+    );
+    await markManagedUsageProviderStarted(reservation);
+    await finalizeManagedUsageRequest({
+      ...reservation,
+      outcome: 'completed',
+      actualCostMicrousd: 300_000,
+    });
+    await finalizeManagedUsageRequest({
+      ...reservation,
+      outcome: 'failed',
+      attempt: { outcome: 'failed', errorClass: 'api_timeout' },
+      actualCostMicrousd: 0,
+    });
+    expect(requestRow('attempt-twice')).toMatchObject({
+      attemptOutcome: 'completed',
+      attemptErrorClass: null,
+    });
+  });
+
+  it('records nothing for a finalization that pauses rather than ends the attempt', async () => {
+    const reservation = await reserveManagedUsageRequest(
+      reservationInput(ledger, 'attempt-paused', 400_000),
+    );
+    await markManagedUsageProviderStarted(reservation);
+    await finalizeManagedUsageRequest({
+      ...reservation,
+      outcome: 'completed',
+      attempt: null,
+      actualCostMicrousd: 200_000,
+    });
+    expect(requestRow('attempt-paused').attemptOutcome).toBeNull();
+  });
+});
 
 describe('a turn that delivered nothing', () => {
   let ledger: LedgerDatabase;

@@ -20,7 +20,7 @@ import { CONTACT_EMAIL, contactMailto } from '@/lib/legal-constants';
 export const metadata = buildMetadata({
   title: 'Partners',
   description:
-    'There is no formal partner program yet. The released CLI speaks MCP, so connectors built against the open protocol work with it now. Here is what we are looking for.',
+    'There is no formal partner program yet. The released CLI speaks MCP, so connectors built against the open protocol work with it now, and developers can list plugins in the reviewed community directory. Here is what we are looking for.',
   path: '/partners',
 });
 
@@ -29,6 +29,11 @@ const OPPORTUNITIES = [
     meta: 'Available today',
     title: 'Build on MCP',
     body: 'The released AGI CLI implements the Model Context Protocol, so a connector or tool server you build against the open spec works with it now, behind explicit tool-approval prompts. Desktop is coming soon. You do not need an agreement with us, or our permission, to build one.',
+  },
+  {
+    meta: 'Available today',
+    title: 'List a plugin in the directory',
+    body: 'Upload or create a plugin in AGI, then submit it from its page in the plugin directory. Every submission is scanned and reviewed before it is listed; once it is approved anyone can find and install it, and you ship an update by submitting the next version.',
   },
   {
     meta: 'Looking for',
@@ -54,9 +59,9 @@ export default function PartnersPage() {
         <PageHero
           id="agi-partners-title"
           eyebrow="Partners"
-          title="No program yet. One open door."
-          em="One open door."
-          lede="There is no partner program yet: no application form, no directory, no reseller agreement. What is real today is that AGI speaks MCP, so anything built on that protocol already works with it."
+          title="No program yet. Two open doors."
+          em="Two open doors."
+          lede="There is no partner program yet: no reseller agreement, no tiers, no certification. What is real today is that AGI speaks MCP, so anything built on that protocol already works with it, and that a plugin you build can be listed in the community directory once it is reviewed."
           ctas={[
             { href: contactMailto('Partnership enquiry'), label: 'Email partnerships' },
             { href: '/apps', label: 'See tools & connectors', variant: 'secondary' },
@@ -70,7 +75,7 @@ export default function PartnersPage() {
             <div>
               <Eyebrow>Where we are</Eyebrow>
               <h2 className="agi-ds-h2" id="agi-partners-opps-title">
-                One thing that works now, two we are exploring.
+                Two things that work now, two we are exploring.
               </h2>
               <Prose>
                 Each of these says plainly whether it is available today or still a conversation, so

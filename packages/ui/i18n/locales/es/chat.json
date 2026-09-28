@@ -67,7 +67,13 @@
     "sharedFrom": "Compartido desde AGI",
     "sharedWithWorkspace": "Compartido con tu espacio de trabajo",
     "renderFailed": "No se pudo mostrar este artefacto: {{error}}",
-    "svgUnavailable": "Este SVG no contenía nada que se pudiera mostrar de forma segura."
+    "svgUnavailable": "Este SVG no contenía nada que se pudiera mostrar de forma segura.",
+    "runtimeSignIn": "Inicia sesión para usar la IA y los datos guardados de esta app.",
+    "runtimeSignInAction": "Iniciar sesión",
+    "runtimeConsentLabel": "Permiso de IA",
+    "runtimeConsent": "Esta app quiere usar IA con tu cuenta. Cada solicitud cuenta para el uso de tu plan.",
+    "runtimeAllow": "Permitir",
+    "runtimeDecline": "No permitir"
   },
   "sidebar": {
     "activeConversation": "Conversación activa",

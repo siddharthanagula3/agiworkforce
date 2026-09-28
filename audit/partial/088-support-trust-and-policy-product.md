@@ -232,18 +232,6 @@ Code: `apps/mobile/app/(app)/settings/memory-import.tsx:5-8`
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S88.24: Policy-version history.
-
-- Done when: Users can see earlier versions of the terms and policies and what changed between them.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Policies show the current revision date and material changes are listed on /changelog, but earlier versions of the policy text are not published. | ui |
-| desktop | partial | Policies show the current revision date and material changes are listed on /changelog, but earlier versions of the policy text are not published. | ui |
-
-Code: `apps/web/app/privacy/page.tsx:1249-1253`, `apps/web/app/signup/TermsGate.tsx:108-110`, `apps/web/lib/server/terms.ts:7-7`
-
 ## S88.26: Security/compliance evidence portal.
 
 - Done when: Customers can review security and compliance evidence (reports, certifications, questionnaires) in a trust portal.
@@ -252,7 +240,7 @@ Code: `apps/web/app/privacy/page.tsx:1249-1253`, `apps/web/app/signup/TermsGate.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The trust page is a posture ledger; there are no audit reports or evidence documents to request or download (none exist yet, as the page says). | ui, handler |
-| desktop | partial | The trust page is a posture ledger; there are no audit reports or evidence documents to request or download (none exist yet, as the page says). | ui, handler |
+| web | partial | Owner: no SOC 2 report, ISO 27001 certificate or penetration test report exists to publish. What the trust page honestly offers is in place: a dated posture ledger, the documents behind each row, the audit-report row saying none exists, and questionnaires answered on request (enterprise security guide) | owner |
+| desktop | partial | Owner: no SOC 2 report, ISO 27001 certificate or penetration test report exists to publish. What the trust page honestly offers is in place: a dated posture ledger, the documents behind each row, the audit-report row saying none exists, and questionnaires answered on request (enterprise security guide) | owner |
 
-Code: `apps/web/app/trust/page.tsx:78-82`, `apps/web/app/trust/page.tsx:277-283`
+Code: `apps/web/app/trust/page.tsx:79-79`, `apps/web/app/trust/page.tsx:42-42`, `apps/web/content/support/enterprise-security.md:21-21`

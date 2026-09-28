@@ -182,6 +182,26 @@ function AuthenticatedDesktopLibrary({
         setPreviewUri(uri);
       },
       startChat: onStartChat,
+      mediaJobs: {
+        listMediaJobs: () =>
+          authenticatedCloudFetch(request, `${CLOUD_API_BASE_URL}/api/media/jobs`),
+        cancelMediaJob: (job) =>
+          authenticatedCloudFetch(
+            request,
+            `${CLOUD_API_BASE_URL}/api/media/${job.kind === 'video' ? 'video' : 'image'}/cancel`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(job.kind === 'video' ? { task_id: job.id } : { job_id: job.id }),
+            },
+          ),
+        retryMediaJob: (job) =>
+          authenticatedCloudFetch(request, `${CLOUD_API_BASE_URL}/api/media/image/retry`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ job_id: job.id }),
+          }),
+      },
     }),
     [fetchAsset, onStartChat, request],
   );

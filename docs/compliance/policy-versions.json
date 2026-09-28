@@ -312,7 +312,7 @@
         },
         {
           "date": "2026-09-21",
-          "digest": "72560c671ae4b7a1",
+          "digest": "8b143c0c03711fbc",
           "note": "The erasure count moves from 105 to 106 with external resource references, and the row-level-isolation row is re-measured at 223 of 347 database-backed routes with 124 on the owner connection and 128 touching no database; the change record says so and the date stays."
         }
       ]

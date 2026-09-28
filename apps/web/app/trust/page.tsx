@@ -387,7 +387,7 @@ export default function TrustPage() {
                       {
                         label: '2026-09-28',
                         value:
-                          'External resource references joined the enumerated erasure list, taking it from 105 to 106 user-scoped tables: one record per repository, source link, connector server or imported file an account reached, deleted with the account. Re-measured with the day\u2019s other hosted routes: the row-level-isolation count moved from 191 to 223 of 347 database-backed routes, the owner-connection remainder from 112 to 124, and the routes that touch no database from 120 to 128. Each figure is derived from the deciding source by a test, not maintained by hand.',
+                          'External resource references joined the enumerated erasure list, taking it from 105 to 106 user-scoped tables: the record of the repositories, web pages, MCP servers and connector items an account reached. They are deleted with the account. Re-measured with the day\u2019s other hosted routes: the row-level-isolation count moved from 191 to 223 of 347 database-backed routes, the owner-connection remainder from 112 to 124, and the routes that touch no database from 120 to 128. Each figure is derived from the deciding source by a test, not maintained by hand.',
                       },
                       {
                         label: '2026-09-28',
