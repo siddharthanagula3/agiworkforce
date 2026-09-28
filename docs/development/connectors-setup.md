@@ -184,6 +184,10 @@ set the named variables in production and locally.
   (`messages.attachments.get`, which needs `gmail.readonly`), and
   `create_draft_with_attachments` builds a draft with up to five of the
   account's own files attached (`drafts.create`, which needs `gmail.compose`).
+  Their declared metadata in `tool-metadata.ts` makes `read_attachments` a
+  read, `create_draft_with_attachments` a write into the user's own mailbox,
+  and `send_draft` a non-reversible external send, so it asks under every
+  approval policy.
   The full-mailbox,
   full-drive and full-calendar scopes are
   forbidden and dropped. `gmail.modify`, which Gmail's label tools need, is left
