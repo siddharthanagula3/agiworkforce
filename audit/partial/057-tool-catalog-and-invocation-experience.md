@@ -142,17 +142,16 @@ Code: `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:84-87`, `apps/w
 
 - Done when: The assistant can call a tool that edits part of an existing file (targeted replace or patch) rather than rewriting it.
 - Wave: 2
-- Already works on: cli, vscode
+- Already works on: desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | The chat sandbox edit_file tool runs only when AGI_E2B_EXECUTION=1 (default 0) with an E2B key and compute price set; until then the loop answers "not available". | flag-off |
-| desktop | partial | Device steps can only replace a whole file (device_write_file); there is no targeted edit or patch step on the Mac. | handler |
 | mobile | partial | The chat sandbox edit_file tool runs only when AGI_E2B_EXECUTION=1 (default 0) with an E2B key and compute price set; until then the loop answers "not available". | flag-off |
 | chrome | partial | The chat sandbox edit_file tool runs only when AGI_E2B_EXECUTION=1 (default 0) with an E2B key and compute price set; until then the loop answers "not available". | flag-off |
 | api | partial | Documented; edit_file still runs only when AGI_E2B_EXECUTION=1. | flag-off |
 
-Code: `apps/web/lib/e2b/execution-tools.ts:18-18`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:2009-2015`, `apps/web/lib/e2b/gate.ts:16-18`, `packages/contracts/local-runtime/src/device-steps.ts:85-90`
+Code: `apps/web/lib/e2b/execution-tools.ts:18-18`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:2009-2015`, `apps/web/lib/e2b/gate.ts:16-18`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:588-594`
 
 ## S57.13: Browser-navigation tool.
 
