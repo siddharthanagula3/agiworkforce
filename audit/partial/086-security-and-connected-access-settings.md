@@ -146,19 +146,3 @@ Code: `apps/extension/src/options.ts:1100-1150`, `apps/extension/src/features/co
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-
-## S86.26: Advanced/hardened account-security mode.
-
-- Done when: The user can turn on a hardened mode that tightens account and agent security beyond defaults.
-- Wave: 3
-- Already works on: mobile
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Lockdown hardens the assistant only; a hardened account-security mode (passkey-only sign-in, stricter recovery) is not built | ui, handler |
-| desktop | partial | Lockdown hardens the assistant only; a hardened account-security mode (passkey-only sign-in, stricter recovery) is not built | ui, handler |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/settings/account-security/service.ts:201-201`

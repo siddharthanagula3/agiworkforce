@@ -4,7 +4,10 @@ import userEvent from '@testing-library/user-event';
 import { SupportHandoffPanel } from '../components/SupportHandoffPanel';
 import { useSupportPresence } from '../hooks/useSupportPresence';
 import { useSupportSession } from '../hooks/useSupportSession';
-import { UNAVAILABLE_PRESENCE, type SupportPresenceView } from '../lib/contract';
+import {
+  UNAVAILABLE_PRESENCE,
+  type SupportPresenceView,
+} from '@agiworkforce/cloud-contracts/support';
 
 vi.mock('@/lib/client/csrf', () => ({
   addCsrfHeaders: (headers: HeadersInit = {}) => Promise.resolve(headers),
