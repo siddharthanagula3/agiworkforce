@@ -23,11 +23,13 @@ import { interactiveCardNeedsResume } from '@/app/api/interactive-cards/response
 import { useChatStreamRuntime } from '../components/ChatStreamRuntimeProvider';
 import { useConversations } from '@/lib/hooks/useConversations';
 import {
+  ManagedCloudAgentRunHttpError,
   createManagedCloudAgentRunClient,
   managedCloudConversationPath,
   managedCloudMessagePath,
   type ManagedCloudChatAttachmentUploadStatus,
 } from '@agiworkforce/cloud-contracts';
+import { takeConversationSend } from '@/features/chat/lib/conversation-send-handoff';
 // GOV-19: remaining managed quota, shared with Settings > Usage.
 import {
   getWorstUsagePercent,
@@ -5023,6 +5025,8 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     [displayedMessages, getToken],
   );
 
+  const researchSteerIdsRef = useRef(new Map<string, string[]>());
+
   const steerResearchRun = useCallback(
     async (id: string, guidance: string): Promise<boolean> => {
       const runId = displayedMessages.find((m) => m.id === id)?.metadata?.cloudAgentRun?.runId;
@@ -5031,10 +5035,14 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         return false;
       }
       try {
-        await createManagedCloudAgentRunClient({
+        const { steer } = await createManagedCloudAgentRunClient({
           getAuthToken: getToken,
           decorateMutationHeaders: addCsrfHeaders,
         }).steerRun(runId, guidance);
+        researchSteerIdsRef.current.set(id, [
+          ...(researchSteerIdsRef.current.get(id) ?? []),
+          steer.id,
+        ]);
         return true;
       } catch (error) {
         toast.error(
@@ -5046,14 +5054,43 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     [displayedMessages, getToken],
   );
 
+  const sendResearchGuidanceAsMessage = useCallback(
+    async (id: string, guidance: string): Promise<boolean> => {
+      const runId = displayedMessages.find((m) => m.id === id)?.metadata?.cloudAgentRun?.runId;
+      const steerIds = researchSteerIdsRef.current.get(id) ?? [];
+      if (runId && steerIds.length > 0) {
+        const client = createManagedCloudAgentRunClient({
+          getAuthToken: getToken,
+          decorateMutationHeaders: addCsrfHeaders,
+        });
+        try {
+          for (const steerId of steerIds) {
+            await client.withdrawSteer(runId, steerId).catch((error: unknown) => {
+              if (error instanceof ManagedCloudAgentRunHttpError && error.status === 404) return;
+              throw error;
+            });
+          }
+        } catch (error) {
+          toast.error(toUserMessage(error, 'Your guidance was not sent. Try again.'));
+          return false;
+        }
+        researchSteerIdsRef.current.delete(id);
+      }
+      const outcome = handleSend(guidance);
+      return outcome !== false && outcome !== SEND_GUARD_BLOCKED;
+    },
+    [displayedMessages, getToken, handleSend],
+  );
+
   const handleResearchRunAction = useCallback<ResearchRunActionHandler>(
     async (id, action) => {
       if (action.kind === 'pause') return pauseResearchRun(id);
       if (action.kind === 'steer') return steerResearchRun(id, action.guidance);
+      if (action.kind === 'sendAsNew') return sendResearchGuidanceAsMessage(id, action.guidance);
       await handleRetryResearch(id, action.guidance);
       return true;
     },
-    [handleRetryResearch, pauseResearchRun, steerResearchRun],
+    [handleRetryResearch, pauseResearchRun, sendResearchGuidanceAsMessage, steerResearchRun],
   );
 
   const {
@@ -5456,6 +5493,22 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   const isEmptyChat =
     !displayedConversationId ||
     (chatMessages.length === 0 && !isLoading && !isConversationTranscriptPending);
+
+  useEffect(() => {
+    if (!urlConversationId || activeConversationId !== urlConversationId) return;
+    if (isConversationTranscriptPending || isLoading || isStreaming) return;
+    const handedOff = takeConversationSend(urlConversationId);
+    if (!handedOff) return;
+    const outcome = handleSend(handedOff);
+    if (outcome === false || outcome === SEND_GUARD_BLOCKED) setComposerPrefill(handedOff);
+  }, [
+    activeConversationId,
+    handleSend,
+    isConversationTranscriptPending,
+    isLoading,
+    isStreaming,
+    urlConversationId,
+  ]);
 
   const voiceModeActive = useVoiceModeActive();
   useEffect(() => () => releaseVoiceSessionOnPageExit(), []);
