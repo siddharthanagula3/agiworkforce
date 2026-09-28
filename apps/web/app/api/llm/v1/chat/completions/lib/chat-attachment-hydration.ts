@@ -454,11 +454,7 @@ export async function hydrateChatAttachments(
       } catch (error) {
         if (!(error instanceof PdfAttachmentUnreadableError)) throw error;
         if (live) {
-          throw new ChatAttachmentHydrationError(
-            400,
-            'unreadable_attachment',
-            `${filename} could not be read as a PDF.`,
-          );
+          throw new ChatAttachmentHydrationError(400, 'unreadable_attachment', error.message);
         }
         degrade(filename, 'unreadable');
         continue;
@@ -497,11 +493,7 @@ export async function hydrateChatAttachments(
       } catch (error) {
         if (!(error instanceof OfficeDocumentUnreadableError)) throw error;
         if (live) {
-          throw new ChatAttachmentHydrationError(
-            400,
-            'unreadable_attachment',
-            `${filename} could not be read as an Office document.`,
-          );
+          throw new ChatAttachmentHydrationError(400, 'unreadable_attachment', error.message);
         }
         degrade(filename, 'unreadable');
         continue;
