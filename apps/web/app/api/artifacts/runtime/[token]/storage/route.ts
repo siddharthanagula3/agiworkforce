@@ -1,14 +1,18 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import {
+  ArtifactStorageRequestSchema,
+  type ArtifactStorageDeleteResponse,
+  type ArtifactStorageEntry,
+  type ArtifactStorageListResponse,
+} from '@agiworkforce/cloud-contracts';
 import { assertAccountActive } from '@/lib/api-auth';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import {
-  ARTIFACT_STORAGE_KEY_PATTERN,
   ARTIFACT_STORAGE_SCOPE_LIMIT_BYTES,
   ARTIFACT_STORAGE_VALUE_LIMIT_BYTES,
   deleteArtifactStorageValue,
@@ -22,24 +26,6 @@ import { PUBLISHED_TOKEN_REGEX } from '@/lib/services/published-artifact-service
 export const runtime = 'nodejs';
 
 const NO_STORE = { 'Cache-Control': 'private, no-store' };
-
-const StorageKey = z.string().regex(ARTIFACT_STORAGE_KEY_PATTERN);
-
-const StorageRequestSchema = z.discriminatedUnion('op', [
-  z.object({ op: z.literal('get'), key: StorageKey, shared: z.boolean().default(false) }),
-  z.object({
-    op: z.literal('set'),
-    key: StorageKey,
-    value: z.string(),
-    shared: z.boolean().default(false),
-  }),
-  z.object({ op: z.literal('delete'), key: StorageKey, shared: z.boolean().default(false) }),
-  z.object({
-    op: z.literal('list'),
-    prefix: z.string().max(200).nullable().default(null),
-    shared: z.boolean().default(false),
-  }),
-]);
 
 type RouteContext = { params: Promise<{ token: string }> };
 
@@ -64,7 +50,7 @@ async function handlePost(request: NextRequest, context: RouteContext): Promise<
   const limited = await withRateLimit(request, 'artifact-storage', `user:${scoped.userId}`);
   if (limited) return limited;
 
-  const parsed = StorageRequestSchema.safeParse(await request.json().catch(() => null));
+  const parsed = ArtifactStorageRequestSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return refusal(
       400,
@@ -86,10 +72,9 @@ async function handlePost(request: NextRequest, context: RouteContext): Promise<
   switch (body.op) {
     case 'get': {
       const value = await readArtifactStorageValue(scoped.db, { ...target, key: body.key });
-      return NextResponse.json(
-        value === null ? null : { key: body.key, value, shared: body.shared },
-        { headers: NO_STORE },
-      );
+      const entry: ArtifactStorageEntry | null =
+        value === null ? null : { key: body.key, value, shared: body.shared };
+      return NextResponse.json(entry, { headers: NO_STORE });
     }
     case 'set': {
       if (Buffer.byteLength(body.value, 'utf8') > ARTIFACT_STORAGE_VALUE_LIMIT_BYTES) {
@@ -113,24 +98,30 @@ async function handlePost(request: NextRequest, context: RouteContext): Promise<
             : `Your data in this app is at its ${megabytes(ARTIFACT_STORAGE_SCOPE_LIMIT_BYTES)} limit.`,
         );
       }
-      return NextResponse.json(
-        { key: body.key, value: body.value, shared: body.shared },
-        { headers: NO_STORE },
-      );
+      const saved: ArtifactStorageEntry = {
+        key: body.key,
+        value: body.value,
+        shared: body.shared,
+      };
+      return NextResponse.json(saved, { headers: NO_STORE });
     }
     case 'delete': {
       const deleted = await deleteArtifactStorageValue(scoped.db, { ...target, key: body.key });
-      return NextResponse.json(
-        { key: body.key, deleted, shared: body.shared },
-        { headers: NO_STORE },
-      );
+      const removal: ArtifactStorageDeleteResponse = {
+        key: body.key,
+        deleted,
+        shared: body.shared,
+      };
+      return NextResponse.json(removal, { headers: NO_STORE });
     }
     case 'list': {
       const keys = await listArtifactStorageKeys(scoped.db, { ...target, prefix: body.prefix });
-      return NextResponse.json(
-        { keys, prefix: body.prefix, shared: body.shared },
-        { headers: NO_STORE },
-      );
+      const listing: ArtifactStorageListResponse = {
+        keys,
+        prefix: body.prefix,
+        shared: body.shared,
+      };
+      return NextResponse.json(listing, { headers: NO_STORE });
     }
   }
 }

@@ -127,6 +127,12 @@ pub async fn run_repl(
         }
     }
 
+    tokio::spawn(async move {
+        if let Ok(catalog) = crate::models::gateway_models::discover_gateway_models().await {
+            crate::models::gateway_models::store_live_catalog(catalog);
+        }
+    });
+
     if team_mode {
         session.enable_team_mode();
         eprintln!(

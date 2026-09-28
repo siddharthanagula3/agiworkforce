@@ -77,11 +77,10 @@ Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:752-763`, `ap
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Recommend skills on the new-chat screen; today a skill is chosen on the Skills screen and shown as a chip in the composer. | handler, ui |
 | cli | partial | Recommend a skill for a new session; today /skills only browses the installed list. | handler, ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/chat/components/ChatInput.tsx:735-771`, `crates/agiworkforce-command-registry/src/lib.rs:248-248`
+Code: `crates/agiworkforce-command-registry/src/lib.rs:248-248`
 
 ## S12.09: Recommended connected apps.
 

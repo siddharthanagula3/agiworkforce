@@ -254,6 +254,13 @@ pub fn builtin_slash_registry_commands() -> Vec<RegistryCommand> {
         RegistryCommand::builtin_slash("skills", "Browse available skills", true, false, vec![]),
         RegistryCommand::builtin_slash("agents", "Browse and manage agents", true, false, vec![]),
         RegistryCommand::builtin_slash(
+            "route",
+            "Route by Auto, Instant, Best or Economy",
+            false,
+            true,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash(
             "control",
             "See which client writes this session, hand it off or take it",
             true,

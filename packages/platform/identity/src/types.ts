@@ -214,6 +214,7 @@ export interface IdentityProvider<Request = unknown> {
   listUserSessions(userId: string, options?: ListUserSessionsOptions): Promise<IdentitySessionPage>;
   getSession(sessionId: string): Promise<IdentitySession | null>;
   revokeSession(sessionId: string): Promise<void>;
+  createSignInToken(userId: string, expiresInSeconds: number): Promise<string>;
   listOrganizationMemberships(userId: string): Promise<readonly IdentityMembership[]>;
   registerSecondFactor(
     userId: string,
