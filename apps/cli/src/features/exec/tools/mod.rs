@@ -222,6 +222,44 @@ pub type ApprovalCallback = Arc<
     dyn Fn(ApprovalRequest) -> Pin<Box<dyn Future<Output = ApprovalDecision> + Send>> + Send + Sync,
 >;
 
+tokio::task_local! {
+    static APPROVAL_NOTES: std::cell::RefCell<Vec<String>>;
+}
+
+static INTERACTIVE_QUESTIONS: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+pub(crate) async fn collect_approval_notes<F: Future>(future: F) -> (F::Output, Vec<String>) {
+    APPROVAL_NOTES
+        .scope(std::cell::RefCell::new(Vec::new()), async move {
+            let output = future.await;
+            let notes = APPROVAL_NOTES.with(|notes| notes.take());
+            (output, notes)
+        })
+        .await
+}
+
+pub(crate) fn record_approval_note(note: String) {
+    let _ = APPROVAL_NOTES.try_with(|notes| notes.borrow_mut().push(note));
+}
+
+pub(crate) fn with_approval_notes(mut output: String, notes: &[String]) -> String {
+    for note in notes {
+        output.push_str(&format!(
+            "\n\nThe user added a note when answering the approval prompt: {note}"
+        ));
+    }
+    output
+}
+
+pub(crate) fn enable_interactive_questions() {
+    INTERACTIVE_QUESTIONS.store(true, std::sync::atomic::Ordering::Relaxed);
+}
+
+pub(crate) fn interactive_questions_enabled() -> bool {
+    INTERACTIVE_QUESTIONS.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 #[derive(Clone)]
 pub struct ToolExecOptions {
     pub require_confirmation: bool,
@@ -1091,6 +1129,10 @@ fn approval_request_tool(kind: &ApprovalRequestKind) -> (&'static str, serde_jso
         ApprovalRequestKind::AskUser { question } => {
             ("ask_user", serde_json::json!({ "question": question }))
         }
+        ApprovalRequestKind::Question { question, options } => (
+            "ask_user",
+            serde_json::json!({ "question": question, "options": options }),
+        ),
         ApprovalRequestKind::Hook { hook_name } => {
             ("hook", serde_json::json!({ "hook": hook_name }))
         }

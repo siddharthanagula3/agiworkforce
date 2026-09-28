@@ -10,6 +10,7 @@ pub mod list_selection_view;
 pub mod memories_settings;
 pub mod mention_popup;
 pub mod model_picker;
+pub mod question_overlay;
 pub mod screen_renderers;
 pub mod session_picker;
 pub mod skills_toggle;

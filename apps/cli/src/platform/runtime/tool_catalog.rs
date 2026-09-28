@@ -697,8 +697,8 @@ fn core_tool_definitions() -> Vec<ToolDefinition> {
         ).control().with_size_cap(2_000).deferred(),
         def(
             "ask_user",
-            "Ask the user a clarifying question and wait for their response. With kind \"approval\", ask the user to approve or decline a plan or decision and wait for the answer.",
-            serde_json::json!({"type":"object","properties":{"question":{"type":"string","description":"The question to ask the user, or the plan or decision to approve"},"kind":{"type":"string","enum":["question","approval"],"description":"question for a typed answer (default); approval for an approve or decline decision"}},"required":["question"]}),
+            "Ask the user a clarifying question and wait for their response. Offer options when the answer is one of a few choices; the user can always type their own answer instead. With kind \"approval\", ask the user to approve or decline a plan or decision and wait for the answer.",
+            serde_json::json!({"type":"object","properties":{"question":{"type":"string","description":"The question to ask the user, or the plan or decision to approve"},"options":{"type":"array","items":{"type":"string"},"maxItems":6,"description":"Up to six short answers the user can pick from; they can also type their own"},"kind":{"type":"string","enum":["question","approval"],"description":"question for an answer (default); approval for an approve or decline decision"}},"required":["question"]}),
         ).interactive().with_size_cap(2_000).deferred(),
         def(
             "memory",

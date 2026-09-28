@@ -111,6 +111,7 @@ pub mod voice {
 pub mod app_server;
 pub mod apply_patch;
 pub mod approval_audit;
+pub(crate) mod approval_details;
 pub mod ecosystem;
 pub mod init;
 pub mod interactive;
