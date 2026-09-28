@@ -3,6 +3,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getWebviewContent } from '../features/sidebar-webview/webviewContent';
+import { vscodeApiStub } from './vscodeApiStub';
 
 function boot(): ReturnType<typeof vi.fn> {
   const html = getWebviewContent(
@@ -26,7 +27,7 @@ function boot(): ReturnType<typeof vi.fn> {
   const postMessage = vi.fn();
   Object.defineProperty(globalThis, 'acquireVsCodeApi', {
     configurable: true,
-    value: () => ({ postMessage }),
+    value: () => vscodeApiStub({ postMessage }),
   });
   const inline = Array.from(parsed.querySelectorAll('script')).find((script) =>
     script.textContent?.includes('acquireVsCodeApi()'),
@@ -244,10 +245,10 @@ describe('the sessions sheet', () => {
     );
   });
 
-  it('reveals the search field only past ten rows', () => {
+  it('reveals the search field whenever the list has rows', () => {
     boot();
     click('#sessionsBtn');
-    const rows = Array.from({ length: 11 }, (_unused, index) => ({
+    const rows = Array.from({ length: 2 }, (_unused, index) => ({
       id: `thread-${index}`,
       title: `Session ${index}`,
       age: '1h ago',
@@ -255,7 +256,7 @@ describe('the sessions sheet', () => {
       sourceLabel: 'Local',
     }));
 
-    deliver({ type: 'sessionsList', payload: { source: 'local', rows: rows.slice(0, 10) } });
+    deliver({ type: 'sessionsList', payload: { source: 'local', rows: [] } });
     expect((document.getElementById('sessionsSearch') as HTMLInputElement).hidden).toBe(true);
 
     deliver({ type: 'sessionsList', payload: { source: 'local', rows } });

@@ -96,6 +96,7 @@ pub mod method {
     pub const MCP_LOGIN: &str = "mcp/login";
     pub const MCP_TEST: &str = "mcp/test";
     pub const MCP_TOOLS: &str = "mcp/tools";
+    pub const MCP_INSPECT: &str = "mcp/inspect";
     pub const MCP_ADD: &str = "mcp/add";
     pub const MCP_REMOVE: &str = "mcp/remove";
     pub const HOOKS_LIST: &str = "hooks/list";
@@ -109,6 +110,8 @@ pub mod method {
     pub const WORKTREE_CREATE: &str = "worktree/create";
     pub const WORKTREE_LIST: &str = "worktree/list";
     pub const WORKTREE_REMOVE: &str = "worktree/remove";
+    pub const PERMISSIONS_LIST: &str = "permissions/list";
+    pub const PERMISSIONS_REMOVE: &str = "permissions/remove";
 }
 
 /// Build a canonical, ordered agent-activity notification for developer-session
@@ -373,6 +376,10 @@ pub struct AppServerCapabilities {
     pub mcp_tools: bool,
     #[serde(default, skip_serializing_if = "is_false")]
     pub installs: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub saved_permissions: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub mcp_inspect: bool,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -850,6 +857,8 @@ pub struct PendingApprovalSnapshot {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub proposed_content: Option<String>,
+    #[serde(default)]
+    pub always_allow_saved: bool,
 }
 
 /// Everything a client needs to render a turn it joined mid-flight.
@@ -1286,6 +1295,22 @@ pub struct TurnStartParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub max_turns: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub routing_profile: Option<DeveloperRoutingProfile>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub cloud_project_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum DeveloperRoutingProfile {
+    Auto,
+    Speed,
+    Quality,
+    Cost,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema, TS)]
@@ -1688,6 +1713,11 @@ pub struct AccountStatusResponse {
     /// True when the answer came from cache without a network read.
     pub cached: bool,
     pub source: AccountSource,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub web_search_key: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub web_search_logins: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -2020,6 +2050,35 @@ pub struct McpResourceSummary {
     pub mime_type: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct McpServerInspectResponse {
+    pub name: String,
+    pub connected: bool,
+    pub live: bool,
+    pub responding: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub protocol_version: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub server_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub server_version: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub capabilities: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub instructions: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub logs: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub error: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(rename_all = "camelCase")]
@@ -2228,6 +2287,8 @@ pub struct SlashCommandSummary {
     /// True when [`method::COMMANDS_RUN`] can execute this command outside a
     /// terminal. A client must not offer the others as buttons.
     pub runnable: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub prompt: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -2316,6 +2377,47 @@ pub struct WorktreeSummary {
 #[ts(rename_all = "camelCase")]
 pub struct WorktreeListResponse {
     pub worktrees: Vec<WorktreeSummary>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum SavedPermissionKind {
+    Command,
+    File,
+    ExecPolicy,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum SavedPermissionDecision {
+    Allow,
+    Deny,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct SavedPermission {
+    pub id: String,
+    pub kind: SavedPermissionKind,
+    pub label: String,
+    pub decision: SavedPermissionDecision,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct PermissionsListResponse {
+    pub permissions: Vec<SavedPermission>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct PermissionsRemoveParams {
+    pub id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -3170,6 +3272,7 @@ mod tests {
                 risk_level: Some(AgentEventApprovalRiskLevel::High),
                 reversible: Some(false),
                 proposed_content: None,
+                always_allow_saved: false,
             }],
             last_turn: Some(HandoffLastTurn {
                 turn_id: "turn-9".to_string(),

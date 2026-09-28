@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getSettingsWebviewContent } from '../features/settings/settingsWebviewContent';
 import { SETTINGS_SECTIONS, type SettingsPanelState } from '../features/settings/settingsProtocol';
 import { SETTINGS_PANEL_SETTING_KEYS } from '../platform/config';
+import { vscodeApiStub } from './vscodeApiStub';
 
 const initialState: SettingsPanelState = {
   values: {
@@ -69,7 +70,7 @@ function boot(): ReturnType<typeof vi.fn> {
   const postMessage = vi.fn();
   Object.defineProperty(globalThis, 'acquireVsCodeApi', {
     configurable: true,
-    value: () => ({ postMessage }),
+    value: () => vscodeApiStub({ postMessage }),
   });
   const script = Array.from(parsed.querySelectorAll('script')).find((candidate) =>
     candidate.textContent?.includes('acquireVsCodeApi()'),

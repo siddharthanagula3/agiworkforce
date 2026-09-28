@@ -64,6 +64,7 @@ export const HUMAN_HELD_TASK_STATES: readonly AgentTaskState[] = Object.freeze([
 ]);
 
 const EXECUTOR_HELD_STATE_VALUES: string[] = [...EXECUTOR_HELD_TASK_STATES];
+const OPEN_STATE_VALUES: string[] = [...EXECUTOR_HELD_TASK_STATES, ...HUMAN_HELD_TASK_STATES];
 
 /**
  * A run the reader was told had ended stays ended. Every statement that parks a
@@ -2314,6 +2315,20 @@ export class CloudAgentCodeRunNotSteerableError extends Error {
   }
 }
 
+export class CloudAgentRunSteerNotFoundError extends Error {
+  constructor() {
+    super('No unread message with that id is waiting on this task');
+    this.name = 'CloudAgentRunSteerNotFoundError';
+  }
+}
+
+export class CloudAgentRunSteerStillReadableError extends Error {
+  constructor() {
+    super('The task can still read this message');
+    this.name = 'CloudAgentRunSteerStillReadableError';
+  }
+}
+
 export class CloudAgentRunSteerQueueFullError extends Error {
   constructor() {
     super('This task already has the most messages it can hold waiting');
@@ -2399,6 +2414,31 @@ export async function takeCloudAgentRunSteers(
     [input.runId, input.userId, input.organizationId],
   );
   return mapPendingSteers(rows[0]?.pending_steer);
+}
+
+export async function withdrawCloudAgentRunSteer(
+  db: DatabaseAdapter,
+  input: { userId: string; organizationId: string | null; runId: string; steerId: string },
+): Promise<CloudAgentRun> {
+  const rows = await db.query<CloudAgentRunRow>(
+    `update public.cloud_agent_runs
+        set pending_steer = nullif(
+              (select coalesce(jsonb_agg(entry order by position), '[]'::jsonb)
+                 from jsonb_array_elements(pending_steer) with ordinality as entries(entry, position)
+                where entry->>'id' <> $4),
+              '[]'::jsonb
+            )
+      where id = $1 and user_id = $2
+        and organization_id is not distinct from $3::uuid
+        and not (state = any($5::text[]))
+        and coalesce(pending_steer, '[]'::jsonb) @> jsonb_build_array(jsonb_build_object('id', $4::text))
+      returning *`,
+    [input.runId, input.userId, input.organizationId, input.steerId, OPEN_STATE_VALUES],
+  );
+  if (rows[0]) return mapRun(rows[0]);
+  const row = await readRunState(db, input);
+  if (OPEN_STATE_VALUES.includes(row.state)) throw new CloudAgentRunSteerStillReadableError();
+  throw new CloudAgentRunSteerNotFoundError();
 }
 
 /**

@@ -82,14 +82,13 @@ Code: `apps/mobile/src/features/chat/components/TaskChips.tsx:34-36`, `apps/mobi
 
 - Done when: The user switches a conversation's privacy mode (e.g. temporary/incognito, local-only) through an explicit flow that explains the consequence.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | TemporaryChatToggle flips the global settingsStore.isTemporaryChat flag (TemporaryChatToggle.tsx:10-15, settingsStore.ts:66) and shows only an EyeOff icon plus the word 'Temporary' when on (36-52); the consequence ('Memory will not be saved from this chat') exists only as an accessibilityHint, so sighted users get no explanation and there is no confirmation or flow. Real effect: chatExecutionStore reads the flag per turn (1368-1402). |  |
-| chrome | partial | Per-conversation temporary chat is scheduled with section 41 (temporary and private experiences) in the next Chrome batch. | ui |
 
-Code: `apps/mobile/src/features/chat/components/TemporaryChatToggle.tsx:11-31`, `apps/mobile/src/features/chat/components/TemporaryChatToggle.tsx:11-14`, `apps/mobile/app/(app)/(tabs)/chat.tsx:805-805`, `apps/extension/src/features/options/data-handling-section.ts:147-147`
+Code: `apps/mobile/src/features/chat/components/TemporaryChatToggle.tsx:11-31`, `apps/mobile/src/features/chat/components/TemporaryChatToggle.tsx:11-14`, `apps/mobile/app/(app)/(tabs)/chat.tsx:805-805`
 
 ## S18.11: Conversation search.
 
@@ -272,11 +271,10 @@ Code: `apps/mobile/src/features/chat/components/TaskChips.tsx:34-36`, `apps/mobi
 
 - Done when: A conversation started on one device can be continued on another.
 - Wave: 3
-- Already works on: web, desktop, mobile, chrome
+- Already works on: web, desktop, mobile, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | CLI sessions stay on this machine: they can move to VS Code here, and /continue-with-cloud only drafts a managed-cloud turn; add opening a CLI session on web/mobile. | ui |
-| vscode | partial | Steps 2 and 3 have landed. 1acc1b329 makes VS Code re-read a session another app wrote and say so. 3f3722bec5 lets VS Code host Remote Control, so a paired phone can list this window's sessions, attach, steer and approve. The host core moved to @agiworkforce/utils/remote-control in 72721511d. Per the ruling, the cell stays partial until p-desktop-cli's load_agent reload from disk lands; that is what keeps a VS Code turn from running on a stale cached session after the terminal wrote to it. | ui |
 
-Code: `apps/cli/src/claude_parity.rs:169-176`, `apps/extension-vscode/src/features/remote-control/remoteControlService.ts:166-166`, `apps/extension-vscode/src/features/remote-control/remoteControlService.ts:316-316`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:3013-3013`
+Code: `apps/cli/src/claude_parity.rs:169-176`

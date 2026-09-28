@@ -97,11 +97,11 @@ Code: `apps/extension-vscode/package.json:638-639`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | missing | Not built on this surface. |  |
-| vscode | partial | Choosing a project applies it to turns in this workspace, but the local chat is not filed under the cloud project, so its knowledge files are not searched. | handler |
+| cli | partial | Chats in a linked directory now search the project's knowledge files (124831c84d). Adding a file to a project from the CLI needs 'cli' in sourceSurface of ManagedCloudProjectKnowledgeRegisterRequestSchema (packages/contracts/cloud-contracts/src/project-knowledge.ts) and the storage upload the desktop uses. | handler |
+| vscode | partial | partials/desktop-cli 124831c84d: turn/start takes cloudProjectId and files the thread's hosted conversation under it, so the project's knowledge files are searched; VS Code must send the active project's id (p-sessions). | ui |
 | chrome | partial | Chrome can reopen a project's chats (which stay grounded in its sources) but cannot start a chat in a project or add/choose sources. | ui |
 
-Code: `apps/extension-vscode/src/core/commandSetup.ts:2265-2269`, `apps/extension/src/features/side-panel/projectsDrawer.ts:472-474`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2550-2555`
+Code: `apps/cli/src/agent/chat.rs:619-619`, `apps/cli/src/models/streaming.rs:384-384`, `apps/cli/src/app_server/developer_host.rs:2353-2353`, `apps/extension/src/features/side-panel/projectsDrawer.ts:472-474`
 
 ## S34.20: Search suggestions.
 

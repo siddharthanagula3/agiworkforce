@@ -240,16 +240,15 @@ Code: `apps/extension/src/features/side-panel/projectsDrawer.ts:533-533`, `apps/
 
 - Done when: From the main chat the user can bring a notebook's context into the conversation.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | The chat project selector applies only the project's instructions (local system message); its sources are not brought in on mobile. | handler |
-| cli | missing | Not built on this surface. |  |
-| vscode | partial | "Use in this chat" prepends only the project name and instructions to VS Code turns; its sources are not used. | handler |
+| vscode | partial | Same as S34.19 vscode: the app-server applies the project's instructions and sources once VS Code sends cloudProjectId (p-sessions). | ui |
 | chrome | partial | Selecting a project binds the chat to it and project instructions and sources apply from the next turn, but the first turn of a new chat is sent before the binding and is answered without project context. | handler |
 
-Code: `apps/mobile/src/features/chat/components/ProjectSelectorBar.tsx:38-38`, `apps/mobile/stores/chat/chatExecutionStore.ts:1348-1348`, `apps/extension-vscode/src/features/projects/projectActions.ts:111-111`, `apps/extension-vscode/src/features/projects/activeProject.ts:51-51`
+Code: `apps/mobile/src/features/chat/components/ProjectSelectorBar.tsx:38-38`, `apps/mobile/stores/chat/chatExecutionStore.ts:1348-1348`, `apps/cli/src/app_server/developer_host.rs:2353-2353`, `apps/extension/src/side_panel.ts:6421-6421`
 
 ## S37.38: Cross-application notebook synchronization.
 
