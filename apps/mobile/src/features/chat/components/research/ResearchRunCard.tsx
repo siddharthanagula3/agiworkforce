@@ -204,6 +204,7 @@ export function ResearchRunCard({
 
   const counts = researchCountsSummary(research);
   const steps = research.steps ?? [];
+  const gaps = research.gaps ?? [];
   const canDecide = Boolean(onPlanDecision) && awaitingApproval && !isStreaming;
   const canRetry = Boolean(onRetry) && (failed || interrupted || paused) && !isStreaming;
   const canStop = Boolean(onStop) && active;
@@ -281,6 +282,38 @@ export function ResearchRunCard({
         >
           {steps.map((step) => (
             <PlanStepRow key={step.id} step={step} />
+          ))}
+        </View>
+      ) : null}
+
+      {gaps.length > 0 ? (
+        <View
+          testID="research-run-questions"
+          accessibilityLabel="Planned questions"
+          style={{
+            borderTopWidth: 1,
+            borderTopColor: colors.borderLight,
+            paddingTop: 6,
+            gap: 6,
+          }}
+        >
+          <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textMuted }}>
+            Planned questions
+          </Text>
+          {gaps.map((gap) => (
+            <View key={gap.id} style={{ gap: 2 }}>
+              <Text style={{ fontSize: 12, lineHeight: 17, color: colors.textPrimary }}>
+                <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textPrimary }}>
+                  {gap.status === 'closed' ? 'Answered: ' : 'Not answered: '}
+                </Text>
+                {gap.question}
+              </Text>
+              {gap.status === 'open' ? (
+                <Text style={{ fontSize: 11, lineHeight: 16, color: colors.textSecondary }}>
+                  {gap.reason}
+                </Text>
+              ) : null}
+            </View>
           ))}
         </View>
       ) : null}
