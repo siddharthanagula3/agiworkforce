@@ -128,6 +128,7 @@ const OPERATIONAL_RECORD = [
   'credit_transactions',
   'data_rights_requests',
   'desktop_devices',
+  'desktop_sign_in_grants',
   'developer_projects',
   'developer_webhook_deliveries',
   'developer_webhook_endpoints',

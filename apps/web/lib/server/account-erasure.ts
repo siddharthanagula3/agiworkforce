@@ -97,6 +97,7 @@ export const USER_SCOPED_TABLES: ReadonlyArray<{
   { table: 'account_sessions', column: 'user_id' },
   { table: 'account_lockout_attempts', column: 'user_id' },
   { table: 'device_authorization_codes', column: 'user_id' },
+  { table: 'desktop_sign_in_grants', column: 'user_id' },
   { table: 'desktop_devices', column: 'user_id' },
   { table: 'mobile_devices', column: 'user_id' },
   { table: 'device_registrations', column: 'user_id' },
