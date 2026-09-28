@@ -1,6 +1,7 @@
 'use client';
 
 import { FREE_QUOTA_EXHAUSTED_CODE } from '@/features/models/lib/free-quota-types';
+import type { ChatOutputFormat } from '@/lib/chat-output-format';
 import {
   chatCompletionEndpoint,
   freeQuotaSelection,
@@ -218,6 +219,7 @@ interface SendMessageOptions {
   webFetch?: boolean;
   codeExecution?: boolean;
   officeCreation?: boolean;
+  officeFormat?: ChatOutputFormat;
   thinkingEnabled?: boolean;
   thinkingEffort?: Effort;
   styleMode?: string;
@@ -3437,6 +3439,7 @@ export function useChatStream(): UseChatStreamReturn {
         thinkingEnabled: options.thinkingEnabled,
         codeExecutionEnabled: options.codeExecution,
         officeCreationEnabled: options.officeCreation,
+        officeOutputFormat: options.officeFormat,
         workMode: options.workMode,
         styleMode: options.styleMode,
         hasSkillInstruction: Boolean(options.skillName),
@@ -3791,6 +3794,7 @@ export function useChatStream(): UseChatStreamReturn {
                   : undefined,
               code_execution: options.codeExecution || undefined,
               office_creation: options.officeCreation || undefined,
+              office_format: (options.officeCreation && options.officeFormat) || undefined,
               skill_name: options.skillName,
               disabled_connector_ids: options.disabledConnectorIds?.length
                 ? options.disabledConnectorIds
