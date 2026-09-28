@@ -200,6 +200,7 @@ export * from './request-identity';
 
 export * from './file-reference';
 export * from './file-model';
+export * from './external-resource-reference';
 
 export * from './browser-bridge';
 export * from './context-handoff-uri';

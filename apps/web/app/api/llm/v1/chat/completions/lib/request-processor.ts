@@ -43,6 +43,7 @@ import { hostedCodeExecutionReserveMicrousd } from '@/lib/e2b/hosted-code-execut
 import {
   DEVICE_HOST_HEADER,
   parseDesktopHostDeclaration,
+  type DesktopCapability,
   type DesktopHostDeclaration,
 } from '@agiworkforce/local-runtime-contract';
 import { deviceStepToolDefs } from '@/lib/device-steps/device-tools';
@@ -127,6 +128,12 @@ import {
   isScheduleTool,
   scheduleToolDefinition,
 } from '@/lib/server/tools/schedule-tool';
+import {
+  asksForPluginDraft,
+  isPluginDraftTool,
+  pluginDraftToolDefinition,
+} from '@/lib/server/tools/plugin-draft-tool';
+import { userSkillAuthoringEnabled } from '@/lib/services/user-skill-authoring';
 import {
   supportsOpenAIReasoningEffort,
   SYSTEM_PROMPT_CACHE_BOUNDARY,
@@ -876,6 +883,32 @@ export function applyScheduleToolCapability(
   request.tools = [
     ...(request.tools ?? []).filter((tool) => !isScheduleTool(tool.function.name)),
     scheduleToolDefinition(),
+  ];
+}
+
+export function applyPluginDraftToolCapability(
+  request: ChatCompletionRequest,
+  params: {
+    surface: CloudChatSurface;
+    toolsCapable: boolean;
+    isTemporary: boolean;
+    ambientToolsAllowed: boolean;
+    pluginDraftsAllowed: boolean;
+  },
+): void {
+  if (
+    !params.toolsCapable ||
+    !params.ambientToolsAllowed ||
+    !params.pluginDraftsAllowed ||
+    !request.stream ||
+    params.isTemporary ||
+    !MEMORY_COMMAND_CLIENT_SURFACES.has(params.surface)
+  ) {
+    return;
+  }
+  request.tools = [
+    ...(request.tools ?? []).filter((tool) => !isPluginDraftTool(tool.function.name)),
+    pluginDraftToolDefinition(),
   ];
 }
 
@@ -2530,10 +2563,15 @@ export function withoutWorkspaceDisabledDeviceCapabilities(
   deviceHost: DesktopHostDeclaration | null,
   controls: ResolvedWorkspaceControls | null,
 ): DesktopHostDeclaration | null {
-  if (!deviceHost || !controls || controls.featureAccess.computer_use) return deviceHost;
+  if (!deviceHost || !controls) return deviceHost;
+  const withheld = new Set<DesktopCapability>([
+    ...(controls.featureAccess.computer_use ? [] : ['computer.use' as const]),
+    ...(controls.featureAccess.browser ? [] : ['browser.site' as const, 'browser.cdp' as const]),
+  ]);
+  if (withheld.size === 0) return deviceHost;
   return {
     ...deviceHost,
-    capabilities: deviceHost.capabilities.filter((capability) => capability !== 'computer.use'),
+    capabilities: deviceHost.capabilities.filter((capability) => !withheld.has(capability)),
   };
 }
 
@@ -4295,6 +4333,18 @@ export async function processRequest(
     schedulesAllowed:
       asksForSchedule(lastUserText) &&
       (await buildWorkspaceFeatureGateResponse(userId, request, 'schedules', chatSurface)) === null,
+  });
+
+  applyPluginDraftToolCapability(chatRequest, {
+    surface: chatSurface,
+    toolsCapable: resolvedModelCaps?.tools ?? true,
+    isTemporary: conversationIsTemporary,
+    ambientToolsAllowed,
+    pluginDraftsAllowed:
+      userSkillAuthoringEnabled() &&
+      asksForPluginDraft(lastUserText) &&
+      (await buildWorkspaceFeatureGateResponse(userId, request, 'plugins', chatSurface)) === null &&
+      (await buildWorkspaceFeatureGateResponse(userId, request, 'skills', chatSurface)) === null,
   });
 
   const lastUserContent = lastUserMsg?.content;

@@ -1185,6 +1185,39 @@
       "deepLink": "file"
     },
     {
+      "name": "external-reference",
+      "label": "External reference",
+      "schema": "packages/contracts/types/src/external-resource-reference.ts",
+      "symbol": "ExternalResourceReference",
+      "tables": ["external_resource_references"],
+      "writeFunctions": [],
+      "mutators": ["apps/web/lib/server/external-resource-references.ts"],
+      "projections": [],
+      "providerCopies": [],
+      "ownership": "user-and-organization",
+      "sync": "server-authoritative",
+      "versioning": "updated-at",
+      "lifecycle": "active",
+      "childDisposition": "detach",
+      "auditBoundary": "none",
+      "columns": {
+        "owner": "user_id",
+        "tenant": "organization_id",
+        "createdAt": "created_at",
+        "updatedAt": "updated_at"
+      },
+      "aliases": [],
+      "identity": "id",
+      "access": "owner-or-tenant-member",
+      "retention": {
+        "kind": "until-deleted"
+      },
+      "classification": ["user-content"],
+      "events": [],
+      "storage": "cloud",
+      "deepLink": null
+    },
+    {
       "name": "notification",
       "label": "Notification",
       "schema": "packages/contracts/types/src/notifications.ts",
@@ -1456,6 +1489,11 @@
       "table": "developer_webhook_endpoints",
       "exempt": [],
       "why": "registered, changed and removed only by its owner in the developer console, so its creator is always its owner, and each change is a single last-write-wins edit that no If-Match precondition quotes"
+    },
+    {
+      "table": "external_resource_references",
+      "exempt": ["createdBy", "version"],
+      "why": "recorded by the server for the account that reached the resource, so its creator is always its owner, and no client edits a reference under an If-Match precondition: a repeat sighting refreshes it in place"
     }
   ],
   "tableDispositions": [

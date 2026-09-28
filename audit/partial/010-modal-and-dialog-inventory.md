@@ -190,20 +190,6 @@ Code: `apps/extension/src/side_panel.ts:9843-9867`, `apps/extension/src/side_pan
 
 Code: `packages/ui/ui/src/settings-modal/SettingsModal.tsx:281-281`, `apps/web/features/connectors/hooks/use-connectors-settings-adapter.tsx:513-518`, `packages/ui/ui/src/directory/ConnectorDetailView.tsx:295-298`, `apps/web/features/chat/components/messages/ToolTimeline.tsx:466-470`
 
-## S10.20: Select among connected accounts.
-
-- Done when: When a service has several connected accounts, a dialog lets the user pick which one to use or make default.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Accounts list, default switch and schema (0253) exist, but no flow creates a second account: both OAuth callbacks save every grant under the "default" account key, so a second sign-in replaces the first. | handler |
-| desktop | partial | Accounts list, default switch and schema (0253) exist, but no flow creates a second account: both OAuth callbacks save every grant under the "default" account key, so a second sign-in replaces the first. | handler |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/connectors/components/ConnectorAccountSelector.tsx:151-169`, `apps/web/app/api/connectors/[connectorId]/accounts/route.ts:44-52`, `apps/web/app/api/connectors/oauth/callback/route.ts:153-161`
-
 ## S10.21: Install Plugin.
 
 - Done when: An install dialog shows the plugin and installs it into the account or workspace.
