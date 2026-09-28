@@ -677,6 +677,31 @@ const ar = {
   'webview.searchingSessions': 'جارٍ البحث في الجلسات…',
   'webview.noMatchingSessions': 'لا توجد جلسات تطابق "{query}"',
   'webview.archivedSessions': 'الجلسات المؤرشفة',
+  'messageActions.resendTitle': 'هل تريد إعادة إرسال هذه الرسالة؟',
+  'messageActions.resendDetail':
+    'يُزال الرد عليها وكل ما يليه من هذه الجلسة، ثم تُرسل الرسالة مرة أخرى. لا تتغير الملفات.',
+  'messageActions.resend': 'إعادة الإرسال',
+  'messageActions.stopFirst': 'AGI Workforce: أوقف الرد الجاري أولًا.',
+  'messageActions.notFound':
+    'AGI Workforce: لم تعد هذه الرسالة في هذه الجلسة. أعد فتح الجلسة وحاول مرة أخرى.',
+  'messageActions.needsUpdate': 'AGI Workforce: حدّث AGI CLI لإعادة إرسال رسالة أو التفرع منها.',
+  'messageActions.branchTitle': '{title} (فرع)',
+  'messageActions.failed': 'AGI Workforce: {reason}',
+  'webview.resendMessage': 'إعادة الإرسال',
+  'webview.resendMessageLabel': 'إعادة إرسال هذه الرسالة',
+  'webview.branchFromMessage': 'تفرّع',
+  'webview.branchFromMessageLabel': 'بدء جلسة جديدة من هنا مع هذه الرسالة جاهزة للتعديل',
+  'localServers.running_zero': '{provider} قيد التشغيل · لا نماذج',
+  'localServers.running_one': '{provider} قيد التشغيل · نموذج واحد',
+  'localServers.running_two': '{provider} قيد التشغيل · نموذجان',
+  'localServers.running_few': '{provider} قيد التشغيل · {count} نماذج',
+  'localServers.running_many': '{provider} قيد التشغيل · {count} نموذجًا',
+  'localServers.running_other': '{provider} قيد التشغيل · {count} نموذج',
+  'localServers.runningEmpty': '{provider} قيد التشغيل دون نماذج محمّلة',
+  'localServers.notRunning': '{provider} ليس قيد التشغيل. شغّله لاستخدام نماذجه.',
+  'localServers.unhealthy': '{provider} لا يستجيب: {reason}',
+  'localServers.blocked': '{provider} محظور: {reason}',
+  'localServers.noReason': 'لم يُذكر سبب',
 };
 
 export default ar;

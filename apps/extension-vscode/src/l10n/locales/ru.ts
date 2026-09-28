@@ -597,6 +597,31 @@ const ru = {
   'webview.searchingSessions': 'Поиск сессий…',
   'webview.noMatchingSessions': 'Нет сессий, соответствующих «{query}»',
   'webview.archivedSessions': 'Архивные сессии',
+  'messageActions.resendTitle': 'Отправить это сообщение повторно?',
+  'messageActions.resendDetail':
+    'Ответ на него и всё, что идёт после, удаляются из этой сессии, затем сообщение отправляется снова. Файлы не изменяются.',
+  'messageActions.resend': 'Отправить повторно',
+  'messageActions.stopFirst': 'AGI Workforce: сначала остановите текущий ответ.',
+  'messageActions.notFound':
+    'AGI Workforce: этого сообщения больше нет в сессии. Откройте сессию заново и повторите попытку.',
+  'messageActions.needsUpdate':
+    'AGI Workforce: обновите AGI CLI, чтобы повторно отправлять сообщения или ответвляться от них.',
+  'messageActions.branchTitle': '{title} (ответвление)',
+  'messageActions.failed': 'AGI Workforce: {reason}',
+  'webview.resendMessage': 'Отправить повторно',
+  'webview.resendMessageLabel': 'Отправить это сообщение повторно',
+  'webview.branchFromMessage': 'Ответвить',
+  'webview.branchFromMessageLabel':
+    'Начать новую сессию с этого места, подставив это сообщение для правки',
+  'localServers.running_one': '{provider} запущен · {count} модель',
+  'localServers.running_few': '{provider} запущен · {count} модели',
+  'localServers.running_many': '{provider} запущен · {count} моделей',
+  'localServers.running_other': '{provider} запущен · {count} модели',
+  'localServers.runningEmpty': '{provider} запущен, но модели не загружены',
+  'localServers.notRunning': '{provider} не запущен. Запустите его, чтобы использовать его модели.',
+  'localServers.unhealthy': '{provider} не отвечает: {reason}',
+  'localServers.blocked': '{provider} заблокирован: {reason}',
+  'localServers.noReason': 'причина не указана',
 };
 
 export default ru;

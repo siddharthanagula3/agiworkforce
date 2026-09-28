@@ -538,6 +538,30 @@ const es = {
   'webview.searchingSessions': 'Buscando sesiones…',
   'webview.noMatchingSessions': 'Ninguna sesión coincide con «{query}»',
   'webview.archivedSessions': 'Sesiones archivadas',
+  'messageActions.resendTitle': '¿Reenviar este mensaje?',
+  'messageActions.resendDetail':
+    'La respuesta a este mensaje y todo lo que sigue se eliminan de esta sesión, y después el mensaje se envía de nuevo. Los archivos no cambian.',
+  'messageActions.resend': 'Reenviar',
+  'messageActions.stopFirst': 'AGI Workforce: detenga primero la respuesta en curso.',
+  'messageActions.notFound':
+    'AGI Workforce: ese mensaje ya no está en esta sesión. Vuelva a abrir la sesión e inténtelo de nuevo.',
+  'messageActions.needsUpdate':
+    'AGI Workforce: actualice la CLI de AGI para reenviar un mensaje o crear una rama desde él.',
+  'messageActions.branchTitle': '{title} (rama)',
+  'messageActions.failed': 'AGI Workforce: {reason}',
+  'webview.resendMessage': 'Reenviar',
+  'webview.resendMessageLabel': 'Reenviar este mensaje',
+  'webview.branchFromMessage': 'Crear rama',
+  'webview.branchFromMessageLabel':
+    'Iniciar una sesión nueva desde aquí con este mensaje listo para editar',
+  'localServers.running_one': '{provider} está en ejecución · {count} modelo',
+  'localServers.running_many': '{provider} está en ejecución · {count} de modelos',
+  'localServers.running_other': '{provider} está en ejecución · {count} modelos',
+  'localServers.runningEmpty': '{provider} está en ejecución sin modelos cargados',
+  'localServers.notRunning': '{provider} no está en ejecución. Inícielo para usar sus modelos.',
+  'localServers.unhealthy': '{provider} no responde: {reason}',
+  'localServers.blocked': '{provider} está bloqueado: {reason}',
+  'localServers.noReason': 'no se indicó el motivo',
 };
 
 export default es;

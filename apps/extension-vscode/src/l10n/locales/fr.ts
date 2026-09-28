@@ -551,6 +551,30 @@ const fr = {
   'webview.searchingSessions': 'Recherche des sessions…',
   'webview.noMatchingSessions': 'Aucune session ne correspond à « {query} »',
   'webview.archivedSessions': 'Sessions archivées',
+  'messageActions.resendTitle': 'Renvoyer ce message ?',
+  'messageActions.resendDetail':
+    'La réponse à ce message et tout ce qui suit sont supprimés de cette session, puis le message est renvoyé. Les fichiers ne changent pas.',
+  'messageActions.resend': 'Renvoyer',
+  'messageActions.stopFirst': "AGI Workforce : arrêtez d'abord la réponse en cours.",
+  'messageActions.notFound':
+    "AGI Workforce : ce message n'est plus dans cette session. Rouvrez la session et réessayez.",
+  'messageActions.needsUpdate':
+    'AGI Workforce : mettez à jour la CLI AGI pour renvoyer un message ou créer une branche à partir de celui-ci.',
+  'messageActions.branchTitle': '{title} (branche)',
+  'messageActions.failed': 'AGI Workforce : {reason}',
+  'webview.resendMessage': 'Renvoyer',
+  'webview.resendMessageLabel': 'Renvoyer ce message',
+  'webview.branchFromMessage': 'Créer une branche',
+  'webview.branchFromMessageLabel':
+    "Démarrer une nouvelle session à partir d'ici avec ce message prêt à modifier",
+  'localServers.running_one': '{provider} est lancé · {count} modèle',
+  'localServers.running_many': '{provider} est lancé · {count} de modèles',
+  'localServers.running_other': '{provider} est lancé · {count} modèles',
+  'localServers.runningEmpty': '{provider} est lancé sans modèle chargé',
+  'localServers.notRunning': "{provider} n'est pas lancé. Démarrez-le pour utiliser ses modèles.",
+  'localServers.unhealthy': '{provider} ne répond pas : {reason}',
+  'localServers.blocked': '{provider} est bloqué : {reason}',
+  'localServers.noReason': "aucun motif n'a été donné",
 };
 
 export default fr;

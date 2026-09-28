@@ -369,6 +369,27 @@ const ko = {
   'webview.searchingSessions': '세션을 검색하는 중…',
   'webview.noMatchingSessions': '"{query}"에 맞는 세션이 없습니다',
   'webview.archivedSessions': '보관된 세션',
+  'messageActions.resendTitle': '이 메시지를 다시 보낼까요?',
+  'messageActions.resendDetail':
+    '이 메시지에 대한 답변과 그 이후의 모든 내용이 이 세션에서 제거된 다음 메시지가 다시 전송됩니다. 파일은 변경되지 않습니다.',
+  'messageActions.resend': '다시 보내기',
+  'messageActions.stopFirst': 'AGI Workforce: 먼저 현재 응답을 중지하세요.',
+  'messageActions.notFound':
+    'AGI Workforce: 해당 메시지가 더 이상 이 세션에 없습니다. 세션을 다시 열고 다시 시도하세요.',
+  'messageActions.needsUpdate':
+    'AGI Workforce: 메시지를 다시 보내거나 분기하려면 AGI CLI를 업데이트하세요.',
+  'messageActions.branchTitle': '{title} (분기)',
+  'messageActions.failed': 'AGI Workforce: {reason}',
+  'webview.resendMessage': '다시 보내기',
+  'webview.resendMessageLabel': '이 메시지 다시 보내기',
+  'webview.branchFromMessage': '분기',
+  'webview.branchFromMessageLabel': '여기서 새 세션을 시작하고 이 메시지를 편집할 수 있게 둡니다',
+  'localServers.running_other': '{provider} 실행 중 · 모델 {count}개',
+  'localServers.runningEmpty': '{provider} 실행 중 · 로드된 모델 없음',
+  'localServers.notRunning': '{provider} 실행 안 됨 · 모델을 사용하려면 시작하세요',
+  'localServers.unhealthy': '{provider} 응답 없음: {reason}',
+  'localServers.blocked': '{provider} 차단됨: {reason}',
+  'localServers.noReason': '이유가 제공되지 않았습니다',
 };
 
 export default ko;

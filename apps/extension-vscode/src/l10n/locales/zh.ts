@@ -324,6 +324,25 @@ const zh = {
   'webview.searchingSessions': '正在搜索会话…',
   'webview.noMatchingSessions': '没有与“{query}”匹配的会话',
   'webview.archivedSessions': '已归档的会话',
+  'messageActions.resendTitle': '要重新发送这条消息吗？',
+  'messageActions.resendDetail':
+    '对这条消息的回复以及之后的所有内容都会从此会话中删除，然后重新发送这条消息。文件不会更改。',
+  'messageActions.resend': '重新发送',
+  'messageActions.stopFirst': 'AGI Workforce：请先停止当前回复。',
+  'messageActions.notFound': 'AGI Workforce：该消息已不在此会话中。请重新打开会话后再试。',
+  'messageActions.needsUpdate': 'AGI Workforce：请更新 AGI CLI，以便重新发送消息或从消息创建分支。',
+  'messageActions.branchTitle': '{title}（分支）',
+  'messageActions.failed': 'AGI Workforce：{reason}',
+  'webview.resendMessage': '重新发送',
+  'webview.resendMessageLabel': '重新发送这条消息',
+  'webview.branchFromMessage': '分支',
+  'webview.branchFromMessageLabel': '从这里开始一个新会话，并把这条消息放进输入框以便编辑',
+  'localServers.running_other': '{provider} 正在运行 · {count} 个模型',
+  'localServers.runningEmpty': '{provider} 正在运行，但未加载模型',
+  'localServers.notRunning': '{provider} 未运行。请启动它以使用其模型。',
+  'localServers.unhealthy': '{provider} 无响应：{reason}',
+  'localServers.blocked': '{provider} 已被阻止：{reason}',
+  'localServers.noReason': '未提供原因',
 };
 
 export default zh;
