@@ -52,7 +52,20 @@ import {
   CONNECTOR_TOKEN_STORAGE_UNAVAILABLE,
   isConnectorTokenStorageAvailable,
 } from '@/lib/custom-connector-crypto';
-import { describeConnectorSetup, type ConnectorSetupKind } from '@/lib/connectors/oauth-setup';
+import {
+  describeConnectorSetup,
+  regionRequirement,
+  type ConnectorSetupKind,
+} from '@/lib/connectors/oauth-setup';
+import {
+  BANK_ACCOUNTS_CONNECTOR_ID,
+  BANK_ACCOUNTS_EXCHANGE_PATH,
+  BANK_ACCOUNTS_LINK_PATH,
+} from '@/lib/connectors/plaid-config';
+import {
+  SENSITIVE_DATA_CONNECTOR_IDS,
+  sensitiveDataRegionRefusal,
+} from '@/lib/connectors/sensitive-data-connectors';
 import { listPendingConnectorIds } from '@/lib/connectors/oauth-store';
 import {
   findDirectoryTargetByRemoteUrl,
@@ -150,6 +163,9 @@ function getAvailableConnectorIds(): string[] {
   for (const id of connectorIdsWithMcpEndpoint()) {
     if (isSelfServiceConnector(id) && describeConnectorSetup(id) === null) available.add(id);
   }
+  if (describeConnectorSetup(BANK_ACCOUNTS_CONNECTOR_ID) === null) {
+    available.add(BANK_ACCOUNTS_CONNECTOR_ID);
+  }
   if (
     isGitHubInstallationLinkingAvailable() &&
     isGitHubAppConfigured() &&
@@ -177,6 +193,27 @@ function describeCuratedSetup(available: ReadonlySet<string>): Record<string, Co
     };
   }
   return setup;
+}
+
+function withRegionRestrictions(
+  request: NextRequest,
+  available: readonly string[],
+  setup: Record<string, ConnectorSetupEntry>,
+): { available: string[]; setup: Record<string, ConnectorSetupEntry> } {
+  const restricted = new Set<string>();
+  const restrictedSetup = { ...setup };
+  for (const connectorId of SENSITIVE_DATA_CONNECTOR_IDS) {
+    if (!available.includes(connectorId)) continue;
+    const refusal = sensitiveDataRegionRefusal(connectorId, request);
+    if (!refusal) continue;
+    const { kind, missingEnv, message } = regionRequirement(connectorId, refusal);
+    restricted.add(connectorId);
+    restrictedSetup[connectorId] = { kind, missingEnv, message };
+  }
+  return {
+    available: available.filter((connectorId) => !restricted.has(connectorId)),
+    setup: restrictedSetup,
+  };
 }
 
 function isCuratedOrConfiguredId(connectorId: string): boolean {
@@ -248,7 +285,10 @@ async function handleGetConnectors(request: NextRequest) {
       scopes: grant.grantedScopes,
       needsReauthorization: grant.needsReauthorization,
     };
-    if (isConnectorOAuthSupported(grant.connectorId)) {
+    if (
+      isConnectorOAuthSupported(grant.connectorId) ||
+      grant.connectorId === BANK_ACCOUNTS_CONNECTOR_ID
+    ) {
       connectors.push(base);
       continue;
     }
@@ -325,10 +365,12 @@ async function handleGetConnectors(request: NextRequest) {
     (connectorId) => !withHealth.some((entry) => entry.connectorId === connectorId),
   );
 
+  const offered = withRegionRestrictions(request, available, describeCuratedSetup(availableSet));
+
   return NextResponse.json({
     connectors: withHealth,
-    available,
-    setup: describeCuratedSetup(availableSet),
+    available: offered.available,
+    setup: offered.setup,
     pending,
   });
 }
@@ -539,6 +581,35 @@ async function handleCreateConnector(request: NextRequest) {
         ...(installUrl ? { installStartPath: GITHUB_INSTALL_START_PATH } : {}),
       },
       { status: installUrl ? 409 : 501 },
+    );
+  }
+
+  const regionRefusal = sensitiveDataRegionRefusal(body.connectorId, request);
+  if (regionRefusal) {
+    return NextResponse.json(
+      { error: regionRefusal, message: regionRefusal, connectorId: body.connectorId },
+      { status: 403 },
+    );
+  }
+
+  if (body.connectorId === BANK_ACCOUNTS_CONNECTOR_ID) {
+    const setup = describeConnectorSetup(body.connectorId, connectorDisplayName(body.connectorId));
+    if (setup) {
+      return NextResponse.json(
+        { error: setup.message, message: setup.message, connectorId: body.connectorId, setup },
+        { status: 501 },
+      );
+    }
+    const message = 'Bank accounts connect through Plaid, which opens its own sign-in window.';
+    return NextResponse.json(
+      {
+        error: message,
+        message,
+        connectorId: body.connectorId,
+        plaidLinkPath: BANK_ACCOUNTS_LINK_PATH,
+        plaidExchangePath: BANK_ACCOUNTS_EXCHANGE_PATH,
+      },
+      { status: 409 },
     );
   }
 

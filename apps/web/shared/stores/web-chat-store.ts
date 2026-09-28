@@ -179,7 +179,7 @@ export interface MessageResearchState {
    * errored/interrupted run so the retry does not re-search what already
    * succeeded (CAP-045 slice 4).
    */
-  sourcesForRetry?: Array<{ url: string; title?: string; snippet?: string }>;
+  sourcesForRetry?: Array<{ url: string; title?: string; snippet?: string; retrievedAt?: string }>;
   runConfig?: ResearchRunConfig;
 }
 

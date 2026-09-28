@@ -10,14 +10,13 @@ nothing is left.
 
 - Done when: The assistant can call a web-search tool during a turn and the searches and their sources are shown to the user.
 - Wave: 3
-- Already works on: web, desktop, mobile, chrome, api
+- Already works on: web, desktop, mobile, vscode, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | Hosted search needs the gateway web_search flag carried on the shared agiworkforce-llm ChatRequest (desktop also constructs it) or a hosted search endpoint; BYOK/Local still need SEARCH_API_KEY. | handler |
-| vscode | partial | The VS Code chat runs the local CLI, whose web_search needs a SEARCH_API_KEY environment variable the user must set outside the product. | handler |
 
-Code: `apps/cli/src/features/exec/tools/web/mod.rs:286-286`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:2836-2845`, `apps/cli/src/features/exec/tools/web/mod.rs:286-293`
+Code: `apps/cli/src/features/exec/tools/web/mod.rs:286-286`
 
 ## S57.03: Source-reader tool.
 
@@ -195,13 +194,13 @@ Code: `apps/web/lib/e2b/execution-tools.ts:18-18`, `apps/web/app/api/llm/v1/chat
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The server offers the tools to mobile, but the mobile client does not yet declare image.v1 (apps/mobile/stores/chat/chatExecutionStore.ts:1812, held by Codex) and has no image.v1 renderer. That needs a post-codex patch. | handler |
+| mobile | partial | 3261f2780 renders image.v1 cards on mobile (GeneratedImage with full screen and share), so images made in a web turn show on the phone. New mobile turns still need image.v1 declared in chatExecutionStore.ts, held by Codex: post-codex/p-mcp-web-S57.16-mobile-image-v1.patch. It touches the same line as no-yearly-s108-33-mobile-itinerary.patch; combined, the line is supported: ['image.v1', 'itinerary.v1', 'map-search.v1']. | handler |
 | cli | partial | Not in this lane: exposing cloud::image::generate as an agent tool for Managed CLI sessions belongs to p-desktop-cli. | handler |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 | api | missing | Not built on this surface. |  |
 
-Code: `apps/web/app/api/media/image/lib/image-chat-tools.ts:45-45`, `apps/cli/src/cloud/image.rs:556-556`
+Code: `apps/mobile/src/features/chat/components/InteractiveCardBlock.tsx:586-586`, `apps/cli/src/cloud/image.rs:556-556`
 
 ## S57.17: Image-editing tool.
 
@@ -211,13 +210,13 @@ Code: `apps/web/app/api/media/image/lib/image-chat-tools.ts:45-45`, `apps/cli/sr
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Same as S57.16 mobile: declare and render image.v1 in the mobile client after Codex releases chatExecutionStore.ts. | handler |
+| mobile | partial | Same as S57.16 mobile: edited images render once image.v1 is declared by the post-codex patch. | handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 | api | missing | Not built on this surface. |  |
 
-Code: `apps/web/app/api/media/image/lib/image-chat-tools.ts:45-45`
+Code: `apps/mobile/src/features/chat/components/InteractiveCardBlock.tsx:586-586`
 
 ## S57.18: Video-generation tool.
 

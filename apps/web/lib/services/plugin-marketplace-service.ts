@@ -685,23 +685,28 @@ async function replaceSourceEntries(
 
 async function writeDependencyDeclarations(
   db: DatabaseAdapter,
+  userId: string,
   sourceId: string,
   manifest: PluginMarketplaceManifest,
 ): Promise<void> {
   await db.execute(
     `update public.plugin_marketplace_sources
         set allow_cross_marketplace_dependencies_on = $2::jsonb
-      where id = $1`,
+      where id = $1 and user_id = $3`,
     [
       sourceId,
       JSON.stringify(parseMarketplaceAllowlist(manifest.allowCrossMarketplaceDependenciesOn)),
+      userId,
     ],
   );
   await db.execute(
     `update public.plugin_marketplace_entries entries
         set dependencies = declared.dependencies
-       from jsonb_to_recordset($2::jsonb) as declared(plugin_key text, dependencies jsonb)
+       from jsonb_to_recordset($2::jsonb) as declared(plugin_key text, dependencies jsonb),
+            public.plugin_marketplace_sources sources
       where entries.source_id = $1
+        and sources.id = entries.source_id
+        and sources.user_id = $3
         and entries.plugin_key = declared.plugin_key
         and entries.dependencies is distinct from declared.dependencies`,
     [
@@ -712,6 +717,7 @@ async function writeDependencyDeclarations(
           dependencies: manifestPluginDependencies(plugin),
         })),
       ),
+      userId,
     ],
   );
 }
@@ -904,7 +910,7 @@ export async function registerMarketplaceSource(
       id = inserted.id;
     }
     await replaceSourceEntries(tx, id, manifest.plugins, contentHash);
-    await writeDependencyDeclarations(tx, id, manifest);
+    await writeDependencyDeclarations(tx, userId, id, manifest);
     await reviewPermissionChanges(tx, userId, id, manifest.plugins);
     return id;
   });
@@ -958,7 +964,7 @@ export async function refreshMarketplaceSource(
           where id = $1`,
         [sourceId],
       );
-      await writeDependencyDeclarations(db, sourceId, manifest);
+      await writeDependencyDeclarations(db, userId, sourceId, manifest);
     } else {
       await db.transaction(async (tx) => {
         await tx.execute(
@@ -969,7 +975,7 @@ export async function refreshMarketplaceSource(
           [sourceId, contentHash],
         );
         await replaceSourceEntries(tx, sourceId, manifest.plugins, contentHash);
-        await writeDependencyDeclarations(tx, sourceId, manifest);
+        await writeDependencyDeclarations(tx, userId, sourceId, manifest);
         await reviewPermissionChanges(tx, userId, sourceId, manifest.plugins);
       });
     }
@@ -1129,6 +1135,7 @@ const SOURCE_ENTRY_SELECT = `
          sources.allow_cross_marketplace_dependencies_on
     from public.plugin_marketplace_entries entries
     join public.plugin_marketplace_sources sources on sources.id = entries.source_id
+   where sources.user_id = $1
 `;
 
 function mapSourceEntryRow(row: MarketplaceSourceEntryRow): MarketplaceSourceEntry {
@@ -1147,9 +1154,9 @@ export async function getMarketplaceSourceEntry(
 ): Promise<MarketplaceSourceEntry | null> {
   const rows = await db.query<MarketplaceSourceEntryRow>(
     `${SOURCE_ENTRY_SELECT}
-      where entries.id = $1 and sources.user_id = $2
+      and entries.id = $2
       limit 1`,
-    [entryId, userId],
+    [userId, entryId],
   );
   const row = rows[0];
   return row ? mapSourceEntryRow(row) : null;
@@ -1163,7 +1170,7 @@ export async function findMarketplaceSourceEntry(
 ): Promise<MarketplaceSourceEntry | null> {
   const rows = await db.query<MarketplaceSourceEntryRow>(
     `${SOURCE_ENTRY_SELECT}
-      where sources.user_id = $1 and sources.name = $2 and entries.plugin_key = $3
+      and sources.name = $2 and entries.plugin_key = $3
       order by sources.created_at asc
       limit 1`,
     [userId, sourceName, pluginKey],
