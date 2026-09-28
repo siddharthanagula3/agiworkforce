@@ -400,6 +400,23 @@ const ko = {
   'cloudSteer.waitingSection': '내 메시지',
   'cloudSteer.failed': '메시지를 보내지 못했습니다',
   'cloudSteer.tooLong': '메시지는 최대 {count}자까지 쓸 수 있습니다.',
+  'savedApprovals.title': '저장된 승인',
+  'savedApprovals.placeholder': 'AGI CLI가 모든 세션에 적용하는 규칙',
+  'savedApprovals.empty':
+    '아직 저장된 승인이 없습니다. 승인 요청에서 항상 허용을 선택하면 저장됩니다.',
+  'savedApprovals.allowed': '항상 허용됨',
+  'savedApprovals.denied': '항상 거부됨',
+  'savedApprovals.kindCommand': '셸 명령',
+  'savedApprovals.kindFile': '파일 편집',
+  'savedApprovals.kindPolicy': '명령 정책 규칙',
+  'savedApprovals.removeTitle': '이 저장된 승인을 제거할까요?',
+  'savedApprovals.removeAllowed': '다음에 이 작업을 하려고 할 때 AGI가 다시 묻습니다: {label}',
+  'savedApprovals.removeDenied': '거부되는 대신 AGI가 이 작업을 다시 요청할 수 있습니다: {label}',
+  'savedApprovals.noun': '저장된 승인',
+  'webview.alwaysAllow': '항상 허용',
+  'webview.alwaysAllowHint':
+    '규칙을 저장해 모든 세션에서 AGI가 이 작업을 더 이상 묻지 않게 합니다. 저장된 승인에서 관리하세요.',
+  'webview.alwaysAllowedOutcome': '항상 허용됨. AGI가 이 작업을 다시 묻지 않습니다.',
 };
 
 export default ko;

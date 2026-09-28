@@ -509,6 +509,24 @@ const de = {
   'cloudSteer.waitingSection': 'Ihre Nachrichten',
   'cloudSteer.failed': 'Ihre Nachricht konnte nicht gesendet werden',
   'cloudSteer.tooLong': 'Eine Nachricht darf höchstens {count} Zeichen lang sein.',
+  'savedApprovals.title': 'Gespeicherte Genehmigungen',
+  'savedApprovals.placeholder': 'Regeln, die die AGI CLI in jeder Sitzung anwendet',
+  'savedApprovals.empty':
+    'Noch keine Genehmigungen gespeichert. Wählen Sie bei einer Genehmigung Immer erlauben, um eine zu speichern.',
+  'savedApprovals.allowed': 'Immer erlaubt',
+  'savedApprovals.denied': 'Immer abgelehnt',
+  'savedApprovals.kindCommand': 'Shell-Befehl',
+  'savedApprovals.kindFile': 'Dateiänderung',
+  'savedApprovals.kindPolicy': 'Befehlsrichtlinie',
+  'savedApprovals.removeTitle': 'Diese gespeicherte Genehmigung entfernen?',
+  'savedApprovals.removeAllowed':
+    'AGI fragt wieder, wenn es das nächste Mal Folgendes tun will: {label}',
+  'savedApprovals.removeDenied': 'AGI darf wieder fragen, statt abgelehnt zu werden: {label}',
+  'savedApprovals.noun': 'gespeicherte Genehmigungen',
+  'webview.alwaysAllow': 'Immer erlauben',
+  'webview.alwaysAllowHint':
+    'Speichert eine Regel, damit AGI in keiner Sitzung mehr danach fragt. Verwaltbar unter Gespeicherte Genehmigungen.',
+  'webview.alwaysAllowedOutcome': 'Immer erlaubt. AGI fragt danach nicht mehr.',
 };
 
 export default de;

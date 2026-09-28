@@ -120,6 +120,7 @@ import {
   openArtifactsSurface,
   openCapabilitySurface,
   manageHooks,
+  manageSavedApprovals,
   manageMcpServers,
   managePlugins,
   manageSkills,
@@ -2515,6 +2516,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     register('agi-workforce.showPlugins', () => managePlugins(cliCapabilities)),
     register('agi-workforce.showMcpServers', () => manageMcpServers(cliCapabilities)),
     register('agi-workforce.showHooks', () => manageHooks(cliCapabilities)),
+    register('agi-workforce.showSavedApprovals', () => manageSavedApprovals(cliCapabilities)),
     register('agi-workforce.showInstructions', () =>
       openCapabilitySurface(cliCapabilities, 'instructions'),
     ),

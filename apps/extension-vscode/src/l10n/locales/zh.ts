@@ -353,6 +353,22 @@ const zh = {
   'cloudSteer.waitingSection': '你的消息',
   'cloudSteer.failed': '无法发送你的消息',
   'cloudSteer.tooLong': '消息最多 {count} 个字符。',
+  'savedApprovals.title': '已保存的批准',
+  'savedApprovals.placeholder': 'AGI CLI 在每个会话中应用的规则',
+  'savedApprovals.empty': '还没有保存的批准。在批准请求上选择“始终允许”即可保存。',
+  'savedApprovals.allowed': '始终允许',
+  'savedApprovals.denied': '始终拒绝',
+  'savedApprovals.kindCommand': 'Shell 命令',
+  'savedApprovals.kindFile': '文件编辑',
+  'savedApprovals.kindPolicy': '命令策略规则',
+  'savedApprovals.removeTitle': '要删除这条已保存的批准吗？',
+  'savedApprovals.removeAllowed': '下次要执行此操作时，AGI 会再次询问：{label}',
+  'savedApprovals.removeDenied': 'AGI 可能会再次请求执行此操作，而不是直接被拒绝：{label}',
+  'savedApprovals.noun': '已保存的批准',
+  'webview.alwaysAllow': '始终允许',
+  'webview.alwaysAllowHint':
+    '保存一条规则，让 AGI 在所有会话中不再询问此操作。可在“已保存的批准”中管理。',
+  'webview.alwaysAllowedOutcome': '已始终允许。AGI 不会再询问此操作。',
 };
 
 export default zh;

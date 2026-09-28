@@ -4,6 +4,7 @@ import {
   getCoreManualModelOptions,
   getProviderDisplayLabel,
   getSurfaceManualModelOptions,
+  isAutoModeModelId,
   isModelSelectable,
   PROVIDER_DISPLAY,
   PROVIDERS_IN_ORDER,
@@ -122,7 +123,7 @@ describe('buildGroupedQuickPickItems, the owner decides the managed universe', (
   function listedModelIds(tier?: string): string[] {
     return buildGroupedQuickPickItems(tier)
       .map((item) => item.modelId)
-      .filter((modelId): modelId is string => modelId !== undefined && modelId !== 'auto');
+      .filter((modelId): modelId is string => modelId !== undefined && !isAutoModeModelId(modelId));
   }
 
   it('offers exactly what the shared owner admits on a managed plan', () => {

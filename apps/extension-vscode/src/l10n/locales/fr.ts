@@ -585,6 +585,25 @@ const fr = {
   'cloudSteer.waitingSection': 'Vos messages',
   'cloudSteer.failed': "votre message n'a pas pu être envoyé",
   'cloudSteer.tooLong': 'Un message peut compter au plus {count} caractères.',
+  'savedApprovals.title': 'Approbations enregistrées',
+  'savedApprovals.placeholder': 'Règles que la CLI AGI applique dans chaque session',
+  'savedApprovals.empty':
+    "Aucune approbation enregistrée pour l'instant. Choisissez Toujours autoriser sur une approbation pour en enregistrer une.",
+  'savedApprovals.allowed': 'Toujours autorisé',
+  'savedApprovals.denied': 'Toujours refusé',
+  'savedApprovals.kindCommand': 'Commande shell',
+  'savedApprovals.kindFile': 'Modification de fichier',
+  'savedApprovals.kindPolicy': 'Règle de politique de commandes',
+  'savedApprovals.removeTitle': 'Supprimer cette approbation enregistrée ?',
+  'savedApprovals.removeAllowed':
+    "AGI redemandera la prochaine fois qu'il voudra faire ceci : {label}",
+  'savedApprovals.removeDenied':
+    "AGI pourra redemander à faire ceci au lieu d'être refusé : {label}",
+  'savedApprovals.noun': 'approbations enregistrées',
+  'webview.alwaysAllow': 'Toujours autoriser',
+  'webview.alwaysAllowHint':
+    "Enregistre une règle pour qu'AGI ne demande plus ceci dans aucune session. Gérez-la dans Approbations enregistrées.",
+  'webview.alwaysAllowedOutcome': 'Toujours autorisé. AGI ne redemandera plus pour ceci.',
 };
 
 export default fr;
