@@ -34,7 +34,7 @@ Nothing left in this wave.
 
 ## Wave 2: switch on and wire up what is already built (flag off or not mounted)
 
-178 open items.
+133 open items.
 
 | Section | Items | File |
 | --- | ---: | --- |
@@ -58,9 +58,7 @@ Nothing left in this wave.
 | 56. Concrete integration families | 17 | [partial/056-concrete-integration-families.md](../partial/056-concrete-integration-families.md) |
 | 57. Tool catalog and invocation experience | 4 | [partial/057-tool-catalog-and-invocation-experience.md](../partial/057-tool-catalog-and-invocation-experience.md) |
 | 62. Multi-agent and multi-model interfaces | 1 | [partial/062-multi-agent-and-multi-model-interfaces.md](../partial/062-multi-agent-and-multi-model-interfaces.md) |
-| 66. Coding-workspace frontend | 15 | [partial/066-coding-workspace-frontend.md](../partial/066-coding-workspace-frontend.md) |
-| 67. Coding capabilities and developer workflows | 25 | [partial/067-coding-capabilities-and-developer-workflows.md](../partial/067-coding-capabilities-and-developer-workflows.md) |
-| 68. Session continuity and remote-session product | 6 | [partial/068-session-continuity-and-remote-session-product.md](../partial/068-session-continuity-and-remote-session-product.md) |
+| 68. Session continuity and remote-session product | 1 | [partial/068-session-continuity-and-remote-session-product.md](../partial/068-session-continuity-and-remote-session-product.md) |
 | 71. Mobile application | 1 | [partial/071-mobile-application.md](../partial/071-mobile-application.md) |
 | 72. CLI and terminal application | 1 | [partial/072-cli-and-terminal-application.md](../partial/072-cli-and-terminal-application.md) |
 | 76. Model-capability registry | 1 | [partial/076-model-capability-registry.md](../partial/076-model-capability-registry.md) |
@@ -76,7 +74,7 @@ Nothing left in this wave.
 
 ## Wave 3: finish half-built features
 
-1370 open items.
+1415 open items.
 
 | Section | Items | File |
 | --- | ---: | --- |
@@ -142,9 +140,9 @@ Nothing left in this wave.
 | 63. Routines, schedules, and triggers | 19 | [partial/063-routines-schedules-and-triggers.md](../partial/063-routines-schedules-and-triggers.md) |
 | 64. Browser-assistant experience | 20 | [partial/064-browser-assistant-experience.md](../partial/064-browser-assistant-experience.md) |
 | 65. Computer-use experience | 24 | [partial/065-computer-use-experience.md](../partial/065-computer-use-experience.md) |
-| 66. Coding-workspace frontend | 19 | [partial/066-coding-workspace-frontend.md](../partial/066-coding-workspace-frontend.md) |
-| 67. Coding capabilities and developer workflows | 12 | [partial/067-coding-capabilities-and-developer-workflows.md](../partial/067-coding-capabilities-and-developer-workflows.md) |
-| 68. Session continuity and remote-session product | 17 | [partial/068-session-continuity-and-remote-session-product.md](../partial/068-session-continuity-and-remote-session-product.md) |
+| 66. Coding-workspace frontend | 34 | [partial/066-coding-workspace-frontend.md](../partial/066-coding-workspace-frontend.md) |
+| 67. Coding capabilities and developer workflows | 37 | [partial/067-coding-capabilities-and-developer-workflows.md](../partial/067-coding-capabilities-and-developer-workflows.md) |
+| 68. Session continuity and remote-session product | 22 | [partial/068-session-continuity-and-remote-session-product.md](../partial/068-session-continuity-and-remote-session-product.md) |
 | 69. Web application | 4 | [partial/069-web-application.md](../partial/069-web-application.md) |
 | 70. Desktop application | 2 | [partial/070-desktop-application.md](../partial/070-desktop-application.md) |
 | 71. Mobile application | 9 | [partial/071-mobile-application.md](../partial/071-mobile-application.md) |
