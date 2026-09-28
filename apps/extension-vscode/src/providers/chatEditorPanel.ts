@@ -134,7 +134,14 @@ export class ChatEditorPanel {
       secrets,
       context,
       (message: ExtToWebviewMessage) => {
-        alertSessionActivity(message, () => this.panel.reveal());
+        alertSessionActivity(message, {
+          reveal: () => this.panel.reveal(),
+          respond: (requestId, decision) =>
+            void this.stateManager.handleMessage({
+              type: 'respondToApproval',
+              payload: { requestId, decision },
+            }),
+        });
         void this.panel.webview.postMessage(message);
       },
       conversationTreeProvider,
