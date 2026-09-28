@@ -37,7 +37,14 @@ const LABEL = {
   slowTool: 'is taking longer than usual',
   toolResults: 'What the actions returned',
   toolFailed: 'Did not complete',
+  openFile: 'Open',
 } as const;
+
+const GENERATED_FILE_PATH = /^\/api\/files\/[A-Za-z0-9_-]+(?:\?.*)?$/;
+
+function isGeneratedFilePath(uri: string): boolean {
+  return GENERATED_FILE_PATH.test(uri);
+}
 
 const ESCAPE = 'Escape';
 
@@ -310,6 +317,19 @@ export function VoiceModeSurface({
                 <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono text-caption text-[var(--chat-text-secondary)]">
                   {outcome.output}
                 </pre>
+                {outcome.files
+                  .filter((file) => isGeneratedFilePath(file.uri))
+                  .map((file) => (
+                    <a
+                      key={file.uri}
+                      href={file.uri}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-1 inline-flex min-h-6 items-center gap-1 font-medium text-[var(--chat-accent-primary-text)] underline-offset-2 hover:underline"
+                    >
+                      {LABEL.openFile} {file.name}
+                    </a>
+                  ))}
               </li>
             ))}
           </ul>
