@@ -104,7 +104,11 @@
       "owner": "apps/web/lib/server/scim",
       "capabilities": [],
       "concepts": [],
-      "tables": ["organization_group_managers", "organization_group_roles"]
+      "tables": [
+        "organization_group_managers",
+        "organization_group_members",
+        "organization_group_roles"
+      ]
     },
     {
       "name": "roles",
