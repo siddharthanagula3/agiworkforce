@@ -25,9 +25,12 @@ import {
   SheetHeader,
   SheetTitle,
   Skeleton,
+  Spinner,
+  useConfirmAction,
 } from '@agiworkforce/ui';
 import {
   CalendarClock,
+  Copy,
   LayoutTemplate,
   Loader2,
   MessageSquarePlus,
@@ -40,6 +43,7 @@ import { SCHEDULE_TEMPLATES, type ScheduleTemplate } from '../lib/schedule-templ
 import type { ScheduleApprovalDecision, ScheduleHistoryState } from './ScheduleRunHistory';
 import {
   createInitialScheduleDraft,
+  scheduleShareToDraft,
   scheduleToDraft,
   validateAndBuildScheduleRequest,
 } from '../lib/schedule-form';
@@ -47,6 +51,8 @@ import { scheduleApi, type ScheduleApi } from '../services/schedule-api';
 import {
   MANAGED_CLOUD_SCHEDULES_DEFAULT_PAGE_SIZE,
   MANAGED_CLOUD_SCHEDULE_RUNS_DEFAULT_PAGE_SIZE,
+  managedCloudScheduleShareUrlPath,
+  type ManagedCloudScheduleShare,
 } from '@agiworkforce/cloud-contracts';
 import { useSettingsModal } from '@/features/settings/components/SettingsModalProvider';
 import { toUserMessage } from '@/lib/user-error-message';
@@ -123,6 +129,7 @@ export interface ScheduleProjectScope {
 
 interface SchedulesPageProps {
   focusScheduleId?: string | null;
+  sharedScheduleToken?: string | null;
   api?: ScheduleApi;
   now?: () => Date;
   createIdempotencyKey?: () => string;
@@ -189,6 +196,7 @@ export function SchedulesPage({
   subscriptionTier,
   onOpenChat,
   focusScheduleId = null,
+  sharedScheduleToken = null,
 }: SchedulesPageProps) {
   const [schedules, setSchedules] = useState<ScheduleTask[]>([]);
   const [listStatus, setListStatus] = useState<'loading' | 'success' | 'error'>('loading');
@@ -212,6 +220,11 @@ export function SchedulesPage({
   const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
   const [historyById, setHistoryById] = useState<Record<string, ScheduleHistoryState>>({});
   const [deleteTarget, setDeleteTarget] = useState<ScheduleTask | null>(null);
+  const [shareTarget, setShareTarget] = useState<ScheduleTask | null>(null);
+  const [shareStatus, setShareStatus] = useState<'idle' | 'saving' | 'ready' | 'error'>('idle');
+  const [share, setShare] = useState<ManagedCloudScheduleShare | null>(null);
+  const [shareError, setShareError] = useState<string | null>(null);
+  const { confirm: confirmAction, dialog: confirmDialog } = useConfirmAction();
   const [actionMessage, setActionMessage] = useState('');
   const manualRunKeys = useRef<Record<string, string>>({});
   const [statusFilter, setStatusFilter] = useState<ScheduleStatusFilter>('all');
@@ -626,21 +639,81 @@ export function SchedulesPage({
     }
   };
 
-  const shareSchedule = useCallback(
-    async (schedule: ScheduleTask) => {
-      // No schedule-sharing endpoint exists; this copies the same app link
-      // anyone with access to the account can already reach.
-      const path = scope ? `/chat/projects/${scope.projectId}` : '/chat/schedules';
-      const url = `${window.location.origin}${path}`;
-      try {
-        await navigator.clipboard.writeText(url);
-        toast.success(`Link to ${schedule.name} copied`);
-      } catch (error) {
-        toast.error(toUserMessage(error, 'Could not copy the link'));
-      }
-    },
-    [scope],
-  );
+  const shareSchedule = (schedule: ScheduleTask) => {
+    setShareTarget(schedule);
+    setShare(null);
+    setShareError(null);
+    setShareStatus('idle');
+  };
+
+  const shareUrl = share
+    ? `${window.location.origin}${managedCloudScheduleShareUrlPath(share.token)}`
+    : null;
+
+  const createShareLink = async (schedule: ScheduleTask) => {
+    setShareStatus('saving');
+    setShareError(null);
+    try {
+      setShare(await api.shareSchedule(schedule.id));
+      setShareStatus('ready');
+    } catch (error) {
+      setShareStatus('error');
+      setShareError(errorMessage(error, 'The share link could not be created.'));
+    }
+  };
+
+  const copyShareLink = async () => {
+    if (!shareUrl) return;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      toast.success('Link copied');
+    } catch (error) {
+      toast.error(toUserMessage(error, 'Could not copy the link'));
+    }
+  };
+
+  const stopSharing = (schedule: ScheduleTask) => {
+    confirmAction({
+      title: 'Stop sharing this schedule?',
+      description:
+        'The link stops working for everyone who has it. Copies people already made stay theirs. Sharing again creates a new link.',
+      confirmLabel: 'Stop sharing',
+      onConfirm: async () => {
+        try {
+          await api.unshareSchedule(schedule.id);
+          setShare(null);
+          setShareStatus('idle');
+          toast.success('Sharing stopped');
+        } catch (error) {
+          toast.error(errorMessage(error, 'Sharing could not be stopped.'));
+        }
+      },
+    });
+  };
+
+  const sharedTokenRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!sharedScheduleToken || !canCreateSchedules || listStatus !== 'success') return;
+    if (sharedTokenRef.current === sharedScheduleToken) return;
+    sharedTokenRef.current = sharedScheduleToken;
+    void api
+      .getSharedSchedule(sharedScheduleToken)
+      .then((shared) => {
+        const nextDraft = {
+          ...scheduleShareToDraft(shared.snapshot),
+          projectId: scope?.projectId ?? null,
+        };
+        setEditing(null);
+        setDraft(nextDraft);
+        initialDraftRef.current = JSON.stringify(nextDraft);
+        setFormErrors({});
+        setSubmitError(null);
+        setDialogOpen(true);
+      })
+      .catch((error: unknown) => {
+        toast.error(errorMessage(error, 'That shared schedule is no longer available.'));
+      });
+  }, [api, canCreateSchedules, listStatus, scope?.projectId, sharedScheduleToken]);
 
   const openNotificationSettings = useCallback(() => {
     openSettings('notifications');
@@ -1011,7 +1084,7 @@ export function SchedulesPage({
                   onToggleEnabled={(selected) => void toggleEnabled(selected)}
                   onRunNow={(selected) => void runNow(selected)}
                   onEdit={openEdit}
-                  onShare={(selected) => void shareSchedule(selected)}
+                  onShare={shareSchedule}
                   onOpenNotificationSettings={openNotificationSettings}
                   onViewResult={(selected) => void openResultPanel(selected)}
                   onDelete={setDeleteTarget}
@@ -1214,6 +1287,63 @@ export function SchedulesPage({
           )}
         </SheetContent>
       </Sheet>
+
+      <Dialog
+        open={Boolean(shareTarget)}
+        onOpenChange={(open) => {
+          if (!open) setShareTarget(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Share “{shareTarget?.name}”</DialogTitle>
+            <DialogDescription>
+              Anyone with the link can see this schedule&apos;s name, instructions and timing as
+              they are now, and add a copy to their own schedules. Run history, results and
+              connectors stay private, and later edits stay private until you share again.
+            </DialogDescription>
+          </DialogHeader>
+          {shareStatus === 'ready' && shareUrl ? (
+            <div className="flex items-center gap-2">
+              <input
+                readOnly
+                value={shareUrl}
+                aria-label="Share link"
+                onFocus={(event) => event.currentTarget.select()}
+                className="min-w-0 flex-1 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-foreground"
+              />
+              <Button type="button" onClick={() => void copyShareLink()}>
+                <Copy className="mr-2 h-4 w-4" aria-hidden="true" />
+                Copy link
+              </Button>
+            </div>
+          ) : null}
+          {shareError ? (
+            <p role="alert" className="text-sm text-danger">
+              {shareError}
+            </p>
+          ) : null}
+          <div className="flex flex-wrap justify-end gap-2">
+            {shareStatus === 'ready' && shareTarget ? (
+              <Button type="button" variant="outline" onClick={() => stopSharing(shareTarget)}>
+                Stop sharing
+              </Button>
+            ) : shareTarget ? (
+              <Button
+                type="button"
+                disabled={shareStatus === 'saving'}
+                onClick={() => void createShareLink(shareTarget)}
+              >
+                {shareStatus === 'saving' ? (
+                  <Spinner size="sm" className="mr-2" aria-label="Creating the link" />
+                ) : null}
+                Create link
+              </Button>
+            ) : null}
+          </div>
+        </DialogContent>
+      </Dialog>
+      {confirmDialog}
     </Root>
   );
 }

@@ -170,6 +170,10 @@ import { ComparisonResponse } from './ComparisonResponse';
 import { interactiveCardRendersBeforeProse, type InteractiveCard } from '@agiworkforce/types';
 import { InteractiveCardBlock } from './InteractiveCardBlock';
 import { useComparisonStore } from '../../stores/comparison-store';
+import {
+  useChatToolAllowanceStore,
+  useToolsAllowedForChat,
+} from '../../stores/chat-tool-allowance-store';
 import { SourcesControl } from '../research/ResearchPanel';
 import { useResearchPanelStore, type ResearchSource } from '../../stores/research-panel-store';
 import {
@@ -1689,6 +1693,45 @@ const MessageBubbleComponent = function MessageBubble({
     message.isStreaming === true &&
     canonicalActivity.entries.every(isLocalPlaceholderActivityEntry);
   const activityTimeline = placeholderOnlyActivity ? undefined : canonicalActivity;
+  const chatConversationId = message.sessionId ?? activeConversationId;
+  const toolsAllowedForChat = useToolsAllowedForChat(chatConversationId);
+  const allowForChat = useChatToolAllowanceStore((state) => state.allowForChat);
+  const handleApproveToolForChat = useCallback(
+    (toolCallId: string) => {
+      const entry = activityTimeline?.entries.find(
+        (candidate) => candidate.kind === 'tool' && candidate.toolCallId === toolCallId,
+      );
+      if (chatConversationId && entry?.kind === 'tool')
+        allowForChat(chatConversationId, entry.name);
+      handleApproveTool(toolCallId);
+    },
+    [activityTimeline, allowForChat, chatConversationId, handleApproveTool],
+  );
+  const approvedForChatRef = useRef(new Set<string>());
+  useEffect(() => {
+    if (!resolveToolApproval || approvalTurnExpired || toolsAllowedForChat.length === 0) return;
+    for (const entry of activityTimeline?.entries ?? []) {
+      if (
+        entry.kind !== 'tool' ||
+        entry.status !== 'awaiting-approval' ||
+        entry.inputRequest !== undefined ||
+        entry.approval?.decision !== undefined ||
+        entry.approval?.riskLevel === 'high' ||
+        !toolsAllowedForChat.includes(entry.name) ||
+        approvedForChatRef.current.has(entry.toolCallId)
+      ) {
+        continue;
+      }
+      approvedForChatRef.current.add(entry.toolCallId);
+      handleApproveTool(entry.toolCallId);
+    }
+  }, [
+    activityTimeline,
+    approvalTurnExpired,
+    handleApproveTool,
+    resolveToolApproval,
+    toolsAllowedForChat,
+  ]);
   /**
    * A turn the user stopped before its first token has no words and no media.
    * Copy, the two ratings and Read aloud all act on that text, so on this turn
@@ -1940,6 +1983,9 @@ const MessageBubbleComponent = function MessageBubble({
               {...(isAgiWorkTurn ? { workMode: AGI_WORK_MODE } : {})}
               defaultExpanded={showNoSearchResultsNotice}
               onApprove={resolveToolApproval ? handleApproveTool : undefined}
+              onApproveForChat={
+                resolveToolApproval && chatConversationId ? handleApproveToolForChat : undefined
+              }
               onReject={resolveToolApproval ? handleRejectTool : undefined}
               isApprovalExpired={() => approvalTurnExpired}
               onResend={resolveToolApproval && onRegenerate ? handleResendTool : undefined}

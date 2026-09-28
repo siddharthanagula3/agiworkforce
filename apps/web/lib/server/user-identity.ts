@@ -245,9 +245,8 @@ export async function readProjectPersonalizationScope(
 export async function buildCustomInstructionsPreamble(
   db: DatabaseAdapter,
   userId: string,
-  options: { projectId?: string | null; personalized?: boolean } = {},
+  options: { projectId?: string | null } = {},
 ): Promise<string | null> {
-  if (options.personalized === false) return null;
   // Two namespaces, because two surfaces write them: 'general' is what web
   // settings collects, 'personalization' is what mobile's style controls
   // collect. The mobile namespace synced to the account and was read by

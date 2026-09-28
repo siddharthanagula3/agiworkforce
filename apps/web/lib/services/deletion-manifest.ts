@@ -57,6 +57,7 @@ const CUSTOMER_CONTENT = [
   'published_artifact_versions',
   'published_artifacts',
   'research_reports',
+  'scheduled_task_shares',
   'scheduled_tasks',
   'search_history',
   'shared_conversations',

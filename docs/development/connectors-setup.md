@@ -29,6 +29,29 @@ Registry entries are keyed by their registry name (for example
 its chat tools are offered under a derived `dir-` server id, so tool names
 stay valid for every model provider.
 
+## Custom connectors added by URL
+
+A custom connector carries either a bearer token or nothing. When its server
+answers the add probe with an authorization challenge, or publishes protected
+resource metadata, the row is saved with `sign_in_required` and the browser
+starts `GET /api/connectors/oauth/start?connectorId=custom-<short_id>` at once.
+The start route authorizes it like a directory server (steps below), and the
+grant is stored in `connector_oauth_grants` under `custom-<short_id>`; a row
+without a token sends that grant's access token and refreshes it like any
+discovered grant.
+
+Under Advanced settings the user may give the OAuth Client ID and Client Secret
+of a client they registered at the server, for servers that accept neither a
+client metadata document nor dynamic registration, as Claude's custom
+connectors allow (https://support.claude.com/en/articles/11175166). That client
+is kept on the row (the secret sealed under the `oauth-client-secret` purpose)
+and is used for that row's authorization, callback and refresh instead of the
+deployment's own identity. The form shows the redirect URI to register, which
+is `<origin>/api/connectors/oauth/callback` as below. A client and a bearer
+token cannot be given together. Removing the connector disconnects its grant.
+The columns come from migration 0313, which must be applied before this code
+is deployed, because the connector list reads `sign_in_required`.
+
 ## Variables every OAuth connector shares
 
 | Name                                    | Production                                                     | Local                                                                                       |

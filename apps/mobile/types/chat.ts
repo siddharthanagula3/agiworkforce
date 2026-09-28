@@ -36,6 +36,7 @@ export interface ToolSearchResult {
   url: string;
   title: string;
   snippet?: string;
+  publishedDate?: string;
 }
 
 export interface ToolCall {

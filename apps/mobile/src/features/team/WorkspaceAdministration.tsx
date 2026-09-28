@@ -63,7 +63,13 @@ function InviteMemberModal({
   const trimmed = email.trim();
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onCancel}
+      accessibilityViewIsModal
+    >
       <KeyboardAvoidingView style={styles.flex} behavior={keyboardAvoidingBehavior('modal')}>
         <View style={[styles.backdrop, { backgroundColor: colors.scrim }]}>
           <View

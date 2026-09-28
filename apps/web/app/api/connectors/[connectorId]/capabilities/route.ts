@@ -9,6 +9,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { loadUserConnectorCapabilityCatalog } from '@/lib/user-connector-tools';
 import { plainMcpServerText } from '@/lib/connectors/mcp-untrusted-text';
+import { resolveConnectorToolMetadata } from '@/app/api/llm/v1/chat/completions/lib/tool-metadata';
 
 export const runtime = 'nodejs';
 
@@ -54,6 +55,8 @@ async function handleGet(
         description: plainMcpServerText(tool.description),
         visibility: tool.visibility,
         hasApp: Boolean(tool.app),
+        readOnly:
+          resolveConnectorToolMetadata(resolved.connectorId, tool.toolName).actionClass === 'read',
       })),
       resources: server.resources.map((resource) => ({
         uri: resource.uri,

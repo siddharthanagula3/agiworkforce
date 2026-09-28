@@ -5,19 +5,25 @@ import {
   ChevronUp,
   Clock3,
   History,
+  LayoutTemplate,
   Loader2,
   Pencil,
   Play,
   Plus,
   RotateCcw,
+  Share2,
   Trash2,
   X,
   Zap,
 } from 'lucide-react';
 import { getPlanMaxScheduledTasks, TOOL_APPROVAL_ACTION_LABELS } from '@agiworkforce/types';
-import { ApprovalCard } from '@agiworkforce/ui';
+import { ApprovalCard, useConfirmAction } from '@agiworkforce/ui';
 import {
   MANAGED_CLOUD_SCHEDULE_DEFAULT_SOURCES,
+  MANAGED_CLOUD_SCHEDULE_TEMPLATES,
+  describeScheduleRunTiming,
+  managedCloudScheduleShareUrlPath,
+  type ManagedCloudScheduleTemplate,
   type ManagedCloudScheduleMutation,
   type ManagedCloudScheduleRecurrence,
   type ManagedCloudScheduleRun,
@@ -27,6 +33,7 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import { selectHasCloudAccountSession, useAuthStore } from '../../stores/auth';
 import { getCloudModels, type CloudModelInfo } from '../../api/cloudApi';
+import { WEB_APP_URL } from '../../api/config';
 import type { PlanTier } from '../../lib/cloudAccountTypes';
 import { resolveDesktopCloudPickerModels } from '../../services/desktopCloudEntitlements';
 import {
@@ -103,6 +110,39 @@ function resolvedTimezone(): string {
   } catch {
     return 'UTC';
   }
+}
+
+function ScheduleTemplateGrid({
+  disabled,
+  onPick,
+}: {
+  disabled: boolean;
+  onPick: (template: ManagedCloudScheduleTemplate) => void;
+}) {
+  return (
+    <ul className="grid gap-3 text-left sm:grid-cols-2 lg:grid-cols-3">
+      {MANAGED_CLOUD_SCHEDULE_TEMPLATES.map((template) => (
+        <li key={template.id}>
+          <button
+            type="button"
+            onClick={() => onPick(template)}
+            disabled={disabled}
+            className="flex h-full w-full flex-col gap-1 rounded-xl border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] p-4 text-left transition-colors hover:bg-[var(--chat-surface-hover)] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <span className="text-sm font-medium text-[var(--chat-text-primary)]">
+              {template.name}
+            </span>
+            <span className="text-xs text-[var(--chat-text-secondary)]">
+              {template.description}
+            </span>
+            <span className="mt-1 text-xs text-[var(--chat-text-muted)]">
+              {template.cadenceLabel}
+            </span>
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 function initialDraft(model = ''): ScheduleDraft {
@@ -440,6 +480,7 @@ function AuthenticatedDesktopCloudSchedules({
   const runAbortable = useAbortableRequests();
   const [schedules, setSchedules] = useState<ManagedCloudScheduleTask[]>([]);
   const [listStatus, setListStatus] = useState<'loading' | 'success' | 'error'>('loading');
+  const [galleryOpen, setGalleryOpen] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [nextOffset, setNextOffset] = useState(0);
@@ -463,6 +504,8 @@ function AuthenticatedDesktopCloudSchedules({
   }, [editorOpen, saving]);
   const [operation, setOperation] = useState<Record<string, string | null>>({});
   const [rowErrors, setRowErrors] = useState<Record<string, string | null>>({});
+  const [shareUrls, setShareUrls] = useState<Record<string, string>>({});
+  const { confirm: confirmAction, dialog: confirmDialog } = useConfirmAction();
   const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
   const [expandedTriggersId, setExpandedTriggersId] = useState<string | null>(null);
   const [historyById, setHistoryById] = useState<Record<string, HistoryState>>({});
@@ -544,6 +587,15 @@ function AuthenticatedDesktopCloudSchedules({
     setEditing(null);
     setDraft(initialDraft(modelOptions[0]?.id));
     setFormError(null);
+    setEditorOpen(true);
+  };
+
+  const openCreateFromTemplate = (template: ManagedCloudScheduleTemplate) => {
+    if (!canCreateSchedule) return;
+    setEditing(null);
+    setDraft({ ...initialDraft(modelOptions[0]?.id), ...template.draft });
+    setFormError(null);
+    setGalleryOpen(false);
     setEditorOpen(true);
   };
 
@@ -630,6 +682,43 @@ function AuthenticatedDesktopCloudSchedules({
       setSchedules((current) =>
         current.map((candidate) => (candidate.id === updated.id ? updated : candidate)),
       );
+    });
+  };
+
+  const shareSchedule = async (schedule: ManagedCloudScheduleTask) => {
+    setOperation((current) => ({ ...current, [schedule.id]: 'share' }));
+    setRowErrors((current) => ({ ...current, [schedule.id]: null }));
+    try {
+      const share = await api.shareSchedule(schedule.id);
+      const url = `${WEB_APP_URL || window.location.origin}${managedCloudScheduleShareUrlPath(share.token)}`;
+      setShareUrls((current) => ({ ...current, [schedule.id]: url }));
+    } catch (error) {
+      setRowErrors((current) => ({
+        ...current,
+        [schedule.id]: errorText(error, 'The share link could not be created.'),
+      }));
+    } finally {
+      setOperation((current) => ({ ...current, [schedule.id]: null }));
+    }
+  };
+
+  const stopSharing = (schedule: ManagedCloudScheduleTask) => {
+    confirmAction({
+      title: 'Stop sharing this schedule?',
+      description:
+        'The link stops working for everyone who has it. Copies people already made stay theirs. Sharing again creates a new link.',
+      confirmLabel: 'Stop sharing',
+      onConfirm: async () => {
+        try {
+          await api.unshareSchedule(schedule.id);
+          setShareUrls(({ [schedule.id]: _removed, ...rest }) => rest);
+        } catch (error) {
+          setRowErrors((current) => ({
+            ...current,
+            [schedule.id]: errorText(error, 'Sharing could not be stopped.'),
+          }));
+        }
+      },
     });
   };
 
@@ -811,17 +900,49 @@ function AuthenticatedDesktopCloudSchedules({
               ))}
             </div>
           </div>
-          <button
-            type="button"
-            onClick={openCreate}
-            disabled={!canCreateSchedule}
-            title={createBlockedReason}
-            className={PRIMARY_BUTTON}
-          >
-            <Plus className="h-4 w-4" aria-hidden />
-            Create schedule
-          </button>
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            {schedules.length > 0 ? (
+              <button
+                type="button"
+                onClick={() => setGalleryOpen((open) => !open)}
+                aria-expanded={galleryOpen}
+                aria-controls="desktop-schedule-template-gallery"
+                className={SECONDARY_BUTTON}
+              >
+                <LayoutTemplate className="h-4 w-4" aria-hidden />
+                Templates
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={openCreate}
+              disabled={!canCreateSchedule}
+              title={createBlockedReason}
+              className={PRIMARY_BUTTON}
+            >
+              <Plus className="h-4 w-4" aria-hidden />
+              Create schedule
+            </button>
+          </div>
         </header>
+
+        {galleryOpen && schedules.length > 0 ? (
+          <section
+            id="desktop-schedule-template-gallery"
+            aria-labelledby="desktop-schedule-template-gallery-heading"
+            className="rounded-2xl border border-[var(--chat-border)] p-4"
+          >
+            <h2 id="desktop-schedule-template-gallery-heading" className="text-sm font-medium">
+              Start from a template
+            </h2>
+            <p className="mt-1 text-xs text-[var(--chat-text-muted)]">
+              Each template opens the create form filled in, for you to review before saving.
+            </p>
+            <div className="mt-4">
+              <ScheduleTemplateGrid disabled={!canCreateSchedule} onPick={openCreateFromTemplate} />
+            </div>
+          </section>
+        ) : null}
 
         {!schedulesEnabled ? (
           <div
@@ -930,6 +1051,12 @@ function AuthenticatedDesktopCloudSchedules({
               <Plus className="h-4 w-4" aria-hidden />
               Create schedule
             </button>
+            <p className="mt-10 text-xs font-medium uppercase tracking-wider text-[var(--chat-text-muted)]">
+              Or start from one of these
+            </p>
+            <div className="mx-auto mt-4 max-w-3xl">
+              <ScheduleTemplateGrid disabled={!canCreateSchedule} onPick={openCreateFromTemplate} />
+            </div>
           </div>
         ) : (
           <div className="space-y-3">
@@ -1048,6 +1175,16 @@ function AuthenticatedDesktopCloudSchedules({
                         </button>
                         <button
                           type="button"
+                          aria-label={`Share ${schedule.name}`}
+                          title="Share schedule"
+                          onClick={() => void shareSchedule(schedule)}
+                          disabled={Boolean(busy)}
+                          className={SECONDARY_BUTTON}
+                        >
+                          <Share2 className="h-3.5 w-3.5" aria-hidden />
+                        </button>
+                        <button
+                          type="button"
                           aria-label={`Edit ${schedule.name}`}
                           title="Edit schedule"
                           onClick={() => openEdit(schedule)}
@@ -1097,6 +1234,47 @@ function AuthenticatedDesktopCloudSchedules({
                     ) : null}
                   </div>
 
+                  {shareUrls[schedule.id] ? (
+                    <div className="space-y-2 border-t border-[var(--chat-border)] px-4 py-3 text-xs">
+                      <p className="text-[var(--chat-text-secondary)]">
+                        Anyone with this link can see this schedule&apos;s name, instructions and
+                        timing as they are now, and add a copy to their own schedules. Run history
+                        and results stay private.
+                      </p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <input
+                          readOnly
+                          value={shareUrls[schedule.id]}
+                          aria-label={`Share link for ${schedule.name}`}
+                          onFocus={(event) => event.currentTarget.select()}
+                          className="min-w-0 flex-1 rounded-md border border-[var(--chat-border)] bg-[var(--chat-surface-base)] px-2 py-1.5 text-[var(--chat-text-primary)]"
+                        />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void navigator.clipboard
+                              .writeText(shareUrls[schedule.id] ?? '')
+                              .catch((error: unknown) =>
+                                setRowErrors((current) => ({
+                                  ...current,
+                                  [schedule.id]: errorText(error, 'The link could not be copied.'),
+                                })),
+                              )
+                          }
+                          className={SECONDARY_BUTTON}
+                        >
+                          Copy link
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => stopSharing(schedule)}
+                          className={SECONDARY_BUTTON}
+                        >
+                          Stop sharing
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
                   {triggersExpanded ? (
                     <div className="border-t border-[var(--chat-border)] px-4 py-3">
                       <DesktopScheduleTriggersPanel
@@ -1130,71 +1308,87 @@ function AuthenticatedDesktopCloudSchedules({
                         </p>
                       ) : (
                         <div className="space-y-2">
-                          {historyState.runs.map((run) => (
-                            <div
-                              key={run.id}
-                              className="rounded-lg border border-[var(--chat-border)] bg-[var(--chat-surface-base)] p-3"
-                            >
-                              <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                                <span
-                                  className={
-                                    run.status === 'success'
-                                      ? 'font-medium text-[var(--chat-success-text)]'
-                                      : run.status === 'running'
-                                        ? 'font-medium text-[var(--chat-info-text)]'
-                                        : run.status === 'awaiting_approval'
-                                          ? 'font-medium text-[var(--warning-text)]'
-                                          : 'font-medium text-[var(--chat-destructive-text)]'
-                                  }
-                                >
-                                  {run.status === 'awaiting_approval'
-                                    ? 'needs approval'
-                                    : run.status}
-                                </span>
-                                <span className="text-[var(--chat-text-muted)]">
-                                  {dateTimeLabel(run.startedAt)} · {durationLabel(run.durationMs)}
-                                </span>
+                          {historyState.runs.map((run) => {
+                            const timing = describeScheduleRunTiming(run, (value) =>
+                              dateTimeLabel(value, schedule.timezone),
+                            );
+                            return (
+                              <div
+                                key={run.id}
+                                className="rounded-lg border border-[var(--chat-border)] bg-[var(--chat-surface-base)] p-3"
+                              >
+                                <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                                  <span
+                                    className={
+                                      timing?.skipped
+                                        ? 'font-medium text-[var(--chat-text-secondary)]'
+                                        : run.status === 'success'
+                                          ? 'font-medium text-[var(--chat-success-text)]'
+                                          : run.status === 'running'
+                                            ? 'font-medium text-[var(--chat-info-text)]'
+                                            : run.status === 'awaiting_approval'
+                                              ? 'font-medium text-[var(--warning-text)]'
+                                              : 'font-medium text-[var(--chat-destructive-text)]'
+                                    }
+                                  >
+                                    {timing?.skipped
+                                      ? 'skipped'
+                                      : run.status === 'awaiting_approval'
+                                        ? 'needs approval'
+                                        : run.status}
+                                  </span>
+                                  <span className="text-[var(--chat-text-muted)]">
+                                    {dateTimeLabel(run.startedAt)} · {durationLabel(run.durationMs)}
+                                  </span>
+                                </div>
+                                {runResultText(run) ? (
+                                  <p className="mt-2 line-clamp-3 text-xs leading-5 text-[var(--chat-text-secondary)]">
+                                    {runResultText(run)}
+                                  </p>
+                                ) : null}
+                                {run.status === 'awaiting_approval' && run.pendingApproval ? (
+                                  <ApprovalCard
+                                    className="mt-2"
+                                    title="Waiting for your approval"
+                                    requests={run.pendingApproval.toolCalls.map((call) => ({
+                                      id: call.id,
+                                      name: call.summary,
+                                      detail: call.name,
+                                    }))}
+                                    approveLabel={TOOL_APPROVAL_ACTION_LABELS.approve}
+                                    denyLabel={TOOL_APPROVAL_ACTION_LABELS.deny}
+                                    onApprove={() =>
+                                      void resolveApproval(schedule, run, 'approved')
+                                    }
+                                    onDeny={() => void resolveApproval(schedule, run, 'rejected')}
+                                    pending={Boolean(busy)}
+                                    meta={`Expires ${dateTimeLabel(run.pendingApproval.expiresAt)}`}
+                                  >
+                                    {run.pendingApproval.toolCalls.map((call) =>
+                                      call.input ? (
+                                        <pre
+                                          key={call.id}
+                                          className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap rounded-md bg-[var(--chat-surface-base)] p-2 font-mono text-xs text-[var(--chat-text-secondary)] [overflow-wrap:anywhere]"
+                                        >
+                                          {call.input}
+                                        </pre>
+                                      ) : null,
+                                    )}
+                                  </ApprovalCard>
+                                ) : null}
+                                {timing ? (
+                                  <p className="mt-2 rounded-md bg-[var(--chat-surface-hover)] px-2 py-1.5 text-xs text-[var(--chat-text-secondary)]">
+                                    {timing.note}
+                                  </p>
+                                ) : null}
+                                {run.error && !timing?.skipped ? (
+                                  <p className="mt-2 text-xs text-[var(--chat-destructive)]">
+                                    {run.error}
+                                  </p>
+                                ) : null}
                               </div>
-                              {runResultText(run) ? (
-                                <p className="mt-2 line-clamp-3 text-xs leading-5 text-[var(--chat-text-secondary)]">
-                                  {runResultText(run)}
-                                </p>
-                              ) : null}
-                              {run.status === 'awaiting_approval' && run.pendingApproval ? (
-                                <ApprovalCard
-                                  className="mt-2"
-                                  title="Waiting for your approval"
-                                  requests={run.pendingApproval.toolCalls.map((call) => ({
-                                    id: call.id,
-                                    name: call.summary,
-                                    detail: call.name,
-                                  }))}
-                                  approveLabel={TOOL_APPROVAL_ACTION_LABELS.approve}
-                                  denyLabel={TOOL_APPROVAL_ACTION_LABELS.deny}
-                                  onApprove={() => void resolveApproval(schedule, run, 'approved')}
-                                  onDeny={() => void resolveApproval(schedule, run, 'rejected')}
-                                  pending={Boolean(busy)}
-                                  meta={`Expires ${dateTimeLabel(run.pendingApproval.expiresAt)}`}
-                                >
-                                  {run.pendingApproval.toolCalls.map((call) =>
-                                    call.input ? (
-                                      <pre
-                                        key={call.id}
-                                        className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap rounded-md bg-[var(--chat-surface-base)] p-2 font-mono text-xs text-[var(--chat-text-secondary)] [overflow-wrap:anywhere]"
-                                      >
-                                        {call.input}
-                                      </pre>
-                                    ) : null,
-                                  )}
-                                </ApprovalCard>
-                              ) : null}
-                              {run.error ? (
-                                <p className="mt-2 text-xs text-[var(--chat-destructive)]">
-                                  {run.error}
-                                </p>
-                              ) : null}
-                            </div>
-                          ))}
+                            );
+                          })}
                           {historyState.hasMore ? (
                             <button
                               type="button"
@@ -1560,6 +1754,7 @@ function AuthenticatedDesktopCloudSchedules({
           </section>
         </div>
       ) : null}
+      {confirmDialog}
     </div>
   );
 }

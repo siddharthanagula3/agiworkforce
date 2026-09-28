@@ -94,22 +94,6 @@ Code: `apps/cli/src/repl/mod.rs:598-598`
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S42.20: Periodic recap.
-
-- Done when: The product produces a recap for a recurring period (week/month) and delivers it.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Reflect builds a recap for a chosen range only when the user opens it; nothing is delivered each week or month. The "Weekly review" template has no access to the user's activity. | handler |
-| desktop | partial | Reflect builds a recap for a chosen range only when the user opens it; nothing is delivered each week or month. The "Weekly review" template has no access to the user's activity. | handler |
-| mobile | partial | Reflect is on demand only; the "Weekly reflection" template is a prompt with no access to the user's activity. | handler |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/settings/components/WebSettingsModal.tsx:209-209`, `apps/web/features/settings/sections/ReflectSection.tsx:16-16`, `apps/web/features/schedules/lib/schedule-templates.ts:20-20`, `apps/mobile/app/(app)/settings/reflect.tsx:56-56`
-
 ## S42.21: Annual recap.
 
 - Done when: The user can see a recap of their past year.

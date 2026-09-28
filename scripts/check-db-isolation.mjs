@@ -862,6 +862,14 @@ const ALLOWLIST = [
       '(api/settings/organization/audit) is additionally gated by isOrgAdminRole',
   },
   {
+    match: /lib\/services\/schedule-share-service\.ts$/,
+    tables: ['scheduled_task_shares'],
+    reason:
+      'getSharedSchedule reads a share by its unguessable token and skips revoked rows; a public ' +
+      'schedule link has no viewer subject to constrain by, and every other statement in the ' +
+      'service runs on the caller-scoped adapter',
+  },
+  {
     match: /lib\/services\/org-shared-session-service\.ts$/,
     tables: ['shared_sessions'],
     reason:
