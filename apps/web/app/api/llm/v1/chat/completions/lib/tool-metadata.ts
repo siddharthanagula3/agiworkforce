@@ -272,6 +272,13 @@ const GMAIL_TOOL_METADATA: Readonly<Record<string, ToolMetadata>> = Object.freez
     createsEgressPath: false,
     declared: true,
   },
+  create_draft_with_attachments: {
+    actionClass: 'write',
+    reversible: true,
+    acceptsUntrustedContent: false,
+    createsEgressPath: true,
+    declared: true,
+  },
 });
 
 const CONNECTOR_TOOL_METADATA: Readonly<Record<string, Readonly<Record<string, ToolMetadata>>>> =
