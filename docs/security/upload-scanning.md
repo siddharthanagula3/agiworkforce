@@ -76,8 +76,15 @@ contract; the parts that decide an upload are:
   200 MB or 2,000 members.
 - Its size limit equals the largest file the web sends for scanning
   (`MAX_ATTACHMENT_BYTES`), pinned by `services/upload-scanner/__tests__/limits.test.ts`.
-- `GET /health` reports the signature version and age, and fails once the
-  signatures are more than seven days old or clamd does not answer.
+- `GET /health` reports the signature version and age, and fails only while
+  clamd does not answer. Signatures more than seven days old are reported as
+  `stale` there without failing it, because Fly stops routing to a machine that
+  fails this check, and scanning on older signatures beats refusing every
+  upload. `GET /health/signatures` fails once they are stale; Fly runs it as the
+  `signatures` monitoring check, which never affects routing.
+- `services/upload-scanner/__tests__/clamd-config.test.ts` pins the clamd
+  settings above: `AlertExceedsMax`, the in-memory spool and the loopback
+  address.
 
 The machine is `shared-cpu-2x` with 4 GB. clamd holds about 1.2 GiB of
 signatures and briefly doubles that while it reloads them after an update,
@@ -115,16 +122,17 @@ token in the password manager; it is set on both sides and nowhere else.
    fly secrets set UPLOAD_SCAN_WEBHOOK_TOKEN="$TOKEN" --app agiworkforce-upload-scanner --stage
    ```
 
-3. Deploy one machine: `fly deploy --ha=false`. The first build downloads the
-   signatures into the image (a later build may reuse that layer from cache;
-   every start refreshes them), and the first boot takes a minute or two while
-   clamd loads them; `/health` has a 180 second grace period.
+3. Check the configuration with `fly config validate`, then deploy one
+   machine: `fly deploy --ha=false`. The first build downloads the signatures
+   into the image (a later build may reuse that layer from cache; every start
+   refreshes them), and the first boot takes a minute or two while clamd loads
+   them; both checks have a 180 second grace period.
 
 ### Verify before the web uses it
 
 ```sh
 URL=https://agiworkforce-upload-scanner.fly.dev
-curl -sS "$URL/health"
+curl -sS "$URL/health/signatures"
 printf 'hello' | curl -sS -X POST "$URL/scan" -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/octet-stream' --data-binary @-
 curl -fsS https://secure.eicar.org/eicar.com.txt | curl -sS -X POST "$URL/scan" \
@@ -188,11 +196,13 @@ bluegreen swap, so the scanner never goes down in between.
 
 - `/health` answers `unavailable`: clamd is not up. `fly logs` shows why,
   usually signatures still loading after a restart, or an out-of-memory exit.
-- `/health` answers `stale`: freshclam has not updated for seven days. Its log
-  lines name the cause. The ClamAV CDN answers `429` to a host that downloads
-  too often, and freshclam waits out the cool-down on its own; a `403` makes
-  freshclam exit, logged as `freshclam_exited`, and it is started again every
-  hour while clamd keeps scanning.
+- `fly checks list --app agiworkforce-upload-scanner` shows the `signatures`
+  check failing, and `/health` answers `status` `stale`: freshclam has not
+  updated for seven days. Scanning continues on the signatures on disk. The
+  freshclam lines in `fly logs` name the cause. The ClamAV CDN answers `429` to
+  a host that downloads too often, and freshclam waits out the cool-down on its
+  own; a `403` makes freshclam exit, logged as `freshclam_exited`, and it is
+  started again every hour.
 - `fly logs` shows `scan_unauthorized`: the two sides hold different tokens.
   Set the same value on both. The scanner closes an unauthenticated connection
   without reading the upload, so the web logs either `Scanner returned 401` or,
