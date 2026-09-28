@@ -94,6 +94,8 @@ async function clearCache(): Promise<void> {
   }
 }
 
+const PERMANENT_REFUSALS: ReadonlySet<number> = new Set([400, 409, 413, 422]);
+
 async function migrateLegacyMemories(token: string): Promise<void> {
   let legacy: unknown;
   try {
@@ -104,25 +106,27 @@ async function migrateLegacyMemories(token: string): Promise<void> {
   }
   if (!Array.isArray(legacy)) return;
 
-  const contents = legacy
-    .filter(isAccountMemory)
-    .map((item) => item.content.trim().slice(0, ACCOUNT_MEMORY_MAX_CONTENT_CHARS))
-    .filter((content) => content.length > 0);
-
-  for (const content of contents) {
+  const pending = legacy.filter(isAccountMemory);
+  const kept: AccountMemory[] = [];
+  let signedOutError: AccountMemoryHttpError | null = null;
+  for (const [index, item] of pending.entries()) {
+    const content = item.content.trim().slice(0, ACCOUNT_MEMORY_MAX_CONTENT_CHARS);
+    if (!content) continue;
     try {
       await createAccountMemory(token, content);
     } catch (error) {
-      if (
-        !(error instanceof AccountMemoryHttpError) ||
-        error.status === 401 ||
-        error.status >= 500
-      ) {
-        throw error;
-      }
+      if (error instanceof AccountMemoryHttpError && PERMANENT_REFUSALS.has(error.status)) continue;
+      kept.push(...pending.slice(index));
+      if (error instanceof AccountMemoryHttpError && error.status === 401) signedOutError = error;
+      break;
     }
   }
-  await chrome.storage.local.remove(LEGACY_MEMORY_STORAGE_KEY);
+  if (kept.length > 0) {
+    await chrome.storage.local.set({ [LEGACY_MEMORY_STORAGE_KEY]: kept });
+  } else {
+    await chrome.storage.local.remove(LEGACY_MEMORY_STORAGE_KEY);
+  }
+  if (signedOutError) throw signedOutError;
 }
 
 function signedOut(): MemoryListResult {
