@@ -5715,6 +5715,8 @@ function injectStyles(): void {
     }
     .sp-drawer-history-open { min-height: 40px; gap: 10px; }
     .sp-drawer-history-title { font-size: var(--type-body-size); line-height: var(--type-body-height); }
+    .sp-drawer-history-item.is-active { background: var(--agi-ext-hover); border-color: var(--agi-ext-border-strong); }
+    .sp-drawer-history-item.is-active .sp-drawer-history-title { font-weight: 600; }
     .sp-drawer-history-date { font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
 
     #sp-drawer-menu { display: flex; flex-direction: column; }
@@ -9344,12 +9346,16 @@ function buildUI(): void {
       return;
     }
     for (const entry of filteredEntries) {
-      const item = el('div', { class: 'sp-drawer-history-item' });
+      const active = entry.id === _ctx.conversationId;
+      const item = el('div', {
+        class: active ? 'sp-drawer-history-item is-active' : 'sp-drawer-history-item',
+      });
       const openButton = el('button', {
         class: 'sp-drawer-history-open',
         type: 'button',
         'data-conversation-restore': 'true',
         'aria-label': `Open chat: ${entry.title}`,
+        ...(active ? { 'aria-current': 'page' } : {}),
       }) as HTMLButtonElement;
       openButton.disabled = _ctx.isStreaming || historyRestoreInProgress;
 
