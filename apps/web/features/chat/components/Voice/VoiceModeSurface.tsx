@@ -70,6 +70,7 @@ export interface VoiceModeSurfaceProps {
   turnActive: boolean;
   conversationId: string | null;
   onSend: (text: string) => boolean;
+  onStartWorkTask?: (goal: string) => boolean;
   onEnsureConversation: () => Promise<string | null>;
   onTranscript: (conversationId: string, turn: VoiceTranscriptTurn) => void;
   onNewChat: () => void;
@@ -85,6 +86,7 @@ export function VoiceModeSurface({
   turnActive,
   conversationId,
   onSend,
+  onStartWorkTask,
   onEnsureConversation,
   onTranscript,
   onNewChat,
@@ -105,6 +107,7 @@ export function VoiceModeSurface({
     turnActive,
     conversationId,
     onSend,
+    ...(onStartWorkTask ? { onStartWorkTask } : {}),
     onEnsureConversation,
     onTranscript: handleTranscript,
   });
