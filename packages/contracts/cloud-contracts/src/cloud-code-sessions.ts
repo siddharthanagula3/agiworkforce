@@ -235,7 +235,6 @@ export interface StartCloudCodeAgentTurnRequest {
 
 export interface CommitCloudCodeSessionRequest {
   message: string;
-  /** Only these changed paths are committed; absent commits every change. */
   files?: string[];
 }
 
