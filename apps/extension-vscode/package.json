@@ -503,6 +503,11 @@
         "icon": "$(cloud-download)"
       },
       {
+        "command": "agi-workforce.showHelp",
+        "title": "AGI Workforce: Help",
+        "icon": "$(question)"
+      },
+      {
         "command": "agi-workforce.reviewPullRequest",
         "title": "AGI Workforce: Review a Pull Request",
         "icon": "$(git-pull-request)"

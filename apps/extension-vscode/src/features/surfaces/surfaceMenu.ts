@@ -50,6 +50,7 @@ export const SURFACE_MENU_ITEMS: readonly SurfaceMenuItem[] = [
     command: 'agi-workforce.openSettings',
   },
   { id: 'account', label: 'Account', icon: 'account', command: 'agi-workforce.showAccountUsage' },
+  { id: 'help', label: 'Help', icon: 'question', command: 'agi-workforce.showHelp' },
 ];
 
 export const ACCOUNT_SURFACE_COMMANDS: Readonly<Record<string, string>> = {
