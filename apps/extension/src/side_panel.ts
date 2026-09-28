@@ -193,6 +193,7 @@ import {
   buildComputerUsePanel,
   COMPUTER_USE_PANEL_CSS,
   describeCancellationReason,
+  type ComputerUseApprovalDecision,
   type ComputerUsePanelAPI,
 } from './features/side-panel/computerUsePanel';
 import {
@@ -11595,13 +11596,19 @@ function buildUI(): void {
       const toolName = typeof m['toolName'] === 'string' ? m['toolName'] : 'action';
       const description = typeof m['description'] === 'string' ? m['description'] : '';
       switchTab('computer-use');
-      cuPanel.showApprovalCard(toolName, description, (allowed: boolean) => {
-        void chrome.runtime.sendMessage({
-          type: 'AGI_CU_APPROVE_RESPONSE',
-          requestId,
-          allowed,
-        });
-      });
+      cuPanel.showApprovalCard(
+        toolName,
+        description,
+        m['canAllowForTask'] === true,
+        (decision: ComputerUseApprovalDecision) => {
+          void chrome.runtime.sendMessage({
+            type: 'AGI_CU_APPROVE_RESPONSE',
+            requestId,
+            allowed: decision !== 'skip',
+            forTask: decision === 'allow-for-task',
+          });
+        },
+      );
     }
   });
 

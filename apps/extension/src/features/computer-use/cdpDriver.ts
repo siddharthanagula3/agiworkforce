@@ -207,7 +207,12 @@ const ELEMENT_SIGNATURE_JS = `((el) => [
   el.getAttribute('role') || '',
   el.getAttribute('type') || '',
   el.getAttribute('name') || '',
-  (el.getAttribute('aria-label') || el.getAttribute('title') || el.textContent || '')
+  (el.getAttribute('aria-label') ||
+    el.getAttribute('title') ||
+    el.textContent ||
+    (el.localName === 'input' && /^(submit|button|image)$/i.test(el.getAttribute('type') || '')
+      ? el.getAttribute('value') || el.getAttribute('alt') || ''
+      : ''))
     .replace(/\\s+/g, ' ')
     .trim()
     .slice(0, ${ELEMENT_LABEL_MAX_CHARS}),
