@@ -1283,6 +1283,37 @@ pub fn effective_tool_definitions_with_browser(
     tool_definitions
 }
 
+pub fn deferred_executable_tool_definitions(
+    plan_mode: bool,
+    allowed_tools: Option<&[String]>,
+    mcp_tool_definitions: Option<&[ToolDefinition]>,
+) -> Vec<ToolDefinition> {
+    let mut deferred: Vec<ToolDefinition> = if plan_mode {
+        Vec::new()
+    } else {
+        all_builtin_tool_definitions()
+            .into_iter()
+            .filter(|definition| definition.should_defer)
+            .collect()
+    };
+    if let Some(mcp_tool_definitions) = mcp_tool_definitions {
+        deferred.extend(
+            mcp_tool_definitions
+                .iter()
+                .filter(|definition| definition.should_defer)
+                .cloned(),
+        );
+    }
+    if let Some(allowed_tools) = allowed_tools {
+        deferred.retain(|definition| {
+            allowed_tools
+                .iter()
+                .any(|spec| tool_spec_matches_schema(spec, &definition.name))
+        });
+    }
+    deferred
+}
+
 /// Name the deferred MCP tools on `tool_search` itself.
 ///
 /// The system prompt's deferred-tool line is written in `AgentSession::new`,

@@ -899,16 +899,17 @@ message -- revise and call `update_plan` again.\n\n",
         let max_tokens = config.effective_max_tokens(&self.model);
 
         let tool_defs = self.effective_tool_definitions();
-        let available_tool_names = tool_defs
+        let callable_tool_defs = self.callable_tool_definitions(&tool_defs);
+        let available_tool_names = callable_tool_defs
             .iter()
             .map(|tool_definition| tool_definition.name.clone())
             .collect::<HashSet<_>>();
-        let concurrency_safe_names: HashSet<String> = tool_defs
+        let concurrency_safe_names: HashSet<String> = callable_tool_defs
             .iter()
             .filter(|t| t.is_concurrency_safe)
             .map(|t| t.name.clone())
             .collect();
-        let plan_mode_mutating_names: HashSet<String> = tool_defs
+        let plan_mode_mutating_names: HashSet<String> = callable_tool_defs
             .iter()
             .filter(|tool_definition| {
                 crate::runtime::tool_catalog::is_plan_mode_mutating_tool_definition(tool_definition)
@@ -2256,6 +2257,13 @@ impl TurnHost for TurnHostAdapter<'_> {
             )
             .await;
 
+            self.on_event(&TurnEvent::ToolStarted {
+                id: tc.id.clone(),
+                name: tc.name.clone(),
+                args: effective_args.clone(),
+                mode: DispatchMode::Sequential,
+            });
+            let started = std::time::Instant::now();
             let mgr = self
                 .session
                 .subagent_manager
@@ -2288,7 +2296,13 @@ impl TurnHost for TurnHostAdapter<'_> {
             )
             .await;
 
-            task_spawn_results.push((tc.id.clone(), tc.name.clone(), effective_args, id_result));
+            task_spawn_results.push((
+                tc.id.clone(),
+                tc.name.clone(),
+                effective_args,
+                id_result,
+                started,
+            ));
         }
 
         if !task_spawn_results.is_empty() {
@@ -2297,7 +2311,7 @@ impl TurnHost for TurnHostAdapter<'_> {
             }
         }
 
-        for (tool_use_id, tool_name, tool_args, id_result) in task_spawn_results {
+        for (tool_use_id, tool_name, tool_args, id_result, started) in task_spawn_results {
             let tool_result = match id_result {
                 Ok(ref id) => {
                     if let Some(ref mgr) = self.session.subagent_manager {
@@ -2349,6 +2363,14 @@ impl TurnHost for TurnHostAdapter<'_> {
                 },
             };
 
+            self.on_event(&TurnEvent::ToolFinished {
+                id: tool_use_id.clone(),
+                name: tool_name.clone(),
+                ok: tool_result.success,
+                output: tool_result.output.clone(),
+                duration_ms: started.elapsed().as_millis() as u64,
+                mode: DispatchMode::Sequential,
+            });
             let sa_display_status = if tool_result.success {
                 ts::success("success").to_string()
             } else {
