@@ -4939,6 +4939,7 @@ export async function processRequest(
             sessionId: chatRequest.conversation_id ?? null,
           },
           ...(auth.apiKeyId ? { apiKeyId: auth.apiKeyId } : {}),
+          ...(chatRequest.conversation_id ? { conversationId: chatRequest.conversation_id } : {}),
         }),
       );
       estimatedCostMicrousd = estimateMicrousdOf(managedUsage);
