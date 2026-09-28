@@ -8,6 +8,8 @@ import {
 } from '@/lib/services/legal-hold-gate';
 import {
   RESOURCE_DELETION_POLICIES,
+  derivedRecordPurgeStatements,
+  resourceDeletionPolicy,
   resourcePurgeStatement,
   type ResourceDeletionPolicy,
 } from './deletion-policies';
@@ -174,4 +176,30 @@ export async function purgeSoftDeletedResources(db: DatabaseAdapter): Promise<Re
     skipped: tables.filter((entry) => entry.skippedReason !== null).length,
     failed: tables.filter((entry) => entry.error !== null).length,
   };
+}
+
+export async function purgeDerivedRecords(
+  db: Pick<DatabaseAdapter, 'query'>,
+  table: string,
+  purged: ReadonlyArray<{ readonly owner: string; readonly key: string }>,
+): Promise<number> {
+  const policy = resourceDeletionPolicy(table);
+  if (policy === null) throw new Error(`${table} has no resource deletion policy`);
+  let removed = 0;
+  for (const statement of derivedRecordPurgeStatements(policy, purged)) {
+    try {
+      const rows = await db.query<{ owner_id: string }>(statement.sql, [...statement.params]);
+      removed += rows.length;
+    } catch (error) {
+      logger.error(
+        {
+          event: 'derived_record_purge_failed',
+          table: policy.table,
+          error: error instanceof Error ? error.message : String(error),
+        },
+        'Records derived from purged rows could not be removed',
+      );
+    }
+  }
+  return removed;
 }

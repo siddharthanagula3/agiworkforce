@@ -897,6 +897,9 @@ export function getSettingsWebviewContent(
         text-align: right;
       }
 
+      .data-flow { margin: 0 0 12px; display: grid; gap: 4px 0; }
+      .data-flow dt { font-weight: 600; margin-top: 8px; }
+      .data-flow dd { margin: 0; color: var(--vscode-descriptionForeground); }
       .action-row {
         display: flex;
         flex-wrap: wrap;
@@ -1350,6 +1353,36 @@ export function getSettingsWebviewContent(
                   Configuration docs
                 </button>
               </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-heading">
+              <h3>Where your data goes</h3>
+              <p>Each way of running AGI in VS Code keeps and sends your work differently.</p>
+            </div>
+            <dl class="data-flow">
+              <dt>Local models</dt>
+              <dd>Ollama and LM Studio run on this computer. Prompts, files and answers stay here.</dd>
+              <dt>Your own provider key</dt>
+              <dd>Requests go from the AGI CLI straight to that provider, under its terms. AGI Cloud does not see them.</dd>
+              <dt>AGI Cloud</dt>
+              <dd>Requests are processed on AGI servers and sent to the provider that serves the model you picked. We do not train AGI-owned models on your prompts, responses or files. Provider handling follows each provider&rsquo;s terms; on the Free plan the free models&rsquo; providers may train on what you send unless you choose models that do not.</dd>
+              <dt>Session history</dt>
+              <dd>Developer sessions are saved by the AGI CLI on this computer. They are not uploaded to your account; delete them from Sessions.</dd>
+              <dt>Memory</dt>
+              <dd>Memory facts live in your AGI Cloud account, shared with the web app, the CLI and mobile, and are sent with turns only while memory is on.</dd>
+            </dl>
+            <div class="action-row">
+              <button class="secondary-button" type="button" data-command="openPrivacySettings">
+                Privacy settings
+              </button>
+              <button class="secondary-button" type="button" data-command="openMemory">
+                Memory
+              </button>
+              <button class="secondary-button" type="button" data-command="openSubprocessors">
+                Who processes AGI Cloud requests
+              </button>
             </div>
           </div>
 
