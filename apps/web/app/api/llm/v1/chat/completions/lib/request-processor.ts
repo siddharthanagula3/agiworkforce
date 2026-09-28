@@ -169,6 +169,7 @@ import {
   resolvePromptCachePrivacyClass,
   getDefaultModelFor,
   getDefaultAutoRoutingProfile,
+  autoAliasForRoutingProfile,
   ROUTING_PROFILE_CHOICES,
 } from '@agiworkforce/types';
 import type {
@@ -275,7 +276,7 @@ import {
   type ProjectContextBlock,
 } from '@/lib/services/project-context-service';
 import { JSON_OBJECT_DIRECTIVE, wantsJsonObject } from './json-object-mode';
-import { autoAliasForRoutingProfile, speedFirstSlots } from './routing-profile-selection';
+import { speedFirstSlots } from './routing-profile-selection';
 import {
   modelKeepsInputsOutOfTraining,
   noTrainingChatModelFor,
