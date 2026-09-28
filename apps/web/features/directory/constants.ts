@@ -278,6 +278,10 @@ export function uploadSkillCountLine(count: number): string {
 
 const DEPENDENCY_NAMES = new Intl.ListFormat('en', { style: 'long', type: 'conjunction' });
 
+export function uploadDependenciesInstalledLine(dependencyNames: readonly string[]): string {
+  return `Also installed the ${dependencyNames.length === 1 ? 'plugin' : 'plugins'} it depends on: ${DEPENDENCY_NAMES.format(dependencyNames)}.`;
+}
+
 export function pluginDependenciesInstalledLine(
   pluginName: string,
   dependencyNames: readonly string[],

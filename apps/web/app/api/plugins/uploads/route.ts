@@ -10,13 +10,25 @@ import { refuseUnsafeUpload } from '@/lib/security/upload-scan';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { isMissingPluginMarketplaceSchema } from '@/lib/services/plugin-marketplace-service';
 import { storeOwnedPluginSource } from '@/lib/services/plugin-owned-source-service';
+import { recordWorkspaceAuditEvent } from '@/lib/workspace-audit';
 import {
   PluginArchiveError,
   readPluginArchive,
-  type UploadedPlugin,
+  type UploadedPluginArchive,
 } from '@/features/plugins/server/directory/archive';
-import { refusePluginInstall } from '@/features/plugins/server/directory/install-gate';
-import { installsDisabledResponse } from '@/features/plugins/server/directory/install-responses';
+import { installedDependencies } from '@/features/plugins/server/directory/dependencies';
+import {
+  prepareOwnedPluginDependencies,
+  writeDependencyPlan,
+} from '@/features/plugins/server/directory/install';
+import {
+  pluginDependencyRefusal,
+  refusePluginInstall,
+} from '@/features/plugins/server/directory/install-gate';
+import {
+  installRefusalResponse,
+  installsDisabledResponse,
+} from '@/features/plugins/server/directory/install-responses';
 import {
   PLUGIN_UPLOAD_FILE_FIELD,
   PLUGIN_UPLOAD_NAME_FIELD,
@@ -100,7 +112,7 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
   const read = await readArchiveField(request);
   if (read instanceof NextResponse) return read;
 
-  let archive: { sourceName: string; plugins: UploadedPlugin[] };
+  let archive: UploadedPluginArchive;
   try {
     archive = await readPluginArchive(read.bytes, fallbackName(read.fileName, read.name));
   } catch (error) {
@@ -121,19 +133,59 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
   });
   if (refused) return refused;
 
+  const sourceName = read.name?.trim() || archive.sourceName;
   try {
+    const prepared = await prepareOwnedPluginDependencies(
+      db,
+      userId,
+      { marketplace: sourceName, allowlist: archive.allowlist, plugins: archive.plugins },
+      {
+        admitDependencies: (dependencies) => pluginDependencyRefusal(request, scope, dependencies),
+      },
+    );
+    if ('refused' in prepared) return installRefusalResponse(prepared.refused);
+    let dependencyInstallations = new Map<string, string>();
     const plugins = await storeOwnedPluginSource(db, userId, {
       kind: SOURCE_KIND_UPLOAD,
-      sourceName: read.name?.trim() || archive.sourceName,
+      sourceName,
       plugins: archive.plugins,
       acknowledgedScans: read.acknowledgedScans,
+      allowlist: archive.allowlist,
+      installAlongside: async (tx) => {
+        dependencyInstallations = await writeDependencyPlan(tx, userId, prepared.plan);
+      },
     });
+    const dependencies = installedDependencies(prepared.plan, dependencyInstallations);
+    for (const dependency of dependencies) {
+      await recordWorkspaceAuditEvent(db, request, {
+        userId,
+        eventType: 'plugin_installed',
+        detail: {
+          resourceType: 'plugin',
+          resourceId: dependency.installationId,
+          resourceName: dependency.pluginId,
+          version: dependency.version,
+          source: SOURCE_KIND_UPLOAD,
+          reason: `required by ${dependency.requiredBy}`,
+        },
+      });
+    }
     const omittedFiles = archive.plugins.flatMap((plugin) => plugin.omittedFiles);
     const body: PluginSourceInstallResponse = {
-      sourceName: read.name?.trim() || archive.sourceName,
+      sourceName,
       kind: SOURCE_KIND_UPLOAD,
       plugins,
       ...(omittedFiles.length > 0 ? { omittedFiles } : {}),
+      ...(dependencies.length > 0
+        ? {
+            dependencies: dependencies.map(({ pluginId, name, version, requiredBy }) => ({
+              pluginId,
+              name,
+              version,
+              requiredBy,
+            })),
+          }
+        : {}),
     };
     await recordAuditEvent({
       userId,

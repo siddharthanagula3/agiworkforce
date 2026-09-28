@@ -68,6 +68,7 @@ import {
   PLUGINS_FAILED_COPY,
   PLUGIN_INSTALL_FAILED_COPY,
   pluginDependenciesInstalledLine,
+  uploadDependenciesInstalledLine,
   PLUGIN_UNINSTALL_FAILED_COPY,
   PLUGIN_ENABLE_FAILED_COPY,
   CREATE_PLUGIN_DONE_TITLE,
@@ -1248,6 +1249,7 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       const body = (await response.json().catch(() => ({}))) as {
         plugins?: ReadonlyArray<{ name: string; skills: readonly string[] }>;
         omittedFiles?: readonly string[];
+        dependencies?: ReadonlyArray<{ name: string }>;
         error?: { message?: string };
       };
       if (!response.ok) {
@@ -1264,6 +1266,9 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
           ...(body.plugins ?? []).map((plugin) => plugin.name),
           uploadSkillCountLine(skillCount),
           ...(body.omittedFiles?.length ? [uploadOmittedFilesLine(body.omittedFiles)] : []),
+          ...(body.dependencies?.length
+            ? [uploadDependenciesInstalledLine(body.dependencies.map((item) => item.name))]
+            : []),
         ],
       };
     },
@@ -1278,6 +1283,8 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
         PLUGIN_UPLOAD_FAILED_COPY,
         UPLOAD_PLUGIN_DONE_TITLE,
       );
+      invalidateSkillsCatalog();
+      announceSkillCatalogChanged();
       await refreshUserMarketplaces();
       await refreshPluginInstalls();
       return result;
@@ -1293,6 +1300,8 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
         PLUGIN_CREATE_FAILED_COPY,
         CREATE_PLUGIN_DONE_TITLE,
       );
+      invalidateSkillsCatalog();
+      announceSkillCatalogChanged();
       await refreshUserMarketplaces();
       await refreshPluginInstalls();
       return result;
