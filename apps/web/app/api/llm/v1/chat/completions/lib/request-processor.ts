@@ -4816,6 +4816,7 @@ export async function processRequest(
             projectId: conversationProjectId,
             sessionId: chatRequest.conversation_id ?? null,
           },
+          ...(auth.apiKeyId ? { apiKeyId: auth.apiKeyId } : {}),
         }),
       );
       estimatedCostMicrousd = estimateMicrousdOf(managedUsage);

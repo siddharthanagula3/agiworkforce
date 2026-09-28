@@ -14,6 +14,7 @@ const PROJECTS_PATH = '/api/developers/projects';
 
 export interface DeveloperProjectDraft {
   name: string;
+  monthlyCreditLimit: number | null;
 }
 
 export async function readDeveloperApiError(response: Response, fallback: string): Promise<string> {
@@ -66,7 +67,11 @@ export function useCreateDeveloperProject() {
 
 export function useUpdateDeveloperProject() {
   const queryClient = useQueryClient();
-  return useMutation<DeveloperProject, Error, { projectId: string; patch: DeveloperProjectDraft }>({
+  return useMutation<
+    DeveloperProject,
+    Error,
+    { projectId: string; patch: Partial<DeveloperProjectDraft> }
+  >({
     mutationFn: ({ projectId, patch }) =>
       projectRequest(
         `${PROJECTS_PATH}/${encodeURIComponent(projectId)}`,
