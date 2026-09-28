@@ -78,10 +78,7 @@ Code: `apps/web/features/workspace-console/components/WorkspaceRoles.tsx:543-560
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile shows "N of M seats used" only; it cannot show available seats, release pending-invitation seats or buy seats. | ui |
 | cli | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/app/(app)/settings/workspace.tsx:459-463`, `apps/mobile/src/features/team/service.ts:63-66`
 
 ## S87.08: Owner transfer.
 
@@ -263,11 +260,11 @@ Code: `apps/web/app/workspace/mcp/page.tsx:12-17`, `apps/web/features/workspace-
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Admins can only read the workspace data region on the overview; there is no control to choose or move it (the move functions have no route) and only the home region is provisioned. | ui, handler |
-| desktop | partial | Admins can only read the workspace data region on the overview; there is no control to choose or move it (the move functions have no route) and only the home region is provisioned. | ui, handler |
+| web | partial | partials/auth 82ade1df1: Enterprise administrators request or cancel a region move from the console and platform admins record the cutover; only the home region is provisioned, so the EU region needs the owner to stand up its database, bucket, log sink and KMS and set the AGI_DATA_REGION_EU_* settings | infra |
+| desktop | partial | partials/auth 82ade1df1: Enterprise administrators request or cancel a region move from the console and platform admins record the cutover; only the home region is provisioned, so the EU region needs the owner to stand up its database, bucket, log sink and KMS and set the AGI_DATA_REGION_EU_* settings | infra |
 | cli | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/services/workspace-posture-service.ts:1040-1065`, `apps/web/lib/server/data-region.ts:100-112`, `apps/web/lib/server/data-region.ts:32-36`, `apps/web/lib/server/data-region.ts:142-150`
+Code: `apps/web/app/workspace/data/page.tsx:24-24`, `apps/web/features/workspace-console/components/WorkspaceDataRegion.tsx:196-196`, `apps/web/app/api/settings/organization/data-region/route.ts:117-117`, `apps/web/app/api/settings/organization/data-region/route.ts:148-148`
 
 ## S87.25: Customer-managed-key setup where offered.
 
