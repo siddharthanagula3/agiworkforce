@@ -37,6 +37,8 @@ import {
   type ConnectorConnectRequest,
 } from '../../lib/connector-connect-required';
 import { ConnectorConnectCard } from '../ConnectorConnectCard';
+import { PluginDraftCard } from '../PluginDraftCard';
+import { readPluginDraftToolResult } from '@agiworkforce/cloud-contracts';
 import { isDesktopHost } from '@/features/desktop-host';
 
 function getFileName(args?: string): string | null {
@@ -422,6 +424,10 @@ function TimelineStepRow({
   const hasSources = isWebSearch && searchSources && searchSources.length > 0;
 
   const connectRequest = useMemo(() => findConnectRequest(tool), [tool]);
+  const pluginDraft = useMemo(
+    () => (tool.status === 'completed' ? readPluginDraftToolResult(tool.name, tool.result) : null),
+    [tool],
+  );
 
   const humanLabel =
     tool.summary ?? humanizeToolName(tool.name, tool.args, tool.parameters, tool.statusPhrase);
@@ -481,6 +487,11 @@ function TimelineStepRow({
           />
         </div>
       )}
+      {pluginDraft ? (
+        <div className="pl-7 mt-1.5">
+          <PluginDraftCard draft={pluginDraft} />
+        </div>
+      ) : null}
       {hasSources && (
         <div className="pl-7 mt-1 text-xs text-muted-foreground">
           {searchSources!.length} {searchSources!.length === 1 ? 'source' : 'sources'}
