@@ -148,6 +148,7 @@
     "cloud-code-transcript",
     "connectors",
     "conversations",
+    "data-export",
     "device-registry",
     "device-steps",
     "domain-events",

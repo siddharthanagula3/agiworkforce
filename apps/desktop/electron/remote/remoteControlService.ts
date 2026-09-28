@@ -26,7 +26,7 @@ import {
   createRemoteControlHost,
   type DispatchPageEvent,
   type RemoteControlHost,
-} from './remoteControlHost';
+} from '@agiworkforce/utils/remote-control';
 
 type WebSocketWithHeaders = new (
   url: string,

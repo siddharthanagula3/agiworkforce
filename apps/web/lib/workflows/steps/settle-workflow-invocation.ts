@@ -142,6 +142,7 @@ async function settleBilling(
   serving: ProcessedRequest,
   outcome: WorkflowTerminalOutcome,
   usage: Awaited<ReturnType<typeof getCloudAgentExecutionUsage>>,
+  errorClass: string | undefined,
 ): Promise<number | null> {
   const provider = serving.provider;
   const model = serving.chatRequest.model;
@@ -159,6 +160,10 @@ async function settleBilling(
       usage,
       reason: `cloud_agent_workflow_${outcome}`,
       cancelled: outcome === 'cancelled',
+      attempt:
+        outcome === 'completed' || outcome === 'failed' || outcome === 'cancelled'
+          ? { outcome, errorClass }
+          : null,
     });
     return finalization.actualCostCents;
   }
@@ -189,6 +194,7 @@ export async function settleWorkflowInvocation(
   input: CloudAgentWorkflowInput,
   outcome: WorkflowTerminalOutcome,
   serving?: ProcessedRequest,
+  errorClass?: string,
 ): Promise<void> {
   const db = getNeonDb();
   const servingRequest = serving ?? (input.processed as ProcessedRequest);
@@ -198,7 +204,15 @@ export async function settleWorkflowInvocation(
     runId: input.runId,
     billingIdempotencyKey: billingLedgerKey,
   });
-  const costCents = await settleBilling(db, input.billing, input, servingRequest, outcome, usage);
+  const costCents = await settleBilling(
+    db,
+    input.billing,
+    input,
+    servingRequest,
+    outcome,
+    usage,
+    errorClass,
+  );
 
   await recordCloudAgentRunSettledUsage(db, {
     userId: input.userId,

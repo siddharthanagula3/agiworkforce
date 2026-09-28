@@ -3,6 +3,7 @@ import { cn } from '../../lib/utils';
 import {
   PLAN_LABEL,
   PLAN_DESCRIPTION,
+  formatUsdAmount,
   getPublishedMonthlyPriceUsd,
   getPublishedPlanPricePerMonthUsd,
   isFreePlan,
@@ -31,7 +32,7 @@ const TIER_CONTENT: Partial<Record<UIPlanTier, TierContent>> = {
     ctaVariant: 'current',
   },
   free: {
-    price: '$0 / mo',
+    price: `${formatUsdAmount(0)} / mo`,
     bullets: [
       'Managed Cloud starter usage',
       'Cross-device chat sync',
@@ -53,7 +54,7 @@ const TIER_CONTENT: Partial<Record<UIPlanTier, TierContent>> = {
     ctaVariant: 'current',
   },
   basic: {
-    price: `$${getPublishedMonthlyPriceUsd('basic')} / mo`,
+    price: `${formatUsdAmount(getPublishedMonthlyPriceUsd('basic'))} / mo`,
     bullets: [
       'Managed cloud entry tier',
       'Speed-optimized managed models',
@@ -64,19 +65,19 @@ const TIER_CONTENT: Partial<Record<UIPlanTier, TierContent>> = {
     ctaVariant: 'primary',
   },
   pro: {
-    price: `$${getPublishedMonthlyPriceUsd('pro')} / mo`,
+    price: `${formatUsdAmount(getPublishedMonthlyPriceUsd('pro'))} / mo`,
     bullets: ['AGI Work and developer surfaces', 'Image generation', 'Advanced agent features'],
     ctaLabel: `Upgrade to ${PLAN_LABEL.pro}`,
     ctaVariant: 'primary',
   },
   max: {
-    price: `$${getPublishedMonthlyPriceUsd('max')} / mo`,
+    price: `${formatUsdAmount(getPublishedMonthlyPriceUsd('max'))} / mo`,
     bullets: ['Every flagship model included', 'Advanced agents and research', 'Priority support'],
     ctaLabel: `Upgrade to ${PLAN_LABEL.max}`,
     ctaVariant: 'primary',
   },
   max_15x: {
-    price: `$${getPublishedMonthlyPriceUsd('max_15x')} / mo`,
+    price: `${formatUsdAmount(getPublishedMonthlyPriceUsd('max_15x'))} / mo`,
     bullets: [
       'Highest individual usage limits',
       'Every flagship model included',
@@ -86,8 +87,8 @@ const TIER_CONTENT: Partial<Record<UIPlanTier, TierContent>> = {
     ctaVariant: 'primary',
   },
   team: {
-    price: `$${getPublishedPlanPricePerMonthUsd('team', 'yearly')} / seat / mo`,
-    priceNote: `Billed yearly, or $${getPublishedMonthlyPriceUsd('team')} per seat billed monthly`,
+    price: `${formatUsdAmount(getPublishedPlanPricePerMonthUsd('team', 'yearly') ?? getPublishedMonthlyPriceUsd('team'))} / seat / mo`,
+    priceNote: `Billed yearly, or ${formatUsdAmount(getPublishedMonthlyPriceUsd('team'))} per seat billed monthly`,
     bullets: [
       'Shared workspaces and organization administration',
       'Owner and admin roles with member management',

@@ -69,22 +69,6 @@ Code: `apps/mobile/src/features/settings/account-security/index.tsx:325-336`
 
 Code: `apps/extension/src/features/cloud-bridge/clerkAuth.ts:265-275`
 
-## S86.07: Trusted devices.
-
-- Done when: The user can see the devices trusted on the account (e.g. that skip extra checks or are linked) and remove trust.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Linked devices (CLI, VS Code, extension, desktop) can be listed, renamed and unlinked, but there is no trusted-device concept for sign-in checks, and Security says trusted-device lists are "not available", contradicting the Linked devices panel. | ui |
-| desktop | partial | Same as web (hosted Account page). | ui |
-| mobile | partial | Mobile lists sessions under "Devices" but not the linked-device registry, and has no trust setting. | ui |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/settings/sections/AccountSection.tsx:529-529`, `apps/web/features/settings/components/LinkedDevicesPanel.tsx:385-405`, `apps/web/features/settings/components/LinkedDevicesPanel.tsx:170-180`, `apps/web/features/settings/sections/SecuritySection.tsx:134-160`
-
 ## S86.10: Sign out all devices.
 
 - Done when: One action signs the account out everywhere: every browser, app and device credential.
@@ -124,16 +108,13 @@ Code: `apps/web/features/settings/sections/AccountSection.tsx:529-529`, `apps/we
 
 - Done when: For each connected account the user can see which permissions (scopes) were actually granted.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only the scopes a connector will request are listed before connecting; the scopes actually granted are stored at OAuth callback but never shown after connection. | ui |
-| desktop | partial | Same as web. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/connectors/hooks/use-connectors-settings-adapter.tsx:830-845`, `apps/web/app/api/connectors/oauth/callback/route.ts:144-162`
 
 ## S86.14: API keys.
 
@@ -146,64 +127,18 @@ Code: `apps/web/features/connectors/hooks/use-connectors-settings-adapter.tsx:83
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S86.16: Local folders.
-
-- Done when: The user can choose which local folders AGI may read or write, see the list, and remove access.
-- Wave: 3
-- Already works on: cli
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| desktop | partial | Folders can be approved from the composer's folder dialog and are listed there, but approved folders cannot be removed: the Local access list with Remove renders only in the internal Tauri shell (hostHasLocalMode is true only for shell "tauri"). | ui |
-
-Code: `apps/web/features/desktop-host/components/LocalFolderAttachDialog.tsx:75-118`, `apps/desktop/electron/runtime/dispatcher.ts:704-712`, `packages/contracts/local-runtime/src/host-bridge.ts:309-312`
-
-## S86.18: Computer applications.
-
-- Done when: The user can choose which desktop applications AGI may control and revoke that.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| desktop | partial | Computer use is gated only by the OS Accessibility/Screen Recording grant and a whole-computer "computer.use" grant; there is no list to allow or block individual applications. | ui |
-
-Code: `apps/desktop/electron/runtime/computerUseService.ts:240-265`, `apps/desktop/electron/runtime/dispatcher.ts:421-430`
-
-## S86.19: Clipboard access.
-
-- Done when: The user controls whether AGI may read the clipboard, and can review or withdraw that permission.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| desktop | partial | "Attach clipboard" asks before reading (Deny / Allow this session / Always allow), but an "Always allow" grant cannot be reviewed or withdrawn: listPermissions() has no caller and no settings row exists. | ui |
-
-Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:1885-1889`, `apps/desktop/electron/runtime/dispatcher.ts:421-424`, `apps/desktop/electron/runtime/permissionManager.ts:300-335`, `apps/desktop/electron/runtime/permissionManager.ts:112-124`
-
-## S86.22: Screen-sharing preferences.
-
-- Done when: The user can set preferences for screen capture/sharing (whether and how AGI may see the screen).
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| desktop | partial | Only the screenshot-to-chat shortcut can be set; there is no setting for what may be captured, and the OS Screen Recording grant is the only on/off. | ui |
-
-Code: `apps/web/features/desktop-host/components/DesktopSettingsSection.tsx:47-58`, `apps/desktop/electron/screenshot.ts:37-46`
-
 ## S86.23: Saved approvals.
 
 - Done when: The user can review the approvals they chose to remember (always-allow/deny) and remove any of them.
 - Wave: 3
-- Already works on: web, mobile, cli
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| desktop | partial | Connector approvals are reviewable through the hosted page, but desktop-native "Always allow" grants (clipboard, computer use, local models, commands) are saved with no screen to review or remove them: listPermissions() has no caller. | ui |
 | vscode | partial | Waits on p-desktop-cli: approval/requested must say whether Always allow is saved for that request, ReviewDecision needs an always_allow answer, and the app-server needs permissions/list and permissions/remove over ~/.agiworkforce/permissions.toml and rules/user-approved.rules; VS Code then offers Always allow and a Saved approvals list | persistence, ui |
 | chrome | partial | The only remembered approval is the approved-sites list; per-action decisions are never saved, and sensitive actions always ask. | ui |
 
-Code: `apps/web/features/connectors/components/ToolPermissionsPanel.tsx:60-90`, `apps/desktop/electron/runtime/permissionManager.ts:300-335`, `apps/desktop/electron/runtime/permissionManager.ts:112-124`, `apps/extension-vscode/src/features/permissions/approvalScope.ts:35-35`
+Code: `apps/extension-vscode/src/features/permissions/approvalScope.ts:35-35`, `apps/extension/src/options.ts:1100-1150`, `apps/extension/src/features/computer-use/approvalPolicy.ts:209-247`
 
 ## S86.25: Revoke all optional grants.
 
@@ -212,14 +147,6 @@ Code: `apps/web/features/connectors/components/ToolPermissionsPanel.tsx:60-90`, 
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Grants can only be removed one connector at a time (Disconnect, or Reset all tool permissions per connector); there is no single revoke-everything action. | ui |
-| desktop | partial | Connector grants are per connector on the hosted page; native "Always allow" grants and approved folders cannot be withdrawn at all from the Electron app. | ui |
-| mobile | missing | Not built on this surface. |  |
-| cli | partial | `agi approvals reset` clears every saved command rule, but trusted folders and MCP servers must be removed separately. | ui |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/connectors/components/ToolPermissionsPanel.tsx:48-50`, `apps/web/features/connectors/hooks/use-connectors-settings-adapter.tsx:640-670`, `apps/desktop/electron/runtime/permissionManager.ts:112-124`, `apps/cli/src/lib.rs:2687-2692`
 
 ## S86.26: Advanced/hardened account-security mode.
 

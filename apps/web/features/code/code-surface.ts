@@ -263,7 +263,8 @@ export const CODE_COPY = {
   sharePublicHint: 'Anyone signed in to AGI Workforce can open it with the link.',
   shareWarning:
     'Check this session for sensitive content before you share it. It can contain code and credentials from private repositories.',
-  shareSnapshotNote: 'People who open the link see the session as it is when they open it.',
+  shareSnapshotNote:
+    'People who open the link see your name and the session as it is when they open it.',
   shareRepositoryNote: 'Teammates also need GitHub access to the repository to open it.',
   shareLinkLabel: 'Session link',
   shareFailed: 'Could not change who can open this session.',
@@ -279,6 +280,7 @@ export const CODE_COPY = {
   sharedUnavailable: 'This shared session is not available.',
   sharedEmpty: 'Nothing has run in this session yet.',
   sharedSnapshot: 'You are viewing a shared session as it was when you opened it.',
+  sharedByPrefix: 'Shared by',
   sharedUpdated: 'Updated',
   sharedOpenCode: 'Open AGI Code',
   editEnvironment: 'Edit environment',

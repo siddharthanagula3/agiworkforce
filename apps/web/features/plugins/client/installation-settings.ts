@@ -94,6 +94,9 @@ export async function setPluginInstallationEnabled(
       await messageFor(response, PLUGIN_ENABLE_FAILED_COPY),
     );
   }
-  const body = (await response.json()) as { installation?: { enabled?: boolean } };
-  return body.installation?.enabled ?? enabled;
+  const body = (await response.json()) as {
+    installation?: { enabled?: boolean };
+    plugin?: { enabled?: boolean };
+  };
+  return body.installation?.enabled ?? body.plugin?.enabled ?? enabled;
 }

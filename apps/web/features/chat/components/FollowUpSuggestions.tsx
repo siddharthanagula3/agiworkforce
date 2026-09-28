@@ -16,8 +16,8 @@ export interface FollowUpSuggestionsProps {
   messageCount?: number;
   /**
    * Questions a model wrote from this answer and its sources. They replace the
-   * keyword matcher when present; the matcher stands in when the turn did not
-   * search or the generation failed.
+   * keyword matcher when present; the matcher stands in when the chat is
+   * temporary or the generation failed.
    */
   suggestions?: readonly string[];
   searchUnavailable?: boolean;

@@ -252,11 +252,10 @@ Code: `apps/mobile/src/features/companion/components/StatusBanners.tsx:38-45`
 
 - Done when: From another device the user directs work on their own permitted computer.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The registry tracks each computer's remote-work switch and durable runs can hand steps to it, but a web chat never offers device tools; only runs started on the desktop reach it. | handler |
-| desktop | partial | Relay side landed (f0e8a02b1). Once a chat window reports dispatch_task_runner_ready, Electron gives each phone dispatch.task.create to that window as a dispatch-task event, forwards cancels to it, and relays its dispatch_task_report as dispatch.task.status with taskId set to the conversation id. Statuses the phone missed are re-sent when it reconnects. If the window closes, reloads or crashes, its unfinished tasks are reported as failed. Until a window is ready, tasks still start a coding session in the first approved folder. Still needed: p-electron's web runner hook (apps/web/features/desktop-host/hooks), which starts the chat with device steps so the model can use the screen, and reports back. Contract sent to p-electron. | handler |
 | mobile | partial | The phone steers desktop code sessions, but its Dispatch tasks go unanswered by the Electron app and it cannot use the screen. | handler |
 
-Code: `apps/web/lib/device-steps/device-registry.ts:307-330`, `apps/web/lib/device-steps/host-headers.ts:27-31`, `apps/desktop/electron/remote/remoteControlHost.ts:195-195`, `apps/desktop/electron/remote/remoteControlHost.ts:246-246`
+Code: `apps/mobile/src/features/companion/remote-code/service.ts:49-49`, `apps/mobile/services/companion.ts:134-140`

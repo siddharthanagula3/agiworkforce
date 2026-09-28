@@ -14,11 +14,11 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile and Chrome cloud chat reach the same server check and get its 400; their own composers do not read the limit before sending. The CLI resolves its own routes and does not read mediaInput. | handler |
+| mobile | partial | The client-side check is written as the post-codex patch chat-gates-s76.04-mobile-image-limit.patch (applies after chat-gates-s79.05-mobile-speed-first.patch): after cloud dispatch resolves the model, chatExecutionStore refuses a send with more images than that model reads in one message (model override, else its default managed route's harness limit), naming the model, the limit and how many to remove, before anything uploads. ChatInput.tsx itself could not be patched: the three-way merge of integration and Codex's copy conflicts. Mobile still gets the server's 400 until the patch lands. | handler |
 | cli | partial | Mobile and Chrome cloud chat reach the same server check and get its 400; their own composers do not read the limit before sending. The CLI resolves its own routes and does not read mediaInput. | handler |
 | chrome | partial | Mobile and Chrome cloud chat reach the same server check and get its 400; their own composers do not read the limit before sending. The CLI resolves its own routes and does not read mediaInput. | handler |
 
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4042-4042`
+Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4058-4058`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4042-4042`
 
 ## S76.06: Native PDF/document input.
 
@@ -158,17 +158,6 @@ Code: `apps/mobile/src/features/voice/components/LiveVoiceComposer.tsx:33-36`, `
 | cli | partial | The CLI agent core runs its parallel tool batch through join_all for every model; it needs to read the harness parallelToolCalls feature from the shared registry (p-desktop-cli). | handler |
 
 Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:4477-4477`
-
-## S76.24: Structured JSON output.
-
-- Done when: The registry records native structured JSON output per model and JSON requests use it.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| api | partial | json_object is enforced by a system directive for every model; the registry structuredOutput flag only sets a task-family quality floor and is never used to pick native JSON mode. | handler |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:386-389`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:3628-3630`, `packages/ai/model-registry/catalog/routing-policies.json:358-359`
 
 ## S76.28: Context-window limit.
 

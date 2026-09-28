@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { createControlReceiptLedger } from '../controlReceipts';
+import { createControlReceiptLedger } from '@agiworkforce/utils/control-receipts';
 
 describe('control receipt ledger', () => {
   it('issues a versioned accepted receipt for a control it has not seen', () => {

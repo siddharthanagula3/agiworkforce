@@ -37,7 +37,7 @@ export function buildVscodeHeartbeat(facts: VscodeHostFacts): DeviceHeartbeatReq
       computerUse: false,
       localModels: false,
       localMcp: false,
-      remoteControl: false,
+      remoteControl: true,
     },
   };
   const parsed = DeviceHeartbeatRequestSchema.safeParse(candidate);
