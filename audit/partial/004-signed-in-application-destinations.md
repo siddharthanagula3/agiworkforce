@@ -475,11 +475,10 @@ Code: `apps/web/features/settings/sections/AccountSection.tsx:369-376`, `apps/we
 
 - Done when: A help-and-feedback destination links to help/docs/status and lets the user send product feedback or a bug report from inside the product.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | /help lists commands, but /feedback and /bug only print a GitHub issues URL; there is no in-product feedback submission. | surface-only |
-| vscode | partial | "Send Feedback" collects type and text but submits by opening a prefilled GitHub issue (needs a GitHub account and a public repo); no in-product submission. | surface-only |
 
-Code: `apps/cli/src/tui/tui_app.rs:3531-3540`, `apps/cli/src/tui/tui_app.rs:3535-3540`, `apps/extension-vscode/src/core/commandSetup.ts:1319-1335`, `apps/extension-vscode/src/core/commandSetup.ts:1354-1362`
+Code: `apps/cli/src/tui/tui_app.rs:3531-3540`, `apps/cli/src/tui/tui_app.rs:3535-3540`
