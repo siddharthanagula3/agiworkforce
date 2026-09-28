@@ -753,6 +753,8 @@ const ar = {
   'mcpDetails.expired':
     'لم تعد هذه التفاصيل محفوظة. شغّل AGI Workforce: Show MCP Servers واختر تفاصيل الخادم لفحص {name} مرة أخرى.',
   'mcpDetails.field': '{label}: {value}',
+  'chatNotice.webSearchDenied':
+    'البحث على الويب غير متاح في هذه الجلسة. {reason} أوقف Browse the web للإرسال من دونه.',
 };
 
 export default ar;

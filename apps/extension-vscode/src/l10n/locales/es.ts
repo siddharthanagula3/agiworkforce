@@ -614,6 +614,8 @@ const es = {
   'mcpDetails.expired':
     'Estos detalles ya no se conservan. Ejecute AGI Workforce: Show MCP Servers y elija Detalles del servidor para volver a comprobar {name}.',
   'mcpDetails.field': '{label}: {value}',
+  'chatNotice.webSearchDenied':
+    'La búsqueda web no está disponible en esta sesión. {reason} Desactive Browse the web para enviar sin ella.',
 };
 
 export default es;

@@ -453,6 +453,8 @@ const ja = {
   'mcpDetails.expired':
     'この詳細はもう保持されていません。{name} をもう一度確認するには、AGI Workforce: Show MCP Servers を実行して「サーバーの詳細」を選んでください。',
   'mcpDetails.field': '{label}: {value}',
+  'chatNotice.webSearchDenied':
+    'このセッションでは Web 検索を利用できません。{reason} 検索なしで送信するには Browse the web をオフにしてください。',
 };
 
 export default ja;

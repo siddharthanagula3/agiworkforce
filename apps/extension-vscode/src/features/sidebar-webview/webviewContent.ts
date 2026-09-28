@@ -2928,6 +2928,7 @@ export function getWebviewContent(
     // ThreadSummary.trustMode from the CLI proves whether this developer session is Local,
     // BYOK, or Managed Cloud. Keep the header neutral until that summary arrives.
     var sessionBoundaryAuthoritative = false;
+    var webSearchDenial = null;
     var activeAccountIdentity = null;
     var activeAccountStatus = 'loading';
     var activeProviderIdentity = '';
@@ -3238,11 +3239,30 @@ export function getWebviewContent(
         : trustMode === 'byok'
           ? 'user-api-key'
           : 'managed-plan');
+      renderBrowseAvailability();
     }
 
     function resetAuthoritativeSessionBoundary() {
       sessionBoundaryAuthoritative = false;
       renderSessionIdentity();
+      renderBrowseAvailability();
+    }
+
+    function renderBrowseAvailability() {
+      if (!plusMenuBrowse) return;
+      var blocked = webSearchDenial !== null && sessionBoundaryAuthoritative &&
+        activeRuntimeSource === 'managed-plan';
+      var description = plusMenuBrowse.querySelector('.plus-menu-description');
+      if (description && description.dataset.available === undefined) {
+        description.dataset.available = description.textContent;
+      }
+      plusMenuBrowse.disabled = blocked;
+      if (description) {
+        description.textContent = blocked ? webSearchDenial.title : description.dataset.available;
+      }
+      if (blocked) plusMenuBrowse.title = webSearchDenial.message;
+      else plusMenuBrowse.removeAttribute('title');
+      if (blocked && browseWebEnabled) setBrowseWebEnabled(false);
     }
 
     function renderUsageBuckets(payload) {
@@ -6178,6 +6198,13 @@ export function getWebviewContent(
 
       else if (msg.type === 'sessionBoundary') {
         applyAuthoritativeSessionBoundary(msg.payload.trustMode, msg.payload.provider);
+      }
+
+      else if (msg.type === 'webSearchGate') {
+        webSearchDenial = msg.payload && msg.payload.denied
+          ? { title: String(msg.payload.title), message: String(msg.payload.message) }
+          : null;
+        renderBrowseAvailability();
       }
 
       else if (msg.type === 'runtimeStatus') {

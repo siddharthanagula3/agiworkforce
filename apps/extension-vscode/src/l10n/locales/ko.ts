@@ -440,6 +440,8 @@ const ko = {
   'mcpDetails.expired':
     '이 세부 정보는 더 이상 보관되지 않습니다. {name}을(를) 다시 확인하려면 AGI Workforce: Show MCP Servers를 실행하고 서버 세부 정보를 선택하세요.',
   'mcpDetails.field': '{label}: {value}',
+  'chatNotice.webSearchDenied':
+    '이 세션에서는 웹 검색을 사용할 수 없습니다. {reason} 검색 없이 보내려면 Browse the web을 끄세요.',
 };
 
 export default ko;
