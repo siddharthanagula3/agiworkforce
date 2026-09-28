@@ -1,4 +1,8 @@
 import { z } from 'zod';
+import {
+  MANAGED_MEMORY_MAX_CATEGORY_CHARS,
+  MANAGED_MEMORY_MAX_CONTENT_CHARS,
+} from '@agiworkforce/types';
 
 export const ServerVersionSchema = z
   .string()
@@ -269,8 +273,8 @@ export type MemorySyncPullResponse = z.infer<typeof MemorySyncPullResponseSchema
 
 export const MemorySyncPushItemSchema = z.object({
   id: z.string().uuid(),
-  content: z.string().max(20_000),
-  category: z.string().max(200).nullable().optional(),
+  content: z.string().max(MANAGED_MEMORY_MAX_CONTENT_CHARS),
+  category: z.string().max(MANAGED_MEMORY_MAX_CATEGORY_CHARS).nullable().optional(),
   source: z.string().max(50).nullable().optional(),
   pinned: z.boolean().optional(),
   baseVersion: ServerVersionSchema,
