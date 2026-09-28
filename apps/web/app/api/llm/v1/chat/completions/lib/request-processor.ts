@@ -182,6 +182,7 @@ import {
   ROUTING_PROFILE_CHOICES,
 } from '@agiworkforce/types';
 import type {
+  ChatResponseFormat,
   ModelCapabilities,
   ProjectFileCitation,
   PromptCacheScope,
@@ -293,9 +294,15 @@ import {
 } from '@/lib/server/provider-training-opt-out';
 import { createResearchDomainPolicy, type ResearchDomainPolicy } from './research-sources';
 import {
+  IMAGE_DETAIL_VALUES,
+  imageDetailRefusalMessage,
+  unsupportedImageDetail,
+} from './image-detail';
+import {
   JsonSchemaResponseFormatSchema,
   jsonSchemaDirective,
   jsonSchemaFormatProblem,
+  requestedResponseFormat,
   wantsJsonSchema,
 } from './json-schema-mode';
 import {
@@ -381,7 +388,7 @@ export const ChatCompletionRequestSchema = z
                       });
                     }
                   }),
-                  detail: z.enum(['auto', 'low', 'high']).optional(),
+                  detail: z.enum(IMAGE_DETAIL_VALUES).optional(),
                 })
                 .optional(),
               file: z
@@ -1165,6 +1172,7 @@ export type ProcessedRequest = {
     thinking?: { type: string; budget_tokens?: number };
     effort?: string;
     usePromptCache?: boolean;
+    responseFormat?: ChatResponseFormat;
     /**
      * Who this turn belongs to, for the prompt cache. Carried on the request
      * rather than re-derived per adapter so one turn cannot be scoped two ways,
@@ -3952,6 +3960,22 @@ export async function processRequest(
       ),
     };
   }
+  const detailRefusal = unsupportedImageDetail(chatRequest.messages, chatRequest.model);
+  if (detailRefusal) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          error: {
+            message: imageDetailRefusalMessage(detailRefusal),
+            type: 'invalid_request_error',
+            code: 'image_detail_unsupported',
+          },
+        },
+        { status: 400 },
+      ),
+    };
+  }
 
   if (wantsJsonObject(chatRequest.response_format)) {
     applyJsonObjectMode(chatRequest, dynamicSystemMessageRefs);
@@ -5063,6 +5087,7 @@ export async function processRequest(
       tool_call_id: undefined,
     });
   }
+  const responseFormat = requestedResponseFormat(chatRequest.response_format);
   const llmRequest = {
     model: chatRequest.model,
     messages: internalMessages,
@@ -5078,6 +5103,7 @@ export async function processRequest(
     thinking_mode: chatRequest.thinking_mode,
     thinking: thinkingConfig,
     effort: effectiveEffort,
+    ...(responseFormat ? { responseFormat } : {}),
     ...resolveTurnPromptCache({
       requested: chatRequest.use_prompt_cache,
       temporaryChat: conversationIsTemporary,

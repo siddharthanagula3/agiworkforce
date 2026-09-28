@@ -49,6 +49,8 @@ const EXTERNAL_DESTINATIONS: Partial<Record<SettingsCommand, string>> = {
   openConfigDocs: 'https://agiworkforce.com/docs?topic=configuration&from=vscode-extension',
   openInstructionDocs:
     'https://agiworkforce.com/docs?topic=custom-instructions&from=vscode-extension',
+  openPrivacySettings: 'https://agiworkforce.com/settings/privacy?from=vscode-extension',
+  openSubprocessors: 'https://agiworkforce.com/subprocessors?from=vscode-extension',
 };
 
 function buildPlanUsage(tierInfo: TierInfo, accountPlanName?: string): SettingsPlanUsage {
