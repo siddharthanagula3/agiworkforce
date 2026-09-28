@@ -62,6 +62,9 @@ export const LOCAL_CODE_COPY = {
   modeMenu: 'Permissions',
   modeControl: 'Permission mode',
   sessionRunning: 'Running',
+  changesFailed: 'The changes in this folder could not be read.',
+  changesNotRepository: 'This folder is not a git repository, so there are no changes to show.',
+  discardFailed: 'That change could not be discarded.',
 } as const;
 
 const LOCAL_SESSION_STATUS_LABELS: Partial<Record<ThreadStatus, string>> = {

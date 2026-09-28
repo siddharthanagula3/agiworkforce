@@ -8,6 +8,7 @@ import {
   ChevronLeft,
   Code2,
   ListChecks,
+  PanelsTopLeft,
   Square,
   TerminalSquare,
 } from '@agiworkforce/icons';
@@ -55,6 +56,7 @@ import {
 } from '../local-code';
 import { useLocalSession, type LocalSessionState } from '../hooks/use-local-session';
 import { useLocalTests } from '../hooks/use-local-tests';
+import { LocalChangesPanel } from './LocalChangesPanel';
 import { LocalModelChip } from './LocalModelChip';
 import { CodeTranscriptBody } from './CodeTranscript';
 import styles from '../CloudCodePage.module.css';
@@ -183,6 +185,7 @@ export function LocalSessionPanel({
   const tests = useLocalTests(session.rootId);
   const [editorError, setEditorError] = useState<string | null>(null);
   const [handoffOpen, setHandoffOpen] = useState(false);
+  const [changesOpen, setChangesOpen] = useState(false);
   const vsCodeHref = continueLocalSessionInVsCodeHref(session);
   const resumeCommand = localSessionResumeCommand(session.id);
   const testsRunning = tests.status === 'running';
@@ -247,6 +250,16 @@ export function LocalSessionPanel({
           <span className={styles['headerChipText']}>{localSessionContext(session, group)}</span>
         </span>
         <div className={styles['headerActions']}>
+          <button
+            type="button"
+            className={`${styles['headerButton']} ${changesOpen ? styles['headerButtonActive'] : ''}`}
+            aria-label={CODE_COPY.changes}
+            aria-pressed={changesOpen}
+            title={CODE_COPY.changes}
+            onClick={() => setChangesOpen((open) => !open)}
+          >
+            <PanelsTopLeft size={HEADER_GLYPH_SIZE} aria-hidden="true" />
+          </button>
           <button
             type="button"
             className={`${styles['headerButton']} ${testsRunning ? styles['headerButtonActive'] : ''}`}
@@ -479,6 +492,13 @@ export function LocalSessionPanel({
             </div>
           </div>
         </div>
+        {changesOpen && (
+          <LocalChangesPanel
+            rootId={session.rootId}
+            refreshKey={state.messages.length}
+            onClose={() => setChangesOpen(false)}
+          />
+        )}
       </div>
     </>
   );
