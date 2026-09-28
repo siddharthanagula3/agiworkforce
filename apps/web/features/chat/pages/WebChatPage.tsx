@@ -2713,6 +2713,25 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             ...((generatedImage?.model ?? requestedModel)
               ? { imageGenModel: generatedImage?.model ?? requestedModel }
               : {}),
+            ...(previousMetadata?.imageUrl
+              ? {
+                  imageVersions: [
+                    ...(previousMetadata.imageVersions ?? []),
+                    {
+                      imageUrl: previousMetadata.imageUrl,
+                      ...(previousMetadata.imageGenPrompt
+                        ? { prompt: previousMetadata.imageGenPrompt }
+                        : {}),
+                      ...(previousMetadata.imageGenAspect
+                        ? { aspect: previousMetadata.imageGenAspect }
+                        : {}),
+                      ...(previousMetadata.imageGenModel
+                        ? { model: previousMetadata.imageGenModel }
+                        : {}),
+                    },
+                  ],
+                }
+              : {}),
           });
 
         const outcome = await runDurableImageGenerationTurn({

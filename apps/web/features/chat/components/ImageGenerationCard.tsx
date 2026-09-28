@@ -8,6 +8,8 @@ import {
   Copy,
   Check,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Pencil,
   MoreHorizontal,
   Send,
@@ -26,7 +28,7 @@ import {
   type ImageRevisionRequest,
 } from '../lib/imageGenerationOptions';
 import { useMediaModelAvailability } from '@features/chat/hooks/use-media-model-availability';
-import { useChatStore } from '@shared/stores/web-chat-store';
+import { useChatStore, type ImageVersion } from '@shared/stores/web-chat-store';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
 import { toast } from 'sonner';
@@ -82,6 +84,7 @@ interface ImageGenerationCardProps {
   modelId?: string;
   /** Bounded ISO instant before which retry remains an explicit disabled control. */
   retryAt?: string;
+  previousVersions?: ImageVersion[];
   /**
    * Called when the user requests a re-generation from within the card
    * (aspect-ratio change or edit description).
@@ -846,6 +849,7 @@ interface ResultCardProps {
   prompt: string;
   modelId?: string;
   aspectRatio?: ImageAspectRatio;
+  version?: { index: number; total: number; onPrevious: () => void; onNext: () => void };
   onEdit: () => void;
   onShare: () => void;
   onKeep?: () => void;
@@ -856,6 +860,7 @@ function ResultCard({
   prompt,
   modelId,
   aspectRatio,
+  version,
   onEdit,
   onShare,
   onKeep,
@@ -1042,10 +1047,35 @@ function ResultCard({
           )}
         </div>
 
+        {version && (
+          <div className="flex items-center" role="group" aria-label="Image versions">
+            <button
+              type="button"
+              onClick={version.onPrevious}
+              disabled={version.index === 0}
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 pointer-coarse:h-11 pointer-coarse:w-11"
+              aria-label="Previous version"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+            </button>
+            <span className="px-1 text-xs tabular-nums text-muted-foreground" aria-live="polite">
+              {version.index + 1} / {version.total}
+            </span>
+            <button
+              type="button"
+              onClick={version.onNext}
+              disabled={version.index === version.total - 1}
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 pointer-coarse:h-11 pointer-coarse:w-11"
+              aria-label="Next version"
+            >
+              <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
+
         {modelLabel && (
           <span className="ml-auto truncate pr-1 text-caption text-muted-foreground">
-            Generated with {modelLabel}
-            {aspectRatio && aspectRatio !== 'auto' ? ` · ${aspectRatio}` : ''}
+            {`Generated with ${modelLabel}${aspectRatio && aspectRatio !== 'auto' ? ` · ${aspectRatio}` : ''}`}
           </span>
         )}
       </div>
@@ -1061,11 +1091,13 @@ export function ImageGenerationCard({
   imageUrl,
   isGenerating = !imageUrl,
   prompt = '',
-  aspectRatio = '1:1',
+  aspectRatio: requestedAspectRatio,
   modelId,
   retryAt,
+  previousVersions,
   onRegenerate,
 }: ImageGenerationCardProps) {
+  const aspectRatio = requestedAspectRatio ?? '1:1';
   const [showEdit, setShowEdit] = useState(false);
   const [showShare, setShowShare] = useState(false);
   const [keptAssetId, setKeptAssetId] = useState<string | null>(null);
@@ -1127,6 +1159,11 @@ export function ImageGenerationCard({
     [],
   );
 
+  const [viewedVersion, setViewedVersion] = useState<number | null>(null);
+  useEffect(() => {
+    setViewedVersion(null);
+  }, [liveUrl]);
+
   // State A: generating. The copy deliberately reflects observable state and
   // elapsed time; rotating pseudo-stages such as "Painting details" and
   // "Almost there" implied provider telemetry we do not receive.
@@ -1180,15 +1217,37 @@ export function ImageGenerationCard({
     );
   }
 
+  const earlierVersions = previousVersions ?? [];
+  const versionCount = earlierVersions.length + 1;
+  const versionIndex = viewedVersion ?? versionCount - 1;
+  const shownVersion = viewedVersion === null ? undefined : earlierVersions[viewedVersion];
+
   // State B/C/D: image ready
   return (
     <>
       {/* State B: Result card */}
       <ResultCard
-        imageUrl={liveUrl ?? imageUrl}
-        prompt={livePrompt}
-        modelId={modelId}
-        aspectRatio={liveAspect}
+        imageUrl={shownVersion?.imageUrl ?? liveUrl ?? imageUrl}
+        prompt={shownVersion?.prompt ?? livePrompt}
+        modelId={shownVersion ? shownVersion.model : modelId}
+        {...(shownVersion
+          ? shownVersion.aspect
+            ? { aspectRatio: shownVersion.aspect as ImageAspectRatio }
+            : {}
+          : requestedAspectRatio
+            ? { aspectRatio: liveAspect }
+            : {})}
+        {...(versionCount > 1
+          ? {
+              version: {
+                index: versionIndex,
+                total: versionCount,
+                onPrevious: () => setViewedVersion(Math.max(0, versionIndex - 1)),
+                onNext: () =>
+                  setViewedVersion(versionIndex + 1 >= versionCount - 1 ? null : versionIndex + 1),
+              },
+            }
+          : {})}
         onEdit={() => setShowEdit(true)}
         onShare={() => setShowShare(true)}
         {...(keepableAssetId
