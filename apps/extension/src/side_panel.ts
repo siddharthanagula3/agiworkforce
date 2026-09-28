@@ -1,4 +1,9 @@
-import { QueueFullError, type AgentActivityToolEntry } from '@agiworkforce/client-runtime';
+import {
+  createMessageQueue,
+  LANE_CAP,
+  QueueFullError,
+  type AgentActivityToolEntry,
+} from '@agiworkforce/client-runtime';
 import {
   createManagedCloudChatAttachmentsClient,
   MAX_CHAT_ATTACHMENT_BYTES,
@@ -1222,6 +1227,7 @@ function clearPendingPageContext(): void {
 }
 
 function resetConversationView(): void {
+  returnFollowUpsToComposer();
   _ctx.messages.length = 0;
   turnPayloadByMessageId.clear();
   void refreshRecentProjects();
@@ -1257,6 +1263,7 @@ async function transitionManagedCloudOwner(nextOwner: ManagedCloudOwner | null):
     _ctx.streamTimeoutHandle = null;
   }
   _ctx.managedCloudOwner = nextOwner ? { ...nextOwner } : null;
+  followUpQueue.clear();
   _ctx.messages.length = 0;
   turnPayloadByMessageId.clear();
   streamStartedAtById.clear();
@@ -2838,6 +2845,36 @@ function injectStyles(): void {
       overflow-y: auto;
     }
     #sp-slash-menu.visible { display: flex; }
+    #sp-queued-list { display: flex; flex-direction: column; gap: 4px; margin: 0 0 6px; padding: 0; list-style: none; }
+    #sp-queued-list[hidden] { display: none; }
+    .sp-queued-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 8px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-control);
+      background: var(--agi-ext-bg);
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
+    .sp-queued-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sp-queued-action {
+      flex-shrink: 0;
+      padding: 2px 6px;
+      border: 0;
+      border-radius: var(--corner-compact);
+      background: transparent;
+      color: var(--agi-ext-text-muted);
+      font: inherit;
+      cursor: pointer;
+    }
+    .sp-queued-action:hover { background: var(--agi-ext-hover); color: var(--agi-ext-text); }
+    .sp-queued-action:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 1px; }
+    @media (pointer: coarse) {
+      .sp-queued-action { min-height: 44px; min-width: 44px; }
+    }
     .sp-slash-item {
       display: flex;
       flex-direction: column;
@@ -5787,6 +5824,7 @@ function cancelCurrentManagedStream(preservePartialOutput: boolean): void {
         _ctx.needsMessageRebuild = true;
         renderMessages();
       }
+      if (preservePartialOutput) sendNextFollowUp();
     });
   }
   stopManagedChatKeepalive();
@@ -5835,6 +5873,57 @@ function turnAttachmentDescriptors(payload: TurnPayload): SidePanelMessageAttach
 
 function pageReference(source: PageContextSource): SidePanelPageReference {
   return { url: source.url, title: source.title || pageChipLabel(source.url) };
+}
+
+const followUpQueue = createMessageQueue();
+
+function canQueueFollowUp(text: string): boolean {
+  return (
+    managedCloudChatState === 'ready' &&
+    _ctx.managedCloudOwner !== null &&
+    (_ctx.isStreaming || stoppingStreamId !== null) &&
+    !historyRestoreInProgress &&
+    text.trim().length > 0
+  );
+}
+
+function submitComposerText(text: string): boolean {
+  if (canAdmitComposerMessage(text)) {
+    sendMessage(text);
+    return true;
+  }
+  if (!canQueueFollowUp(text)) return false;
+  try {
+    followUpQueue.enqueue({ value: text.trim(), mode: 'prompt' });
+  } catch (err) {
+    if (!(err instanceof QueueFullError)) throw err;
+    composerContextNotice = t('spQueuedFull', [String(LANE_CAP)]);
+    updateAttachmentPreview();
+    return false;
+  }
+  return true;
+}
+
+function sendNextFollowUp(): void {
+  const next = followUpQueue.peek();
+  if (!next || typeof next.value !== 'string' || !canAdmitComposerMessage(next.value)) return;
+  followUpQueue.dequeueIf(next.id);
+  sendMessage(next.value);
+}
+
+function returnFollowUpsToComposer(): void {
+  const parked = followUpQueue
+    .dequeueAll()
+    .flatMap((command) => (typeof command.value === 'string' ? [command.value] : []));
+  if (parked.length === 0) return;
+  const input = document.getElementById('sp-input') as HTMLTextAreaElement | null;
+  if (!input) return;
+  const current = input.value.trim();
+  replaceComposerText(input, [...parked, ...(current ? [current] : [])].join('\n\n'));
+  autoResizeInput(input);
+  composerContextNotice = t('spQueuedReturned');
+  updateAttachmentPreview();
+  updateSendButton();
 }
 
 function sendMessage(text: string, displayText?: string): void {
@@ -6139,6 +6228,7 @@ function handleStreamError(
   _ctx.needsMessageRebuild = true;
   saveMessages();
   renderMessages();
+  sendNextFollowUp();
 }
 
 function ensureStreamingAssistant(streamId: string, streamUsedQuick: boolean): ChatMessage {
@@ -6217,6 +6307,12 @@ function updateModelBadge(modelId: string): void {
 
 function updateSendButton(): void {
   document.getElementById('sp-messages')?.classList.toggle('sp-messages--busy', _ctx.isStreaming);
+  const composer = document.getElementById('sp-input') as HTMLTextAreaElement | null;
+  if (composer && managedCloudChatState === 'ready') {
+    composer.placeholder = t(
+      _ctx.isStreaming ? 'spComposerPlaceholderQueue' : 'spComposerPlaceholder',
+    );
+  }
   const btn = document.getElementById('sp-send-btn') as HTMLButtonElement | null;
   if (!btn) return;
   if (_ctx.isStreaming) {
@@ -7861,6 +7957,7 @@ function buildUI(): void {
         clearTimeout(_ctx.streamTimeoutHandle);
         _ctx.streamTimeoutHandle = null;
       }
+      returnFollowUpsToComposer();
       _ctx.messages.length = 0;
       turnPayloadByMessageId.clear();
       _ctx.lastRenderedCount = 0;
@@ -11424,10 +11521,10 @@ function buildUI(): void {
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229) {
       e.preventDefault();
       const text = inputEl.value;
-      if (!canAdmitComposerMessage(text)) return;
+      if (!submitComposerText(text)) return;
       inputEl.value = '';
       autoResizeInput(inputEl);
-      sendMessage(text);
+      updateSendButton();
     }
   });
 
@@ -11642,6 +11739,62 @@ function buildUI(): void {
 
   inputRow.appendChild(inputEl);
 
+  const queuedList = el('ul', {
+    id: 'sp-queued-list',
+    'aria-label': t('spQueuedListLabel'),
+    hidden: '',
+  });
+  function renderQueuedFollowUps(): void {
+    const queued = followUpQueue
+      .getSnapshot()
+      .flatMap((command) =>
+        typeof command.value === 'string' ? [{ id: command.id, text: command.value }] : [],
+      );
+    clearChildren(queuedList);
+    queuedList.hidden = queued.length === 0;
+    queued.forEach(({ id, text }, index) => {
+      const item = el('li', { class: 'sp-queued-item' });
+      item.appendChild(renderIcon(Clock, 14));
+      const lead =
+        queued.length > 1
+          ? t('spQueuedLeadNumbered', [String(index + 1), String(queued.length)])
+          : t('spQueuedLead');
+      item.appendChild(el('span', { class: 'sp-queued-text' }, `${lead}: ${text}`));
+      const removeQueued = (): void => {
+        followUpQueue.dequeueAllMatching((command) => command.id === id);
+      };
+      const edit = el(
+        'button',
+        { type: 'button', class: 'sp-queued-action', 'aria-label': t('spQueuedEditAria', [text]) },
+        t('spQueuedEdit'),
+      );
+      edit.addEventListener('click', () => {
+        removeQueued();
+        replaceComposerText(inputEl, text);
+        autoResizeInput(inputEl);
+        updateSendButton();
+      });
+      const cancel = el(
+        'button',
+        {
+          type: 'button',
+          class: 'sp-queued-action',
+          'aria-label': t('spQueuedCancelAria', [text]),
+        },
+        t('spQueuedCancel'),
+      );
+      cancel.addEventListener('click', () => {
+        removeQueued();
+        inputEl.focus();
+      });
+      item.appendChild(edit);
+      item.appendChild(cancel);
+      queuedList.appendChild(item);
+    });
+  }
+  followUpQueue.subscribe(renderQueuedFollowUps);
+
+  composerShell.appendChild(queuedList);
   composerShell.appendChild(slashMenu);
   composerShell.appendChild(inputRow);
 
@@ -12651,6 +12804,7 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
     _ctx.needsMessageRebuild = true;
     saveMessages();
     renderMessages();
+    sendNextFollowUp();
   }
 });
 
