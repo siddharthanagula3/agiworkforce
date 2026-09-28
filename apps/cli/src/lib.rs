@@ -931,6 +931,11 @@ enum Command {
     Logout,
     /// Show authentication status for all configured providers.
     AuthStatus,
+    /// List your account's connectors with their state, or disconnect one.
+    Connectors {
+        #[command(subcommand)]
+        action: Option<ConnectorsSubcommand>,
+    },
     /// Export your account data: request an export, or download the one that is ready.
     ExportData {
         /// Directory to save the export in (defaults to the current directory).
@@ -1096,6 +1101,18 @@ enum HistorySubcommand {
         yes: bool,
         #[arg(long)]
         json: bool,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum ConnectorsSubcommand {
+    /// Disconnect a connector from your account.
+    Disconnect {
+        /// Connector id, as agi connectors lists it.
+        connector: String,
+        /// Skip the confirmation prompt.
+        #[arg(long, short = 'y')]
+        yes: bool,
     },
 }
 
@@ -5168,6 +5185,34 @@ async fn run_cli(cli: Cli) -> Result<()> {
             }
 
             // --- Auth Status ---
+            Command::Connectors { action } => {
+                let client = cloud::CloudClient::connect(account_privacy_mode())
+                    .map_err(|error| anyhow::anyhow!("{error}"))?;
+                match action {
+                    None => {
+                        let list = cloud::connectors::list(&client)
+                            .await
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        println!("{}", cloud::connectors::render_list(&list));
+                    }
+                    Some(ConnectorsSubcommand::Disconnect { connector, yes }) => {
+                        if !confirm_destructive(
+                            &format!(
+                                "Disconnect {connector} from your account? Its saved sign-in and tool permissions are removed, and every surface loses it until you connect it again."
+                            ),
+                            *yes,
+                        ) {
+                            println!("Left {connector} connected.");
+                            return Ok(());
+                        }
+                        cloud::connectors::disconnect(&client, connector)
+                            .await
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        println!("Disconnected {connector} from your account.");
+                    }
+                }
+                Ok(())
+            }
             Command::ExportData { out } => {
                 let client = cloud::CloudClient::connect_managed()
                     .map_err(|error| anyhow::anyhow!("{error}"))?;
