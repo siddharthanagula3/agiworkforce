@@ -3155,6 +3155,8 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             // Sizes VideoGenerationPlaceholder to the requested shape before the
             // provider returns anything, so the transcript doesn't jump later.
             ...(videoOptions?.aspectRatio ? { videoAspect: videoOptions.aspectRatio } : {}),
+            ...(videoOptions?.resolution ? { videoResolution: videoOptions.resolution } : {}),
+            ...(videoOptions?.durationSecs ? { videoDurationSecs: videoOptions.durationSecs } : {}),
           };
           addMessage(
             {
@@ -3248,6 +3250,10 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
               // sized correctly for the whole in-flight window, not just the
               // instant before the start request resolves.
               ...(videoOptions?.aspectRatio ? { videoAspect: videoOptions.aspectRatio } : {}),
+              ...(videoOptions?.resolution ? { videoResolution: videoOptions.resolution } : {}),
+              ...(videoOptions?.durationSecs
+                ? { videoDurationSecs: videoOptions.durationSecs }
+                : {}),
             };
             updateOwnMessage(assistantMessageId, {
               content: '',
@@ -3440,9 +3446,15 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         handleOpenUpgradeDialog();
         return;
       }
+      const failed = assistantMessage.metadata;
       handleGenerateVideo(userMessage.content, {
-        ...(typeof assistantMessage.metadata.videoModel === 'string'
-          ? { modelId: assistantMessage.metadata.videoModel }
+        ...(typeof failed.videoModel === 'string' ? { modelId: failed.videoModel } : {}),
+        ...(typeof failed.videoAspect === 'string' ? { aspectRatio: failed.videoAspect } : {}),
+        ...(typeof failed.videoResolution === 'string'
+          ? { resolution: failed.videoResolution }
+          : {}),
+        ...(typeof failed.videoDurationSecs === 'number'
+          ? { durationSecs: failed.videoDurationSecs }
           : {}),
       });
     },

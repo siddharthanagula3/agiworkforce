@@ -426,6 +426,8 @@ export interface MessageMetadata {
   videoModel?: string;
   /** Aspect ratio requested when the video was generated; sizes the shimmer placeholder. */
   videoAspect?: string;
+  videoResolution?: string;
+  videoDurationSecs?: number;
   /** Latest provider progress reported by the durable reconciler. */
   videoProgress?: number;
   /** Durable terminal error projected by the server. */
