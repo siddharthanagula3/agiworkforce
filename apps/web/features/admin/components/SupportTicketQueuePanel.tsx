@@ -415,8 +415,8 @@ export default function SupportTicketQueuePanel() {
         </h2>
         <p className="mt-1 text-xs text-muted-foreground">
           Tickets customers raised in Settings, Help that are open or in progress, newest first. A
-          reply here appears on the customer&apos;s ticket straight away. It is not emailed to them,
-          so write to the contact address on the ticket when it cannot wait.
+          reply here appears on the customer&apos;s ticket straight away and is emailed to the
+          contact address on the ticket.
         </p>
       </div>
 
