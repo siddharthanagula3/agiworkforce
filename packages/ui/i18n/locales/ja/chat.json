@@ -442,7 +442,11 @@
     "viewSources_one": "{{count}} 件のソースを表示",
     "viewSources_other": "{{count}} 件のソースを表示",
     "folderFilesLeftOut_one": "{{folder}} の {{count}} 件のファイルは添付されませんでした。ローカルフォルダーから添付してください。",
-    "folderFilesLeftOut_other": "{{folder}} の {{count}} 件のファイルは添付されませんでした。ローカルフォルダーから添付してください。"
+    "folderFilesLeftOut_other": "{{folder}} の {{count}} 件のファイルは添付されませんでした。ローカルフォルダーから添付してください。",
+    "savedMemoriesUsed_one": "保存されたメモリを {{count}} 件使用",
+    "savedMemoriesUsed_other": "保存されたメモリを {{count}} 件使用",
+    "moreSavedMemories_one": "ほか {{count}} 件",
+    "moreSavedMemories_other": "ほか {{count}} 件"
   },
   "markdownTable": {
     "label": "表",

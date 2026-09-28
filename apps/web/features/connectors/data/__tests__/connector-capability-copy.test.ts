@@ -249,7 +249,7 @@ describe('CRIT-001 guard, an absent action list is attributed, not read as "none
       'bank-accounts',
       'sharepoint',
     ]);
-    expect(tally['runtime-discovered']?.length).toBe(80);
+    expect(tally['runtime-discovered']?.length).toBe(81);
     expect(tally['device-local']?.length).toBe(5);
   });
 

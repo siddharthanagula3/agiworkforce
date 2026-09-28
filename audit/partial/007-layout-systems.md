@@ -145,18 +145,6 @@ Code: `apps/desktop/electron/appMenu.ts:212-214`, `apps/desktop/electron/main.ts
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S7.17: Full-screen media viewer.
-
-- Done when: An image or video in the conversation can be opened in a full-screen viewer and dismissed back to the chat.
-- Wave: 3
-- Already works on: web, desktop, mobile
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | Only computer-use screenshots can be opened full size, and they open in a new browser tab; attachment thumbnails and other media have no viewer. | ui |
-
-Code: `apps/extension/src/features/side-panel/computerUsePanel.ts:1008-1016`, `apps/extension/src/features/side-panel/computerUsePanel.ts:1016-1016`
-
 ## S7.19: Compact companion mode.
 
 - Done when: A compact companion mode shows a reduced chat UI (no sidebar or side panels) sized for quick questions.

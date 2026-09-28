@@ -442,7 +442,11 @@
     "viewSources_one": "Visualizza {{count}} fonte",
     "viewSources_other": "Visualizza {{count}} fonti",
     "folderFilesLeftOut_one": "{{count}} file in {{folder}} non è stato allegato. Allegalo da una cartella locale.",
-    "folderFilesLeftOut_other": "{{count}} file in {{folder}} non sono stati allegati. Allegali da una cartella locale."
+    "folderFilesLeftOut_other": "{{count}} file in {{folder}} non sono stati allegati. Allegali da una cartella locale.",
+    "savedMemoriesUsed_one": "Usato {{count}} ricordo salvato",
+    "savedMemoriesUsed_other": "Usati {{count}} ricordi salvati",
+    "moreSavedMemories_one": "E un altro",
+    "moreSavedMemories_other": "E altri {{count}}"
   },
   "markdownTable": {
     "label": "Tabella",

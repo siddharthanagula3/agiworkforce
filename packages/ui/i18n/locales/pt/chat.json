@@ -442,7 +442,11 @@
     "viewSources_one": "Ver {{count}} fonte",
     "viewSources_other": "Ver {{count}} fontes",
     "folderFilesLeftOut_one": "{{count}} arquivo em {{folder}} não foi anexado. Anexe-o a partir de uma pasta local.",
-    "folderFilesLeftOut_other": "{{count}} arquivos em {{folder}} não foram anexados. Anexe-os a partir de uma pasta local."
+    "folderFilesLeftOut_other": "{{count}} arquivos em {{folder}} não foram anexados. Anexe-os a partir de uma pasta local.",
+    "savedMemoriesUsed_one": "Usou {{count}} memória salva",
+    "savedMemoriesUsed_other": "Usou {{count}} memórias salvas",
+    "moreSavedMemories_one": "E mais {{count}}",
+    "moreSavedMemories_other": "E mais {{count}}"
   },
   "markdownTable": {
     "label": "Tabela",

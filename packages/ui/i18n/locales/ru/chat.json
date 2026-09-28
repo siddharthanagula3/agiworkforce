@@ -564,7 +564,15 @@
     "folderFilesLeftOut_one": "{{count}} файл из {{folder}} не прикреплён. Прикрепите его из локальной папки.",
     "folderFilesLeftOut_few": "{{count}} файла из {{folder}} не прикреплены. Прикрепите их из локальной папки.",
     "folderFilesLeftOut_many": "{{count}} файлов из {{folder}} не прикреплены. Прикрепите их из локальной папки.",
-    "folderFilesLeftOut_other": "{{count}} файла из {{folder}} не прикреплены. Прикрепите их из локальной папки."
+    "folderFilesLeftOut_other": "{{count}} файла из {{folder}} не прикреплены. Прикрепите их из локальной папки.",
+    "savedMemoriesUsed_one": "Использовано {{count}} сохранённое воспоминание",
+    "savedMemoriesUsed_few": "Использовано {{count}} сохранённых воспоминания",
+    "savedMemoriesUsed_many": "Использовано {{count}} сохранённых воспоминаний",
+    "savedMemoriesUsed_other": "Использовано {{count}} сохранённого воспоминания",
+    "moreSavedMemories_one": "И ещё {{count}}",
+    "moreSavedMemories_few": "И ещё {{count}}",
+    "moreSavedMemories_many": "И ещё {{count}}",
+    "moreSavedMemories_other": "И ещё {{count}}"
   },
   "markdownTable": {
     "label": "Таблица",

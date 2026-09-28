@@ -490,8 +490,8 @@ export const CONNECTOR_TOOL_PERMISSIONS_MAX_TOOLS_PER_WRITE = 200;
 const PermissionNameSchema = z.string().min(1).max(200);
 
 export const ConnectorToolPermissionSchema = z.object({
-  connectorId: z.string(),
-  toolName: z.string(),
+  connectorId: z.string().min(1),
+  toolName: z.string().min(1),
   level: z.enum(CONNECTOR_TOOL_PERMISSION_LEVELS),
 });
 export type ConnectorToolPermission = z.infer<typeof ConnectorToolPermissionSchema>;
@@ -516,15 +516,21 @@ export const UpsertConnectorToolPermissionRequestSchema = z
     level: z.enum(CONNECTOR_TOOL_PERMISSION_LEVELS),
     destructive: z.boolean().optional(),
   })
-  .refine((body) =>
-    body.category === undefined
-      ? (body.toolName === undefined) !== (body.toolNames === undefined)
-      : body.toolName === undefined,
+  .refine(
+    (body) =>
+      body.category === undefined
+        ? (body.toolName === undefined) !== (body.toolNames === undefined)
+        : body.toolName === undefined,
+    {
+      message: 'Name exactly one of toolName or toolNames, or a category with optional toolNames.',
+    },
   )
-  .refine((body) =>
-    [body.toolName, ...(body.toolNames ?? [])].every(
-      (name) => name === undefined || !isConnectorCategoryToolName(name),
-    ),
+  .refine(
+    (body) =>
+      [body.toolName, ...(body.toolNames ?? [])].every(
+        (name) => name === undefined || !isConnectorCategoryToolName(name),
+      ),
+    { message: 'Category entries are written through category, not as a tool name.' },
   );
 export type UpsertConnectorToolPermissionRequest = z.infer<
   typeof UpsertConnectorToolPermissionRequestSchema

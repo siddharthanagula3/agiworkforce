@@ -13,6 +13,7 @@ import {
 } from '@agiworkforce/local-runtime-contract';
 import type { DeveloperMessage, ThreadStatus } from '@agiworkforce/types/protocol';
 import {
+  CLOUD_CODE_DEFAULT_TURN_MODE,
   providerLabels,
   type CloudCodeAgentStep,
   type CloudCodeAgentStopReason,
@@ -587,7 +588,13 @@ export function localTranscriptItems(
   messages.forEach((message, index) => {
     if (message.text.trim() === '') return;
     if (message.role === 'user') {
-      items.push({ kind: 'task', id: `stored-${index}`, at: '', text: message.text });
+      items.push({
+        kind: 'task',
+        id: `stored-${index}`,
+        at: '',
+        text: message.text,
+        mode: CLOUD_CODE_DEFAULT_TURN_MODE,
+      });
       return;
     }
     items.push({
@@ -597,11 +604,18 @@ export function localTranscriptItems(
       text: message.text,
       stopReason: null,
       retryGoal: null,
+      retryMode: CLOUD_CODE_DEFAULT_TURN_MODE,
     });
   });
 
   if (turn.prompt !== '') {
-    items.push({ kind: 'task', id: 'live-task', at: '', text: turn.prompt });
+    items.push({
+      kind: 'task',
+      id: 'live-task',
+      at: '',
+      text: turn.prompt,
+      mode: CLOUD_CODE_DEFAULT_TURN_MODE,
+    });
   }
   const steps = toSteps(turn.tools);
   if (turn.diff) steps.push(diffStep(turn.diff, steps.length));
@@ -618,6 +632,7 @@ export function localTranscriptItems(
       text: reply,
       stopReason: localTurnStopReason(turn),
       retryGoal: null,
+      retryMode: CLOUD_CODE_DEFAULT_TURN_MODE,
     });
   }
 

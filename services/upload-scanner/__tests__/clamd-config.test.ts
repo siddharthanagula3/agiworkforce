@@ -21,6 +21,7 @@ describe('clamd configuration', () => {
 
   it('reports content it cannot scan to the end instead of passing it', () => {
     expect(clamd.get('AlertExceedsMax')).toBe('yes');
+    expect(clamd.get('AlertEncrypted')).toBe('yes');
     for (const limit of ['MaxScanSize', 'MaxFileSize', 'MaxRecursion', 'MaxFiles']) {
       expect(clamd.get(limit)).not.toBe('0');
     }

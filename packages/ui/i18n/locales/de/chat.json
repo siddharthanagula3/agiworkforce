@@ -442,7 +442,11 @@
     "viewSources_one": "{{count}} Quelle ansehen",
     "viewSources_other": "{{count}} Quellen ansehen",
     "folderFilesLeftOut_one": "{{count}} Datei in {{folder}} wurde nicht angehängt. Hängen Sie sie aus einem lokalen Ordner an.",
-    "folderFilesLeftOut_other": "{{count}} Dateien in {{folder}} wurden nicht angehängt. Hängen Sie sie aus einem lokalen Ordner an."
+    "folderFilesLeftOut_other": "{{count}} Dateien in {{folder}} wurden nicht angehängt. Hängen Sie sie aus einem lokalen Ordner an.",
+    "savedMemoriesUsed_one": "{{count}} gespeicherte Erinnerung verwendet",
+    "savedMemoriesUsed_other": "{{count}} gespeicherte Erinnerungen verwendet",
+    "moreSavedMemories_one": "Und {{count}} weitere",
+    "moreSavedMemories_other": "Und {{count}} weitere"
   },
   "markdownTable": {
     "label": "Tabelle",

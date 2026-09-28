@@ -35,7 +35,6 @@ export const SENSITIVE_NO_STORE_ROUTE_FILES = [
   'app/api/settings/organization/spend-limit/route.ts',
   'app/api/settings/organization/usage-analytics/route.ts',
   'app/api/settings/organization/usage-report/route.ts',
-  'app/api/user/data/route.ts',
   'app/api/user/delete-account/route.ts',
   'app/api/billing/credit-history/route.ts',
   'app/api/billing/invoices/route.ts',

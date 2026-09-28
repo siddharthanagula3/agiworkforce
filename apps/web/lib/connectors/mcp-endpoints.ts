@@ -124,6 +124,12 @@ export const MCP_ENDPOINTS: Readonly<Record<string, McpEndpointRecord>> = {
     transport: 'streamable-http',
     clientRegistration: 'preregistered',
   },
+  docusign: {
+    connectorId: 'docusign',
+    url: 'https://mcp.docusign.com/mcp',
+    transport: 'streamable-http',
+    clientRegistration: 'preregistered',
+  },
   dropbox: {
     connectorId: 'dropbox',
     url: 'https://mcp.dropbox.com/mcp',
