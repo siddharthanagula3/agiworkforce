@@ -216,6 +216,7 @@ pub fn tool_status_line(
         "search_files" | "grep_files" | "glob" => value("pattern").or_else(|| value("query")),
         "web_search" => value("query"),
         "web_fetch" => value("url"),
+        "agent" | "spawn_teammate" => value("name"),
         _ => None,
     }
 }
@@ -367,7 +368,7 @@ fn tool_owner(name: &str) -> &'static str {
         | "lsp_format" => "cli-lsp",
         "todo_read" | "todo_write" | "update_plan" => "cli-planning",
         "ask_user" => "cli-human-input",
-        "send_message" | "team_task" | "read_messages" | "list_teammates" => {
+        "send_message" | "team_task" | "read_messages" | "list_teammates" | "spawn_teammate" => {
             "cli-team-collaboration"
         }
         "advisor" => "cli-advisor",
@@ -1108,16 +1109,30 @@ pub fn browser_tool_definitions() -> Vec<ToolDefinition> {
 pub fn team_tool_definitions() -> Vec<ToolDefinition> {
     vec![
         def(
-            "send_message",
-            "Send a message to a teammate. Use this to coordinate work, share findings, request help, or notify teammates of status changes.",
+            "spawn_teammate",
+            "Start a teammate: a separate agent with its own context that works on the prompt you give it, in parallel with you. Only the team lead can spawn. The teammate's final reply each turn lands in your inbox; message it again with send_message and collect replies with read_messages.",
             serde_json::json!({
                 "type": "object",
                 "properties": {
-                    "from": {"type": "string", "description": "Your teammate name (the sender)"},
-                    "to": {"type": "string", "description": "The recipient teammate name"},
+                    "name": {"type": "string", "description": "Short unique name: letters, digits, '-' or '_'"},
+                    "role": {"type": "string", "description": "What this teammate is responsible for"},
+                    "prompt": {"type": "string", "description": "Everything the teammate needs to start: it does not see your conversation"},
+                    "agent": {"type": "string", "description": "Optional installed agent to base the teammate on, by exact name"}
+                },
+                "required": ["name", "prompt"]
+            }),
+        ),
+        def(
+            "send_message",
+            "Send a message to a teammate, to 'lead', or to 'user' when a decision needs the person. Use this to coordinate work, share findings, request help, or notify teammates of status changes.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "from": {"type": "string", "description": "Your own name; the sender is always the member running this tool"},
+                    "to": {"type": "string", "description": "A teammate name, 'lead', or 'user'"},
                     "content": {"type": "string", "description": "The message content"}
                 },
-                "required": ["from", "to", "content"]
+                "required": ["to", "content"]
             }),
         ),
         def(
@@ -1138,13 +1153,14 @@ pub fn team_tool_definitions() -> Vec<ToolDefinition> {
         ),
         def(
             "read_messages",
-            "Read pending messages for a teammate. Messages are consumed after reading (inbox is drained).",
+            "Read your pending messages. Messages are consumed after reading. Set wait_seconds to wait for the next message, for example while teammates work.",
             serde_json::json!({
                 "type": "object",
                 "properties": {
-                    "name": {"type": "string", "description": "The teammate name whose inbox to read"}
+                    "name": {"type": "string", "description": "Your own name; only your own inbox can be read"},
+                    "wait_seconds": {"type": "integer", "minimum": 0, "maximum": 600, "description": "Wait up to this many seconds for a message when none is pending"}
                 },
-                "required": ["name"]
+                "required": []
             }),
         ),
         def(
@@ -1265,6 +1281,37 @@ pub fn effective_tool_definitions_with_browser(
     }
 
     tool_definitions
+}
+
+pub fn deferred_executable_tool_definitions(
+    plan_mode: bool,
+    allowed_tools: Option<&[String]>,
+    mcp_tool_definitions: Option<&[ToolDefinition]>,
+) -> Vec<ToolDefinition> {
+    let mut deferred: Vec<ToolDefinition> = if plan_mode {
+        Vec::new()
+    } else {
+        all_builtin_tool_definitions()
+            .into_iter()
+            .filter(|definition| definition.should_defer)
+            .collect()
+    };
+    if let Some(mcp_tool_definitions) = mcp_tool_definitions {
+        deferred.extend(
+            mcp_tool_definitions
+                .iter()
+                .filter(|definition| definition.should_defer)
+                .cloned(),
+        );
+    }
+    if let Some(allowed_tools) = allowed_tools {
+        deferred.retain(|definition| {
+            allowed_tools
+                .iter()
+                .any(|spec| tool_spec_matches_schema(spec, &definition.name))
+        });
+    }
+    deferred
 }
 
 /// Name the deferred MCP tools on `tool_search` itself.
@@ -1659,6 +1706,7 @@ mod tests {
                 "git_branches",
                 "git_worktrees",
                 "git_stash_list",
+                "spawn_teammate",
                 "send_message",
                 "team_task",
                 "read_messages",

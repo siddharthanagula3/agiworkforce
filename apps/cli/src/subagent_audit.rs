@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use chrono::{SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -14,6 +14,16 @@ pub enum SubagentAuditOutcome {
     Cancelled,
 }
 
+impl SubagentAuditOutcome {
+    pub fn label(self) -> &'static str {
+        match self {
+            SubagentAuditOutcome::Completed => "completed",
+            SubagentAuditOutcome::Failed => "failed",
+            SubagentAuditOutcome::Cancelled => "cancelled",
+        }
+    }
+}
+
 /// One finished subagent run: who spawned it, what it was asked, how it ended
 /// and what it cost. The prompt is recorded by length only, because it can
 /// carry file contents the parent read.
@@ -21,6 +31,8 @@ pub enum SubagentAuditOutcome {
 pub struct SubagentAuditEntry {
     pub timestamp: String,
     pub subagent_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent: Option<String>,
     pub description: String,
     pub depth: usize,
     pub prompt_chars: usize,
@@ -36,6 +48,7 @@ pub struct SubagentAuditEntry {
 
 pub struct SubagentAuditRecord<'a> {
     pub subagent_id: &'a str,
+    pub agent: Option<&'a str>,
     pub description: &'a str,
     pub depth: usize,
     pub prompt_chars: usize,
@@ -57,6 +70,7 @@ impl SubagentAuditEntry {
         Some(Self {
             timestamp: Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true),
             subagent_id: sanitize_field(record.subagent_id),
+            agent: record.agent.map(sanitize_field),
             description: sanitize_field(record.description),
             depth: record.depth,
             prompt_chars: record.prompt_chars,
@@ -79,6 +93,28 @@ pub fn record_subagent(record: &SubagentAuditRecord<'_>) {
     if let Err(error) = appended {
         tracing::warn!(%error, "failed to append CLI subagent audit entry");
     }
+}
+
+pub fn recent_agent_runs(agent: Option<&str>, limit: usize) -> Result<Vec<SubagentAuditEntry>> {
+    let path = subagent_log_path()?;
+    let contents = match std::fs::read_to_string(&path) {
+        Ok(contents) => contents,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) => {
+            return Err(error).with_context(|| format!("failed to read {}", path.display()))
+        }
+    };
+    Ok(contents
+        .lines()
+        .rev()
+        .filter_map(|line| serde_json::from_str::<SubagentAuditEntry>(line).ok())
+        .filter(|entry| match (agent, entry.agent.as_deref()) {
+            (Some(wanted), Some(recorded)) => recorded.eq_ignore_ascii_case(wanted),
+            (None, Some(_)) => true,
+            (_, None) => false,
+        })
+        .take(limit)
+        .collect())
 }
 
 fn subagent_log_path() -> Result<PathBuf> {
@@ -105,6 +141,7 @@ mod tests {
     fn a_running_subagent_is_not_an_audit_event() {
         let record = SubagentAuditRecord {
             subagent_id: "subagent_1",
+            agent: None,
             description: "survey",
             depth: 1,
             prompt_chars: 10,
@@ -120,6 +157,7 @@ mod tests {
         let usage = usage();
         let record = SubagentAuditRecord {
             subagent_id: "subagent_2",
+            agent: None,
             description: "refactor\u{1b}[31m parser",
             depth: 2,
             prompt_chars: 4_096,
@@ -141,6 +179,7 @@ mod tests {
         let status = SubagentStatus::Failed("provider\nrefused".to_string());
         let record = SubagentAuditRecord {
             subagent_id: "subagent_3",
+            agent: None,
             description: "tests",
             depth: 1,
             prompt_chars: 12,
@@ -165,6 +204,7 @@ mod tests {
         ] {
             let record = SubagentAuditRecord {
                 subagent_id: id,
+                agent: None,
                 description: "batch",
                 depth: 1,
                 prompt_chars: 8,

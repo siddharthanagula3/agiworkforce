@@ -402,6 +402,7 @@ mod tests {
             risk_level: Some(AgentEventApprovalRiskLevel::High),
             reversible: Some(false),
             proposed_content: None,
+            always_allow_saved: false,
         }];
 
         let admitted = developer_session_handoff(&session, context)

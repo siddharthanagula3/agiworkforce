@@ -429,6 +429,12 @@
       "purpose": "Pairing, signaling and authenticated WebSocket relay for cross-device sessions."
     },
     {
+      "name": "@agiworkforce/upload-scanner",
+      "path": "services/upload-scanner",
+      "kind": "service",
+      "purpose": "Self-hosted ClamAV scanner that answers the web's upload scan webhook."
+    },
+    {
       "name": "skill-vetting",
       "path": "tools/skill-vetting",
       "kind": "tool",

@@ -68,9 +68,9 @@ Code: `crates/agiworkforce-model-registry/src/generated/model_registry.rs:2-2`, 
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | The server builds the capability document in /api/me and the guard stops client literals, but only mobile reads capability_handshake; web, Chrome, VS Code and CLI never consume it. | surface-only |
+| platform | partial | partials/platform 09897761b4, b83d89b1fd: check:capability-consumption (in check:llm-operability) requires each surface to name where it reads the capability document, records Chrome, VS Code and the CLI as owned gaps that fail once closed, and bans client imports of the static matrix and re-reads of feature_flags.code_execution; web and desktop read it, mobile reads it for requests. Remaining: Chrome, VS Code and CLI adoption (sent to the lead), and the mobile provider and code-execution flag (post-codex/p-platform-S78.01-mobile-capability-document.patch) | surface-only |
 
-Code: `apps/web/app/api/me/route.ts:228-232`, `apps/mobile/src/features/billing/store.ts:13-15`, `scripts/check-capability-boundaries.mjs:125-126`
+Code: `scripts/check-capability-consumption.mjs:22-22`, `scripts/check-capability-consumption.mjs:70-70`, `scripts/check-capability-consumption.mjs:223-223`, `package.json:130-130`
 
 ## S101.08: Shared entitlement resolution.
 
@@ -233,9 +233,9 @@ Code: `packages/contracts/cloud-contracts/src/tool-events.ts:18-24`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | Two shared connector contracts exist (cloud-contracts connectors.ts for web and VS Code, client-runtime connectors for mobile); the /api/connectors routes import neither and Chrome uses none. | surface-only |
+| platform | partial | partials/platform 2ae3661b81 with p-mcp-web b17126b7f5: the connector input request model is shared from client-runtime and the resume-input path is a shared constant. Remaining: the Chrome side panel answering input requests through them (recipe sent to the lead for p-chrome) and the /api/connectors routes importing the shared contract (p-mcp-web's connectors family) | surface-only |
 
-Code: `packages/contracts/cloud-contracts/src/connectors.ts:10-16`, `packages/client/client-runtime/src/connectors/index.ts:1-5`
+Code: `packages/contracts/cloud-contracts/src/managed-cloud-agent-runs-client.ts:34-34`, `packages/client/client-runtime/src/connectors/index.ts:66-66`
 
 ## S101.23: Shared Skill/Plugin manifests.
 

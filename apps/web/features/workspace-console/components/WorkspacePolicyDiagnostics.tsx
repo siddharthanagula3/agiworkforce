@@ -6,6 +6,7 @@ import {
   WORKSPACE_CODE_CONTROL_LABELS,
   WORKSPACE_FEATURE_LABELS,
   WORKSPACE_POLICY_OVERRIDE_SUBJECT_LABELS,
+  isWorkspaceFeature,
   type WorkspaceFeature,
   type WorkspacePolicyBlockingRule,
 } from '@agiworkforce/types';
@@ -145,7 +146,9 @@ export function WorkspacePolicyDiagnostics({ organizationId }: { organizationId:
             Feature to check (optional)
             <select
               value={feature}
-              onChange={(event) => setFeature(event.target.value as WorkspaceFeature | '')}
+              onChange={(event) =>
+                setFeature(isWorkspaceFeature(event.target.value) ? event.target.value : '')
+              }
               style={controlStyle}
             >
               <option value="">No request, show the policy only</option>

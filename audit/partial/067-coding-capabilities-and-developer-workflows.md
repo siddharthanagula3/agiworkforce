@@ -276,15 +276,14 @@ Code: `apps/extension/src/features/content/in-page-panel/pageActions.ts:76-92`
 
 - Done when: The agent scans the code for security problems and reports them.
 - Wave: 2
-- Already works on: cli, vscode
+- Already works on: desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | The cloud agent (read_file, list_files, run_command in the E2B sandbox) can do this, with no security-review command; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
-| desktop | partial | The local runtime expands only custom and skill slash commands at turn time (expand_prompt_command), so /security-review typed in a local desktop session reaches the model unexpanded. The CLI lane needs expand_prompt_command to also expand the built-in prompt commands (/security-review, /review) the way claude_parity does in the terminal. | handler |
 | mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
 
-Code: `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/web/lib/services/cloud-code-agent-tools.ts:274-279`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:84-86`, `apps/cli/src/app_server/surfaces.rs:906-906`
+Code: `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/web/lib/services/cloud-code-agent-tools.ts:274-279`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:84-86`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`
 
 ## S67.23: Explain findings.
 

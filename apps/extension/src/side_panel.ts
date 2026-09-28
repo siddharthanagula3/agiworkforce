@@ -3,6 +3,7 @@ import {
   LANE_CAP,
   QueueFullError,
   type AgentActivityToolEntry,
+  type ConnectorInputResponse,
 } from '@agiworkforce/client-runtime';
 import {
   createManagedCloudChatAttachmentsClient,
@@ -22,7 +23,7 @@ import {
 import { agiCornerCssVars, agiMotionCssVars, cssVarsToString } from '@agiworkforce/design-tokens';
 import { getExtensionTokensCssAuto } from './tokens';
 import { followThemePreference } from './features/appearance/themePreference';
-import { t } from './i18n';
+import { t, tPlural } from './i18n';
 import { pageChipLabel } from './utils';
 import {
   canUseBillingPlanCapability,
@@ -102,6 +103,7 @@ import {
   resolveManagedArtifactUrl,
   type RegenerateModelOption,
 } from './features/side-panel/bubbles';
+import type { ConnectorInputBinding } from './features/side-panel/connectorInputForm';
 import {
   clarifyAnswerMessage,
   clarifyAnswersFromResponse,
@@ -232,8 +234,29 @@ import {
   unpair,
   type PairingState,
 } from './features/native-bridge/pairing';
-import { ACCOUNT_MEMORY_CACHE_KEY, isAccountMemory } from './features/cloud-bridge/memoryClient';
+import {
+  ACCOUNT_MEMORY_CACHE_KEY,
+  fetchAccountMemoryConflicts,
+  fetchActiveMemoryWorkspace,
+  fetchMemoryExclusions,
+  isAccountMemory,
+  MEMORY_COMMAND_HINT,
+  MEMORY_EXCLUSION_MAX_CHARS,
+  MEMORY_EXCLUSION_MAX_TERMS,
+  MEMORY_EXCLUSION_MIN_CHARS,
+  normalizeMemoryExclusions,
+  restoreAccountMemory,
+  runAccountMemoryCommand,
+  saveMemoryExclusions,
+  type AccountMemory,
+  type AccountMemoryConflict,
+  type MemoryCommandKind,
+  type MemoryCommandRequest,
+  type MemoryCommandResult,
+} from './features/cloud-bridge/memoryClient';
 import { mountInviteCodeModal } from './features/cloud-bridge/InviteCodeModal';
+import { createExtensionCloudChatClient } from './features/cloud-bridge/conversationSyncClient';
+import { managedModelImageLimit } from './features/cloud-bridge/managedModelLimits';
 import {
   CONTEXT_HANDOFF_CLI_DESTINATION,
   CONTEXT_HANDOFF_STORAGE_KEY,
@@ -256,6 +279,7 @@ import {
   getManagedUsageHistory,
   type ManagedChatSourcesDelta,
   type ManagedCodeExecution,
+  type ManagedMemoryCommandTurn,
   type ManagedModelAccess,
   type ManagedUsageHistory,
   type ManagedQuotaBlock,
@@ -737,6 +761,8 @@ export interface SharedSidePanelContext {
   reasoningEffort?: Effort;
   activeProject: ActiveProjectSelection | null;
   pendingProjectBinding?: string | null;
+  temporaryChat: boolean;
+  temporaryConversationId: string | null;
 }
 
 function createSharedSidePanelContext(): SharedSidePanelContext {
@@ -759,6 +785,8 @@ function createSharedSidePanelContext(): SharedSidePanelContext {
     managedCloudOwner: null,
     selectedModel: 'auto',
     activeProject: null,
+    temporaryChat: false,
+    temporaryConversationId: null,
   };
 }
 
@@ -902,6 +930,12 @@ function managedTurnPersistencePayload(streamId: string): {
   assistantMessageId?: string;
   conversationId?: string;
 } {
+  if (_ctx.temporaryChat) {
+    const temporaryId = _ctx.temporaryConversationId;
+    return temporaryId && OUTBOUND_UUID_PATTERN.test(temporaryId)
+      ? { conversationId: temporaryId }
+      : {};
+  }
   const assistantMessageId = assistantCloudIdByStreamId.get(streamId);
   const cloudConversationId = activePersistenceEntry?.cloudSync?.conversationId;
   return {
@@ -1070,7 +1104,7 @@ function serializeMessagesForHistory() {
 
 function persistMessages(): Promise<void> {
   const owner = _ctx.managedCloudOwner;
-  if (!owner) return Promise.resolve();
+  if (!owner || _ctx.temporaryChat) return Promise.resolve();
   const conversationId = _ctx.conversationId;
   persistCurrentConversationOwner();
   const projectBinding = _ctx.pendingProjectBinding;
@@ -1100,6 +1134,7 @@ function persistMessages(): Promise<void> {
 }
 
 function saveMessages(): void {
+  if (_ctx.temporaryChat) return;
   void persistMessages()
     .then(() => {
       requestCloudConversationSync();
@@ -1247,6 +1282,7 @@ function clearStoredMessages(): void {
   historyRestoreToken += 1;
   _ctx.conversationGeneration += 1;
   _ctx.conversationId = createBrowserConversationId();
+  leaveTemporaryChat();
   _ctx.pendingProjectBinding = _ctx.activeProject?.id ?? null;
   clearActivePersistenceState();
   persistCurrentConversationOwner();
@@ -1364,47 +1400,6 @@ function injectStyles(): void {
     :root {
       ${cssVarsToString(agiCornerCssVars)}
       ${cssVarsToString(agiMotionCssVars)}
-      --duration-spin: 800ms;
-      --duration-pulse: 1000ms;
-      --duration-blink: 700ms;
-      --duration-bounce: 1200ms;
-      --z-dropdown: 10;
-      --z-popover: 20;
-      --z-sheet: 30;
-      --z-drawer-backdrop: 40;
-      --z-drawer: 41;
-      --z-notice: 50;
-      --z-modal: 60;
-      --z-modal-raised: 61;
-      --control-sm: 30px;
-      --control-md: 32px;
-      --control-lg: 34px;
-      --sp-reading-column: 768px;
-      --pressed: color-mix(in srgb, var(--agi-ext-text) 12%, transparent);
-      --paragraph-gap: 0.75em;
-      --type-h1-size: 20px;
-      --type-h1-height: 1.25;
-      --type-h2-size: 18px;
-      --type-h2-height: 1.3;
-      --type-h3-size: 16px;
-      --type-h3-height: 1.3;
-      --type-title-size: 15px;
-      --type-title-height: 1.35;
-      --type-body-large-size: 14px;
-      --type-body-large-height: 1.5;
-      --type-prose-size: 13.5px;
-      --type-prose-height: 1.58;
-      --type-body-size: 13px;
-      --type-body-height: 1.5;
-      --type-body-small-size: 12px;
-      --type-body-small-height: 1.5;
-      --type-label-size: 12px;
-      --type-label-height: 1.3;
-      --type-caption-size: 12px;
-      --type-caption-height: 1.4;
-      --type-code-family: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', Consolas, monospace;
-      --type-code-size: 12px;
-      --type-code-height: 1.5;
     }
 
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -2902,6 +2897,83 @@ function injectStyles(): void {
       outline: 2px solid var(--agi-ext-focus);
       outline-offset: 2px;
     }
+    .sp-connector-input {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      margin: 0 5px 6px 26px;
+      padding: 10px;
+      border: 1px solid var(--agi-ext-border-strong);
+      border-radius: var(--corner-control);
+      background: var(--agi-ext-bg);
+      white-space: normal;
+    }
+    .sp-connector-input__heading { margin: 0; color: var(--agi-ext-text); font-weight: 600; line-height: var(--type-body-height); }
+    .sp-connector-input__meta,
+    .sp-connector-input__hint { margin: 0; color: var(--agi-ext-text-muted); font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
+    .sp-connector-input [hidden] { display: none; }
+    .sp-connector-input__form { display: flex; flex-direction: column; gap: 12px; margin-top: 8px; }
+    .sp-connector-input__prompt { display: flex; flex-direction: column; gap: 10px; }
+    .sp-connector-input__message { margin: 0; color: var(--agi-ext-text); line-height: var(--type-body-height); white-space: pre-wrap; overflow-wrap: anywhere; }
+    .sp-connector-input__field { display: flex; flex-direction: column; gap: 4px; min-width: 0; margin: 0; padding: 0; border: 0; }
+    .sp-connector-input__label { padding: 0; color: var(--agi-ext-text); font-size: var(--type-caption-size); font-weight: 600; line-height: var(--type-caption-height); }
+    .sp-connector-input__optional { color: var(--agi-ext-text-muted); font-weight: 400; }
+    .sp-connector-input__control {
+      box-sizing: border-box;
+      width: 100%;
+      min-height: var(--control-md);
+      padding: 5px 9px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-control);
+      background: var(--agi-ext-bg);
+      color: var(--agi-ext-text);
+      font: inherit;
+      font-size: var(--type-caption-size);
+    }
+    .sp-connector-input__control[aria-invalid='true'] { border-color: var(--agi-ext-danger-border); }
+    .sp-connector-input__check-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      color: var(--agi-ext-text);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
+    .sp-connector-input__check { flex-shrink: 0; margin: 2px 0 0; accent-color: var(--agi-ext-accent); }
+    .sp-connector-input__error { margin: 0; color: var(--agi-ext-danger-text); font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
+    .sp-connector-input__address {
+      margin: 0;
+      padding: 6px 8px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-control);
+      color: var(--agi-ext-text-muted);
+      font-family: var(--type-code-family);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      overflow-wrap: anywhere;
+    }
+    .sp-connector-input__address strong { color: var(--agi-ext-text); }
+    .sp-connector-input__warning {
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+      margin: 0;
+      color: var(--agi-ext-warning-text);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
+    .sp-connector-input__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+    .sp-connector-input__open,
+    .sp-connector-input__submit { display: inline-flex; align-items: center; gap: 5px; }
+    .sp-connector-input button:disabled { cursor: default; opacity: 0.5; }
+    .sp-connector-input__submit[aria-busy='true'] svg { animation: sp-spin var(--duration-spin) linear infinite; }
+    .sp-connector-input__control:focus-visible,
+    .sp-connector-input__check:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
+    @media (pointer: coarse) {
+      .sp-connector-input__control,
+      .sp-connector-input__check-row,
+      .sp-connector-input button { min-height: 44px; }
+    }
 
     /* ── Thinking dots ── */
     .sp-thinking {
@@ -3168,6 +3240,23 @@ function injectStyles(): void {
       cursor: pointer;
       white-space: nowrap;
     }
+    .sp-composer-notice-dismiss {
+      display: grid;
+      flex-shrink: 0;
+      width: 24px;
+      height: 24px;
+      place-items: center;
+      padding: 0;
+      border: 0;
+      border-radius: var(--corner-control);
+      background: transparent;
+      color: inherit;
+      cursor: pointer;
+    }
+    .sp-composer-notice-dismiss:hover { background: var(--agi-ext-hover); }
+    .sp-composer-notice-dismiss:focus-visible,
+    .sp-composer-notice-action:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
+    #sp-memory-notice { flex-wrap: wrap; color: var(--agi-ext-text); }
     .sp-composer-notice-action:hover {
       background: color-mix(in srgb, currentColor 12%, transparent);
     }
@@ -4376,6 +4465,51 @@ function injectStyles(): void {
     }
     .sp-drawer-memory-item-textarea:focus { border-color: var(--agi-ext-focus); }
     .sp-drawer-memory-empty { font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--agi-ext-text-muted); padding: 4px 0; }
+    .sp-drawer-memory-item-link { color: var(--agi-ext-accent-text); text-decoration: underline; text-underline-offset: 2px; }
+    .sp-drawer-memory-block { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--agi-ext-border); }
+    .sp-drawer-memory-subtitle { margin: 0; color: var(--agi-ext-text); font-size: var(--type-label-size); font-weight: 600; line-height: var(--type-label-height); }
+    .sp-drawer-memory-block .sp-drawer-memory-help { margin-bottom: 0; }
+    .sp-drawer-memory-exclusion-form { display: flex; gap: 6px; }
+    .sp-drawer-memory-exclusion-input {
+      flex: 1;
+      min-width: 0;
+      min-height: 28px;
+      padding: 4px 8px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-control);
+      background: var(--agi-ext-bg);
+      color: var(--agi-ext-text);
+      font: inherit;
+      font-size: var(--type-caption-size);
+    }
+    .sp-drawer-memory-exclusion-input::placeholder { color: var(--agi-ext-text-placeholder); }
+    .sp-drawer-memory-exclusion-input:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
+    .sp-drawer-memory-exclusions { display: flex; flex-wrap: wrap; gap: 5px; margin: 0; padding: 0; list-style: none; }
+    .sp-drawer-memory-exclusion {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 4px 2px 9px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-pill);
+      color: var(--agi-ext-text);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
+    .sp-drawer-memory-exclusion-remove {
+      display: grid;
+      width: 24px;
+      height: 24px;
+      place-items: center;
+      padding: 0;
+      border: 0;
+      border-radius: var(--corner-pill);
+      background: transparent;
+      color: var(--agi-ext-text-muted);
+      cursor: pointer;
+    }
+    .sp-drawer-memory-exclusion-remove:hover { background: var(--agi-ext-hover); color: var(--agi-ext-text); }
+    .sp-drawer-memory-exclusion-remove:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 1px; }
     .sp-drawer-memory-status { font-size: var(--type-caption-size); color: var(--agi-ext-text-muted); line-height: var(--type-caption-height); padding: 4px 0; }
     .sp-drawer-memory-retry-btn {
       align-self: flex-start;
@@ -5117,7 +5251,7 @@ function injectStyles(): void {
     }
 
     #sp-input-area {
-      padding: 6px 10px 8px;
+      padding: 6px max(10px, calc((100% - var(--sp-reading-column)) / 2)) 8px;
       border-top: 0;
       background: var(--agi-ext-bg);
     }
@@ -5413,6 +5547,8 @@ function injectStyles(): void {
       line-height: var(--type-body-height);
     }
     .sp-attach-menu-label { flex: 1; min-width: 0; }
+    .sp-attach-menu-label > span { display: block; }
+    .sp-attach-menu-hint { color: var(--agi-ext-text-muted); font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
     .sp-attach-menu-check {
       display: inline-flex;
       align-items: center;
@@ -5579,6 +5715,8 @@ function injectStyles(): void {
     }
     .sp-drawer-history-open { min-height: 40px; gap: 10px; }
     .sp-drawer-history-title { font-size: var(--type-body-size); line-height: var(--type-body-height); }
+    .sp-drawer-history-item.is-active { background: var(--agi-ext-hover); border-color: var(--agi-ext-border-strong); }
+    .sp-drawer-history-item.is-active .sp-drawer-history-title { font-weight: 600; }
     .sp-drawer-history-date { font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
 
     #sp-drawer-menu { display: flex; flex-direction: column; }
@@ -5699,6 +5837,10 @@ function scrollToBottom(): void {
 
 const toolsAllowedForChat = new Map<string, Set<string>>();
 const approvalGuidanceDrafts = new Map<string, string>();
+const connectorInputResponses = new Map<
+  string,
+  Map<string, Record<string, ConnectorInputResponse>>
+>();
 
 function setApprovalGuidanceDraft(toolCallId: string, guidance: string): void {
   if (guidance.trim()) approvalGuidanceDrafts.set(toolCallId, guidance);
@@ -5819,6 +5961,97 @@ function resolveManagedToolApproval(
         );
       } else if (response?.success !== true) {
         handleStreamError(assistant.id, response?.error ?? 'Approval could not be continued.');
+      }
+    },
+  );
+}
+
+function pendingConnectorInputs(message: ChatMessage): AgentActivityToolEntry[] {
+  return (
+    message.agentActivity?.entries.filter(
+      (entry): entry is AgentActivityToolEntry =>
+        entry.kind === 'tool' && entry.inputRequest !== undefined,
+    ) ?? []
+  );
+}
+
+function connectorInputBinding(message: ChatMessage): ConnectorInputBinding | undefined {
+  if (message.role !== 'assistant' || !message.cloudAgentRun) return undefined;
+  return {
+    answered: new Set(connectorInputResponses.get(message.id)?.keys()),
+    sending: message.streaming === true,
+    ...(message.cloudApprovalError ? { error: message.cloudApprovalError } : {}),
+    ...(_ctx.isStreaming || !_ctx.managedCloudOwner
+      ? {}
+      : {
+          onRespond: (toolCallId: string, responses: Record<string, ConnectorInputResponse>) =>
+            resolveManagedToolInput(message.id, toolCallId, responses),
+        }),
+  };
+}
+
+function resolveManagedToolInput(
+  assistantMessageId: string,
+  toolCallId: string,
+  responses: Record<string, ConnectorInputResponse>,
+): void {
+  const assistant = _ctx.messages.find(
+    (message) => message.id === assistantMessageId && message.role === 'assistant',
+  );
+  const run = assistant?.cloudAgentRun;
+  const owner = _ctx.managedCloudOwner;
+  const pendingCalls = assistant ? pendingConnectorInputs(assistant) : [];
+  if (
+    !assistant ||
+    !run ||
+    !owner ||
+    _ctx.isStreaming ||
+    !pendingCalls.some((entry) => entry.toolCallId === toolCallId)
+  ) {
+    return;
+  }
+
+  const answered = connectorInputResponses.get(assistant.id) ?? new Map();
+  answered.set(toolCallId, responses);
+  connectorInputResponses.set(assistant.id, answered);
+  assistant.cloudApprovalError = undefined;
+  _ctx.needsMessageRebuild = true;
+  if (pendingCalls.some((entry) => !answered.has(entry.toolCallId))) {
+    renderMessages();
+    return;
+  }
+
+  const toolInputs = pendingCalls.map((entry) => ({
+    tool_call_id: entry.toolCallId,
+    input_responses: answered.get(entry.toolCallId) ?? {},
+  }));
+  assistant.streaming = true;
+  _ctx.currentStreamId = assistant.id;
+  ownerByStreamId.set(assistant.id, { ...owner });
+  _ctx.isStreaming = true;
+  startManagedChatKeepalive();
+  armManagedStreamInactivityWatchdog(assistant.id);
+  updateSendButton();
+  renderMessages();
+
+  chrome.runtime.sendMessage(
+    {
+      type: 'RESOLVE_CHAT_INPUT',
+      owner,
+      clientInstanceId: SIDE_PANEL_CLIENT_INSTANCE_ID,
+      id: assistant.id,
+      cloudRun: run,
+      toolInputs,
+    },
+    (response?: { success?: boolean; error?: string }) => {
+      if (_ctx.currentStreamId !== assistant.id) return;
+      if (chrome.runtime.lastError) {
+        handleStreamError(
+          assistant.id,
+          chrome.runtime.lastError.message ?? t('spConnectorInputSendFailed'),
+        );
+      } else if (response?.success !== true) {
+        handleStreamError(assistant.id, response?.error ?? t('spConnectorInputSendFailed'));
       }
     },
   );
@@ -6016,6 +6249,7 @@ function renderMessages(): void {
             resolveManagedToolApproval(msg.id, toolCallId, decision),
           onApproveForChat: (_toolCallId, toolName) => approveToolForChat(msg.id, toolName),
           onApprovalGuidanceChange: setApprovalGuidanceDraft,
+          connectorInput: connectorInputBinding(msg),
           onRetry: (messageId) => retryFailedMessage(messageId),
           onSwitchModel: () => document.getElementById('sp-model-selector-btn')?.click(),
           quotaRecovery: { label: quotaRecoveryLabel, open: openQuotaRecovery },
@@ -6043,6 +6277,7 @@ function renderMessages(): void {
     }
   }
   _ctx.lastRenderedCount = _ctx.messages.length;
+  renderTemporaryChatState();
 
   scrollToBottom();
 }
@@ -6548,6 +6783,12 @@ function returnFollowUpsToComposer(): void {
 
 function sendMessage(text: string, displayText?: string): void {
   if (!canAdmitComposerMessage(text)) return;
+  const imageLimitNotice = selectedModelImageLimitNotice(composerImageCount());
+  if (imageLimitNotice) {
+    composerAttachmentNotices = [imageLimitNotice];
+    updateAttachmentPreview();
+    return;
+  }
   const prompt = expandPromptShortcut(
     resolveComposerPrompt(
       text,
@@ -6605,11 +6846,188 @@ function sendMessage(text: string, displayText?: string): void {
   dispatchTurn(userMsg, payload, _ctx.quickMode);
 }
 
+let temporaryEndPending = false;
+
+function renderTemporaryChatState(): void {
+  const notice = document.getElementById('sp-temporary-notice');
+  const text = document.getElementById('sp-temporary-notice-text');
+  const end = document.getElementById('sp-temporary-notice-end');
+  const keep = document.getElementById('sp-temporary-notice-keep');
+  const item = document.getElementById('sp-temporary-item');
+  if (notice && text && end && keep) {
+    notice.classList.toggle('visible', _ctx.temporaryChat);
+    const started = _ctx.messages.length > 0;
+    text.textContent = temporaryEndPending
+      ? t('spTemporaryChatEndPrompt')
+      : t('spTemporaryChatActive');
+    end.textContent = temporaryEndPending
+      ? t('spTemporaryChatEndConfirm')
+      : started
+        ? t('spTemporaryChatEnd')
+        : t('spTemporaryChatTurnOff');
+    keep.hidden = !temporaryEndPending;
+  }
+  if (item) {
+    item.setAttribute('aria-checked', String(_ctx.temporaryChat));
+    item.hidden = !_ctx.temporaryChat && _ctx.messages.length > 0;
+    const check = item.querySelector('.sp-attach-menu-check');
+    if (check) {
+      clearChildren(check);
+      if (_ctx.temporaryChat) check.appendChild(renderIcon(Check, 14));
+    }
+  }
+}
+
+function leaveTemporaryChat(): void {
+  _ctx.temporaryChat = false;
+  _ctx.temporaryConversationId = null;
+  temporaryEndPending = false;
+  renderTemporaryChatState();
+}
+
+function startTemporaryChat(): void {
+  if (_ctx.messages.length > 0 || _ctx.isStreaming) return;
+  _ctx.temporaryChat = true;
+  _ctx.temporaryConversationId = null;
+  temporaryEndPending = false;
+  renderTemporaryChatState();
+}
+
+function endTemporaryChat(): void {
+  const owner = _ctx.managedCloudOwner;
+  const conversationId = _ctx.temporaryConversationId;
+  if (owner && conversationId) {
+    void createExtensionCloudChatClient(owner)
+      .deleteConversation(conversationId)
+      .catch(() => undefined);
+  }
+  cancelCurrentManagedStream(false);
+  resetConversationView();
+}
+
+function renderMemoryNotice(
+  notice: { text: string; confirmForget?: () => Promise<void> } | null,
+): void {
+  const element = document.getElementById('sp-memory-notice');
+  const text = document.getElementById('sp-memory-notice-text');
+  const forget = document.getElementById('sp-memory-notice-forget') as HTMLButtonElement | null;
+  const keep = document.getElementById('sp-memory-notice-keep') as HTMLButtonElement | null;
+  if (!element || !text || !forget || !keep) return;
+  element.classList.toggle('visible', notice !== null);
+  text.textContent = notice?.text ?? '';
+  const confirmForget = notice?.confirmForget;
+  forget.hidden = keep.hidden = confirmForget === undefined;
+  forget.disabled = false;
+  forget.onclick = confirmForget
+    ? () => {
+        forget.disabled = true;
+        void confirmForget();
+      }
+    : null;
+}
+
+function memoryCommandKindHint(message: string): MemoryCommandKind | undefined {
+  if (/\bforget\b/i.test(message)) return 'forget';
+  return /\bremember/i.test(message) ? 'remember' : undefined;
+}
+
+async function runChatMemoryCommand(
+  message: string,
+): Promise<ManagedMemoryCommandTurn | undefined> {
+  const auth = await getManagedCloudAuthContext().catch(() => null);
+  if (!auth) return undefined;
+  const conversationId = activePersistenceEntry?.cloudSync?.conversationId;
+  const projectId = _ctx.activeProject?.id;
+  const request: MemoryCommandRequest = {
+    message,
+    conversationId:
+      conversationId && OUTBOUND_UUID_PATTERN.test(conversationId) ? conversationId : null,
+    projectId: projectId && OUTBOUND_UUID_PATTERN.test(projectId) ? projectId : null,
+  };
+  let result: MemoryCommandResult | null;
+  try {
+    result = await runAccountMemoryCommand(auth.token, request);
+  } catch (error) {
+    renderMemoryNotice({
+      text: error instanceof Error ? error.message : t('spMemoryCommandUnavailable'),
+    });
+    const kind = memoryCommandKindHint(message);
+    return kind ? { kind, status: 'failed' } : undefined;
+  }
+  if (!result) return undefined;
+  const matches = result.matches;
+  if (matches.length > 0) {
+    renderMemoryNotice({
+      text: tPlural('spMemoryForgetPrompt', matches.length, [
+        matches.map((memory) => `“${memory.content}”`).join(' '),
+      ]),
+      confirmForget: async () => {
+        try {
+          const confirmed = await runAccountMemoryCommand(auth.token, {
+            ...request,
+            confirmed: true,
+          });
+          renderMemoryNotice({ text: confirmed?.message ?? t('spMemoryCommandUnavailable') });
+        } catch (error) {
+          renderMemoryNotice({
+            text: error instanceof Error ? error.message : t('spMemoryCommandUnavailable'),
+          });
+        }
+      },
+    });
+  } else if (result.message) {
+    renderMemoryNotice({ text: result.message });
+  }
+  return { kind: result.kind, status: result.status };
+}
+
+async function ensureTemporaryConversation(owner: ManagedCloudOwner): Promise<string | null> {
+  if (_ctx.temporaryConversationId) return _ctx.temporaryConversationId;
+  const conversation = await createExtensionCloudChatClient(owner).createConversation({
+    isTemporary: true,
+  });
+  if (!_ctx.temporaryChat) return null;
+  _ctx.temporaryConversationId = conversation.id;
+  return conversation.id;
+}
+
 function dispatchTurn(userMsg: ChatMessage, payload: TurnPayload, quickMode: boolean): void {
   const owner = _ctx.managedCloudOwner!;
   const streamId = beginManagedStream(quickMode);
+  renderMemoryNotice(null);
+  if (_ctx.temporaryChat) {
+    void ensureTemporaryConversation(owner)
+      .catch(() => null)
+      .then((conversationId) => {
+        if (_ctx.currentStreamId !== streamId) return;
+        if (!conversationId) {
+          handleStreamError(streamId, t('spTemporaryChatUnavailable'));
+          return;
+        }
+        continueTurn(userMsg, payload, streamId, owner, quickMode);
+      });
+    return;
+  }
+  if (!MEMORY_COMMAND_HINT.test(payload.prompt)) {
+    continueTurn(userMsg, payload, streamId, owner, quickMode);
+    return;
+  }
+  void runChatMemoryCommand(payload.prompt).then((memoryCommand) => {
+    if (_ctx.currentStreamId !== streamId) return;
+    continueTurn(userMsg, payload, streamId, owner, quickMode, memoryCommand);
+  });
+}
+
+function continueTurn(
+  userMsg: ChatMessage,
+  payload: TurnPayload,
+  streamId: string,
+  owner: ManagedCloudOwner,
+  quickMode: boolean,
+  memoryCommand?: ManagedMemoryCommandTurn,
+): void {
   if (!payload.capturePage) {
-    postTurn(userMsg, payload, streamId, owner, quickMode);
+    postTurn(userMsg, payload, streamId, owner, quickMode, memoryCommand);
     return;
   }
   const pageAtAdmission = activePageSource;
@@ -6639,7 +7057,7 @@ function dispatchTurn(userMsg: ChatMessage, payload: TurnPayload, quickMode: boo
         renderMessages();
         showThinking();
       }
-      postTurn(userMsg, payload, streamId, owner, quickMode);
+      postTurn(userMsg, payload, streamId, owner, quickMode, memoryCommand);
     })
     .catch((err) => {
       console.error('[SidePanel] Failed to capture page context for chat:', err);
@@ -6655,6 +7073,7 @@ function postTurn(
   streamId: string,
   owner: ManagedCloudOwner,
   quickMode: boolean,
+  memoryCommand?: ManagedMemoryCommandTurn,
 ): void {
   const history = selectModelHistory(_ctx.messages, userMsg.id);
   _ctx.messages.push({
@@ -6687,6 +7106,7 @@ function postTurn(
       modelSelection: _ctx.selectedModel,
       quickMode: quickMode || undefined,
       ...(_ctx.workMode === 'agiwork' ? { workMode: 'agiwork' } : {}),
+      ...(memoryCommand ? { memoryCommand } : {}),
       ...managedOutboundRoutingPayload(quickMode),
       ...managedTurnPersistencePayload(streamId),
     },
@@ -6816,18 +7236,20 @@ function handleStreamError(
   removeThinking();
   const existing = _ctx.messages.find((message) => message.id === id);
   if (existing) existing.reconnecting = false;
-  const canRetryApproval = existing?.agentActivity?.entries.some(
+  const canRetryPause = existing?.agentActivity?.entries.some(
     (entry) =>
       entry.kind === 'tool' &&
-      entry.status === 'awaiting-approval' &&
-      Boolean(entry.approval) &&
-      !entry.approval?.decision,
+      (entry.inputRequest !== undefined ||
+        (entry.status === 'awaiting-approval' &&
+          Boolean(entry.approval) &&
+          !entry.approval?.decision)),
   );
-  if (existing && canRetryApproval) {
+  if (existing && canRetryPause) {
     existing.streaming = false;
     if (streamUsedQuick) existing.managedQuickMode = true;
     existing.cloudApprovalDecisions = undefined;
     existing.cloudApprovalError = errorText.slice(0, 500);
+    connectorInputResponses.delete(existing.id);
   } else {
     applyStreamFailure(_ctx.messages, id, errorText, Date.now(), errorAction, quota?.recovery);
   }
@@ -7076,9 +7498,29 @@ function attachmentBudgetLabel(bytes: number): string {
   return `${Math.round((bytes / (1024 * 1024)) * 10) / 10} MB`;
 }
 
+function composerImageCount(): number {
+  return (
+    pendingAttachments.length +
+    pendingDocuments.filter((entry) => entry.mimeType.startsWith('image/')).length
+  );
+}
+
+function selectedModelImageLimitNotice(images: number): string | null {
+  const model = getModelMetadataById(_ctx.selectedModel);
+  if (!model) return null;
+  const limit = managedModelImageLimit(model.id);
+  if (limit === null || images <= limit) return null;
+  return tPlural('spAttachmentModelImageLimit', limit, [model.name]);
+}
+
 function admitComposerAttachment(dataUrl: string, name: string): boolean {
   if (!COMPOSER_ATTACHMENT_DATA_URL.test(dataUrl)) {
     composerAttachmentNotices.push(t('spAttachmentUnsupported', [name]));
+    return false;
+  }
+  const imageLimitNotice = selectedModelImageLimitNotice(composerImageCount() + 1);
+  if (imageLimitNotice) {
+    composerAttachmentNotices.push(imageLimitNotice);
     return false;
   }
   if (pendingAttachmentCount() >= MANAGED_CHAT_MAX_ATTACHMENTS) {
@@ -7174,6 +7616,7 @@ async function uploadComposerDocument(entry: ComposerDocument): Promise<void> {
   try {
     const [attachment] = await client.upload([entry.file], {
       signal,
+      ...(_ctx.temporaryChat ? { temporary: true } : {}),
       onStatus: (status) => {
         if (signal.aborted || status.phase === 'failed' || status.phase === 'complete') return;
         entry.phase = status.phase;
@@ -8673,6 +9116,7 @@ function buildUI(): void {
       clearPendingPageContext();
       _ctx.conversationGeneration += 1;
       _ctx.conversationId = conversationOwner.conversationId;
+      leaveTemporaryChat();
       adoptChatProject(entry.projectId);
       if (conversationOwner.forked) _ctx.pendingProjectBinding = entry.projectId ?? null;
       activePersistenceEntry = conversationOwner.forked ? undefined : entry;
@@ -8902,12 +9346,16 @@ function buildUI(): void {
       return;
     }
     for (const entry of filteredEntries) {
-      const item = el('div', { class: 'sp-drawer-history-item' });
+      const active = entry.id === _ctx.conversationId;
+      const item = el('div', {
+        class: active ? 'sp-drawer-history-item is-active' : 'sp-drawer-history-item',
+      });
       const openButton = el('button', {
         class: 'sp-drawer-history-open',
         type: 'button',
         'data-conversation-restore': 'true',
         'aria-label': `Open chat: ${entry.title}`,
+        ...(active ? { 'aria-current': 'page' } : {}),
       }) as HTMLButtonElement;
       openButton.disabled = _ctx.isStreaming || historyRestoreInProgress;
 
@@ -9189,6 +9637,11 @@ function buildUI(): void {
   const projectsDrawer: ProjectsDrawerAPI = buildProjectsDrawerSection({
     getActiveProject: () => _ctx.activeProject,
     setActiveProject: (project) => selectActiveProject(project),
+    openConversation: (conversationId) => {
+      void chrome.tabs.create({
+        url: `${FREE_TRIAL_GATEWAY}/chat/${encodeURIComponent(conversationId)}?from=chrome-extension`,
+      });
+    },
   });
   drawerGroupBody(t('spMenuProjects'), () => {
     void projectsDrawer.refresh();
@@ -9840,6 +10293,26 @@ function buildUI(): void {
     }
   });
 
+  const personalizationSection = el('div', { class: 'sp-drawer-section' });
+  personalizationSection.appendChild(
+    el('h3', { class: 'sp-drawer-section-title' }, t('spPersonalizationTitle')),
+  );
+  personalizationSection.appendChild(
+    el('p', { class: 'sp-drawer-memory-help' }, t('spPersonalizationHelp')),
+  );
+  const personalizationBtn = el(
+    'button',
+    { type: 'button', class: 'sp-drawer-memory-add-btn' },
+    t('spPersonalizationOpen'),
+  );
+  personalizationBtn.addEventListener('click', () => {
+    void chrome.tabs.create({
+      url: `${FREE_TRIAL_GATEWAY}/settings/general?from=chrome-extension`,
+    });
+  });
+  personalizationSection.appendChild(personalizationBtn);
+  settingsGroupBody.appendChild(personalizationSection);
+
   const memorySection = el('div', { class: 'sp-drawer-section' });
   memorySection.appendChild(el('h3', { class: 'sp-drawer-section-title' }, 'Memory'));
   memorySection.appendChild(
@@ -9849,6 +10322,8 @@ function buildUI(): void {
       'Saved facts and preferences reused across sessions, shared with the AGI web and mobile apps on your account.',
     ),
   );
+  const memoryScope = el('p', { class: 'sp-drawer-memory-help', hidden: '' });
+  memorySection.appendChild(memoryScope);
 
   const memoryAddBtn = el(
     'button',
@@ -9909,10 +10384,74 @@ function buildUI(): void {
     { type: 'button', class: 'sp-drawer-memory-retry-btn', id: 'sp-drawer-memory-retry-btn' },
     'Try again',
   ) as HTMLButtonElement;
+  const memoryCount = el('div', { class: 'sp-drawer-memory-status', hidden: '' });
+  const memoryMoreBtn = el(
+    'button',
+    { type: 'button', class: 'sp-drawer-memory-retry-btn', hidden: '' },
+    t('spMemoryShowMore'),
+  ) as HTMLButtonElement;
   memorySection.appendChild(memoryList);
   memorySection.appendChild(memoryEmpty);
+  memorySection.appendChild(memoryCount);
+  memorySection.appendChild(memoryMoreBtn);
   memorySection.appendChild(memoryStatus);
   memorySection.appendChild(memoryRetryBtn);
+
+  const exclusionsBlock = el('div', { class: 'sp-drawer-memory-block', hidden: '' });
+  exclusionsBlock.appendChild(
+    el('h4', { class: 'sp-drawer-memory-subtitle' }, t('spMemoryNeverRememberTitle')),
+  );
+  exclusionsBlock.appendChild(
+    el('p', { class: 'sp-drawer-memory-help' }, t('spMemoryNeverRememberHelp')),
+  );
+  const exclusionForm = el('div', { class: 'sp-drawer-memory-exclusion-form' });
+  const exclusionInput = el('input', {
+    type: 'text',
+    class: 'sp-drawer-memory-exclusion-input',
+    maxlength: String(MEMORY_EXCLUSION_MAX_CHARS),
+    placeholder: t('spMemoryNeverRememberPlaceholder'),
+    'aria-label': t('spMemoryNeverRememberInputLabel'),
+  });
+  const exclusionAddBtn = el(
+    'button',
+    { type: 'button', class: 'sp-drawer-btn' },
+    t('spMemoryNeverRememberAdd'),
+  ) as HTMLButtonElement;
+  exclusionForm.appendChild(exclusionInput);
+  exclusionForm.appendChild(exclusionAddBtn);
+  exclusionsBlock.appendChild(exclusionForm);
+  const exclusionList = el('ul', {
+    class: 'sp-drawer-memory-exclusions',
+    'aria-label': t('spMemoryNeverRememberTitle'),
+  });
+  exclusionsBlock.appendChild(exclusionList);
+  const exclusionStatus = el('div', {
+    class: 'sp-drawer-memory-status',
+    role: 'status',
+    hidden: '',
+  });
+  exclusionsBlock.appendChild(exclusionStatus);
+  memorySection.appendChild(exclusionsBlock);
+
+  const conflictsBlock = el('div', { class: 'sp-drawer-memory-block', hidden: '' });
+  conflictsBlock.appendChild(
+    el('h4', { class: 'sp-drawer-memory-subtitle' }, t('spMemoryConflictsTitle')),
+  );
+  conflictsBlock.appendChild(
+    el('p', { class: 'sp-drawer-memory-help' }, t('spMemoryConflictsRule')),
+  );
+  const conflictList = el('ul', {
+    class: 'sp-drawer-memory-list',
+    'aria-label': t('spMemoryConflictsListLabel'),
+  });
+  conflictsBlock.appendChild(conflictList);
+  const conflictStatus = el('div', {
+    class: 'sp-drawer-memory-status',
+    role: 'status',
+    hidden: '',
+  });
+  conflictsBlock.appendChild(conflictStatus);
+  memorySection.appendChild(conflictsBlock);
   settingsGroupBody.appendChild(memorySection);
 
   type DrawerMemoryMessageType = 'LIST_MEMORIES' | 'ADD_MEMORY' | 'UPDATE_MEMORY' | 'DELETE_MEMORY';
@@ -9944,16 +10483,41 @@ function buildUI(): void {
     }
   }
 
-  type DrawerMemoryItem = { id: string; content: string; createdAt: string; updatedAt?: string };
+  type DrawerMemoryItem = AccountMemory;
+
+  function buildDrawerMemoryOrigin(item: DrawerMemoryItem): HTMLElement {
+    const origin = el('span', { class: 'sp-drawer-memory-item-origin' });
+    if (item.source === 'auto') {
+      if (item.sourceConversationId) {
+        const link = el('a', {
+          class: 'sp-drawer-memory-item-link',
+          href: `${FREE_TRIAL_GATEWAY}/chat/${encodeURIComponent(item.sourceConversationId)}?from=chrome-extension`,
+          target: '_blank',
+          rel: 'noopener noreferrer',
+        });
+        link.textContent = item.sourceConversationTitle
+          ? t('spMemoryOriginLearnedFromTitled', [item.sourceConversationTitle])
+          : t('spMemoryOriginLearnedFromChat');
+        origin.appendChild(link);
+      } else {
+        origin.textContent = t('spMemoryOriginLearnedFromChat');
+      }
+    } else if (item.source?.startsWith('imported:')) {
+      origin.textContent = t('spMemoryOriginImported');
+    } else {
+      origin.textContent = t('spMemoryOriginAdded');
+    }
+    return origin;
+  }
 
   function buildDrawerMemoryItem(item: DrawerMemoryItem): HTMLLIElement {
     const li = el('li', { class: 'sp-drawer-memory-item' });
     li.dataset['id'] = item.id;
     const contentEl = el('span', { class: 'sp-drawer-memory-item-content' }, item.content);
-    const metaEl = el(
-      'span',
-      { class: 'sp-drawer-memory-item-meta' },
-      drawerFormatRelTime(item.updatedAt || item.createdAt),
+    const metaEl = el('span', { class: 'sp-drawer-memory-item-meta' });
+    metaEl.appendChild(buildDrawerMemoryOrigin(item));
+    metaEl.appendChild(
+      document.createTextNode(` · ${drawerFormatRelTime(item.updatedAt || item.createdAt)}`),
     );
     const actionRow = el('div', { class: 'sp-drawer-memory-item-row' });
 
@@ -10049,22 +10613,49 @@ function buildUI(): void {
     else memoryRetryBtn.setAttribute('hidden', '');
   }
 
+  let drawerMemoryShown = 0;
+  let drawerMemoryGeneration = 0;
+
+  function renderDrawerMemoryCount(hasMore: boolean): void {
+    memoryCount.hidden = drawerMemoryShown === 0;
+    memoryCount.replaceChildren(
+      document.createTextNode(
+        hasMore
+          ? tPlural('spMemoryShowingMore', drawerMemoryShown)
+          : tPlural('spMemoryShowing', drawerMemoryShown),
+      ),
+    );
+    memoryMoreBtn.hidden = !hasMore;
+  }
+
+  function setDrawerMemoryExtrasHidden(hidden: boolean): void {
+    memoryScope.hidden = hidden;
+    exclusionsBlock.hidden = hidden;
+    conflictsBlock.hidden = hidden;
+  }
+
   async function refreshDrawerMemory(): Promise<void> {
+    const generation = ++drawerMemoryGeneration;
     const res = await sendDrawerMemoryMsg('LIST_MEMORIES');
+    if (generation !== drawerMemoryGeneration) return;
     const status = typeof res['status'] === 'string' ? res['status'] : 'unavailable';
     const raw = Array.isArray(res['memories']) ? (res['memories'] as unknown[]) : [];
     const items = raw.filter(isAccountMemory);
     clearChildren(memoryList);
+    drawerMemoryShown = 0;
+    renderDrawerMemoryCount(false);
 
     if (status === 'signed-out') {
       memoryEmpty.setAttribute('hidden', '');
       memoryAddBtn.setAttribute('hidden', '');
       showDrawerMemoryEditor(false);
+      setDrawerMemoryExtrasHidden(true);
       setDrawerMemoryStatus('Sign in to your AGI account to read and save memories.', false);
       return;
     }
 
     memoryAddBtn.removeAttribute('hidden');
+    void refreshDrawerMemoryAccountDetails();
 
     if (status !== 'ready') {
       memoryEmpty.setAttribute('hidden', '');
@@ -10087,9 +10678,201 @@ function buildUI(): void {
       return;
     }
     memoryEmpty.setAttribute('hidden', '');
-    for (const item of items) {
-      memoryList.appendChild(buildDrawerMemoryItem(item as DrawerMemoryItem));
+    for (const item of items) memoryList.appendChild(buildDrawerMemoryItem(item));
+    drawerMemoryShown = items.length;
+    renderDrawerMemoryCount(res['hasMore'] === true && res['fromCache'] !== true);
+  }
+
+  memoryMoreBtn.addEventListener('click', async () => {
+    const generation = drawerMemoryGeneration;
+    memoryMoreBtn.disabled = true;
+    const res = await sendDrawerMemoryMsg('LIST_MEMORIES', { offset: drawerMemoryShown });
+    memoryMoreBtn.disabled = false;
+    if (generation !== drawerMemoryGeneration) return;
+    if (res['status'] !== 'ready') {
+      setDrawerMemoryStatus(
+        typeof res['error'] === 'string' ? res['error'] : 'Memory is unavailable right now.',
+        false,
+      );
+      return;
     }
+    const raw = Array.isArray(res['memories']) ? (res['memories'] as unknown[]) : [];
+    const items = raw.filter(isAccountMemory);
+    for (const item of items) memoryList.appendChild(buildDrawerMemoryItem(item));
+    drawerMemoryShown += items.length;
+    renderDrawerMemoryCount(res['hasMore'] === true);
+  });
+
+  let memoryExclusions: string[] = [];
+
+  function renderMemoryExclusions(): void {
+    clearChildren(exclusionList);
+    for (const term of memoryExclusions) {
+      const item = el('li', { class: 'sp-drawer-memory-exclusion' });
+      item.appendChild(el('span', {}, term));
+      const remove = el('button', {
+        type: 'button',
+        class: 'sp-drawer-memory-exclusion-remove',
+        'aria-label': t('spMemoryNeverRememberRemove', [term]),
+      });
+      remove.appendChild(renderIcon(X, 11));
+      remove.addEventListener('click', () => {
+        void saveDrawerMemoryExclusions(memoryExclusions.filter((existing) => existing !== term));
+      });
+      item.appendChild(remove);
+      exclusionList.appendChild(item);
+    }
+    if (memoryExclusions.length === 0) {
+      exclusionList.appendChild(
+        el('li', { class: 'sp-drawer-memory-empty' }, t('spMemoryNeverRememberEmpty')),
+      );
+    }
+  }
+
+  function setExclusionStatus(text: string): void {
+    exclusionStatus.textContent = text;
+    exclusionStatus.hidden = text.length === 0;
+  }
+
+  async function saveDrawerMemoryExclusions(next: string[]): Promise<void> {
+    const auth = await getManagedCloudAuthContext();
+    if (!auth) {
+      setExclusionStatus(t('spMemorySignedOut'));
+      return;
+    }
+    exclusionAddBtn.disabled = true;
+    try {
+      await saveMemoryExclusions(auth.token, next);
+      memoryExclusions = normalizeMemoryExclusions(next);
+      setExclusionStatus('');
+      renderMemoryExclusions();
+    } catch (error) {
+      setExclusionStatus(
+        error instanceof Error ? error.message : t('spMemoryNeverRememberSaveFailed'),
+      );
+    } finally {
+      exclusionAddBtn.disabled = false;
+    }
+  }
+
+  function addMemoryExclusion(): void {
+    const term = exclusionInput.value.trim().toLowerCase();
+    if (term.length < MEMORY_EXCLUSION_MIN_CHARS) {
+      setExclusionStatus(t('spMemoryNeverRememberTooShort', [String(MEMORY_EXCLUSION_MIN_CHARS)]));
+      return;
+    }
+    if (memoryExclusions.includes(term)) {
+      exclusionInput.value = '';
+      return;
+    }
+    if (memoryExclusions.length >= MEMORY_EXCLUSION_MAX_TERMS) {
+      setExclusionStatus(t('spMemoryNeverRememberFull', [String(MEMORY_EXCLUSION_MAX_TERMS)]));
+      return;
+    }
+    exclusionInput.value = '';
+    void saveDrawerMemoryExclusions([...memoryExclusions, term]);
+  }
+  exclusionAddBtn.addEventListener('click', addMemoryExclusion);
+  exclusionInput.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    addMemoryExclusion();
+  });
+
+  function renderMemoryConflicts(conflicts: readonly AccountMemoryConflict[]): void {
+    clearChildren(conflictList);
+    if (conflicts.length === 0) {
+      conflictList.appendChild(
+        el('li', { class: 'sp-drawer-memory-empty' }, t('spMemoryConflictsEmpty')),
+      );
+      return;
+    }
+    for (const conflict of conflicts) {
+      const item = el('li', { class: 'sp-drawer-memory-item' });
+      item.appendChild(
+        el(
+          'span',
+          { class: 'sp-drawer-memory-item-content' },
+          t('spMemoryConflictUsing', [conflict.keptContent]),
+        ),
+      );
+      item.appendChild(
+        el(
+          'span',
+          { class: 'sp-drawer-memory-item-meta' },
+          t('spMemoryConflictReplaced', [conflict.content]),
+        ),
+      );
+      const restore = el(
+        'button',
+        { type: 'button', class: 'sp-drawer-memory-item-edit-btn' },
+        t('spMemoryConflictRestore'),
+      ) as HTMLButtonElement;
+      restore.addEventListener('click', async () => {
+        const auth = await getManagedCloudAuthContext();
+        if (!auth) return;
+        restore.disabled = true;
+        try {
+          await restoreAccountMemory(auth.token, conflict.id);
+          await Promise.all([refreshDrawerMemory(), loadDrawerMemoryConflicts(auth.token)]);
+        } catch (error) {
+          restore.disabled = false;
+          conflictStatus.textContent =
+            error instanceof Error ? error.message : t('spMemoryConflictRestoreFailed');
+          conflictStatus.hidden = false;
+        }
+      });
+      const row = el('div', { class: 'sp-drawer-memory-item-row' });
+      row.appendChild(restore);
+      item.appendChild(row);
+      conflictList.appendChild(item);
+    }
+  }
+
+  async function loadDrawerMemoryConflicts(token: string): Promise<void> {
+    try {
+      renderMemoryConflicts(await fetchAccountMemoryConflicts(token));
+      conflictStatus.hidden = true;
+    } catch (error) {
+      clearChildren(conflictList);
+      conflictStatus.textContent =
+        error instanceof Error ? error.message : t('spMemoryConflictsLoadFailed');
+      conflictStatus.hidden = false;
+    }
+  }
+
+  async function refreshDrawerMemoryAccountDetails(): Promise<void> {
+    const auth = await getManagedCloudAuthContext();
+    if (!auth) {
+      setDrawerMemoryExtrasHidden(true);
+      return;
+    }
+    setDrawerMemoryExtrasHidden(false);
+    await Promise.all([
+      fetchActiveMemoryWorkspace(auth.token)
+        .then((workspace) => {
+          memoryScope.textContent =
+            workspace.scope === 'organization' && workspace.name
+              ? t('spMemoryScopeWorkspace', [workspace.name])
+              : t('spMemoryScopePersonal');
+        })
+        .catch(() => {
+          memoryScope.hidden = true;
+        }),
+      fetchMemoryExclusions(auth.token)
+        .then((terms) => {
+          memoryExclusions = terms;
+          setExclusionStatus('');
+          renderMemoryExclusions();
+        })
+        .catch((error: unknown) => {
+          clearChildren(exclusionList);
+          setExclusionStatus(
+            error instanceof Error ? error.message : t('spMemoryNeverRememberLoadFailed'),
+          );
+        }),
+      loadDrawerMemoryConflicts(auth.token),
+    ]);
   }
 
   async function applyDrawerMemoryWrite(res: Record<string, unknown>): Promise<void> {
@@ -12765,7 +13548,45 @@ function buildUI(): void {
       });
   });
 
-  const attachMenuItems = [fileItem, screenshotItem, contextBtn, linkItem, connectorsItem];
+  const temporaryItem = el('button', {
+    class: 'sp-attach-menu-item',
+    id: 'sp-temporary-item',
+    type: 'button',
+    role: 'menuitemcheckbox',
+    'aria-checked': 'false',
+    title: t('spTemporaryChatRetention'),
+  }) as HTMLButtonElement;
+  temporaryItem.appendChild(renderIcon(Clock, 16));
+  const temporaryItemText = el('span', { class: 'sp-attach-menu-label' });
+  temporaryItemText.appendChild(el('span', {}, t('spTemporaryChatLabel')));
+  temporaryItemText.appendChild(
+    el('span', { class: 'sp-attach-menu-hint' }, t('spTemporaryChatExplanation')),
+  );
+  temporaryItem.appendChild(temporaryItemText);
+  temporaryItem.appendChild(el('span', { class: 'sp-attach-menu-check' }));
+  temporaryItem.addEventListener('click', () => {
+    attachMenu.classList.remove('open');
+    attachBtn.setAttribute('aria-expanded', 'false');
+    if (_ctx.temporaryChat) {
+      if (_ctx.messages.length === 0) leaveTemporaryChat();
+      else {
+        temporaryEndPending = true;
+        renderTemporaryChatState();
+      }
+      return;
+    }
+    startTemporaryChat();
+    inputEl.focus();
+  });
+
+  const attachMenuItems = [
+    fileItem,
+    screenshotItem,
+    contextBtn,
+    linkItem,
+    connectorsItem,
+    temporaryItem,
+  ];
   for (const item of attachMenuItems) attachMenu.appendChild(item);
   attachWrapper.appendChild(attachMenu);
   attachWrapper.appendChild(attachBtn);
@@ -12778,7 +13599,7 @@ function buildUI(): void {
     if (isOpen) fileItem.focus();
   });
   attachMenu.addEventListener('keydown', (event: KeyboardEvent) => {
-    const items = attachMenuItems;
+    const items = attachMenuItems.filter((item) => !item.hidden && !item.disabled);
     if (event.key === 'Escape') {
       event.preventDefault();
       attachMenu.classList.remove('open');
@@ -13076,8 +13897,85 @@ function buildUI(): void {
   });
   modelNotice.appendChild(modelNoticeAction);
 
+  const memoryNotice = el('div', {
+    id: 'sp-memory-notice',
+    class: 'sp-composer-notice',
+    role: 'status',
+    'aria-live': 'polite',
+  });
+  memoryNotice.appendChild(el('span', { id: 'sp-memory-notice-text' }));
+  memoryNotice.appendChild(
+    el(
+      'button',
+      {
+        id: 'sp-memory-notice-forget',
+        class: 'sp-composer-notice-action',
+        type: 'button',
+        hidden: '',
+      },
+      t('spMemoryForgetConfirm'),
+    ),
+  );
+  const memoryNoticeKeep = el(
+    'button',
+    { id: 'sp-memory-notice-keep', class: 'sp-composer-notice-action', type: 'button', hidden: '' },
+    t('spMemoryForgetKeep'),
+  );
+  memoryNoticeKeep.addEventListener('click', () => renderMemoryNotice(null));
+  memoryNotice.appendChild(memoryNoticeKeep);
+  const memoryNoticeDismiss = el('button', {
+    class: 'sp-composer-notice-dismiss',
+    type: 'button',
+    'aria-label': t('spMemoryNoticeDismiss'),
+  });
+  memoryNoticeDismiss.appendChild(renderIcon(X, 12));
+  memoryNoticeDismiss.addEventListener('click', () => renderMemoryNotice(null));
+  memoryNotice.appendChild(memoryNoticeDismiss);
+
+  const temporaryNotice = el('div', {
+    id: 'sp-temporary-notice',
+    class: 'sp-composer-notice',
+    role: 'status',
+    'aria-live': 'polite',
+  });
+  temporaryNotice.appendChild(el('span', { id: 'sp-temporary-notice-text' }));
+  const temporaryEnd = el('button', {
+    id: 'sp-temporary-notice-end',
+    class: 'sp-composer-notice-action',
+    type: 'button',
+  });
+  temporaryEnd.addEventListener('click', () => {
+    if (_ctx.messages.length === 0) {
+      leaveTemporaryChat();
+      return;
+    }
+    if (!temporaryEndPending) {
+      temporaryEndPending = true;
+      renderTemporaryChatState();
+      return;
+    }
+    endTemporaryChat();
+  });
+  const temporaryKeep = el(
+    'button',
+    {
+      id: 'sp-temporary-notice-keep',
+      class: 'sp-composer-notice-action',
+      type: 'button',
+      hidden: '',
+    },
+    t('spTemporaryChatKeep'),
+  );
+  temporaryKeep.addEventListener('click', () => {
+    temporaryEndPending = false;
+    renderTemporaryChatState();
+  });
+  temporaryNotice.append(temporaryEnd, temporaryKeep);
+
   inputArea.appendChild(usageWarningBanner);
   inputArea.appendChild(modelNotice);
+  inputArea.appendChild(temporaryNotice);
+  inputArea.appendChild(memoryNotice);
   inputArea.appendChild(cloudGate);
   inputArea.appendChild(bridgeNotice);
   const microphoneNotice = buildMicrophoneNotice();
@@ -13760,6 +14658,10 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
       before.cloudApprovalDecisions = undefined;
       before.cloudApprovalError = undefined;
     }
+    if (chunk.agentEvent.event.type === 'input-requested' && before) {
+      connectorInputResponses.delete(before.id);
+      before.cloudApprovalError = undefined;
+    }
     const assistant = applyCanonicalAgentEvent(_ctx.messages, chunk.id, chunk.agentEvent);
     assistant.runtime = 'managed-cloud';
     if (streamUsedQuick) assistant.managedQuickMode = true;
@@ -13771,6 +14673,13 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
       )
     ) {
       assistant.cloudApprovalDecisions = undefined;
+      assistant.cloudApprovalError = undefined;
+    }
+    if (
+      chunk.agentEvent.event.type === 'input-resolved' &&
+      pendingConnectorInputs(assistant).length === 0
+    ) {
+      connectorInputResponses.delete(assistant.id);
       assistant.cloudApprovalError = undefined;
     }
     const cloudRun = cloudRunsByStreamId.get(chunk.id);
@@ -13978,12 +14887,23 @@ const DRAWER_DELETE_CONFIRM_MS = 3000;
 
 const PENDING_CHAT_TTL_MS = 5 * 60_000;
 
+function browserLanguageName(): string {
+  const code = chrome.i18n.getUILanguage();
+  try {
+    return new Intl.DisplayNames(['en'], { type: 'language' }).of(code) ?? code;
+  } catch {
+    return code;
+  }
+}
+
 function pendingChatPrompt(pending: { type: string; text: string }): string {
   switch (pending.type) {
     case 'explain':
       return `Explain the following:\n\n"${pending.text}"`;
-    case 'translate':
-      return `Translate the following to English (or if already English, to Spanish):\n\n"${pending.text}"`;
+    case 'translate': {
+      const language = browserLanguageName();
+      return `Translate the following into ${language}. If it is already in ${language}, ask me which language to translate it into:\n\n"${pending.text}"`;
+    }
     default:
       return pending.text;
   }

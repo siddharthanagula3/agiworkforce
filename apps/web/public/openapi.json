@@ -1922,6 +1922,11 @@
             "additionalProperties": true,
             "description": "The run's output, with `text` for the answer and `usage` for what it cost"
           },
+          "output": {
+            "type": "string",
+            "nullable": true,
+            "description": "The run's answer, the same text as `result.text`. Null while the run is going, when it failed or was cancelled, and when it only recorded a skip."
+          },
           "error": {
             "type": "string",
             "nullable": true

@@ -23,6 +23,7 @@ import {
   Stack,
 } from '@/features/marketing/components/system';
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
+import CODE_SAMPLES from '@/content/api-docs/code-samples.json';
 
 export const metadata = buildMetadata({
   title: 'API docs: the OpenAI-compatible gateway',
@@ -43,46 +44,28 @@ const RETIREMENT_DATE = new Intl.DateTimeFormat('en', {
 const GATEWAY_BASE_URL = `${SITE_URL}/api/llm/v1`;
 const API_BASE_URL = `${SITE_URL}/api`;
 
+function fillSample(code: string): string {
+  return code
+    .replaceAll('{{GATEWAY_BASE_URL}}', GATEWAY_BASE_URL)
+    .replaceAll('{{API_BASE_URL}}', API_BASE_URL);
+}
+
 const HERO_TABS = [
   {
     label: 'curl',
     language: 'shell',
-    code: `curl ${GATEWAY_BASE_URL}/chat/completions \\
-  -H "Authorization: Bearer $AGI_API_KEY" \\
-  -H "Content-Type: application/json" \\
-  -d '{ "model": "auto", "messages": [{ "role": "user", "content": "hello" }] }'`,
+    code: fillSample(CODE_SAMPLES.hero['curl']),
   },
   {
     label: 'Python',
     language: 'python',
-    code: `import os
-from openai import OpenAI
-
-client = OpenAI(
-    base_url="${GATEWAY_BASE_URL}",
-    api_key=os.environ["AGI_API_KEY"],
-)
-reply = client.chat.completions.create(
-    model="auto",
-    messages=[{"role": "user", "content": "hello"}],
-)
-print(reply.choices[0].message.content)`,
+    code: fillSample(CODE_SAMPLES.hero['Python']),
     note: "OpenAI's official Python and TypeScript libraries work unchanged once they point at this base URL and carry an AGI API key.",
   },
   {
     label: 'TypeScript',
     language: 'typescript',
-    code: `import OpenAI from 'openai';
-
-const client = new OpenAI({
-  baseURL: '${GATEWAY_BASE_URL}',
-  apiKey: process.env.AGI_API_KEY,
-});
-const reply = await client.chat.completions.create({
-  model: 'auto',
-  messages: [{ role: 'user', content: 'hello' }],
-});
-console.log(reply.choices[0]?.message.content);`,
+    code: fillSample(CODE_SAMPLES.hero['TypeScript']),
   },
 ] as const;
 
@@ -90,64 +73,13 @@ const SDK_TABS = [
   {
     label: 'Python',
     language: 'python',
-    code: `# pip install openai
-# export OPENAI_BASE_URL=${GATEWAY_BASE_URL}
-# export OPENAI_API_KEY=sk_live_...
-import uuid
-from openai import OpenAI
-
-client = OpenAI()
-
-for model in client.models.list():
-    print(model.id)
-
-stream = client.chat.completions.create(
-    model="auto",
-    messages=[{"role": "user", "content": "Summarise the attached notes"}],
-    stream=True,
-    extra_headers={"Idempotency-Key": str(uuid.uuid4())},
-)
-for chunk in stream:
-    if chunk.choices:
-        print(chunk.choices[0].delta.content or "", end="")
-
-with open("meeting.m4a", "rb") as audio:
-    transcript = client.audio.transcriptions.create(file=audio, model="auto")
-print(transcript.text)`,
+    code: fillSample(CODE_SAMPLES.sdk['Python']),
     note: 'The client reads OPENAI_BASE_URL and OPENAI_API_KEY when base_url and api_key are not passed.',
   },
   {
     label: 'TypeScript',
     language: 'typescript',
-    code: `// npm install openai
-// export OPENAI_BASE_URL=${GATEWAY_BASE_URL}
-// export OPENAI_API_KEY=sk_live_...
-import fs from 'node:fs';
-import OpenAI from 'openai';
-
-const client = new OpenAI();
-
-for await (const model of client.models.list()) {
-  console.log(model.id);
-}
-
-const stream = await client.chat.completions.create(
-  {
-    model: 'auto',
-    messages: [{ role: 'user', content: 'Summarise the attached notes' }],
-    stream: true,
-  },
-  { headers: { 'Idempotency-Key': crypto.randomUUID() } },
-);
-for await (const chunk of stream) {
-  process.stdout.write(chunk.choices[0]?.delta.content ?? '');
-}
-
-const transcript = await client.audio.transcriptions.create({
-  file: fs.createReadStream('meeting.m4a'),
-  model: 'auto',
-});
-console.log(transcript.text);`,
+    code: fillSample(CODE_SAMPLES.sdk['TypeScript']),
     note: 'The client reads OPENAI_BASE_URL and OPENAI_API_KEY when baseURL and apiKey are not passed.',
   },
 ] as const;
@@ -156,33 +88,25 @@ const HTTP_TABS = [
   {
     label: 'Route preview',
     language: 'shell',
-    code: `curl ${GATEWAY_BASE_URL}/route/preview \\
-  -H "Authorization: Bearer $AGI_API_KEY" \\
-  -H "Content-Type: application/json" \\
-  -d '{ "selection": "auto", "taskType": "general" }'`,
+    code: fillSample(CODE_SAMPLES.http['Route preview']),
     note: 'The route auto would take for a task, without running it. Needs inference:write.',
   },
   {
     label: 'Credit balance',
     language: 'shell',
-    code: `curl ${GATEWAY_BASE_URL}/credits/balance \\
-  -H "Authorization: Bearer $AGI_API_KEY"`,
+    code: fillSample(CODE_SAMPLES.http['Credit balance']),
     note: 'How much of the plan is used and when it resets. Needs usage:read.',
   },
   {
     label: 'Estimate',
     language: 'shell',
-    code: `curl ${API_BASE_URL}/usage/estimate \\
-  -H "Authorization: Bearer $AGI_API_KEY" \\
-  -H "Content-Type: application/json" \\
-  -d '{ "model": "<id from GET /models>", "messages": [{ "role": "user", "content": "hello" }], "max_tokens": 500 }'`,
+    code: fillSample(CODE_SAMPLES.http['Estimate']),
     note: 'The credit range a chat completion body would cost on a named model, with no provider call and no charge. Needs usage:read.',
   },
   {
     label: 'Settled cost',
     language: 'shell',
-    code: `curl ${API_BASE_URL}/usage/turns/$IDEMPOTENCY_KEY \\
-  -H "Authorization: Bearer $AGI_API_KEY"`,
+    code: fillSample(CODE_SAMPLES.http['Settled cost']),
     note: 'The credits a request settled at, looked up by the Idempotency-Key it was sent with. Needs usage:read.',
   },
 ] as const;
@@ -191,51 +115,19 @@ const WEBHOOK_TABS = [
   {
     label: 'Payload',
     language: 'json',
-    code: `{
-  "object": "event",
-  "id": "4f2b1c9e-6a3d-4c8e-9b1f-2d7e5a0c3b18",
-  "type": "api_key.revoked",
-  "created_at": 1790553600,
-  "data": {
-    "id": "b7a0e2d4-1f3c-4e5a-8b6d-9c0f1e2a3b4c",
-    "name": "Production",
-    "project_id": null,
-    "reason": "deleted"
-  }
-}`,
+    code: fillSample(CODE_SAMPLES.webhook['Payload']),
     note: 'webhook-id carries the event id, which stays the same when a delivery is retried or resent.',
   },
   {
     label: 'Python',
     language: 'python',
-    code: `# pip install standardwebhooks
-import os
-from standardwebhooks.webhooks import Webhook
-
-webhook = Webhook(os.environ["AGI_WEBHOOK_SECRET"])
-
-def handle(request_body: bytes, headers: dict) -> None:
-    event = webhook.verify(request_body, headers)
-    print(event["type"], event["data"])`,
+    code: fillSample(CODE_SAMPLES.webhook['Python']),
     note: 'verify raises when the signature does not match or the timestamp is more than five minutes old.',
   },
   {
     label: 'TypeScript',
     language: 'typescript',
-    code: `// npm install standardwebhooks
-import { Webhook } from 'standardwebhooks';
-
-const webhook = new Webhook(process.env.AGI_WEBHOOK_SECRET!);
-
-export async function POST(request: Request) {
-  const body = await request.text();
-  const event = webhook.verify(body, Object.fromEntries(request.headers)) as {
-    type: string;
-    data: unknown;
-  };
-  console.log(event.type, event.data);
-  return new Response(null, { status: 204 });
-}`,
+    code: fillSample(CODE_SAMPLES.webhook['TypeScript']),
     note: 'Verify the raw body exactly as received; parsing and re-serialising it changes the bytes that were signed.',
   },
 ] as const;
