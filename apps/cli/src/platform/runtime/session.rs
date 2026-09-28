@@ -276,6 +276,8 @@ pub struct ManagedSessionAutoRouting {
     pub model_key: String,
     pub task_type: DeveloperRoutingTaskType,
     pub trust_mode: TrustMode,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub speed_first: bool,
 }
 
 pub const MANAGED_SESSION_MAX_APPROVALS: usize = 1_000;
@@ -1281,6 +1283,7 @@ mod tests {
             model_key: "fixture-route-model".to_string(),
             task_type: agiworkforce_protocol::developer_session::DeveloperRoutingTaskType::Coding,
             trust_mode: agiworkforce_model_registry::TrustMode::Byok,
+            speed_first: false,
         });
         session.model = Some("fixture-route-model".to_string());
         session.routing_authority = Some(ManagedSessionRoutingAuthority {
