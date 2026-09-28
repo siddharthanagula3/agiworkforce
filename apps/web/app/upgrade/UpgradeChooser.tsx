@@ -213,7 +213,7 @@ export function UpgradeChooser() {
                     </li>
                     {newFeatures.map((feature) => (
                       <li key={feature} className="flex gap-2.5">
-                        <span aria-hidden className="mt-px text-foreground/40">
+                        <span aria-hidden className="mt-px text-muted-foreground">
                           ✓
                         </span>
                         <span>{feature}</span>

@@ -10,6 +10,9 @@ export interface SiteToolDescriptor {
   name: string;
   effect: SiteToolEffect;
   source: 'imperative' | 'declarative';
+  pageName?: string;
+  description?: string;
+  inputSchema?: Record<string, unknown>;
 }
 
 export interface SiteToolAnnotations {

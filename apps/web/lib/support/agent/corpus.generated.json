@@ -40,7 +40,7 @@
           "ordinal": 1,
           "heading": "Second factors",
           "headingPath": "Passkeys, two-factor and active sessions › Second factors",
-          "text": "Settings, Security manages passkeys and two-factor authentication. Passkeys sign\nyou in. Authenticator apps (TOTP) and backup codes are temporarily unavailable:\nSettings, Security shows **Temporarily unavailable** where you would set one up\nor replace your backup codes, and a workspace cannot start requiring\nmulti-factor authentication until they return. Hardware security keys, SMS MFA\nand trusted-device lists are not part of the current account contract, so they\nare not offered rather than silently ignored."
+          "text": "Settings, Security manages passkeys and two-factor authentication. Passkeys sign\nyou in. Authenticator apps (TOTP) and backup codes are temporarily unavailable:\nSettings, Security shows **Temporarily unavailable** where you would set one up\nor replace your backup codes, and a workspace cannot start requiring\nmulti-factor authentication until they return. Hardware security keys and SMS\nMFA are not part of the current account contract, so they are not offered rather\nthan silently ignored.\n\nNo device skips the sign-in checks. Devices you linked, such as the CLI, VS\nCode, the Chrome extension or the desktop app, are listed in Settings, Account\nunder **Linked devices**, where you can unlink each one."
         },
         {
           "id": "account-security#2",

@@ -1,6 +1,7 @@
 'use client';
 
 import { useId, useState } from 'react';
+import { formatCredits } from '@agiworkforce/types';
 import {
   Button,
   Card,
@@ -31,14 +32,32 @@ import {
   useUpdateDeveloperProject,
   type DeveloperProjectDraft,
 } from '../hooks/use-developer-projects';
-import type { DeveloperProject } from '../types';
+import { useDeveloperUsage } from '../hooks/use-developer-usage';
+import type { DeveloperProject, DeveloperUsageFigures } from '../types';
 
 const NAME_MAX = 100;
 
 type EditorState = { mode: 'create' } | { mode: 'edit'; project: DeveloperProject } | null;
 
+function parseLimit(value: string): number | null | 'invalid' {
+  const trimmed = value.trim();
+  if (trimmed === '') return null;
+  const limit = Number(trimmed);
+  return Number.isInteger(limit) && limit > 0 ? limit : 'invalid';
+}
+
 function keyCountLabel(count: number): string {
   return count === 1 ? '1 key' : `${count.toLocaleString()} keys`;
+}
+
+function projectUsageLabel(
+  usage: DeveloperUsageFigures | undefined,
+  monthlyCreditLimit: number | null,
+): string {
+  const credits = usage?.credits ?? 0;
+  const spent = formatCredits(credits, { maximumFractionDigits: 2 });
+  if (monthlyCreditLimit === null) return `${spent} this month, no monthly limit`;
+  return `${spent} of ${formatCredits(monthlyCreditLimit, { maximumFractionDigits: 0 })} this month`;
 }
 
 function ProjectEditor({
@@ -55,7 +74,12 @@ function ProjectEditor({
   const fieldId = useId();
   const initial = state.mode === 'edit' ? state.project : null;
   const [name, setName] = useState(initial?.name ?? '');
-  const canSave = name.trim().length > 0 && name.trim().length <= NAME_MAX && !pending;
+  const [limit, setLimit] = useState(
+    initial?.monthlyCreditLimit ? String(initial.monthlyCreditLimit) : '',
+  );
+  const parsedLimit = parseLimit(limit);
+  const nameValid = name.trim().length > 0 && name.trim().length <= NAME_MAX;
+  const canSave = nameValid && parsedLimit !== 'invalid' && !pending;
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -63,14 +87,14 @@ function ProjectEditor({
         <form
           onSubmit={(event) => {
             event.preventDefault();
-            if (!canSave) return;
-            onSubmit({ name: name.trim() });
+            if (!canSave || parsedLimit === 'invalid') return;
+            onSubmit({ name: name.trim(), monthlyCreditLimit: parsedLimit });
           }}
         >
           <DialogHeader>
             <DialogTitle>{initial ? `Edit ${initial.name}` : 'New project'}</DialogTitle>
             <DialogDescription>
-              Keys you create in this project are listed and counted under it.
+              Keys you create in this project share its usage and its monthly limit.
             </DialogDescription>
           </DialogHeader>
           <div className="mt-4 flex flex-col gap-4">
@@ -84,6 +108,26 @@ function ProjectEditor({
                 placeholder="Production"
                 required
               />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor={`${fieldId}-limit`}>Monthly limit in credits</Label>
+              <Input
+                id={`${fieldId}-limit`}
+                type="number"
+                inputMode="numeric"
+                min={1}
+                step={1}
+                value={limit}
+                onChange={(event) => setLimit(event.target.value)}
+                placeholder="No limit"
+                aria-invalid={parsedLimit === 'invalid'}
+                aria-describedby={`${fieldId}-limit-help`}
+              />
+              <p id={`${fieldId}-limit-help`} className="text-xs text-muted-foreground">
+                {parsedLimit === 'invalid'
+                  ? 'Enter a whole number of credits, or leave it empty for no limit.'
+                  : 'Once the project has used this many credits in a calendar month, its keys are refused until the month ends. Leave it empty for no limit.'}
+              </p>
             </div>
           </div>
           <DialogFooter className="mt-6">
@@ -104,6 +148,10 @@ function ProjectEditor({
 export function ProjectsPanel() {
   const projects = useDeveloperProjects();
   const apiKeys = useAPIKeys();
+  const usage = useDeveloperUsage();
+  const usageByProject = new Map(
+    (usage.data?.projects ?? []).map((entry) => [entry.projectId, entry] as const),
+  );
   const createProject = useCreateDeveloperProject();
   const updateProject = useUpdateDeveloperProject();
   const archiveProject = useArchiveDeveloperProject();
@@ -160,8 +208,8 @@ export function ProjectsPanel() {
           <div>
             <CardTitle className="text-foreground">Projects</CardTitle>
             <CardDescription>
-              A project groups API keys, so a staging key stays apart from a production one. Keys
-              created without one are in the default project.
+              A project groups API keys, counts their usage together and can cap what they spend
+              each month. Keys created without one are in the default project.
             </CardDescription>
           </div>
           <Button
@@ -198,7 +246,8 @@ export function ProjectsPanel() {
             <li className="flex flex-col gap-0.5 py-2.5">
               <span className="text-sm font-medium text-foreground">Default project</span>
               <span className="text-xs text-muted-foreground">
-                {keyCountLabel(keyCounts.get(null) ?? 0)}
+                {keyCountLabel(keyCounts.get(null) ?? 0)},{' '}
+                {projectUsageLabel(usageByProject.get(null), null)}
               </span>
             </li>
             {live.map((project) => (
@@ -211,7 +260,8 @@ export function ProjectsPanel() {
                     {project.name}
                   </span>
                   <span className="text-xs text-muted-foreground">
-                    {keyCountLabel(keyCounts.get(project.id) ?? 0)}
+                    {keyCountLabel(keyCounts.get(project.id) ?? 0)},{' '}
+                    {projectUsageLabel(usageByProject.get(project.id), project.monthlyCreditLimit)}
                   </span>
                 </div>
                 <div className="flex shrink-0 gap-2">
