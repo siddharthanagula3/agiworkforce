@@ -256,7 +256,7 @@ export default function CopyrightNoticeQueuePanel() {
                       onClick={() => decide(notice, 'actioned')}
                     >
                       {pendingReference === notice.reference ? (
-                        <Spinner size="sm" className="mr-2 inline-block" aria-hidden="true" />
+                        <Spinner size="sm" className="me-2 inline-block" aria-hidden="true" />
                       ) : null}
                       Unpublish
                     </button>

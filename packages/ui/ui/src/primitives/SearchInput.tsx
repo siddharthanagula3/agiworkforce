@@ -6,12 +6,12 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '../cn';
 
 const searchInputVariants = cva(
-  'w-full rounded-lg border border-border bg-background pr-3 text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50',
+  'w-full rounded-lg border border-border bg-background pe-3 text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50',
   {
     variants: {
       size: {
-        sm: 'h-8 pl-8 text-xs',
-        default: 'h-10 pl-9 text-sm',
+        sm: 'h-8 ps-8 text-xs',
+        default: 'h-10 ps-9 text-sm',
       },
     },
     defaultVariants: {
@@ -21,8 +21,8 @@ const searchInputVariants = cva(
 );
 
 const ICON_POSITION = {
-  sm: 'left-2.5 size-3.5',
-  default: 'left-3 size-4',
+  sm: 'start-2.5 size-3.5',
+  default: 'start-3 size-4',
 } as const;
 
 export interface SearchInputProps

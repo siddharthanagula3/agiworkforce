@@ -296,7 +296,7 @@ function BestAutoRow({ isSelected, onSelect, disabled = false }: BestAutoRowProp
         onClick={onSelect}
         aria-pressed={isSelected}
         className={cn(
-          'flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left transition-colors',
+          'flex w-full items-center gap-2 rounded-lg px-2 py-2 text-start transition-colors',
           'border border-transparent',
           disabled && 'cursor-not-allowed opacity-50',
           isSelected
@@ -760,7 +760,7 @@ export function ModelSelector({
                     type="button"
                     onClick={() => toggleGroup(providerKey)}
                     aria-expanded={!isCollapsed}
-                    className="flex w-full items-center gap-1.5 rounded-compact px-2 py-1.5 text-left transition-colors hover:bg-[var(--chat-surface-hover)]"
+                    className="flex w-full items-center gap-1.5 rounded-compact px-2 py-1.5 text-start transition-colors hover:bg-[var(--chat-surface-hover)]"
                   >
                     <ProviderLogo providerKey={providerKey} size={14} />
                     <p className="flex-1 text-caption font-semibold uppercase tracking-wider text-[var(--chat-text-muted)]">
@@ -817,7 +817,7 @@ export function ModelSelector({
                               aria-pressed={isSelected}
                               title={!isSelectable ? m.unavailableReason : undefined}
                               className={cn(
-                                'flex min-w-0 flex-1 items-start gap-2 rounded-lg px-2 py-1.5 text-left transition-colors',
+                                'flex min-w-0 flex-1 items-start gap-2 rounded-lg px-2 py-1.5 text-start transition-colors',
                                 !isSelectable
                                   ? 'cursor-not-allowed opacity-50'
                                   : isSelected
@@ -883,14 +883,14 @@ export function ModelSelector({
                           </Popover.Close>
 
                           {isSelected && reasoningIsMandatory && (
-                            <span className="self-center pr-1 text-caption font-semibold uppercase tracking-wide text-[var(--chat-accent-primary-text)]">
+                            <span className="self-center pe-1 text-caption font-semibold uppercase tracking-wide text-[var(--chat-accent-primary-text)]">
                               always
                             </span>
                           )}
 
                           {/* Thinking toggle follows this model's reasoning contract. */}
                           {showThinkingToggle && (
-                            <div className="flex shrink-0 items-center self-center pr-1">
+                            <div className="flex shrink-0 items-center self-center pe-1">
                               <ThinkingToggle
                                 enabled={isThinkingEnabled}
                                 enabledEffort={effort ?? defaultEffortFor(reasoning)}

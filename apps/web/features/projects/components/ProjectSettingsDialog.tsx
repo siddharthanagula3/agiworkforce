@@ -221,7 +221,7 @@ export function ProjectSettingsDialog({
               <div className="relative">
                 <span
                   aria-hidden="true"
-                  className="absolute left-3 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center text-muted-foreground"
+                  className="absolute start-3 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center text-muted-foreground"
                 >
                   {project.iconEmoji ? (
                     <span className="text-base leading-none">{project.iconEmoji}</span>
@@ -237,7 +237,7 @@ export function ProjectSettingsDialog({
                   placeholder="Project name"
                   autoComplete="off"
                   maxLength={100}
-                  className="h-11 rounded-xl bg-muted/40 pl-10"
+                  className="h-11 rounded-xl bg-muted/40 ps-10"
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') void handleSave();
                   }}
@@ -388,7 +388,7 @@ export function ProjectSettingsDialog({
               className="order-3 col-span-2 w-full justify-center text-danger hover:bg-destructive/10 hover:text-danger sm:order-none sm:w-auto"
               onClick={requestDelete}
             >
-              <Trash2 className="mr-1.5 h-4 w-4" />
+              <Trash2 className="me-1.5 h-4 w-4" />
               Delete project
             </Button>
 
@@ -406,7 +406,7 @@ export function ProjectSettingsDialog({
                 disabled={isDuplicating}
                 onClick={() => void handleDuplicate()}
               >
-                <Copy className="mr-1.5 h-4 w-4" />
+                <Copy className="me-1.5 h-4 w-4" />
                 {isDuplicating ? 'Duplicating…' : 'Duplicate'}
               </Button>
               {/*
@@ -416,7 +416,7 @@ export function ProjectSettingsDialog({
               */}
               <Button asChild variant="ghost" size="sm" className="w-full sm:w-auto">
                 <a href={`/api/projects/${project.id}/export`} download>
-                  <Download className="mr-1.5 h-4 w-4" />
+                  <Download className="me-1.5 h-4 w-4" />
                   Export
                 </a>
               </Button>

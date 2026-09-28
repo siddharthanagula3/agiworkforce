@@ -7,7 +7,7 @@ import { useAuthCopy } from './authCopy';
 import { AuthField } from './AuthField';
 
 const TOGGLE_CLASS =
-  'absolute right-2 top-2 flex size-9 items-center justify-center rounded-full text-text-muted transition-colors hover:text-text-primary';
+  'absolute end-2 top-2 flex size-9 items-center justify-center rounded-full text-text-muted transition-colors hover:text-text-primary';
 const TOGGLE_ICON_SIZE = 16;
 
 export function AuthPasswordField({

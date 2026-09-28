@@ -171,7 +171,7 @@ function CodeView({ content }: { content: string }) {
         aria-label={copyFailed ? 'Copy failed' : copied ? 'Copied' : 'Copy code'}
         onClick={handleCopy}
         className={cn(
-          'absolute top-2 right-2 z-[var(--z-control)] h-7 w-7',
+          'absolute top-2 end-2 z-[var(--z-control)] h-7 w-7',
           'text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]',
           copied && 'text-[var(--chat-accent-secondary)]',
           copyFailed && 'text-[var(--chat-destructive-text)]',
@@ -183,7 +183,7 @@ function CodeView({ content }: { content: string }) {
       {copyFailed && (
         <div
           role="status"
-          className="absolute top-10 right-2 z-[var(--z-control)] rounded-compact border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] px-2 py-1 text-caption text-[var(--chat-destructive-text)]"
+          className="absolute top-10 end-2 z-[var(--z-control)] rounded-compact border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] px-2 py-1 text-caption text-[var(--chat-destructive-text)]"
         >
           Copy failed, clipboard unavailable
         </div>
@@ -195,12 +195,12 @@ function CodeView({ content }: { content: string }) {
             {shownLines.map((line, index) => (
               <tr key={index} className="hover:bg-[var(--chat-surface-hover)]/40">
                 <td
-                  className="select-none pr-4 pl-4 text-right text-[13px] font-mono text-[var(--chat-text-muted)] w-12 min-w-12"
+                  className="select-none pe-4 ps-4 text-end text-[13px] font-mono text-[var(--chat-text-muted)] w-12 min-w-12"
                   aria-hidden
                 >
                   {index + 1}
                 </td>
-                <td className="pr-4 text-[13px] font-mono text-[var(--chat-text-primary)] whitespace-pre leading-relaxed">
+                <td className="pe-4 text-[13px] font-mono text-[var(--chat-text-primary)] whitespace-pre leading-relaxed">
                   {line || ' '}
                 </td>
               </tr>
@@ -270,7 +270,7 @@ function DropdownMenu({
             role="menu"
             aria-label="Artifact options"
             className={cn(
-              'absolute right-0 top-full mt-1 z-[var(--z-content-sticky)] min-w-[140px]',
+              'absolute end-0 top-full mt-1 z-[var(--z-content-sticky)] min-w-[140px]',
               'rounded-md border border-[var(--chat-border)]',
               'bg-[var(--chat-surface-elevated)] shadow-lg',
               'py-1',
@@ -968,7 +968,7 @@ export function ArtifactPanel({
                   aria-label={shareUrlCopied ? 'Copied' : 'Copy share URL'}
                   onClick={() => void handleCopyShareUrl()}
                   className={cn(
-                    'ml-auto h-6 w-6 shrink-0',
+                    'ms-auto h-6 w-6 shrink-0',
                     'text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]',
                     shareUrlCopied && 'text-[var(--chat-accent-secondary)]',
                   )}
@@ -993,7 +993,7 @@ export function ArtifactPanel({
                 variant="ghost"
                 size="sm"
                 onClick={handleDownload}
-                className="ml-auto h-6 shrink-0 px-2 text-caption text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]"
+                className="ms-auto h-6 shrink-0 px-2 text-caption text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]"
               >
                 Download instead
               </Button>
@@ -1008,7 +1008,7 @@ export function ArtifactPanel({
                 size="icon"
                 aria-label="Dismiss error"
                 onClick={() => setPublishError(null)}
-                className="ml-auto h-6 w-6 shrink-0 text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)]"
+                className="ms-auto h-6 w-6 shrink-0 text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)]"
               >
                 <X size={11} />
               </Button>
@@ -1027,7 +1027,7 @@ export function ArtifactPanel({
                 size="icon"
                 aria-label="Dismiss restore error"
                 onClick={() => setRestoreError(null)}
-                className="ml-auto h-6 w-6 shrink-0 text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)]"
+                className="ms-auto h-6 w-6 shrink-0 text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)]"
               >
                 <X size={11} />
               </Button>
@@ -1044,7 +1044,7 @@ export function ArtifactPanel({
                 size="icon"
                 aria-label="Dismiss copy error"
                 onClick={() => setCopyError(null)}
-                className="ml-auto h-6 w-6 shrink-0 text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)]"
+                className="ms-auto h-6 w-6 shrink-0 text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)]"
               >
                 <X size={11} />
               </Button>

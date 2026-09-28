@@ -110,7 +110,7 @@ export function CodeExecutionOutput({ isExecuting, result }: CodeExecutionOutput
         type="button"
         onClick={() => setExpanded((value) => !value)}
         aria-expanded={expanded}
-        className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left hover:bg-[var(--chat-surface-hover)]"
+        className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-start hover:bg-[var(--chat-surface-hover)]"
       >
         <Code2 className="h-4 w-4 shrink-0 text-[var(--chat-accent,#8b5cf6)]" aria-hidden />
         <span className="flex-1 font-medium text-[var(--chat-text-primary)]">Code execution</span>

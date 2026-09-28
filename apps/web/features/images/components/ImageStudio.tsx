@@ -311,7 +311,7 @@ export function ImageStudio() {
                   <button
                     type="button"
                     onClick={() => setFiles((current) => current.filter((_, i) => i !== index))}
-                    className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full border border-border bg-background text-muted-foreground hover:text-foreground pointer-coarse:h-7 pointer-coarse:w-7"
+                    className="absolute -end-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full border border-border bg-background text-muted-foreground hover:text-foreground pointer-coarse:h-7 pointer-coarse:w-7"
                     aria-label={`Remove ${index === 0 ? 'the image to edit' : `guide image ${index}`}`}
                   >
                     <X className="h-3 w-3" aria-hidden="true" />
@@ -347,7 +347,7 @@ export function ImageStudio() {
               disabled={generating || files.length >= MAX_ATTACHED_IMAGES}
             >
               <ImagePlus className="h-4 w-4" aria-hidden="true" />
-              <span className="ml-1">Add image</span>
+              <span className="ms-1">Add image</span>
             </Button>
 
             {models.length > 1 ? (
@@ -355,7 +355,7 @@ export function ImageStudio() {
                 <DropdownMenuTrigger asChild>
                   <Button type="button" variant="outline" size="sm" aria-label="Choose image model">
                     {selectedModel?.label}
-                    <ChevronDown className="ml-1 h-4 w-4" aria-hidden="true" />
+                    <ChevronDown className="ms-1 h-4 w-4" aria-hidden="true" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">
@@ -381,7 +381,7 @@ export function ImageStudio() {
                     aria-label="Choose aspect ratio"
                   >
                     {aspectOptions.find((option) => option.id === effectiveAspect)?.label ?? 'Auto'}
-                    <ChevronDown className="ml-1 h-4 w-4" aria-hidden="true" />
+                    <ChevronDown className="ms-1 h-4 w-4" aria-hidden="true" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">
@@ -406,7 +406,7 @@ export function ImageStudio() {
                   aria-label="Add a style to the prompt"
                 >
                   Style
-                  <ChevronDown className="ml-1 h-4 w-4" aria-hidden="true" />
+                  <ChevronDown className="ms-1 h-4 w-4" aria-hidden="true" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-64">
@@ -421,7 +421,7 @@ export function ImageStudio() {
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <div className="ml-auto flex items-center gap-2">
+            <div className="ms-auto flex items-center gap-2">
               {generating ? (
                 <Button
                   type="button"
@@ -521,7 +521,7 @@ export function ImageStudio() {
                 <a
                   href={image.url}
                   download={image.fileName}
-                  className="ml-auto flex h-8 w-8 items-center justify-center rounded-md text-foreground hover:bg-muted pointer-coarse:h-11 pointer-coarse:w-11"
+                  className="ms-auto flex h-8 w-8 items-center justify-center rounded-md text-foreground hover:bg-muted pointer-coarse:h-11 pointer-coarse:w-11"
                   aria-label="Download this image"
                 >
                   <Download className="h-3.5 w-3.5" aria-hidden="true" />

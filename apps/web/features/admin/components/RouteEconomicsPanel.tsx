@@ -488,7 +488,7 @@ export default function RouteEconomicsPanel() {
                 <caption className="sr-only">
                   Provider route economics, filtered and sorted by the controls above
                 </caption>
-                <thead className="bg-card text-left">
+                <thead className="bg-card text-start">
                   <tr>
                     <th scope="col" className={HEADER_CELL_CLASS}>
                       Model

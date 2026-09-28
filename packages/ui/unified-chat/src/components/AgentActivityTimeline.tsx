@@ -602,8 +602,8 @@ function sourcesFoundLabel(count: number, query: string | undefined): string {
 
 function ProgressRow({ entry }: { entry: Extract<AgentActivityEntry, { kind: 'progress' }> }) {
   return (
-    <div className="relative pl-8 py-1.5">
-      <span className="absolute left-0 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--chat-surface-base)] text-muted-foreground">
+    <div className="relative ps-8 py-1.5">
+      <span className="absolute start-0 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--chat-surface-base)] text-muted-foreground">
         {entry.status === 'running' ? (
           <Loader2
             className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none"
@@ -635,9 +635,9 @@ function StaticRow({
 }) {
   if (entry.kind === 'sources') {
     return (
-      <div className="relative pl-8 py-1.5">
+      <div className="relative ps-8 py-1.5">
         <Globe2
-          className="absolute left-0 top-2 h-4 w-4 text-muted-foreground"
+          className="absolute start-0 top-2 h-4 w-4 text-muted-foreground"
           aria-hidden="true"
         />
         <p className="text-sm text-foreground">
@@ -657,9 +657,9 @@ function StaticRow({
       </>
     );
     return (
-      <div className="relative pl-8 py-1.5">
+      <div className="relative ps-8 py-1.5">
         <CheckCircle2
-          className="absolute left-0 top-2 h-4 w-4 text-muted-foreground"
+          className="absolute start-0 top-2 h-4 w-4 text-muted-foreground"
           aria-hidden="true"
         />
         <p className="mb-1 text-sm text-foreground">Created a file</p>
@@ -681,9 +681,9 @@ function StaticRow({
 
   if (entry.kind === 'context') {
     return (
-      <div className="relative pl-8 py-1.5">
+      <div className="relative ps-8 py-1.5">
         <DatabaseZap
-          className="absolute left-0 top-2 h-4 w-4 text-muted-foreground"
+          className="absolute start-0 top-2 h-4 w-4 text-muted-foreground"
           aria-hidden="true"
         />
         <p className="text-sm text-foreground">{entry.summary}</p>
@@ -698,8 +698,8 @@ function StaticRow({
   }
 
   return (
-    <div className="relative pl-8 py-1.5">
-      <AlertCircle className="absolute left-0 top-2 h-4 w-4 text-danger-text" aria-hidden="true" />
+    <div className="relative ps-8 py-1.5">
+      <AlertCircle className="absolute start-0 top-2 h-4 w-4 text-danger-text" aria-hidden="true" />
       <p className="break-words text-sm text-danger-text">{entry.message}</p>
       {entry.retryable && (
         <p className="mt-0.5 text-caption text-muted-foreground">Retry available</p>
@@ -983,7 +983,7 @@ export function AgentActivityTimeline({
               ? `${isOpen ? 'Hide' : 'Show'} agent activity: ${failureLead}`
               : `Agent activity: ${failureLead}`
           }
-          className="group flex min-w-0 flex-1 touch-manipulation items-center gap-2 rounded-md py-1.5 text-left text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-default disabled:hover:text-muted-foreground"
+          className="group flex min-w-0 flex-1 touch-manipulation items-center gap-2 rounded-md py-1.5 text-start text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-default disabled:hover:text-muted-foreground"
         >
           <RunStatusIcon status={settledStatus} spinnerless={isAgiWork} />
           <span className="min-w-0 flex-1 truncate">{failureLead}</span>
@@ -1001,7 +1001,7 @@ export function AgentActivityTimeline({
       </div>
 
       {planSentence && (
-        <p data-testid="agi-work-plan-sentence" className="mb-1 ml-2 text-sm text-foreground">
+        <p data-testid="agi-work-plan-sentence" className="mb-1 ms-2 text-sm text-foreground">
           {planSentence}
         </p>
       )}
@@ -1011,7 +1011,7 @@ export function AgentActivityTimeline({
           ref={rowsRef}
           data-testid="agent-activity-rows"
           style={reservedRowsHeight > 0 ? { minHeight: reservedRowsHeight } : undefined}
-          className="relative ml-2 mt-1 space-y-0.5 border-l border-border/70 pl-4"
+          className="relative ms-2 mt-1 space-y-0.5 border-s border-border/70 ps-4"
         >
           {hiddenEntryCount > 0 && (
             <button
@@ -1022,7 +1022,7 @@ export function AgentActivityTimeline({
                   count: visibleEntryCount + ACTIVITY_PAGE_SIZE,
                 })
               }
-              className="ml-7 touch-manipulation rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="ms-7 touch-manipulation rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               Show {Math.min(ACTIVITY_PAGE_SIZE, hiddenEntryCount)} earlier steps
             </button>
@@ -1032,9 +1032,9 @@ export function AgentActivityTimeline({
             if (entry.kind === 'tool') {
               if (entry.unavailable) {
                 return (
-                  <div key={entry.id} className="relative py-1.5 pl-8">
+                  <div key={entry.id} className="relative py-1.5 ps-8">
                     <Info
-                      className="absolute left-0 top-2 h-4 w-4 text-muted-foreground"
+                      className="absolute start-0 top-2 h-4 w-4 text-muted-foreground"
                       aria-hidden="true"
                     />
                     <p className="break-words text-sm text-muted-foreground">{entry.summary}</p>
@@ -1053,7 +1053,7 @@ export function AgentActivityTimeline({
                     ? 'pending'
                     : 'cancelled';
               return (
-                <div key={entry.id} className="relative py-1 pl-7">
+                <div key={entry.id} className="relative py-1 ps-7">
                   <ToolCallCard
                     id={entry.toolCallId}
                     name={traceRowName(entry)}
@@ -1115,9 +1115,9 @@ export function AgentActivityTimeline({
             return <StaticRow key={entry.id} entry={entry} />;
           })}
           {settledStatus === 'completed' && !lastVisibleSearchId && (
-            <div className="relative pl-8 py-1.5 text-sm text-muted-foreground">
+            <div className="relative ps-8 py-1.5 text-sm text-muted-foreground">
               <CheckCircle2
-                className="absolute left-0 top-2 h-4 w-4 text-muted-foreground"
+                className="absolute start-0 top-2 h-4 w-4 text-muted-foreground"
                 aria-hidden="true"
               />
               Done

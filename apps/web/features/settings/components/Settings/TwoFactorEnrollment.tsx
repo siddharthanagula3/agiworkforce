@@ -348,9 +348,9 @@ export function TwoFactorEnrollmentPanel({ onStatusChange }: TwoFactorEnrollment
                 onClick={() => void copyText(stage.codes.join('\n'), 'codes')}
               >
                 {copied === 'codes' ? (
-                  <Check className="mr-2 h-4 w-4" />
+                  <Check className="me-2 h-4 w-4" />
                 ) : (
-                  <Copy className="mr-2 h-4 w-4" />
+                  <Copy className="me-2 h-4 w-4" />
                 )}
                 Copy codes
               </Button>
@@ -360,7 +360,7 @@ export function TwoFactorEnrollmentPanel({ onStatusChange }: TwoFactorEnrollment
                 size="sm"
                 onClick={() => downloadCodes(stage.codes)}
               >
-                <Download className="mr-2 h-4 w-4" />
+                <Download className="me-2 h-4 w-4" />
                 Download codes
               </Button>
               <Button
@@ -369,7 +369,7 @@ export function TwoFactorEnrollmentPanel({ onStatusChange }: TwoFactorEnrollment
                 size="sm"
                 onClick={() => printCodes(stage.codes)}
               >
-                <Printer className="mr-2 h-4 w-4" />
+                <Printer className="me-2 h-4 w-4" />
                 Print codes
               </Button>
             </div>
@@ -433,9 +433,9 @@ export function TwoFactorEnrollmentPanel({ onStatusChange }: TwoFactorEnrollment
                   onClick={() => void copyText(stage.secret, 'secret')}
                 >
                   {copied === 'secret' ? (
-                    <Check className="mr-2 h-4 w-4" />
+                    <Check className="me-2 h-4 w-4" />
                   ) : (
-                    <Copy className="mr-2 h-4 w-4" />
+                    <Copy className="me-2 h-4 w-4" />
                   )}
                   Copy key
                 </Button>
@@ -468,7 +468,7 @@ export function TwoFactorEnrollmentPanel({ onStatusChange }: TwoFactorEnrollment
                 disabled={busy || code.trim().length === 0}
                 onClick={() => void handleVerify()}
               >
-                {busy ? <Spinner size="sm" className="mr-2" aria-hidden="true" /> : null}
+                {busy ? <Spinner size="sm" className="me-2" aria-hidden="true" /> : null}
                 Verify and enable
               </Button>
               <Button type="button" variant="outline" disabled={busy} onClick={resetFlow}>
@@ -527,7 +527,7 @@ export function TwoFactorEnrollmentPanel({ onStatusChange }: TwoFactorEnrollment
                   disabled={busy || !enrollmentAvailable}
                   onClick={() => void handleStartSetup()}
                 >
-                  {busy ? <Spinner size="sm" className="mr-2" aria-hidden="true" /> : null}
+                  {busy ? <Spinner size="sm" className="me-2" aria-hidden="true" /> : null}
                   Set up authenticator app
                 </Button>
               )}

@@ -688,7 +688,7 @@ export function ResearchReportView({
               >
                 Key findings
               </h3>
-              <ul className="list-disc space-y-1 pl-5 text-sm text-foreground">
+              <ul className="list-disc space-y-1 ps-5 text-sm text-foreground">
                 {report.keyFindings.map((finding, index) => (
                   <li key={`${index}-${finding.slice(0, 24)}`}>{finding}</li>
                 ))}
@@ -740,7 +740,7 @@ export function ResearchReportView({
                     <button
                       type="button"
                       onClick={() => scrollToHeading(heading.id)}
-                      className="block w-full truncate text-left text-xs text-muted-foreground transition-colors hover:text-primary"
+                      className="block w-full truncate text-start text-xs text-muted-foreground transition-colors hover:text-primary"
                     >
                       {heading.text}
                     </button>

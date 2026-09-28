@@ -36,7 +36,7 @@ function Lines({ run }: { run: ArtifactChangeRun }) {
       <span aria-hidden="true" className="w-8 shrink-0 select-none text-center">
         {LINE_SIGNS[run.kind]}
       </span>
-      <span className="min-w-0 flex-1 whitespace-pre-wrap break-words pr-4">{line || ' '}</span>
+      <span className="min-w-0 flex-1 whitespace-pre-wrap break-words pe-4">{line || ' '}</span>
     </div>
   ));
 }

@@ -184,7 +184,7 @@ function NewTicketForm({
             disabled={reviewing}
             onClick={() => void reviewDiagnostics()}
           >
-            {reviewing ? <Spinner size="sm" className="mr-2" /> : null}
+            {reviewing ? <Spinner size="sm" className="me-2" /> : null}
             {diagnostics ? 'Refresh diagnostics' : 'Review diagnostics'}
           </button>
           {diagnostics ? (
@@ -506,7 +506,7 @@ export function SupportTicketsPanel() {
                   <button
                     type="button"
                     onClick={() => void open(ticket.id)}
-                    className={`${CARD_CLASS} w-full text-left transition-colors hover:bg-muted`}
+                    className={`${CARD_CLASS} w-full text-start transition-colors hover:bg-muted`}
                   >
                     <span className="flex flex-wrap items-baseline justify-between gap-2">
                       <span className="text-[13px] font-medium text-foreground">

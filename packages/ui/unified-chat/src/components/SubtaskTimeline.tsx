@@ -82,7 +82,7 @@ function StepRow({ step, isLast }: StepRowProps) {
         <button
           type="button"
           className={cn(
-            'flex w-full items-start gap-2 text-left',
+            'flex w-full items-start gap-2 text-start',
             hasOutput ? 'cursor-pointer' : 'cursor-default',
           )}
           onClick={hasOutput ? () => setExpanded((v) => !v) : undefined}

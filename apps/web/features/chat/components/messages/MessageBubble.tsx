@@ -2260,7 +2260,7 @@ const MessageBubbleComponent = function MessageBubble({
               end of the page. Replaces the rendered body rather than sitting
               beside it, two copies of the same message is the bug, not the fix. */}
           {isEditing && (
-            <div className="w-full min-w-0 text-left">
+            <div className="w-full min-w-0 text-start">
               <EditableMessage
                 message={{ id: message.id, content: message.content }}
                 onSave={handleSaveEdit}
@@ -2403,7 +2403,7 @@ const MessageBubbleComponent = function MessageBubble({
               onClick={() => {
                 useArtifactsStore.getState().setPanelOpen(true);
               }}
-              className="mt-2 flex items-center gap-2 rounded-lg border border-border/50 bg-muted/40 px-2.5 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/70"
+              className="mt-2 flex items-center gap-2 rounded-lg border border-border/50 bg-muted/40 px-2.5 py-1.5 text-start text-xs text-muted-foreground transition-colors hover:bg-muted/70"
               aria-label="Show artifact being written"
             >
               <span
@@ -2464,7 +2464,7 @@ const MessageBubbleComponent = function MessageBubble({
                         key={attachment.id}
                         type="button"
                         onClick={() => setLightboxAttachment(attachment)}
-                        className="group relative basis-full overflow-hidden rounded-lg border border-border/50 bg-muted/50 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+                        className="group relative basis-full overflow-hidden rounded-lg border border-border/50 bg-muted/50 text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
                         aria-label={`View ${attachment.name} full size`}
                         title={attachment.name}
                       >
@@ -2513,7 +2513,7 @@ const MessageBubbleComponent = function MessageBubble({
                     download={shouldPreview ? undefined : attachment.name}
                     className={cn(
                       'flex items-center gap-2 rounded-lg border border-border/50 overflow-hidden',
-                      'bg-muted/40 hover:bg-muted/70 transition-colors text-left no-underline',
+                      'bg-muted/40 hover:bg-muted/70 transition-colors text-start no-underline',
                       'px-2.5 py-1.5',
                     )}
                     title={`${shouldPreview ? 'Preview' : 'Download'} ${attachment.name}`}
@@ -2630,7 +2630,7 @@ const MessageBubbleComponent = function MessageBubble({
                 <button
                   type="button"
                   onClick={handleRegenerateInterruptedArtifact}
-                  className="ml-auto inline-flex min-h-6 shrink-0 items-center px-1 text-xs font-medium underline underline-offset-2"
+                  className="ms-auto inline-flex min-h-6 shrink-0 items-center px-1 text-xs font-medium underline underline-offset-2"
                 >
                   {INTERRUPTED_ARTIFACT_ACTION}
                 </button>
@@ -2816,7 +2816,7 @@ const MessageBubbleComponent = function MessageBubble({
                         download
                         aria-label="Download video"
                         className={cn(
-                          'absolute right-2 top-2 flex h-8 w-8 items-center justify-center',
+                          'absolute end-2 top-2 flex h-8 w-8 items-center justify-center',
                           'rounded-full bg-black/55 text-white hover:bg-black/75',
                           'opacity-0 transition-opacity duration-quick',
                           'group-hover:opacity-100 group-focus-within:opacity-100',
@@ -3082,7 +3082,7 @@ const MessageBubbleComponent = function MessageBubble({
               {!isUser && trustBoundary.privacyMode === 'local' && (
                 <span
                   data-testid="message-local-boundary"
-                  className="mr-1 shrink-0 rounded-full bg-muted/60 px-1.5 py-px text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+                  className="me-1 shrink-0 rounded-full bg-muted/60 px-1.5 py-px text-xs font-semibold uppercase tracking-wide text-muted-foreground"
                   title={LOCAL_BOUNDARY_TITLE}
                 >
                   {LOCAL_BOUNDARY_LABEL}
@@ -3259,7 +3259,7 @@ const MessageBubbleComponent = function MessageBubble({
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="start" className="max-h-80 overflow-y-auto">
                             <DropdownMenuItem onClick={() => onRegenerate(message.id)}>
-                              <RefreshCw className="mr-2 h-4 w-4" aria-hidden="true" />
+                              <RefreshCw className="me-2 h-4 w-4" aria-hidden="true" />
                               Try again
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
@@ -3273,7 +3273,7 @@ const MessageBubbleComponent = function MessageBubble({
                               >
                                 <span className="min-w-0 flex-1 truncate">{option.name}</span>
                                 {option.id === (message.model ?? message.metadata?.model) && (
-                                  <Check className="ml-2 h-4 w-4 shrink-0" aria-hidden="true" />
+                                  <Check className="ms-2 h-4 w-4 shrink-0" aria-hidden="true" />
                                 )}
                               </DropdownMenuItem>
                             ))}
@@ -3358,9 +3358,9 @@ const MessageBubbleComponent = function MessageBubble({
                             onCheckedChange={() => onReadAloud(message.id, message.content)}
                           >
                             {isReadingAloud ? (
-                              <Square className="mr-2 h-4 w-4 fill-current" aria-hidden="true" />
+                              <Square className="me-2 h-4 w-4 fill-current" aria-hidden="true" />
                             ) : (
-                              <Volume2 className="mr-2 h-4 w-4" aria-hidden="true" />
+                              <Volume2 className="me-2 h-4 w-4" aria-hidden="true" />
                             )}
                             {isReadingAloud ? 'Stop reading message' : 'Read message aloud'}
                           </DropdownMenuCheckboxItem>
@@ -3372,7 +3372,7 @@ const MessageBubbleComponent = function MessageBubble({
                           >
                             <Pin
                               className={cn(
-                                'mr-2 h-4 w-4',
+                                'me-2 h-4 w-4',
                                 message.metadata?.isPinned && 'fill-current',
                               )}
                               aria-hidden="true"
@@ -3385,7 +3385,7 @@ const MessageBubbleComponent = function MessageBubble({
                             disabled={isBranching}
                             onClick={() => onBranch(message.id)}
                           >
-                            <GitFork className="mr-2 h-4 w-4" aria-hidden="true" />
+                            <GitFork className="me-2 h-4 w-4" aria-hidden="true" />
                             {isBranching ? 'Creating branch…' : 'Branch conversation from here'}
                           </DropdownMenuItem>
                         )}
@@ -3394,7 +3394,7 @@ const MessageBubbleComponent = function MessageBubble({
                             disabled={savingToProject}
                             onClick={() => void saveToProject()}
                           >
-                            <FolderOpen className="mr-2 h-4 w-4" aria-hidden="true" />
+                            <FolderOpen className="me-2 h-4 w-4" aria-hidden="true" />
                             {savingToProject ? 'Saving to project…' : 'Save to project'}
                           </DropdownMenuItem>
                         )}
@@ -3403,7 +3403,7 @@ const MessageBubbleComponent = function MessageBubble({
                             disabled={reportState !== 'idle'}
                             onClick={() => void reportMessage()}
                           >
-                            <Flag className="mr-2 h-4 w-4" aria-hidden="true" />
+                            <Flag className="me-2 h-4 w-4" aria-hidden="true" />
                             {reportState === 'sent'
                               ? 'Reported'
                               : reportState === 'sending'
@@ -3437,7 +3437,7 @@ const MessageBubbleComponent = function MessageBubble({
                             onClick={handleDeleteVariantWithConfirm}
                             className="text-danger focus:text-danger"
                           >
-                            <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
+                            <Trash2 className="me-2 h-4 w-4" aria-hidden="true" />
                             Delete this response and what follows
                           </DropdownMenuItem>
                         )}
@@ -3446,7 +3446,7 @@ const MessageBubbleComponent = function MessageBubble({
                             onClick={handleDeleteWithConfirm}
                             className="text-danger focus:text-danger"
                           >
-                            <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
+                            <Trash2 className="me-2 h-4 w-4" aria-hidden="true" />
                             Delete
                           </DropdownMenuItem>
                         )}

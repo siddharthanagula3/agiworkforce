@@ -531,7 +531,7 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
           <button
             type="button"
             aria-label={`Account menu for ${displayName}`}
-            className="flex w-full items-center gap-2 px-3 py-3 text-left transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.05] outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+            className="flex w-full items-center gap-2 px-3 py-3 text-start transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.05] outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
           >
             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
               {userInitial}
