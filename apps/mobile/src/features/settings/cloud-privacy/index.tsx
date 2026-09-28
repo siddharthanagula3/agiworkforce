@@ -15,8 +15,8 @@ import { ChineseHqProviderConsentGroup } from './ChineseHqProviderConsentGroup';
 const PRIVACY_ITEMS = [
   {
     key: 'no-training',
-    label: 'AGI model training: Always off',
-    body: 'AGI does not use customer prompts, responses, or files to train AGI-owned models. There is no training opt-in because this data path does not exist.',
+    label: 'Model training',
+    body: 'AGI does not use your prompts, responses or files to train AGI-owned models. On the Free plan, requests are served by providers’ free models, and those providers’ terms may allow them to train on what you send, unless you turn on Only use models that do not train on your chats in Privacy settings on the web.',
   },
   {
     key: 'telemetry',
@@ -26,7 +26,7 @@ const PRIVACY_ITEMS = [
   {
     key: 'retention',
     label: 'Data retention',
-    body: 'Cloud conversations are permanently deleted within 24 hours of an account deletion request. You can export or delete your data at any time.',
+    body: 'A chat stays in your history until you delete it, and a deleted chat stays in Recently deleted for 30 days, then is deleted for good. A temporary chat and its attachments are removed after 30 days. When you delete your account, erasure starts 24 hours after you confirm, and you can cancel until then.',
   },
 ] as const;
 
@@ -165,6 +165,11 @@ export default function CloudPrivacyScreen() {
           label="Privacy Policy"
           icon={FileText}
           onPress={() => void openExternalUrl('https://agiworkforce.com/privacy')}
+        />
+        <SettingsRow
+          label="Data rights requests"
+          icon={Shield}
+          onPress={() => void openExternalUrl('https://agiworkforce.com/privacy/requests')}
         />
         <SettingsRow
           label="Terms of Service"

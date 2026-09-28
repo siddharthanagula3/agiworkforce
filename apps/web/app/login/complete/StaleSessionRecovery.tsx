@@ -48,7 +48,7 @@ export function StaleSessionRecovery({
   return (
     <main className="flex min-h-[60vh] items-center justify-center p-6">
       <div className="max-w-md text-center">
-        <h1 className="mb-2 text-xl font-semibold text-foreground">
+        <h1 className="mb-2 text-h2 text-foreground">
           {stuck ? 'We could not finish signing you in' : 'Finishing sign-in…'}
         </h1>
         <p className="mb-6 text-sm text-muted-foreground">

@@ -199,6 +199,7 @@
     "voiceUnsupportedHint": "L’input vocale non è supportato in questo browser. Prova Chrome o Edge."
   },
   "bubble": {
+    "assistantSaid": "AGI ha detto:",
     "assistantThinking": "L'assistente sta pensando",
     "cancelEdit": "Annulla",
     "copied": "Copiato",
@@ -210,7 +211,8 @@
     "messageAttachments": "Allegati del messaggio",
     "retryResponse": "Riprova questa risposta",
     "saveEdit": "Salva",
-    "toolResult": "Risultato"
+    "toolResult": "Risultato",
+    "userSaid": "Hai detto:"
   },
   "goalHandoff": {
     "action": "Esegui come attività",
@@ -226,6 +228,9 @@
     "shareConversation": "Condividi la conversazione",
     "temporaryChat": "Chat temporanea",
     "temporaryChatRetentionNote": "Non verrà salvata nella cronologia e salta la memoria per questo turno.",
+    "temporaryChatPersonalized": "Personalizzata",
+    "temporaryChatUnpersonalized": "Non personalizzata",
+    "temporaryChatPersonalizationHint": "Personalizzata usa il tuo profilo, le tue istruzioni e il tuo stile di risposta. Non personalizzata li esclude.",
     "toggleArtifacts": "Attiva/disattiva il pannello degli artefatti",
     "toggleArtifactsCount": "Attiva/disattiva il pannello degli artefatti ({{count}})",
     "toggleStats": "Statistiche"

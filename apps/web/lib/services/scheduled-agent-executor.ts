@@ -545,6 +545,7 @@ async function runScheduledToolLoop(input: {
     approvalMode: input.approvalMode,
     toolApprovalPolicy: input.plan.toolApprovalPolicy,
     unattended: true,
+    unattendedEscalationPauses: true,
     userId: input.userId,
     connectorPermissions: input.plan.connectorPermissions,
     ...(input.plan.connectorExecutor ? { connectorExecutor: input.plan.connectorExecutor } : {}),

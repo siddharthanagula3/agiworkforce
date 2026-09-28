@@ -79,7 +79,7 @@ function ToolTestDialog({ tool, open, onClose, onExecute }: ToolTestDialogProps)
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <div className="p-6 max-w-3xl">
-        <h2 className="text-xl font-bold mb-4">Test Tool: {tool.name}</h2>
+        <h2 className="text-h2 mb-4">Test Tool: {tool.name}</h2>
 
         <div className="mb-4">
           <p className="text-gray-600 mb-2">{tool.description}</p>
@@ -299,7 +299,7 @@ export function MCPToolExplorer() {
   return (
     <div className="p-6">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold mb-2">Tool Explorer</h1>
+        <h1 className="text-h1 mb-2">Tool Explorer</h1>
         <p className="text-gray-600">
           Browse, search, and test tools from all connected integrations
         </p>
@@ -347,7 +347,7 @@ export function MCPToolExplorer() {
               {allTools.length === 0 ? (
                 <div className="text-center py-12">
                   <Wrench className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">No tools available</h3>
+                  <h3 className="text-h3 mb-2">No tools available</h3>
                   <p className="text-gray-600">Enable integrations to access their tools</p>
                 </div>
               ) : (
@@ -370,7 +370,7 @@ export function MCPToolExplorer() {
               <div className="space-y-6">
                 {Object.entries(toolsByServer).map(([serverName, serverTools]) => (
                   <div key={serverName}>
-                    <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                    <h3 className="text-h3 mb-3 flex items-center gap-2">
                       <Server className="w-5 h-5" />
                       {serverName}
                       <Badge variant="secondary">{serverTools.length} tools</Badge>
@@ -399,7 +399,7 @@ export function MCPToolExplorer() {
             {favoriteTools.length === 0 ? (
               <div className="text-center py-12">
                 <StarOff className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold mb-2">No favorite tools</h3>
+                <h3 className="text-h3 mb-2">No favorite tools</h3>
                 <p className="text-gray-600">
                   Click the star icon on any tool to add it to favorites
                 </p>

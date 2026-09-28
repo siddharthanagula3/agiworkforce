@@ -1130,6 +1130,8 @@ impl CliConfig {
     /// - `AGIWORKFORCE_MODEL` -> `default.model`
     /// - `AGIWORKFORCE_PROVIDER` -> `default.provider`
     /// - `AGIWORKFORCE_MAX_TOKENS` -> `default.max_tokens`
+    /// - `AGIWORKFORCE_API_BASE` and `AGI_PLAIN`, which take effect where they
+    ///   are read and are recorded here so `/config` shows them
     pub fn merge_env_overrides(&mut self) {
         if let Ok(model) = std::env::var("AGIWORKFORCE_MODEL") {
             if !model.is_empty() {
@@ -1154,6 +1156,14 @@ impl CliConfig {
                     .env_overrides
                     .push("AGIWORKFORCE_MAX_TOKENS".to_string());
             }
+        }
+        if std::env::var("AGIWORKFORCE_API_BASE").is_ok_and(|base| !base.trim().is_empty()) {
+            self.source
+                .env_overrides
+                .push("AGIWORKFORCE_API_BASE".to_string());
+        }
+        if crate::output::plain_output_requested_by_environment() {
+            self.source.env_overrides.push("AGI_PLAIN".to_string());
         }
     }
 }

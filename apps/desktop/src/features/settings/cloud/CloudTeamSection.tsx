@@ -1,4 +1,3 @@
-
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
@@ -180,7 +179,7 @@ export function CloudTeamSection() {
           </div>
 
           <div>
-            <h3 className="text-sm font-medium text-foreground">Members</h3>
+            <h3 className="text-h5 text-foreground">Members</h3>
             {members.length === 0 ? (
               <p className="mt-2 text-xs text-muted-foreground">No members to show.</p>
             ) : (
@@ -243,7 +242,7 @@ export function CloudTeamSection() {
 
           {canManageTeam ? (
             <div className="rounded-lg border border-border bg-card/40 p-5">
-              <h3 className="text-sm font-medium text-foreground">Add a member</h3>
+              <h3 className="text-h5 text-foreground">Add a member</h3>
               <p className="mt-1 text-xs leading-5 text-muted-foreground">
                 Adds an existing AGI account to this workspace by email. AGI does not send
                 invitation emails, so the person must already have an account.

@@ -13,6 +13,7 @@ export const metadata: Metadata = {
 export default function WorkspaceAuditPage() {
   return (
     <ConsolePage
+      help={{ docId: 'enterprise-security', label: 'How audit evidence works' }}
       title="Audit"
       description="Administrative, policy, and access events for this workspace. Writes go through a security-definer function, so this record cannot be edited from the application."
     >

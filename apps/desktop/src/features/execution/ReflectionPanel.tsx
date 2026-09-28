@@ -101,7 +101,7 @@ export function ReflectionPanel({ className }: ReflectionPanelProps) {
             )}
           </div>
           <div className="min-w-0 flex-1">
-            <h3 className="text-sm font-semibold text-foreground">
+            <h3 className="text-h5 text-foreground">
               {reflection.isReflecting
                 ? 'Analyzing execution...'
                 : reflection.goalAchievable

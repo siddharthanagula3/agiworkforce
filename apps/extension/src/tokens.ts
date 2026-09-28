@@ -4,15 +4,25 @@ export function getExtensionTokensCss(mode: 'dark' | 'light' = 'dark'): string {
   return `:root {\n${cssVarsToString(agiExtensionCssVars[mode])}\n}`;
 }
 
+function themed(selector: string, condition: string): string {
+  return selector === ':host' ? `:host(${condition})` : `${selector}${condition}`;
+}
+
 export function getExtensionTokensCssAuto(selector = ':root'): string {
   return [
     `${selector} {`,
+    'color-scheme: dark;',
     cssVarsToString(agiExtensionCssVars.dark),
     '}',
     '@media (prefers-color-scheme: light) {',
-    `  ${selector} {`,
+    `  ${themed(selector, ":not([data-theme='dark'])")} {`,
+    'color-scheme: light;',
     cssVarsToString(agiExtensionCssVars.light),
     '  }',
+    '}',
+    `${themed(selector, "[data-theme='light']")} {`,
+    'color-scheme: light;',
+    cssVarsToString(agiExtensionCssVars.light),
     '}',
     '@media (forced-colors: active) {',
     `  ${selector} {`,
@@ -54,6 +64,10 @@ export function getExtensionTokensCssAuto(selector = ':root'): string {
     '    --agi-ext-info-text: CanvasText;',
     '    --agi-ext-modal-shadow: transparent;',
     '    --agi-ext-scrim: transparent;',
+    '    --agi-ext-elevation-1: none;',
+    '    --agi-ext-elevation-2: none;',
+    '    --agi-ext-elevation-3: none;',
+    '    --agi-ext-elevation-4: none;',
     '  }',
     '}',
   ].join('\n');

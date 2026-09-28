@@ -131,6 +131,27 @@ function makeApi(overrides: Partial<DesktopCloudSchedulesApi> = {}): DesktopClou
     deleteSchedule: vi.fn(async () => undefined),
     listRuns: vi.fn(async () => runsPage()),
     runNow: vi.fn(async () => ({ run, replay: false })),
+    resolveRunApproval: vi.fn(async () => run),
+    shareSchedule: vi.fn(async () => ({
+      token: 'abcdefghijklmnopqrstuvwx',
+      snapshot: {
+        name: schedule.name,
+        description: null,
+        prompt: schedule.prompt ?? '',
+        model: null,
+        scheduleType: schedule.scheduleType,
+        cronExpression: null,
+        intervalMs: null,
+        recurrenceRule: null,
+        dayparts: null,
+        metadata: null,
+        missedExecutionPolicy: 'run_once' as const,
+        retryMaxAttempts: 0,
+        retryBackoffSeconds: 300,
+      },
+      createdAt: '2026-08-01T14:00:00.000Z',
+    })),
+    unshareSchedule: vi.fn(async () => undefined),
     ...overrides,
   };
 }

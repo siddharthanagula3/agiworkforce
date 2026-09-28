@@ -10,6 +10,7 @@ export const metadata: Metadata = {
 export default function WorkspaceBillingPage() {
   return (
     <ConsolePage
+      help={{ docId: 'billing-and-plans', label: 'How plans and billing work' }}
       title="Billing"
       description="What this workspace is on and what it consumes. Payment and invoices are handled in billing settings."
     >

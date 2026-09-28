@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   CLOUD_CODE_AGENT_STOP_REASONS,
+  CLOUD_CODE_LIMITS,
   CLOUD_CODE_NETWORK_ACCESS,
   CLOUD_CODE_SESSION_STATUS_FILTERS,
   NOTEBOOK_CELL_LANGUAGES,
@@ -68,7 +69,7 @@ import {
   type CloudCodeValidationSummary,
 } from './cloud-code-result';
 
-const MAX_TITLE_LENGTH = 120;
+const MAX_TITLE_LENGTH = CLOUD_CODE_LIMITS.title;
 const MAX_HARNESS_CREDENTIAL_LENGTH = 4_000;
 const MAX_COMMAND_LENGTH = 2_000;
 const MAX_ERROR_LENGTH = 2_000;

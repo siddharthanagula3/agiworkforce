@@ -112,9 +112,7 @@ function LibrarySignInRequired() {
       className="mx-auto flex w-full max-w-5xl flex-col items-center gap-3 py-24 text-center"
     >
       <Lock className="h-6 w-6 text-[var(--chat-text-muted)]" aria-hidden />
-      <h1 className="text-lg font-medium text-[var(--chat-text-primary)]">
-        Sign in to see your library
-      </h1>
+      <h1 className="text-h3 text-[var(--chat-text-primary)]">Sign in to see your library</h1>
       <p className="max-w-sm text-sm text-[var(--chat-text-muted)]">
         Files and artifacts are stored against your account. Nothing here is lost, it is just not
         readable until you sign in.

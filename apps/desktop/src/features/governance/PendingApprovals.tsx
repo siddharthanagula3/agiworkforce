@@ -73,9 +73,7 @@ export const PendingApprovals: React.FC<PendingApprovalsProps> = ({ requests, is
     <>
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold">
-            Pending Approval Requests ({pendingRequests.length})
-          </h2>
+          <h2 className="text-h2">Pending Approval Requests ({pendingRequests.length})</h2>
         </div>
 
         {pendingRequests.length === 0 ? (
@@ -177,7 +175,7 @@ export const PendingApprovals: React.FC<PendingApprovalsProps> = ({ requests, is
         {}
         {requests.filter((r) => r.status !== 'pending').length > 0 && (
           <div className="mt-8">
-            <h2 className="text-xl font-semibold mb-4">Request History</h2>
+            <h2 className="text-h2 mb-4">Request History</h2>
             <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
               <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                 <thead className="bg-gray-50 dark:bg-gray-900">

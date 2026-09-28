@@ -70,7 +70,7 @@ export function PlaceDetailPopup({
       data-testid="places-detail-popup"
       style={style}
       className={cn(
-        'flex w-72 max-w-full flex-col overflow-hidden rounded-xl border border-[var(--chat-border-strong)] bg-[var(--chat-surface-elevated)] shadow-lg focus:outline-none',
+        'flex w-72 max-w-full flex-col overflow-hidden rounded-xl border border-[var(--chat-border-strong)] bg-[var(--chat-surface-elevated)] shadow-e3 focus:outline-none',
         className,
       )}
     >
@@ -91,9 +91,7 @@ export function PlaceDetailPopup({
       </div>
 
       <div className="flex shrink-0 items-start justify-between gap-2 px-3 pb-1 pt-2.5">
-        <h3 className="text-sm font-semibold text-[color:var(--chat-text-primary)]">
-          {place.name}
-        </h3>
+        <h3 className="text-h5 text-[color:var(--chat-text-primary)]">{place.name}</h3>
         <button
           type="button"
           onClick={onClose}

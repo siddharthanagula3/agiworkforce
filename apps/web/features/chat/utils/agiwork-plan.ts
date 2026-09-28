@@ -1,10 +1,5 @@
-
 export type AgiWorkPlanStepStatus =
-  | 'pending'
-  | 'in_progress'
-  | 'completed'
-  | 'failed'
-  | 'cancelled';
+  'pending' | 'in_progress' | 'completed' | 'failed' | 'cancelled';
 
 export interface AgiWorkPlanStep {
   id: string;
@@ -12,15 +7,23 @@ export interface AgiWorkPlanStep {
   status: AgiWorkPlanStepStatus;
 }
 
+export const AGIWORK_EXCLUDABLE_TOOLS = ['web_search', 'code_execution'] as const;
+export type AgiWorkExcludableTool = (typeof AGIWORK_EXCLUDABLE_TOOLS)[number];
+
 export interface AgiWorkGoalInput {
   goal: string;
   constraints?: string;
   deliverable?: string;
+  excludedTools?: AgiWorkExcludableTool[];
 }
 
 export function buildAgiWorkGoalInput(
   message: string,
-  fields?: { constraints?: string; deliverable?: string },
+  fields?: {
+    constraints?: string;
+    deliverable?: string;
+    excludedTools?: readonly AgiWorkExcludableTool[];
+  },
 ): AgiWorkGoalInput | undefined {
   const goal = message.trim();
   if (!goal) return undefined;
@@ -30,6 +33,7 @@ export function buildAgiWorkGoalInput(
     goal,
     ...(constraints ? { constraints } : {}),
     ...(deliverable ? { deliverable } : {}),
+    ...(fields?.excludedTools?.length ? { excludedTools: [...fields.excludedTools] } : {}),
   };
 }
 

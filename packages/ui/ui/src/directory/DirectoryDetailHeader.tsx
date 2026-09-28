@@ -106,7 +106,7 @@ export function DirectoryDetailHeader({
       {icon}
       <div className="min-w-0 flex-1 basis-40">
         <div className="flex flex-wrap items-center gap-2">
-          <h3 className="break-words text-xl font-semibold text-foreground">{title}</h3>
+          <h3 className="break-words text-h2 text-foreground">{title}</h3>
           {badge}
         </div>
         {subtitle ? <div className="mt-0.5 text-sm text-muted-foreground">{subtitle}</div> : null}

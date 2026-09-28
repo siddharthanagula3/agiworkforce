@@ -225,6 +225,9 @@ import { persistGeneratedFileBytes } from '@/lib/server/generated-file-persist';
 import {
   type AgiWorkPlanStep,
   advanceAgiWorkPlan,
+  advanceAgiWorkPlanToStep,
+  agiWorkExecutionDirective,
+  agiWorkPlanStepMarker,
   agiWorkGoalProgressEvent,
   agiWorkPlanEvent,
   agiWorkPlanProgressEvents,
@@ -985,11 +988,13 @@ export function toolStatusEvent(
   status: 'running' | 'completed' | 'failed',
   responseModel: string,
   args?: Record<string, unknown>,
+  parallelGroup?: string,
 ): SseLine {
   const statusPayload: Record<string, unknown> = {
     type: 'mcp_tool_use',
     name: toolName,
     status,
+    ...(parallelGroup ? { parallel_group: parallelGroup } : {}),
   };
   if (status === 'running') {
     const phrase =
@@ -4020,9 +4025,14 @@ export async function* runToolLoop(
           ? 'cancel'
           : reason === 'error' || reason === 'refusal'
             ? 'fail'
-            : 'complete';
+            : stoppedShort
+              ? 'stop'
+              : 'complete';
       agiWorkPlan = advanceAgiWorkPlan(agiWorkPlan, transition);
       yield encoder.encode(agiWorkPlanEvent(agiWorkPlan, responseModel));
+      for (const planEvent of agiWorkPlanProgressEvents(agiWorkPlan)) {
+        yield encoder.encode(eventStream.emit(planEvent));
+      }
     }
     if (reason === 'cancelled') {
       yield encoder.encode(taskStateEvent('cancelled', 'Agent work was cancelled.'));
@@ -4160,13 +4170,25 @@ export async function* runToolLoop(
     const mutating = calls.filter((tc) => !isReadOnlyTool(tc.qualifiedName));
 
     const toolStartedAt = new Map<string, number>();
+    const parallelGroup =
+      readOnly.length > 1
+        ? `parallel:${suspendContext.completedSteps}:${readOnly[0]!.id}`
+        : undefined;
     for (const tc of calls) {
       if (!isServerOwnedSearchCall(tc, suspendContext.completedSteps)) {
         if (tc.argsMalformed) toolCapabilityEvidence.malformedCalls += 1;
         else toolCapabilityEvidence.wellFormedCalls += 1;
       }
       if (isExecutionTool(tc.qualifiedName)) executionToolCalled = true;
-      yield encoder.encode(toolStatusEvent(tc.qualifiedName, 'running', responseModel, tc.args));
+      yield encoder.encode(
+        toolStatusEvent(
+          tc.qualifiedName,
+          'running',
+          responseModel,
+          tc.args,
+          parallelGroup && isReadOnlyTool(tc.qualifiedName) ? parallelGroup : undefined,
+        ),
+      );
       const category = canonicalToolCategory(tc.qualifiedName, mcpTools);
       toolStartedAt.set(tc.id, Date.now());
       yield encoder.encode(
@@ -4728,6 +4750,13 @@ export async function* runToolLoop(
           yield encoder.encode(agiWorkPlanEvent(agiWorkPlan, responseModel));
           for (const planEvent of agiWorkPlanProgressEvents(agiWorkPlan)) {
             yield encoder.encode(eventStream.emit(planEvent));
+          }
+          const directive = agiWorkExecutionDirective(agiWorkPlan);
+          const last = messages.at(-1);
+          if (last?.role === 'user' && typeof last.content === 'string') {
+            messages[messages.length - 1] = { ...last, content: `${last.content}\n\n${directive}` };
+          } else {
+            messages.push({ role: 'user', content: directive });
           }
         } else {
           logger.warn(
@@ -5297,6 +5326,20 @@ export async function* runToolLoop(
         }
         providerStep = await stepPromise;
         mergeObservedProviderUsage(observedUsage, providerStep.usage);
+        if (agiWorkPlan.length > 0) {
+          const marker = agiWorkPlanStepMarker(
+            providerStep.canonicalText || providerStep.textContent,
+          );
+          const advanced =
+            marker === null ? agiWorkPlan : advanceAgiWorkPlanToStep(agiWorkPlan, marker);
+          if (JSON.stringify(advanced) !== JSON.stringify(agiWorkPlan)) {
+            agiWorkPlan = advanced;
+            yield encoder.encode(agiWorkPlanEvent(agiWorkPlan, responseModel));
+            for (const planEvent of agiWorkPlanProgressEvents(agiWorkPlan)) {
+              yield encoder.encode(eventStream.emit(planEvent));
+            }
+          }
+        }
         for (const ref of providerStep.generatedFileRefs ?? []) {
           if (ref.fileId) providerGeneratedFileRefs.set(`${ref.provider}:${ref.fileId}`, ref);
         }

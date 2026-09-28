@@ -19,6 +19,8 @@ const DEFAULT_STATE: HostPreferencesState = {
     voiceShortcut: HOST_SHORTCUT_CHOICES.voice[0] as string,
     showInMenuBar: true,
     cliPath: '',
+    sessionCompletionAlerts: 'background',
+    sessionApprovalAlerts: true,
   },
   shortcutStatus: { quickAsk: 'registered', screenshot: 'registered', voice: 'registered' },
 };

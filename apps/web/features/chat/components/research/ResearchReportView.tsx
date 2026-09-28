@@ -17,6 +17,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Download,
   ExternalLink,
@@ -25,6 +26,8 @@ import {
   Library,
   Globe,
   List,
+  Maximize2,
+  Minimize2,
   SendHorizontal,
   Telescope,
   TriangleAlert,
@@ -55,6 +58,7 @@ import { cn } from '@shared/lib/utils';
 import type { DocumentFormat } from '../../types/message-metadata';
 import { documentExportService } from '../../services/document-export-service';
 import { toUserMessage } from '@/lib/user-error-message';
+import { useOverlayDialog } from '../../hooks/use-overlay-dialog';
 
 // ============================================================================
 // Markdown assembly (export payload)
@@ -331,6 +335,10 @@ export function ResearchReportView({
   const [savedProjectName, setSavedProjectName] = useState<string | null>(null);
   const [savingToLibrary, setSavingToLibrary] = useState(false);
   const [savedToLibrary, setSavedToLibrary] = useState(false);
+  const [reading, setReading] = useState(false);
+  const readerRef = useRef<HTMLDivElement>(null);
+  const readerToggleRef = useRef<HTMLButtonElement>(null);
+  const wasReadingRef = useRef(false);
   const projects = useChatProjectStore((s) => s.projects);
   const service = exportService ?? documentExportService;
   const saveReport = saveToProject ?? defaultSaveReportToProject;
@@ -362,7 +370,21 @@ export function ResearchReportView({
       const element = rendered[index];
       if (element) element.id = heading.id;
     });
-  }, [headings]);
+  }, [headings, reading]);
+
+  const closeReader = useCallback(() => setReading(false), []);
+  useOverlayDialog(readerRef, reading, closeReader);
+
+  useEffect(() => {
+    if (wasReadingRef.current && !reading) readerToggleRef.current?.focus();
+    wasReadingRef.current = reading;
+    if (!reading) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [reading]);
 
   const scrollToHeading = useCallback((headingId: string) => {
     const target = bodyRef.current?.ownerDocument.getElementById(headingId);
@@ -437,15 +459,16 @@ export function ResearchReportView({
   }, [followUp, onAskFollowUp, report]);
 
   const incomplete = report.status !== 'completed';
+  const readingColumn = reading ? 'mx-auto w-full max-w-3xl' : undefined;
 
-  return (
+  const view = (
     <div className="flex h-full min-h-0 flex-col" data-testid="research-report-view">
       {/* Header */}
       <div className="flex items-start justify-between gap-3 border-b border-border/30 px-4 py-3">
         <div className="flex min-w-0 items-start gap-2">
           <Telescope className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
           <div className="min-w-0">
-            <h2 className="truncate text-sm font-semibold text-foreground">
+            <h2 className="truncate text-h5 text-foreground">
               {report.title || 'Research report'}
             </h2>
             <p className="mt-0.5 text-caption text-muted-foreground">
@@ -529,7 +552,23 @@ export function ResearchReportView({
               {format.label}
             </Button>
           ))}
-          {onClose && (
+          <Button
+            ref={readerToggleRef}
+            variant="ghost"
+            size="sm"
+            className="h-7 w-7 p-0"
+            onClick={() => setReading((open) => !open)}
+            data-testid="research-report-reader-toggle"
+            aria-label={reading ? 'Exit full screen' : 'Read report full screen'}
+            title={reading ? 'Exit full screen' : 'Full screen'}
+          >
+            {reading ? (
+              <Minimize2 className="h-3.5 w-3.5" aria-hidden="true" />
+            ) : (
+              <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />
+            )}
+          </Button>
+          {onClose && !reading && (
             <Button
               variant="ghost"
               size="sm"
@@ -590,108 +629,118 @@ export function ResearchReportView({
       )}
 
       {/* Body */}
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 [scrollbar-width:thin]">
-        {report.summary && (
-          <p className="mb-4 text-sm leading-relaxed text-foreground">{report.summary}</p>
+      <div
+        className={cn(
+          'min-h-0 flex-1 overflow-y-auto [scrollbar-width:thin]',
+          reading ? 'px-6 py-8' : 'px-4 py-3',
         )}
+      >
+        <div className={readingColumn}>
+          {report.summary && (
+            <p className="mb-4 text-sm leading-relaxed text-foreground">{report.summary}</p>
+          )}
 
-        {report.keyFindings && report.keyFindings.length > 0 && (
-          <section className="mb-4" aria-labelledby="research-report-key-findings">
-            <h3
-              id="research-report-key-findings"
-              className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+          {report.keyFindings && report.keyFindings.length > 0 && (
+            <section className="mb-4" aria-labelledby="research-report-key-findings">
+              <h3
+                id="research-report-key-findings"
+                className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+              >
+                Key findings
+              </h3>
+              <ul className="list-disc space-y-1 pl-5 text-sm text-foreground">
+                {report.keyFindings.map((finding, index) => (
+                  <li key={`${index}-${finding.slice(0, 24)}`}>{finding}</li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {headings.length >= 3 && (
+            <nav
+              className="mb-4 rounded-lg border border-border/30 bg-muted/20 p-3"
+              aria-label="Report contents"
             >
-              Key findings
-            </h3>
-            <ul className="list-disc space-y-1 pl-5 text-sm text-foreground">
-              {report.keyFindings.map((finding, index) => (
-                <li key={`${index}-${finding.slice(0, 24)}`}>{finding}</li>
-              ))}
-            </ul>
-          </section>
-        )}
-
-        {headings.length >= 3 && (
-          <nav
-            className="mb-4 rounded-lg border border-border/30 bg-muted/20 p-3"
-            aria-label="Report contents"
-          >
-            <p className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              <List className="h-3.5 w-3.5" aria-hidden="true" />
-              Contents
-            </p>
-            <ol className="space-y-0.5" data-testid="research-report-toc">
-              {headings.map((heading) => (
-                <li
-                  key={heading.id}
-                  style={{
-                    paddingLeft: `${(heading.level - (headings[0]?.level ?? 1)) * 12}px`,
-                  }}
-                >
-                  <button
-                    type="button"
-                    onClick={() => scrollToHeading(heading.id)}
-                    className="block w-full truncate text-left text-xs text-muted-foreground transition-colors hover:text-primary"
+              <p className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <List className="h-3.5 w-3.5" aria-hidden="true" />
+                Contents
+              </p>
+              <ol className="space-y-0.5" data-testid="research-report-toc">
+                {headings.map((heading) => (
+                  <li
+                    key={heading.id}
+                    style={{
+                      paddingLeft: `${(heading.level - (headings[0]?.level ?? 1)) * 12}px`,
+                    }}
                   >
-                    {heading.text}
-                  </button>
-                </li>
-              ))}
-            </ol>
-          </nav>
-        )}
+                    <button
+                      type="button"
+                      onClick={() => scrollToHeading(heading.id)}
+                      className="block w-full truncate text-left text-xs text-muted-foreground transition-colors hover:text-primary"
+                    >
+                      {heading.text}
+                    </button>
+                  </li>
+                ))}
+              </ol>
+            </nav>
+          )}
 
-        {/*
+          {/*
           The stored body is markdown, so it goes through the same renderer the
           chat transcript uses. Rendering it as preformatted text showed saved
           reports as literal `##`, `**`, and `[text](url)` syntax.
         */}
-        <article
-          ref={bodyRef}
-          className="text-sm leading-relaxed text-foreground"
-          data-testid="research-report-content"
-        >
-          <MarkdownContent content={citedContent} />
-        </article>
+          <article
+            ref={bodyRef}
+            className={cn(
+              'text-foreground',
+              reading ? 'text-base leading-[26px]' : 'text-sm leading-relaxed',
+            )}
+            data-testid="research-report-content"
+          >
+            <MarkdownContent content={citedContent} />
+          </article>
 
-        {report.citations.length > 0 ? (
-          <section className="mt-5" aria-labelledby="research-report-sources">
-            <h3
-              id="research-report-sources"
-              className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
-            >
-              Sources
-            </h3>
-            <ul className="space-y-1.5">
-              {report.citations.map((citation, index) => (
-                <CitationRow key={citation.url + index} citation={citation} index={index} />
-              ))}
-            </ul>
-          </section>
-        ) : uncapturedSources.length > 0 ? (
-          /*
-           * The report cites sources the run never captured a link for. Hiding
-           * the whole section leaves numbered references in the prose pointing
-           * at nothing, and a reader cannot tell whether the report has no
-           * sources or whether the product lost them.
-           */
-          <section className="mt-5" aria-labelledby="research-report-sources">
-            <h3
-              id="research-report-sources"
-              className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
-            >
-              Sources
-            </h3>
-            <p
-              className="text-xs text-muted-foreground"
-              data-testid="research-report-uncaptured-sources"
-            >
-              {`This report refers to ${uncapturedSources.length} numbered ${
-                uncapturedSources.length === 1 ? 'source' : 'sources'
-              }, but the run recorded no links for them. The references in the text above are the report's own and cannot be opened from here.`}
-            </p>
-          </section>
-        ) : null}
+          {report.citations.length > 0 ? (
+            <section className="mt-5" aria-labelledby="research-report-sources">
+              <h3
+                id="research-report-sources"
+                className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+              >
+                Sources
+              </h3>
+              <ul className="space-y-1.5">
+                {report.citations.map((citation, index) => (
+                  <CitationRow key={citation.url + index} citation={citation} index={index} />
+                ))}
+              </ul>
+            </section>
+          ) : uncapturedSources.length > 0 ? (
+            /*
+             * The report cites sources the run never captured a link for. Hiding
+             * the whole section leaves numbered references in the prose pointing
+             * at nothing, and a reader cannot tell whether the report has no
+             * sources or whether the product lost them.
+             */
+            <section className="mt-5" aria-labelledby="research-report-sources">
+              <h3
+                id="research-report-sources"
+                className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+              >
+                Sources
+              </h3>
+              <p
+                className="text-xs text-muted-foreground"
+                data-testid="research-report-uncaptured-sources"
+              >
+                {`This report refers to ${uncapturedSources.length} numbered ${
+                  uncapturedSources.length === 1 ? 'source' : 'sources'
+                }, but the run recorded no links for them. The references in the text above are the report's own and cannot be opened from here.`}
+              </p>
+            </section>
+          ) : null}
+        </div>
       </div>
 
       {onAskFollowUp && (
@@ -703,7 +752,12 @@ export function ResearchReportView({
             askFollowUp();
           }}
         >
-          <div className="flex items-end gap-2 rounded-lg border border-border/30 bg-muted/20 p-2">
+          <div
+            className={cn(
+              'flex items-end gap-2 rounded-lg border border-border/30 bg-muted/20 p-2',
+              readingColumn,
+            )}
+          >
             <textarea
               value={followUp}
               onChange={(event) => setFollowUp(event.target.value)}
@@ -728,11 +782,28 @@ export function ResearchReportView({
               Ask
             </Button>
           </div>
-          <p className="mt-1 text-caption text-muted-foreground">
+          <p className={cn('mt-1 text-caption text-muted-foreground', readingColumn)}>
             The report travels with your question, so the answer stays grounded in it.
           </p>
         </form>
       )}
     </div>
+  );
+
+  if (!reading || typeof document === 'undefined') return view;
+
+  return createPortal(
+    <div
+      ref={readerRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label={report.title || 'Research report'}
+      tabIndex={-1}
+      data-testid="research-report-reader"
+      className="fixed inset-0 z-[var(--z-modal)] flex flex-col bg-background outline-none"
+    >
+      {view}
+    </div>,
+    document.body,
   );
 }

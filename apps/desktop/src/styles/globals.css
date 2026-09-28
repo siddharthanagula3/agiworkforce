@@ -108,6 +108,7 @@
   --color-surface-elevated: #1a1a1a;
   --color-surface-overlay: #242424;
   --color-surface-hover: #2e2e2e;
+  --color-surface-active: var(--surface-active);
 
   /* Semantic colors (using CSS variable references) */
   --color-background: hsl(var(--background));

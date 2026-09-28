@@ -25,7 +25,7 @@ export interface AccountAccessDenied {
 
 /** The page each denial is actually resolved on; an erasure has none by design. */
 export const LOCKOUT_RECOVERY_PATH = '/auth/reset-password';
-export const SUSPENSION_APPEAL_PATH = '/support';
+export const SUSPENSION_APPEAL_PATH = '/appeal';
 
 /** A denial needs a heading and a control, not only the sentence a 403 carries. */
 export interface AccountDenialNotice {
@@ -36,7 +36,7 @@ export interface AccountDenialNotice {
 export const ACCOUNT_DENIAL_NOTICE: Readonly<Record<AccountDenialReason, AccountDenialNotice>> = {
   locked: { title: 'This account is locked', action: 'Reset your password' },
   recovery: { title: 'Finish recovering this account', action: 'Continue recovery' },
-  suspended: { title: 'This account is suspended', action: 'Contact support' },
+  suspended: { title: 'This account is suspended', action: 'Appeal this suspension' },
   deleted: { title: 'This account has been deleted', action: 'Back to sign-in' },
 };
 
@@ -91,7 +91,8 @@ export function accountAccessDecision(status: string | null): AccountAccessDecis
         allowed: false,
         reason: 'suspended',
         recoveryPath: SUSPENSION_APPEAL_PATH,
-        message: 'Your account has been suspended. Please contact support.',
+        message:
+          'Your account has been suspended under section 11 of our Terms of Service. You can appeal, and a person reviews every appeal and tells you what triggered it.',
       };
     case 'deleted':
       return {

@@ -3,7 +3,7 @@
   "info": {
     "title": "AGI Workforce API",
     "version": "1.0.0",
-    "description": "OpenAI-compatible inference gateway, the billing and device-authorization endpoints the first-party apps use, and the workspace administration API.\n\nThe complete API base URL is `https://agiworkforce.com/api`. The API host also exposes the OpenAI-compatible aliases `/v1/chat/completions`, `/v1/models`, `/v1/embeddings`, `/v1/audio/transcriptions`, and `/v1/credits/balance` at `https://api.agiworkforce.com`, plus `/health`. Other operations use the complete API base URL above.\n\nThree credential types authenticate here and they are NOT interchangeable. An AGI API key (`sk_live_\u2026`/`sk_test_\u2026`, issued under Settings > API Keys) works only on the operations that declare `ApiKeyAuth`. A workspace API key (`agiadm_\u2026`, issued in the workspace console under Audit > Workspace API keys) works only on the workspace administration operations that declare `WorkspaceApiKeyAuth`. Every other operation needs a session bearer token. Each operation states which one it takes. Rate limits are published in `docs/standards/api-rate-limits.md`.",
+    "description": "OpenAI-compatible inference gateway, the billing and device-authorization endpoints the first-party apps use, and the workspace administration API.\n\nThe complete API base URL is `https://agiworkforce.com/api`. The API host also exposes the OpenAI-compatible aliases `/v1/chat/completions`, `/v1/models`, `/v1/embeddings`, `/v1/audio/transcriptions`, and `/v1/credits/balance` at `https://api.agiworkforce.com`, plus `/health`. Other operations use the complete API base URL above.\n\nThree credential types authenticate here and they are NOT interchangeable. An AGI API key (`sk_live_…`/`sk_test_…`, issued under Settings > API Keys) works only on the operations that declare `ApiKeyAuth`. A workspace API key (`agiadm_…`, issued in the workspace console under Audit > Workspace API keys) works only on the workspace administration operations that declare `WorkspaceApiKeyAuth`. Every other operation needs a session bearer token. Each operation states which one it takes. Rate limits are published in `docs/standards/api-rate-limits.md`.",
     "contact": {
       "name": "AGI Workforce Support",
       "email": "contact@agiworkforce.com",
@@ -30,12 +30,12 @@
       "ApiKeyAuth": {
         "type": "http",
         "scheme": "bearer",
-        "description": "AGI API key (`sk_live_\u2026` / `sk_test_\u2026`) issued under Settings > API Keys. Scopes are chosen at issue time; an operation lists the one it needs in `x-agi-api-key-scope` and answers 403 `insufficient_scope` without it."
+        "description": "AGI API key (`sk_live_…` / `sk_test_…`) issued under Settings > API Keys. Scopes are chosen at issue time; an operation lists the one it needs in `x-agi-api-key-scope` and answers 403 `insufficient_scope` without it."
       },
       "WorkspaceApiKeyAuth": {
         "type": "http",
         "scheme": "bearer",
-        "description": "Workspace API key (`agiadm_\u2026`) issued in the workspace console under Audit > Workspace API keys. It acts for the workspace rather than for a person, keeps working after the member who issued it leaves, and needs an active Team or Enterprise plan. The issuer picks its scopes, only from permissions they hold, and an optional expiry; neither can change after issue, and the key can be revoked at any time. An operation names the scope it needs in `x-agi-workspace-scope` and answers 403 without it, listing the scopes the key carries. A revoked, expired or unknown key answers 401, and a call from outside the workspace's IP allow list answers 403 `IP_NOT_ALLOWED`. Writes made with a key need no CSRF token."
+        "description": "Workspace API key (`agiadm_…`) issued in the workspace console under Audit > Workspace API keys. It acts for the workspace rather than for a person, keeps working after the member who issued it leaves, and needs an active Team or Enterprise plan. The issuer picks its scopes, only from permissions they hold, and an optional expiry; neither can change after issue, and the key can be revoked at any time. An operation names the scope it needs in `x-agi-workspace-scope` and answers 403 without it, listing the scopes the key carries. A revoked, expired or unknown key answers 401, and a call from outside the workspace's IP allow list answers 403 `IP_NOT_ALLOWED`. Writes made with a key need no CSRF token."
       }
     },
     "schemas": {
@@ -58,6 +58,199 @@
             "minimum": 2,
             "maximum": 999999,
             "description": "Licensed seat count. Required for per-seat plans (team) and rejected for per-account plans. Charged as the Stripe line-item quantity."
+          }
+        }
+      },
+      "UpgradePreviewRequest": {
+        "type": "object",
+        "required": ["plan", "billingInterval"],
+        "properties": {
+          "plan": {
+            "type": "string",
+            "enum": ["basic", "pro", "max", "max_15x", "team"],
+            "description": "The plan to move the active subscription to. For team, the same plan with a larger seats value adds seats."
+          },
+          "billingInterval": {
+            "type": "string",
+            "enum": ["monthly", "yearly"],
+            "description": "Must match the current subscription's cadence when the target plan sells that cadence; a mismatch answers 400."
+          },
+          "seats": {
+            "type": "integer",
+            "minimum": 2,
+            "maximum": 999999,
+            "description": "Licensed seat count for team. Seats can only increase; added seats keep the renewal date and are charged for the rest of the current period."
+          },
+          "promotionCode": {
+            "type": "string",
+            "maxLength": 64,
+            "pattern": "^[A-Za-z0-9]+$",
+            "description": "Optional customer-facing promotion code, checked with Stripe before it is quoted."
+          }
+        }
+      },
+      "UpgradePreview": {
+        "type": "object",
+        "description": "The exact charge an upgrade would make. A tier upgrade starts a new billing period today: the new plan's price minus a credit for the unused time on the current plan. A seat increase keeps the renewal date and charges only for the rest of the period.",
+        "properties": {
+          "plan": {
+            "type": "string"
+          },
+          "billingInterval": {
+            "type": "string",
+            "enum": ["monthly", "yearly"]
+          },
+          "currency": {
+            "type": "string"
+          },
+          "amountDueNowCents": {
+            "type": "integer",
+            "description": "What is charged today, after tax and any balance."
+          },
+          "charge": {
+            "type": "object",
+            "description": "Itemized receipt: lineItems, subtotalCents, discountCents, taxCents, totalCents, appliedBalanceCents, totalDueTodayCents, creditToBalanceCents and renewsAt."
+          },
+          "grandfatheredNotice": {
+            "type": "string",
+            "nullable": true
+          },
+          "recurringAmountCents": {
+            "type": "integer",
+            "description": "What renews each period after the upgrade, before tax."
+          },
+          "seats": {
+            "type": "integer"
+          },
+          "promotion": {
+            "type": "object",
+            "nullable": true,
+            "description": "The applied promotion code and its discount, when one was sent."
+          },
+          "replacesScheduledChange": {
+            "type": "boolean"
+          },
+          "previewToken": {
+            "type": "string",
+            "description": "Signed quote to send to POST /upgrade. It binds the plan, cadence, seats, promotion and proration time."
+          }
+        }
+      },
+      "UpgradeCheckoutRequired": {
+        "type": "object",
+        "description": "The account has no paid subscription to credit, so the plan must be bought through POST /checkout. `checkout` quotes that purchase.",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "message": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              },
+              "code": {
+                "type": "string",
+                "enum": ["checkout_required"]
+              }
+            }
+          },
+          "checkout": {
+            "type": "object",
+            "properties": {
+              "amountDueNowCents": {
+                "type": "integer"
+              },
+              "currency": {
+                "type": "string"
+              },
+              "recurringAmountCents": {
+                "type": "integer"
+              },
+              "seats": {
+                "type": "integer"
+              },
+              "trial": {
+                "type": "object",
+                "nullable": true
+              }
+            }
+          }
+        }
+      },
+      "UpgradeRequest": {
+        "type": "object",
+        "required": ["plan", "billingInterval", "previewToken"],
+        "properties": {
+          "plan": {
+            "type": "string",
+            "enum": ["basic", "pro", "max", "max_15x", "team"]
+          },
+          "billingInterval": {
+            "type": "string",
+            "enum": ["monthly", "yearly"]
+          },
+          "seats": {
+            "type": "integer",
+            "minimum": 2,
+            "maximum": 999999
+          },
+          "previewToken": {
+            "type": "string",
+            "maxLength": 4096,
+            "description": "The previewToken from POST /upgrade/preview for the same plan, cadence, seats and promotion."
+          },
+          "promotionCode": {
+            "type": "string",
+            "maxLength": 64,
+            "pattern": "^[A-Za-z0-9]+$"
+          }
+        }
+      },
+      "UpgradeResult": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "newPlan": {
+            "type": "string"
+          },
+          "billingInterval": {
+            "type": "string",
+            "enum": ["monthly", "yearly"]
+          },
+          "seats": {
+            "type": "integer"
+          },
+          "activation": {
+            "type": "string",
+            "enum": ["webhook_pending"],
+            "description": "Stripe has charged; the plan is written when its subscription event arrives, usually within seconds."
+          }
+        }
+      },
+      "UpgradePaymentActionRequired": {
+        "type": "object",
+        "description": "The bank asked for authentication. Finish the payment at paymentUrl, or confirm clientSecret with Stripe.js, before the plan activates.",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [false]
+          },
+          "paymentActionRequired": {
+            "type": "boolean",
+            "enum": [true]
+          },
+          "message": {
+            "type": "string"
+          },
+          "paymentUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "clientSecret": {
+            "type": "string"
           }
         }
       },
@@ -434,6 +627,36 @@
           "memory_enabled": {
             "type": "boolean",
             "description": "Whether this request may read the memories saved in your account. A request made with an API key reads none unless this is `true`, and it never saves new memories or searches past chats. Has no effect while Memory is off in your account settings."
+          },
+          "web_search": {
+            "type": "boolean",
+            "description": "Lets the model search the web while it answers. Each search is billed in credits and shows in your usage as Agentic search."
+          },
+          "research": {
+            "type": "boolean",
+            "description": "Runs Deep Research: the model plans, searches and reads many sources before it writes a cited report. A model that cannot run research answers the request normally instead. Searches are billed as Agentic search."
+          },
+          "research_sources": {
+            "type": "object",
+            "description": "What a Deep Research run may read. Applies only when `research` is true.",
+            "properties": {
+              "files": {
+                "type": "boolean",
+                "description": "Also search the documents indexed in your account."
+              },
+              "allow_domains": {
+                "type": "array",
+                "maxItems": 32,
+                "items": { "type": "string", "maxLength": 253 },
+                "description": "Only read and cite pages on these sites, for example `nature.com`."
+              },
+              "deny_domains": {
+                "type": "array",
+                "maxItems": 32,
+                "items": { "type": "string", "maxLength": 253 },
+                "description": "Never read or cite pages on these sites."
+              }
+            }
           },
           "personalization": {
             "type": "boolean",
@@ -1407,6 +1630,102 @@
             "format": "date-time",
             "nullable": true,
             "description": "Pass as `page`, with the same `from` and `to`, to read the next day buckets."
+          }
+        }
+      },
+      "ScheduleRun": {
+        "type": "object",
+        "required": ["id", "taskId", "status", "triggerSource", "startedAt", "idempotencyKey"],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "taskId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["running", "success", "failed", "timeout", "cancelled", "awaiting_approval"]
+          },
+          "triggerSource": {
+            "type": "string",
+            "enum": ["schedule", "manual", "webhook", "api"]
+          },
+          "scheduledFor": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "durationMs": {
+            "type": "integer",
+            "nullable": true
+          },
+          "result": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": true,
+            "description": "The run's output, with `text` for the answer and `usage` for what it cost"
+          },
+          "error": {
+            "type": "string",
+            "nullable": true
+          },
+          "idempotencyKey": {
+            "type": "string"
+          },
+          "attemptCount": {
+            "type": "integer"
+          },
+          "pendingApproval": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": true,
+            "description": "Present while the run waits for the owner's approval: when it was requested, when it expires, and each step it is waiting on"
+          }
+        }
+      },
+      "ScheduleRunList": {
+        "type": "object",
+        "required": ["runs"],
+        "properties": {
+          "runs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScheduleRun"
+            }
+          },
+          "pagination": {
+            "type": "object",
+            "properties": {
+              "limit": {
+                "type": "integer"
+              },
+              "offset": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+      },
+      "ScheduleRunStarted": {
+        "type": "object",
+        "required": ["run", "replay"],
+        "properties": {
+          "run": {
+            "$ref": "#/components/schemas/ScheduleRun"
+          },
+          "replay": {
+            "type": "boolean",
+            "description": "True when this Idempotency-Key had already started the run"
           }
         }
       },
@@ -2867,6 +3186,174 @@
         }
       }
     },
+    "/upgrade/preview": {
+      "post": {
+        "summary": "Quote an upgrade or a seat increase",
+        "description": "Prices a change to the caller's active Stripe subscription without charging: a tier upgrade, or more seats on Team. Returns an itemized charge and a previewToken for POST /upgrade. An account with no paid subscription to credit answers 409 checkout_required and buys through POST /checkout.",
+        "tags": ["Billing"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpgradePreviewRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Quote for the change",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpgradePreview"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request, a cadence the upgrade must keep, fewer seats, or a promotion code that does not apply",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "No paid subscription to credit (checkout_required, with a checkout quote), or a cancellation is pending",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpgradeCheckoutRequired"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Billing could not be verified; nothing was changed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/upgrade": {
+      "post": {
+        "summary": "Apply a quoted upgrade or seat increase",
+        "description": "Charges the saved payment method for the change quoted by POST /upgrade/preview and updates the subscription. The previewToken must match the plan, cadence, seats and promotion, and the charge is the one the quote stated.",
+        "tags": ["Billing"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpgradeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Charged; the plan activates when the subscription event arrives",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpgradeResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request, an expired or mismatched previewToken, or a change the plan does not allow",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "The bank asked for authentication before the charge completes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpgradePaymentActionRequired"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "No paid subscription to credit (checkout_required) or a cancellation is pending",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Billing could not be verified; nothing was charged",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/device/link": {
       "post": {
         "summary": "Generate device authorization code",
@@ -3929,6 +4416,208 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/WorkspaceApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/schedules/{id}/runs": {
+      "get": {
+        "summary": "List a scheduled task's runs",
+        "description": "Returns the task's runs, newest first. A run waiting for the owner's approval carries `pendingApproval` with the steps it is waiting on.",
+        "tags": ["Schedules"],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The scheduled task id"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            },
+            "description": "How many runs to return"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            },
+            "description": "How many runs to skip"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The task's runs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleRunList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No scheduled task with this id belongs to the caller",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Start a scheduled task run",
+        "description": "Starts one run of the task now, the same as Run now in the app, and answers when the run finishes, pauses for approval, or reaches the request's time limit. The `Idempotency-Key` header is required: repeating a request with the same key returns the run it started instead of starting another, and answers 409 while that run is still in progress.",
+        "tags": ["Schedules"],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The scheduled task id"
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            },
+            "description": "A unique key for this start request, reused on a retry"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A repeated request: the run this key already started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleRunStarted"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "The run this request started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleRunStarted"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The Idempotency-Key header is missing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The request failed the CSRF check for a browser session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No scheduled task with this id belongs to the caller",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The run this key started is still in progress, or the task cannot run now",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
                 }
               }
             }

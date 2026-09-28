@@ -12,7 +12,7 @@ const SCAN_DIRS = ['apps/web/lib', 'apps/web/app'];
 
 // Rows whose content is served from an unauthenticated URL. Writing one is the
 // moment private content becomes public, which is the moment to inspect it.
-const PUBLIC_SHARE_TABLES = ['shared_sessions', 'published_artifacts'];
+const PUBLIC_SHARE_TABLES = ['shared_sessions', 'published_artifacts', 'scheduled_task_shares'];
 
 // The inspections that decide whether content may leave the account. Any one of
 // them satisfies the rule; none of them is optional.

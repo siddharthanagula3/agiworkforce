@@ -1,11 +1,26 @@
 import * as vscode from 'vscode';
 import {
+  continueCloudWorkHere,
+  openDeveloperSessionLink,
   PULL_CLOUD_TASK_COMMAND,
   parseCloudTaskHandoffQuery,
   pullCloudResultIntoCheckout,
+  readWorkspaceCloudSource,
   registerContextHandoffUriHandler,
   resolveGitCheckoutHost,
+  resumePendingDeveloperSession,
+  type ContextHandoffTarget,
 } from './features/context-handoff';
+import {
+  CONTINUE_IN_CLOUD_COMMAND,
+  continueInCloud,
+  OPEN_CLOUD_CODE_SESSION_COMMAND,
+  resolveCloudCodeApi,
+  showCloudCodeSession,
+} from './features/cloud-tasks';
+import { getCloudWebOrigin } from './utils/api';
+import { resolveCloudCodeAgentModel } from '@agiworkforce/types';
+import { resolveTierSync } from './integrations/tierResolver';
 import { Config } from './platform/config';
 import { initModelMetrics } from './features/model-picker/modelMetrics';
 import { startVscodeHeartbeat } from './features/device-registry';
@@ -118,22 +133,25 @@ export function activate(context: vscode.ExtensionContext): void {
   const sidebarProvider = chatState?.sidebarProvider;
   const conversationTreeProvider = chatState?.conversationTreeProvider;
 
+  const resolveChatTarget = (): ContextHandoffTarget | undefined => {
+    const provider = chatState?.sidebarProvider;
+    if (provider === undefined) return undefined;
+    markInUse('session-restore');
+    return {
+      prefillComposer: (text: string) => provider.prefillComposer(text),
+      reveal: async () => {
+        try {
+          await vscode.commands.executeCommand('agi-workforce.sidebar.focus');
+        } finally {
+          provider.reveal();
+        }
+      },
+    };
+  };
   context.subscriptions.push(
-    registerContextHandoffUriHandler(() => {
-      const provider = chatState?.sidebarProvider;
-      if (provider === undefined) return undefined;
-      markInUse('session-restore');
-      return {
-        prefillComposer: (text: string) => provider.prefillComposer(text),
-        reveal: async () => {
-          try {
-            await vscode.commands.executeCommand('agi-workforce.sidebar.focus');
-          } finally {
-            provider.reveal();
-          }
-        },
-      };
-    }),
+    registerContextHandoffUriHandler(resolveChatTarget, resolveGitCheckoutHost, (link) =>
+      openDeveloperSessionLink(link, context.globalState),
+    ),
   );
 
   runBoot('cloud-task-pull', () => {
@@ -149,6 +167,54 @@ export function activate(context: vscode.ExtensionContext): void {
         }
         await pullCloudResultIntoCheckout(handoff, await resolveGitCheckoutHost());
       }),
+      vscode.commands.registerCommand(
+        OPEN_CLOUD_CODE_SESSION_COMMAND,
+        async (argument: unknown) => {
+          if (typeof argument !== 'string' || argument === '') {
+            void vscode.window.showWarningMessage(
+              'AGI Workforce: pick an AGI Code session from Sessions, this command needs the session to open.',
+            );
+            return;
+          }
+          const code = await resolveCloudCodeApi(context.secrets);
+          if (code.status === 'signed-out') {
+            void vscode.window.showWarningMessage(
+              'AGI Workforce: sign in to AGI Cloud to open AGI Code sessions.',
+            );
+            return;
+          }
+          await showCloudCodeSession(code.api, argument, {
+            webOrigin: getCloudWebOrigin(),
+            bringBranchIn: async (query) => {
+              await vscode.commands.executeCommand(PULL_CLOUD_TASK_COMMAND, query);
+            },
+            continueHere: async (draft, handoff) => {
+              const target = resolveChatTarget();
+              if (target === undefined) {
+                void vscode.window.showWarningMessage(
+                  'AGI Workforce: the chat view is not available, so this session was not placed. Reload the window and open it again.',
+                );
+                return;
+              }
+              await continueCloudWorkHere(draft, handoff, target, resolveGitCheckoutHost);
+            },
+          });
+        },
+      ),
+      vscode.commands.registerCommand(CONTINUE_IN_CLOUD_COMMAND, () =>
+        continueInCloud({
+          readSource: readWorkspaceCloudSource,
+          resolveApi: async () => {
+            const code = await resolveCloudCodeApi(context.secrets);
+            return code.status === 'ready' ? code.api : null;
+          },
+          modelId: () =>
+            resolveCloudCodeAgentModel(
+              normalizeConfiguredModelId(Config.model()),
+              resolveTierSync(context),
+            ),
+        }),
+      ),
     );
   });
 
@@ -214,6 +280,7 @@ export function activate(context: vscode.ExtensionContext): void {
         diagnosticsProvider: providers.diagnosticsProvider,
         nativeChatAvailable: chat.nativeChatAvailable,
       });
+      void resumePendingDeveloperSession(context.globalState);
     } catch (err) {
       reportBootFailure('commands', err, 'Some AGI Workforce commands could not be registered');
     }

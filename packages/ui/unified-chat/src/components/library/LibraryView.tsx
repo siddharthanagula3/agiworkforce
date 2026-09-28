@@ -64,6 +64,7 @@ import {
   type GeneratedFile,
   type GeneratedFileKind,
   type SourceSurface,
+  isAcceptedAttachmentType,
 } from '@agiworkforce/types';
 import { FileKindIcon } from './FileKindIcon';
 
@@ -805,7 +806,7 @@ export function LibraryView({
         />
       ) : null}
       <header className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="font-[var(--chat-font-sans)] text-[28px] font-medium text-[var(--chat-text-primary)]">
+        <h1 className="font-[var(--chat-font-sans)] text-display text-[var(--chat-text-primary)]">
           Library
         </h1>
         {uploadFiles || transport.createFolder ? (
@@ -1128,7 +1129,7 @@ function FileViewerOverlay({
 
       {askAboutFile ? (
         <form
-          className="absolute inset-x-0 bottom-6 mx-auto flex h-12 w-full max-w-[600px] shrink-0 items-center gap-1 rounded-hero border border-[var(--chat-border-strong)] bg-[var(--chat-input-bg)] px-2 shadow-lg backdrop-blur-sm"
+          className="absolute inset-x-0 bottom-6 mx-auto flex h-12 w-full max-w-[600px] shrink-0 items-center gap-1 rounded-hero border border-[var(--chat-border-strong)] bg-[var(--chat-input-bg)] px-2 shadow-e3 backdrop-blur-sm"
           onSubmit={(event) => {
             event.preventDefault();
             submitQuestion();
@@ -1627,7 +1628,8 @@ function ItemMenu({
                   Remix
                 </button>
               ) : null}
-              {actions.onAddToProject ? (
+              {actions.onAddToProject &&
+              isAcceptedAttachmentType(item.file_name, item.mime_type) ? (
                 <button
                   type="button"
                   role="menuitem"

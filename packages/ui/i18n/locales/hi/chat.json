@@ -199,6 +199,7 @@
     "voiceUnsupportedHint": "यह ब्राउज़र वॉइस इनपुट का समर्थन नहीं करता। Chrome या Edge आज़माएं।"
   },
   "bubble": {
+    "assistantSaid": "AGI ने कहा:",
     "assistantThinking": "सहायक सोच रहा है",
     "cancelEdit": "रद्द करें",
     "copied": "कॉपी हो गया",
@@ -210,7 +211,8 @@
     "messageAttachments": "संदेश अनुलग्नक",
     "retryResponse": "इस प्रतिक्रिया को फिर से आज़माएं",
     "saveEdit": "सहेजें",
-    "toolResult": "परिणाम"
+    "toolResult": "परिणाम",
+    "userSaid": "आपने कहा:"
   },
   "goalHandoff": {
     "action": "टास्क के रूप में चलाएं",
@@ -226,6 +228,9 @@
     "shareConversation": "बातचीत साझा करें",
     "temporaryChat": "अस्थायी चैट",
     "temporaryChatRetentionNote": "यह आपके इतिहास में सेव नहीं होगी और इस बार मेमोरी का उपयोग नहीं करेगी।",
+    "temporaryChatPersonalized": "व्यक्तिगत",
+    "temporaryChatUnpersonalized": "गैर-व्यक्तिगत",
+    "temporaryChatPersonalizationHint": "व्यक्तिगत आपकी प्रोफ़ाइल, निर्देश और जवाब की शैली का उपयोग करता है। गैर-व्यक्तिगत इन्हें शामिल नहीं करता।",
     "toggleArtifacts": "आर्टिफ़ैक्ट पैनल टॉगल करें",
     "toggleArtifactsCount": "आर्टिफ़ैक्ट पैनल टॉगल करें ({{count}})",
     "toggleStats": "आँकड़े"

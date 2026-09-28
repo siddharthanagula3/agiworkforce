@@ -24,7 +24,7 @@ export function FirstRunChecklist({ items }: FirstRunChecklistProps) {
       className="w-full max-w-[760px] rounded-xl border border-[var(--chat-border)] bg-[var(--chat-surface-base)] p-4"
     >
       <header className="mb-3 flex items-baseline justify-between gap-3">
-        <h2 className="text-sm font-semibold text-[var(--chat-text-primary)]">Set up AGI</h2>
+        <h2 className="text-h5 text-[var(--chat-text-primary)]">Set up AGI</h2>
         <span className="text-xs text-[var(--chat-text-muted)]">
           {completed} of {items.length} done
         </span>

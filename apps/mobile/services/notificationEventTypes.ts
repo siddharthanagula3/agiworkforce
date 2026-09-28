@@ -1,3 +1,5 @@
+import { QUIET_HOURS_EXEMPT_NOTIFICATION_TYPES } from '@agiworkforce/types';
+
 export const NOTIFICATION_EVENT_TYPES = [
   'task_completed',
   'agent_approval_needed',
@@ -25,9 +27,5 @@ export type NotificationEventType = (typeof NOTIFICATION_EVENT_TYPES)[number];
  * the foreground handler and ships it with its registration so the server
  * applies the identical exemption before it hands a notice to Expo.
  */
-export const QUIET_HOURS_EXEMPT_EVENT_TYPES: readonly NotificationEventType[] = [
-  'agent_failed',
-  'emergency_stop_triggered',
-  'agent_approval_needed',
-  'approval_pending_escalation',
-];
+export const QUIET_HOURS_EXEMPT_EVENT_TYPES: readonly NotificationEventType[] =
+  QUIET_HOURS_EXEMPT_NOTIFICATION_TYPES;

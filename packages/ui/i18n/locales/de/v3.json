@@ -100,7 +100,10 @@
     "noArchived": "Keine archivierten Chats",
     "noConversations": "Noch keine Unterhaltungen",
     "showActive": "Zurück zu aktiven Chats",
-    "showArchived": "Archivierte Chats anzeigen ({{count}})"
+    "showArchived": "Archivierte Chats anzeigen ({{count}})",
+    "archivedToast": "Chat archiviert",
+    "archivedUndo": "Rückgängig",
+    "archivedView": "Archiv anzeigen"
   },
   "emptyChat": {
     "neutralHeadline": "Wie kann ich dir heute helfen?",
@@ -381,6 +384,9 @@
       "constraintsPlaceholder": "Grenzen, zu Vermeidendes, bevorzugte Quellen…",
       "deliverableLabel": "Ergebnis",
       "deliverablePlaceholder": "Das konkrete erwartete Ergebnis (eine Datei, eine Tabelle, eine Zusammenfassung…)",
+      "toolsLabel": "Werkzeuge für diese Aufgabe",
+      "toolWebSearch": "Websuche und Browsen",
+      "toolCodeExecution": "Codeausführung",
       "palette": {
         "label": "AGI Work-Werkzeuge",
         "searchPlaceholder": "Plugins, Ordner und Skills suchen",

@@ -1,4 +1,34 @@
 @theme inline {
+  --text-display: var(--type-display-size);
+  --text-display--line-height: var(--type-display-height);
+  --text-display--font-weight: var(--type-display-weight);
+  --text-display--letter-spacing: var(--type-display-tracking);
+
+  --text-h1: var(--type-h1-size);
+  --text-h1--line-height: var(--type-h1-height);
+  --text-h1--font-weight: var(--type-h1-weight);
+  --text-h1--letter-spacing: var(--type-h1-tracking);
+
+  --text-h2: var(--type-h2-size);
+  --text-h2--line-height: var(--type-h2-height);
+  --text-h2--font-weight: var(--type-h2-weight);
+  --text-h2--letter-spacing: var(--type-h2-tracking);
+
+  --text-h3: var(--type-h3-size);
+  --text-h3--line-height: var(--type-h3-height);
+  --text-h3--font-weight: var(--type-h3-weight);
+  --text-h3--letter-spacing: var(--type-h3-tracking);
+
+  --text-h4: var(--type-h4-size);
+  --text-h4--line-height: var(--type-h4-height);
+  --text-h4--font-weight: var(--type-h4-weight);
+  --text-h4--letter-spacing: var(--type-h4-tracking);
+
+  --text-h5: var(--type-h5-size);
+  --text-h5--line-height: var(--type-h5-height);
+  --text-h5--font-weight: var(--type-h5-weight);
+  --text-h5--letter-spacing: var(--type-h5-tracking);
+
   --text-caption: var(--type-caption-size);
   --text-caption--line-height: var(--type-caption-height);
   --text-caption--font-weight: var(--type-caption-weight);

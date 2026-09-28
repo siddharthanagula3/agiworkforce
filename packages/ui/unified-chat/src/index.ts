@@ -159,6 +159,7 @@ export {
   StreamingMarkdownContent,
   type StreamingMarkdownContentProps,
 } from './components/markdown/StreamingMarkdownContent';
+export { StreamAnnouncer } from './components/markdown/StreamAnnouncer';
 export { MARKDOWN_SANITIZE_SCHEMA } from './components/markdown/markdownSanitizeSchema';
 export {
   MermaidDiagram,

@@ -4,6 +4,7 @@ import {
   checkResourceAllowed,
   discoverOAuthServerInfo,
   resourceUrlFromServerUrl,
+  type AuthorizationServerMetadata,
   type OAuthDiscoveryState,
   type OAuthServerInfo,
 } from '@modelcontextprotocol/client';
@@ -12,6 +13,8 @@ import { logger } from '@/lib/logger';
 import { mcpOAuthFetch } from '@/lib/connectors/mcp-oauth-fetch';
 import { supportsS256Pkce } from '@/lib/connectors/mcp-oauth-provider';
 import type { ConnectorOAuthProvider } from '@/lib/connectors/oauth-registry';
+
+const PKCE_METHOD = 'S256';
 
 export interface RegistryAuthorizationContext {
   issuer: string | null;
@@ -26,6 +29,34 @@ export type RegistryAuthorizationResolution =
 
 function withoutTrailingSlash(value: string): string {
   return value.replace(/\/$/, '');
+}
+
+function sameIssuer(left: string, right: string): boolean {
+  return withoutTrailingSlash(left) === withoutTrailingSlash(right);
+}
+
+function namesAdvertisedServer(
+  issuer: string,
+  info: OAuthServerInfo | null,
+  metadata: AuthorizationServerMetadata | undefined,
+): boolean {
+  const advertised = info?.resourceMetadata?.authorization_servers ?? [];
+  if (advertised.length === 0) return true;
+  if (advertised.some((server) => sameIssuer(server, issuer))) return true;
+  return (
+    info !== null &&
+    metadata !== undefined &&
+    sameIssuer(metadata.issuer, issuer) &&
+    advertised.some((server) => sameIssuer(server, info.authorizationServerUrl))
+  );
+}
+
+function acceptsS256(
+  provider: ConnectorOAuthProvider,
+  metadata: AuthorizationServerMetadata,
+): boolean {
+  if (metadata.code_challenge_methods_supported !== undefined) return supportsS256Pkce(metadata);
+  return provider.codeChallengeMethodsSupported?.includes(PKCE_METHOD) === true;
 }
 
 export function canonicalResourceUri(mcpUrl: string): string {
@@ -68,17 +99,10 @@ export async function resolveRegistryAuthorization(
     metadata !== undefined && metadata.token_endpoint === provider.tokenUrl;
   const issuer = provider.issuer ?? (discoveredIsConfigured ? metadata.issuer : null);
 
-  const advertisedServers = info?.resourceMetadata?.authorization_servers ?? [];
-  if (
-    issuer !== null &&
-    advertisedServers.length > 0 &&
-    !advertisedServers.some(
-      (server) => withoutTrailingSlash(server) === withoutTrailingSlash(issuer),
-    )
-  ) {
+  if (issuer !== null && !namesAdvertisedServer(issuer, info, metadata)) {
     return { status: 'authorization-server-changed', issuer };
   }
-  if (discoveredIsConfigured && !supportsS256Pkce(metadata)) {
+  if (discoveredIsConfigured && !acceptsS256(provider, metadata)) {
     return { status: 'pkce-unsupported', issuer: metadata.issuer };
   }
 

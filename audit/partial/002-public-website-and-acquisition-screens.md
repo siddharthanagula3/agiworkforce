@@ -61,39 +61,6 @@ Code: `apps/web/app/skills/page.tsx:12-14`, `apps/web/app/skills/SignedOutSkills
 
 Code: `apps/web/app/gallery/GalleryClient.tsx:1509-1517`, `apps/web/app/gallery/GalleryClient.tsx:1520-1523`
 
-## S2.22: Consumer pricing page.
-
-- Done when: A public pricing page lists individual plans with prices and lets a visitor buy one; its plan copy matches enforcement.
-- Wave: 2
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Paid checkout refuses anyone without a beta_redemptions waitlist code; plan rows say Chrome needs a Pro-tier plan though the server lets Free use Chrome (managed_chat). | flag-off, ui |
-
-Code: `apps/web/features/marketing/components/system/nav.ts:158-158`, `apps/web/app/pricing/page.tsx:1613-1615`, `apps/web/app/api/checkout/route.ts:208-220`, `apps/web/app/pricing/page.tsx:216-218`
-
-## S2.23: Team pricing page.
-
-- Done when: A public page shows Team per-seat pricing and lets a buyer choose seats and purchase.
-- Wave: 2
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Team checkout goes through the same waitlist gate: a buyer without a beta_redemptions code is refused. | flag-off |
-
-Code: `apps/web/app/teams/page.tsx:50-50`, `apps/web/app/pricing/page.tsx:358-360`, `apps/web/app/api/checkout/route.ts:208-220`
-
-## S2.25: Plan-comparison table.
-
-- Done when: A plan-comparison table lists plans against features, and each cell matches enforcement.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Developer-surfaces row lists Chrome as a Pro-tier feature ("No managed access" on Free) while the server gates Chrome as managed_chat, which Free has; fix the row. | ui |
-
-Code: `apps/web/app/pricing/page.tsx:126-142`, `apps/web/app/pricing/page.tsx:216-218`, `apps/web/lib/free-chat-surface-policy.ts:91-98`
-
 ## S2.28: Changelog and release notes.
 
 - Done when: A public changelog lists dated releases.

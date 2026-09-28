@@ -196,6 +196,7 @@ export interface ScheduledRunApproval {
 export interface ScheduledRunResume {
   checkpoint: ScheduledRunApprovalCheckpoint;
   decision: ManagedCloudScheduleRunApproval['decision'];
+  missedExecution: MissedExecution | null;
 }
 
 export interface ScheduledExecutionResult {
@@ -1885,7 +1886,11 @@ export async function claimScheduleRunApproval(
         scope: { userId: taskRow.user_id, organizationId: taskRow.organization_id ?? null },
         task,
       },
-      resume: { checkpoint, decision: input.approval.decision },
+      resume: {
+        checkpoint,
+        decision: input.approval.decision,
+        missedExecution: missedExecutionOf(runRow.result?.['missedExecution']),
+      },
     };
   });
 }
@@ -1926,6 +1931,25 @@ export interface MissedExecution {
   scheduledFor: string;
   detectedAt: string;
   lateByMs: number;
+}
+
+function missedExecutionOf(value: unknown): MissedExecution | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  if (
+    (record['policy'] !== 'run_once' && record['policy'] !== 'skip') ||
+    typeof record['scheduledFor'] !== 'string' ||
+    typeof record['detectedAt'] !== 'string' ||
+    typeof record['lateByMs'] !== 'number'
+  ) {
+    return null;
+  }
+  return {
+    policy: record['policy'],
+    scheduledFor: record['scheduledFor'],
+    detectedAt: record['detectedAt'],
+    lateByMs: record['lateByMs'],
+  };
 }
 
 export function detectMissedExecution(
@@ -2035,6 +2059,7 @@ async function runClaimedSchedule(
     : [timeoutController.signal];
   const signal = signals.length === 1 ? signals[0]! : AbortSignal.any(signals);
   let removeAbortListener = () => {};
+  let missedExecution: MissedExecution | null = options.resume?.missedExecution ?? null;
 
   try {
     signal.throwIfAborted();
@@ -2070,8 +2095,8 @@ async function runClaimedSchedule(
         });
       }
     }
-    const missedExecution = options.resume ? null : detectMissedExecution(claim, now());
-    if (missedExecution) {
+    if (!options.resume) missedExecution = detectMissedExecution(claim, now());
+    if (missedExecution && !options.resume) {
       await auditMissedExecution(claim, missedExecution);
       if (missedExecution.policy === 'skip') {
         await releaseExecutionSlot(db, claim);
@@ -2109,7 +2134,11 @@ async function runClaimedSchedule(
       return await awaitScheduleRunApproval(
         db,
         claim,
-        { ...executed, approval: executed.approval },
+        {
+          ...executed,
+          ...(missedExecution ? { missedExecution } : {}),
+          approval: executed.approval,
+        },
         now(),
       );
     }
@@ -2138,6 +2167,7 @@ async function runClaimedSchedule(
     }
     const run = await finalizeScheduleRun(db, claim, {
       status,
+      ...(missedExecution ? { result: { missedExecution } } : {}),
       error: errorMessage(error),
       completedAt: now(),
     });

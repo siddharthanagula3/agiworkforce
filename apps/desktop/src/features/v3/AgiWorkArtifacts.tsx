@@ -60,11 +60,11 @@ export function AgiWorkArtifacts({ onNewChat }: { onNewChat?: () => void } = {})
       data-testid="agi-work-artifacts"
       className="h-full overflow-y-auto scrollbar-thin scrollbar-thumb-[var(--chat-border-strong)]"
     >
-      <div className="mx-auto max-w-3xl px-6 py-8 space-y-5">
+      <div className="mx-auto max-w-3xl px-gutter-compact py-8 space-y-5 sm:px-gutter-regular">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="font-serif text-xl font-medium text-[var(--chat-text-primary)]">
+            <h1 className="font-serif text-h2 text-[var(--chat-text-primary)]">
               {t('agiWork.artifacts.title')}
             </h1>
             <p className="mt-1 text-xs text-[var(--chat-text-secondary)]">
