@@ -1508,6 +1508,10 @@ enum PluginSubcommand {
     },
     /// Remove a plugin you installed.
     Remove { name: String },
+    /// Turn an installed plugin back on.
+    Enable { name: String },
+    /// Turn an installed plugin off without removing it.
+    Disable { name: String },
     /// Sign a plugin directory with a publisher's Ed25519 key.
     Sign {
         /// Plugin directory containing its manifest.
@@ -4575,6 +4579,14 @@ pub async fn run_main() -> Result<()> {
                                 anyhow::bail!("Failed: {}", error)
                             }
                         }
+                    }
+                    PluginSubcommand::Enable { name } => {
+                        println!("{}", installs::set_plugin_enabled(name, true)?);
+                        Ok(())
+                    }
+                    PluginSubcommand::Disable { name } => {
+                        println!("{}", installs::set_plugin_enabled(name, false)?);
+                        Ok(())
                     }
                     PluginSubcommand::Remove { name } => {
                         let removed = installs::remove_plugin(name)?;
