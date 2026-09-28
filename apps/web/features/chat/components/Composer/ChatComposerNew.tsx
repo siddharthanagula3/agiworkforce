@@ -973,6 +973,7 @@ const ChatComposerNewComponent = ({
     selectedSkillName,
     agiWorkScope,
     pendingImageSettings,
+    deviceStepsEnabled,
   } = composerToggles;
   const setWorkMode = useCallback(
     (mode: ComposerWorkMode) => setComposerToggles({ workMode: mode }),
@@ -4892,6 +4893,10 @@ const ChatComposerNewComponent = ({
                       setBrowserToolsOpen(true);
                       closeMenu();
                     }}
+                    deviceStepsEnabled={deviceStepsEnabled !== false}
+                    onToggleDeviceSteps={() =>
+                      setComposerToggles({ deviceStepsEnabled: deviceStepsEnabled === false })
+                    }
                     mediaModeActive={mediaModeActive}
                     attachmentsUnavailable={attachmentsUnavailable}
                     attachmentUnavailableTitle={
