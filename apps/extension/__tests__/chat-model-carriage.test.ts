@@ -19,14 +19,15 @@ describe('side panel carries the visible model selection on every CHAT_MESSAGE',
 
   it('every CHAT_MESSAGE send site includes the routing carriage fields', () => {
     const sendSites = sidePanelSource.match(/type:\s*'CHAT_MESSAGE'[\s\S]*?\(response\?:/g);
-    expect(sendSites?.length).toBe(2);
+    expect(sendSites?.length).toBe(1);
     for (const site of sendSites ?? []) {
       const codeOnly = stripComments(site);
       expect(codeOnly).toMatch(/modelSelection:\s*_ctx\.selectedModel/);
-      expect(codeOnly).toMatch(/quickMode:\s*_ctx\.quickMode/);
-      expect(codeOnly).toContain('...managedOutboundRoutingPayload()');
+      expect(codeOnly).toMatch(/quickMode:\s*quickMode \|\| undefined/);
+      expect(codeOnly).toContain('...managedOutboundRoutingPayload(quickMode)');
       expect(codeOnly).not.toMatch(/effort:\s*_ctx\.reasoningEffort/);
     }
+    expect(sidePanelSource).toContain('dispatchTurn(userMsg, payload, _ctx.quickMode)');
   });
 
   it('omits prior route and effort from every Quick request envelope', () => {
@@ -34,8 +35,9 @@ describe('side panel carries the visible model selection on every CHAT_MESSAGE',
     const end = sidePanelSource.indexOf('// Provider display order', start);
     const helper = stripComments(sidePanelSource.slice(start, end));
 
-    expect(helper).toContain('if (_ctx.quickMode) return {};');
-    expect(helper).toContain('...managedOutboundEffortPayload()');
+    expect(helper).toContain('function managedOutboundRoutingPayload(quickMode = _ctx.quickMode)');
+    expect(helper).toContain('if (quickMode) return {};');
+    expect(helper).toContain('...managedOutboundEffortPayload(true)');
     expect(helper).toMatch(/currentModelKey:\s*_ctx\.currentModelKey/);
     expect(helper).toMatch(/previousTaskType:\s*_ctx\.previousTaskType/);
   });
