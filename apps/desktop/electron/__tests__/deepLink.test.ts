@@ -1,7 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ELECTRON_IPC_CHANNELS } from '../../src/lib/tauri-electron/bridgeContract';
 
-const SSO_DEEP_LINK = 'agiworkforce-cloud://sso-callback?rotating_token_nonce=nonce-abc123';
+const DEEP_LINK = 'agiworkforce-cloud://chat/conversation-1?nonce=nonce-abc123';
+const LEGACY_SSO_LINK = 'agiworkforce-cloud://sso-callback?rotating_token_nonce=nonce-abc123';
+
+const shell = vi.hoisted(() => ({
+  ready: true,
+  readyGate: null as Promise<void> | null,
+  windows: [] as Array<{ loadURL: unknown }>,
+}));
 
 const appHandlers = new Map<string, (...args: unknown[]) => void>();
 const webContentsSend = vi.fn();
@@ -25,7 +32,9 @@ vi.mock('electron', () => {
     static fromWebContents = vi.fn(() => null);
     static getAllWindows = vi.fn(() => []);
     webContents = makeWebContents();
-    constructor(public options: unknown) {}
+    constructor(public options: unknown) {
+      shell.windows.push(this);
+    }
     once = vi.fn((event: string, cb: () => void) => {
       if (event === 'ready-to-show') cb();
     });
@@ -64,7 +73,8 @@ vi.mock('electron', () => {
       on: vi.fn((event: string, cb: (...args: unknown[]) => void) => {
         appHandlers.set(event, cb);
       }),
-      whenReady: () => Promise.resolve(),
+      whenReady: () => shell.readyGate ?? Promise.resolve(),
+      isReady: () => shell.ready,
       getVersion: () => '1.2.0',
       getAppPath: () => '/app',
       getPath: () => '/userData',
@@ -122,6 +132,7 @@ async function bootMain(mode: 'remote' | 'bundled' | 'unset') {
   vi.resetModules();
   appHandlers.clear();
   webContentsSend.mockClear();
+  shell.windows.length = 0;
   await import('../main');
   await Promise.resolve();
   await Promise.resolve();
@@ -150,9 +161,9 @@ describe('deep-link delivery', () => {
   it('delivers the callback over IPC when nothing sets the renderer mode', async () => {
     await bootMain('unset');
 
-    openUrl(SSO_DEEP_LINK);
+    openUrl(DEEP_LINK);
 
-    expect(webContentsSend).toHaveBeenCalledWith(ELECTRON_IPC_CHANNELS.deepLink, SSO_DEEP_LINK);
+    expect(webContentsSend).toHaveBeenCalledWith(ELECTRON_IPC_CHANNELS.deepLink, DEEP_LINK);
     expect(warn.mock.calls.flat().join(' ')).not.toContain('dropped');
   });
 
@@ -167,9 +178,9 @@ describe('deep-link delivery', () => {
     await bootMain('remote');
     warn.mockClear();
 
-    openUrl(SSO_DEEP_LINK);
+    openUrl(DEEP_LINK);
 
-    expect(webContentsSend).toHaveBeenCalledWith(ELECTRON_IPC_CHANNELS.deepLink, SSO_DEEP_LINK);
+    expect(webContentsSend).toHaveBeenCalledWith(ELECTRON_IPC_CHANNELS.deepLink, DEEP_LINK);
     const warned = warn.mock.calls.flat().join(' ');
     expect(warned).not.toContain('dropped');
     expect(warned).not.toContain('nonce-abc123');
@@ -178,10 +189,46 @@ describe('deep-link delivery', () => {
   it('delivers over IPC when the bundled renderer attaches the bridge', async () => {
     await bootMain('bundled');
 
-    openUrl(SSO_DEEP_LINK);
+    openUrl(DEEP_LINK);
 
-    expect(webContentsSend).toHaveBeenCalledWith(ELECTRON_IPC_CHANNELS.deepLink, SSO_DEEP_LINK);
+    expect(webContentsSend).toHaveBeenCalledWith(ELECTRON_IPC_CHANNELS.deepLink, DEEP_LINK);
     expect(warn.mock.calls.flat().join(' ')).not.toContain('dropped');
+  });
+
+  it('holds a link that arrives before the app is ready until the window exists', async () => {
+    let becomeReady = () => {};
+    shell.ready = false;
+    shell.readyGate = new Promise<void>((resolve) => {
+      becomeReady = resolve;
+    });
+    await bootMain('remote');
+    openUrl(DEEP_LINK);
+    expect(shell.windows).toHaveLength(0);
+
+    shell.ready = true;
+    becomeReady();
+    shell.readyGate = null;
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(webContentsSend).toHaveBeenCalledWith(ELECTRON_IPC_CHANNELS.deepLink, DEEP_LINK);
+  });
+
+  it('sends a legacy sign-in callback to the expired sign-in page', async () => {
+    await bootMain('remote');
+
+    openUrl(LEGACY_SSO_LINK);
+
+    const loads = shell.windows.flatMap(
+      (win) => (win.loadURL as ReturnType<typeof vi.fn>).mock.calls,
+    );
+    expect(loads.flat()).toContainEqual(
+      expect.stringContaining('/auth/desktop/complete#expired=1'),
+    );
+    expect(webContentsSend).not.toHaveBeenCalledWith(
+      ELECTRON_IPC_CHANNELS.deepLink,
+      LEGACY_SSO_LINK,
+    );
   });
 
   it('ignores URLs outside the deep-link scheme', async () => {

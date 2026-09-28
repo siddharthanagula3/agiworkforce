@@ -25,16 +25,33 @@ export async function startBrowserSignIn(): Promise<{ started: true }> {
   return { started: true };
 }
 
+const LEGACY_SIGN_IN_ROUTE = 'sso-callback';
+
+function isLegacySignInLink(link: string): boolean {
+  try {
+    const parsed = new URL(link);
+    return `${parsed.host}${parsed.pathname}`.replace(/\/+$/, '') === LEGACY_SIGN_IN_ROUTE;
+  } catch {
+    return false;
+  }
+}
+
+function staleSignInUrl(): string {
+  const url = new URL(DESKTOP_SIGN_IN_COMPLETE_PATH, CLOUD_APP_ORIGIN);
+  url.hash = new URLSearchParams({ expired: '1' }).toString();
+  return url.toString();
+}
+
 export function readBrowserSignInLink(link: string): BrowserSignInLink {
+  if (isLegacySignInLink(link)) return { kind: 'stale', url: staleSignInUrl() };
   if (!isDesktopSignInLink(link)) return { kind: 'not-sign-in' };
   const code = readDesktopSignInCode(link);
   const started = pending;
-  const url = new URL(DESKTOP_SIGN_IN_COMPLETE_PATH, CLOUD_APP_ORIGIN);
   if (!code || !started || Date.now() - started.startedAtMs > PENDING_SIGN_IN_TTL_MS) {
-    url.hash = new URLSearchParams({ expired: '1' }).toString();
-    return { kind: 'stale', url: url.toString() };
+    return { kind: 'stale', url: staleSignInUrl() };
   }
   pending = null;
+  const url = new URL(DESKTOP_SIGN_IN_COMPLETE_PATH, CLOUD_APP_ORIGIN);
   url.hash = new URLSearchParams({ code, verifier: started.verifier }).toString();
   return { kind: 'complete', url: url.toString() };
 }
