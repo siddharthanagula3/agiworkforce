@@ -118,6 +118,7 @@ import { substituteGatedWebSearchTool } from '@/lib/web-search/required-search';
 import { WEB_SEARCH_TOOL, webSearchBackendConfigured } from '@/lib/web-search/web-search-tool';
 import type { StreamChunk } from '@agiworkforce/types';
 import { getModelMetadataById, isFreeBillingPlanTier } from '@agiworkforce/types';
+import { connectorsAllowedForTurn } from '@/lib/connectors/connector-capability';
 import {
   ManagedUsageRequestError,
   finalizeManagedUsageRequest,
@@ -588,7 +589,12 @@ async function dispatchChatCompletions(
       // file search runs before the loop so a failing index degrades to a
       // web-only run rather than failing the turn.
       const researchDomainPolicy = processed.webSearchDomainPolicy ?? null;
-      const researchConnectorIds = processed.researchSources?.connectors ?? [];
+      const requestedResearchConnectorIds = processed.researchSources?.connectors ?? [];
+      const researchConnectorIds =
+        requestedResearchConnectorIds.length > 0 &&
+        (await connectorsAllowedForTurn(request, userId, processed))
+          ? requestedResearchConnectorIds
+          : [];
       const researchFileSources = processed.researchSources?.files
         ? await searchResearchFileSources(runDb, {
             userId,
@@ -773,7 +779,9 @@ async function dispatchChatCompletions(
     // E2B paths already 4xx for tools:false; this closes the same gap for connectors/MCP.
     const modelSupportsTools =
       getModelMetadataById(processed.chatRequest.model)?.capabilities?.tools ?? true;
-    const userConnectorToolsEnabled = processed.chatRequest.connector_tools_enabled !== false;
+    const userConnectorToolsEnabled =
+      processed.chatRequest.connector_tools_enabled !== false &&
+      (await connectorsAllowedForTurn(request, userId, processed));
     const operatorTools = modelSupportsTools
       ? await timePhase(CHAT_TURN_PHASE.toolCatalog, () => loadMcpToolDefs())
       : [];

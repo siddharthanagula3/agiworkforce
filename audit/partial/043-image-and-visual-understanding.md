@@ -14,8 +14,8 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
-| desktop | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
+| web | partial | live check after the next website deploy: the scanner is live on Fly and UPLOAD_SCAN_WEBHOOK_URL and UPLOAD_SCAN_WEBHOOK_TOKEN are in Vercel Production (rulings 2026-09-28 ~14:05); attach an image in chat and confirm it reaches a vision model. | flag-off |
+| desktop | partial | live check after the next website deploy: the scanner is live on Fly and UPLOAD_SCAN_WEBHOOK_URL and UPLOAD_SCAN_WEBHOOK_TOKEN are in Vercel Production (rulings 2026-09-28 ~14:05); attach an image in chat and confirm it reaches a vision model. | flag-off |
 | mobile | partial | Cloud images go through the same upload scanner gate (UPLOAD_SCAN_WEBHOOK_URL); Local mode only OCRs text. | flag-off |
 
 Code: `services/upload-scanner/src/server.ts:183-183`, `services/upload-scanner/src/server.ts:106-106`, `services/upload-scanner/src/server.ts:124-124`, `services/upload-scanner/src/server.ts:99-99`
@@ -28,8 +28,8 @@ Code: `services/upload-scanner/src/server.ts:183-183`, `services/upload-scanner/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
-| desktop | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
+| web | partial | live check after the next website deploy: the scanner is live on Fly and UPLOAD_SCAN_WEBHOOK_URL and UPLOAD_SCAN_WEBHOOK_TOKEN are in Vercel Production (rulings 2026-09-28 ~14:05); attach an image in chat and confirm it reaches a vision model. | flag-off |
+| desktop | partial | live check after the next website deploy: the scanner is live on Fly and UPLOAD_SCAN_WEBHOOK_URL and UPLOAD_SCAN_WEBHOOK_TOKEN are in Vercel Production (rulings 2026-09-28 ~14:05); attach an image in chat and confirm it reaches a vision model. | flag-off |
 | mobile | partial | Up to 5 photos per pick, but cloud images need the upload scanner (UPLOAD_SCAN_WEBHOOK_URL) in production. | flag-off |
 
 Code: `services/upload-scanner/src/server.ts:183-183`, `services/upload-scanner/src/server.ts:106-106`, `services/upload-scanner/src/server.ts:124-124`, `services/upload-scanner/src/server.ts:99-99`
@@ -42,8 +42,8 @@ Code: `services/upload-scanner/src/server.ts:183-183`, `services/upload-scanner/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
-| desktop | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
+| web | partial | live check after the next website deploy: the scanner is live on Fly and UPLOAD_SCAN_WEBHOOK_URL and UPLOAD_SCAN_WEBHOOK_TOKEN are in Vercel Production (rulings 2026-09-28 ~14:05); attach an image in chat and confirm it reaches a vision model. | flag-off |
+| desktop | partial | live check after the next website deploy: the scanner is live on Fly and UPLOAD_SCAN_WEBHOOK_URL and UPLOAD_SCAN_WEBHOOK_TOKEN are in Vercel Production (rulings 2026-09-28 ~14:05); attach an image in chat and confirm it reaches a vision model. | flag-off |
 | mobile | partial | Cloud images go through the same upload scanner gate (UPLOAD_SCAN_WEBHOOK_URL); Local mode only OCRs text. | flag-off |
 
 Code: `services/upload-scanner/src/server.ts:183-183`, `services/upload-scanner/src/server.ts:106-106`, `services/upload-scanner/src/server.ts:124-124`, `services/upload-scanner/src/server.ts:99-99`
@@ -56,8 +56,8 @@ Code: `services/upload-scanner/src/server.ts:183-183`, `services/upload-scanner/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
-| desktop | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
+| web | partial | live check after the next website deploy: the scanner is live on Fly and UPLOAD_SCAN_WEBHOOK_URL and UPLOAD_SCAN_WEBHOOK_TOKEN are in Vercel Production (rulings 2026-09-28 ~14:05); attach an image in chat and confirm it reaches a vision model. | flag-off |
+| desktop | partial | live check after the next website deploy: the scanner is live on Fly and UPLOAD_SCAN_WEBHOOK_URL and UPLOAD_SCAN_WEBHOOK_TOKEN are in Vercel Production (rulings 2026-09-28 ~14:05); attach an image in chat and confirm it reaches a vision model. | flag-off |
 | mobile | partial | Cloud images go through the same upload scanner gate (UPLOAD_SCAN_WEBHOOK_URL); Local mode only OCRs text. | flag-off |
 
 Code: `services/upload-scanner/src/server.ts:183-183`, `services/upload-scanner/src/server.ts:106-106`, `services/upload-scanner/src/server.ts:124-124`, `services/upload-scanner/src/server.ts:99-99`
@@ -70,8 +70,8 @@ Code: `services/upload-scanner/src/server.ts:183-183`, `services/upload-scanner/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
-| desktop | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
+| web | partial | live check after the next website deploy: the scanner is live on Fly and UPLOAD_SCAN_WEBHOOK_URL and UPLOAD_SCAN_WEBHOOK_TOKEN are in Vercel Production (rulings 2026-09-28 ~14:05); attach an image in chat and confirm it reaches a vision model. | flag-off |
+| desktop | partial | live check after the next website deploy: the scanner is live on Fly and UPLOAD_SCAN_WEBHOOK_URL and UPLOAD_SCAN_WEBHOOK_TOKEN are in Vercel Production (rulings 2026-09-28 ~14:05); attach an image in chat and confirm it reaches a vision model. | flag-off |
 | mobile | partial | Cloud images go through the same upload scanner gate (UPLOAD_SCAN_WEBHOOK_URL); Local mode only OCRs text. | flag-off |
 
 Code: `services/upload-scanner/src/server.ts:183-183`, `services/upload-scanner/src/server.ts:106-106`, `services/upload-scanner/src/server.ts:124-124`, `services/upload-scanner/src/server.ts:99-99`
@@ -84,8 +84,8 @@ Code: `services/upload-scanner/src/server.ts:183-183`, `services/upload-scanner/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
-| desktop | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
+| web | partial | live check after the next website deploy: the scanner is live on Fly and UPLOAD_SCAN_WEBHOOK_URL and UPLOAD_SCAN_WEBHOOK_TOKEN are in Vercel Production (rulings 2026-09-28 ~14:05); attach an image in chat and confirm it reaches a vision model. | flag-off |
+| desktop | partial | live check after the next website deploy: the scanner is live on Fly and UPLOAD_SCAN_WEBHOOK_URL and UPLOAD_SCAN_WEBHOOK_TOKEN are in Vercel Production (rulings 2026-09-28 ~14:05); attach an image in chat and confirm it reaches a vision model. | flag-off |
 | mobile | partial | Cloud images go through the same upload scanner gate (UPLOAD_SCAN_WEBHOOK_URL); Local mode only OCRs text. | flag-off |
 
 Code: `services/upload-scanner/src/server.ts:183-183`, `services/upload-scanner/src/server.ts:106-106`, `services/upload-scanner/src/server.ts:124-124`, `services/upload-scanner/src/server.ts:99-99`
@@ -98,8 +98,8 @@ Code: `services/upload-scanner/src/server.ts:183-183`, `services/upload-scanner/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
-| desktop | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
+| web | partial | live check after the next website deploy: the scanner is live on Fly and UPLOAD_SCAN_WEBHOOK_URL and UPLOAD_SCAN_WEBHOOK_TOKEN are in Vercel Production (rulings 2026-09-28 ~14:05); attach an image in chat and confirm it reaches a vision model. | flag-off |
+| desktop | partial | live check after the next website deploy: the scanner is live on Fly and UPLOAD_SCAN_WEBHOOK_URL and UPLOAD_SCAN_WEBHOOK_TOKEN are in Vercel Production (rulings 2026-09-28 ~14:05); attach an image in chat and confirm it reaches a vision model. | flag-off |
 | mobile | partial | Cloud images go through the same upload scanner gate (UPLOAD_SCAN_WEBHOOK_URL); Local mode only OCRs text. | flag-off |
 
 Code: `services/upload-scanner/src/server.ts:183-183`, `services/upload-scanner/src/server.ts:106-106`, `services/upload-scanner/src/server.ts:124-124`, `services/upload-scanner/src/server.ts:99-99`
@@ -112,8 +112,8 @@ Code: `services/upload-scanner/src/server.ts:183-183`, `services/upload-scanner/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
-| desktop | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
+| web | partial | live check after the next website deploy: the scanner is live on Fly and UPLOAD_SCAN_WEBHOOK_URL and UPLOAD_SCAN_WEBHOOK_TOKEN are in Vercel Production (rulings 2026-09-28 ~14:05); attach an image in chat and confirm it reaches a vision model. | flag-off |
+| desktop | partial | live check after the next website deploy: the scanner is live on Fly and UPLOAD_SCAN_WEBHOOK_URL and UPLOAD_SCAN_WEBHOOK_TOKEN are in Vercel Production (rulings 2026-09-28 ~14:05); attach an image in chat and confirm it reaches a vision model. | flag-off |
 
 Code: `services/upload-scanner/src/server.ts:183-183`, `services/upload-scanner/src/server.ts:106-106`, `services/upload-scanner/src/server.ts:124-124`, `services/upload-scanner/src/server.ts:99-99`
 
@@ -125,8 +125,8 @@ Code: `services/upload-scanner/src/server.ts:183-183`, `services/upload-scanner/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
-| desktop | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
+| web | partial | live check after the next website deploy: the scanner is live on Fly and UPLOAD_SCAN_WEBHOOK_URL and UPLOAD_SCAN_WEBHOOK_TOKEN are in Vercel Production (rulings 2026-09-28 ~14:05); attach an image in chat and confirm it reaches a vision model. | flag-off |
+| desktop | partial | live check after the next website deploy: the scanner is live on Fly and UPLOAD_SCAN_WEBHOOK_URL and UPLOAD_SCAN_WEBHOOK_TOKEN are in Vercel Production (rulings 2026-09-28 ~14:05); attach an image in chat and confirm it reaches a vision model. | flag-off |
 | mobile | partial | Cloud images go through the same upload scanner gate (UPLOAD_SCAN_WEBHOOK_URL); Local mode only OCRs text. | flag-off |
 
 Code: `services/upload-scanner/src/server.ts:183-183`, `services/upload-scanner/src/server.ts:106-106`, `services/upload-scanner/src/server.ts:124-124`, `services/upload-scanner/src/server.ts:99-99`
@@ -139,8 +139,8 @@ Code: `services/upload-scanner/src/server.ts:183-183`, `services/upload-scanner/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
-| desktop | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
+| web | partial | live check after the next website deploy: the scanner is live on Fly and UPLOAD_SCAN_WEBHOOK_URL and UPLOAD_SCAN_WEBHOOK_TOKEN are in Vercel Production (rulings 2026-09-28 ~14:05); attach an image in chat and confirm it reaches a vision model. | flag-off |
+| desktop | partial | live check after the next website deploy: the scanner is live on Fly and UPLOAD_SCAN_WEBHOOK_URL and UPLOAD_SCAN_WEBHOOK_TOKEN are in Vercel Production (rulings 2026-09-28 ~14:05); attach an image in chat and confirm it reaches a vision model. | flag-off |
 | mobile | partial | Cloud images go through the same upload scanner gate (UPLOAD_SCAN_WEBHOOK_URL); Local mode only OCRs text. | flag-off |
 
 Code: `services/upload-scanner/src/server.ts:183-183`, `services/upload-scanner/src/server.ts:106-106`, `services/upload-scanner/src/server.ts:124-124`, `services/upload-scanner/src/server.ts:99-99`
@@ -153,8 +153,8 @@ Code: `services/upload-scanner/src/server.ts:183-183`, `services/upload-scanner/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
-| desktop | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
+| web | partial | live check after the next website deploy: the scanner is live on Fly and UPLOAD_SCAN_WEBHOOK_URL and UPLOAD_SCAN_WEBHOOK_TOKEN are in Vercel Production (rulings 2026-09-28 ~14:05); attach an image in chat and confirm it reaches a vision model. | flag-off |
+| desktop | partial | live check after the next website deploy: the scanner is live on Fly and UPLOAD_SCAN_WEBHOOK_URL and UPLOAD_SCAN_WEBHOOK_TOKEN are in Vercel Production (rulings 2026-09-28 ~14:05); attach an image in chat and confirm it reaches a vision model. | flag-off |
 | mobile | partial | Cloud images go through the same upload scanner gate (UPLOAD_SCAN_WEBHOOK_URL); Local mode only OCRs text. | flag-off |
 
 Code: `services/upload-scanner/src/server.ts:183-183`, `services/upload-scanner/src/server.ts:106-106`, `services/upload-scanner/src/server.ts:124-124`, `services/upload-scanner/src/server.ts:99-99`

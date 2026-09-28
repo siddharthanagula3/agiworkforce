@@ -266,6 +266,7 @@ export type { ContainmentOptions, PathPlatform } from './path-safety';
 export {
   BROWSER_STEP_COMMAND,
   DEVICE_HOST_HEADER,
+  DEVICE_BROWSER_CONSOLE_LEVELS,
   DEVICE_KEY_MODIFIERS,
   DEVICE_MOUSE_BUTTONS,
   DEVICE_NAMED_KEYS,
@@ -300,6 +301,7 @@ export {
 } from './device-steps';
 export type {
   DesktopHostDeclaration,
+  DeviceBrowserConsoleLevel,
   DeviceKeyModifier,
   DeviceMouseButton,
   DeviceNamedKey,

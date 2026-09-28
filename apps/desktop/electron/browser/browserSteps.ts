@@ -48,6 +48,7 @@ function reviewFor(plan: BrowserCommandPlan, review: unknown): string | null {
   const declared = typeof review === 'string' ? review.trim() : '';
   if (declared !== '') return declared.slice(0, MAX_DEVICE_REVIEW_LENGTH);
   if (plan.command === 'browser_download') return `Download ${String(plan.args['url'])}`;
+  if (BROWSER_CDP_COMMANDS.includes(plan.command)) return plan.summary.replace(/\?$/, '');
   return null;
 }
 
@@ -72,7 +73,7 @@ export async function runBrowserStep(
   args: Record<string, unknown>,
 ): Promise<unknown> {
   const command = args['command'];
-  if (!isBrowserCommand(command) || BROWSER_CDP_COMMANDS.includes(command)) {
+  if (!isBrowserCommand(command)) {
     throw new InvalidBrowserArguments('That is not a browser step the assistant can take.');
   }
   const plan = planBrowserCommand(command, stepArguments(args['args']));

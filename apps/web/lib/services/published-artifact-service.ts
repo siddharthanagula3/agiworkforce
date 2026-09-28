@@ -304,7 +304,7 @@ export async function publishArtifactRecord(
        (select count(*) from public.published_artifacts
          where user_id = $1 and artifact_id <> $2) as other_published,
        (select count(*) from public.web_conversations
-         where id = $3::uuid and user_id = $1) as owned_conversations`,
+         where id = $3::uuid and user_id = $1 and deleted_at is null) as owned_conversations`,
     [userId, artifactId, conversationId],
   );
 
@@ -313,7 +313,7 @@ export async function publishArtifactRecord(
   // answer is a 403 the client can act on.
   if (conversationId && countOf(preflight?.owned_conversations) === 0) {
     throw new PublishedArtifactOwnershipError(
-      'That artifact belongs to a conversation you do not own, so it cannot be published.',
+      'That artifact belongs to a conversation that was deleted or that you do not own, so it cannot be published.',
     );
   }
 
@@ -330,7 +330,7 @@ export async function publishArtifactRecord(
        token, user_id, artifact_id, conversation_id, title, kind, language, content
      ) values ($1, $2, $3, $4, $5, $6, $7, $8)
      on conflict (user_id, artifact_id) do update set
-       conversation_id = excluded.conversation_id,
+       conversation_id = coalesce(excluded.conversation_id, published_artifacts.conversation_id),
        title = excluded.title,
        kind = excluded.kind,
        language = excluded.language,

@@ -4,6 +4,7 @@ export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { LIVE_VOICE_CLIENT_HANDOFFS } from '@agiworkforce/cloud-contracts';
 import { requireEnv } from '@shared/utils/env';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -18,7 +19,15 @@ import {
   buildModelPolicyGateResponse,
 } from '@/lib/managed-compute-gate';
 import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
-import { getModelMetadataById, getRoutingSlotModel, isModelLive } from '@agiworkforce/types';
+import { isAppError } from '@/lib/errors';
+import { assertCapabilityAvailable } from '@/lib/feature-flags/capability-gate';
+import { buildFlagSubject } from '@/lib/feature-flags/flag-evaluation-service';
+import {
+  getModelMetadataById,
+  getRoutingSlotModel,
+  getTierPolicy,
+  isModelLive,
+} from '@agiworkforce/types';
 import { isManagedProviderId, providerApiUrl } from '@/lib/server/provider-endpoints';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
@@ -98,6 +107,10 @@ const CreateLiveSessionSchema = z.object({
   language: z.string().min(2).max(32).nullable().optional(),
   pace: z.number().min(VOICE_PACE_MIN).max(VOICE_PACE_MAX).optional(),
   surface: z.enum(['web', 'mobile', 'desktop']).optional(),
+  clientHandoffs: z
+    .array(z.enum(LIVE_VOICE_CLIENT_HANDOFFS))
+    .max(LIVE_VOICE_CLIENT_HANDOFFS.length)
+    .optional(),
 });
 
 function upstreamErrorCode(body: string): string {
@@ -156,7 +169,6 @@ async function handleCreateLiveSession(request: NextRequest) {
     gateHeaders,
   );
   if (modelPolicyResponse) return modelPolicyResponse;
-
   let body: z.infer<typeof CreateLiveSessionSchema>;
   try {
     body = CreateLiveSessionSchema.parse(await request.json());
@@ -261,6 +273,25 @@ async function handleCreateLiveSession(request: NextRequest) {
       if (gateResponse) return gateResponse;
     }
     planTier = entitlement.plan;
+    await assertCapabilityAvailable(
+      buildFlagSubject(request, {
+        userId,
+        workspaceId: scoped.organizationId,
+        role: null,
+        plan: planTier,
+        surface: resolveCloudChatSurface(request),
+      }),
+      'canUseVoice',
+      'Voice',
+    );
+    if (!getTierPolicy(planTier).allowVoice) {
+      return voiceJsonError(
+        request,
+        403,
+        'voice_not_in_plan',
+        'Voice conversations are not included in your plan.',
+      );
+    }
     const block = await planVoiceSessionBlock({
       db: scoped.db,
       userId,
@@ -296,6 +327,7 @@ async function handleCreateLiveSession(request: NextRequest) {
       quotaFeature: LIVE_VOICE_FEATURE,
     });
   } catch (error) {
+    if (isAppError(error)) throw error;
     if (error instanceof ManagedUsageRequestError) {
       return voiceUsageErrorResponse(request, error, limitResets);
     }
@@ -340,6 +372,7 @@ async function handleCreateLiveSession(request: NextRequest) {
     organizationId: scoped.organizationId,
     planTier,
     backendModel,
+    clientHandoffs: body.clientHandoffs ?? [],
   }).catch((error: unknown): LiveVoiceFunctionTools => {
     logger.error(
       { event: 'live_voice_function_tools_failed', error, userId },

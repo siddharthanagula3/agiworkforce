@@ -242,6 +242,7 @@ export const STEP_CAPABILITY_ADVERTISEMENTS: Readonly<
   'mcp.local': 'canUseLocalMcp',
   'local.inference': 'canUseLocalModels',
   'browser.site': 'canUseBrowserAutomation',
+  'browser.cdp': 'canUseBrowserAutomation',
 });
 
 const STEP_CAPABILITY_LABELS: Readonly<Partial<Record<DesktopCapability, string>>> = Object.freeze({
@@ -254,6 +255,7 @@ const STEP_CAPABILITY_LABELS: Readonly<Partial<Record<DesktopCapability, string>
   'mcp.local': 'its local tool servers',
   'local.inference': 'its local models',
   'browser.site': 'browser control',
+  'browser.cdp': "its browser's console and network activity",
 });
 
 interface RefusedDeviceCapability {

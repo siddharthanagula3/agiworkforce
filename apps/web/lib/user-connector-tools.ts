@@ -93,7 +93,7 @@ import {
   serializeConnectorAuthorizationRequired,
   type ConnectorAuthorizationReason,
 } from '@/lib/connectors/connect-required';
-import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
+import { CONNECTOR_RECONNECT_TOOL_NAME, type WebMcpToolDef } from '@/lib/mcp-tool-executor';
 import {
   GMAIL_CONNECTOR_ID,
   executeGmailAction,
@@ -787,15 +787,31 @@ function catalogToConnectorToolDefs(
   catalog: McpToolCatalog,
   serverLabel?: string,
 ): WebMcpToolDef[] {
-  return catalog.tools.map((t) => ({
-    qualifiedName: `mcp__${t.serverName}__${t.toolName}`,
-    serverId: t.serverName,
-    toolName: t.toolName,
-    description: t.description ?? t.fallbackDescription,
-    origin: 'connector',
-    ...(serverLabel ? { serverLabel } : {}),
-    inputSchema: t.inputSchema,
-  }));
+  return catalog.tools
+    .filter((t) => t.toolName !== CONNECTOR_RECONNECT_TOOL_NAME)
+    .map((t) => ({
+      qualifiedName: `mcp__${t.serverName}__${t.toolName}`,
+      serverId: t.serverName,
+      toolName: t.toolName,
+      description: t.description ?? t.fallbackDescription,
+      origin: 'connector',
+      ...(serverLabel ? { serverLabel } : {}),
+      inputSchema: t.inputSchema,
+    }));
+}
+
+function reconnectToolDefs(serverId: string, label: string): WebMcpToolDef[] {
+  return [
+    {
+      qualifiedName: `mcp__${serverId}__${CONNECTOR_RECONNECT_TOOL_NAME}`,
+      serverId,
+      toolName: CONNECTOR_RECONNECT_TOOL_NAME,
+      description: `${label} is connected to this account, but its authorization has expired or was revoked, so none of its tools can run. Call this when the user asks for anything from ${label}; it shows them a button to reconnect it.`,
+      origin: 'connector',
+      serverLabel: label,
+      inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    },
+  ];
 }
 
 async function executeRemoteConnectorTool(
@@ -2431,10 +2447,13 @@ export async function loadUserConnectorToolCatalog(
           const target = resolveConnectorMcpTarget(connectorId);
           if (!target) return [];
           const access = await resolveConnectorAccessToken(userId, connectorId);
+          const label = target.displayName ?? connectorId;
+          if (access.status === 'reauthorization-required') {
+            return reconnectToolDefs(target.serverId, label);
+          }
           if (access.status !== 'ready') return [];
           const catalog = await buildOAuthConnectorCatalog(userId, target, access);
           if (!catalog) return [];
-          const label = target.displayName ?? connectorId;
           return connectorId === GMAIL_CONNECTOR_ID
             ? [...catalogToConnectorToolDefs(catalog, label), ...gmailActionToolDefs(label)]
             : catalogToConnectorToolDefs(catalog, label).filter((def) =>
@@ -2456,6 +2475,9 @@ export async function loadUserConnectorToolCatalog(
           const access = await resolveConnectorAccessToken(userId, target.connectorId, {
             discovered: true,
           });
+          if (access.status === 'reauthorization-required') {
+            return reconnectToolDefs(target.serverId, target.displayName ?? target.connectorId);
+          }
           if (access.status !== 'ready') return [];
           const catalog = await buildOAuthConnectorCatalog(userId, target, access);
           return catalog ? catalogToConnectorToolDefs(catalog, target.displayName) : [];
