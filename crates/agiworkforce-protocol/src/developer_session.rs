@@ -1713,6 +1713,11 @@ pub struct AccountStatusResponse {
     /// True when the answer came from cache without a network read.
     pub cached: bool,
     pub source: AccountSource,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub web_search_key: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub web_search_logins: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
