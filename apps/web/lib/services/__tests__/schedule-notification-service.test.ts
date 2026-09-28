@@ -63,14 +63,13 @@ describe('notifyScheduleCompleted, consent', () => {
     expect(mocks.sendPush.mock.calls[0]?.[2]).toEqual({ expo: true, web: false });
   });
 
-  it('sends nothing when the preference is absent', async () => {
+  it('sends push and email when the preference is absent, as they are on by default', async () => {
     preferences({});
 
     await expect(notifyScheduleCompleted(callerDb, notice)).resolves.toEqual({
-      pushed: false,
-      emailed: false,
+      pushed: true,
+      emailed: true,
     });
-    expect(mocks.sendPush).not.toHaveBeenCalled();
   });
 
   it('records the in-app feed row whatever the push and email opt-ins say', async () => {
@@ -89,18 +88,18 @@ describe('notifyScheduleCompleted, consent', () => {
     });
   });
 
-  it('sends nothing when the account has no settings row', async () => {
+  it('pushes by default when the account has no settings row, with no address to email', async () => {
     mocks.query.mockResolvedValue([]);
 
     await expect(notifyScheduleCompleted(callerDb, notice)).resolves.toEqual({
-      pushed: false,
+      pushed: true,
       emailed: false,
     });
-    expect(mocks.sendPush).not.toHaveBeenCalled();
+    expect(mocks.sendEmail).not.toHaveBeenCalled();
   });
 
-  it('treats a non-boolean preference as off', async () => {
-    preferences({ [SCHEDULE_PUSH_PREFERENCE_KEY]: 'yes' });
+  it('sends nothing once the user turned both channels off', async () => {
+    preferences({ [SCHEDULE_PUSH_PREFERENCE_KEY]: false, [SCHEDULE_EMAIL_PREFERENCE_KEY]: false });
 
     await expect(notifyScheduleCompleted(callerDb, notice)).resolves.toEqual({
       pushed: false,
@@ -164,6 +163,7 @@ describe('notifyScheduleCompleted, content', () => {
 describe('notifyScheduleCompleted, never throws', () => {
   it('swallows a push failure', async () => {
     mocks.sendPush.mockRejectedValue(new Error('expo down'));
+    preferences({ [SCHEDULE_PUSH_PREFERENCE_KEY]: true, [SCHEDULE_EMAIL_PREFERENCE_KEY]: false });
 
     await expect(notifyScheduleCompleted(callerDb, notice)).resolves.toEqual({
       pushed: false,
@@ -207,7 +207,10 @@ describe('notifyScheduleCompleted, never throws', () => {
   });
 
   it('sends no email when the account has no address', async () => {
-    preferences({ [SCHEDULE_EMAIL_PREFERENCE_KEY]: true }, null);
+    preferences(
+      { [SCHEDULE_PUSH_PREFERENCE_KEY]: false, [SCHEDULE_EMAIL_PREFERENCE_KEY]: true },
+      null,
+    );
 
     await expect(notifyScheduleCompleted(callerDb, notice)).resolves.toEqual({
       pushed: false,
