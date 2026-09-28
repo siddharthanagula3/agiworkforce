@@ -8,6 +8,7 @@
 
 begin;
 
+drop policy if exists slack_assistant_runs_owner_delete on public.slack_assistant_runs;
 drop policy if exists slack_assistant_runs_owner_update on public.slack_assistant_runs;
 drop policy if exists slack_assistant_runs_owner_insert on public.slack_assistant_runs;
 drop policy if exists slack_assistant_runs_owner_read on public.slack_assistant_runs;

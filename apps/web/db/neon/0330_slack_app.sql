@@ -197,7 +197,7 @@ create index if not exists idx_slack_assistant_runs_agent_run
   where agent_run_id is not null;
 
 revoke all on public.slack_assistant_runs from app_rls;
-grant select, insert on public.slack_assistant_runs to app_rls;
+grant select, insert, delete on public.slack_assistant_runs to app_rls;
 grant update (
   status, model, agent_run_id, approval_checkpoint, approval_request, approval_expires_at,
   error, completed_at, updated_at
@@ -221,6 +221,11 @@ create policy slack_assistant_runs_owner_update
   on public.slack_assistant_runs for update to app_rls
   using (user_id = (select public.current_app_user_id()))
   with check (user_id = (select public.current_app_user_id()));
+
+drop policy if exists slack_assistant_runs_owner_delete on public.slack_assistant_runs;
+create policy slack_assistant_runs_owner_delete
+  on public.slack_assistant_runs for delete to app_rls
+  using (user_id = (select public.current_app_user_id()));
 
 comment on table public.slack_installations is
   'One row per Slack workspace the AGI Workforce app is installed in. The bot token is sealed and readable only by the service role; the installing account may list and remove it.';
