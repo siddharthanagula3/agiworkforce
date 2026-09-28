@@ -40,6 +40,7 @@ export interface ImageEditContext {
   operation: ManagedMediaImageOperation;
   sourceBytes: Uint8Array;
   maskBytes?: Uint8Array;
+  referenceBytes?: Uint8Array[];
   transparentBackground: boolean;
 }
 
@@ -468,11 +469,20 @@ async function generateWithOpenAIImage(
     form.append('size', imageSize);
     form.append('n', String(Math.min(n, 4)));
     if (edit.transparentBackground) form.append('background', 'transparent');
+    const references = edit.referenceBytes ?? [];
+    const imageField = references.length > 0 ? 'image[]' : 'image';
     form.append(
-      'image',
+      imageField,
       new Blob([edit.sourceBytes as BlobPart], { type: 'image/png' }),
       'source.png',
     );
+    references.forEach((bytes, index) => {
+      form.append(
+        imageField,
+        new Blob([bytes as BlobPart], { type: 'image/png' }),
+        `reference-${index + 1}.png`,
+      );
+    });
     if (edit.maskBytes) {
       form.append(
         'mask',
@@ -812,6 +822,16 @@ export function sha256HexFromBase64(b64: string): string {
 
 export function sha256HexFromBytes(bytes: Uint8Array): string {
   return createHash('sha256').update(bytes).digest('hex');
+}
+
+export function editImagesSha256(
+  sourceBytes: Uint8Array,
+  referenceBytes: readonly Uint8Array[] = [],
+): string {
+  if (referenceBytes.length === 0) return sha256HexFromBytes(sourceBytes);
+  return createHash('sha256')
+    .update([sourceBytes, ...referenceBytes].map(sha256HexFromBytes).join(':'))
+    .digest('hex');
 }
 
 export async function generateImages(input: {

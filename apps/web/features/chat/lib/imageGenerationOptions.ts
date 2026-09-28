@@ -142,6 +142,7 @@ export interface ResolvedImageGenerationRequestOptions {
   operation?: ManagedMediaImageOperation;
   sourceImageBase64?: string;
   maskImageBase64?: string;
+  referenceImagesBase64?: string[];
   transparentBackground?: boolean;
 }
 
@@ -149,6 +150,7 @@ export interface ImageEditRequest {
   operation: ManagedMediaImageOperation;
   sourceImageBase64: string;
   maskImageBase64?: string;
+  referenceImagesBase64?: string[];
   transparentBackground?: boolean;
 }
 
@@ -176,6 +178,9 @@ export function resolveImageGenerationRequestOptions(
           operation: edit.operation,
           sourceImageBase64: edit.sourceImageBase64,
           ...(edit.maskImageBase64 ? { maskImageBase64: edit.maskImageBase64 } : {}),
+          ...(edit.referenceImagesBase64?.length
+            ? { referenceImagesBase64: edit.referenceImagesBase64 }
+            : {}),
           ...(edit.transparentBackground ? { transparentBackground: true } : {}),
         }
       : {}),
@@ -204,6 +209,29 @@ export function readImageFileAsBase64(file: Blob): Promise<string> {
     };
     reader.readAsDataURL(file);
   });
+}
+
+const REFERENCE_IMAGE_MAX_EDGE = 1024;
+const REFERENCE_IMAGE_QUALITY = 0.9;
+
+export async function readReferenceImageAsBase64(file: Blob): Promise<string> {
+  if (typeof createImageBitmap !== 'function') return readImageFileAsBase64(file);
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, REFERENCE_IMAGE_MAX_EDGE / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(bitmap.width * scale);
+  canvas.height = Math.round(bitmap.height * scale);
+  const context = canvas.getContext('2d');
+  if (!context) {
+    bitmap.close();
+    return readImageFileAsBase64(file);
+  }
+  context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+  const blob = await new Promise<Blob | null>((resolve) =>
+    canvas.toBlob(resolve, 'image/jpeg', REFERENCE_IMAGE_QUALITY),
+  );
+  return readImageFileAsBase64(blob ?? file);
 }
 
 export async function readImageUrlAsBase64(url: string): Promise<string> {
