@@ -38,9 +38,11 @@ function fileNameForRow(row: LibraryAssetRow): string {
 }
 
 function previewableForRow(row: LibraryAssetRow): boolean {
-  const persisted = row.metadata['previewable'];
-  if (typeof persisted === 'boolean') return persisted;
-  return row.mimeType.toLowerCase().startsWith('image/');
+  const mime = row.mimeType.toLowerCase();
+  if (mime.startsWith('image/') || mime.startsWith('video/') || mime === 'application/pdf') {
+    return true;
+  }
+  return row.metadata['previewable'] === true;
 }
 
 function toLibraryItem(row: LibraryAssetRow): LibraryItem {
