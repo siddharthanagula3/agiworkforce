@@ -42,7 +42,7 @@
       "name": "agiworkforce-mcp",
       "path": "crates/agiworkforce-mcp",
       "kind": "crate",
-      "purpose": "AGI Workforce shared MCP (Model Context Protocol) client engine: JSON-RPC framing/correlation/timeouts, stdio/SSE/Streamable-HTTP transports, and RFC 9728/8414/7591 OAuth. Transport-agnostic; UI/persistence injected by the host app."
+      "purpose": "AGI Workforce shared MCP (Model Context Protocol) engine: stateless 2026-07-28 negotiation with a 2025-era fallback, stdio and Streamable HTTP transports, the MCP authorization flow, and the server-side envelope helpers. UI and persistence are injected by the host app."
     },
     {
       "name": "agiworkforce-model-registry",
@@ -427,6 +427,12 @@
       "path": "services/signaling-server",
       "kind": "service",
       "purpose": "Pairing, signaling and authenticated WebSocket relay for cross-device sessions."
+    },
+    {
+      "name": "@agiworkforce/upload-scanner",
+      "path": "services/upload-scanner",
+      "kind": "service",
+      "purpose": "Self-hosted ClamAV scanner that answers the web's upload scan webhook."
     },
     {
       "name": "skill-vetting",
