@@ -57,13 +57,10 @@ Code: `apps/cli/src/cloud/artifacts.rs:212-216`, `apps/cli/src/lib.rs:1034-1043`
 
 - Done when: The user can compare two versions of a design and restore an earlier one.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Earlier versions can be paged through and restored (restore appends as newest); there is no side-by-side or diff comparison of two versions. | ui |
-| desktop | partial | Earlier versions can be paged through and restored (restore appends as newest); there is no side-by-side or diff comparison of two versions. | ui |
 | mobile | partial | Earlier versions can be paged through and restored (restore appends as newest); there is no side-by-side or diff comparison of two versions. | ui |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1300-1325`, `apps/web/features/chat/stores/artifacts-store.ts:680-690`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:573-580`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:279-285`
+Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:573-580`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:279-285`

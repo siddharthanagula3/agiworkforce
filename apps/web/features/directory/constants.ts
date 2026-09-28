@@ -186,6 +186,7 @@ export const CONNECTOR_SETUP_NOTICE_CURATED_SUFFIX =
   'needs credentials this deployment has not been given yet.';
 export const CONNECTOR_SETUP_KIND_NO_REMOTE = 'no-remote';
 export const CONNECTOR_SETUP_KIND_DEVICE_LOCAL = 'device-local';
+export const CONNECTOR_SETUP_KIND_REGION = 'region';
 export const DESKTOP_DOWNLOAD_PATH = '/download';
 export const CONNECTOR_TERMS_PATH = '/terms';
 export const RELATED_CONNECTOR_LIMIT = 6;

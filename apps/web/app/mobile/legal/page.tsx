@@ -20,6 +20,7 @@ import {
   POLICY_LAST_UPDATED,
   contactMailto,
 } from '@/lib/legal-constants';
+import { PolicyVersionsLink } from '@shared/components/legal/PolicyVersionsLink';
 
 export const metadata = buildMetadata({
   title: 'Mobile legal: privacy policy and terms of service',
@@ -256,6 +257,7 @@ export default function MobileLegalPage() {
           lede={
             <>
               Effective {EFFECTIVE_DATE}. Applies to AGI Mobile on iOS and Android.{' '}
+              <PolicyVersionsLink policy="mobile" />{' '}
               <strong>
                 {MOBILE_UNRELEASED
                   ? 'AGI Mobile is not published. This page describes the planned Local and managed-cloud boundaries for a future release.'

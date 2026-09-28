@@ -1,13 +1,24 @@
 import { SignalingClient, endsPairing, type SignalingEvent } from '@agiworkforce/utils';
-import { isRelayPairingCode } from '@agiworkforce/types';
+import {
+  REMOTE_CODE_LIMITS,
+  clipRemoteText,
+  isRelayPairingCode,
+  type DispatchTaskLifecycleStatus,
+} from '@agiworkforce/types';
 import {
   IDLE_REMOTE_CONTROL_STATE,
+  type DesktopRuntimeEvent,
   type DeveloperSessionEvent,
+  type DispatchTaskReport,
   type RemoteControlStartRequest,
   type RemoteControlState,
 } from '@agiworkforce/local-runtime-contract';
 import { createControlReceiptLedger } from '../../src/services/controlReceipts';
-import { createCodeRemoteController, type CodeRemoteDependencies } from './codeRemoteController';
+import {
+  createCodeRemoteController,
+  parseDispatchTask,
+  type CodeRemoteDependencies,
+} from './codeRemoteController';
 import {
   createDispatchSession,
   deriveDispatchKey,
@@ -23,7 +34,26 @@ const HEARTBEAT_INTERVAL_MS = 25_000;
 const RECONNECT_BASE_DELAY_MS = 1_000;
 const RECONNECT_MAX_DELAY_MS = 30_000;
 
+const PAGE_CLOSED_BEFORE_FINISHING =
+  'The AGI Workforce window running this task closed before it finished.';
+const FINISHED_TASK_STATUSES: ReadonlySet<DispatchTaskLifecycleStatus> = new Set([
+  'completed',
+  'failed',
+  'cancelled',
+  'rejected',
+]);
+
 export type RemoteSocketFactory = (wsUrl: string) => WebSocket;
+
+export type DispatchPageEvent = Extract<
+  DesktopRuntimeEvent,
+  { kind: 'dispatch-task' | 'dispatch-task-cancel' }
+>;
+
+export interface DispatchTaskPages {
+  current: () => number | null;
+  deliver: (page: number, event: DispatchPageEvent) => boolean;
+}
 
 export interface RemoteControlHostOptions {
   code: Omit<CodeRemoteDependencies, 'send'>;
@@ -31,9 +61,17 @@ export interface RemoteControlHostOptions {
   appVersion: () => string;
   createSocket: RemoteSocketFactory;
   onStateChanged: (state: RemoteControlState) => void;
+  dispatchPages?: DispatchTaskPages;
   createClient?: (
     options: ConstructorParameters<typeof SignalingClient>[0],
   ) => Pick<SignalingClient, 'sendSignal' | 'close'>;
+}
+
+interface PageTask {
+  page: number;
+  conversationId: string | null;
+  finished: boolean;
+  undelivered: Record<string, unknown> | null;
 }
 
 export class RemoteControlRefused extends Error {}
@@ -88,6 +126,7 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
   let reconnectAttempts = 0;
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   const receipts = createControlReceiptLedger();
+  const pageTasks = new Map<string, PageTask>();
   let queue: Promise<void> = Promise.resolve();
 
   function enqueue(work: () => Promise<void>): void {
@@ -112,6 +151,121 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
   function refreshAttached(): void {
     const attachedSessions = controller.attachedThreadCount();
     if (attachedSessions !== state.attachedSessions) publish({ attachedSessions });
+  }
+
+  function clipped(text: string | undefined): string | undefined {
+    if (text === undefined) return undefined;
+    const value = clipRemoteText(text, REMOTE_CODE_LIMITS.partialResponseLength).text;
+    return value === '' ? undefined : value;
+  }
+
+  async function sendPageTaskStatus(
+    requestId: string,
+    task: PageTask,
+    status: DispatchTaskLifecycleStatus,
+    detail: { message?: string; result?: string; error?: string } = {},
+  ): Promise<void> {
+    const message = clipped(detail.message);
+    const result = clipped(detail.result);
+    const error = clipped(detail.error);
+    const payload: Record<string, unknown> = {
+      version: 1,
+      requestId,
+      status,
+      ...(task.conversationId === null ? {} : { taskId: task.conversationId }),
+      ...(message === undefined ? {} : { message }),
+      ...(result === undefined ? {} : { result }),
+      ...(error === undefined ? {} : { error }),
+      updatedAt: new Date().toISOString(),
+    };
+    const delivered = await send('dispatch.task.status', payload);
+    task.undelivered = delivered ? null : payload;
+    if (delivered && task.finished) pageTasks.delete(requestId);
+  }
+
+  async function flushPageTasks(): Promise<void> {
+    for (const [requestId, task] of [...pageTasks]) {
+      if (task.undelivered === null) continue;
+      if (!(await send('dispatch.task.status', task.undelivered))) return;
+      task.undelivered = null;
+      if (task.finished) pageTasks.delete(requestId);
+    }
+  }
+
+  async function routeDispatchToPage(
+    action: string,
+    payload: Record<string, unknown>,
+  ): Promise<boolean> {
+    const pages = options.dispatchPages;
+    if (!pages) return false;
+    const request = parseDispatchTask(action, payload);
+    if (!request) return false;
+    if (request.action === 'dispatch.task.cancel') {
+      const task = pageTasks.get(request.requestId);
+      if (!task) return false;
+      if (task.finished) return true;
+      if (
+        request.taskId !== undefined &&
+        task.conversationId !== null &&
+        request.taskId !== task.conversationId
+      ) {
+        return false;
+      }
+      if (
+        !pages.deliver(task.page, { kind: 'dispatch-task-cancel', requestId: request.requestId })
+      ) {
+        task.finished = true;
+        await sendPageTaskStatus(request.requestId, task, 'failed', {
+          error: PAGE_CLOSED_BEFORE_FINISHING,
+        });
+      }
+      return true;
+    }
+    const page = pages.current();
+    if (page === null) return false;
+    const delivered = pages.deliver(page, {
+      kind: 'dispatch-task',
+      task: {
+        requestId: request.requestId,
+        prompt: request.prompt,
+        ...(request.title === undefined ? {} : { title: request.title }),
+        sentAt: request.sentAt,
+        phoneName: state.phoneName,
+      },
+    });
+    if (!delivered) return false;
+    pageTasks.set(request.requestId, {
+      page,
+      conversationId: null,
+      finished: false,
+      undelivered: null,
+    });
+    return true;
+  }
+
+  function reportDispatchTask(page: number, report: DispatchTaskReport): boolean {
+    const task = pageTasks.get(report.requestId);
+    if (!task || task.page !== page || task.finished) return false;
+    if (report.conversationId !== undefined) task.conversationId = report.conversationId;
+    if (FINISHED_TASK_STATUSES.has(report.status)) task.finished = true;
+    enqueue(() =>
+      sendPageTaskStatus(report.requestId, task, report.status, {
+        ...(report.message === undefined ? {} : { message: report.message }),
+        ...(report.result === undefined ? {} : { result: report.result }),
+        ...(report.error === undefined ? {} : { error: report.error }),
+      }),
+    );
+    return true;
+  }
+
+  function dispatchPageGone(page: number): void {
+    for (const [requestId, task] of pageTasks) {
+      if (task.page !== page || task.finished) continue;
+      task.finished = true;
+      enqueue(() =>
+        sendPageTaskStatus(requestId, task, 'failed', { error: PAGE_CLOSED_BEFORE_FINISHING }),
+      );
+    }
   }
 
   async function handleControl(payload: unknown): Promise<void> {
@@ -149,6 +303,8 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
       if (receipt.outcome === 'duplicate') return;
     }
 
+    if (await routeDispatchToPage(action, inner)) return;
+
     if (action === 'sync_request') {
       await controller.handleControl('code.sessions.list', {
         version: 1,
@@ -182,6 +338,7 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
       error: null,
       phoneName: typeof phoneName === 'string' ? phoneName.slice(0, 120) : null,
     });
+    enqueue(flushPageTasks);
     void controller
       .handleControl('code.sessions.list', {
         version: 1,
@@ -315,6 +472,7 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
     dispatch = null;
     pairingSecret = null;
     receipts.clear();
+    pageTasks.clear();
     controller.reset();
     if (state.status !== 'idle') publish({ ...IDLE_REMOTE_CONTROL_STATE });
     return state;
@@ -330,6 +488,8 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
     stop,
     state: () => state,
     handleSessionEvent,
+    reportDispatchTask,
+    dispatchPageGone,
   };
 }
 

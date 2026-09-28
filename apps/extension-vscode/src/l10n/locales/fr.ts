@@ -448,6 +448,43 @@ const fr = {
   'webview.moreLinesHidden_one': '{count} ligne supplémentaire non affichée',
   'webview.moreLinesHidden_many': '{count} de lignes supplémentaires non affichées',
   'webview.moreLinesHidden_other': '{count} lignes supplémentaires non affichées',
+  'mcp.connected_one': 'AGI Workforce : {name} s’est connecté en {ms} ms et propose {count} outil.',
+  'mcp.connected_many':
+    'AGI Workforce : {name} s’est connecté en {ms} ms et propose {count} d’outils.',
+  'mcp.connected_other':
+    'AGI Workforce : {name} s’est connecté en {ms} ms et propose {count} outils.',
+  'checkpoints.trackedFiles_one': '{count} fichier suivi',
+  'checkpoints.trackedFiles_many': '{count} de fichiers suivis',
+  'checkpoints.trackedFiles_other': '{count} fichiers suivis',
+  'checkpoints.skippedFiles_one':
+    'AGI Workforce : {count} fichier n’a pas pu être restauré : {files}',
+  'checkpoints.skippedFiles_many':
+    'AGI Workforce : {count} de fichiers n’ont pas pu être restaurés : {files}',
+  'checkpoints.skippedFiles_other':
+    'AGI Workforce : {count} fichiers n’ont pas pu être restaurés : {files}',
+  'checkpoints.filesRestored_one':
+    'AGI Workforce : {count} fichier est revenu au point de contrôle.',
+  'checkpoints.filesRestored_many':
+    'AGI Workforce : {count} de fichiers sont revenus au point de contrôle.',
+  'checkpoints.filesRestored_other':
+    'AGI Workforce : {count} fichiers sont revenus au point de contrôle.',
+  'webview.sources_one': '{count} source',
+  'webview.sources_many': '{count} de sources',
+  'webview.sources_other': '{count} sources',
+  'sessionSync.continuedIn':
+    "Cette session s'est poursuivie dans {client}. Ses messages les plus récents sont affichés ici.",
+  'sessionSync.continuedElsewhere':
+    "Cette session s'est poursuivie dans une autre application. Ses messages les plus récents sont affichés ici.",
+  'sessionSync.heldBy': '{client} utilise cette session.',
+  'sessionSync.takeOverDetail':
+    "Prenez-en le contrôle pour envoyer votre message d'ici. Si {client} répond encore, arrêtez-le d'abord : deux applications qui écrivent en même temps laissent deux copies de la session.",
+  'sessionSync.takeOver': 'Prendre le contrôle et envoyer',
+  'sessionSync.notSent':
+    "Non envoyé : {client} utilise cette session. Renvoyez pour en prendre le contrôle d'ici.",
+  'sessionSync.takeOverFailed':
+    'Impossible de prendre le contrôle de cette session. Renvoyez pour réessayer.',
+  'sessionSync.stopBeforeTerminal':
+    'Arrêtez la réponse en cours avant de poursuivre cette session dans le terminal.',
 };
 
 export default fr;

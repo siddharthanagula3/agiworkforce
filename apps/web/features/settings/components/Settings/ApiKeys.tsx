@@ -43,11 +43,21 @@ import {
   useDeleteAPIKey,
   type CreateAPIKeyResult,
 } from '@features/settings/hooks/use-settings-queries';
+import { formatCredits } from '@agiworkforce/types';
 import { useDeveloperProjects } from '@/features/developers/hooks/use-developer-projects';
+import { useDeveloperUsage } from '@/features/developers/hooks/use-developer-usage';
+import type { DeveloperUsageFigures } from '@/features/developers/types';
 import { API_KEY_SCOPE_OPTIONS, type ApiKeyScope } from '@/lib/api-key-scopes';
 import { toUserMessage } from '@/lib/user-error-message';
 
 const DEFAULT_PROJECT_LABEL = 'Default project';
+
+function keyUsageLabel(usage: DeveloperUsageFigures | undefined): string {
+  if (!usage || usage.requests + usage.unsettledRequests === 0) return 'No requests this month';
+  const requests =
+    usage.requests === 1 ? '1 request' : `${usage.requests.toLocaleString()} requests`;
+  return `This month: ${requests}, ${formatCredits(usage.credits, { maximumFractionDigits: 2 })}`;
+}
 
 function projectLabel(
   projectId: string | null | undefined,
@@ -78,6 +88,7 @@ interface ApiKeyProject {
 interface ApiKeysPanelProps {
   apiKeys: ApiKey[];
   projects?: readonly ApiKeyProject[];
+  usageByKey?: ReadonlyMap<string, DeveloperUsageFigures> | null;
   apiKeyForm: UseFormReturn<CreateApiKeyFormData>;
   showAPIKeyDialog: boolean;
   generatedAPIKey: string;
@@ -121,6 +132,7 @@ function ApiKeySubmitButton({ control, isCreatePending }: ApiKeySubmitButtonProp
 export const ApiKeysPanel: React.FC<ApiKeysPanelProps> = ({
   apiKeys,
   projects = [],
+  usageByKey = null,
   apiKeyForm,
   showAPIKeyDialog,
   generatedAPIKey,
@@ -190,6 +202,11 @@ export const ApiKeysPanel: React.FC<ApiKeysPanelProps> = ({
                   <p className="truncate font-medium text-foreground">{apiKey.name}</p>
                   <p className="font-mono text-sm text-muted-foreground">{apiKey.key_prefix}...</p>
                   {projectLabel(apiKey.project_id, projects)}
+                  {usageByKey ? (
+                    <p className="text-xs text-muted-foreground">
+                      {keyUsageLabel(usageByKey.get(apiKey.id))}
+                    </p>
+                  ) : null}
                   <p className="text-xs text-muted-foreground">
                     {apiKey.scopes
                       .map(
@@ -437,6 +454,7 @@ const DEFAULT_API_KEY_FORM: CreateApiKeyFormData = {
 export function ApiKeysManager() {
   const { data: apiKeys = [], isLoading, isError, error, refetch } = useAPIKeys();
   const { data: projects = [] } = useDeveloperProjects();
+  const { data: usage } = useDeveloperUsage();
   const createMutation = useCreateAPIKey();
   const deleteMutation = useDeleteAPIKey();
   const apiKeyForm = useForm<CreateApiKeyFormData>({
@@ -484,6 +502,9 @@ export function ApiKeysManager() {
       <ApiKeysPanel
         apiKeys={apiKeys}
         projects={projects.filter((project) => project.archivedAt === null)}
+        usageByKey={
+          usage ? new Map(usage.keys.map((entry) => [entry.apiKeyId, entry] as const)) : null
+        }
         apiKeyForm={apiKeyForm}
         showAPIKeyDialog={showAPIKeyDialog}
         generatedAPIKey={generatedAPIKey}

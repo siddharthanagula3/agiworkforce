@@ -14,6 +14,7 @@ import {
 import { conversationHref } from '@/shared/components/layout/sidebar-session-actions';
 import { useCapabilitiesPreferences } from '../hooks/use-capabilities-preferences';
 import { HelpArticleLink } from '@/features/support/components/HelpArticleLink';
+import { toUserMessage } from '@/lib/user-error-message';
 
 const MEMORY_EDITOR_ANCHOR_ID = 'memory-editor';
 const SAVE_FAILED_MESSAGE = 'Your memory settings were not saved, so nothing changed.';
@@ -99,7 +100,7 @@ export function MemorySection() {
         try {
           await clearAllMemories();
         } catch (error) {
-          setClearError(error instanceof Error ? error.message : CLEAR_FAILED_MESSAGE);
+          setClearError(toUserMessage(error, CLEAR_FAILED_MESSAGE));
         }
       },
     });

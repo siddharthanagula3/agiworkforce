@@ -318,8 +318,84 @@ const GMAIL_TOOL_METADATA: Readonly<Record<string, ToolMetadata>> = Object.freez
   },
 });
 
+const GOOGLE_CONTACTS_TOOL_METADATA: Readonly<Record<string, ToolMetadata>> = Object.freeze({
+  get_user_profile: {
+    actionClass: 'read',
+    reversible: true,
+    acceptsUntrustedContent: false,
+    createsEgressPath: false,
+    declared: true,
+  },
+  search_contacts: {
+    actionClass: 'read',
+    reversible: true,
+    acceptsUntrustedContent: true,
+    createsEgressPath: false,
+    declared: true,
+  },
+  search_directory_people: {
+    actionClass: 'read',
+    reversible: true,
+    acceptsUntrustedContent: true,
+    createsEgressPath: false,
+    declared: true,
+  },
+});
+
+const HEALTH_RECORD_READ: ToolMetadata = Object.freeze({
+  actionClass: 'read',
+  reversible: true,
+  acceptsUntrustedContent: true,
+  createsEgressPath: false,
+  declared: true,
+});
+
+const HEALTHEX_TOOL_METADATA: Readonly<Record<string, ToolMetadata>> = Object.freeze({
+  get_health_summary: HEALTH_RECORD_READ,
+  get_conditions: HEALTH_RECORD_READ,
+  get_medications: HEALTH_RECORD_READ,
+  get_allergies: HEALTH_RECORD_READ,
+  get_labs: HEALTH_RECORD_READ,
+  get_vitals: HEALTH_RECORD_READ,
+  get_procedures: HEALTH_RECORD_READ,
+  get_immunizations: HEALTH_RECORD_READ,
+  get_visits: HEALTH_RECORD_READ,
+  search_clinical_notes: HEALTH_RECORD_READ,
+  search: HEALTH_RECORD_READ,
+  check_records_status: {
+    actionClass: 'read',
+    reversible: true,
+    acceptsUntrustedContent: false,
+    createsEgressPath: false,
+    declared: true,
+  },
+  get_add_record_location_link: {
+    actionClass: 'read',
+    reversible: true,
+    acceptsUntrustedContent: false,
+    createsEgressPath: false,
+    declared: true,
+  },
+});
+
+const BANK_ACCOUNT_READ: ToolMetadata = Object.freeze({
+  actionClass: 'read',
+  reversible: true,
+  acceptsUntrustedContent: true,
+  createsEgressPath: false,
+  declared: true,
+});
+
+const BANK_ACCOUNTS_TOOL_METADATA: Readonly<Record<string, ToolMetadata>> = Object.freeze({
+  get_account_balances: BANK_ACCOUNT_READ,
+  get_transactions: BANK_ACCOUNT_READ,
+});
+
 const CONNECTOR_TOOL_METADATA: Readonly<Record<string, Readonly<Record<string, ToolMetadata>>>> =
   Object.freeze({
+    'google-contacts': GOOGLE_CONTACTS_TOOL_METADATA,
+    healthex: HEALTHEX_TOOL_METADATA,
+    'bank-accounts': BANK_ACCOUNTS_TOOL_METADATA,
     github: GITHUB_TOOL_METADATA,
     gmail: GMAIL_TOOL_METADATA,
   });

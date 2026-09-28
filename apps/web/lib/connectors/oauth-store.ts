@@ -90,6 +90,7 @@ export interface PendingAuthorizationInput
   redirectUri: string;
   requestedScopes: string[];
   returnPath: string;
+  ttlSeconds?: number | undefined;
 }
 
 export interface PendingAuthorization extends DiscoveredAuthorizationFacts, ConnectorAccountFacts {
@@ -103,7 +104,8 @@ export interface PendingAuthorization extends DiscoveredAuthorizationFacts, Conn
 
 export async function createPendingAuthorization(input: PendingAuthorizationInput): Promise<void> {
   const db = getNeonDb();
-  const expiresAt = new Date(Date.now() + PENDING_AUTHORIZATION_TTL_SECONDS * 1000).toISOString();
+  const ttlSeconds = input.ttlSeconds ?? PENDING_AUTHORIZATION_TTL_SECONDS;
+  const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
   try {
     await db.execute(
       `delete from public.connector_oauth_authorizations
@@ -281,7 +283,6 @@ export interface ConnectorAccountIdentity {
   accountKey?: string | null;
   accountLabel?: string | null;
   accountScope?: ConnectorAccountScope | null;
-  makeDefault?: boolean;
 }
 
 export async function upsertConnectorOAuthGrant(
@@ -332,17 +333,6 @@ export async function upsertConnectorOAuthGrant(
         );
         return;
       }
-      // A new account is the default only when nothing else holds that place,
-      // so connecting a second mailbox never silently redirects existing calls.
-      const isDefault = account.makeDefault === true;
-      if (isDefault) {
-        await db.execute(
-          `update public.connector_oauth_grants
-              set is_default = false, updated_at = now()
-            where user_id = $1 and connector_id = $2 and account_key <> $3`,
-          [userId, connectorId, accountKey],
-        );
-      }
       await db.execute(
         `insert into public.connector_oauth_grants (
            user_id, connector_id, access_token_enc, refresh_token_enc, token_type,
@@ -351,7 +341,7 @@ export async function upsertConnectorOAuthGrant(
            account_key, account_label, account_scope, is_default,
            connected_at, revoked_at, updated_at
          ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
-                   $15 or not exists (
+                   not exists (
                      select 1 from public.connector_oauth_grants existing
                       where existing.user_id = $1
                         and existing.connector_id = $2
@@ -376,13 +366,7 @@ export async function upsertConnectorOAuthGrant(
            connected_at = now(),
            revoked_at = null,
            updated_at = now()`,
-        [
-          ...values,
-          accountKey,
-          account.accountLabel ?? null,
-          account.accountScope ?? 'personal',
-          isDefault,
-        ],
+        [...values, accountKey, account.accountLabel ?? null, account.accountScope ?? 'personal'],
       );
     });
   } catch (error) {
@@ -687,8 +671,7 @@ export async function getUserConnectorOAuthGrantSummaries(
 }
 
 /**
- * Every account connected for one connector, or for all of them. This is what
- * a selector renders and what `selectConnectorAccount` resolves a call against.
+ * Every account connected for one connector, or for all of them.
  */
 export async function listConnectorAccounts(
   userId: string,
@@ -770,41 +753,6 @@ export async function listRevocableConnectorTokens(
     });
   }
   return tokens;
-}
-
-/**
- * Both statements run together: clearing the old default first is what keeps
- * the one-live-default index from rejecting the new one.
- */
-export async function setDefaultConnectorAccount(
-  userId: string,
-  connectorId: string,
-  accountKey: string,
-): Promise<boolean> {
-  const db = getNeonDb();
-  const key = normalizeConnectorAccountKey(accountKey);
-  try {
-    return await withAccountColumns(async (accountAware) => {
-      if (!accountAware) return false;
-      await db.execute(
-        `update public.connector_oauth_grants
-            set is_default = false, updated_at = now()
-          where user_id = $1 and connector_id = $2 and account_key <> $3 and is_default`,
-        [userId, connectorId, key],
-      );
-      const rows = await db.query<{ account_key: string }>(
-        `update public.connector_oauth_grants
-            set is_default = true, updated_at = now()
-          where user_id = $1 and connector_id = $2 and account_key = $3 and revoked_at is null
-          returning account_key`,
-        [userId, connectorId, key],
-      );
-      return rows.length > 0;
-    });
-  } catch (error) {
-    if (isUndefinedTable(error)) return false;
-    throw error;
-  }
 }
 
 /**

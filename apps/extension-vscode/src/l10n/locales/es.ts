@@ -437,6 +437,41 @@ const es = {
   'webview.moreLinesHidden_one': '{count} línea más sin mostrar',
   'webview.moreLinesHidden_many': '{count} de líneas más sin mostrar',
   'webview.moreLinesHidden_other': '{count} líneas más sin mostrar',
+  'mcp.connected_one': 'AGI Workforce: {name} se conectó en {ms} ms y ofrece {count} herramienta.',
+  'mcp.connected_many':
+    'AGI Workforce: {name} se conectó en {ms} ms y ofrece {count} de herramientas.',
+  'mcp.connected_other':
+    'AGI Workforce: {name} se conectó en {ms} ms y ofrece {count} herramientas.',
+  'checkpoints.trackedFiles_one': '{count} archivo registrado',
+  'checkpoints.trackedFiles_many': '{count} de archivos registrados',
+  'checkpoints.trackedFiles_other': '{count} archivos registrados',
+  'checkpoints.skippedFiles_one': 'AGI Workforce: no se pudo restaurar {count} archivo: {files}',
+  'checkpoints.skippedFiles_many':
+    'AGI Workforce: no se pudieron restaurar {count} de archivos: {files}',
+  'checkpoints.skippedFiles_other':
+    'AGI Workforce: no se pudieron restaurar {count} archivos: {files}',
+  'checkpoints.filesRestored_one': 'AGI Workforce: {count} archivo volvió al punto de control.',
+  'checkpoints.filesRestored_many':
+    'AGI Workforce: {count} de archivos volvieron al punto de control.',
+  'checkpoints.filesRestored_other':
+    'AGI Workforce: {count} archivos volvieron al punto de control.',
+  'webview.sources_one': '{count} fuente',
+  'webview.sources_many': '{count} de fuentes',
+  'webview.sources_other': '{count} fuentes',
+  'sessionSync.continuedIn':
+    'Esta sesión continuó en {client}. Aquí se muestran sus mensajes más recientes.',
+  'sessionSync.continuedElsewhere':
+    'Esta sesión continuó en otra aplicación. Aquí se muestran sus mensajes más recientes.',
+  'sessionSync.heldBy': '{client} está usando esta sesión.',
+  'sessionSync.takeOverDetail':
+    'Tome el control para enviar su mensaje desde aquí. Si {client} sigue respondiendo, deténgalo allí primero: si dos aplicaciones escriben a la vez, quedan dos copias de la sesión.',
+  'sessionSync.takeOver': 'Tomar el control y enviar',
+  'sessionSync.notSent':
+    'No enviado: {client} está usando esta sesión. Envíe de nuevo para tomar el control desde aquí.',
+  'sessionSync.takeOverFailed':
+    'No se pudo tomar el control de esta sesión. Envíe de nuevo para reintentarlo.',
+  'sessionSync.stopBeforeTerminal':
+    'Detenga la respuesta en curso antes de continuar esta sesión en la terminal.',
 };
 
 export default es;

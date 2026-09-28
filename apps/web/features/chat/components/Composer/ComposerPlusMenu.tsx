@@ -20,6 +20,7 @@ import {
   ChevronRight,
   Copy,
   EyeOff,
+  FileSpreadsheet,
   FileText,
   Folder,
   FolderOpen,
@@ -27,6 +28,7 @@ import {
   ImagePlus,
   LibraryBig,
   ListChecks,
+  MonitorPlay,
   Paperclip,
   Search,
   Sparkles,
@@ -54,6 +56,11 @@ import {
 import { OfficialConnectorLogo } from '@/features/connectors/components/OfficialConnectorLogo';
 import { buildSettingsBrowseHash, buildSettingsCustomConnectorHash } from '@/features/directory';
 import type { LibraryItem } from '@agiworkforce/cloud-contracts';
+import {
+  CHAT_OUTPUT_FORMATS,
+  CHAT_OUTPUT_FORMAT_LABEL,
+  type ChatOutputFormat,
+} from '@/lib/chat-output-format';
 import { ConnectorToggleRow } from './ConnectorToggleRow';
 import {
   COMPOSER_FILES_ATTACH_FAILED_COPY,
@@ -106,7 +113,7 @@ const ROW_LABEL_SKILLS = 'Skills';
 const ROW_LABEL_CONNECTORS = 'Connectors';
 const ROW_LABEL_PLUGINS = 'Plugins';
 const ROW_LABEL_RESEARCH = 'Deep Research';
-const ROW_LABEL_OFFICE = 'Create Office files';
+const ROW_LABEL_OUTPUT = 'Output';
 const ROW_LABEL_MEMORY = 'Memory';
 const ROW_LABEL_TEMPORARY = TEMPORARY_CHAT_LABEL;
 const ROW_LABEL_TEMPORARY_SAVING = `${TEMPORARY_CHAT_LABEL} · saving…`;
@@ -165,7 +172,7 @@ const SEARCH_DOCK_CLASS =
 const PALETTE_PANEL_CLASS = 'w-80 px-1.5 pt-1.5';
 const CHAT_PANEL_CLASS = 'w-64 p-1.5';
 const PALETTE_ITEM_SELECTOR =
-  '[role="menuitem"], [role="menuitemcheckbox"], [data-composer-palette-search]';
+  '[role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"], [data-composer-palette-search]';
 const CATALOG_RESULT_LIMIT = 5;
 const PALETTE_SEARCH_DEBOUNCE_MS = 250;
 
@@ -572,10 +579,10 @@ export interface ComposerPlusMenuProps {
   codeExecutionTitle?: string;
   onToggleCodeExecution: () => void;
 
-  officeCreationEnabled: boolean;
+  officeOutputFormat: ChatOutputFormat | null;
   officeCreationDisabled: boolean;
   officeCreationTitle?: string;
-  onToggleOfficeCreation: () => void;
+  onSelectOfficeOutput: (format: ChatOutputFormat | null) => void;
 
   memoryEnabled: boolean;
   memoryDisabled: boolean;
@@ -705,6 +712,67 @@ function AttachRow({ props, role }: { props: ComposerPlusMenuProps; role?: strin
         />
       )}
     </button>
+  );
+}
+
+const OUTPUT_GLYPH: Readonly<
+  Record<ChatOutputFormat, React.ComponentType<{ className?: string }>>
+> = {
+  docx: FileText,
+  pptx: MonitorPlay,
+  xlsx: FileSpreadsheet,
+};
+
+function OutputRows({ props, role }: { props: ComposerPlusMenuProps; role?: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const active = props.officeOutputFormat;
+  const open = expanded && !props.officeCreationDisabled;
+  return (
+    <>
+      <button
+        type="button"
+        role={role}
+        onClick={() => setExpanded((value) => !value)}
+        aria-expanded={open}
+        disabled={props.officeCreationDisabled}
+        title={props.officeCreationTitle}
+        className={cn(
+          ROW_CLASS,
+          props.officeCreationDisabled ? ROW_DISABLED_CLASS : ROW_HOVER_CLASS,
+          active && 'text-primary',
+        )}
+      >
+        <FileText className={cn(GLYPH_CLASS, active ? 'text-primary' : 'text-muted-foreground')} />
+        <span className="flex-1 text-left">
+          {active ? `${ROW_LABEL_OUTPUT}: ${CHAT_OUTPUT_FORMAT_LABEL[active]}` : ROW_LABEL_OUTPUT}
+        </span>
+        <ChevronRight
+          className={cn('h-4 w-4 text-muted-foreground transition-transform', open && 'rotate-90')}
+        />
+      </button>
+      {open && (
+        <div role="group" aria-label={ROW_LABEL_OUTPUT} className="space-y-0.5 pb-1">
+          {CHAT_OUTPUT_FORMATS.map((format) => {
+            const Glyph = OUTPUT_GLYPH[format];
+            const checked = active === format;
+            return (
+              <button
+                key={format}
+                type="button"
+                role="menuitemradio"
+                aria-checked={checked}
+                onClick={() => props.onSelectOfficeOutput(checked ? null : format)}
+                className={SUBMENU_ROW_CLASS}
+              >
+                <Glyph className={cn(GLYPH_CLASS, 'text-muted-foreground')} />
+                <span className="flex-1 text-left">{CHAT_OUTPUT_FORMAT_LABEL[format]}</span>
+                {checked && <Check className="h-4 w-4 text-foreground" aria-hidden="true" />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </>
   );
 }
 
@@ -998,14 +1066,7 @@ function ChatMenu(props: ComposerPlusMenuProps) {
         title={props.researchTitle}
       />
 
-      <MenuToggleRow
-        icon={FileText}
-        label={ROW_LABEL_OFFICE}
-        checked={props.officeCreationEnabled}
-        onToggle={props.onToggleOfficeCreation}
-        disabled={props.officeCreationDisabled}
-        title={props.officeCreationTitle}
-      />
+      <OutputRows props={props} />
 
       <MenuToggleRow
         icon={Brain}
@@ -1368,18 +1429,10 @@ function WorkPalette(props: ComposerPlusMenuProps) {
         title={props.researchTitle}
       />
     ),
-    matches(ROW_LABEL_OFFICE) && (
-      <MenuToggleRow
-        key="office"
-        role="menuitem"
-        icon={FileText}
-        label={ROW_LABEL_OFFICE}
-        checked={props.officeCreationEnabled}
-        onToggle={props.onToggleOfficeCreation}
-        disabled={props.officeCreationDisabled}
-        title={props.officeCreationTitle}
-      />
-    ),
+    matches(
+      ROW_LABEL_OUTPUT,
+      ...CHAT_OUTPUT_FORMATS.map((format) => CHAT_OUTPUT_FORMAT_LABEL[format]),
+    ) && <OutputRows key="output" props={props} role="menuitem" />,
     props.showScopeRow && matches(t('agiWork.compose.scopeAdd')) && (
       <MenuToggleRow
         key="scope"
