@@ -33,6 +33,26 @@ const CONNECTOR = '44444444-4444-4444-8444-444444444444';
 function respondFor(role: 'owner' | 'admin' | 'member' | 'viewer') {
   permissionRole.value = role;
   mockNeonQuery.mockImplementation(async (sql: string) => {
+    if (/from public\.organization_members om/i.test(sql)) {
+      return [
+        {
+          user_id: 'user-owner',
+          role: 'owner',
+          joined_at: '2026-01-01T00:00:00.000Z',
+          email: 'olive@example.com',
+          display_name: 'Olive Owner',
+          avatar_url: null,
+        },
+        {
+          user_id: 'user-member',
+          role: 'member',
+          joined_at: '2026-01-02T00:00:00.000Z',
+          email: 'mina@example.com',
+          display_name: null,
+          avatar_url: null,
+        },
+      ];
+    }
     if (/from public\.organization_shared_projects s/i.test(sql)) {
       return [
         {
@@ -57,12 +77,6 @@ function respondFor(role: 'owner' | 'admin' | 'member' | 'viewer') {
       /where organization_id = \$1 and user_id = \$2/i.test(sql)
     ) {
       return [{ organization_id: ORG, role }];
-    }
-    if (/select user_id, role, joined_at/i.test(sql)) {
-      return [
-        { user_id: 'user-owner', role: 'owner', joined_at: '2026-01-01T00:00:00.000Z' },
-        { user_id: 'user-member', role: 'member', joined_at: '2026-01-02T00:00:00.000Z' },
-      ];
     }
     if (/from public\.organization_project_access/i.test(sql)) {
       return [{ project_id: PROJECT, user_id: 'user-member', access: 'none' }];
@@ -110,13 +124,17 @@ describe('GET /api/settings/organization/shared', () => {
     const body = (await response.json()) as {
       organizationId: string;
       canManageSharing: boolean;
-      members: { userId: string }[];
+      members: { userId: string; name: string; email: string }[];
       sharedProjects: { projectId: string; memberGrants: { userId: string; access: string }[] }[];
       sharedConnectors: { orgShortId: string }[];
     };
 
     expect(body.organizationId).toBe(ORG);
     expect(body.members.map((m) => m.userId)).toEqual(['user-owner', 'user-member']);
+    expect(body.members.map((m) => [m.name, m.email])).toEqual([
+      ['Olive Owner', 'olive@example.com'],
+      ['mina@example.com', 'mina@example.com'],
+    ]);
     expect(body.sharedProjects[0]!.projectId).toBe(PROJECT);
     expect(body.sharedProjects[0]!.memberGrants).toEqual([
       { userId: 'user-member', access: 'none' },
@@ -127,7 +145,7 @@ describe('GET /api/settings/organization/shared', () => {
         /from public\.organization_shared_projects s/i.test(String(sql)),
       ),
     ).toBe(false);
-    expect(mockNeonQuery).toHaveBeenCalledTimes(1);
+    expect(mockNeonQuery).toHaveBeenCalledTimes(2);
   });
 
   it('never lets a connector credential reach the wire', async () => {

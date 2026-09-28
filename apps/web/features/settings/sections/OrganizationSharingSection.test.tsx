@@ -8,6 +8,7 @@ const {
   mockShareProject,
   mockUnshareProject,
   mockSetAccess,
+  mockSetManyAccess,
   mockShareConnector,
   mockUnshareConnector,
   mockUnshareArtifact,
@@ -17,6 +18,7 @@ const {
   mockShareProject: vi.fn(),
   mockUnshareProject: vi.fn(),
   mockSetAccess: vi.fn(),
+  mockSetManyAccess: vi.fn(),
   mockShareConnector: vi.fn(),
   mockUnshareConnector: vi.fn(),
   mockUnshareArtifact: vi.fn(),
@@ -30,6 +32,7 @@ vi.mock('../hooks/use-settings-queries', () => ({
   useShareProjectWithOrganization: () => ({ mutate: mockShareProject, isPending: false }),
   useUnshareProjectFromOrganization: () => ({ mutate: mockUnshareProject, isPending: false }),
   useSetSharedProjectMemberAccess: () => ({ mutate: mockSetAccess, isPending: false }),
+  useSetSharedProjectMembersAccess: () => ({ mutate: mockSetManyAccess, isPending: false }),
   useShareConnectorWithOrganization: () => ({ mutate: mockShareConnector, isPending: false }),
   useUnshareConnectorFromOrganization: () => ({ mutate: mockUnshareConnector, isPending: false }),
   useUnshareArtifactFromOrganization: () => ({ mutate: mockUnshareArtifact, isPending: false }),
@@ -67,8 +70,22 @@ function overview(overrides: Record<string, unknown> = {}) {
       currentUserRole: 'admin',
       canManageSharing: true,
       members: [
-        { userId: 'user-owner', role: 'owner', joinedAt: '2026-01-01T00:00:00.000Z' },
-        { userId: 'user-member', role: 'member', joinedAt: '2026-01-02T00:00:00.000Z' },
+        {
+          userId: 'user-owner',
+          role: 'owner',
+          joinedAt: '2026-01-01T00:00:00.000Z',
+          name: 'Olive Owner',
+          email: 'olive@example.com',
+          avatarUrl: null,
+        },
+        {
+          userId: 'user-member',
+          role: 'member',
+          joinedAt: '2026-01-02T00:00:00.000Z',
+          name: 'Mina Member',
+          email: 'mina@example.com',
+          avatarUrl: null,
+        },
       ],
       sharedProjects: [
         {
@@ -185,7 +202,7 @@ describe('OrganizationSharingSection', () => {
     renderSection();
 
     expect(screen.getByText(/Visible to 2 of 2 members · 1 can edit/)).toBeInTheDocument();
-    const control = screen.getByLabelText(/user-member/) as HTMLSelectElement;
+    const control = screen.getByLabelText('Access for Mina Member') as HTMLSelectElement;
     expect(control.value).toBe('write');
     expect(Array.from(control.options).map((option) => option.value)).toEqual([
       'read',
@@ -266,14 +283,15 @@ describe('OrganizationSharingSection', () => {
     mockOverview.mockReturnValue(overview());
     renderSection();
 
-    const control = await screen.findByLabelText('user-member (member)');
-    await user.selectOptions(control, 'none');
+    await user.type(screen.getByRole('combobox', { name: 'Add people' }), 'mina@');
+    await user.click(screen.getByRole('option', { name: /Mina Member/ }));
+    await user.selectOptions(screen.getByLabelText('Access for the people you add'), 'none');
+    await user.click(screen.getByRole('button', { name: 'Add' }));
 
-    expect(mockSetAccess).toHaveBeenCalledWith({
-      projectId: PROJECT,
-      userId: 'user-member',
-      access: 'none',
-    });
+    expect(mockSetManyAccess).toHaveBeenCalledWith(
+      { projectId: PROJECT, userIds: ['user-member'], access: 'none' },
+      expect.anything(),
+    );
     expect(mockUnshareProject).not.toHaveBeenCalled();
   });
 

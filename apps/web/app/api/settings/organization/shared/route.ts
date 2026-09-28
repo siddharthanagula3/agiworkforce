@@ -19,20 +19,16 @@ import {
   type SharedSessionSummary,
 } from '@/lib/services/org-shared-session-service';
 import {
+  listOrgMemberRoster,
   listSharedProjects,
   requireOrgMember,
   resolveOrgMembership,
+  type OrgMemberRosterEntry,
   type SharedProjectSummary,
 } from '@/lib/services/org-sharing-service';
 import { resolveOrganizationPermissions } from '@/lib/services/organization-permission-service';
 
 export const runtime = 'nodejs';
-
-interface OrgMemberRosterEntry {
-  userId: string;
-  role: 'owner' | 'admin' | 'member' | 'viewer';
-  joinedAt: string;
-}
 
 export interface OrganizationSharedOverview {
   organizationId: string;
@@ -61,13 +57,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     sharedConversations,
     permissions,
   ] = await Promise.all([
-    db.query<{ user_id: string; role: OrgMemberRosterEntry['role']; joined_at: string }>(
-      `select user_id, role, joined_at
-         from public.organization_members
-        where organization_id = $1
-        order by joined_at asc`,
-      [membership.organizationId],
-    ),
+    listOrgMemberRoster(membership.organizationId),
     listSharedProjects(db, membership.organizationId),
     listSharedConnectors(db, membership.organizationId),
     listSharedArtifacts(db, membership.organizationId),
@@ -80,11 +70,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     currentUserId: userId,
     currentUserRole: membership.role,
     canManageSharing: permissions.has('sharing.manage'),
-    members: members.map((row) => ({
-      userId: row.user_id,
-      role: row.role,
-      joinedAt: row.joined_at,
-    })),
+    members,
     sharedProjects,
     sharedConnectors,
     sharedArtifacts,
