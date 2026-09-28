@@ -10,4 +10,3 @@ nothing is left.
 | --- | --- | --- |
 | S13.10: Undo and redo. | mobile | device |
 | S13.10: Undo and redo. | vscode | device |
-| S13.10: Undo and redo. | chrome | live-web |

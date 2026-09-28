@@ -42,42 +42,35 @@ nothing is left.
 
 - Done when: A composer control captures the screen and attaches the screenshot to the next message.
 - Wave: 3
-- Already works on: desktop, chrome
+- Already works on: web, desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | claude.ai's own Plus menu offers Take a screenshot in the browser (docs/research/leader-settings-and-directory-reference-2026-09-07.md:164, observed 2026-09-07), so this is not n/a: the web capability table still hides the row (p-contrast next batch). | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `packages/contracts/types/src/capabilities.ts:57-57`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:4633-4633`, `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:872-872`
 
 ## S14.07: Window capture.
 
 - Done when: The user can pick a single application window and attach a capture of it.
 - Wave: 3
-- Already works on: desktop
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | the browser's screen picker lets the user choose one window once the screenshot row shows on web (S14.06; p-contrast next batch). | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `packages/contracts/types/src/capabilities.ts:57-57`, `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:872-872`
 
 ## S14.08: URL attachment.
 
 - Done when: The user can attach a web page by its URL so its content is used as context for the message.
 - Wave: 3
-- Already works on: cli, vscode
+- Already works on: cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Attach a shared or pasted link as a page; today a link shared into the app becomes draft text and is read only if the cloud model calls url_fetch. | ui |
-| chrome | partial | The item is attaching a page by its URL. The cited control captures the text of the tab currently open; there is no URL input, and the auditor's own note concedes the user must navigate first. Page-context capture is a partial answer, not done. |  |
 
-Code: `apps/mobile/src/features/share-preview/index.tsx:81-81`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:1501-1508`, `apps/extension/src/side_panel.ts:9881-9903`, `apps/extension/_locales/en/messages.json:1161-1161`
+Code: `apps/mobile/src/features/share-preview/index.tsx:81-81`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:1501-1508`
 
 ## S14.09: Cloud-file picker.
 
@@ -178,11 +171,11 @@ Code: `apps/web/features/chat/components/Composer/AttachmentPreview.tsx:200-200`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | the truncation marker reaches only the model; the client needs a notice that the document was cut off, which needs request-processor (p-chat-gates) to return the hydration truncation to the client. | ui |
-| desktop | partial | the truncation marker reaches only the model; the client needs a notice that the document was cut off, which needs request-processor (p-chat-gates) to return the hydration truncation to the client. | ui |
+| web | partial | hydration marks truncation only in the model's text; the client needs it: hydration returns the cut files (p-contrast), request-processor sends them to the client with the turn (p-chat-gates), useChatStream keeps them on the user message (p-mcp-web), and the bubble shows the notice (p-contrast). | ui, handler |
+| desktop | partial | hydration marks truncation only in the model's text; the client needs it: hydration returns the cut files (p-contrast), request-processor sends them to the client with the turn (p-chat-gates), useChatStream keeps them on the user message (p-mcp-web), and the bubble shows the notice (p-contrast). | ui, handler |
 | mobile | partial | Tell the user when a document was cut to 100,000 characters or could not be read on the device; today only the model sees "[truncated]" or "could not be extracted". | ui |
 
-Code: `apps/web/lib/server/office-document-text.ts:95-95`, `apps/web/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration.ts:508-508`, `apps/mobile/services/attachmentContext.ts:15-29`
+Code: `apps/web/lib/server/office-document-text.ts:95-95`, `apps/web/lib/server/pdf-attachment-content.ts:139-139`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:3165-3166`, `apps/mobile/services/attachmentContext.ts:15-29`
 
 ## S14.25: Password-protected-file notice.
 

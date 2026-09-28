@@ -11,6 +11,7 @@ import {
   LOCAL_CODE_COPY,
   localModelLabel,
   localSessionOriginLabel,
+  localSessionStatusIsQuiet,
   localSessionStatusLabel,
   newSessionLabel,
 } from '../local-code';
@@ -118,7 +119,11 @@ export function LocalSessionsSection({
                   </span>
                 </span>
                 {localSessionStatusLabel(session.status) && (
-                  <span className={styles['railRowState']}>
+                  <span
+                    className={`${styles['railRowState']} ${
+                      localSessionStatusIsQuiet(session.status) ? styles['railRowStateQuiet'] : ''
+                    }`}
+                  >
                     {localSessionStatusLabel(session.status)}
                   </span>
                 )}

@@ -226,6 +226,18 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     this._stateManager.syncActiveModelFromConfiguration();
   }
 
+  public activeModel(): string {
+    return this._stateManager.activeModel();
+  }
+
+  public get onDidChangeActiveModel(): vscode.Event<string> {
+    return this._stateManager.onDidChangeActiveModel;
+  }
+
+  public selectModel(modelId: string): Promise<'conversation' | 'default'> {
+    return this._stateManager.selectModel(modelId);
+  }
+
   public pushActiveProject(): void {
     this._stateManager.pushActiveProject();
   }

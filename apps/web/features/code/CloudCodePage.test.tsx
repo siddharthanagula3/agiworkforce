@@ -243,6 +243,20 @@ function createApi(overrides: Partial<CloudCodeApi> = {}): CloudCodeApi {
       reviewState: 'none' as const,
     })),
     get: vi.fn(async () => ({ session, terminalEntries: [], turns: [] })),
+    setSharing: vi.fn(async () => session),
+    openShared: vi.fn(async () => ({
+      visibility: 'public' as const,
+      title: session.title,
+      repositoryUrl: null,
+      workingBranch: null,
+      baseBranch: null,
+      pullRequestUrl: null,
+      pullRequestNumber: null,
+      createdAt: session.createdAt,
+      updatedAt: session.updatedAt,
+      terminalEntries: [],
+      turns: [],
+    })),
     create: vi.fn(async () => ({ session, terminalEntries: [], turns: [] })),
     run: vi.fn(async () => ({
       session,
@@ -1807,16 +1821,24 @@ describe('CloudCodePage', () => {
     vi.spyOn(navigator, 'clipboard', 'get').mockReturnValue({
       writeText,
     } as unknown as Clipboard);
+    const shared = {
+      ...session,
+      shareVisibility: 'public' as const,
+      shareAudience: 'public' as const,
+      shareToken: 'AbCdEfGhIjKlMnOpQrStUvWx',
+    };
     const api = createApi({
-      list: vi.fn(async () => ({ availability, sessions: [session], runtimes: [] })),
+      list: vi.fn(async () => ({ availability, sessions: [shared], runtimes: [] })),
+      get: vi.fn(async () => ({ session: shared, terminalEntries: [], turns: [] })),
     });
     render(<CloudCodePage api={api} />);
 
     await openSession(user, session.title);
     await user.click(await screen.findByRole('button', { name: 'Session actions' }));
-    await user.click(await screen.findByRole('menuitem', { name: 'Copy link' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Share' }));
+    await user.click(await screen.findByRole('button', { name: 'Copy link' }));
 
-    expect(await screen.findByRole('menuitem', { name: 'Could not copy the link' })).toBeVisible();
+    expect(await screen.findByRole('button', { name: 'Could not copy the link' })).toBeVisible();
   });
 
   it('puts the error notice in the composer column, directly above the composer', async () => {

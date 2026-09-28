@@ -8,6 +8,7 @@ import {
   type ApplicationOpenResult,
   type BackgroundActivity,
   type BackgroundWorkKind,
+  type BrowserActivityEntry,
   type BrowserPairingState,
   type ClipboardSnapshot,
   type ComputerUseStatus,
@@ -43,7 +44,7 @@ import {
   type WorkspaceRootKind,
 } from '@agiworkforce/local-runtime-contract';
 import type { BrowserPageSummary } from '@agiworkforce/types';
-import type { PluginSummary, SkillSummary } from '@agiworkforce/types/protocol';
+import type { MemoryAddResponse, PluginSummary, SkillSummary } from '@agiworkforce/types/protocol';
 
 const NO_HOST_MESSAGE = 'Local access is only available in the AGI Cloud desktop app.';
 
@@ -325,6 +326,14 @@ export function revokeDesktopPermission(
   });
 }
 
+export function readBrowserActivity(): Promise<BrowserActivityEntry[]> {
+  return invoke<BrowserActivityEntry[]>('browser_activity');
+}
+
+export function openDownloadsFolder(): Promise<boolean> {
+  return invoke<boolean>('browser_downloads_open');
+}
+
 export function readBackgroundActivity(): Promise<BackgroundActivity> {
   return invoke<BackgroundActivity>('background_activity');
 }
@@ -544,6 +553,14 @@ export function startDeveloperSession(
 
 export function startDeveloperTurn(request: DeveloperTurnRequest): Promise<{ turnId: string }> {
   return invoke<{ turnId: string }>('developer_turn_start', { ...request });
+}
+
+export function addDeveloperMemory(
+  rootId: string,
+  text: string,
+  scope: 'project' | 'user',
+): Promise<MemoryAddResponse> {
+  return invoke<MemoryAddResponse>('developer_memory_add', { rootId, text, scope });
 }
 
 export function listLocalBranches(rootId: string): Promise<LocalBranches | null> {

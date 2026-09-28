@@ -619,6 +619,30 @@ export async function getActiveWorkspaceMediaAssetById(
   }
 }
 
+export async function latestConversationImageAssetId(
+  userId: string,
+  conversationId: string,
+  db: DatabaseAdapter,
+): Promise<string | null> {
+  try {
+    const rows = await db.query<{ id: string }>(
+      `select id
+         from public.media_assets
+        where user_id = $1
+          and conversation_id = $2
+          and kind = 'image'
+          and deleted_at is null
+        order by created_at desc
+        limit 1`,
+      [userId, conversationId],
+    );
+    return rows[0]?.id ?? null;
+  } catch (error) {
+    if (isSchemaNotReady(error)) return null;
+    throw error;
+  }
+}
+
 /**
  * The asset this uploader already holds for these exact bytes, if any.
  *

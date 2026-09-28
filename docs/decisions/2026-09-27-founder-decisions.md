@@ -212,3 +212,14 @@ whether the FTC Health Breach Notification Rule or the GLBA Safeguards Rule
 applies before either is switched on. The BigQuery server Google hosts is not
 pinned, because it requires the full BigQuery scope and the Google ceiling stays
 read-only; Snowflake and Databricks are added by account URL.
+
+## D-2026-09-28-09 Signed-out chat follows ChatGPT
+
+ChatGPT lets people chat without an account and Claude does not; where the two
+differ, Gemini and Perplexity decide, and both allow it. A signed-out visitor
+can therefore chat on the web and desktop, as in ChatGPT's logged-out
+experience: text only, on the default free model, with no files, images, voice,
+tools, memory or saved history, and a line saying that messaging means
+accepting the Terms and Privacy Policy. Per-device, per-IP and global daily
+caps come from configuration, bot protection applies, and a kill switch keeps
+it off until it is switched on after the final checks.

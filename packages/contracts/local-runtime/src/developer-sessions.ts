@@ -28,6 +28,7 @@ export const DEVELOPER_SESSION_COMMANDS = [
   'developer_branches_list',
   'developer_branch_switch',
   'developer_branch_push',
+  'developer_memory_add',
 ] as const;
 
 export type DeveloperSessionCommand = (typeof DEVELOPER_SESSION_COMMANDS)[number];
@@ -153,12 +154,18 @@ export interface DeveloperHostModel {
  * What the CLI can run in one folder. `hostModels` is empty against a CLI that
  * predates it, and a caller falls back to `models` there.
  */
+export interface DeveloperRuntimeFeatures {
+  maxTurns: boolean;
+  memory: boolean;
+}
+
 export interface DeveloperRuntimeModels {
   models: DeveloperModelOption[];
   hostModels: DeveloperHostModel[];
   defaultModelId: string | null;
   defaultAgentMode: DeveloperAgentMode | null;
   managedSignedIn: boolean;
+  features?: DeveloperRuntimeFeatures;
 }
 
 export interface DeveloperSessionList {
@@ -270,6 +277,7 @@ export interface DeveloperTurnRequest {
   text: string;
   model?: string;
   agentMode?: DeveloperAgentMode;
+  maxTurns?: number;
 }
 
 export const WORKING_TREE_CHANGE_STATES = [

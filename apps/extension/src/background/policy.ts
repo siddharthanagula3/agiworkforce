@@ -48,6 +48,7 @@ export const MESSAGE_POLICY: Record<string, MessageTypePolicy> = {
   DELETE_SCHEDULED_TASK: { senderClass: 'extension-page-only', allowsCrossTab: true },
   SAVE_SHORTCUT: { senderClass: 'extension-page-only', allowsCrossTab: true },
   DELETE_SHORTCUT: { senderClass: 'extension-page-only', allowsCrossTab: true },
+  UPDATE_SHORTCUT: { senderClass: 'extension-page-only', allowsCrossTab: true },
   REPLAY_SHORTCUT: { senderClass: 'extension-page-only', allowsCrossTab: true },
   SET_RECORDING_VALUE_CAPTURE: { senderClass: 'extension-page-only', allowsCrossTab: true },
   CANCEL_STREAM: { senderClass: 'extension-page-only', allowsCrossTab: true },
