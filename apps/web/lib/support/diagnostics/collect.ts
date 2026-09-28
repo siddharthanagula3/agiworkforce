@@ -3,7 +3,7 @@ import {
   type DiagnosticEvent,
   type DiagnosticSurface,
   type SupportDiagnostics,
-} from './types';
+} from '@agiworkforce/cloud-contracts/support';
 
 /**
  * Client-side collection. Every field is read from the runtime the caller is

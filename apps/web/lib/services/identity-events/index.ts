@@ -30,6 +30,7 @@ export interface IdentitySecurityEventInput {
   userId: string;
   event: IdentitySecurityEventKey;
   subjectRef?: string | null;
+  noticeRef?: string | null;
   context?: string | null;
   request?: Request;
   organizationId?: string | null;
@@ -63,7 +64,7 @@ export async function emitIdentitySecurityEvent(
     await notifyIdentitySecurityEvent(db, {
       userId: input.userId,
       event: input.event,
-      subjectRef: input.subjectRef ?? null,
+      subjectRef: input.noticeRef ?? input.subjectRef ?? null,
       context: input.context ?? null,
     });
   } catch (error) {

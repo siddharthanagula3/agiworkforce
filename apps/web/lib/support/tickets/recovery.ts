@@ -9,11 +9,13 @@ import { revokeEveryOtherSession } from '@/lib/server/session-revocation';
 import { sendCustomerTicketEmail } from '@/lib/support/handoff/escalation-email';
 
 import { openTicket, readTicketForStaff } from './service';
-import { OPEN_TICKET_STATUSES, RECOVERY_FOLLOW_PATH, RECOVERY_TICKET_SUBJECT } from './types';
-
-export const RECOVERY_LOSSES = ['password', 'email', 'factor'] as const;
-
-export type RecoveryLoss = (typeof RECOVERY_LOSSES)[number];
+import {
+  OPEN_TICKET_STATUSES,
+  RECOVERY_FOLLOW_PATH,
+  RECOVERY_TICKET_SUBJECT,
+  type RecoveryAction,
+  type RecoveryLoss,
+} from '@agiworkforce/cloud-contracts/support';
 
 const LOSS_COPY: Readonly<Record<RecoveryLoss, string>> = {
   password: 'The password, and the emailed reset did not work',
@@ -85,10 +87,6 @@ export async function submitAccountRecoveryRequest(input: {
   }
 }
 
-export const RECOVERY_ACTIONS = ['remove_second_factor', 'replace_email'] as const;
-
-export type RecoveryAction = (typeof RECOVERY_ACTIONS)[number];
-
 export class RecoveryTicketError extends Error {
   constructor(message: string) {
     super(message);
@@ -118,6 +116,14 @@ export async function completeAccountRecovery(input: {
     const email = input.email?.trim().toLowerCase();
     if (!email) throw new RecoveryTicketError('Enter the new sign-in email address.');
     const added = await identity.addEmailAddress(ticket.userId, email);
+    const { emitIdentitySecurityEvent } = await import('@/lib/services/identity-events');
+    await emitIdentitySecurityEvent(getNeonDb(), {
+      userId: ticket.userId,
+      event: 'email_changed',
+      subjectRef: ticket.id,
+      context: 'Support changed it while restoring access to the account.',
+      detail: { source: 'support_recovery' },
+    });
     await identity.setPrimaryEmailAddress(ticket.userId, added.id);
     await getNeonDb().query(`update public.profiles set email = $2 where id = $1`, [
       ticket.userId,

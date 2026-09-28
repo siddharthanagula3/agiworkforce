@@ -1,6 +1,6 @@
 'use client';
 
-import type { SupportAbstentionView } from '../lib/contract';
+import type { SupportAbstentionView } from '@agiworkforce/cloud-contracts/support';
 import { ABSTENTION_HEADING } from '../lib/normalize-answer';
 import { renderSupportText } from '../lib/render-text';
 import { SupportCitationList } from './SupportCitationList';

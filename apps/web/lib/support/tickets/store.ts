@@ -5,22 +5,21 @@ import {
   parsePlatformAdminIds,
 } from '@/features/admin/lib/platform-admin-access';
 import { getNeonDb } from '@/lib/server/neon-db';
-import type { SupportDiagnostics } from '@/lib/support/diagnostics/types';
-
 import {
+  type SupportDiagnostics,
   OPEN_TICKET_STATUSES,
-  type CreateEscalationInput,
   type EscalationPageOutcome,
   type EscalationSeverity,
   type EscalationTracker,
-  type CreateTicketInput,
   type StaffSupportTicket,
   type SupportTicket,
   type SupportTicketReply,
   type TicketEscalation,
   type TicketPriority,
   type TicketStatus,
-} from './types';
+} from '@agiworkforce/cloud-contracts/support';
+
+import { type CreateEscalationInput, type CreateTicketInput } from './types';
 
 /**
  * Service-context reads and writes over the ticket tables, following the access
