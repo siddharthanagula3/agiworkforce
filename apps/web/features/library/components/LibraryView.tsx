@@ -147,6 +147,7 @@ export function LibraryView() {
         fetch(`/api/library?${params.toString()}`, { credentials: 'same-origin' }),
       fetchAsset: (uri) => fetch(uri, { credentials: 'same-origin' }),
       inlinePreviewUri: (uri) => uri,
+      textPreviewUri: (uri) => `${uri}/text`,
       listFolders: async () => {
         const response = await fetch(PROJECT_LIST_ENDPOINT, { credentials: 'same-origin' });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -190,6 +191,8 @@ export function LibraryView() {
           () => toast.error('That file could not be attached. Download it and attach it instead.'),
         );
       },
+      openConversation: (conversationId) =>
+        router.push(`/chat/${encodeURIComponent(conversationId)}`),
       addToChat: async (item) => {
         await stageLibraryItemForNewChat(item, { workMode: 'chat' });
         router.push(NEW_CHAT_PATH);

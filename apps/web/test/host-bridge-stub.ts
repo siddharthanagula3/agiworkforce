@@ -1,4 +1,5 @@
 import {
+  DEFAULT_SESSION_COMPLETION_ALERTS,
   HOST_SHORTCUT_CHOICES,
   HOST_SHORTCUT_STATUSES,
   type HostBridge,
@@ -17,6 +18,8 @@ export function hostPreferencesStub(
       voiceShortcut: HOST_SHORTCUT_CHOICES.voice[0] ?? '',
       showInMenuBar: true,
       cliPath: '',
+      sessionCompletionAlerts: DEFAULT_SESSION_COMPLETION_ALERTS,
+      sessionApprovalAlerts: true,
       ...overrides,
     },
     shortcutStatus: {

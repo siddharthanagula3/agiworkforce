@@ -112,12 +112,14 @@ describe('a rejected credential on a directory-linked connector', () => {
     expect(result.content).not.toMatch(/bearer|authorization:/i);
   });
 
-  it('keeps the plain sentence for a hand-entered endpoint with no directory entry', async () => {
+  it('asks a hand-entered endpoint with no saved token to sign in', async () => {
     directoryByUrl.mockResolvedValue(null);
 
     const result = await makeUserConnectorExecutor('user-1')(SERVER_ID, 'search_issues', {});
 
-    expect(parseConnectorAuthorizationRequired(result.content)).toBeNull();
-    expect(result.content).toContain('rejected the saved credential');
+    expect(parseConnectorAuthorizationRequired(result.content)).toMatchObject({
+      connectorId: SERVER_ID,
+      reason: 'not_connected',
+    });
   });
 });

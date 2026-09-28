@@ -27,6 +27,7 @@ import {
   useWorkspaceGroups,
   useWorkspaceRoles,
 } from '../hooks/use-workspace-roles';
+import { WorkspacePolicyDiagnostics } from './WorkspacePolicyDiagnostics';
 
 export const GOVERNED_FEATURES: readonly WorkspaceFeature[] = [
   'work',
@@ -493,6 +494,9 @@ export function WorkspaceFeatureControls() {
       />
       {overview.canManagePolicy && overview.configured ? (
         <PolicyExceptions organizationId={overview.organizationId} />
+      ) : null}
+      {overview.canManagePolicy ? (
+        <WorkspacePolicyDiagnostics organizationId={overview.organizationId} />
       ) : null}
     </div>
   );

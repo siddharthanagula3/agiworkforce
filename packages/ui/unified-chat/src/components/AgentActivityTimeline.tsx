@@ -35,6 +35,7 @@ import {
 import {
   agiWorkPlanSentence,
   isAgiWorkGoalEntry,
+  isAgiWorkPlanOverviewEntry,
   isAgiWorkPlanEntry,
 } from '../lib/agi-work-progress';
 import { ConnectorConnectCard } from './ConnectorConnectCard';
@@ -65,6 +66,7 @@ export interface AgentActivityTimelineProps {
   className?: string;
   defaultExpanded?: boolean;
   onApprove?: (toolCallId: string) => void;
+  onApproveForChat?: (toolCallId: string) => void;
   onReject?: (toolCallId: string) => void;
   onCancel?: (toolCallId: string) => void;
   onResend?: (toolCallId: string) => void;
@@ -129,6 +131,7 @@ function lastStepFailed(activity: Pick<AgentActivityState, 'entries'>): boolean 
     if (!entry) continue;
     if (entry.kind === 'error') return true;
     if (entry.kind !== 'tool' && entry.kind !== 'progress') continue;
+    if (isAgiWorkPlanOverviewEntry(entry)) continue;
     if (entry.status === 'pending' || entry.status === 'running') continue;
     return entry.status === 'failed';
   }
@@ -784,6 +787,7 @@ export function AgentActivityTimeline({
   className,
   defaultExpanded = false,
   onApprove,
+  onApproveForChat,
   onReject,
   onCancel,
   onResend,
@@ -924,7 +928,10 @@ export function AgentActivityTimeline({
   // echo it back.
   const planLineEntryIndex = planSentence ? activity.entries.findIndex(isAgiWorkPlanEntry) : -1;
   const rowEntries = activity.entries.filter(
-    (entry, index) => index !== planLineEntryIndex && !isAgiWorkGoalEntry(entry),
+    (entry, index) =>
+      index !== planLineEntryIndex &&
+      !isAgiWorkGoalEntry(entry) &&
+      !isAgiWorkPlanOverviewEntry(entry),
   );
   const visibleEntryCount =
     entryVisibility.turnId === activity.turnId ? entryVisibility.count : ACTIVITY_PAGE_SIZE;
@@ -1072,6 +1079,7 @@ export function AgentActivityTimeline({
                     }
                     expired={isApprovalExpired?.(entry.toolCallId) ?? false}
                     onApprove={onApprove}
+                    onApproveForChat={onApproveForChat}
                     onReject={onReject}
                     onCancel={onCancel}
                     onResend={onResend}

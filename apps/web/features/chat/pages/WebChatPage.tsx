@@ -61,6 +61,7 @@ import {
   parkUnsentDraft,
   readMessageArrayPatch,
 } from '@shared/stores/web-chat-store';
+import { useStyleStore } from '@features/chat/stores/style-store';
 import {
   EMPTY_VARIANT_INFO,
   resolveLeafForSibling,
@@ -237,6 +238,7 @@ import type {
   ResearchPlanDecision,
   ResearchPlanOptions,
 } from '../components/research/ResearchActivity';
+import type { AgiWorkPlanDecision } from '../components/work-session/AgiWorkPlanReview';
 import { CreateProjectDialog } from '../components/dialogs/CreateProjectDialog';
 import { TimeFocusReminder } from '@/features/time-focus/TimeFocusReminder';
 import { toast } from 'sonner';
@@ -289,6 +291,8 @@ import {
 import { takeStagedLibraryAttachments } from '@features/library/lib/library-chat-handoff';
 import {
   useMediaGeneration,
+  cancelImageGenerations,
+  IMAGE_GENERATION_CANCELLED_CODE,
   MediaGenerationApiError,
   type GeneratedImageResult,
   type GenerateVideoOptions,
@@ -1465,6 +1469,8 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   const messages = useChatStore((s) => s.messages);
   const activeConversationId = useChatStore((s) => s.activeConversationId);
   const pendingTemporaryChat = useChatStore((s) => s.pendingTemporaryChat);
+  const temporaryChatPersonalized = useChatStore((s) => s.temporaryChatPersonalized);
+  const setTemporaryChatPersonalized = useChatStore((s) => s.setTemporaryChatPersonalized);
   const newChatsTemporary = useSettingsStore((s) => s.newChatsTemporary);
   const addMessage = useChatStore((s) => s.addMessage);
   const updateMessage = useChatStore((s) => s.updateMessage);
@@ -1533,7 +1539,14 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     setActiveConversation,
   } = useConversations();
   const draftConflict = useConversationDraftSync();
-  const adoptPendingComposerToggles = useChatStore((s) => s.adoptPendingComposerToggles);
+  const adoptPendingChatToggles = useChatStore((s) => s.adoptPendingComposerToggles);
+  const adoptPendingComposerToggles = useCallback(
+    (conversationId: string) => {
+      adoptPendingChatToggles(conversationId);
+      useStyleStore.getState().adoptSelection(PENDING_CONVERSATION_KEY, conversationId);
+    },
+    [adoptPendingChatToggles],
+  );
   const parkBlockedSend = useChatStore((s) => s.parkBlockedSend);
   const {
     groupsByMessageId: branchGroupsByMessageId,
@@ -2054,12 +2067,13 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           ? useChatStore.getState().conversations.find((c) => c.id === existingConvId)
               ?.isTemporary === true
           : temporaryIntent;
-        if (!conversationIsTemporary && localModelSelection === null) {
-          runExplicitMemoryCommand(content, {
-            conversationId: existingConvId || null,
-            projectId: sendProjectId ?? null,
-          });
-        }
+        const memoryCommandReport =
+          !conversationIsTemporary && localModelSelection === null
+            ? runExplicitMemoryCommand(content, {
+                conversationId: existingConvId || null,
+                projectId: sendProjectId ?? null,
+              })
+            : null;
         if (clientConvId) {
           // Register the placeholder itself, not just `sendGuardKey` above: the
           // two lines below make `bareChatSessionId` (hence a racing second
@@ -2110,6 +2124,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             })
           : undefined;
         attachmentsUploaded = Boolean(options.attachments?.length);
+        const memoryCommand = memoryCommandReport ? await memoryCommandReport : null;
         if (options.attachmentUploadAttemptId) {
           setAttachmentUploadAttempts((current) =>
             current.filter((attempt) => attempt.id !== options.attachmentUploadAttemptId),
@@ -2152,6 +2167,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             disabledConnectorIds: options.meta?.disabledConnectorIds,
             connectorToolsEnabled: options.meta?.connectorToolsEnabled,
             memoryEnabled: options.meta?.memoryEnabled,
+            ...(memoryCommand ? { memoryCommand } : {}),
           });
 
         const announceDesktopCompletion = () => {
@@ -2350,7 +2366,11 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             usage: managedUsageSummary,
           })
         : null;
-      const content = paywall ? '' : `Image generation failed: ${raw}`;
+      const content = paywall
+        ? ''
+        : apiError?.code === IMAGE_GENERATION_CANCELLED_CODE
+          ? raw
+          : `Image generation failed: ${raw}`;
       const metadata = imageGenerationFailureMetadata(readMessageMetadata(conversationId, msgId), {
         ...(paywall ? { paywall } : {}),
         ...(apiError?.resetAt ? { retryAt: apiError.resetAt } : {}),
@@ -2434,6 +2454,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         generate: async () => {
           generatedImage = await generateImage(turn.prompt, {
             ...turn.imageRequest,
+            cancelScope: turn.conversationId,
             ...(!turn.temporary ? { conversationId: turn.conversationId } : {}),
           });
           return generatedImage.imageUrl;
@@ -2540,7 +2561,12 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   const handleGenerateImage = useCallback(
     (
       prompt: string,
-      options: { aspectRatio: ImageAspectRatio; modelId: string; edit?: ImageEditRequest },
+      options: {
+        aspectRatio: ImageAspectRatio;
+        modelId: string;
+        edit?: ImageEditRequest;
+        transparentBackground?: boolean;
+      },
     ) => {
       // Same first-message send guard as sendContent: a lazy-created image
       // conversation has the identical createConversation → bareChatSessionId
@@ -2561,6 +2587,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             options.aspectRatio,
             options.modelId,
             options.edit,
+            options.transparentBackground,
           );
           const requestedAspect: ImageAspectRatio = imageRequest.aspectRatio ?? 'auto';
           const requestedModel = imageRequest.model;
@@ -2708,6 +2735,25 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             ...((generatedImage?.model ?? requestedModel)
               ? { imageGenModel: generatedImage?.model ?? requestedModel }
               : {}),
+            ...(previousMetadata?.imageUrl
+              ? {
+                  imageVersions: [
+                    ...(previousMetadata.imageVersions ?? []),
+                    {
+                      imageUrl: previousMetadata.imageUrl,
+                      ...(previousMetadata.imageGenPrompt
+                        ? { prompt: previousMetadata.imageGenPrompt }
+                        : {}),
+                      ...(previousMetadata.imageGenAspect
+                        ? { aspect: previousMetadata.imageGenAspect }
+                        : {}),
+                      ...(previousMetadata.imageGenModel
+                        ? { model: previousMetadata.imageGenModel }
+                        : {}),
+                    },
+                  ],
+                }
+              : {}),
           });
 
         const outcome = await runDurableImageGenerationTurn({
@@ -2717,6 +2763,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           generate: async () => {
             generatedImage = await generateImage(opts.prompt, {
               ...imageRequest,
+              cancelScope: ownerConversationId,
               ...(!ownerConversationIsTemporary ? { conversationId: ownerConversationId } : {}),
             });
             return generatedImage.imageUrl;
@@ -3149,6 +3196,8 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             // Sizes VideoGenerationPlaceholder to the requested shape before the
             // provider returns anything, so the transcript doesn't jump later.
             ...(videoOptions?.aspectRatio ? { videoAspect: videoOptions.aspectRatio } : {}),
+            ...(videoOptions?.resolution ? { videoResolution: videoOptions.resolution } : {}),
+            ...(videoOptions?.durationSecs ? { videoDurationSecs: videoOptions.durationSecs } : {}),
           };
           addMessage(
             {
@@ -3242,6 +3291,10 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
               // sized correctly for the whole in-flight window, not just the
               // instant before the start request resolves.
               ...(videoOptions?.aspectRatio ? { videoAspect: videoOptions.aspectRatio } : {}),
+              ...(videoOptions?.resolution ? { videoResolution: videoOptions.resolution } : {}),
+              ...(videoOptions?.durationSecs
+                ? { videoDurationSecs: videoOptions.durationSecs }
+                : {}),
             };
             updateOwnMessage(assistantMessageId, {
               content: '',
@@ -3434,9 +3487,15 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         handleOpenUpgradeDialog();
         return;
       }
+      const failed = assistantMessage.metadata;
       handleGenerateVideo(userMessage.content, {
-        ...(typeof assistantMessage.metadata.videoModel === 'string'
-          ? { modelId: assistantMessage.metadata.videoModel }
+        ...(typeof failed.videoModel === 'string' ? { modelId: failed.videoModel } : {}),
+        ...(typeof failed.videoAspect === 'string' ? { aspectRatio: failed.videoAspect } : {}),
+        ...(typeof failed.videoResolution === 'string'
+          ? { resolution: failed.videoResolution }
+          : {}),
+        ...(typeof failed.videoDurationSecs === 'number'
+          ? { durationSecs: failed.videoDurationSecs }
           : {}),
       });
     },
@@ -3456,7 +3515,16 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
    * recently -- possibly another conversation's -- while its store teardown
    * resolved against `activeConversationId`, so the two halves could disagree.
    */
+  const imageTurnActive = useMemo(
+    () =>
+      displayedMessages.some(
+        (message) => message.isStreaming && message.metadata?.toolType === 'image-generation',
+      ),
+    [displayedMessages],
+  );
+
   const handleStopGeneration = useCallback(() => {
+    if (displayedConversationId && cancelImageGenerations(displayedConversationId)) return;
     stopGeneration(displayedConversationId ?? undefined);
   }, [stopGeneration, displayedConversationId]);
 
@@ -4903,6 +4971,96 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     ],
   );
 
+  const handleAgiWorkPlanDecision = useCallback(
+    async (id: string, decision: AgiWorkPlanDecision) => {
+      if (!displayedConversationId || isStreaming) return;
+      const assistantMsg = displayedMessages.find((m) => m.id === id);
+      const steps = assistantMsg?.metadata?.agiWorkPlan;
+      const review = assistantMsg?.metadata?.agiWorkPlanReview;
+      if (!assistantMsg || !steps?.length || !review) return;
+
+      if (decision.kind === 'cancel') {
+        updateMessage(
+          id,
+          {
+            metadata: {
+              ...assistantMsg.metadata,
+              agiWorkPlan: steps.map((step) => ({ ...step, status: 'cancelled' as const })),
+              agiWorkPlanReview: { ...review, awaitingApproval: false },
+            },
+          },
+          displayedConversationId,
+        );
+        return;
+      }
+      if (isTrialExhausted) {
+        handleOpenUpgradeDialog();
+        return;
+      }
+
+      if (decision.kind === 'retry') {
+        const step = steps[decision.fromIndex];
+        if (!step) return;
+        setRetryingResearchMessageId(id);
+        try {
+          await sendMessage(`Retry step ${decision.fromIndex + 1}: ${step.description}`, {
+            model: activeModelId,
+            conversationId: displayedConversationId,
+            workMode: 'agiwork',
+            agiWorkGoal: review.goal,
+            agiWorkPlan: steps.slice(decision.fromIndex).map((entry) => entry.description),
+          });
+        } finally {
+          setRetryingResearchMessageId(null);
+        }
+        return;
+      }
+
+      const plan = planRegenerateRollback(displayedMessages, id);
+      if (!plan) return;
+      const userMsg = displayedMessages[plan.userIndex];
+      if (!userMsg) return;
+      const boundaryRefusal = resolveRegenerateBoundaryRefusal({
+        conversation: displayedConversation,
+        messages: displayedMessages,
+        targetModelId: activeModelId,
+      });
+      if (boundaryRefusal) {
+        setChatError(boundaryRefusal, displayedConversationId);
+        return;
+      }
+      setRetryingResearchMessageId(id);
+      try {
+        await sendReplacingMessages(plan.rollbackIds, (onTurnCommitted) =>
+          sendMessage(userMsg.content, {
+            model: activeModelId,
+            conversationId: displayedConversationId,
+            attachments: userMsg.attachments,
+            workMode: 'agiwork',
+            agiWorkGoal: review.goal,
+            agiWorkPlan: decision.steps,
+            onTurnCommitted,
+          }),
+        );
+      } finally {
+        setRetryingResearchMessageId(null);
+      }
+    },
+    [
+      activeModelId,
+      displayedConversation,
+      displayedConversationId,
+      displayedMessages,
+      handleOpenUpgradeDialog,
+      isStreaming,
+      isTrialExhausted,
+      sendMessage,
+      sendReplacingMessages,
+      setChatError,
+      updateMessage,
+    ],
+  );
+
   /**
    * Continue Generation: resume the last assistant turn when it was truncated
    * at the token cap or user-stopped with partial text. Appends to the same
@@ -5589,6 +5747,21 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                     <span className="shrink-0">{t('chat:header.temporaryChat')}</span>
                   </span>
                 )}
+                {!voiceModeActive && temporaryChatActive && (
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={temporaryChatPersonalized}
+                    aria-label={t('chat:header.temporaryChatPersonalized')}
+                    title={t('chat:header.temporaryChatPersonalizationHint')}
+                    onClick={() => setTemporaryChatPersonalized(!temporaryChatPersonalized)}
+                    className="ml-1 inline-flex h-7 min-w-[24px] shrink-0 items-center rounded-md border border-border px-2 text-caption font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    {temporaryChatPersonalized
+                      ? t('chat:header.temporaryChatPersonalized')
+                      : t('chat:header.temporaryChatUnpersonalized')}
+                  </button>
+                )}
                 {!voiceModeActive &&
                   !temporaryChatActive &&
                   !hasMessages &&
@@ -5818,7 +5991,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                         conversationId={displayedConversationId}
                         onStop={handleStopGeneration}
                         isLoading={isLoading}
-                        isGenerating={isStreaming}
+                        isGenerating={isStreaming || imageTurnActive}
                         placeholder={t('chat:placeholderEmpty')}
                         prefillText={composerPrefill}
                         onPrefillConsumed={handleComposerPrefillConsumed}
@@ -5876,6 +6049,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                             onRegenerate={handleRegenerateMessage}
                             onRetryResearch={handleRetryResearch}
                             onResearchPlanDecision={handleResearchPlanDecision}
+                            onAgiWorkPlanDecision={handleAgiWorkPlanDecision}
                             retryingResearchMessageId={retryingResearchMessageId}
                             onContinue={handleContinueMessage}
                             onEdit={handleEditMessage}
@@ -5932,7 +6106,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                         conversationId={displayedConversationId}
                         onStop={handleStopGeneration}
                         isLoading={isLoading}
-                        isGenerating={isStreaming}
+                        isGenerating={isStreaming || imageTurnActive}
                         placeholder={t('chat:placeholder')}
                         onEditLastMessage={editLastUserMessage}
                         prefillText={composerPrefill}

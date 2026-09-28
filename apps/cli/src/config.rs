@@ -747,6 +747,54 @@ impl CliConfig {
     /// This avoids dumping merged global provider settings into a project file
     /// when a user changes session-local UX/privacy defaults from a slash command.
     pub fn save_project_ui_settings(&mut self) -> Result<PathBuf> {
+        let output_style = self.ui.output_style.clone();
+        let privacy_mode = self.ui.privacy_mode.clone();
+        let theme = self.ui.theme.clone();
+        self.update_project_config(|root| {
+            let ui_value = root
+                .entry("ui".to_string())
+                .or_insert_with(|| toml::Value::Table(toml::Table::new()));
+            if !ui_value.is_table() {
+                *ui_value = toml::Value::Table(toml::Table::new());
+            }
+            let ui = ui_value
+                .as_table_mut()
+                .context("Failed to update [ui] config table")?;
+            if let Some(style) = output_style {
+                ui.insert("output_style".to_string(), toml::Value::String(style));
+            }
+            if let Some(mode) = privacy_mode {
+                ui.insert("privacy_mode".to_string(), toml::Value::String(mode));
+            }
+            if let Some(theme) = theme {
+                ui.insert("theme".to_string(), toml::Value::String(theme));
+            }
+            Ok(())
+        })
+    }
+
+    pub fn persist_effort_project(&mut self, effort: &str) -> Result<PathBuf> {
+        let effort = effort.to_ascii_lowercase();
+        self.default.reasoning_effort = Some(effort.clone());
+        self.update_project_config(|root| {
+            let default_value = root
+                .entry("default".to_string())
+                .or_insert_with(|| toml::Value::Table(toml::Table::new()));
+            if !default_value.is_table() {
+                *default_value = toml::Value::Table(toml::Table::new());
+            }
+            default_value
+                .as_table_mut()
+                .context("Failed to update [default] config table")?
+                .insert("reasoning_effort".to_string(), toml::Value::String(effort));
+            Ok(())
+        })
+    }
+
+    fn update_project_config(
+        &mut self,
+        edit: impl FnOnce(&mut toml::Table) -> Result<()>,
+    ) -> Result<PathBuf> {
         let path = self.source.project_path.clone().unwrap_or_else(|| {
             std::env::current_dir()
                 .unwrap_or_else(|_| PathBuf::from("."))
@@ -767,30 +815,7 @@ impl CliConfig {
             toml::Table::new()
         };
 
-        let ui_value = root
-            .entry("ui".to_string())
-            .or_insert_with(|| toml::Value::Table(toml::Table::new()));
-        if !ui_value.is_table() {
-            *ui_value = toml::Value::Table(toml::Table::new());
-        }
-        let ui = ui_value
-            .as_table_mut()
-            .context("Failed to update [ui] config table")?;
-        if let Some(style) = &self.ui.output_style {
-            ui.insert(
-                "output_style".to_string(),
-                toml::Value::String(style.clone()),
-            );
-        }
-        if let Some(mode) = &self.ui.privacy_mode {
-            ui.insert(
-                "privacy_mode".to_string(),
-                toml::Value::String(mode.clone()),
-            );
-        }
-        if let Some(theme) = &self.ui.theme {
-            ui.insert("theme".to_string(), toml::Value::String(theme.clone()));
-        }
+        edit(&mut root)?;
 
         let contents = toml::to_string_pretty(&toml::Value::Table(root))
             .context("Failed to serialize project config")?;
@@ -1130,6 +1155,8 @@ impl CliConfig {
     /// - `AGIWORKFORCE_MODEL` -> `default.model`
     /// - `AGIWORKFORCE_PROVIDER` -> `default.provider`
     /// - `AGIWORKFORCE_MAX_TOKENS` -> `default.max_tokens`
+    /// - `AGIWORKFORCE_API_BASE` and `AGI_PLAIN`, which take effect where they
+    ///   are read and are recorded here so `/config` shows them
     pub fn merge_env_overrides(&mut self) {
         if let Ok(model) = std::env::var("AGIWORKFORCE_MODEL") {
             if !model.is_empty() {
@@ -1154,6 +1181,14 @@ impl CliConfig {
                     .env_overrides
                     .push("AGIWORKFORCE_MAX_TOKENS".to_string());
             }
+        }
+        if std::env::var("AGIWORKFORCE_API_BASE").is_ok_and(|base| !base.trim().is_empty()) {
+            self.source
+                .env_overrides
+                .push("AGIWORKFORCE_API_BASE".to_string());
+        }
+        if crate::output::plain_output_requested_by_environment() {
+            self.source.env_overrides.push("AGI_PLAIN".to_string());
         }
     }
 }

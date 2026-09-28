@@ -104,7 +104,11 @@
       "owner": "apps/web/lib/server/scim",
       "capabilities": [],
       "concepts": [],
-      "tables": ["organization_group_managers", "organization_group_roles"]
+      "tables": [
+        "organization_group_managers",
+        "organization_group_members",
+        "organization_group_roles"
+      ]
     },
     {
       "name": "roles",
@@ -542,7 +546,7 @@
       "owner": "apps/web/lib/services/schedule-service.ts",
       "capabilities": [],
       "concepts": ["schedule"],
-      "tables": ["scheduled_task_runs", "scheduled_tasks"]
+      "tables": ["scheduled_task_runs", "scheduled_task_shares", "scheduled_tasks"]
     },
     {
       "name": "notifications",

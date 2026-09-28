@@ -13,30 +13,27 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The All tab lists media_assets (chat uploads, generated images/files/videos); project knowledge files are not in it or its search, projects only appear as folders that leave the Library. | ui, handler |
-| desktop | partial | The All tab lists media_assets (chat uploads, generated images/files/videos); project knowledge files are not in it or its search, projects only appear as folders that leave the Library. | ui, handler |
 | mobile | partial | All lists media_assets plus local/cloud artifacts; project files are absent, and type filters and artifact search run only over pages already loaded. | ui, handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/app/chat/library/page.tsx:4-17`, `packages/ui/unified-chat/src/components/library/LibraryView.tsx:852-874`, `apps/web/app/api/library/route.ts:67-97`, `apps/web/lib/server/media-assets.ts:454-510`
+Code: `apps/mobile/app/(app)/library/index.tsx:1-8`, `apps/mobile/src/features/library/index.tsx:249-270`, `apps/mobile/src/features/library/index.tsx:91-120`, `apps/mobile/src/features/library/libraryClient.ts:53-80`
 
 ## S24.02: Uploaded-files view.
 
 - Done when: A view shows only the files the user uploaded.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | No Uploaded view: /api/library accepts origin=uploaded but no tab or control sends it, so uploads are mixed into All/Images/Documents. | ui |
-| desktop | partial | No Uploaded view: /api/library accepts origin=uploaded but no tab or control sends it, so uploads are mixed into All/Images/Documents. | ui |
 | mobile | partial | Rows carry a source label ("Upload") but no view shows uploaded files only. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `packages/ui/unified-chat/src/components/library/LibraryView.tsx:81-88`, `packages/ui/unified-chat/src/components/library/LibraryView.tsx:96-103`, `apps/web/app/api/library/route.ts:67-97`, `apps/mobile/src/features/library/index.tsx:518-522`
+Code: `apps/mobile/src/features/library/index.tsx:518-522`, `apps/mobile/src/features/library/libraryClient.ts:37-50`
 
 ## S24.03: Generated-files view.
 
@@ -69,17 +66,13 @@ Code: `apps/mobile/src/features/library/index.tsx:518-522`, `apps/mobile/src/fea
 
 - Done when: A Videos view collects the user's videos and plays them.
 - Wave: 3
-- Already works on: mobile
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Videos tab lists videos, but a row opens only if previewable; /api/library falls back to image-only when no flag is stored, so uploaded videos do nothing on click (live E099). Generated videos play. | handler |
-| desktop | partial | Videos tab lists videos, but a row opens only if previewable; /api/library falls back to image-only when no flag is stored, so uploaded videos do nothing on click (live E099). Generated videos play. | handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `packages/ui/unified-chat/src/components/library/LibraryView.tsx:81-88`, `packages/ui/unified-chat/src/components/library/LibraryView.tsx:670-687`, `apps/web/app/api/library/route.ts:40-44`, `packages/ui/unified-chat/src/components/library/LibraryView.tsx:1100-1110`
 
 ## S24.08: Recent-files view.
 
@@ -103,14 +96,10 @@ Code: `apps/mobile/src/features/library/libraryClient.ts:60-62`, `apps/mobile/ap
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Items shared with you appear only on Workspace > Sharing (projects, conversations, artifacts shared org-wide); the Library has no Shared-with-me view and nothing for files. | ui |
-| desktop | partial | Items shared with you appear only on Workspace > Sharing (projects, conversations, artifacts shared org-wide); the Library has no Shared-with-me view and nothing for files. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/workspace/sharing/page.tsx:16-16`, `apps/web/features/settings/sections/OrganizationSharingSection.tsx:445-452`
 
 ## S24.11: Folder hierarchy.
 
@@ -119,14 +108,10 @@ Code: `apps/web/app/workspace/sharing/page.tsx:16-16`, `apps/web/features/settin
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Projects appear as one flat level of "folders" in the All tab and opening one leaves the Library for the project page; there are no user folders or nesting. | ui, handler |
-| desktop | partial | Projects appear as one flat level of "folders" in the All tab and opening one leaves the Library for the project page; there are no user folders or nesting. | ui, handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `packages/ui/unified-chat/src/components/library/LibraryView.tsx:720-727`, `apps/web/features/library/components/LibraryView.tsx:137-139`
 
 ## S24.12: Grid/list toggle.
 
@@ -185,17 +170,14 @@ Code: `packages/ui/unified-chat/src/components/library/LibraryView.tsx:81-88`, `
 
 - Done when: Users can sort the Library by name, date, size or type.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Sort by name, size and "Modified" exists, but there is no type sort and "Modified" actually orders by creation time. | ui |
-| desktop | partial | Sort by name, size and "Modified" exists, but there is no type sort and "Modified" actually orders by creation time. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `packages/ui/unified-chat/src/components/library/LibraryView.tsx:111-115`, `apps/web/lib/server/media-assets.ts:429-433`, `packages/ui/unified-chat/src/components/library/LibraryView.tsx:1826-1860`
 
 ## S24.27: Add to Project.
 
@@ -229,17 +211,14 @@ Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:404-420`, `ap
 
 - Done when: From a Library file, users can open the conversation it came from.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | media_assets stores the conversation a file came from, but /api/library does not return it and the Library has no "Open conversation" action. | api, ui |
-| desktop | partial | media_assets stores the conversation a file came from, but /api/library does not return it and the Library has no "Open conversation" action. | api, ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/lib/server/media-assets.ts:181-185`, `apps/web/app/api/library/route.ts:46-64`
 
 ## S24.32: Version history.
 
@@ -248,30 +227,25 @@ Code: `apps/web/lib/server/media-assets.ts:181-185`, `apps/web/app/api/library/r
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Generated files record a derivation graph (file_lineage, migration 0257: edit/export/copy parents), but no Library or file UI shows earlier versions or restores one. | ui, api |
-| desktop | partial | Generated files record a derivation graph (file_lineage, migration 0257: edit/export/copy parents), but no Library or file UI shows earlier versions or restores one. | ui, api |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/server/generated-file-persist.ts:66-80`
-
 ## S24.33: Storage-consumption display.
 
 - Done when: The product shows how much storage the user's files consume against their allowance.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only project knowledge storage shows "used of limit" (project settings); the Library shows no storage consumption for the user's files. | ui |
-| desktop | partial | Only project knowledge storage shows "used of limit" (project settings); the Library shows no storage consumption for the user's files. | ui |
 | mobile | partial | Settings > Storage shows on-device bytes (downloaded models, cache, free space), not cloud Library usage. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/projects/components/ProjectSettingsDialog.tsx:283-283`, `apps/web/features/projects/components/KnowledgeFilesPanel.tsx:228-244`, `apps/mobile/app/(app)/settings/storage.tsx:260-300`
+Code: `apps/mobile/app/(app)/settings/storage.tsx:260-300`
 
 ## S24.34: Trash and restore.
 
@@ -311,11 +285,7 @@ Code: `packages/ui/unified-chat/src/components/library/LibraryView.tsx:1438-1446
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Processing/indexing state is shown only for project knowledge files; Library items show no upload or processing status. | ui |
-| desktop | partial | Processing/indexing state is shown only for project knowledge files; Library items show no upload or processing status. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/projects/components/ProjectSettingsDialog.tsx:283-283`, `apps/web/features/projects/components/KnowledgeFilesPanel.tsx:41-48`

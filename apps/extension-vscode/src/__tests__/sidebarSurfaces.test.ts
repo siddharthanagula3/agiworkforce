@@ -66,6 +66,7 @@ describe('the overflow menu', () => {
       'work',
       'connectors',
       'memory',
+      'personalization',
       'skills',
       'plugins',
       'mcp',

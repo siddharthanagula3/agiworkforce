@@ -72,17 +72,6 @@ Code: `apps/web/app/api/voice/live/sessions/route.ts:337-340`
 
 Code: `apps/web/features/chat/lib/live-voice-session.ts:668-676`
 
-## S97.24: Voice-to-tool bridge.
-
-- Done when: Voice turns can call product tools and return the results into the spoken conversation, under the user's approval policy.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Voice now offers connector tools, operator MCP tools, url_fetch and create_office_file through the chat gate (live-voice-tool-runner.ts). Still open: the sandbox file tools and E2B code execution, which wait on a single-call executor from the tool loop. | handler |
-
-Code: `apps/web/lib/voice/live-voice-tools.ts:194-203`, `apps/web/lib/voice/live-voice-tools.ts:68-78`
-
 ## S97.26: Visual-frame ingestion.
 
 - Done when: Camera or screen frames are captured and delivered to the realtime model during a voice session.
@@ -101,6 +90,6 @@ Code: `apps/web/features/chat/components/Voice/VoiceModeSurface.tsx:125-129`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | Sessions are stored, but mobile never sends its surface so its sessions are recorded as web, and GET /sessions/active has no caller, so nothing resumes from the record. | handler |
+| platform | partial | mobile now records its surface (9635039ad); GET /sessions/active still has no caller that resumes from the record | handler |
 
-Code: `apps/web/app/api/voice/live/sessions/lib/voice-session-store.ts:133-137`, `apps/web/app/api/voice/live/sessions/route.ts:210-210`, `apps/web/db/neon/0260_voice_sessions.sql:27-35`
+Code: `apps/mobile/src/features/voice/services/liveVoiceSession.ts:238-238`

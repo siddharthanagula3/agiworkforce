@@ -228,6 +228,9 @@
     "shareConversation": "대화 공유",
     "temporaryChat": "임시 채팅",
     "temporaryChatRetentionNote": "기록에 저장되지 않으며 이번 대화에서는 메모리를 사용하지 않습니다.",
+    "temporaryChatPersonalized": "개인화",
+    "temporaryChatUnpersonalized": "개인화 안 함",
+    "temporaryChatPersonalizationHint": "개인화는 프로필, 지침, 응답 스타일을 사용합니다. 개인화 안 함은 이를 제외합니다.",
     "toggleArtifacts": "아티팩트 패널 전환",
     "toggleArtifactsCount": "아티팩트 패널 전환 ({{count}})",
     "toggleStats": "통계"

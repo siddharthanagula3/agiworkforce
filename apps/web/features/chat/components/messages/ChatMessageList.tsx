@@ -33,6 +33,7 @@ import { openModelPicker } from '@features/chat/lib/model-picker-trigger';
 import { pickStandardModel } from '@features/chat/lib/eligible-model';
 import { hasCompatibleFreeErrorRecoveryModel } from '../../lib/free-error-model-recovery';
 import type { ResearchPlanDecision, ResearchPlanOptions } from '../research/ResearchActivity';
+import type { AgiWorkPlanDecision } from '../work-session/AgiWorkPlanReview';
 import {
   InlinePaywallCard,
   normalizePaywallFeature,
@@ -163,6 +164,7 @@ export interface ChatMessageListProps {
     decision: ResearchPlanDecision,
     options?: ResearchPlanOptions,
   ) => void;
+  onAgiWorkPlanDecision?: (id: string, decision: AgiWorkPlanDecision) => void;
   retryingResearchMessageId?: string | null;
   onContinue?: (messageId: string) => void;
   onEdit?: (messageId: string, newContent: string) => void;
@@ -369,6 +371,7 @@ interface MessageGroupRowProps {
     decision: ResearchPlanDecision,
     options?: ResearchPlanOptions,
   ) => void;
+  onAgiWorkPlanDecision?: (id: string, decision: AgiWorkPlanDecision) => void;
   retryingResearchMessageId?: string | null;
   onEdit?: (id: string) => void;
   onDelete?: (id: string) => void;
@@ -415,6 +418,7 @@ interface MessageRowProps {
     decision: ResearchPlanDecision,
     options?: ResearchPlanOptions,
   ) => void;
+  onAgiWorkPlanDecision?: (id: string, decision: AgiWorkPlanDecision) => void;
   retryingResearchMessageId?: string | null;
   onEdit?: (id: string) => void;
   onDelete?: (id: string) => void;
@@ -615,6 +619,7 @@ const MessageRow = memo(function MessageRow({
   onRegenerate,
   onRetryResearch,
   onResearchPlanDecision,
+  onAgiWorkPlanDecision,
   retryingResearchMessageId,
   onEdit,
   onDelete,
@@ -775,6 +780,11 @@ const MessageRow = memo(function MessageRow({
           ? onResearchPlanDecision
           : undefined
       }
+      onAgiWorkPlanDecision={
+        onAgiWorkPlanDecision && displayRole === 'assistant' && message.metadata?.['agiWorkPlan']
+          ? onAgiWorkPlanDecision
+          : undefined
+      }
       isRetryingResearch={retryingResearchMessageId === message.id}
       onEdit={onEdit && displayRole === 'user' ? handleEdit : undefined}
       onDelete={onDelete ? handleDelete : undefined}
@@ -834,6 +844,7 @@ const MessageGroupRow = memo(
     onRegenerate,
     onRetryResearch,
     onResearchPlanDecision,
+    onAgiWorkPlanDecision,
     retryingResearchMessageId,
     onEdit,
     onDelete,
@@ -877,6 +888,7 @@ const MessageGroupRow = memo(
             onRegenerate={onRegenerate}
             onRetryResearch={onRetryResearch}
             onResearchPlanDecision={onResearchPlanDecision}
+            onAgiWorkPlanDecision={onAgiWorkPlanDecision}
             retryingResearchMessageId={retryingResearchMessageId}
             onEdit={onEdit}
             onDelete={onDelete}
@@ -914,6 +926,7 @@ const MessageGroupRow = memo(
       prev.onRegenerate === next.onRegenerate &&
       prev.onRetryResearch === next.onRetryResearch &&
       prev.onResearchPlanDecision === next.onResearchPlanDecision &&
+      prev.onAgiWorkPlanDecision === next.onAgiWorkPlanDecision &&
       prev.retryingResearchMessageId === next.retryingResearchMessageId &&
       prev.onEdit === next.onEdit &&
       prev.onDelete === next.onDelete &&
@@ -1100,6 +1113,7 @@ const ChatMessageListComponent = ({
   onRegenerate,
   onRetryResearch,
   onResearchPlanDecision,
+  onAgiWorkPlanDecision,
   retryingResearchMessageId = null,
   onContinue,
   onEdit,
@@ -1716,6 +1730,7 @@ const ChatMessageListComponent = ({
       onRegenerate: handleRegenerate,
       onRetryResearch,
       onResearchPlanDecision,
+      onAgiWorkPlanDecision,
       retryingResearchMessageId,
       onEdit: handleEdit,
       onDelete: handleDelete,
@@ -1757,6 +1772,7 @@ const ChatMessageListComponent = ({
       handleRegenerateImage,
       onRetryResearch,
       onResearchPlanDecision,
+      onAgiWorkPlanDecision,
       retryingResearchMessageId,
       isReadAloudSupported,
       isSpeaking,
@@ -2010,6 +2026,7 @@ export const ChatMessageList = memo(ChatMessageListComponent, (prev, next) => {
     prev.onRegenerate === next.onRegenerate &&
     prev.onRetryResearch === next.onRetryResearch &&
     prev.onResearchPlanDecision === next.onResearchPlanDecision &&
+    prev.onAgiWorkPlanDecision === next.onAgiWorkPlanDecision &&
     prev.retryingResearchMessageId === next.retryingResearchMessageId &&
     prev.onContinue === next.onContinue &&
     prev.onDelete === next.onDelete &&

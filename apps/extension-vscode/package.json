@@ -430,6 +430,10 @@
         "icon": "$(add)"
       },
       {
+        "command": "agi-workforce.memory.rememberSelection",
+        "title": "AGI Workforce: Remember This"
+      },
+      {
         "command": "agi-workforce.memory.edit",
         "title": "AGI Workforce: Edit Memory Fact",
         "icon": "$(edit)"
@@ -497,6 +501,11 @@
         "command": "agi-workforce.pullCloudTaskIntoWorkspace",
         "title": "AGI Workforce: Pull Cloud Task Into Workspace",
         "icon": "$(cloud-download)"
+      },
+      {
+        "command": "agi-workforce.continueInCloud",
+        "title": "AGI Workforce: Continue in the Cloud",
+        "icon": "$(cloud-upload)"
       },
       {
         "command": "agi-workforce.openCloudCodeSession",
@@ -643,6 +652,11 @@
         "command": "agi-workforce.showContextFiles",
         "title": "AGI Workforce: Show Context Files",
         "icon": "$(pin)"
+      },
+      {
+        "command": "agi-workforce.personalize",
+        "title": "AGI Workforce: Personalization",
+        "icon": "$(person)"
       },
       {
         "command": "agi-workforce.showSkills",
@@ -888,6 +902,11 @@
           "command": "agi-workforce.sendSelectionToNewSession",
           "when": "editorHasSelection",
           "group": "agi-workforce@10"
+        },
+        {
+          "command": "agi-workforce.memory.rememberSelection",
+          "when": "editorHasSelection",
+          "group": "agi-workforce@11"
         }
       ],
       "commandPalette": [

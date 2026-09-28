@@ -50,6 +50,10 @@ export function ProjectSettingsDialog({
   const [description, setDescription] = useState(project.description ?? '');
   const [instructions, setInstructions] = useState(project.instructions ?? '');
   const [usesGlobalMemory, setUsesGlobalMemory] = useState(project.usesGlobalMemory !== false);
+  const [usesAccountInstructions, setUsesAccountInstructions] = useState(
+    project.usesAccountInstructions !== false,
+  );
+  const [usesAccountStyle, setUsesAccountStyle] = useState(project.usesAccountStyle !== false);
   const [isSaving, setIsSaving] = useState(false);
   const { confirm, dialog: confirmDialog } = useConfirmAction();
 
@@ -58,7 +62,17 @@ export function ProjectSettingsDialog({
     setDescription(project.description ?? '');
     setInstructions(project.instructions ?? '');
     setUsesGlobalMemory(project.usesGlobalMemory !== false);
-  }, [project.name, project.description, project.instructions, project.usesGlobalMemory]);
+    setUsesAccountInstructions(project.usesAccountInstructions !== false);
+    setUsesAccountStyle(project.usesAccountStyle !== false);
+  }, [
+    project.id,
+    project.name,
+    project.description,
+    project.instructions,
+    project.usesGlobalMemory,
+    project.usesAccountInstructions,
+    project.usesAccountStyle,
+  ]);
 
   useEffect(() => {
     resetFields();
@@ -69,7 +83,9 @@ export function ProjectSettingsDialog({
     (name !== project.name ||
       description !== (project.description ?? '') ||
       instructions !== (project.instructions ?? '') ||
-      usesGlobalMemory !== (project.usesGlobalMemory !== false));
+      usesGlobalMemory !== (project.usesGlobalMemory !== false) ||
+      usesAccountInstructions !== (project.usesAccountInstructions !== false) ||
+      usesAccountStyle !== (project.usesAccountStyle !== false));
   const { confirmDiscard, dialog: discardDialog } = useUnsavedChangesGuard({
     dirty,
     description:
@@ -127,6 +143,8 @@ export function ProjectSettingsDialog({
       name: name.trim(),
       instructions: instructions.trim() || null,
       usesGlobalMemory,
+      usesAccountInstructions,
+      usesAccountStyle,
     };
     setIsSaving(true);
     try {
@@ -255,6 +273,46 @@ export function ProjectSettingsDialog({
                 rows={5}
                 className="resize-y rounded-xl bg-muted/40"
               />
+            </div>
+
+            <div className="space-y-1.5">
+              <p className="text-caption font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                Personalization
+              </p>
+              <label className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  checked={usesAccountInstructions}
+                  onChange={(e) => setUsesAccountInstructions(e.target.checked)}
+                  className="mt-0.5"
+                />
+                <span className="flex flex-col gap-0.5">
+                  <span className="text-xs text-foreground">
+                    Use your profile and instructions for AGI
+                  </span>
+                  <span className="text-caption text-muted-foreground">
+                    {usesAccountInstructions
+                      ? 'Chats here also follow your profile and Instructions for AGI from Settings > General, alongside this project\u2019s instructions.'
+                      : 'Chats here follow only this project\u2019s instructions. Your name, work, about you and Instructions for AGI are left out.'}
+                  </span>
+                </span>
+              </label>
+              <label className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  checked={usesAccountStyle}
+                  onChange={(e) => setUsesAccountStyle(e.target.checked)}
+                  className="mt-0.5"
+                />
+                <span className="flex flex-col gap-0.5">
+                  <span className="text-xs text-foreground">Use your response style</span>
+                  <span className="text-caption text-muted-foreground">
+                    {usesAccountStyle
+                      ? 'Replies here use the style, length and language you chose in Settings.'
+                      : 'Replies here ignore your saved style, length and language settings.'}
+                  </span>
+                </span>
+              </label>
             </div>
 
             {/*

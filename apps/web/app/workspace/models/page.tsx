@@ -10,6 +10,7 @@ export const metadata: Metadata = {
 export default function WorkspaceModelsPage() {
   return (
     <ConsolePage
+      help={{ docId: 'providers-and-models', label: 'How models and providers work' }}
       title="Models"
       description="Which models and providers members may run. Checked server-side after auto-routing resolves, so a blocked model cannot be reached by asking for Auto."
     >

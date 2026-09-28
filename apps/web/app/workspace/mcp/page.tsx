@@ -10,6 +10,7 @@ export const metadata: Metadata = {
 export default function WorkspaceMcpPage() {
   return (
     <ConsolePage
+      help={{ docId: 'mcp-connections', label: 'How MCP servers work' }}
       title="MCP servers"
       description="Servers this workspace publishes to every member, so nobody has to configure the same connection twice. Retiring one takes it away from everyone."
     >

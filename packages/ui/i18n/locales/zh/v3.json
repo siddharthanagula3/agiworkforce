@@ -384,6 +384,9 @@
       "constraintsPlaceholder": "边界、需避免的内容、优先来源…",
       "deliverableLabel": "交付物",
       "deliverablePlaceholder": "你期望的具体产出（文件、表格、摘要等）",
+      "toolsLabel": "此任务可使用的工具",
+      "toolWebSearch": "网页搜索与浏览",
+      "toolCodeExecution": "代码执行",
       "palette": {
         "label": "AGI Work 工具",
         "searchPlaceholder": "搜索插件、文件夹和技能",

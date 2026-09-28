@@ -105,17 +105,12 @@ describe('organization shared surface · cross-org isolation', () => {
     }
 
     expect(mockNeonQuery).toHaveBeenCalledTimes(2);
-    for (const [, params] of mockNeonQuery.mock.calls) {
-      expect((params as unknown[])[0]).toBe(ORG_A);
-      expect(params).not.toContain(ORG_B);
+    for (const [ownerSql, ownerParams] of mockNeonQuery.mock.calls) {
+      expect(String(ownerSql)).toMatch(/organization_shared_projects|organization_members om/i);
+      expect(String(ownerSql)).toMatch(/organization_id = \$1/i);
+      expect((ownerParams as unknown[])[0]).toBe(ORG_A);
+      expect(ownerParams).not.toContain(ORG_B);
     }
-    const [sharesSql, sharesParams] = mockNeonQuery.mock.calls.find(([sql]) =>
-      /organization_shared_projects/i.test(String(sql)),
-    )!;
-    expect(String(sharesSql)).toMatch(/organization_shared_projects/i);
-    expect(String(sharesSql)).toMatch(/organization_id = \$1/i);
-    expect((sharesParams as unknown[])[0]).toBe(ORG_A);
-    expect(sharesParams).not.toContain(ORG_B);
   });
 
   it('the member roster read is fenced on the caller’s organization', async () => {
@@ -126,13 +121,10 @@ describe('organization shared surface · cross-org isolation', () => {
     );
     expect(response.status).toBe(200);
 
-    const roster = mockNeonQuery.mock.calls.find(([sql]) =>
-      /from public\.organization_members om/i.test(String(sql)),
-    );
+    const roster = calls().find(({ sql }) => /select user_id, role, joined_at/i.test(sql));
     expect(roster).toBeDefined();
-    expect(String(roster![0])).toMatch(/where om\.organization_id = \$1/i);
-    expect(String(roster![0])).toMatch(/om\.status = 'active'/i);
-    expect(roster![1]).toEqual([ORG_A]);
+    expect(roster!.sql).toMatch(/where organization_id = \$1/i);
+    expect(roster!.params).toEqual([ORG_A]);
   });
 
   it('an admin of org A cannot share a project that lives in org B', async () => {

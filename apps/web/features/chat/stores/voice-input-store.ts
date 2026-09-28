@@ -22,6 +22,7 @@ export interface VoiceInputState {
   error: string | null;
   language: string;
   captureStream: MediaStream | null;
+  canRetryTranscription: boolean;
 }
 
 interface VoiceInputActions {
@@ -31,6 +32,7 @@ interface VoiceInputActions {
   clearTranscript: () => void;
   setLanguage: (lang: string) => void;
   clearError: () => void;
+  retryTranscription: () => Promise<void>;
 }
 
 interface RuntimeRefs {
@@ -39,6 +41,7 @@ interface RuntimeRefs {
   mediaRecorder: MediaRecorder | null;
   audioChunks: Blob[];
   stopResolve: (() => void) | null;
+  failedRecording: Blob | null;
 }
 
 const rt: RuntimeRefs = {
@@ -47,6 +50,7 @@ const rt: RuntimeRefs = {
   mediaRecorder: null,
   audioChunks: [],
   stopResolve: null,
+  failedRecording: null,
 };
 
 /**
@@ -61,6 +65,7 @@ export function _resetRuntimeRefs(): void {
   rt.mediaRecorder = null;
   rt.audioChunks = [];
   rt.stopResolve = null;
+  rt.failedRecording = null;
 }
 
 const PREFERRED_MIME_TYPES = [
@@ -172,12 +177,14 @@ export const useVoiceInputStore = create<VoiceInputState & VoiceInputActions>()(
           ? (navigator.language ?? DEFAULT_LANGUAGE)
           : DEFAULT_LANGUAGE,
       captureStream: null,
+      canRetryTranscription: false,
 
       startListening: async () => {
         if (get().mode !== 'idle') return;
         const generation = ++rt.generation;
+        rt.failedRecording = null;
 
-        set({ mode: 'listening', error: null, transcript: '' });
+        set({ mode: 'listening', error: null, transcript: '', canRetryTranscription: false });
 
         try {
           const stream = await navigator.mediaDevices.getUserMedia({
@@ -259,12 +266,39 @@ export const useVoiceInputStore = create<VoiceInputState & VoiceInputActions>()(
           set({ transcript: text, mode: 'idle' });
         } catch (err) {
           if (generation !== rt.generation) return;
-          set({ mode: 'error', error: transcriptionErrorMessage(err) });
+          rt.failedRecording = blob;
+          set({
+            mode: 'error',
+            error: transcriptionErrorMessage(err),
+            canRetryTranscription: true,
+          });
+        }
+      },
+
+      retryTranscription: async () => {
+        const blob = rt.failedRecording;
+        if (!blob || get().mode === 'listening' || get().mode === 'transcribing') return;
+        const generation = ++rt.generation;
+        set({ mode: 'transcribing', error: null, transcript: '' });
+        try {
+          const text = await transcribeViaServer(blob, get().language);
+          if (generation !== rt.generation) return;
+          rt.failedRecording = null;
+          set({ transcript: text, mode: 'idle', canRetryTranscription: false });
+        } catch (err) {
+          if (generation !== rt.generation) return;
+          set({
+            mode: 'error',
+            error: transcriptionErrorMessage(err),
+            canRetryTranscription: true,
+          });
         }
       },
 
       cancelListening: () => {
         rt.generation += 1;
+        rt.failedRecording = null;
+        if (get().canRetryTranscription) set({ canRetryTranscription: false });
         if (get().mode === 'idle') return;
         releaseCapture();
         set({ mode: 'idle', transcript: '', error: null, captureStream: null });

@@ -10,33 +10,29 @@ nothing is left.
 
 - Done when: A parent task visibly owns child agents it spawned, and the user can see that relationship.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | A session can spawn subagent tasks; Shown only by /tasks in the --no-tui REPL; the TUI has no subagent list or cell. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/subagent.rs:247-255`, `apps/cli/src/repl/slash_commands.rs:214-230`, `apps/cli/src/subagent.rs:476-484`
 
 ## S62.02: Child-agent list.
 
 - Done when: The user sees a list of the child agents working under a task.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Shown only by /tasks in the --no-tui REPL; the TUI has no subagent list or cell. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/repl/slash_commands.rs:214-230`, `apps/cli/src/subagent.rs:45-61`
 
 ## S62.03: Role labels.
 
@@ -74,17 +70,14 @@ Code: `apps/cli/src/subagent.rs:64-73`
 
 - Done when: The view shows the live status of each participating agent or model.
 - Wave: 3
-- Already works on: mobile
+- Already works on: mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
-| cli | partial | Shown only by /tasks in the --no-tui REPL; the TUI has no subagent list or cell. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/subagent.rs:45-61`, `apps/cli/src/subagent.rs:476-484`
 
 ## S62.06: Per-agent transcript.
 
@@ -132,33 +125,18 @@ Code: `apps/cli/src/subagent.rs:247-255`
 
 Code: `apps/mobile/src/features/compare/index.tsx:575-589`, `apps/mobile/src/features/compare/index.tsx:210-212`, `apps/cli/src/subagent.rs:64-73`, `apps/cli/src/subagent.rs:367-373`
 
-## S62.09: Concurrent task view.
-
-- Done when: The user can watch several running tasks or agents at once in one view.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Shown only by /tasks in the --no-tui REPL; the TUI has no subagent list or cell. | ui |
-
-Code: `apps/cli/src/repl/slash_commands.rs:214-230`, `apps/cli/src/subagent.rs:476-484`
-
 ## S62.10: Needs-input prioritization.
 
 - Done when: Tasks or agents that need the user's input are surfaced first.
 - Wave: 3
-- Already works on: mobile
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Runs waiting for approval show an inline card, but they are not sorted or filtered to the top; there is no "needs you" view. | ui |
-| desktop | partial | Same as web. | ui |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | Runs waiting for approval get their own context value (for Approve/Reject), but are not sorted or grouped first. | ui |
-| chrome | partial | Waiting runs show an approval card, but the list is not ordered by needs-input. | ui |
+| chrome | partial | patches /private/tmp/claude-501/-Users-siddhartha-Desktop-agiworkforce/8f9d3a7a-39dd-4667-8b02-4d9e6e44cf4c/scratchpad/outside-set/p-routines-voice-S62.10-vscode.patch and /private/tmp/claude-501/-Users-siddhartha-Desktop-agiworkforce/8f9d3a7a-39dd-4667-8b02-4d9e6e44cf4c/scratchpad/outside-set/p-routines-voice-S62.10-chrome.patch (files held by p-sessions and p-contrast) | ui |
 
-Code: `packages/ui/unified-chat/src/components/tasks/TasksPage.tsx:727-742`, `packages/ui/unified-chat/src/components/tasks/TasksPage.tsx:59-63`, `apps/extension-vscode/src/features/cloud-tasks/cloudTasksTree.ts:34-36`, `apps/extension/src/features/side-panel/cloudRunsPanel.ts:676-686`
+Code: `apps/extension-vscode/src/features/cloud-tasks/cloudTasksTree.ts:104-104`, `apps/extension/src/features/side-panel/cloudRunsPanel.ts:802-802`
 
 ## S62.12: Full-transcript drill-down.
 
@@ -208,17 +186,15 @@ Code: `apps/cli/src/subagent.rs:247-255`
 
 - Done when: The user can fork a side task that runs in the background without disturbing the main one.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | /btw forks a side question only in the --no-tui REPL; in the TUI it is sent into the main conversation. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/tui/tui_app.rs:3841-3848`
 
 ## S62.17: Interactive branch.
 

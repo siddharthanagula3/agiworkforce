@@ -9,6 +9,7 @@ export const USER_OWNED_TABLES = new Set([
   'media_assets',
   'scheduled_tasks',
   'scheduled_task_runs',
+  'scheduled_task_shares',
   'cloud_agent_runs',
   'cloud_agent_events',
   'cloud_agent_approval_checkpoints',

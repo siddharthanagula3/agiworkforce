@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import {
   Archive,
@@ -39,7 +39,7 @@ import {
   workModeLabel,
 } from './task-display';
 
-type TaskFilter = 'active' | 'all' | 'archived';
+type TaskFilter = 'active' | 'needs_you' | 'all' | 'archived';
 
 const ALL_STATES: AgentTaskState[] = [
   'queued',
@@ -57,8 +57,19 @@ const PAGE_SIZE = 25;
 
 const ARCHIVED_STATES: AgentTaskState[] = ['archived'];
 
+const NEEDS_INPUT_STATES: readonly AgentTaskState[] = [
+  'awaiting_input',
+  'awaiting_approval',
+  'paused',
+];
+
+function needsInput(run: CloudAgentRun): boolean {
+  return NEEDS_INPUT_STATES.includes(runWorkState(run));
+}
+
 const FILTERS: ReadonlyArray<{ value: TaskFilter; label: string }> = [
   { value: 'active', label: 'Active' },
+  { value: 'needs_you', label: 'Needs you' },
   { value: 'all', label: 'All' },
   { value: 'archived', label: 'Archived' },
 ];
@@ -93,6 +104,7 @@ function saveTaskLayout(layout: TaskLayout): void {
 function statesForFilter(filter: TaskFilter): AgentTaskState[] | undefined {
   if (filter === 'all') return ALL_STATES;
   if (filter === 'archived') return ARCHIVED_STATES;
+  if (filter === 'needs_you') return [...NEEDS_INPUT_STATES];
   return undefined;
 }
 
@@ -184,6 +196,7 @@ export interface TasksTransport {
   notifyError(message: string): void;
   startWork?: () => void;
   rerunWork?(goal: AgiWorkRerunGoal): void;
+  shareConversation?(conversationId: string): void;
   /**
    * Shelve a finished run, or bring one back. Optional because a surface that
    * cannot reach the archive route must not paint the control: an Archive
@@ -217,6 +230,10 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
   const journalRef = useRef<TaskJournalSnapshot | null>(null);
 
   const getClient = useCallback(() => transport.client, [transport.client]);
+  const orderedRuns = useMemo(
+    () => [...runs.filter(needsInput), ...runs.filter((run) => !needsInput(run))],
+    [runs],
+  );
 
   const load = useCallback(
     async (nextFilter: TaskFilter, cursor: string | null) => {
@@ -405,6 +422,7 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
             .filter((r) => {
               if (filter === 'archived') return r.state === 'archived';
               if (filter === 'active') return r.state !== 'archived';
+              if (filter === 'needs_you') return needsInput(r);
               return true;
             }),
         );
@@ -549,14 +567,18 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
             <ListChecks className="h-7 w-7 text-[var(--chat-accent-primary-text)]" />
           </div>
           <p className="text-base font-semibold text-foreground">
-            No {filter === 'all' ? '' : `${filter} `}work sessions yet
+            {filter === 'needs_you'
+              ? 'Nothing needs you right now'
+              : `No ${filter === 'all' ? '' : `${filter} `}work sessions yet`}
           </p>
           <p className="max-w-sm text-sm text-muted-foreground">
             {filter === 'archived'
               ? 'A finished task moves here when you archive it, and stays until you restore it.'
-              : 'Runs from AGI Work, Research, and long tool sessions show up here.'}
+              : filter === 'needs_you'
+                ? 'A work session that is waiting for your approval, an answer or a resume shows up here.'
+                : 'Runs from AGI Work, Research, and long tool sessions show up here.'}
           </p>
-          {transport.startWork && filter !== 'archived' ? (
+          {transport.startWork && filter !== 'archived' && filter !== 'needs_you' ? (
             <Button size="sm" onClick={transport.startWork}>
               Start AGI Work
             </Button>
@@ -624,7 +646,7 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
       ) : (
         <div className="grid min-h-0 gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
           <div className="flex min-w-0 flex-col gap-2">
-            {runs.map((run) => {
+            {orderedRuns.map((run) => {
               const workState = runWorkState(run);
               const tone = taskStateTone(workState);
               const cancellable = isCancellableState(workState);
@@ -906,6 +928,12 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
                 ? (goal) => transport.rerunWork?.(goal)
                 : undefined
             }
+            {...(transport.shareConversation
+              ? {
+                  onShare: (conversationId: string) =>
+                    transport.shareConversation?.(conversationId),
+                }
+              : {})}
           />
         </div>
       )}

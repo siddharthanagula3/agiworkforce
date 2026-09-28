@@ -174,7 +174,7 @@ describe('GET /api/library', () => {
 
   it('orders by the requested sort and defaults to most recently modified', async () => {
     await GET(makeRequest(''));
-    expect((mockQuery.mock.calls[0] as [string])[0]).toContain('order by created_at desc');
+    expect((mockQuery.mock.calls[0] as [string])[0]).toContain('order by updated_at desc');
 
     mockQuery.mockClear();
     await GET(makeRequest('?sort=name'));
@@ -187,6 +187,10 @@ describe('GET /api/library', () => {
     expect((mockQuery.mock.calls[0] as [string])[0]).toContain(
       'order by byte_size desc nulls last',
     );
+
+    mockQuery.mockClear();
+    await GET(makeRequest('?sort=type'));
+    expect((mockQuery.mock.calls[0] as [string])[0]).toContain('order by mime_type asc');
   });
 
   it('keeps the deleted bin on its own ordering, whatever sort is asked for', async () => {

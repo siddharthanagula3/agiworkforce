@@ -82,6 +82,8 @@ export const ManagedMediaImageRefSchema = z.union([
   z.object({ b64_json: z.string().min(1).max(MANAGED_MEDIA_IMAGE_REF_MAX_B64_LENGTH) }).strict(),
 ]);
 
+export const MANAGED_MEDIA_MAX_IMAGE_REFERENCES = 3;
+
 export const ManagedMediaImageGenerationRequestSchema = z
   .object({
     prompt: z.string().min(1).max(4000),
@@ -97,6 +99,11 @@ export const ManagedMediaImageGenerationRequestSchema = z
     operation: ManagedMediaImageOperationSchema.optional().default('generate'),
     source_image: ManagedMediaImageRefSchema.optional(),
     mask_image: ManagedMediaImageRefSchema.optional(),
+    reference_images: z
+      .array(ManagedMediaImageRefSchema)
+      .min(1)
+      .max(MANAGED_MEDIA_MAX_IMAGE_REFERENCES)
+      .optional(),
     transparent_background: z.boolean().optional().default(false),
     /**
      * Return the durable job handle instead of the finished images. Every
@@ -122,6 +129,13 @@ export const ManagedMediaImageGenerationRequestSchema = z
         code: z.ZodIssueCode.custom,
         path: ['operation'],
         message: 'source_image was provided but operation is "generate"; pick an edit operation',
+      });
+    }
+    if (value.reference_images && value.operation !== 'edit') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['reference_images'],
+        message: 'reference_images is only valid for operation "edit"',
       });
     }
     const maskAllowed = value.operation === 'inpaint' || value.operation === 'outpaint';

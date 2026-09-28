@@ -45,16 +45,14 @@ nothing is left.
 
 - Done when: Archiving asks to confirm, or confirms afterwards with a way to undo, and says where archived items can be found.
 - Wave: 3
-- Already works on: cli, vscode
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Archive happens on one click with no confirmation, undo toast or pointer to the Archived view (only failures toast); project archive also silently unfiles its chats (S23.30). | states |
-| desktop | partial | Archive happens on one click with no confirmation, undo toast or pointer to the Archived view (only failures toast); project archive also silently unfiles its chats (S23.30). | states |
 | mobile | partial | Archive runs immediately from the menu with no confirmation or undo; only a failure alert. | states |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/shared/components/layout/WebAppShell.tsx:326-326`, `apps/web/shared/components/layout/sidebar-session-actions.ts:49-49`, `packages/ui/ui/src/sidebar/SessionItem.tsx:365-365`, `apps/mobile/src/features/conversation-actions/useConversationActions.ts:129-129`
+Code: `apps/mobile/src/features/conversation-actions/useConversationActions.ts:129-129`, `apps/mobile/src/features/conversation-actions/useConversationActions.ts:100-100`
 
 ## S10.08: Share conversation.
 
@@ -181,7 +179,7 @@ Code: `apps/mobile/app/(app)/settings/workspace.tsx:163-177`, `apps/mobile/src/f
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| chrome | partial | Let the Chrome picker attach documents (PDF, text); today "Add an image" accepts PNG, JPEG, WebP and GIF only. | handler |
+| chrome | partial | needs the R2 upload host in manifest connect-src and host_permissions (permission prompt on update, owner call) or a server upload proxy accepting the extension token | document upload |
 
 Code: `apps/extension/src/side_panel.ts:9843-9867`, `apps/extension/src/side_panel.ts:5258-5298`
 
@@ -193,10 +191,10 @@ Code: `apps/extension/src/side_panel.ts:9843-9867`, `apps/extension/src/side_pan
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Settings marks an expired connector "Needs to be reconnected" but offers only Disconnect (which deletes its saved tool permissions); Reconnect exists only as the in-chat card after a tool call fails. | ui |
+| web | partial | Same as S55.20: detail offers Connect on an expired connection; browser verification against a real expired grant is still owed. | states |
 | desktop | partial | Settings marks an expired connector "Needs to be reconnected" but offers only Disconnect (which deletes its saved tool permissions); Reconnect exists only as the in-chat card after a tool call fails. | ui |
 
-Code: `apps/web/features/connectors/hooks/use-connectors-settings-adapter.tsx:513-518`, `packages/ui/ui/src/directory/ConnectorDetailView.tsx:295-298`, `apps/web/features/chat/components/messages/ToolTimeline.tsx:466-470`, `packages/ui/unified-chat/src/components/ConnectorConnectCard.tsx:15-25`
+Code: `packages/ui/ui/src/settings-modal/SettingsModal.tsx:281-281`, `apps/web/features/connectors/hooks/use-connectors-settings-adapter.tsx:513-518`, `packages/ui/ui/src/directory/ConnectorDetailView.tsx:295-298`, `apps/web/features/chat/components/messages/ToolTimeline.tsx:466-470`
 
 ## S10.20: Select among connected accounts.
 
@@ -307,29 +305,27 @@ Code: `apps/extension-vscode/src/core/commandSetup.ts:1129-1132`
 
 - Done when: As a conversation nears or passes the model's context limit, the user gets a clear warning with what to do (trim, compact, new chat).
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Only the on-device Apple Intelligence path explains an over-long chat, after it fails; warn before sending, for every model. | states |
-| cli | partial | The footer always shows a ctx bar and percentage, but nothing warns as it nears 100%; add a warning that suggests /compact. | states |
 | vscode | partial | Near the limit the token counter only changes colour (75% / 90%); add a text warning that is also announced. | states |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:584-584`, `apps/cli/src/tui/tui_app.rs:2029-2029`, `apps/cli/src/tui/tui_app.rs:3422-3422`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:3329-3329`
+Code: `apps/mobile/stores/chat/chatExecutionStore.ts:584-584`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:3329-3329`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:3312-3312`
 
 ## S10.28: Usage-limit notice.
 
 - Done when: When a usage limit is reached, the user sees which limit, when it resets, and what they can do.
 - Wave: 3
-- Already works on: web, desktop, mobile, vscode
+- Already works on: web, desktop, mobile, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | The paywall message is never shown: the server sends *_limit_reached, not kind "paywall", so the CLI prints a generic error without which limit or when it resets. | handler |
-| chrome | partial | Chrome matches none of the server's *_limit_reached codes and reports a usage block as service rate limiting; map those codes to the usage-limit notice. | handler |
 
-Code: `apps/cli/src/usage_summary.rs:283-285`, `apps/cli/src/errors.rs:348-360`, `apps/cli/src/usage_summary.rs:146-170`, `apps/extension/src/side_panel.ts:8370-8384`
+Code: `apps/cli/src/usage_summary.rs:283-285`, `apps/cli/src/errors.rs:348-360`, `apps/cli/src/usage_summary.rs:146-170`
 
 ## S10.29: Credit-purchase dialog.
 
@@ -380,18 +376,6 @@ Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:165-182`, `apps
 
 Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:367-380`, `apps/mobile/lib/v1FeatureFlags.ts:6-6`
 
-## S10.34: Microphone permission explanation.
-
-- Done when: Before or when the microphone is first needed, the product explains why it wants it and what to do if access is refused.
-- Wave: 3
-- Already works on: web, desktop, mobile
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | Dictation explains only after Chrome blocks the microphone; say why the side panel wants it before Chrome asks. | states |
-
-Code: `apps/extension/src/features/side-panel/voice.ts:23-23`
-
 ## S10.35: Screen-sharing source selection.
 
 - Done when: When sharing the screen, the user picks which screen or window to share before anything is captured.
@@ -437,31 +421,29 @@ Code: `apps/mobile/src/features/companion/components/ConnectionStateViews.tsx:98
 
 - Done when: Leaving an editor with unsaved edits warns the user and lets them keep editing or discard.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only the schedule draft (browser close via beforeunload) and the artifact source editor warn; add in-app navigation guards for other editors. | states |
-| desktop | partial | Only the schedule draft (browser close via beforeunload) and the artifact source editor warn; add in-app navigation guards for other editors. | states |
 | mobile | partial | Only the Personalization screen asks before discarding edits; other edit screens do not. | states |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/schedules/components/SchedulesPage.tsx:256-256`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1377-1377`, `apps/mobile/src/features/settings/personalization/index.tsx:260-260`, `apps/mobile/src/features/settings/personalization/index.tsx:259-259`
+Code: `apps/mobile/src/features/settings/personalization/index.tsx:260-260`, `apps/mobile/src/features/settings/personalization/index.tsx:259-259`
 
 ## S10.42: Edit-conflict resolution.
 
 - Done when: When the same item was changed elsewhere, the user sees both versions and chooses which to keep (or merges).
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Draft conflicts are detected and reported ("changed elsewhere"), but the user cannot compare versions or pick which to keep. | ui |
-| desktop | partial | Draft conflicts are detected and reported ("changed elsewhere"), but the user cannot compare versions or pick which to keep. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | `agi sync import` keeps the local file on a conflict and lists it in the report; the user cannot compare or pick the imported version. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/hooks/use-conversation-draft-sync.ts:124-124`, `apps/web/features/chat/hooks/use-conversation-draft-sync.ts:121-121`, `apps/cli/src/sync.rs:273-273`, `apps/cli/src/sync.rs:361-361`
+Code: `apps/cli/src/sync.rs:273-273`, `apps/cli/src/sync.rs:361-361`
 
 ## S10.43: Export options.
 
@@ -504,14 +486,13 @@ Code: `apps/cli/src/claude_parity.rs:129-131`, `apps/extension-vscode/src/core/c
 
 - Done when: Before diagnostics or crash reports leave the device, the user is told what is included and chooses (or sets a preference that is honoured).
 - Wave: 3
-- Already works on: web, desktop, vscode, chrome
+- Already works on: web, desktop, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Diagnostics leave only when the user taps Export Diagnostics and shares the file, but nothing says what the bundle contains before sharing. | ui |
-| cli | partial | Crash reporting is off by default and honoured, but the default TUI cannot change it (its /config only prints); use the --no-tui REPL "/config set crash-reports true", the AGI_CRASH_REPORTS variable, or edit config.toml. | ui |
 
-Code: `apps/mobile/src/features/settings/index.tsx:618-618`, `apps/mobile/src/features/settings/diagnostics/shareDiagnostics.ts:40-40`, `apps/cli/src/repl/registry.rs:1770-1785`, `apps/cli/src/tui/tui_app.rs:3486-3488`
+Code: `apps/mobile/src/features/settings/index.tsx:618-618`, `apps/mobile/src/features/settings/diagnostics/shareDiagnostics.ts:40-40`
 
 ## S10.47: Data-export request.
 

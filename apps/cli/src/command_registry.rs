@@ -230,9 +230,31 @@ fn append_tui_shortcuts(help: &mut String) {
         "  {:<14} Close the open panel, then clear the composer, then quit (twice)",
         "Esc"
     );
-    let _ = writeln!(help, "  {:<14} Scroll chat history", "Up/Down");
+    let _ = writeln!(
+        help,
+        "  {:<14} Previous / next prompt, or scroll when there is none",
+        "Up/Down"
+    );
+    let _ = writeln!(help, "  {:<14} Scroll chat history", "PageUp/Down");
+    let _ = writeln!(help, "  {:<14} Jump to the latest output", "Ctrl-End");
     let _ = writeln!(help, "  {:<14} Insert a newline", "Ctrl-J");
     let _ = writeln!(help, "  {:<14} Delete to line start", "Ctrl-U");
+    let _ = writeln!(
+        help,
+        "  {:<14} Undo the last edit (Ctrl-Shift-Z redoes)",
+        "Ctrl-_"
+    );
+    let _ = writeln!(
+        help,
+        "  {:<14} Edit the prompt in $VISUAL or $EDITOR",
+        "Ctrl-G/Ctrl-E"
+    );
+    let _ = writeln!(help, "  {:<14} Show or hide full tool output", "Ctrl-O");
+    let _ = writeln!(
+        help,
+        "  {:<14} While a turn runs: queue a message, or /btw to ask aside",
+        "Type + Enter"
+    );
     let _ = writeln!(help, "  {:<14} Redraw the screen", "Ctrl-L");
     let _ = writeln!(help, "  {:<14} Clear input", "Ctrl-C");
     let _ = writeln!(help, "  Customize global actions with [ui.keybindings]");
