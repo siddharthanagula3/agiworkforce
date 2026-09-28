@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import type { MediaJobListResponse } from '@agiworkforce/cloud-contracts';
 
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -17,8 +18,10 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   if (limited) return limited;
 
   const { db, userId, organizationId } = await getUserScopedDb(request);
-  const jobs = await listMediaJobHistory(db, userId, organizationId);
-  return NextResponse.json({ jobs }, { headers: { 'Cache-Control': 'private, no-store' } });
+  const body: MediaJobListResponse = {
+    jobs: await listMediaJobHistory(db, userId, organizationId),
+  };
+  return NextResponse.json(body, { headers: { 'Cache-Control': 'private, no-store' } });
 }
 
 export const GET = withCorsRoute(withErrorHandler(handleGet));
