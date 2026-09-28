@@ -23,7 +23,11 @@ import {
   UPLOAD_NOT_AN_ARCHIVE_MESSAGE,
 } from '@/features/plugins/server/directory/constants';
 import { PayloadCeilingExceededError } from '@/lib/payload-ceiling';
-import type { PluginSourceInstallResponse } from '@agiworkforce/cloud-contracts';
+import {
+  isPluginMarketplaceContentHash,
+  PLUGIN_UPLOAD_ACKNOWLEDGED_SCAN_FIELD,
+  type PluginSourceInstallResponse,
+} from '@agiworkforce/cloud-contracts';
 import { recordAuditEvent } from '@/lib/security-audit';
 
 export const runtime = 'nodejs';
@@ -50,9 +54,14 @@ function invalidUpload(message: string, issues?: readonly string[]): NextRespons
   );
 }
 
-async function readArchiveField(
-  request: NextRequest,
-): Promise<{ bytes: Uint8Array; fileName: string | null; name: string | null } | NextResponse> {
+interface ArchiveUpload {
+  bytes: Uint8Array;
+  fileName: string | null;
+  name: string | null;
+  acknowledgedScans: string[];
+}
+
+async function readArchiveField(request: NextRequest): Promise<ArchiveUpload | NextResponse> {
   let form: FormData;
   try {
     form = (await request.formData()) as unknown as FormData;
@@ -73,6 +82,9 @@ async function readArchiveField(
     bytes: new Uint8Array(buffer),
     fileName: fileName.length > 0 ? fileName : null,
     name: typeof provided === 'string' ? provided : null,
+    acknowledgedScans: form
+      .getAll(PLUGIN_UPLOAD_ACKNOWLEDGED_SCAN_FIELD)
+      .filter((value): value is string => isPluginMarketplaceContentHash(value)),
   };
 }
 
@@ -105,6 +117,7 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
 
   const refused = await refusePluginInstall(request, scope, {
     pluginKeys: archive.plugins.map((plugin) => plugin.key),
+    authorsSkills: true,
   });
   if (refused) return refused;
 
@@ -113,11 +126,14 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
       kind: SOURCE_KIND_UPLOAD,
       sourceName: read.name?.trim() || archive.sourceName,
       plugins: archive.plugins,
+      acknowledgedScans: read.acknowledgedScans,
     });
+    const omittedFiles = archive.plugins.flatMap((plugin) => plugin.omittedFiles);
     const body: PluginSourceInstallResponse = {
       sourceName: read.name?.trim() || archive.sourceName,
       kind: SOURCE_KIND_UPLOAD,
       plugins,
+      ...(omittedFiles.length > 0 ? { omittedFiles } : {}),
     };
     await recordAuditEvent({
       userId,

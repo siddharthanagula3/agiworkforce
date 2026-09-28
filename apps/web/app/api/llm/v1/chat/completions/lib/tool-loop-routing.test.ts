@@ -28,6 +28,8 @@ describe('classifyToolLoopInputs', () => {
       hasSkillTools: false,
       hasOfficeFileTools: false,
       hasMapSearchTools: false,
+      hasPlaceTools: false,
+      hasProductComparisonTools: false,
       hasDeviceStepTools: false,
       shouldRun: true,
       approvalMode: 'manual',

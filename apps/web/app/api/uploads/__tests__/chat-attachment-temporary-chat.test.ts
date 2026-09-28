@@ -111,7 +111,8 @@ describe('POST /api/uploads/chat-attachment/complete · Temporary Chat file poli
     expect(insertedTemporaryFlag()).toBe(true);
     const [sql, params] = SCOPED_DB.query.mock.calls[0] as [string, unknown[]];
     expect(sql).toMatch(/is_temporary/);
-    expect(params).toEqual([CONVERSATION, 'user-abc']);
+    expect(sql).toMatch(/organization_id is not distinct from \$3/);
+    expect(params).toEqual([CONVERSATION, 'user-abc', null]);
   });
 
   it('believes the conversation over a client that claims otherwise', async () => {

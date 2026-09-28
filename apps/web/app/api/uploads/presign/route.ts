@@ -25,10 +25,11 @@ import {
   MAX_AVATAR_BYTES,
   validateAttachmentMeta,
 } from '@agiworkforce/types';
-import { secureFilenameSegment } from '@/lib/secure-random';
 import { randomUUID } from 'node:crypto';
 import { isSupportedChatAttachment, MAX_CHAT_ATTACHMENT_BYTES } from '@/lib/chat-attachment-policy';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
+import { uploadNeedsSameOriginRelay } from '@/lib/server/upload-transport';
+import { uploadObjectKey } from '@/lib/server/upload-keys';
 import { PROJECT_KNOWLEDGE_UPLOAD_PROTOCOL_VERSION } from '@agiworkforce/cloud-contracts';
 
 const PresignRequestSchema = z.object({
@@ -52,24 +53,6 @@ const CleanupRequestSchema = z.object({
     .max(1_000)
     .regex(/^[A-Za-z0-9][A-Za-z0-9._/-]*$/),
 });
-
-const R2_CORS_SAFE_DEV_ORIGINS = new Set(['http://localhost:3000', 'http://127.0.0.1:3000']);
-
-function needsSameOriginUploadProxy(request: NextRequest): boolean {
-  if (process.env['VERCEL_ENV'] === 'production') return false;
-  if (!process.env['VERCEL_ENV'] && process.env['NODE_ENV'] === 'production') return false;
-  return !R2_CORS_SAFE_DEV_ORIGINS.has(request.nextUrl.origin);
-}
-
-function extOf(name: string): string {
-  const dot = name.lastIndexOf('.');
-  return dot >= 0
-    ? name
-        .slice(dot + 1)
-        .toLowerCase()
-        .replace(/[^a-z0-9]/g, '') || 'bin'
-    : 'bin';
-}
 
 async function handlePresign(request: NextRequest): Promise<NextResponse> {
   const { db, userId, organizationId } = await getUserScopedDb(request);
@@ -126,13 +109,7 @@ async function handlePresign(request: NextRequest): Promise<NextResponse> {
     }
   }
 
-  const ext = extOf(fileName);
-  const suffix = `${Date.now()}_${secureFilenameSegment(13)}.${ext}`;
-
-  let key: string;
-  if (kind === 'avatar') {
-    key = `avatars/${userId}/${suffix}`;
-  } else if (kind === 'knowledge-file') {
+  if (kind === 'knowledge-file') {
     if (!projectId) {
       throw createError.validation('projectId is required for knowledge-file uploads');
     }
@@ -150,14 +127,12 @@ async function handlePresign(request: NextRequest): Promise<NextResponse> {
     if (!project) {
       throw createError.notFound('Project not found');
     }
-    key = `knowledge-files/projects/${projectId}/${suffix}`;
-  } else {
-    key = `chat-attachments/${userId}/${suffix}`;
   }
+  const key = uploadObjectKey(kind, { userId, projectId: projectId ?? null, fileName });
 
   const localKnowledgeUpload = kind === 'knowledge-file' && !isPrivateObjectStorageConfigured();
   const proxyChatAttachmentUpload =
-    kind === 'chat-attachment' && needsSameOriginUploadProxy(request);
+    kind === 'chat-attachment' && uploadNeedsSameOriginRelay(request);
   // Same reasoning as the chat-attachment proxy above: a direct browser PUT to
   // R2's presigned URL needs the bucket's own CORS config to allow this
   // origin, and that allowlist is Cloudflare-side infrastructure this route
@@ -166,7 +141,7 @@ async function handlePresign(request: NextRequest): Promise<NextResponse> {
   // hit a same silent "Failed to fetch" the presign response itself looked
   // fine for.
   const proxyKnowledgeFileUpload =
-    kind === 'knowledge-file' && !localKnowledgeUpload && needsSameOriginUploadProxy(request);
+    kind === 'knowledge-file' && !localKnowledgeUpload && uploadNeedsSameOriginRelay(request);
   const upload = localKnowledgeUpload
     ? {
         uploadUrl: new URL(

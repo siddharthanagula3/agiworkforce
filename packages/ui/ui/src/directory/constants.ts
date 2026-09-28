@@ -329,7 +329,7 @@ export const UPLOAD_PLUGIN_FAILED_COPY = 'The plugin could not be uploaded.';
 
 export const UPLOAD_SKILL_LABEL = 'Upload skill';
 export const UPLOAD_SKILL_INTRO =
-  'Choose a SKILL.md, or a zip holding one. It needs a name and a description in its frontmatter.';
+  'Choose a SKILL.md, or a zip of the skill folder with its references and scripts. SKILL.md needs a name and a description in its frontmatter.';
 export const UPLOAD_SKILL_ACCEPT = '.md,.zip,text/markdown,application/zip';
 export const UPLOAD_SKILL_FAILED_COPY = 'The skill could not be uploaded.';
 
@@ -339,6 +339,10 @@ export const UPLOAD_SUBMIT_LABEL = 'Upload';
 export const UPLOAD_CANCEL_LABEL = 'Cancel';
 export const UPLOAD_DONE_LABEL = 'Done';
 export const UPLOAD_BUSY_LABEL = 'Uploading';
+export const UPLOAD_CAUTION_TITLE = 'This upload could not be fully verified';
+export const UPLOAD_CAUTION_BODY =
+  'The security scan found patterns that may carry risk depending on where the file came from. Continue only if you trust its source.';
+export const UPLOAD_CAUTION_CONTINUE_LABEL = 'Continue anyway';
 
 export const CREATE_PLUGIN_LABEL = 'Create a plugin';
 export const CREATE_PLUGIN_INTRO =

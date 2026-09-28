@@ -9,13 +9,16 @@ import type {
   RunCloudCodeCommandResponse,
 } from '@agiworkforce/types';
 import {
+  CLOUD_CODE_BRANCHES_PATH,
   CLOUD_CODE_REPOSITORIES_PATH,
   CLOUD_CODE_SESSIONS_PATH,
   CloudCodeAgentApprovalsSchema,
+  CloudCodeBranchListSchema,
   CloudCodeAgentTurnSchema,
   CloudCodeChangesSchema,
   CloudCodeCommandResponseSchema,
   CloudCodeCommitResultSchema,
+  CloudCodeDiscardResultSchema,
   CloudCodePullRequestSchema,
   CloudCodePullRequestStatusSchema,
   CloudCodeRepositoryListSchema,
@@ -27,8 +30,11 @@ import {
   cloudCodeSessionPath,
   type CloudCodeAgentApproval,
   type CloudCodeAgentTurn,
+  type CloudCodeBranchList,
   type CloudCodeChanges,
   type CloudCodeCommitResult,
+  type CloudCodeDiscardResult,
+  type CommitCloudCodeSessionRequest,
   type CloudCodePullRequest,
   type CloudCodePullRequestStatus,
   type CloudCodeRepositoryList,
@@ -70,6 +76,10 @@ export interface CloudCodeApi {
     signal?: AbortSignal,
   ): Promise<CloudCodeSessionListResponse>;
   listRepositories(search?: string, signal?: AbortSignal): Promise<CloudCodeRepositoryList>;
+  listBranches(
+    repository: { installationId: number; fullName: string },
+    signal?: AbortSignal,
+  ): Promise<CloudCodeBranchList>;
   get(
     sessionId: string,
     signal?: AbortSignal,
@@ -98,7 +108,16 @@ export interface CloudCodeApi {
     signal?: AbortSignal,
   ): Promise<CloudCodeSession>;
   deleteSession(sessionId: string, signal?: AbortSignal): Promise<void>;
-  commit(sessionId: string, message: string, signal?: AbortSignal): Promise<CloudCodeCommitResult>;
+  commit(
+    sessionId: string,
+    input: CommitCloudCodeSessionRequest,
+    signal?: AbortSignal,
+  ): Promise<CloudCodeCommitResult>;
+  discardChanges(
+    sessionId: string,
+    files: string[],
+    signal?: AbortSignal,
+  ): Promise<CloudCodeDiscardResult>;
   startAgentTurn(
     sessionId: string,
     input: StartCloudCodeAgentTurnRequest,
@@ -207,6 +226,17 @@ export function createManagedCloudCodeApi(config: ManagedCloudCodeApiConfig): Cl
         CloudCodeRepositoryListSchema,
       );
     },
+    listBranches(repository, signal) {
+      const query = new URLSearchParams({
+        installationId: String(repository.installationId),
+        repository: repository.fullName,
+      });
+      return request(
+        `${CLOUD_CODE_BRANCHES_PATH}?${query.toString()}`,
+        { signal },
+        CloudCodeBranchListSchema,
+      );
+    },
     get(sessionId, signal) {
       return request(cloudCodeSessionPath(sessionId), { signal }, CloudCodeSessionDetailSchema);
     },
@@ -296,16 +326,28 @@ export function createManagedCloudCodeApi(config: ManagedCloudCodeApiConfig): Cl
         CloudCodeSessionDeletedSchema,
       );
     },
-    async commit(sessionId, message, signal) {
+    async commit(sessionId, input, signal) {
       return request(
         `${cloudCodeSessionPath(sessionId)}/commit`,
         {
           method: 'POST',
           headers: await mutationHeaders(),
-          body: JSON.stringify({ message }),
+          body: JSON.stringify(input),
           signal,
         },
         CloudCodeCommitResultSchema,
+      );
+    },
+    async discardChanges(sessionId, files, signal) {
+      return request(
+        `${cloudCodeSessionPath(sessionId)}/changes`,
+        {
+          method: 'POST',
+          headers: await mutationHeaders(),
+          body: JSON.stringify({ discard: files }),
+          signal,
+        },
+        CloudCodeDiscardResultSchema,
       );
     },
     async startAgentTurn(sessionId, input, signal) {
@@ -314,7 +356,11 @@ export function createManagedCloudCodeApi(config: ManagedCloudCodeApiConfig): Cl
         {
           method: 'POST',
           headers: { ...(await mutationHeaders()), 'idempotency-key': input.idempotencyKey },
-          body: JSON.stringify({ goal: input.goal, model: input.model }),
+          body: JSON.stringify({
+            goal: input.goal,
+            model: input.model,
+            ...(input.maxSteps ? { maxSteps: input.maxSteps } : {}),
+          }),
           signal,
         },
         CloudCodeAgentTurnSchema,

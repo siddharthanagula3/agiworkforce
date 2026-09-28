@@ -411,6 +411,8 @@ export {
   AddMarketplaceDialog,
   DirectoryActionNotice,
   isDirectoryActionNotice,
+  DirectoryScanCaution,
+  isDirectoryScanCaution,
   buildFileTree,
   countActiveFilters,
   formatInstallCount,

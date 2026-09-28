@@ -13,6 +13,7 @@ vi.mock('electron', () => ({
       registered.set(accelerator, handler);
       return true;
     },
+    unregister: (accelerator: string) => registered.delete(accelerator),
     unregisterAll: () => registered.clear(),
   },
   Notification: Object.assign(

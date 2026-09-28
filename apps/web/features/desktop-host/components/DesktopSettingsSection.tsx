@@ -22,6 +22,9 @@ import { Switch } from '@agiworkforce/ui';
 import { toUserMessage } from '@/lib/user-error-message';
 import { useDesktopHost } from '../lib/host';
 import { readDeveloperRuntimeStatus } from '../lib/runtime-client';
+import { ComputerUseSettings } from './ComputerUseSettings';
+import { DesktopPermissionsSection } from './DesktopPermissionsSection';
+import { DesktopSettingsHeading, DesktopSettingsRow as Row } from './DesktopSettingsRow';
 import { DesktopUpdateRow } from './DesktopUpdateRow';
 
 const HEADING = 'General desktop settings';
@@ -152,119 +155,122 @@ export function DesktopSettingsSection() {
   const platformName = describeHostPlatform(host.platform);
 
   return (
-    <section className="flex flex-col gap-4" aria-label={HEADING}>
-      <div>
-        <h2 className="text-base font-semibold text-[var(--text-1)]">{HEADING}</h2>
-        <p className="mt-1 text-sm text-[var(--text-3)]">{HEADING_HINT}</p>
-      </div>
+    <div className="flex flex-col gap-10">
+      <section className="flex flex-col gap-4" aria-label={HEADING}>
+        <DesktopSettingsHeading title={HEADING} hint={HEADING_HINT} />
 
-      {error !== null && (
-        <p className="text-sm text-[var(--settings-destructive-text)]" role="alert">
-          {error}
-        </p>
-      )}
+        {error !== null && (
+          <p className="text-sm text-[var(--settings-destructive-text)]" role="alert">
+            {error}
+          </p>
+        )}
 
-      <div className="flex flex-col">
-        <Row label={STARTUP_LABEL} hint={STARTUP_HINT}>
-          <Switch
-            checked={preferences?.launchAtLogin ?? false}
-            disabled={!preferences}
-            onCheckedChange={(checked) => write({ launchAtLogin: checked })}
-            aria-label={STARTUP_LABEL}
-          />
-        </Row>
+        <div className="flex flex-col">
+          <Row label={STARTUP_LABEL} hint={STARTUP_HINT}>
+            <Switch
+              checked={preferences?.launchAtLogin ?? false}
+              disabled={!preferences}
+              onCheckedChange={(checked) => write({ launchAtLogin: checked })}
+              aria-label={STARTUP_LABEL}
+            />
+          </Row>
 
-        {HOST_SHORTCUT_KEYS.map((key) => {
-          const preferenceKey = HOST_SHORTCUT_PREFERENCE_KEYS[key];
-          const current = (preferences?.[preferenceKey] as string | undefined) ?? NO_HOST_SHORTCUT;
-          const note = state ? STATUS_NOTE[state.shortcutStatus[key]] : undefined;
+          {HOST_SHORTCUT_KEYS.map((key) => {
+            const preferenceKey = HOST_SHORTCUT_PREFERENCE_KEYS[key];
+            const current =
+              (preferences?.[preferenceKey] as string | undefined) ?? NO_HOST_SHORTCUT;
+            const note = state ? STATUS_NOTE[state.shortcutStatus[key]] : undefined;
 
-          return (
-            <Row
-              key={key}
-              label={SHORTCUT_ROWS[key].label}
-              hint={SHORTCUT_ROWS[key].hint}
-              note={note}
-            >
-              <select
-                value={current}
-                disabled={!preferences}
-                aria-label={SHORTCUT_ROWS[key].label}
-                onChange={(event) => write({ [preferenceKey]: event.target.value })}
-                className="h-8 max-w-[220px] rounded-md border border-border bg-background px-2 text-sm text-foreground"
+            return (
+              <Row
+                key={key}
+                label={SHORTCUT_ROWS[key].label}
+                hint={SHORTCUT_ROWS[key].hint}
+                note={note}
               >
-                {choicesFor(key, current).map((choice) => (
-                  <option key={choice === NO_HOST_SHORTCUT ? 'none' : choice} value={choice}>
-                    {shortcutLabel(choice, host.platform)}
-                  </option>
-                ))}
-              </select>
-            </Row>
-          );
-        })}
+                <select
+                  value={current}
+                  disabled={!preferences}
+                  aria-label={SHORTCUT_ROWS[key].label}
+                  onChange={(event) => write({ [preferenceKey]: event.target.value })}
+                  className="h-8 max-w-[220px] rounded-md border border-border bg-background px-2 text-sm text-foreground"
+                >
+                  {choicesFor(key, current).map((choice) => (
+                    <option key={choice === NO_HOST_SHORTCUT ? 'none' : choice} value={choice}>
+                      {shortcutLabel(choice, host.platform)}
+                    </option>
+                  ))}
+                </select>
+              </Row>
+            );
+          })}
 
-        <Row
-          label={CLI_PATH_LABEL}
-          hint={CLI_PATH_HINT}
-          note={cliStatus === null ? CLI_RESOLVING : cliStateLine(cliStatus)}
-          noteIsFailure={
-            cliStatus !== null && (!cliStatus.available || cliStatus.accountSyncError !== null)
-          }
-        >
-          <CliPathField
-            value={preferences?.cliPath ?? ''}
-            disabled={!preferences}
-            onCommit={(cliPath) => {
-              write({ cliPath });
-              resolveCli();
-            }}
-            onResolve={resolveCli}
-          />
-        </Row>
-
-        <Row label={MENU_BAR_LABEL} hint={MENU_BAR_HINT}>
-          <Switch
-            checked={preferences?.showInMenuBar ?? false}
-            disabled={!preferences}
-            onCheckedChange={(checked) => write({ showInMenuBar: checked })}
-            aria-label={MENU_BAR_LABEL}
-          />
-        </Row>
-
-        <Row label={COMPLETION_ALERTS_LABEL} hint={COMPLETION_ALERTS_HINT}>
-          <select
-            value={preferences?.sessionCompletionAlerts ?? DEFAULT_SESSION_COMPLETION_ALERTS}
-            disabled={!preferences}
-            aria-label={COMPLETION_ALERTS_LABEL}
-            onChange={(event) =>
-              write({ sessionCompletionAlerts: event.target.value as SessionCompletionAlerts })
+          <Row
+            label={CLI_PATH_LABEL}
+            hint={CLI_PATH_HINT}
+            note={cliStatus === null ? CLI_RESOLVING : cliStateLine(cliStatus)}
+            noteIsFailure={
+              cliStatus !== null && (!cliStatus.available || cliStatus.accountSyncError !== null)
             }
-            className="h-8 max-w-[220px] rounded-md border border-border bg-background px-2 text-sm text-foreground"
           >
-            {SESSION_COMPLETION_ALERTS.map((mode) => (
-              <option key={mode} value={mode}>
-                {SESSION_COMPLETION_ALERT_LABELS[mode]}
-              </option>
-            ))}
-          </select>
-        </Row>
+            <CliPathField
+              value={preferences?.cliPath ?? ''}
+              disabled={!preferences}
+              onCommit={(cliPath) => {
+                write({ cliPath });
+                resolveCli();
+              }}
+              onResolve={resolveCli}
+            />
+          </Row>
 
-        <Row label={APPROVAL_ALERTS_LABEL} hint={APPROVAL_ALERTS_HINT}>
-          <Switch
-            checked={preferences?.sessionApprovalAlerts ?? false}
-            disabled={!preferences}
-            onCheckedChange={(checked) => write({ sessionApprovalAlerts: checked })}
-            aria-label={APPROVAL_ALERTS_LABEL}
-          />
-        </Row>
+          <Row label={MENU_BAR_LABEL} hint={MENU_BAR_HINT}>
+            <Switch
+              checked={preferences?.showInMenuBar ?? false}
+              disabled={!preferences}
+              onCheckedChange={(checked) => write({ showInMenuBar: checked })}
+              aria-label={MENU_BAR_LABEL}
+            />
+          </Row>
 
-        <DesktopUpdateRow />
-      </div>
+          <Row label={COMPLETION_ALERTS_LABEL} hint={COMPLETION_ALERTS_HINT}>
+            <select
+              value={preferences?.sessionCompletionAlerts ?? DEFAULT_SESSION_COMPLETION_ALERTS}
+              disabled={!preferences}
+              aria-label={COMPLETION_ALERTS_LABEL}
+              onChange={(event) =>
+                write({ sessionCompletionAlerts: event.target.value as SessionCompletionAlerts })
+              }
+              className="h-8 max-w-[220px] rounded-md border border-border bg-background px-2 text-sm text-foreground"
+            >
+              {SESSION_COMPLETION_ALERTS.map((mode) => (
+                <option key={mode} value={mode}>
+                  {SESSION_COMPLETION_ALERT_LABELS[mode]}
+                </option>
+              ))}
+            </select>
+          </Row>
 
-      {platformName !== null && (
-        <p className="text-xs text-[var(--text-3)]">AGI Cloud on {platformName}</p>
-      )}
-    </section>
+          <Row label={APPROVAL_ALERTS_LABEL} hint={APPROVAL_ALERTS_HINT}>
+            <Switch
+              checked={preferences?.sessionApprovalAlerts ?? false}
+              disabled={!preferences}
+              onCheckedChange={(checked) => write({ sessionApprovalAlerts: checked })}
+              aria-label={APPROVAL_ALERTS_LABEL}
+            />
+          </Row>
+
+          <DesktopUpdateRow />
+        </div>
+
+        {platformName !== null && (
+          <p className="text-xs text-[var(--text-3)]">AGI Cloud on {platformName}</p>
+        )}
+      </section>
+
+      <ComputerUseSettings />
+      <DesktopPermissionsSection />
+    </div>
   );
 }
 
@@ -313,40 +319,5 @@ function CliPathField({
       }}
       className="h-8 w-[220px] max-w-[220px] rounded-md border border-border bg-background px-2 text-sm text-foreground"
     />
-  );
-}
-
-function Row({
-  label,
-  hint,
-  note,
-  noteIsFailure = true,
-  children,
-}: {
-  label: string;
-  hint: string;
-  note?: string;
-  noteIsFailure?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-4 border-b border-[var(--settings-border)] py-[14px]">
-      <span className="flex min-w-0 flex-col gap-0.5">
-        <span className="text-sm text-[var(--text-1)]">{label}</span>
-        <span className="text-xs text-[var(--text-3)]">{hint}</span>
-        {note !== undefined && (
-          <span
-            className={
-              noteIsFailure
-                ? 'text-xs text-[var(--settings-destructive-text)]'
-                : 'text-xs text-[var(--text-3)]'
-            }
-          >
-            {note}
-          </span>
-        )}
-      </span>
-      {children}
-    </div>
   );
 }

@@ -46,6 +46,6 @@ Code: `apps/desktop/electron/runtime/shellService.ts:257-262`, `apps/cli/src/fea
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | Published artifacts are served as static single files at /shared-artifact/<token> under connect-src 'none'; hosted apps get no backend, storage, network or viewer auth. | handler |
+| platform | partial | Claude does offer a runtime for published artifacts (support.claude.com/en/articles/9487310, fetched 2026-09-28): AI-powered artifacts that make Claude calls counted against each viewer's own plan and require the viewer to sign in, per-artifact storage of 20 MB text in personal and shared scopes, and access to the viewer's connected apps. Matching it is exactly the missing items S28.22 (brokered AI API), S28.23 and S96.17 (artifact data store) and S33.20 (model-call allowance), which are outside this run's scope, so published artifacts stay static single files under connect-src 'none' | handler |
 
-Code: `apps/web/app/shared-artifact/[token]/page.tsx:54-59`, `apps/web/db/neon/0095_published_artifacts.sql:47-51`, `packages/contracts/types/src/artifact-csp.ts:35-39`
+Code: `apps/web/app/shared-artifact/[token]/page.tsx:54-54`, `packages/contracts/types/src/artifact-csp.ts:37-37`

@@ -193,17 +193,16 @@ Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:738-752`, `ap
 
 - Done when: The agent can pause a task to ask the user a clarifying question and continue with the answer.
 - Wave: 3
-- Already works on: web
+- Already works on: web, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | desktop | partial | Same as web: the clarify tool is never offered on AGI Work turns. | handler |
 | mobile | partial | Mobile shows "Waiting for connector input" but cannot answer it ("answered where the task was started"); no clarifying questions. | ui |
-| cli | partial | The ask_user tool reads the answer with a plain stdin prompt, which works in the --no-tui REPL; the TUI has no overlay for it. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | Chrome shows "Waiting on connector details" for a run but cannot answer it; no clarifying questions. | ui |
 
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:3007-3009`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:700-720`, `apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx:252-265`, `apps/cli/src/features/exec/tools/task_registry/mod.rs:483-493`
+Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:3007-3009`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:700-720`, `apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx:252-265`, `apps/extension/src/features/side-panel/cloudRunsPanel.ts:693-705`
 
 ## S60.20: Task steering.
 

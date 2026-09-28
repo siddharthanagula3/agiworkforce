@@ -10,14 +10,12 @@ import {
   BrowserPairingSection,
   RemoteControlSection,
   LocalAccessSection,
-  useLocalModeHost,
 } from '@/features/desktop-host';
 import { useCapabilitiesPreferences } from '../hooks/use-capabilities-preferences';
 
 export function CapabilitiesSection() {
   const { settings, saving, saveError, savedAt, loadError, retry, retrySave, setBoolean } =
     useCapabilitiesPreferences();
-  const localModeHost = useLocalModeHost();
 
   const row = (title: string, description: string, control: ReactNode) => (
     <div className="flex items-center justify-between rounded-lg border border-border/40 p-4">
@@ -87,7 +85,7 @@ export function CapabilitiesSection() {
         )}
       </section>
 
-      {localModeHost ? <LocalAccessSection /> : null}
+      <LocalAccessSection />
       <BrowserPairingSection />
       <RemoteControlSection />
 

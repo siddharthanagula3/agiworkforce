@@ -30,7 +30,12 @@ import type {
   CloudToolApprovalProjection,
   ManagedCloudAgentRunReference,
 } from '@agiworkforce/cloud-contracts';
-import type { InteractiveCard, ProjectFileCitation, ResearchStep } from '@agiworkforce/types';
+import type {
+  InteractiveCard,
+  ProjectFileCitation,
+  ResearchRunConfig,
+  ResearchStep,
+} from '@agiworkforce/types';
 import type { PastChatCitation } from '@/lib/past-chat-citation';
 import type { CloudWorkMode } from '@agiworkforce/types';
 import type { ManagedMediaImageAspectRatio } from '@agiworkforce/cloud-contracts';
@@ -142,6 +147,7 @@ export interface MessageResearchState {
     | 'awaiting_approval'
     | 'searching'
     | 'synthesizing'
+    | 'paused'
     | 'complete'
     | 'error'
     | 'interrupted';
@@ -174,6 +180,7 @@ export interface MessageResearchState {
    * succeeded (CAP-045 slice 4).
    */
   sourcesForRetry?: Array<{ url: string; title?: string; snippet?: string }>;
+  runConfig?: ResearchRunConfig;
 }
 
 // Types
