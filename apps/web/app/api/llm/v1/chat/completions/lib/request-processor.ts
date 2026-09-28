@@ -773,6 +773,7 @@ export function applyMemoryToolCapability(
     !params.memoryEnabled ||
     request.memory_enabled === false ||
     request.personalization === false ||
+    request.memory_command !== undefined ||
     !MEMORY_COMMAND_CLIENT_SURFACES.has(params.surface)
   ) {
     return;
