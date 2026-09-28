@@ -49,6 +49,7 @@ export const ACCOUNT_SECURITY_POLICY = {
   handoffMinutes: 10,
   enrollmentCodeMinutes: 10,
   enrollmentCodeAttempts: 5,
+  enrollmentCodeLockoutMinutes: 60,
   undoHours: 48,
   emailChangeCooldownDays: 7,
 } as const;

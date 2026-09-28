@@ -429,7 +429,16 @@ export async function sendEnrollmentCode(
     sessionId: caller.sessionId,
     codeHash: hashEnrollmentCode(caller.userId, code),
     ttlMinutes: ACCOUNT_SECURITY_POLICY.enrollmentCodeMinutes,
+    maxAttempts: ACCOUNT_SECURITY_POLICY.enrollmentCodeAttempts,
+    lockoutMinutes: ACCOUNT_SECURITY_POLICY.enrollmentCodeLockoutMinutes,
   });
+  if (expiresAt === null) {
+    throw createError
+      .rateLimit(
+        `Too many wrong codes were entered. Send a new code in ${ACCOUNT_SECURITY_POLICY.enrollmentCodeLockoutMinutes} minutes.`,
+      )
+      .asUserSafe();
+  }
   const sent = await sendAccountSecurityCodeEmail({
     to: address,
     code,
