@@ -8,7 +8,10 @@ import type {
 } from '@agiworkforce/cloud-contracts';
 import { getCsrfToken } from '@/lib/client/csrf';
 import { useVoiceInputStore } from '@features/chat/stores/voice-input-store';
-import { useVoiceSessionStore } from '@features/chat/stores/voice-session-store';
+import {
+  useVoiceSessionStore,
+  type VoiceRejoinOffer,
+} from '@features/chat/stores/voice-session-store';
 import { usePrefersReducedMotion } from '@features/support/hooks/usePrefersReducedMotion';
 import {
   isVoiceSessionActive,
@@ -82,6 +85,8 @@ export interface VoiceSessionController {
   pause: () => void;
   resume: () => void;
   paused: boolean;
+  rejoinOffer: VoiceRejoinOffer | null;
+  answerRejoin: (rejoin: boolean) => void;
   cancelPending: () => void;
   submitTyped: (text: string) => void;
   retry: () => void;
@@ -200,6 +205,28 @@ function markVoiceReconnected(): void {
     controller.stableTimer = null;
     controller.attempt = 0;
   }, RECONNECT_STABLE_MS);
+}
+
+async function readActiveVoiceSession(conversationId: string): Promise<VoiceRejoinOffer | null> {
+  try {
+    const response = await fetch(
+      `${LIVE_SESSION_ENDPOINT}/active?conversationId=${encodeURIComponent(conversationId)}`,
+      { credentials: 'include' },
+    );
+    if (!response.ok) return null;
+    const body = (await response.json()) as { session?: Record<string, unknown> | null };
+    const record = body.session;
+    if (!record || typeof record['startedAt'] !== 'string') return null;
+    return {
+      surface: typeof record['surface'] === 'string' ? record['surface'] : 'web',
+      voice: typeof record['voice'] === 'string' ? record['voice'] : null,
+      language: typeof record['language'] === 'string' ? record['language'] : null,
+      pace: typeof record['pace'] === 'number' ? record['pace'] : null,
+      startedAt: record['startedAt'],
+    };
+  } catch {
+    return null;
+  }
 }
 
 function settleSession(session: LiveVoiceSession, closed: LiveSessionClosed): Promise<void> {
@@ -490,6 +517,7 @@ export function useVoiceSession({
   const toolOutcomes = useVoiceSessionStore((store) => store.toolOutcomes);
   const toolApprovals = useVoiceSessionStore((store) => store.toolApprovals);
   const paused = useVoiceSessionStore((store) => store.paused);
+  const rejoinOffer = useVoiceSessionStore((store) => store.rejoinOffer);
   const dispatch = useVoiceSessionStore((store) => store.dispatch);
   const reducedMotion = usePrefersReducedMotion();
   const reconnect = useSyncExternalStore(
@@ -513,16 +541,43 @@ export function useVoiceSession({
   useEffect(() => {
     if (status !== VOICE_SESSION_STATUS.entering) return undefined;
     let cancelled = false;
-    startLiveVoiceSession(currentVoiceSettings()).then(
-      (session) => {
-        if (!cancelled) setDeviceName(session.microphoneLabel);
-      },
-      () => undefined,
-    );
+    const start = () =>
+      startLiveVoiceSession(currentVoiceSettings()).then(
+        (session) => {
+          if (!cancelled) setDeviceName(session.microphoneLabel);
+        },
+        () => undefined,
+      );
+    const targetConversation = controller.sink?.conversationId ?? null;
+    if (!targetConversation || controller.session || controller.starting || reconnectState.active) {
+      void start();
+    } else {
+      void readActiveVoiceSession(targetConversation).then((offer) => {
+        if (cancelled) return;
+        if (offer) useVoiceSessionStore.getState().setRejoinOffer(offer);
+        else void start();
+      });
+    }
     return () => {
       cancelled = true;
     };
   }, [status]);
+
+  const answerRejoin = useCallback((rejoin: boolean) => {
+    const store = useVoiceSessionStore.getState();
+    const offer = store.rejoinOffer;
+    if (!offer) return;
+    store.setRejoinOffer(null);
+    if (rejoin) {
+      if (offer.voice) store.setVoice(offer.voice);
+      if (offer.language !== null) store.setLanguage(offer.language);
+      if (offer.pace !== null) store.setPace(offer.pace);
+    }
+    startLiveVoiceSession(currentVoiceSettings()).then(
+      (session) => setDeviceName(session.microphoneLabel),
+      () => undefined,
+    );
+  }, []);
 
   // A voice, language or pace change while the session is up re-negotiates it,
   // so a language switch lands without dropping the utterance in flight.
@@ -662,6 +717,8 @@ export function useVoiceSession({
     pause,
     resume,
     paused,
+    rejoinOffer,
+    answerRejoin,
     cancelPending,
     submitTyped,
     retry,
