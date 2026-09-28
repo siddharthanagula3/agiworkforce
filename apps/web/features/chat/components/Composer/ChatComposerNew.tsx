@@ -122,7 +122,6 @@ import { CHAT_OUTPUT_FORMAT_LABEL, type ChatOutputFormat } from '@/lib/chat-outp
 import { useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 import {
-  canUseBillingPlanCapability,
   describeCapabilityDenial,
   getModels,
   isExecutableVideoModel,
@@ -931,13 +930,13 @@ const ChatComposerNewComponent = ({
   const billingPolicyError = useBillingStore((s) => s.error);
   const refreshBillingPolicy = useBillingStore((s) => s.refreshUser);
   const canUseImages = useCapability('canUseImages');
-  const canUseAgiWork =
-    billingPolicyReady && !isFreeTrial && canUseBillingPlanCapability(subscriptionTier, 'agi_work');
+  const agiWorkCapability = useCapability('canUseAgiWork');
+  const videoCapability = useCapability('canUseVideoGeneration');
+  const imageDecision = useCapabilityDecision('canUseImages');
+  const videoDecision = useCapabilityDecision('canUseVideoGeneration');
+  const canUseAgiWork = billingPolicyReady && !isFreeTrial && agiWorkCapability;
   const canUseImageGeneration = billingPolicyReady && !isFreeTrial && canUseImages;
-  const canUseVideoGeneration =
-    billingPolicyReady &&
-    !isFreeTrial &&
-    canUseBillingPlanCapability(subscriptionTier, 'video_generation');
+  const canUseVideoGeneration = billingPolicyReady && !isFreeTrial && videoCapability;
   // A host must own the actual media turn. ChatComposerNew is also used by the
   // project-detail handoff composer, which deliberately has no generation
   // callbacks; rendering media controls there would accept and then discard a
@@ -1079,8 +1078,8 @@ const ChatComposerNewComponent = ({
   // Entering with a preselected project (sidebar "New chat in project" /
   // project-page handoff → ?projectId= → host store) lands eligible accounts in
   // AGI Work. Free/basic accounts keep ordinary project-scoped chat; AGI Work
-  // needs the `agi_work` plan capability (AUDIT-FIX CMP-14), which is exactly
-  // what the server enforces.
+  // needs the canUseAgiWork capability, which carries the `agi_work` plan
+  // capability and the Work switch the server enforces (AUDIT-FIX CMP-14).
   const pickerActiveProjectId = projectPicker?.activeProjectId ?? null;
   useEffect(() => {
     if (!billingPolicyReady) return;
@@ -2268,7 +2267,12 @@ const ChatComposerNewComponent = ({
       return;
     }
     if (!canUseImageGeneration) {
-      onUpgradeRequest?.();
+      const reason = isFreeTrial ? null : (imageDecision?.reason ?? null);
+      if (reason && reason !== 'requires_upgrade') {
+        setLocalNotice(describeCapabilityDenial(reason).message);
+      } else {
+        onUpgradeRequest?.();
+      }
       return;
     }
     setImageMode(true);
@@ -2287,6 +2291,8 @@ const ChatComposerNewComponent = ({
     availableImageModels,
     mediaModelsSettled,
     canUseImageGeneration,
+    isFreeTrial,
+    imageDecision,
     onUpgradeRequest,
     setImageMode,
     focusComposer,
@@ -2322,7 +2328,12 @@ const ChatComposerNewComponent = ({
       return;
     }
     if (!canUseVideoGeneration) {
-      onUpgradeRequest?.();
+      const reason = isFreeTrial ? null : (videoDecision?.reason ?? null);
+      if (reason && reason !== 'requires_upgrade') {
+        setLocalNotice(describeCapabilityDenial(reason).message);
+      } else {
+        onUpgradeRequest?.();
+      }
       return;
     }
     setVideoMode(true);
@@ -2341,6 +2352,8 @@ const ChatComposerNewComponent = ({
     availableVideoModels,
     mediaModelsSettled,
     canUseVideoGeneration,
+    isFreeTrial,
+    videoDecision,
     onUpgradeRequest,
     setVideoMode,
     focusComposer,
