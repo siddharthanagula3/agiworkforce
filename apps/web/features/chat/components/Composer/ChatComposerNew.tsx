@@ -30,9 +30,9 @@ import {
   MessageSquare,
   LibraryBig,
   Brain,
+  Maximize2,
   Minimize2,
 } from '@agiworkforce/icons';
-import { Maximize2 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { toUserMessage } from '@/lib/user-error-message';
 import { useBillingStore } from '@shared/stores/web-auth-store';
