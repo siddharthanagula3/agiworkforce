@@ -18,6 +18,7 @@ const state = vi.hoisted(() => {
       async (_userId: string, _challenge: string) => 'desktop-grant-code',
     ),
     attackerPasskeys: false,
+    addressJustLearned: false,
     statements: [] as string[],
   };
 });
@@ -103,6 +104,9 @@ function passkeyRow(id: string, deviceType: 'singleDevice' | 'multiDevice') {
 function answer(sql: string, params: unknown[]): Record<string, unknown>[] {
   const statement = sql.toLowerCase();
   state.statements.push(statement);
+  if (statement.includes('from public.profiles') && statement.includes('changed_recently')) {
+    return [{ email: OWNER_EMAIL, changed_recently: state.addressJustLearned }];
+  }
   if (statement.includes('select email from public.profiles')) {
     return [{ email: OWNER_EMAIL }];
   }
@@ -219,6 +223,7 @@ describe('the Advanced Account Security gate on a signed-in session', () => {
     state.noteSessionSighting.mockReset();
     state.createDesktopSignInGrant.mockClear();
     state.attackerPasskeys = false;
+    state.addressJustLearned = false;
     state.statements = [];
   });
 
@@ -299,6 +304,28 @@ describe('the Advanced Account Security gate on a signed-in session', () => {
     expect(
       state.statements.some((statement) => statement.includes('set attempts = attempts + 1')),
     ).toBe(true);
+    expect(enrollmentWasPromoted()).toBe(false);
+  });
+
+  it('refuses to turn the mode on with an address the account only just learned from the identity provider', async () => {
+    state.attackerPasskeys = true;
+    state.addressJustLearned = true;
+
+    const response = await enrollAccountSecurity(
+      passwordOnlyEnrollment({
+        recoveryKeysSaved: true,
+        emailCode: '000000',
+        response: { id: 'attacker-phone-credential-id-0000', type: 'public-key' },
+      }),
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { message: expect.stringContaining('set or changed in the last 7 days') },
+    });
+    expect(state.statements.some((statement) => statement.includes('returning challenge'))).toBe(
+      false,
+    );
     expect(enrollmentWasPromoted()).toBe(false);
   });
 });

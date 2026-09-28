@@ -3,9 +3,14 @@
 -- WHAT THIS COSTS: every enrollment, registered passkey and security key,
 -- recovery key hash, pending recovery hold, session verification and open
 -- challenge is deleted. Enrolled accounts return to standard sign-in, and a
--- recovery that was waiting out its hold is forgotten.
+-- recovery that was waiting out its hold is forgotten. profiles loses the time
+-- its address was last set or changed.
 
 begin;
+
+drop trigger if exists stamp_profile_email_change on public.profiles;
+drop function if exists public.stamp_profile_email_change();
+alter table public.profiles drop column if exists email_changed_at;
 
 drop policy if exists account_security_challenges_owner on public.account_security_challenges;
 drop trigger if exists set_account_security_challenges_updated_at on public.account_security_challenges;

@@ -26,6 +26,10 @@
 --          Turning the mode on records the session that did it and the hash of
 --          a 48-hour link, emailed to the account, that turns it off again
 --          without a passkey in case the enrollment was not the owner's.
+--          profiles gains email_changed_at, stamped by a trigger whenever any
+--          writer first sets or changes the address, so an address learned
+--          from the identity provider moments ago cannot pass the enrollment
+--          cooldown.
 --
 -- Depends: 0037 (profiles, current_app_user_id), 0076 (set_row_updated_at)
 -- =============================================================================
@@ -150,6 +154,30 @@ create index if not exists idx_account_security_challenges_session
 
 create index if not exists idx_account_security_challenges_expiry
   on public.account_security_challenges (expires_at);
+
+alter table public.profiles add column if not exists email_changed_at timestamptz;
+
+create or replace function public.stamp_profile_email_change()
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $$
+begin
+  if tg_op = 'INSERT' then
+    new.email_changed_at := case when nullif(btrim(new.email), '') is null then null else now() end;
+  elsif new.email is distinct from old.email then
+    new.email_changed_at := now();
+  else
+    new.email_changed_at := old.email_changed_at;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists stamp_profile_email_change on public.profiles;
+create trigger stamp_profile_email_change
+  before insert or update on public.profiles
+  for each row execute function public.stamp_profile_email_change();
 
 revoke all on public.account_security_enrollments from app_rls;
 revoke all on public.account_security_credentials from app_rls;

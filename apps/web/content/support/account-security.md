@@ -38,8 +38,8 @@ To turn it on, add at least two passkeys or security keys, including one that
 works across devices, such as a passkey synced by your password manager or a
 hardware security key, then save your recovery keys. Turning it on requires a
 code we email to the address on your account and one of the passkeys or security
-keys you added. It cannot be turned on within 7 days of a change to the
-email address on your account. Every other device is signed out when you turn it
+keys you added. It cannot be turned on within 7 days of the email address on
+your account being set or changed. Every other device is signed out when you turn it
 on. We also email the address that got the code a link that turns it off, signs
 everyone out and resets your password, without a passkey, for 48 hours after it
 was turned on, in case it was not you.
