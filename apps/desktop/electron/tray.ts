@@ -21,6 +21,7 @@ export interface TrayHandlers {
   onNewChat: () => void;
   onQuickAsk: () => void;
   onScreenshot: () => void;
+  onWindowShot: () => void;
   onVoice: () => void;
   onCheckForUpdates: () => void;
 }
@@ -55,6 +56,7 @@ function applyShortcut(key: ShortcutKey, value: string, handlers: TrayHandlers):
   registerGarnishShortcuts({
     onQuickAsk: handlers.onQuickAsk,
     onScreenshot: handlers.onScreenshot,
+    onWindowShot: handlers.onWindowShot,
     onVoice: handlers.onVoice,
   });
   refreshTrayMenu(handlers);
@@ -107,6 +109,12 @@ function buildMenu(handlers: TrayHandlers): Electron.Menu {
       accelerator: shortcuts.screenshotShortcut,
       registerAccelerator: false,
       click: handlers.onScreenshot,
+    },
+    {
+      label: SHORTCUT_LABELS.windowShotShortcut,
+      accelerator: shortcuts.windowShotShortcut,
+      registerAccelerator: false,
+      click: handlers.onWindowShot,
     },
     {
       label: SHORTCUT_LABELS.voiceShortcut,

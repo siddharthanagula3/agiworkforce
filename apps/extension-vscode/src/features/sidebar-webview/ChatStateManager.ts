@@ -19,7 +19,6 @@ import {
 import {
   PROVIDER_DISPLAY,
   canUseBillingPlanCapability,
-  formatCredits,
   formatUsageRemaining,
   formatUsageResetIn,
   managedUsageBucketLabel,
@@ -107,6 +106,13 @@ import {
 import { searchMentionTargets } from '../../data/mentionSearch';
 import type { ApprovalDecision, ContextAttachmentKind } from '../../protocol/webviewMessages';
 import { approvalToolIdentity, approvalToolLabel } from '../permissions/approvalScope';
+import {
+  answerRatingId,
+  applyAnswerRating,
+  rememberedAnswerRating,
+} from '../feedback/answerRating';
+import type { AnswerRating } from '../feedback/submitFeedback';
+import { t, tPlural } from '../../l10n';
 import { openPathReference, openWorkspaceFileDiff, type PathReferenceTarget } from '../path-links';
 import { buildCustomInstructionInput } from '../instructions';
 import { clearActiveCloudProject, getActiveCloudProject } from '../projects/activeProject';
@@ -124,6 +130,7 @@ import {
   type PlanVisualization,
 } from '../../integrations/planVisualization';
 import { getTokenCounter } from '../../data/tokenCounter';
+import { formatCreditAmount, formatUnsettledRequests } from '../../data/usagePresentation';
 import {
   CREDIT_BALANCE_LABEL,
   CREDIT_TOP_UP_LABEL,
@@ -146,9 +153,6 @@ const RECENT_CONVERSATION_LIMIT = 5;
 const TEXT_ATTACHMENT_CHAR_LIMIT = 40_000;
 const MAX_QUEUED_SENDS = 20;
 const MAX_PRE_START_TURN_EVENTS = 1_024;
-const PRE_START_EVENT_OVERFLOW_MESSAGE =
-  'The local runtime emitted too many events before confirming the turn. AGI interrupted the turn to avoid losing its completion state.';
-
 /**
  * What the sentences below are, told to the error block rather than left for a
  * regex to infer. `retryable` means resending the identical turn could
@@ -158,18 +162,9 @@ const PRE_START_EVENT_OVERFLOW_MESSAGE =
 const PERMISSION_REFUSAL: ChatErrorHint = { category: 'permission' };
 const RUNTIME_REFUSAL: ChatErrorHint = { category: 'runtime' };
 const RUNTIME_FAILURE: ChatErrorHint = { category: 'runtime', retryable: true };
-const RUNTIME_SETUP_REFUSAL: ChatErrorHint = {
-  category: 'runtime',
-  action: { kind: 'open-settings', label: 'Open settings' },
-};
-const PLAN_REFUSAL: ChatErrorHint = {
-  category: 'subscription',
-  action: { kind: 'upgrade-plan', label: 'Upgrade your plan' },
-};
-const MODEL_UNAVAILABLE: ChatErrorHint = {
-  category: 'provider',
-  action: { kind: 'switch-model', label: 'Switch model' },
-};
+const RUNTIME_SETUP_REFUSAL: ChatErrorHint = { category: 'runtime', action: 'open-settings' };
+const PLAN_REFUSAL: ChatErrorHint = { category: 'subscription', action: 'upgrade-plan' };
+const MODEL_UNAVAILABLE: ChatErrorHint = { category: 'provider', action: 'switch-model' };
 
 const MANAGE_TRUST_LABEL = 'Manage Trust';
 
@@ -260,10 +255,12 @@ export type WebviewToExtMessage =
   | { type: 'regenerate' }
   | { type: 'cancelQueuedMessage'; payload: { clientMessageId: string } }
   | { type: 'openSuggestedProject'; payload: { projectId: string } }
-  | { type: 'runSlashCommand'; payload: { name: string } };
+  | { type: 'runSlashCommand'; payload: { name: string } }
+  | { type: 'rateAnswer'; payload: { key: string; text: string; rating: AnswerRating | null } };
 
 export type ExtToWebviewMessage =
   | { type: 'token'; payload: { text: string } }
+  | { type: 'answerRating'; payload: { key: string; rating: AnswerRating | null } }
   | {
       type: 'done';
       payload?: {
@@ -316,7 +313,7 @@ export type ExtToWebviewMessage =
         trustMode: Exclude<DeveloperSessionTrustMode, 'unknown'>;
         provider?: string;
         transcriptTruncated: boolean;
-        messages: Array<{ role: 'user' | 'assistant'; text: string }>;
+        messages: Array<{ role: 'user' | 'assistant'; text: string; rating?: AnswerRating }>;
       };
     }
   | {
@@ -700,6 +697,9 @@ export class ChatStateManager {
     }
   >();
   private readonly _editorContextListeners: vscode.Disposable[] = [];
+  private _answerRatings: Promise<void> = Promise.resolve();
+  private readonly _activeModelChanged = new vscode.EventEmitter<string>();
+  readonly onDidChangeActiveModel = this._activeModelChanged.event;
 
   constructor(
     private readonly _secrets: vscode.SecretStorage,
@@ -727,6 +727,50 @@ export class ChatStateManager {
 
   get meterCollapsed(): boolean {
     return this._meterCollapsed;
+  }
+
+  activeModel(): string {
+    return this._activeModel;
+  }
+
+  private _setActiveModel(model: string): void {
+    if (model === this._activeModel) return;
+    this._activeModel = model;
+    this._activeModelChanged.fire(model);
+  }
+
+  async selectModel(modelId: string): Promise<'conversation' | 'default'> {
+    const model = this._normalizeModelSelection(modelId);
+    const scope = this._thread === undefined ? 'default' : 'conversation';
+    if (scope === 'default') {
+      await vscode.workspace
+        .getConfiguration('agiWorkforce')
+        .update('model', model, vscode.ConfigurationTarget.Global);
+    }
+    this._setActiveModel(model);
+    this._showModel(model);
+    await this._pushUsageMeterOnBoundaryChange();
+    return scope;
+  }
+
+  private _showModel(model: string): void {
+    this._post({ type: 'model', payload: { model } });
+    this._postProviderBadge(model);
+    this._post({
+      type: 'effortChanged',
+      payload: {
+        effort: this._effort ?? Config.agentEffort(),
+        supportsEffort: this.modelSupportsEffort(model),
+        efforts: this.modelEffortLevels(model),
+      },
+    });
+  }
+
+  private _followDefaultModel(): void {
+    const model = this._normalizeModelSelection(Config.model());
+    if (model === this._activeModel) return;
+    this._setActiveModel(model);
+    this._showModel(model);
   }
 
   get mode(): AgentMode | undefined {
@@ -758,8 +802,11 @@ export class ChatStateManager {
           this._post({ type: 'hideOnboarding' });
         }
         await this._discoverLocalModels(this._thread?.runtime);
-        const model = this._thread?.model ?? this._normalizeModelSelection(Config.model());
-        this._activeModel = model;
+        const model =
+          this._thread === undefined
+            ? this._normalizeModelSelection(Config.model())
+            : this._activeModel;
+        this._setActiveModel(model);
         this._post({ type: 'model', payload: { model } });
         this._postProviderBadge(model);
         this.pushFollowUpBehavior();
@@ -827,7 +874,7 @@ export class ChatStateManager {
         await this._discoverLocalModels();
         if (this._runtimeReady) {
           const model = this._normalizeModelSelection(this._activeModel);
-          this._activeModel = model;
+          this._setActiveModel(model);
           this._post({ type: 'model', payload: { model } });
           this._postProviderBadge(model);
         }
@@ -835,17 +882,7 @@ export class ChatStateManager {
       }
 
       case 'getModel': {
-        const model = normalizeConfiguredModelId(Config.model());
-        this._post({ type: 'model', payload: { model } });
-        this._postProviderBadge(model);
-        this._post({
-          type: 'effortChanged',
-          payload: {
-            effort: this._effort ?? Config.agentEffort(),
-            supportsEffort: this.modelSupportsEffort(model),
-            efforts: this.modelEffortLevels(model),
-          },
-        });
+        this._showModel(this._activeModel);
         break;
       }
 
@@ -884,12 +921,12 @@ export class ChatStateManager {
       case 'shareDiagnostics': {
         const editor = vscode.window.activeTextEditor;
         if (editor === undefined) {
-          this._postError('No active editor for diagnostics.');
+          this._postError(t('chatNotice.noEditorForDiagnostics'));
           break;
         }
         const diagnostics = vscode.languages.getDiagnostics(editor.document.uri);
         if (diagnostics.length === 0) {
-          this._postError('No diagnostics found in active file.');
+          this._postError(t('chatNotice.noDiagnostics'));
           break;
         }
         const relativePath = vscode.workspace.asRelativePath(editor.document.uri);
@@ -930,6 +967,8 @@ export class ChatStateManager {
         this._pendingApprovals.clear();
         this.pushEditorContext();
         this._post({ type: 'conversationCleared' });
+        this._followDefaultModel();
+        await this._pushUsageMeterOnBoundaryChange();
         break;
       }
 
@@ -967,6 +1006,8 @@ export class ChatStateManager {
         this._pendingApprovals.clear();
         this.pushEditorContext();
         this._post({ type: 'conversationCleared' });
+        this._followDefaultModel();
+        await this._pushUsageMeterOnBoundaryChange();
         break;
       }
 
@@ -1101,7 +1142,7 @@ export class ChatStateManager {
           break;
         }
         if (msg.payload.kind === 'switch-model') {
-          await vscode.commands.executeCommand('agi-workforce.selectModel');
+          await this.handleMessage({ type: 'openModelPopover' });
           break;
         }
         if (msg.payload.kind === 'update-extension') {
@@ -1165,7 +1206,7 @@ export class ChatStateManager {
         if (await setAgentEffortWithConsent(this._context, effort)) {
           this._effort = effort;
         }
-        const model = normalizeConfiguredModelId(Config.model());
+        const model = this._activeModel;
         this._post({
           type: 'effortChanged',
           payload: {
@@ -1208,7 +1249,7 @@ export class ChatStateManager {
 
       case 'openModelPopover': {
         const localModels = await this._discoverLocalModels();
-        const currentModel = this._normalizeModelSelection(Config.model());
+        const currentModel = this._activeModel;
         const tier = await resolveTier(this._context);
         const allItems = buildGroupedQuickPickItems(tier);
         const groups: Array<{
@@ -1321,6 +1362,26 @@ export class ChatStateManager {
         break;
       }
 
+      case 'rateAnswer': {
+        const { key, text, rating } = msg.payload;
+        const thread = this._thread;
+        const rate = async (): Promise<void> => {
+          const settled =
+            thread === undefined
+              ? null
+              : await applyAnswerRating(this._secrets, this._context.globalState, rating, {
+                  messageId: answerRatingId(thread.id, text),
+                  conversationId: thread.id,
+                  model: thread.model,
+                });
+          this._post({ type: 'answerRating', payload: { key, rating: settled } });
+        };
+        const queued = this._answerRatings.then(rate);
+        this._answerRatings = queued.catch(() => undefined);
+        await queued;
+        break;
+      }
+
       case 'selectModel': {
         const { modelId } = (msg as { type: 'selectModel'; payload: { modelId: string } }).payload;
         if (modelId === '__local_setup__') break;
@@ -1330,27 +1391,10 @@ export class ChatStateManager {
           !this._localModelProviders.has(normalized) &&
           !isModelReachableForTier(normalized, tier)
         ) {
-          this._postError(
-            'This model is not available for your current plan or provider setup.',
-            PLAN_REFUSAL,
-          );
+          this._postError(t('chatNotice.modelNotOnPlan'), PLAN_REFUSAL);
           break;
         }
-        await vscode.workspace
-          .getConfiguration('agiWorkforce')
-          .update('model', normalized, vscode.ConfigurationTarget.Global);
-        this._activeModel = normalized;
-        this._post({ type: 'model', payload: { model: normalized } });
-        this._postProviderBadge(normalized);
-        this._post({
-          type: 'effortChanged',
-          payload: {
-            effort: this._effort ?? Config.agentEffort(),
-            supportsEffort: this.modelSupportsEffort(normalized),
-            efforts: this.modelEffortLevels(normalized),
-          },
-        });
-        await this._pushUsageMeterOnBoundaryChange();
+        await this.selectModel(normalized);
         break;
       }
 
@@ -1449,13 +1493,13 @@ export class ChatStateManager {
         ).payload;
         const editor = vscode.window.activeTextEditor;
         if (editor === undefined) {
-          const message = 'Open a file in the editor to review this code suggestion.';
+          const message = t('chatNotice.openFileForDiff');
           void vscode.window.showWarningMessage(message);
           this._post({ type: 'diffProposalFailed', payload: { message } });
           break;
         }
         if (this._diffDecorationProvider === undefined) {
-          const message = 'Diff provider is not available. Please reload the extension.';
+          const message = t('chatNotice.diffUnavailable');
           void vscode.window.showWarningMessage(message);
           this._post({ type: 'diffProposalFailed', payload: { message } });
           break;
@@ -1480,8 +1524,7 @@ export class ChatStateManager {
             },
           });
         } catch (error) {
-          const message =
-            error instanceof Error ? error.message : 'Could not open the proposed diff.';
+          const message = error instanceof Error ? error.message : t('webview.couldNotOpenDiff');
           void vscode.window.showErrorMessage(`AGI Workforce: ${message}`);
           this._post({ type: 'diffProposalFailed', payload: { message } });
         }
@@ -1709,31 +1752,20 @@ export class ChatStateManager {
       this._activeTurn === undefined;
 
     if (!vscode.workspace.isTrusted) {
-      return this._rejectResume(
-        'Trust this workspace before resuming a developer session.',
-        PERMISSION_REFUSAL,
-      );
+      return this._rejectResume(t('chatNotice.trustBeforeResume'), PERMISSION_REFUSAL);
     }
     if (this._turnLifecycleActive || this._activeTurn !== undefined) {
-      return this._rejectResume(
-        'Stop the current response before opening another developer session.',
-      );
+      return this._rejectResume(t('chatNotice.stopBeforeOpening'));
     }
     if (this._conversationTreeProvider === undefined) {
-      return this._rejectResume(
-        'Developer session history is unavailable in this chat surface.',
-        RUNTIME_REFUSAL,
-      );
+      return this._rejectResume(t('chatNotice.historyUnavailable'), RUNTIME_REFUSAL);
     }
 
     try {
       const resolved = await this._conversationTreeProvider.resolveThread(threadId);
       if (!isCurrentAttempt()) return false;
       if (resolved === undefined || resolved.response.thread.id !== threadId) {
-        return this._rejectResume(
-          'Developer session not found in the open workspace.',
-          RUNTIME_REFUSAL,
-        );
+        return this._rejectResume(t('chatNotice.sessionNotFound'), RUNTIME_REFUSAL);
       }
 
       const listed = resolved.response.thread;
@@ -1746,16 +1778,10 @@ export class ChatStateManager {
       const resumed = await resolved.runtime.resumeThread(threadId);
       if (!isCurrentAttempt()) return false;
       if (resumed.id !== threadId) {
-        return this._rejectResume(
-          'The local runtime returned a different developer session.',
-          RUNTIME_REFUSAL,
-        );
+        return this._rejectResume(t('chatNotice.differentSession'), RUNTIME_REFUSAL);
       }
       if (!isSameWorkspacePath(resolved.cwd, resumed.cwd)) {
-        return this._rejectResume(
-          'The developer session workspace does not match its owning local runtime.',
-          RUNTIME_REFUSAL,
-        );
+        return this._rejectResume(t('chatNotice.workspaceMismatch'), RUNTIME_REFUSAL);
       }
       const resumedStatusError = resumeStatusError(resumed);
       if (resumedStatusError !== undefined) {
@@ -1801,11 +1827,11 @@ export class ChatStateManager {
         !persistedModel.startsWith('auto-')
       ) {
         return this._rejectResume(
-          `This developer session uses model "${persistedModel}", which is not available in the current model catalog or local runtime. Start a new session after selecting an available model.`,
+          t('chatNotice.modelUnavailableForSession', { model: persistedModel }),
           MODEL_UNAVAILABLE,
         );
       }
-      this._activeModel = model;
+      this._setActiveModel(model);
       this._startNewEpoch();
       this._dropQueuedSends('Queued follow-up cancelled when another session was opened.');
       this._pendingAttachments.splice(0);
@@ -1820,7 +1846,14 @@ export class ChatStateManager {
         runtime: resolved.runtime,
       };
 
-      const messages = normalizeTranscriptMessages(resolved.response.messages);
+      const messages = normalizeTranscriptMessages(resolved.response.messages).map((message) => {
+        if (message.role !== 'assistant') return message;
+        const rating = rememberedAnswerRating(
+          this._context.globalState,
+          answerRatingId(resumed.id, message.text),
+        );
+        return rating === undefined ? message : { ...message, rating };
+      });
       this._loadedConversation = {
         threadId: resumed.id,
         title: resumed.title,
@@ -1855,7 +1888,7 @@ export class ChatStateManager {
     } catch (error) {
       if (!isCurrentAttempt()) return false;
       return this._rejectResume(
-        error instanceof Error ? error.message : 'The developer session could not be resumed.',
+        error instanceof Error ? error.message : t('chatNotice.resumeFailed'),
         RUNTIME_REFUSAL,
       );
     }
@@ -1930,19 +1963,8 @@ export class ChatStateManager {
   }
 
   public syncActiveModelFromConfiguration(): void {
-    const model = this._normalizeModelSelection(Config.model());
-    if (model === this._activeModel) return;
-    this._activeModel = model;
-    this._post({ type: 'model', payload: { model } });
-    this._postProviderBadge(model);
-    this._post({
-      type: 'effortChanged',
-      payload: {
-        effort: this._effort ?? Config.agentEffort(),
-        supportsEffort: this.modelSupportsEffort(model),
-        efforts: this.modelEffortLevels(model),
-      },
-    });
+    if (this._thread !== undefined) return;
+    this._followDefaultModel();
   }
 
   /**
@@ -2035,7 +2057,7 @@ export class ChatStateManager {
         return;
       }
       this._postError(
-        error instanceof Error ? error.message : 'The approval response failed.',
+        error instanceof Error ? error.message : t('chatNotice.approvalFailed'),
         RUNTIME_FAILURE,
       );
       await this._interruptActiveTurn();
@@ -2048,10 +2070,11 @@ export class ChatStateManager {
     if (billed.length === 0) return;
     const total = billed.reduce((sum, credits) => sum + credits, 0);
     const open = settled.length - billed.length;
+    const credits = formatCreditAmount(total);
     vscode.window.setStatusBarMessage(
       open === 0
-        ? `AGI Workforce: this turn was billed ${formatCredits(total, { maximumFractionDigits: 2 })}`
-        : `AGI Workforce: this turn was billed ${formatCredits(total, { maximumFractionDigits: 2 })} so far, ${open} ${open === 1 ? 'request' : 'requests'} not settled yet`,
+        ? t('billing.turnBilled', { credits })
+        : t('billing.turnBilledSoFar', { credits, unsettled: formatUnsettledRequests(open) }),
       10_000,
     );
   }
@@ -2087,6 +2110,7 @@ export class ChatStateManager {
   dispose(): void {
     for (const listener of this._editorContextListeners) listener.dispose();
     this._editorContextListeners.length = 0;
+    this._activeModelChanged.dispose();
   }
 
   /**
@@ -2148,18 +2172,10 @@ export class ChatStateManager {
     this._effort = undefined;
     this._post({ type: 'conversationCleared' });
 
-    const mode = Config.agentMode();
-    const effort = Config.agentEffort();
-    this._post({ type: 'modeChanged', payload: { mode } });
-    const model = normalizeConfiguredModelId(Config.model());
-    this._post({
-      type: 'effortChanged',
-      payload: {
-        effort,
-        supportsEffort: this.modelSupportsEffort(model),
-        efforts: this.modelEffortLevels(model),
-      },
-    });
+    this._post({ type: 'modeChanged', payload: { mode: Config.agentMode() } });
+    this._setActiveModel(this._normalizeModelSelection(Config.model()));
+    this._showModel(this._activeModel);
+    void this._pushUsageMeterOnBoundaryChange();
   }
 
   cancelInFlight(): void {
@@ -2463,7 +2479,7 @@ export class ChatStateManager {
             type: 'followUpStatus',
             payload: {
               kind: 'error',
-              message: 'Queued follow-up was not started.',
+              message: t('chatNotice.queuedNotStarted'),
               queueDepth: this._queuedSends.length,
               attachmentIds: [],
               clientMessageId: current.clientMessageId,
@@ -2515,7 +2531,7 @@ export class ChatStateManager {
 
   private _rejectFollowUpCapacity(request: PendingChatSend): void {
     const attachmentIds = request.attachments.map((entry) => entry.id);
-    const message = `Follow-up capacity is full (${MAX_QUEUED_SENDS} pending). Try again after the active turn finishes.`;
+    const message = tPlural('chatNotice.followUpCapacity', MAX_QUEUED_SENDS);
     this._pendingAttachments.unshift(...request.attachments.splice(0));
     this._post({
       type: 'followUpStatus',
@@ -2592,7 +2608,7 @@ export class ChatStateManager {
         type: 'followUpStatus',
         payload: {
           kind: 'error',
-          message: error instanceof Error ? error.message : 'The active turn could not be steered.',
+          message: error instanceof Error ? error.message : t('chatNotice.steerFailed'),
           queueDepth: this._queuedSends.length,
           attachmentIds: [],
           clientMessageId: request.clientMessageId,
@@ -2644,23 +2660,17 @@ export class ChatStateManager {
     const { text, model, browseWeb } = request;
     if (conversationEpoch !== this._conversationEpoch) return false;
     if (!vscode.workspace.isTrusted) {
-      this._postError(
-        'Trust this workspace before starting a developer session.',
-        PERMISSION_REFUSAL,
-      );
+      this._postError(t('chatNotice.trustBeforeStart'), PERMISSION_REFUSAL);
       return false;
     }
     const activeWorkspace = await getActiveWorkspaceFolder();
     const cwd = this._thread?.cwd ?? activeWorkspace?.uri.fsPath;
     if (cwd === undefined) {
-      this._postError(
-        'Open a workspace folder before starting a developer session.',
-        RUNTIME_REFUSAL,
-      );
+      this._postError(t('chatNotice.openWorkspace'), RUNTIME_REFUSAL);
       return false;
     }
     if (this._localRuntimes === undefined) {
-      this._postError('The AGI local runtime is unavailable.', RUNTIME_SETUP_REFUSAL);
+      this._postError(t('chatNotice.runtimeUnavailable'), RUNTIME_SETUP_REFUSAL);
       return false;
     }
 
@@ -2668,10 +2678,7 @@ export class ChatStateManager {
       (folder) => folder.uri.fsPath === cwd,
     );
     if (workspaceStillOpen !== true) {
-      this._postError(
-        'Reopen this developer session’s workspace before continuing.',
-        RUNTIME_REFUSAL,
-      );
+      this._postError(t('chatNotice.reopenWorkspace'), RUNTIME_REFUSAL);
       return false;
     }
     const workspaceUri = vscode.Uri.file(cwd);
@@ -2691,8 +2698,7 @@ export class ChatStateManager {
       !samePersistedLocalModel &&
       requestedLocalProvider === undefined
     ) {
-      const message =
-        'AGI will not continue a Local developer session into BYOK, Managed Cloud, or Auto routing without a reviewed handoff. Use New Chat for a fresh provider session, or create a reviewed continuation in the AGI CLI.';
+      const message = t('chatNotice.localBoundary');
       this._postError(message, PERMISSION_REFUSAL);
       this._post({
         type: 'followUpStatus',
@@ -2713,13 +2719,10 @@ export class ChatStateManager {
       !this._localModelProviders.has(requestedModel) &&
       !isModelReachableForTier(requestedModel, tier)
     ) {
-      this._postError(
-        'This model is not available for your current plan or provider setup.',
-        PLAN_REFUSAL,
-      );
+      this._postError(t('chatNotice.modelNotOnPlan'), PLAN_REFUSAL);
       return false;
     }
-    this._activeModel = requestedModel;
+    this._setActiveModel(requestedModel);
     const requestedProviderBoundary = samePersistedLocalModel
       ? (this._thread?.providerBoundary ?? this._providerBoundaryForModel(requestedModel))
       : this._providerBoundaryForRequestedModel(requestedModel, this._thread?.trustMode);
@@ -2832,7 +2835,7 @@ export class ChatStateManager {
           preStartOverflowTurnId = event.turnId;
           bufferedTurnEvents.splice(0);
           uiSettled = true;
-          this._postError(PRE_START_EVENT_OVERFLOW_MESSAGE, RUNTIME_FAILURE);
+          this._postError(t('chatNotice.eventOverflow'), RUNTIME_FAILURE);
           if (!terminal) {
             terminal = true;
             resolveCompletion();
@@ -2842,9 +2845,10 @@ export class ChatStateManager {
             .interruptTurn({ threadId: thread.id, turnId: event.turnId })
             .catch((error: unknown) => {
               this._postError(
-                `The overflowing local turn could not be interrupted: ${
-                  error instanceof Error ? error.message : 'Cancellation failed.'
-                }`,
+                t('chatNotice.overflowNotInterrupted', {
+                  reason:
+                    error instanceof Error ? error.message : t('chatNotice.cancellationFailed'),
+                }),
                 RUNTIME_REFUSAL,
               );
             });
@@ -2959,7 +2963,7 @@ export class ChatStateManager {
       return true;
     } catch (error) {
       this._postError(
-        error instanceof Error ? error.message : 'The AGI local runtime failed.',
+        error instanceof Error ? error.message : t('chatNotice.runtimeFailed'),
         RUNTIME_FAILURE,
       );
       return false;
@@ -3161,7 +3165,7 @@ export class ChatStateManager {
     } else {
       // A runtime too old to send `failure` says nothing about the cause, so the
       // category stays unknown; resending is still the only move the user has.
-      this._postError(event.error ?? 'The local developer turn failed.', {
+      this._postError(event.error ?? t('chatNotice.turnFailed'), {
         category: 'unknown',
         retryable: true,
       });
@@ -3189,7 +3193,7 @@ export class ChatStateManager {
       if (!active.isUiSettled()) this._post({ type: 'done' });
     } catch (error) {
       this._postError(
-        error instanceof Error ? error.message : 'Cancellation failed.',
+        error instanceof Error ? error.message : t('chatNotice.cancellationFailed'),
         RUNTIME_REFUSAL,
       );
     } finally {
@@ -3206,16 +3210,16 @@ function catalogContextWindow(model: string): number | undefined {
 function resumeStatusError(thread: ThreadSummary): string | undefined {
   if (thread.status === 'idle' || thread.status === 'failed') return undefined;
   if (thread.status === 'running') {
-    return 'This developer session is still running in another client. Stop it there or wait until it becomes idle.';
+    return t('chatNotice.sessionRunningElsewhere');
   }
   if (thread.status === 'awaiting_approval') {
-    return 'This developer session is awaiting approval in another client. Resolve it there before resuming here.';
+    return t('chatNotice.sessionAwaitingApprovalElsewhere');
   }
-  return 'Archived developer sessions are read-only. Start a new session to continue this work.';
+  return t('chatNotice.sessionArchived');
 }
 
 function unknownBoundaryMessage(): string {
-  return 'This legacy developer session has no verified Local, BYOK, or Managed boundary. Start a new session and choose the provider again; AGI will not resume it automatically.';
+  return t('chatNotice.unverifiedBoundary');
 }
 
 function normalizeTranscriptMessages(

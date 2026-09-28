@@ -14,6 +14,7 @@ import {
 export interface GarnishShortcutHandlers {
   onQuickAsk: () => void;
   onScreenshot: () => void;
+  onWindowShot: () => void;
   onVoice: () => void;
 }
 
@@ -89,6 +90,7 @@ export function registerGarnishShortcuts(
   const handlerFor: Record<ShortcutKey, () => void> = {
     quickAskShortcut: handlers.onQuickAsk,
     screenshotShortcut: handlers.onScreenshot,
+    windowShotShortcut: handlers.onWindowShot,
     voiceShortcut: handlers.onVoice,
   };
 

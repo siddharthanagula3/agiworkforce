@@ -12,6 +12,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import {
   Brain,
   Camera,
@@ -24,6 +25,7 @@ import {
   FolderOpen,
   Globe,
   ImagePlus,
+  LibraryBig,
   ListChecks,
   Paperclip,
   Search,
@@ -51,7 +53,19 @@ import {
 } from '@agiworkforce/types';
 import { OfficialConnectorLogo } from '@/features/connectors/components/OfficialConnectorLogo';
 import { buildSettingsBrowseHash, buildSettingsCustomConnectorHash } from '@/features/directory';
+import type { LibraryItem } from '@agiworkforce/cloud-contracts';
 import { ConnectorToggleRow } from './ConnectorToggleRow';
+import {
+  COMPOSER_FILES_ATTACH_FAILED_COPY,
+  COMPOSER_FILES_ATTACH_LABEL_PREFIX,
+  COMPOSER_FILES_BROWSE_LABEL,
+  COMPOSER_FILES_EMPTY_COPY,
+  COMPOSER_FILES_LOADING_LABEL,
+  LIBRARY_PATH,
+  libraryFileGlyph,
+  libraryItemToFile,
+  useLibraryFiles,
+} from './ComposerFilesMenu';
 import type { SkillItem } from '@features/chat/hooks/use-skills-list';
 import {
   loadPalettePlugins,
@@ -77,6 +91,7 @@ const ROW_LABEL_ATTACH = 'Add photos & files';
 const ATTACH_RETENTION_NOTE = `Files you attach are saved to your Library and kept until you delete them. A deleted file can be restored for ${RESOURCE_RECOVERY_WINDOW_DAYS} days.`;
 const TEMPORARY_ATTACH_RETENTION_NOTE =
   'Files you attach in a temporary chat stay out of your Library and are deleted along with the chat.';
+const ROW_LABEL_LIBRARY = 'Add from library';
 const ROW_LABEL_IMAGE = 'Create image';
 const ROW_LABEL_VIDEO = 'Create video';
 const ROW_LABEL_SCREENSHOT = 'Take a screenshot';
@@ -483,6 +498,7 @@ export interface ComposerPlusMenuProps {
   workPalette: boolean;
 
   onAddFiles: () => void;
+  onAttachLibraryFile: (file: File) => void;
   mediaModeActive: boolean;
   mediaModeNoun: string;
   /**
@@ -655,6 +671,13 @@ function VideoRow({ props, role }: { props: ComposerPlusMenuProps; role?: string
   );
 }
 
+function attachmentUnavailableReason(props: ComposerPlusMenuProps): string {
+  return (
+    props.attachmentUnavailableTitle ??
+    `${props.mediaModeNoun} generation works from your prompt only. Leave ${props.mediaModeNoun.toLowerCase()} mode to attach files.`
+  );
+}
+
 function AttachRow({ props, role }: { props: ComposerPlusMenuProps; role?: string }) {
   return (
     <button
@@ -664,8 +687,7 @@ function AttachRow({ props, role }: { props: ComposerPlusMenuProps; role?: strin
       disabled={props.attachmentsUnavailable}
       title={
         props.attachmentsUnavailable
-          ? (props.attachmentUnavailableTitle ??
-            `${props.mediaModeNoun} generation works from your prompt only. Leave ${props.mediaModeNoun.toLowerCase()} mode to attach files.`)
+          ? attachmentUnavailableReason(props)
           : props.isIncognito
             ? TEMPORARY_ATTACH_RETENTION_NOTE
             : ATTACH_RETENTION_NOTE
@@ -683,6 +705,100 @@ function AttachRow({ props, role }: { props: ComposerPlusMenuProps; role?: strin
         />
       )}
     </button>
+  );
+}
+
+function LibraryRows({ props }: { props: ComposerPlusMenuProps }) {
+  const [expanded, setExpanded] = useState(false);
+  const [attachingId, setAttachingId] = useState<string | null>(null);
+  const [attachError, setAttachError] = useState<string | null>(null);
+  const unavailable = props.attachmentsUnavailable;
+  const library = useLibraryFiles(expanded && props.open && !unavailable, '');
+  const error = attachError ?? library.error;
+
+  const attach = async (item: LibraryItem) => {
+    setAttachingId(item.id);
+    setAttachError(null);
+    try {
+      props.onAttachLibraryFile(await libraryItemToFile(item));
+      props.closeMenu();
+    } catch {
+      setAttachError(COMPOSER_FILES_ATTACH_FAILED_COPY);
+    } finally {
+      setAttachingId(null);
+    }
+  };
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setExpanded((open) => !open)}
+        aria-expanded={expanded && !unavailable}
+        disabled={unavailable}
+        title={unavailable ? attachmentUnavailableReason(props) : undefined}
+        className={cn(ROW_CLASS, unavailable ? ROW_DISABLED_CLASS : ROW_HOVER_CLASS)}
+      >
+        <LibraryBig className={cn(GLYPH_CLASS, 'text-muted-foreground')} />
+        <span className="flex-1 text-left">{ROW_LABEL_LIBRARY}</span>
+        <ChevronRight
+          className={cn(
+            'h-4 w-4 text-muted-foreground transition-transform',
+            expanded && !unavailable && 'rotate-90',
+          )}
+        />
+      </button>
+      {expanded && !unavailable && (
+        <div
+          role="group"
+          aria-label={ROW_LABEL_LIBRARY}
+          aria-busy={library.loading}
+          className="space-y-0.5 pb-1"
+        >
+          {error ? <p className={cn(SUBMENU_EMPTY_CLASS, 'text-danger-text')}>{error}</p> : null}
+          {library.loading && library.items.length === 0 ? (
+            <div className="flex items-center gap-2 py-2 pl-8 pr-3">
+              <Spinner size="sm" aria-label={COMPOSER_FILES_LOADING_LABEL} />
+              <span className="text-caption text-muted-foreground">
+                {COMPOSER_FILES_LOADING_LABEL}
+              </span>
+            </div>
+          ) : library.items.length === 0 && !library.error ? (
+            <p className={SUBMENU_EMPTY_CLASS}>{COMPOSER_FILES_EMPTY_COPY}</p>
+          ) : (
+            library.items.map((item) => {
+              const Glyph = libraryFileGlyph(item);
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  role="menuitem"
+                  onClick={() => void attach(item)}
+                  disabled={attachingId !== null}
+                  aria-label={`${COMPOSER_FILES_ATTACH_LABEL_PREFIX} ${item.file_name}`}
+                  className={SUBMENU_ROW_CLASS}
+                >
+                  {attachingId === item.id ? (
+                    <Spinner size="sm" className={GLYPH_CLASS} />
+                  ) : (
+                    <Glyph aria-hidden className={cn(GLYPH_CLASS, 'text-muted-foreground')} />
+                  )}
+                  <span className="min-w-0 flex-1 truncate">{item.file_name}</span>
+                </button>
+              );
+            })
+          )}
+          <Link
+            href={LIBRARY_PATH}
+            role="menuitem"
+            onClick={props.closeMenu}
+            className={SUBMENU_MANAGE_CLASS}
+          >
+            {COMPOSER_FILES_BROWSE_LABEL}
+          </Link>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -861,6 +977,7 @@ function ChatMenu(props: ComposerPlusMenuProps) {
   return (
     <>
       <AttachRow props={props} />
+      <LibraryRows props={props} />
       {props.showLocalFolderRow && <LocalFolderRow props={props} />}
       {props.showDesktopActionRows && <ClipboardRow props={props} />}
       {props.showDesktopActionRows && <LocalCommandRow props={props} />}

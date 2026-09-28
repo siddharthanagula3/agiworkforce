@@ -134,6 +134,7 @@ describe('useChatStream, interactive cards', () => {
     expect(body['x_interactive_cards']).toEqual({
       supported: [
         'clarify.v1',
+        'image.v1',
         'itinerary.v1',
         'map-search.v1',
         'mcp-app.v1',

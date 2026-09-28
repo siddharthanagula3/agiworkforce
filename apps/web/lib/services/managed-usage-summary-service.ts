@@ -4,7 +4,9 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   creditsFromMicrousd,
   isFreeBillingPlanTier,
+  type ManagedUsageBonusCredits,
   type ManagedUsageCredits,
+  type ManagedUsagePurchaseExpiry,
   type ManagedUsageSummaryResponse,
 } from '@agiworkforce/types';
 import { creditWindow, resolvePlanCreditAllowance } from '@/lib/billing/usage-credits';
@@ -30,16 +32,6 @@ import {
 import { CreditService } from '@/lib/services/credit-service';
 import { getFreeTrialPublicUsage } from '@/lib/services/free-trial-service';
 import { resolveEffectiveSubscription } from '@/lib/services/effective-subscription-service';
-
-export interface ManagedUsageBonusCredits {
-  remaining: number;
-  next_expiry_at: string | null;
-}
-
-export interface ManagedUsagePurchaseExpiry {
-  expiring_credits: number;
-  next_expiry_at: string | null;
-}
 
 export interface AccountUsageCredits extends ManagedUsageCredits {
   bonus: ManagedUsageBonusCredits | null;

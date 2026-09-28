@@ -222,6 +222,7 @@ impl DeveloperSessionHost for FakeHost {
                     detail: "cargo test".to_string(),
                     risk_level: Some(AgentEventApprovalRiskLevel::Medium),
                     reversible: Some(true),
+                    proposed_content: None,
                 }],
             }),
         })
@@ -340,6 +341,10 @@ fn capabilities() -> AppServerCapabilities {
         max_turns: false,
         memory: false,
         plan: false,
+        approval_notes: false,
+        approval_edits: false,
+        mcp_tools: false,
+        installs: false,
     }
 }
 
@@ -976,6 +981,8 @@ async fn websocket_transport_carries_typed_approval_round_trips() {
         turn_id: "turn-1".to_string(),
         request_id: "approval-1".to_string(),
         decision: ReviewDecision::ApprovedForSession,
+        note: None,
+        edited_content: None,
     };
     websocket
         .send(Message::text(
@@ -1262,6 +1269,7 @@ impl DeveloperSessionHost for SurfaceHost {
                 scope: HookConfigScope::User,
                 trusted: true,
                 source: Some("/home/dev/.agiworkforce/hooks.json".to_string()),
+                position: Some(1),
             }],
         })
     }
@@ -1774,6 +1782,7 @@ fn handoff_record(to: HandoffEnvironment) -> DeveloperSessionHandoff {
             detail: "cargo test".to_string(),
             risk_level: Some(AgentEventApprovalRiskLevel::Medium),
             reversible: Some(true),
+            proposed_content: None,
         }],
         last_turn: Some(HandoffLastTurn {
             turn_id: "turn-9".to_string(),

@@ -5,6 +5,7 @@ export const USER_OWNED_TABLES = new Set([
   'web_artifact_versions',
   'user_projects',
   'project_knowledge_files',
+  'external_resource_references',
   'user_memories',
   'media_assets',
   'scheduled_tasks',

@@ -99,6 +99,8 @@ export type { DeveloperAgentMode, DeveloperSessionNegotiation } from './develope
 
 export { BROWSER_PAIRING_COMMANDS } from './browser-bridge';
 export type {
+  BrowserActivityEntry,
+  BrowserActivityOutcome,
   BrowserPairRequestPrompt,
   BrowserPairingCommand,
   BrowserPairingState,
@@ -201,6 +203,7 @@ export type {
 } from './inference';
 
 export {
+  CODE_HOME_DEEP_LINK_ID,
   DEFAULT_SESSION_COMPLETION_ALERTS,
   DESKTOP_DEEP_LINK_SCHEME,
   DESKTOP_DEEP_LINK_TARGETS,
@@ -249,6 +252,7 @@ export {
 export type { ContainmentOptions, PathPlatform } from './path-safety';
 
 export {
+  BROWSER_STEP_COMMAND,
   DEVICE_HOST_HEADER,
   DEVICE_KEY_MODIFIERS,
   DEVICE_MOUSE_BUTTONS,
@@ -271,6 +275,7 @@ export {
   MAX_DEVICE_WAIT_MS,
   describeDeviceDisplays,
   describeDeviceStep,
+  deviceStepBrowserCommand,
   deviceStepCapability,
   deviceStepCommand,
   deviceStepScope,
