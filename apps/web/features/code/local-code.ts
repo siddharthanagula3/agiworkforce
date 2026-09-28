@@ -94,12 +94,27 @@ export const LOCAL_CODE_COPY = {
   trustProjectSkills: "Trust this folder's skills",
   revokeProjectSkills: "Stop trusting this folder's skills",
   skillScopeLabels: { project: 'This folder', user: 'Your account', plugin: 'From a plugin' },
+  memory: 'Memory',
+  memoryHeading: 'Remember for later sessions',
+  memoryLabel: 'What to remember',
+  memoryPlaceholder: 'A fact about this repository the agent should keep in mind',
+  memoryProject: 'Project memory',
+  memoryProjectHint: 'Saved in this repository and shared through git.',
+  memoryUser: 'User memory',
+  memoryUserHint: 'Saved for all your projects on this computer.',
+  memorySave: 'Save to memory',
+  memorySaving: 'Saving to memory',
+  memorySavedTo: 'Saved to',
+  memoryFailed: 'That could not be saved to memory.',
 } as const;
 
 const LOCAL_SESSION_STATUS_LABELS: Partial<Record<ThreadStatus, string>> = {
   awaiting_approval: 'Needs approval',
   failed: 'Failed',
+  archived: 'Archived',
 };
+
+const QUIET_LOCAL_SESSION_STATUSES: ReadonlySet<ThreadStatus> = new Set(['archived']);
 
 const LOCAL_PULL_REQUEST_STATE_LABELS = {
   open: 'open',
@@ -131,6 +146,10 @@ export function localPullRequestLabel(pullRequest: {
 
 export function localSessionStatusLabel(status: ThreadStatus): string | null {
   return LOCAL_SESSION_STATUS_LABELS[status] ?? null;
+}
+
+export function localSessionStatusIsQuiet(status: ThreadStatus): boolean {
+  return QUIET_LOCAL_SESSION_STATUSES.has(status);
 }
 
 export const LOCAL_AGENT_MODES = [

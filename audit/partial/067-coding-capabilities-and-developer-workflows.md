@@ -281,10 +281,10 @@ Code: `apps/extension/src/features/content/in-page-panel/pageActions.ts:76-92`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | The cloud agent (read_file, list_files, run_command in the E2B sandbox) can do this, with no security-review command; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
-| desktop | partial | None of the nine commits added a security-review command, tool or menu entry; a local session can still only be asked to check for security problems in words, same as before. | ui |
+| desktop | partial | The local runtime expands only custom and skill slash commands at turn time (expand_prompt_command), so /security-review typed in a local desktop session reaches the model unexpanded. The CLI lane needs expand_prompt_command to also expand the built-in prompt commands (/security-review, /review) the way claude_parity does in the terminal. | handler |
 | mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
 
-Code: `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/web/lib/services/cloud-code-agent-tools.ts:274-279`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:84-86`, `apps/web/features/code/components/LocalSessionPanel.tsx:234-234`
+Code: `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/web/lib/services/cloud-code-agent-tools.ts:274-279`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:84-86`, `apps/cli/src/app_server/surfaces.rs:577-577`
 
 ## S67.23: Explain findings.
 
@@ -455,31 +455,29 @@ Code: `apps/web/app/api/github/webhook/route.ts:32-32`, `apps/web/app/api/github
 
 - Done when: The user sets a goal and a bound (turns/time) and the agent loops until done or the bound is hit.
 - Wave: 2
-- Already works on: cli
+- Already works on: desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Each cloud turn is bounded by a fixed 10-minute budget the user cannot change; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off, ui |
-| desktop | partial | No commit added a way to set a goal or a turn/time bound from the panel; the local loop still stops only at the runtime's default MAX_AGENTIC_ITERATIONS cap. | ui |
 | mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
 | vscode | partial | The runtime loop uses its default cap; the extension exposes only effort presets, not a goal bound. | ui |
 
-Code: `apps/web/lib/deadline-policy.ts:33-33`, `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/web/features/code/components/LocalSessionPanel.tsx:234-234`, `apps/cli/src/agent/chat.rs:947-947`
+Code: `apps/web/lib/deadline-policy.ts:33-33`, `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
 
 ## S67.37: Persist useful repository-specific Memory.
 
 - Done when: The agent saves useful repository-specific facts to memory and reuses them in later sessions on that repository.
 - Wave: 3
-- Already works on: cli
+- Already works on: desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
-| desktop | partial | Reuse still works (project memory loads into the prompt each session), but no commit added a memory-save tool, app-server command or panel control; saving repository-specific memory is still unreachable from the desktop surface. | ui |
 | mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
 | vscode | partial | VS Code memory commands edit account-wide facts (/api/memory/sync); repository memory is only what the local runtime already loads from project files. | ui |
 
-Code: `apps/web/features/code/components/LocalSessionPanel.tsx:234-234`, `apps/desktop/electron/runtime/dispatcher.ts:1053-1053`, `apps/cli/src/agent/prompt.rs:401-401`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`
+Code: `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`, `apps/extension-vscode/src/core/commandSetup.ts:1863-1868`, `apps/extension-vscode/src/memory/accountMemoryClient.ts:10-10`
 
 ## S67.38: Load repository instruction files.
 

@@ -214,7 +214,7 @@ func secureInputOwner() -> Int32? {
   return owner.int32Value
 }
 
-func frontWindow() -> [String: Any] {
+func frontWindow(excluding excludedOwner: Int32?) -> [String: Any] {
   let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
   guard let windows = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]]
   else {
@@ -223,11 +223,15 @@ func frontWindow() -> [String: Any] {
   for window in windows {
     guard (window[kCGWindowLayer as String] as? Int) == 0,
       let owner = window[kCGWindowOwnerPID as String] as? Int32,
+      owner != excludedOwner,
       let name = window[kCGWindowOwnerName as String] as? String
     else {
       continue
     }
     var front: [String: Any] = ["app": name]
+    if let number = window[kCGWindowNumber as String] as? Int {
+      front["windowId"] = number
+    }
     if let bundle = NSRunningApplication(processIdentifier: owner)?.bundleIdentifier {
       front["bundleId"] = bundle
     }
@@ -251,7 +255,7 @@ func perform(_ request: [String: Any]) throws -> [String: Any] {
   case "ping":
     return [:]
   case "front":
-    return ["front": frontWindow()]
+    return ["front": frontWindow(excluding: (request["excludePid"] as? NSNumber)?.int32Value)]
   case "move":
     try moveMouse(to: point(request, "x", "y"))
   case "click":

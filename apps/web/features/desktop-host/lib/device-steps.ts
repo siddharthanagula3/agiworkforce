@@ -1,12 +1,15 @@
 'use client';
 
 import {
+  BROWSER_STEP_COMMAND,
   DesktopRuntimeError,
   MAX_DEVICE_STEP_RESULT_LENGTH,
   describeDeviceDisplays,
   describeDeviceFrontWindow,
   deviceFrontWindowRefusal,
+  deviceStepBrowserCommand,
   deviceStepCommand,
+  deviceStepScope,
   getHostBridge,
   isDeviceStepTool,
   readDeviceFrontWindow,
@@ -134,7 +137,89 @@ async function captureFor(
   };
 }
 
-type ActionStepTool = Exclude<DeviceStepTool, 'device_screenshot' | 'device_zoom'>;
+type BrowserStepTool = Extract<DeviceStepTool, `device_browser_${string}`>;
+
+type ActionStepTool = Exclude<
+  DeviceStepTool,
+  'device_screenshot' | 'device_zoom' | BrowserStepTool
+>;
+
+function isBrowserStepTool(tool: DeviceStepTool): tool is BrowserStepTool {
+  return deviceStepScope(tool) === 'browser';
+}
+
+function dataUrlImage(value: unknown): DeviceStepOutcome['image'] | null {
+  const dataUrl =
+    value && typeof value === 'object' ? (value as { dataUrl?: unknown }).dataUrl : undefined;
+  if (typeof dataUrl !== 'string') return null;
+  const match = /^data:(image\/(?:png|jpeg));base64,(.+)$/.exec(dataUrl);
+  if (!match?.[1] || !match[2]) return null;
+  return { base64: match[2], mimeType: match[1] as 'image/png' | 'image/jpeg' };
+}
+
+function readPageText(value: unknown): string {
+  const page = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>;
+  const title = typeof page['title'] === 'string' ? page['title'] : '';
+  const url = typeof page['url'] === 'string' ? page['url'] : '';
+  const text = typeof page['text'] === 'string' ? page['text'] : '';
+  return `${title}\n${url}\n\n${text || '(the page has no visible text)'}`;
+}
+
+function browserStepArgs(
+  tool: BrowserStepTool,
+  input: Record<string, unknown>,
+): Record<string, unknown> {
+  switch (tool) {
+    case 'device_browser_navigate':
+    case 'device_browser_download':
+      return { url: input['url'] };
+    case 'device_browser_click':
+      return { selector: input['selector'] };
+    case 'device_browser_type':
+      return { selector: input['selector'], text: input['text'], clear: input['clear'] === true };
+    case 'device_browser_read_page':
+    case 'device_browser_screenshot':
+      return {};
+  }
+}
+
+async function runBrowserStep(
+  tool: BrowserStepTool,
+  input: Record<string, unknown>,
+): Promise<DeviceStepOutcome> {
+  const value = await invokeDeviceCommand<unknown>(BROWSER_STEP_COMMAND, {
+    command: deviceStepBrowserCommand(tool),
+    args: browserStepArgs(tool, input),
+    ...reviewOf(input),
+  });
+  switch (tool) {
+    case 'device_browser_read_page':
+      return { content: cap(readPageText(value)), isError: false };
+    case 'device_browser_screenshot': {
+      const image = dataUrlImage(value);
+      return image
+        ? { content: 'The visible part of the Chrome tab follows.', isError: false, image }
+        : { content: 'Chrome returned no picture of the tab.', isError: true };
+    }
+    case 'device_browser_navigate':
+      return {
+        content: `Opened ${String(input['url'])} in Chrome. Read the page to see what loaded.`,
+        isError: false,
+      };
+    case 'device_browser_click':
+      return {
+        content: `Clicked ${String(input['selector'])} in Chrome. Read the page to see what changed.`,
+        isError: false,
+      };
+    case 'device_browser_type':
+      return { content: `Typed into ${String(input['selector'])} in Chrome.`, isError: false };
+    case 'device_browser_download':
+      return {
+        content: `Chrome started downloading ${String(input['url'])} into the user's downloads folder.`,
+        isError: false,
+      };
+  }
+}
 
 async function runStep(tool: ActionStepTool, input: Record<string, unknown>): Promise<string> {
   const command = deviceStepCommand(tool);
@@ -269,6 +354,7 @@ export async function executeDeviceStep(
     if (tool === 'device_screenshot' || tool === 'device_zoom') {
       return await captureFor(tool, input);
     }
+    if (isBrowserStepTool(tool)) return await runBrowserStep(tool, input);
     return { content: cap(await runStep(tool, input)), isError: false };
   } catch (error) {
     if (error instanceof DesktopRuntimeError) {
