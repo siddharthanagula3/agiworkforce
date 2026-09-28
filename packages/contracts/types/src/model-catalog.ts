@@ -52,6 +52,7 @@ import {
   getRetiredModelRecord,
   lifecycleStageAtOrAfter,
   modelRegistry,
+  type HarnessResponseFormat,
   type LifecycleStage,
   type ModelCapabilityName,
   type ModelCapabilityValue,
@@ -85,6 +86,7 @@ export interface RegistryRoute {
   trustModes: readonly string[];
   isDefault: boolean;
   commercialStatus: RouteCommercialStatus;
+  responseFormats?: readonly HarnessResponseFormat[];
 }
 
 export function getRegistryRoute(routeId: string): RegistryRoute | null {

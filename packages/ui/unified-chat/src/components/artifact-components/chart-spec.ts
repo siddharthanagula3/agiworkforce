@@ -1,4 +1,5 @@
 import { agiPalette, type AgiThemeMode } from '@agiworkforce/design-tokens';
+import { translateUiPlural } from '@agiworkforce/ui';
 
 export const CHART_KINDS = ['bar', 'line', 'pie'] as const;
 export type ChartKind = (typeof CHART_KINDS)[number];
@@ -351,7 +352,10 @@ function describeSeries(spec: ChartSpec, entry: ChartSeriesSpec): string | null 
 export function summarizeChart(spec: ChartSpec, fallbackTitle?: string): string {
   const title = (spec.title ?? fallbackTitle?.trim())?.replace(/[.!?]+$/, '');
   const xAxis = spec.xLabel ?? spec.xKey;
-  const pointCount = `${spec.rows.length} ${spec.rows.length === 1 ? 'point' : 'points'}`;
+  const pointCount = translateUiPlural('chat', 'counts.chartPoints', spec.rows.length, {
+    one: '{{count}} point',
+    other: '{{count}} points',
+  });
   const plotted =
     spec.kind === 'pie'
       ? `Pie chart of ${pointCount}, one slice per ${xAxis}.`

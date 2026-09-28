@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
+vi.mock('@/lib/developer-api/project-spend', () => ({
+  developerProjectSpendRefusal: vi.fn(async () => null),
+}));
 vi.mock('server-only', () => ({}));
 
 vi.mock('@/lib/logger', () => ({

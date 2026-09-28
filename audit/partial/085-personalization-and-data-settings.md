@@ -130,14 +130,11 @@ Code: `apps/extension/src/features/options/data-handling-section.ts:147-158`, `a
 
 - Done when: The user can list archived chats, restore them, and delete them.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| vscode | partial | Developer sessions can be archived, but the list excludes archived sessions and there is no command to view or restore them. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/extension-vscode/src/core/commandSetup.ts:1168-1182`, `apps/extension-vscode/src/features/trees/conversationTreeProvider.ts:108-114`
 
 ## S85.18: Delete all chats.
 

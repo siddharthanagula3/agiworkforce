@@ -10,38 +10,38 @@ import { el } from './dom';
 
 export const ARTIFACTS_DRAWER_CSS = `
   .sp-drawer-artifacts-help {
-    font-size: 12px;
+    font-size: var(--type-caption-size);
     color: var(--agi-ext-text-muted);
-    line-height: 1.5;
+    line-height: var(--type-caption-height);
     margin-bottom: 8px;
   }
   .sp-drawer-artifacts-list { list-style: none; display: flex; flex-direction: column; gap: 5px; }
   .sp-drawer-artifact {
     background: var(--agi-ext-surface);
     border: 1px solid var(--agi-ext-border);
-    border-radius: 6px;
+    border-radius: var(--corner-control);
     padding: 8px 10px;
     display: flex;
     flex-direction: column;
     gap: 4px;
   }
   .sp-drawer-artifact-title {
-    font-size: 12px;
+    font-size: var(--type-caption-size);
     color: var(--agi-ext-text);
-    line-height: 1.4;
+    line-height: var(--type-caption-height);
     overflow-wrap: anywhere;
   }
-  .sp-drawer-artifact-meta { font-size: 12px; color: var(--agi-ext-text-muted); }
+  .sp-drawer-artifact-meta { font-size: var(--type-caption-size); color: var(--agi-ext-text-muted); }
   .sp-drawer-artifact-actions { display: flex; gap: 6px; flex-wrap: wrap; }
   .sp-drawer-artifact-btn {
     background: none;
     border: 1px solid var(--agi-ext-border);
-    border-radius: 5px;
+    border-radius: var(--corner-control);
     color: var(--agi-ext-text-muted);
-    font-size: 12px;
+    font-size: var(--type-label-size);
     padding: 3px 8px;
     cursor: pointer;
-    transition: color 0.12s, border-color 0.12s;
+    transition: color var(--duration-instant), border-color var(--duration-instant);
   }
   .sp-drawer-artifact-btn:hover {
     color: var(--agi-ext-accent-text);
@@ -50,9 +50,9 @@ export const ARTIFACTS_DRAWER_CSS = `
   .sp-drawer-artifact-btn:disabled { cursor: wait; opacity: 0.55; }
   .sp-drawer-artifacts-empty,
   .sp-drawer-artifacts-status {
-    font-size: 12px;
+    font-size: var(--type-caption-size);
     color: var(--agi-ext-text-muted);
-    line-height: 1.5;
+    line-height: var(--type-caption-height);
     padding: 4px 0;
   }
   .sp-drawer-artifacts-empty[hidden],

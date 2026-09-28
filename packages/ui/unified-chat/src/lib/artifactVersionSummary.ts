@@ -1,3 +1,5 @@
+import { translateUiPlural } from '@agiworkforce/ui';
+
 export interface VersionedContent {
   content: string;
   createdAt?: string;
@@ -29,17 +31,22 @@ export function artifactLineChange(
   return { added, removed };
 }
 
-function plural(count: number, word: string): string {
-  return `${count} ${word}${count === 1 ? '' : 's'}`;
-}
-
 export function describeArtifactVersionChange(
   versions: readonly VersionedContent[],
   index: number,
 ): string {
   const version = versions[index];
   if (!version) return '';
-  if (index === 0) return `Created, ${plural(version.content.split('\n').length, 'line')}`;
+  if (index === 0)
+    return translateUiPlural(
+      'chat',
+      'counts.artifactCreatedLines',
+      version.content.split('\n').length,
+      {
+        one: 'Created, {{count}} line',
+        other: 'Created, {{count}} lines',
+      },
+    );
   const match = versions.findIndex(
     (candidate, candidateIndex) =>
       candidateIndex < index - 1 && candidate.content === version.content,
@@ -48,7 +55,16 @@ export function describeArtifactVersionChange(
   const previous = versions[index - 1];
   const { added, removed } = artifactLineChange(previous?.content ?? '', version.content);
   if (added === 0 && removed === 0) return 'Line order changed';
-  return `${plural(added, 'line')} added, ${removed} removed`;
+  return translateUiPlural(
+    'chat',
+    'counts.artifactLinesChanged',
+    added,
+    {
+      one: '{{count}} line added, {{removed}} removed',
+      other: '{{count}} lines added, {{removed}} removed',
+    },
+    { removed },
+  );
 }
 
 export function formatArtifactVersionTime(value: string | undefined): string | null {
@@ -71,5 +87,8 @@ export function summarizeArtifactVersions(
 }
 
 export function formatVersionCount(count: number): string {
-  return plural(count, 'version');
+  return translateUiPlural('chat', 'counts.artifactVersions', count, {
+    one: '{{count}} version',
+    other: '{{count}} versions',
+  });
 }

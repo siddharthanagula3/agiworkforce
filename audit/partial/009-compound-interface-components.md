@@ -6,18 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S9.01: Searchable resource picker.
-
-- Done when: A picker lists selectable resources (files, projects, models, skills) and narrows the list as the user types a query.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | Only the recent-chats list can be searched; add a searchable picker for files, projects or connectors to attach from the side panel. | ui |
-
-Code: `apps/extension/src/side_panel.ts:6699-6707`, `apps/extension/src/side_panel.ts:6720-6723`
-
 ## S9.03: Source picker.
 
 - Done when: Before or while asking, the user can choose which sources (specific sites, files, connected apps) the answer may draw on.
@@ -42,18 +30,6 @@ Code: `apps/extension/src/side_panel.ts:6699-6707`, `apps/extension/src/side_pan
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-## S9.06: Project picker.
-
-- Done when: The user can pick one of their projects so the chat or task runs in that project.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | The Projects drawer only lists projects and reopens their chats; add choosing a project so a new side-panel chat runs in it. | handler |
-
-Code: `apps/extension/src/features/side-panel/projectsDrawer.ts:460-468`
 
 ## S9.07: Repository picker.
 
@@ -273,18 +249,6 @@ Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:556-556`,
 
 Code: `apps/mobile/src/features/chat/components/CollapsibleSources.tsx:120-120`, `apps/mobile/src/features/chat/components/MessageBubble.tsx:1017-1017`, `apps/extension/src/features/side-panel/bubbles.ts:411-411`, `apps/extension/src/features/side-panel/bubbles.ts:540-540`
 
-## S9.29: Usage meter.
-
-- Done when: A meter shows how much of the plan allowance is used (per window) with the reset time, readable by assistive tech.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | Shows remaining usage as a text line only ("N% left, resets in"); render the bar (.sp-quota-bar-fill is styled but no element uses it). | ui |
-
-Code: `apps/extension/src/side_panel.ts:8368-8368`, `apps/extension/src/features/cloud-bridge/freeTrialClient.ts:58-58`
-
 ## S9.30: Credit-balance card.
 
 - Done when: The user sees their purchased credit balance in one place, next to a way to add credits.
@@ -338,16 +302,15 @@ Code: `apps/mobile/src/features/chat/components/ModelTierWarningBanner.tsx:33-33
 
 - Done when: An answer can embed a widget the user operates in place (choices, map, app card), and the choice or state feeds back into the conversation.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Only the map-search card renders; clarify choices and MCP app widgets fall back to text. Add renderers that let the user answer in place. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Only the map-search card renders; clarify choices and MCP app widgets fall back to text. Add renderers that let the user answer in place. | ui |
 
-Code: `apps/mobile/src/features/chat/components/InteractiveCardBlock.tsx:357-357`, `apps/mobile/src/features/chat/components/MessageBubble.tsx:988-988`, `apps/extension/src/features/side-panel/bubbles.ts:127-127`, `apps/extension/src/features/side-panel/bubbles.ts:118-118`
+Code: `apps/mobile/src/features/chat/components/InteractiveCardBlock.tsx:357-357`, `apps/mobile/src/features/chat/components/MessageBubble.tsx:988-988`
 
 ## S9.37: Notification inbox.
 

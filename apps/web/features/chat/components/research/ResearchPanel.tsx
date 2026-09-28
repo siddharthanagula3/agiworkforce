@@ -15,7 +15,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Globe, X, ExternalLink, Search, PanelRight, Telescope } from 'lucide-react';
 import type { ResearchReport } from '@agiworkforce/types';
 import { cn } from '@shared/lib/utils';
-import { Button, EmptyState } from '@agiworkforce/ui';
+import { Button, EmptyState, translateUiPlural } from '@agiworkforce/ui';
 import { citationPublisherDomain } from '@agiworkforce/unified-chat';
 import { useResearchPanelStore, type ResearchSource } from '../../stores/research-panel-store';
 import { formatSourceDate } from '../../utils/research-sources';
@@ -576,7 +576,10 @@ export function SourcesControl({ messageId, cited, more, query }: SourcesControl
       type="button"
       onClick={() => openPanel(activeConversationId, messageId, cited, more, query)}
       className="inline-flex items-center gap-2 rounded-full border border-border/30 bg-muted/20 py-1.5 pl-1.5 pr-3 text-[13px] text-muted-foreground transition-colors hover:border-border/60 hover:bg-muted/50 hover:text-foreground"
-      aria-label={`View ${total} ${total === 1 ? 'source' : 'sources'}`}
+      aria-label={translateUiPlural('chat', 'counts.viewSources', total, {
+        one: 'View {{count}} source',
+        other: 'View {{count}} sources',
+      })}
     >
       <span className="flex items-center -space-x-2">
         {preview.map((source, index) => (

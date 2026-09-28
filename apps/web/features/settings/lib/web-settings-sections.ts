@@ -34,6 +34,7 @@ export const WEB_SETTINGS_CONTENT_SECTIONS = [
   'voice',
   'reflect',
   'time-focus',
+  'slack',
   'help',
 ] as const satisfies readonly SettingsNavKey[];
 

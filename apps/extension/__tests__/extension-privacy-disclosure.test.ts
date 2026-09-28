@@ -177,6 +177,8 @@ describe('options data-handling disclosure', () => {
       'debugger',
       'cookies',
       'cloud-mirroring',
+      'training',
+      'retention',
     ]);
     expect(text).toContain('every http and https page');
     expect(text).toContain('Chrome debugger permission');

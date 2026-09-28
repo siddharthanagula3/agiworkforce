@@ -60,6 +60,7 @@ import {
   buildItineraryCard,
   buildProductComparisonCard,
 } from './interactiveCards';
+import { buildConnectorInputForm, type ConnectorInputBinding } from './connectorInputForm';
 
 type ChatMessage = SidePanelChatMessage;
 export type ManagedApprovalDecision = 'approved' | 'rejected';
@@ -81,6 +82,7 @@ export interface BubbleInteractionOptions {
   onResolveApproval?: (toolCallId: string, decision: ManagedApprovalDecision) => void;
   onApproveForChat?: (toolCallId: string, toolName: string) => void;
   onApprovalGuidanceChange?: (toolCallId: string, guidance: string) => void;
+  connectorInput?: ConnectorInputBinding;
   onRetry?: (messageId: string) => void;
   onSwitchModel?: () => void;
   quotaRecovery?: QuotaRecoveryControl;
@@ -726,14 +728,18 @@ function activityEntrySummary(entry: AgentActivityEntry): string {
   return entry.message;
 }
 
-function boundedJson(value: unknown): string {
+function formattedJson(value: unknown): string {
   if (value === undefined) return '';
   try {
-    const formatted = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
-    return formatted.length > 8_000 ? `${formatted.slice(0, 8_000)}\n…` : formatted;
+    return typeof value === 'string' ? value : JSON.stringify(value, null, 2);
   } catch {
-    return String(value).slice(0, 8_000);
+    return String(value);
   }
+}
+
+function boundedJson(value: unknown): string {
+  const formatted = formattedJson(value);
+  return formatted.length > 8_000 ? `${formatted.slice(0, 8_000)}\n…` : formatted;
 }
 
 function appendActivitySources(
@@ -927,12 +933,11 @@ function buildAgentActivityStep(
     if (entry.deviceStep) {
       detailParts.push(t('spActivityStepWaitingForDevice', [entry.deviceStep.deviceName]));
     }
-    if (entry.inputRequest) detailParts.push(t('spActivityStepNeedsInput'));
     if (entry.input !== undefined) {
       detailParts.push(`${t('spActivityRequestHeading')}\n${boundedJson(entry.input)}`);
     }
     if (entry.output !== undefined) {
-      detailParts.push(`${t('spActivityResultHeading')}\n${boundedJson(entry.output)}`);
+      detailParts.push(`${t('spActivityResultHeading')}\n${formattedJson(entry.output)}`);
     }
     if (entry.error) detailParts.push(entry.error);
     sources = entry.sources ?? [];
@@ -952,7 +957,7 @@ function buildAgentActivityStep(
     detailParts.length > 0 ||
     sources.length > 0 ||
     entry.kind === 'artifact' ||
-    (entry.kind === 'tool' && Boolean(entry.approval));
+    (entry.kind === 'tool' && Boolean(entry.approval || entry.inputRequest));
   const step = document.createElement(hasDetails ? 'details' : 'div');
   step.className = `sp-agent-step sp-agent-step--${status}`;
   if (
@@ -994,7 +999,10 @@ function buildAgentActivityStep(
     appendActivitySources(detail, sources);
     if (entry.kind === 'artifact') appendArtifactAction(detail, entry);
     if (entry.kind === 'tool') appendApprovalActions(detail, entry, options);
-    step.appendChild(detail);
+    if (detail.hasChildNodes()) step.appendChild(detail);
+    const inputForm =
+      entry.kind === 'tool' ? buildConnectorInputForm(entry, options.connectorInput) : null;
+    if (inputForm) step.appendChild(inputForm);
   }
   return step;
 }
