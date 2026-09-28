@@ -257,9 +257,6 @@ export const CONNECTOR_NOT_RESPONDING_COPY = 'Not responding to recent requests.
 export const CSRF_HEADER = 'x-csrf-token';
 export const JSON_CONTENT_TYPE = 'application/json';
 
-export const CONNECTOR_ICON_PATH = '/api/connectors/directory/icon';
-export const CONNECTOR_DIRECTORY_PATH = '/api/connectors/directory';
-export const CONNECTORS_PATH = '/api/connectors';
 export const DIRECTORY_QUERY_SEARCH = 'search';
 export const DIRECTORY_QUERY_CATEGORY = 'category';
 export const DIRECTORY_QUERY_BADGE = 'badge';

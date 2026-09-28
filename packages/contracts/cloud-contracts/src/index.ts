@@ -42,6 +42,8 @@ export * from './cloud-code-transcript';
 export * from './local-code-session-activity';
 export * from './device-steps';
 export * from './connectors';
+export * from './connector-capabilities';
+export * from './connector-directory';
 export * from './capability-handshake';
 export * from './schedules';
 export * from './live-voice-tools';

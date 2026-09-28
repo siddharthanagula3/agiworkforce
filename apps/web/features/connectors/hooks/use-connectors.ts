@@ -4,6 +4,22 @@ import { useState, useEffect, useCallback } from 'react';
 import { useCurrentUser } from '@/lib/identity/client';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
+import { z } from 'zod';
+import {
+  CONNECTOR_OAUTH_RESULT_CONNECTOR_PARAM,
+  CONNECTOR_OAUTH_RESULT_STATUS_PARAM,
+  ConnectConflictResponseSchema,
+  ConnectorConnectionSchema,
+  ConnectorDirectoryEntrySchema,
+  ListConnectorsResponseSchema,
+  MANAGED_CLOUD_CONNECTORS_PATH,
+  connectorDirectoryEntryPath,
+  connectorErrorMessage,
+  type ConnectRequest,
+  type ConnectorOAuthResultStatus,
+  type ConnectorSetupEntry,
+  type ConnectorSource,
+} from '@agiworkforce/cloud-contracts';
 import { getCsrfToken } from '@/lib/client/csrf';
 import { CONNECTORS } from '@/features/connectors/data/connectors';
 import {
@@ -11,14 +27,6 @@ import {
   plaidLinkRoutesOf,
 } from '@/features/connectors/lib/plaid-link';
 import { toUserMessage } from '@/lib/user-error-message';
-
-export type ConnectorSource = 'user' | 'github-app' | 'custom' | 'oauth';
-
-export interface ConnectorSetupRequirementView {
-  kind: string;
-  missingEnv: string[];
-  message: string;
-}
 
 export interface ConnectorStatus {
   connectedIds: Set<string>;
@@ -30,7 +38,7 @@ export interface ConnectorStatus {
   needsReauthorizationIds: Set<string>;
   notRespondingIds: Set<string>;
   availableIds: Set<string>;
-  setupRequirements: Record<string, ConnectorSetupRequirementView>;
+  setupRequirements: Record<string, ConnectorSetupEntry>;
   loading: boolean;
   error: string | null;
   mutatingIds: Set<string>;
@@ -40,27 +48,29 @@ export interface ConnectorStatus {
   retry: () => void;
 }
 
-interface ConnectorsResponse {
-  connectors: Array<{
-    connectorId: string;
-    toolConnectorId?: string;
-    connectedAt?: string;
-    source?: ConnectorSource;
-    name?: string;
-    scopes?: string[];
-    needsReauthorization?: boolean;
-    health?: string;
-  }>;
-  available?: string[];
-  setup?: Record<string, ConnectorSetupRequirementView>;
-}
+const ConnectorRowSchema = ConnectorConnectionSchema.pick({
+  connectorId: true,
+  toolConnectorId: true,
+  connectedAt: true,
+  source: true,
+  name: true,
+  scopes: true,
+  needsReauthorization: true,
+  health: true,
+}).partial({ connectedAt: true, source: true });
 
-interface ConnectStartBody {
-  error?: string;
-  message?: string;
-  oauthStartPath?: string;
-  installStartPath?: string;
-}
+const ConnectorsResponseSchema = ListConnectorsResponseSchema.pick({
+  available: true,
+  setup: true,
+})
+  .partial({ available: true })
+  .extend({ connectors: z.array(ConnectorRowSchema) });
+
+type ConnectorsResponse = z.infer<typeof ConnectorsResponseSchema>;
+
+const DirectoryIdentitySchema = z.object({
+  entry: ConnectorDirectoryEntrySchema.pick({ name: true, documentationUrl: true }).partial(),
+});
 
 const CONNECTORS_CACHE_TTL_MS = 5000;
 let connectorsInFlight: Promise<ConnectorsResponse> | null = null;
@@ -94,12 +104,12 @@ function fetchConnectorsShared(): Promise<ConnectorsResponse> {
     return connectorsInFlight;
   }
   const generation = connectorsGeneration;
-  const request = fetch('/api/connectors')
+  const request = fetch(MANAGED_CLOUD_CONNECTORS_PATH)
     .then(async (res) => {
       if (!res.ok) {
         throw Object.assign(new Error(`HTTP ${res.status}`), { status: res.status });
       }
-      const json = (await res.json()) as ConnectorsResponse;
+      const json = ConnectorsResponseSchema.parse(await res.json());
       if (generation === connectorsGeneration) {
         connectorsCache = { data: json, fetchedAt: Date.now() };
       }
@@ -115,17 +125,14 @@ function fetchConnectorsShared(): Promise<ConnectorsResponse> {
   return request;
 }
 
-function messageFromBody(body: { error?: string; message?: string }, fallback: string): string {
-  return body.message ?? body.error ?? fallback;
-}
-
 async function readErrorMessage(res: Response, fallback: string): Promise<string> {
-  const body = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
-  return messageFromBody(body, fallback);
+  return connectorErrorMessage(await res.json().catch(() => null), fallback);
 }
 
-const BROKER_OUTCOME_PARAMS = ['connector', 'status'] as const;
-const DIRECTORY_ENTRY_PATH = '/api/connectors/directory';
+const BROKER_OUTCOME_PARAMS = [
+  CONNECTOR_OAUTH_RESULT_CONNECTOR_PARAM,
+  CONNECTOR_OAUTH_RESULT_STATUS_PARAM,
+] as const;
 const BANK_CONNECT_FAILED = 'Could not connect your bank account. Try again.';
 const FALLBACK_CONNECTOR_NAME = 'This connector';
 const DOCUMENTATION_ACTION_LABEL = 'Open documentation';
@@ -137,7 +144,7 @@ type BrokerOutcome = {
   offersDocumentation?: boolean;
 };
 
-const BROKER_OUTCOMES: Record<string, BrokerOutcome> = {
+const BROKER_OUTCOMES: Readonly<Partial<Record<string, BrokerOutcome>>> = {
   registration_rejected: {
     tone: 'error',
     message: (name) => `${name} refused to register this app, so it cannot be connected here.`,
@@ -175,7 +182,7 @@ const BROKER_OUTCOMES: Record<string, BrokerOutcome> = {
     tone: 'error',
     message: (name) => `${name} is not set up on this deployment yet.`,
   },
-};
+} satisfies Partial<Record<ConnectorOAuthResultStatus, BrokerOutcome>>;
 
 interface ConnectorIdentity {
   name: string;
@@ -190,21 +197,16 @@ function looksLikeDirectoryId(id: string): boolean {
   return DIRECTORY_ID_MARKERS.some((marker) => id.includes(marker));
 }
 
-function directoryEntryPath(id: string): string {
-  return `${DIRECTORY_ENTRY_PATH}/${id.split('/').map(encodeURIComponent).join('/')}`;
-}
-
 async function fetchDirectoryIdentity(id: string): Promise<ConnectorIdentity> {
   const fallback = { name: FALLBACK_CONNECTOR_NAME, documentationUrl: null };
   try {
-    const res = await fetch(directoryEntryPath(id), { cache: 'no-store' });
+    const res = await fetch(connectorDirectoryEntryPath(id), { cache: 'no-store' });
     if (!res.ok) return fallback;
-    const body = (await res.json()) as {
-      entry?: { name?: string; documentationUrl?: string | null };
-    };
+    const parsed = DirectoryIdentitySchema.safeParse(await res.json());
+    if (!parsed.success) return fallback;
     return {
-      name: body.entry?.name ?? FALLBACK_CONNECTOR_NAME,
-      documentationUrl: body.entry?.documentationUrl ?? null,
+      name: parsed.data.entry.name ?? FALLBACK_CONNECTOR_NAME,
+      documentationUrl: parsed.data.entry.documentationUrl ?? null,
     };
   } catch {
     return fallback;
@@ -248,11 +250,11 @@ export function useBrokerOutcome(onConnected: () => void): void {
     if (typeof window === 'undefined') return;
 
     const params = new URLSearchParams(window.location.search);
-    const status = params.get('status');
+    const status = params.get(CONNECTOR_OAUTH_RESULT_STATUS_PARAM);
     if (!status) return;
 
     const outcome = BROKER_OUTCOMES[status];
-    const connectorId = params.get('connector') ?? '';
+    const connectorId = params.get(CONNECTOR_OAUTH_RESULT_CONNECTOR_PARAM) ?? '';
 
     for (const key of BROKER_OUTCOME_PARAMS) params.delete(key);
     const query = params.toString();
@@ -313,9 +315,9 @@ export function useConnectors(): ConnectorStatus {
   const [needsReauthorizationIds, setNeedsReauthorizationIds] = useState<Set<string>>(new Set());
   const [notRespondingIds, setNotRespondingIds] = useState<Set<string>>(new Set());
   const [availableIds, setAvailableIds] = useState<Set<string>>(new Set());
-  const [setupRequirements, setSetupRequirements] = useState<
-    Record<string, ConnectorSetupRequirementView>
-  >({});
+  const [setupRequirements, setSetupRequirements] = useState<Record<string, ConnectorSetupEntry>>(
+    {},
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [mutatingIds, setMutatingIds] = useState<Set<string>>(new Set());
@@ -420,10 +422,11 @@ export function useConnectors(): ConnectorStatus {
       setMutatingIds((prev) => new Set([...prev, id]));
       try {
         const csrfToken = await getCsrfToken();
-        const res = await fetch('/api/connectors', {
+        const connectRequest: ConnectRequest = { connectorId: id, authType };
+        const res = await fetch(MANAGED_CLOUD_CONNECTORS_PATH, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrfToken },
-          body: JSON.stringify({ connectorId: id, authType }),
+          body: JSON.stringify(connectRequest),
         });
         if (!res.ok) {
           if (options.optimistic) {
@@ -433,8 +436,10 @@ export function useConnectors(): ConnectorStatus {
               return next;
             });
           }
-          const body = (await res.json().catch(() => ({}))) as ConnectStartBody;
-          const plaidRoutes = res.status === 409 ? plaidLinkRoutesOf(body) : null;
+          const raw: unknown = await res.json().catch(() => null);
+          const conflict = ConnectConflictResponseSchema.safeParse(raw);
+          const body = conflict.success ? conflict.data : null;
+          const plaidRoutes = res.status === 409 && body ? plaidLinkRoutesOf(body) : null;
           if (plaidRoutes && typeof window !== 'undefined') {
             try {
               if (await connectBankAccountsWithPlaid(plaidRoutes)) {
@@ -446,7 +451,7 @@ export function useConnectors(): ConnectorStatus {
             }
             return;
           }
-          if (res.status === 409 && typeof window !== 'undefined') {
+          if (res.status === 409 && body && typeof window !== 'undefined') {
             if (body.oauthStartPath) {
               const target = withConnectorReturnPath(
                 body.oauthStartPath,
@@ -461,7 +466,9 @@ export function useConnectors(): ConnectorStatus {
               return;
             }
           }
-          toast.error(messageFromBody(body, 'Could not connect this connector. Try again later.'));
+          toast.error(
+            connectorErrorMessage(raw, 'Could not connect this connector. Try again later.'),
+          );
         } else {
           invalidateConnectorsCache();
         }
@@ -507,10 +514,13 @@ export function useConnectors(): ConnectorStatus {
       setMutatingIds((prev) => new Set([...prev, id]));
       try {
         const csrfToken = await getCsrfToken();
-        const res = await fetch(`/api/connectors?connectorId=${encodeURIComponent(id)}`, {
-          method: 'DELETE',
-          headers: { 'x-csrf-token': csrfToken },
-        });
+        const res = await fetch(
+          `${MANAGED_CLOUD_CONNECTORS_PATH}?connectorId=${encodeURIComponent(id)}`,
+          {
+            method: 'DELETE',
+            headers: { 'x-csrf-token': csrfToken },
+          },
+        );
         if (!res.ok) {
           setConnectedIds((prev) => new Set([...prev, id]));
           toast.error(await readErrorMessage(res, 'Could not disconnect. Try again later.'));
