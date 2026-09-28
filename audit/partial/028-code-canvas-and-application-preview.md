@@ -150,14 +150,14 @@ Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1800-1812
 
 - Done when: Runtime errors in the preview appear as an overlay with a way to recover.
 - Wave: 3
+- Already works on: web
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The panel (View source / Retry) appears only when the sandbox's own render step throws. A React artifact that throws shows raw error text inside the frame, and errors after the first render are never reported. | states |
 | desktop | partial | Same as web (hosted): only sandbox render-step failures reach the error panel. | states |
 | mobile | partial | Only a failed Mermaid diagram shows a message ("Could not render this diagram."); there is no error panel with View source or Retry. | states |
 
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1776-1799`, `apps/web/features/chat/components/SandboxedIframe.tsx:160-168`, `infrastructure/sandbox/index.html:376-383`, `apps/mobile/src/features/chat/components/sandboxedArtifactHtml.ts:32-35`
+Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1776-1799`, `apps/web/features/chat/components/SandboxedIframe.tsx:160-168`, `apps/mobile/src/features/chat/components/sandboxedArtifactHtml.ts:32-35`, `apps/mobile/src/features/chat/components/SafeArtifactPreview.tsx:30-36`
 
 ## S28.18: Preview reload.
 

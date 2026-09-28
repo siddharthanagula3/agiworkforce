@@ -11,6 +11,7 @@ import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { buildExternalSharingGateResponse } from '@/lib/managed-compute-gate';
 import { inspectOutboundContent } from '@/lib/security/outbound-content-inspection';
+import { moderateManagedPrompt } from '@/lib/moderation';
 import { resolveSecretHandlingPolicy } from '@/lib/services/organization-policy-gate';
 import {
   MAX_CONTENT_CHARS,
@@ -59,6 +60,19 @@ function publishingUnavailableResponse(): NextResponse {
     { error: { message: 'Artifact publishing is not configured in this environment yet.' } },
     { status: 503 },
   );
+}
+
+function refuseModeratedPublication(userId: string, title: string, content: string): void {
+  const moderation = moderateManagedPrompt({
+    userId,
+    segments: [title, content],
+    surface: 'published-artifact',
+  });
+  if (!moderation.allowed) {
+    throw createError.validation(
+      'This artifact cannot be published because it violates the AGI Workforce usage policy.',
+    );
+  }
 }
 
 /**
@@ -202,6 +216,8 @@ async function handlePublish(request: NextRequest): Promise<Response> {
 
   const sharingGateResponse = await buildExternalSharingGateResponse(userId, request);
   if (sharingGateResponse) return sharingGateResponse;
+
+  refuseModeratedPublication(userId, parsed.data.title, parsed.data.content);
 
   const outbound = await inspectOutboundContent({
     channel: 'artifact_publish',
@@ -353,6 +369,8 @@ async function handleRestore(request: NextRequest): Promise<Response> {
       throw createError.notFound(`Version ${parsed.data.version} is not in this artifact history.`);
     }
 
+    refuseModeratedPublication(userId, target.title, target.content);
+
     const outbound = await inspectOutboundContent({
       channel: 'artifact_publish',
       value: target.content,
@@ -414,7 +432,7 @@ async function handleList(request: NextRequest): Promise<NextResponse> {
     return handleListVersions(request, versionsToken);
   }
 
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
   let artifacts;
   try {
     artifacts = await listPublishedArtifacts(db, { userId });
@@ -429,6 +447,7 @@ async function handleList(request: NextRequest): Promise<NextResponse> {
       shareUrl: buildPublishedArtifactUrl(artifact.token),
       sandboxed: requiresSandboxedRender(artifact.kind),
     })),
+    workspace: await describeWorkspaceAudience(db, organizationId),
   });
 }
 
