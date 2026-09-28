@@ -295,6 +295,14 @@ function isVideoItem(item: LibraryItem): boolean {
   return item.mime_type.toLowerCase().startsWith('video/');
 }
 
+function isPdfItem(item: LibraryItem): boolean {
+  return item.mime_type.toLowerCase() === 'application/pdf';
+}
+
+function pdfPreviewUri(uri: string): string {
+  return `${uri}${uri.includes('?') ? '&' : '?'}preview=pdf`;
+}
+
 const MODIFIED_DATE_FORMAT: Intl.DateTimeFormatOptions = {
   year: 'numeric',
   month: 'short',
@@ -997,6 +1005,9 @@ function FileViewerOverlay({
   const [container, setContainer] = useState<HTMLElement | null>(null);
   const previewUri = isImageItem(item) ? inlinePreviewUri?.(item.uri) : undefined;
   const playbackUri = isVideoItem(item) ? (inlinePreviewUri?.(item.uri) ?? item.uri) : undefined;
+  const documentUri = isPdfItem(item)
+    ? pdfPreviewUri(inlinePreviewUri?.(item.uri) ?? item.uri)
+    : undefined;
 
   useEffect(() => {
     setContainer(containerId ? document.getElementById(containerId) : null);
@@ -1111,6 +1122,19 @@ function FileViewerOverlay({
             aria-label={item.file_name}
             className="max-h-full max-w-full object-contain"
           />
+        ) : documentUri ? (
+          <object
+            data={documentUri}
+            type="application/pdf"
+            data-testid="library-pdf-reader"
+            aria-label={item.file_name}
+            className="h-full min-h-[70vh] w-full rounded-md bg-white"
+          >
+            <Button size="sm" onClick={() => void onDownload(item)}>
+              <Download className="mr-1.5 h-4 w-4" aria-hidden />
+              Download to view
+            </Button>
+          </object>
         ) : (
           <div className="flex flex-col items-center gap-3 rounded-lg bg-[var(--chat-surface-base)] p-8 text-center text-sm text-[var(--chat-text-secondary)]">
             <FileKindIcon

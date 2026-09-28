@@ -995,7 +995,7 @@ describe('shared LibraryView', () => {
       expect(screen.queryByRole('group', { name: 'Zoom' })).toBeNull();
     });
 
-    it('falls back to a download prompt when the host has no inline preview for it', async () => {
+    it('reads a PDF inline, with a download fallback inside the reader', async () => {
       const transport = makeTransport({ listPage: pageOf([DOC_ITEM]) });
       render(<LibraryView transport={transport} />);
 
@@ -1003,7 +1003,8 @@ describe('shared LibraryView', () => {
       await screen.findByTestId('library-file-viewer');
 
       expect(screen.queryByRole('group', { name: 'Zoom' })).toBeNull();
-      expect(screen.getByText('Preview isn’t available for this file inline.')).toBeTruthy();
+      const reader = screen.getByTestId('library-pdf-reader');
+      expect(reader.getAttribute('data')).toContain('preview=pdf');
       expect(screen.getByRole('button', { name: 'Download to view' })).toBeTruthy();
     });
 
