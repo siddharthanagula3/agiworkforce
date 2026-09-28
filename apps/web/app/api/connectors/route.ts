@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { evaluateConnectorPolicyForUser } from '@/lib/services/connector-policy-gate';
 import {
   ConnectRequestSchema,
   connectorCredentialsPath,
@@ -554,6 +555,23 @@ async function handleCreateConnector(request: NextRequest) {
     const target = await resolveDirectoryTarget(body.connectorId);
     if (!target) throw createError.validation('Invalid connector ID');
     return connectDirectoryTarget(request, db, userId, target);
+  }
+
+  const policyDecision = await evaluateConnectorPolicyForUser({
+    db,
+    userId,
+    connectorId: body.connectorId,
+    request,
+  });
+  if (!policyDecision.allowed) {
+    return NextResponse.json(
+      {
+        error: policyDecision.reason,
+        message: policyDecision.reason,
+        connectorId: body.connectorId,
+      } satisfies ConnectConflictResponse,
+      { status: 403 },
+    );
   }
 
   const isLocal = isDeviceLocalConnector(body.connectorId);

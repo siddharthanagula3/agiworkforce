@@ -1,12 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { resolveActiveOrganizationId, readConnectorPolicySafely, loggerInfo, loggerError } =
-  vi.hoisted(() => ({
-    resolveActiveOrganizationId: vi.fn(),
-    readConnectorPolicySafely: vi.fn(),
-    loggerInfo: vi.fn(),
-    loggerError: vi.fn(),
-  }));
+const {
+  resolveActiveOrganizationId,
+  readConnectorPolicySafely,
+  loggerInfo,
+  loggerError,
+  connectorsAllowed,
+} = vi.hoisted(() => ({
+  resolveActiveOrganizationId: vi.fn(),
+  readConnectorPolicySafely: vi.fn(),
+  loggerInfo: vi.fn(),
+  loggerError: vi.fn(),
+  connectorsAllowed: vi.fn(async () => true),
+}));
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({
@@ -14,6 +20,12 @@ vi.mock('@/lib/logger', () => ({
 }));
 vi.mock('@/lib/services/active-workspace-service', () => ({ resolveActiveOrganizationId }));
 vi.mock('@/lib/services/connector-policy-service', () => ({ readConnectorPolicySafely }));
+vi.mock('@/lib/connectors/connector-capability', () => ({
+  connectorsAllowedWithoutRequest: connectorsAllowed,
+}));
+vi.mock('@/lib/services/subscription-service', () => ({
+  SubscriptionService: { getSubscription: vi.fn(async () => ({ plan_tier: 'pro' })) },
+}));
 
 import {
   evaluateConnectorPolicyForUser,
@@ -111,6 +123,24 @@ describe('evaluateConnectorPolicyForUser', () => {
 
     expect(decision.allowed).toBe(true);
     expect(decision.code).toBe('allowed');
+  });
+
+  it('refuses to connect when the connector decision is closed', async () => {
+    connectorsAllowed.mockResolvedValueOnce(false);
+
+    const decision = await evaluateConnectorPolicyForUser({
+      db,
+      userId: USER,
+      organizationId: null,
+      connectorId: 'github',
+    });
+
+    expect(decision).toMatchObject({ allowed: false, code: 'connectors_unavailable' });
+    expect(connectorsAllowed).toHaveBeenCalledWith({
+      userId: USER,
+      organizationId: null,
+      planTier: 'pro',
+    });
   });
 
   it('leaves a personal account ungoverned', async () => {
