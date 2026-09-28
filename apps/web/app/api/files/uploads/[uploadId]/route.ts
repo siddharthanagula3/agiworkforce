@@ -2,6 +2,7 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import {
+  ManagedCloudProjectKnowledgeFileSchema,
   ManagedCloudResumableUploadCompleteRequestSchema,
   RESUMABLE_UPLOAD_SESSION_PARAM,
   type ManagedCloudResumableUploadCompleteResponse,
@@ -170,6 +171,14 @@ async function assembleParts(
   return 'assembled';
 }
 
+function knowledgeFileCompletion(file: unknown): ManagedCloudResumableUploadCompleteResponse {
+  const parsed = ManagedCloudProjectKnowledgeFileSchema.safeParse(file);
+  if (!parsed.success) {
+    throw createError.internal('The project source was stored but could not be described.');
+  }
+  return { kind: 'knowledge-file', file: parsed.data };
+}
+
 async function finishedUpload(
   db: ScopedDb,
   scope: { userId: string; organizationId: string | null },
@@ -182,7 +191,7 @@ async function finishedUpload(
       { db, ...scope, projectId: session.projectId },
       session.checksumSha256,
     );
-    return file ? { kind: 'knowledge-file', file } : null;
+    return file ? knowledgeFileCompletion(file) : null;
   }
   const temporaryChat = await resolveTemporaryChatUpload({
     db,
@@ -221,7 +230,7 @@ async function finishKnowledgeFile(
     if (registration.status === 'unavailable') {
       throw createError.capabilityUnavailable('Project sources are not available yet.');
     }
-    return { kind: 'knowledge-file', file: registration.file };
+    return knowledgeFileCompletion(registration.file);
   } catch (error) {
     if (isAppError(error) && error.statusCode < 500) {
       await deleteProjectKnowledgeObject(session.key).catch((deleteError: unknown) => {

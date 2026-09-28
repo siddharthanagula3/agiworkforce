@@ -50,8 +50,8 @@ async function handleSignParts(request: NextRequest, context: RouteContext): Pro
 
   const target = resumableUploadTarget();
   const relay = uploadNeedsSameOriginRelay(request);
-  const parts: ManagedCloudResumableUploadSignedPart[] = await Promise.all(
-    partNumbers.map(async (partNumber) => {
+  const parts = await Promise.all(
+    partNumbers.map(async (partNumber): Promise<ManagedCloudResumableUploadSignedPart> => {
       if (relay) {
         const url = new URL(
           managedCloudResumableUploadSessionPath(uploadId, parsed.data.session),
@@ -61,7 +61,7 @@ async function handleSignParts(request: NextRequest, context: RouteContext): Pro
         return {
           partNumber,
           url: url.toString(),
-          method: 'PUT' as const,
+          method: 'PUT',
           headers: { 'x-csrf-token': request.headers.get('x-csrf-token') ?? '' },
         };
       }
@@ -75,7 +75,7 @@ async function handleSignParts(request: NextRequest, context: RouteContext): Pro
           contentLength: sessionPartLength(session, partNumber),
           expiresInSeconds: RESUMABLE_PART_URL_TTL_SECONDS,
         }),
-        method: 'PUT' as const,
+        method: 'PUT',
         headers: {},
       };
     }),
