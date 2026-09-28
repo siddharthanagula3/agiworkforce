@@ -67,7 +67,10 @@ pub(super) async fn execute_run_command(
     // Most command strings are a program and its operands, and handing those to
     // `sh -c` is the only reason an operand can be read as syntax. When the
     // string needs no shell, it is exec'd as argv instead.
-    let structured = parse_simple_command(command);
+    let structured = parse_simple_command(command)
+        .filter(|(program, _)| !crate::shell_snapshot::defines(program))
+        .map(|(program, args)| crate::shell_snapshot::program_invocation(program, args))
+        .or_else(|| crate::shell_snapshot::shell_invocation(command));
 
     if args
         .get("run_in_background")

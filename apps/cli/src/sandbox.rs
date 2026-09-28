@@ -491,6 +491,12 @@ fn seatbelt_profile(manager: &SandboxManager, scratch_dir: Option<&Path>) -> Res
     };
 
     let mut scratch_read_rules = String::new();
+    if let Some(snapshot) = crate::shell_snapshot::applied_file() {
+        scratch_read_rules.push_str(&format!(
+            "(allow file-read* (literal \"{}\"))\n",
+            validate_and_escape_seatbelt_path(&snapshot)?
+        ));
+    }
     let mut write_rules = String::from("(allow file-write* (literal \"/dev/null\"))\n");
     match &manager.policy {
         // Both write policies get one private scratch directory rather than the
