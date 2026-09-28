@@ -289,6 +289,7 @@ pub struct TurnResult {
     /// surface states it beside the text; nothing about the answer is dropped.
     pub incomplete: Option<crate::errors::IncompleteTurnCause>,
     pub managed_request_ids: Vec<String>,
+    pub sources: Vec<crate::sources::WebSource>,
 }
 
 #[derive(Debug, Clone)]

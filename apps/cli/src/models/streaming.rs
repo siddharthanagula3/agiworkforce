@@ -535,6 +535,9 @@ fn stream_event_handler<'a>(
         StreamEvent::Vendor { event, data } if event == QUOTA_WARNING_EVENT => {
             notify_quota_warning(&data)
         }
+        StreamEvent::Vendor { event, data } if event == crate::sources::SEARCH_RESULTS_EVENT => {
+            crate::sources::record(crate::sources::from_search_results_delta(&data))
+        }
         StreamEvent::Vendor { event, data } => {
             if let Some(pause) = pause.as_deref_mut() {
                 pause.observe(&event, &data);
