@@ -52,6 +52,52 @@ fn normalize_rule(prefix: &str) -> Option<String> {
     }
 }
 
+pub const DOMAIN_RULE_PREFIX: &str = "domain:";
+
+fn normalize_domain(text: &str) -> String {
+    text.trim().trim_end_matches('.').to_ascii_lowercase()
+}
+
+fn labels_match(pattern: &[&str], host: &[&str]) -> bool {
+    pattern.len() == host.len()
+        && pattern
+            .iter()
+            .zip(host)
+            .all(|(pattern, label)| *pattern == "*" || pattern == label)
+}
+
+pub fn domain_pattern_matches(pattern: &str, host: &str) -> bool {
+    let pattern = normalize_domain(pattern);
+    let host = normalize_domain(host);
+    if pattern.is_empty() || host.is_empty() {
+        return false;
+    }
+    if pattern == "*" {
+        return true;
+    }
+    let host_labels: Vec<&str> = host.split('.').collect();
+    match pattern.strip_prefix("*.") {
+        Some(suffix) => {
+            let suffix_labels: Vec<&str> = suffix.split('.').collect();
+            host_labels.len() > suffix_labels.len()
+                && labels_match(
+                    &suffix_labels,
+                    &host_labels[host_labels.len() - suffix_labels.len()..],
+                )
+        }
+        None => labels_match(&pattern.split('.').collect::<Vec<_>>(), &host_labels),
+    }
+}
+
+pub fn url_blocked_by_domain_rule(url: &str) -> Option<String> {
+    let host = reqwest::Url::parse(url).ok()?.host_str()?.to_string();
+    let store = PermissionStore::load().ok()?;
+    let rule = store.denying_domain_rule(&host)?;
+    Some(format!(
+        "{host} is blocked by your rule {rule}, so the agent cannot open or fetch it. /permissions remove deny {rule} lifts it."
+    ))
+}
+
 static PROCESS_SESSION_ALLOW: LazyLock<Mutex<HashSet<String>>> =
     LazyLock::new(|| Mutex::new(HashSet::new()));
 
@@ -374,6 +420,25 @@ impl PermissionStore {
             Some(cap) => profile.under_admin_cap(cap),
             None => profile,
         }
+    }
+
+    pub fn denying_domain_rule(&self, host: &str) -> Option<&str> {
+        self.always_deny
+            .iter()
+            .find(|rule| {
+                rule.strip_prefix(DOMAIN_RULE_PREFIX)
+                    .is_some_and(|pattern| domain_pattern_matches(pattern, host))
+            })
+            .map(String::as_str)
+    }
+
+    pub fn names_domain(&self, host: &str) -> bool {
+        let host = normalize_domain(host);
+        self.always_allow
+            .iter()
+            .chain(self.session_allow.iter())
+            .filter_map(|rule| rule.strip_prefix(DOMAIN_RULE_PREFIX))
+            .any(|pattern| !pattern.contains('*') && normalize_domain(pattern) == host)
     }
 
     /// Check a path-scoped file mutation rule. File rules use exact keys so

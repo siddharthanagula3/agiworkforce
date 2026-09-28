@@ -1,4 +1,10 @@
-import { isResearchStep, type ResearchStep } from '@agiworkforce/types';
+import {
+  isResearchStep,
+  normalizeResearchDeliverable,
+  type ResearchRunConfig,
+  type ResearchStep,
+} from '@agiworkforce/types';
+import type { WebSearchResults } from '../types/message-metadata';
 
 export function parseResearchPlanEvent(payload: unknown): ResearchStep[] | null {
   if (!payload || typeof payload !== 'object') return null;
@@ -44,8 +50,55 @@ export function parseResearchPlanEvent(payload: unknown): ResearchStep[] | null 
   return steps.length > 0 ? steps : null;
 }
 
+const MAX_RUN_CONFIG_ENTRIES = 32;
+
+function stringList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
+    .slice(0, MAX_RUN_CONFIG_ENTRIES);
+}
+
+export function parseResearchRunConfig(payload: unknown): ResearchRunConfig | null {
+  if (!payload || typeof payload !== 'object') return null;
+  const run = (payload as { run?: unknown }).run;
+  if (!run || typeof run !== 'object') return null;
+  const wire = run as Record<string, unknown>;
+  return {
+    sources: {
+      files: wire['files'] === true,
+      allowDomains: stringList(wire['allow_domains']),
+      denyDomains: stringList(wire['deny_domains']),
+      connectors: stringList(wire['connectors']),
+    },
+    deliverable: normalizeResearchDeliverable(wire['deliverable']),
+  };
+}
+
 export function completedResearchSteps(steps: ResearchStep[] | undefined): ResearchStep[] {
-  return (steps ?? []).filter((step) => step.status === 'completed' && step.type === 'search');
+  return (steps ?? []).filter(
+    (step) => step.status === 'completed' && (step.type === 'search' || step.type === 'analyze'),
+  );
+}
+
+export function isResearchGuidanceStep(step: ResearchStep): boolean {
+  return step.type === 'analyze';
+}
+
+function isAbsoluteWebUrl(url: string): boolean {
+  return /^https?:\/\//i.test(url);
+}
+
+export function researchResumeSources(
+  sourcesForRetry: Array<{ url: string; title?: string; snippet?: string }> | undefined,
+  searchResults: WebSearchResults | undefined,
+): Array<{ url: string; title?: string; snippet?: string }> {
+  const gathered =
+    sourcesForRetry ??
+    (Array.isArray(searchResults) ? searchResults : (searchResults?.results ?? [])).map(
+      (result) => ({ url: result.url, title: result.title, snippet: result.snippet }),
+    );
+  return gathered.filter((source) => isAbsoluteWebUrl(source.url));
 }
 
 /** The plan steps a paused run is offering: what pressing Start commits to. */

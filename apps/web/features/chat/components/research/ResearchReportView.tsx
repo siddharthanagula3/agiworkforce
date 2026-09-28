@@ -36,6 +36,7 @@ import {
 import {
   creditsFromMicrousd,
   formatCredits,
+  isPausedResearchReport,
   type Citation,
   type ResearchReport,
 } from '@agiworkforce/types';
@@ -670,8 +671,9 @@ export function ResearchReportView({
       {incomplete && (
         <p className="flex items-center gap-2 border-b border-border/30 bg-muted/30 px-4 py-2 text-xs text-muted-foreground">
           <TriangleAlert className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-          This report is {report.status}
-          {report.error ? `: ${report.error}` : '.'}
+          {isPausedResearchReport(report)
+            ? `This research is paused. Resume it from its card in the chat to continue from where it stopped.`
+            : `This report is ${report.status}${report.error ? `: ${report.error}` : '.'}`}
         </p>
       )}
 

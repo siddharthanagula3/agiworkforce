@@ -60,6 +60,7 @@
 /extra-usage [pricing]
 /remote-env
 /add-dir
+/remove-dir
 /color
 /desktop [app]
 /effort
