@@ -4199,6 +4199,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       if (isFollowUp) userMessageEl.setAttribute('data-delivery-state', 'queued');
       userInput.value = '';
       userInput.style.height = 'auto';
+      saveComposerDraft();
 
       if (!isFollowUp) {
         showTyping();
@@ -4301,7 +4302,25 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       }
     });
 
-    userInput.addEventListener('input', function() { autoResize(); detectMention(); });
+    function saveComposerDraft() {
+      var state = vscode.getState() || {};
+      state.composerDraft = userInput.value;
+      vscode.setState(state);
+    }
+
+    userInput.addEventListener('input', function() {
+      autoResize();
+      detectMention();
+      saveComposerDraft();
+    });
+
+    (function restoreComposerDraft() {
+      var state = vscode.getState() || {};
+      if (typeof state.composerDraft === 'string' && state.composerDraft && !userInput.value) {
+        userInput.value = state.composerDraft;
+        autoResize();
+      }
+    })();
 
     function closeActionsMenu() {
       if (!actionsMenu) return;
@@ -4637,6 +4656,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
             if (userInput.value.trim().indexOf('/') === 0) {
               userInput.value = '';
               autoResize();
+              saveComposerDraft();
             }
             vscode.postMessage({ type: 'runSlashCommand', payload: { name: entry.name } });
           });
@@ -5554,6 +5574,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
 
       else if (msg.type === 'composerDraft') {
         userInput.value = msg.payload.text || '';
+        saveComposerDraft();
         pendingFileReferences = (msg.payload.references || []).map(function(reference) {
           var range = reference.range;
           var endLine = range && range.endCharacter === 0 && range.endLine > range.startLine
@@ -10687,6 +10708,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       if (isFollowUp) userMessageEl.setAttribute('data-delivery-state', 'queued');
       userInput.value = '';
       userInput.style.height = 'auto';
+      saveComposerDraft();
 
       if (!isFollowUp) {
         showTyping();
@@ -10789,7 +10811,25 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       }
     });
 
-    userInput.addEventListener('input', function() { autoResize(); detectMention(); });
+    function saveComposerDraft() {
+      var state = vscode.getState() || {};
+      state.composerDraft = userInput.value;
+      vscode.setState(state);
+    }
+
+    userInput.addEventListener('input', function() {
+      autoResize();
+      detectMention();
+      saveComposerDraft();
+    });
+
+    (function restoreComposerDraft() {
+      var state = vscode.getState() || {};
+      if (typeof state.composerDraft === 'string' && state.composerDraft && !userInput.value) {
+        userInput.value = state.composerDraft;
+        autoResize();
+      }
+    })();
 
     function closeActionsMenu() {
       if (!actionsMenu) return;
@@ -11125,6 +11165,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
             if (userInput.value.trim().indexOf('/') === 0) {
               userInput.value = '';
               autoResize();
+              saveComposerDraft();
             }
             vscode.postMessage({ type: 'runSlashCommand', payload: { name: entry.name } });
           });
@@ -12042,6 +12083,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
 
       else if (msg.type === 'composerDraft') {
         userInput.value = msg.payload.text || '';
+        saveComposerDraft();
         pendingFileReferences = (msg.payload.references || []).map(function(reference) {
           var range = reference.range;
           var endLine = range && range.endCharacter === 0 && range.endLine > range.startLine
@@ -17175,6 +17217,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       if (isFollowUp) userMessageEl.setAttribute('data-delivery-state', 'queued');
       userInput.value = '';
       userInput.style.height = 'auto';
+      saveComposerDraft();
 
       if (!isFollowUp) {
         showTyping();
@@ -17277,7 +17320,25 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       }
     });
 
-    userInput.addEventListener('input', function() { autoResize(); detectMention(); });
+    function saveComposerDraft() {
+      var state = vscode.getState() || {};
+      state.composerDraft = userInput.value;
+      vscode.setState(state);
+    }
+
+    userInput.addEventListener('input', function() {
+      autoResize();
+      detectMention();
+      saveComposerDraft();
+    });
+
+    (function restoreComposerDraft() {
+      var state = vscode.getState() || {};
+      if (typeof state.composerDraft === 'string' && state.composerDraft && !userInput.value) {
+        userInput.value = state.composerDraft;
+        autoResize();
+      }
+    })();
 
     function closeActionsMenu() {
       if (!actionsMenu) return;
@@ -17613,6 +17674,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
             if (userInput.value.trim().indexOf('/') === 0) {
               userInput.value = '';
               autoResize();
+              saveComposerDraft();
             }
             vscode.postMessage({ type: 'runSlashCommand', payload: { name: entry.name } });
           });
@@ -18530,6 +18592,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
 
       else if (msg.type === 'composerDraft') {
         userInput.value = msg.payload.text || '';
+        saveComposerDraft();
         pendingFileReferences = (msg.payload.references || []).map(function(reference) {
           var range = reference.range;
           var endLine = range && range.endCharacter === 0 && range.endLine > range.startLine
