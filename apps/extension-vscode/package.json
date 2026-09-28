@@ -503,6 +503,11 @@
         "icon": "$(cloud-download)"
       },
       {
+        "command": "agi-workforce.showSessionActivity",
+        "title": "AGI Workforce: Show Session Activity",
+        "icon": "$(history)"
+      },
+      {
         "command": "agi-workforce.continueInCloud",
         "title": "AGI Workforce: Continue in the Cloud",
         "icon": "$(cloud-upload)"

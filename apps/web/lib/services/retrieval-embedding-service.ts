@@ -38,6 +38,10 @@ import {
 } from '@/lib/services/provider-adapter-service';
 import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
 import { freeDailyLimitError, hasDailyAllowance } from '@/lib/services/tier-unit-quota-service';
+import {
+  noTrainingProviderIds,
+  sideCallTrainingOptOut,
+} from '@/lib/server/side-call-training-policy';
 
 const EMBEDDING_SLOT = 'embedding_default';
 const EMBEDDING_LEASE_SECONDS = 120;
@@ -202,7 +206,12 @@ export async function embedTextsMetered(
   }
   const texts = input.texts.map((text) => text.slice(0, MAX_EMBEDDING_INPUT_CHARS));
 
-  const route = resolveRetrievalEmbeddingRoute();
+  const managedProviders = listAvailableManagedProviderIds();
+  const route = resolveRetrievalEmbeddingRoute(
+    (await sideCallTrainingOptOut(input.db, input.userId))
+      ? noTrainingProviderIds(managedProviders)
+      : managedProviders,
+  );
   if (!route) {
     throw new RetrievalEmbeddingError('No embedding route is configured.', 'no_route');
   }

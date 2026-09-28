@@ -46,22 +46,6 @@ Code: `apps/cli/src/voice.rs:229-229`
 
 Code: `apps/mobile/src/features/voice/hooks/useVoiceConversation.ts:183-183`, `apps/mobile/src/features/chat/components/ChatInput.tsx:1134-1134`, `apps/mobile/src/features/voice/services/voice.ts:45-45`, `apps/cli/Cargo.toml:118-118`
 
-## S49.04: Interim transcript.
-
-- Done when: While dictating, interim (partial) text appears before the recording ends.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Composer dictation shows only a waveform and transcribes after stop; streaming partial text exists only as voice-mode captions. | ui, handler |
-| desktop | partial | Composer dictation shows only a waveform and transcribes after stop; streaming partial text exists only as voice-mode captions. | ui, handler |
-| mobile | partial | The recognizer produces partials (interimResults) but composer dictation and the companion show text only after capture ends; only the live voice bar streams text. | ui |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/DictationStrip.tsx:101-101`, `apps/web/features/chat/stores/voice-input-store.ts:257-257`, `apps/mobile/src/features/voice/services/voiceInput.ts:291-291`, `apps/mobile/src/features/voice/components/LiveVoiceBar.tsx:169-169`
-
 ## S49.05: Final transcript.
 
 - Done when: When dictation ends, the final transcript is produced and delivered.

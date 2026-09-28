@@ -183,6 +183,10 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     return this._stateManager.activeThreadId();
   }
 
+  public activeThreadReceipt(): ReturnType<ChatStateManager['activeThreadReceipt']> {
+    return this._stateManager.activeThreadReceipt();
+  }
+
   public chatTranscript(): readonly ChatTurn[] {
     return this._stateManager.chatTranscript();
   }
