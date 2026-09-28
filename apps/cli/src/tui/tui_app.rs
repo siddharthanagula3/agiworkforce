@@ -5834,6 +5834,23 @@ async fn send_message_with_prompt(
     )
     .await;
 
+    match app.session.reload_if_changed_on_disk() {
+        Ok(true) => {
+            rebuild_transcript_from_session(app);
+            app.chat_messages.push(ChatMessage {
+                role: ChatRole::System,
+                text: "This conversation continued in another app, so it now shows the saved version and your message continues from there.".to_string(),
+            });
+        }
+        Ok(false) => {}
+        Err(error) => app.chat_messages.push(ChatMessage {
+            role: ChatRole::System,
+            text: format!(
+                "This conversation changed in another app and could not be reloaded: {}",
+                sanitize_terminal_text(&format!("{error:#}"))
+            ),
+        }),
+    }
     let attachments = if app.staged_images.is_empty() {
         String::new()
     } else {
