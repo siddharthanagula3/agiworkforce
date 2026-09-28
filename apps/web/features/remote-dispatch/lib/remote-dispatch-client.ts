@@ -22,6 +22,10 @@ const CLAIM_FAILURES: Readonly<Record<string, string>> = {
 const CLAIM_FAILED =
   'This browser could not connect to your computer. Make a new link and try again.';
 const CONNECTION_LOST = 'The connection to your computer ended. Make a new link to connect again.';
+const RECEIPT_TIMEOUT_MS = 8_000;
+const MAX_SEND_ATTEMPTS = 3;
+const NOT_RECEIVED =
+  'Your computer did not receive the task. Check that AGI Cloud is open on it, then send it again.';
 
 export interface RemoteTaskStatus {
   requestId: string;
@@ -84,6 +88,13 @@ function readTaskStatus(payload: unknown): RemoteTaskStatus | null {
   };
 }
 
+function readReceiptRequestId(payload: unknown): string | null {
+  if (!payload || typeof payload !== 'object') return null;
+  const record = payload as Record<string, unknown>;
+  if (record['action'] !== 'control.receipt') return null;
+  return typeof record['requestId'] === 'string' ? record['requestId'] : null;
+}
+
 function controlEnvelope(payload: unknown): unknown {
   if (!payload || typeof payload !== 'object') return payload;
   const data = (payload as Record<string, unknown>)['data'];
@@ -98,10 +109,17 @@ export async function connectRemoteDispatch(
   const dispatchSalt = newDispatchSalt();
   const session = await createDispatchSession(pairing.code, dispatchSalt, pairing.secret);
   let ended = false;
+  const awaitingReceipt = new Map<string, ReturnType<typeof setTimeout>>();
+
+  const stopAwaitingReceipts = () => {
+    for (const timer of awaitingReceipt.values()) clearTimeout(timer);
+    awaitingReceipt.clear();
+  };
 
   const end = (message: string) => {
     if (ended) return;
     ended = true;
+    stopAwaitingReceipts();
     client.close();
     handlers.onClosed(message);
   };
@@ -116,6 +134,12 @@ export async function connectRemoteDispatch(
       case 'signal':
         if (event.kind !== 'control') return;
         void openDispatchEnvelope(session, controlEnvelope(event.payload)).then((opened) => {
+          const received = readReceiptRequestId(opened);
+          if (received !== null) {
+            clearTimeout(awaitingReceipt.get(received));
+            awaitingReceipt.delete(received);
+            return;
+          }
           const status = readTaskStatus(opened);
           if (status) handlers.onTaskStatus(status);
         });
@@ -149,17 +173,33 @@ export async function connectRemoteDispatch(
     return client.sendSignal('control', { action, data: envelope });
   };
 
+  const awaitReceipt = (requestId: string, resend: () => Promise<boolean>, attempt: number) => {
+    awaitingReceipt.set(
+      requestId,
+      setTimeout(() => {
+        awaitingReceipt.delete(requestId);
+        if (ended) return;
+        if (attempt >= MAX_SEND_ATTEMPTS) {
+          handlers.onTaskStatus({ requestId, status: 'failed', error: NOT_RECEIVED });
+          return;
+        }
+        void resend().then((sent) => {
+          if (sent) awaitReceipt(requestId, resend, attempt + 1);
+          else if (!ended)
+            handlers.onTaskStatus({ requestId, status: 'failed', error: NOT_RECEIVED });
+        });
+      }, RECEIPT_TIMEOUT_MS),
+    );
+  };
+
   return {
     sendTask: async (prompt, title) => {
       const requestId = crypto.randomUUID();
-      const sent = await send('dispatch.task.create', {
-        version: 1,
-        requestId,
-        prompt,
-        title,
-        sentAt: new Date().toISOString(),
-      });
-      return sent ? requestId : null;
+      const task = { version: 1, requestId, prompt, title, sentAt: new Date().toISOString() };
+      const resend = () => send('dispatch.task.create', task);
+      if (!(await resend())) return null;
+      awaitReceipt(requestId, resend, 1);
+      return requestId;
     },
     cancelTask: (requestId, taskId) =>
       send('dispatch.task.cancel', {
@@ -170,6 +210,7 @@ export async function connectRemoteDispatch(
       }),
     close: () => {
       ended = true;
+      stopAwaitingReceipts();
       client.close({ endPairing: true });
     },
   };

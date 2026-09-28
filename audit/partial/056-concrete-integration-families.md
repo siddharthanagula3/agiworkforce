@@ -333,11 +333,11 @@ Code: `apps/web/lib/connectors/oauth-scope-allowlist.ts:91-91`, `apps/web/app/ap
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | GitHub's hosted MCP server (repos toolset, search_code) is now pinned as github-mcp; it connects once the owner adds the github-mcp CONNECTOR_OAUTH_PROVIDERS_JSON descriptor and CONNECTOR_OAUTH_GITHUB_MCP_CLIENT_ID/_CLIENT_SECRET from a GitHub App. GitLab still has no pinned server. | flag-off |
-| desktop | partial | The GitHub connector reads a PR diff and posts comments/reviews but cannot search a repository; GitLab has scopes but no pinned server; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for GitLab. | handler, flag-off |
+| desktop | partial | desktop hosts the web app, so it is the same as web: github-mcp search_code connects once the owner adds the github-mcp CONNECTOR_OAUTH_PROVIDERS_JSON descriptor and CONNECTOR_OAUTH_GITHUB_MCP_CLIENT_ID/_CLIENT_SECRET; GitLab has no pinned server | flag-off |
 | mobile | partial | The GitHub connector reads a PR diff and posts comments/reviews but cannot search a repository; GitLab has scopes but no pinned server; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for GitLab. | handler, flag-off |
 | chrome | partial | GitHub hosted MCP (search_code) is pinned as github-mcp and connects once the owner adds its descriptor and CONNECTOR_OAUTH_GITHUB_MCP_CLIENT_ID/_CLIENT_SECRET; GitLab has no pinned server. Chrome chats use the same connectors through the account once connected in the web app, show each call as a step, and a send asks with its recipients named. | flag-off |
 
-Code: `apps/web/lib/connectors/directory/sources/first-party.json:550-550`, `apps/web/lib/connectors/catalog.ts:163-163`, `apps/web/lib/connectors/oauth-scope-allowlist.ts:169-169`, `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`
+Code: `apps/web/lib/connectors/directory/sources/first-party.json:550-550`, `apps/web/lib/connectors/catalog.ts:163-163`, `apps/web/lib/connectors/oauth-scope-allowlist.ts:169-169`, `apps/web/lib/connectors/catalog.ts:163-164`
 
 ## S56.33: CI status and logs.
 

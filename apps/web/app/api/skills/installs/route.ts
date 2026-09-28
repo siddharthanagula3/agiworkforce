@@ -19,7 +19,7 @@ import {
   resolveInstalledManagedSkillNames,
   setSkillInstallOverride,
 } from '@/lib/services/skill-install-service';
-import { listEnabledPluginIds } from '@/lib/services/plugin-installation-service';
+import { listPermittedPluginIds } from '@/lib/services/workspace-plugin-access';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { recordWorkspaceAuditEvent } from '@/lib/workspace-audit';
 
@@ -38,7 +38,7 @@ async function handleListInstalls(request: NextRequest) {
   if (rateLimit) return rateLimit;
   const { db, userId } = await getUserScopedDb(request);
 
-  const enabledPluginIds = await listEnabledPluginIds(db, userId);
+  const enabledPluginIds = await listPermittedPluginIds(db, userId);
   const directory = await getManagedSkillDirectoryForPlugins(enabledPluginIds);
   const installed = await resolveInstalledManagedSkillNames(
     db,
@@ -68,7 +68,7 @@ async function handleInstallSkill(request: NextRequest) {
     resolveCloudChatSurface(request),
   );
   if (featureGate) return featureGate;
-  const enabledPluginIds = await listEnabledPluginIds(db, userId);
+  const enabledPluginIds = await listPermittedPluginIds(db, userId);
   const directory = await getManagedSkillDirectoryForPlugins(enabledPluginIds);
   const skill = directory.find((candidate) => candidate.name === parsed.data.name);
   if (!skill) {

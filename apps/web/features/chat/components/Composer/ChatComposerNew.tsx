@@ -42,6 +42,7 @@ import { useSettingsModal } from '@features/settings/components/SettingsModalPro
 import { useSettingsStore } from '@shared/stores/web-settings-store';
 import { SendButton } from './SendButton';
 import { ComposerInput } from './ComposerInput';
+import { ImageMaskDialog, type ImageMaskResult } from './ImageMaskDialog';
 import { ComposerFooter } from './ComposerFooter';
 import { freeQuotaSelection, promotionalChatToolConflict } from '../../lib/free-quota-selection';
 import { OfficialConnectorLogo } from '@/features/connectors/components/OfficialConnectorLogo';
@@ -1117,6 +1118,7 @@ const ChatComposerNewComponent = ({
    */
   const [imageOperation, setImageOperation] = useState<ImageEditOperation>('edit');
   const [showImageOperationMenu, setShowImageOperationMenu] = useState(false);
+  const [maskDialogFile, setMaskDialogFile] = useState<File | null>(null);
   const [imageTransparentBackground, setImageTransparentBackground] = useState(false);
   const [showCompatibleModels, setShowCompatibleModels] = useState(false);
   const {
@@ -1201,6 +1203,19 @@ const ChatComposerNewComponent = ({
         (option) => option.id !== 'inpaint' || imageMaskFile !== undefined,
       ),
     [imageMaskFile],
+  );
+  const handleImageMaskDone = useCallback(
+    ({ mask, source }: ImageMaskResult) => {
+      setMaskDialogFile(null);
+      if (source) {
+        removeFile(0);
+        addFiles([source, mask]);
+      } else {
+        addFiles([mask]);
+      }
+      setImageOperation('inpaint');
+    },
+    [addFiles, removeFile],
   );
   const effectiveImageOperation: ImageEditOperation = imageOperationOptions.some(
     (option) => option.id === imageOperation,
@@ -5410,13 +5425,27 @@ const ChatComposerNewComponent = ({
                             )}
                           </button>
                         ))}
-                        {imageMaskFile === undefined && (
-                          <p className="px-3 py-1.5 text-xs text-muted-foreground">
-                            Attach a second PNG the same size, transparent where the model should
-                            redraw, to mask an edit.
-                          </p>
+                        {imageMaskFile === undefined && attachments.length === 1 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowImageOperationMenu(false);
+                              setMaskDialogFile(imageSourceFile ?? null);
+                            }}
+                            className="flex w-full flex-col items-start gap-0.5 rounded-lg px-3 py-1.5 text-start text-xs transition-colors hover:bg-muted/60"
+                          >
+                            <span className="font-medium text-foreground">Select an area</span>
+                            <span className="text-muted-foreground">
+                              Paint over the part to redraw
+                            </span>
+                          </button>
                         )}
                       </AnchoredComposerMenu>
+                      <ImageMaskDialog
+                        file={maskDialogFile}
+                        onClose={() => setMaskDialogFile(null)}
+                        onDone={handleImageMaskDone}
+                      />
                     </div>
                   )}
 

@@ -43,14 +43,14 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1756`, `apps/mobile/sr
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | renders slides to PDF in the E2B sandbox with LibreOffice once AGI_E2B_EXECUTION is on; the public code-interpreter-v1 template has no LibreOffice, so the owner builds agi-office-interpreter with apps/web/scripts/build-e2b-office-template.mjs and sets AGI_E2B_CHAT_TEMPLATE=agi-office-interpreter | flag-off |
-| desktop | partial | renders slides to PDF in the E2B sandbox with LibreOffice once AGI_E2B_EXECUTION is on; the public code-interpreter-v1 template has no LibreOffice, so the owner builds agi-office-interpreter with apps/web/scripts/build-e2b-office-template.mjs and sets AGI_E2B_CHAT_TEMPLATE=agi-office-interpreter | flag-off |
+| web | partial | switch-on AGI_E2B_EXECUTION plus owner: build agi-office-interpreter with apps/web/scripts/build-e2b-office-template.mjs and set AGI_E2B_CHAT_TEMPLATE; then a live check. | flag-off |
+| desktop | partial | switch-on AGI_E2B_EXECUTION plus owner: build agi-office-interpreter with apps/web/scripts/build-e2b-office-template.mjs and set AGI_E2B_CHAT_TEMPLATE; then a live check. | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/scripts/build-e2b-office-template.mjs:21-21`, `apps/web/lib/e2b/chat-template.ts:3-3`, `apps/web/lib/e2b/runtime.ts:801-801`, `apps/web/lib/e2b/execution-tools.ts:30-30`
+Code: `apps/web/lib/e2b/chat-template.ts:3-3`
 
 ## S31.04: PDF summarization.
 
@@ -133,12 +133,12 @@ Code: `apps/mobile/app/(app)/chat/[id].tsx:849-856`, `apps/mobile/stores/chat/ch
 ## S31.23: Signature-service integration.
 
 - Done when: The user can send a document for e-signature through a connected signature service.
-- Wave: 2
+- Wave: 3
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | partials/mcp-web 4a48dadc2: Claude ships a Docusign connector on https://mcp.docusign.com/mcp (claude.com/connectors/docusign, made by Docusign; the endpoint is also in developers.docusign.com/platform/mcp-server). The directory pins that endpoint with Claude's twenty tools, and docusign is a pre-registered OAuth catalog connector (Docusign's authorization server has no registration endpoint and takes only the confidential code grant), so once connected the assistant creates, sends and tracks envelopes for signature, asking first on every call. It stays Needs setup until the owner registers a Docusign app (integration key and secret, our callback as redirect URI) and adds the docusign CONNECTOR_OAUTH_PROVIDERS_JSON descriptor with CONNECTOR_OAUTH_DOCUSIGN_CLIENT_ID and CONNECTOR_OAUTH_DOCUSIGN_CLIENT_SECRET (docs/runbooks/connector-oauth-apps.md section 8). | flag-off |
-| desktop | partial | partials/mcp-web 4a48dadc2: desktop cloud settings list Docusign once the server reports it available, through the same web connector. Same owner step as web: register the Docusign app and add its descriptor and client pair. | flag-off |
+| web | partial | owner: register the Docusign app and add its descriptor and client pair (unchanged). | config |
+| desktop | partial | owner: register the Docusign app and add its descriptor and client pair (unchanged). | config |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |

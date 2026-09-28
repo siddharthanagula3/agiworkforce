@@ -94,6 +94,8 @@ async function clearCache(): Promise<void> {
   }
 }
 
+const PERMANENT_REFUSALS: ReadonlySet<number> = new Set([400, 409, 413, 422]);
+
 async function migrateLegacyMemories(token: string): Promise<void> {
   let legacy: unknown;
   try {
@@ -104,15 +106,27 @@ async function migrateLegacyMemories(token: string): Promise<void> {
   }
   if (!Array.isArray(legacy)) return;
 
-  const contents = legacy
-    .filter(isAccountMemory)
-    .map((item) => item.content.trim().slice(0, ACCOUNT_MEMORY_MAX_CONTENT_CHARS))
-    .filter((content) => content.length > 0);
-
-  for (const content of contents) {
-    await createAccountMemory(token, content);
+  const pending = legacy.filter(isAccountMemory);
+  const kept: AccountMemory[] = [];
+  let signedOutError: AccountMemoryHttpError | null = null;
+  for (const [index, item] of pending.entries()) {
+    const content = item.content.trim().slice(0, ACCOUNT_MEMORY_MAX_CONTENT_CHARS);
+    if (!content) continue;
+    try {
+      await createAccountMemory(token, content);
+    } catch (error) {
+      if (error instanceof AccountMemoryHttpError && PERMANENT_REFUSALS.has(error.status)) continue;
+      kept.push(...pending.slice(index));
+      if (error instanceof AccountMemoryHttpError && error.status === 401) signedOutError = error;
+      break;
+    }
   }
-  await chrome.storage.local.remove(LEGACY_MEMORY_STORAGE_KEY);
+  if (kept.length > 0) {
+    await chrome.storage.local.set({ [LEGACY_MEMORY_STORAGE_KEY]: kept });
+  } else {
+    await chrome.storage.local.remove(LEGACY_MEMORY_STORAGE_KEY);
+  }
+  if (signedOutError) throw signedOutError;
 }
 
 function signedOut(): MemoryListResult {
@@ -179,15 +193,25 @@ async function withAuthorizedWrite(
   }
 }
 
+function contentRefusal(content: string): string | null {
+  if (!content) return 'Memory content is required';
+  if (content.length > ACCOUNT_MEMORY_MAX_CONTENT_CHARS) {
+    return `Content must be ${ACCOUNT_MEMORY_MAX_CONTENT_CHARS.toLocaleString('en-US')} characters or less`;
+  }
+  return null;
+}
+
 export async function memoryAdd(content: string): Promise<MemoryWriteResult> {
-  const trimmed = content.trim().slice(0, ACCOUNT_MEMORY_MAX_CONTENT_CHARS);
-  if (!trimmed) return { status: 'unavailable', error: 'Memory content is required' };
+  const trimmed = content.trim();
+  const refusal = contentRefusal(trimmed);
+  if (refusal) return { status: 'unavailable', error: refusal };
   return withAuthorizedWrite((token) => createAccountMemory(token, trimmed));
 }
 
 export async function memoryUpdate(id: string, content: string): Promise<MemoryWriteResult> {
-  const trimmed = content.trim().slice(0, ACCOUNT_MEMORY_MAX_CONTENT_CHARS);
-  if (!trimmed) return { status: 'unavailable', error: 'Memory content is required' };
+  const trimmed = content.trim();
+  const refusal = contentRefusal(trimmed);
+  if (refusal) return { status: 'unavailable', error: refusal };
   return withAuthorizedWrite((token) => updateAccountMemory(token, id, trimmed));
 }
 

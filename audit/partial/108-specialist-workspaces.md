@@ -13,8 +13,8 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | billing/no-yearly f4a1e5e5b3: /chat/finance is a read-only product view of the connected bank accounts: current and available balances per account, spending and income for 30 days, 90 days or 12 months, by category and month, and recent transactions, read from Plaid (/accounts/get, /transactions/get). It is gated on the same owner steps as S56.47 (Plaid agreement, production transactions access, PLAID_CLIENT_ID, PLAID_SECRET, PLAID_ENV); until then the page says bank accounts are not set up. ChatGPT's personal finance pages refuse fetches (help.openai.com and openai.com 403, 2026-09-28) | flag-off |
-| desktop | partial | billing/no-yearly f4a1e5e5b3: /chat/finance is a read-only product view of the connected bank accounts: current and available balances per account, spending and income for 30 days, 90 days or 12 months, by category and month, and recent transactions, read from Plaid (/accounts/get, /transactions/get). It is gated on the same owner steps as S56.47 (Plaid agreement, production transactions access, PLAID_CLIENT_ID, PLAID_SECRET, PLAID_ENV); until then the page says bank accounts are not set up. ChatGPT's personal finance pages refuse fetches (help.openai.com and openai.com 403, 2026-09-28) | flag-off |
+| web | partial | owner: Plaid agreement and production transactions access, PLAID_CLIENT_ID, PLAID_SECRET, PLAID_ENV (owner said bank stays off for now). | flag-off |
+| desktop | partial | owner: Plaid agreement and production transactions access, PLAID_CLIENT_ID, PLAID_SECRET, PLAID_ENV (owner said bank stays off for now). | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
@@ -27,8 +27,8 @@ Code: `apps/web/app/chat/finance/page.tsx:17-17`, `apps/web/features/finance/com
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | billing/no-yearly f4a1e5e5b3 on top of p-mcp-web's Plaid Link connector (S56.47): the user links bank and card accounts in Settings, Connectors; the finance page offers the link when none is connected and a toast offers the page after linking, and the assistant reads balances and transactions through the connector's read tools. Gated on the S56.47 owner steps | flag-off |
-| desktop | partial | billing/no-yearly f4a1e5e5b3 on top of p-mcp-web's Plaid Link connector (S56.47): the user links bank and card accounts in Settings, Connectors; the finance page offers the link when none is connected and a toast offers the page after linking, and the assistant reads balances and transactions through the connector's read tools. Gated on the S56.47 owner steps | flag-off |
+| web | partial | owner: Plaid agreement and production transactions access, PLAID_CLIENT_ID, PLAID_SECRET, PLAID_ENV (owner said bank stays off for now). | flag-off |
+| desktop | partial | owner: Plaid agreement and production transactions access, PLAID_CLIENT_ID, PLAID_SECRET, PLAID_ENV (owner said bank stays off for now). | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
@@ -41,8 +41,8 @@ Code: `apps/web/features/connectors/hooks/use-connectors.ts:449-449`, `apps/web/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | billing/no-yearly f4a1e5e5b3: spending is analysed by Plaid personal finance category and by month for the chosen period (posted outflows in the main currency, transfers, loan payments and income left out) and shown on /chat/finance. Gated on the S56.47 owner steps | flag-off |
-| desktop | partial | billing/no-yearly f4a1e5e5b3: spending is analysed by Plaid personal finance category and by month for the chosen period (posted outflows in the main currency, transfers, loan payments and income left out) and shown on /chat/finance. Gated on the S56.47 owner steps | flag-off |
+| web | partial | owner: Plaid agreement and production transactions access, PLAID_CLIENT_ID, PLAID_SECRET, PLAID_ENV (owner said bank stays off for now). | flag-off |
+| desktop | partial | owner: Plaid agreement and production transactions access, PLAID_CLIENT_ID, PLAID_SECRET, PLAID_ENV (owner said bank stays off for now). | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
@@ -75,8 +75,8 @@ Code: `apps/web/lib/services/finance-overview-service.ts:64-64`, `apps/web/featu
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | billing/no-yearly 77957dc6aa, 6d5066b158 (merged at f5c3be8a6b; migration renumbered to 0337 after integration took 0336): the Health space is built as one personal project per account and stays off until the owner sets up HealthEx (CONNECTOR_OAUTH_PROVIDERS_JSON healthex, client id, vendor agreement, lawyer check). Its chats, files, HealthEx tools and memories stay out of every other chat (tool catalog, memory scope, retrieval, database triggers on move, delete and share), and Health turns, titles, follow-ups and memory extraction use only no-training models. Still missing: a view that browses imported records (they are read by asking in a Health chat) and the owner switch-on. Waits on founder research entry 1 (ChatGPT's July 2026 relaunch lets @Health reach any chat; built as the lead ruled, kept apart). | ui, flag-off |
-| desktop | partial | billing/no-yearly 77957dc6aa, 6d5066b158 (merged at f5c3be8a6b; migration renumbered to 0337 after integration took 0336): the Health space is built as one personal project per account and stays off until the owner sets up HealthEx (CONNECTOR_OAUTH_PROVIDERS_JSON healthex, client id, vendor agreement, lawyer check). Its chats, files, HealthEx tools and memories stay out of every other chat (tool catalog, memory scope, retrieval, database triggers on move, delete and share), and Health turns, titles, follow-ups and memory extraction use only no-training models. Still missing: a view that browses imported records (they are read by asking in a Health chat) and the owner switch-on. Waits on founder research entry 1 (ChatGPT's July 2026 relaunch lets @Health reach any chat; built as the lead ruled, kept apart). | ui, flag-off |
+| web | partial | owner: HealthEx setup (CONNECTOR_OAUTH_PROVIDERS_JSON healthex, client id, vendor agreement, lawyer check), owner said Health stays off; records browser waits on founder research entry 1 (Claude's HealthEx connector is conversational only). | ui, flag-off |
+| desktop | partial | owner: HealthEx setup (CONNECTOR_OAUTH_PROVIDERS_JSON healthex, client id, vendor agreement, lawyer check), owner said Health stays off; records browser waits on founder research entry 1 (Claude's HealthEx connector is conversational only). | ui, flag-off |
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
