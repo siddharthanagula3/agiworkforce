@@ -173,18 +173,6 @@ Code: `apps/extension/src/side_panel.ts:8589-8589`, `apps/extension/src/features
 
 Code: `packages/ui/unified-chat/src/components/tasks/TasksPage.tsx:57-61`, `packages/ui/unified-chat/src/components/tasks/TasksPage.tsx:726-740`, `packages/ui/unified-chat/src/components/tasks/TasksPage.tsx:391-408`, `apps/extension/src/features/side-panel/cloudRunsPanel.ts:677-680`
 
-## S4.17: Scheduled-task manager.
-
-- Done when: A scheduled-task manager lists the user's schedules with cadence/status and lets them create, edit, pause/resume, run now and delete.
-- Wave: 3
-- Already works on: web, desktop, mobile, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | `agi schedules` can list, create (optionally paused), delete and show runs, but cannot edit, pause or resume an existing schedule or run it now. | handler |
-
-Code: `apps/cli/src/lib.rs:1092-1096`, `apps/cli/src/lib.rs:2135-2180`
-
 ## S4.18: Routine details.
 
 - Done when: Opening one routine/schedule shows its configuration (prompt, cadence, next run) and its run history.
@@ -482,18 +470,6 @@ Code: `apps/extension/src/side_panel.ts:8360-8369`, `apps/extension/src/side_pan
 | chrome | partial | Side panel shows plan tier and past-due/canceled status; all billing management opens web settings/billing. | surface-only |
 
 Code: `apps/web/app/settings/billing/page.tsx:1-7`, `apps/web/features/settings/components/WebSettingsModal.tsx:203-204`, `apps/web/features/settings/sections/BillingSection.tsx:304-318`, `apps/web/features/settings/sections/BillingSection.tsx:436-450`
-
-## S4.41: Personal settings.
-
-- Done when: A personal settings destination lets the signed-in user view and change their own preferences (profile, appearance, personalization, notifications) and saves them.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | In the default TUI /config only displays the config; /config get/set (saved) works only in the --no-tui REPL, and other settings each have their own command (/theme, /statusline). | ui |
-
-Code: `apps/cli/src/tui/tui_app.rs:3486-3488`, `apps/cli/src/repl/registry.rs:1751-1790`
 
 ## S4.42: Workspace administration.
 

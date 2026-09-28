@@ -125,15 +125,12 @@ Code: `apps/web/features/chat/components/messages/ChatMessageList.tsx:1335-1341`
 
 - Done when: After scrolling up, one control returns the view to the latest message.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | The transcript scrolls with the mouse wheel and snaps back only when a message is sent; add a key (e.g. End) that jumps to the latest output. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/tui/tui_app.rs:4804-4811`, `apps/cli/src/tui/tui_app.rs:2466-2474`
 
 ## S18.17: Branch-tree navigation.
 
@@ -277,12 +274,11 @@ Code: `apps/mobile/src/features/chat/components/TaskChips.tsx:34-36`, `apps/mobi
 
 - Done when: The conversation shows the active tasks/runs started from it and their status.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | L2/R-l: the REPL's /tasks list (slash_commands.rs:214-224) renders session.subagent_manager.list() (subagent.rs:476-490), i.e. the tasks started from this conversation with their status. Mode-only (--no-tui), so partial, matching the auditor's own S72.31 cell. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 

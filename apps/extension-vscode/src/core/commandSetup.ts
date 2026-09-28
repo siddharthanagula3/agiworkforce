@@ -99,6 +99,7 @@ import { ChatEditorPanel } from '../providers/chatEditorPanel';
 import { type LocalRuntimePool } from '../integrations/localRuntimePool';
 import { installCli } from '../integrations/cliInstaller';
 import { managePersonalization } from '../features/personalization/personalization';
+import { manageMemoryExclusions } from '../memory/memoryExclusions';
 import {
   admitDeveloperSessionHandoff,
   describeHandoffRefusal,
@@ -188,14 +189,6 @@ import { exportVsCodeDiagnostics } from '../features/diagnostics';
 const execFileAsync = promisify(execFile);
 
 const UPGRADE_URL = 'https://agiworkforce.com/pricing';
-
-function requireWorkspaceMemoryScope(): boolean {
-  if ((vscode.workspace.workspaceFolders?.length ?? 0) > 0) return true;
-  void vscode.window.showWarningMessage(
-    'AGI Workforce: Open a workspace folder before managing workspace memory.',
-  );
-  return false;
-}
 
 const MEMORY_TURN_ON_ACTION = 'Turn memory on';
 
@@ -1747,30 +1740,39 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       function capMode(s: string): string {
         return s.charAt(0).toUpperCase() + s.slice(1);
       }
-      const modeItems: vscode.QuickPickItem[] = [
+      type ModeItem = vscode.QuickPickItem & { mode: 'ask' | 'auto' | 'plan' | 'bypass' };
+      const modeItems: ModeItem[] = [
         {
           label: '$(comment-discussion) Ask before edits',
           description: 'AGI will ask for approval before making each edit',
-          detail: 'ask',
+          detail:
+            'Example: “add a test for parseDate” shows each edit and command for you to approve.',
+          mode: 'ask',
           picked: currentMode === 'ask',
         },
         {
           label: '$(symbol-misc) Auto safe operations',
           description: 'Safe reads run automatically; writes and commands require approval',
-          detail: 'auto',
+          detail:
+            'Example: reading files and searching run on their own; npm install still asks first.',
+          mode: 'auto',
           picked: currentMode === 'auto',
         },
         {
           label: '$(checklist) Plan mode',
           description: 'AGI will explore the code and present a plan before editing',
-          detail: 'plan',
+          detail:
+            'Example: “move to the new API” returns a step-by-step plan and edits nothing until you approve it.',
+          mode: 'plan',
           picked: currentMode === 'plan',
         },
         {
           label: '$(warning) Bypass permissions',
           description:
             'AGI will not ask for approval before running potentially dangerous commands',
-          detail: 'bypass',
+          detail:
+            'Example: a throwaway container or VM where every edit and command may run without asking.',
+          mode: 'bypass',
           picked: currentMode === 'bypass',
         },
       ];
@@ -1779,8 +1781,8 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         placeHolder: `Current: ${capMode(currentMode)} · choose the authority for future actions`,
         matchOnDescription: true,
       });
-      if (modePick?.detail !== undefined) {
-        const selectedMode = modePick.detail as 'ask' | 'auto' | 'plan' | 'bypass';
+      if (modePick !== undefined) {
+        const selectedMode = modePick.mode;
         if (await setAgentModeWithConsent(context, selectedMode)) {
           vscode.window.showInformationMessage(
             `AGI Workforce agent mode set to: ${capMode(selectedMode)}`,
@@ -1836,7 +1838,6 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     }),
 
     register('agi-workforce.memory', async () => {
-      if (!requireWorkspaceMemoryScope()) return;
       const enabled = Config.memoryEnabled();
       const action = await vscode.window.showQuickPick(
         [
@@ -1846,6 +1847,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
           },
           { label: '$(add) Add a memory fact', detail: 'add' },
           { label: '$(list-unordered) List & remove facts', detail: 'list' },
+          { label: '$(eye-closed) Never remember…', detail: 'exclusions' },
           { label: '$(trash) Forget everything', detail: 'clear' },
         ],
         {
@@ -1873,6 +1875,11 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         return;
       }
 
+      if (action.detail === 'exclusions') {
+        await manageMemoryExclusions(context.secrets);
+        return;
+      }
+
       if (action.detail === 'clear') {
         const store = getAccountMemoryStore();
         if (store === undefined) {
@@ -1885,7 +1892,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
           );
           return;
         }
-        const facts = store.cachedFacts();
+        const facts = (await store.refresh()).facts;
         if (facts.length === 0) {
           vscode.window.showInformationMessage('No memory facts to forget.');
           return;
@@ -1921,13 +1928,19 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       await memoryTreeProvider.refresh();
     }),
 
-    register('agi-workforce.memory.create', async () => {
-      if (!requireWorkspaceMemoryScope()) return;
+    register('agi-workforce.memory.rememberSelection', async () => {
+      const editor = vscode.window.activeTextEditor;
+      const selected = editor?.document.getText(editor.selection).trim() ?? '';
+      await vscode.commands.executeCommand('agi-workforce.memory.create', selected);
+    }),
+
+    register('agi-workforce.memory.create', async (prefill?: unknown) => {
       if (!(await requireMemoryEnabledForCapture(context))) return;
       const text = await vscode.window.showInputBox({
         title: 'AGI Workforce, Add Memory Fact',
+        value: typeof prefill === 'string' ? prefill : '',
         prompt:
-          'A short fact included with future developer turns. Stored locally; sent only to the model/provider you choose for that turn.',
+          'A short fact saved to your AGI Cloud account. Every AGI client uses it, and it is sent with turns only while memory is on.',
         placeHolder: 'Example: I prefer Python over JavaScript for data work.',
         ignoreFocusOut: true,
         validateInput: (value) => {
@@ -1963,12 +1976,10 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     }),
 
     register('agi-workforce.memory.edit', async (item: MemoryFactItem) => {
-      if (!requireWorkspaceMemoryScope()) return;
       const newText = await vscode.window.showInputBox({
         title: 'AGI Workforce, Edit Memory Fact',
         value: item.fact.text,
-        prompt:
-          'Update this locally stored fact. It is included only with turns sent to your selected model/provider.',
+        prompt: 'Update this fact in your AGI Cloud account. The change reaches every AGI client.',
         ignoreFocusOut: true,
         validateInput: (value) => {
           const trimmed = value.trim();
@@ -1994,7 +2005,6 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     }),
 
     register('agi-workforce.memory.delete', async (item: MemoryFactItem) => {
-      if (!requireWorkspaceMemoryScope()) return;
       const confirm = await vscode.window.showWarningMessage(
         `Delete this memory from your AGI Cloud account? It disappears from the web app, the CLI and mobile too, and cannot be recovered.\n\n"${item.fact.text.slice(0, 80)}${item.fact.text.length > 80 ? '…' : ''}"`,
         { modal: true },

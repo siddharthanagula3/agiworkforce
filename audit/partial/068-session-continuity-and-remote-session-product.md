@@ -334,16 +334,14 @@ Code: `apps/cli/src/app_server/developer_host.rs:386-386`, `apps/cli/src/lib.rs:
 
 - Done when: The user exports a coding session (transcript and context) to a file from any client.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | /export shows the transcript as markdown or json on screen; it never writes a file, and no other client exports a coding session at all. | surface-only |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/tui/tui_app.rs:3581-3589`, `apps/cli/src/repl/registry.rs:368-378`
 
 ## S68.28: Summary-only transfer as a separate option.
 

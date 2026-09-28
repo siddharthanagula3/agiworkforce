@@ -104,6 +104,9 @@ build it, and the audit cell is recorded as not applicable by this decision.
   S32.26-28, S32.30, S33.02, S33.05, S33.08-09, S33.13, S33.19).** ChatGPT
   Canvas and Claude artifacts change files by prompt and have no spreadsheet,
   slide, design, email-send or deployment editor.
+- **Library extras (S24.01, S24.10, S24.11, S24.32, S25.13, S25.21, S25.22).** No
+  shared-with-me view, folders, version history, project files in All, or
+  page-level PDF controls; files open in the browser viewer.
 - **Periodic usage recap (S42.20).** Neither delivers one; Reflect builds a recap
   on demand.
 - **Search domain, source-type and per-answer source controls (S34.08, S34.09,

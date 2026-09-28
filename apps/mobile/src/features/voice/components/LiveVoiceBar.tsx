@@ -31,6 +31,7 @@ export interface LiveVoiceBarProps {
   approvals: readonly LiveVoicePendingApproval[];
   onDecideApproval: (callId: string, decision: LiveVoiceToolDecision) => void;
   onToggleMute: () => void;
+  onStopTask: () => void;
   onSwitchToText: () => void;
   onRetry: () => void;
   onExit: () => void;
@@ -65,6 +66,7 @@ export function LiveVoiceBar({
   approvals,
   onDecideApproval,
   onToggleMute,
+  onStopTask,
   onSwitchToText,
   onRetry,
   onExit,
@@ -295,6 +297,26 @@ export function LiveVoiceBar({
               status: 'running',
             }}
           />
+          <Pressable
+            onPress={tap(onStopTask)}
+            accessibilityRole="button"
+            accessibilityLabel="Stop the task and keep talking"
+            testID="live-voice-stop-task"
+            style={{
+              alignSelf: 'flex-start',
+              minHeight: 44,
+              justifyContent: 'center',
+              paddingHorizontal: 14,
+              marginTop: 6,
+              borderRadius: 22,
+              borderWidth: 1,
+              borderColor: colors.border,
+            }}
+          >
+            <Text style={{ color: colors.textSecondary, fontSize: 14, fontWeight: '600' }}>
+              Stop the task
+            </Text>
+          </Pressable>
         </View>
       ) : null}
 

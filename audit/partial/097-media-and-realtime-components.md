@@ -79,17 +79,6 @@ Code: `apps/web/features/chat/lib/live-voice-session.ts:668-676`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | Frame capture exists in the voice surface but no caller passes a frame sink and the live session has no path to send frames; wire capture into the session. | handler, mount |
+| platform | partial | blocked: GPT-Live has no documented frame input (fetched 2026-09-27) | handler, mount |
 
-Code: `apps/web/features/chat/components/Voice/VoiceModeSurface.tsx:125-129`
-
-## S97.28: Voice session persistence.
-
-- Done when: Voice sessions are persisted with their settings and status so they can be audited and resumed.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | mobile now records its surface (9635039ad); GET /sessions/active still has no caller that resumes from the record | handler |
-
-Code: `apps/mobile/src/features/voice/services/liveVoiceSession.ts:238-238`
+Code: `apps/web/features/chat/components/Voice/VoiceModeSurface.tsx:445-445`

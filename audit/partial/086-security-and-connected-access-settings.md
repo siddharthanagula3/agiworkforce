@@ -101,17 +101,13 @@ Code: `apps/web/features/settings/sections/AccountSection.tsx:529-529`, `apps/we
 
 - Done when: The user is told about security-relevant events (new sign-in, password or 2FA change, new device) and can control how.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | partials/auth 86ae38fc2, 53132ce90: a new browser, desktop or mobile session now puts 'A new sign-in to your account' in the security feed once; security events are still not emailed and there is no setting to choose how they are delivered | ui |
-| desktop | partial | partials/auth 86ae38fc2, 53132ce90: a new browser, desktop or mobile session now puts 'A new sign-in to your account' in the security feed once; security events are still not emailed and there is no setting to choose how they are delivered | ui |
-| mobile | partial | Mobile shows the recent security activity log but receives no security alert (it never reads the notification feed or gets a push for it). | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/lib/api-auth.ts:349-349`, `apps/web/lib/api-auth.ts:369-369`, `apps/web/lib/server/session-sightings.ts:40-40`, `apps/mobile/src/features/settings/account-security/index.tsx:434-462`
 
 ## S86.12: Connected accounts.
 
@@ -158,13 +154,13 @@ Code: `apps/cli/src/lib.rs:3957-3975`, `apps/extension-vscode/src/core/commandSe
 
 - Done when: The user can choose which local folders AGI may read or write, see the list, and remove access.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | desktop | partial | Folders can be approved from the composer's folder dialog and are listed there, but approved folders cannot be removed: the Local access list with Remove renders only in the internal Tauri shell (hostHasLocalMode is true only for shell "tauri"). | ui |
-| cli | partial | Trust is asked for each new directory at first run and --add-dir adds roots per run, but listing and revoking trusted folders (/trust, /untrust) exists only in the --no-tui REPL. | ui |
 
-Code: `apps/web/features/desktop-host/components/LocalFolderAttachDialog.tsx:75-118`, `apps/desktop/electron/runtime/dispatcher.ts:704-712`, `packages/contracts/local-runtime/src/host-bridge.ts:309-312`, `apps/cli/src/onboarding.rs:156-170`
+Code: `apps/web/features/desktop-host/components/LocalFolderAttachDialog.tsx:75-118`, `apps/desktop/electron/runtime/dispatcher.ts:704-712`, `packages/contracts/local-runtime/src/host-bridge.ts:309-312`
 
 ## S86.18: Computer applications.
 
