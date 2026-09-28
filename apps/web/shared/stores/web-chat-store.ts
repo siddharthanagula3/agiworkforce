@@ -43,7 +43,11 @@ import {
   accountUsageBlockEqual,
   type AccountUsageBlock,
 } from '@/features/chat/stores/account-usage-block';
-import type { AgiWorkExcludableTool, AgiWorkPlanStep } from '@/features/chat/utils/agiwork-plan';
+import type {
+  AgiWorkExcludableTool,
+  AgiWorkPlanReview,
+  AgiWorkPlanStep,
+} from '@/features/chat/utils/agiwork-plan';
 import {
   resolveLeafForSibling,
   resolveVisibleThread,
@@ -350,6 +354,8 @@ export interface MessageMetadata {
    * event or whose plan could not be parsed.
    */
   agiWorkPlan?: AgiWorkPlanStep[];
+  /** The goal the plan was made for, and whether the run is waiting for the plan's approval. */
+  agiWorkPlanReview?: AgiWorkPlanReview;
   /** Code execution result from server-managed code_execution_20260120 tool */
   codeExecutionResult?: {
     stdout: string;
