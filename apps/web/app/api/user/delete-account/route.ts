@@ -9,6 +9,7 @@ import { withPrivateNoStore } from '@/lib/private-cache-policy';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { isAuthGateRefusal, unauthorizedResponseFor } from '@/lib/api-auth-response';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { invalidateAccountStatusCache } from '@/lib/server/request-context-cache';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { eraseUserAccountData } from '@/lib/server/account-erasure';
 import {
@@ -363,6 +364,7 @@ async function handleDelete(request: NextRequest) {
           );
         }
         await getIdentityProvider().deleteUser(userId);
+        await invalidateAccountStatusCache(userId);
       } catch (clerkErr: unknown) {
         const errMsg = clerkErr instanceof Error ? clerkErr.message : String(clerkErr);
         logger.error({ userId, error: errMsg }, 'Account deletion failed');

@@ -3140,7 +3140,10 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         let _guard = self.admit_request().await?;
         self.pending_logins.lock().await.clear();
         *self.host_models.write().await = None;
-        account::logout().map_err(|error| DeveloperSessionHostError::internal(error.to_string()))
+        account::sign_out()
+            .await
+            .map(|_| ())
+            .map_err(|error| DeveloperSessionHostError::internal(error.to_string()))
     }
 
     async fn account_token(&self) -> Result<AccountTokenResponse, DeveloperSessionHostError> {

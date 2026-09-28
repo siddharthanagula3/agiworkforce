@@ -264,6 +264,11 @@ pub async fn run_repl(
                             }
                         }
                         SlashResult::Logout => {
+                            if !crate::app_server::account::revoke_managed_sessions().await {
+                                output::print_info(
+                                    "AGI Cloud did not confirm the sign-out. The device session ends when it expires, or unlink it in Settings, Account, Linked devices.",
+                                );
+                            }
                             dialogs::handle_logout();
                         }
                         SlashResult::Voice(lang) => {

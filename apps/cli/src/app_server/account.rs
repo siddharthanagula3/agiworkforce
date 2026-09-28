@@ -249,6 +249,35 @@ fn forget_managed(store: &mut AuthStore) {
     }
 }
 
+/// Revoke every managed device session this machine holds on the server.
+/// Returns false when one was held and the server did not confirm it.
+pub async fn revoke_managed_sessions() -> bool {
+    let Ok(store) = AuthStore::load() else {
+        return true;
+    };
+    let base = device_auth_base();
+    let mut confirmed = true;
+    for key in MANAGED_AUTH_KEYS {
+        if let Some(AuthEntry::OAuth {
+            access, refresh, ..
+        }) = store.entries.get(key)
+        {
+            if access.is_empty() && refresh.is_empty() {
+                continue;
+            }
+            confirmed &= crate::oauth::revoke_device_session(&base, access, refresh).await;
+        }
+    }
+    confirmed
+}
+
+/// Revoke the managed sessions on the server, then forget them here.
+pub async fn sign_out() -> Result<bool> {
+    let confirmed = revoke_managed_sessions().await;
+    logout()?;
+    Ok(confirmed)
+}
+
 /// Forget the managed credential on this machine.
 pub fn logout() -> Result<()> {
     let mut store = AuthStore::load().context("Failed to read the credential store")?;

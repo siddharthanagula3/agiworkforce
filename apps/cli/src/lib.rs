@@ -5479,10 +5479,16 @@ async fn run_cli(cli: Cli) -> Result<()> {
                 if store.entries.is_empty() {
                     println!("No active sessions to logout from.");
                 } else {
+                    let revoked = crate::app_server::account::revoke_managed_sessions().await;
                     let count = store.entries.len();
                     store.entries.clear();
                     store.save()?;
                     println!("Logged out from {} provider(s).", count);
+                    if !revoked {
+                        println!(
+                            "AGI Cloud did not confirm the sign-out. The device session ends when it expires, or unlink it in Settings, Account, Linked devices."
+                        );
+                    }
                 }
                 Ok(())
             }
