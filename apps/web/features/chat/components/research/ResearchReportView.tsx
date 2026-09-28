@@ -209,6 +209,30 @@ export function researchReportFilename(report: ResearchReport): string {
 // Citation row
 // ============================================================================
 
+const CITATION_DATE_FORMAT: Intl.DateTimeFormatOptions = {
+  year: 'numeric',
+  month: 'short',
+  day: 'numeric',
+};
+
+function formatCitationDate(value: string | undefined): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? null
+    : date.toLocaleDateString(undefined, CITATION_DATE_FORMAT);
+}
+
+function citationDateLabel(citation: Citation): string | null {
+  const published = formatCitationDate(citation.publishedDate);
+  const retrieved = formatCitationDate(citation.accessedAt);
+  return (
+    [published ? `Published ${published}` : null, retrieved ? `Retrieved ${retrieved}` : null]
+      .filter(Boolean)
+      .join(' · ') || null
+  );
+}
+
 function CitationRow({ citation, index }: { citation: Citation; index: number }) {
   const [faviconError, setFaviconError] = useState(false);
   const anchorId = citationAnchorId(index + 1);
@@ -259,7 +283,9 @@ function CitationRow({ citation, index }: { citation: Citation; index: number })
           <span className="block truncate text-[13px] font-medium text-foreground group-hover:text-primary">
             {citation.title || host}
           </span>
-          <span className="block truncate text-caption text-muted-foreground">{host}</span>
+          <span className="block truncate text-caption text-muted-foreground">
+            {[host, citationDateLabel(citation)].filter(Boolean).join(' · ')}
+          </span>
         </span>
         <ExternalLink
           className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground group-hover:text-muted-foreground"
