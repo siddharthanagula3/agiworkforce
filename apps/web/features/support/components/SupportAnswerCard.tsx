@@ -1,6 +1,6 @@
 'use client';
 
-import type { SupportAnswerView } from '../lib/contract';
+import type { SupportAnswerView } from '@agiworkforce/cloud-contracts/support';
 import { renderSupportText } from '../lib/render-text';
 import { SupportCitationList } from './SupportCitationList';
 import styles from './SupportWidget.module.css';

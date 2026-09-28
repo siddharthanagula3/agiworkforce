@@ -17,6 +17,7 @@ import {
 import { isApiKeyScopeError } from '@/lib/api-key-scope-error';
 import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
 import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
+import { isPasskeyRequiredError } from '@/lib/server/account-security/gate';
 import { logger } from '@/lib/logger';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
@@ -162,6 +163,21 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
         response: NextResponse.json(
           {
             error: { message: error.message, type: 'invalid_request_error', code: 'mfa_required' },
+          },
+          { status: 403 },
+        ),
+      };
+    }
+    if (isPasskeyRequiredError(error)) {
+      return {
+        ok: false,
+        response: NextResponse.json(
+          {
+            error: {
+              message: error.message,
+              type: 'invalid_request_error',
+              code: 'passkey_required',
+            },
           },
           { status: 403 },
         ),
