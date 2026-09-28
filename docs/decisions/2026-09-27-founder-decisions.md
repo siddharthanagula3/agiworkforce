@@ -264,3 +264,13 @@ full-screen writing and code blocks are listed for the web
 (help.openai.com/en/articles/6825453, 2026-06-08) and Claude opens only
 artifacts full screen. The mobile app therefore keeps code blocks inline
 (S21.08 mobile). Checked 2026-09-28.
+
+## D-2026-09-28-14 Cloud coding sessions show command logs, not an interactive terminal
+
+Codex cloud tasks show their command logs only (learn.chatgpt.com/docs/cloud),
+and Claude Code on the web opens a terminal only by copying a command to run in
+the person's own terminal (code.claude.com/docs/en/claude-code-on-the-web).
+Cloud coding sessions here keep their command view and journal and do not add
+an interactive sandbox terminal (S66.15). The Library filters files by where
+they came from, uploads or generated, and has no filter by product surface,
+which neither leader documents (S24.15). Checked 2026-09-28.

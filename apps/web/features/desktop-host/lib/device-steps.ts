@@ -12,6 +12,7 @@ import {
   deviceStepScope,
   getHostBridge,
   isDeviceStepTool,
+  isScreenDeviceStep,
   readDeviceFrontWindow,
   type DesktopHostDeclaration,
   type DeviceScreenDisplay,
@@ -24,6 +25,7 @@ import {
   type BackgroundShellOutput,
   type ShellRunResult,
 } from '@agiworkforce/local-runtime-contract';
+import { noteComputerUseConversation } from './computer-use-conversation';
 import { DesktopHostUnavailable } from './runtime-client';
 
 /**
@@ -385,6 +387,7 @@ export async function executeDeviceStep(
   if (!isDeviceStepTool(tool)) {
     return { content: `"${tool}" is not a step this device runs.`, isError: true };
   }
+  if (isScreenDeviceStep(tool)) noteComputerUseConversation();
   try {
     if (tool === 'device_screenshot' || tool === 'device_zoom') {
       return await captureFor(tool, input);

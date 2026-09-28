@@ -1,4 +1,11 @@
 import {
+  ConnectConflictResponseSchema,
+  type ConnectRequest,
+  type CreateCustomConnectorRequest,
+  type UpsertConnectorToolPermissionRequest,
+} from '@agiworkforce/cloud-contracts';
+
+import {
   evaluateConnectorAccess,
   evaluateMcpHostAccess,
   evaluatePluginAccess,
@@ -135,12 +142,12 @@ function statusOf(error: unknown): number | null {
   return null;
 }
 
+const InstallStartSchema = ConnectConflictResponseSchema.pick({ installStartPath: true });
+
 function installUrlOf(error: unknown): string | null {
   if (!error || typeof error !== 'object') return null;
-  const body = (error as { body?: unknown }).body;
-  if (!body || typeof body !== 'object') return null;
-  const path = (body as { installStartPath?: unknown }).installStartPath;
-  return typeof path === 'string' && path.length > 0 ? path : null;
+  const parsed = InstallStartSchema.safeParse((error as { body?: unknown }).body);
+  return parsed.success && parsed.data.installStartPath ? parsed.data.installStartPath : null;
 }
 
 export function createConnectorRuntime(options: ConnectorRuntimeOptions): ConnectorRuntime {
@@ -271,7 +278,7 @@ export function createConnectorRuntime(options: ConnectorRuntimeOptions): Connec
         await http.post(endpoints.connectors, {
           connectorId,
           ...(authType ? { authType } : {}),
-        });
+        } satisfies ConnectRequest);
         return { kind: 'connected' };
       } catch (error) {
         if (statusOf(error) !== 409) throw error;
@@ -299,7 +306,11 @@ export function createConnectorRuntime(options: ConnectorRuntimeOptions): Connec
       return parseConnectorToolPermissions(await http.get(endpoints.permissions));
     },
     async setToolPermission(connectorId, toolName, level) {
-      await http.put(endpoints.permissions, { connectorId, toolName, level });
+      await http.put(endpoints.permissions, {
+        connectorId,
+        toolName,
+        level,
+      } satisfies UpsertConnectorToolPermissionRequest);
     },
     async resetToolPermission(connectorId, toolName) {
       await http.delete(
@@ -315,7 +326,7 @@ export function createConnectorRuntime(options: ConnectorRuntimeOptions): Connec
           url,
           ...(input.transport ? { transport: input.transport } : {}),
           ...(input.authToken?.trim() ? { authToken: input.authToken.trim() } : {}),
-        }),
+        } satisfies CreateCustomConnectorRequest),
       );
     },
     async deleteCustomConnector(id: string) {

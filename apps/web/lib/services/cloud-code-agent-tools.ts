@@ -28,7 +28,11 @@ import 'server-only';
  * destructive, external, privileged, or expensive agent actions."
  */
 
-import type { ToolApprovalPolicy } from '@agiworkforce/types';
+import {
+  CLOUD_CODE_DEFAULT_TURN_MODE,
+  type CloudCodeTurnMode,
+  type ToolApprovalPolicy,
+} from '@agiworkforce/types';
 import {
   CREATE_FOLDER_TOOL,
   EDIT_FILE_TOOL,
@@ -322,6 +326,8 @@ const EDIT_TOOLS: ReadonlySet<string> = new Set([
 const EVERY_ACTION_REASON =
   'Ask before every action is on, so this waits for you even though it only reads.';
 const EDIT_REASON = 'Changes files in the workspace.';
+const PLAN_EDIT_REASON =
+  'Plan mode proposes changes without making them. Switch to an editing mode to apply the plan.';
 const MAX_APPROVAL_SUMMARY_LENGTH = 100_000;
 const APPROVAL_SUMMARY_TAIL_RESERVE = 64;
 const OVERSIZED_COMMAND_REASON =
@@ -334,6 +340,7 @@ export function gateCloudCodeTool(
   policy: ToolApprovalPolicy,
   toolName: string,
   command: string | null,
+  mode: CloudCodeTurnMode = CLOUD_CODE_DEFAULT_TURN_MODE,
 ): CloudCodeToolGate {
   if (command !== null) {
     const verdict = classifyCommandRisk(command);
@@ -342,6 +349,7 @@ export function gateCloudCodeTool(
       command.length > MAX_APPROVAL_SUMMARY_LENGTH
         ? { action: 'refuse', reason: OVERSIZED_COMMAND_REASON }
         : { action: 'ask', reason };
+    if (mode === 'plan') return verdict.risk === 'safe' ? { action: 'run' } : ask(verdict.reason);
     if (policy === 'ask_every_time') {
       return ask(verdict.risk === 'safe' ? EVERY_ACTION_REASON : verdict.reason);
     }
@@ -350,11 +358,12 @@ export function gateCloudCodeTool(
     return ask(verdict.reason);
   }
   if (READ_TOOLS.has(toolName)) {
-    return policy === 'ask_every_time'
+    return policy === 'ask_every_time' && mode !== 'plan'
       ? { action: 'ask', reason: EVERY_ACTION_REASON }
       : { action: 'run' };
   }
   if (EDIT_TOOLS.has(toolName)) {
+    if (mode === 'plan') return { action: 'refuse', reason: PLAN_EDIT_REASON };
     return policy === 'autonomous' ? { action: 'run' } : { action: 'ask', reason: EDIT_REASON };
   }
   return { action: 'refuse', reason: `Tool "${toolName}" is not available in Code sessions.` };
@@ -372,8 +381,18 @@ const APPROVAL_MODE_LINES: Record<ToolApprovalPolicy, string> = {
     'delete or move files or change version-control state wait for the user approval.',
 };
 
+const PLAN_MODE_LINE =
+  'Plan mode for this turn: research the repository and propose changes without making them. ' +
+  'Reads and read-only commands run immediately, any other command waits for the user ' +
+  'approval, and there are no file editing tools. End with the plan: each file to change and ' +
+  'what to change in it.';
+
 export function cloudCodeApprovalModeLine(policy: ToolApprovalPolicy): string {
   return APPROVAL_MODE_LINES[policy];
+}
+
+export function cloudCodeTurnModeLine(mode: CloudCodeTurnMode, policy: ToolApprovalPolicy): string {
+  return mode === 'plan' ? PLAN_MODE_LINE : cloudCodeApprovalModeLine(policy);
 }
 
 function prefixedLines(text: unknown, prefix: string): string[] {
@@ -406,13 +425,18 @@ export function cloudCodeApprovalSummary(toolName: string, args: Record<string, 
   return `${summary.slice(0, shownLength)}\n[${hiddenLines} more ${hiddenLines === 1 ? 'line' : 'lines'} not shown]`;
 }
 
-export function cloudCodeAgentToolDefs(): Array<{
+export function cloudCodeAgentToolDefs(
+  mode: CloudCodeTurnMode = CLOUD_CODE_DEFAULT_TURN_MODE,
+): Array<{
   type: 'function';
   function: { name: string; description: string; parameters: Record<string, unknown> };
 }> {
-  const editTools = e2bExecutionToolDefs().filter(
-    (tool) => tool.function.name === WRITE_FILE_TOOL || tool.function.name === EDIT_FILE_TOOL,
-  );
+  const editTools =
+    mode === 'plan'
+      ? []
+      : e2bExecutionToolDefs().filter(
+          (tool) => tool.function.name === WRITE_FILE_TOOL || tool.function.name === EDIT_FILE_TOOL,
+        );
   return [
     ...editTools,
     {
