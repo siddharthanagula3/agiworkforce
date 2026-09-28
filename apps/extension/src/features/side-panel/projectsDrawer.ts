@@ -1,10 +1,12 @@
 import type { ManagedCloudProject } from '@agiworkforce/cloud-contracts';
 import { openClerkSignIn } from '../cloud-bridge/clerkAuth';
+import { PROJECT_DESCRIPTION_MAX_LENGTH } from '@agiworkforce/cloud-contracts';
 import {
   createChromeProject,
   deleteChromeProject,
   listChromeProjectConversations,
   listChromeProjects,
+  updateChromeProject,
   CHROME_PROJECT_INSTRUCTIONS_MAX_CHARS,
   CHROME_PROJECT_NAME_MAX_CHARS,
   type ChromeProjectConversation,
@@ -115,12 +117,17 @@ export const PROJECTS_DRAWER_CSS = `
     font: inherit;
     font-size: 12px;
     text-align: left;
+    min-height: 24px;
     padding: 3px 0;
-    cursor: default;
+    cursor: pointer;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  .sp-drawer-project-chat:hover { color: var(--agi-ext-accent-text); text-decoration: underline; }
+  .sp-drawer-project-chat:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 1px; }
+  .sp-drawer-project-meta { font-size: 12px; color: var(--agi-ext-text-muted); }
+  .sp-drawer-project-edit { display: flex; flex-direction: column; gap: 6px; }
   .sp-drawer-project-actions { display: flex; gap: 6px; flex-wrap: wrap; }
   .sp-drawer-project-btn {
     background: none;
@@ -184,11 +191,13 @@ export interface ActiveProjectSelection {
 export interface ProjectsDrawerDependencies {
   listProjects: typeof listChromeProjects;
   createProject: typeof createChromeProject;
+  updateProject: typeof updateChromeProject;
   deleteProject: typeof deleteChromeProject;
   listConversations: typeof listChromeProjectConversations;
   signIn: typeof openClerkSignIn;
   getActiveProject: () => ActiveProjectSelection | null;
   setActiveProject: (project: ActiveProjectSelection | null) => void;
+  openConversation: (conversationId: string) => void;
 }
 
 export interface ProjectsDrawerAPI {
@@ -200,10 +209,11 @@ const DELETE_CONFIRM_MS = 6000;
 
 const DEFAULT_DEPENDENCIES: Omit<
   ProjectsDrawerDependencies,
-  'getActiveProject' | 'setActiveProject'
+  'getActiveProject' | 'setActiveProject' | 'openConversation'
 > = {
   listProjects: listChromeProjects,
   createProject: createChromeProject,
+  updateProject: updateChromeProject,
   deleteProject: deleteChromeProject,
   listConversations: listChromeProjectConversations,
   signIn: openClerkSignIn,
@@ -215,7 +225,10 @@ function formatChatCount(project: ManagedCloudProject): string {
 }
 
 export function buildProjectsDrawerSection(
-  dependencies: Pick<ProjectsDrawerDependencies, 'getActiveProject' | 'setActiveProject'> &
+  dependencies: Pick<
+    ProjectsDrawerDependencies,
+    'getActiveProject' | 'setActiveProject' | 'openConversation'
+  > &
     Partial<ProjectsDrawerDependencies>,
 ): ProjectsDrawerAPI {
   const deps: ProjectsDrawerDependencies = { ...DEFAULT_DEPENDENCIES, ...dependencies };
@@ -358,16 +371,113 @@ export function buildProjectsDrawerSection(
       return wrapper;
     }
     for (const conversation of loaded) {
-      wrapper.appendChild(el('div', { class: 'sp-drawer-project-chat' }, conversation.title));
+      const open = el(
+        'button',
+        {
+          type: 'button',
+          class: 'sp-drawer-project-chat',
+          title: t('spProjectsOpenChat', [conversation.title]),
+        },
+        conversation.title,
+      );
+      open.addEventListener('click', () => deps.openConversation(conversation.id));
+      wrapper.appendChild(open);
     }
     return wrapper;
   }
 
+  function buildEditForm(project: ManagedCloudProject, detail: HTMLElement): HTMLElement {
+    const editor = el('div', { class: 'sp-drawer-project-edit' });
+    const editName = el('input', {
+      type: 'text',
+      class: 'sp-drawer-projects-input',
+      maxlength: String(CHROME_PROJECT_NAME_MAX_CHARS),
+      'aria-label': t('spProjectsNamePlaceholder'),
+    });
+    editName.value = project.name;
+    const editDescription = el('textarea', {
+      class: 'sp-drawer-projects-textarea',
+      maxlength: String(PROJECT_DESCRIPTION_MAX_LENGTH),
+      placeholder: t('spProjectsDescriptionPlaceholder'),
+      'aria-label': t('spProjectsDescriptionPlaceholder'),
+      rows: '2',
+    });
+    editDescription.value = project.description ?? '';
+    const editInstructions = el('textarea', {
+      class: 'sp-drawer-projects-textarea',
+      maxlength: String(CHROME_PROJECT_INSTRUCTIONS_MAX_CHARS),
+      placeholder: t('spProjectsInstructionsPlaceholder'),
+      'aria-label': t('spProjectsInstructionsPlaceholder'),
+      rows: '3',
+    });
+    editInstructions.value = project.instructions ?? '';
+    const actions = el('div', { class: 'sp-drawer-projects-form-actions' });
+    const save = el(
+      'button',
+      { type: 'button', class: 'sp-drawer-project-btn' },
+      t('spProjectsSave'),
+    );
+    const cancel = el(
+      'button',
+      { type: 'button', class: 'sp-drawer-project-btn' },
+      t('spProjectsCancel'),
+    );
+    cancel.addEventListener('click', () => {
+      editor.remove();
+      detail.hidden = false;
+    });
+    save.addEventListener('click', () => {
+      if (!editName.value.trim()) {
+        editName.focus();
+        return;
+      }
+      save.disabled = true;
+      void deps
+        .updateProject(project.id, {
+          name: editName.value,
+          description: editDescription.value,
+          instructions: editInstructions.value,
+        })
+        .then(async (result) => {
+          if (result.status === 'error') {
+            reportFailure(result);
+            return;
+          }
+          if (deps.getActiveProject()?.id === project.id) {
+            deps.setActiveProject({ id: project.id, name: result.project.name });
+          }
+          if (await refresh()) setStatus(t('spProjectsSaved'));
+        })
+        .finally(() => {
+          save.disabled = false;
+        });
+    });
+    actions.append(save, cancel);
+    editor.append(editName, editDescription, editInstructions, actions);
+    return editor;
+  }
+
   function buildDetail(project: ManagedCloudProject): HTMLElement {
     const detail = el('div', { class: 'sp-drawer-project-detail' });
-    const described = project.description?.trim() || project.instructions?.trim();
+    const description = project.description?.trim();
+    if (description)
+      detail.appendChild(el('div', { class: 'sp-drawer-project-text' }, description));
     detail.appendChild(
-      el('div', { class: 'sp-drawer-project-text' }, described || t('spProjectsNoInstructions')),
+      el(
+        'div',
+        { class: 'sp-drawer-project-meta' },
+        `${formatChatCount(project)} · ${tPlural('spProjectsFileCount', project.knowledgeFileCount ?? 0)}`,
+      ),
+    );
+    detail.appendChild(
+      el('div', { class: 'sp-drawer-project-subtitle' }, t('spProjectsInstructions')),
+    );
+    detail.appendChild(
+      el(
+        'div',
+        { class: 'sp-drawer-project-text' },
+        project.instructions?.trim() || t('spProjectsNoInstructions'),
+      ),
     );
     detail.appendChild(buildConversationList(project.id));
 
@@ -376,6 +486,17 @@ export function buildProjectsDrawerSection(
     detail.appendChild(warning);
 
     const actions = el('div', { class: 'sp-drawer-project-actions' });
+    const editBtn = el(
+      'button',
+      { type: 'button', class: 'sp-drawer-project-btn' },
+      t('spProjectsEdit'),
+    );
+    editBtn.addEventListener('click', () => {
+      if (detail.nextElementSibling?.classList.contains('sp-drawer-project-edit')) return;
+      detail.hidden = true;
+      detail.after(buildEditForm(project, detail));
+    });
+    actions.appendChild(editBtn);
     const active = deps.getActiveProject();
     const isActive = active?.id === project.id;
     const useBtn = el(

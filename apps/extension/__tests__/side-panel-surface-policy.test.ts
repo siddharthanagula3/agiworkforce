@@ -51,8 +51,8 @@ describe('Chrome side-panel surface ownership', () => {
     expect(sidePanelSource).toContain('Chrome does not let extensions read or automate this page.');
   });
 
-  it('cancels active cloud work before owner, new-chat, and current-delete transitions', () => {
-    expect(sidePanelSource.match(/cancelCurrentManagedStream\(false\)/g)).toHaveLength(3);
+  it('cancels active cloud work before owner, new-chat, temporary-end and current-delete transitions', () => {
+    expect(sidePanelSource.match(/cancelCurrentManagedStream\(false\)/g)).toHaveLength(4);
     expect(sidePanelSource).toContain('requestStreamCancellation(streamId)');
   });
 
