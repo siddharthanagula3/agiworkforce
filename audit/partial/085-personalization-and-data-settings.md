@@ -146,15 +146,14 @@ Code: `apps/cli/src/lib.rs:428-430`, `apps/cli/src/lib.rs:3001-3006`
 
 - Done when: The user can list archived chats, restore them, and delete them.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | agi session archive/unarchive work on local sessions, but archived sessions cannot be listed (agi session list shows active only) and account archived chats are not reachable from the CLI. | ui |
 | vscode | partial | Developer sessions can be archived, but the list excludes archived sessions and there is no command to view or restore them. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/cli/src/lib.rs:1255-1258`, `apps/cli/src/lib.rs:2847-2867`, `apps/cli/src/lib.rs:2702-2705`, `apps/extension-vscode/src/core/commandSetup.ts:1168-1182`
+Code: `apps/extension-vscode/src/core/commandSetup.ts:1168-1182`, `apps/extension-vscode/src/features/trees/conversationTreeProvider.ts:108-114`
 
 ## S85.18: Delete all chats.
 
@@ -201,15 +200,12 @@ Code: `apps/cli/src/repl/slash_commands.rs:149-151`
 
 - Done when: The user can import memories exported from another assistant and they become saved memories.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | `agi migrate claude` copies Claude Code's ~/.claude/CLAUDE.md into the CLI's global memory file, but the CLI cannot import another assistant's memory export into account memory. | ui, handler |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:3849-3856`, `apps/cli/src/ecosystem.rs:566-571`
 
 ## S85.23: Clear local storage.
 

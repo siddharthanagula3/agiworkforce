@@ -17,7 +17,6 @@ nothing is left.
 | desktop | partial | Same as web: only a raw source textarea (S27.02 missing); no document editor. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | The document leaves chat only as a file (`agi artifacts show --out` or an agent file write) to edit in an outside editor; nothing reads edits back as a version (S26.15 missing). | ui |
-| vscode | partial | Artifacts open read-only; 'Save Artifact into Workspace' makes an unlinked file copy editable in VS Code, with no save-back as a version (S26.15 missing). | ui |
 
 Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1340-1356`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1863-1872`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:488-496`, `apps/cli/src/lib.rs:1034-1043`
 
@@ -143,7 +142,6 @@ Code: `apps/web/app/api/github/webhook/route.ts:215-238`
 | desktop | partial | Local sessions now run the CLI bundled with the desktop app (partials/desktop-cli). Still open: a design must be downloaded and referenced by hand in a local session; there is no design-to-code handoff (S32.28). | ui |
 | mobile | partial | Phone can only steer an existing desktop session (S67.06 partial) and saves design source as a text file (S32.28 partial). | ui |
 | cli | partial | `agi artifacts show --out` writes the design source into the repo and the agent can implement it, but there is no spec/inspect handoff and no Figma import (S32.28 partial, S32.30 missing). | ui |
-| vscode | partial | 'Save Artifact into Workspace' copies the design source into the folder for the agent; no spec handoff (S32.28 partial). | ui |
 
 Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1220-1232`, `apps/desktop/electron/runtime/developerSessionService.ts:160-160`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:426-436`, `apps/cli/src/lib.rs:1034-1043`
 
@@ -196,7 +194,7 @@ Code: `apps/mobile/src/features/companion/components/DispatchTaskComposer.tsx:40
 ## S110.22: Local work → explicit cloud handoff.
 
 - Done when: The user explicitly hands a local coding session (history, repo state, pending work) to cloud execution and it continues in a cloud session.
-- Wave: 3
+- Wave: 2
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -204,9 +202,9 @@ Code: `apps/mobile/src/features/companion/components/DispatchTaskComposer.tsx:40
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | /continue-with-cloud only moves the conversation to the managed cloud model while tools still run locally; the app-server's cloud handoff record (S99.30) has no client that issues it and no cloud importer, and web cloud Code is flag-off. | handler |
-| vscode | partial | The extension issues only local handoffs (handOffThread(..., 'local')); nothing moves a session to cloud execution and the cloud side has no importer. | ui, handler |
+| vscode | partial | Continue in the Cloud moves work to a cloud AGI Code session after a review (835ae2a5d). Needs AGI_E2B_EXECUTION on in production. | flag-off |
 
-Code: `apps/cli/src/claude_parity.rs:169-179`, `apps/extension-vscode/src/core/commandSetup.ts:458-494`
+Code: `apps/cli/src/claude_parity.rs:169-179`, `apps/extension-vscode/src/features/cloud-tasks/continueInCloud.ts:87-87`
 
 ## S110.23: Cloud result → local repository application.
 
@@ -218,9 +216,9 @@ Code: `apps/cli/src/claude_parity.rs:169-179`, `apps/extension-vscode/src/core/c
 | web | partial | Cloud sessions can commit, push a branch or open a PR for the user to pull by hand; nothing hands the result to a local client, and cloud sessions need AGI_E2B_EXECUTION=1 (ships 0). | flag-off, handler |
 | desktop | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | Pull Cloud Task Into Workspace is registered but hidden (commandPalette when:false) and needs a task handoff argument nothing passes; the cloud side (web Code) is also flag-off. | mount, flag-off |
+| vscode | partial | A cloud session opened from Sessions brings its branch into the workspace through the guarded pull command, which now has a caller (b432ccd73). Cloud sessions need AGI_E2B_EXECUTION on in production. | flag-off |
 
-Code: `apps/web/features/code/components/CodeChangesPanel.tsx:281-285`, `apps/extension-vscode/src/extension.ts:138-149`
+Code: `apps/web/features/code/components/CodeChangesPanel.tsx:281-285`, `apps/extension-vscode/src/features/cloud-tasks/cloudCodeSessions.ts:305-305`
 
 ## S110.24: Existing notebook → main assistant context.
 
@@ -232,10 +230,9 @@ Code: `apps/web/features/code/components/CodeChangesPanel.tsx:281-285`, `apps/ex
 | --- | --- | --- | --- |
 | mobile | partial | The mobile project selector applies only the project instructions; the turn carries no conversation_id, so the project sources never reach the answer (S37.14, S37.37). | handler |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | "Use in this chat" prepends only the project name and instructions; project sources are never sent and the local CLI runtime has no project retrieval. | handler |
 | chrome | partial | Project binding applies from the turn after the chat is synced; the first turn of a new chat is answered without the project context (S37.37 contest, S37.14 partial). | handler |
 
-Code: `apps/mobile/src/features/chat/components/ProjectSelectorBar.tsx:38-38`, `apps/mobile/stores/chat/chatExecutionStore.ts:1348-1348`, `apps/extension-vscode/src/features/projects/projectActions.ts:111-111`, `apps/extension-vscode/src/features/projects/activeProject.ts:51-51`
+Code: `apps/mobile/src/features/chat/components/ProjectSelectorBar.tsx:38-38`, `apps/mobile/stores/chat/chatExecutionStore.ts:1348-1348`, `apps/extension/src/side_panel.ts:669-682`, `apps/extension/src/features/cloud-bridge/freeTrialClient.ts:846-846`
 
 ## S110.25: Main conversation → persistent notebook sources.
 
@@ -257,18 +254,17 @@ Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1542-1542
 
 - Done when: When the user runs out of usage, the product offers an eligible alternative (named eligible model, reset wait, or purchase) that the user can take in one step and continue.
 - Wave: 2
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | At a limit the card shows the reset time and upgrade, but never names a one-click eligible model (S82.26), and upgrade and extra-usage checkout are behind the beta_redemptions waitlist gate (S82.29). | ui, flag-off |
 | desktop | partial | At a limit the card shows the reset time and upgrade, but never names a one-click eligible model (S82.26), and upgrade and extra-usage checkout are behind the beta_redemptions waitlist gate (S82.29). | ui, flag-off |
 | mobile | partial | Mobile paywall shows only the server reason: no eligible model, no reset time in the sheet (S82.26/S82.27), and IAP purchase is off (MOBILE_IAP_ENABLED) plus waitlist-gated (S82.29). | ui, flag-off |
-| cli | partial | CLI reports plan limits as provider rate limits with a generic --fallback-model hint; no eligible plan model or reset time is offered (S82.26/S82.27). | ui |
-| vscode | partial | VS Code shows the reset time and Upgrade/Add credits links, but never proposes an eligible model (S82.26); purchases go to waitlist-gated web checkout. | ui |
 | chrome | partial | Chrome silently falls back to Auto and prints the period-end reset rather than the rolling-window reset (S82.26, S82.27 fv downgrade); no eligible model is proposed. | ui |
 | api | partial | Limit errors carry a recovery hint but no eligible model id and no reset timestamp (S82.26, S82.27). | ui |
 
-Code: `apps/web/features/chat/components/InlinePaywallCard.tsx:430-434`, `packages/contracts/types/src/billing-catalog.ts:515-524`, `apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx:77-88`, `apps/cli/src/errors.rs:530-541`
+Code: `apps/web/features/chat/components/InlinePaywallCard.tsx:430-434`, `packages/contracts/types/src/billing-catalog.ts:515-524`, `apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx:77-88`, `apps/extension/src/features/cloud-bridge/managedModelPicker.ts:94-106`
 
 ## S110.27: Disconnected integration → reconnect and resume.
 
@@ -281,7 +277,6 @@ Code: `apps/web/features/chat/components/InlinePaywallCard.tsx:430-434`, `packag
 | desktop | partial | Reconnect appears only as the in-chat card after a tool call fails (Settings offers only Disconnect, S55.20); after the OAuth return nothing resumes the interrupted turn or run: the user presses Retry, which re-runs from the last message. | ui, states |
 | mobile | partial | Mobile reconnects from Settings > Connectors, but chat never recognises a connector-authorization-required result and nothing resumes; the user must regenerate by hand, and paused runs cannot be resumed (S60.22 missing). | ui, states |
 | cli | partial | `agi mcp login` re-authorizes user-registered MCP servers, but account (web) connectors cannot be reauthorized from the CLI and nothing resumes the interrupted turn; the user re-prompts or reopens with /resume. | states |
-| vscode | partial | Needs-reauthorization rows only open web Settings; back in VS Code the user must use Retry Last Message, and nothing resumes the interrupted turn. | ui, states |
 | chrome | partial | Chrome only links out to agiworkforce.com/connectors to reconnect; its Retry resends the prompt text only (drops attachments and page context) and nothing resumes the turn. | ui, states |
 
 Code: `packages/ui/unified-chat/src/components/ConnectorConnectCard.tsx:128-146`, `apps/web/features/chat/components/messages/MessageBubble.tsx:900-903`, `apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx:318-330`

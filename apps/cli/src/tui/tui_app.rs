@@ -4027,6 +4027,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 arg.split_whitespace().next().unwrap_or(""),
                 "" | "list" | "ls" | "show" | "view" | "inspect" | "path" | "where"
                     | "new" | "create" | "init" | "validate" | "doctor" | "check"
+                    | "delete" | "remove" | "rm" | "rename" | "set"
                     | "help" | "-h" | "--help"
             );
             if arg.is_empty() {

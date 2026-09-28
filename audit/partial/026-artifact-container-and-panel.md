@@ -235,15 +235,14 @@ Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:421-435`,
 
 - Done when: A copy control puts the artifact's own content on the clipboard and confirms it.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | No clipboard copy for a saved artifact: `agi artifacts show` prints it for piping, and TUI `/copy code` copies only the last reply's code block. | ui |
 | vscode | partial | No Copy command on an artifact; its content can only be copied by selecting it in the read-only editor it opens in. | ui |
 | chrome | partial | Copy puts the whole assistant message on the clipboard, not just the artifact: readChromeArtifactSource returns the message content without deriving the artifact block (VS Code derives it with deriveArtifacts). | handler |
 
-Code: `apps/cli/src/tui/tui_app.rs:3492-3508`, `apps/cli/src/cloud/artifacts.rs:488-494`, `apps/extension-vscode/src/features/artifacts/artifactActions.ts:99-102`, `apps/extension-vscode/src/features/artifacts/artifactActions.ts:32-45`
+Code: `apps/extension-vscode/src/features/artifacts/artifactActions.ts:99-102`, `apps/extension-vscode/src/features/artifacts/artifactActions.ts:32-45`, `apps/extension/src/features/side-panel/artifactsDrawer.ts:198-221`, `apps/extension/src/features/cloud-bridge/artifactsClient.ts:197-203`
 
 ## S26.31: Share controls.
 
@@ -262,13 +261,13 @@ Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:405-418`,
 
 - Done when: Wherever an artifact is shown, the user can see whether it is private, published to anyone, or shared with the workspace.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | The viewer shows the link and audience only right after publishing in that session; reopening a published artifact shows no published state, and Settings lists published pages without their audience. | states |
 | desktop | partial | Same as web (hosted): published state is only shown right after a publish in that session. | states |
 | mobile | partial | The public link appears only right after publishing in the open viewer (component state); reopening shows no published state and the audience is never shown. | states |
-| cli | partial | Visibility is printed only once when publishing; `agi artifacts list` does not mark published artifacts and render_published has no command that calls it. | ui |
 | vscode | partial | The tree marks an artifact "published" and says it "has a public link" even when its audience is the workspace only; the published row's visibility is ignored. | states |
 
 Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:247-251`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:466-471`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1704-1722`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1675-1680`
@@ -303,15 +302,12 @@ Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1076-1081
 
 - Done when: From an artifact seen outside its chat (gallery, list, library), the user can jump to the conversation that produced it.
 - Wave: 3
-- Already works on: web, desktop, chrome
+- Already works on: web, desktop, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | `agi artifacts open` goes to the conversation only while the artifact is unpublished; a published one opens its public page and no command always opens the source chat. | ui |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:1955-1975`, `apps/cli/src/cloud/artifacts.rs:450-460`
 
 ## S26.39: Live updates from ongoing work.
 
