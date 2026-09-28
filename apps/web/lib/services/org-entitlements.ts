@@ -68,12 +68,8 @@ export async function resolveOrganizationEntitlementPlan(
   organizationId: string,
 ): Promise<BillingPlanTier> {
   const db: DatabaseAdapter = getNeonDb();
-  const [billing] = await db.query<{
-    user_id: string | null;
-    plan_tier: string | null;
-    status: string | null;
-  }>(
-    `select s.user_id, s.plan_tier, s.status
+  const [billing] = await db.query<{ user_id: string | null }>(
+    `select s.user_id
        from public.organizations o
        left join public.subscriptions s
          on (

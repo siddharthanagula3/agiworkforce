@@ -18,6 +18,7 @@ pub mod personalization;
 pub mod projects;
 pub mod referrals;
 pub mod state;
+pub mod workspace_policy;
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};

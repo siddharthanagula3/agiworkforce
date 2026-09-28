@@ -327,13 +327,52 @@ pub async fn format_model_list_with_discovery(config: &crate::config::CliConfig)
             if models.is_empty() {
                 out.push_str("  No models available to this CLI account tier.\n");
             } else {
-                for model in models {
+                for model in &models {
                     out.push_str(&format!(
                         "  {:<34} {:>6} ctx {:>5} out\n",
                         model.id,
                         format_context_size(model.context_window),
                         format_context_size(model.max_output_tokens),
                     ));
+                }
+            }
+            if !catalog.temporarily_unavailable.is_empty() {
+                out.push_str(
+                    "  Temporarily unavailable, on your plan but not answering right now; try again later:\n",
+                );
+                for id in &catalog.temporarily_unavailable {
+                    out.push_str(&format!("    {id}\n"));
+                }
+            }
+            let tier = crate::models::gateway_models::catalog_user_tier(&catalog);
+            let (locked, withheld): (Vec<String>, Vec<String>) =
+                crate::model_catalog::managed_catalog_models()
+                    .into_iter()
+                    .filter(|id| {
+                        !catalog.models.iter().any(|remote| &remote.id == id)
+                            && !models.iter().any(|model| &model.id == id)
+                            && !catalog
+                                .temporarily_unavailable
+                                .iter()
+                                .any(|down| down == id)
+                    })
+                    .partition(|id| !crate::model_catalog::can_access_model_for_tier(id, &tier));
+            if !locked.is_empty() {
+                out.push_str(&format!(
+                    "  Locked on your {} plan (`agi plans` shows what each plan includes):\n",
+                    catalog.user_tier
+                ));
+                for id in &locked {
+                    match crate::model_catalog::managed_plan_needed(id) {
+                        Some(plan) => out.push_str(&format!("    {id:<32} needs {plan}\n")),
+                        None => out.push_str(&format!("    {id}\n")),
+                    }
+                }
+            }
+            if !withheld.is_empty() {
+                out.push_str("  On your plan but not offered by this deployment right now:\n");
+                for id in &withheld {
+                    out.push_str(&format!("    {id}\n"));
                 }
             }
         }
