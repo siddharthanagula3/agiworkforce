@@ -4955,6 +4955,7 @@ async function handleChatMessage(
         systemPrompt,
         conversationHistory: message.conversationHistory,
         attachments: message.attachments,
+        fileAttachments: message.fileAttachments,
         extendedThinking: message.extendedThinking,
         currentModelKey: message.currentModelKey,
         previousTaskType: message.previousTaskType,

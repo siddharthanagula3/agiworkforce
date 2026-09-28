@@ -182,13 +182,17 @@ export function applyCanonicalAgentEvent(
   return assistant;
 }
 
-export function resolveComposerPrompt(text: string, attachmentCount: number): string | null {
+export function resolveComposerPrompt(
+  text: string,
+  attachmentCount: number,
+  attachmentKind: 'image' | 'file' = 'image',
+): string | null {
   const trimmed = text.trim();
   if (trimmed) return trimmed;
   if (attachmentCount <= 0) return null;
   return attachmentCount === 1
-    ? 'Please analyze the attached image.'
-    : 'Please analyze the attached images.';
+    ? `Please analyze the attached ${attachmentKind}.`
+    : `Please analyze the attached ${attachmentKind}s.`;
 }
 
 export function trimChatMessages(messages: SidePanelChatMessage[], maximum: number): number {

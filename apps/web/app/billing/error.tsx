@@ -15,7 +15,7 @@ export default function BillingError({
   }, [error]);
   return (
     <div className="flex min-h-[60vh] flex-col items-center justify-center p-8 text-center">
-      <h2 className="mb-4 text-2xl font-semibold">Something went wrong</h2>
+      <h2 className="mb-4 text-h1">Something went wrong</h2>
       <p className="mb-6 max-w-md text-muted-foreground">
         We encountered an error loading your billing information. Please try again or contact
         support if the issue persists.
