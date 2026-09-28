@@ -29,14 +29,9 @@ Code: `apps/web/features/chat/components/Composer/ModelCatalogue.tsx:64-64`, `ap
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | detailValues (low/high/original) is recorded for three models but nothing reads it; images are always sent without a detail level, so high-resolution inspection is never requested. | handler, ui |
-| desktop | partial | detailValues (low/high/original) is recorded for three models but nothing reads it; images are always sent without a detail level, so high-resolution inspection is never requested. | handler, ui |
-| mobile | partial | detailValues (low/high/original) is recorded for three models but nothing reads it; images are always sent without a detail level, so high-resolution inspection is never requested. | handler, ui |
-| cli | partial | detailValues (low/high/original) is recorded for three models but nothing reads it; images are always sent without a detail level, so high-resolution inspection is never requested. | handler, ui |
-| chrome | partial | detailValues (low/high/original) is recorded for three models but nothing reads it; images are always sent without a detail level, so high-resolution inspection is never requested. | handler, ui |
 | api | partial | detailValues (low/high/original) is recorded for three models but nothing reads it; images are always sent without a detail level, so high-resolution inspection is never requested. | handler, ui |
 
-Code: `apps/web/features/chat/components/Composer/ComposerFooter.tsx:1379-1383`, `apps/web/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration.ts:440-445`, `packages/contracts/types/src/model-catalog.ts:676-676`, `apps/mobile/src/features/model-picker/components/ModelRow.tsx:166-170`
+Code: `apps/web/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration.ts:440-445`
 
 ## S76.06: Native PDF/document input.
 
@@ -58,6 +53,7 @@ Code: `apps/web/features/chat/components/Composer/ComposerFooter.tsx:1379-1383`,
 
 - Done when: The registry records audio input per model and the product uses it to show or gate audio understanding.
 - Wave: 3
+- Already works on: api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -67,9 +63,8 @@ Code: `apps/web/features/chat/components/Composer/ComposerFooter.tsx:1379-1383`,
 | cli | partial | CLI loads supports_audio_input but only a reserved, unwired detail view shows it; nothing gates on it. | ui, handler |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-| api | partial | Public /v1/models exposes only tier, context and output limits, not audio input. | api |
 
-Code: `apps/web/features/chat/components/Composer/ModelCatalogue.tsx:88-91`, `apps/cli/src/provider.rs:16-19`, `apps/web/app/api/llm/v1/models/route.ts:64-74`
+Code: `apps/web/features/chat/components/Composer/ModelCatalogue.tsx:88-91`, `apps/cli/src/provider.rs:16-19`
 
 ## S76.08: Audio transcription.
 
@@ -124,23 +119,6 @@ Code: `apps/web/features/chat/components/Voice/VoiceModeSurface.tsx:82-85`, `app
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-## S76.12: Video understanding.
-
-- Done when: The registry records video input per model and the product uses it to show or route video understanding.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | videoInput is recorded but only the admin route-economics panel reads it; chat never shows it to users or routes video attachments by it. | handler, ui |
-| desktop | partial | videoInput is recorded but only the admin route-economics panel reads it; chat never shows it to users or routes video attachments by it. | handler, ui |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-| api | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/admin/services/route-economics.ts:211-211`
 
 ## S76.14: Image generation.
 
@@ -215,17 +193,6 @@ Code: `apps/web/features/admin/services/route-economics.ts:211-211`
 
 Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:386-389`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:3628-3630`, `packages/ai/model-registry/catalog/routing-policies.json:358-359`
 
-## S76.25: Schema-constrained output.
-
-- Done when: The registry records schema-constrained output support and schema requests are honoured on supporting models.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| api | partial | response_format json_schema is refused ('not enforced on this endpoint'); the registry toolSchemaSupport flag is never read. | handler |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:392-396`
-
 ## S76.26: Reasoning-effort controls.
 
 - Done when: The registry records per-model reasoning-effort levels and each surface offers and sends only those levels.
@@ -242,24 +209,22 @@ Code: `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:67
 
 - Done when: The registry records each model context window; the product shows it and trims or refuses over-long requests accordingly.
 - Wave: 3
-- Already works on: web, desktop, cli, vscode, api
+- Already works on: web, desktop, mobile, cli, vscode, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The cited ui anchor {model.detailLabel} renders "Sign in required" / "Upgrade required" / "<provider> provider" (service.ts:237-241); contextWindow is carried on the row but never rendered (its only readers are the memory budgeter). Server trimming applies, so partial with miss ui; remaining: show the context window in the model row. |  |
 | chrome | partial | The criterion says the product shows the context window and trims by it. The cited chrome ui lines (side_panel.ts renderModelDropdown) only render picker options built from name, provider, capability and bestFor (managedModelPicker.ts:53-62); no context window is shown anywhere in the extension. Server trimming (context-window.ts:170) still applies, so partial with miss ui; remaining: show the model context window in the picker. |  |
 
-Code: `apps/mobile/src/features/model-picker/components/ModelRow.tsx:166-170`, `apps/mobile/services/streaming.ts:167-167`, `apps/web/app/api/llm/v1/chat/completions/lib/context-window.ts:170-186`, `packages/ai/routing/src/auto.ts:1354-1359`
+Code: `apps/extension/src/side_panel.ts:6168-6173`, `apps/extension/src/features/cloud-bridge/freeTrialClient.ts:55-55`, `apps/web/app/api/llm/v1/chat/completions/lib/context-window.ts:170-186`, `packages/ai/routing/src/auto.ts:1354-1359`
 
 ## S76.29: Output-token limit.
 
 - Done when: The registry records each model output-token limit; requests are capped by it and it is shown.
 - Wave: 3
-- Already works on: web, desktop, cli, vscode, api
+- Already works on: web, desktop, mobile, cli, vscode, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | maxOutput is carried on the row but never rendered; detailLabel is a sign-in/upgrade/provider string. Server cap applies. Partial with miss ui; remaining: show the output ceiling. |  |
 | chrome | partial | Output-token limit is never shown in the extension (picker options carry no maxOutput); the server cap (request-processor.ts:4034) applies. Partial with miss ui; remaining: show the output ceiling. |  |
 
-Code: `apps/mobile/src/features/model-picker/components/ModelRow.tsx:166-170`, `apps/mobile/services/streaming.ts:167-167`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4034-4036`, `apps/extension/src/side_panel.ts:6168-6173`
+Code: `apps/extension/src/side_panel.ts:6168-6173`, `apps/extension/src/features/cloud-bridge/freeTrialClient.ts:55-55`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4034-4036`

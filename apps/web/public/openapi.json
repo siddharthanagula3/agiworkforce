@@ -755,7 +755,7 @@
           },
           "connector_tools_enabled": {
             "type": "boolean",
-            "description": "A request made with an API key can use the connectors connected to the account. The model sees their tools by name and loads a tool's schema on demand with `load_connector_tools`. A connector call that needs approval pauses the run, and `POST /llm/v1/chat/completions/approve` resumes it. `false` offers no connector tools for this turn."
+            "description": "A request made with an API key can use the connectors connected to the account. The model sees their tools by name and loads a tool's schema on demand with `load_connector_tools`, by exact name or by a keyword query that returns the best matches with their descriptions. A connector call that needs approval pauses the run, and `POST /llm/v1/chat/completions/approve` resumes it. `false` offers no connector tools for this turn."
           },
           "disabled_connector_ids": {
             "type": "array",
