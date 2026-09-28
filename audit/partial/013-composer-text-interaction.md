@@ -251,15 +251,14 @@ Code: `apps/web/features/connectors/components/ConnectorCapabilitiesPanel.tsx:13
 
 - Done when: Sources chosen for the next message (e.g. web search, connector resources, a page) are shown as chips before sending.
 - Wave: 3
-- Already works on: web, desktop, vscode
+- Already works on: web, desktop, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Show chosen sources as chips; the composer only shows tool status chips (Research, Code), not which sources a message will use. | ui |
 | cli | missing | Not built on this surface. |  |
-| chrome | partial | Show the attached page as a chip in the composer; today it appears only as a checked item inside the + menu. | ui |
 
-Code: `apps/mobile/src/features/chat/components/ChatInput.tsx:210-231`, `apps/extension/src/side_panel.ts:5099-5114`
+Code: `apps/mobile/src/features/chat/components/ChatInput.tsx:210-231`
 
 ## S13.33: Selected-tool chips.
 

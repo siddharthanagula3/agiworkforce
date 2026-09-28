@@ -268,7 +268,7 @@ export const ManagedCloudScheduleRecentRunListResponseSchema = z.object({
   pagination: ManagedCloudSchedulePaginationSchema,
 });
 
-export const MANAGED_CLOUD_SCHEDULE_RECENT_RUNS_PATH = `${MANAGED_CLOUD_SCHEDULES_PATH}/runs`;
+export const MANAGED_CLOUD_SCHEDULE_RECENT_RUNS_PATH = '/api/schedules/runs';
 
 export const ManagedCloudScheduleRunResponseSchema = z.object({
   run: ManagedCloudScheduleRunSchema,

@@ -1,7 +1,8 @@
 import 'server-only';
 
 import { z } from 'zod';
-import { extractJsonObject } from './json-object-mode';
+import type { ChatResponseFormat } from '@agiworkforce/types';
+import { extractJsonObject, wantsJsonObject } from './json-object-mode';
 import { isBlockedFinishReason, isMaxOutputFinishReason } from './turn-completeness';
 
 const MAX_SCHEMA_CHARS = 32_000;
@@ -52,6 +53,20 @@ export type JsonSchemaResponseFormat = z.infer<typeof JsonSchemaResponseFormatSc
 
 export function wantsJsonSchema(responseFormat: { type?: string } | undefined): boolean {
   return responseFormat?.type === 'json_schema';
+}
+
+export function requestedResponseFormat(
+  responseFormat: { type?: string; json_schema?: JsonSchemaResponseFormat } | undefined,
+): ChatResponseFormat | undefined {
+  if (wantsJsonObject(responseFormat)) return { type: 'json_object' };
+  const format = responseFormat?.json_schema;
+  if (!wantsJsonSchema(responseFormat) || !format) return undefined;
+  return {
+    type: 'json_schema',
+    name: format.name,
+    schema: format.schema,
+    strict: format.strict === true,
+  };
 }
 
 function schemaProblemAt(schema: unknown, path: string, depth: number): string | null {

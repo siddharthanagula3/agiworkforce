@@ -23,15 +23,14 @@ Code: `apps/extension/src/features/side-panel/cloudRunsPanel.ts:344-348`, `apps/
 
 - Done when: Before the model answers, the surface shows it is preparing (reading context/attachments/memory).
 - Wave: 3
-- Already works on: web, desktop, vscode
+- Already works on: web, desktop, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Only a generic spinner ('Generating response') shows before output; no distinct preparing-context state. | states |
 | cli | partial | The spinner says 'Thinking…' from the start; context preparation (memory, files) is not shown as its own state. | states |
-| chrome | partial | Only three animated dots show before output; no distinct preparing state or label. | states |
 
-Code: `apps/mobile/src/features/chat/components/StreamingIndicator.tsx:4-18`, `apps/cli/src/tui/tui_app.rs:1272-1276`, `apps/extension/src/side_panel.ts:4443-4454`
+Code: `apps/mobile/src/features/chat/components/StreamingIndicator.tsx:4-18`, `apps/cli/src/tui/tui_app.rs:1272-1276`
 
 ## S19.08: Waiting for user input.
 
@@ -43,9 +42,9 @@ Code: `apps/mobile/src/features/chat/components/StreamingIndicator.tsx:4-18`, `a
 | --- | --- | --- | --- |
 | mobile | partial | Only Deep Research asks for plan confirmation mid-task (research card); other input requests are not shown. | ui |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Input requests are tracked on the run and the Work runs panel labels it 'Waiting for input', but the chat has no way to answer it. | ui |
+| chrome | partial | The chat now says "Needs your input" and the step names the connector request, but Chrome cannot render the connector form to answer it. The form model lives in apps/web/features/connectors/lib/connector-input-request.ts; it needs to move to a shared package before the side panel can render and resume it. | ui |
 
-Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:777-790`, `apps/mobile/src/features/chat/components/MessageList.tsx:101-102`, `apps/extension/src/features/side-panel/cloudRunsPanel.ts:650-656`, `apps/extension/src/features/side-panel/chat-state.ts:81-81`
+Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:777-790`, `apps/mobile/src/features/chat/components/MessageList.tsx:101-102`, `apps/extension/src/features/side-panel/bubbles.ts:830-830`, `apps/extension/src/features/side-panel/chat-state.ts:254-254`
 
 ## S19.11: Streaming structured output.
 
@@ -105,20 +104,19 @@ Code: `apps/web/features/chat/components/messages/MessageBubble.tsx:2748-2755`, 
 
 - Done when: A run that finished with some steps failed is shown as partially completed, distinct from success and failure.
 - Wave: 3
-- Already works on: web, desktop, cli, vscode
+- Already works on: web, desktop, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | A run that finished with errors (status 'partial') falls through to 'Working…', so it looks still running; add a 'Finished with errors' label. | states |
-| chrome | partial | A run that finished with errors (status 'partial') falls through to 'Working for …', so it looks still running; add a 'Finished with errors' label. | states |
 
-Code: `apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx:82-97`, `apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx:90-92`, `apps/extension/src/features/side-panel/bubbles.ts:610-621`
+Code: `apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx:82-97`, `apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx:90-92`
 
 ## S19.17: Cancel requested.
 
 - Done when: After the user presses stop, the surface shows the stop is in progress until it takes effect.
 - Wave: 3
-- Already works on: api
+- Already works on: vscode, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -126,8 +124,6 @@ Code: `apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx:82-97`
 | desktop | partial | Same as web (hosted): Stop aborts at once; no 'Stopping…' state while the server winds down. | states |
 | mobile | partial | Only video generation shows 'stopping'; stopping a chat turn has no in-progress state. | states |
 | cli | partial | Esc/Ctrl-C cancels immediately and prints '⊘ Stopped'; there is no stopping-in-progress state. | states |
-| vscode | partial | The stop request is tracked internally (_cancelRequested) until the runtime interrupts, but the sidebar shows no 'Stopping…' state. | states |
-| chrome | partial | Stop cancels the stream immediately; there is no stopping-in-progress state in the chat. | states |
 
 Code: `apps/web/lib/hooks/useChatStream.ts:2381-2388`, `apps/web/features/chat/components/messages/ChatMessageList.tsx:1758-1763`, `apps/mobile/src/features/chat/components/MessageBubble.tsx:894-902`, `apps/mobile/stores/chat/chatExecutionStore.ts:2828-2835`
 
@@ -147,6 +143,7 @@ Code: `apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx:92-92`
 
 - Done when: When the connection drops mid-turn, the surface shows it is reconnecting and resumes when possible.
 - Wave: 3
+- Already works on: chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -155,7 +152,6 @@ Code: `apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx:92-92`
 | mobile | partial | Sends made offline are queued and marked 'queued'; a stream that drops mid-turn ends as a failure instead of reconnecting. | states |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | When the background connection drops, the panel silently re-attaches to the cloud run; no reconnecting state is shown. | states |
 
 Code: `apps/web/lib/hooks/useChatStream.ts:2235-2242`, `apps/web/lib/hooks/useChatStream.ts:1027-1027`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:591-591`, `apps/mobile/src/features/chat/components/MessageBubble.tsx:684-700`
 
@@ -177,27 +173,25 @@ Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:777-790`, `app
 
 - Done when: When a step needs a device that is offline (e.g. the user's desktop or local runtime), the turn shows it is waiting for / cannot reach that device.
 - Wave: 3
-- Already works on: web, desktop, vscode, api
+- Already works on: web, desktop, vscode, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | A run waiting for the user's desktop (status 'awaiting-device') falls through to 'Working…'; add a 'Waiting for your desktop' state. | states |
-| chrome | partial | A run waiting for the user's desktop (status 'awaiting-device') falls through to 'Working for …'; add a waiting-for-device state. | states |
 
-Code: `apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx:82-97`, `apps/extension/src/features/side-panel/bubbles.ts:610-621`
+Code: `apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx:82-97`
 
 ## S19.26: Failed with recoverable input.
 
 - Done when: A turn that fails because of the user's input (too long, bad attachment) explains what to change so the user can fix and resend.
 - Wave: 3
-- Already works on: web, desktop, cli, vscode, api
+- Already works on: web, desktop, cli, vscode, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Shows the gateway's failure text; only context length is warned about in advance (chip), with no input-specific recovery on the failed turn. | states |
-| chrome | partial | Shows the gateway's failure text in the bubble with Retry; no input-specific guidance (shorten, remove attachment). | states |
 
-Code: `apps/mobile/app/(app)/chat/[id].tsx:1458-1464`, `apps/mobile/src/features/chat/utils/messageStreamError.ts:160-172`, `apps/extension/src/features/side-panel/chat-state.ts:233-237`, `apps/extension/src/features/side-panel/bubbles.ts:147-155`
+Code: `apps/mobile/app/(app)/chat/[id].tsx:1458-1464`, `apps/mobile/src/features/chat/utils/messageStreamError.ts:160-172`
 
 ## S19.29: Background work continuing after UI closure.
 
