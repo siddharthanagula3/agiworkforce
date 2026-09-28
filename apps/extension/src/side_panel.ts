@@ -899,18 +899,29 @@ function applyRoutingContinuation(routing: ChatChunk['routing']): boolean {
   return changed;
 }
 
+function previousAnswerModel(streamId: string): string | undefined {
+  const index = _ctx.messages.findIndex((message) => message.id === streamId);
+  const earlier = index < 0 ? _ctx.messages : _ctx.messages.slice(0, index);
+  return [...earlier].reverse().find((message) => message.role === 'assistant' && message.model)
+    ?.model;
+}
+
 function captureResolvedRoute(streamId: string, routing: ChatChunk['routing']): boolean {
   if (!routing) return false;
   const metadata = getModelMetadataById(routing.modelKey);
   if (!metadata) return false;
-  resolvedRouteByStreamId.set(streamId, {
+  const chosenByAuto = routing.reason !== 'explicit';
+  const movedFrom = chosenByAuto ? previousAnswerModel(streamId) : undefined;
+  const route: ResolvedRoute = {
     model: metadata.id,
     provider: metadata.provider,
-  });
+    ...(chosenByAuto ? { autoRouteReason: routing.reason } : {}),
+    ...(movedFrom && movedFrom !== metadata.id ? { movedFromModel: movedFrom } : {}),
+  };
+  resolvedRouteByStreamId.set(streamId, route);
   const assistant = _ctx.messages.find((message) => message.id === streamId);
   if (!assistant) return false;
-  assistant.model = metadata.id;
-  assistant.provider = metadata.provider;
+  stampResolvedRoute(streamId, assistant);
   return true;
 }
 
@@ -919,6 +930,10 @@ function stampResolvedRoute(streamId: string, assistant: ChatMessage): void {
   if (!route) return;
   assistant.model = route.model;
   assistant.provider = route.provider;
+  if (route.autoRouteReason) assistant.autoRouteReason = route.autoRouteReason;
+  else delete assistant.autoRouteReason;
+  if (route.movedFromModel) assistant.movedFromModel = route.movedFromModel;
+  else delete assistant.movedFromModel;
 }
 
 function managedOutboundEffortPayload(usePersistedSelection = false): { effort?: Effort } {
@@ -1054,7 +1069,14 @@ interface ComposerDocument {
 const pendingDocuments: ComposerDocument[] = [];
 let composerAttachmentIntakeCount = 0;
 const cloudRunsByStreamId = new Map<string, ManagedCloudAgentRunReference>();
-const resolvedRouteByStreamId = new Map<string, { model: string; provider: string }>();
+interface ResolvedRoute {
+  model: string;
+  provider: string;
+  autoRouteReason?: string;
+  movedFromModel?: string;
+}
+
+const resolvedRouteByStreamId = new Map<string, ResolvedRoute>();
 const quickModeByStreamId = new Map<string, boolean>();
 const ownerByStreamId = new Map<string, ManagedCloudOwner>();
 const assistantCloudIdByStreamId = new Map<string, string>();
@@ -1118,6 +1140,12 @@ function serializeMessagesForHistory() {
       : {}),
     ...(message.role === 'assistant' && message.model ? { model: message.model } : {}),
     ...(message.role === 'assistant' && message.provider ? { provider: message.provider } : {}),
+    ...(message.role === 'assistant' && message.autoRouteReason
+      ? { autoRouteReason: message.autoRouteReason }
+      : {}),
+    ...(message.role === 'assistant' && message.movedFromModel
+      ? { movedFromModel: message.movedFromModel }
+      : {}),
     ...(message.role === 'assistant' && message.generatedFiles
       ? { generatedFiles: message.generatedFiles }
       : {}),
@@ -1907,6 +1935,14 @@ function injectStyles(): void {
       color: var(--agi-ext-text-muted);
       font-size: var(--type-caption-size);
       line-height: var(--type-caption-height);
+    }
+    .sp-answer-route {
+      margin: 2px 0 0;
+      padding: 0 3px;
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      overflow-wrap: anywhere;
     }
     .sp-regenerate { position: relative; display: inline-flex; }
     .sp-regenerate__menu {
