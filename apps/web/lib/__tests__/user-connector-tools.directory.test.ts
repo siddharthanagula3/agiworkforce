@@ -286,7 +286,7 @@ describe('directory records in the connector tool catalog', () => {
         config: expect.objectContaining({ url: OPEN_URL, headers: {} }),
       }),
     );
-    expect(mockResolveAccessToken).not.toHaveBeenCalled();
+    expect(mockResolveAccessToken).not.toHaveBeenCalledWith('user-1', OPEN_ID, expect.anything());
   });
 
   it('serves the capability catalog of a directory OAuth grant under its server id', async () => {

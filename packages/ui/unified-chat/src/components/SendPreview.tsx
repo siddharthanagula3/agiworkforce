@@ -98,7 +98,7 @@ export function SendPreview({
             data-testid="send-preview-details"
             className={cn(
               'absolute bottom-full left-1/2 z-[var(--z-dropdown)] mb-2 w-72 max-w-[calc(100vw-2rem)] -translate-x-1/2',
-              'rounded-md border p-3 text-left shadow-xl backdrop-blur-xl',
+              'rounded-md border p-3 text-left shadow-e4 backdrop-blur-xl',
               'bg-[var(--chat-surface-overlay)]',
               accentClass,
             )}

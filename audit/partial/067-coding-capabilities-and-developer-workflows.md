@@ -263,16 +263,15 @@ Code: `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/web/lib/services
 
 - Done when: The agent reviews a pull request (fetches its diff) and posts or shows review findings.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | agi review --base reviews the local branch diff; nothing fetches a GitHub PR by number, and /pr-comments only sends a canned prompt. | handler |
 | vscode | partial | Code Review covers only the active file; no command fetches or reviews a pull request. | handler |
 | chrome | partial | On a GitHub PR page the in-page panel sends the visible page text with an explain/review/summary prompt; no diff fetch and nothing is posted back. | handler |
 
-Code: `apps/cli/src/lib.rs:743-752`, `apps/cli/src/review.rs:40-46`, `apps/extension-vscode/src/core/commandSetup.ts:985-997`, `apps/extension/src/features/content/in-page-panel/pageActions.ts:76-92`
+Code: `apps/extension-vscode/src/core/commandSetup.ts:985-997`, `apps/extension/src/features/content/in-page-panel/pageActions.ts:76-92`
 
 ## S67.22: Scan for security problems.
 

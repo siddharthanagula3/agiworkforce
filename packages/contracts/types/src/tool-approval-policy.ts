@@ -23,6 +23,7 @@ export const DEFAULT_TOOL_APPROVAL_PREFERENCES: ToolApprovalPreferences = {
 export const TOOL_APPROVAL_ACTION_LABELS = Object.freeze({
   allow: 'Allow',
   alwaysAllow: 'Always allow',
+  allowForChat: 'Allow for this chat',
   ask: 'Ask',
   deny: 'Deny',
   approve: 'Approve',
@@ -31,6 +32,9 @@ export const TOOL_APPROVAL_ACTION_LABELS = Object.freeze({
 });
 
 export type ToolApprovalActionVerb = keyof typeof TOOL_APPROVAL_ACTION_LABELS;
+
+export const TOOL_APPROVAL_HIGH_RISK_NOTICE =
+  'High risk. Check the request below before you allow it.';
 
 export interface ToolApprovalPolicyOption {
   policy: ToolApprovalPolicy;

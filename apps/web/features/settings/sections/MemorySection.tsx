@@ -13,6 +13,7 @@ import {
 } from '@/features/settings/components/ImportMemoryDialog';
 import { conversationHref } from '@/shared/components/layout/sidebar-session-actions';
 import { useCapabilitiesPreferences } from '../hooks/use-capabilities-preferences';
+import { HelpArticleLink } from '@/features/support/components/HelpArticleLink';
 
 const MEMORY_EDITOR_ANCHOR_ID = 'memory-editor';
 const SAVE_FAILED_MESSAGE = 'Your memory settings were not saved, so nothing changed.';
@@ -123,6 +124,9 @@ export function MemorySection() {
           Facts the assistant should remember about you across conversations. Stored on this device,
           and synced to your account across devices when you&apos;re signed in.
         </p>
+        <div style={{ marginTop: 'var(--space-2)' }}>
+          <HelpArticleLink docId="memory" label="How memory works" />
+        </div>
       </div>
 
       <section

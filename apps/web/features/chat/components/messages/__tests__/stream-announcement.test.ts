@@ -14,8 +14,8 @@ function assistant(overrides: Partial<ChatMessage> = {}): ChatMessage {
 }
 
 describe('what the live region tells a screen reader when a turn ends', () => {
-  it('reports a completed answer with its text', () => {
-    expect(buildStreamAnnouncement(assistant())).toBe('Response complete. Here is the answer.');
+  it('reports a completed answer without reading its text a second time', () => {
+    expect(buildStreamAnnouncement(assistant())).toBe('Response complete');
   });
 
   it('does not claim completion when the turn produced no assistant message', () => {
@@ -85,7 +85,7 @@ describe('what the live region tells a screen reader when a turn ends', () => {
         },
       },
     } as Partial<ChatMessage>);
-    expect(buildStreamAnnouncement(recovered)).toBe('Response complete. Here is the answer.');
+    expect(buildStreamAnnouncement(recovered)).toBe('Response complete');
   });
 
   it('keeps reporting errors when the last step is the one that failed', () => {

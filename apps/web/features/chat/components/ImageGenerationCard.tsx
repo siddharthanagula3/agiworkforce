@@ -8,6 +8,8 @@ import {
   Copy,
   Check,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Pencil,
   MoreHorizontal,
   Send,
@@ -26,7 +28,7 @@ import {
   type ImageRevisionRequest,
 } from '../lib/imageGenerationOptions';
 import { useMediaModelAvailability } from '@features/chat/hooks/use-media-model-availability';
-import { useChatStore } from '@shared/stores/web-chat-store';
+import { useChatStore, type ImageVersion } from '@shared/stores/web-chat-store';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
 import { toast } from 'sonner';
@@ -82,6 +84,7 @@ interface ImageGenerationCardProps {
   modelId?: string;
   /** Bounded ISO instant before which retry remains an explicit disabled control. */
   retryAt?: string;
+  previousVersions?: ImageVersion[];
   /**
    * Called when the user requests a re-generation from within the card
    * (aspect-ratio change or edit description).
@@ -134,6 +137,31 @@ async function downloadImage(url: string, filenameBase = 'image') {
     a.click();
     document.body.removeChild(a);
   }
+}
+
+async function pngBlob(url: string): Promise<Blob> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Image copy failed with HTTP ${res.status}`);
+  const blob = await res.blob();
+  if (blob.type === 'image/png') return blob;
+  const bitmap = await createImageBitmap(blob);
+  const canvas = document.createElement('canvas');
+  canvas.width = bitmap.width;
+  canvas.height = bitmap.height;
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('Image copy could not draw the image');
+  context.drawImage(bitmap, 0, 0);
+  bitmap.close();
+  return new Promise((resolve, reject) =>
+    canvas.toBlob(
+      (png) => (png ? resolve(png) : reject(new Error('Image copy could not encode PNG'))),
+      'image/png',
+    ),
+  );
+}
+
+async function copyImage(url: string): Promise<void> {
+  await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob(url) })]);
 }
 
 // ---------------------------------------------------------------------------
@@ -297,10 +325,10 @@ export function ShareModal({ imageUrl, prompt, onClose, mediaKind = 'image' }: S
       aria-modal="true"
       aria-label={`Share ${mediaKind}`}
     >
-      <div className="relative w-full max-w-sm rounded-2xl border border-border/40 bg-card/95 p-6 shadow-2xl backdrop-blur-xl">
+      <div className="relative w-full max-w-sm rounded-2xl border border-border/40 bg-card/95 p-6 shadow-e4 backdrop-blur-xl">
         {/* Header */}
         <div className="mb-4 flex items-start justify-between gap-2">
-          <h2 className="text-sm font-semibold text-foreground leading-snug">{title}</h2>
+          <h2 className="text-h5 text-foreground">{title}</h2>
           <button
             type="button"
             onClick={onClose}
@@ -582,7 +610,7 @@ function EditPanel({
             >
               <X className="h-4 w-4" />
             </button>
-            <h2 className="truncate text-sm font-semibold text-foreground">{titleText} image</h2>
+            <h2 className="truncate text-h5 text-foreground">{titleText} image</h2>
           </div>
 
           {/* Right-side controls */}
@@ -611,7 +639,7 @@ function EditPanel({
                   ref={aspectMenuRef}
                   role="menu"
                   aria-label="Aspect ratio"
-                  className="absolute right-0 top-full z-[var(--z-dropdown)] mt-1 w-44 rounded-xl border border-border/60 bg-popover/95 p-1 shadow-xl backdrop-blur-xl"
+                  className="absolute right-0 top-full z-[var(--z-dropdown)] mt-1 w-44 rounded-xl border border-border/60 bg-popover/95 p-1 shadow-e4 backdrop-blur-xl"
                 >
                   {aspectOptions.map((opt) => (
                     <button
@@ -820,15 +848,27 @@ interface ResultCardProps {
   imageUrl: string;
   prompt: string;
   modelId?: string;
+  aspectRatio?: ImageAspectRatio;
+  version?: { index: number; total: number; onPrevious: () => void; onNext: () => void };
   onEdit: () => void;
   onShare: () => void;
   onKeep?: () => void;
 }
 
-function ResultCard({ imageUrl, prompt, modelId, onEdit, onShare, onKeep }: ResultCardProps) {
+function ResultCard({
+  imageUrl,
+  prompt,
+  modelId,
+  aspectRatio,
+  version,
+  onEdit,
+  onShare,
+  onKeep,
+}: ResultCardProps) {
   const modelLabel = getImageModelLabel(modelId);
   const [imgError, setImgError] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [copyFailed, setCopyFailed] = useState(false);
   const [showMore, setShowMore] = useState(false);
   const moreRef = useRef<HTMLDivElement>(null);
   const moreTriggerRef = useRef<HTMLButtonElement>(null);
@@ -837,11 +877,13 @@ function ResultCard({ imageUrl, prompt, modelId, onEdit, onShare, onKeep }: Resu
 
   const handleCopy = useCallback(async () => {
     try {
-      await navigator.clipboard.writeText(imageUrl);
+      await copyImage(imageUrl);
+      setCopyFailed(false);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // ignore
+      setCopyFailed(true);
+      setTimeout(() => setCopyFailed(false), 4000);
     }
   }, [imageUrl]);
 
@@ -930,15 +972,17 @@ function ResultCard({ imageUrl, prompt, modelId, onEdit, onShare, onKeep }: Resu
           type="button"
           onClick={() => void handleCopy()}
           className="flex h-7 items-center gap-1.5 rounded-lg px-2 text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
-          aria-label="Copy image URL"
-          title="Copy image URL"
+          aria-label={copyFailed ? 'Copying the image failed' : 'Copy image'}
+          title="Copy image"
         >
           {copied ? (
             <Check className="h-3.5 w-3.5 text-primary" />
           ) : (
             <Copy className="h-3.5 w-3.5" />
           )}
-          <span className="hidden sm:inline">{copied ? 'Copied' : 'Copy'}</span>
+          <span className="hidden sm:inline">
+            {copyFailed ? 'Copy failed' : copied ? 'Copied' : 'Copy'}
+          </span>
         </button>
 
         {/* More (download lives here too) */}
@@ -959,7 +1003,7 @@ function ResultCard({ imageUrl, prompt, modelId, onEdit, onShare, onKeep }: Resu
               ref={morePanelRef}
               role="menu"
               aria-label="More actions"
-              className="absolute bottom-full left-0 z-[var(--z-dropdown)] mb-1 w-40 rounded-xl border border-border/60 bg-popover/95 p-1 shadow-xl backdrop-blur-xl"
+              className="absolute bottom-full left-0 z-[var(--z-dropdown)] mb-1 w-40 rounded-xl border border-border/60 bg-popover/95 p-1 shadow-e4 backdrop-blur-xl"
             >
               <button
                 type="button"
@@ -1003,9 +1047,35 @@ function ResultCard({ imageUrl, prompt, modelId, onEdit, onShare, onKeep }: Resu
           )}
         </div>
 
+        {version && (
+          <div className="flex items-center" role="group" aria-label="Image versions">
+            <button
+              type="button"
+              onClick={version.onPrevious}
+              disabled={version.index === 0}
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 pointer-coarse:h-11 pointer-coarse:w-11"
+              aria-label="Previous version"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+            </button>
+            <span className="px-1 text-xs tabular-nums text-muted-foreground" aria-live="polite">
+              {version.index + 1} / {version.total}
+            </span>
+            <button
+              type="button"
+              onClick={version.onNext}
+              disabled={version.index === version.total - 1}
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 pointer-coarse:h-11 pointer-coarse:w-11"
+              aria-label="Next version"
+            >
+              <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
+
         {modelLabel && (
           <span className="ml-auto truncate pr-1 text-caption text-muted-foreground">
-            Generated with {modelLabel}
+            {`Generated with ${modelLabel}${aspectRatio && aspectRatio !== 'auto' ? ` · ${aspectRatio}` : ''}`}
           </span>
         )}
       </div>
@@ -1021,11 +1091,13 @@ export function ImageGenerationCard({
   imageUrl,
   isGenerating = !imageUrl,
   prompt = '',
-  aspectRatio = '1:1',
+  aspectRatio: requestedAspectRatio,
   modelId,
   retryAt,
+  previousVersions,
   onRegenerate,
 }: ImageGenerationCardProps) {
+  const aspectRatio = requestedAspectRatio ?? '1:1';
   const [showEdit, setShowEdit] = useState(false);
   const [showShare, setShowShare] = useState(false);
   const [keptAssetId, setKeptAssetId] = useState<string | null>(null);
@@ -1087,6 +1159,11 @@ export function ImageGenerationCard({
     [],
   );
 
+  const [viewedVersion, setViewedVersion] = useState<number | null>(null);
+  useEffect(() => {
+    setViewedVersion(null);
+  }, [liveUrl]);
+
   // State A: generating. The copy deliberately reflects observable state and
   // elapsed time; rotating pseudo-stages such as "Painting details" and
   // "Almost there" implied provider telemetry we do not receive.
@@ -1140,14 +1217,37 @@ export function ImageGenerationCard({
     );
   }
 
+  const earlierVersions = previousVersions ?? [];
+  const versionCount = earlierVersions.length + 1;
+  const versionIndex = viewedVersion ?? versionCount - 1;
+  const shownVersion = viewedVersion === null ? undefined : earlierVersions[viewedVersion];
+
   // State B/C/D: image ready
   return (
     <>
       {/* State B: Result card */}
       <ResultCard
-        imageUrl={liveUrl ?? imageUrl}
-        prompt={livePrompt}
-        modelId={modelId}
+        imageUrl={shownVersion?.imageUrl ?? liveUrl ?? imageUrl}
+        prompt={shownVersion?.prompt ?? livePrompt}
+        modelId={shownVersion ? shownVersion.model : modelId}
+        {...(shownVersion
+          ? shownVersion.aspect
+            ? { aspectRatio: shownVersion.aspect as ImageAspectRatio }
+            : {}
+          : requestedAspectRatio
+            ? { aspectRatio: liveAspect }
+            : {})}
+        {...(versionCount > 1
+          ? {
+              version: {
+                index: versionIndex,
+                total: versionCount,
+                onPrevious: () => setViewedVersion(Math.max(0, versionIndex - 1)),
+                onNext: () =>
+                  setViewedVersion(versionIndex + 1 >= versionCount - 1 ? null : versionIndex + 1),
+              },
+            }
+          : {})}
         onEdit={() => setShowEdit(true)}
         onShare={() => setShowShare(true)}
         {...(keepableAssetId

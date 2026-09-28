@@ -56,7 +56,7 @@ export function ModelCard({
       <div className="flex items-start gap-2.5">
         <ProviderLogo providerKey={entry.developer} size={20} />
         <div className="min-w-0 flex-1">
-          <h2 className="text-sm font-medium break-words text-foreground">{entry.displayName}</h2>
+          <h2 className="text-h5 break-words text-foreground">{entry.displayName}</h2>
           <p className={META_LABEL_CLASS}>{entry.developerLabel}</p>
         </div>
         <button

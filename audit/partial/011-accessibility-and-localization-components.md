@@ -22,16 +22,15 @@ Code: `apps/mobile/app/(app)/notifications/index.tsx:93-93`, `apps/mobile/src/fe
 
 - Done when: Each screen has a top heading and sections use nested headings, so screen-reader users can jump by heading.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | An open conversation has no page heading: the title is a menu button, and the only h1 on /chat is the empty-state greeting. Add an h1 with the conversation title. | ui |
-| desktop | partial | An open conversation has no page heading: the title is a menu button, and the only h1 on /chat is the empty-state greeting. Add an h1 with the conversation title. | ui |
 | mobile | partial | Header roles appear only on onboarding, lock and consent screens; chat, settings and projects mark no headers. | ui |
 | vscode | partial | Only the onboarding steps use h2; the chat view, settings panel and cards have no headings. | ui |
-| chrome | partial | Headings exist only inside rendered answer markdown; the panel's own views (history, projects, runs) have no heading elements. | ui |
+| chrome | partial | b21db27be: each tab view has an h1, drawer and Recents h2; bridge and schedules titles belong to other lanes | bridge URL title, schedules title |
 
-Code: `apps/web/features/chat/components/ConversationTitleMenu.tsx:132-132`, `packages/ui/unified-chat/src/components/BrandedGreeting.tsx:44-44`, `apps/mobile/app/(public)/onboarding.tsx:471-471`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2284-2284`
+Code: `apps/mobile/app/(public)/onboarding.tsx:471-471`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2284-2284`, `apps/extension/src/side_panel.ts:10037-10037`, `apps/extension/src/side_panel.ts:7100-7100`
 
 ## S11.06: Focus restoration after panel closure.
 
@@ -58,14 +57,11 @@ Code: `apps/mobile/app/(app)/settings/performance.tsx:352-352`
 
 - Done when: A streaming reply is announced calmly (in word-bounded chunks or once when done), never token by token and never twice.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The answer is spoken twice: StreamAnnouncer reads it in 2-second word-bounded chunks, then the transcript's status region reads "Response complete." plus the full text. Keep one of the two. | handler |
-| desktop | partial | The answer is spoken twice: StreamAnnouncer reads it in 2-second word-bounded chunks, then the transcript's status region reads "Response complete." plus the full text. Keep one of the two. | handler |
 | mobile | missing | Not built on this surface. |  |
-
-Code: `packages/ui/unified-chat/src/components/markdown/StreamAnnouncer.tsx:3-3`, `packages/ui/unified-chat/src/components/markdown/StreamingMarkdownContent.tsx:174-174`, `apps/web/features/chat/components/messages/ChatMessageList.tsx:1055-1055`
 
 ## S11.09: Accessible tool and approval status.
 
@@ -78,19 +74,6 @@ Code: `packages/ui/unified-chat/src/components/markdown/StreamAnnouncer.tsx:3-3`
 | mobile | partial | Approve and reject are labelled, but activity rows announce only "Show details for <step>", not whether it is running, done or failed. | states |
 
 Code: `apps/mobile/src/features/chat/components/ApprovalCard.tsx:333-333`, `apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx:145-145`
-
-## S11.10: Touch equivalents for hover interactions.
-
-- Done when: Anything revealed on hover is also reachable by touch (always visible on touch screens or shown on tap).
-- Wave: 3
-- Already works on: chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Action rows on user messages and older replies show only on hover or keyboard focus; on touch screens add the [@media(hover:none)] reveal the sidebar rows already use. | ui |
-| desktop | partial | Action rows on user messages and older replies show only on hover or keyboard focus; on touch screens add the [@media(hover:none)] reveal the sidebar rows already use. | ui |
-
-Code: `apps/web/features/chat/components/messages/MessageBubble.tsx:2807-2807`, `packages/ui/ui/src/sidebar/SessionItem.tsx:264-264`
 
 ## S11.12: Text resizing.
 
@@ -148,18 +131,6 @@ Code: `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`, `a
 | cli | partial | Voice turns are printed but not added back to the TUI transcript after voice mode returns. Works only in builds compiled with the off-by-default `voice` cargo feature, and needs the user's own OPENAI_API_KEY or a local whisper binary for transcription. | flag-off |
 
 Code: `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`, `apps/cli/src/tui/tui_app.rs:4671-4671`
-
-## S11.17: Chart descriptions.
-
-- Done when: A chart comes with a text description (title, what is plotted, key values) that assistive tech can read.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Charts announce only their kind and point count ("bar, 12 points, 2 series"); add a text summary of title, axes and key values. | ui |
-| desktop | partial | Charts announce only their kind and point count ("bar, 12 points, 2 series"); add a text summary of title, axes and key values. | ui |
-
-Code: `packages/ui/unified-chat/src/components/artifact-components/ChartArtifact.tsx:167-167`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1050-1050`
 
 ## S11.19: Right-to-left layouts.
 

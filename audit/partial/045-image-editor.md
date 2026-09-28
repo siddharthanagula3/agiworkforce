@@ -68,51 +68,6 @@ Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:4767-4771`
 
 Code: `apps/web/features/chat/components/ImageGenerationCard.tsx:719-725`, `apps/web/features/chat/components/ImageGenerationCard.tsx:424-429`
 
-## S45.12: Object addition.
-
-- Done when: User adds a new object to an existing image while the rest is kept.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Only by describing the object to add as a free-text edit of an attached or generated image; no dedicated control. | ui |
-| desktop | partial | Only by describing the object to add as a free-text edit of an attached or generated image; no dedicated control. | ui |
-| mobile | partial | Only by attaching a photo and describing the object to add as a free-text edit; no dedicated control. | ui |
-| cli | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/ImageGenerationCard.tsx:664-668`, `apps/web/features/chat/components/ImageGenerationCard.tsx:448-461`, `apps/web/app/api/media/image/lib/image-generation-provider.ts:459-480`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:376-381`
-
-## S45.13: Object removal.
-
-- Done when: User removes an object from an existing image while the rest is kept.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Only by describing what to remove as a free-text edit of an attached or generated image; no dedicated control. | ui |
-| desktop | partial | Only by describing what to remove as a free-text edit of an attached or generated image; no dedicated control. | ui |
-| mobile | partial | Only by attaching a photo and describing what to remove as a free-text edit; no dedicated control. | ui |
-| cli | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/ImageGenerationCard.tsx:664-668`, `apps/web/features/chat/components/ImageGenerationCard.tsx:448-461`, `apps/web/app/api/media/image/lib/image-generation-provider.ts:459-480`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:376-381`
-
-## S45.14: Background replacement.
-
-- Done when: User replaces the background of an existing image while the subject is kept.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Only by describing the new background as a free-text edit of an attached or generated image; no dedicated control. | ui |
-| desktop | partial | Only by describing the new background as a free-text edit of an attached or generated image; no dedicated control. | ui |
-| mobile | partial | Only by attaching a photo and describing the new background as a free-text edit; no dedicated control. | ui |
-| cli | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/ImageGenerationCard.tsx:664-668`, `apps/web/features/chat/components/ImageGenerationCard.tsx:448-461`, `apps/web/app/api/media/image/lib/image-generation-provider.ts:459-480`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:376-381`
-
 ## S45.15: Background removal.
 
 - Done when: User removes the background of an image and gets the subject on a transparent background.
@@ -155,36 +110,6 @@ Code: `packages/contracts/cloud-contracts/src/managed-media.ts:49-55`, `apps/web
 
 Code: `apps/web/features/chat/components/ImageGenerationCard.tsx:577-580`, `apps/web/features/chat/components/ImageGenerationCard.tsx:439-446`
 
-## S45.20: Lighting adjustment.
-
-- Done when: User adjusts the lighting of an existing image.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Only by describing the lighting change as a free-text edit of an attached or generated image; no dedicated control. | ui |
-| desktop | partial | Only by describing the lighting change as a free-text edit of an attached or generated image; no dedicated control. | ui |
-| mobile | partial | Only by attaching a photo and describing the lighting change as a free-text edit; no dedicated control. | ui |
-| cli | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/ImageGenerationCard.tsx:664-668`, `apps/web/features/chat/components/ImageGenerationCard.tsx:448-461`, `apps/web/app/api/media/image/lib/image-generation-provider.ts:459-480`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:376-381`
-
-## S45.21: Color/style transformation.
-
-- Done when: User transforms the colours or style of an existing image.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Only by describing the colour or style change as a free-text edit of an attached or generated image; no dedicated control. | ui |
-| desktop | partial | Only by describing the colour or style change as a free-text edit of an attached or generated image; no dedicated control. | ui |
-| mobile | partial | Only by attaching a photo and describing the colour or style change as a free-text edit; no dedicated control. | ui |
-| cli | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/ImageGenerationCard.tsx:664-668`, `apps/web/features/chat/components/ImageGenerationCard.tsx:448-461`, `apps/web/app/api/media/image/lib/image-generation-provider.ts:459-480`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:376-381`
-
 ## S45.22: Reference-based composition.
 
 - Done when: User supplies a reference image and the result is composed from it (subject, layout or style carried over).
@@ -200,65 +125,16 @@ Code: `apps/web/features/chat/components/ImageGenerationCard.tsx:664-668`, `apps
 
 Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:191-195`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:2868-2877`, `packages/contracts/cloud-contracts/src/managed-media.ts:97-99`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:376-381`
 
-## S45.25: Text-bearing image generation.
-
-- Done when: User generates an image containing specified legible text (sign, poster, label).
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Text is only typed into the prompt; no text field, font or placement control, and legibility depends on the model picked. | ui |
-| desktop | partial | Text is only typed into the prompt; no text field, font or placement control, and legibility depends on the model picked. | ui |
-| mobile | partial | Text is only typed into the prompt; no text or typography control. | ui |
-| cli | partial | Text is only typed into the prompt of agi image; no text or typography option. | ui |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:72-73`, `apps/web/app/api/media/image/generate/route.ts:119-122`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:516-524`, `apps/mobile/src/features/image/services/imagegen.ts:51-53`
-
-## S45.26: Photo restoration.
-
-- Done when: User restores an old or damaged photo (scratches, fading) into a clean version.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Only by describing the restoration as a free-text edit of an attached or generated image; no dedicated control. | ui |
-| desktop | partial | Only by describing the restoration as a free-text edit of an attached or generated image; no dedicated control. | ui |
-| mobile | partial | Only by attaching a photo and describing the restoration as a free-text edit; no dedicated control. | ui |
-| cli | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/ImageGenerationCard.tsx:664-668`, `apps/web/features/chat/components/ImageGenerationCard.tsx:448-461`, `apps/web/app/api/media/image/lib/image-generation-provider.ts:459-480`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:376-381`
-
-## S45.27: Colorization.
-
-- Done when: User colourises a black-and-white photo.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Only by describing the colourisation as a free-text edit of an attached or generated image; no dedicated control. | ui |
-| desktop | partial | Only by describing the colourisation as a free-text edit of an attached or generated image; no dedicated control. | ui |
-| mobile | partial | Only by attaching a photo and describing the colourisation as a free-text edit; no dedicated control. | ui |
-| cli | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/ImageGenerationCard.tsx:664-668`, `apps/web/features/chat/components/ImageGenerationCard.tsx:448-461`, `apps/web/app/api/media/image/lib/image-generation-provider.ts:459-480`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:376-381`
-
 ## S45.31: Preserve-original action.
 
 - Done when: Editing keeps the original image available next to the result instead of overwriting it.
 - Wave: 3
-- Already works on: mobile
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The revise panel overwrites the chat card in place; the original survives only as a separate Library item with no link, and an uploaded source is never kept. Add keep-original or revert. | ui |
-| desktop | partial | The revise panel overwrites the chat card in place; the original survives only as a separate Library item with no link, and an uploaded source is never kept. Add keep-original or revert. | ui |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/pages/WebChatPage.tsx:2566-2570`, `apps/web/features/chat/components/ImageGenerationCard.tsx:880-886`, `apps/web/app/api/media/image/lib/image-job-executor.ts:421-429`
 
 ## S45.33: Alpha-channel preservation.
 

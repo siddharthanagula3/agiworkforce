@@ -2301,6 +2301,17 @@ export function getVideoQualityOptionsForModel(
   return sortByKnownOrder(VIDEO_QUALITY_ORDER, [...seen.keys()]).map((id) => seen.get(id)!);
 }
 
+export function getVideoDurationOptionsForModel(
+  modelId?: string,
+  quality?: VideoQualityOption,
+): number[] {
+  const durations =
+    quality?.durationSecs ??
+    (modelId ? getModelMetadataById(modelId)?.videoGeneration?.durationSecs : undefined) ??
+    [];
+  return [...new Set(durations)].sort((a, b) => a - b);
+}
+
 export function isVideoOutputSupported(
   modelId: string | undefined,
   aspectRatio: string,

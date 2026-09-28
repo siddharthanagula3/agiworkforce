@@ -217,7 +217,7 @@ interface SectionParts {
 }
 
 function buildSection(id: string, title: string, controls: HTMLElement[]): SectionParts {
-  const head = el('div', { class: 'sp-bt-head' }, el('div', { class: 'sp-bt-title' }, title));
+  const head = el('div', { class: 'sp-bt-head' }, el('h2', { class: 'sp-bt-title' }, title));
   for (const control of controls) head.appendChild(control);
   const list = el('ul', { class: 'sp-bt-list', id: `${id}-list` });
   const empty = el('div', { class: 'sp-bt-empty', id: `${id}-empty` });
@@ -248,7 +248,7 @@ export function buildBrowserToolsPanel(send: Send = sendMessage): BrowserToolsPa
     el(
       'div',
       { class: 'sp-bt-head' },
-      el('div', { class: 'sp-bt-title' }, 'Page capture'),
+      el('h2', { class: 'sp-bt-title' }, 'Page capture'),
       watchBtn,
     ),
     watchStatus,

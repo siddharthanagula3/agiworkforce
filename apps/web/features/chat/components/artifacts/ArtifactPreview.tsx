@@ -1179,7 +1179,7 @@ if (__AgiApp) {
           // (no --z-modal theme key), so it compiled to nothing and the fullscreen
           // overlay sat at z-index:auto - header, composer and toasts painted over
           // it. Use the repo's established form (see ui/src/primitives/Dialog.tsx).
-          isFullscreen && 'fixed inset-0 z-[var(--z-modal)]',
+          isFullscreen && 'fixed inset-0 z-[var(--z-modal)] bg-background',
           className,
         )}
       >
@@ -1605,19 +1605,16 @@ if (__AgiApp) {
               </Button>
             )}
 
-            {/* Fullscreen, renderable only; the entry is hidden on narrow widths, the exit never is. */}
-            {(canPreview || isMermaid) && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleFullscreen}
-                className={isFullscreen ? 'flex h-7 px-2' : 'hidden h-7 px-2 @[22rem]:flex'}
-                aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
-                title="Fullscreen"
-              >
-                <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />
-              </Button>
-            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleFullscreen}
+              className={isFullscreen ? 'flex h-7 px-2' : 'hidden h-7 px-2 @[22rem]:flex'}
+              aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+              title="Fullscreen"
+            >
+              <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />
+            </Button>
 
             {/* Close, panel-only */}
             {onClose && (
@@ -1887,7 +1884,7 @@ if (__AgiApp) {
     <div
       ref={containerRef}
       className={cn(
-        'mt-3 overflow-hidden rounded-xl border border-border bg-card shadow-lg',
+        'mt-3 overflow-hidden rounded-xl border border-border bg-card shadow-e3',
         // AUDIT-FIX ART-13: `z-modal` compiled to nothing (no such Tailwind v4
         // utility here), leaving the fullscreen card at z-index:auto under the
         // chrome. Matches ui/src/primitives/Dialog.tsx.
@@ -2044,30 +2041,28 @@ if (__AgiApp) {
           )}
 
           {(canPreview || isMermaid) && (
-            <>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleOpenInNewTab}
-                className="hidden h-7 px-2 @[22rem]:flex"
-                aria-label="Open source in new tab"
-                title="Open source in new tab"
-              >
-                <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-              </Button>
-
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleFullscreen}
-                className={isFullscreen ? 'flex h-7 px-2' : 'hidden h-7 px-2 @[22rem]:flex'}
-                aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
-                title="Fullscreen"
-              >
-                <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />
-              </Button>
-            </>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleOpenInNewTab}
+              className="hidden h-7 px-2 @[22rem]:flex"
+              aria-label="Open source in new tab"
+              title="Open source in new tab"
+            >
+              <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+            </Button>
           )}
+
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleFullscreen}
+            className={isFullscreen ? 'flex h-7 px-2' : 'hidden h-7 px-2 @[22rem]:flex'}
+            aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+            title="Fullscreen"
+          >
+            <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />
+          </Button>
         </div>
       </div>
 

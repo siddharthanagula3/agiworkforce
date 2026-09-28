@@ -206,7 +206,7 @@ function DataPrivacySection() {
 
   return (
     <div>
-      <h3 className="text-lg font-semibold mb-4">Data &amp; Privacy</h3>
+      <h3 className="text-h3 mb-4">Data &amp; Privacy</h3>
       <p className="text-sm text-muted-foreground mb-6">
         Manage your data, privacy settings, and GDPR compliance
       </p>
@@ -383,7 +383,7 @@ interface PrivacyTabProps {
 function AnalyticsPrivacySection() {
   return (
     <div className="pt-6 border-t border-border">
-      <h3 className="text-lg font-semibold mb-4">App analytics</h3>
+      <h3 className="text-h3 mb-4">App analytics</h3>
       <p className="text-sm text-muted-foreground mb-4">
         This device-wide preference applies to both Local and Cloud mode.
       </p>
@@ -399,7 +399,7 @@ function GovernancePrivacySection({ scope }: { scope: 'local' | 'cloud' }) {
   if (scope === 'cloud') {
     return (
       <div className="pt-6 border-t border-border">
-        <h3 className="text-lg font-semibold mb-1">Managed approvals &amp; governance</h3>
+        <h3 className="text-h3 mb-1">Managed approvals &amp; governance</h3>
         <p className="text-sm text-muted-foreground">
           Cloud tool policy is enforced by the managed service and approval requests appear in the
           conversation transcript. Local remembered approvals, device tool history, and the Local
@@ -411,7 +411,7 @@ function GovernancePrivacySection({ scope }: { scope: 'local' | 'cloud' }) {
 
   return (
     <div className="pt-6 border-t border-border">
-      <h3 className="text-lg font-semibold mb-1">Governance &amp; Compliance</h3>
+      <h3 className="text-h3 mb-1">Governance &amp; Compliance</h3>
       <p className="text-sm text-muted-foreground mb-4">
         Approvals, audit events, and execution history for this device.
       </p>
@@ -455,7 +455,7 @@ export function PrivacyTab({ scope = 'local' }: PrivacyTabProps) {
     return (
       <>
         <div>
-          <h3 className="text-lg font-semibold mb-1">Cloud data &amp; privacy</h3>
+          <h3 className="text-h3 mb-1">Cloud data &amp; privacy</h3>
           <p className="text-sm text-muted-foreground">
             These controls apply to synced chats, projects, files, and account data stored in AGI
             Cloud. Local chats, provider keys, allowed folders, and the local database remain
@@ -476,7 +476,7 @@ export function PrivacyTab({ scope = 'local' }: PrivacyTabProps) {
   return (
     <>
       <div>
-        <h3 className="text-lg font-semibold mb-1">Master Password</h3>
+        <h3 className="text-h3 mb-1">Master Password</h3>
         <p className="text-sm text-muted-foreground mb-4">
           Encrypt stored API keys and secrets with an Argon2id-derived master password.
         </p>

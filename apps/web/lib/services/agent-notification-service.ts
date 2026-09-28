@@ -2,6 +2,10 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type { CloudCodeAgentStopReason } from '@agiworkforce/types';
+import {
+  codeSessionActivityNotice,
+  type LocalCodeSessionActivity,
+} from '@agiworkforce/cloud-contracts';
 import { logger } from '@/lib/logger';
 import type { NotificationSeverity } from '@/features/notifications/lib/notification-target';
 import { recordNotification } from './notification-service';
@@ -277,29 +281,10 @@ export interface CloudCodeTurnNotice {
 
 function describeCloudCodeTurnEvent(notice: CloudCodeTurnNotice): { title: string; body: string } {
   const session = shortLabel(notice.sessionTitle ?? '');
-  switch (notice.event) {
-    case 'approval_required':
-      return {
-        title: 'Approval needed',
-        body: session
-          ? `“${session}” is waiting for your approval.`
-          : 'Your AGI Code session is waiting for your approval.',
-      };
-    case 'completed':
-      return {
-        title: 'Task finished',
-        body: session
-          ? `“${session}” finished its task.`
-          : 'Your AGI Code session finished its task.',
-      };
-    case 'failed':
-      return {
-        title: 'Task stopped',
-        body: session
-          ? `“${session}” stopped before it finished.`
-          : 'Your AGI Code session stopped before it finished.',
-      };
-  }
+  return codeSessionActivityNotice(
+    notice.event,
+    session ? `“${session}”` : 'Your AGI Code session',
+  );
 }
 
 export async function notifyCloudCodeTurnEvent(
@@ -340,6 +325,58 @@ export async function notifyCloudCodeTurnEvent(
     return { pushed: (result?.sent ?? 0) > 0 };
   } catch (error) {
     logger.warn({ error, turnId: notice.turnId }, '[notifications] code turn notify failed');
+    return { pushed: false };
+  }
+}
+
+export interface LocalCodeSessionNotice {
+  userId: string;
+  deviceName: string | null;
+  activity: LocalCodeSessionActivity;
+}
+
+function describeLocalCodeSessionEvent(notice: LocalCodeSessionNotice): {
+  title: string;
+  body: string;
+} {
+  const session = shortLabel(notice.activity.sessionTitle ?? '');
+  const device = shortLabel(notice.deviceName ?? '') || 'your computer';
+  return codeSessionActivityNotice(
+    notice.activity.event,
+    session ? `“${session}” on ${device}` : `A session on ${device}`,
+  );
+}
+
+export async function notifyLocalCodeSessionEvent(
+  db: DatabaseAdapter,
+  notice: LocalCodeSessionNotice,
+): Promise<{ pushed: boolean }> {
+  try {
+    if (!(await loadAgentPushPreference(db, notice.userId))) return { pushed: false };
+    const { title, body } = describeLocalCodeSessionEvent(notice);
+    const { event, rootId, threadId, approvalId } = notice.activity;
+    const result = await sendPushToUser(
+      notice.userId,
+      {
+        title,
+        body,
+        data: {
+          type: MOBILE_NOTIFICATION_TYPE[event],
+          priority: MOBILE_PRIORITY[event],
+          rootId,
+          threadId,
+          ...(approvalId ? { approvalId } : {}),
+        },
+      },
+      { expo: true, web: false },
+    ).catch(() => null);
+
+    return { pushed: (result?.sent ?? 0) > 0 };
+  } catch (error) {
+    logger.warn(
+      { error, turnId: notice.activity.turnId },
+      '[notifications] local code session notify failed',
+    );
     return { pushed: false };
   }
 }

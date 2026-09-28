@@ -176,7 +176,7 @@ export function DocumentWorkspace({ className }: DocumentWorkspaceProps) {
       {}
       <div className="flex items-center gap-2 border-b border-border bg-muted/50 px-4 py-3">
         <FileText className="h-5 w-5 text-primary" />
-        <h2 className="text-lg font-semibold">Document MCP</h2>
+        <h2 className="text-h3">Document MCP</h2>
         <div className="ml-auto flex items-center gap-2">
           <Button onClick={handleOpenDocument} size="sm" disabled={loading}>
             <Download className="mr-2 h-4 w-4" />
@@ -300,7 +300,7 @@ export function DocumentWorkspace({ className }: DocumentWorkspaceProps) {
           <div className="flex h-full flex-col items-center justify-center gap-4 text-muted-foreground">
             <FileText className="h-16 w-16" />
             <div className="text-center">
-              <h3 className="mb-2 text-lg font-semibold">No Document Loaded</h3>
+              <h3 className="mb-2 text-h3">No Document Loaded</h3>
               <p className="text-sm">
                 Click "Open Document" to load a Word, Excel, or PDF document
               </p>

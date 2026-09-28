@@ -59,7 +59,7 @@ export function CapModal({ onSwitchModel }: CapModalProps) {
           <div className="flex-1 min-w-0">
             <h2
               id="cap-modal-title"
-              className="text-base font-semibold"
+              className="text-h4"
               style={{ color: 'var(--chat-text-primary)' }}
             >
               {t('capModal.title')}

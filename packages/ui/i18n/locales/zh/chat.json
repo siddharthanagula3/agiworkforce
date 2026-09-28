@@ -199,6 +199,7 @@
     "voiceUnsupportedHint": "此浏览器不支持语音输入。请尝试 Chrome 或 Edge。"
   },
   "bubble": {
+    "assistantSaid": "AGI 说：",
     "assistantThinking": "助手正在思考",
     "cancelEdit": "取消",
     "copied": "已复制",
@@ -210,7 +211,8 @@
     "messageAttachments": "消息附件",
     "retryResponse": "重试此回复",
     "saveEdit": "保存",
-    "toolResult": "结果"
+    "toolResult": "结果",
+    "userSaid": "你说："
   },
   "goalHandoff": {
     "action": "作为任务运行",
@@ -226,6 +228,9 @@
     "shareConversation": "分享对话",
     "temporaryChat": "临时对话",
     "temporaryChatRetentionNote": "不会保存到你的历史记录，本轮也不会使用记忆。",
+    "temporaryChatPersonalized": "个性化",
+    "temporaryChatUnpersonalized": "非个性化",
+    "temporaryChatPersonalizationHint": "个性化会使用你的个人资料、指示和回复风格。非个性化则不使用它们。",
     "toggleArtifacts": "切换工件面板",
     "toggleArtifactsCount": "切换工件面板（{{count}}）",
     "toggleStats": "统计"

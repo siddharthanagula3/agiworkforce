@@ -571,7 +571,7 @@ export function ArtifactRenderer({
 
   return (
     <div
-      className={cn('rounded-lg border border-border overflow-hidden bg-card shadow-sm', className)}
+      className={cn('rounded-lg border border-border overflow-hidden bg-card shadow-e1', className)}
       data-artifact-id={artifact.id}
       data-testid="artifact-renderer"
     >
@@ -637,7 +637,7 @@ export function ArtifactRenderer({
                   onClick={() => setExportMenuOpen(false)}
                   aria-hidden
                 />
-                <div className="absolute right-0 top-full mt-1 z-[var(--z-content-sticky)] min-w-[180px] rounded-md border border-border bg-card shadow-lg py-1">
+                <div className="absolute right-0 top-full mt-1 z-[var(--z-content-sticky)] min-w-[180px] rounded-md border border-border bg-card shadow-e3 py-1">
                   <button
                     type="button"
                     onClick={() => {

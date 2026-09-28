@@ -46,7 +46,7 @@ function ServerDetailsDialog({ server, open, onClose, onInstall }: ServerDetails
       <div className="p-6 max-w-2xl">
         <div className="flex items-start justify-between mb-4">
           <div>
-            <h2 className="text-2xl font-bold mb-2">{server.name}</h2>
+            <h2 className="text-h1 mb-2">{server.name}</h2>
             <p className="text-gray-600">
               {server.version ? `v${server.version} by ${server.author}` : `by ${server.author}`}
             </p>
@@ -119,7 +119,7 @@ function ServerPackageCard({ server, onViewDetails, onInstall }: ServerPackageCa
       <div className="flex items-start justify-between mb-3">
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-1">
-            <h3 className="font-semibold text-lg">{server.name}</h3>
+            <h3 className="text-h3">{server.name}</h3>
             {server.installed && (
               <Badge
                 variant="secondary"
@@ -225,7 +225,7 @@ export function MCPServerBrowser() {
   return (
     <div className="p-6">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold mb-2">Tool Registry</h1>
+        <h1 className="text-h1 mb-2">Tool Registry</h1>
         <p className="text-gray-600">
           Discover and install tools to extend AGI Workforce's capabilities
         </p>
@@ -272,13 +272,13 @@ export function MCPServerBrowser() {
             ) : error ? (
               <div className="text-center py-12">
                 <Package className="w-12 h-12 text-red-400 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold mb-2 text-red-600">Error loading servers</h3>
+                <h3 className="text-h3 mb-2 text-danger-text">Error loading servers</h3>
                 <p className="text-gray-600">{error}</p>
               </div>
             ) : filteredServers.length === 0 ? (
               <div className="text-center py-12">
                 <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold mb-2">No servers found</h3>
+                <h3 className="text-h3 mb-2">No servers found</h3>
                 <p className="text-gray-600">
                   {servers.length === 0
                     ? 'No tools available. Check back later or contact support.'

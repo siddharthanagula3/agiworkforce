@@ -1,5 +1,11 @@
 import path from 'node:path';
-import type { DeveloperSessionHandoff, HandoffAdmission } from '@agiworkforce/types/protocol';
+import type {
+  DeveloperSessionHandoff,
+  DeveloperSessionSource,
+  DeveloperSessionTrustMode,
+  HandoffAdmission,
+  HandoffLocalResource,
+} from '@agiworkforce/types/protocol';
 
 /**
  * How long a record stays admissible. A handoff carries the whole session, so
@@ -174,4 +180,102 @@ export function describeHandoffRefusal(refusal: HandoffAdmissionRefusal): string
     case 'credentialInRecord':
       return `That session record carries what looks like a credential in its ${refusal.field}, so this editor refused it. Report it rather than passing it on.`;
   }
+}
+
+const SOURCE_LABELS: Record<DeveloperSessionSource, string> = {
+  cli: 'AGI CLI',
+  vscode: 'VS Code',
+  desktop: 'desktop app',
+  unknown: 'other AGI app',
+};
+
+const TRUST_LABELS: Record<DeveloperSessionTrustMode, string> = {
+  local: 'Local',
+  byok: 'BYOK',
+  managed: 'Managed',
+  unknown: 'Unknown',
+};
+
+const LOCAL_RESOURCE_LABELS: Record<HandoffLocalResource, string> = {
+  background_shell: 'background shell',
+  dev_server: 'dev server',
+  mcp_server: 'MCP server',
+  sandbox: 'sandbox',
+  file_watcher: 'file watcher',
+  terminal: 'terminal',
+};
+
+const MAX_REVIEWED_FILES = 8;
+const SHORT_COMMIT_LENGTH = 12;
+
+function plural(count: number, noun: string): string {
+  return `${count} ${noun}${count === 1 ? '' : 's'}`;
+}
+
+export function describeHandoffReview(
+  handoff: DeveloperSessionHandoff,
+  admission: HandoffAdmission,
+): { message: string; detail: string } {
+  const source = SOURCE_LABELS[handoff.issuedBy];
+  const { workspace } = handoff;
+  const lines: string[] = [];
+
+  if (handoff.objective !== undefined && handoff.objective.trim() !== '') {
+    lines.push(`Goal: ${handoff.objective.trim()}`);
+  }
+  lines.push(`Folder: ${workspace.cwd}`);
+  if (workspace.branch !== undefined) {
+    const commit =
+      workspace.headCommit !== undefined
+        ? ` at ${workspace.headCommit.slice(0, SHORT_COMMIT_LENGTH)}`
+        : '';
+    lines.push(`Branch: ${workspace.branch}${commit}`);
+  }
+  lines.push(`Runs as: ${TRUST_LABELS[handoff.posture.trustMode]}`);
+  if (workspace.uncommittedChanges === true) {
+    lines.push('The folder has uncommitted changes, which stay on disk as they are.');
+  }
+
+  const moves: string[] = [
+    admission.start.kind === 'resume'
+      ? 'The conversation, with its full history'
+      : 'A new session, started from that thread',
+  ];
+  const files = handoff.modifiedFiles ?? [];
+  if (files.length > 0) {
+    const shown = files.slice(0, MAX_REVIEWED_FILES).map((file) => file.path);
+    const rest = files.length - shown.length;
+    moves.push(
+      `${plural(files.length, 'changed file')}: ${shown.join(', ')}${rest > 0 ? `, and ${rest} more` : ''}`,
+    );
+  }
+  const plan = handoff.plan ?? [];
+  if (plan.length > 0) moves.push(`A plan of ${plural(plan.length, 'step')}`);
+  const validations = handoff.validations ?? [];
+  if (validations.length > 0) moves.push(`${plural(validations.length, 'check')} already run`);
+  lines.push('', 'Moves with it:', ...moves.map((item) => `- ${item}`));
+
+  if (admission.reask !== undefined) {
+    lines.push(
+      '',
+      `${plural(admission.reask.length, 'pending approval')} will be asked again here. No earlier answer carries over.`,
+    );
+  }
+  if (admission.restart !== undefined) {
+    lines.push(
+      '',
+      `Restarted here, not moved: ${admission.restart.map((resource) => LOCAL_RESOURCE_LABELS[resource]).join(', ')}.`,
+    );
+  }
+  if (admission.interruptedTurn !== undefined) {
+    lines.push('', 'The last turn was interrupted and does not continue on its own.');
+  }
+
+  return {
+    message:
+      admission.start.kind === 'resume'
+        ? `Continue the ${source} session in this window?`
+        : `Start a session in this window from the ${source} thread?`,
+    detail: lines.join('\n'),
+  };
 }

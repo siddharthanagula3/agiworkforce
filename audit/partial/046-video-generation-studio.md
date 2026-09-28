@@ -30,15 +30,14 @@ nothing is left.
 
 - Done when: User chooses the clip duration before generating.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | No duration picker: duration comes only from a quality that pins one length, otherwise the route default of 4s; the API accepts duration_secs 2-30 and models publish several lengths. | ui |
-| desktop | partial | No duration picker: duration comes only from a quality that pins one length, otherwise the route default of 4s; the API accepts duration_secs 2-30 and models publish several lengths. | ui |
 | mobile | partial | No duration picker and duration_secs is never sent; the quality list only hints "Ns only". | ui, handler |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:1161-1167`, `packages/contracts/cloud-contracts/src/managed-media.ts:149-153`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:690-695`, `apps/mobile/src/features/chat/actions/runVideoGenerationTurn.ts:103-110`
+Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:690-695`, `apps/mobile/src/features/chat/actions/runVideoGenerationTurn.ts:103-110`
 
 ## S46.07: Aspect-ratio selector.
 
@@ -62,62 +61,6 @@ Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:1161-1167`
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:693-700`, `apps/mobile/src/features/chat/actions/runVideoGenerationTurn.ts:103-110`, `apps/web/app/api/media/video/generate/route.ts:421-424`
-
-## S46.10: Camera-motion instructions.
-
-- Done when: User gives camera-motion instructions (pan, dolly, zoom) for the clip.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Only as free text inside the single prompt; no dedicated camera-motion field. | ui |
-| desktop | partial | Only as free text inside the single prompt; no dedicated camera-motion field. | ui |
-| mobile | partial | Only as free text inside the single prompt; no dedicated camera-motion field. | ui |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:4311-4314`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:2929-2936`, `apps/web/app/api/media/video/generate/route.ts:699-702`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:532-542`
-
-## S46.11: Scene/action instructions.
-
-- Done when: User describes the scene and action the clip should show.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Only as free text inside the single prompt; no dedicated scene or action field. | ui |
-| desktop | partial | Only as free text inside the single prompt; no dedicated scene or action field. | ui |
-| mobile | partial | Only as free text inside the single prompt; no dedicated scene or action field. | ui |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:4311-4314`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:2929-2936`, `apps/web/app/api/media/video/generate/route.ts:699-702`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:532-542`
-
-## S46.12: Dialogue instructions.
-
-- Done when: User writes dialogue lines the characters should speak.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Only as free text inside the single prompt; no dedicated dialogue field. | ui |
-| desktop | partial | Only as free text inside the single prompt; no dedicated dialogue field. | ui |
-| mobile | partial | Only as free text inside the single prompt; no dedicated dialogue field. | ui |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:4311-4314`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:2929-2936`, `apps/web/app/api/media/video/generate/route.ts:699-702`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:532-542`
-
-## S46.13: Generated-audio option.
-
-- Done when: User chooses whether the clip is generated with audio.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Audio is switched on automatically for audio-capable models (generate_audio defaults to supportsAudio); no client offers the toggle the API accepts. | ui |
-| desktop | partial | Audio is switched on automatically for audio-capable models (generate_audio defaults to supportsAudio); no client offers the toggle the API accepts. | ui |
-| mobile | partial | No audio toggle; mobile never sends generate_audio, so the model default applies. | ui |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/api/media/video/generate/route.ts:983-985`, `packages/contracts/cloud-contracts/src/managed-media.ts:152-156`, `apps/mobile/src/features/chat/actions/runVideoGenerationTurn.ts:103-110`
 
 ## S46.25: Generation queue.
 
@@ -147,15 +90,14 @@ Code: `apps/web/features/chat/components/messages/MessageBubble.tsx:2419-2427`, 
 
 - Done when: User sees the estimated or actual credit cost of a video before or after generating.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The route computes estimatedCostCents to reserve usage, but no screen shows it. | ui |
-| desktop | partial | The route computes estimatedCostCents to reserve usage, but no screen shows it. | ui |
 | mobile | partial | Only a per-second list price appears in the model picker; the cost of this clip is never shown. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/app/api/media/video/generate/route.ts:1001-1007`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:889-897`
+Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:889-897`, `apps/web/app/api/media/video/generate/route.ts:1001-1007`
 
 ## S46.28: Cancel request.
 
@@ -171,15 +113,14 @@ Code: `apps/web/app/api/media/video/generate/route.ts:1001-1007`, `apps/mobile/s
 
 - Done when: User retries a failed video job with the same settings.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | "Try video again" resends only the prompt and model; the aspect ratio, quality and duration of the failed job are dropped. | handler |
-| desktop | partial | "Try video again" resends only the prompt and model; the aspect ratio, quality and duration of the failed job are dropped. | handler |
 | mobile | partial | Retry on a failed video calls the generic retryMessage, which resends the prompt as an ordinary text-chat turn (sendMessage), not a new video job. | handler |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/messages/MessageBubble.tsx:2464-2474`, `apps/web/features/chat/pages/WebChatPage.tsx:3356-3362`, `apps/mobile/src/features/chat/components/MessageBubble.tsx:911-915`, `apps/mobile/app/(app)/chat/[id].tsx:1090-1102`
+Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:911-915`, `apps/mobile/app/(app)/chat/[id].tsx:1090-1102`, `apps/mobile/stores/chat/chatExecutionStore.ts:3028-3030`
 
 ## S46.30: Completed clip gallery.
 
@@ -228,17 +169,3 @@ Code: `apps/mobile/src/features/library/index.tsx:144-148`
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-## S46.34: Save to Project.
-
-- Done when: User saves a finished clip to a Project.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Library shows "Add to project" on videos, but project sources accept only images, PDF, text and Office files, so saving a clip always fails with "not an accepted attachment type"; clips generated inside a project chat stay only in that chat. | handler |
-| desktop | partial | Library shows "Add to project" on videos, but project sources accept only images, PDF, text and Office files, so saving a clip always fails with "not an accepted attachment type"; clips generated inside a project chat stay only in that chat. | handler |
-| mobile | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `packages/ui/unified-chat/src/components/library/LibraryView.tsx:1630-1639`, `apps/web/features/library/components/LibraryView.tsx:212-218`, `packages/contracts/cloud-contracts/src/managed-cloud-project-knowledge-client.ts:166-169`, `packages/contracts/types/src/chat.ts:212-224`

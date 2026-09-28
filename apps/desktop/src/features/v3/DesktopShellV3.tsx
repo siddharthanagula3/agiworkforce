@@ -727,7 +727,10 @@ export function DesktopShellV3({
                 onOpenConversation={handleOpenProjectConversation}
               />
             ) : activePanel === 'library' && privacyMode !== 'local' ? (
-              <div data-testid="desktop-library" className="h-full overflow-y-auto px-6 py-6">
+              <div
+                data-testid="desktop-library"
+                className="h-full overflow-y-auto px-gutter-compact py-6 sm:px-gutter-regular"
+              >
                 <Suspense fallback={panelFallback}>
                   <DesktopLibrary
                     initialQuery={libraryInitialQuery}

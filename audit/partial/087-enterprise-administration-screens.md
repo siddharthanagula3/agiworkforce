@@ -10,14 +10,11 @@ nothing is left.
 
 - Done when: An administrator opens an organization overview that summarises the workspace (name, plan, members/seats, security posture) from live data.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile shows the workspace name, slug, plan, seats used and your role, but none of the security posture or recommendations the web overview gives administrators. | ui |
 | cli | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/app/(app)/settings/workspace.tsx:452-466`, `apps/mobile/src/features/team/service.ts:62-66`
 
 ## S87.02: Member directory.
 
@@ -33,14 +30,11 @@ Code: `apps/mobile/app/(app)/settings/workspace.tsx:452-466`, `apps/mobile/src/f
 
 - Done when: An administrator can invite people by email with a role, see pending invitations, renew and revoke them, and the invitee can accept.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile cannot send, list, renew or revoke invitations: on iOS "Add" attaches an existing AGI account directly ("There is no invitation email") and on Android it opens web team settings. | ui |
 | cli | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/app/(app)/settings/workspace.tsx:129-160`, `apps/mobile/src/features/team/service.ts:149-155`
 
 ## S87.04: Groups.
 
@@ -60,14 +54,11 @@ Code: `apps/web/features/workspace-console/components/WorkspaceRoles.tsx:543-560
 
 - Done when: An administrator sees the workspace roles with their permissions and can change a member's role, enforced by the server.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile changes a member between the built-in roles only and shows no role permissions; it also offers "Owner", which the server always refuses (ownership moves only by transfer). | ui |
 | cli | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/app/(app)/settings/workspace.tsx:163-177`, `apps/mobile/src/features/team/service.ts:5-5`, `apps/mobile/src/features/team/service.ts:161-161`
 
 ## S87.06: Custom roles.
 
@@ -87,10 +78,7 @@ Code: `apps/mobile/app/(app)/settings/workspace.tsx:163-177`, `apps/mobile/src/f
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile shows "N of M seats used" only; it cannot show available seats, release pending-invitation seats or buy seats. | ui |
 | cli | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/app/(app)/settings/workspace.tsx:459-463`, `apps/mobile/src/features/team/service.ts:63-66`
 
 ## S87.08: Owner transfer.
 
@@ -272,25 +260,21 @@ Code: `apps/web/app/workspace/mcp/page.tsx:12-17`, `apps/web/features/workspace-
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Admins can only read the workspace data region on the overview; there is no control to choose or move it (the move functions have no route) and only the home region is provisioned. | ui, handler |
-| desktop | partial | Admins can only read the workspace data region on the overview; there is no control to choose or move it (the move functions have no route) and only the home region is provisioned. | ui, handler |
+| web | partial | partials/auth 82ade1df1: Enterprise administrators request or cancel a region move from the console and platform admins record the cutover; only the home region is provisioned, so the EU region needs the owner to stand up its database, bucket, log sink and KMS and set the AGI_DATA_REGION_EU_* settings | infra |
+| desktop | partial | partials/auth 82ade1df1: Enterprise administrators request or cancel a region move from the console and platform admins record the cutover; only the home region is provisioned, so the EU region needs the owner to stand up its database, bucket, log sink and KMS and set the AGI_DATA_REGION_EU_* settings | infra |
 | cli | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/services/workspace-posture-service.ts:1040-1065`, `apps/web/lib/server/data-region.ts:100-112`, `apps/web/lib/server/data-region.ts:32-36`, `apps/web/lib/server/data-region.ts:142-150`
+Code: `apps/web/app/workspace/data/page.tsx:24-24`, `apps/web/features/workspace-console/components/WorkspaceDataRegion.tsx:196-196`, `apps/web/app/api/settings/organization/data-region/route.ts:117-117`, `apps/web/app/api/settings/organization/data-region/route.ts:148-148`
 
 ## S87.25: Customer-managed-key setup where offered.
 
 - Done when: Where offered, an administrator connects a customer-managed encryption key, rotates or revokes it from the console, and workspace data is sealed under it.
 - Wave: 3
-- Already works on: api
+- Already works on: web, desktop, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Migration 0290 is now applied in production (2026-09-27). Still open: Keys can be provisioned, rotated and revoked only by calling /api/settings/organization/keys (no console screen), and after any rotation the key status and rewrap read the covered_stores column from pending migration 0290, which fails on production. | ui |
-| desktop | partial | Migration 0290 is now applied in production (2026-09-27). Still open: Keys can be provisioned, rotated and revoked only by calling /api/settings/organization/keys (no console screen), and after any rotation the key status and rewrap read the covered_stores column from pending migration 0290, which fails on production. | ui |
 | cli | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/api/settings/organization/keys/route.ts:359-363`, `apps/web/app/api/settings/organization/keys/route.ts:112-121`, `apps/web/lib/server/organization-encryption-keys.ts:622-637`
 
 ## S87.26: Network/IP restrictions.
 
@@ -394,14 +378,11 @@ Code: `apps/web/lib/server/service-principals/route-access.ts:35-41`, `apps/web/
 
 - Done when: An administrator can see the effective policy for a member or request and why an action was allowed or refused.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | An effective-policy endpoint resolves a member's merged controls and overrides, but no screen or client calls it, and administrators cannot look up another member's effective policy or trace why a request was denied. | ui |
-| desktop | partial | An effective-policy endpoint resolves a member's merged controls and overrides, but no screen or client calls it, and administrators cannot look up another member's effective policy or trace why a request was denied. | ui |
 | cli | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/api/settings/organization/policy/effective/route.ts:16-40`, `apps/web/features/workspace-console/components/WorkspaceFeatureControls.tsx:93-105`
 
 ## S87.40: Administrative API access.
 

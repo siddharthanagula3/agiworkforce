@@ -57,12 +57,12 @@ describe('Tasks per-task cost and usage', () => {
       },
     });
 
-    expect((await screen.findByTestId(`task-cost-${RUN_ID}`)).textContent).toBe('$3.42');
+    expect((await screen.findByTestId(`task-cost-${RUN_ID}`)).textContent).toBe('684 credits');
 
     await openDetails();
 
     const panel = await screen.findByTestId('task-cost');
-    expect(panel.textContent).toContain('$3.42');
+    expect(panel.textContent).toContain('684 credits');
     expect(panel.textContent).toContain('128.4K in');
     expect(panel.textContent).toContain('9.3K out');
     expect(panel.textContent).toContain('2.1K reasoning');
@@ -76,7 +76,7 @@ describe('Tasks per-task cost and usage', () => {
 
     const panel = await screen.findByTestId('task-cost');
     expect(panel.textContent).toContain('recorded when this task settles');
-    expect(panel.textContent).not.toContain('$');
+    expect(panel.textContent).not.toContain('credits');
     expect(screen.queryByTestId(`task-cost-${RUN_ID}`)).toBeNull();
   });
 
@@ -97,7 +97,7 @@ describe('Tasks per-task cost and usage', () => {
 
     const panel = await screen.findByTestId('task-cost');
     expect(panel.textContent).toContain('free trial allowance');
-    expect(panel.textContent).not.toContain('$');
+    expect(panel.textContent).not.toContain('credits');
     expect(panel.textContent).toContain('500 in');
     expect(screen.queryByTestId(`task-cost-${RUN_ID}`)).toBeNull();
   });

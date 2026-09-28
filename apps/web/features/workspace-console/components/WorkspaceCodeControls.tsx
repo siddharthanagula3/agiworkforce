@@ -177,7 +177,7 @@ export function WorkspaceCodeControls() {
       <div className="border-b px-5 py-3.5" style={{ borderColor: 'var(--settings-border)' }}>
         <h2
           id="workspace-code-controls-heading"
-          className="text-sm font-semibold"
+          className="text-h5"
           style={{ color: 'var(--text-1)' }}
         >
           Code connections

@@ -78,6 +78,8 @@ export const ManagedCloudProjectUpdateRequestSchema = z.object({
   starred: z.boolean().optional(),
   /** False confines this project's chats to its own memories. */
   usesGlobalMemory: z.boolean().optional(),
+  usesAccountInstructions: z.boolean().optional(),
+  usesAccountStyle: z.boolean().optional(),
   ...ManagedCloudProjectWriteFields,
 });
 export type ManagedCloudProjectUpdateRequest = z.infer<

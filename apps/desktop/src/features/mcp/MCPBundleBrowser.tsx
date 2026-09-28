@@ -246,7 +246,7 @@ function BundleDetailsModal({
                 )}
                 <div>
                   <div className="flex items-center gap-2">
-                    <h2 className="text-xl font-bold text-foreground">{bundle.name}</h2>
+                    <h2 className="text-h2 text-foreground">{bundle.name}</h2>
                     {bundle.verified && (
                       <span title="Verified">
                         <ShieldCheck className="w-5 h-5 text-blue-400" />
@@ -707,7 +707,7 @@ export function MCPBundleBrowser({ onConfigureServer }: MCPBundleBrowserProps) {
       <div className="p-6 border-b border-border">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+            <h1 className="text-h1 text-foreground flex items-center gap-2">
               <Cloud className="w-7 h-7 text-blue-400" />
               Tool Registry
             </h1>
@@ -797,7 +797,7 @@ export function MCPBundleBrowser({ onConfigureServer }: MCPBundleBrowserProps) {
           {/* Featured Section */}
           {!searchQuery && selectedCategory === null && featuredBundles.length > 0 && (
             <div className="mb-8">
-              <h2 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
+              <h2 className="text-h3 text-foreground mb-4 flex items-center gap-2">
                 <TrendingUp className="w-5 h-5 text-amber-400" />
                 Featured Bundles
               </h2>
@@ -824,7 +824,7 @@ export function MCPBundleBrowser({ onConfigureServer }: MCPBundleBrowserProps) {
           ) : filteredBundles.length === 0 ? (
             <div className="text-center py-12">
               <Package className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-foreground mb-2">No bundles found</h3>
+              <h3 className="text-h3 text-foreground mb-2">No bundles found</h3>
               <p className="text-muted-foreground">
                 {searchQuery
                   ? 'Try adjusting your search terms'
@@ -835,7 +835,7 @@ export function MCPBundleBrowser({ onConfigureServer }: MCPBundleBrowserProps) {
             <>
               {/* All Bundles */}
               <div>
-                <h2 className="text-lg font-semibold text-foreground mb-4">
+                <h2 className="text-h3 text-foreground mb-4">
                   {selectedCategory
                     ? `${CATEGORY_CONFIG[selectedCategory]?.name || selectedCategory} Bundles`
                     : searchQuery

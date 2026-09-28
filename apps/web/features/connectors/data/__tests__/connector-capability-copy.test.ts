@@ -235,7 +235,7 @@ describe('CRIT-001 guard, an absent action list is attributed, not read as "none
       {},
     );
     expect(tally['declared']).toEqual(['github']);
-    expect(tally['runtime-discovered']?.length).toBe(83);
+    expect(tally['runtime-discovered']?.length).toBe(85);
     expect(tally['device-local']?.length).toBe(5);
   });
 

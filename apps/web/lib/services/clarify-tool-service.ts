@@ -55,7 +55,6 @@ export interface ClarifyOfferContext {
 
 export function shouldOfferClarifyTool(context: ClarifyOfferContext): boolean {
   if (context.research) return false;
-  if (context.webSearch && !context.agiWork) return false;
   const trimmed = context.userMessage.trim();
   if (trimmed.length === 0) return false;
   if (trimmed.length > CLARIFY_OFFER_MAX_MESSAGE_LENGTH) return false;

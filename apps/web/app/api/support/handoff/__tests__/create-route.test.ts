@@ -18,6 +18,7 @@ const routeMocks = vi.hoisted(() => ({
 
 vi.mock('@clerk/nextjs/server', () => ({ auth: routeMocks.auth }));
 vi.mock('@/lib/api-auth', () => ({
+  getSuspendedAccountUser: vi.fn(async () => null),
   getOptionalAuthUser: routeMocks.optionalUser,
   getClerkAuthUser: vi.fn(),
   assertAccountActive: vi.fn(),

@@ -3,6 +3,7 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
+import { configuredAuthProviders } from '@/features/auth/authProviderConfig';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -38,6 +39,7 @@ async function handleList(request: NextRequest): Promise<NextResponse> {
 
   return NextResponse.json({
     identities,
+    providers: configuredAuthProviders(),
     consequence: stepUpActionSpec('identity.unlink').consequence,
   });
 }

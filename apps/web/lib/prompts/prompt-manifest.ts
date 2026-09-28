@@ -94,6 +94,13 @@ const TOOL_URL_FETCH_DESCRIPTION_V1 =
   'Supports HTML, plain text, Markdown, and JSON pages; binary content is not supported. ' +
   'Only fetch URLs that appear in the conversation or in prior tool results.';
 
+const TOOL_URL_FETCH_DESCRIPTION_V2 =
+  'Fetch a public web page or document (http/https URL) and return its extracted text content. ' +
+  'Use when the user provides a URL or when you need the contents of a specific page or file. ' +
+  'Supports HTML, plain text, Markdown and JSON pages, PDFs, and Word, Excel and PowerPoint files; ' +
+  'images, audio and video are not supported. ' +
+  'Only fetch URLs that appear in the conversation or in prior tool results.';
+
 const TOOL_PLACES_SEARCH_DESCRIPTION_V1 =
   'Search real places: restaurants, cafes, bars, hotels, shops, pharmacies, clinics and ' +
   'other businesses or points of interest. Returns each place with its rating, review ' +
@@ -207,7 +214,10 @@ export const PROMPT_MANIFEST = {
   'tool.url_fetch_description': {
     kind: 'tool',
     pinnedVersion: 1,
-    versions: [{ version: 1, text: TOOL_URL_FETCH_DESCRIPTION_V1 }],
+    versions: [
+      { version: 1, text: TOOL_URL_FETCH_DESCRIPTION_V1 },
+      { version: 2, text: TOOL_URL_FETCH_DESCRIPTION_V2 },
+    ],
   },
   'tool.places_search_description': {
     kind: 'tool',

@@ -306,7 +306,7 @@ export default function MCPCredentialManager({ servers }: MCPCredentialManagerPr
     return (
       <div className="flex flex-col items-center justify-center py-12 text-center">
         <Key className="w-12 h-12 text-muted-foreground mb-4" />
-        <h3 className="text-lg font-medium mb-2">No credentials required</h3>
+        <h3 className="text-h3 mb-2">No credentials required</h3>
         <p className="text-sm text-muted-foreground">
           The configured servers don't require API keys or authentication
         </p>

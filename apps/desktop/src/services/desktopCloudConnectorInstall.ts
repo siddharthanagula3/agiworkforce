@@ -5,11 +5,16 @@ import { recordOwnedWindowPresentation, resolveContentProtection } from './owned
 const CLOUD_CONNECTOR_WINDOW_LABEL = OWNED_CLOUD_WINDOW_LABELS.connectorInstall;
 const CONNECTOR_POLL_INTERVAL_MS = 1_500;
 const CONNECTOR_INSTALL_TIMEOUT_MS = 10 * 60 * 1_000;
+const TRUSTED_CONNECTOR_START_PATHS = new Set([
+  '/api/github/install/start',
+  '/api/connectors/oauth/start',
+]);
+const DEFAULT_CONNECTOR_WINDOW_TITLE = 'Connect GitHub to AGI';
 
 function trustedInstallUrl(rawUrl: string): string {
   const configuredOrigin = new URL(WEB_APP_URL).origin;
   const url = new URL(rawUrl);
-  if (url.origin !== configuredOrigin || url.pathname !== '/api/github/install/start') {
+  if (url.origin !== configuredOrigin || !TRUSTED_CONNECTOR_START_PATHS.has(url.pathname)) {
     throw new Error('Refusing to open an untrusted cloud connector authorization URL.');
   }
   return url.toString();
@@ -17,11 +22,12 @@ function trustedInstallUrl(rawUrl: string): string {
 
 export interface DesktopCloudConnectorInstallOptions {
   isConnected: () => Promise<boolean>;
+  title?: string;
 }
 
 export async function completeDesktopCloudConnectorInstall(
   rawUrl: string,
-  { isConnected }: DesktopCloudConnectorInstallOptions,
+  { isConnected, title = DEFAULT_CONNECTOR_WINDOW_TITLE }: DesktopCloudConnectorInstallOptions,
 ): Promise<void> {
   const url = trustedInstallUrl(rawUrl);
   const contentProtected = resolveContentProtection('connector-install');
@@ -32,7 +38,7 @@ export async function completeDesktopCloudConnectorInstall(
 
   const installWindow = new WebviewWindow(CLOUD_CONNECTOR_WINDOW_LABEL, {
     url,
-    title: 'Connect GitHub to AGI',
+    title,
     parent: 'main',
     center: true,
     focus: true,

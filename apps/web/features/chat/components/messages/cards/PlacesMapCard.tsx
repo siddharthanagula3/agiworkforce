@@ -243,7 +243,7 @@ export function PlacesMapCard({ body, assistantText }: PlacesMapCardProps) {
                   aria-pressed={selectedIndex === index}
                   data-testid="places-map-marker"
                   className={cn(
-                    'inline-flex min-h-6 items-center gap-1 rounded-full border px-2 text-xs font-semibold shadow-sm transition-colors',
+                    'inline-flex min-h-6 items-center gap-1 rounded-full border px-2 text-xs font-semibold shadow-e1 transition-colors',
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]',
                     selectedIndex === index
                       ? 'border-[var(--chat-accent-primary)] bg-[var(--chat-surface-elevated)] text-[color:var(--chat-text-primary)] ring-2 ring-[var(--chat-accent-primary)]'

@@ -767,7 +767,7 @@ export function ChatInterface({
 
         {/* Input area, ALWAYS at bottom in natural document flow.
             Never position:fixed. Never teleported. */}
-        <div className="shrink-0 px-4 pb-2">
+        <div className="shrink-0 px-gutter-compact pb-2">
           {/*
             Running-low warning, attached ABOVE the composer.
             Usage was previously visible only in Settings, so the first signal a
@@ -839,11 +839,11 @@ export function ChatInterface({
           hostBridge.rewindCodingCheckpoint && (
             <div className="absolute inset-0 z-[var(--z-modal)] flex justify-end bg-black/35">
               <section
-                className="flex h-full w-full max-w-sm flex-col border-l border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] shadow-2xl"
+                className="flex h-full w-full max-w-sm flex-col border-l border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] shadow-e4"
                 aria-label={t('interface.rewindCheckpoints', 'Rewind checkpoints')}
               >
                 <header className="flex items-center justify-between border-b border-[var(--chat-border)] px-4 py-3">
-                  <h2 className="text-sm font-semibold text-[var(--chat-text-primary)]">
+                  <h2 className="text-h5 text-[var(--chat-text-primary)]">
                     {t('interface.rewindCheckpoints', 'Rewind checkpoints')}
                   </h2>
                   <button

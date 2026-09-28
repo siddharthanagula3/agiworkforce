@@ -33,6 +33,7 @@ import type {
 import type { InteractiveCard, ProjectFileCitation, ResearchStep } from '@agiworkforce/types';
 import type { PastChatCitation } from '@/lib/past-chat-citation';
 import type { CloudWorkMode } from '@agiworkforce/types';
+import type { ManagedMediaImageAspectRatio } from '@agiworkforce/cloud-contracts';
 import type {
   PaywallSlot,
   SendReplayMetadata,
@@ -68,6 +69,13 @@ import {
  * them to one conversation, so turning Deep Research on in chat A no longer
  * leaks into chat B.
  */
+export interface ImageVersion {
+  imageUrl: string;
+  prompt?: string;
+  aspect?: string;
+  model?: string;
+}
+
 export interface ComposerToggleState {
   /** Chat | AGI Work. Stamped into send meta and enforced server-side. */
   workMode: CloudWorkMode;
@@ -85,6 +93,10 @@ export interface ComposerToggleState {
    * catalog owns the body.
    */
   selectedSkillName: string | null;
+  pendingImageSettings: {
+    modelId: string | null;
+    aspectRatio: ManagedMediaImageAspectRatio | null;
+  } | null;
   agiWorkScope: AgiWorkComposerScope | null;
 }
 
@@ -112,6 +124,7 @@ export const DEFAULT_COMPOSER_TOGGLES: ComposerToggleState = Object.freeze({
   videoMode: false,
   selectedSkillName: null,
   agiWorkScope: null,
+  pendingImageSettings: null,
 });
 
 /**
@@ -410,6 +423,7 @@ export interface MessageMetadata {
   imageGenModel?: string;
   /** Bounded ISO instant before which provider-directed image retry should stay disabled. */
   imageRetryAt?: string;
+  imageVersions?: ImageVersion[];
   /**
    * Generated video URL. Displayed inline when toolType === 'video-generation';
    * its ABSENCE while the tool is running is what drives MessageBubble's
@@ -428,6 +442,8 @@ export interface MessageMetadata {
   videoModel?: string;
   /** Aspect ratio requested when the video was generated; sizes the shimmer placeholder. */
   videoAspect?: string;
+  videoResolution?: string;
+  videoDurationSecs?: number;
   /** Latest provider progress reported by the durable reconciler. */
   videoProgress?: number;
   /** Durable terminal error projected by the server. */
@@ -751,6 +767,8 @@ interface ChatState {
    */
   pendingTemporaryChat: boolean | null;
 
+  temporaryChatPersonalized: boolean;
+
   // Actions - Conversations
   setConversations: (conversations: Conversation[]) => void;
   addConversation: (conversation: Conversation) => void;
@@ -759,6 +777,7 @@ interface ChatState {
   deleteConversation: (id: string) => void;
   setActiveConversation: (id: string | null) => void;
   setPendingTemporaryChat: (value: boolean | null) => void;
+  setTemporaryChatPersonalized: (value: boolean) => void;
   setActiveConversationWithMessages: (
     id: string,
     messages: Message[],
@@ -985,6 +1004,7 @@ const initialState = {
   memoryDisabledByConversation: {} as Record<string, boolean>,
   workModeByConversation: {} as Record<string, CloudWorkMode>,
   pendingTemporaryChat: null,
+  temporaryChatPersonalized: true,
 };
 
 /**
@@ -2074,6 +2094,9 @@ export const useChatStore = create<ChatState>()(
 
         setPendingTemporaryChat: (value) =>
           set({ pendingTemporaryChat: value }, undefined, 'chat/setPendingTemporaryChat'),
+
+        setTemporaryChatPersonalized: (value) =>
+          set({ temporaryChatPersonalized: value }, undefined, 'chat/setTemporaryChatPersonalized'),
 
         // Reset
         resetOnWorkspaceSwitch: () =>

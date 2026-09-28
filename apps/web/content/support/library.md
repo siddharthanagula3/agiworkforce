@@ -33,8 +33,8 @@ A file too large to preview in place says so and offers a download instead.
 
 Deleting moves an item to **Recently deleted**, where it stays restorable. For
 an uploaded or generated file, that window is 30 days: after it the stored bytes
-are removed for good. Other items stay in **Recently deleted** until you restore
-them or delete them yourself. A legal hold on your workspace keeps held material
+are removed for good. Other items stay in **Recently deleted** for 30 days and
+are then deleted for good. A legal hold on your workspace keeps held material
 past either window until the hold is released.
 
 **Delete permanently** erases the stored bytes now: nothing restores the file

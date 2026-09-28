@@ -318,6 +318,7 @@ export type AuditEventType =
   | 'encryption_key_provisioned'
   | 'encryption_key_revoked'
   | 'data_region_change_requested'
+  | 'data_region_change_cancelled'
   | 'data_region_changed'
   /**
    * A provider call was refused because it would have crossed the trust
@@ -326,6 +327,7 @@ export type AuditEventType =
    */
   | 'provider_egress_refused'
   | 'tool_executed'
+  | 'tool_approval_decided'
   | 'browser_action'
   | 'computer_use_action'
   | 'data_accessed'
@@ -404,6 +406,7 @@ export interface AuditEventDetail {
   organizationId?: string;
   targetUserId?: string;
   sessionId?: string;
+  conversationId?: string;
   subjectRef?: string;
   scopes?: string[];
   changedKeys?: string[];
@@ -471,6 +474,7 @@ const COMPLIANCE_AUDIT_EVENT_TYPES: ReadonlySet<AuditEventType> = new Set<AuditE
   'domain_retention_sweep_completed',
   'retention_policy_changed',
   'data_region_change_requested',
+  'data_region_change_cancelled',
   'data_region_changed',
   'privacy_request_submitted',
 ]);
@@ -505,6 +509,7 @@ const AUDIT_DETAIL_KEYS: ReadonlySet<string> = new Set<keyof AuditEventDetail & 
   'organizationId',
   'targetUserId',
   'sessionId',
+  'conversationId',
   'subjectRef',
   'scopes',
   'changedKeys',
@@ -818,11 +823,13 @@ function inferResourceType(eventType: AuditEventType): string {
     case 'encryption_key_revoked':
       return 'encryption_key';
     case 'data_region_change_requested':
+    case 'data_region_change_cancelled':
     case 'data_region_changed':
       return 'data_region';
     case 'provider_egress_refused':
       return 'provider_egress';
     case 'tool_executed':
+    case 'tool_approval_decided':
       return 'tool';
     case 'browser_action':
       return 'browser';

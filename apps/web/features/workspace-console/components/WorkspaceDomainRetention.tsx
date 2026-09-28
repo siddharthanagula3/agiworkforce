@@ -188,11 +188,7 @@ export function WorkspaceDomainRetention() {
     <section style={cardStyle} aria-labelledby="domain-retention-heading">
       {dialog}
       <div className="border-b px-5 py-3.5" style={{ borderColor: 'var(--settings-border)' }}>
-        <h2
-          id="domain-retention-heading"
-          className="text-sm font-semibold"
-          style={{ color: 'var(--text-1)' }}
-        >
+        <h2 id="domain-retention-heading" className="text-h5" style={{ color: 'var(--text-1)' }}>
           Retention by data type
         </h2>
         <p className="mt-1 text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>

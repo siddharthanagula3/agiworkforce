@@ -102,6 +102,7 @@ describe('options page, Help', () => {
       (button) => button.dataset.target,
     );
     expect(targets).toEqual([
+      'opt-appearance',
       'opt-permissions',
       'opt-privacy',
       'opt-account',

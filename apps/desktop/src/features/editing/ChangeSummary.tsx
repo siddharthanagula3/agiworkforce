@@ -42,7 +42,7 @@ export function ChangeSummary({ className }: ChangeSummaryProps) {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <FileText className="h-5 w-5 text-primary" />
-          <h3 className="text-lg font-semibold">Changes Summary</h3>
+          <h3 className="text-h3">Changes Summary</h3>
         </div>
         <Badge
           variant={riskLevel.variant as 'destructive' | 'default' | 'secondary'}

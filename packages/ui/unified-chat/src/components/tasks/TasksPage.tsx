@@ -479,7 +479,7 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
       <header className="mb-4 flex flex-col gap-1">
         <div className="flex items-center gap-2">
           <ListChecks className="h-5 w-5 text-primary" />
-          <h1 className="font-[var(--chat-font-sans)] text-[28px] font-medium">Work history</h1>
+          <h1 className="font-[var(--chat-font-sans)] text-display">Work history</h1>
         </div>
         <p className="text-sm text-muted-foreground">Your Managed Cloud work sessions</p>
       </header>

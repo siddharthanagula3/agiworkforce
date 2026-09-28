@@ -38,7 +38,7 @@ const SMART_ON_FHIR_PATIENT_SCOPES: readonly string[] = [
 ];
 
 export const CONNECTOR_OAUTH_SCOPE_CEILINGS: Readonly<Record<string, ConnectorScopeCeiling>> = {
-  gmail: [...GOOGLE_IDENTITY_SCOPES, ...google('gmail.readonly', 'gmail.send')],
+  gmail: [...GOOGLE_IDENTITY_SCOPES, ...google('gmail.readonly', 'gmail.compose', 'gmail.send')],
   'google-calendar': [...GOOGLE_IDENTITY_SCOPES, ...google('calendar.readonly', 'calendar.events')],
   'google-drive': [...GOOGLE_IDENTITY_SCOPES, ...google('drive.file', 'drive.metadata.readonly')],
   'google-sheets': [
@@ -68,6 +68,15 @@ export const CONNECTOR_OAUTH_SCOPE_CEILINGS: Readonly<Record<string, ConnectorSc
     ),
   ],
   sharepoint: [...OIDC_SCOPES, OFFLINE_ACCESS_SCOPE, ...graph('User.Read', 'Sites.Read.All')],
+  'microsoft-365': [
+    ...OIDC_SCOPES,
+    OFFLINE_ACCESS_SCOPE,
+    'api://e8c77dc2-69b3-43f4-bc51-3213c9d915b4/MCP.User.Read.All',
+    'api://e8c77dc2-69b3-43f4-bc51-3213c9d915b4/MCP.Group.Read.All',
+    'api://e8c77dc2-69b3-43f4-bc51-3213c9d915b4/MCP.GroupMember.Read.All',
+    'api://e8c77dc2-69b3-43f4-bc51-3213c9d915b4/MCP.Device.Read.All',
+    'api://e8c77dc2-69b3-43f4-bc51-3213c9d915b4/MCP.Organization.Read.All',
+  ],
   azure: [...OIDC_SCOPES, OFFLINE_ACCESS_SCOPE, `${AZURE_ARM_SCOPE_PREFIX}user_impersonation`],
 
   slack: [
@@ -109,13 +118,19 @@ export const CONNECTOR_OAUTH_SCOPE_CEILINGS: Readonly<Record<string, ConnectorSc
     'app:assignable',
     'app:mentionable',
   ],
-  jira: [OFFLINE_ACCESS_SCOPE, 'read:me', 'read:jira-user', 'read:jira-work', 'write:jira-work'],
+  jira: [
+    OFFLINE_ACCESS_SCOPE,
+    'read:me',
+    'read:jira:agent-interface',
+    'write:jira:agent-interface',
+    'search:jira:agent-interface',
+  ],
   confluence: [
     OFFLINE_ACCESS_SCOPE,
     'read:me',
-    'read:confluence-space.summary',
-    'read:confluence-content.all',
-    'write:confluence-content',
+    'read:confluence:agent-interface',
+    'write:confluence:agent-interface',
+    'search:confluence:agent-interface',
   ],
   asana: [
     ...OIDC_SCOPES,
@@ -151,6 +166,7 @@ export const CONNECTOR_OAUTH_SCOPE_CEILINGS: Readonly<Record<string, ConnectorSc
   linkedin: [...OIDC_SCOPES, 'w_member_social'],
   twitter: ['tweet.read', 'tweet.write', 'users.read', OFFLINE_ACCESS_SCOPE],
   discord: ['identify', 'guilds', 'guilds.members.read'],
+  'github-mcp': [OFFLINE_ACCESS_SCOPE],
   gitlab: [...OIDC_SCOPES, 'read_user', 'read_api', 'read_repository'],
   bitbucket: ['account', 'repository', 'pullrequest', 'issue'],
   pipedrive: ['base', 'deals:read', 'contacts:read', 'activities:read', 'users:read', 'search'],

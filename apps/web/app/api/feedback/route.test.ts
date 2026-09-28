@@ -7,6 +7,7 @@ const feedbackRouteMocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/api-auth', () => ({
+  getSuspendedAccountUser: vi.fn(async () => null),
   getOptionalAuthUser: feedbackRouteMocks.optionalUser,
   getClerkAuthUser: vi.fn(),
   assertAccountActive: vi.fn(),

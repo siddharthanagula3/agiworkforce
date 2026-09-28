@@ -2,7 +2,7 @@ import { ActivityIndicator, Modal, Pressable, ScrollView, View } from 'react-nat
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { X } from 'lucide-react-native';
 import type { ManagedCloudAgentRunApprovalDecision } from '@agiworkforce/cloud-contracts';
-import { TOOL_APPROVAL_ACTION_LABELS } from '@agiworkforce/types';
+import { TOOL_APPROVAL_ACTION_LABELS, creditsFromCents, formatCredits } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
 import { getManagedDisplayName } from '@/src/features/model-picker/service';
@@ -178,6 +178,18 @@ export function CloudRunDetailSheet({
                   <MetadataRow label="Model" value={getManagedDisplayName(run.model)} />
                   {cloudRunTimeLabel(run) ? (
                     <MetadataRow label="Activity" value={cloudRunTimeLabel(run)} />
+                  ) : null}
+                  {run.usage ? (
+                    <MetadataRow
+                      label="Cost"
+                      value={
+                        run.usage.costCents === null
+                          ? 'Metered against your free trial allowance'
+                          : formatCredits(creditsFromCents(run.usage.costCents), {
+                              maximumFractionDigits: 2,
+                            })
+                      }
+                    />
                   ) : null}
                   {run.usage ? (
                     <MetadataRow

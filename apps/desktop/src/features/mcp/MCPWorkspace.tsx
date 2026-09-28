@@ -76,7 +76,7 @@ export default function MCPWorkspace() {
       <div className="flex items-center justify-between p-4 border-b">
         <div className="flex items-center gap-2">
           <Server className="w-5 h-5 text-primary" />
-          <h1 className="text-xl font-semibold">Tool Management</h1>
+          <h1 className="text-h2">Tool Management</h1>
           <span className="text-sm text-muted-foreground">Integrations & Automations</span>
         </div>
         <div className="flex items-center gap-2">
@@ -140,7 +140,7 @@ export default function MCPWorkspace() {
           <TabsContent value="servers" className="flex-1 overflow-auto p-4">
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold">Connected Tools</h2>
+                <h2 className="text-h3">Connected Tools</h2>
                 <span className="text-sm text-muted-foreground">
                   {servers.filter((s: McpServerInfo) => s.enabled).length} enabled
                 </span>
@@ -149,7 +149,7 @@ export default function MCPWorkspace() {
               {servers.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 text-center">
                   <Server className="w-12 h-12 text-muted-foreground mb-4" />
-                  <h3 className="text-lg font-medium mb-2">No servers configured</h3>
+                  <h3 className="text-h3 mb-2">No servers configured</h3>
                   <p className="text-sm text-muted-foreground mb-4">
                     Add servers in the Configuration tab
                   </p>

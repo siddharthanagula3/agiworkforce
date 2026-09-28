@@ -199,6 +199,7 @@
     "voiceUnsupportedHint": "La entrada de voz no es compatible con este navegador. Prueba Chrome o Edge."
   },
   "bubble": {
+    "assistantSaid": "AGI dijo:",
     "assistantThinking": "El asistente está pensando",
     "cancelEdit": "Cancelar",
     "copied": "Copiado",
@@ -210,7 +211,8 @@
     "messageAttachments": "Archivos adjuntos del mensaje",
     "retryResponse": "Reintentar esta respuesta",
     "saveEdit": "Guardar",
-    "toolResult": "Resultado"
+    "toolResult": "Resultado",
+    "userSaid": "Tú dijiste:"
   },
   "goalHandoff": {
     "action": "Ejecutar como tarea",
@@ -226,6 +228,9 @@
     "shareConversation": "Compartir conversación",
     "temporaryChat": "Chat temporal",
     "temporaryChatRetentionNote": "No se guardará en tu historial y omite la memoria en este turno.",
+    "temporaryChatPersonalized": "Personalizado",
+    "temporaryChatUnpersonalized": "Sin personalizar",
+    "temporaryChatPersonalizationHint": "Personalizado usa tu perfil, tus instrucciones y tu estilo de respuesta. Sin personalizar los deja fuera.",
     "toggleArtifacts": "Alternar panel de artefactos",
     "toggleArtifactsCount": "Alternar panel de artefactos ({{count}})",
     "toggleStats": "Estadísticas"
