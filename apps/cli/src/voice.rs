@@ -296,6 +296,40 @@ pub async fn run_voice_mode(
     Ok(())
 }
 
+pub async fn dictate(session: &AgentSession, voice_lang: &str) -> Result<Option<String>> {
+    if !crate::voice_languages::is_valid_language(voice_lang) {
+        bail!("Unsupported voice language '{voice_lang}'.");
+    }
+    let privacy_mode = session.privacy_mode;
+    let opt_in =
+        std::env::var("AGIWORKFORCE_VOICE_ALLOW_CLOUD").is_ok_and(|value| value.trim() == "1");
+    let backend = gate_backend(detect_backend(&privacy_mode), &privacy_mode, opt_in);
+    if matches!(backend, TranscriptionBackend::None) {
+        bail!(
+            "No transcription backend available. Sign in with `agi login`, set OPENAI_API_KEY, \
+             or install the `whisper` CLI tool."
+        );
+    }
+    check_audio_device()?;
+    eprintln!(
+        "  {} Press {} to dictate into the composer, {} to cancel.",
+        ts::accent_header("dictate:"),
+        "SPACE".bold(),
+        "ESC".bold(),
+    );
+    if matches!(wait_for_key()?, VoiceAction::Exit) {
+        return Ok(None);
+    }
+    eprintln!();
+    let Some(recording) = record_audio()? else {
+        return Ok(None);
+    };
+    let spinner = output::create_spinner("Transcribing...");
+    let transcript = transcribe(&backend, &recording, voice_lang, &privacy_mode, opt_in).await;
+    spinner.finish_and_clear();
+    Ok(Some(transcript?.trim().to_string()).filter(|text| !text.is_empty()))
+}
+
 // ---------------------------------------------------------------------------
 // Transcription backend detection
 // ---------------------------------------------------------------------------
