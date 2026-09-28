@@ -5,6 +5,8 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { logger } from '@/lib/logger';
 import { parseQualifiedToolName } from '@/lib/mcp-tool-executor';
 import { parseLockdownEnabled } from '@shared/types/lockdownMode';
+import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
+import { readConnectorPolicySafely } from '@/lib/services/connector-policy-service';
 import { resolveConnectorToolMetadata } from './tool-metadata';
 
 export type ConnectorToolPermissionLevel = 'allow' | 'ask' | 'deny';
@@ -33,17 +35,19 @@ export interface ConnectorToolPermissions {
   readonly size: number;
 }
 
-function buildPermissions(
-  levels: Map<string, ConnectorToolPermissionLevel>,
-): ConnectorToolPermissions {
-  const key = (connectorId: string, toolName: string): string => connectorId + ' ' + toolName;
-  const levelForConnectorTool = (
-    connectorId: string,
-    toolName: string,
-  ): ConnectorToolPermissionLevel | undefined =>
-    levels.get(key(connectorId, toolName)) ??
+function levelKey(connectorId: string, toolName: string): string {
+  return connectorId + ' ' + toolName;
+}
+
+function lookupLevel(
+  levels: ReadonlyMap<string, ConnectorToolPermissionLevel>,
+  connectorId: string,
+  toolName: string,
+): ConnectorToolPermissionLevel | undefined {
+  return (
+    levels.get(levelKey(connectorId, toolName)) ??
     levels.get(
-      key(
+      levelKey(
         connectorId,
         connectorCategoryToolName(
           resolveConnectorToolMetadata(connectorId, toolName).actionClass === 'read'
@@ -51,7 +55,17 @@ function buildPermissions(
             : 'write',
         ),
       ),
-    );
+    )
+  );
+}
+
+function buildPermissions(
+  levels: Map<string, ConnectorToolPermissionLevel>,
+): ConnectorToolPermissions {
+  const levelForConnectorTool = (
+    connectorId: string,
+    toolName: string,
+  ): ConnectorToolPermissionLevel | undefined => lookupLevel(levels, connectorId, toolName);
   const levelFor = (qualifiedName: string): ConnectorToolPermissionLevel | undefined => {
     const parsed = parseQualifiedToolName(qualifiedName);
     if (!parsed) return undefined;
@@ -154,6 +168,45 @@ export function withoutStandingApprovals(
   };
 }
 
+/**
+ * A workspace administrator's verdicts on connector tools, applied over each
+ * member's own. The stricter answer wins: a workspace block or approval
+ * requirement holds whatever the member saved, and a workspace allow only
+ * settles tools the member has not decided on.
+ */
+export function withWorkspaceToolRules(
+  permissions: ConnectorToolPermissions,
+  rules: ReadonlyArray<ConnectorToolPermissionEntry>,
+): ConnectorToolPermissions {
+  if (rules.length === 0) return permissions;
+  const workspace = new Map(
+    rules.map((rule) => [levelKey(rule.connectorId, rule.toolName), rule.level]),
+  );
+  const levelForConnectorTool = (
+    connectorId: string,
+    toolName: string,
+  ): ConnectorToolPermissionLevel | undefined => {
+    const member = permissions.levelForConnectorTool(connectorId, toolName);
+    const ruled = lookupLevel(workspace, connectorId, toolName);
+    if (ruled === 'deny' || member === 'deny') return 'deny';
+    if (ruled === 'ask' || member === 'ask') return 'ask';
+    return member ?? ruled;
+  };
+  const levelFor = (qualifiedName: string): ConnectorToolPermissionLevel | undefined => {
+    const parsed = parseQualifiedToolName(qualifiedName);
+    if (!parsed) return permissions.levelFor(qualifiedName);
+    return levelForConnectorTool(parsed.serverId, parsed.toolName);
+  };
+  return {
+    ...permissions,
+    levelFor,
+    levelForConnectorTool,
+    isDenied: (qualifiedName) => levelFor(qualifiedName) === 'deny',
+    isConnectorToolDenied: (connectorId, toolName) =>
+      levelForConnectorTool(connectorId, toolName) === 'deny',
+  };
+}
+
 export function connectorToolPermissionsFromEntries(
   entries: ReadonlyArray<ConnectorToolPermissionEntry>,
 ): ConnectorToolPermissions {
@@ -222,14 +275,26 @@ export async function loadConnectorToolPermissions(
         '[connector-permissions] saved tool verdicts unavailable; falling back to approval prompts',
       );
     }
-    return EMPTY_CONNECTOR_TOOL_PERMISSIONS;
+    return withWorkspaceToolRules(
+      EMPTY_CONNECTOR_TOOL_PERMISSIONS,
+      await workspaceToolRules(db, userId),
+    );
   }
 
   const levels = new Map<string, ConnectorToolPermissionLevel>();
   for (const row of rows) {
     const level = DB_TO_WIRE[row.level];
     if (!level) continue;
-    levels.set(row.connector_id + ' ' + row.tool_name, level);
+    levels.set(levelKey(row.connector_id, row.tool_name), level);
   }
-  return buildPermissions(levels);
+  return withWorkspaceToolRules(buildPermissions(levels), await workspaceToolRules(db, userId));
+}
+
+async function workspaceToolRules(
+  db: DatabaseAdapter,
+  userId: string,
+): Promise<ReadonlyArray<ConnectorToolPermissionEntry>> {
+  const organizationId = await resolveActiveOrganizationId(db, userId).catch(() => null);
+  const policy = await readConnectorPolicySafely(db, organizationId);
+  return policy?.toolRules ?? [];
 }
