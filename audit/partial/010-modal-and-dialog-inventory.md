@@ -77,13 +77,9 @@ Code: `apps/mobile/app/(app)/chat/[id].tsx:1186-1192`, `apps/mobile/app/(app)/ch
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The library shares only artifacts, as a published link; uploaded files and images cannot be shared and there are no folders to share. | ui |
-| desktop | partial | The library shares only artifacts, as a published link; uploaded files and images cannot be shared and there are no folders to share. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/library/components/LibraryView.tsx:45-45`, `apps/web/features/library/components/LibraryView.tsx:219-219`
 
 ## S10.10: Share artifact.
 
