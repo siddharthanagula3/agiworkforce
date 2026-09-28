@@ -107,6 +107,12 @@ import {
 import { searchMentionTargets } from '../../data/mentionSearch';
 import type { ApprovalDecision, ContextAttachmentKind } from '../../protocol/webviewMessages';
 import { approvalToolIdentity, approvalToolLabel } from '../permissions/approvalScope';
+import {
+  answerRatingId,
+  applyAnswerRating,
+  rememberedAnswerRating,
+} from '../feedback/answerRating';
+import type { AnswerRating } from '../feedback/submitFeedback';
 import { openPathReference, openWorkspaceFileDiff, type PathReferenceTarget } from '../path-links';
 import { buildCustomInstructionInput } from '../instructions';
 import { clearActiveCloudProject, getActiveCloudProject } from '../projects/activeProject';
@@ -260,10 +266,12 @@ export type WebviewToExtMessage =
   | { type: 'regenerate' }
   | { type: 'cancelQueuedMessage'; payload: { clientMessageId: string } }
   | { type: 'openSuggestedProject'; payload: { projectId: string } }
-  | { type: 'runSlashCommand'; payload: { name: string } };
+  | { type: 'runSlashCommand'; payload: { name: string } }
+  | { type: 'rateAnswer'; payload: { key: string; text: string; rating: AnswerRating | null } };
 
 export type ExtToWebviewMessage =
   | { type: 'token'; payload: { text: string } }
+  | { type: 'answerRating'; payload: { key: string; rating: AnswerRating | null } }
   | {
       type: 'done';
       payload?: {
@@ -316,7 +324,7 @@ export type ExtToWebviewMessage =
         trustMode: Exclude<DeveloperSessionTrustMode, 'unknown'>;
         provider?: string;
         transcriptTruncated: boolean;
-        messages: Array<{ role: 'user' | 'assistant'; text: string }>;
+        messages: Array<{ role: 'user' | 'assistant'; text: string; rating?: AnswerRating }>;
       };
     }
   | {
@@ -700,6 +708,7 @@ export class ChatStateManager {
     }
   >();
   private readonly _editorContextListeners: vscode.Disposable[] = [];
+  private _answerRatings: Promise<void> = Promise.resolve();
   private readonly _activeModelChanged = new vscode.EventEmitter<string>();
   readonly onDidChangeActiveModel = this._activeModelChanged.event;
 
@@ -1364,6 +1373,26 @@ export class ChatStateManager {
         break;
       }
 
+      case 'rateAnswer': {
+        const { key, text, rating } = msg.payload;
+        const thread = this._thread;
+        const rate = async (): Promise<void> => {
+          const settled =
+            thread === undefined
+              ? null
+              : await applyAnswerRating(this._secrets, this._context.globalState, rating, {
+                  messageId: answerRatingId(thread.id, text),
+                  conversationId: thread.id,
+                  model: thread.model,
+                });
+          this._post({ type: 'answerRating', payload: { key, rating: settled } });
+        };
+        const queued = this._answerRatings.then(rate);
+        this._answerRatings = queued.catch(() => undefined);
+        await queued;
+        break;
+      }
+
       case 'selectModel': {
         const { modelId } = (msg as { type: 'selectModel'; payload: { modelId: string } }).payload;
         if (modelId === '__local_setup__') break;
@@ -1849,7 +1878,14 @@ export class ChatStateManager {
         runtime: resolved.runtime,
       };
 
-      const messages = normalizeTranscriptMessages(resolved.response.messages);
+      const messages = normalizeTranscriptMessages(resolved.response.messages).map((message) => {
+        if (message.role !== 'assistant') return message;
+        const rating = rememberedAnswerRating(
+          this._context.globalState,
+          answerRatingId(resumed.id, message.text),
+        );
+        return rating === undefined ? message : { ...message, rating };
+      });
       this._loadedConversation = {
         threadId: resumed.id,
         title: resumed.title,

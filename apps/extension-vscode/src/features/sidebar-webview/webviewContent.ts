@@ -625,6 +625,7 @@ export function getWebviewContent(
       background: var(--hover);
       color: var(--text-primary);
     }
+    .message-action[aria-pressed='true'] { color: var(--text-primary); }
     .message-action--regenerate { display: none; }
     .message.assistant.message--latest .message-action--regenerate { display: inline-flex; }
     .message-meta {
@@ -3732,7 +3733,48 @@ export function getWebviewContent(
       }, 1500);
     }
 
-    function appendMessageActions(messageEl, sourceText, meta) {
+    var answerRatingSeq = 0;
+
+    function paintAnswerRating(row, rating) {
+      row.dataset.rating = rating || '';
+      var buttons = row.querySelectorAll('.message-action--rate');
+      for (var i = 0; i < buttons.length; i++) {
+        var button = buttons[i];
+        var kind = button.dataset.rating;
+        var pressed = kind === rating;
+        var label = pressed ? 'Remove rating' : kind === 'up' ? 'Good response' : 'Bad response';
+        button.setAttribute('aria-pressed', pressed ? 'true' : 'false');
+        button.setAttribute('aria-label', label);
+        button.title = label;
+        button.firstChild.className = 'codicon codicon-thumbs' + kind + (pressed ? '-filled' : '');
+      }
+    }
+
+    function appendRatingButtons(row, messageEl, rating) {
+      var key = 'answer-' + (++answerRatingSeq);
+      row.dataset.answerKey = key;
+      ['up', 'down'].forEach(function (kind) {
+        var button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'message-action message-action--rate';
+        button.dataset.rating = kind;
+        var ratingIcon = document.createElement('span');
+        ratingIcon.setAttribute('aria-hidden', 'true');
+        button.appendChild(ratingIcon);
+        button.addEventListener('click', function () {
+          var next = row.dataset.rating === kind ? null : kind;
+          paintAnswerRating(row, next);
+          vscode.postMessage({
+            type: 'rateAnswer',
+            payload: { key: key, text: assistantSources.get(messageEl) || '', rating: next },
+          });
+        });
+        row.appendChild(button);
+      });
+      paintAnswerRating(row, rating || null);
+    }
+
+    function appendMessageActions(messageEl, sourceText, meta, rating) {
       if (!messageEl || !sourceText) return;
       assistantSources.set(messageEl, sourceText);
       var previous = messagesEl.querySelectorAll('.message.assistant.message--latest');
@@ -3761,6 +3803,7 @@ export function getWebviewContent(
         );
       });
       row.appendChild(copy);
+      appendRatingButtons(row, messageEl, rating);
       var regenerate = document.createElement('button');
       regenerate.type = 'button';
       regenerate.className = 'message-action message-action--regenerate';
@@ -5705,6 +5748,13 @@ export function getWebviewContent(
         renderContextUsage(msg.payload.usedTokens, msg.payload.contextWindow);
       }
 
+      else if (msg.type === 'answerRating') {
+        var ratedRow = messagesEl.querySelector(
+          '.message-actions[data-answer-key="' + msg.payload.key + '"]'
+        );
+        if (ratedRow) paintAnswerRating(ratedRow, msg.payload.rating);
+      }
+
       else if (msg.type === 'progressUpdate') {
         removeTyping();
         upsertProgressEl(
@@ -5937,7 +5987,7 @@ export function getWebviewContent(
             var assistantHistoryEl = addMessage('assistant', '');
             assistantHistoryEl.innerHTML = renderAssistant(historyMessage.text || '');
             bindCodeBlockActions(assistantHistoryEl);
-            appendMessageActions(assistantHistoryEl, historyMessage.text || '');
+            appendMessageActions(assistantHistoryEl, historyMessage.text || '', null, historyMessage.rating);
           } else if (historyMessage.role === 'user') {
             addMessage('user', historyMessage.text || '');
           }
