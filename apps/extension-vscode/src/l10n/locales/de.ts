@@ -395,6 +395,20 @@ const de = {
     'AGI Workforce: {count} Dateien wurden auf den Prüfpunkt zurückgesetzt.',
   'webview.sources_one': '{count} Quelle',
   'webview.sources_other': '{count} Quellen',
+  'sessionSync.continuedIn':
+    'Diese Sitzung wurde in {client} fortgesetzt. Die neuesten Nachrichten werden hier angezeigt.',
+  'sessionSync.continuedElsewhere':
+    'Diese Sitzung wurde in einer anderen App fortgesetzt. Die neuesten Nachrichten werden hier angezeigt.',
+  'sessionSync.heldBy': '{client} verwendet diese Sitzung.',
+  'sessionSync.takeOverDetail':
+    'Übernehmen Sie sie, um Ihre Nachricht von hier zu senden. Wenn {client} noch antwortet, beenden Sie es dort zuerst: Schreiben zwei Apps gleichzeitig, entstehen zwei Kopien der Sitzung.',
+  'sessionSync.takeOver': 'Übernehmen und senden',
+  'sessionSync.notSent':
+    'Nicht gesendet: {client} verwendet diese Sitzung. Senden Sie erneut, um sie hierher zu übernehmen.',
+  'sessionSync.takeOverFailed':
+    'Die Sitzung konnte nicht übernommen werden. Senden Sie erneut, um es noch einmal zu versuchen.',
+  'sessionSync.stopBeforeTerminal':
+    'Beenden Sie die laufende Antwort, bevor Sie diese Sitzung im Terminal fortsetzen.',
 };
 
 export default de;

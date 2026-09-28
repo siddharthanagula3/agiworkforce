@@ -292,6 +292,19 @@ const ko = {
   'checkpoints.filesRestored_other':
     'AGI Workforce: 파일 {count}개를 체크포인트 시점으로 되돌렸습니다.',
   'webview.sources_other': '출처 {count}개',
+  'sessionSync.continuedIn':
+    '이 세션은 {client}에서 계속되었습니다. 최신 메시지가 여기에 표시됩니다.',
+  'sessionSync.continuedElsewhere':
+    '이 세션은 다른 앱에서 계속되었습니다. 최신 메시지가 여기에 표시됩니다.',
+  'sessionSync.heldBy': '{client}에서 이 세션을 사용 중입니다.',
+  'sessionSync.takeOverDetail':
+    '여기에서 메시지를 보내려면 세션을 넘겨받으세요. {client}에서 아직 응답 중이면 먼저 그곳에서 중지하세요. 두 앱이 동시에 쓰면 세션 사본이 두 개 남습니다.',
+  'sessionSync.takeOver': '넘겨받고 보내기',
+  'sessionSync.notSent':
+    '보내지 않음: {client}에서 이 세션을 사용 중입니다. 다시 보내면 여기에서 넘겨받을 수 있습니다.',
+  'sessionSync.takeOverFailed': '이 세션을 넘겨받지 못했습니다. 다시 보내서 재시도하세요.',
+  'sessionSync.stopBeforeTerminal':
+    '터미널에서 이 세션을 계속하기 전에 실행 중인 응답을 중지하세요.',
 };
 
 export default ko;
