@@ -203,29 +203,27 @@ Code: `apps/web/features/billing/components/Billing/types.ts:77-77`, `apps/mobil
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | A few strings use i18next _one/_other keys (and Arabic has none of its zero/two/few/many forms); about 18 files still build English "s" suffixes inline. | ui |
-| desktop | partial | A few strings use i18next _one/_other keys (and Arabic has none of its zero/two/few/many forms); about 18 files still build English "s" suffixes inline. | ui |
+| web | partial | 56cd1c51f: ~20 files on _one/_other with full Arabic forms; remaining sites are in schedules, connectors, privacy, billing, MCP folders, ChatComposerNew, ProjectSettingsDialog, WorkspaceRoles and server copy | ~60 sites in other lanes' folders, compactToolSummary |
+| desktop | partial | 56cd1c51f: ~20 files on _one/_other with full Arabic forms; remaining sites are in schedules, connectors, privacy, billing, MCP folders, ChatComposerNew, ProjectSettingsDialog, WorkspaceRoles and server copy | ~60 sites in other lanes' folders, compactToolSummary |
 | mobile | partial | Counts use English-only "=== 1 ? '' : 's'" suffixes; use the i18n plural rules (one/few/many) so translated counts read correctly. | ui |
 | vscode | partial | Counts use English-only "=== 1 ? '' : 's'" suffixes; use the i18n plural rules (one/few/many) so translated counts read correctly. | ui |
-| chrome | partial | Only an English locale ships and plurals are separate one/many message keys; chrome.i18n has no plural rules, so add a plural-aware formatter before adding locales. | ui |
+| chrome | partial | 56cd1c51f: tPlural over Intl.PluralRules in place; adding locales is outside this item | only an English locale ships |
 
-Code: `packages/ui/i18n/locales/en/pricing.json:191-191`, `apps/web/features/chat/components/dialogs/KeyboardShortcutsDialog.tsx:156-156`, `apps/mobile/app/(app)/notifications/index.tsx:307-307`, `apps/extension-vscode/src/core/commandSetup.ts:276-276`
+Code: `apps/web/features/chat/components/dialogs/KeyboardShortcutsDialog.tsx:158-158`, `packages/ui/i18n/locales/ar/errors.json:295-295`, `apps/mobile/app/(app)/notifications/index.tsx:307-307`, `apps/extension-vscode/src/core/commandSetup.ts:276-276`
 
 ## S11.25: Translated error messages.
 
 - Done when: Error messages appear in the user's chosen language.
 - Wave: 3
+- Already works on: web, desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | errors.json is translated into 12 languages but no code reads the errors namespace; error text is hard-coded English. Route errors through t('errors:…'). | handler |
-| desktop | partial | errors.json is translated into 12 languages but no code reads the errors namespace; error text is hard-coded English. Route errors through t('errors:…'). | handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | partial | Host notifications are translated (l10n in 12 locales), but errors inside the chat webview are English only. | ui |
-| chrome | partial | Errors go through chrome.i18n (t()), but only an English locale ships, and some errors (dictation) are literal strings. | ui |
 
-Code: `packages/ui/i18n/locales/ar/errors.json:2-2`, `apps/web/features/onboarding/components/OnboardingWizard.tsx:88-88`, `apps/extension-vscode/src/l10n/index.ts:45-45`, `apps/extension-vscode/src/platform/applyEdit.ts:43-43`
+Code: `apps/extension-vscode/src/l10n/index.ts:45-45`, `apps/extension-vscode/src/platform/applyEdit.ts:43-43`
 
 ## S11.26: Platform-specific shortcut notation.
 

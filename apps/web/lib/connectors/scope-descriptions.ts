@@ -123,6 +123,13 @@ const SCOPE_DESCRIPTIONS: Readonly<Record<string, ScopeDescription>> = {
   'users:read.email': { sentence: "Reads workspace members' email addresses.", access: READ },
   'team:read': { sentence: 'Reads basic information about your workspace.', access: READ },
   'files:read': { sentence: 'Reads files you have access to.', access: READ },
+  'search:read.public': { sentence: 'Searches messages in public channels.', access: READ },
+  'search:read.private': {
+    sentence: 'Searches messages in private channels you belong to.',
+    access: READ,
+  },
+  'search:read.im': { sentence: 'Searches your direct messages.', access: READ },
+  'search:read.mpim': { sentence: 'Searches your group direct messages.', access: READ },
 
   read: { sentence: 'Reads issues, projects, and comments in your workspace.', access: READ },
   write: { sentence: 'Creates and edits issues and projects in your workspace.', access: WRITE },

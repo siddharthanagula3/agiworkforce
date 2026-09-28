@@ -144,7 +144,12 @@ import {
   resolveVisibleThread,
   stampLinearParents,
 } from '@/features/chat/lib/messageThread';
-import { parseAgiWorkPlanEvent, type AgiWorkGoalInput } from '@/features/chat/utils/agiwork-plan';
+import {
+  parseAgiWorkPlanEvent,
+  parseAgiWorkPlanReview,
+  type AgiWorkGoalInput,
+  type AgiWorkPlanReview,
+} from '@/features/chat/utils/agiwork-plan';
 import {
   resolveQuotaPaywallSlot,
   type ServerQuotaRecovery,
@@ -231,6 +236,8 @@ interface SendMessageOptions {
   };
   workMode?: CloudWorkMode;
   agiWorkGoal?: AgiWorkGoalInput;
+  /** Steps the user approved, edited or chose to retry; the server runs them instead of planning. */
+  agiWorkPlan?: string[];
   onTurnCommitted?: () => void;
   /**
    * Edit-as-sibling: the parent the REVISED user message hangs from, which is
@@ -1556,6 +1563,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     ? { ...seedMetadata.research }
     : undefined;
   let currentAgiWorkPlan: MessageMetadata['agiWorkPlan'] = seedMetadata?.agiWorkPlan;
+  let currentAgiWorkPlanReview: AgiWorkPlanReview | undefined = seedMetadata?.agiWorkPlanReview;
   let currentGeneratedFiles: MessageMetadata['generatedFiles'] = seedMetadata?.generatedFiles;
   let currentAgentActivity: AgentActivityState | undefined = liveMessageMetadata?.agentActivity;
   let currentCloudAgentRun: ManagedCloudAgentRunReference | undefined = runHandle
@@ -2159,6 +2167,9 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     }
     if (currentAgiWorkPlan) {
       metadata.agiWorkPlan = currentAgiWorkPlan.map((step) => ({ ...step }));
+    }
+    if (currentAgiWorkPlanReview) {
+      metadata.agiWorkPlanReview = { ...currentAgiWorkPlanReview };
     }
     if (interactiveCards.size > 0) {
       metadata.interactiveCards = [...interactiveCards.values()];
@@ -2830,6 +2841,11 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
             if (planSteps) {
               currentAgiWorkPlan = planSteps;
               setAgiWorkPlan(assistantMessageId, planSteps, conversationId);
+            }
+            const review = parseAgiWorkPlanReview(agiWorkPlan);
+            if (review) {
+              currentAgiWorkPlanReview = review;
+              patchMessageMeta({ agiWorkPlanReview: review });
             }
           }
 
@@ -3750,6 +3766,12 @@ export function useChatStream(): UseChatStreamReturn {
                 : undefined,
               work_mode: options.workMode,
               agi_work_goal: options.workMode === 'agiwork' ? options.agiWorkGoal : undefined,
+              agi_work_plan:
+                options.workMode === 'agiwork' && options.agiWorkPlan?.length
+                  ? { steps: options.agiWorkPlan }
+                  : undefined,
+              agi_work_plan_approval:
+                options.workMode === 'agiwork' && !options.agiWorkPlan?.length ? true : undefined,
               thinking_mode: thinkingEnabled,
               effort:
                 supportsEffort && resolvedEffort && (thinkingEnabled || sendsEffortWithoutThinking)

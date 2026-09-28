@@ -112,16 +112,13 @@ Code: `apps/extension-vscode/src/features/settings/settingsWebviewContent.ts:116
 
 - Done when: A token/chip input (typed entries become removable chips inside or beside the field) is used in shipped UI.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Allow-list editors add typed entries to a removable list (workspace IP allow list, connector policy), but entries are rows, not inline chips; there is no chip input component. | ui |
-| desktop | partial | Allow-list editors add typed entries to a removable list (workspace IP allow list, connector policy), but entries are rows, not inline chips; there is no chip input component. | ui |
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/settings/sections/WorkspacePolicySection.tsx:671-672`, `apps/web/features/settings/sections/WorkspacePolicySection.tsx:684-687`
 
 ## S8.22: Numeric steppers.
 

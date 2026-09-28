@@ -101,17 +101,13 @@ Code: `apps/web/features/settings/sections/AccountSection.tsx:529-529`, `apps/we
 
 - Done when: The user is told about security-relevant events (new sign-in, password or 2FA change, new device) and can control how.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | partials/auth 86ae38fc2, 53132ce90: a new browser, desktop or mobile session now puts 'A new sign-in to your account' in the security feed once; security events are still not emailed and there is no setting to choose how they are delivered | ui |
-| desktop | partial | partials/auth 86ae38fc2, 53132ce90: a new browser, desktop or mobile session now puts 'A new sign-in to your account' in the security feed once; security events are still not emailed and there is no setting to choose how they are delivered | ui |
-| mobile | partial | Mobile shows the recent security activity log but receives no security alert (it never reads the notification feed or gets a push for it). | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/lib/api-auth.ts:349-349`, `apps/web/lib/api-auth.ts:369-369`, `apps/web/lib/server/session-sightings.ts:40-40`, `apps/mobile/src/features/settings/account-security/index.tsx:434-462`
 
 ## S86.12: Connected accounts.
 

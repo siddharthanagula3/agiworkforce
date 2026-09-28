@@ -11,6 +11,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { recordAuditEvent } from '@/lib/security-audit';
 import { handleLiveVoiceToolCall } from '@/lib/voice/live-voice-tool-runner';
 import { isVoiceSessionStoreReady, touchVoiceSession } from '../../lib/voice-session-store';
 
@@ -72,6 +73,22 @@ async function handleVoiceToolCall(
     call: parsed.data,
     signal: request.signal,
   });
+  if (parsed.data.decision && result.status !== 'approval_required') {
+    await recordAuditEvent({
+      userId,
+      organizationId: session.organizationId,
+      eventType: 'tool_approval_decided',
+      request,
+      surface: 'voice',
+      detail: {
+        resourceType: 'tool',
+        resourceId: parsed.data.callId,
+        resourceName: parsed.data.name,
+        status: parsed.data.decision,
+        conversationId: session.conversationId,
+      },
+    });
+  }
   return NextResponse.json(result, { headers });
 }
 

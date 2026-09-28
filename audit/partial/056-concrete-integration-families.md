@@ -202,9 +202,9 @@ Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `pa
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Box's folder and share-link tools need write scope (root_readwrite), but the ceiling admits root_readonly and item_upload only; Drive (drive.file) cannot share arbitrary files; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Google Drive. | handler, flag-off |
-| desktop | partial | Box's folder and share-link tools need write scope (root_readwrite), but the ceiling admits root_readonly and item_upload only; Drive (drive.file) cannot share arbitrary files; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Google Drive. | handler, flag-off |
-| mobile | partial | Box's folder and share-link tools need write scope (root_readwrite), but the ceiling admits root_readonly and item_upload only; Drive (drive.file) cannot share arbitrary files; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Google Drive. | handler, flag-off |
+| web | partial | Box folder and shared-link tools need root_readwrite (verified: developer.box.com scopes page), which reads and writes every file; it stays out of the ceiling like full-Drive. Owner decision whether to admit it. | handler, flag-off |
+| desktop | partial | Box folder and shared-link tools need root_readwrite (verified: developer.box.com scopes page), which reads and writes every file; it stays out of the ceiling like full-Drive. Owner decision whether to admit it. | handler, flag-off |
+| mobile | partial | Box folder and shared-link tools need root_readwrite (verified: developer.box.com scopes page), which reads and writes every file; it stays out of the ceiling like full-Drive. Owner decision whether to admit it. | handler, flag-off |
 | cli | missing | Not built on this surface. |  |
 | chrome | partial | Box's folder and share-link tools need write scope (root_readwrite), but the ceiling admits root_readonly and item_upload only; Drive (drive.file) cannot share arbitrary files; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Google Drive. | handler, flag-off |
 
@@ -266,13 +266,13 @@ Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `pa
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Slack message search needs the search:read scope, which the Slack ceiling does not admit; Teams has no pinned MCP server; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Teams. | handler, flag-off |
-| desktop | partial | Slack message search needs the search:read scope, which the Slack ceiling does not admit; Teams has no pinned MCP server; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Teams. | handler, flag-off |
-| mobile | partial | Slack message search needs the search:read scope, which the Slack ceiling does not admit; Teams has no pinned MCP server; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Teams. | handler, flag-off |
+| web | partial | 693fe31f9 admits Slack's search:read.public/.private/.im/.mpim (scopes verified at docs.slack.dev assistant.search.context). Slack is a preregistered vendor, so the owner must register the Slack app with these scopes and add its descriptor; Teams has no Microsoft-hosted MCP server we could verify. | flag-off |
+| desktop | partial | 693fe31f9 admits Slack's search:read.public/.private/.im/.mpim (scopes verified at docs.slack.dev assistant.search.context). Slack is a preregistered vendor, so the owner must register the Slack app with these scopes and add its descriptor; Teams has no Microsoft-hosted MCP server we could verify. | flag-off |
+| mobile | partial | 693fe31f9 admits Slack's search:read.public/.private/.im/.mpim (scopes verified at docs.slack.dev assistant.search.context). Slack is a preregistered vendor, so the owner must register the Slack app with these scopes and add its descriptor; Teams has no Microsoft-hosted MCP server we could verify. | flag-off |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | Slack message search needs the search:read scope, which the Slack ceiling does not admit; Teams has no pinned MCP server; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Teams. | handler, flag-off |
 
-Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `packages/ui/ui/src/settings-modal/SettingsModal.tsx:1967-1969`, `apps/web/app/api/llm/v1/chat/completions/route.ts:735-741`, `apps/web/lib/user-connector-tools.ts:2269-2289`
+Code: `apps/web/lib/connectors/oauth-scope-allowlist.ts:91-91`, `apps/extension/src/features/side-panel/bubbles.ts:388-388`, `apps/extension/src/features/cloud-bridge/freeTrialClient.ts:55-56`, `apps/web/app/api/llm/v1/chat/completions/route.ts:735-741`
 
 ## S56.22: Team-message drafting and posting.
 
@@ -369,13 +369,13 @@ Code: `apps/web/lib/connectors/directory/sources/first-party.json:550-550`, `app
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | No CI provider connector works (CircleCI has no remote server; GitHub Actions is not exposed); only Vercel deployment build logs are available. | handler |
-| desktop | partial | No CI provider connector works (CircleCI has no remote server; GitHub Actions is not exposed); only Vercel deployment build logs are available. | handler |
-| mobile | partial | No CI provider connector works (CircleCI has no remote server; GitHub Actions is not exposed); only Vercel deployment build logs are available. | handler |
+| web | partial | GitHub's remote MCP enables Actions only through /x/actions, /x/all or an X-MCP-Toolsets header (verified in github-mcp-server docs/remote-server.md). The descriptor has no per-connector header support, and /x/all exceeds the per-user connector tool cap; adding a header field to the descriptor, then X-MCP-Toolsets default,actions, would close it. | handler |
+| desktop | partial | GitHub's remote MCP enables Actions only through /x/actions, /x/all or an X-MCP-Toolsets header (verified in github-mcp-server docs/remote-server.md). The descriptor has no per-connector header support, and /x/all exceeds the per-user connector tool cap; adding a header field to the descriptor, then X-MCP-Toolsets default,actions, would close it. | handler |
+| mobile | partial | GitHub's remote MCP enables Actions only through /x/actions, /x/all or an X-MCP-Toolsets header (verified in github-mcp-server docs/remote-server.md). The descriptor has no per-connector header support, and /x/all exceeds the per-user connector tool cap; adding a header field to the descriptor, then X-MCP-Toolsets default,actions, would close it. | handler |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | No CI provider connector works (CircleCI has no remote server; GitHub Actions is not exposed); only Vercel deployment build logs are available. | handler |
 
-Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `packages/ui/ui/src/settings-modal/SettingsModal.tsx:1967-1969`, `apps/web/app/api/llm/v1/chat/completions/route.ts:735-741`, `apps/web/lib/user-connector-tools.ts:2269-2289`
+Code: `apps/web/lib/connectors/directory/sources/first-party.json:550-550`, `apps/extension/src/features/side-panel/bubbles.ts:388-388`, `apps/extension/src/features/cloud-bridge/freeTrialClient.ts:55-56`, `apps/web/app/api/llm/v1/chat/completions/route.ts:735-741`
 
 ## S56.34: Design-file inspection.
 

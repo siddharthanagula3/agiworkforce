@@ -1309,6 +1309,33 @@ export async function claimDueScheduleRuns(
   return rows.map(mapClaim);
 }
 
+export type RecentScheduleRun = ScheduleRun & { taskName: string };
+
+export async function listRecentScheduleRuns(
+  db: DatabaseAdapter,
+  userId: string,
+  page: { limit: number; offset: number },
+): Promise<RecentScheduleRun[]> {
+  const limit = clampInteger(page.limit, 1, MAX_PAGE_SIZE);
+  const offset = clampInteger(page.offset, 0, 10_000);
+  const rows = await db.query<RunRow & { task_name: string }>(
+    `select run.*, task.name as task_name,
+            (select sum(charge.actual_cost_microusd)
+               from public.managed_usage_requests charge
+              where charge.user_id = $1
+                and charge.scheduled_task_id = run.task_id
+                and charge.scheduled_task_run_id = run.id
+                and charge.status = 'completed') as credits_used_microusd
+       from scheduled_task_runs as run
+       join scheduled_tasks as task on task.id = run.task_id
+      where task.user_id = $1
+      order by run.started_at desc, run.id desc
+      limit $2 offset $3`,
+    [userId, limit, offset],
+  );
+  return rows.map((row) => ({ ...mapScheduleRun(row), taskName: row.task_name }));
+}
+
 export async function listScheduleRuns(
   db: DatabaseAdapter,
   userId: string,

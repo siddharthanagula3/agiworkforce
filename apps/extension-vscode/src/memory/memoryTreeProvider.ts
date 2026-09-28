@@ -1,9 +1,55 @@
 import * as vscode from 'vscode';
+import type { MemoryCategory } from '@agiworkforce/agent-core';
 import { type MemoryFact } from './memoryStore';
 import type { AccountMemoryStatus, AccountMemoryStore } from './accountMemoryStore';
 import { Config } from '../platform/config';
 
 const MAX_LABEL_CHARS = 60;
+
+const CATEGORY_LABELS: Record<MemoryCategory, string> = {
+  preference: 'Preferences',
+  fact: 'Facts',
+  decision: 'Decisions',
+  context: 'Context',
+  summary: 'Summaries',
+  skill: 'Skills',
+};
+
+const SOURCE_LABELS: Record<string, string> = {
+  vscode: 'VS Code',
+  web: 'the web app',
+  chat: 'a chat',
+  cli: 'the CLI',
+  mobile: 'mobile',
+  desktop: 'the desktop app',
+  import: 'an import',
+};
+
+function provenance(fact: MemoryFact): string {
+  const source =
+    fact.source === undefined ? undefined : (SOURCE_LABELS[fact.source] ?? fact.source);
+  if (fact.sourceConversationTitle !== undefined) {
+    return `Saved from the conversation “${fact.sourceConversationTitle}”${source === undefined ? '' : ` in ${source}`}`;
+  }
+  return source === undefined ? 'Source not recorded' : `Saved from ${source}`;
+}
+
+export class MemoryCategoryItem extends vscode.TreeItem {
+  constructor(
+    readonly category: MemoryCategory,
+    readonly facts: readonly MemoryFact[],
+  ) {
+    super(CATEGORY_LABELS[category], vscode.TreeItemCollapsibleState.Expanded);
+    this.id = `memory-category:${category}`;
+    this.description = String(facts.length);
+    this.iconPath = new vscode.ThemeIcon('folder-library');
+    this.contextValue = 'memoryCategory';
+    this.accessibilityInformation = {
+      label: `${CATEGORY_LABELS[category]}, ${facts.length}`,
+      role: 'treeitem',
+    };
+  }
+}
 
 export class MemoryFactItem extends vscode.TreeItem {
   constructor(public readonly fact: MemoryFact) {
@@ -18,7 +64,7 @@ export class MemoryFactItem extends vscode.TreeItem {
         ? `\nUpdated: ${new Date(fact.updatedAt).toLocaleString()}`
         : '';
     const tooltip = new vscode.MarkdownString(
-      `**${fact.category ?? 'fact'} memory**\n\n${fact.text}\n\n---\n${createdLabel}${updatedLabel}`,
+      `${fact.text}\n\n---\n${provenance(fact)}\n\n${createdLabel}${updatedLabel}`,
     );
     tooltip.isTrusted = false;
     this.tooltip = tooltip;
@@ -101,13 +147,23 @@ export class MemoryTreeProvider implements vscode.TreeDataProvider<vscode.TreeIt
   }
 
   getChildren(element?: vscode.TreeItem): vscode.TreeItem[] {
+    if (element instanceof MemoryCategoryItem) {
+      return element.facts.map((fact) => new MemoryFactItem(fact));
+    }
     if (element !== undefined) return [];
     if (this._status === 'signed-out') return [new MemorySignedOutItem()];
-    const facts = this.store.cachedFacts().map((fact) => new MemoryFactItem(fact));
+    const byCategory = new Map<MemoryCategory, MemoryFact[]>();
+    for (const fact of this.store.cachedFacts()) {
+      const category = fact.category ?? 'fact';
+      byCategory.set(category, [...(byCategory.get(category) ?? []), fact]);
+    }
+    const groups = (Object.keys(CATEGORY_LABELS) as MemoryCategory[])
+      .filter((category) => byCategory.has(category))
+      .map((category) => new MemoryCategoryItem(category, byCategory.get(category) ?? []));
     const banners: vscode.TreeItem[] = [];
     if (this._status === 'unreachable') banners.push(new MemoryUnreachableItem(this._detail));
     if (!Config.memoryEnabled()) banners.push(new MemoryDisabledItem());
-    return [...banners, ...facts];
+    return [...banners, ...groups];
   }
 
   dispose(): void {

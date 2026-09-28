@@ -48,7 +48,6 @@ const CLARIFY_OFFER_CODE_FENCE_RE = /```/;
 export interface ClarifyOfferContext {
   userMessage: string;
   hasAttachment: boolean;
-  webSearch: boolean;
   research: boolean;
   agiWork?: boolean;
 }

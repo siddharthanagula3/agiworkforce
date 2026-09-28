@@ -182,12 +182,17 @@ import {
   type ResearchPlanDecision,
   type ResearchPlanOptions,
 } from '../research/ResearchActivity';
+import { AgiWorkPlanReview, type AgiWorkPlanDecision } from '../work-session/AgiWorkPlanReview';
 import {
   reconcileCitationMarkersFromSourceList,
   stripTrailingSourceList,
   stripTrailingCitationOnlyBlock,
 } from '../../lib/researchReportSources';
 import type { MessageResearchState } from '@shared/stores/web-chat-store';
+import type {
+  AgiWorkPlanReview as AgiWorkPlanReviewState,
+  AgiWorkPlanStep,
+} from '../../utils/agiwork-plan';
 import {
   collectMessageResearchSources,
   orderSourcesByCitation,
@@ -590,6 +595,9 @@ interface Message {
     interactiveCards?: InteractiveCard[];
     /** Deep Research run state (activity header + persistence). */
     research?: MessageResearchState;
+    /** AGI Work plan steps with their status, and the goal and approval state they belong to. */
+    agiWorkPlan?: AgiWorkPlanStep[];
+    agiWorkPlanReview?: AgiWorkPlanReviewState;
     /**
      * The client's post-stream metadata save failed. What is on screen is
      * richer than what a reload will show, and the notice below says so.
@@ -624,6 +632,8 @@ interface MessageBubbleProps {
     decision: ResearchPlanDecision,
     options?: ResearchPlanOptions,
   ) => void;
+  /** Answer an AGI Work plan: start it as edited, cancel it, or retry from a stopped step. */
+  onAgiWorkPlanDecision?: (messageId: string, decision: AgiWorkPlanDecision) => void;
   /** True while a research retry or approved start for THIS message is in flight. */
   isRetryingResearch?: boolean;
   onDelete?: (messageId: string) => void;
@@ -699,6 +709,7 @@ const MessageBubbleComponent = function MessageBubble({
   onRegenerate,
   onRetryResearch,
   onResearchPlanDecision,
+  onAgiWorkPlanDecision,
   isRetryingResearch = false,
   onDelete,
   onDeleteVariant,
@@ -1962,6 +1973,16 @@ const MessageBubbleComponent = function MessageBubble({
                 : {})}
             />
           )}
+
+          {!isUser && onAgiWorkPlanDecision && message.metadata?.agiWorkPlan?.length ? (
+            <AgiWorkPlanReview
+              steps={message.metadata.agiWorkPlan}
+              awaitingApproval={message.metadata.agiWorkPlanReview?.awaitingApproval === true}
+              runFinished={!message.isStreaming}
+              busy={isRetryingResearch || (message.isStreaming ?? false)}
+              onDecision={(decision) => onAgiWorkPlanDecision(message.id, decision)}
+            />
+          ) : null}
 
           {/* One canonical Cloud run spine. It is collapsed inline by default,
               expands in place, and each tool then owns its own request/response
@@ -3383,6 +3404,8 @@ function metadataEqual(prev: Message['metadata'], next: Message['metadata']): bo
     prev?.isThinking === next?.isThinking &&
     prev?.agentActivity === next?.agentActivity &&
     prev?.research === next?.research &&
+    prev?.agiWorkPlan === next?.agiWorkPlan &&
+    prev?.agiWorkPlanReview === next?.agiWorkPlanReview &&
     prev?.generatedFiles === next?.generatedFiles &&
     prev?.generatedFile === next?.generatedFile &&
     prev?.artifactManifest === next?.artifactManifest &&
@@ -3475,6 +3498,8 @@ export const MessageBubble = React.memo(MessageBubbleComponent, (prev, next) => 
   if (prev.onResumeVideo !== next.onResumeVideo) return false;
   if (prev.onRetryVideo !== next.onRetryVideo) return false;
   if (prev.onSelectVariant !== next.onSelectVariant) return false;
+  if (prev.onAgiWorkPlanDecision !== next.onAgiWorkPlanDecision) return false;
+  if (prev.isRetryingResearch !== next.isRetryingResearch) return false;
 
   // Check flags
   if (prev.isBranching !== next.isBranching) return false;
