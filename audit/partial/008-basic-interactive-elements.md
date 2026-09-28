@@ -16,9 +16,9 @@ nothing is left.
 | --- | --- | --- | --- |
 | cli | partial | The "Deny All" choice in the approval row is styled like every other choice; give destructive choices a danger colour. | ui |
 | vscode | partial | Destructive actions confirm through VS Code's modal warning, whose buttons the extension cannot style; the webview itself has no danger button style. | ui |
-| chrome | partial | Delete buttons are muted grey and turn red only on hover, so a destructive action is not distinguishable at rest or on touch. | ui |
+| chrome | partial | b21db27be: delete and remove show danger text at rest; workflow lane delete buttons left | .sp-wf-btn-delete, .sp-wf-task-delete |
 
-Code: `apps/cli/src/tui/widgets/approval_overlay.rs:76-76`, `apps/cli/src/tui/widgets/approval_overlay.rs:248-248`, `apps/extension-vscode/src/core/commandSetup.ts:1171-1175`, `apps/extension/src/side_panel.ts:2480-2481`
+Code: `apps/cli/src/tui/widgets/approval_overlay.rs:76-76`, `apps/cli/src/tui/widgets/approval_overlay.rs:248-248`, `apps/extension-vscode/src/core/commandSetup.ts:1171-1175`, `apps/extension/src/side_panel.ts:3213-3213`
 
 ## S8.06: Toggle buttons.
 
@@ -271,16 +271,13 @@ Code: `apps/cli/src/tui/transcript_cell.rs:49-55`
 
 - Done when: Message authors are distinguished visually and for assistive technology (R-n: avatar or equivalent marker plus an accessible label).
 - Wave: 3
-- Already works on: mobile, cli
+- Already works on: web, desktop, mobile, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | User and assistant turns differ only by layout (right bubble vs flat column) and a data-role attribute; the author is not announced to screen readers. Add a visually hidden author label per turn. | ui |
-| desktop | partial | User and assistant turns differ only by layout (right bubble vs flat column) and a data-role attribute; the author is not announced to screen readers. Add a visually hidden author label per turn. | ui |
 | vscode | partial | User and assistant messages differ by CSS class and background only; there is no avatar or accessible author label. | ui |
-| chrome | partial | User and assistant bubbles differ by alignment and styling only; no author label is exposed to screen readers. | ui |
 
-Code: `apps/web/features/chat/components/messages/MessageBubble.tsx:1776-1788`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:491-495`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:3446-3449`, `apps/extension/src/side_panel.ts:1324-1327`
+Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:491-495`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:3446-3449`
 
 ## S8.44: Skeleton loaders.
 

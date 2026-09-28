@@ -55,19 +55,6 @@ Code: `apps/mobile/components/ui/text.tsx:11-11`, `apps/mobile/app/(app)/setting
 
 Code: `apps/extension/src/side_panel.ts:1252-1252`
 
-## S6.20: Page-edge gutters.
-
-- Done when: Pages use defined page-edge gutters that step with viewport width.
-- Wave: 3
-- Already works on: mobile, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Gutter tokens (compact/regular/wide) exist but only the workspace console uses them; chat and settings pages hard-code px-4/px-6. | ui |
-| desktop | partial | Gutter tokens (compact/regular/wide) exist but only the workspace console uses them; chat and settings pages hard-code px-4/px-6. | ui |
-
-Code: `packages/ui/design-tokens/src/foundation.css:203-205`, `apps/web/features/workspace-console/components/WorkspaceConsoleShell.tsx:97-97`, `apps/web/features/chat/components/messages/ChatMessageList.tsx:1745-1745`
-
 ## S6.23: Dialog padding.
 
 - Done when: Dialogs and sheets share one defined inner padding.
