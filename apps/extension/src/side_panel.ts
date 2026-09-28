@@ -12660,7 +12660,7 @@ function buildUI(): void {
   cuPanel.panelEl.setAttribute('aria-labelledby', 'sp-tab-computer-use');
   cuPanel.panelEl.setAttribute('aria-hidden', 'true');
 
-  const runsPanel: CloudRunsPanelAPI = buildCloudRunsPanel();
+  const runsPanel: CloudRunsPanelAPI = buildCloudRunsPanel({ fileAccess: answerFileAccess });
   runsPanel.panelEl.setAttribute('role', 'tabpanel');
   runsPanel.panelEl.setAttribute('aria-labelledby', 'sp-tab-cloud-runs');
   runsPanel.panelEl.setAttribute('aria-hidden', 'true');

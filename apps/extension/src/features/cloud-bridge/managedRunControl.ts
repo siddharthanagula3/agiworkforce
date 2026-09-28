@@ -1,19 +1,25 @@
 import {
   AgentTaskStateSchema,
+  CloudAgentRunSteerRequestSchema,
   ManagedCloudAgentRunAlreadyResumingError,
   ManagedCloudAgentRunApprovalExpiredError,
   ManagedCloudAgentRunHttpError,
   ManagedCloudAgentRunRequestIdSchema,
   ManagedCloudAgentRunReferenceSchema,
   TOOL_APPROVAL_GUIDANCE_MAX_LENGTH,
+  TOOL_INPUT_RESUME_PATH,
+  ToolInputResumeRequestSchema,
   createManagedCloudAgentRunClient,
   managedCloudAgentRunPath,
+  readManagedCloudAgentRunHandle,
   reconcileManagedCloudPublicText,
   type CloudAgentRun,
   type CloudAgentRunListPage,
+  type CloudAgentRunSteer,
   type ManagedCloudAgentRunApprovalDecision,
   type ManagedCloudAgentRunClient,
   type ManagedCloudAgentRunReference,
+  type ToolInputResponseWire,
 } from '@agiworkforce/cloud-contracts';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import { FREE_TRIAL_GATEWAY, getAuthToken } from './freeTrialClient';
@@ -29,6 +35,7 @@ export const ALL_MANAGED_RUN_STATES = AgentTaskStateSchema.options;
 export interface ChromeManagedRunDependencies {
   getAuthToken: typeof getAuthToken;
   createClient: (token: string) => ManagedCloudAgentRunClient;
+  fetchImpl?: (input: string, init?: RequestInit) => Promise<Response>;
   onText?: (text: string) => void | Promise<void>;
   onAgentEvent?: (event: AgentEventEnvelope) => void | Promise<void>;
   onRunReference?: (run: ManagedCloudAgentRunReference) => void | Promise<void>;
@@ -436,5 +443,199 @@ export async function cancelChromeManagedRun(
     };
   } catch (error) {
     return errorResult(error, signal);
+  }
+}
+
+export type ChromeManagedRunUpdateResult =
+  { status: 'success'; run: CloudAgentRun } | ChromeManagedRunControlError;
+
+export interface PauseChromeManagedRunRequest {
+  runId: string;
+  signal?: AbortSignal;
+}
+
+export async function pauseChromeManagedRun(
+  request: PauseChromeManagedRunRequest,
+  dependencies: Partial<ChromeManagedRunDependencies> = {},
+): Promise<ChromeManagedRunUpdateResult> {
+  const resolvedDependencies = { ...DEFAULT_DEPENDENCIES, ...dependencies };
+  const runId = validateRunId(request.runId);
+  if (!runId) {
+    return { status: 'error', code: 'invalid_request', message: 'Invalid Managed Cloud run.' };
+  }
+  const token = await resolvedDependencies.getAuthToken();
+  if (!token) {
+    return { status: 'error', code: 'auth_required', message: 'Sign in to pause this run.' };
+  }
+  try {
+    return {
+      status: 'success',
+      run: await resolvedDependencies
+        .createClient(token)
+        .pauseRun(runId, request.signal ? { signal: request.signal } : {}),
+    };
+  } catch (error) {
+    return errorResult(error, request.signal, 'The run could not be paused. It is still working.');
+  }
+}
+
+export interface ResumePausedChromeManagedRunRequest {
+  runId: string;
+  guidance?: string;
+  signal?: AbortSignal;
+}
+
+export async function resumePausedChromeManagedRun(
+  request: ResumePausedChromeManagedRunRequest,
+  dependencies: Partial<ChromeManagedRunDependencies> = {},
+): Promise<ChromeManagedRunApprovalResult> {
+  const resolvedDependencies = { ...DEFAULT_DEPENDENCIES, ...dependencies };
+  const runId = validateRunId(request.runId);
+  const guidance = request.guidance?.trim();
+  if (!runId || (guidance !== undefined && guidance.length > TOOL_APPROVAL_GUIDANCE_MAX_LENGTH)) {
+    return { status: 'error', code: 'invalid_request', message: 'Invalid Managed Cloud run.' };
+  }
+  const token = await resolvedDependencies.getAuthToken();
+  if (!token) {
+    return { status: 'error', code: 'auth_required', message: 'Sign in to resume this run.' };
+  }
+  try {
+    await resolvedDependencies.createClient(token).resumePausedRun(runId, {
+      ...(guidance ? { guidance } : {}),
+      ...(request.signal ? { signal: request.signal } : {}),
+    });
+    return { status: 'success' };
+  } catch (error) {
+    if (error instanceof ManagedCloudAgentRunAlreadyResumingError) {
+      return {
+        status: 'error',
+        code: 'already_resolved',
+        message: 'Another device already resumed this run.',
+      };
+    }
+    return errorResult(error, request.signal, 'The run could not be resumed. It is still paused.');
+  }
+}
+
+export type ChromeManagedRunSteerResult =
+  | { status: 'success'; run: CloudAgentRun; steer: CloudAgentRunSteer }
+  | ChromeManagedRunControlError;
+
+export interface SteerChromeManagedRunRequest {
+  runId: string;
+  message: string;
+  signal?: AbortSignal;
+}
+
+export async function steerChromeManagedRun(
+  request: SteerChromeManagedRunRequest,
+  dependencies: Partial<ChromeManagedRunDependencies> = {},
+): Promise<ChromeManagedRunSteerResult> {
+  const resolvedDependencies = { ...DEFAULT_DEPENDENCIES, ...dependencies };
+  const runId = validateRunId(request.runId);
+  const message = request.message.trim();
+  if (!runId || !CloudAgentRunSteerRequestSchema.safeParse({ message }).success) {
+    return { status: 'error', code: 'invalid_request', message: 'Write a message for the agent.' };
+  }
+  const token = await resolvedDependencies.getAuthToken();
+  if (!token) {
+    return { status: 'error', code: 'auth_required', message: 'Sign in to message this run.' };
+  }
+  try {
+    const steered = await resolvedDependencies
+      .createClient(token)
+      .steerRun(runId, message, request.signal ? { signal: request.signal } : {});
+    return { status: 'success', run: steered.run, steer: steered.steer };
+  } catch (error) {
+    return errorResult(
+      error,
+      request.signal,
+      'Your message was not sent. The run keeps working without it.',
+    );
+  }
+}
+
+export interface AnswerChromeManagedRunInputRequest {
+  runId: string;
+  toolInputs: ToolInputResponseWire[];
+  signal?: AbortSignal;
+}
+
+async function inputResumeFailureMessage(response: Response): Promise<string> {
+  const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+  const error = body['error'];
+  const message =
+    error && typeof error === 'object' ? (error as Record<string, unknown>)['message'] : error;
+  return typeof message === 'string' && message.trim()
+    ? message.trim()
+    : 'Your answer could not be sent.';
+}
+
+export async function answerChromeManagedRunInput(
+  request: AnswerChromeManagedRunInputRequest,
+  dependencies: Partial<ChromeManagedRunDependencies> = {},
+): Promise<ChromeManagedRunApprovalResult> {
+  const resolvedDependencies = { ...DEFAULT_DEPENDENCIES, ...dependencies };
+  const runId = validateRunId(request.runId);
+  const body = ToolInputResumeRequestSchema.safeParse({
+    run_id: runId,
+    tool_inputs: request.toolInputs,
+  });
+  if (!runId || !body.success) {
+    return { status: 'error', code: 'invalid_request', message: 'Invalid connector answer.' };
+  }
+  const token = await resolvedDependencies.getAuthToken();
+  if (!token) {
+    return { status: 'error', code: 'auth_required', message: 'Sign in to answer this run.' };
+  }
+  const fetchImpl: NonNullable<ChromeManagedRunDependencies['fetchImpl']> =
+    resolvedDependencies.fetchImpl ?? ((input, init) => fetch(input, init));
+  try {
+    const response = await fetchImpl(`${FREE_TRIAL_GATEWAY}${TOOL_INPUT_RESUME_PATH}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        'X-Requested-With': 'XMLHttpRequest',
+        ...platformRequestHeaders(),
+      },
+      body: JSON.stringify(body.data),
+      ...(request.signal ? { signal: request.signal } : {}),
+    });
+    if (response.status === 401 || response.status === 403) {
+      await response.body?.cancel().catch(() => undefined);
+      return { status: 'error', code: 'auth_required', message: 'Sign in to answer this run.' };
+    }
+    if (response.status === 409) {
+      await response.body?.cancel().catch(() => undefined);
+      return {
+        status: 'error',
+        code: 'already_resolved',
+        message: 'Another device already answered this request.',
+      };
+    }
+    if (response.status === 410) {
+      await response.body?.cancel().catch(() => undefined);
+      return {
+        status: 'error',
+        code: 'approval_expired',
+        message: 'This request expired and the run can no longer continue from it.',
+      };
+    }
+    if (!response.ok) {
+      return {
+        status: 'error',
+        code: 'server_error',
+        message: await inputResumeFailureMessage(response),
+      };
+    }
+    if (readManagedCloudAgentRunHandle(response)?.detachable) {
+      await response.body?.cancel().catch(() => undefined);
+    } else {
+      void response.body?.pipeTo(new WritableStream()).catch(() => undefined);
+    }
+    return { status: 'success' };
+  } catch (error) {
+    return errorResult(error, request.signal, 'Your answer could not be sent.');
   }
 }
