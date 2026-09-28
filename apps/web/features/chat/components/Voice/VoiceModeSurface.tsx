@@ -38,6 +38,10 @@ const LABEL = {
   toolResults: 'What the actions returned',
   toolFailed: 'Did not complete',
   openFile: 'Open',
+  pause: 'Pause',
+  resume: 'Resume',
+  pausedHint:
+    'Paused. The call is closed and nothing is being used. Resume to pick up this conversation.',
 } as const;
 
 const GENERATED_FILE_PATH = /^\/api\/files\/[A-Za-z0-9_-]+(?:\?.*)?$/;
@@ -215,6 +219,10 @@ export function VoiceModeSurface({
         {LABEL.retry}
       </button>
     </div>
+  ) : session.paused ? (
+    <p data-testid="voice-paused-hint" className="text-sm text-[var(--chat-text-muted)]">
+      {LABEL.pausedHint}
+    </p>
   ) : muted && status === VOICE_SESSION_STATUS.muted ? (
     <p data-testid="voice-muted-hint" className="text-sm text-[var(--chat-text-muted)]">
       {session.mutedHint}
@@ -392,6 +400,18 @@ export function VoiceModeSurface({
             </>
           ) : null}
         </div>
+      ) : null}
+
+      {status !== VOICE_SESSION_STATUS.error ? (
+        <button
+          type="button"
+          data-testid="voice-pause-toggle"
+          aria-pressed={session.paused}
+          onClick={session.paused ? session.resume : session.pause}
+          className="min-h-11 rounded-full border border-[var(--chat-border-strong)] px-4 py-2 text-sm font-medium text-[var(--chat-text-secondary)] transition-colors hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]"
+        >
+          {session.paused ? LABEL.resume : LABEL.pause}
+        </button>
       ) : null}
 
       <VoiceComposer

@@ -53,6 +53,7 @@ interface VoiceSessionStoreState {
   toolActivity: readonly LiveVoiceToolActivity[];
   toolApprovals: readonly LiveVoicePendingApproval[];
   toolOutcomes: readonly LiveVoiceToolOutcome[];
+  paused: boolean;
 }
 
 interface VoiceSessionStoreActions {
@@ -63,6 +64,7 @@ interface VoiceSessionStoreActions {
   setToolActivity: (toolActivity: readonly LiveVoiceToolActivity[]) => void;
   setToolApprovals: (toolApprovals: readonly LiveVoicePendingApproval[]) => void;
   addToolOutcome: (outcome: LiveVoiceToolOutcome) => void;
+  setPaused: (paused: boolean) => void;
   toggleFocusMode: () => void;
   setDockOpen: (open: boolean) => void;
   setSettingsOpen: (open: boolean) => void;
@@ -94,6 +96,7 @@ export const useVoiceSessionStore = create<VoiceSessionStoreState & VoiceSession
       toolActivity: [],
       toolApprovals: [],
       toolOutcomes: [],
+      paused: false,
 
       resetOnLogout: () =>
         set({
@@ -107,6 +110,7 @@ export const useVoiceSessionStore = create<VoiceSessionStoreState & VoiceSession
           toolActivity: [],
           toolApprovals: [],
           toolOutcomes: [],
+          paused: false,
         }),
 
       dispatch: (event) => {
@@ -121,6 +125,7 @@ export const useVoiceSessionStore = create<VoiceSessionStoreState & VoiceSession
                 toolActivity: [],
                 toolApprovals: [],
                 toolOutcomes: [],
+                paused: false,
                 ...PANELS_CLOSED,
               },
         );
@@ -129,6 +134,7 @@ export const useVoiceSessionStore = create<VoiceSessionStoreState & VoiceSession
       setBackendBusy: (backendBusy) => set({ backendBusy }),
       setToolActivity: (toolActivity) => set({ toolActivity }),
       setToolApprovals: (toolApprovals) => set({ toolApprovals }),
+      setPaused: (paused) => set({ paused }),
       addToolOutcome: (outcome) =>
         set((state) => ({
           toolOutcomes: [
