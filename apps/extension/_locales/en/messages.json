@@ -1276,7 +1276,7 @@
     }
   },
   "spQuickModeDescription": {
-    "message": "Answer faster on a cheaper route",
+    "message": "Answers faster on a cheaper route, good for summaries and quick lookups",
     "description": "One-line description of the Quick mode toggle"
   },
   "spThinking": {
@@ -1284,7 +1284,7 @@
     "description": "Label of the extended-thinking toggle in the model menu"
   },
   "spThinkingDescription": {
-    "message": "Let the model reason before it answers",
+    "message": "Reasons before it answers, good for math, logic and planning",
     "description": "One-line description of the extended-thinking toggle"
   },
   "spContextItem": {
@@ -1356,7 +1356,7 @@
     "description": "Accessible label of the recent-chats close button"
   },
   "spModelAutoDescription": {
-    "message": "Route each turn to the model that fits it",
+    "message": "Picks a model for each turn: a quick one for a summary, a stronger one for code",
     "description": "One-line description of the automatic model choice"
   },
   "spPlansHeading": {
@@ -2210,6 +2210,40 @@
       "name": {
         "content": "$1",
         "example": "Checkout flow"
+      }
+    }
+  },
+  "spModelsRecommended": {
+    "message": "Recommended",
+    "description": "Heading above the short list of models recommended for this plan in the model menu"
+  },
+  "spModelSpeedVeryFast": {
+    "message": "Fastest",
+    "description": "Relative speed of a model in the model menu"
+  },
+  "spModelSpeedFast": {
+    "message": "Fast",
+    "description": "Relative speed of a model in the model menu"
+  },
+  "spModelSpeedMedium": {
+    "message": "Medium speed",
+    "description": "Relative speed of a model in the model menu"
+  },
+  "spModelSpeedSlow": {
+    "message": "Slower",
+    "description": "Relative speed of a model in the model menu"
+  },
+  "spModelLockedAria": {
+    "message": "$MODEL$, available on $PLAN$. Opens plans in a new tab.",
+    "description": "Accessible name of a model the current plan cannot use",
+    "placeholders": {
+      "model": {
+        "content": "$1",
+        "example": "A model name"
+      },
+      "plan": {
+        "content": "$2",
+        "example": "Pro"
       }
     }
   },

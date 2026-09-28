@@ -42,6 +42,7 @@ import {
   type Effort,
   type InteractiveCard,
   type ManagedUsageWarning,
+  type ModelSpeed,
   type RoutingTaskType,
 } from '@agiworkforce/types';
 import { getExtensionSendQueue } from './features/native-bridge/sendQueue';
@@ -270,6 +271,7 @@ import {
 } from './features/cloud-bridge/clerkAuth';
 import {
   agiWorkUnlockPlanLabel,
+  buildManagedModelPickerView,
   formatManagedTierLabel,
   getManagedCapabilityLabel,
   getManagedModelBadgeLabel,
@@ -901,6 +903,19 @@ const UNKNOWN_PROVIDER_KEY = 'unknown-provider';
 function modelGroupHeading(providerKey: string): string {
   if (providerKey === UNKNOWN_PROVIDER_KEY) return t('spModelsOtherProvider');
   return getProviderDisplayLabel(providerKey);
+}
+
+function modelSpeedLabel(speed: ModelSpeed): string {
+  switch (speed) {
+    case 'very-fast':
+      return t('spModelSpeedVeryFast');
+    case 'fast':
+      return t('spModelSpeedFast');
+    case 'medium':
+      return t('spModelSpeedMedium');
+    case 'slow':
+      return t('spModelSpeedSlow');
+  }
 }
 
 const CONNECTORS_URL = 'https://agiworkforce.com/connectors?from=chrome-extension';
@@ -3583,11 +3598,20 @@ function injectStyles(): void {
       white-space: nowrap;
     }
     .sp-model-option.selected .sp-model-option-sublabel { color: var(--agi-ext-accent-text); opacity: 0.7; }
+    .sp-model-option-auto .sp-model-option-sublabel { white-space: normal; }
     .sp-model-option:hover .sp-model-option-sublabel { color: var(--agi-ext-text-muted); }
 
     /* ── Free-tier model gating: Upgrade badge on premium models ── */
-    .sp-model-option.premium-gated { opacity: 0.75; }
-    .sp-model-option.premium-gated:hover { background: var(--agi-ext-hover); color: var(--agi-ext-text); opacity: 1; cursor: pointer; }
+    .sp-model-option-lock {
+      padding: 1px 6px;
+      border-radius: var(--corner-control);
+      background: var(--agi-ext-overlay);
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
     .sp-model-upgrade-tag {
       font-size: var(--type-caption-size);
       line-height: var(--type-caption-height);
@@ -7645,21 +7669,33 @@ function buildUI(): void {
 
   function buildModelOptionRow(m: ManagedModelPickerOption, isSelected: boolean): HTMLElement {
     const isAuto = m.value === 'auto';
+    const lockLabel = m.lockLabel;
 
     const classes = [
       'sp-model-option',
       isSelected ? 'selected' : '',
       isAuto ? 'sp-model-option-auto' : '',
+      lockLabel ? 'sp-model-option-locked' : '',
     ]
       .filter(Boolean)
       .join(' ');
 
-    const opt = el('button', {
-      class: classes,
-      type: 'button',
-      role: 'menuitemradio',
-      'aria-checked': String(isSelected),
-    });
+    const opt = el(
+      'button',
+      lockLabel
+        ? {
+            class: classes,
+            type: 'button',
+            role: 'menuitem',
+            'aria-label': t('spModelLockedAria', [m.label, lockLabel]),
+          }
+        : {
+            class: classes,
+            type: 'button',
+            role: 'menuitemradio',
+            'aria-checked': String(isSelected),
+          },
+    );
 
     if (isAuto) {
       opt.appendChild(el('div', { class: 'sp-model-auto-dot' }));
@@ -7694,24 +7730,44 @@ function buildUI(): void {
     textBlock.appendChild(el('span', { class: 'sp-model-option-name' }, m.label));
     const sublabel = isAuto
       ? t('spModelAutoDescription')
-      : (m.description ?? getManagedCapabilityLabel(m));
+      : [
+          m.speed ? modelSpeedLabel(m.speed) : undefined,
+          m.description ?? getManagedCapabilityLabel(m),
+        ]
+          .filter(Boolean)
+          .join(' · ');
     if (sublabel) {
       textBlock.appendChild(el('span', { class: 'sp-model-option-sublabel' }, sublabel));
     }
     opt.appendChild(textBlock);
+
+    if (lockLabel) {
+      opt.appendChild(
+        el('span', { class: 'sp-model-option-lock', 'aria-hidden': 'true' }, lockLabel),
+      );
+      opt.addEventListener('click', () => {
+        closeModelDropdown();
+        chrome.tabs.create({ url: agiWebUrl('/pricing') }).catch(() => {});
+      });
+      return opt;
+    }
 
     const checkCell = el('span', { class: 'sp-model-option-check' });
     if (isSelected) checkCell.appendChild(renderIcon(Check, 12));
     opt.appendChild(checkCell);
     opt.addEventListener('click', () => {
       applyModelSelection(m.value);
-      modelDropdownEl.classList.remove('open');
-      modelSelectorBtn.classList.remove('open');
-      modelSelectorBtn.setAttribute('aria-expanded', 'false');
+      closeModelDropdown();
       modelSelectorBtn.focus();
     });
 
     return opt;
+  }
+
+  function closeModelDropdown(): void {
+    modelDropdownEl.classList.remove('open');
+    modelSelectorBtn.classList.remove('open');
+    modelSelectorBtn.setAttribute('aria-expanded', 'false');
   }
 
   function currentEffortState() {
@@ -7860,14 +7916,21 @@ function buildUI(): void {
 
   function renderModelDropdown(): void {
     clearChildren(modelDropdownEl);
-    const modelOptions = getManagedModelPickerOptions(managedModelAccess);
-
-    const autoOption = modelOptions.find((option) => option.value === 'auto');
+    const autoOption = getManagedModelPickerOptions(null)[0];
     if (autoOption) {
       modelDropdownEl.appendChild(buildModelOptionRow(autoOption, _ctx.selectedModel === 'auto'));
     }
-    const { primary, more } = partitionManagedModelOptions(modelOptions);
-    appendModelRows(primary);
+    const view = managedModelAccess
+      ? buildManagedModelPickerView(managedModelAccess, _ctx.selectedModel)
+      : null;
+    const more = view?.more ?? [];
+    if (view?.current) appendModelRows([view.current]);
+    if (view && view.recommended.length > 0) {
+      modelDropdownEl.appendChild(
+        el('div', { class: 'sp-model-group-header' }, t('spModelsRecommended')),
+      );
+      appendModelRows(view.recommended);
+    }
     if (managedModelAccess === null) {
       modelDropdownEl.appendChild(el('div', { class: 'sp-menu-note' }, t('spModelsSignedOut')));
     }
