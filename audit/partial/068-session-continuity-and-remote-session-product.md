@@ -72,16 +72,16 @@ Code: `apps/extension-vscode/src/integrations/localRuntimeClient.ts:202-202`
 ## S68.06: Same model and instruction configuration.
 
 - Done when: Every client runs the session with the same model and the same instruction files.
-- Wave: 2
+- Wave: 3
 - Already works on: mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Works once AGI_E2B_EXECUTION is on in production | flag-off |
-| desktop | partial | The thread keeps its model and each runtime loads the folder's instruction files, but each client can switch the model per turn and cloud sessions are not covered. | surface-only |
+| web | partial | Code done; switch-on AGI_E2B_EXECUTION=1 (with E2B_API_KEY and priced sandbox compute) at deploy creates cloud sessions. Desktop cloud sessions are the hosted /code; switching model per turn matches Claude Remote Control (a model picked from a connected device applies to the session, code.claude.com/docs/en/remote-control, 2026-09-28). | switch-on |
+| desktop | partial | Code done; switch-on AGI_E2B_EXECUTION=1 (with E2B_API_KEY and priced sandbox compute) at deploy creates cloud sessions. Desktop cloud sessions are the hosted /code; switching model per turn matches Claude Remote Control (a model picked from a connected device applies to the session, code.claude.com/docs/en/remote-control, 2026-09-28). | switch-on |
 | cli | partial | Local AGI Code threads share one agi thread store across CLI, VS Code, desktop and the paired phone, but cloud Code sessions (web) are a separate store none of the local clients can open, so it is not the same on every client. | surface-only |
 
-Code: `apps/web/lib/services/cloud-code-agent-service.ts:790-790`, `apps/web/lib/services/cloud-code-agent-loop.ts:172-172`, `apps/web/features/code/components/LocalSessionPanel.tsx:125-125`, `apps/desktop/electron/runtime/developerSessionService.ts:890-898`
+Code: `apps/web/lib/services/cloud-code-agent-service.ts:799-799`, `apps/cli/src/agent/prompt.rs:396-398`, `apps/cli/src/lib.rs:829-835`
 
 ## S68.07: Same task plan and checkpoints.
 
@@ -98,28 +98,28 @@ Code: `apps/web/lib/services/cloud-code-agent-service.ts:790-790`, `apps/web/lib
 ## S68.08: Same pending approvals.
 
 - Done when: An approval pending in the session shows on every attached client and can be answered from any of them.
-- Wave: 2
+- Wave: 3
 - Already works on: mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Works once AGI_E2B_EXECUTION is on in production | flag-off |
+| web | partial | Code done; switch-on AGI_E2B_EXECUTION=1 (with E2B_API_KEY and priced sandbox compute) at deploy creates cloud sessions. | switch-on |
 | cli | partial | The TUI runs turns in its own process with a per-turn approval broker; another client on the same thread cannot see or answer them until a cross-process transport exists (TUI turns through the app-server, or Remote Control for local threads). | handler |
 
-Code: `apps/web/app/api/code/sessions/[sessionId]/agent/approvals/route.ts:139-139`, `apps/web/features/code/CloudCodePage.tsx:354-354`, `apps/cli/src/tui/tui_app.rs:5940-5940`
+Code: `apps/web/lib/services/cloud-code-agent-loop.ts:401-401`, `apps/cli/src/tui/tui_app.rs:5940-5940`
 
 ## S68.09: Same tool activity.
 
 - Done when: Tool activity of a running turn streams to every attached client.
-- Wave: 2
+- Wave: 3
 - Already works on: mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Works once AGI_E2B_EXECUTION is on in production | flag-off |
+| web | partial | Code done; switch-on AGI_E2B_EXECUTION=1 (with E2B_API_KEY and priced sandbox compute) at deploy creates cloud sessions. | switch-on |
 | cli | partial | Tool events of a TUI-run turn reach only that terminal (and the JSON stream); streaming them to other attached clients needs the same cross-process transport as S68.08. | handler |
 
-Code: `apps/web/features/code/components/CodeTranscript.tsx:344-344`, `apps/cli/src/agent/chat.rs:2835-2835`
+Code: `apps/web/lib/services/cloud-code-agent-loop.ts:401-401`, `apps/cli/src/agent/chat.rs:2835-2835`
 
 ## S68.12: Execution-owner indicator.
 
@@ -137,14 +137,14 @@ Code: `apps/web/features/code/components/CodeTranscript.tsx:344-344`, `apps/cli/
 ## S68.15: Continue cloud execution from desktop.
 
 - Done when: From the desktop app, the user continues a coding session that runs in the cloud.
-- Wave: 2
+- Wave: 3
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Works once AGI_E2B_EXECUTION is on in production | flag-off |
-| desktop | partial | Works once AGI_E2B_EXECUTION is on in production | flag-off |
+| web | partial | Code done; switch-on AGI_E2B_EXECUTION=1 (with E2B_API_KEY and priced sandbox compute) at deploy creates cloud sessions. | switch-on |
+| desktop | partial | Code done; switch-on AGI_E2B_EXECUTION=1 (with E2B_API_KEY and priced sandbox compute) at deploy creates cloud sessions. | switch-on |
 
-Code: `apps/web/features/code/CloudCodePage.tsx:124-124`, `apps/web/features/code/CloudCodePage.tsx:796-796`
+Code: `apps/web/lib/services/cloud-code-agent-loop.ts:401-401`
 
 ## S68.16: Move work to cloud through an explicit handoff.
 
@@ -187,16 +187,15 @@ Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:4431
 
 - Done when: The user sees which of their machines are available to run sessions.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Account settings list linked devices with status and capabilities, but you cannot start or route a session to one. | handler |
-| desktop | partial | Same hosted-web devices list; no way to pick a machine for a session. | handler |
 | mobile | partial | The phone connects to one desktop by scanning its code; there is no list of machines to choose from. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/settings/components/LinkedDevicesPanel.tsx:152-152`, `apps/web/features/settings/components/LinkedDevicesPanel.tsx:136-139`, `apps/mobile/app/(app)/companion/index.tsx:246-251`
+Code: `apps/mobile/app/(app)/companion/index.tsx:246-251`
 
 ## S68.20: Remote-machine card.
 
@@ -228,17 +227,17 @@ Code: `apps/mobile/src/features/companion/components/DesktopInfoCard.tsx:73-76`,
 ## S68.22: Device pairing.
 
 - Done when: The user pairs a phone or another client with a machine so it can reach that machine's sessions.
-- Wave: 2
+- Wave: 3
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Owner settings SIGNALING_HTTP_URL and SIGNALING_INTERNAL_SECRET | flag-off |
-| desktop | partial | Remote Control pairs one phone at a time; no computer-to-computer pairing. | surface-only |
+| web | partial | Code done; SIGNALING_HTTP_URL and SIGNALING_INTERNAL_SECRET are set in Vercel Production and take effect at the next website deploy. Live check: pair a phone and a browser against signaling.agiworkforce.com after deploy. | live-check |
+| desktop | partial | Parity: Claude Remote Control serves one remote connection per process and a browser on another computer connects (code.claude.com/docs/en/remote-control, 2026-09-28); ours pairs one phone or one browser (/code/computer). Live check after the website deploy, as the web cell. | live-check |
 | mobile | partial | Scans the desktop's code to pair; only phone-to-desktop. | surface-only |
 | cli | missing | Not built on this surface. |  |
 | vscode | partial | Remote Control in VS Code pairs a phone through /api/pair/initiate with the account token, by QR code or pairing link, but only one phone at a time and with no computer-to-computer pairing. That is the same limit the desktop cell records. | surface-only |
 
-Code: `apps/web/app/api/pair/initiate/route.ts:73-73`, `apps/web/app/api/pair/claim/route.ts:72-72`, `apps/web/features/desktop-host/components/RemoteControlSection.tsx:74-77`, `apps/desktop/electron/runtime/dispatcher.ts:874-875`
+Code: `apps/web/app/api/pair/claim/route.ts:72-72`, `apps/web/features/desktop-host/components/RemoteControlSection.tsx:81-81`, `apps/web/features/remote-dispatch/components/RemoteComputerPage.tsx:75-75`, `apps/mobile/app/(app)/companion/index.tsx:248-248`
 
 ## S68.23: Pairing revocation.
 

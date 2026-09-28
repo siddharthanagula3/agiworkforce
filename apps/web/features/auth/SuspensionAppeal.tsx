@@ -4,16 +4,13 @@ import { useEffect, useId, useState, type FormEvent } from 'react';
 
 import { Spinner } from '@agiworkforce/ui';
 
-import {
-  readSuspensionAppeal,
-  submitSuspensionAppeal,
-  type SupportTicketThread,
-} from '@/features/support/lib/ticket-client';
+import { readSuspensionAppeal, submitSuspensionAppeal } from '@/features/support/lib/ticket-client';
 import {
   MAX_TICKET_MESSAGE_CHARS,
   OPEN_TICKET_STATUSES,
   TICKET_STATUS_LABEL,
-} from '@/lib/support/tickets/types';
+  type SupportTicketThread,
+} from '@agiworkforce/cloud-contracts/support';
 import { toUserMessage } from '@/lib/user-error-message';
 
 import {

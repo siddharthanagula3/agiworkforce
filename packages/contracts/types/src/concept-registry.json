@@ -1520,6 +1520,26 @@
       "table": "slack_assistant_runs",
       "exempt": [],
       "why": "written by the server for the linked account when the app takes up a Slack message, so its creator is always its owner, and no client edits it under an If-Match precondition: its status moves only through the server's own transitions"
+    },
+    {
+      "table": "account_security_enrollments",
+      "exempt": [],
+      "why": "one row per account, written only by that account's own enrollment, recovery and key changes, so its creator is always its owner, and each change is a single statement that no If-Match precondition quotes"
+    },
+    {
+      "table": "account_security_credentials",
+      "exempt": [],
+      "why": "a passkey or security key its owner registered; after that only a verified assertion moves its signature counter and only its owner removes it, so there is no creator distinct from the owner and no edit to version"
+    },
+    {
+      "table": "account_security_sessions",
+      "exempt": [],
+      "why": "one row per identity session that passed a passkey check, written by that check and swept once it expires; nothing edits it, so there is no creator distinct from the owner and nothing to version"
+    },
+    {
+      "table": "account_security_challenges",
+      "exempt": [],
+      "why": "a single-use WebAuthn challenge or browser handoff, created and consumed within minutes by the ceremony that minted it for its owner, so there is nothing to version"
     }
   ],
   "tableDispositions": [
@@ -1825,6 +1845,26 @@
       "table": "billing_refund_requests",
       "disposition": "operational",
       "why": "a request about a payment rather than an object of its own; it is decided and closed, never synced or versioned"
+    },
+    {
+      "table": "account_security_enrollments",
+      "disposition": "identity",
+      "why": "how the account proves who it is once Advanced Account Security is on; the row records that choice, its recovery key hashes and any recovery hold, not a product object"
+    },
+    {
+      "table": "account_security_credentials",
+      "disposition": "identity",
+      "why": "the public half of a passkey or security key the account signs in with; a sign-in method, not a product object"
+    },
+    {
+      "table": "account_security_sessions",
+      "disposition": "identity",
+      "why": "the local record that one identity session completed a passkey check and until when it counts"
+    },
+    {
+      "table": "account_security_challenges",
+      "disposition": "identity",
+      "why": "the local record of one sign-in ceremony in flight, deleted when it is used or expires"
     }
   ],
   "uiStateColumns": [

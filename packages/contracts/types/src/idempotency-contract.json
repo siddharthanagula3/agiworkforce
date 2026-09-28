@@ -13,7 +13,8 @@
       "tables": [
         "processed_stripe_events",
         "organization_subscription_state_transitions",
-        "slack_assistant_runs"
+        "slack_assistant_runs",
+        "developer_webhook_deliveries"
       ]
     },
     "tool-actions": {
@@ -52,5 +53,10 @@
       "tables": []
     }
   },
-  "advisoryKeys": []
+  "advisoryKeys": [
+    {
+      "table": "developer_webhook_deliveries",
+      "why": "event_id is the Standard Webhooks message id a developer's endpoint deduplicates on, not a fence for this server: one event fans out to every subscribed endpoint under the same id and a resend repeats it on purpose, so it cannot be unique. Each attempt is its own row, sent with its own idempotency key."
+    }
+  ]
 }

@@ -6,20 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S3.02: Create-account screen.
-
-- Done when: A new user can create an account (email or provider) from a sign-up screen on the surface, or is handed to one.
-- Wave: 3
-- Already works on: web, desktop, mobile
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | A new user is handed to the web sign-up page through the device-code link, but sign-up does not return to the CLI: /signup drops redirectTo outside desktop, so the user lands on /welcome and must reopen the device link to finish signing in. | handler |
-| vscode | partial | A new user is handed to the web sign-up page through the device-code link, but sign-up does not return to VS Code: /signup drops redirectTo outside desktop, so the user lands on /welcome and must reopen the verification link. | handler |
-| chrome | partial | The side panel opens web sign-in, whose Create account link reaches /signup, but sign-up drops the /auth/chrome-extension redirect (buildSignupUrl keeps it only for desktop), so the user lands on /welcome instead of returning to the extension. | handler |
-
-Code: `apps/cli/src/lib.rs:3936-3940`, `apps/cli/src/oauth.rs:451-466`, `apps/web/features/auth/authRoutes.ts:39-45`, `apps/extension-vscode/src/core/commandSetup.ts:1035-1042`
-
 ## S3.03: Email verification screen.
 
 - Done when: After sign-up the user must confirm their email address on a verification screen before the account is usable.

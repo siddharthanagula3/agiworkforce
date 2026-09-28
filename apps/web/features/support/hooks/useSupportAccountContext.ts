@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import type { SupportAccountContextView } from '../lib/contract';
+import type { SupportAccountContextView } from '@agiworkforce/cloud-contracts/support';
 import { fetchAccountContext } from '../lib/support-client';
 
 export interface SupportAccountContextState {

@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { connectorsAllowedWithoutRequest } from '@/lib/connectors/connector-capability';
 import { createPostgresContextManifestStore, resolveContext } from '@agiworkforce/context-engine';
 import {
   classifyTaskLocally,
@@ -243,10 +244,15 @@ export async function buildScheduledToolPlan(input: {
   const capabilities = getModelMetadataById(input.model)?.capabilities;
   const policy = getTierPolicy(input.planTier);
   if (capabilities?.tools !== true || policy.allowToolUse === false) return NO_SCHEDULED_TOOLS;
+  const connectorsAllowed = await connectorsAllowedWithoutRequest({
+    userId: input.userId,
+    organizationId: input.organizationId,
+    planTier: input.planTier,
+  });
 
   const [toolApprovalPolicy, connectorPermissions] = await Promise.all([
     loadToolApprovalPolicy(input.db, input.userId),
-    policy.allowMCP === false
+    !connectorsAllowed
       ? Promise.resolve(EMPTY_CONNECTOR_TOOL_PERMISSIONS)
       : loadConnectorToolPermissions(input.db, input.userId),
   ]);
@@ -318,7 +324,7 @@ export async function buildScheduledToolPlan(input: {
     withheldTools,
     ...(webDomainPolicy ? { webDomainPolicy } : {}),
   };
-  if (policy.allowMCP === false) return { ...base, mcpTools: [] };
+  if (!connectorsAllowed) return { ...base, mcpTools: [] };
 
   const [operatorTools, connectorCatalog] = await Promise.all([
     loadMcpToolDefs(),

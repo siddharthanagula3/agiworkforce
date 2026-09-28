@@ -4,7 +4,7 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { getManagedUsageSummary } from '@/lib/services/managed-usage-summary-service';
 import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
 import { logger } from '@/lib/logger';
-import type { HandoffAccountContext } from './types';
+import type { HandoffAccountContext } from '@agiworkforce/cloud-contracts/support';
 
 const LOOKUP_TIMEOUT_MS = 2_000;
 

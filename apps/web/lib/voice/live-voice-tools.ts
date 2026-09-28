@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { connectorsAllowedWithoutRequest } from '@/lib/connectors/connector-capability';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   canUseBillingPlanCapability,
@@ -380,18 +381,22 @@ export async function resolveLiveVoiceFunctionTools(input: {
     return { tools: [], names: [] };
   }
   const permissions = await loadConnectorToolPermissions(input.db, input.userId);
-  const [operatorTools, connectorCatalog] =
-    tierPolicy.allowMCP === false
-      ? [[], { tools: [] }]
-      : await Promise.all([
-          loadMcpToolDefs(),
-          loadUserConnectorToolCatalog(input.userId, {
-            customConnectorLimit: getCustomRemoteMcpLimit(input.planTier) ?? undefined,
-            planTier: input.planTier,
-            organizationId: input.organizationId,
-            isToolDenied: permissions.isConnectorToolDenied,
-          }),
-        ]);
+  const connectorsAllowed = await connectorsAllowedWithoutRequest({
+    userId: input.userId,
+    organizationId: input.organizationId,
+    planTier: input.planTier,
+  });
+  const [operatorTools, connectorCatalog] = !connectorsAllowed
+    ? [[], { tools: [] }]
+    : await Promise.all([
+        loadMcpToolDefs(),
+        loadUserConnectorToolCatalog(input.userId, {
+          customConnectorLimit: getCustomRemoteMcpLimit(input.planTier) ?? undefined,
+          planTier: input.planTier,
+          organizationId: input.organizationId,
+          isToolDenied: permissions.isConnectorToolDenied,
+        }),
+      ]);
   const productTools: ChatFunctionTool[] = [
     ...(tierPolicy.allowSearch ? [urlFetchToolDef()] : []),
     createManagedOfficeFileToolDefinition(),

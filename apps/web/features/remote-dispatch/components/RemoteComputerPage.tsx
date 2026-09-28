@@ -1,14 +1,19 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import type { DevicePresence } from '@agiworkforce/cloud-contracts';
 import {
   REMOTE_CODE_LIMITS,
   runStatusLabel,
   type DispatchTaskLifecycleStatus,
 } from '@agiworkforce/types';
+import { Mic } from '@agiworkforce/icons';
 import { Button, Spinner, Textarea } from '@agiworkforce/ui';
+import { DictationStrip } from '@features/chat/components/Composer/DictationStrip';
+import { MicrophonePrivacyNotice } from '@features/chat/components/MicrophonePrivacyNotice';
+import { useDictation } from '@features/chat/hooks/use-dictation';
+import { useMicrophoneNoticeStore } from '@features/chat/stores/microphone-notice-store';
 import { toUserMessage } from '@/lib/user-error-message';
 import { readBrowserPairing, type BrowserPairing } from '../lib/browser-pairing';
 import {
@@ -21,6 +26,7 @@ const DEVICES_PATH = '/api/settings/devices';
 const DOWNLOAD_PATH = '/download';
 const CODE_PATH = '/code';
 const TASK_TITLE_LENGTH = 80;
+const DICTATE_LABEL = 'Start voice input';
 
 const HEADING = 'Your computer';
 const INTRO =
@@ -213,8 +219,8 @@ export function RemoteComputerPage() {
     setComputerName(null);
   };
 
-  const onSend = async () => {
-    const prompt = draft.trim();
+  const sendTask = async (text: string) => {
+    const prompt = text.trim();
     if (!prompt || !connection.current) return;
     const requestId = await connection.current.sendTask(prompt, titleFor(prompt));
     if (!requestId) {
@@ -225,6 +231,18 @@ export function RemoteComputerPage() {
     setDraft('');
     setTasks((current) => [{ requestId, prompt, status: 'queued' }, ...current]);
   };
+
+  const dictation = useDictation({
+    onInsert: (text) => setDraft((current) => (current ? `${current} ${text}` : text)),
+    onSend: (text) => void sendTask(draft ? `${draft} ${text}` : text),
+  });
+  const microphoneOwner = useId();
+  const askForMicrophone = useMicrophoneNoticeStore((state) => state.askForMicrophone);
+  const withdrawMicrophoneRequest = useMicrophoneNoticeStore((state) => state.withdraw);
+  useEffect(
+    () => () => withdrawMicrophoneRequest(microphoneOwner),
+    [withdrawMicrophoneRequest, microphoneOwner],
+  );
 
   return (
     <main
@@ -288,11 +306,34 @@ export function RemoteComputerPage() {
             onChange={(event) => setDraft(event.target.value)}
             rows={4}
           />
-          <div>
-            <Button type="button" disabled={!draft.trim()} onClick={() => void onSend()}>
-              {SEND_LABEL}
-            </Button>
-          </div>
+          <MicrophonePrivacyNotice />
+          {dictation.isActive ? (
+            <DictationStrip
+              status={dictation.status}
+              bars={dictation.bars}
+              error={dictation.error}
+              reducedMotion={dictation.reducedMotion}
+              onCancel={dictation.cancel}
+              onStop={dictation.stop}
+              onSend={dictation.send}
+              onRetry={dictation.retry}
+            />
+          ) : (
+            <div className="flex items-center gap-2">
+              <Button type="button" disabled={!draft.trim()} onClick={() => void sendTask(draft)}>
+                {SEND_LABEL}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                aria-label={DICTATE_LABEL}
+                onClick={() => askForMicrophone(microphoneOwner, dictation.start)}
+              >
+                <Mic className="h-4 w-4" aria-hidden="true" />
+              </Button>
+            </div>
+          )}
         </section>
       ) : (
         <section className="flex flex-col gap-3" aria-labelledby="remote-connect-heading">

@@ -21,6 +21,7 @@ export interface LiveVoiceToolOutcome {
 }
 import { formatUsageResetIn } from '@agiworkforce/types';
 import { getCsrfToken } from '@/lib/client/csrf';
+import { isDesktopHost } from '@/features/desktop-host/lib/host';
 import { ANALYSER_FFT_SIZE, readAnalyserLevel } from '@features/chat/lib/dictation-machine';
 
 export const LIVE_SESSION_ENDPOINT = '/api/voice/live/sessions';
@@ -384,7 +385,7 @@ export class LiveVoiceSession {
           conversationId: options.conversationId,
           language: options.language ?? null,
           ...(options.pace === undefined ? {} : { pace: options.pace }),
-          surface: 'web',
+          surface: isDesktopHost() ? 'desktop' : 'web',
           ...(options.callbacks.onStartWorkTask
             ? { clientHandoffs: [LIVE_VOICE_WORK_TASK_TOOL] }
             : {}),
