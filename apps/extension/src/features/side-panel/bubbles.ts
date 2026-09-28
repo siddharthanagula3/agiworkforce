@@ -7,6 +7,7 @@ import {
 import { isAllowedMapSearchProviderUrl } from '@agiworkforce/cloud-contracts';
 import {
   agentTaskStateLabel,
+  getModelMetadataById,
   resolveInteractiveCardRenderer,
   type InteractiveCard,
   type InteractiveCardRegistry,
@@ -20,19 +21,32 @@ import {
   Globe,
   Terminal,
   FilePen,
+  FileImage,
   FileText,
   Search,
   Folder,
   Plug,
+  CircleAlert,
   CircleCheck,
   CircleX,
   Clock,
   Loader2,
+  Monitor,
+  RotateCcw,
 } from '../../assets/icons';
+import { t, tPlural } from '../../i18n';
 import { sanitizeHtml, renderMarkdown } from './markdown';
 import { el, formatTime } from './dom';
-import { shouldRenderTextBubble, type SidePanelChatMessage } from './chat-state';
+import {
+  answerSourceLists,
+  shouldRenderTextBubble,
+  type SidePanelChatMessage,
+  type SidePanelSource,
+} from './chat-state';
 import { FREE_TRIAL_GATEWAY, type ManagedQuotaRecovery } from '../cloud-bridge/freeTrialClient';
+import { answerFiles, buildAnswerFiles, type AnswerFileAccess } from './generatedFiles';
+import { wirePopupMenu } from './menu';
+import { buildSourcesFooter, decorateCitations, sourceHost } from './sources';
 
 type ChatMessage = SidePanelChatMessage;
 export type ManagedApprovalDecision = 'approved' | 'rejected';
@@ -42,6 +56,11 @@ export interface QuotaRecoveryControl {
   open: (recovery: ManagedQuotaRecovery) => void;
 }
 
+export interface RegenerateModelOption {
+  value: string;
+  label: string;
+}
+
 export interface BubbleInteractionOptions {
   approvalDecisions?: Readonly<Record<string, ManagedApprovalDecision>>;
   approvalError?: string;
@@ -49,6 +68,10 @@ export interface BubbleInteractionOptions {
   onRetry?: (messageId: string) => void;
   onSwitchModel?: () => void;
   quotaRecovery?: QuotaRecoveryControl;
+  onRegenerate?: (messageId: string, modelSelection?: string) => void;
+  regenerateModels?: readonly RegenerateModelOption[];
+  imagePreviews?: readonly string[];
+  fileAccess?: AnswerFileAccess;
 }
 
 export function openInteractiveCardUrl(value: string): void {
@@ -72,7 +95,7 @@ function buildInteractiveCardFallback(card: InteractiveCard): HTMLElement {
       el(
         'div',
         { class: 'sp-interactive-card__status', role: 'status' },
-        'This card is read-only in Chrome.',
+        t('spInteractiveCardReadOnly'),
       ),
     );
   }
@@ -97,7 +120,7 @@ function buildMapSearchCard(
   if (body.places?.length) {
     const places = el('ol', {
       class: 'sp-interactive-card__places',
-      'aria-label': 'Resolved map places',
+      'aria-label': t('spMapPlacesLabel'),
     });
     for (const place of body.places) {
       const item = el('li', {}, place.label);
@@ -150,6 +173,19 @@ function appendInteractiveCards(parent: HTMLElement, message: ChatMessage): void
   parent.appendChild(cards);
 }
 
+function buildRetryButton(msg: ChatMessage, onRetry: (messageId: string) => void): HTMLElement {
+  const retryBtn = el(
+    'button',
+    { class: 'sp-bubble-retry-btn', type: 'button' },
+    t('spBubbleRetry'),
+  ) as HTMLButtonElement;
+  retryBtn.addEventListener('click', () => {
+    retryBtn.disabled = true;
+    onRetry(msg.id);
+  });
+  return retryBtn;
+}
+
 function buildErrorFooter(
   msg: ChatMessage,
   onRetry?: (messageId: string) => void,
@@ -161,23 +197,12 @@ function buildErrorFooter(
   const footer = el('div', { class: 'sp-bubble-error-footer', role: 'alert' });
   footer.appendChild(el('div', { class: 'sp-bubble-error-text' }, msg.errorText));
 
-  if (onRetry) {
-    const retryBtn = el(
-      'button',
-      { class: 'sp-bubble-retry-btn', type: 'button' },
-      'Retry',
-    ) as HTMLButtonElement;
-    retryBtn.addEventListener('click', () => {
-      retryBtn.disabled = true;
-      onRetry(msg.id);
-    });
-    footer.appendChild(retryBtn);
-  }
+  if (onRetry) footer.appendChild(buildRetryButton(msg, onRetry));
   if (msg.errorAction === 'switch-model' && onSwitchModel) {
     const switchBtn = el(
       'button',
       { class: 'sp-bubble-retry-btn', type: 'button' },
-      'Switch model',
+      t('spBubbleSwitchModel'),
     ) as HTMLButtonElement;
     switchBtn.addEventListener('click', (event) => {
       event.stopPropagation();
@@ -212,20 +237,7 @@ function buildInterruptedFooter(
   footer.appendChild(
     el('div', { class: 'sp-bubble-interrupted-text' }, agentTaskStateLabel('cancelled')),
   );
-
-  if (onRetry) {
-    const retryBtn = el(
-      'button',
-      { class: 'sp-bubble-retry-btn', type: 'button' },
-      'Retry',
-    ) as HTMLButtonElement;
-    retryBtn.addEventListener('click', () => {
-      retryBtn.disabled = true;
-      onRetry(msg.id);
-    });
-    footer.appendChild(retryBtn);
-  }
-
+  if (onRetry) footer.appendChild(buildRetryButton(msg, onRetry));
   return footer;
 }
 
@@ -242,13 +254,214 @@ export function resolveManagedArtifactUrl(uri: string): string | null {
   }
 }
 
-const AUTHOR_LABELS: Record<ChatMessage['role'], string> = {
-  user: 'You said:',
-  assistant: 'AGI said:',
-};
-
 function buildAuthorLabel(role: ChatMessage['role']): HTMLElement {
-  return el('h2', { class: 'sp-visually-hidden' }, AUTHOR_LABELS[role]);
+  return el(
+    'h2',
+    { class: 'sp-visually-hidden' },
+    role === 'user' ? t('spAuthorUser') : t('spAuthorAssistant'),
+  );
+}
+
+function bubbleClass(msg: ChatMessage): string {
+  return `sp-bubble sp-bubble-${msg.role}${msg.error ? ' sp-bubble-error' : ''}${msg.streaming ? ' sp-cursor' : ''}`;
+}
+
+export function fillAnswerBubble(
+  bubble: HTMLElement,
+  text: string,
+  markers: readonly SidePanelSource[],
+): void {
+  bubble.innerHTML = sanitizeHtml(renderMarkdown(text));
+  decorateCitations(bubble, markers);
+}
+
+function buildUserContext(msg: ChatMessage, previews: readonly string[] = []): HTMLElement | null {
+  const attachments = msg.attachments ?? [];
+  const pages = msg.pages ?? [];
+  if (attachments.length === 0 && pages.length === 0) return null;
+  const group = el('div', {
+    class: 'sp-msg-context',
+    role: 'list',
+    'aria-label': t('spMessageContextLabel'),
+  });
+  let imageIndex = 0;
+  for (const attachment of attachments) {
+    const item = el('span', {
+      class: 'sp-msg-context__item',
+      role: 'listitem',
+      title: attachment.name,
+    });
+    const preview = attachment.kind === 'image' ? previews[imageIndex] : undefined;
+    if (attachment.kind === 'image') imageIndex += 1;
+    if (preview) {
+      item.classList.add('sp-msg-context__item--thumb');
+      item.appendChild(
+        el('img', { class: 'sp-msg-context__thumb', src: preview, alt: attachment.name }),
+      );
+    } else {
+      item.appendChild(renderIcon(attachment.kind === 'image' ? FileImage : FileText, 14));
+      item.appendChild(el('span', { class: 'sp-msg-context__label' }, attachment.name));
+    }
+    group.appendChild(item);
+  }
+  for (const page of pages) {
+    const link = el('a', {
+      class: 'sp-msg-context__item sp-msg-context__page',
+      role: 'listitem',
+      href: page.url,
+      target: '_blank',
+      rel: 'noopener noreferrer',
+      title: page.url,
+    });
+    link.appendChild(renderIcon(Globe, 14));
+    link.appendChild(
+      el('span', { class: 'sp-msg-context__label' }, page.title || sourceHost(page.url)),
+    );
+    group.appendChild(link);
+  }
+  return group;
+}
+
+function formatElapsed(milliseconds: number): string {
+  const seconds = Math.max(0, Math.round(milliseconds / 1_000));
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  const remainder = seconds % 60;
+  return `${minutes}m${remainder ? ` ${remainder}s` : ''}`;
+}
+
+function answerMetaLabel(msg: ChatMessage): string | null {
+  if (msg.role !== 'assistant' || msg.streaming) return null;
+  const parts: string[] = [];
+  if (msg.model) parts.push(getModelMetadataById(msg.model)?.name ?? msg.model);
+  if (msg.durationMs !== undefined) parts.push(formatElapsed(msg.durationMs));
+  return parts.length > 0 ? parts.join(' · ') : null;
+}
+
+function buildCopyButton(label: string, text: () => string): HTMLElement {
+  const copyBtn = el('button', {
+    class: 'sp-copy-btn',
+    type: 'button',
+    title: label,
+    'aria-label': label,
+  });
+  copyBtn.appendChild(renderIcon(Copy, 11));
+  copyBtn.addEventListener('click', () => {
+    navigator.clipboard
+      .writeText(text())
+      .then(() => {
+        copyBtn.classList.add('copied');
+        setTimeout(() => copyBtn.classList.remove('copied'), 1500);
+      })
+      .catch(() => {});
+  });
+  return copyBtn;
+}
+
+function buildRegenerateControl(
+  msg: ChatMessage,
+  onRegenerate: (messageId: string, modelSelection?: string) => void,
+  models: readonly RegenerateModelOption[],
+): HTMLElement {
+  const control = el('span', { class: 'sp-regenerate' });
+  const trigger = el('button', {
+    class: 'sp-copy-btn sp-regenerate__trigger',
+    type: 'button',
+    title: t('spRegenerate'),
+    'aria-label': t('spRegenerate'),
+  });
+  trigger.appendChild(renderIcon(RotateCcw, 11));
+  if (models.length === 0) {
+    trigger.addEventListener('click', () => onRegenerate(msg.id));
+    control.appendChild(trigger);
+    return control;
+  }
+  const menu = el('div', {
+    class: 'sp-regenerate__menu',
+    role: 'menu',
+    'aria-label': t('spRegenerateMenuLabel'),
+  });
+  const handle = wirePopupMenu(trigger, menu);
+  const addItem = (label: string, modelSelection?: string): void => {
+    const item = el('button', { class: 'sp-regenerate__item', type: 'button', role: 'menuitem' });
+    item.textContent = label;
+    item.addEventListener('click', () => {
+      handle.close();
+      onRegenerate(msg.id, modelSelection);
+    });
+    menu.appendChild(item);
+  };
+  addItem(t('spRegenerateSame'));
+  menu.appendChild(el('div', { class: 'sp-regenerate__heading' }, t('spRegenerateWithHeading')));
+  for (const model of models) addItem(model.label, model.value);
+  control.appendChild(trigger);
+  control.appendChild(menu);
+  return control;
+}
+
+function buildActionRow(
+  msg: ChatMessage,
+  options: BubbleInteractionOptions,
+  copyText: () => string,
+): HTMLElement {
+  const actionRow = el('div', { class: 'sp-bubble-actions' });
+  actionRow.appendChild(el('span', { class: 'sp-timestamp' }, formatTime(msg.timestamp)));
+  const meta = answerMetaLabel(msg);
+  if (meta) actionRow.appendChild(el('span', { class: 'sp-answer-meta' }, meta));
+  if (msg.role === 'assistant' && msg.streaming) return actionRow;
+  if (msg.content.trim()) {
+    actionRow.appendChild(
+      buildCopyButton(msg.role === 'user' ? t('spCopyMessage') : t('spCopyResponse'), copyText),
+    );
+  }
+  if (options.onRegenerate && !msg.error && !msg.interrupted) {
+    if (msg.role === 'user') {
+      const resend = el('button', {
+        class: 'sp-copy-btn sp-resend-btn',
+        type: 'button',
+        title: t('spResendMessage'),
+        'aria-label': t('spResendMessage'),
+      });
+      resend.appendChild(renderIcon(RotateCcw, 11));
+      const onRegenerate = options.onRegenerate;
+      resend.addEventListener('click', () => onRegenerate(msg.id));
+      actionRow.appendChild(resend);
+    } else {
+      actionRow.appendChild(
+        buildRegenerateControl(msg, options.onRegenerate, options.regenerateModels ?? []),
+      );
+    }
+  }
+  return actionRow;
+}
+
+function buildTransientStatus(msg: ChatMessage): HTMLElement | null {
+  if (!msg.stopping && !msg.reconnecting) return null;
+  const status = el('div', { class: 'sp-bubble-transient-status', role: 'status' });
+  status.appendChild(renderIcon(Loader2, 12, 'sp-bubble-transient-status__icon'));
+  status.appendChild(document.createTextNode(msg.stopping ? t('spStopping') : t('spReconnecting')));
+  return status;
+}
+
+function appendAnswerExtras(
+  wrapper: HTMLElement,
+  msg: ChatMessage,
+  options: BubbleInteractionOptions,
+  sources: readonly SidePanelSource[],
+): void {
+  if (msg.role !== 'assistant') return;
+  const transient = buildTransientStatus(msg);
+  if (transient) wrapper.appendChild(transient);
+  const files = buildAnswerFiles(
+    answerFiles(msg.generatedFiles, msg.agentActivity),
+    options.fileAccess,
+  );
+  if (files) wrapper.appendChild(files);
+  appendInteractiveCards(wrapper, msg);
+  if (!msg.streaming) {
+    const footer = buildSourcesFooter(sources);
+    if (footer) wrapper.appendChild(footer);
+  }
 }
 
 function buildBubble(msg: ChatMessage, options: BubbleInteractionOptions = {}): HTMLElement {
@@ -258,18 +471,19 @@ function buildBubble(msg: ChatMessage, options: BubbleInteractionOptions = {}): 
     { class: `sp-msg sp-msg-${msg.role}`, 'data-id': msg.id },
     buildAuthorLabel(msg.role),
   );
+  const { markers, all } = answerSourceLists(msg);
 
-  const bubble = el('div', {
-    class: `sp-bubble sp-bubble-${msg.role}${msg.error ? ' sp-bubble-error' : ''}${msg.streaming ? ' sp-cursor' : ''}`,
-    id: `sp-bubble-${msg.id}`,
-  });
+  if (isUser) {
+    const context = buildUserContext(msg, options.imagePreviews);
+    if (context) wrapper.appendChild(context);
+  }
 
+  const bubble = el('div', { class: bubbleClass(msg), id: `sp-bubble-${msg.id}` });
   if (isUser) {
     bubble.textContent = msg.content;
   } else {
-    bubble.innerHTML = sanitizeHtml(renderMarkdown(msg.content));
+    fillAnswerBubble(bubble, msg.content, markers);
   }
-
   wrapper.appendChild(bubble);
 
   const errorFooter = buildErrorFooter(
@@ -282,32 +496,8 @@ function buildBubble(msg: ChatMessage, options: BubbleInteractionOptions = {}): 
   const interruptedFooter = buildInterruptedFooter(msg, options.onRetry);
   if (interruptedFooter) bubble.appendChild(interruptedFooter);
 
-  appendInteractiveCards(wrapper, msg);
-
-  const actionRow = el('div', { class: 'sp-bubble-actions' });
-  const ts = el('span', { class: 'sp-timestamp' }, formatTime(msg.timestamp));
-  actionRow.appendChild(ts);
-
-  if (!isUser) {
-    const copyBtn = el('button', {
-      class: 'sp-copy-btn',
-      title: 'Copy',
-      'aria-label': 'Copy response',
-    });
-    copyBtn.appendChild(renderIcon(Copy, 11));
-    copyBtn.addEventListener('click', () => {
-      navigator.clipboard
-        .writeText(msg.content)
-        .then(() => {
-          copyBtn.classList.add('copied');
-          setTimeout(() => copyBtn.classList.remove('copied'), 1500);
-        })
-        .catch(() => {});
-    });
-    actionRow.appendChild(copyBtn);
-  }
-
-  wrapper.appendChild(actionRow);
+  appendAnswerExtras(wrapper, msg, options, all);
+  wrapper.appendChild(buildActionRow(msg, options, () => msg.content));
   return wrapper;
 }
 
@@ -408,14 +598,6 @@ export function buildToolCallEl(block: ToolCallBlock): HTMLElement {
   return wrapper;
 }
 
-function formatElapsed(milliseconds: number): string {
-  const seconds = Math.max(0, Math.round(milliseconds / 1_000));
-  if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  const remainder = seconds % 60;
-  return `${minutes}m${remainder ? ` ${remainder}s` : ''}`;
-}
-
 function activityEntryStatus(entry: AgentActivityEntry): string {
   if (entry.kind === 'tool' || entry.kind === 'progress') return entry.status;
   if (entry.kind === 'error') return 'failed';
@@ -425,8 +607,8 @@ function activityEntryStatus(entry: AgentActivityEntry): string {
 function activityEntrySummary(entry: AgentActivityEntry): string {
   if (entry.kind === 'tool' || entry.kind === 'progress') return entry.summary;
   if (entry.kind === 'sources')
-    return entry.query ? `Sources for ${entry.query}` : 'Reviewed sources';
-  if (entry.kind === 'artifact') return `Created ${entry.name}`;
+    return entry.query ? t('spActivitySourcesFor', [entry.query]) : t('spActivitySourcesReviewed');
+  if (entry.kind === 'artifact') return t('spActivityCreated', [entry.name]);
   if (entry.kind === 'context') return entry.summary;
   return entry.message;
 }
@@ -473,11 +655,7 @@ function appendArtifactAction(parent: HTMLElement, entry: AgentActivityArtifactE
   const href = resolveManagedArtifactUrl(entry.uri);
   if (!href) {
     parent.appendChild(
-      el(
-        'div',
-        { class: 'sp-agent-artifact-unavailable' },
-        'Download unavailable in Chrome for this artifact.',
-      ),
+      el('div', { class: 'sp-agent-artifact-unavailable' }, t('spArtifactDownloadUnavailable')),
     );
     return;
   }
@@ -486,10 +664,10 @@ function appendArtifactAction(parent: HTMLElement, entry: AgentActivityArtifactE
     href,
     target: '_blank',
     rel: 'noopener noreferrer',
-    title: `Open or download ${entry.name}`,
+    title: t('spArtifactOpenOrDownloadNamed', [entry.name]),
   });
   link.appendChild(renderIcon(FileText, 12));
-  link.appendChild(document.createTextNode('Open or download'));
+  link.appendChild(document.createTextNode(t('spArtifactOpenOrDownload')));
   parent.appendChild(link);
 }
 
@@ -505,7 +683,9 @@ function appendApprovalActions(
     el(
       'div',
       { class: 'sp-agent-approval__summary' },
-      `${entry.approval.riskLevel ? `${entry.approval.riskLevel} risk · ` : ''}Your approval is required before this tool can run.`,
+      entry.approval.riskLevel
+        ? t('spApprovalRequiredWithRisk', [entry.approval.riskLevel])
+        : t('spApprovalRequired'),
     ),
   );
   if (options.approvalError) {
@@ -518,7 +698,7 @@ function appendApprovalActions(
       el(
         'div',
         { class: 'sp-agent-approval__recorded', role: 'status' },
-        `${selected === 'approved' ? 'Approved' : 'Declined'} · decision recorded`,
+        selected === 'approved' ? t('spApprovalRecordedApproved') : t('spApprovalRecordedDeclined'),
       ),
     );
   } else if (options.onResolveApproval) {
@@ -528,9 +708,9 @@ function appendApprovalActions(
       {
         class: 'sp-agent-approval__button sp-agent-approval__button--approve',
         type: 'button',
-        'aria-label': `Approve ${entry.name}`,
+        'aria-label': t('spApprovalApproveNamed', [entry.name]),
       },
-      'Approve',
+      t('spApprovalApprove'),
     );
     approve.addEventListener('click', () =>
       options.onResolveApproval?.(entry.toolCallId, 'approved'),
@@ -540,9 +720,9 @@ function appendApprovalActions(
       {
         class: 'sp-agent-approval__button',
         type: 'button',
-        'aria-label': `Decline ${entry.name}`,
+        'aria-label': t('spApprovalDeclineNamed', [entry.name]),
       },
-      'Decline',
+      t('spApprovalDecline'),
     );
     decline.addEventListener('click', () =>
       options.onResolveApproval?.(entry.toolCallId, 'rejected'),
@@ -552,11 +732,7 @@ function appendApprovalActions(
     approval.appendChild(actions);
   } else {
     approval.appendChild(
-      el(
-        'div',
-        { class: 'sp-agent-artifact-unavailable' },
-        'This approval cannot be continued from the current Chrome session.',
-      ),
+      el('div', { class: 'sp-agent-artifact-unavailable' }, t('spApprovalUnavailable')),
     );
   }
   parent.appendChild(approval);
@@ -572,8 +748,16 @@ function buildAgentActivityStep(
 
   if (entry.kind === 'progress' && entry.detail) detailParts.push(entry.detail);
   if (entry.kind === 'tool') {
-    if (entry.input !== undefined) detailParts.push(`Request\n${boundedJson(entry.input)}`);
-    if (entry.output !== undefined) detailParts.push(`Result\n${boundedJson(entry.output)}`);
+    if (entry.deviceStep) {
+      detailParts.push(t('spActivityStepWaitingForDevice', [entry.deviceStep.deviceName]));
+    }
+    if (entry.inputRequest) detailParts.push(t('spActivityStepNeedsInput'));
+    if (entry.input !== undefined) {
+      detailParts.push(`${t('spActivityRequestHeading')}\n${boundedJson(entry.input)}`);
+    }
+    if (entry.output !== undefined) {
+      detailParts.push(`${t('spActivityResultHeading')}\n${boundedJson(entry.output)}`);
+    }
     if (entry.error) detailParts.push(entry.error);
     sources = entry.sources ?? [];
   } else if (entry.kind === 'sources') {
@@ -595,7 +779,12 @@ function buildAgentActivityStep(
     (entry.kind === 'tool' && Boolean(entry.approval));
   const step = document.createElement(hasDetails ? 'details' : 'div');
   step.className = `sp-agent-step sp-agent-step--${status}`;
-  if (step instanceof HTMLDetailsElement && status === 'awaiting-approval') step.open = true;
+  if (
+    step instanceof HTMLDetailsElement &&
+    (status === 'awaiting-approval' || status === 'awaiting-device')
+  ) {
+    step.open = true;
+  }
   const row = document.createElement(hasDetails ? 'summary' : 'div');
   if (!hasDetails) row.className = 'sp-agent-step__row';
   const icon =
@@ -603,13 +792,15 @@ function buildAgentActivityStep(
       ? Loader2
       : status === 'failed' || status === 'cancelled'
         ? CircleX
-        : entry.kind === 'tool'
-          ? toolIcon(entry.name)
-          : entry.kind === 'sources'
-            ? Globe
-            : entry.kind === 'artifact'
-              ? FileText
-              : Clock;
+        : status === 'awaiting-device'
+          ? Monitor
+          : entry.kind === 'tool'
+            ? toolIcon(entry.name)
+            : entry.kind === 'sources'
+              ? Globe
+              : entry.kind === 'artifact'
+                ? FileText
+                : Clock;
   row.appendChild(renderIcon(icon, 14, 'sp-agent-step__icon'));
   row.appendChild(el('span', { class: 'sp-agent-step__summary' }, activityEntrySummary(entry)));
   if (entry.kind === 'tool' && entry.elapsedMs !== undefined) {
@@ -632,48 +823,72 @@ function buildAgentActivityStep(
   return step;
 }
 
+function activityStatusLabel(activity: AgentActivityState, elapsedLabel: string): string {
+  const tools = activity.entries.filter(
+    (entry): entry is AgentActivityToolEntry => entry.kind === 'tool',
+  );
+  if (tools.some((entry) => entry.inputRequest)) return t('spActivityNeedsInput', [elapsedLabel]);
+  if (
+    activity.status === 'awaiting-approval' ||
+    tools.some((entry) => entry.status === 'awaiting-approval')
+  ) {
+    return t('spActivityNeedsApproval', [elapsedLabel]);
+  }
+  const deviceStep = tools.find((entry) => entry.deviceStep)?.deviceStep;
+  if (activity.status === 'awaiting-device' || deviceStep) {
+    return deviceStep
+      ? t('spActivityWaitingForDevice', [deviceStep.deviceName, elapsedLabel])
+      : t('spActivityWaitingForDesktop', [elapsedLabel]);
+  }
+  switch (activity.status) {
+    case 'completed':
+      return t('spActivityWorkedFor', [elapsedLabel]);
+    case 'partial':
+      return t('spActivityFinishedWithErrors', [elapsedLabel]);
+    case 'failed':
+      return t('spActivityFailedAfter', [elapsedLabel]);
+    case 'cancelled':
+      return t('spActivityCancelledAfter', [elapsedLabel]);
+    case 'paused':
+      return t('spActivityPausedAfter', [elapsedLabel]);
+    default:
+      return t('spActivityWorkingFor', [elapsedLabel]);
+  }
+}
+
+function activityStatusIcon(activity: AgentActivityState, needsUser: boolean): string {
+  if (activity.status === 'failed' || activity.status === 'cancelled') return CircleX;
+  if (activity.status === 'partial') return CircleAlert;
+  if (activity.status === 'completed') return CircleCheck;
+  if (activity.status === 'awaiting-device') return Monitor;
+  if (needsUser || activity.status === 'paused') return Clock;
+  return Loader2;
+}
+
 function buildAgentActivityEl(
   activity: AgentActivityState,
   options: BubbleInteractionOptions,
 ): HTMLElement {
-  const details = el('details', { class: 'sp-agent-activity' });
+  const details = el('details', { class: 'sp-agent-activity', 'data-status': activity.status });
   const summary = document.createElement('summary');
   const elapsed = Math.max(
     0,
     (activity.completedAtMs ?? activity.updatedAtMs) - activity.startedAtMs,
   );
-  const elapsedLabel = formatElapsed(elapsed);
-  const needsApproval =
+  const needsUser =
     activity.status === 'awaiting-approval' ||
-    activity.entries.some((entry) => entry.kind === 'tool' && entry.status === 'awaiting-approval');
-  const statusLabel = needsApproval
-    ? `Needs your approval · ${elapsedLabel}`
-    : activity.status === 'completed'
-      ? `Worked for ${elapsedLabel}`
-      : activity.status === 'failed'
-        ? `Failed after ${elapsedLabel}`
-        : activity.status === 'cancelled'
-          ? `Cancelled after ${elapsedLabel}`
-          : activity.status === 'paused'
-            ? `Paused after ${elapsedLabel}`
-            : `Working for ${elapsedLabel}`;
+    activity.entries.some(
+      (entry) =>
+        entry.kind === 'tool' &&
+        (entry.status === 'awaiting-approval' || Boolean(entry.inputRequest)),
+    );
+  summary.appendChild(renderIcon(activityStatusIcon(activity, needsUser), 14));
+  if (needsUser || activity.status === 'awaiting-device') details.open = true;
+  const stepCount = activity.entries.length
+    ? ` · ${tPlural('spActivitySteps', activity.entries.length)}`
+    : '';
   summary.appendChild(
-    renderIcon(
-      activity.status === 'failed' || activity.status === 'cancelled'
-        ? CircleX
-        : activity.status === 'completed'
-          ? CircleCheck
-          : needsApproval || activity.status === 'paused'
-            ? Clock
-            : Loader2,
-      14,
-    ),
-  );
-  if (needsApproval) details.open = true;
-  summary.appendChild(
-    document.createTextNode(
-      `${statusLabel}${activity.entries.length ? ` · ${activity.entries.length} steps` : ''}`,
-    ),
+    document.createTextNode(`${activityStatusLabel(activity, formatElapsed(elapsed))}${stepCount}`),
   );
   summary.appendChild(renderIcon(ChevronRight, 12, 'sp-agent-activity__chevron'));
   details.appendChild(summary);
@@ -712,6 +927,7 @@ export function buildBubbleWithTools(
   }
 
   if (msg.agentActivity) wrapper.appendChild(buildAgentActivityEl(msg.agentActivity, options));
+  const { markers, all } = answerSourceLists(msg);
 
   if (
     shouldRenderTextBubble({
@@ -720,10 +936,8 @@ export function buildBubbleWithTools(
       interrupted: Boolean(msg.interrupted),
     })
   ) {
-    const bubble = document.createElement('div');
-    bubble.className = `sp-bubble sp-bubble-${msg.role}${msg.error ? ' sp-bubble-error' : ''}${msg.streaming ? ' sp-cursor' : ''}`;
-    bubble.id = `sp-bubble-${msg.id}`;
-    bubble.innerHTML = sanitizeHtml(renderMarkdown(textParts.join('')));
+    const bubble = el('div', { class: bubbleClass(msg), id: `sp-bubble-${msg.id}` });
+    fillAnswerBubble(bubble, textParts.join(''), markers);
     wrapper.appendChild(bubble);
   }
 
@@ -740,39 +954,13 @@ export function buildBubbleWithTools(
     }
   }
 
-  appendInteractiveCards(wrapper, msg);
+  appendAnswerExtras(wrapper, msg, options, all);
 
   const toolsErrorFooter = buildErrorFooter(msg, options.onRetry, undefined, options.quotaRecovery);
   if (toolsErrorFooter) wrapper.appendChild(toolsErrorFooter);
   const toolsInterruptedFooter = buildInterruptedFooter(msg, options.onRetry);
   if (toolsInterruptedFooter) wrapper.appendChild(toolsInterruptedFooter);
 
-  const actionRow = document.createElement('div');
-  actionRow.className = 'sp-bubble-actions';
-  const ts = document.createElement('span');
-  ts.className = 'sp-timestamp';
-  ts.textContent = formatTime(msg.timestamp);
-  actionRow.appendChild(ts);
-
-  if (msg.role === 'assistant') {
-    const copyBtn = document.createElement('button');
-    copyBtn.className = 'sp-copy-btn';
-    copyBtn.title = 'Copy';
-    copyBtn.setAttribute('aria-label', 'Copy response');
-    copyBtn.appendChild(renderIcon(Copy, 11));
-    copyBtn.addEventListener('click', () => {
-      const text = textParts.join('').trim();
-      navigator.clipboard
-        .writeText(text || msg.content)
-        .then(() => {
-          copyBtn.classList.add('copied');
-          setTimeout(() => copyBtn.classList.remove('copied'), 1500);
-        })
-        .catch(() => {});
-    });
-    actionRow.appendChild(copyBtn);
-  }
-
-  wrapper.appendChild(actionRow);
+  wrapper.appendChild(buildActionRow(msg, options, () => textParts.join('').trim() || msg.content));
   return wrapper;
 }

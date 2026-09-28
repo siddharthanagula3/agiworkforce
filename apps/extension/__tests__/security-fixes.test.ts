@@ -378,7 +378,7 @@ describe('H-10 side panel does not send apiKey on CHAT_MESSAGE', () => {
 
   it('CHAT_MESSAGE send sites do not include an apiKey: field', () => {
     const chatMessageBlocks = sidePanelSource.match(
-      /type:\s*'CHAT_MESSAGE'[\s\S]*?\.\.\.managedOutboundRoutingPayload\(\)/g,
+      /type:\s*'CHAT_MESSAGE'[\s\S]*?\.\.\.managedOutboundRoutingPayload\(quickMode\)/g,
     );
     expect(chatMessageBlocks?.length).toBeGreaterThan(0);
     for (const block of chatMessageBlocks ?? []) {
