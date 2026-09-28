@@ -360,6 +360,7 @@ export function LibraryView({
   const [searchInput, setSearchInput] = useState(initialQuery);
   const [query, setQuery] = useState(initialQuery.trim());
   const [page, setPage] = useState<PageState>({ items: [], hasMore: false, nextOffset: null });
+  const [storageUsedBytes, setStorageUsedBytes] = useState<number | null>(null);
   const [folders, setFolders] = useState<LibraryFolder[]>([]);
   const [loading, setLoading] = useState(false);
   const [hasResolvedPage, setHasResolvedPage] = useState(false);
@@ -433,6 +434,9 @@ export function LibraryView({
           hasMore: parsed.data.has_more,
           nextOffset: parsed.data.next_offset,
         }));
+        if (parsed.data.storage_used_bytes !== undefined) {
+          setStorageUsedBytes(parsed.data.storage_used_bytes);
+        }
       } catch (err) {
         if (seq !== requestSeq.current) return;
         setError(toUserMessageWithStatus(err, 'Something went wrong.'));
@@ -832,9 +836,19 @@ export function LibraryView({
         />
       ) : null}
       <header className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="font-[var(--chat-font-sans)] text-display text-[var(--chat-text-primary)]">
-          Library
-        </h1>
+        <div className="flex flex-col gap-1">
+          <h1 className="font-[var(--chat-font-sans)] text-display text-[var(--chat-text-primary)]">
+            Library
+          </h1>
+          {storageUsedBytes !== null ? (
+            <p
+              data-testid="library-storage-used"
+              className="text-xs text-[var(--chat-text-secondary)]"
+            >
+              {formatBytes(storageUsedBytes, 1)} of files stored
+            </p>
+          ) : null}
+        </div>
         {uploadFiles || transport.createFolder ? (
           <NewMenu
             onUpload={uploadFiles ? requestUpload : undefined}

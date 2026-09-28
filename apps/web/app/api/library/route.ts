@@ -9,7 +9,12 @@ import {
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
-import { listLibraryAssets, type LibraryAssetRow } from '@/lib/server/media-assets';
+import { logger } from '@/lib/logger';
+import {
+  listLibraryAssets,
+  sumLibraryStorageBytes,
+  type LibraryAssetRow,
+} from '@/lib/server/media-assets';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 
@@ -112,7 +117,18 @@ async function handleListLibrary(request: NextRequest): Promise<NextResponse> {
     has_more: hasMore,
     next_offset: hasMore ? offset + limit : null,
   };
-  return NextResponse.json(body, { headers: headers(request) });
+  const storageUsedBytes =
+    offset === 0 && !deleted
+      ? await sumLibraryStorageBytes(userId, db).catch((error: unknown) => {
+          logger.warn({ error, userId }, 'Library storage total unavailable');
+          return null;
+        })
+      : null;
+  const response: LibraryListResponse = {
+    ...body,
+    ...(storageUsedBytes !== null ? { storage_used_bytes: storageUsedBytes } : {}),
+  };
+  return NextResponse.json(response, { headers: headers(request) });
 }
 
 export const GET = withErrorHandler(handleListLibrary);
