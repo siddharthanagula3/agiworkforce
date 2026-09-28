@@ -290,6 +290,11 @@ pub fn format_model_list() -> String {
             "  {}{:<30} [{}{}{}] {:>6} ctx {:>5} out  {}\n",
             status_icon, model.id, tools_icon, vision_icon, reasoning_icon, ctx, max_out, price
         ));
+        if let Some(date) =
+            model_catalog::model_detail(&model.id).and_then(|detail| detail.deprecation_date)
+        {
+            out.push_str(&format!("      deprecated, leaves the catalog {date}\n"));
+        }
     }
 
     out.push_str(
