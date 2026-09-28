@@ -1642,7 +1642,13 @@ export interface OrgSharedOverview {
   currentUserId: string;
   currentUserRole: OrgSharingRole;
   canManageSharing: boolean;
-  members: { userId: string; role: OrgSharingRole; joinedAt: string }[];
+  members: {
+    userId: string;
+    role: OrgSharingRole;
+    joinedAt: string;
+    displayName: string | null;
+    email: string | null;
+  }[];
   sharedProjects: OrgSharedProject[];
   sharedConnectors: OrgSharedConnector[];
   sharedArtifacts: OrgSharedArtifact[];
