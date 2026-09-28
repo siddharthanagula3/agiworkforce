@@ -36,6 +36,7 @@ import {
 import type { PublishResult } from '@agiworkforce/artifacts';
 import { isSupportedChatAttachment } from '@agiworkforce/cloud-contracts';
 import { addCsrfHeaders } from '@/lib/client/csrf';
+import { exportDocument } from '@features/chat/services/document-export-service';
 import {
   summarizeGeneratedFileBundle,
   type ArtifactManifest,
@@ -949,6 +950,22 @@ if (__AgiApp) {
     [artifactSourceFile, projectSave],
   );
 
+  const isTextDocument = artifact.type === 'document' && !isPdf && !isDocx;
+
+  const handleExportDocument = async (format: 'docx' | 'pdf') => {
+    const title = artifact.title || 'Artifact';
+    try {
+      await exportDocument(activeContent, format, title, { title });
+    } catch (error) {
+      toast.error(
+        toUserMessage(
+          error,
+          `This document could not be exported as ${format === 'docx' ? 'Word' : 'PDF'}`,
+        ),
+      );
+    }
+  };
+
   const handleDownloadGeneratedFile = async () => {
     if (!generatedFileSummary.primaryUri) return;
     try {
@@ -1585,6 +1602,16 @@ if (__AgiApp) {
                   <DropdownMenuItem onClick={() => handleDownload('md')}>
                     Download as Markdown
                   </DropdownMenuItem>
+                  {isTextDocument && (
+                    <>
+                      <DropdownMenuItem onClick={() => void handleExportDocument('docx')}>
+                        Download as Word (.docx)
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => void handleExportDocument('pdf')}>
+                        Download as PDF
+                      </DropdownMenuItem>
+                    </>
+                  )}
                   {hasGeneratedFileManifest && generatedFileSummary.primaryUri && (
                     <DropdownMenuItem onClick={() => void handleDownloadGeneratedFile()}>
                       Download generated file
@@ -2159,6 +2186,16 @@ if (__AgiApp) {
                 <DropdownMenuItem onClick={() => handleDownload('md')}>
                   Download as Markdown
                 </DropdownMenuItem>
+                {isTextDocument && (
+                  <>
+                    <DropdownMenuItem onClick={() => void handleExportDocument('docx')}>
+                      Download as Word (.docx)
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => void handleExportDocument('pdf')}>
+                      Download as PDF
+                    </DropdownMenuItem>
+                  </>
+                )}
                 {hasGeneratedFileManifest && generatedFileSummary.primaryUri && (
                   <DropdownMenuItem onClick={() => void handleDownloadGeneratedFile()}>
                     Download generated file
