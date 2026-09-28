@@ -603,6 +603,15 @@ export function getWebviewContent(
       background: var(--hover);
       color: var(--text-primary);
     }
+    .message-action--regenerate { display: none; }
+    .message.assistant.message--latest .message-action--regenerate { display: inline-flex; }
+    .message-meta {
+      align-self: center;
+      margin-left: 6px;
+      color: var(--text-secondary);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
 
     /* A failed turn is a notice in the transcript, not an input-validation
        box. The error border and the Activity row carry the signal; a saturated
@@ -3611,7 +3620,7 @@ export function getWebviewContent(
       }, 1500);
     }
 
-    function appendMessageActions(messageEl, sourceText) {
+    function appendMessageActions(messageEl, sourceText, meta) {
       if (!messageEl || !sourceText) return;
       assistantSources.set(messageEl, sourceText);
       var previous = messagesEl.querySelectorAll('.message.assistant.message--latest');
@@ -3640,7 +3649,40 @@ export function getWebviewContent(
         );
       });
       row.appendChild(copy);
+      var regenerate = document.createElement('button');
+      regenerate.type = 'button';
+      regenerate.className = 'message-action message-action--regenerate';
+      regenerate.setAttribute('aria-label', 'Regenerate response');
+      regenerate.title = 'Regenerate';
+      var regenerateIcon = document.createElement('span');
+      regenerateIcon.className = 'codicon codicon-refresh';
+      regenerateIcon.setAttribute('aria-hidden', 'true');
+      regenerate.appendChild(regenerateIcon);
+      regenerate.addEventListener('click', function () {
+        vscode.postMessage({ type: 'regenerate' });
+      });
+      row.appendChild(regenerate);
+      if (meta && meta.label) {
+        var metaEl = document.createElement('span');
+        metaEl.className = 'message-meta';
+        metaEl.textContent = meta.label;
+        if (meta.detail) metaEl.title = meta.detail;
+        row.appendChild(metaEl);
+      }
       messageEl.appendChild(row);
+    }
+
+    function answerMeta(payload) {
+      if (!payload || !payload.modelLabel) return null;
+      var tokens = (payload.inputTokens || 0) + (payload.outputTokens || 0);
+      return {
+        label: payload.modelLabel,
+        detail: tokens > 0
+          ? payload.modelLabel + ' · ' + tokens.toLocaleString() + ' tokens (' +
+            (payload.inputTokens || 0).toLocaleString() + ' in, ' +
+            (payload.outputTokens || 0).toLocaleString() + ' out)'
+          : payload.modelLabel,
+      };
     }
 
     function addMessage(role, text) {
@@ -5267,7 +5309,7 @@ export function getWebviewContent(
           // token is flushed, then bind actions on any code blocks.
           currentAssistantEl.innerHTML = renderAssistant(accumulatedContent);
           bindCodeBlockActions(currentAssistantEl);
-          appendMessageActions(currentAssistantEl, accumulatedContent);
+          appendMessageActions(currentAssistantEl, accumulatedContent, answerMeta(msg.payload));
         }
         finalizeToolCallStack();
         if (msg.payload && msg.payload.providerLabel) {
