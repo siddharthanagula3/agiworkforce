@@ -39,7 +39,7 @@ const NAMESPACE = 'privacy';
 // Fixing that means gating the save path itself, not this settings screen.
 // do not re-add the switch until that read is wired, or it goes back to
 // actively lying to privacy-conscious users.
-type ToggleKey = 'shareTelemetry';
+type ToggleKey = 'shareTelemetry' | 'keepOutOfProviderTraining';
 
 interface ToggleSpec {
   id: ToggleKey;
@@ -55,6 +55,13 @@ const TOGGLES: ReadonlyArray<ToggleSpec> = [
     label: 'Share crash and usage telemetry',
     description:
       'Allow browser error reports and consent-gated usage counts so we can fix problems faster. Sensitive request fields are removed from error reports before they are sent.',
+    defaultValue: false,
+  },
+  {
+    id: 'keepOutOfProviderTraining',
+    label: 'Only use models that do not train on your chats',
+    description:
+      'Your requests go only to models whose providers do not train on what you send. On the Free plan this replaces the free models, whose providers’ terms may allow training.',
     defaultValue: false,
   },
 ];
@@ -493,7 +500,8 @@ export function PrivacySection() {
               /subprocessors
             </SettingsPageLink>
             . On the Free plan, requests are served by providers&rsquo; free models, and those
-            providers&rsquo; terms may allow them to train on what you send.
+            providers&rsquo; terms may allow them to train on what you send, unless you turn on Only
+            use models that do not train on your chats above.
           </p>
           <p style={{ margin: 'var(--space-2) 0 0' }}>
             How long we keep it: a chat stays in your history until you delete it, and a deleted
