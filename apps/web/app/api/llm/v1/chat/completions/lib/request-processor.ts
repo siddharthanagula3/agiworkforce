@@ -411,7 +411,7 @@ import {
 import { loadSelectedMcpContext, McpContextError } from '@/lib/connectors/mcp-context-service';
 import { moderateManagedPrompt } from '@/lib/moderation';
 import { timePhase } from '@/lib/observability/phase-timer';
-import { assertCapabilityAvailable } from '@/lib/feature-flags/capability-gate';
+import { assertCapabilityAvailable, readKillSwitchGate } from '@/lib/feature-flags/capability-gate';
 import { buildFlagSubject } from '@/lib/feature-flags/flag-evaluation-service';
 import { WORK_CAPABILITY } from '@/lib/feature-flags/kill-switches';
 import { CHAT_TURN_PHASE } from './turn-phases';
@@ -4161,7 +4161,12 @@ export async function processRequest(
 
   const researchPlanRefusal = getResearchPlanRefusal(chatRequest.research, subscription.plan_tier);
   if (researchPlanRefusal) return researchPlanRefusal;
-  if (chatRequest.research === true || chatRequest.work_mode === 'agiwork') {
+  let cloudExecutionSwitchedOff = false;
+  if (
+    chatRequest.research === true ||
+    chatRequest.work_mode === 'agiwork' ||
+    chatRequest.code_execution === true
+  ) {
     const { organizationId: gatedWorkspaceId } = await scopedDbPromise;
     const gatedSubject = buildFlagSubject(request, {
       userId,
@@ -4175,6 +4180,16 @@ export async function processRequest(
     }
     if (chatRequest.research === true) {
       await assertCapabilityAvailable(gatedSubject, 'canUseDeepResearch', 'Deep Research');
+    }
+    if (chatRequest.code_execution === true) {
+      const gate = await readKillSwitchGate(gatedSubject).catch((gateError: unknown) => {
+        logger.error(
+          { error: gateError, userId },
+          'Kill-switch gate unreadable; code execution is offered as shipped',
+        );
+        return null;
+      });
+      cloudExecutionSwitchedOff = gate?.capabilityAllowed('canUseCloudExecution') === false;
     }
   }
   const researchMode = researchModeAllowed(
@@ -4817,9 +4832,10 @@ export async function processRequest(
     codeExecutionCapable:
       resolvedModelCaps?.codeExecution === true && nativeToolPermitted(EXECUTE_CODE_TOOL),
   };
-  const codeExecutionHoldMicrousd = chatRequest.code_execution
-    ? hostedCodeExecutionReserveMicrousd(turnCodeExecutionInput)
-    : 0;
+  const codeExecutionHoldMicrousd =
+    chatRequest.code_execution && !cloudExecutionSwitchedOff
+      ? hostedCodeExecutionReserveMicrousd(turnCodeExecutionInput)
+      : 0;
   let freeTrial: FreeTrialReservation | undefined;
   let managedUsage: ManagedUsageRequestReservation | undefined;
 
@@ -5222,7 +5238,9 @@ export async function processRequest(
   }
 
   let codeExecutionUnavailable = false;
-  if (chatRequest.code_execution) {
+  if (chatRequest.code_execution && cloudExecutionSwitchedOff) {
+    codeExecutionUnavailable = true;
+  } else if (chatRequest.code_execution) {
     const turnCodeExecution = resolveTurnCodeExecutionTools(turnCodeExecutionInput);
     if (turnCodeExecution.tools.length > 0) {
       resolvedTools = [...(resolvedTools ?? []), ...turnCodeExecution.tools];
