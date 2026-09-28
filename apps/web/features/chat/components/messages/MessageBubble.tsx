@@ -526,6 +526,7 @@ interface Message {
     imageGenModel?: string;
     /** Bounded provider/gateway retry instant for explicit image regeneration. */
     imageRetryAt?: string;
+    imageVersions?: StoreMessageMetadata['imageVersions'];
     imageData?: MediaGenerationResult;
     videoUrl?: string;
     thumbnailUrl?: string;
@@ -2493,6 +2494,7 @@ const MessageBubbleComponent = function MessageBubble({
                 aspectRatio={message.metadata.imageGenAspect as ImageAspectRatio | undefined}
                 modelId={message.metadata.imageGenModel as string | undefined}
                 retryAt={message.metadata.imageRetryAt as string | undefined}
+                previousVersions={message.metadata.imageVersions}
                 onRegenerate={onRegenerateImage}
               />
             </div>

@@ -86,6 +86,23 @@ function resolveImageModel(modelId?: string): ImageModelOption | undefined {
   return IMAGE_MODELS.find((model) => model.id === modelId);
 }
 
+export interface ImageStylePreset {
+  id: string;
+  label: string;
+  phrase: string;
+}
+
+export const IMAGE_STYLE_PRESETS: readonly ImageStylePreset[] = [
+  { id: 'photo', label: 'Photorealistic', phrase: 'photorealistic, natural light, sharp detail' },
+  { id: 'illustration', label: 'Illustration', phrase: 'flat digital illustration, clean shapes' },
+  { id: 'watercolor', label: 'Watercolor', phrase: 'soft watercolor painting on textured paper' },
+  { id: 'oil', label: 'Oil painting', phrase: 'oil painting with visible brushstrokes' },
+  { id: '3d', label: '3D render', phrase: 'polished 3D render, studio lighting' },
+  { id: 'anime', label: 'Anime', phrase: 'anime style, cel shading' },
+  { id: 'line-art', label: 'Line art', phrase: 'black ink line art on a white background' },
+  { id: 'pixel', label: 'Pixel art', phrase: '16-bit pixel art' },
+];
+
 export function getImageModelLabel(modelId?: string | null): string | null {
   const id = modelId?.trim();
   if (!id) return null;
