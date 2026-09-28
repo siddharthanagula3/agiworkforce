@@ -41,6 +41,7 @@ const CHAT_SECTION_PREFIXES = [
   '/chat/projects',
   '/chat/artifacts',
   '/chat/library',
+  '/chat/finance',
   '/chat/schedules',
   '/chat/customize',
   '/chat/study',
