@@ -8,6 +8,7 @@ import type {
 import type { ManagedCloudOwner } from './features/cloud-bridge/managedCloudAuthority';
 import type {
   ManagedChatSourcesDelta,
+  ManagedCodeExecution,
   ManagedQuotaBlock,
   ManagedQuotaWarningSignal,
 } from './features/cloud-bridge/freeTrialClient';
@@ -566,6 +567,7 @@ export interface ChatChunkMessage {
   generatedFiles?: GeneratedFileWire[];
   interactiveCard?: InteractiveCard;
   sources?: ManagedChatSourcesDelta;
+  codeExecution?: ManagedCodeExecution;
 }
 
 export interface ChatMessageResponse {

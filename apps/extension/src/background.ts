@@ -5190,6 +5190,12 @@ async function handleChatMessage(
       },
       {
         ...createChromeManagedChatDependencies(onStreamText, {
+          onCodeExecution: (chunk) =>
+            publishManagedChatChunk(streamKey, activeStream, id, {
+              text: '',
+              done: false,
+              codeExecution: chunk.execution,
+            }),
           onRouting: async (routing) => {
             publishManagedChatChunk(streamKey, activeStream, id, {
               text: '',
@@ -5489,6 +5495,12 @@ async function handleResolveChatApproval(
               done: false,
             }),
           {
+            onCodeExecution: (chunk) =>
+              publishManagedChatChunk(streamKey, activeStream, id, {
+                text: '',
+                done: false,
+                codeExecution: chunk.execution,
+              }),
             onAgentEvent: (chunk) =>
               publishManagedChatChunk(streamKey, activeStream, id, {
                 text: '',

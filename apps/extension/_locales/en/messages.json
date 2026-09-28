@@ -2664,5 +2664,41 @@
   "spClarifyExpiredSuperseded": {
     "message": "These questions are no longer answerable: they were superseded by a newer message.",
     "description": "Clarifying questions replaced by a newer message"
+  },
+  "spCodeExecution": {
+    "message": "Code execution",
+    "description": "Heading of the output of code the assistant ran"
+  },
+  "spCodeRunning": {
+    "message": "Running code…",
+    "description": "Heading while the assistant's code is running"
+  },
+  "spCodeOutput": {
+    "message": "Output",
+    "description": "Label above the standard output of code the assistant ran"
+  },
+  "spCodeStderr": {
+    "message": "Stderr",
+    "description": "Label above the error output of code the assistant ran"
+  },
+  "spCodeExitCode": {
+    "message": "Exit code: $CODE$",
+    "description": "Non-zero exit code of code the assistant ran",
+    "placeholders": {
+      "code": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "spCodeFailed": {
+    "message": "Code execution failed: $CODE$",
+    "description": "The code runner itself failed, with the error code it returned",
+    "placeholders": {
+      "code": {
+        "content": "$1",
+        "example": "execution_time_exceeded"
+      }
+    }
   }
 }

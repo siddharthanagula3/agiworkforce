@@ -36,6 +36,7 @@ import {
   CircleCheck,
   CircleX,
   Clock,
+  Code2,
   Loader2,
   Monitor,
   RotateCcw,
@@ -494,6 +495,62 @@ function buildTransientStatus(msg: ChatMessage): HTMLElement | null {
   return status;
 }
 
+function buildCodeExecution(msg: ChatMessage): HTMLElement | null {
+  const execution = msg.codeExecution;
+  if (!execution || (execution.status === 'running' && !msg.streaming)) return null;
+  const running = execution.status === 'running';
+  const returnCode = execution.returnCode ?? 0;
+  const passed = execution.status === 'completed' && returnCode === 0;
+  const detail = el('div', { class: 'sp-code-run__detail' });
+  if (execution.stdout) {
+    detail.appendChild(el('div', { class: 'sp-code-run__label' }, t('spCodeOutput')));
+    detail.appendChild(el('pre', { class: 'sp-code-run__output' }, execution.stdout));
+  }
+  if (execution.stderr) {
+    detail.appendChild(el('div', { class: 'sp-code-run__label' }, t('spCodeStderr')));
+    detail.appendChild(
+      el('pre', { class: 'sp-code-run__output sp-code-run__output--error' }, execution.stderr),
+    );
+  }
+  if (execution.status === 'failed') {
+    detail.appendChild(
+      el(
+        'div',
+        { class: 'sp-code-run__error' },
+        t('spCodeFailed', [execution.errorCode ?? 'unknown_error']),
+      ),
+    );
+  } else if (returnCode !== 0) {
+    detail.appendChild(
+      el('div', { class: 'sp-code-run__error' }, t('spCodeExitCode', [String(returnCode)])),
+    );
+  }
+  const hasDetail = detail.childElementCount > 0;
+  const block = document.createElement(hasDetail ? 'details' : 'div');
+  block.className = 'sp-code-run';
+  if (block instanceof HTMLDetailsElement) block.open = true;
+  const summary = document.createElement(hasDetail ? 'summary' : 'div');
+  summary.className = 'sp-code-run__summary';
+  summary.appendChild(renderIcon(Code2, 14));
+  summary.appendChild(
+    el(
+      'span',
+      { class: 'sp-code-run__title' },
+      running ? t('spCodeRunning') : t('spCodeExecution'),
+    ),
+  );
+  summary.appendChild(
+    renderIcon(
+      running ? Loader2 : passed ? CircleCheck : CircleX,
+      13,
+      `sp-code-run__status sp-code-run__status--${running ? 'running' : passed ? 'passed' : 'failed'}`,
+    ),
+  );
+  block.appendChild(summary);
+  if (hasDetail) block.appendChild(detail);
+  return block;
+}
+
 function appendAnswerExtras(
   wrapper: HTMLElement,
   msg: ChatMessage,
@@ -503,6 +560,8 @@ function appendAnswerExtras(
   if (msg.role !== 'assistant') return;
   const transient = buildTransientStatus(msg);
   if (transient) wrapper.appendChild(transient);
+  const codeRun = buildCodeExecution(msg);
+  if (codeRun) wrapper.appendChild(codeRun);
   const files = buildAnswerFiles(
     answerFiles(msg.generatedFiles, msg.agentActivity),
     options.fileAccess,

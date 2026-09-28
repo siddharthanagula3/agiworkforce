@@ -255,6 +255,7 @@ import {
   FREE_TRIAL_GATEWAY,
   getManagedUsageHistory,
   type ManagedChatSourcesDelta,
+  type ManagedCodeExecution,
   type ManagedModelAccess,
   type ManagedUsageHistory,
   type ManagedQuotaBlock,
@@ -704,6 +705,7 @@ interface ChatChunk {
   generatedFiles?: GeneratedFileWire[];
   interactiveCard?: InteractiveCard;
   sources?: ManagedChatSourcesDelta;
+  codeExecution?: ManagedCodeExecution;
   routing?: {
     modelKey: string;
     taskType: RoutingTaskType;
@@ -1052,6 +1054,9 @@ function serializeMessagesForHistory() {
       : {}),
     ...(message.role === 'assistant' && message.interactiveCards
       ? { interactiveCards: message.interactiveCards }
+      : {}),
+    ...(message.role === 'assistant' && message.codeExecution
+      ? { codeExecution: message.codeExecution }
       : {}),
     ...(message.role === 'assistant' && message.sources ? { sources: message.sources } : {}),
     ...(message.role === 'assistant' && message.citations ? { citations: message.citations } : {}),
@@ -2255,6 +2260,53 @@ function injectStyles(): void {
       font-size: var(--type-caption-size);
       line-height: var(--type-caption-height);
     }
+    .sp-code-run {
+      margin-top: 8px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-control);
+      background: var(--agi-ext-surface);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
+    .sp-code-run__summary {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      min-height: 32px;
+      padding: 0 10px;
+      color: var(--agi-ext-text);
+      font-weight: 600;
+      list-style: none;
+    }
+    details.sp-code-run > summary { cursor: pointer; }
+    details.sp-code-run > summary::-webkit-details-marker { display: none; }
+    .sp-code-run__title { flex: 1; min-width: 0; }
+    .sp-code-run__status--running svg { animation: sp-spin var(--duration-spin) linear infinite; }
+    .sp-code-run__status--passed { color: var(--agi-ext-success-text); }
+    .sp-code-run__status--failed { color: var(--agi-ext-danger-text); }
+    .sp-code-run__detail {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      padding: 8px 10px 10px;
+      border-top: 1px solid var(--agi-ext-border);
+    }
+    .sp-code-run__label { color: var(--agi-ext-text-muted); font-weight: 600; }
+    .sp-code-run__output {
+      max-height: 240px;
+      margin: 0;
+      overflow: auto;
+      padding: 7px 9px;
+      border-radius: var(--corner-compact);
+      background: var(--agi-ext-bg);
+      color: var(--agi-ext-text);
+      font-family: var(--type-code-family);
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+    .sp-code-run__output--error { border: 1px solid var(--agi-ext-danger-border); color: var(--agi-ext-danger-text); }
+    .sp-code-run__error { color: var(--agi-ext-danger-text); }
+    .sp-code-run > summary:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
     .sp-interactive-card__meta {
       margin-top: 4px;
       color: var(--agi-ext-text-muted);
@@ -13724,6 +13776,16 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
     const cloudRun = cloudRunsByStreamId.get(chunk.id);
     if (cloudRun) assistant.cloudAgentRun = { ...cloudRun };
     trimLiveMessages();
+    _ctx.needsMessageRebuild = true;
+    renderMessages();
+    saveMessages();
+  }
+
+  if (chunk.codeExecution) {
+    removeThinking();
+    const assistant = ensureStreamingAssistant(chunk.id, streamUsedQuick);
+    stampResolvedRoute(chunk.id, assistant);
+    assistant.codeExecution = { ...chunk.codeExecution };
     _ctx.needsMessageRebuild = true;
     renderMessages();
     saveMessages();

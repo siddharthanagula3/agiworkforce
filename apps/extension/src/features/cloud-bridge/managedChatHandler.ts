@@ -121,6 +121,9 @@ export interface ChromeManagedChatDependencies {
   streamChat: typeof streamFreeChat;
   onRouting?: (routing: ChromeManagedRoutingResult) => void | Promise<void>;
   onText: (text: string) => void | Promise<void>;
+  onCodeExecution?: (
+    chunk: Extract<FreeTrialChunk, { type: 'code-execution' }>,
+  ) => void | Promise<void>;
   onAgentEvent?: (chunk: Extract<FreeTrialChunk, { type: 'agent-event' }>) => void | Promise<void>;
   onGeneratedFiles?: (
     chunk: Extract<FreeTrialChunk, { type: 'generated-files' }>,
@@ -157,6 +160,9 @@ export interface ChromeManagedApprovalDependencies {
   getAuthToken: typeof getAuthToken;
   streamApproval: typeof streamManagedChatApproval;
   onText: (text: string) => void | Promise<void>;
+  onCodeExecution?: (
+    chunk: Extract<FreeTrialChunk, { type: 'code-execution' }>,
+  ) => void | Promise<void>;
   onAgentEvent?: (chunk: Extract<FreeTrialChunk, { type: 'agent-event' }>) => void | Promise<void>;
   onGeneratedFiles?: (
     chunk: Extract<FreeTrialChunk, { type: 'generated-files' }>,
@@ -549,6 +555,10 @@ export async function executeChromeManagedChat(
       await dependencies.onText(chunk.text);
       continue;
     }
+    if (chunk.type === 'code-execution') {
+      await dependencies.onCodeExecution?.(chunk);
+      continue;
+    }
     if (chunk.type === 'agent-event') {
       if (chunk.envelope.event.type === 'task-state-changed') {
         latestTaskState = chunk.envelope.event.state;
@@ -647,6 +657,10 @@ export async function executeChromeManagedApproval(
       await dependencies.onText(chunk.text);
       continue;
     }
+    if (chunk.type === 'code-execution') {
+      await dependencies.onCodeExecution?.(chunk);
+      continue;
+    }
     if (chunk.type === 'agent-event') {
       await dependencies.onAgentEvent?.(chunk);
       continue;
@@ -698,6 +712,7 @@ export function createChromeManagedChatDependencies(
   callbacks: Pick<
     ChromeManagedChatDependencies,
     | 'onRouting'
+    | 'onCodeExecution'
     | 'onAgentEvent'
     | 'onGeneratedFiles'
     | 'onInteractiveCard'
@@ -713,6 +728,7 @@ export function createChromeManagedApprovalDependencies(
   onText: ChromeManagedApprovalDependencies['onText'],
   callbacks: Pick<
     ChromeManagedApprovalDependencies,
+    | 'onCodeExecution'
     | 'onAgentEvent'
     | 'onGeneratedFiles'
     | 'onInteractiveCard'
