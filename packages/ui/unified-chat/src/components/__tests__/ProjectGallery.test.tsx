@@ -40,7 +40,9 @@ describe('ProjectGallery, enhanced create UX', () => {
     expect(options.length).toBeGreaterThan(0);
     await userEvent.click(options[1]!);
     expect(screen.queryByTestId('project-create-emoji-picker')).toBeNull();
-    expect(screen.getByTestId('project-create-emoji-trigger').textContent).toBe('💻');
+    await userEvent.type(screen.getByTestId('project-create-name-input'), 'Picked');
+    fireEvent.submit(screen.getByTestId('project-create-form'));
+    expect(useProjectStore.getState().projects[0]!.iconEmoji).toBe('code');
   });
 
   it('applies a preset to the name + emoji when the chip is clicked', async () => {
@@ -49,7 +51,8 @@ describe('ProjectGallery, enhanced create UX', () => {
     await userEvent.click(screen.getByTestId('project-create-preset-coding'));
     const input = screen.getByTestId('project-create-name-input') as HTMLInputElement;
     expect(input.value).toBe('Coding');
-    expect(screen.getByTestId('project-create-emoji-trigger').textContent).toBe('💻');
+    fireEvent.submit(screen.getByTestId('project-create-form'));
+    expect(useProjectStore.getState().projects[0]!.iconEmoji).toBe('code');
   });
 
   it('submits the form and adds the project with iconEmoji + accentColor', async () => {
@@ -61,7 +64,7 @@ describe('ProjectGallery, enhanced create UX', () => {
     const projects = useProjectStore.getState().projects;
     expect(projects.length).toBe(1);
     expect(projects[0]!.name).toBe('Research');
-    expect(projects[0]!.iconEmoji).toBe('🔬');
+    expect(projects[0]!.iconEmoji).toBe('brain');
     expect(projects[0]!.accentColor).toBe('emerald');
   });
 
@@ -81,7 +84,7 @@ describe('ProjectGallery, enhanced create UX', () => {
     await waitFor(() => {
       expect(onCreate).toHaveBeenCalledWith({
         name: 'Cloud project',
-        iconEmoji: '📁',
+        iconEmoji: 'folder',
         accentColor: 'zinc',
       });
       expect(useProjectStore.getState().projects).toEqual([
@@ -115,7 +118,7 @@ describe('ProjectGallery, enhanced create UX', () => {
     const projects = useProjectStore.getState().projects;
     expect(projects.length).toBe(1);
     expect(projects[0]!.name).toBe('Generic project');
-    expect(projects[0]!.iconEmoji).toBe('📁');
+    expect(projects[0]!.iconEmoji).toBe('folder');
     expect(projects[0]!.accentColor).toBe('zinc');
   });
 
@@ -127,7 +130,10 @@ describe('ProjectGallery, enhanced create UX', () => {
     await userEvent.click(screen.getByRole('button', { name: /new/i }));
     const input = screen.getByTestId('project-create-name-input') as HTMLInputElement;
     expect(input.value).toBe('');
-    expect(screen.getByTestId('project-create-emoji-trigger').textContent).toBe('📁');
+    await userEvent.type(input, 'After cancel');
+    fireEvent.submit(screen.getByTestId('project-create-form'));
+    expect(useProjectStore.getState().projects[0]!.iconEmoji).toBe('folder');
+    expect(useProjectStore.getState().projects[0]!.accentColor).toBe('zinc');
   });
 });
 

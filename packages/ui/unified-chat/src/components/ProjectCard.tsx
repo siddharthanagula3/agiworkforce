@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useRef, useState, type MouseEvent } from 'react';
 import { FolderOpen, MoreHorizontal, Share2, Star } from 'lucide-react';
-import { useConfirmAction, useMenuKeyboard } from '@agiworkforce/ui';
+import {
+  hasKnownProjectIcon,
+  resolveProjectAccentHex,
+  resolveProjectIcon,
+  useConfirmAction,
+  useMenuKeyboard,
+} from '@agiworkforce/ui';
 import { cn } from '../lib/utils';
 import { useProjectStore } from '../stores/projectStore';
 import type { Project } from '../lib/types';
@@ -38,6 +44,28 @@ function defaultFormatRelativeDate(iso: string): string {
   const days = Math.round(hours / 24);
   if (days < 30) return `${days}d ago`;
   return new Date(iso).toLocaleDateString();
+}
+
+function ProjectCardIcon({ project }: { project: Project }) {
+  if (!hasKnownProjectIcon(project.iconEmoji)) {
+    return (
+      <FolderOpen
+        size={16}
+        strokeWidth={1.75}
+        className="shrink-0 text-[var(--chat-accent-secondary)]"
+        aria-hidden="true"
+      />
+    );
+  }
+  const Icon = resolveProjectIcon(project.iconEmoji);
+  return (
+    <span
+      className="flex h-4 w-4 shrink-0 items-center justify-center"
+      style={{ color: resolveProjectAccentHex(project.accentColor) }}
+    >
+      <Icon className="h-4 w-4" aria-hidden="true" />
+    </span>
+  );
 }
 
 export function ProjectCard({
@@ -152,12 +180,7 @@ export function ProjectCard({
         )}
         <div className="pointer-events-none relative z-[var(--z-control)] flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2">
-            <FolderOpen
-              size={16}
-              strokeWidth={1.75}
-              className="shrink-0 text-[var(--chat-accent-secondary)]"
-              aria-hidden="true"
-            />
+            <ProjectCardIcon project={project} />
             <span className="truncate text-sm font-semibold text-[var(--chat-text-primary)]">
               {project.name}
             </span>
