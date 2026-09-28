@@ -1,8 +1,9 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ComponentProps } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatComposerNew } from './ChatComposerNew';
+import { __resetComposerDraftStorageForTests } from './composer-draft-storage';
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn(), back: vi.fn() }),
@@ -47,6 +48,12 @@ async function composerWithDraft(onSend: SendHandler) {
   await userEvent.type(textarea, 'こんにち');
   return textarea;
 }
+
+beforeEach(() => {
+  window.localStorage.clear();
+  window.sessionStorage.clear();
+  __resetComposerDraftStorageForTests();
+});
 
 describe('composer Enter during input-method composition', () => {
   it('does not send when the keydown carries the IME processing keycode and isComposing is absent', async () => {

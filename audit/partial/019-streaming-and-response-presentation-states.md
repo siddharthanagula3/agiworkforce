@@ -10,14 +10,11 @@ nothing is left.
 
 - Done when: A request that cannot start yet (queued behind a running turn or a server queue) is shown as waiting/queued.
 - Wave: 3
-- Already works on: web, desktop, mobile, vscode, api
+- Already works on: web, desktop, mobile, vscode, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
-| chrome | partial | The chat never shows a queued state (the composer refuses a second send while a turn runs); only the separate Work runs panel labels queued runs. | ui |
-
-Code: `apps/extension/src/features/side-panel/cloudRunsPanel.ts:344-348`, `apps/extension/src/side_panel.ts:925-929`
 
 ## S19.03: Preparing context.
 
@@ -42,9 +39,9 @@ Code: `apps/mobile/src/features/chat/components/StreamingIndicator.tsx:4-18`, `a
 | --- | --- | --- | --- |
 | mobile | partial | Only Deep Research asks for plan confirmation mid-task (research card); other input requests are not shown. | ui |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | The chat now says "Needs your input" and the step names the connector request, but Chrome cannot render the connector form to answer it. The form model lives in apps/web/features/connectors/lib/connector-input-request.ts; it needs to move to a shared package before the side panel can render and resume it. | ui |
+| chrome | partial | Waiting for p-platform to move the connector input-request form model into a shared package (S101.22); the side panel form will be built on it. | ui |
 
-Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:777-790`, `apps/mobile/src/features/chat/components/MessageList.tsx:101-102`, `apps/extension/src/features/side-panel/bubbles.ts:830-830`, `apps/extension/src/features/side-panel/chat-state.ts:254-254`
+Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:777-790`, `apps/mobile/src/features/chat/components/MessageList.tsx:101-102`, `apps/extension/src/features/side-panel/bubbles.ts:847-847`
 
 ## S19.11: Streaming structured output.
 
@@ -92,13 +89,11 @@ Code: `apps/cli/src/tui/tui_app.rs:169-180`, `apps/cli/src/tui/tui_app.rs:4865-4
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only a failure notice appears when tool steps were not saved; there is no 'saving/saved' state for results. | states |
-| desktop | partial | Same as web (hosted): Only a failure notice appears when tool steps were not saved; there is no 'saving/saved' state for results. | states |
 | mobile | partial | Only failure notices exist (e.g. 'Generated image was not saved'); no saving/synced state for a turn. | states |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/messages/MessageBubble.tsx:2748-2755`, `apps/mobile/src/features/chat/components/MessageBubble.tsx:945-955`
+Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:945-955`
 
 ## S19.16: Partially completed.
 
@@ -116,16 +111,14 @@ Code: `apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx:82-97`
 
 - Done when: After the user presses stop, the surface shows the stop is in progress until it takes effect.
 - Wave: 3
-- Already works on: vscode, chrome, api
+- Already works on: web, desktop, vscode, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Stop aborts the stream at once and records the durable run's cancellation request, but no 'Stopping…' state is shown while the server winds down. | states |
-| desktop | partial | Same as web (hosted): Stop aborts at once; no 'Stopping…' state while the server winds down. | states |
 | mobile | partial | Only video generation shows 'stopping'; stopping a chat turn has no in-progress state. | states |
 | cli | partial | Esc/Ctrl-C cancels immediately and prints '⊘ Stopped'; there is no stopping-in-progress state. | states |
 
-Code: `apps/web/lib/hooks/useChatStream.ts:2381-2388`, `apps/web/features/chat/components/messages/ChatMessageList.tsx:1758-1763`, `apps/mobile/src/features/chat/components/MessageBubble.tsx:894-902`, `apps/mobile/stores/chat/chatExecutionStore.ts:2828-2835`
+Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:894-902`, `apps/mobile/stores/chat/chatExecutionStore.ts:2828-2835`, `apps/cli/src/tui/tui_app.rs:5240-5256`
 
 ## S19.18: Cancelled.
 
@@ -143,17 +136,15 @@ Code: `apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx:92-92`
 
 - Done when: When the connection drops mid-turn, the surface shows it is reconnecting and resumes when possible.
 - Wave: 3
-- Already works on: chrome
+- Already works on: web, desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | A dropped stream is resumed from the last cursor (3 attempts) silently; the user sees no 'Reconnecting' state while it retries. | states |
-| desktop | partial | Same as web (hosted): A dropped stream is resumed from the last cursor (3 attempts) silently; the user sees no 'Reconnecting' state while it retries. | states |
 | mobile | partial | Sends made offline are queued and marked 'queued'; a stream that drops mid-turn ends as a failure instead of reconnecting. | states |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/hooks/useChatStream.ts:2235-2242`, `apps/web/lib/hooks/useChatStream.ts:1027-1027`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:591-591`, `apps/mobile/src/features/chat/components/MessageBubble.tsx:684-700`
+Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:684-700`
 
 ## S19.20: Resuming existing work.
 

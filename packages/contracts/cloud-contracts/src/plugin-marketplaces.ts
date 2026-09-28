@@ -32,6 +32,21 @@ const marketplaceStringListSchema = z
   .array(z.string().trim().min(1).max(MARKETPLACE_LIST_ITEM_MAX_LENGTH))
   .max(MARKETPLACE_LIST_MAX_ITEMS);
 
+const marketplaceReferenceSchema = z.string().trim().min(1).max(MARKETPLACE_NAME_MAX_LENGTH);
+
+export const PluginMarketplaceDependencySchema = z.union([
+  z
+    .string()
+    .trim()
+    .min(1)
+    .max(MARKETPLACE_LIST_ITEM_MAX_LENGTH * 2),
+  z.object({
+    name: z.string().trim().regex(MARKETPLACE_PLUGIN_ID_PATTERN),
+    marketplace: marketplaceReferenceSchema.nullable().optional(),
+    version: z.string().trim().min(1).max(MARKETPLACE_LIST_ITEM_MAX_LENGTH).nullable().optional(),
+  }),
+]);
+
 export const PluginMarketplaceManifestPluginSchema = z.object({
   id: z.string().regex(MARKETPLACE_PLUGIN_ID_PATTERN),
   name: z.string().trim().min(1).max(MARKETPLACE_NAME_MAX_LENGTH),
@@ -42,10 +57,18 @@ export const PluginMarketplaceManifestPluginSchema = z.object({
   agents: marketplaceStringListSchema.default([]),
   examplePrompts: marketplaceStringListSchema.default([]),
   permissions: marketplaceStringListSchema.default([]),
+  dependencies: z
+    .array(PluginMarketplaceDependencySchema)
+    .max(MARKETPLACE_LIST_MAX_ITEMS)
+    .default([]),
 });
 
 export const PluginMarketplaceManifestSchema = z.object({
   name: z.string().trim().min(1).max(MARKETPLACE_NAME_MAX_LENGTH),
+  allowCrossMarketplaceDependenciesOn: z
+    .array(marketplaceReferenceSchema)
+    .max(MARKETPLACE_LIST_MAX_ITEMS)
+    .default([]),
   plugins: z.array(PluginMarketplaceManifestPluginSchema).min(1).max(MARKETPLACE_PLUGINS_MAX_COUNT),
 });
 
@@ -162,6 +185,57 @@ export interface PluginSourceInstallResponse {
   sourceName: string;
   kind: PluginMarketplaceSourceKind;
   plugins: PluginSourceInstalledPlugin[];
+  omittedFiles?: string[];
+}
+
+export interface PluginInstalledDependency {
+  pluginId: string;
+  name: string;
+  version: string;
+  requiredBy: string;
+}
+
+export const PLUGIN_UPLOAD_ACKNOWLEDGED_SCAN_FIELD = 'acknowledged_scan';
+export const PLUGIN_SCAN_REVIEW_REFUSAL = 'scan_review_required';
+
+export const PluginScanFindingSummarySchema = z.object({
+  path: z.string(),
+  line: z.number().int(),
+  message: z.string(),
+  severity: z.enum(['block', 'review']),
+});
+
+export const PluginPackageRefusalDetailsSchema = z.object({
+  refusal: z.string(),
+  findings: z.array(PluginScanFindingSummarySchema).optional(),
+  acknowledgements: z.array(z.string()).optional(),
+});
+
+export type PluginScanFindingSummary = z.infer<typeof PluginScanFindingSummarySchema>;
+export type PluginPackageRefusalDetails = z.infer<typeof PluginPackageRefusalDetailsSchema>;
+
+export interface PluginScanSummary {
+  verdict: 'pass' | 'review' | 'block';
+  findings: PluginScanFindingSummary[];
+  scannedAt: string;
+}
+
+export interface PluginScanResponse {
+  scan: PluginScanSummary | null;
+}
+
+export interface PluginPublishedVersion {
+  version: string;
+  publishedAt: string | null;
+  changelog: string;
+  permissions: string[];
+  declaredSkills: string[];
+}
+
+export interface PluginVersionsResponse {
+  versions: PluginPublishedVersion[];
+  installedVersion: string | null;
+  approvedPermissions: string[];
 }
 
 export interface PluginConnectorRequirementState {

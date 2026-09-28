@@ -23,7 +23,11 @@ const db = {
 vi.mock('workflow', () => ({ sleep: mocks.sleep }));
 vi.mock('../device-steps/device-clearance-step', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../device-steps/device-clearance-step')>();
-  return { ...actual, clearCloudAgentDevice: vi.fn(actual.clearCloudAgentDevice) };
+  return {
+    ...actual,
+    clearCloudAgentDevice: vi.fn(actual.clearCloudAgentDevice),
+    reportCloudAgentDeviceClearance: vi.fn(async () => undefined),
+  };
 });
 vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },

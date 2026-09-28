@@ -8,8 +8,4 @@ nothing is left.
 
 | Item | Surface | What would settle it |
 | --- | --- | --- |
-| S22.10: Geographic maps. | web | production-state |
-| S22.10: Geographic maps. | desktop | production-state |
 | S22.10: Geographic maps. | mobile | production-state |
-| S22.11: Place and business cards. | web | production-state |
-| S22.11: Place and business cards. | desktop | production-state |

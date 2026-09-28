@@ -13,6 +13,12 @@ import {
   managedCloudProjectKnowledgePath,
   type ManagedCloudProjectKnowledgeFile,
 } from './project-knowledge';
+import { sha256HexOfBlob } from './file-digest';
+import {
+  createManagedCloudResumableUploadClient,
+  isResumableUploadUnavailable,
+} from './managed-cloud-resumable-upload-client';
+import { shouldUploadInParts } from './resumable-uploads';
 
 type ManagedKnowledgeSurface = 'web' | 'desktop' | 'mobile';
 
@@ -70,49 +76,6 @@ async function responseError(response: Response, fallback: string): Promise<Erro
   return new ManagedCloudProjectKnowledgeHttpError(message, response.status);
 }
 
-async function readFileArrayBuffer(file: File): Promise<ArrayBuffer> {
-  const fileWithArrayBuffer = file as File & {
-    arrayBuffer?: () => Promise<ArrayBuffer>;
-  };
-  if (typeof fileWithArrayBuffer.arrayBuffer === 'function') {
-    return fileWithArrayBuffer.arrayBuffer();
-  }
-  if (typeof FileReader === 'undefined') {
-    throw new ManagedCloudProjectKnowledgeContractError(
-      'This surface cannot read the selected project knowledge file.',
-    );
-  }
-  return new Promise<ArrayBuffer>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () =>
-      reject(
-        new ManagedCloudProjectKnowledgeContractError(
-          'The selected project knowledge file could not be read.',
-        ),
-      );
-    reader.onload = () => {
-      if (reader.result instanceof ArrayBuffer) {
-        resolve(reader.result);
-      } else {
-        reject(
-          new ManagedCloudProjectKnowledgeContractError(
-            'The selected project knowledge file returned invalid bytes.',
-          ),
-        );
-      }
-    };
-    reader.readAsArrayBuffer(file);
-  });
-}
-
-async function sha256Hex(file: File): Promise<string> {
-  const buffer = await readFileArrayBuffer(file);
-  const hash = await crypto.subtle.digest('SHA-256', buffer);
-  return Array.from(new Uint8Array(hash))
-    .map((byte) => byte.toString(16).padStart(2, '0'))
-    .join('');
-}
-
 function parseContract<T>(schema: ZodType<T>, value: unknown, label: string): T {
   const parsed = schema.safeParse(value);
   if (!parsed.success) {
@@ -129,6 +92,59 @@ export function createManagedCloudProjectKnowledgeClient(
   const baseUrl = normalizeBaseUrl(config.baseUrl ?? '');
   const fetchImpl = config.fetchImpl ?? globalThis.fetch.bind(globalThis);
   const uploadFetchImpl = config.uploadFetchImpl ?? fetchImpl;
+  const resumable = createManagedCloudResumableUploadClient({
+    ...config,
+    fetchImpl,
+    uploadFetchImpl,
+  });
+
+  function assertRegisteredAsSent(
+    registered: ManagedCloudProjectKnowledgeFile,
+    projectId: string,
+    file: File,
+    checksumSha256: string,
+  ): ManagedCloudProjectKnowledgeFile {
+    if (
+      registered.projectId !== projectId ||
+      registered.fileName !== file.name ||
+      registered.byteCount !== file.size ||
+      registered.checksumSha256 !== checksumSha256
+    ) {
+      throw new Error('The server returned mismatched project knowledge metadata.');
+    }
+    return registered;
+  }
+
+  async function uploadInParts(
+    projectId: string,
+    file: File,
+    mimeType: string,
+    checksumSha256: string,
+  ): Promise<ManagedCloudProjectKnowledgeFile | null> {
+    try {
+      const completed = await resumable.upload({
+        file,
+        request: {
+          kind: 'knowledge-file',
+          projectId,
+          fileName: file.name,
+          mimeType,
+          byteCount: file.size,
+          checksumSha256,
+          sourceSurface: config.sourceSurface,
+        },
+      });
+      if (completed.kind !== 'knowledge-file') {
+        throw new ManagedCloudProjectKnowledgeContractError(
+          'Managed Cloud project knowledge completion contract violation: expected a knowledge file.',
+        );
+      }
+      return completed.file;
+    } catch (error) {
+      if (isResumableUploadUnavailable(error)) return null;
+      throw error;
+    }
+  }
 
   async function headers(json: boolean, mutation: boolean): Promise<HeadersInit> {
     const result = new Headers(await config.getHeaders?.());
@@ -166,7 +182,12 @@ export function createManagedCloudProjectKnowledgeClient(
       const validation = validateAttachmentFile(file);
       if (!validation.ok) throw new Error(validation.message);
       const mimeType = file.type || 'application/octet-stream';
-      const checksumSha256 = await sha256Hex(file);
+      const checksumSha256 = await sha256HexOfBlob(file);
+
+      if (shouldUploadInParts(file.size)) {
+        const registered = await uploadInParts(projectId, file, mimeType, checksumSha256);
+        if (registered) return assertRegisteredAsSent(registered, projectId, file, checksumSha256);
+      }
 
       const presignBody = ManagedCloudProjectKnowledgePresignRequestSchema.parse({
         kind: 'knowledge-file',
@@ -233,15 +254,7 @@ export function createManagedCloudProjectKnowledgeClient(
         await registrationResponse.json(),
         'registration response',
       ).file;
-      if (
-        registered.projectId !== projectId ||
-        registered.fileName !== file.name ||
-        registered.byteCount !== file.size ||
-        registered.checksumSha256 !== checksumSha256
-      ) {
-        throw new Error('The server returned mismatched project knowledge metadata.');
-      }
-      return registered;
+      return assertRegisteredAsSent(registered, projectId, file, checksumSha256);
     },
 
     async remove(projectId, fileId) {

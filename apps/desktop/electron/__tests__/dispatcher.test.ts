@@ -18,9 +18,11 @@ const getPermissionState = vi.fn<() => PermissionState>();
 const requestPermission = vi.fn<() => Promise<PermissionState>>();
 const consumeSingleUse = vi.fn();
 const revokePermission = vi.fn();
-const stopComputerUseHelper = vi.fn();
-const takeOverComputerUse = vi.fn(() => ({ takenOver: true }));
-const isComputerUseTakenOver = vi.fn(() => false);
+const stopComputerUse = vi.fn(() => ({ phase: 'idle' }));
+const takeOverComputerUse = vi.fn(() => ({ phase: 'paused' }));
+const handBackComputerUse = vi.fn(() => ({ phase: 'active' }));
+const computerUsePhase = vi.fn(() => 'idle');
+const enterScreenStep = vi.fn(async () => undefined);
 const screenChangesSeen = vi.fn(() => 0);
 const captureScreen = vi.fn();
 const runShellCommand = vi.fn();
@@ -39,9 +41,11 @@ const readLocalModelSettings = vi.fn();
 const writeLocalModelSettings = vi.fn();
 const send = vi.fn();
 
+const showMessageBox = vi.fn();
+
 vi.mock('electron', () => ({
   app: { getPath: () => '/tmp', getVersion: () => '1.8.0' },
-  dialog: { showOpenDialog: vi.fn(), showMessageBox: vi.fn() },
+  dialog: { showOpenDialog: vi.fn(), showMessageBox },
   shell: { openPath: vi.fn() },
 }));
 
@@ -49,7 +53,9 @@ vi.mock('../runtime/permissionManager', () => ({
   getPermissionState,
   requestPermission,
   consumeSingleUse,
+  reviewPermissions: vi.fn(() => ({ decisions: [], system: {} })),
   revokePermission,
+  revokeScope: vi.fn(),
 }));
 
 vi.mock('../runtime/computerUseService', () => ({
@@ -59,15 +65,38 @@ vi.mock('../runtime/computerUseService', () => ({
   clickPointer: vi.fn(),
   computerUseAvailability: () => ({ supported: true }),
   dragPointer: vi.fn(),
-  isComputerUseTakenOver,
   movePointer: vi.fn(),
+  readFrontWindow: vi.fn(async () => ({ front: null, secureInput: false })),
   screenChangesSeen,
   pressKey: vi.fn(),
   scrollPointer: vi.fn(),
-  stopComputerUseHelper,
-  takeOverComputerUse,
   typeText: vi.fn(),
   waitFor: vi.fn(),
+}));
+
+vi.mock('../runtime/computerUseSession', () => ({
+  askUserDuringRun: vi.fn((_window: unknown, ask: () => Promise<unknown>) => ask()),
+  configureComputerUse: vi.fn(),
+  shutDownComputerUse: vi.fn(),
+  computerUseEnabled: () => true,
+  computerUsePhase,
+  computerUseStatus: vi.fn(() => ({ phase: computerUsePhase() })),
+  confirmScreenStepStillWanted: vi.fn(async () => undefined),
+  enterScreenStep,
+  finishComputerUse: vi.fn(),
+  handBackComputerUse,
+  refuseScreenStepEarly: vi.fn(),
+  setComputerUseEnabled: vi.fn(),
+  stopComputerUse,
+  takeOverComputerUse,
+  withoutInputWatch: vi.fn((action: () => Promise<unknown>) => action()),
+}));
+
+vi.mock('../runtime/systemPermissions', () => ({
+  listForAccessibility: vi.fn(),
+  openSystemPermission: vi.fn(),
+  systemPermissionStatus: vi.fn(() => 'granted'),
+  systemPermissionStatuses: vi.fn(() => ({})),
 }));
 
 vi.mock('../runtime/workspaceStore', () => ({
@@ -81,7 +110,11 @@ vi.mock('../runtime/workspaceStore', () => ({
   WorkspaceGrantRefused: class extends Error {},
 }));
 
-vi.mock('../runtime/shellService', () => ({ runShellCommand, cancelShellRun }));
+vi.mock('../runtime/shellService', () => ({
+  runShellCommand,
+  cancelShellRun,
+  listShellRuns: vi.fn(() => []),
+}));
 vi.mock('../runtime/shellPolicyStore', () => ({ readShellPolicy, writeShellPolicy }));
 vi.mock('../runtime/appsService', () => ({
   openInEditor,
@@ -90,7 +123,9 @@ vi.mock('../runtime/appsService', () => ({
 }));
 vi.mock('../runtime/clipboardService', () => ({ readClipboard }));
 vi.mock('../runtime/filesystemService', () => ({
+  TextEditRefused: class extends Error {},
   createDirectory: vi.fn(),
+  editTextFile: vi.fn(),
   globFiles: vi.fn(),
   grepFiles: vi.fn(),
   listDirectory: vi.fn(),
@@ -155,7 +190,8 @@ const window = {
 beforeEach(() => {
   vi.clearAllMocks();
   resetScreenStepGate();
-  isComputerUseTakenOver.mockReturnValue(false);
+  enterScreenStep.mockResolvedValue(undefined);
+  computerUsePhase.mockReturnValue('idle');
   getPermissionState.mockReturnValue('granted');
   readShellPolicy.mockReturnValue({ allow: ['git'], deny: [] });
   writeShellPolicy.mockImplementation((policy: unknown) => policy);
@@ -542,11 +578,6 @@ describe('the account the shell hands its app-servers', () => {
 });
 
 describe('stopping screen control', () => {
-  beforeEach(() => {
-    revokePermission.mockClear();
-    stopComputerUseHelper.mockClear();
-  });
-
   it('stops without asking for permission first', async () => {
     // Needing a prompt to stop something already holding the mouse is the one
     // place a prompt must not appear, so this command is outside the capability
@@ -556,18 +587,8 @@ describe('stopping screen control', () => {
     const result = await dispatch(window, 'computer_stop', {});
 
     expect(result.ok).toBe(true);
-    expect(stopComputerUseHelper).toHaveBeenCalledOnce();
+    expect(stopComputerUse).toHaveBeenCalledOnce();
     expect(requestPermission).not.toHaveBeenCalled();
-  });
-
-  it('withdraws the grant so the next step cannot simply restart it', async () => {
-    // Each screen step is independent here: killing the helper alone would let
-    // the very next call spawn a new one and carry on moving the pointer.
-    getPermissionState.mockReturnValue('granted');
-
-    await dispatch(window, 'computer_stop', {});
-
-    expect(revokePermission).toHaveBeenCalledWith('computer.use', { kind: 'global' });
   });
 });
 
@@ -603,10 +624,17 @@ describe('screen control across displays and takeover', () => {
     expect(requestPermission).not.toHaveBeenCalled();
   });
 
-  it('leaves handing control back to the native menu, not the page', async () => {
-    const result = await dispatch(window, 'computer_hand_back', {});
+  it('hands control back from the page only after a native confirmation', async () => {
+    computerUsePhase.mockReturnValue('paused');
+    showMessageBox.mockResolvedValueOnce({ response: 0 });
 
-    expect(result.ok).toBe(false);
+    await dispatch(window, 'computer_hand_back', {});
+    expect(showMessageBox).toHaveBeenCalledOnce();
+    expect(handBackComputerUse).not.toHaveBeenCalled();
+
+    showMessageBox.mockResolvedValueOnce({ response: 1 });
+    await dispatch(window, 'computer_hand_back', {});
+    expect(handBackComputerUse).toHaveBeenCalledOnce();
   });
 });
 
@@ -624,7 +652,7 @@ describe('device registry and remote control commands', () => {
         capabilities: {
           browser: true,
           computerUse: true,
-          localModels: true,
+          localModels: false,
           localMcp: false,
           remoteControl: true,
         },
@@ -658,7 +686,7 @@ describe('the screen steps a user can stop', () => {
   });
 
   it('refuses every one of them once the user has taken the screen back', async () => {
-    isComputerUseTakenOver.mockReturnValue(true);
+    enterScreenStep.mockRejectedValue(new Error('The user has the screen.'));
     for (const command of SCREEN_STEP_COMMANDS) {
       const response = await dispatch(window, command, ARGS[command] ?? {});
       expect(response, command).toMatchObject({ ok: false });
@@ -666,7 +694,7 @@ describe('the screen steps a user can stop', () => {
   });
 
   it('lets them through again once control is handed back', async () => {
-    isComputerUseTakenOver.mockReturnValue(false);
+    enterScreenStep.mockResolvedValue(undefined);
     const response = await dispatch(window, 'computer_move', { x: 10, y: 10 });
     expect(response).toMatchObject({ ok: true });
   });

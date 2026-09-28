@@ -1,26 +1,41 @@
 export { isDesktopHost, isLocalModeHost, useDesktopHost, useLocalModeHost } from './lib/host';
-export { PRODUCT_HOME_PATH, conversationDeepLink, deepLinkDestination } from './lib/deep-links';
+export {
+  PRODUCT_HOME_PATH,
+  codeDeepLink,
+  conversationDeepLink,
+  deepLinkDestination,
+} from './lib/deep-links';
 export { notifyJobComplete, type DesktopJobNotification } from './lib/notify';
 export {
   DesktopHostUnavailable,
+  addDeveloperMemory,
   answerDeveloperApproval,
   cancelLocalChat,
   cancelLocalCommand,
   capturePairedBrowser,
+  discardDeveloperSessionChanges,
   clickInPairedBrowser,
   downloadThroughPairedBrowser,
   installBrowserHost,
   interruptDeveloperTurn,
   listDeveloperModels,
+  listDeveloperPlugins,
   listDeveloperSessions,
+  listDeveloperSkills,
+  listLocalBranches,
   navigatePairedBrowser,
   onDeveloperSessionEvent,
   readDeveloperRuntimeStatus,
   reportDesktopAccount,
   readDeveloperSession,
+  readDeveloperSessionChanges,
   resumeDeveloperSession,
+  setDeveloperPluginEnabled,
+  setDeveloperSkillConsent,
+  setDeveloperSkillEnabled,
   startDeveloperSession,
   startDeveloperTurn,
+  switchLocalBranch,
   readBrowserPairing,
   readPairedBrowserConsole,
   readPairedBrowserNetwork,
@@ -35,6 +50,7 @@ export {
   openWorkspaceInEditor,
   openWorkspacePath,
   pickWorkspaceRoot,
+  pushLocalBranch,
   readHostClipboard,
   readLocalCommandPolicy,
   readLocalModelSettings,
@@ -48,6 +64,7 @@ export {
   startLocalChat,
   startLocalCommand,
   writeLocalCommandPolicy,
+  writeWorkspaceText,
   writeLocalModelSettings,
   type LocalChatDelta,
   type LocalChatRun,
@@ -68,6 +85,7 @@ export { useHostCommands } from './hooks/use-host-commands';
 export { useHostShortcuts, type HostShortcutRow } from './hooks/use-host-shortcuts';
 export { useWindowZoom } from './hooks/use-window-zoom';
 export { useDesktopVoiceHotkey } from './hooks/use-desktop-voice-hotkey';
+export { useDesktopHandoff, type DesktopHandoff } from './hooks/use-desktop-handoff';
 export { DesktopHostMount } from './components/DesktopHostMount';
 export { BrowserPairingSection } from './components/BrowserPairingSection';
 export { RemoteControlSection } from './components/RemoteControlSection';

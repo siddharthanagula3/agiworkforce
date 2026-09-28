@@ -11,6 +11,7 @@ export interface MarkdownCitation {
   siteName?: string;
   snippet?: string;
   publishedDate?: string;
+  retrievedAt?: string;
 }
 
 export interface CitationItem {
@@ -67,6 +68,16 @@ function citationPublishedLabel(citation: MarkdownCitation): string | undefined 
   });
 }
 
+function citationRetrievedLabel(citation: MarkdownCitation): string | undefined {
+  const parsed = citation.retrievedAt ? new Date(citation.retrievedAt) : null;
+  if (!parsed || Number.isNaN(parsed.getTime())) return undefined;
+  return `Retrieved ${parsed.toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  })}`;
+}
+
 function CitationFavicon({
   citation,
   imgClassName,
@@ -101,6 +112,7 @@ function TooltipSourceRow({ index, citation }: CitationItem) {
   const label = citation.title || citationSiteName(citation);
   const snippet = citationSnippet(citation);
   const published = citationPublishedLabel(citation);
+  const retrieved = citationRetrievedLabel(citation);
   return (
     <div className="flex items-start gap-1.5">
       <CitationFavicon
@@ -122,6 +134,11 @@ function TooltipSourceRow({ index, citation }: CitationItem) {
             </>
           )}
         </span>
+        {retrieved && (
+          <span className="block text-[var(--chat-text-secondary)]" data-citation-retrieved="">
+            {retrieved}
+          </span>
+        )}
         {snippet && (
           <span className="mt-1 block text-[var(--chat-text-secondary)]" data-citation-snippet="">
             {snippet}

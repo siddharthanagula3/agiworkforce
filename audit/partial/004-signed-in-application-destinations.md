@@ -462,24 +462,23 @@ Code: `apps/mobile/src/features/settings/index.tsx:451-456`, `apps/mobile/app/(a
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | API keys (create with scopes, revoke, last-used date) sit inside Account settings and docs are a marketing page (/api-docs); there is no developer console with per-key usage, request logs or a playground. | ui |
-| desktop | partial | API keys (create with scopes, revoke, last-used date) sit inside Account settings and docs are a marketing page (/api-docs); there is no developer console with per-key usage, request logs or a playground. | ui |
+| web | partial | Keys, projects, a request playground (answers as an API key would), limits and docs are in /developers. Usage per key needs managed_usage_requests.api_key_id written at reservation, which waits on the approval asked for request-processor.ts, auth-gate.ts, managed-usage-request-service.ts and transcriptions. | per-key usage |
+| desktop | partial | Keys, projects, a request playground (answers as an API key would), limits and docs are in /developers. Usage per key needs managed_usage_requests.api_key_id written at reservation, which waits on the approval asked for request-processor.ts, auth-gate.ts, managed-usage-request-service.ts and transcriptions. | per-key usage |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/settings/sections/AccountSection.tsx:369-376`, `apps/web/features/settings/sections/AccountSection.tsx:411-416`, `apps/web/features/settings/hooks/use-settings-queries.ts:239-258`, `apps/web/features/settings/components/Settings/ApiKeys.tsx:350-385`
+Code: `apps/web/features/developers/components/DeveloperConsolePage.tsx:59-59`, `apps/web/features/developers/components/DeveloperConsolePage.tsx:61-61`, `apps/web/features/developers/components/DeveloperConsolePage.tsx:14-14`, `apps/web/features/developers/components/RequestPlayground.tsx:202-202`
 
 ## S4.44: Help and feedback.
 
 - Done when: A help-and-feedback destination links to help/docs/status and lets the user send product feedback or a bug report from inside the product.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | /help lists commands, but /feedback and /bug only print a GitHub issues URL; there is no in-product feedback submission. | surface-only |
-| vscode | partial | "Send Feedback" collects type and text but submits by opening a prefilled GitHub issue (needs a GitHub account and a public repo); no in-product submission. | surface-only |
 
-Code: `apps/cli/src/tui/tui_app.rs:3531-3540`, `apps/cli/src/tui/tui_app.rs:3535-3540`, `apps/extension-vscode/src/core/commandSetup.ts:1319-1335`, `apps/extension-vscode/src/core/commandSetup.ts:1354-1362`
+Code: `apps/cli/src/tui/tui_app.rs:3531-3540`, `apps/cli/src/tui/tui_app.rs:3535-3540`

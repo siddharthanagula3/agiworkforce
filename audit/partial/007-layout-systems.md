@@ -151,19 +151,6 @@ Code: `apps/desktop/electron/appMenu.ts:210-212`, `apps/desktop/electron/main.ts
 
 Code: `apps/desktop/electron/appMenu.ts:212-214`, `apps/desktop/electron/main.ts:1093-1094`
 
-## S7.15: Full-screen editor.
-
-- Done when: An editor (prompt, document or source) can take over the whole screen for focused editing and return to the chat.
-- Wave: 3
-- Already works on: mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | d9d61d48e: code artifacts get full screen; full-screen composer unverified against ChatGPT (help.openai.com 403), owner call | full-screen composer |
-| desktop | partial | d9d61d48e: code artifacts get full screen; full-screen composer unverified against ChatGPT (help.openai.com 403), owner call | full-screen composer |
-
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1611-1611`
-
 ## S7.16: Full-screen report reader.
 
 - Done when: A long report (e.g. a research report) can be read in a full-screen reading view.

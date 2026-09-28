@@ -1,16 +1,9 @@
 import 'server-only';
 
-import {
-  createHash,
-  createHmac,
-  hkdfSync,
-  randomBytes,
-  randomUUID,
-  timingSafeEqual,
-} from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { objectStorageConfig } from './object-storage-runtime';
+import { readSignedUploadClaims, signUploadClaims } from './upload-signing';
 import {
   copyPrivateObjectIfUnchanged,
   deleteObject,
@@ -24,7 +17,7 @@ import {
 
 const UPLOAD_AUTHORIZATION_TTL_MS = 5 * 60 * 1000;
 const UPLOAD_TOKEN_VERSION = 2;
-const SIGNING_KEY_BYTES = 32;
+const UPLOAD_AUTHORIZATION_PURPOSE = `agi-project-knowledge-upload-authorization-v${UPLOAD_TOKEN_VERSION}`;
 const SEALED_KNOWLEDGE_SEGMENT = 'sealed';
 
 export interface ProjectKnowledgeUploadClaims {
@@ -96,29 +89,6 @@ function localPathForKey(key: string): { objectPath: string; metadataPath: strin
   return { objectPath, metadataPath };
 }
 
-async function localSigningSecret(): Promise<Buffer> {
-  const root = localStorageRoot();
-  const secretPath = path.resolve(root, '.upload-signing-secret');
-  await mkdir(/* turbopackIgnore: true */ root, { recursive: true });
-  try {
-    return await readFile(/* turbopackIgnore: true */ secretPath);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-  }
-
-  const secret = randomBytes(32);
-  try {
-    await writeFile(/* turbopackIgnore: true */ secretPath, secret, {
-      flag: 'wx',
-      mode: 0o600,
-    });
-    return secret;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
-    return readFile(/* turbopackIgnore: true */ secretPath);
-  }
-}
-
 function parseClaims(value: unknown): ProjectKnowledgeUploadClaims | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const claims = value as Record<string, unknown>;
@@ -143,34 +113,6 @@ function parseClaims(value: unknown): ProjectKnowledgeUploadClaims | null {
     return null;
   }
   return claims as unknown as ProjectKnowledgeUploadClaims;
-}
-
-/**
- * The storage credential, never the raw value and never a new environment
- * variable: it is already required wherever an upload can be authorized, so a
- * deploy cannot arrive with this unset. The local file secret covers the
- * development case that has no object storage at all.
- */
-async function uploadSigningSecret(): Promise<Buffer> {
-  const storageSecret = objectStorageConfig().secretAccessKey;
-  if (storageSecret) {
-    return Buffer.from(
-      hkdfSync(
-        'sha256',
-        storageSecret,
-        '',
-        `agi-project-knowledge-upload-authorization-v${UPLOAD_TOKEN_VERSION}`,
-        SIGNING_KEY_BYTES,
-      ),
-    );
-  }
-  return localSigningSecret();
-}
-
-async function signPayload(payload: string): Promise<string> {
-  return createHmac('sha256', await uploadSigningSecret())
-    .update(payload)
-    .digest('base64url');
 }
 
 /**
@@ -199,8 +141,7 @@ export async function createProjectKnowledgeUploadAuthorization(input: {
     expiresAt: Date.now() + UPLOAD_AUTHORIZATION_TTL_MS,
     nonce: randomUUID(),
   };
-  const payload = Buffer.from(JSON.stringify(claims)).toString('base64url');
-  return `${payload}.${await signPayload(payload)}`;
+  return signUploadClaims(UPLOAD_AUTHORIZATION_PURPOSE, claims);
 }
 
 export function isProjectKnowledgeObjectStorageConfigured(): boolean {
@@ -225,21 +166,8 @@ export async function verifyProjectKnowledgeUploadAuthorization(
   token: string,
   userId: string,
 ): Promise<ProjectKnowledgeUploadClaims> {
-  const [payload, suppliedSignature, ...extra] = token.split('.');
-  if (!payload || !suppliedSignature || extra.length > 0) {
-    throw new Error('This upload authorization is invalid.');
-  }
-  const expectedSignature = await signPayload(payload);
-  const supplied = Buffer.from(suppliedSignature);
-  const expected = Buffer.from(expectedSignature);
-  if (supplied.byteLength !== expected.byteLength || !timingSafeEqual(supplied, expected)) {
-    throw new Error('This upload authorization is invalid.');
-  }
-
-  let decoded: unknown;
-  try {
-    decoded = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
-  } catch {
+  const decoded = await readSignedUploadClaims(UPLOAD_AUTHORIZATION_PURPOSE, token);
+  if (decoded === null) {
     throw new Error('This upload authorization is invalid.');
   }
   const claims = parseClaims(decoded);

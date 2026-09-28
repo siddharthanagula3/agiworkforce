@@ -9,6 +9,8 @@ import {
   CLOUD_CODE_SESSION_STATUS_FILTERS,
   NOTEBOOK_CELL_LANGUAGES,
   getPlanMaxSandboxes,
+  cloudCodeShareVisibilityFor,
+  isCloudCodeShareVisibility,
   type CloudCodeAgentStep,
   type CloudCodeAgentStopReason,
   type CloudCodeAgentTurnRecord,
@@ -37,7 +39,7 @@ import { InvalidExtraEgressHostsError, normalizeExtraEgressHosts } from '@/lib/e
 import { assertExtraEgressHostsResolveSafely } from '@/lib/e2b/egress-host-resolution';
 import { confineWorkspacePath } from '@/lib/e2b/execution-tools';
 import { tracedCodeAction } from '@/lib/observability/code-action-span';
-import type { CommandExecutionResult } from '@/lib/e2b/types';
+import type { CommandExecutionResult, E2BGitExecutor } from '@/lib/e2b/types';
 import {
   harnessCredentialSpecs,
   harnessIsProxyCovered,
@@ -310,6 +312,8 @@ interface SessionRow extends Record<string, unknown> {
   created_at: string | Date;
   updated_at: string | Date;
   closed_at: string | Date | null;
+  share_visibility?: string | null;
+  share_token?: string | null;
 }
 
 interface TerminalEntryRow extends Record<string, unknown> {
@@ -423,6 +427,11 @@ export function mapCloudCodeSession(row: SessionRow): CloudCodeSession {
     createdAt: iso(row.created_at),
     updatedAt: iso(row.updated_at),
     closedAt: row.closed_at ? iso(row.closed_at) : null,
+    shareVisibility: isCloudCodeShareVisibility(row.share_visibility)
+      ? row.share_visibility
+      : 'private',
+    shareAudience: cloudCodeShareVisibilityFor(row.organization_id),
+    shareToken: row.share_token ?? null,
   };
 }
 
@@ -1935,6 +1944,7 @@ export const commitAndPushCloudCodeSession = tracedCodeAction(
     sessionId: string,
     planTier: string,
     messageValue: unknown,
+    filesValue?: unknown,
   ): Promise<{ session: CloudCodeSession; push: CommandExecutionResult }> {
     const message = typeof messageValue === 'string' ? messageValue.trim() : '';
     if (!message || message.length > MAX_COMMIT_MESSAGE_LENGTH || message.includes('\0')) {
@@ -1942,6 +1952,7 @@ export const commitAndPushCloudCodeSession = tracedCodeAction(
         `Commit message must be 1–${MAX_COMMIT_MESSAGE_LENGTH} characters and contain no null bytes`,
       );
     }
+    const files = parseRequestedChangedFiles(filesValue);
 
     const session = await getCloudCodeSession(db, owner, sessionId);
     if (!session.repositoryUrl) {
@@ -1995,16 +2006,16 @@ export const commitAndPushCloudCodeSession = tracedCodeAction(
     }
 
     try {
-      const add = await executor.git.add({ path: claim.session.workspacePath, all: true });
-      if (!add.ok) {
-        throw gitStepFailure('Staging changes failed', add, {
-          userId: owner.userId,
-          sessionId,
-        });
-      }
-      const commit = await executor.git.commit({ path: claim.session.workspacePath, message });
-      if (!commit.ok) {
-        throw gitStepFailure('Commit failed', commit, { userId: owner.userId, sessionId });
+      const context = { userId: owner.userId, sessionId };
+      const status = await executor.git.status({ path: claim.session.workspacePath });
+      if (!status.ok) throw gitStepFailure('Workspace status could not be read', status, context);
+      if (files || parseGitPorcelainEntries(status.stdout).length > 0) {
+        const add = files
+          ? await stageChosenFiles(executor.git, claim.session.workspacePath, files, context)
+          : await executor.git.add({ path: claim.session.workspacePath, all: true });
+        if (!add.ok) throw gitStepFailure('Staging changes failed', add, context);
+        const commit = await executor.git.commit({ path: claim.session.workspacePath, message });
+        if (!commit.ok) throw gitStepFailure('Commit failed', commit, context);
       }
       const push = await executor.git.push({
         path: claim.session.workspacePath,
@@ -2040,6 +2051,114 @@ export const commitAndPushCloudCodeSession = tracedCodeAction(
   },
 );
 
+async function stageChosenFiles(
+  git: E2BGitExecutor,
+  workspacePath: string,
+  files: readonly string[],
+  context: { userId: string; sessionId: string },
+): Promise<CommandExecutionResult> {
+  const status = await git.status({ path: workspacePath });
+  if (!status.ok) throw gitStepFailure('Workspace status could not be read', status, context);
+  const chosen = selectChangedEntries(status.stdout, files);
+  return git.add({
+    path: workspacePath,
+    files: chosen.flatMap((entry) =>
+      entry.originalPath ? [entry.originalPath, entry.path] : [entry.path],
+    ),
+  });
+}
+
+export const discardCloudCodeSessionChanges = tracedCodeAction(
+  'discard_changes',
+  async function discardCloudCodeSessionChanges(
+    db: DatabaseAdapter,
+    owner: CloudCodeOwner,
+    sessionId: string,
+    planTier: string,
+    filesValue: unknown,
+  ): Promise<{ session: CloudCodeSession; discarded: string[] }> {
+    const files = parseRequestedChangedFiles(filesValue);
+    if (!files) throw new CloudCodeValidationError('Choose the files to discard');
+    const session = await getCloudCodeSession(db, owner, sessionId);
+    assertSessionAcceptsWork(session, 'discard changes');
+    if (!session.repositoryUrl) {
+      throw new CloudCodeValidationError('Code session has no repository changes to discard');
+    }
+
+    const claim = await claimCloudCodeSessionForRun(db, owner, sessionId);
+    if (!claim) {
+      throw new CloudCodeConflictError('Code session is busy; wait and try again');
+    }
+    const scope = managedCloudCodeSessionScope(
+      owner.userId,
+      sessionId,
+      claim.session.networkAccess,
+      planTier,
+      claim.session.runtimeId,
+      null,
+      claim.session.extraHosts,
+    );
+    const executor = await getE2BExecutor(scope);
+    if (!executor?.git) {
+      await releaseCloudCodeSessionAfterRun(db, owner, sessionId, claim.leaseToken);
+      throw new CloudCodeUnavailableError('Managed Code environment could not be attached');
+    }
+
+    const context = { userId: owner.userId, sessionId };
+    try {
+      const workspacePath = claim.session.workspacePath;
+      const status = await executor.git.status({ path: workspacePath });
+      if (!status.ok) throw gitStepFailure('Workspace status could not be read', status, context);
+      const chosen = selectChangedEntries(status.stdout, files);
+      const conflicted = chosen.find((entry) => entry.state === 'conflicted');
+      if (conflicted) {
+        throw new CloudCodeValidationError(
+          `${conflicted.path} has a merge conflict. Resolve it before discarding it.`,
+        );
+      }
+
+      const removed = chosen
+        .filter((entry) => entry.state === 'added' || entry.state === 'renamed')
+        .map((entry) => entry.path);
+      const restored = chosen.flatMap((entry) => {
+        if (entry.state === 'modified' || entry.state === 'deleted') return [entry.path];
+        return entry.state === 'renamed' && entry.originalPath ? [entry.originalPath] : [];
+      });
+      const cleaned = chosen
+        .filter((entry) => entry.state === 'untracked')
+        .map((entry) => entry.path);
+
+      if (removed.length > 0) {
+        const result = await executor.git.remove({ path: workspacePath, files: removed });
+        if (!result.ok) throw gitStepFailure('Discarding new files failed', result, context);
+      }
+      if (restored.length > 0) {
+        const result = await executor.git.restore({ path: workspacePath, files: restored });
+        if (!result.ok) throw gitStepFailure('Restoring files failed', result, context);
+      }
+      if (cleaned.length > 0) {
+        const result = await executor.git.clean({ path: workspacePath, files: cleaned });
+        if (!result.ok) throw gitStepFailure('Deleting untracked files failed', result, context);
+      }
+
+      const released = await releaseCloudCodeSessionAfterRun(
+        db,
+        owner,
+        sessionId,
+        claim.leaseToken,
+      );
+      if (!released) throw new CloudCodeNotFoundError();
+      return { session: released, discarded: chosen.map((entry) => entry.path) };
+    } catch (error) {
+      await releaseCloudCodeSessionAfterRun(db, owner, sessionId, claim.leaseToken);
+      throw error;
+    } finally {
+      await executor.pause?.();
+      await executor.dispose();
+    }
+  },
+);
+
 export const closeCloudCodeSession = tracedCodeAction(
   'worktree_cleanup',
   async function closeCloudCodeSession(
@@ -2061,6 +2180,7 @@ const GIT_PORCELAIN_RENAME_SEPARATOR = ' -> ';
 const GIT_PORCELAIN_PATH_INDEX = 3;
 const MAX_DIFF_LENGTH = 200_000;
 const CHANGED_FILE_LIMIT = 500;
+const MAX_CHANGED_PATH_LENGTH = 4_096;
 const UNTRACKED_PORCELAIN_CODE = '?';
 const CONFLICT_PORCELAIN_CODES = new Set(['U', 'AA', 'DD']);
 
@@ -2096,7 +2216,15 @@ function unquotePorcelainPath(value: string): string {
  * rename is reported under it.
  */
 export function parseGitPorcelainStatus(output: string): CloudCodeChangedFile[] {
-  const files: CloudCodeChangedFile[] = [];
+  return parseGitPorcelainEntries(output).map(({ path, state }) => ({ path, state }));
+}
+
+interface PorcelainEntry extends CloudCodeChangedFile {
+  originalPath: string | null;
+}
+
+function parseGitPorcelainEntries(output: string): PorcelainEntry[] {
+  const files: PorcelainEntry[] = [];
   for (const line of output.split('\n')) {
     if (line.length <= GIT_PORCELAIN_PATH_INDEX) continue;
     const codes = line.slice(0, 2);
@@ -2106,10 +2234,42 @@ export function parseGitPorcelainStatus(output: string): CloudCodeChangedFile[] 
       separator >= 0 ? rest.slice(separator + GIT_PORCELAIN_RENAME_SEPARATOR.length) : rest;
     const path = unquotePorcelainPath(rawPath.trim());
     if (!path) continue;
-    files.push({ path, state: porcelainState(codes) });
+    const originalPath =
+      separator >= 0 ? unquotePorcelainPath(rest.slice(0, separator).trim()) : '';
+    files.push({ path, state: porcelainState(codes), originalPath: originalPath || null });
     if (files.length >= CHANGED_FILE_LIMIT) break;
   }
   return files;
+}
+
+function parseRequestedChangedFiles(value: unknown): string[] | null {
+  if (value === undefined || value === null) return null;
+  if (!Array.isArray(value) || value.length === 0 || value.length > CHANGED_FILE_LIMIT) {
+    throw new CloudCodeValidationError(`Choose between 1 and ${CHANGED_FILE_LIMIT} changed files`);
+  }
+  const files = value.map((entry) => {
+    if (
+      typeof entry !== 'string' ||
+      entry.length === 0 ||
+      entry.length > MAX_CHANGED_PATH_LENGTH ||
+      entry.includes('\0')
+    ) {
+      throw new CloudCodeValidationError('Each file must be a changed path in the workspace');
+    }
+    return entry;
+  });
+  return [...new Set(files)];
+}
+
+function selectChangedEntries(statusOutput: string, files: readonly string[]): PorcelainEntry[] {
+  const changed = new Map(
+    parseGitPorcelainEntries(statusOutput).map((entry) => [entry.path, entry] as const),
+  );
+  return files.map((file) => {
+    const entry = changed.get(file);
+    if (!entry) throw new CloudCodeValidationError(`${file} has no changes in the workspace`);
+    return entry;
+  });
 }
 
 /**
@@ -2358,6 +2518,7 @@ export const openCloudCodeSessionPullRequest = tracedCodeAction(
     db: DatabaseAdapter,
     owner: CloudCodeOwner,
     sessionId: string,
+    linkedIssues: readonly number[] = [],
   ): Promise<CloudCodePullRequestResponse> {
     const session = await getCloudCodeSession(db, owner, sessionId);
     assertSessionAcceptsWork(session, 'open a pull request');
@@ -2421,6 +2582,7 @@ export const openCloudCodeSessionPullRequest = tracedCodeAction(
         // Work that cannot back its own "done" claim opens as a draft rather
         // than asking for a review it has not earned.
         draft: !result.verdict.complete,
+        linkedIssues,
       });
     } catch (error) {
       if (!(error instanceof GitHubPullRequestError)) throw error;

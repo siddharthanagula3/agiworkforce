@@ -7,8 +7,11 @@ export const DESKTOP_DEEP_LINK_TARGETS = [
   'chat',
   'project',
   'settings',
+  'code',
   ...PRODUCT_LINK_TARGETS,
 ] as const;
+
+export const CODE_HOME_DEEP_LINK_ID = 'home';
 
 export type DesktopDeepLinkTarget = (typeof DESKTOP_DEEP_LINK_TARGETS)[number];
 
@@ -64,7 +67,7 @@ export function isHostCommand(value: unknown): value is HostCommand {
  * empty accelerator means the user chose no shortcut, which is a setting
  * rather than a missing one.
  */
-export const HOST_SHORTCUT_KEYS = ['quickAsk', 'screenshot', 'voice'] as const;
+export const HOST_SHORTCUT_KEYS = ['quickAsk', 'screenshot', 'windowShot', 'voice'] as const;
 
 export type HostShortcutKey = (typeof HOST_SHORTCUT_KEYS)[number];
 
@@ -81,6 +84,7 @@ export const NO_HOST_SHORTCUT = '';
 export const HOST_SHORTCUT_CHOICES: Record<HostShortcutKey, readonly string[]> = {
   quickAsk: ['Alt+Shift+Space', 'CommandOrControl+Shift+Space', 'CommandOrControl+Alt+A'],
   screenshot: ['CommandOrControl+Shift+2', 'CommandOrControl+Shift+4', 'CommandOrControl+Alt+S'],
+  windowShot: ['CommandOrControl+Shift+1', 'CommandOrControl+Alt+W', 'Alt+Shift+W'],
   voice: ['Alt+Shift+V', 'CommandOrControl+Alt+V', 'CommandOrControl+Alt+D'],
 };
 
@@ -209,6 +213,7 @@ export interface HostPreferences {
   launchAtLogin: boolean;
   quickAskShortcut: string;
   screenshotShortcut: string;
+  windowShotShortcut: string;
   voiceShortcut: string;
   showInMenuBar: boolean;
   /**
@@ -224,6 +229,7 @@ export interface HostPreferences {
 export const HOST_SHORTCUT_PREFERENCE_KEYS: Record<HostShortcutKey, keyof HostPreferences> = {
   quickAsk: 'quickAskShortcut',
   screenshot: 'screenshotShortcut',
+  windowShot: 'windowShotShortcut',
   voice: 'voiceShortcut',
 };
 
@@ -258,6 +264,8 @@ export interface HostUpdateAvailability {
   version: string;
   publishedAt?: string;
   downloadUrl: string;
+  installsAutomatically?: boolean;
+  readyToInstall?: boolean;
 }
 
 /**

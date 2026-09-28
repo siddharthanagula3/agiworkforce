@@ -4,10 +4,13 @@ import {
   CLOUD_CODE_CHANGE_STATES,
   CLOUD_CODE_NETWORK_ACCESS,
   CLOUD_CODE_SESSION_STATES,
+  CLOUD_CODE_SHARE_VISIBILITIES,
 } from '@agiworkforce/types';
 
 export const CLOUD_CODE_SESSIONS_PATH = '/api/code/sessions';
+export const CLOUD_CODE_SHARED_SESSIONS_PATH = '/api/code/shared';
 export const CLOUD_CODE_REPOSITORIES_PATH = '/api/github/repositories';
+export const CLOUD_CODE_BRANCHES_PATH = '/api/code/repositories/branches';
 
 export function cloudCodeSessionPath(sessionId: string): string {
   return `${CLOUD_CODE_SESSIONS_PATH}/${encodeURIComponent(sessionId)}`;
@@ -34,6 +37,9 @@ export const CloudCodeSessionSchema = z.object({
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
   closedAt: z.string().datetime().nullable(),
+  shareVisibility: z.enum(CLOUD_CODE_SHARE_VISIBILITIES).default('private'),
+  shareAudience: z.enum(['team', 'public']).optional(),
+  shareToken: z.string().nullable().default(null),
 });
 
 export const CloudCodeTerminalEntrySchema = z.object({
@@ -90,6 +96,16 @@ export const CloudCodeRepositoryListSchema = z.object({
     .default([]),
 });
 
+export const CloudCodeBranchSchema = z.object({
+  name: z.string().min(1),
+  isProtected: z.boolean(),
+});
+
+export const CloudCodeBranchListSchema = z.object({
+  branches: z.array(CloudCodeBranchSchema),
+  truncated: z.boolean().default(false),
+});
+
 export const CloudCodeAgentStepSchema = z.object({
   index: z.number().int().nonnegative(),
   toolName: z.string(),
@@ -119,6 +135,20 @@ export const CloudCodeSessionDetailSchema = z.object({
 });
 
 export const CloudCodeSessionResponseSchema = z.object({ session: CloudCodeSessionSchema });
+
+export const CloudCodeSharedSessionSchema = z.object({
+  visibility: z.enum(['team', 'public']),
+  title: z.string(),
+  repositoryUrl: z.string().nullable(),
+  workingBranch: z.string().nullable(),
+  baseBranch: z.string().nullable(),
+  pullRequestUrl: z.string().nullable(),
+  pullRequestNumber: z.number().int().nullable(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+  terminalEntries: z.array(CloudCodeTerminalEntrySchema),
+  turns: z.array(CloudCodeAgentTurnRecordSchema),
+});
 export const CloudCodeSessionDeletedSchema = z.object({ deleted: z.literal(true) });
 
 export const CloudCodeCommandResponseSchema = z.object({
@@ -148,6 +178,11 @@ export const CloudCodeChangesSchema = z.object({
   files: z.array(CloudCodeChangedFileSchema),
   diff: z.string(),
   diffTruncated: z.boolean().default(false),
+});
+
+export const CloudCodeDiscardResultSchema = z.object({
+  session: CloudCodeSessionSchema,
+  discarded: z.array(z.string()),
 });
 
 export const CloudCodePullRequestSchema = z.object({
@@ -214,16 +249,25 @@ export type CloudCodeApprovalDecision = 'approve' | 'reject';
 export type CloudCodeCommitResult = z.infer<typeof CloudCodeCommitResultSchema>;
 export type CloudCodeRepository = z.infer<typeof CloudCodeRepositorySchema>;
 export type CloudCodeChanges = z.infer<typeof CloudCodeChangesSchema>;
+export type CloudCodeDiscardResult = z.infer<typeof CloudCodeDiscardResultSchema>;
 export type CloudCodePullRequest = z.infer<typeof CloudCodePullRequestSchema>;
 export type CloudCodePullRequestStatus = z.infer<typeof CloudCodePullRequestStatusSchema>;
 export type CloudCodeTurnCancellation = z.infer<typeof CloudCodeTurnCancellationSchema>;
 export type CloudCodeRepositoryList = z.infer<typeof CloudCodeRepositoryListSchema>;
+export type CloudCodeBranch = z.infer<typeof CloudCodeBranchSchema>;
+export type CloudCodeBranchList = z.infer<typeof CloudCodeBranchListSchema>;
 
 export interface StartCloudCodeAgentTurnRequest {
   goal: string;
   model: string;
   /** Sent as `Idempotency-Key`; the managed-usage ledger refuses the turn without it. */
   idempotencyKey: string;
+  maxSteps?: number;
+}
+
+export interface CommitCloudCodeSessionRequest {
+  message: string;
+  files?: string[];
 }
 
 export interface DecideCloudCodeApprovalRequest {

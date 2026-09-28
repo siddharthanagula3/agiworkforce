@@ -24,7 +24,9 @@ import {
 import { recordModerationEvent } from '@/lib/moderation';
 import { validateAttachmentMeta } from '@agiworkforce/types';
 import type { ManagedCloudProjectKnowledgeRegisterRequest } from '@agiworkforce/cloud-contracts';
-import type { ProjectKnowledgeIndexState } from '@agiworkforce/types';
+import type { ExternalResourceReferenceInput } from '@agiworkforce/types';
+import { recordExternalResourceReferences } from '@/lib/server/external-resource-references';
+import type { BillingPlanTier, ProjectKnowledgeIndexState } from '@agiworkforce/types';
 import {
   findProjectKnowledgeDocument,
   readProjectKnowledgeIndexStates,
@@ -132,15 +134,23 @@ export type ProjectKnowledgeRegistration =
   | { status: 'created'; file: ReturnType<typeof projectKnowledgeResponse> }
   | { status: 'unavailable' };
 
-export async function registerProjectKnowledgeFile(
-  scope: {
-    db: Awaited<ReturnType<typeof getUserScopedDb>>['db'];
-    userId: string;
-    organizationId: string | null;
-    projectId: string;
-  },
-  body: ManagedCloudProjectKnowledgeRegisterRequest,
-): Promise<ProjectKnowledgeRegistration> {
+export interface ProjectKnowledgeScope {
+  db: Awaited<ReturnType<typeof getUserScopedDb>>['db'];
+  userId: string;
+  organizationId: string | null;
+  projectId: string;
+}
+
+export type ProjectKnowledgeCapacity =
+  { status: 'ready'; planTier: BillingPlanTier } | { status: 'unavailable' };
+
+export async function checkProjectKnowledgeCapacity(
+  scope: ProjectKnowledgeScope,
+  body: Pick<
+    ManagedCloudProjectKnowledgeRegisterRequest,
+    'fileName' | 'mimeType' | 'byteCount' | 'checksumSha256'
+  >,
+): Promise<ProjectKnowledgeCapacity> {
   const { db, userId, organizationId, projectId } = scope;
   const attachmentValidation = validateAttachmentMeta(
     body.fileName.trim(),
@@ -220,7 +230,9 @@ export async function registerProjectKnowledgeFile(
     throw createError.conflict(`This file is already in the project as "${duplicate.file_name}".`);
   }
 
-  const planTier = await resolveEntitledPlanTier(db, userId);
+  const planTier = await resolveEntitledPlanTier(db, userId, {
+    workspaceOrganizationId: organizationId,
+  });
   const storageLimitBytes = getKnowledgeStorageLimitBytes(planTier);
   if (storageLimitBytes !== null) {
     let usedBytes = 0;
@@ -246,6 +258,46 @@ export async function registerProjectKnowledgeFile(
       );
     }
   }
+  return { status: 'ready', planTier };
+}
+
+export async function findProjectKnowledgeFileByChecksum(
+  scope: ProjectKnowledgeScope,
+  checksumSha256: string,
+): Promise<ReturnType<typeof projectKnowledgeResponse> | null> {
+  const { db, userId, projectId } = scope;
+  let row: Record<string, unknown> | undefined;
+  try {
+    [row] = await db.query<Record<string, unknown>>(
+      `select *
+         from project_knowledge_files
+        where project_id = $1
+          and checksum_sha256 = $2
+          and added_by_user_id = $3
+          and deleted_at is null
+          and superseded_at is null
+        limit 1`,
+      [projectId, checksumSha256, userId],
+    );
+  } catch (error) {
+    if (isSchemaNotReady(error)) return null;
+    throw error;
+  }
+  if (!row) return null;
+  const fileId = String(row['id'] ?? '');
+  const indexStates = await readIndexStates(db, projectId, [fileId]);
+  return projectKnowledgeResponse(row, projectId, indexStates.get(fileId) ?? null);
+}
+
+export async function registerProjectKnowledgeFile(
+  scope: ProjectKnowledgeScope,
+  body: ManagedCloudProjectKnowledgeRegisterRequest,
+  origin?: ExternalResourceReferenceInput,
+): Promise<ProjectKnowledgeRegistration> {
+  const { db, userId, organizationId, projectId } = scope;
+  const capacity = await checkProjectKnowledgeCapacity(scope, body);
+  if (capacity.status === 'unavailable') return capacity;
+  const { planTier } = capacity;
 
   let supersedes: { id: string; version: number } | undefined;
   try {
@@ -378,6 +430,27 @@ export async function registerProjectKnowledgeFile(
         logger.warn(
           { error: anchorError, projectId, fileId: inserted['id'] },
           '[knowledge-files] extraction anchors were not stored',
+        );
+      }
+    }
+
+    if (origin && typeof inserted['id'] === 'string') {
+      try {
+        const [reference] = await recordExternalResourceReferences(db, { userId, organizationId }, [
+          origin,
+        ]);
+        if (reference) {
+          await db.execute(
+            `update project_knowledge_files
+                set external_reference_id = $1
+              where id = $2 and project_id = $3`,
+            [reference.id, inserted['id'], projectId],
+          );
+        }
+      } catch (referenceError) {
+        logger.warn(
+          { error: referenceError, projectId, fileId: inserted['id'] },
+          '[knowledge-files] the imported source was not recorded',
         );
       }
     }

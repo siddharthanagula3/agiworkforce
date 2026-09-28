@@ -52,6 +52,7 @@ export interface CodeSessionMenuProps {
   onSetVerbose: (verbose: boolean) => void;
   onEditEnvironment: () => void;
   onRename: () => void;
+  onShare: () => void;
   onSetArchived: (archived: boolean) => void;
   onDeleteSession: () => void;
   onCloseSession: () => void;
@@ -66,31 +67,15 @@ export function CodeSessionMenu({
   onSetVerbose,
   onEditEnvironment,
   onRename,
+  onShare,
   onSetArchived,
   onDeleteSession,
   onCloseSession,
 }: CodeSessionMenuProps) {
-  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
-
-  const copyLink = async () => {
-    if (typeof window === 'undefined') return;
-    try {
-      await navigator.clipboard.writeText(window.location.href);
-      setCopyState('copied');
-    } catch {
-      setCopyState('failed');
-    }
-  };
-
-  const copyLabel =
-    copyState === 'copied'
-      ? CODE_COPY.copiedLink
-      : copyState === 'failed'
-        ? CODE_COPY.copyLinkFailed
-        : CODE_COPY.copyLink;
+  const [menuOpen, setMenuOpen] = useState(false);
 
   return (
-    <DropdownMenu onOpenChange={(open) => open && setCopyState('idle')}>
+    <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
       <DropdownMenuTrigger asChild>
         <button type="button" className={styles['headerButton']} aria-label={CODE_COPY.sessionMenu}>
           <MoreHorizontal size={GLYPH_SIZE} aria-hidden="true" />
@@ -151,11 +136,12 @@ export function CodeSessionMenu({
         <DropdownMenuItem
           onSelect={(event) => {
             event.preventDefault();
-            void copyLink();
+            setMenuOpen(false);
+            onShare();
           }}
         >
           <Link2 size={MENU_GLYPH_SIZE} aria-hidden="true" />
-          <span className={styles['menuRowLabel']}>{copyLabel}</span>
+          <span className={styles['menuRowLabel']}>{CODE_COPY.share}</span>
         </DropdownMenuItem>
 
         <DropdownMenuItem onSelect={onEditEnvironment}>

@@ -7,7 +7,7 @@ import { useSession } from '@/lib/identity/client';
 import { getCsrfToken } from '@/lib/client/csrf';
 import { selectableLanguageOrDefault, SUPPORTED_LANGUAGES } from '@/app/i18n/index';
 import { useAppTheme } from '@shared/hooks/useAppTheme';
-import { useSettingsStore } from '@shared/stores/web-settings-store';
+import { useSettingsStore, type CustomCommand } from '@shared/stores/web-settings-store';
 import {
   fetchStoredPreferenceNamespace,
   savePreferenceNamespace,
@@ -24,6 +24,13 @@ import {
   type AppearanceNamespace,
   type SyncedTheme,
 } from '@/features/settings/lib/appearance-namespace';
+import {
+  CUSTOM_COMMANDS_NAMESPACE,
+  hydratedCustomCommands,
+  readAccountCustomCommands,
+  sameCustomCommands,
+  type CustomCommandsNamespace,
+} from '@/features/settings/lib/custom-commands-namespace';
 
 const SAVE_DEBOUNCE_MS = 400;
 
@@ -34,7 +41,7 @@ function isSyncedTheme(value: string | undefined): value is SyncedTheme {
 }
 
 export function CloudSettingsSync() {
-  const { isLoaded, isSignedIn } = useSession();
+  const { isLoaded, isSignedIn, userId } = useSession();
   const { theme, setTheme } = useAppTheme();
   const { i18n } = useTranslation();
   const setStatus = useCloudSettingsSyncStatusStore((state) => state.setStatus);
@@ -48,11 +55,13 @@ export function CloudSettingsSync() {
   const dictationEnabled = useSettingsStore((state) => state.dictationEnabled);
   const voiceSpeed = useSettingsStore((state) => state.voiceSpeed);
   const hiddenNavIds = useSettingsStore((state) => state.hiddenNavIds);
+  const customCommands = useSettingsStore((state) => state.customCommands);
 
   const [hydrateKey, setHydrateKey] = useState(0);
   const [hydratedAt, setHydratedAt] = useState<number | null>(null);
   const acknowledged = useRef<AppearanceNamespace | null>(null);
   const acknowledgedLocale = useRef<string | null>(null);
+  const acknowledgedCommands = useRef<CustomCommand[] | null>(null);
   const writeQueue = useRef<Promise<void>>(Promise.resolve());
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingAppearanceWrite = useRef<Record<string, unknown> | null>(null);
@@ -69,9 +78,14 @@ export function CloudSettingsSync() {
     (namespace, patch) => {
       writeQueue.current = writeQueue.current.then(async () => {
         try {
-          await savePreferenceNamespace(namespace, patch, { merge: true, keepalive: true });
+          await savePreferenceNamespace(namespace, patch, {
+            merge: true,
+            keepalive: namespace !== CUSTOM_COMMANDS_NAMESPACE,
+          });
           if (namespace === APPEARANCE_NAMESPACE) {
             acknowledged.current = { ...(acknowledged.current ?? {}), ...patch };
+          } else if (namespace === CUSTOM_COMMANDS_NAMESPACE) {
+            acknowledgedCommands.current = readAccountCustomCommands(patch);
           } else {
             acknowledgedLocale.current = String(patch['locale'] ?? acknowledgedLocale.current);
           }
@@ -88,10 +102,11 @@ export function CloudSettingsSync() {
 
   useEffect(() => {
     if (!isLoaded) return;
-    if (!isSignedIn) {
+    if (!isSignedIn || !userId) {
       setHydratedAt(null);
       acknowledged.current = null;
       acknowledgedLocale.current = null;
+      acknowledgedCommands.current = null;
       setStatus(null, null);
       return;
     }
@@ -101,12 +116,25 @@ export function CloudSettingsSync() {
     void Promise.all([
       fetchStoredPreferenceNamespace<AppearanceNamespace>(APPEARANCE_NAMESPACE),
       fetchStoredPreferenceNamespace<{ locale?: string }>(LANGUAGE_NAMESPACE),
+      fetchStoredPreferenceNamespace<CustomCommandsNamespace>(CUSTOM_COMMANDS_NAMESPACE),
     ])
-      .then(async ([storedAppearance, storedLanguage]) => {
+      .then(async ([storedAppearance, storedLanguage, storedCommands]) => {
         if (cancelled) return;
         const { theme: storedTheme, ...storeFields } = fromAppearanceNamespace(storedAppearance);
         if (Object.keys(storeFields).length > 0) useSettingsStore.setState(storeFields);
         if (storedTheme) setTheme(storedTheme);
+
+        const accountCommands = readAccountCustomCommands(storedCommands);
+        useSettingsStore.setState({
+          customCommands: hydratedCustomCommands({
+            account: accountCommands,
+            local: useSettingsStore.getState().customCommands,
+            localOwner: useSettingsStore.getState().customCommandsOwner,
+            userId,
+          }),
+          customCommandsOwner: userId,
+        });
+        acknowledgedCommands.current = accountCommands;
 
         const storedLocale = readStoredLocale(storedLanguage, SUPPORTED_LOCALES);
         if (storedLocale && storedLocale !== localeRef.current) {
@@ -131,7 +159,7 @@ export function CloudSettingsSync() {
     return () => {
       cancelled = true;
     };
-  }, [hydrateKey, isLoaded, isSignedIn, setStatus, setTheme]);
+  }, [hydrateKey, isLoaded, isSignedIn, setStatus, setTheme, userId]);
 
   useEffect(() => {
     if (hydratedAt === null || !isSignedIn) return;
@@ -176,6 +204,12 @@ export function CloudSettingsSync() {
     voiceSpeed,
     write,
   ]);
+
+  useEffect(() => {
+    if (hydratedAt === null || !isSignedIn) return;
+    if (sameCustomCommands(acknowledgedCommands.current, customCommands)) return;
+    write(CUSTOM_COMMANDS_NAMESPACE, { commands: customCommands });
+  }, [customCommands, hydratedAt, isSignedIn, write]);
 
   useEffect(() => {
     if (hydratedAt === null || !isSignedIn) return;
