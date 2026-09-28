@@ -468,6 +468,7 @@ pub async fn tasks_for_display(
 enum ExportFormat {
     Markdown,
     Json,
+    Answer,
 }
 
 fn parse_export_argument(arg: &str) -> (ExportFormat, Option<&str>) {
@@ -477,6 +478,7 @@ fn parse_export_argument(arg: &str) -> (ExportFormat, Option<&str>) {
     match keyword {
         "" => (ExportFormat::Markdown, None),
         "json" => (ExportFormat::Json, rest),
+        "answer" | "last" => (ExportFormat::Answer, rest),
         "markdown" | "md" => (ExportFormat::Markdown, rest),
         _ if std::path::Path::new(arg)
             .extension()
@@ -505,6 +507,14 @@ fn render_export(format: ExportFormat, session: &AgentSession) -> Result<String,
             let md = conversations::export_as_markdown(session);
             Ok(sanitize_terminal_text(&md).into_owned())
         }
+        ExportFormat::Answer => session
+            .messages
+            .iter()
+            .rev()
+            .find(|message| message.role == "assistant")
+            .map(|message| sanitize_terminal_text(message.text_content().trim()).into_owned())
+            .filter(|text| !text.is_empty())
+            .ok_or_else(|| CommandOutcome::Warn("No answer to export yet.".to_string())),
     }
 }
 
@@ -1211,6 +1221,10 @@ pub(super) fn handle_diff(arg: &str) {
 /// this covers add/remove/enable/disable/list plus restart (reconnect the live
 /// session manager) and reconfigure (replace an existing entry).
 pub(super) async fn handle_mcp(arg: &str, session: &mut AgentSession) {
+    mcp_for_display(arg, session).await.print();
+}
+
+pub async fn mcp_for_display(arg: &str, session: &mut AgentSession) -> CommandOutcome {
     use crate::mcp::registry::McpRegistry;
 
     let tokens: Vec<&str> = arg.split_whitespace().collect();
@@ -1222,97 +1236,98 @@ pub(super) async fn handle_mcp(arg: &str, session: &mut AgentSession) {
             let reg = match McpRegistry::load() {
                 Ok(reg) => reg,
                 Err(e) => {
-                    output::print_error(&format!("Failed to load MCP registry: {e:#}"));
-                    return;
+                    return CommandOutcome::Error(format!("Failed to load MCP registry: {e:#}"))
                 }
             };
             let rows = reg.list();
             if rows.is_empty() {
-                output::print_info(
-                    "No servers in the MCP registry. Add one with `/mcp add <name> <url>`.",
+                return CommandOutcome::Info(
+                    "No servers in the MCP registry. Add one with `/mcp add <name> <url>`."
+                        .to_string(),
                 );
-                return;
             }
-            eprintln!("{}", ts::accent_header("Registered MCP servers:"));
+            let mut lines = vec![ts::accent_header("Registered MCP servers:").to_string()];
             for row in rows {
                 let state = if row.enabled { "enabled" } else { "disabled" };
-                eprintln!(
+                lines.push(format!(
                     "  {:<24} [{}] {:<6} {}",
                     sanitize_terminal_text(&row.name),
                     state,
                     sanitize_terminal_text(&row.kind),
                     sanitize_terminal_text(&row.target)
-                );
+                ));
             }
+            CommandOutcome::Block(lines.join("\n"))
         }
-        "add" => {
-            let (name, entry) = match crate::mcp::registry::parse_add_spec(rest) {
-                Ok(parsed) => parsed,
-                Err(e) => {
-                    output::print_warn(&format!("{e:#}"));
-                    return;
-                }
+        "tools" => {
+            let Some(tools) = session.mcp_info() else {
+                return CommandOutcome::Info("No MCP servers connected.".to_string());
             };
-            mutate_registry(
+            let wanted = rest.first().copied();
+            let mut lines = Vec::new();
+            for tool in tools
+                .iter()
+                .filter(|tool| wanted.is_none_or(|name| tool.server_name == name))
+            {
+                lines.push(format!(
+                    "  {:<20} {:<28} {}",
+                    sanitize_terminal_text(&tool.server_name),
+                    sanitize_terminal_text(&tool.original_name),
+                    sanitize_terminal_text(&tool.description)
+                ));
+            }
+            if lines.is_empty() {
+                return CommandOutcome::Warn(format!(
+                    "No connected server named '{}'.",
+                    wanted.unwrap_or_default()
+                ));
+            }
+            lines.insert(0, ts::accent_header("MCP tools:").to_string());
+            CommandOutcome::Block(lines.join("\n"))
+        }
+        "add" => match crate::mcp::registry::parse_add_spec(rest) {
+            Ok((name, entry)) => mutate_registry(
                 |reg| reg.add(&name, entry.clone(), false),
                 &format!("Added MCP server '{name}'. Run `/mcp restart` to connect it."),
-            );
-        }
-        "reconfigure" | "edit" => {
-            let (name, entry) = match crate::mcp::registry::parse_add_spec(rest) {
-                Ok(parsed) => parsed,
-                Err(e) => {
-                    output::print_warn(&format!("{e:#}"));
-                    return;
-                }
-            };
-            mutate_registry(
+            ),
+            Err(e) => CommandOutcome::Warn(format!("{e:#}")),
+        },
+        "reconfigure" | "edit" => match crate::mcp::registry::parse_add_spec(rest) {
+            Ok((name, entry)) => mutate_registry(
                 |reg| reg.add(&name, entry.clone(), true),
                 &format!("Reconfigured MCP server '{name}'. Run `/mcp restart` to apply."),
-            );
-        }
+            ),
+            Err(e) => CommandOutcome::Warn(format!("{e:#}")),
+        },
         "remove" | "rm" | "delete" => {
             let Some(name) = rest.first().copied() else {
-                output::print_warn("Usage: /mcp remove <name>");
-                return;
+                return CommandOutcome::Warn("Usage: /mcp remove <name>".to_string());
             };
-            let name = name.to_string();
+            let owned = name.to_string();
             mutate_registry_bool(
-                move |reg| reg.remove(&name),
-                &format!("Removed MCP server '{}'.", rest[0]),
-                &format!("No MCP server named '{}' in the registry.", rest[0]),
-            );
+                move |reg| reg.remove(&owned),
+                &format!("Removed MCP server '{name}'."),
+                &format!("No MCP server named '{name}' in the registry."),
+            )
         }
-        "enable" => {
+        "enable" | "disable" => {
             let Some(name) = rest.first().copied() else {
-                output::print_warn("Usage: /mcp enable <name>");
-                return;
+                return CommandOutcome::Warn(format!("Usage: /mcp {sub} <name>"));
             };
-            let name = name.to_string();
-            mutate_registry(
-                move |reg| reg.enable(&name).map(|_| ()),
-                &format!(
-                    "Enabled MCP server '{}'. Run `/mcp restart` to connect it.",
-                    rest[0]
-                ),
-            );
+            let owned = name.to_string();
+            if sub == "enable" {
+                mutate_registry(
+                    move |reg| reg.enable(&owned).map(|_| ()),
+                    &format!("Enabled MCP server '{name}'. Run `/mcp restart` to connect it."),
+                )
+            } else {
+                mutate_registry(
+                    move |reg| reg.disable(&owned).map(|_| ()),
+                    &format!("Disabled MCP server '{name}'. Run `/mcp restart` to disconnect it."),
+                )
+            }
         }
-        "disable" => {
-            let Some(name) = rest.first().copied() else {
-                output::print_warn("Usage: /mcp disable <name>");
-                return;
-            };
-            let name = name.to_string();
-            mutate_registry(
-                move |reg| reg.disable(&name).map(|_| ()),
-                &format!(
-                    "Disabled MCP server '{}'. Run `/mcp restart` to disconnect it.",
-                    rest[0]
-                ),
-            );
-        }
-        "restart" | "reload" => {
-            output::print_info("Reloading MCP servers and reconnecting...");
+        "restart" | "reload" | "test" => {
             match crate::attach_mcp_manager_for_session(
                 session,
                 &crate::mcp::McpConfigLoadOptions::default(),
@@ -1323,59 +1338,49 @@ pub(super) async fn handle_mcp(arg: &str, session: &mut AgentSession) {
             {
                 Ok(()) => {
                     let count = session.mcp_info().map(|t| t.len()).unwrap_or(0);
-                    output::print_info(&format!("MCP reconnected: {count} tool(s) available."));
+                    CommandOutcome::Info(format!("MCP reconnected: {count} tool(s) available."))
                 }
-                Err(e) => output::print_error(&format!("MCP restart failed: {e:#}")),
+                Err(e) => CommandOutcome::Error(format!("MCP restart failed: {e:#}")),
             }
         }
-        other => {
-            output::print_warn(&format!(
-                "Unknown /mcp subcommand '{other}'. Use: list | add <name> <url> | \
-                 remove <name> | enable <name> | disable <name> | reconfigure <name> <spec> | restart"
-            ));
-        }
+        other => CommandOutcome::Warn(format!(
+            "Unknown /mcp subcommand '{other}'. Use: list | tools [server] | add <name> <url> | \
+             remove <name> | enable <name> | disable <name> | reconfigure <name> <spec> | restart"
+        )),
     }
 }
 
-fn mutate_registry<F>(op: F, success: &str)
+fn mutate_registry<F>(op: F, success: &str) -> CommandOutcome
 where
     F: FnOnce(&mut crate::mcp::registry::McpRegistry) -> anyhow::Result<()>,
 {
     let mut reg = match crate::mcp::registry::McpRegistry::load() {
         Ok(reg) => reg,
-        Err(e) => {
-            output::print_error(&format!("Failed to load MCP registry: {e:#}"));
-            return;
-        }
+        Err(e) => return CommandOutcome::Error(format!("Failed to load MCP registry: {e:#}")),
     };
     if let Err(e) = op(&mut reg) {
-        output::print_warn(&format!("{e:#}"));
-        return;
+        return CommandOutcome::Warn(format!("{e:#}"));
     }
     match reg.save() {
-        Ok(()) => output::print_info(success),
-        Err(e) => output::print_error(&format!("Failed to save MCP registry: {e:#}")),
+        Ok(()) => CommandOutcome::Info(success.to_string()),
+        Err(e) => CommandOutcome::Error(format!("Failed to save MCP registry: {e:#}")),
     }
 }
 
-fn mutate_registry_bool<F>(op: F, success: &str, missing: &str)
+fn mutate_registry_bool<F>(op: F, success: &str, missing: &str) -> CommandOutcome
 where
     F: FnOnce(&mut crate::mcp::registry::McpRegistry) -> bool,
 {
     let mut reg = match crate::mcp::registry::McpRegistry::load() {
         Ok(reg) => reg,
-        Err(e) => {
-            output::print_error(&format!("Failed to load MCP registry: {e:#}"));
-            return;
-        }
+        Err(e) => return CommandOutcome::Error(format!("Failed to load MCP registry: {e:#}")),
     };
     if !op(&mut reg) {
-        output::print_warn(missing);
-        return;
+        return CommandOutcome::Warn(missing.to_string());
     }
     match reg.save() {
-        Ok(()) => output::print_info(success),
-        Err(e) => output::print_error(&format!("Failed to save MCP registry: {e:#}")),
+        Ok(()) => CommandOutcome::Info(success.to_string()),
+        Err(e) => CommandOutcome::Error(format!("Failed to save MCP registry: {e:#}")),
     }
 }
 

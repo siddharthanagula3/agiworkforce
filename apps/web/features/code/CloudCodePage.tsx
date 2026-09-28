@@ -1247,6 +1247,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
                     onRunCommand={(command) => void handleRunCommand(command)}
                     onRefreshChanges={() => void loadChanges(selectedSession.id)}
                     onCreatePullRequest={() => void handleCreatePullRequest()}
+                    onLoadPullRequestStatus={api.pullRequestStatus}
                     onClose={() => setChangesOpen(false)}
                   />
                 )}

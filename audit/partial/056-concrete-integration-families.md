@@ -60,13 +60,13 @@ Code: `apps/web/lib/connectors/oauth-scope-allowlist.ts:41-41`, `apps/extension/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | No pinned email server exposes a send tool: Gmail's listed tools stop at drafts, and Outlook (Mail.Send allowed) has no pinned MCP server; add a send-capable email connector; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Gmail and Outlook. | handler, flag-off |
-| desktop | partial | No pinned email server exposes a send tool: Gmail's listed tools stop at drafts, and Outlook (Mail.Send allowed) has no pinned MCP server; add a send-capable email connector; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Gmail and Outlook. | handler, flag-off |
-| mobile | partial | No pinned email server exposes a send tool: Gmail's listed tools stop at drafts, and Outlook (Mail.Send allowed) has no pinned MCP server; add a send-capable email connector; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Gmail and Outlook. | handler, flag-off |
+| web | partial | 0bdcfd2f3 adds send_draft beside Google's Gmail server tools: it sends a reviewed draft through Gmail drafts.send, declared a non-reversible external send so it asks under every policy (Claude parity: support.claude.com/en/articles/10166901, fetched 2026-09-27). It runs once the owner adds the gmail CONNECTOR_OAUTH_PROVIDERS_JSON descriptor and client pair with gmail.compose. | flag-off |
+| desktop | partial | 0bdcfd2f3 adds send_draft beside Google's Gmail server tools: it sends a reviewed draft through Gmail drafts.send, declared a non-reversible external send so it asks under every policy (Claude parity: support.claude.com/en/articles/10166901, fetched 2026-09-27). It runs once the owner adds the gmail CONNECTOR_OAUTH_PROVIDERS_JSON descriptor and client pair with gmail.compose. | flag-off |
+| mobile | partial | 0bdcfd2f3 adds send_draft beside Google's Gmail server tools: it sends a reviewed draft through Gmail drafts.send, declared a non-reversible external send so it asks under every policy (Claude parity: support.claude.com/en/articles/10166901, fetched 2026-09-27). It runs once the owner adds the gmail CONNECTOR_OAUTH_PROVIDERS_JSON descriptor and client pair with gmail.compose. | flag-off |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | No pinned email server exposes a send tool: Gmail's listed tools stop at drafts, and Outlook (Mail.Send allowed) has no pinned MCP server; add a send-capable email connector; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Gmail and Outlook. | handler, flag-off |
 
-Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `packages/ui/ui/src/settings-modal/SettingsModal.tsx:1967-1969`, `apps/web/app/api/llm/v1/chat/completions/route.ts:735-741`, `apps/web/lib/user-connector-tools.ts:2269-2289`
+Code: `apps/web/lib/connectors/gmail-actions.ts:347-347`, `apps/web/lib/user-connector-tools.ts:2605-2605`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-metadata.ts:258-258`, `apps/extension/src/features/side-panel/bubbles.ts:388-388`
 
 ## S56.05: Email attachments.
 
@@ -75,14 +75,14 @@ Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `pa
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Messages can be read, but no pinned email tool downloads an attachment or attaches a file to a draft; add attachment tools; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Gmail. | handler, flag-off |
-| desktop | partial | Messages can be read, but no pinned email tool downloads an attachment or attaches a file to a draft; add attachment tools; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Gmail. | handler, flag-off |
-| mobile | partial | Messages can be read, but no pinned email tool downloads an attachment or attaches a file to a draft; add attachment tools; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Gmail. | handler, flag-off |
+| web | partial | 0bdcfd2f3 and b1a59f084 add read_attachments (PDF, Office and text attachments as fenced text) and create_draft_with_attachments (up to five of the account's own /api/files/<id> files in a MIME draft). Both run once the owner adds the gmail descriptor and client pair. | flag-off |
+| desktop | partial | 0bdcfd2f3 and b1a59f084 add read_attachments (PDF, Office and text attachments as fenced text) and create_draft_with_attachments (up to five of the account's own /api/files/<id> files in a MIME draft). Both run once the owner adds the gmail descriptor and client pair. | flag-off |
+| mobile | partial | 0bdcfd2f3 and b1a59f084 add read_attachments (PDF, Office and text attachments as fenced text) and create_draft_with_attachments (up to five of the account's own /api/files/<id> files in a MIME draft). Both run once the owner adds the gmail descriptor and client pair. | flag-off |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | Messages can be read, but no pinned email tool downloads an attachment or attaches a file to a draft; add attachment tools; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Gmail. | handler, flag-off |
 
-Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `packages/ui/ui/src/settings-modal/SettingsModal.tsx:1967-1969`, `apps/web/app/api/llm/v1/chat/completions/route.ts:735-741`, `apps/web/lib/user-connector-tools.ts:2269-2289`
+Code: `apps/web/lib/connectors/gmail-actions.ts:369-369`, `apps/web/lib/connectors/gmail-actions.ts:307-307`, `apps/web/lib/user-connector-tools.ts:2375-2375`, `apps/extension/src/features/side-panel/bubbles.ts:388-388`
 
 ## S56.07: Calendar search.
 
@@ -198,65 +198,46 @@ Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `pa
 
 - Done when: The assistant can create folders and manage sharing (links, collaborators) in a connected cloud drive.
 - Wave: 2
-- Already works on: vscode
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Box folder and shared-link tools need root_readwrite (verified: developer.box.com scopes page), which reads and writes every file; it stays out of the ceiling like full-Drive. Owner decision whether to admit it. | handler, flag-off |
-| desktop | partial | Box folder and shared-link tools need root_readwrite (verified: developer.box.com scopes page), which reads and writes every file; it stays out of the ceiling like full-Drive. Owner decision whether to admit it. | handler, flag-off |
-| mobile | partial | Box folder and shared-link tools need root_readwrite (verified: developer.box.com scopes page), which reads and writes every file; it stays out of the ceiling like full-Drive. Owner decision whether to admit it. | handler, flag-off |
 | cli | missing | Not built on this surface. |  |
 | chrome | partial | Box's folder and share-link tools need write scope (root_readwrite), but the ceiling admits root_readonly and item_upload only; Drive (drive.file) cannot share arbitrary files; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Google Drive. | handler, flag-off |
 
-Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `packages/ui/ui/src/settings-modal/SettingsModal.tsx:1967-1969`, `apps/web/app/api/llm/v1/chat/completions/route.ts:735-741`, `apps/web/lib/user-connector-tools.ts:2269-2289`
+Code: `apps/extension/src/features/side-panel/bubbles.ts:388-388`, `apps/extension/src/features/cloud-bridge/freeTrialClient.ts:55-56`, `apps/web/app/api/llm/v1/chat/completions/route.ts:735-741`, `apps/web/lib/connectors/directory/sources/first-party.json:436-436`
 
 ## S56.18: Document editing.
 
 - Done when: The assistant can edit a word-processing document (e.g. Google Docs or Word) in a connected account.
 - Wave: 3
-- Already works on: cli
+- Already works on: web, desktop, mobile, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | No Google Docs or Word/OneDrive document connector; only Notion and Confluence pages can be edited. | handler |
-| desktop | partial | No Google Docs or Word/OneDrive document connector; only Notion and Confluence pages can be edited. | handler |
-| mobile | partial | No Google Docs or Word/OneDrive document connector; only Notion and Confluence pages can be edited. | handler |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | No Google Docs or Word/OneDrive document connector; only Notion and Confluence pages can be edited. | handler |
-
-Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `packages/ui/ui/src/settings-modal/SettingsModal.tsx:1967-1969`, `apps/web/app/api/llm/v1/chat/completions/route.ts:735-741`, `apps/web/lib/user-connector-tools.ts:2269-2289`
 
 ## S56.19: Spreadsheet editing.
 
 - Done when: The assistant can read and edit a spreadsheet in a connected account.
-- Wave: 2
+- Wave: 3
+- Already works on: web, desktop, mobile, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Google Sheets has scopes but no pinned MCP server (the operator must supply one); only Airtable is pinned and its tools are discovered at connect; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Google Sheets. | handler, flag-off |
-| desktop | partial | Google Sheets has scopes but no pinned MCP server (the operator must supply one); only Airtable is pinned and its tools are discovered at connect; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Google Sheets. | handler, flag-off |
-| mobile | partial | Google Sheets has scopes but no pinned MCP server (the operator must supply one); only Airtable is pinned and its tools are discovered at connect; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Google Sheets. | handler, flag-off |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Google Sheets has scopes but no pinned MCP server (the operator must supply one); only Airtable is pinned and its tools are discovered at connect; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Google Sheets. | handler, flag-off |
-
-Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `packages/ui/ui/src/settings-modal/SettingsModal.tsx:1967-1969`, `apps/web/app/api/llm/v1/chat/completions/route.ts:735-741`, `apps/web/lib/user-connector-tools.ts:2269-2289`
 
 ## S56.20: Presentation editing.
 
 - Done when: The assistant can edit a presentation (e.g. Slides/PowerPoint) in a connected account.
 - Wave: 3
+- Already works on: web, desktop, mobile, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | No Google Slides or PowerPoint connector; only Canva designs can be edited (edit_design). | handler |
-| desktop | partial | No Google Slides or PowerPoint connector; only Canva designs can be edited (edit_design). | handler |
-| mobile | partial | No Google Slides or PowerPoint connector; only Canva designs can be edited (edit_design). | handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | No Google Slides or PowerPoint connector; only Canva designs can be edited (edit_design). | handler |
-
-Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `packages/ui/ui/src/settings-modal/SettingsModal.tsx:1967-1969`, `apps/web/app/api/llm/v1/chat/completions/route.ts:735-741`, `apps/web/lib/user-connector-tools.ts:2269-2289`
 
 ## S56.21: Team-message search.
 
@@ -364,18 +345,18 @@ Code: `apps/web/lib/connectors/directory/sources/first-party.json:550-550`, `app
 ## S56.33: CI status and logs.
 
 - Done when: The assistant can report CI pipeline status and show build logs from a connected CI provider.
-- Wave: 3
+- Wave: 2
 - Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | GitHub's remote MCP enables Actions only through /x/actions, /x/all or an X-MCP-Toolsets header (verified in github-mcp-server docs/remote-server.md). The descriptor has no per-connector header support, and /x/all exceeds the per-user connector tool cap; adding a header field to the descriptor, then X-MCP-Toolsets default,actions, would close it. | handler |
-| desktop | partial | GitHub's remote MCP enables Actions only through /x/actions, /x/all or an X-MCP-Toolsets header (verified in github-mcp-server docs/remote-server.md). The descriptor has no per-connector header support, and /x/all exceeds the per-user connector tool cap; adding a header field to the descriptor, then X-MCP-Toolsets default,actions, would close it. | handler |
-| mobile | partial | GitHub's remote MCP enables Actions only through /x/actions, /x/all or an X-MCP-Toolsets header (verified in github-mcp-server docs/remote-server.md). The descriptor has no per-connector header support, and /x/all exceeds the per-user connector tool cap; adding a header field to the descriptor, then X-MCP-Toolsets default,actions, would close it. | handler |
+| web | partial | 02fb5c4be sends descriptor X-MCP-* option headers; the documented github-mcp descriptor names the five default toolsets plus actions (list_workflow_runs, get_job_logs). It works once the owner adds that descriptor, the GitHub App with Actions read, and CONNECTOR_OAUTH_GITHUB_MCP_CLIENT_ID/_CLIENT_SECRET. | flag-off |
+| desktop | partial | 02fb5c4be sends descriptor X-MCP-* option headers; the documented github-mcp descriptor names the five default toolsets plus actions (list_workflow_runs, get_job_logs). It works once the owner adds that descriptor, the GitHub App with Actions read, and CONNECTOR_OAUTH_GITHUB_MCP_CLIENT_ID/_CLIENT_SECRET. | flag-off |
+| mobile | partial | 02fb5c4be sends descriptor X-MCP-* option headers; the documented github-mcp descriptor names the five default toolsets plus actions (list_workflow_runs, get_job_logs). It works once the owner adds that descriptor, the GitHub App with Actions read, and CONNECTOR_OAUTH_GITHUB_MCP_CLIENT_ID/_CLIENT_SECRET. | flag-off |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | No CI provider connector works (CircleCI has no remote server; GitHub Actions is not exposed); only Vercel deployment build logs are available. | handler |
 
-Code: `apps/web/lib/connectors/directory/sources/first-party.json:550-550`, `apps/extension/src/features/side-panel/bubbles.ts:388-388`, `apps/extension/src/features/cloud-bridge/freeTrialClient.ts:55-56`, `apps/web/app/api/llm/v1/chat/completions/route.ts:735-741`
+Code: `apps/web/lib/connectors/oauth-registry.ts:77-77`, `apps/web/lib/user-connector-tools.ts:1310-1310`, `docs/development/connectors-setup.md:222-222`, `apps/extension/src/features/side-panel/bubbles.ts:388-388`
 
 ## S56.34: Design-file inspection.
 

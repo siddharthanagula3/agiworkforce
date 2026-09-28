@@ -65,6 +65,9 @@ pub struct UiConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reduced_motion: Option<bool>,
 
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bell_on_finish: Option<bool>,
+
     /// Line-editing mode for the classic REPL: `emacs` or `vi`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub edit_mode: Option<String>,
@@ -103,6 +106,9 @@ pub struct DefaultConfig {
     /// Reasoning effort chosen at onboarding: low, medium, high, max.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reasoning_effort: Option<String>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub keep_history: Option<bool>,
 
     /// Permission posture applied when no flag or client names one:
     /// `default`, `plan`, `acceptEdits` or `dontAsk`.
@@ -183,6 +189,7 @@ impl DefaultConfig {
             fallback_chain: Vec::new(),
             fast_model: None,
             reasoning_effort: None,
+            keep_history: None,
             permission_mode: None,
             sandbox_mode: None,
             review_model: None,
@@ -676,6 +683,9 @@ impl CliConfig {
         if other.default.reasoning_effort.is_some() {
             self.default.reasoning_effort = other.default.reasoning_effort.clone();
         }
+        if other.default.keep_history.is_some() {
+            self.default.keep_history = other.default.keep_history;
+        }
         if other.default.permission_mode.is_some() {
             self.default.permission_mode = other.default.permission_mode.clone();
         }
@@ -705,6 +715,9 @@ impl CliConfig {
         }
         if other.ui.reduced_motion.is_some() {
             self.ui.reduced_motion = other.ui.reduced_motion;
+        }
+        if other.ui.bell_on_finish.is_some() {
+            self.ui.bell_on_finish = other.ui.bell_on_finish;
         }
         for (action, binding) in &other.ui.keybindings {
             self.ui.keybindings.insert(action.clone(), binding.clone());
@@ -905,6 +918,9 @@ impl CliConfig {
                 self.default.fallback_chain.join(" -> ")
             ));
         }
+        if let Some(keep) = self.default.keep_history {
+            out.push_str(&format!("Keep session history: {}\n", keep));
+        }
         if let Some(ref fast) = self.default.fast_model {
             out.push_str(&format!("Fast model: {}\n", fast));
         }
@@ -922,6 +938,9 @@ impl CliConfig {
         }
         if let Some(reduced_motion) = self.ui.reduced_motion {
             out.push_str(&format!("Reduced motion: {}\n", reduced_motion));
+        }
+        if let Some(bell) = self.ui.bell_on_finish {
+            out.push_str(&format!("Bell when a long turn finishes: {}\n", bell));
         }
         if !self.ui.keybindings.is_empty() {
             out.push_str("Keybindings:\n");
@@ -1021,12 +1040,16 @@ impl CliConfig {
                 }
             }
             "fast-model" => self.default.fast_model.clone(),
+            "history" | "keep-history" => self.default.keep_history.map(|keep| keep.to_string()),
             "output-style" | "ui.output-style" | "ui.output_style" => self.ui.output_style.clone(),
             "privacy-mode" | "ui.privacy-mode" | "ui.privacy_mode" => self.ui.privacy_mode.clone(),
             "edit-mode" | "ui.edit-mode" | "ui.edit_mode" => self.ui.edit_mode.clone(),
             "theme" | "ui.theme" => self.ui.theme.clone(),
             "reduced-motion" | "ui.reduced-motion" | "ui.reduced_motion" => {
                 self.ui.reduced_motion.map(|reduced| reduced.to_string())
+            }
+            "bell" | "ui.bell" | "ui.bell_on_finish" => {
+                self.ui.bell_on_finish.map(|bell| bell.to_string())
             }
             "crash-reports" | "telemetry.crash-reports" | "telemetry.crash_reports" => {
                 Some(self.telemetry.crash_reports.to_string())
@@ -1079,6 +1102,14 @@ impl CliConfig {
                     .filter(|s| !s.is_empty())
                     .collect();
             }
+            "history" | "keep-history" => {
+                self.default.keep_history = Some(
+                    value
+                        .trim()
+                        .parse::<bool>()
+                        .context("history must be true or false")?,
+                );
+            }
             "fast-model" => {
                 self.default.fast_model = if value.is_empty() {
                     None
@@ -1121,6 +1152,14 @@ impl CliConfig {
                         .trim()
                         .parse::<bool>()
                         .context("reduced-motion must be true or false")?,
+                );
+            }
+            "bell" | "ui.bell" | "ui.bell_on_finish" => {
+                self.ui.bell_on_finish = Some(
+                    value
+                        .trim()
+                        .parse::<bool>()
+                        .context("bell must be true or false")?,
                 );
             }
             "crash-reports" | "telemetry.crash-reports" | "telemetry.crash_reports" => {

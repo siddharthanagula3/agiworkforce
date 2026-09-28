@@ -89,6 +89,12 @@ export const PROJECT_ROW_ACTIONS: readonly SurfaceRowAction[] = [
 
 export const ARTIFACT_ROW_ACTIONS: readonly SurfaceRowAction[] = [
   {
+    command: 'agi-workforce.copyArtifact',
+    icon: 'copy',
+    tooltip: 'Copy the content',
+    matches: matching(/^artifact(Published)?$/u),
+  },
+  {
     command: 'agi-workforce.saveArtifactToWorkspace',
     icon: 'save',
     tooltip: 'Save into the workspace',

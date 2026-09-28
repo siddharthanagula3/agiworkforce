@@ -828,6 +828,13 @@ svg + .menuRowLabel {
   padding: 0 8px;
 }
 
+.chipWarning,
+.chipWarning:hover {
+  border-color: var(--chat-warning-border);
+  background: var(--chat-warning-bg);
+  color: var(--chat-warning-fg);
+}
+
 .usageTrigger {
   display: grid;
   width: 28px;

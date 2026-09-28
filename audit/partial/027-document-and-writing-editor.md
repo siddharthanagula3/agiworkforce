@@ -22,79 +22,61 @@ nothing is left.
 
 - Done when: The user can make text bold, italic or underlined and add links in a document.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Bold, italic and links work only by typing Markdown in the raw source editor; there is no toolbar or shortcut, and underline has no Markdown form. | ui |
-| desktop | partial | Same as web (hosted): bold, italic and links work only by typing Markdown in the raw source editor; there is no toolbar or shortcut, and underline has no Markdown form. | ui |
 | mobile | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1029-1038`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1864-1872`, `packages/ui/unified-chat/src/components/markdown/remarkPlugins.ts:26-30`
 
 ## S27.07: Lists and checklists.
 
 - Done when: The user can create bulleted, numbered and checklist items in a document.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Lists and task lists render (GFM), but are created only by typing Markdown in the source editor, and checklist boxes are read-only in the preview. | ui |
-| desktop | partial | Same as web (hosted): lists and task lists render (GFM), but are created only by typing Markdown in the source editor, and checklist boxes are read-only in the preview. | ui |
 | mobile | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1029-1038`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1864-1872`, `packages/ui/unified-chat/src/components/markdown/remarkPlugins.ts:26-30`, `packages/ui/unified-chat/src/components/markdown/MarkdownContent.tsx:318-332`
 
 ## S27.08: Tables.
 
 - Done when: The user can insert and edit tables in a document.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | GFM tables render, but a table can only be written as Markdown pipe syntax in the source editor; there is no insert or row/column editing. | ui |
-| desktop | partial | Same as web (hosted): gFM tables render, but a table can only be written as Markdown pipe syntax in the source editor; there is no insert or row/column editing. | ui |
 | mobile | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1029-1038`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1864-1872`, `packages/ui/unified-chat/src/components/markdown/remarkPlugins.ts:26-30`
 
 ## S27.09: Images.
 
 - Done when: The user can insert images into a document and see them rendered.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Markdown image links render, but images can only be referenced by URL in the source editor; there is no insert or upload into a document. | ui |
-| desktop | partial | Same as web (hosted): markdown image links render, but images can only be referenced by URL in the source editor; there is no insert or upload into a document. | ui |
 | mobile | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1029-1038`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1864-1872`, `packages/ui/unified-chat/src/components/markdown/MarkdownContent.tsx:145-160`
 
 ## S27.11: Code and equation blocks.
 
 - Done when: The user can add code blocks and math equations to a document and see them rendered.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Code fences and $…$ math (KaTeX) render, but only by typing Markdown in the source editor; there is no insert control or equation editor. | ui |
-| desktop | partial | Same as web (hosted): code fences and $…$ math (KaTeX) render, but only by typing Markdown in the source editor; there is no insert control or equation editor. | ui |
 | mobile | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1029-1038`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1864-1872`, `packages/ui/unified-chat/src/components/markdown/MarkdownContent.tsx:473-479`
 
 ## S27.12: Outline panel.
 
 - Done when: A document view offers an outline of its headings that jumps to each section.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only research reports show a Contents outline (when they have 3+ headings); documents in the artifact panel have no outline. | ui |
-| desktop | partial | Same as web (hosted): outline only in research reports. | ui |
 | mobile | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/research/ResearchReportView.tsx:614-635`, `apps/web/features/chat/components/research/ResearchReportView.tsx:144-150`
 
 ## S27.15: Selection toolbar.
 
@@ -145,14 +127,11 @@ Code: `apps/extension/src/background.ts:4618-4631`, `apps/extension/src/side_pan
 
 - Done when: While editing, the document saves automatically and shows its save state (saving / saved).
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The panel shows Syncing… / Synced / Sync retrying for cloud sync and "Not saved" when browser storage is full, but source edits are not autosaved: they need an explicit Save. | states |
-| desktop | partial | Same as web (hosted): sync status shown, edits need an explicit Save. | states |
 | mobile | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/artifacts/ArtifactsPanel.tsx:502-523`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:485-496`
 
 ## S27.28: Undo and redo.
 
@@ -183,31 +162,29 @@ Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1255-1281
 
 - Done when: A document can be exported to office document formats (e.g. Word/DOCX).
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Word export exists for research reports and for Library files; a document in the artifact panel can only be downloaded as HTML, Markdown or source. | ui |
-| desktop | partial | Same as web (hosted): Word only from research reports and Library. | ui |
 | mobile | partial | A whole reply can be exported as PDF or text from the message export sheet; there is no Word/DOCX export and the artifact viewer exports only Markdown/text. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/research/ResearchReportView.tsx:517-530`, `apps/web/features/chat/components/research/ResearchReportView.tsx:273-277`, `apps/web/features/chat/services/document-export-service.ts:467-486`, `apps/web/features/library/components/LibraryView.tsx:220-227`
+Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:1228-1235`, `apps/mobile/src/features/chat/components/FileExportButton.tsx:97-101`
 
 ## S27.36: Export to PDF.
 
 - Done when: A document can be exported as a PDF.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | PDF export exists for research reports and for Library files; a document in the artifact panel has no PDF download. | ui |
-| desktop | partial | Same as web (hosted): PDF only from research reports and Library. | ui |
 | mobile | partial | PDF export exists for a whole reply (message export sheet); the artifact viewer itself exports only Markdown/text. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/research/ResearchReportView.tsx:517-530`, `apps/web/features/chat/services/document-export-service.ts:467-486`, `apps/web/features/library/components/LibraryView.tsx:220-227`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1441-1462`
+Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:1228-1235`, `apps/mobile/src/features/chat/components/FileExportButton.tsx:97-101`
 
 ## S27.37: Export to Markdown.
 

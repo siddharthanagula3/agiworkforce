@@ -1306,18 +1306,12 @@ function FileViewerOverlay({
             className="max-h-full max-w-full object-contain"
           />
         ) : documentUri ? (
-          <object
-            data={documentUri}
-            type="application/pdf"
+          <iframe
+            src={documentUri}
+            title={item.file_name}
             data-testid="library-pdf-reader"
-            aria-label={item.file_name}
-            className="h-full min-h-[70vh] w-full rounded-md bg-white"
-          >
-            <Button size="sm" onClick={() => void onDownload(item)}>
-              <Download className="mr-1.5 h-4 w-4" aria-hidden />
-              Download to view
-            </Button>
-          </object>
+            className="h-full min-h-[70vh] w-full rounded-md border-0 bg-white"
+          />
         ) : textPreview.status === 'loading' ? (
           <Spinner size="default" />
         ) : textPreview.status === 'ready' ? (

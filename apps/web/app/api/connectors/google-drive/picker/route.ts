@@ -1,0 +1,49 @@
+import 'server-only';
+
+import { NextRequest, NextResponse } from 'next/server';
+import { withErrorHandler } from '@/lib/error-handler';
+import { withRateLimit } from '@/lib/rate-limit';
+import { getUserScopedDb } from '@/lib/server/rls-db';
+import { resolveConnectorAccessToken } from '@/lib/connectors/oauth-access';
+import { GOOGLE_DRIVE_CONNECTOR_ID } from '@/lib/connectors/google-drive-files';
+import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
+
+const PICKER_API_KEY_ENV = 'GOOGLE_PICKER_API_KEY';
+const PICKER_APP_ID_ENV = 'GOOGLE_PICKER_APP_ID';
+
+async function handleGetPicker(request: NextRequest): Promise<NextResponse> {
+  const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
+  if (rateLimitResponse) return rateLimitResponse;
+
+  const { userId } = await getUserScopedDb(request, { resolveOrganization: false });
+  const developerKey = process.env[PICKER_API_KEY_ENV]?.trim();
+  const appId = process.env[PICKER_APP_ID_ENV]?.trim();
+  if (!developerKey || !appId) {
+    return NextResponse.json(
+      { status: 'not-configured' },
+      { headers: { 'Cache-Control': 'no-store' } },
+    );
+  }
+
+  const access = await resolveConnectorAccessToken(userId, GOOGLE_DRIVE_CONNECTOR_ID);
+  if (access.status !== 'ready') {
+    return NextResponse.json(
+      {
+        status:
+          access.status === 'reauthorization-required' ? 'reconnect-required' : 'not-connected',
+      },
+      { headers: { 'Cache-Control': 'no-store' } },
+    );
+  }
+
+  return NextResponse.json(
+    { status: 'ready', accessToken: access.accessToken, developerKey, appId },
+    { headers: { 'Cache-Control': 'no-store' } },
+  );
+}
+
+export const GET = withCorsRoute(withErrorHandler(handleGetPicker));
+
+export function OPTIONS(request: NextRequest): NextResponse {
+  return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
+}

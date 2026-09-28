@@ -104,17 +104,16 @@ Code: `apps/web/lib/voice/live-voice-tools.ts:110-119`, `apps/web/features/chat/
 
 - Done when: The user turns an email thread (forwarded, addressed, or picked from a connected mailbox) into an agent task that reads the thread and runs as a tracked task.
 - Wave: 2
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | A Gmail trigger starts one tracked run per new message in the connected mailbox, narrowed by From, To, Subject and Labels, and the run reads the thread with the Gmail connector. One account per connector, as in ChatGPT and Claude. Still open: an address to forward or send a thread to, proposed for decline (ChatGPT and Claude offer none); waiting on the owner. | ui |
-| desktop | partial | A Gmail trigger starts one tracked run per new message in the connected mailbox, narrowed by From, To, Subject and Labels, and the run reads the thread with the Gmail connector. One account per connector, as in ChatGPT and Claude. Still open: an address to forward or send a thread to, proposed for decline (ChatGPT and Claude offer none); waiting on the owner. | ui |
 | mobile | partial | Mobile can start AGI Work and the turn gets the Gmail connector only when the operator configured it; sharing an email from the Mail app only drafts a chat, not a task. | flag-off, handler |
 | cli | partial | CLI managed-cloud turns receive the account's connector tools, but Gmail exists only with the operator JSON entry and only tools pre-set to Always allow on web run (approval requests are not shown); no email intake. | flag-off, ui, states |
 | vscode | partial | VS Code chat reaches connector tools only through the local CLI's managed-cloud turn; Gmail is operator-gated and only Always-allow tools run; no email intake. | flag-off, ui, states |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/schedules/components/ScheduleTriggersPanel.tsx:64-64`, `packages/contracts/cloud-contracts/src/triggers.ts:125-125`, `apps/web/lib/triggers/gmail-watch.ts:427-427`, `apps/web/lib/triggers/trigger-fire.ts:69-69`
+Code: `apps/mobile/src/features/share-preview/index.tsx:93-104`, `apps/cli/src/models/streaming.rs:226-236`
 
 ## S110.11: Team mention → coding session.
 

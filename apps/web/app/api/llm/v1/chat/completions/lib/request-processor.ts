@@ -33,6 +33,7 @@ import { logger } from '@/lib/logger';
 import { stagedAttachmentPaths, type TurnAttachment } from '@/lib/e2b/attachment-staging';
 import { EXECUTE_CODE_TOOL, resolveTurnCodeExecutionTools } from '@/lib/e2b/execution-tools';
 import { e2bProvisioningReady } from '@/lib/e2b/gate';
+import { e2bChatTemplate } from '@/lib/e2b/chat-template';
 import { hostedCodeExecutionReserveMicrousd } from '@/lib/e2b/hosted-code-execution';
 import {
   DEVICE_HOST_HEADER,
@@ -97,6 +98,14 @@ import {
   MEMORY_COMMAND_TURN_STATUSES,
   memoryCommandTurnNote,
 } from '@/lib/services/memory-commands';
+import { isMemoryTool, memoryToolDefinitions } from '@/lib/server/tools/memory-tools';
+import { fileSearchToolDefinition, isFileSearchTool } from '@/lib/server/tools/file-search-tool';
+import { buildWorkspaceFeatureGateResponse } from '@/lib/managed-compute-gate';
+import {
+  asksForSchedule,
+  isScheduleTool,
+  scheduleToolDefinition,
+} from '@/lib/server/tools/schedule-tool';
 import {
   supportsOpenAIReasoningEffort,
   SYSTEM_PROMPT_CACHE_BOUNDARY,
@@ -751,6 +760,87 @@ export async function applyImplicitManagedSkillOffer(
     createSkillToolDefinition(),
   ];
   return relevant.map((skill) => skill.name);
+}
+
+export function applyMemoryToolCapability(
+  request: ChatCompletionRequest,
+  params: {
+    surface: CloudChatSurface;
+    toolsCapable: boolean;
+    memoryEnabled: boolean;
+    isTemporary: boolean;
+    ambientToolsAllowed: boolean;
+  },
+): void {
+  if (
+    !params.toolsCapable ||
+    !params.ambientToolsAllowed ||
+    !request.stream ||
+    params.isTemporary ||
+    !params.memoryEnabled ||
+    request.memory_enabled === false ||
+    request.personalization === false ||
+    request.memory_command !== undefined ||
+    !MEMORY_COMMAND_CLIENT_SURFACES.has(params.surface)
+  ) {
+    return;
+  }
+  request.tools = [
+    ...(request.tools ?? []).filter((tool) => !isMemoryTool(tool.function.name)),
+    ...memoryToolDefinitions(),
+  ];
+}
+
+export function applyFileSearchToolCapability(
+  request: ChatCompletionRequest,
+  params: {
+    surface: CloudChatSurface;
+    toolsCapable: boolean;
+    isTemporary: boolean;
+    projectHasKnowledgeFiles: boolean;
+    ambientToolsAllowed: boolean;
+  },
+): void {
+  if (
+    !params.toolsCapable ||
+    !params.ambientToolsAllowed ||
+    !params.projectHasKnowledgeFiles ||
+    !request.stream ||
+    params.isTemporary ||
+    !MEMORY_COMMAND_CLIENT_SURFACES.has(params.surface)
+  ) {
+    return;
+  }
+  request.tools = [
+    ...(request.tools ?? []).filter((tool) => !isFileSearchTool(tool.function.name)),
+    fileSearchToolDefinition(),
+  ];
+}
+
+export function applyScheduleToolCapability(
+  request: ChatCompletionRequest,
+  params: {
+    surface: CloudChatSurface;
+    toolsCapable: boolean;
+    isTemporary: boolean;
+    ambientToolsAllowed: boolean;
+    schedulesAllowed: boolean;
+  },
+): void {
+  if (
+    !params.toolsCapable ||
+    !params.ambientToolsAllowed ||
+    !params.schedulesAllowed ||
+    !request.stream ||
+    params.isTemporary ||
+    !MEMORY_COMMAND_CLIENT_SURFACES.has(params.surface)
+  ) {
+    return;
+  }
+  request.tools = [
+    ...(request.tools ?? []).filter((tool) => !isScheduleTool(tool.function.name)),
+    scheduleToolDefinition(),
+  ];
 }
 
 export function applyManagedOfficeFileCreation(request: ChatCompletionRequest): void {
@@ -2675,6 +2765,7 @@ export async function processRequest(
         projectId: string | null;
         projectBlocks: readonly ProjectContextBlock[];
         projectSources?: ProjectFileCitation[];
+        projectHasKnowledgeFiles: boolean;
         studyInstruction: string | null;
       }
     | ProcessFailure
@@ -2682,6 +2773,7 @@ export async function processRequest(
     ? (async () => {
         let projectSources: ProjectFileCitation[] = [];
         let projectBlocks: readonly ProjectContextBlock[] = [];
+        let projectHasKnowledgeFiles = false;
         try {
           const scoped = await scopedDbPromise;
           if (scoped.userId !== userId) {
@@ -2758,6 +2850,7 @@ export async function processRequest(
                   ),
                 };
               }
+              projectHasKnowledgeFiles = projectContext.knowledgeFiles.length > 0;
               const rendered = renderProjectContextBlocks(projectContext);
               projectBlocks = fitProjectContextBlocks(rendered.blocks, MAX_PROJECT_CONTEXT_CHARS);
               projectSources = rendered.citations;
@@ -2795,6 +2888,7 @@ export async function processRequest(
             projectId: ownedRows[0].project_id,
             projectBlocks,
             ...(projectSources.length > 0 ? { projectSources } : {}),
+            projectHasKnowledgeFiles,
             studyInstruction: activeStudyInstruction(ownedRows[0]),
           };
         } catch (error) {
@@ -2823,6 +2917,7 @@ export async function processRequest(
         selectedRouteId: null,
         projectId: null,
         projectBlocks: [],
+        projectHasKnowledgeFiles: false,
         studyInstruction: null,
       });
 
@@ -4144,6 +4239,34 @@ export async function processRequest(
     placesSearchOffered: placesRequirement.offered,
   });
 
+  const ambientToolsAllowed =
+    getModelMetadataById(chatRequest.model)?.webSearchToolOfferPolicy !== 'required_only';
+  applyMemoryToolCapability(chatRequest, {
+    surface: chatSurface,
+    toolsCapable: resolvedModelCaps?.tools ?? true,
+    memoryEnabled: managedMemoryPolicy.enabled,
+    isTemporary: conversationIsTemporary,
+    ambientToolsAllowed,
+  });
+
+  applyFileSearchToolCapability(chatRequest, {
+    surface: chatSurface,
+    toolsCapable: resolvedModelCaps?.tools ?? true,
+    isTemporary: conversationIsTemporary,
+    projectHasKnowledgeFiles: ownership.projectHasKnowledgeFiles,
+    ambientToolsAllowed,
+  });
+
+  applyScheduleToolCapability(chatRequest, {
+    surface: chatSurface,
+    toolsCapable: resolvedModelCaps?.tools ?? true,
+    isTemporary: conversationIsTemporary,
+    ambientToolsAllowed,
+    schedulesAllowed:
+      asksForSchedule(lastUserText) &&
+      (await buildWorkspaceFeatureGateResponse(userId, request, 'schedules', chatSurface)) === null,
+  });
+
   const lastUserContent = lastUserMsg?.content;
   applyClarifyCardCapability(chatRequest, {
     surface: chatSurface,
@@ -4450,6 +4573,7 @@ export async function processRequest(
     provider: providerLower,
     stream: chatRequest.stream,
     e2bEnabled: e2bProvisioningReady(),
+    officeRendering: e2bChatTemplate() !== null,
     toolsCapable: resolvedModelCaps?.tools ?? true,
     codeExecutionCapable:
       resolvedModelCaps?.codeExecution === true && nativeToolPermitted(EXECUTE_CODE_TOOL),

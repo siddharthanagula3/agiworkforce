@@ -173,6 +173,17 @@ export const CloudCodePullRequestSchema = z.object({
   alreadyOpen: z.boolean(),
 });
 
+export const CloudCodePullRequestStatusSchema = z.object({
+  number: z.number().int().positive(),
+  url: z.string(),
+  state: z.enum(['open', 'closed']),
+  draft: z.boolean(),
+  merged: z.boolean(),
+  checksState: z.enum(['none', 'pending', 'passing', 'failing']),
+  failedChecks: z.array(z.string()),
+  reviewState: z.enum(['none', 'commented', 'approved', 'changes_requested']),
+});
+
 export const CloudCodeTurnCancellationSchema = z.object({
   turnId: z.string(),
   requestedAt: z.string(),
@@ -221,6 +232,7 @@ export type CloudCodeRepository = z.infer<typeof CloudCodeRepositorySchema>;
 export type CloudCodeChanges = z.infer<typeof CloudCodeChangesSchema>;
 export type CloudCodeDiscardResult = z.infer<typeof CloudCodeDiscardResultSchema>;
 export type CloudCodePullRequest = z.infer<typeof CloudCodePullRequestSchema>;
+export type CloudCodePullRequestStatus = z.infer<typeof CloudCodePullRequestStatusSchema>;
 export type CloudCodeTurnCancellation = z.infer<typeof CloudCodeTurnCancellationSchema>;
 export type CloudCodeRepositoryList = z.infer<typeof CloudCodeRepositoryListSchema>;
 export type CloudCodeBranch = z.infer<typeof CloudCodeBranchSchema>;

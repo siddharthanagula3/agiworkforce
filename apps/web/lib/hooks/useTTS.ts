@@ -2,6 +2,76 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSettingsStore, VOICE_SPEED_RATES } from '@shared/stores/web-settings-store';
+import { getCsrfToken } from '@/lib/client/csrf';
+
+const SPEECH_ENDPOINT = '/api/voice/speech';
+const SPEECH_CHUNK_CHARACTERS = 3_800;
+const CSRF_HEADER = 'x-csrf-token';
+
+function speechChunks(text: string): string[] {
+  const chunks: string[] = [];
+  let rest = text;
+  while (rest.length > SPEECH_CHUNK_CHARACTERS) {
+    const window = rest.slice(0, SPEECH_CHUNK_CHARACTERS);
+    const cut = Math.max(window.lastIndexOf('. '), window.lastIndexOf('\n'));
+    const end = cut > SPEECH_CHUNK_CHARACTERS / 2 ? cut + 1 : SPEECH_CHUNK_CHARACTERS;
+    chunks.push(rest.slice(0, end).trim());
+    rest = rest.slice(end);
+  }
+  if (rest.trim()) chunks.push(rest.trim());
+  return chunks;
+}
+
+async function fetchSpeech(
+  text: string,
+  speed: number,
+  signal: AbortSignal,
+): Promise<ArrayBuffer | null> {
+  try {
+    const response = await fetch(SPEECH_ENDPOINT, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        [CSRF_HEADER]: await getCsrfToken(),
+        'Idempotency-Key': `agi.speech.${globalThis.crypto.randomUUID()}`,
+      },
+      body: JSON.stringify({ text, speed }),
+      signal,
+    });
+    return response.ok ? await response.arrayBuffer() : null;
+  } catch {
+    return null;
+  }
+}
+
+let speechContext: AudioContext | null = null;
+
+function speechAudioContext(): AudioContext | null {
+  if (typeof window === 'undefined') return null;
+  if (speechContext && speechContext.state !== 'closed') return speechContext;
+  const Context =
+    window.AudioContext ??
+    (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!Context) return null;
+  try {
+    speechContext = new Context();
+  } catch {
+    return null;
+  }
+  return speechContext;
+}
+
+async function decodeSpeech(
+  context: AudioContext,
+  bytes: ArrayBuffer,
+): Promise<AudioBuffer | null> {
+  try {
+    return await context.decodeAudioData(bytes);
+  } catch {
+    return null;
+  }
+}
 
 const VOICE_STORAGE_KEY = 'agi:tts-voice-uri';
 
@@ -47,7 +117,7 @@ function stripMarkdown(text: string): string {
 export interface UseTTSReturn {
   isSpeaking: boolean;
   isSupported: boolean;
-  speak: (text: string) => void;
+  speak: (text: string, options?: { deviceVoice?: boolean }) => void;
   stop: () => void;
   unlock: () => void;
   voices: SpeechSynthesisVoice[];
@@ -64,13 +134,17 @@ export function useTTS(): UseTTSReturn {
   const [voiceUri, setVoiceUriState] = useState<string | null>(null);
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const spokenTextRef = useRef<string | null>(null);
+  const playbackRef = useRef<{
+    controller: AbortController;
+    source: AudioBufferSourceNode | null;
+  } | null>(null);
 
   useEffect(() => {
     const browserSupportsSpeech =
       typeof window !== 'undefined' &&
       'speechSynthesis' in window &&
       'SpeechSynthesisUtterance' in window;
-    setIsSupported(browserSupportsSpeech);
+    setIsSupported(typeof window !== 'undefined');
     if (!browserSupportsSpeech) return;
 
     const synth = window.speechSynthesis;
@@ -109,16 +183,25 @@ export function useTTS(): UseTTSReturn {
     [voices, voiceUri],
   );
 
+  const stopServerPlayback = useCallback(() => {
+    const playback = playbackRef.current;
+    playbackRef.current = null;
+    if (!playback) return;
+    playback.controller.abort();
+    playback.source?.stop();
+  }, []);
+
   const stop = useCallback(() => {
+    stopServerPlayback();
     if (!isSupported) return;
-    window.speechSynthesis.cancel();
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
     setIsSpeaking(false);
     utteranceRef.current = null;
     spokenTextRef.current = null;
-  }, [isSupported]);
+  }, [isSupported, stopServerPlayback]);
 
   const unlock = useCallback(() => {
-    if (!isSupported) return;
+    if (!isSupported || !('speechSynthesis' in window)) return;
     const synth = window.speechSynthesis;
     if (synth.speaking || synth.pending) return;
     const primer = new SpeechSynthesisUtterance(UNLOCK_TEXT);
@@ -126,18 +209,13 @@ export function useTTS(): UseTTSReturn {
     synth.speak(primer);
   }, [isSupported]);
 
-  const speak = useCallback(
-    (text: string) => {
-      if (!isSupported) return;
-
-      const clean = stripMarkdown(text);
-      if (!clean) return;
-
-      if (isSpeaking && spokenTextRef.current === clean) {
-        stop();
+  const speakWithDevice = useCallback(
+    (clean: string) => {
+      if (!('speechSynthesis' in window)) {
+        setIsSpeaking(false);
+        spokenTextRef.current = null;
         return;
       }
-
       window.speechSynthesis.cancel();
 
       const utterance = new SpeechSynthesisUtterance(clean);
@@ -174,7 +252,87 @@ export function useTTS(): UseTTSReturn {
       spokenTextRef.current = clean;
       window.speechSynthesis.speak(utterance);
     },
-    [isSupported, isSpeaking, stop, selectedVoice],
+    [selectedVoice],
+  );
+
+  const speak = useCallback(
+    (text: string, options?: { deviceVoice?: boolean }) => {
+      if (!isSupported) return;
+      const clean = stripMarkdown(text);
+      if (!clean) return;
+      if (isSpeaking && spokenTextRef.current === clean) {
+        stop();
+        return;
+      }
+      stop();
+      const context = options?.deviceVoice ? null : speechAudioContext();
+      if (!context) {
+        speakWithDevice(clean);
+        return;
+      }
+      const resumed =
+        context.state === 'running'
+          ? Promise.resolve(true)
+          : context.resume().then(
+              () => context.state === 'running',
+              () => false,
+            );
+
+      const controller = new AbortController();
+      const playback: { controller: AbortController; source: AudioBufferSourceNode | null } = {
+        controller,
+        source: null,
+      };
+      playbackRef.current = playback;
+      spokenTextRef.current = clean;
+      setIsSpeaking(true);
+      const speed =
+        VOICE_SPEED_RATES[useSettingsStore.getState().voiceSpeed ?? 'normal'] ??
+        VOICE_SPEED_RATES.normal;
+      const finish = () => {
+        if (playbackRef.current !== playback) return;
+        playbackRef.current = null;
+        spokenTextRef.current = null;
+        setIsSpeaking(false);
+      };
+
+      void (async () => {
+        if (!(await resumed)) {
+          if (playbackRef.current !== playback) return;
+          playbackRef.current = null;
+          speakWithDevice(clean);
+          return;
+        }
+        const chunks = speechChunks(clean);
+        for (const [index, chunk] of chunks.entries()) {
+          const bytes = await fetchSpeech(chunk, speed, controller.signal);
+          const buffer = bytes ? await decodeSpeech(context, bytes) : null;
+          if (playbackRef.current !== playback) return;
+          if (!buffer) {
+            if (index === 0) {
+              playbackRef.current = null;
+              speakWithDevice(clean);
+            } else {
+              finish();
+            }
+            return;
+          }
+          const source = context.createBufferSource();
+          source.buffer = buffer;
+          source.connect(context.destination);
+          const ended = new Promise<void>((resolve) => {
+            source.onended = () => resolve();
+          });
+          source.start();
+          playback.source = source;
+          await ended;
+          source.disconnect();
+          if (playbackRef.current !== playback) return;
+        }
+        finish();
+      })();
+    },
+    [isSupported, isSpeaking, stop, speakWithDevice],
   );
 
   return { isSpeaking, isSupported, speak, stop, unlock, voices, voiceUri, setVoiceUri };

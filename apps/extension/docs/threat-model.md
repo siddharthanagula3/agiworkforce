@@ -110,12 +110,23 @@ before it reaches this host: message text, file paths, and URLs never leave
 the browser, only the error's type name and bare function names from its
 stack.
 
+`connect-src` also allows `https://*.r2.cloudflarestorage.com`, the object
+store behind chat file attachments. The side panel asks
+`/api/uploads/presign` for a short-lived signed PUT URL, sends the file body
+there directly, then asks `/api/uploads/chat-attachment/complete` to verify
+it; the chat request carries only the returned asset id. This is a CSP entry,
+not a host permission, so the PUT is an ordinary cross-origin request that the
+bucket's CORS policy must admit for the extension origin. No cookie or bearer
+token is sent to the object store; the signature in the URL is the only
+credential, and it is scoped to one key and one content type.
+
 ## Data flows
 
 ### Managed Cloud chat
 
-1. The user enters a prompt and may explicitly attach captured page text or
-   image data in the side panel.
+1. The user enters a prompt and may explicitly attach captured page text,
+   image data, or a PDF, text or Markdown file uploaded through the flow
+   above in the side panel.
 2. Page text is stripped of hidden Unicode control characters, passed through
    the shared secret redactor, bounded, and fenced as untrusted data. This is a
    mitigation, not proof that every sensitive value or prompt injection is

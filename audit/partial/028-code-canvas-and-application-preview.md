@@ -127,7 +127,6 @@ Code: `apps/cli/src/platform/runtime/tool_catalog.rs:203-208`
 | desktop | partial | The cited SandboxedIframe branch (src=sandboxOrigin, 217-229) exists only when getSandboxOrigin() returns a value from NEXT_PUBLIC_SANDBOX_ORIGIN (artifact-sandbox.ts:24-43); otherwise the component renders the srcDoc fallback (236-250), and fallbackWillRunScripts (75-77) marks any document with an inline script as dead because the page CSP in proxy.ts:39 allows only nonce'd scripts. A live, interactive preview is therefore off by default behind an env gate; whether production sets it is S96.16's open production-state question. Hosted-web inherits the same gate. |  |
 | mobile | partial | HTML previews render with JavaScript disabled (only Mermaid enables it), so interactive pages show layout only. | states |
 | cli | partial | The cited lines open a browser URL: the share page when published, else the web conversation (browse_url, artifacts.rs:449-459). For an unpublished artifact that is a link-out to the web app, which the same auditor scored as partial/surface-only on S26.14 cli with this exact evidence. Done is inconsistent with that call and with R-a; partial with surface-only matches. |  |
-| vscode | partial | Only an already-published artifact can be previewed (opened in the browser); an unpublished HTML artifact opens as read-only source. | ui |
 
 Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1800-1812`, `apps/web/features/chat/components/SandboxedIframe.tsx:217-229`, `infrastructure/sandbox/index.html:459-462`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:638-639`
 
@@ -142,7 +141,6 @@ Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1800-1812
 | desktop | partial | The cited SandboxedIframe branch (src=sandboxOrigin, 217-229) exists only when getSandboxOrigin() returns a value from NEXT_PUBLIC_SANDBOX_ORIGIN (artifact-sandbox.ts:24-43); otherwise the component renders the srcDoc fallback (236-250), and fallbackWillRunScripts (75-77) marks any document with an inline script as dead because the page CSP in proxy.ts:39 allows only nonce'd scripts. A live, interactive preview is therefore off by default behind an env gate; whether production sets it is S96.16's open production-state question. Hosted-web inherits the same gate. |  |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | The cited lines open a browser URL: the share page when published, else the web conversation (browse_url, artifacts.rs:449-459). For an unpublished artifact that is a link-out to the web app, which the same auditor scored as partial/surface-only on S26.14 cli with this exact evidence. Done is inconsistent with that call and with R-a; partial with surface-only matches. |  |
-| vscode | partial | Only an already-published React artifact can be opened (in the browser); otherwise it opens as source. | ui |
 
 Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1800-1812`, `infrastructure/sandbox/index.html:360-383`, `apps/web/features/chat/components/SandboxedIframe.tsx:217-229`, `apps/cli/src/lib.rs:1955-1975`
 
@@ -150,14 +148,14 @@ Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1800-1812
 
 - Done when: Runtime errors in the preview appear as an overlay with a way to recover.
 - Wave: 3
+- Already works on: web
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The panel (View source / Retry) appears only when the sandbox's own render step throws. A React artifact that throws shows raw error text inside the frame, and errors after the first render are never reported. | states |
 | desktop | partial | Same as web (hosted): only sandbox render-step failures reach the error panel. | states |
 | mobile | partial | Only a failed Mermaid diagram shows a message ("Could not render this diagram."); there is no error panel with View source or Retry. | states |
 
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1776-1799`, `apps/web/features/chat/components/SandboxedIframe.tsx:160-168`, `infrastructure/sandbox/index.html:376-383`, `apps/mobile/src/features/chat/components/sandboxedArtifactHtml.ts:32-35`
+Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1776-1799`, `apps/web/features/chat/components/SandboxedIframe.tsx:160-168`, `apps/mobile/src/features/chat/components/sandboxedArtifactHtml.ts:32-35`, `apps/mobile/src/features/chat/components/SafeArtifactPreview.tsx:30-36`
 
 ## S28.18: Preview reload.
 

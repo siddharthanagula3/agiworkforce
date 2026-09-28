@@ -5,7 +5,11 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { CreateConversationSchema } from '@/lib/validations/chat';
-import { CONVERSATION_WORK_MODE_SELECT, type ChatConversationRow } from '@/lib/server/neon-chat';
+import {
+  CONVERSATION_NEEDS_YOU_SELECT,
+  CONVERSATION_WORK_MODE_SELECT,
+  type ChatConversationRow,
+} from '@/lib/server/neon-chat';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { buildPage, decodeKeysetCursor, keysetSql } from '@/lib/identity/pagination';
 import { assertSessionInvariants } from '@agiworkforce/types';
@@ -109,7 +113,8 @@ async function handleGetConversations(request: NextRequest) {
             select id, organization_id, title, model, to_jsonb(web_conversations)->>'selected_route_id' as selected_route_id, project_id, pinned, starred, archived, is_temporary, created_at, updated_at, deleted_at,
               (case when pinned then '1' else '0' end)
                 || to_char(updated_at at time zone 'utc', ${PAGE_SORT_KEY_FORMAT}) as ${PAGE_SORT_COLUMN},
-              ${CONVERSATION_WORK_MODE_SELECT}
+              ${CONVERSATION_WORK_MODE_SELECT},
+              ${CONVERSATION_NEEDS_YOU_SELECT}
             from web_conversations
             where ${where.join(' and ')}
           ) conversations

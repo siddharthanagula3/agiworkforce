@@ -82,97 +82,88 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:577-583
 
 - Done when: The user can insert a chart built from sheet data into the workbook.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Charts exist only when the assistant creates a new .xlsx (one bar/line/pie chart per sheet); the product cannot show the workbook or insert a chart into an existing one. | ui |
-| desktop | partial | Charts exist only when the assistant creates a new .xlsx (one bar/line/pie chart per sheet); the product cannot show the workbook or insert a chart into an existing one. | ui |
 | mobile | partial | Only the assistant office-file tool can add one chart per sheet at creation; no in-app chart insertion. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | Only the assistant office-file tool can add one chart per sheet at creation; no in-app chart insertion. Chrome offers the tool only when the prompt names an Office file (no toggle). | ui |
 
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:868-875`, `apps/web/features/chat/components/messages/MessageBubble.tsx:2286-2301`, `apps/web/lib/services/managed-office-file-service.ts:67-80`, `apps/web/lib/services/managed-workbook-builder.ts:218-231`
+Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1756`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:195-203`, `apps/web/lib/services/managed-office-file-service.ts:67-80`, `apps/web/lib/services/managed-workbook-builder.ts:218-231`
 
 ## S29.18: Chart-type selector.
 
 - Done when: The user can pick or change a chart type from a selector.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The chart type (bar, line or pie) is chosen by the assistant in the tool call; there is no selector for the user, and the chart renderer shows the type as a read-only label. | ui |
-| desktop | partial | The chart type (bar, line or pie) is chosen by the assistant in the tool call; there is no selector for the user, and the chart renderer shows the type as a read-only label. | ui |
 | mobile | partial | Chart type is chosen by the assistant (bar/line/pie); no user selector. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | Chart type is chosen by the assistant (bar/line/pie); no user selector. Chrome offers the tool only when the prompt names an Office file (no toggle). | ui |
 
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:868-875`, `apps/web/features/chat/components/messages/MessageBubble.tsx:2286-2301`, `apps/web/lib/services/managed-office-file-service.ts:221-226`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:1868-1880`
+Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1756`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:195-203`, `apps/web/lib/services/managed-office-file-service.ts:221-226`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:577-583`
 
 ## S29.19: Chart data-range editor.
 
 - Done when: The user can view and edit the cell range a chart plots.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The data range (category/value columns, first and last row) is set by the assistant in the tool call; no editor exists to view or change it. | ui |
-| desktop | partial | The data range (category/value columns, first and last row) is set by the assistant in the tool call; no editor exists to view or change it. | ui |
 | mobile | partial | Range set only by the assistant in the tool call; no editor. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | Range set only by the assistant in the tool call; no editor. Chrome offers the tool only when the prompt names an Office file (no toggle). | ui |
 
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:868-875`, `apps/web/features/chat/components/messages/MessageBubble.tsx:2286-2301`, `apps/web/lib/services/managed-office-file-service.ts:227-234`, `apps/web/lib/services/managed-workbook-builder.ts:75-86`
+Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1756`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:195-203`, `apps/web/lib/services/managed-office-file-service.ts:227-234`, `apps/web/lib/services/managed-workbook-builder.ts:75-86`
 
 ## S29.27: Python analysis panel.
 
 - Done when: A panel lets the user run Python analysis on data and see code, output and charts.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Python runs only when the assistant calls code execution; the output block (stdout, stderr, images) shows in the transcript, and there is no panel where the user writes or reruns analysis code. | ui |
-| desktop | partial | Python runs only when the assistant calls code execution; the output block (stdout, stderr, images) shows in the transcript, and there is no panel where the user writes or reruns analysis code. | ui |
 | mobile | partial | Code execution output appears only as a tool row in the transcript timeline; no analysis panel. | ui |
 | cli | partial | The agent can run Python only through its general shell tool (text output in the transcript) and can edit .ipynb cells without running them; no analysis panel, no chart display. | ui |
-| vscode | partial | The sidebar drives the local CLI runtime, whose general shell tool can run Python with text output only; no analysis panel or chart display in the extension. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/messages/MessageBubble.tsx:1994-2000`, `apps/web/features/chat/components/messages/CodeExecutionBlock.tsx:74-78`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4440-4452`, `apps/mobile/src/features/chat/utils/toolCallAccumulator.ts:97-110`
+Code: `apps/mobile/src/features/chat/utils/toolCallAccumulator.ts:97-110`, `apps/mobile/src/features/chat/components/ToolCallTimeline.tsx:389-408`, `apps/cli/src/features/exec/tools/mod.rs:548-554`, `apps/cli/src/features/exec/tools/mod.rs:616-622`
 
 ## S29.28: Query-result table.
 
 - Done when: Results of a query or analysis appear in a sortable result table.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Results reach a table only if the assistant writes a CSV file (e.g. from code execution), shown in the read-only sortable CSV viewer; no query panel feeds a result grid. | ui |
-| desktop | partial | Results reach a table only if the assistant writes a CSV file (e.g. from code execution), shown in the read-only sortable CSV viewer; no query panel feeds a result grid. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1040-1046`, `packages/ui/unified-chat/src/components/artifact-components/SpreadsheetArtifact.tsx:175-179`, `apps/web/features/chat/components/messages/MessageBubble.tsx:320-327`
-
 ## S29.34: Export workbook.
 
 - Done when: The user can export data or a sheet as a downloadable .xlsx workbook.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | An .xlsx is produced only by asking the assistant; tables and CSV artifacts offer no Export-to-XLSX action (the download menu has CSV only, and the Library omits Excel on purpose). | ui |
-| desktop | partial | An .xlsx is produced only by asking the assistant; tables and CSV artifacts offer no Export-to-XLSX action (the download menu has CSV only, and the Library omits Excel on purpose). | ui |
 | mobile | partial | An .xlsx comes only from the assistant tool; no export action on tables. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | An .xlsx comes only from the assistant tool; no export action on tables. Chrome offers the tool only when the prompt names an Office file (no toggle). | ui |
 
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:868-875`, `apps/web/features/chat/components/messages/MessageBubble.tsx:2286-2301`, `apps/web/lib/services/managed-office-file-service.ts:106-111`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:1868-1880`
+Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1756`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:195-203`, `apps/web/lib/services/managed-office-file-service.ts:106-111`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:577-583`
 
 ## S29.35: Export CSV.
 
@@ -208,30 +199,28 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1756`, `apps/mobile/sr
 
 - Done when: From an analysis, the user can get a formatted report document (docx or pdf).
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | A DOCX or PDF report is produced only by asking the assistant to call the office-file tool; there is no Report-from-analysis action. | ui |
-| desktop | partial | A DOCX or PDF report is produced only by asking the assistant to call the office-file tool; there is no Report-from-analysis action. | ui |
 | mobile | partial | Report only via the assistant office-file tool; no dedicated action. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | Report only via the assistant office-file tool; no dedicated action. Chrome offers the tool only when the prompt names an Office file (no toggle). | ui |
 
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:868-875`, `apps/web/features/chat/components/messages/MessageBubble.tsx:2286-2301`, `apps/web/lib/services/managed-office-file-service.ts:408-412`, `apps/web/lib/services/managed-office-file-service.ts:644-648`
+Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1756`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:195-203`, `apps/web/lib/services/managed-office-file-service.ts:408-412`, `apps/web/lib/services/managed-office-file-service.ts:644-648`
 
 ## S29.39: Generate slides from analysis.
 
 - Done when: From an analysis, the user can get a slide deck (pptx).
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | A PPTX is produced only by asking the assistant; slides are title plus bullets with no charts or tables from the analysis. | ui |
-| desktop | partial | A PPTX is produced only by asking the assistant; slides are title plus bullets with no charts or tables from the analysis. | ui |
 | mobile | partial | Deck only via the assistant office-file tool (bullets only); no dedicated action. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | Deck only via the assistant office-file tool (bullets only); no dedicated action. Chrome offers the tool only when the prompt names an Office file (no toggle). | ui |
 
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:868-875`, `apps/web/features/chat/components/messages/MessageBubble.tsx:2286-2301`, `apps/web/lib/services/managed-office-file-service.ts:513-524`, `apps/web/lib/services/managed-office-file-service.ts:59-63`
+Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1756`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:195-203`, `apps/web/lib/services/managed-office-file-service.ts:513-524`, `apps/web/lib/services/managed-office-file-service.ts:59-63`

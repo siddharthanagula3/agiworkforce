@@ -22,58 +22,19 @@ nothing is left.
 
 Code: `apps/web/app/api/me/route.ts:228-236`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:879-886`
 
-## S78.02: Model-dependent composer controls.
-
-- Done when: Composer controls (effort, thinking, attachment options) appear, change or disappear according to the selected model.
-- Wave: 3
-- Already works on: web, desktop, mobile, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | The TUI effort picker is offered for every model; no composer control changes with the selected model. | ui |
-| vscode | partial | The effort control is shown or hidden per provider, not from the selected model's capabilities. | ui |
-
-Code: `apps/cli/src/models/streaming.rs:347-352`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:678-686`
-
 ## S78.03: Model-dependent accepted-file types.
 
 - Done when: Which files the composer accepts (or how it reacts to them) depends on what the selected model can read.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | On-device chat switches to a vision model when an image is attached, but the cloud composer accepts the same files for every model and relies on the server refusal. | ui |
-| cli | partial | The CLI shows a V (vision) flag in `agi models list`, but attachments are not filtered or refused by the selected model on the client. | handler |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/model-picker/localModelRuntime.ts:60-62`, `apps/mobile/services/streaming.ts:167-167`, `apps/cli/src/provider.rs:264-265`
-
-## S78.04: Model-dependent reasoning options.
-
-- Done when: The reasoning/effort options offered match the selected model, and unsupported levels are not sent.
-- Wave: 3
-- Already works on: web, desktop, mobile, chrome, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | The CLI sends the chosen effort to every model without checking which efforts that model supports. | handler |
-| vscode | partial | Effort is offered per provider rather than from each model's registry effort levels. | ui |
-
-Code: `apps/cli/src/models/streaming.rs:347-352`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:678-686`
-
-## S78.05: Model-dependent sampling options.
-
-- Done when: Sampling options offered or sent depend on the selected model.
-- Wave: 3
-- Already works on: api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | A configured temperature is silently dropped for models that reject sampling; the CLI never tells the user or hides the setting for those models. | ui |
-
-Code: `apps/cli/src/config.rs:89-89`, `apps/cli/src/models/streaming.rs:301-306`
+Code: `apps/mobile/src/features/model-picker/localModelRuntime.ts:60-62`, `apps/mobile/services/streaming.ts:167-167`
 
 ## S78.06: Model-dependent media settings.
 
@@ -97,26 +58,24 @@ Code: `apps/cli/src/lib.rs:943-951`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile shows invite and member-management controls from the plan flag canManageTeam, not the member's role; non-admins are refused only by the server (members.manage). | ui |
+| mobile | partial | Gating member controls on the current user's owner/admin role is in post-codex/chat-gates-s78.10-mobile-role-controls.patch (workspace.tsx is Codex-held). | ui |
 
-Code: `apps/mobile/app/(app)/settings/workspace.tsx:268-268`, `apps/web/app/api/settings/team/route.ts:131-136`
+Code: `apps/mobile/app/(app)/settings/workspace.tsx:269-269`
 
 ## S78.11: Regional restrictions.
 
 - Done when: Features or routes restricted by region are enforced and the restriction is visible to the user.
 - Wave: 3
-- Already works on: api
+- Already works on: web, desktop, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Routing enforces the workspace residency region and excludes non-US vendor hosts, but nothing tells the user; the US-only preference has an endpoint (/api/me/routing-preferences) and no settings control. | ui |
-| desktop | partial | Routing enforces the workspace residency region and excludes non-US vendor hosts, but nothing tells the user; the US-only preference has an endpoint (/api/me/routing-preferences) and no settings control. | ui |
 | mobile | partial | The cited mobile evidence is the first-run age gate whose threshold varies by region: that is an age-eligibility rule (S78.12), not a feature or route restricted by region. The regional restriction that exists (workspace residency routing, non-US host exclusion) is enforced server-side and never shown on mobile, exactly the state that makes the web cell partial. Partial with miss ui; remaining: show the residency restriction to the user. |  |
 | cli | partial | Server routing applies the workspace residency region to this surface's requests, but the surface never shows or explains a regional restriction. | ui |
 | vscode | partial | Server routing applies the workspace residency region to this surface's requests, but the surface never shows or explains a regional restriction. | ui |
 | chrome | partial | Server routing applies the workspace residency region to this surface's requests, but the surface never shows or explains a regional restriction. | ui |
 
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:1904-1912`, `packages/ai/routing/src/auto.ts:1024-1034`, `apps/mobile/src/features/auth/services/ageGate.ts:128-135`, `apps/mobile/src/features/auth/services/rootRouting.ts:28-28`
+Code: `apps/mobile/src/features/auth/services/ageGate.ts:128-135`, `apps/mobile/src/features/auth/services/rootRouting.ts:28-28`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:1904-1912`, `apps/cli/src/provider.rs:260-267`
 
 ## S78.12: Age or account eligibility restrictions.
 
@@ -253,19 +212,6 @@ Code: `apps/extension/src/features/cloud-bridge/managedModelPicker.ts:94-106`
 
 Code: `apps/web/app/api/code/sessions/route.ts:132-135`, `apps/mobile/src/features/companion/components/ConnectionStateViews.tsx:69-71`, `apps/cli/src/context_handoff.rs:1-5`
 
-## S78.24: Explicit processing-path selection.
-
-- Done when: The user can explicitly choose where a request is processed (local model, own key, managed cloud).
-- Wave: 3
-- Already works on: desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | In a normal browser the web app offers only the managed cloud path; the Local path appears in the picker only when the page runs inside the desktop app. | ui |
-| chrome | partial | Side-panel chat always takes the managed cloud path; there is no in-panel choice of Local or BYOK. | ui |
-
-Code: `apps/web/features/chat/components/Composer/ComposerFooter.tsx:167-167`, `apps/web/features/desktop-host/lib/runtime-client.ts:386-389`, `apps/extension/src/features/cloud-bridge/managedChatRouting.ts:28-30`
-
 ## S78.25: Attachment-preservation choice after model change.
 
 - Done when: After switching to a model that cannot use the current attachments, the user chooses to keep them (by switching model) or remove them.
@@ -278,34 +224,6 @@ Code: `apps/web/features/chat/components/Composer/ComposerFooter.tsx:167-167`, `
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-## S78.26: Unsupported-parameter removal or correction.
-
-- Done when: Parameters the chosen model cannot take are removed or corrected before the request is sent.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Effort is corrected per provider, not per model, so an unsupported level can still be sent to a model in a supporting provider. | ui |
-
-Code: `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:678-686`
-
-## S78.27: Effective-capability inspector.
-
-- Done when: A view shows what is effectively available to this user on this surface and why anything is not.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | The model catalogue shows each model's capabilities and whether your plan admits it, but no view shows feature availability across plan, policy, surface and device with the reason. | ui |
-| desktop | partial | The model catalogue shows each model's capabilities and whether your plan admits it, but no view shows feature availability across plan, policy, surface and device with the reason. | ui |
-| mobile | partial | The Capabilities screen lists what AGI can use with on/off states, but it does not read the server capability document or say which layer (plan, policy, device) blocks something. | ui |
-| cli | missing | Not built on this surface. |  |
-| vscode | partial | Upgrade to partial (miss ui) for consistency with the web cell: the VS Code picker names why each locked model is unavailable on this session (sign in, upgrade, provider key via modelLockForRoute) and the settings webview has a read-only "Resolved entitlement" diagnostics card with the resolved tier. Remaining: no view lists feature availability across plan, policy, surface and runtime with reasons; the diagnostics card is developer-only. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/ModelCatalogue.tsx:227-229`, `apps/web/features/chat/components/Composer/ModelCatalogue.tsx:64-64`, `apps/mobile/src/features/settings/capabilities/index.tsx:230-232`
 
 ## S78.28: Live updates after a plan, policy, connection, or device change.
 

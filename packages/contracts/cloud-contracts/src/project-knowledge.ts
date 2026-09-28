@@ -80,6 +80,9 @@ export const ManagedCloudProjectKnowledgeRegisterRequestSchema = z.object({
   sourceSurface: z.enum(['web', 'desktop', 'mobile']),
   storageUri: z.string().min(1),
 });
+export type ManagedCloudProjectKnowledgeRegisterRequest = z.infer<
+  typeof ManagedCloudProjectKnowledgeRegisterRequestSchema
+>;
 
 export const ManagedCloudProjectKnowledgeRegisterResponseSchema = z.object({
   file: ManagedCloudProjectKnowledgeFileSchema,

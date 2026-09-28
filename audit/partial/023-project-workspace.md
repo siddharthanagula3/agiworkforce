@@ -75,13 +75,13 @@ Code: `apps/extension-vscode/src/features/projects/projectActions.ts:120-120`, `
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Sources are uploaded files and pasted text only: Google Drive and Slack just open connector setup and nothing is imported from them. And every source upload hits the knowledge-storage cap defect (0 bytes for never-paid Free users and Team seat members). | handler, api |
-| desktop | partial | Sources are uploaded files and pasted text only: Google Drive and Slack just open connector setup and nothing is imported from them. And every source upload hits the knowledge-storage cap defect (0 bytes for never-paid Free users and Team seat members). | handler, api |
+| web | partial | Google Drive files are picked with the Google Picker and added as project sources through the upload pipeline (partials/privacy bd63f0822, e562a9956, c07ecd0ad; Drive only for unshared projects as in Claude, support.claude.com/en/articles/10166901). Needs owner settings GOOGLE_PICKER_API_KEY and GOOGLE_PICKER_APP_ID (same Google Cloud project as the Drive connector OAuth client) and a live check of the Picker under the page CSP. Slack as a project source is declined (no leader offers it); the knowledge-storage cap now reads the entitled plan. | config |
+| desktop | partial | Google Drive files are picked with the Google Picker and added as project sources through the upload pipeline (partials/privacy bd63f0822, e562a9956, c07ecd0ad; Drive only for unshared projects as in Claude, support.claude.com/en/articles/10166901). Needs owner settings GOOGLE_PICKER_API_KEY and GOOGLE_PICKER_APP_ID (same Google Cloud project as the Drive connector OAuth client) and a live check of the Picker under the page CSP. Slack as a project source is declined (no leader offers it); the knowledge-storage cap now reads the entitled plan. | config |
 | mobile | partial | Mobile adds picked files as sources, but has no text or connected-service sources, and uploads hit the same 0-byte cap for never-paid Free users and Team seat members. | handler, ui |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/projects/components/SourcesPanel.tsx:590-596`, `apps/web/features/projects/components/AddSourcesModal.tsx:277-283`, `apps/web/features/projects/components/SourcesPanel.tsx:149-155`, `apps/web/app/api/projects/[id]/knowledge-files/route.ts:381-384`
+Code: `apps/web/app/api/projects/[id]/knowledge-files/google-drive/route.ts:123-123`, `apps/web/features/projects/components/AddSourcesModal.tsx:295-295`, `apps/web/features/projects/lib/google-drive-picker.ts:82-82`, `apps/mobile/src/features/projects/components/ProjectSourcesTab.tsx:199-199`
 
 ## S23.09: Project instructions.
 
@@ -163,17 +163,6 @@ Code: `apps/mobile/src/features/tasks/components/StartWorkSheet.tsx:165-175`, `a
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S23.16: Default model/profile.
-
-- Done when: A project can set a default model (or profile) that new chats in it start with.
-- Wave: 3
-- Already works on: vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | VS Code already stores a project default model on the account (S79.03); web and desktop must show and apply it. The earlier decline is withdrawn so all our surfaces agree. | ui |
-| desktop | partial | VS Code already stores a project default model on the account (S79.03); web and desktop must show and apply it. The earlier decline is withdrawn so all our surfaces agree. | ui |
-
 ## S23.17: Default tools and Skills.
 
 - Done when: A project can set which tools and Skills are on by default for chats in it.
@@ -206,17 +195,14 @@ Code: `apps/cli/src/skills.rs:191-204`, `apps/cli/src/app_server/surfaces.rs:132
 
 - Done when: A project shows who can access it (owner and members) and a member can see a project is shared with them.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The owner (with sharing.manage) sees every member by name with their access in the project's Share dialog; members without that permission still see no member list, because member names are returned only to sharing managers. | ui |
-| desktop | partial | The owner (with sharing.manage) sees every member by name with their access in the project's Share dialog; members without that permission still see no member list, because member names are returned only to sharing managers. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/projects/components/ProjectShareDialog.tsx:120-120`, `apps/web/features/settings/sections/OrganizationSharingSection.tsx:315-318`
 
 ## S23.22: Member roles.
 
