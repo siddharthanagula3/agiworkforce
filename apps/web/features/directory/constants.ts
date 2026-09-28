@@ -117,6 +117,9 @@ export const PLUGIN_COUNT_SUFFIX = 'plugins';
 export const PLUGIN_CATEGORY_GROUP_LABEL = 'Category';
 export const PLUGIN_PUBLISHER_GROUP_LABEL = 'Publisher';
 export const PLUGIN_PUBLISHER_MORE_HEADING_PREFIX = 'Plugins by';
+export const PLUGIN_PERMISSIONS_NOTICE_PREFIX = 'It says it needs these permissions:';
+export const PLUGIN_PERMISSIONS_NOTICE_SUFFIX =
+  'Installing it accepts them, and you can remove it at any time.';
 export const PLUGIN_PUBLISHER_KIND_LABELS: Readonly<Record<string, string>> = {
   'first-party': 'First-party',
   partner: 'Partner',
