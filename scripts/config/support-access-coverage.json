@@ -16,6 +16,10 @@
       "serves": "submitted_to_platform",
       "reason": "A member filed the report and chose the excerpt it carries, which is the queue trust and safety works."
     },
+    "apps/web/app/api/admin/copyright-notices/route.ts": {
+      "serves": "submitted_to_platform",
+      "reason": "Copyright and rights notices that rights holders filed with us through the public form, and the operator decisions on them; no workspace content is read."
+    },
     "apps/web/app/api/admin/cost-operations/route.ts": {
       "serves": "platform_only",
       "reason": "What the platform paid providers. Aggregates, no tenant content."

@@ -1773,7 +1773,7 @@
         "desktop": {
           "state": "present",
           "via": "import",
-          "entry": "apps/desktop/electron/remote/remoteControlHost.ts",
+          "entry": "apps/desktop/electron/remote/remoteControlService.ts",
           "mount": "apps/desktop/electron/runtime/dispatcher.ts"
         },
         "mobile": {
@@ -1787,8 +1787,10 @@
           "why": "Nothing under apps/cli/src is a remote-control host or client."
         },
         "vscode": {
-          "state": "absent",
-          "why": "Nothing under apps/extension-vscode/src is a remote-control host or client."
+          "state": "present",
+          "via": "import",
+          "entry": "apps/extension-vscode/src/features/remote-control/remoteControlService.ts",
+          "mount": "apps/extension-vscode/src/features/remote-control/index.ts"
         },
         "chrome": {
           "state": "absent",

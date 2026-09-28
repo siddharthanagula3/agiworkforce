@@ -5,7 +5,6 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
-import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
 import { collectMessageResearchSources } from '@/features/chat/utils/research-sources';
 import {
   FOLLOW_UP_SUGGESTIONS_METADATA_KEY,
@@ -18,8 +17,7 @@ type RouteContext = { params: Promise<{ id: string; messageId: string }> };
 function cachedSuggestions(metadata: Record<string, unknown> | null): string[] | null {
   const stored = metadata?.[FOLLOW_UP_SUGGESTIONS_METADATA_KEY];
   if (!Array.isArray(stored)) return null;
-  const suggestions = stored.filter((entry): entry is string => typeof entry === 'string');
-  return suggestions.length > 0 ? suggestions : null;
+  return stored.filter((entry): entry is string => typeof entry === 'string');
 }
 
 async function handleGenerateFollowUps(request: NextRequest, context: RouteContext) {
@@ -33,8 +31,8 @@ async function handleGenerateFollowUps(request: NextRequest, context: RouteConte
 
   const { id: conversationId, messageId } = await context.params;
 
-  const [conversation] = await db.query<{ id: string }>(
-    `select id
+  const [conversation] = await db.query<{ id: string; is_temporary: boolean }>(
+    `select id, is_temporary
        from web_conversations
       where id = $1
         and user_id = $2
@@ -44,6 +42,7 @@ async function handleGenerateFollowUps(request: NextRequest, context: RouteConte
     [conversationId, userId, organizationId],
   );
   if (!conversation) throw createError.notFound('Conversation not found');
+  if (conversation.is_temporary) return NextResponse.json({ suggestions: [], cached: false });
 
   const [message] = await db.query<{
     content: string;
@@ -65,25 +64,16 @@ async function handleGenerateFollowUps(request: NextRequest, context: RouteConte
   if (cached) return NextResponse.json({ suggestions: cached, cached: true });
 
   const { searchSources } = collectMessageResearchSources(message.metadata ?? undefined);
-  if (searchSources.length === 0) {
-    return NextResponse.json({ suggestions: [], cached: false });
-  }
-
   const suggestions = await generateFollowUpSuggestions({
     db,
     userId,
     organizationId,
-    planTier: await resolveEntitledPlanTier(db, userId),
     conversationId,
     messageId,
     answer: message.content,
     sourceTitles: searchSources.map((source) => source.title || source.url),
     signal: request.signal,
   });
-
-  if (suggestions.length === 0) {
-    return NextResponse.json({ suggestions: [], cached: false });
-  }
 
   // Cached on the turn that produced them so a reload never pays for a second
   // generation. A failed write costs a regeneration, never the answer.

@@ -2,6 +2,7 @@ import {
   createManagedCloudSchedulesClient,
   ManagedCloudSchedulesHttpError,
   MANAGED_CLOUD_SCHEDULES_DEFAULT_PAGE_SIZE,
+  type ManagedCloudScheduleMutation,
   type ManagedCloudScheduleRun,
   type ManagedCloudScheduleRunApproval,
   type ManagedCloudSchedulesClient,
@@ -107,6 +108,18 @@ export async function listChromeSchedules(
   );
   if (result.status === 'error') return result;
   return { status: 'success', schedules: result.value.schedules };
+}
+
+export async function createChromeSchedule(
+  input: ManagedCloudScheduleMutation,
+  options: { signal?: AbortSignal } = {},
+  dependencies: Partial<ChromeSchedulesDependencies> = {},
+): Promise<ChromeScheduleResult> {
+  const result = await withSchedulesClient(dependencies, options.signal, (client) =>
+    client.createSchedule(input, options.signal),
+  );
+  if (result.status === 'error') return result;
+  return { status: 'success', schedule: result.value };
 }
 
 export async function setChromeScheduleEnabled(
