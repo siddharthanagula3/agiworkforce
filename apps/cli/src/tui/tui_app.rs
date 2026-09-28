@@ -173,6 +173,8 @@ struct ToolCell {
     timing: ToolTiming,
     full_output: Option<String>,
     accent: Option<Color>,
+    exit_code: Option<i32>,
+    stderr: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -283,6 +285,12 @@ fn tool_cell_lines(cell: &ToolCell, spinner_char: &str) -> Vec<Line<'static>> {
             Style::default().fg(ui_muted()),
         ));
     }
+    if let Some(code) = cell.exit_code {
+        spans.push(Span::styled(
+            format!("  exit {code}"),
+            Style::default().fg(if code == 0 { ui_success() } else { ui_danger() }),
+        ));
+    }
     let mut lines = vec![Line::from(spans)];
     let expanded = EXPAND_TOOL_OUTPUT.load(std::sync::atomic::Ordering::Relaxed);
     match (&cell.full_output, &cell.output_preview) {
@@ -306,6 +314,35 @@ fn tool_cell_lines(cell: &ToolCell, spinner_char: &str) -> Vec<Line<'static>> {
             Span::styled(preview.clone(), Style::default().fg(ui_muted())),
         ])),
         _ => {}
+    }
+    if let Some(stderr) = &cell.stderr {
+        let shown = if expanded {
+            EXPANDED_TOOL_OUTPUT_LINES
+        } else {
+            1
+        };
+        for (index, line) in stderr.lines().take(shown).enumerate() {
+            lines.push(Line::from(vec![
+                Span::styled(
+                    if index == 0 {
+                        "    stderr "
+                    } else {
+                        "           "
+                    },
+                    Style::default()
+                        .fg(ui_danger())
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(line.to_string(), Style::default().fg(ui_danger())),
+            ]));
+        }
+        let total = stderr.lines().count();
+        if total > shown {
+            lines.push(Line::from(Span::styled(
+                format!("           … {} more stderr lines", total - shown),
+                Style::default().fg(ui_muted()),
+            )));
+        }
     }
     lines
 }
@@ -1849,6 +1886,25 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
     // (running → succeeded/failed), instead of vanishing into swallowed stderr.
     if !ctx.tool_cells.is_empty() {
         lines.push(Line::from(""));
+        let running: Vec<&ToolCell> = ctx
+            .tool_cells
+            .iter()
+            .filter(|cell| cell.state == crate::tui::transcript_cell::TranscriptCellState::Running)
+            .collect();
+        if running.len() > 1 {
+            let what = if running
+                .iter()
+                .all(|cell| matches!(cell.name.as_str(), "task" | "agent"))
+            {
+                "subagents"
+            } else {
+                "tools"
+            };
+            lines.push(Line::from(Span::styled(
+                format!("  ⧉ {} {what} working at once", running.len()),
+                Style::default().fg(ui_accent()),
+            )));
+        }
         for cell in ctx.tool_cells {
             lines.extend(tool_cell_lines(cell, ctx.spinner_char));
         }
@@ -5920,6 +5976,8 @@ fn apply_tool_event(cells: &mut Vec<ToolCell>, ev: crate::tui::app_event::TuiApp
                 timing: ToolTiming::Running(Instant::now()),
                 full_output: None,
                 accent,
+                exit_code: None,
+                stderr: None,
             });
         }
         TuiAppEvent::ToolCompleted {
@@ -5935,13 +5993,42 @@ fn apply_tool_event(cells: &mut Vec<ToolCell>, ev: crate::tui::app_event::TuiApp
                     ToolStatus::Cancelled => TranscriptCellState::Cancelled,
                     _ => TranscriptCellState::Complete,
                 };
-                cell.output_preview = compact_tool_output_preview(&output);
+                let (exit_code, output, stderr) = if tool_type_icon(&cell.name) == "$" {
+                    split_command_output(&output)
+                } else {
+                    (None, output.as_str(), None)
+                };
+                cell.exit_code = exit_code;
+                cell.stderr = stderr
+                    .map(|stderr| sanitize_terminal_text(stderr.trim_end()).into_owned())
+                    .filter(|stderr| !stderr.is_empty());
+                cell.output_preview = compact_tool_output_preview(output);
                 cell.timing = ToolTiming::Finished(duration_ms);
                 cell.full_output = Some(sanitize_terminal_text(output.trim_end()).into_owned())
                     .filter(|output| !output.is_empty());
             }
         }
         _ => {}
+    }
+}
+
+fn split_command_output(output: &str) -> (Option<i32>, &str, Option<&str>) {
+    let (exit_code, rest) = match output.split_once('\n') {
+        Some((first, rest)) => match first
+            .strip_prefix("Exit code: ")
+            .and_then(|code| code.trim().parse().ok())
+        {
+            Some(code) => (Some(code), rest),
+            None => (None, output),
+        },
+        None => (None, output),
+    };
+    if let Some(stderr) = rest.strip_prefix("[stderr]\n") {
+        return (exit_code, "", Some(stderr));
+    }
+    match rest.split_once("\n[stderr]\n") {
+        Some((stdout, stderr)) => (exit_code, stdout, Some(stderr)),
+        None => (exit_code, rest, None),
     }
 }
 
@@ -6578,6 +6665,8 @@ mod tests {
             timing: ToolTiming::default(),
             full_output: None,
             accent: None,
+            exit_code: None,
+            stderr: None,
         };
         let t = line0(&edit);
         assert!(
@@ -6595,6 +6684,8 @@ mod tests {
             timing: ToolTiming::default(),
             full_output: None,
             accent: None,
+            exit_code: None,
+            stderr: None,
         };
         assert!(
             line0(&cmd).contains("$ ls -la"),
@@ -6612,6 +6703,8 @@ mod tests {
             timing: ToolTiming::default(),
             full_output: None,
             accent: None,
+            exit_code: None,
+            stderr: None,
         };
         let f = line0(&fail);
         assert!(f.contains('✗') && f.contains('▤'), "got: {f}");
@@ -8693,6 +8786,8 @@ mod tests {
             timing: ToolTiming::default(),
             full_output: None,
             accent: None,
+            exit_code: None,
+            stderr: None,
         }];
         let stream_buffer = format!("streaming {ESCAPE_PAYLOAD}tokens");
         let statusline_cfg = crate::tui::widgets::statusline_setup::StatusLineConfig::default();
