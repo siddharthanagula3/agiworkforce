@@ -30,17 +30,35 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+const PLURAL_KEY = /^(.+)_(zero|one|two|few|many|other)$/u;
+
+function pluralBase(key: string): string | undefined {
+  return PLURAL_KEY.exec(key)?.[1];
+}
+
 describe('catalogs', () => {
-  it('keeps every catalog at key parity with English', () => {
-    const english = catalogFor(DEFAULT_LOCALE);
-    expect(english).toBeDefined();
-    const englishKeys = Object.keys(english ?? {}).sort();
-    expect(englishKeys.length).toBeGreaterThan(0);
+  it('keeps every catalog at key parity with English, with the plural forms its language uses', () => {
+    const english = catalogFor(DEFAULT_LOCALE) ?? {};
+    const singular = Object.keys(english).filter((key) => pluralBase(key) === undefined);
+    const bases = [
+      ...new Set(
+        Object.keys(english)
+          .map(pluralBase)
+          .filter((base): base is string => base !== undefined),
+      ),
+    ];
+    expect(singular.length).toBeGreaterThan(0);
+    expect(bases.length).toBeGreaterThan(0);
 
     for (const locale of SUPPORTED_LOCALES) {
       const catalog = catalogFor(locale);
       expect(catalog, `${locale}.ts is missing`).toBeDefined();
-      expect(Object.keys(catalog ?? {}).sort(), `${locale}.ts key parity`).toEqual(englishKeys);
+      const categories = new Intl.PluralRules(locale).resolvedOptions().pluralCategories;
+      const expected = [
+        ...singular,
+        ...bases.flatMap((base) => categories.map((category) => `${base}_${category}`)),
+      ].sort();
+      expect(Object.keys(catalog ?? {}).sort(), `${locale}.ts key parity`).toEqual(expected);
       for (const [key, value] of Object.entries(catalog ?? {})) {
         expect(value.trim(), `${locale}.ts: ${key} is blank`).not.toBe('');
       }
@@ -51,11 +69,13 @@ describe('catalogs', () => {
     const english = catalogFor(DEFAULT_LOCALE) ?? {};
     for (const locale of SUPPORTED_LOCALES) {
       const catalog = catalogFor(locale) ?? {};
-      for (const [key, template] of Object.entries(english)) {
-        for (const placeholder of template.match(/\{[a-zA-Z]+\}/gu) ?? []) {
-          expect(catalog[key], `${locale}.ts: ${key} dropped ${placeholder}`).toContain(
-            placeholder,
-          );
+      for (const [key, template] of Object.entries(catalog)) {
+        const base = pluralBase(key);
+        const source = base === undefined ? english[key] : english[`${base}_other`];
+        const countMayBeWord = /_(zero|one|two)$/u.test(key);
+        for (const placeholder of source?.match(/\{[a-zA-Z]+\}/gu) ?? []) {
+          if (countMayBeWord && placeholder === '{count}') continue;
+          expect(template, `${locale}.ts: ${key} dropped ${placeholder}`).toContain(placeholder);
         }
       }
     }

@@ -343,10 +343,10 @@ export function openConnectorsSurface(provider: TreeSource): Promise<void> {
   });
 }
 
-export function openMemorySurface(provider: TreeSource): Promise<void> {
+export function openMemorySurface(provider: TreeSource, placeholder: string): Promise<void> {
   return showSurfaceQuickPick({
     title: 'AGI Workforce, Memory',
-    placeholder: 'Your account memory, shared with every AGI client…',
+    placeholder,
     provider,
     rowActions: MEMORY_ROW_ACTIONS,
     titleActions: MEMORY_TITLE_ACTIONS,

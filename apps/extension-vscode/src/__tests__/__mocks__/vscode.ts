@@ -613,6 +613,7 @@ export const chat = {
   createChatParticipant: vi.fn((_id: string, _handler: unknown) => ({
     iconPath: undefined,
     followupProvider: undefined,
+    onDidReceiveFeedback: vi.fn(() => ({ dispose: vi.fn() })),
     dispose: vi.fn(),
   })),
 };
