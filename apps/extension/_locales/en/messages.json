@@ -3302,5 +3302,113 @@
   "spPaletteMenuDetail": {
     "message": "Menu",
     "description": "Marks a command palette entry that opens a section of the side panel menu"
+  },
+  "spMenuHelp": {
+    "message": "Help",
+    "description": "Side panel menu section with help links and keyboard shortcuts"
+  },
+  "spHelpCenter": {
+    "message": "Help center",
+    "description": "Opens the help center on the web"
+  },
+  "spHelpCenterDetail": {
+    "message": "Answers to common questions.",
+    "description": "Describes the help center link"
+  },
+  "spHelpDocs": {
+    "message": "Documentation",
+    "description": "Opens the documentation on the web"
+  },
+  "spHelpDocsDetail": {
+    "message": "Guides for every surface, from chat to the CLI.",
+    "description": "Describes the documentation link"
+  },
+  "spHelpContact": {
+    "message": "Contact support",
+    "description": "Opens the support page on the web"
+  },
+  "spHelpContactDetail": {
+    "message": "Reach a person about your account.",
+    "description": "Describes the contact support link"
+  },
+  "spHelpReportBug": {
+    "message": "Report a bug",
+    "description": "Opens the bug report form on the web"
+  },
+  "spHelpReportBugDetail": {
+    "message": "Tell us what broke and how to reproduce it.",
+    "description": "Describes the bug report link"
+  },
+  "spHelpStatus": {
+    "message": "System status",
+    "description": "Opens the service status page"
+  },
+  "spHelpStatusDetail": {
+    "message": "Current availability of managed services.",
+    "description": "Describes the status page link"
+  },
+  "spHelpReleaseNotes": {
+    "message": "Release notes",
+    "description": "Opens the changelog on the web"
+  },
+  "spHelpReleaseNotesDetail": {
+    "message": "What shipped, and when.",
+    "description": "Describes the release notes link"
+  },
+  "spHelpShortcutsTitle": {
+    "message": "Keyboard shortcuts",
+    "description": "Heading of the keyboard shortcut list in the Help menu"
+  },
+  "spHelpShortcutsChange": {
+    "message": "Change browser shortcuts",
+    "description": "Opens Chrome's page for editing extension shortcuts"
+  },
+  "spHelpKeyCtrl": {
+    "message": "Ctrl",
+    "description": "Name of the Control key in a shortcut"
+  },
+  "spHelpKeyEnter": {
+    "message": "Enter",
+    "description": "Name of the Enter key in a shortcut"
+  },
+  "spHelpKeyShift": {
+    "message": "Shift",
+    "description": "Name of the Shift key in a shortcut"
+  },
+  "spHelpKeyEscape": {
+    "message": "Esc",
+    "description": "Name of the Escape key in a shortcut"
+  },
+  "spHelpShortcutPalette": {
+    "message": "Search commands and chats",
+    "description": "What the command palette shortcut does"
+  },
+  "spHelpShortcutSend": {
+    "message": "Send the message",
+    "description": "What Enter does in the composer"
+  },
+  "spHelpShortcutNewLine": {
+    "message": "Start a new line",
+    "description": "What Shift Enter does in the composer"
+  },
+  "spHelpShortcutSlash": {
+    "message": "Prompts and saved shortcuts",
+    "description": "What typing a slash in the composer opens"
+  },
+  "spHelpShortcutMention": {
+    "message": "Attach a tab or choose a project",
+    "description": "What typing @ in the composer opens"
+  },
+  "spHelpShortcutEscape": {
+    "message": "Close a menu or dialog",
+    "description": "What Escape does in the side panel"
+  },
+  "spHelpShortcutOpenPanel": {
+    "message": "Open the side panel",
+    "description": "What the browser shortcut for the extension does"
+  },
+  "spHelpShortcutCapture": {
+    "message": "Capture the page",
+    "description": "What the page capture browser shortcut does"
   }
 }
