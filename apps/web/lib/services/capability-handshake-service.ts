@@ -75,7 +75,7 @@ import {
 
 type CatalogModelCapabilityKey = Extract<
   keyof ModelCapabilities,
-  'search' | 'research' | 'codeExecution'
+  'search' | 'research' | 'codeExecution' | 'agentic' | 'videoGen'
 >;
 
 function catalogHasModelWithCapability(key: CatalogModelCapabilityKey): boolean {
@@ -93,6 +93,8 @@ function buildModelLayerGrant(cloudExecutionDeploymentEnabled: boolean): Capabil
   }
   if (!catalogHasModelWithCapability('search')) granted.delete('canUseWebSearch');
   if (!catalogHasModelWithCapability('research')) granted.delete('canUseDeepResearch');
+  if (!catalogHasModelWithCapability('agentic')) granted.delete('canUseAgiWork');
+  if (!catalogHasModelWithCapability('videoGen')) granted.delete('canUseVideoGeneration');
   return { layer: 'model', sourceId: `models.json@${modelsCatalog.version}`, granted };
 }
 
@@ -103,7 +105,11 @@ function buildTierLayerGrant(tier: string | null | undefined): CapabilityLayerGr
   if (!policy.allowVoice) granted.delete('canUseVoice');
   if (!policy.allowMCP) granted.delete('canUseConnectors');
   if (!canUseBillingPlanCapability(tier, 'deep_research')) granted.delete('canUseDeepResearch');
+  if (!canUseBillingPlanCapability(tier, 'agi_work')) granted.delete('canUseAgiWork');
   if (!canUseBillingPlanCapability(tier, 'image_generation')) granted.delete('canUseImages');
+  if (!canUseBillingPlanCapability(tier, 'video_generation')) {
+    granted.delete('canUseVideoGeneration');
+  }
   return { layer: 'tier', sourceId: `tier:${policy.tier}`, granted };
 }
 
@@ -240,7 +246,7 @@ function buildLimits(
   ) {
     limits.push({
       id: 'video_seconds_per_month',
-      capabilityId: null,
+      capabilityId: 'canUseVideoGeneration',
       limit: policy.videoSecondsPerMonth,
       unit: 'video_seconds',
       window: 'month',
