@@ -43,6 +43,7 @@ import type {
   SkillListResponse,
   SlashCommandListResponse,
   SlashCommandRunResponse,
+  ThreadRewindParams,
 } from '@agiworkforce/types/protocol';
 import type {
   DeveloperSessionHandoff,
@@ -218,8 +219,39 @@ const threadListResponseSchema = z.object({
   threads: z.array(threadSummarySchema),
   nextCursor: z.string().optional(),
 });
+const developerStepStatusSchema = z.enum([
+  'pending',
+  'in_progress',
+  'done',
+  'blocked',
+  'skipped',
+  'superseded',
+]);
+
 const threadReadResponseSchema = z.object({
   thread: threadSummarySchema,
+  plan: z
+    .array(
+      z.object({
+        description: z.string().max(4_000),
+        status: developerStepStatusSchema,
+        notes: z.string().max(8_000).optional(),
+      }),
+    )
+    .max(200)
+    .optional()
+    .catch(undefined),
+  todos: z
+    .array(
+      z.object({
+        content: z.string().max(4_000),
+        status: developerStepStatusSchema,
+        priority: z.string().max(40),
+      }),
+    )
+    .max(500)
+    .optional()
+    .catch(undefined),
   messages: z
     .array(
       z.object({
@@ -263,6 +295,36 @@ const threadReadResponseSchema = z.object({
     .optional()
     .catch(undefined),
 });
+const threadCheckpointsResponseSchema = z.object({
+  checkpoints: z
+    .array(
+      z.object({
+        checkpointIndex: z.number().int().nonnegative(),
+        createdAt: z.string().max(64),
+        prompt: z.string().max(1_000_000),
+        messageIndex: z.number().int().nonnegative().optional(),
+        trackedFiles: z.number().int().nonnegative(),
+      }),
+    )
+    .max(10_000),
+});
+
+export type ThreadCheckpointList = z.infer<typeof threadCheckpointsResponseSchema>;
+
+const threadRewindResponseSchema = z.object({
+  thread: threadSummarySchema,
+  prompt: z.string().max(1_000_000),
+  conversationRestored: z.boolean(),
+  restoredFiles: z.array(z.string().max(16_384)).max(10_000).default([]),
+  removedFiles: z.array(z.string().max(16_384)).max(10_000).default([]),
+  skippedFiles: z
+    .array(z.object({ path: z.string().max(16_384), reason: z.string().max(8_192) }))
+    .max(10_000)
+    .default([]),
+});
+
+export type ThreadRewindOutcome = z.infer<typeof threadRewindResponseSchema>;
+
 const hostModelSummarySchema = z.object({
   id: z.string().min(1),
   provider: z.string().min(1),
@@ -1031,6 +1093,28 @@ export class LocalRuntimeClient {
       );
     }
     await connection.request('thread/delete', { threadId });
+  }
+
+  async offersCheckpoints(): Promise<boolean> {
+    return (await this.initialize()).capabilities.checkpoints === true;
+  }
+
+  async listCheckpoints(threadId: string): Promise<ThreadCheckpointList> {
+    const connection = await this.readyConnection();
+    if (!(await this.offersCheckpoints())) {
+      throw new Error('The installed AGI CLI keeps no checkpoints. Update the AGI CLI to rewind.');
+    }
+    return threadCheckpointsResponseSchema.parse(
+      await connection.request('thread/checkpoints', { threadId }),
+    );
+  }
+
+  async rewindThread(params: ThreadRewindParams): Promise<ThreadRewindOutcome> {
+    const connection = await this.readyConnection();
+    if (!(await this.offersCheckpoints())) {
+      throw new Error('The installed AGI CLI keeps no checkpoints. Update the AGI CLI to rewind.');
+    }
+    return threadRewindResponseSchema.parse(await connection.request('thread/rewind', params));
   }
 
   async startTurn(params: TurnStartParams): Promise<TurnSummary> {

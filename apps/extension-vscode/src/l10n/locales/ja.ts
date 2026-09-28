@@ -296,6 +296,11 @@ const ja = {
   'webview.moreLinesHidden_other': 'ほか {count} 行は非表示',
   'mcp.connected_other':
     'AGI Workforce: {name} に {ms} ミリ秒で接続しました。{count} 個のツールを利用できます。',
+  'checkpoints.trackedFiles_other': '追跡中のファイル {count} 個',
+  'checkpoints.skippedFiles_other':
+    'AGI Workforce: {count} 個のファイルを復元できませんでした: {files}',
+  'checkpoints.filesRestored_other':
+    'AGI Workforce: {count} 個のファイルをチェックポイントの状態に戻しました。',
 };
 
 export default ja;

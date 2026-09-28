@@ -342,6 +342,12 @@ const en = {
   'webview.moreLinesHidden_other': '{count} more lines not shown',
   'mcp.connected_one': 'AGI Workforce: {name} connected in {ms} ms and offers {count} tool.',
   'mcp.connected_other': 'AGI Workforce: {name} connected in {ms} ms and offers {count} tools.',
+  'checkpoints.trackedFiles_one': '{count} file tracked',
+  'checkpoints.trackedFiles_other': '{count} files tracked',
+  'checkpoints.skippedFiles_one': 'AGI Workforce: {count} file could not be restored: {files}',
+  'checkpoints.skippedFiles_other': 'AGI Workforce: {count} files could not be restored: {files}',
+  'checkpoints.filesRestored_one': 'AGI Workforce: {count} file went back to the checkpoint.',
+  'checkpoints.filesRestored_other': 'AGI Workforce: {count} files went back to the checkpoint.',
 };
 
 export default en;

@@ -46,6 +46,8 @@ import {
   LocalRuntimeProtocolError,
   type LocalRuntimeClient,
   type LocalRuntimeEvent,
+  type ThreadCheckpointList,
+  type ThreadRewindOutcome,
 } from '../../integrations/localRuntimeClient';
 import {
   assertRunnableStartedThread,
@@ -127,6 +129,7 @@ import {
 } from '../chat-participant/promptReferences';
 import {
   parsePlanVisualization,
+  planFromThread,
   type PlanVisualization,
 } from '../../integrations/planVisualization';
 import { getTokenCounter } from '../../data/tokenCounter';
@@ -167,6 +170,32 @@ const PLAN_REFUSAL: ChatErrorHint = { category: 'subscription', action: 'upgrade
 const MODEL_UNAVAILABLE: ChatErrorHint = { category: 'provider', action: 'switch-model' };
 
 const MANAGE_TRUST_LABEL = 'Manage Trust';
+const REWIND = 'Rewind';
+
+const REWIND_CHOICES = [
+  {
+    label: 'Restore code and conversation',
+    restore: 'both',
+    consequence:
+      'Files the agent changed after this point go back to how they were, and every later message is removed from the session. This cannot be undone.',
+  },
+  {
+    label: 'Restore conversation',
+    restore: 'conversation',
+    consequence:
+      'Every later message is removed from the session. Files stay as they are now. This cannot be undone.',
+  },
+  {
+    label: 'Restore code',
+    restore: 'code',
+    consequence:
+      'Files the agent changed after this point go back to how they were. The conversation stays as it is.',
+  },
+] as const;
+
+function checkpointLabel(prompt: string): string {
+  return prompt.split('\n')[0]?.trim() || 'Checkpoint';
+}
 
 export type WebviewToExtMessage =
   | {
@@ -314,6 +343,7 @@ export type ExtToWebviewMessage =
         provider?: string;
         transcriptTruncated: boolean;
         messages: Array<{ role: 'user' | 'assistant'; text: string; rating?: AnswerRating }>;
+        plan?: PlanVisualization;
       };
     }
   | {
@@ -1846,6 +1876,7 @@ export class ChatStateManager {
         runtime: resolved.runtime,
       };
 
+      const plan = planFromThread(resolved.response.plan, resolved.response.todos);
       const messages = normalizeTranscriptMessages(resolved.response.messages).map((message) => {
         if (message.role !== 'assistant') return message;
         const rating = rememberedAnswerRating(
@@ -1862,6 +1893,7 @@ export class ChatStateManager {
         ...(resumed.provider === undefined ? {} : { provider: resumed.provider }),
         transcriptTruncated: resolved.response.transcriptTruncated,
         messages,
+        ...(plan === undefined ? {} : { plan }),
       };
       this._postLoadedConversation();
       this._post({ type: 'model', payload: { model } });
@@ -2120,6 +2152,96 @@ export class ChatStateManager {
   /** The CLI session this chat is running in, when one has been opened. */
   activeThreadId(): string | undefined {
     return this._thread?.id;
+  }
+
+  async checkpointsAvailable(): Promise<boolean> {
+    const thread = this._thread;
+    if (thread === undefined) return false;
+    try {
+      return await thread.runtime.offersCheckpoints();
+    } catch {
+      return false;
+    }
+  }
+
+  async showCheckpoints(): Promise<void> {
+    const thread = this._thread;
+    if (thread === undefined) {
+      void vscode.window.showInformationMessage(
+        'AGI Workforce: open a developer session to see its checkpoints.',
+      );
+      return;
+    }
+    let listed: ThreadCheckpointList;
+    try {
+      listed = await thread.runtime.listCheckpoints(thread.id);
+    } catch (error) {
+      void vscode.window.showErrorMessage(
+        `AGI Workforce: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return;
+    }
+    if (listed.checkpoints.length === 0) {
+      void vscode.window.showInformationMessage(
+        'AGI Workforce: this session has no checkpoints yet. One is saved with each prompt.',
+      );
+      return;
+    }
+    const picked = await vscode.window.showQuickPick(
+      [...listed.checkpoints].reverse().map((checkpoint) => ({
+        label: checkpointLabel(checkpoint.prompt),
+        description: new Date(checkpoint.createdAt).toLocaleString(),
+        detail: tPlural('checkpoints.trackedFiles', checkpoint.trackedFiles),
+        checkpoint,
+      })),
+      { title: 'AGI Workforce, Checkpoints', placeHolder: 'Pick the prompt to go back to' },
+    );
+    if (picked === undefined) return;
+    const choice = await vscode.window.showQuickPick(REWIND_CHOICES, {
+      title: `AGI Workforce, Rewind to “${picked.label}”`,
+      placeHolder: 'What goes back to this point',
+    });
+    if (choice === undefined) return;
+    const confirmed = await vscode.window.showWarningMessage(
+      `Rewind to “${picked.label}”?`,
+      { modal: true, detail: choice.consequence },
+      REWIND,
+    );
+    if (confirmed !== REWIND || this._thread !== thread) return;
+    if (this._activeTurn?.threadId === thread.id) {
+      void vscode.window.showWarningMessage(
+        'AGI Workforce: stop the current response before rewinding this session.',
+      );
+      return;
+    }
+    let outcome: ThreadRewindOutcome;
+    try {
+      outcome = await thread.runtime.rewindThread({
+        threadId: thread.id,
+        checkpointIndex: picked.checkpoint.checkpointIndex,
+        restore: choice.restore,
+      });
+    } catch (error) {
+      void vscode.window.showErrorMessage(
+        `AGI Workforce: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return;
+    }
+    if (outcome.conversationRestored && (await this.resumeConversation(thread.id))) {
+      this._post({ type: 'composerDraft', payload: { text: outcome.prompt, references: [] } });
+    }
+    if (outcome.skippedFiles.length > 0) {
+      void vscode.window.showWarningMessage(
+        tPlural('checkpoints.skippedFiles', outcome.skippedFiles.length, {
+          files: outcome.skippedFiles.map((file) => `${file.path} (${file.reason})`).join(', '),
+        }),
+      );
+      return;
+    }
+    const changed = outcome.restoredFiles.length + outcome.removedFiles.length;
+    if (changed > 0) {
+      void vscode.window.showInformationMessage(tPlural('checkpoints.filesRestored', changed));
+    }
   }
 
   async activeThreadReceipt(): Promise<SessionReceipt | undefined> {

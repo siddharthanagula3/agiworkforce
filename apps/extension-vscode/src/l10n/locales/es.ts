@@ -442,6 +442,19 @@ const es = {
     'AGI Workforce: {name} se conectó en {ms} ms y ofrece {count} de herramientas.',
   'mcp.connected_other':
     'AGI Workforce: {name} se conectó en {ms} ms y ofrece {count} herramientas.',
+  'checkpoints.trackedFiles_one': '{count} archivo registrado',
+  'checkpoints.trackedFiles_many': '{count} de archivos registrados',
+  'checkpoints.trackedFiles_other': '{count} archivos registrados',
+  'checkpoints.skippedFiles_one': 'AGI Workforce: no se pudo restaurar {count} archivo: {files}',
+  'checkpoints.skippedFiles_many':
+    'AGI Workforce: no se pudieron restaurar {count} de archivos: {files}',
+  'checkpoints.skippedFiles_other':
+    'AGI Workforce: no se pudieron restaurar {count} archivos: {files}',
+  'checkpoints.filesRestored_one': 'AGI Workforce: {count} archivo volvió al punto de control.',
+  'checkpoints.filesRestored_many':
+    'AGI Workforce: {count} de archivos volvieron al punto de control.',
+  'checkpoints.filesRestored_other':
+    'AGI Workforce: {count} archivos volvieron al punto de control.',
 };
 
 export default es;
