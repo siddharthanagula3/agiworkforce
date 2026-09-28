@@ -10,41 +10,25 @@ nothing is left.
 
 - Done when: The user can view and edit their account profile (name, photo, email) on the surface, and the change is saved to the account.
 - Wave: 3
-- Already works on: web, desktop, vscode
+- Already works on: web, desktop, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | partials/auth 68949fe36: the Full Name field now saves to the account display name through PATCH /api/me; there is still no profile photo upload on mobile | ui |
 | cli | missing | Not built on this surface. |  |
-| chrome | partial | The side panel shows the signed-in name, email and initials read-only; name and photo can only be changed on the web, and Chrome has no link to that page. | ui |
 | api | partial | GET /api/me (documented) returns the profile; updating the name or photo (PATCH /api/me) works for signed-in clients but is not part of the documented public API. | api |
 
-Code: `apps/mobile/src/features/settings/personalization/index.tsx:334-334`, `apps/extension/src/side_panel.ts:8320-8325`, `apps/extension/src/features/cloud-bridge/clerkAuth.ts:215-228`, `apps/web/app/api/me/route.ts:347-347`
-
-## S85.02: Custom instructions.
-
-- Done when: The user can write custom instructions on the surface and they are applied to that surface's chats until changed or switched off.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | Chrome cannot view or edit custom instructions; ones saved on web or mobile are applied by the server to Chrome Managed Cloud chats. | ui |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2453-2461`, `apps/web/app/api/llm/v1/chat/completions/lib/request-surface.ts:24-33`
+Code: `apps/mobile/src/features/settings/personalization/index.tsx:334-334`, `apps/web/app/api/me/route.ts:347-347`
 
 ## S85.03: Communication style.
 
 - Done when: The user can choose how the assistant communicates (tone, length, formatting) on the surface and replies follow it.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli
+- Already works on: web, desktop, mobile, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Chrome has no style control; the style saved on web or mobile is applied by the server to Chrome Managed Cloud chats. | ui |
-
-Code: `apps/web/lib/server/user-identity.ts:214-227`, `apps/web/app/api/llm/v1/chat/completions/lib/request-surface.ts:24-33`
 
 ## S85.04: Writing-style personalization.
 
@@ -65,13 +49,12 @@ Code: `apps/cli/src/output_styles.rs:1-20`, `apps/cli/src/agent/mod.rs:1264-1279
 
 - Done when: The user can see, add, edit and delete saved memories on the surface and turn memory on or off, and saved memories are used in that surface's chats.
 - Wave: 3
-- Already works on: web, desktop, vscode
+- Already works on: web, desktop, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | In Cloud mode the "Memory" switch is only stored on the phone (never synced), so turning it off does not stop the server from reading or learning account memories; the "Search and reference chats" switch is what actually writes the account memory setting. | handler |
 | cli | partial | F1: the cited MemorySubcommand enum (lib.rs:1072-1089) has List, Add and Forget only; there is no edit and no way to turn account memory on or off in the CLI (no memory key in config.rs), while the criterion requires edit and an on/off switch. Memories are used (context_prompt injected into the system prompt), so partial. |  |
-| chrome | partial | F1: the cited side-panel memory section only lists, adds, edits and deletes memories; the extension has no memory on/off switch (no memory_enabled/memoryEnabled anywhere in apps/extension/src) and never sets chatRequest.memory_enabled, so the server-side 'memory_enabled === false' gate is unreachable from Chrome. The criterion requires an on/off control: partial. |  |
 
 Code: `apps/mobile/src/features/memory/components/MemoryControlsCard.tsx:41-72`, `apps/mobile/stores/settings/cloudSettingsStore.ts:79-84`, `apps/mobile/services/cloudSettingsMapping.ts:133-139`, `apps/cli/src/lib.rs:1072-1089`
 
@@ -79,15 +62,12 @@ Code: `apps/mobile/src/features/memory/components/MemoryControlsCard.tsx:41-72`,
 
 - Done when: The user can let the assistant search or reference their other chats when answering, and switch it off; temporary chats are never referenced.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Chrome has no switch; if "Search past chats" is on in web settings the server adds past-chat excerpts to Chrome Managed Cloud chats. | ui |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:1233-1259`, `apps/web/app/api/llm/v1/chat/completions/lib/request-surface.ts:24-33`
 
 ## S85.07: Project Memory preferences.
 

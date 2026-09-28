@@ -290,3 +290,10 @@ checked 2026-09-28); Gemini also keeps export to Sheets off its mobile app. The
 mobile app therefore keeps in-app file viewers, sharing settings, document
 editing, export to Sheets and dedicated report or deck actions off the phone
 (S25.02-S25.04, S26.31, S29.17-S29.19, S29.34, S29.38 and S29.39 mobile).
+
+## D-2026-09-28-17 No memory profile summary
+
+Claude lists memory as topics and shows no generated profile summary of the
+person (support.claude.com/en/articles/11817273, checked 2026-09-28), and the
+web and desktop apps show none either, so the mobile app does not add one
+(S39.07 mobile).

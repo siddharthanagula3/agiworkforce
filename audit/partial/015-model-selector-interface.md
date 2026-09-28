@@ -82,15 +82,12 @@ Code: `apps/mobile/src/features/model-picker/store.ts:189-203`, `apps/mobile/src
 
 - Done when: Models show which inputs they accept (e.g. images, audio) as badges.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Badge image input on cloud models too; only on-device models list "Vision" in their detail line. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/model-picker/service.ts:171-175`
 
 ## S15.13: Output-modality badges.
 
@@ -128,18 +125,6 @@ Code: `apps/mobile/src/features/model-picker/service.ts:171-175`
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-## S15.16: Relative speed information.
-
-- Done when: The selector tells the user which models are faster or slower.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Show relative speed per model; only the effort choices describe speed ("Faster and cheaper than the default"). | ui |
-
-Code: `apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx:48-48`
 
 ## S15.17: Relative usage or cost information.
 
@@ -192,16 +177,13 @@ Code: `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:11
 
 - Done when: A model that is temporarily unavailable is marked as such in the selector and cannot be picked by mistake.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mark cloud models that are down right now; only an on-device model that cannot run here shows "Device" and is disabled. | handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/model-picker/components/ModelRow.tsx:187-187`, `apps/mobile/src/features/model-picker/components/ModelRow.tsx:54-54`
 
 ## S15.23: Fast-serving option where supported.
 

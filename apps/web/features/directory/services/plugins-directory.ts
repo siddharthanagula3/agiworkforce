@@ -2,6 +2,7 @@ import {
   COMMUNITY_PLUGINS_PATH,
   MEMBER_ORGANIZATION_PLUGINS_PATH,
   PLUGIN_SUBMISSIONS_PATH,
+  pluginSubmissionPath,
   type CommunityPlugin,
   type CommunityPluginPatch,
   type CommunityPluginsResponse,
@@ -564,7 +565,7 @@ export async function submitPluginForReview(
 
 export async function withdrawPluginSubmission(id: string, csrfToken: string): Promise<void> {
   await sendJson(
-    `${PLUGIN_SUBMISSIONS_PATH}/${encodeURIComponent(id)}`,
+    pluginSubmissionPath(id),
     'DELETE',
     undefined,
     csrfToken,

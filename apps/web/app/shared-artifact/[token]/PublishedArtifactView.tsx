@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@agiworkforce/ui';
 import { MarkdownContent } from '@agiworkforce/unified-chat';
@@ -14,6 +15,8 @@ import {
   type PublishedArtifactKind,
 } from '@/features/chat/components/artifacts/publishedArtifactRender';
 import { usePublishedArtifactRuntime } from './usePublishedArtifactRuntime';
+import { copySharedArtifactToChat } from '@/features/chat/lib/copy-shared-artifact';
+import { toUserMessage } from '@/lib/user-error-message';
 
 /**
  * Public viewer for a published artifact (CAP-015 slice 2).
@@ -66,6 +69,9 @@ export function PublishedArtifactView({
   const runnable = kind === 'html' || kind === 'react';
   const runtime = usePublishedArtifactRuntime(runnable ? token : undefined);
   const [renderError, setRenderError] = useState<string | null>(null);
+  const router = useRouter();
+  const [copying, setCopying] = useState(false);
+  const [copyError, setCopyError] = useState<string | null>(null);
 
   const payload = useMemo(() => buildPublishedSandboxPayload(kind, content), [kind, content]);
   const fallbackSrcDoc = useMemo(
@@ -80,10 +86,51 @@ export function PublishedArtifactView({
   const publishedLabel = formatDate(publishedAt);
   const heading = title || t('artifactPublish.untitled', 'Published artifact');
 
+  const saveCopy = async () => {
+    setCopying(true);
+    setCopyError(null);
+    try {
+      const result = await copySharedArtifactToChat({ title: heading, kind, language, content });
+      if (result.kind === 'sign-in') {
+        const returnTo = token ? `/shared-artifact/${token}` : '/chat';
+        router.push(`/login?redirectTo=${encodeURIComponent(returnTo)}`);
+        return;
+      }
+      router.push(`/chat/${encodeURIComponent(result.conversationId)}`);
+    } catch (error) {
+      setCopyError(
+        toUserMessage(
+          error,
+          t('artifactPublish.saveCopyFailed', 'This artifact could not be copied.'),
+        ),
+      );
+    } finally {
+      setCopying(false);
+    }
+  };
+
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-4 px-4 py-8">
       <header className="flex flex-col gap-1">
-        <h1 className="text-h2 text-foreground">{heading}</h1>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h1 className="text-h2 text-foreground">{heading}</h1>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={copying}
+            onClick={() => void saveCopy()}
+            data-testid="published-artifact-save-copy"
+          >
+            {copying
+              ? t('artifactPublish.saveCopyBusy', 'Copying…')
+              : t('artifactPublish.saveCopy', 'Save a copy to my chats')}
+          </Button>
+        </div>
+        {copyError ? (
+          <p role="alert" className="text-xs text-danger">
+            {copyError}
+          </p>
+        ) : null}
         <p className="text-xs text-muted-foreground">
           {publishedLabel
             ? `${t('artifactPublish.publishedOn', 'Published {{date}}', { date: publishedLabel })} · `
