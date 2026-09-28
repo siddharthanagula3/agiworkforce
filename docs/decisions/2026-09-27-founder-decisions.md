@@ -125,6 +125,13 @@ build it, and the audit cell is recorded as not applicable by this decision.
   built, because ChatGPT has one. Per-image cost and remaining image counts
   (S44.14, S44.15), negative prompts (S44.13), a generation queue view (S44.16,
   S46.25), external image sharing (S44.31) and adding videos to projects (S46.34) are declined too.
+- **Connector reach (S55.10, S55.13-14 for non-OIDC providers, S55.25, S56.18-20
+  for Google Docs, Sheets, Slides and Office files, S57.18, S58.13).** ChatGPT
+  and Claude read Drive and Office files without editing them, generate no
+  video from a chat turn, pick no folders in-product, authorize no service
+  accounts, show the connected account only where sign-in returns it, and
+  remove and re-add a server rather than disable it
+  (support.claude.com/en/articles/11175166, checked 2026-09-28).
 
 ## D-2026-09-28-01 Authenticator app and backup codes are temporarily unavailable
 
@@ -170,3 +177,21 @@ worker models on web (S79.23), confidence-based abstention (S79.25), a
 classification adapter (S79.29), a routing evaluation screen (S79.31), video
 input (S76.12), a capability inspector (S78.27) or a user control for image
 detail (S76.05 outside the API).
+
+## D-2026-09-28-08 Connectors the leaders ship are built, including health and money
+
+Where ChatGPT or Claude ships a connector capability, it is built. The model
+can create and edit images in an ordinary chat turn, as ChatGPT Images does
+(help.openai.com/en/articles/11084440, checked 2026-09-28). Gmail can send,
+reply and forward with attachments after an approval every time, as Claude's
+Gmail connector does. Google Contacts can be searched, as in ChatGPT since
+August 2025. Health records connect as in ChatGPT Health (b.well) and Claude
+(HealthEx), and bank accounts connect read-only as in ChatGPT's personal
+finance experience (Plaid, June 2026). Health and bank connections are opt-in,
+read-only, United States only, never written to memory or used for training,
+and removed with their stored tokens on disconnect. They stay unavailable until
+the owner signs the vendor agreement and configures it, and a lawyer confirms
+whether the FTC Health Breach Notification Rule or the GLBA Safeguards Rule
+applies before either is switched on. The BigQuery server Google hosts is not
+pinned, because it requires the full BigQuery scope and the Google ceiling stays
+read-only; Snowflake and Databricks are added by account URL.
