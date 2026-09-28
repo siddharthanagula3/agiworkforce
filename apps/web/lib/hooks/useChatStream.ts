@@ -930,6 +930,7 @@ export const WEB_INTERACTIVE_CARD_KINDS = [
   'map-search.v1',
   'mcp-app.v1',
   'places.v1',
+  'product-comparison.v1',
 ] as const satisfies readonly KnownInteractiveCardKind[];
 
 export type WebInteractiveCardKind = (typeof WEB_INTERACTIVE_CARD_KINDS)[number];
