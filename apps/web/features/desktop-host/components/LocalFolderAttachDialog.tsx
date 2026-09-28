@@ -1,21 +1,24 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
 import {
   DesktopRuntimeError,
   type FileEntry,
+  type FileSearchMatch,
   type WorkspaceRoot,
 } from '@agiworkforce/local-runtime-contract';
 import { Spinner, useDialogKeyboard } from '@agiworkforce/ui';
 import { resolveChatAttachmentMimeType } from '@/lib/chat-attachment-policy';
 import {
+  findWorkspaceFilesByName,
   listWorkspaceFiles,
   listWorkspaceRoots,
   openWorkspacePath,
   pickWorkspaceRoot,
   readWorkspaceFile,
   revealWorkspacePath,
+  searchWorkspaceText,
 } from '../lib/runtime-client';
 
 const TITLE = 'Attach from a local folder';
@@ -26,8 +29,46 @@ const LOAD_FAILED = 'That folder could not be read.';
 const READ_FAILED = 'That file could not be read.';
 const OPEN_FAILED = 'That file could not be opened.';
 const REVEAL_FAILED = 'That file could not be shown in Finder.';
+const SEARCH_FAILED = 'That search did not finish.';
+const SEARCH_LABEL = 'Search this folder';
+const SEARCH_PLACEHOLDER = 'Search names and text';
+const SEARCHING_LABEL = 'Searching…';
+const NAME_MATCHES_HEADING = 'Matching names';
+const TEXT_MATCHES_HEADING = 'Matching text';
+const CLEAR_SEARCH_LABEL = 'Clear search';
 const PARENT_LABEL = 'Back';
 const ROOT_SEGMENT = '';
+const SUB_HEADING_CLASS = 'px-3 pt-2 text-xs font-medium text-muted-foreground';
+const FIELD_CLASS =
+  'min-h-[32px] min-w-0 flex-1 rounded-md border border-border/60 bg-background px-3 py-1 text-sm text-foreground outline-none focus-visible:border-[var(--chat-accent-primary)]';
+
+type AttachableEntry = Pick<FileEntry, 'name' | 'path'>;
+
+interface FolderSearchResults {
+  query: string;
+  names: FileEntry[];
+  textByFile: [string, FileSearchMatch[]][];
+}
+
+function baseName(path: string): string {
+  return path.slice(path.lastIndexOf('/') + 1);
+}
+
+function isAttachable(name: string): boolean {
+  return resolveChatAttachmentMimeType(name, ROOT_SEGMENT) !== null;
+}
+
+function groupTextMatches(
+  matches: FileSearchMatch[],
+  alreadyListed: ReadonlySet<string>,
+): [string, FileSearchMatch[]][] {
+  const byFile = new Map<string, FileSearchMatch[]>();
+  for (const match of matches) {
+    if (alreadyListed.has(match.path) || !isAttachable(baseName(match.path))) continue;
+    byFile.set(match.path, [...(byFile.get(match.path) ?? []), match]);
+  }
+  return [...byFile.entries()];
+}
 
 const BUTTON_CLASS =
   'min-h-[32px] rounded-md border border-border/60 px-3 py-1 text-xs text-foreground transition-colors hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-60';
@@ -68,8 +109,18 @@ export function LocalFolderAttachDialog({ open, onClose, onAttach }: LocalFolder
   const [loading, setLoading] = useState(false);
   const [reading, setReading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [searching, setSearching] = useState(false);
+  const [results, setResults] = useState<FolderSearchResults | null>(null);
+  const searchRun = useRef(0);
 
   useDialogKeyboard({ open, onClose, panelRef });
+
+  useEffect(() => {
+    searchRun.current += 1;
+    setSearching(false);
+    setResults(null);
+  }, [open, activeRoot, path]);
 
   useEffect(() => {
     if (!open) return;
@@ -101,14 +152,43 @@ export function LocalFolderAttachDialog({ open, onClose, onAttach }: LocalFolder
   }, [open, activeRoot, path]);
 
   const visible = useMemo(
-    () =>
-      entries.filter(
-        (entry) =>
-          entry.kind === 'directory' ||
-          resolveChatAttachmentMimeType(entry.name, ROOT_SEGMENT) !== null,
-      ),
+    () => entries.filter((entry) => entry.kind === 'directory' || isAttachable(entry.name)),
     [entries],
   );
+
+  const onSearch = useCallback(
+    async (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      const trimmed = query.trim();
+      if (!activeRoot || trimmed === '') return;
+      const run = ++searchRun.current;
+      setSearching(true);
+      try {
+        const nameHits = await findWorkspaceFilesByName(activeRoot.id, trimmed, path);
+        const textHits = await searchWorkspaceText(activeRoot.id, trimmed, path);
+        if (run !== searchRun.current) return;
+        const names = nameHits.filter((entry) => entry.kind === 'file' && isAttachable(entry.name));
+        setResults({
+          query: trimmed,
+          names,
+          textByFile: groupTextMatches(textHits, new Set(names.map((entry) => entry.path))),
+        });
+        setError(null);
+      } catch (cause) {
+        if (run === searchRun.current) setError(messageFor(cause, SEARCH_FAILED));
+      } finally {
+        if (run === searchRun.current) setSearching(false);
+      }
+    },
+    [activeRoot, path, query],
+  );
+
+  const onClearSearch = useCallback(() => {
+    searchRun.current += 1;
+    setSearching(false);
+    setResults(null);
+    setQuery('');
+  }, []);
 
   const onAddRoot = useCallback(async () => {
     try {
@@ -123,7 +203,7 @@ export function LocalFolderAttachDialog({ open, onClose, onAttach }: LocalFolder
   }, []);
 
   const onChooseFile = useCallback(
-    async (entry: FileEntry) => {
+    async (entry: AttachableEntry) => {
       if (!activeRoot) return;
       const mimeType = resolveChatAttachmentMimeType(entry.name, ROOT_SEGMENT);
       if (!mimeType) {
@@ -144,7 +224,7 @@ export function LocalFolderAttachDialog({ open, onClose, onAttach }: LocalFolder
   );
 
   const onOpenEntry = useCallback(
-    async (entry: FileEntry) => {
+    async (entry: AttachableEntry) => {
       if (!activeRoot) return;
       try {
         await openWorkspacePath(activeRoot.id, entry.path);
@@ -157,7 +237,7 @@ export function LocalFolderAttachDialog({ open, onClose, onAttach }: LocalFolder
   );
 
   const onRevealEntry = useCallback(
-    async (entry: FileEntry) => {
+    async (entry: AttachableEntry) => {
       if (!activeRoot) return;
       try {
         await revealWorkspacePath(activeRoot.id, entry.path);
@@ -170,6 +250,51 @@ export function LocalFolderAttachDialog({ open, onClose, onAttach }: LocalFolder
   );
 
   if (!open || typeof document === 'undefined') return null;
+
+  const entryRow = (
+    entry: AttachableEntry,
+    label: string,
+    options: { detail?: string; folder?: boolean } = {},
+  ) => (
+    <li key={entry.path} className="flex items-center gap-1">
+      <button
+        type="button"
+        disabled={reading !== null}
+        className={ENTRY_CLASS}
+        onClick={() => (options.folder ? setPath(entry.path) : void onChooseFile(entry))}
+      >
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="truncate">{label}</span>
+          {options.detail ? (
+            <span className="truncate font-mono text-xs text-muted-foreground">
+              {options.detail}
+            </span>
+          ) : null}
+        </span>
+        {options.folder ? (
+          <span className="text-xs text-muted-foreground">Folder</span>
+        ) : reading === entry.path ? (
+          <Spinner aria-label={`Reading ${entry.name}`} />
+        ) : null}
+      </button>
+      <button
+        type="button"
+        className={ROW_ACTION_CLASS}
+        aria-label={`Open ${entry.name} with the default app`}
+        onClick={() => void onOpenEntry(entry)}
+      >
+        Open
+      </button>
+      <button
+        type="button"
+        className={ROW_ACTION_CLASS}
+        aria-label={`Show ${entry.name} in Finder`}
+        onClick={() => void onRevealEntry(entry)}
+      >
+        Reveal
+      </button>
+    </li>
+  );
 
   /**
    * Portaled to the body, because the composer sits inside a transformed
@@ -236,8 +361,65 @@ export function LocalFolderAttachDialog({ open, onClose, onAttach }: LocalFolder
           </p>
         ) : null}
 
-        {loading ? (
-          <Spinner aria-label="Loading folder contents" />
+        {activeRoot ? (
+          <form
+            className="flex items-center gap-2"
+            role="search"
+            onSubmit={(event) => void onSearch(event)}
+          >
+            <input
+              type="search"
+              value={query}
+              aria-label={SEARCH_LABEL}
+              placeholder={SEARCH_PLACEHOLDER}
+              spellCheck={false}
+              className={FIELD_CLASS}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+            <button
+              type="submit"
+              className={BUTTON_CLASS}
+              disabled={searching || query.trim() === ''}
+            >
+              {searching ? SEARCHING_LABEL : 'Search'}
+            </button>
+          </form>
+        ) : null}
+
+        {loading || searching ? (
+          <Spinner aria-label={searching ? SEARCHING_LABEL : 'Loading folder contents'} />
+        ) : activeRoot && results ? (
+          <div className="flex min-h-0 flex-col gap-1">
+            <div className="flex items-center justify-between gap-2">
+              <p className="truncate text-xs text-muted-foreground">
+                {`Results for “${results.query}”`}
+              </p>
+              <button type="button" className={ROW_ACTION_CLASS} onClick={onClearSearch}>
+                {CLEAR_SEARCH_LABEL}
+              </button>
+            </div>
+            <ul className="flex list-none flex-col overflow-y-auto p-0">
+              {results.names.length === 0 && results.textByFile.length === 0 ? (
+                <li className="px-3 py-2 text-xs text-muted-foreground">
+                  {`No file here that can be attached matches “${results.query}”.`}
+                </li>
+              ) : null}
+              {results.names.length > 0 ? (
+                <li className={SUB_HEADING_CLASS}>{NAME_MATCHES_HEADING}</li>
+              ) : null}
+              {results.names.map((entry) => entryRow(entry, entry.path))}
+              {results.textByFile.length > 0 ? (
+                <li className={SUB_HEADING_CLASS}>{TEXT_MATCHES_HEADING}</li>
+              ) : null}
+              {results.textByFile.map(([filePath, matches]) =>
+                entryRow(
+                  { name: baseName(filePath), path: filePath },
+                  filePath,
+                  matches[0] ? { detail: `${matches[0].line}: ${matches[0].preview.trim()}` } : {},
+                ),
+              )}
+            </ul>
+          </div>
         ) : activeRoot ? (
           <ul className="flex list-none flex-col overflow-y-auto p-0">
             {path === ROOT_SEGMENT ? null : (
@@ -254,41 +436,9 @@ export function LocalFolderAttachDialog({ open, onClose, onAttach }: LocalFolder
             {visible.length === 0 ? (
               <li className="px-3 py-2 text-xs text-muted-foreground">{EMPTY_FOLDER_COPY}</li>
             ) : (
-              visible.map((entry) => (
-                <li key={entry.path} className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    disabled={reading !== null}
-                    className={ENTRY_CLASS}
-                    onClick={() =>
-                      entry.kind === 'directory' ? setPath(entry.path) : void onChooseFile(entry)
-                    }
-                  >
-                    <span className="flex-1 truncate">{entry.name}</span>
-                    {entry.kind === 'directory' ? (
-                      <span className="text-xs text-muted-foreground">Folder</span>
-                    ) : reading === entry.path ? (
-                      <Spinner aria-label={`Reading ${entry.name}`} />
-                    ) : null}
-                  </button>
-                  <button
-                    type="button"
-                    className={ROW_ACTION_CLASS}
-                    aria-label={`Open ${entry.name} with the default app`}
-                    onClick={() => void onOpenEntry(entry)}
-                  >
-                    Open
-                  </button>
-                  <button
-                    type="button"
-                    className={ROW_ACTION_CLASS}
-                    aria-label={`Show ${entry.name} in Finder`}
-                    onClick={() => void onRevealEntry(entry)}
-                  >
-                    Reveal
-                  </button>
-                </li>
-              ))
+              visible.map((entry) =>
+                entryRow(entry, entry.name, { folder: entry.kind === 'directory' }),
+              )
             )}
           </ul>
         ) : null}
