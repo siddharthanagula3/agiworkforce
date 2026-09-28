@@ -3,7 +3,7 @@ import type {
   GeneratedFileWire,
   ManagedCloudAgentRunReference,
 } from '@agiworkforce/cloud-contracts';
-import type { InteractiveCard } from '@agiworkforce/types';
+import type { AgentEventSource, InteractiveCard } from '@agiworkforce/types';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import { normalizeSourceUrlKey } from '@agiworkforce/utils/source-url';
 import type { ManagedCodeExecution, ManagedQuotaRecovery } from '../cloud-bridge/freeTrialClient';
@@ -21,10 +21,7 @@ export interface SidePanelPageReference {
   title: string;
 }
 
-export interface SidePanelSource {
-  url: string;
-  title: string;
-  snippet?: string;
+export interface SidePanelSource extends AgentEventSource {
   publishedDate?: string;
 }
 
