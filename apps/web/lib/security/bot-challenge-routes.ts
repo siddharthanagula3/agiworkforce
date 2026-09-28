@@ -10,6 +10,7 @@ export const BOT_CHALLENGED_ENDPOINTS = {
   supportHandoffCreate: { path: '/api/support/handoff', method: 'POST' },
   supportHandoffMessage: { path: '/api/support/handoff/*/messages', method: 'POST' },
   supportAppeal: { path: '/api/support/appeal', method: 'POST' },
+  supportRecovery: { path: '/api/support/recovery', method: 'POST' },
 } as const satisfies Record<string, BotChallengedEndpoint>;
 
 export const BOT_CHALLENGED_ROUTES: BotChallengedEndpoint[] =
