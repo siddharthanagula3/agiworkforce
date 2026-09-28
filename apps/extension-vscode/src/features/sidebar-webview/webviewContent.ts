@@ -517,7 +517,7 @@ export function getWebviewContent(
     #messages {
       flex: 1;
       overflow-y: auto;
-      padding: 10px 12px 16px;
+      padding: 10px max(12px, calc((100% - 768px) / 2)) 16px;
       display: flex;
       flex-direction: column;
       gap: 10px;
@@ -1231,11 +1231,19 @@ export function getWebviewContent(
     .message th, .message td { padding: 4px 10px; border: 1px solid var(--border); text-align: left; vertical-align: top; }
     .message th { background: var(--bg-overlay); font-weight: 600; }
     li { margin-left: 16px; list-style: disc; }
+    ol > li { list-style: decimal; }
     blockquote { border-left: 2px solid var(--accent-teal); padding-left: 8px; color: var(--text-secondary); margin: 6px 0; }
     .code-block-wrapper { position: relative; margin: 8px 0; }
     .code-block-wrapper pre { margin: 0; padding-top: 36px; }
     .code-block-actions { position: absolute; top: 5px; right: 5px; z-index: var(--z-content); display: flex; gap: 4px; }
     .code-lang { position: absolute; top: 4px; left: 8px; font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; }
+    .explain-btn { background: var(--vscode-button-secondaryBackground, var(--bg-overlay)); border: 1px solid var(--border); border-radius: var(--corner-compact); color: var(--vscode-button-secondaryForeground, var(--text-primary)); font-size: var(--type-label-size); line-height: var(--type-label-height); padding: 2px 8px; cursor: pointer; opacity: 0; transition: opacity var(--duration-quick); }
+    .code-block-wrapper:hover .explain-btn, .explain-btn:focus-visible { opacity: 1; }
+    .explain-btn:hover { background: var(--hover); color: var(--text-primary); }
+    .diff-add { display: inline-block; min-width: 100%; background: var(--vscode-diffEditor-insertedLineBackground, var(--vscode-diffEditor-insertedTextBackground)); }
+    .diff-del { display: inline-block; min-width: 100%; background: var(--vscode-diffEditor-removedLineBackground, var(--vscode-diffEditor-removedTextBackground)); }
+    .diff-hunk { color: var(--vscode-textLink-foreground); }
+    .diff-file { color: var(--text-secondary); font-weight: 600; }
     .copy-btn, .apply-btn { background: var(--vscode-button-secondaryBackground, var(--bg-overlay)); border: 1px solid var(--border); border-radius: var(--corner-compact); color: var(--vscode-button-secondaryForeground, var(--text-primary)); font-size: var(--type-label-size); line-height: var(--type-label-height); padding: 2px 8px; cursor: pointer; opacity: 0; transition: opacity var(--duration-quick); }
     .code-block-wrapper:hover .copy-btn, .code-block-wrapper:hover .apply-btn { opacity: 1; }
     .copy-btn:focus-visible, .apply-btn:focus-visible { opacity: 1; }
@@ -3776,6 +3784,13 @@ export function getWebviewContent(
       messageEl.appendChild(row);
     }
 
+    function prependAuthor(messageEl, label) {
+      var author = document.createElement('span');
+      author.className = 'visually-hidden';
+      author.textContent = label + ' ';
+      messageEl.insertBefore(author, messageEl.firstChild);
+    }
+
     function answerMeta(payload) {
       if (!payload || !payload.modelLabel) return null;
       var tokens = (payload.inputTokens || 0) + (payload.outputTokens || 0);
@@ -3852,6 +3867,11 @@ export function getWebviewContent(
 
     function setStreaming(value) {
       streaming = value;
+      if (!value && stopBtn && stopBtn.getAttribute('aria-busy') === 'true') {
+        stopBtn.removeAttribute('aria-busy');
+        stopBtn.setAttribute('aria-label', 'Stop response');
+        showFollowUpStatus('', 'queued', false);
+      }
       if (composerCard) composerCard.classList.toggle('is-streaming', value);
       sendBtn.disabled = runtimeBlock !== null;
       sendBtn.classList.toggle('follow-up', value);
@@ -4202,7 +4222,7 @@ export function getWebviewContent(
 
     function bindCodeBlockActions(rootEl) {
       if (!rootEl) return;
-      var btns = rootEl.querySelectorAll('.copy-btn, .apply-btn');
+      var btns = rootEl.querySelectorAll('.copy-btn, .apply-btn, .explain-btn');
       for (var i = 0; i < btns.length; i++) {
         var btn = btns[i];
         if (boundCodeActionButtons.has(btn)) continue;
@@ -4212,6 +4232,12 @@ export function getWebviewContent(
           var codeEl = getCodeBlock(b);
           if (!codeEl) return;
           var text = codeEl.textContent || '';
+          if (b.classList.contains('explain-btn')) {
+            var language = getCodeLanguage(codeEl) || '';
+            prefillComposer('Explain this code:\n\n' + '\u0060\u0060\u0060' + language + '\n' + text + '\n' + '\u0060\u0060\u0060');
+            sendMessage();
+            return;
+          }
           if (b.classList.contains('apply-btn')) {
             if (pendingApplyButton && pendingApplyButton !== b) {
               settleApplyButton('Failed', 'A newer diff proposal replaced this request.');
@@ -4349,7 +4375,7 @@ export function getWebviewContent(
       var clientMessageId = 'msg-' + Date.now() + '-' + (++clientMessageSeq);
       var userMessageEl = addMessage('user', text);
       userMessageEl.setAttribute('data-client-message-id', clientMessageId);
-      userMessageEl.setAttribute('aria-label', 'You said: ' + text);
+      prependAuthor(userMessageEl, 'You said:');
       appendSentContext(userMessageEl);
       if (isFollowUp) {
         userMessageEl.setAttribute('data-delivery-state', 'queued');
@@ -4395,6 +4421,10 @@ export function getWebviewContent(
     sendBtn.addEventListener('click', function() { sendMessage(); });
     if (stopBtn) {
       stopBtn.addEventListener('click', function() {
+        if (stopBtn.getAttribute('aria-busy') === 'true') return;
+        stopBtn.setAttribute('aria-busy', 'true');
+        stopBtn.setAttribute('aria-label', 'Stopping');
+        showFollowUpStatus('Stopping…', 'queued', true);
         vscode.postMessage({ type: 'cancel' });
       });
     }
@@ -5651,6 +5681,10 @@ export function getWebviewContent(
           // Content is already rendered; re-render once to ensure the final
           // token is flushed, then bind actions on any code blocks.
           currentAssistantEl.innerHTML = renderAssistant(accumulatedContent);
+          prependAuthor(
+            currentAssistantEl,
+            msg.payload && msg.payload.modelLabel ? 'AGI (' + msg.payload.modelLabel + ') replied:' : 'AGI replied:'
+          );
           bindCodeBlockActions(currentAssistantEl);
           appendMessageActions(currentAssistantEl, accumulatedContent, answerMeta(msg.payload));
         }
