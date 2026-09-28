@@ -249,7 +249,7 @@ function GeneratingCard({
       <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-foreground/[0.02] via-transparent to-foreground/[0.04]" />
 
       <div className="relative z-[var(--z-control)] flex flex-col items-center gap-2.5">
-        <Spinner aria-hidden="true" className="h-10 w-10 text-primary/60" />
+        <Spinner aria-hidden="true" className="h-10 w-10 text-muted-foreground" />
         <span className="text-sm font-medium text-foreground">Generating image</span>
         {modelLabel && (
           <span className="text-xs text-muted-foreground">Generating with {modelLabel}</span>

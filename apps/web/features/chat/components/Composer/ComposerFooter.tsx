@@ -395,7 +395,7 @@ function AutoRow({
         <span
           className={[
             PICKER_ROW_NAME_CLASS,
-            isSelected ? 'font-medium text-foreground' : 'text-foreground/85',
+            isSelected ? 'font-medium text-foreground' : 'text-foreground',
           ].join(' ')}
         >
           {auto.label}
@@ -439,7 +439,7 @@ function RoutingProfileRow({
         <span
           className={[
             PICKER_ROW_NAME_CLASS,
-            isSelected ? 'font-medium text-foreground' : 'text-foreground/85',
+            isSelected ? 'font-medium text-foreground' : 'text-foreground',
           ].join(' ')}
         >
           {label}
@@ -616,7 +616,7 @@ function ModelRow({
         className={[
           PICKER_ROW_NAME_CLASS,
           isLocked
-            ? 'text-foreground/60'
+            ? 'text-muted-foreground'
             : isSelected
               ? 'font-medium text-foreground'
               : 'font-normal text-foreground',

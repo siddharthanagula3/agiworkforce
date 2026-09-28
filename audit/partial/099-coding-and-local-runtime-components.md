@@ -17,17 +17,6 @@ nothing is left.
 
 Code: `crates/agiworkforce-app-server/src/lib.rs:199-205`, `apps/web/lib/services/cloud-code-session-service.ts:2039-2041`
 
-## S99.16: Worktree manager.
-
-- Done when: A worktree manager creates, lists and removes worktrees for isolated sessions.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | The CLI can create/list/remove worktrees (agent tools, REPL /worktree), but sessions are not bound to them and the app-server reports worktrees:false. | handler |
-
-Code: `apps/cli/src/platform/runtime/worktree.rs:105-113`, `apps/cli/src/app_server/developer_host.rs:376-376`
-
 ## S99.17: Terminal/PTY manager.
 
 - Done when: A terminal/PTY manager runs interactive shells with a real pseudo-terminal.

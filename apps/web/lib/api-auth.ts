@@ -45,6 +45,7 @@ export interface AuthResult {
   email?: string;
   surfaceClass?: 'developer';
   boundSurface?: BoundSurface;
+  apiKeyId?: string;
 }
 
 export interface AuthOptions {
@@ -295,7 +296,7 @@ async function verifyApiKey(
   try {
     const apiKey = await ApiKeyService.verifyKey(token);
     if (!apiKey) return null;
-    return { userId: apiKey.user_id, scopes: apiKey.scopes };
+    return { userId: apiKey.user_id, apiKeyId: apiKey.id, scopes: apiKey.scopes };
   } catch (error) {
     logger.error({ error }, 'API key verification failed');
     return null;
@@ -328,7 +329,7 @@ export async function getClerkAuthUser(
           options.mfaEnrollment,
         );
         await assertIpAllowList(result.userId, request);
-        return { userId: result.userId };
+        return { userId: result.userId, apiKeyId: result.apiKeyId };
       }
       await logAuthFailure(request, 'invalid_api_key');
       throw createError.unauthorized();
