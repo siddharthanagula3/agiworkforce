@@ -1,31 +1,135 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
 
 import { cn } from '../cn';
 import { toUserMessage } from '../lib/network-error';
 import { Spinner } from '../primitives/Spinner';
 import { Switch } from '../primitives/Switch';
 import {
+  CONNECT_LABEL,
   DIRECTORY_LOADING_LABEL,
   GENERIC_ERROR_COPY,
   INSTALLED_LABEL,
   INSTALL_LABEL,
+  PLUGIN_CONNECTOR_CONNECTED_LABEL,
+  PLUGIN_CONNECTOR_MISSING_LABEL,
+  SKILL_ACCESS_HEADING,
+  SKILL_ACCESS_LABEL,
+  SKILL_ACCESS_VALUE,
+  SKILL_ADDED_LABEL,
   SKILL_DESCRIPTION_LABEL,
   SKILL_ENABLED_HINT,
   SKILL_ENABLED_LABEL,
   SKILL_LICENSE_LABEL,
+  SKILL_REQUIRED_CONNECTORS_LABEL,
+  SKILL_REQUIRED_TOOLS_LABEL,
+  SKILL_SOURCE_LABEL,
   SKILL_TRY_IN_CHAT_LABEL,
+  SKILL_VERSION_LABEL,
   UNINSTALL_LABEL,
 } from './constants';
 import { DirectoryBackLink, DirectoryDetailHeader } from './DirectoryDetailHeader';
 import { isTextFile } from './highlight';
 import { SkillFileBody, SkillFileTree } from './SkillFileViewer';
-import { DIRECTORY_CREATE_BUTTON, DIRECTORY_FOCUS_RING } from './styles';
-import type { DirectorySkillDetail } from './types';
+import {
+  DETAIL_HEADING,
+  DETAIL_LABEL,
+  DIRECTORY_CREATE_BUTTON,
+  DIRECTORY_FOCUS_RING,
+} from './styles';
+import type { DirectoryPluginConnectorSetting, DirectorySkillDetail } from './types';
 
 const SKILL_DELETE_LABEL = 'Delete skill';
 const SKILL_DELETE_HINT = 'Deleting removes this skill for good. It cannot be recovered.';
+const EMPTY_TOOLS: readonly string[] = [];
+const EMPTY_CONNECTORS: readonly DirectoryPluginConnectorSetting[] = [];
+
+function formatAddedAt(value: string | undefined): string {
+  if (!value) return '';
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? '' : parsed.toLocaleDateString();
+}
+
+function AccessRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-1">
+      <dt className={DETAIL_LABEL}>{label}</dt>
+      <dd className="min-w-0 text-sm text-foreground">{children}</dd>
+    </div>
+  );
+}
+
+function SkillAccessSummary({
+  detail,
+  onOpenConnector,
+}: {
+  detail: DirectorySkillDetail;
+  onOpenConnector?: (connectorId: string) => void;
+}) {
+  const tools = detail.requiredTools ?? EMPTY_TOOLS;
+  const connectors = detail.requiredConnectors ?? EMPTY_CONNECTORS;
+  const added = formatAddedAt(detail.addedAt);
+  return (
+    <section className="flex flex-col gap-3" data-testid="skill-access-summary">
+      <h4 className={DETAIL_HEADING}>{SKILL_ACCESS_HEADING}</h4>
+      <dl className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
+        {detail.provenance ? (
+          <AccessRow label={SKILL_SOURCE_LABEL}>{detail.provenance}</AccessRow>
+        ) : null}
+        {added ? <AccessRow label={SKILL_ADDED_LABEL}>{added}</AccessRow> : null}
+        {detail.version ? (
+          <AccessRow label={SKILL_VERSION_LABEL}>{detail.version}</AccessRow>
+        ) : null}
+        {tools.length > 0 ? (
+          <AccessRow label={SKILL_REQUIRED_TOOLS_LABEL}>
+            <ul className="flex flex-wrap gap-1.5">
+              {tools.map((tool) => (
+                <li
+                  key={tool}
+                  className="truncate rounded-md bg-muted px-2.5 py-1.5 font-mono text-xs text-foreground"
+                  title={tool}
+                >
+                  {tool}
+                </li>
+              ))}
+            </ul>
+          </AccessRow>
+        ) : null}
+        {connectors.length > 0 ? (
+          <AccessRow label={SKILL_REQUIRED_CONNECTORS_LABEL}>
+            <ul className="flex flex-col gap-2">
+              {connectors.map((connector) => (
+                <li key={connector.id} className="flex min-w-0 items-center gap-3">
+                  <span className="min-w-0 flex-1 truncate">{connector.name}</span>
+                  {connector.connected ? (
+                    <span className="shrink-0 text-xs text-success-text">
+                      {PLUGIN_CONNECTOR_CONNECTED_LABEL}
+                    </span>
+                  ) : onOpenConnector ? (
+                    <button
+                      type="button"
+                      onClick={() => onOpenConnector(connector.id)}
+                      className={cn(DIRECTORY_CREATE_BUTTON, 'min-h-9 shrink-0')}
+                    >
+                      {CONNECT_LABEL}
+                    </button>
+                  ) : (
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      {PLUGIN_CONNECTOR_MISSING_LABEL}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </AccessRow>
+        ) : null}
+        <AccessRow label={SKILL_ACCESS_LABEL}>{SKILL_ACCESS_VALUE}</AccessRow>
+      </dl>
+    </section>
+  );
+}
 
 export function SkillDetailView({
   detail,
@@ -39,6 +143,7 @@ export function SkillDetailView({
   onDownloadFile,
   onSetEnabled,
   onTryInChat,
+  onOpenConnector,
   busy,
 }: {
   detail: DirectorySkillDetail;
@@ -52,6 +157,7 @@ export function SkillDetailView({
   onDownloadFile?: (skillId: string, path: string) => Promise<void> | void;
   onSetEnabled?: (enabled: boolean) => Promise<void> | void;
   onTryInChat?: () => void;
+  onOpenConnector?: (connectorId: string) => void;
   busy?: boolean;
 }) {
   const entryPath = detail.files[0]?.path ?? '';
@@ -143,6 +249,8 @@ export function SkillDetailView({
           </button>
         </div>
       ) : null}
+
+      <SkillAccessSummary detail={detail} onOpenConnector={onOpenConnector} />
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,14rem)_minmax(0,1fr)]">
         <SkillFileTree

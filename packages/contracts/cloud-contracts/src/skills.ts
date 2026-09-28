@@ -20,6 +20,22 @@ export const MANAGED_OFFICE_FILE_TOOL_NAME = 'create_office_file';
 export const ManagedSkillSourceSchema = z.enum(MANAGED_SKILL_SOURCES);
 export const ManagedSkillLifecycleSchema = z.enum(MANAGED_SKILL_LIFECYCLES);
 
+export const MANAGED_SKILL_ORIGIN_KINDS = [
+  'personal',
+  'catalog',
+  'repository',
+  'upload',
+  'authored',
+] as const;
+
+export const ManagedSkillOriginSchema = z.object({
+  kind: z.enum(MANAGED_SKILL_ORIGIN_KINDS),
+  pluginId: z.string().trim().min(1).max(200).optional(),
+  pluginName: z.string().trim().min(1).max(200).optional(),
+  marketplace: z.string().trim().min(1).max(200).optional(),
+  addedAt: z.string().trim().min(1).max(40).optional(),
+});
+
 export const ManagedSkillSummarySchema = z
   .object({
     name: z.string().trim().min(1).max(200),
@@ -40,6 +56,8 @@ export const ManagedSkillSummarySchema = z
      */
     editable: z.boolean().optional(),
     requiredTools: z.array(z.string().trim().min(1).max(200)).max(20).optional(),
+    requiredConnectors: z.array(z.string().trim().min(1).max(200)).max(20).optional(),
+    origin: ManagedSkillOriginSchema.optional().catch(undefined),
   })
   .superRefine((skill, context) => {
     if (skill.downloadable && (skill.source !== 'bundled' || skill.lifecycle !== 'included')) {
@@ -57,6 +75,7 @@ export const ManagedSkillsResponseSchema = z.object({
 
 export type ManagedSkillSource = z.infer<typeof ManagedSkillSourceSchema>;
 export type ManagedSkillLifecycle = z.infer<typeof ManagedSkillLifecycleSchema>;
+export type ManagedSkillOrigin = z.infer<typeof ManagedSkillOriginSchema>;
 export type ManagedSkillSummary = z.infer<typeof ManagedSkillSummarySchema>;
 export type ManagedSkillsResponse = z.infer<typeof ManagedSkillsResponseSchema>;
 
