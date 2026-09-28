@@ -11,6 +11,7 @@ vi.mock('@/lib/identity/client', () => ({ useSession: () => mockSession }));
 vi.mock('sonner', () => ({ toast: { error: mockToastError, dismiss: vi.fn() } }));
 vi.mock('../services/conversation-draft', () => ({
   saveConversationDraft: mockSaveConversationDraft,
+  adoptConversationDraftRevision: vi.fn(),
   clearObservedConversationDraftRevisions: vi.fn(),
 }));
 
@@ -223,7 +224,11 @@ describe('carrying a composer draft to the server', () => {
   });
 
   it('keeps a conflicting local draft and warns that it did not sync', async () => {
-    mockSaveConversationDraft.mockResolvedValueOnce('conflict');
+    mockSaveConversationDraft.mockResolvedValueOnce({
+      kind: 'conflict',
+      theirs: 'their text',
+      theirsRevision: '2026-08-02T00:00:01.000Z',
+    });
     seedConversation();
     render(<Harness />);
 
