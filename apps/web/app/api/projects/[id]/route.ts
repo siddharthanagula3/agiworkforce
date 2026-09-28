@@ -236,12 +236,12 @@ async function handleUpdateProject(request: NextRequest, context: RouteContext) 
         userId,
         organizationId,
         projectId: id,
-        conversationIds: body.isArchived === true ? [] : (body.conversationIds ?? []),
+        conversationIds: body.conversationIds ?? [],
       });
     });
 
   const runUpdate = async () => {
-    if (body.isArchived === true || body.conversationIds !== undefined) {
+    if (body.conversationIds !== undefined) {
       try {
         await updateAndReplaceMembership(hasRound10);
       } catch (error) {
