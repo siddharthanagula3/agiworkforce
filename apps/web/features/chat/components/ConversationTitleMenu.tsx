@@ -103,6 +103,10 @@ export function ConversationTitleMenu({
 
   return (
     <div className="flex min-w-0 flex-1 items-center justify-start">
+      <h1 className="sr-only">
+        {displayedTitle}
+        {agiWork ? AGI_WORK_TITLE_SUFFIX : null}
+      </h1>
       {isRenaming ? (
         <input
           autoFocus

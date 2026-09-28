@@ -90,7 +90,7 @@ import {
   type PageContextSource,
   type SidePanelChatMessage,
 } from './features/side-panel/chat-state';
-import { setupVoiceInput } from './features/side-panel/voice';
+import { buildMicrophoneNotice, setupVoiceInput } from './features/side-panel/voice';
 import {
   dictationLanguageChoices,
   readDictationLanguage,
@@ -1234,6 +1234,7 @@ function injectStyles(): void {
       --control-sm: 30px;
       --control-md: 32px;
       --control-lg: 34px;
+      --sp-reading-column: 768px;
       --pressed: color-mix(in srgb, var(--agi-ext-text) 12%, transparent);
       --paragraph-gap: 0.75em;
       --type-h1-size: 20px;
@@ -1545,6 +1546,21 @@ function injectStyles(): void {
     #sp-blocked.visible { display: flex; }
     .sp-blocked-copy { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
     #sp-blocked-desc { font-size: var(--type-caption-size); color: var(--agi-ext-text-muted); line-height: var(--type-caption-height); }
+
+    .sp-visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      margin: -1px;
+      padding: 0;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+      border: 0;
+    }
+    :where(#sp-drawer-title, #sp-recents-title, .sp-drawer-section-title, .sp-bt-title, .sp-runs-detail-title) {
+      margin: 0;
+    }
 
     /* ── Message bubbles ── */
     .sp-msg {
@@ -2328,6 +2344,8 @@ function injectStyles(): void {
     }
     .sp-composer-notice.visible { display: flex; }
     .sp-composer-notice > span { flex: 1; min-width: 0; }
+    #sp-mic-notice { flex-wrap: wrap; justify-content: flex-end; color: var(--agi-ext-text); }
+    #sp-mic-notice > span { flex-basis: 100%; }
     #sp-usage-warning[data-severity='warning'] {
       border-color: var(--agi-ext-warning-border);
       background: var(--agi-ext-warning-bg);
@@ -3195,7 +3213,7 @@ function injectStyles(): void {
     .sp-drawer-history-delete {
       background: none;
       border: none;
-      color: var(--agi-ext-text-muted);
+      color: var(--agi-ext-danger-text);
       font-size: 12px;
       cursor: pointer;
       padding: 2px 4px;
@@ -3204,6 +3222,7 @@ function injectStyles(): void {
       line-height: 1;
       flex-shrink: 0;
     }
+    .sp-drawer-history-delete:hover { background: var(--agi-ext-danger-bg); }
     /* Connection / pairing */
     .sp-drawer-pairing-row {
       display: flex;
@@ -3322,7 +3341,7 @@ function injectStyles(): void {
     .sp-drawer-allowlist-item-remove {
       background: none;
       border: none;
-      color: var(--agi-ext-text-muted);
+      color: var(--agi-ext-danger-text);
       font-size: 10px;
       cursor: pointer;
       padding: 1px 5px;
@@ -3389,11 +3408,11 @@ function injectStyles(): void {
     }
     .sp-drawer-memory-item-edit-btn:hover { color: var(--agi-ext-accent-text); border-color: var(--agi-ext-accent); }
     .sp-drawer-memory-item-delete-btn {
-      background: none; border: 1px solid var(--agi-ext-border); border-radius: var(--corner-compact);
-      color: var(--agi-ext-text-muted); font-size: var(--type-caption-size); line-height: var(--type-caption-height); padding: 2px 6px; cursor: pointer;
+      background: none; border: 1px solid var(--agi-ext-danger-border); border-radius: var(--corner-compact);
+      color: var(--agi-ext-danger-text); font-size: var(--type-caption-size); line-height: var(--type-caption-height); padding: 2px 6px; cursor: pointer;
       transition: color var(--duration-instant), border-color var(--duration-instant), background var(--duration-instant);
     }
-    .sp-drawer-memory-item-delete-btn:hover { color: var(--agi-ext-danger-text); border-color: var(--agi-ext-danger-border); }
+    .sp-drawer-memory-item-delete-btn:hover { color: var(--agi-ext-danger-text); border-color: var(--agi-ext-danger-border); background: var(--agi-ext-danger-bg); }
     .sp-drawer-memory-item-delete-btn.is-confirm { color: var(--agi-ext-on-danger); background: var(--agi-ext-danger); border-color: var(--agi-ext-danger); }
     .sp-drawer-history-delete.is-confirm { color: var(--agi-ext-danger-text); border-color: var(--agi-ext-danger); background: color-mix(in srgb, var(--agi-ext-danger) 12%, transparent); }
     .sp-drawer-memory-item-textarea {
@@ -4116,7 +4135,7 @@ function injectStyles(): void {
     }
 
     #sp-messages {
-      padding: 18px 14px 10px;
+      padding: 18px max(14px, calc((100% - var(--sp-reading-column)) / 2)) 10px;
       gap: 18px;
     }
     #sp-empty {
@@ -7078,7 +7097,7 @@ function buildUI(): void {
   drawerBack.setAttribute('aria-label', t('spMenuBack'));
   drawerBack.appendChild(renderIcon(ChevronRight, 14));
   drawerHeader.appendChild(drawerBack);
-  const drawerTitle = el('div', { id: 'sp-drawer-title' }, t('spMenuTitle'));
+  const drawerTitle = el('h2', { id: 'sp-drawer-title' }, t('spMenuTitle'));
   drawerHeader.appendChild(drawerTitle);
   const drawerClose = el('button', { id: 'sp-drawer-close' });
   drawerClose.setAttribute('aria-label', t('spMenuClose'));
@@ -7324,7 +7343,7 @@ function buildUI(): void {
   recentsSheet.hidden = true;
   recentsSheet.setAttribute('aria-label', t('spRecentsTitle'));
   const recentsHeader = el('div', { id: 'sp-recents-header' });
-  recentsHeader.appendChild(el('div', { id: 'sp-recents-title' }, t('spRecentsTitle')));
+  recentsHeader.appendChild(el('h2', { id: 'sp-recents-title' }, t('spRecentsTitle')));
   const recentsClose = el('button', { id: 'sp-recents-close', type: 'button' });
   recentsClose.setAttribute('aria-label', t('spRecentsClose'));
   recentsClose.appendChild(renderIcon(X, 14));
@@ -7804,7 +7823,7 @@ function buildUI(): void {
   }
 
   const inPageSection = el('div', { class: 'sp-drawer-section' });
-  inPageSection.appendChild(el('div', { class: 'sp-drawer-section-title' }, 'In-Page Panel'));
+  inPageSection.appendChild(el('h3', { class: 'sp-drawer-section-title' }, 'In-Page Panel'));
   const inPageRow = el('div', { class: 'sp-drawer-toggle-row' });
   inPageRow.appendChild(
     el('span', { class: 'sp-drawer-toggle-label' }, t('spPageAssistantOverlay')),
@@ -7860,7 +7879,7 @@ function buildUI(): void {
 
   const dictationSection = el('div', { class: 'sp-drawer-section' });
   dictationSection.appendChild(
-    el('div', { class: 'sp-drawer-section-title' }, t('spDictationSectionTitle')),
+    el('h3', { class: 'sp-drawer-section-title' }, t('spDictationSectionTitle')),
   );
   const dictationRow = el('div', { class: 'sp-drawer-toggle-row' });
   dictationRow.appendChild(
@@ -7914,7 +7933,7 @@ function buildUI(): void {
   settingsGroupBody.appendChild(dictationSection);
 
   const allowlistSection = el('div', { class: 'sp-drawer-section' });
-  allowlistSection.appendChild(el('div', { class: 'sp-drawer-section-title' }, 'Site Allowlist'));
+  allowlistSection.appendChild(el('h3', { class: 'sp-drawer-section-title' }, 'Site Allowlist'));
   allowlistSection.appendChild(
     el(
       'p',
@@ -8098,7 +8117,7 @@ function buildUI(): void {
   });
 
   const memorySection = el('div', { class: 'sp-drawer-section' });
-  memorySection.appendChild(el('div', { class: 'sp-drawer-section-title' }, 'Memory'));
+  memorySection.appendChild(el('h3', { class: 'sp-drawer-section-title' }, 'Memory'));
   memorySection.appendChild(
     el(
       'p',
@@ -8449,7 +8468,7 @@ function buildUI(): void {
   });
 
   const cloudSection = el('div', { class: 'sp-drawer-section' });
-  cloudSection.appendChild(el('div', { class: 'sp-drawer-section-title' }, 'AGI Cloud'));
+  cloudSection.appendChild(el('h3', { class: 'sp-drawer-section-title' }, 'AGI Cloud'));
 
   const cloudAccountEl = el('div', { class: 'sp-cloud-account', id: 'sp-cloud-account' });
 
@@ -10008,6 +10027,16 @@ function buildUI(): void {
 
   document.body.appendChild(pagePanel.panelEl);
 
+  for (const [tabBtn, panel] of [
+    [chatTabBtn, chatPanel],
+    [workflowsTabBtn, workflowsPanel],
+    [cuTabBtn, cuPanel.panelEl],
+    [runsTabBtn, runsPanel.panelEl],
+    [pageTabBtn, pagePanel.panelEl],
+  ] as const) {
+    panel.prepend(el('h1', { class: 'sp-visually-hidden' }, tabBtn.textContent ?? ''));
+  }
+
   chrome.runtime.onMessage.addListener((msg: unknown) => {
     if (!msg || typeof msg !== 'object') return;
     const m = msg as Record<string, unknown>;
@@ -10804,6 +10833,8 @@ function buildUI(): void {
   inputArea.appendChild(modelNotice);
   inputArea.appendChild(cloudGate);
   inputArea.appendChild(bridgeNotice);
+  const microphoneNotice = buildMicrophoneNotice();
+  inputArea.appendChild(microphoneNotice.element);
   inputArea.appendChild(attachmentBar);
   inputArea.appendChild(composerShell);
   document.body.appendChild(inputArea);
@@ -10838,10 +10869,16 @@ function buildUI(): void {
     acceptIncomingComposerFiles(filesFromDataTransfer(event.dataTransfer));
   });
 
-  setupVoiceInput(micBtn, inputEl, autoResizeInput, (message) => {
-    composerContextNotice = message;
-    updateAttachmentPreview();
-  });
+  setupVoiceInput(
+    micBtn,
+    inputEl,
+    autoResizeInput,
+    (message) => {
+      composerContextNotice = message;
+      updateAttachmentPreview();
+    },
+    microphoneNotice,
+  );
   renderMessages();
 
   switchTab('chat');

@@ -199,6 +199,7 @@
     "voiceUnsupportedHint": "الإدخال الصوتي غير مدعوم في هذا المتصفح. جرّب Chrome أو Edge."
   },
   "bubble": {
+    "assistantSaid": "قال AGI:",
     "assistantThinking": "المساعد يفكر",
     "cancelEdit": "إلغاء",
     "copied": "تم النسخ",
@@ -210,7 +211,8 @@
     "messageAttachments": "مرفقات الرسالة",
     "retryResponse": "إعادة محاولة هذا الرد",
     "saveEdit": "حفظ",
-    "toolResult": "النتيجة"
+    "toolResult": "النتيجة",
+    "userSaid": "قلت:"
   },
   "goalHandoff": {
     "action": "تشغيل كمهمة",

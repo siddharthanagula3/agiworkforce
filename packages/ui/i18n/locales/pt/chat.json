@@ -199,6 +199,7 @@
     "voiceUnsupportedHint": "A entrada de voz não é suportada neste navegador. Tente o Chrome ou o Edge."
   },
   "bubble": {
+    "assistantSaid": "AGI disse:",
     "assistantThinking": "O assistente está pensando",
     "cancelEdit": "Cancelar",
     "copied": "Copiado",
@@ -210,7 +211,8 @@
     "messageAttachments": "Anexos da mensagem",
     "retryResponse": "Tentar esta resposta novamente",
     "saveEdit": "Salvar",
-    "toolResult": "Resultado"
+    "toolResult": "Resultado",
+    "userSaid": "Você disse:"
   },
   "goalHandoff": {
     "action": "Executar como tarefa",

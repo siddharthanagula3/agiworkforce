@@ -199,6 +199,7 @@
     "voiceUnsupportedHint": "L’input vocale non è supportato in questo browser. Prova Chrome o Edge."
   },
   "bubble": {
+    "assistantSaid": "AGI ha detto:",
     "assistantThinking": "L'assistente sta pensando",
     "cancelEdit": "Annulla",
     "copied": "Copiato",
@@ -210,7 +211,8 @@
     "messageAttachments": "Allegati del messaggio",
     "retryResponse": "Riprova questa risposta",
     "saveEdit": "Salva",
-    "toolResult": "Risultato"
+    "toolResult": "Risultato",
+    "userSaid": "Hai detto:"
   },
   "goalHandoff": {
     "action": "Esegui come attività",

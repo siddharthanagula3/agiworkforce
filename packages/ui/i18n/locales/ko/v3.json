@@ -100,7 +100,10 @@
     "noArchived": "보관된 채팅이 없습니다",
     "noConversations": "아직 대화가 없습니다",
     "showActive": "활성 채팅으로 돌아가기",
-    "showArchived": "보관된 채팅 보기({{count}})"
+    "showArchived": "보관된 채팅 보기({{count}})",
+    "archivedToast": "채팅을 보관했습니다",
+    "archivedUndo": "실행 취소",
+    "archivedView": "보관함 보기"
   },
   "emptyChat": {
     "neutralHeadline": "오늘은 무엇을 도와드릴까요?",

@@ -831,7 +831,7 @@ export function buildCloudRunsPanel(
       );
       head.appendChild(
         el(
-          'span',
+          'h2',
           { class: 'sp-runs-detail-title' },
           `${WORK_MODE_LABELS[run.workMode]} • ${run.model} • ${ORIGIN_SURFACE_LABELS[run.originSurface]}`,
         ),

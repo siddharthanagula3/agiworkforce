@@ -139,7 +139,7 @@ export function MessageList({
           const research =
             msg.role === 'assistant' ? readMessageResearchStatus(msg.metadata) : null;
           return (
-            <div key={msg.id} data-message-row={msg.role} className="px-4 py-3">
+            <div key={msg.id} data-message-row={msg.role} className="px-gutter-compact py-3">
               <div className="mx-auto w-full max-w-3xl">
                 <div
                   className={
@@ -167,14 +167,14 @@ export function MessageList({
           );
         })}
         {showDetachedThinkingStatus ? (
-          <div className="px-4 py-3" data-message-row="assistant-status">
+          <div className="px-gutter-compact py-3" data-message-row="assistant-status">
             <div className="mx-auto w-full max-w-3xl">
               <StreamingThinkingStatus />
             </div>
           </div>
         ) : null}
         {showContinue && lastMessage ? (
-          <div className="px-4 pb-3">
+          <div className="px-gutter-compact pb-3">
             <div className="mx-auto flex w-full max-w-3xl justify-start">
               <button
                 type="button"
@@ -216,7 +216,7 @@ export function MessageList({
           </div>
         ) : null}
         {showStreamErrorNotice && lastMessage ? (
-          <div className="px-4 pb-3">
+          <div className="px-gutter-compact pb-3">
             <div
               className="mx-auto flex w-full max-w-3xl items-center gap-2 rounded-lg border px-3 py-1.5 text-xs"
               style={{
