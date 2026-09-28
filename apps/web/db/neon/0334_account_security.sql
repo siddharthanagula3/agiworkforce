@@ -157,6 +157,12 @@ create index if not exists idx_account_security_challenges_expiry
 
 alter table public.profiles add column if not exists email_changed_at timestamptz;
 
+update public.profiles
+  set email_changed_at = now()
+  where email_changed_at is null
+    and nullif(btrim(email), '') is not null
+    and greatest(created_at, updated_at) > now() - interval '7 days';
+
 create or replace function public.stamp_profile_email_change()
 returns trigger
 language plpgsql

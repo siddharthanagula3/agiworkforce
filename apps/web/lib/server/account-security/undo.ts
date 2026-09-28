@@ -16,7 +16,7 @@ import { hashUndoToken, newUnusablePassword } from './secrets';
 import { readEnrollmentUndo, undoEnrollment } from './store';
 
 const LINK_EXPIRED =
-  'This link expired or was already used. If you still cannot get into your account, contact support from the sign-in page.';
+  'This link expired or was already used. If you still cannot get into your account, sign in with a passkey, a security key or a recovery key.';
 
 export async function turnOffFromEmailLink(
   ownerDb: DatabaseAdapter,
