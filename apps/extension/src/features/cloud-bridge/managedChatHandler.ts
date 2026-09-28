@@ -92,6 +92,7 @@ export interface ChromeManagedChatRequest {
   fileAttachments?: ManagedChatFileAttachment[];
   extendedThinking?: boolean;
   workMode?: 'chat' | 'agiwork';
+  webSearch?: boolean;
   currentModelKey?: string | null;
   previousTaskType?: RoutingTaskType | null;
   idempotencyKey?: string;
@@ -591,7 +592,7 @@ export async function executeChromeManagedChat(
     ...(effort ? { effort } : {}),
     extendedThinking: request.extendedThinking,
     workMode: request.workMode === 'agiwork' ? 'agiwork' : 'chat',
-    ...(routedModelSearches && request.workMode !== 'agiwork'
+    ...(routedModelSearches && request.webSearch !== false && request.workMode !== 'agiwork'
       ? { webSearch: true, webFetch: true }
       : {}),
     ...(request.conversationId ? { conversationId: request.conversationId } : {}),

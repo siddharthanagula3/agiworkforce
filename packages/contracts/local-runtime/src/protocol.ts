@@ -122,4 +122,5 @@ export type DesktopRuntimeEvent =
   | { kind: 'update-ready'; version: string }
   | { kind: 'dispatch-task'; task: DispatchTaskAssignment }
   | { kind: 'dispatch-task-cancel'; requestId: string }
-  | { kind: 'device-prompt-changed'; open: boolean };
+  | { kind: 'device-prompt-changed'; open: boolean }
+  | { kind: 'computer-use-handed-back' };

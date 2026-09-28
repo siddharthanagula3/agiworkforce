@@ -12,6 +12,7 @@ import {
   ProjectKnowledgeExtractionError,
 } from '@/lib/server/project-knowledge-extraction';
 import { objectKeyFromStorageUri } from '@/lib/server/object-storage';
+import { fileTextPreviewKind } from '@/lib/server/file-text-preview';
 import { enqueueJob } from '@/lib/jobs/job-service';
 import {
   deleteProjectKnowledgeObject,
@@ -32,15 +33,54 @@ import { dispatchRetrievalIndexWorkflows } from '@/lib/workflows/start-retrieval
 const PG_UNDEFINED_TABLE = '42P01';
 const PG_UNDEFINED_COLUMN = '42703';
 
+export interface OwnedProjectKnowledgeFile {
+  mimeType: string;
+  fileName: string;
+  storageUri: string;
+}
+
+export async function findOwnedProjectKnowledgeFile(
+  db: Awaited<ReturnType<typeof getUserScopedDb>>['db'],
+  owner: { userId: string; organizationId: string | null },
+  projectId: string,
+  fileId: string,
+): Promise<OwnedProjectKnowledgeFile | null> {
+  const [file] = await db.query<{
+    mime_type: string | null;
+    file_name: string;
+    storage_uri: string | null;
+  }>(
+    `select f.mime_type, f.file_name, f.storage_uri
+       from project_knowledge_files f
+       join user_projects p on p.id = f.project_id
+      where f.id = $1
+        and f.project_id = $2
+        and f.deleted_at is null
+        and p.user_id = $3
+        and p.organization_id is not distinct from $4::uuid
+        and p.deleted_at is null
+      limit 1`,
+    [fileId, projectId, owner.userId, owner.organizationId],
+  );
+  if (!file?.storage_uri) return null;
+  return {
+    mimeType: file.mime_type || 'application/octet-stream',
+    fileName: file.file_name,
+    storageUri: file.storage_uri,
+  };
+}
+
 export function projectKnowledgeResponse(
   row: Record<string, unknown>,
   projectId: string,
   indexing: ProjectKnowledgeIndexState | null = null,
 ) {
   const file = mapKnowledgeFileRow(row);
+  const previewKind = fileTextPreviewKind(file.fileName, file.mimeType);
   return {
     ...file,
     storageUri: `/api/projects/${encodeURIComponent(projectId)}/knowledge-files/${encodeURIComponent(file.id)}`,
+    textPreview: previewKind === 'table' || previewKind === 'office',
     indexing,
   };
 }

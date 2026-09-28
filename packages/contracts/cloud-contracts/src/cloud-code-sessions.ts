@@ -5,6 +5,8 @@ import {
   CLOUD_CODE_NETWORK_ACCESS,
   CLOUD_CODE_SESSION_STATES,
   CLOUD_CODE_SHARE_VISIBILITIES,
+  CLOUD_CODE_TURN_MODES,
+  type CloudCodeTurnMode,
 } from '@agiworkforce/types';
 
 export const CLOUD_CODE_SESSIONS_PATH = '/api/code/sessions';
@@ -118,6 +120,7 @@ export const CloudCodeAgentStepSchema = z.object({
 export const CloudCodeAgentTurnRecordSchema = z.object({
   turnId: z.string(),
   goal: z.string(),
+  mode: z.enum(CLOUD_CODE_TURN_MODES).default('agent'),
   stopReason: z.enum(CLOUD_CODE_AGENT_STOP_REASONS).nullable(),
   stepsUsed: z.number().int().nonnegative(),
   inputTokens: z.number().int().nonnegative().default(0),
@@ -265,6 +268,7 @@ export interface StartCloudCodeAgentTurnRequest {
   /** Sent as `Idempotency-Key`; the managed-usage ledger refuses the turn without it. */
   idempotencyKey: string;
   maxSteps?: number;
+  mode?: CloudCodeTurnMode;
 }
 
 export interface CommitCloudCodeSessionRequest {

@@ -25,29 +25,23 @@ Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:1008-1013`, `a
 
 - Done when: Each cited source shows its title.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Chrome shows source titles only for sources inside agent activity steps; plain chat answers carry no citations. | ui |
-
-Code: `apps/extension/src/features/side-panel/bubbles.ts:406-432`
 
 ## S36.03: Publisher or provider.
 
 - Done when: Each cited source shows its publisher or provider (site name/domain).
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Chrome falls back to the hostname only for activity-step source links; plain chat answers carry no citations. | ui |
-
-Code: `apps/extension/src/features/side-panel/bubbles.ts:406-432`
 
 ## S36.04: Source URL or resource identifier.
 

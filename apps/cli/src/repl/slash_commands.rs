@@ -567,15 +567,10 @@ pub(super) async fn handle_slash_command(
             let subcmd = if arg.is_empty() { "scan" } else { arg };
             return SlashResult::Ecosystem(subcmd.to_string());
         }
-        "/plugin" | "/plugins"
-            if matches!(
-                arg.split_whitespace().next(),
-                Some("enable" | "disable" | "remove" | "uninstall")
-            ) =>
-        {
+        "/plugin" | "/plugins" if crate::installs::is_plugin_action(arg) => {
             match crate::installs::plugin_command(arg) {
                 Some(message) => output::print_info(&message),
-                None => output::print_warn("Usage: /plugins enable|disable|remove <name>"),
+                None => output::print_warn("Usage: /plugins enable|disable|update|remove <name>"),
             }
         }
         "/marketplace" | "/market" | "/plugin" | "/plugins" => {

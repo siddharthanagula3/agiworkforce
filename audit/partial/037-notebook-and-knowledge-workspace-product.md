@@ -6,18 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S37.03: Notebook title and description.
-
-- Done when: A notebook has a title and description the user can set and later edit.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | The side panel names a project at creation only; it cannot rename it or set or edit a description. | ui |
-
-Code: `apps/extension/src/features/side-panel/projectsDrawer.ts:533-533`
-
 ## S37.04: Source rail.
 
 - Done when: Inside a notebook, a source list sits beside the conversation so the user can see what grounds the answers.
@@ -82,18 +70,6 @@ Code: `apps/web/features/projects/components/AddSourcesModal.tsx:279-279`, `apps
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | L4: settle-able from code. managedTurnPersistencePayload adds conversation_id only once the conversation is bound server-side (cloudSync.conversationId); the first turn of a new chat is sent without it and is answered without project sources. The project binding travels with the synced conversation entry (projectId in the stored entry, synced by the background SYNC_CONVERSATION to /api/chat/conversations), so from the next turn the server finds the row and loadProjectContext runs. partial, miss [handler]; remaining: 'Project sources ground a chrome chat only from the turn after the conversation is first synced and bound; the first turn of a new chat is sent without conversation_id.' |  |
-
-## S37.15: Notebook instructions.
-
-- Done when: The notebook has instructions that apply to every chat in it.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | Chrome sets instructions only while creating a project and cannot edit them later. | ui |
-
-Code: `apps/extension/src/features/side-panel/projectsDrawer.ts:533-533`, `apps/extension/src/side_panel.ts:6421-6421`
 
 ## S37.16: Saved chat responses.
 

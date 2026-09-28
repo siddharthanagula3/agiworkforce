@@ -27,6 +27,7 @@ import {
   plaidLinkRoutesOf,
 } from '@/features/connectors/lib/plaid-link';
 import { toUserMessage } from '@/lib/user-error-message';
+import { announceBankConnected } from '@features/finance/lib/announce-bank-connected';
 
 export interface ConnectorStatus {
   connectedIds: Set<string>;
@@ -445,6 +446,7 @@ export function useConnectors(): ConnectorStatus {
               if (await connectBankAccountsWithPlaid(plaidRoutes)) {
                 setConnectedIds((prev) => new Set([...prev, id]));
                 invalidateConnectorsCache();
+                announceBankConnected();
               }
             } catch (caught) {
               toast.error(toUserMessage(caught, BANK_CONNECT_FAILED));

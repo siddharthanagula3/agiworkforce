@@ -319,7 +319,7 @@ export function MemberPicker({
           hidden={!open}
           style={{
             position: 'absolute',
-            zIndex: 20,
+            zIndex: 'var(--z-dropdown)',
             top: 'calc(100% + 4px)',
             left: 0,
             right: 0,

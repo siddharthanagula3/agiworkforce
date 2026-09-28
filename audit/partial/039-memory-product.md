@@ -200,18 +200,15 @@ Code: `apps/cli/src/cloud/mod.rs:322-334`, `apps/web/app/api/memory/sync/route.t
 
 - Done when: When saved memory or past chats shaped a reply, the reply shows it (and which memories), so the user can tell remembered facts from invented ones.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Show when saved memories shaped a reply (and which); only past-chat references are cited under answers, and the memories a turn loaded are kept server-side for a relevance check. | ui |
-| desktop | partial | Show when saved memories shaped a reply (and which); only past-chat references are cited under answers, and the memories a turn loaded are kept server-side for a relevance check. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 | api | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/messages/MessageBubble.tsx:2730-2733`, `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:878-882`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:3440-3446`
 
 ## S39.28: Temporary-chat exclusions.
 
@@ -247,16 +244,3 @@ Code: `packages/ai/agent-core/src/memory.ts:78-104`, `apps/mobile/src/features/m
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-## S39.31: Cross-model personalization.
-
-- Done when: Saved memory and personalization apply the same way whichever model the user picks.
-- Wave: 3
-- Already works on: cli, vscode, chrome, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Apply memory to every model: free-pool models (free-quota, experiential-free routes) and local Ollama/LM Studio models never receive saved memory; only the managed route injects it. | handler |
-| desktop | partial | Apply memory to every model: free-pool models (free-quota, experiential-free routes) and local Ollama/LM Studio models never receive saved memory; only the managed route injects it. | handler |
-
-Code: `apps/web/features/chat/lib/free-quota-selection.ts:35-42`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2904-2921`, `apps/web/app/api/models/free-quota/completions/route.ts:586-590`
