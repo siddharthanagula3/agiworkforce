@@ -346,6 +346,7 @@ pub fn recording_approval_callback(
                 kind: request.kind.clone(),
                 summary: request.summary.clone(),
                 detail: Vec::new(),
+                proposal: None,
             };
             let decision = inner(request).await;
             if let Ok(mut activity) = activity.lock() {

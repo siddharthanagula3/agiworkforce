@@ -168,6 +168,7 @@ describe('POST /api/chat/sync, revision CAS', () => {
       .mockResolvedValueOnce([
         { kind: 'applied', id: artifactId, server_version: '7', current: null },
       ])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([
         { kind: 'applied', id: artifactId, server_version: '7', current: null },
       ]);

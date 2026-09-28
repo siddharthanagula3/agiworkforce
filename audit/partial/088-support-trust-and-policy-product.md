@@ -139,11 +139,11 @@ Code: `apps/cli/src/diagnostics_bundle.rs:52-67`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Same as S2.28: the release feed has no notes body to print. | ui |
+| cli | partial | Same as S2.28: the feed has the notes summary and link; the CLI prints them once p-desktop-cli reads releaseNotes. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/cli/src/claude_parity.rs:1381-1381`
+Code: `apps/web/lib/releases/github-cli-releases.ts:157-157`
 
 ## S88.14: Model-retirement notice.
 

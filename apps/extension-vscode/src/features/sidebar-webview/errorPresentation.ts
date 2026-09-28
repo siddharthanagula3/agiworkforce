@@ -14,6 +14,7 @@
  */
 
 import { modelDisplayLabel, providerDisplayLabel } from '../model-picker/modelConstants';
+import { t, tPlural, type MessageKey } from '../../l10n';
 
 export type ChatErrorCategory =
   | 'network'
@@ -44,10 +45,24 @@ export interface ChatErrorAction {
  * sentences the extension writes itself. Those match none of the CLI rules
  * below and would otherwise arrive as `unknown` with nothing to click.
  */
+type OfferKind = Exclude<ChatErrorAction['kind'], 'sign-in-provider'>;
+
 export interface ChatErrorHint {
   category: ChatErrorCategory;
   retryable?: boolean;
-  action?: ChatErrorAction;
+  action?: OfferKind;
+}
+
+const OFFER_LABELS: Readonly<Record<OfferKind, MessageKey>> = Object.freeze({
+  'sign-in-account': 'chatError.signInToAgi',
+  'upgrade-plan': 'chatError.upgradePlan',
+  'open-settings': 'chatError.openSettings',
+  'switch-model': 'chatError.switchModel',
+  'update-extension': 'chatError.updateExtension',
+});
+
+function offer(kind: OfferKind): ChatErrorAction {
+  return { kind, label: t(OFFER_LABELS[kind]) };
 }
 
 export interface ChatErrorPresentation {
@@ -88,42 +103,39 @@ const RUNTIME_TEXT = /\bruntime\b.*\b(?:unavailable|disconnected|not ready|exite
 const MACHINE_SHAPED = /^\[|[{}]|\bHTTP \d{3}\b|\n|\bat [A-Za-z$_][\w$.]*\s\(/u;
 const MACHINE_LENGTH = 600;
 
-/** What to call the provider when the failure text does not name one. */
-const UNNAMED_PROVIDER = 'the model provider';
-
 function fromApiStatus(providerId: string, status: number): Classification {
   const provider = providerDisplayLabel(providerId);
   if (status === 401 || status === 403) {
     return {
       category: 'sign-in',
-      headline: `Your ${provider} key was rejected.`,
+      headline: t('chatError.keyRejected', { provider }),
       retryable: false,
     };
   }
   if (status === 402) {
     return {
       category: 'subscription',
-      headline: `${provider} says this request is not covered by your plan.`,
+      headline: t('chatError.notCoveredByPlan', { provider }),
       retryable: false,
     };
   }
   if (status === 429) {
     return {
       category: 'rate-limit',
-      headline: `${provider} is rate limiting requests. Try again in a moment.`,
+      headline: t('chatError.rateLimiting', { provider }),
       retryable: true,
     };
   }
   if (status >= 500) {
     return {
       category: 'provider',
-      headline: `${provider} had a problem and could not answer. Try again.`,
+      headline: t('chatError.providerProblem', { provider }),
       retryable: true,
     };
   }
   return {
     category: 'provider',
-    headline: `${provider} rejected the request.`,
+    headline: t('chatError.providerRejected', { provider }),
     retryable: status === 408,
   };
 }
@@ -134,7 +146,7 @@ function classify(raw: string, activeProvider: string | undefined): Classificati
       category: 'runtime',
       headline: raw,
       retryable: false,
-      action: { kind: 'update-extension', label: 'Update the extension' },
+      action: offer('update-extension'),
     };
   }
 
@@ -147,7 +159,7 @@ function classify(raw: string, activeProvider: string | undefined): Classificati
   if (auth?.[1] !== undefined) {
     return {
       category: 'sign-in',
-      headline: `Your ${providerDisplayLabel(auth[1])} key was rejected.`,
+      headline: t('chatError.keyRejected', { provider: providerDisplayLabel(auth[1]) }),
       retryable: false,
     };
   }
@@ -156,7 +168,7 @@ function classify(raw: string, activeProvider: string | undefined): Classificati
   if (limited?.[1] !== undefined) {
     return {
       category: 'rate-limit',
-      headline: `${providerDisplayLabel(limited[1])} is rate limiting requests. Try again in a moment.`,
+      headline: t('chatError.rateLimiting', { provider: providerDisplayLabel(limited[1]) }),
       retryable: true,
     };
   }
@@ -165,7 +177,7 @@ function classify(raw: string, activeProvider: string | undefined): Classificati
   if (stream?.[1] !== undefined) {
     return {
       category: 'provider',
-      headline: `${providerDisplayLabel(stream[1])} stopped replying part way through.`,
+      headline: t('chatError.stoppedPartWay', { provider: providerDisplayLabel(stream[1]) }),
       retryable: true,
     };
   }
@@ -174,7 +186,7 @@ function classify(raw: string, activeProvider: string | undefined): Classificati
   if (tool?.[1] !== undefined) {
     return {
       category: 'tool',
-      headline: `The ${tool[1]} tool failed, so the reply stopped.`,
+      headline: t('chatError.toolFailed', { tool: tool[1] }),
       retryable: false,
     };
   }
@@ -182,7 +194,9 @@ function classify(raw: string, activeProvider: string | undefined): Classificati
   if (NETWORK_ERROR.test(raw) || NETWORK_TEXT.test(raw)) {
     return {
       category: 'network',
-      headline: `Couldn't reach ${activeProvider ?? UNNAMED_PROVIDER}. Check your connection and try again.`,
+      headline: t('chatError.couldNotReach', {
+        provider: activeProvider ?? t('chatError.theModelProvider'),
+      }),
       retryable: true,
     };
   }
@@ -191,7 +205,7 @@ function classify(raw: string, activeProvider: string | undefined): Classificati
   if (overflow?.[1] !== undefined) {
     return {
       category: 'provider',
-      headline: `This conversation is longer than ${modelDisplayLabel(overflow[1])} can read at once.`,
+      headline: t('chatError.tooLongForModel', { model: modelDisplayLabel(overflow[1]) }),
       retryable: false,
     };
   }
@@ -200,7 +214,7 @@ function classify(raw: string, activeProvider: string | undefined): Classificati
   if (paywall?.[1] !== undefined) {
     return {
       category: 'subscription',
-      headline: `Cloud chat needs the ${paywall[1]} plan.`,
+      headline: t('chatError.planRequired', { plan: paywall[1] }),
       retryable: false,
     };
   }
@@ -208,7 +222,7 @@ function classify(raw: string, activeProvider: string | undefined): Classificati
   if (CONFIG_ERROR.test(raw)) {
     return {
       category: 'runtime',
-      headline: "AGI's local runtime could not read its settings.",
+      headline: t('chatError.runtimeSettings'),
       retryable: false,
     };
   }
@@ -216,7 +230,7 @@ function classify(raw: string, activeProvider: string | undefined): Classificati
   if (PERMISSION_TEXT.test(raw)) {
     return {
       category: 'permission',
-      headline: "AGI doesn't have permission for that action.",
+      headline: t('chatError.noPermission'),
       retryable: false,
     };
   }
@@ -224,7 +238,7 @@ function classify(raw: string, activeProvider: string | undefined): Classificati
   if (RUNTIME_TEXT.test(raw)) {
     return {
       category: 'runtime',
-      headline: "AGI's local runtime isn't running.",
+      headline: t('chatError.runtimeNotRunning'),
       retryable: false,
     };
   }
@@ -281,10 +295,6 @@ const FAILURE_CATEGORY: Readonly<Record<string, ChatErrorCategory>> = Object.fre
  */
 const MAX_STATED_RETRY_AFTER_SECONDS = 86_400;
 
-function counted(value: number, unit: string): string {
-  return `${value} ${unit}${value === 1 ? '' : 's'}`;
-}
-
 /**
  * The wait in the words a reader reads, or nothing. There is no fallback: a
  * reader who waits out a figure nobody sent, and fails again, stops believing
@@ -294,63 +304,59 @@ export function statedWait(retryAfterSeconds: number | undefined): string | null
   if (typeof retryAfterSeconds !== 'number' || !Number.isFinite(retryAfterSeconds)) return null;
   const seconds = Math.round(retryAfterSeconds);
   if (seconds < 1 || seconds > MAX_STATED_RETRY_AFTER_SECONDS) return null;
-  if (seconds < 90) return `about ${counted(seconds, 'second')}`;
+  if (seconds < 90) return tPlural('chatError.aboutSeconds', seconds);
   const minutes = Math.round(seconds / 60);
-  if (minutes < 90) return `about ${counted(minutes, 'minute')}`;
-  return `about ${counted(Math.round(seconds / 3600), 'hour')}`;
+  if (minutes < 90) return tPlural('chatError.aboutMinutes', minutes);
+  return tPlural('chatError.aboutHours', Math.round(seconds / 3600));
 }
 
 /** The one string a reader hands to support, appended only when there is one. */
 export function withFailureReference(text: string, requestId: string | undefined): string {
   const reference = requestId?.trim();
-  return reference ? `${text} Reference: ${reference}` : text;
+  return reference ? t('chatError.withReference', { text, reference }) : text;
 }
 
 function failureHeadline(failure: TurnFailureShape, provider: string): string {
   const wait = statedWait(failure.retryAfterSeconds);
   switch (failure.code) {
     case 'account_signed_out':
-      return 'Sign in to AGI to run this model on your plan.';
+      return t('chatError.signInToRun');
     case 'plan_excludes_model':
-      return 'Your plan does not include this model.';
+      return t('chatError.planExcludesModel');
     case 'usage_limit_reached':
-      return wait
-        ? `You have reached a usage limit on your account. It reopens in ${wait}.`
-        : 'You have reached a usage limit on your account. Check your usage to see when it resets.';
+      return wait ? t('chatError.usageLimitWait', { wait }) : t('chatError.usageLimit');
     case 'provider_auth_missing':
-      return `AGI has no ${provider} key to run this with.`;
+      return t('chatError.noProviderKey', { provider });
     case 'provider_auth_invalid':
-      return `Your ${provider} key was rejected.`;
+      return t('chatError.keyRejected', { provider });
     case 'provider_rate_limited':
       return wait
-        ? `${provider} is taking too many requests right now. Try again in ${wait}.`
-        : `${provider} is taking too many requests right now. Try again in a moment, or switch model.`;
+        ? t('chatError.providerBusyWait', { provider, wait })
+        : t('chatError.providerBusy', { provider });
     case 'free_allowance_exhausted':
-      return wait
-        ? `The free model has used up the allowance everyone on the Free plan shares, so this is not a limit on your account. Try again in ${wait}.`
-        : "The free model has used up the allowance everyone on the Free plan shares, so this is not a limit on your account. It resets on the provider's schedule.";
+      return wait ? t('chatError.freeAllowanceWait', { wait }) : t('chatError.freeAllowance');
     case 'provider_unavailable':
-      return `${provider} could not answer.`;
+      return t('chatError.providerCouldNotAnswer', { provider });
     case 'stream_interrupted':
-      return `${provider} stopped replying part way through.`;
+      return t('chatError.stoppedPartWay', { provider });
     case 'context_window_exceeded':
-      return 'This conversation is longer than the model can read at once.';
+      return t('chatError.tooLong');
     case 'output_limit_reached':
-      return "The answer reached this model's maximum length and stopped there. Ask for a shorter answer, or split the request.";
+      return t('chatError.outputLimit');
     case 'refused_by_safety':
-      return 'The safety system stopped this response. Rephrase the request, or try a different model.';
+      return t('chatError.safety');
     case 'network':
-      return 'This machine could not reach the provider.';
+      return t('chatError.network');
     case 'tool_denied':
-      return 'The turn stopped because a tool was not allowed to run.';
+      return t('chatError.toolDenied');
     case 'interrupted':
-      return 'The turn was stopped.';
+      return t('chatError.interrupted');
     case 'timeout':
-      return `${provider} took too long to answer.`;
+      return t('chatError.timeout', { provider });
     case 'invalid_request':
-      return `AGI sent ${provider} a request it refused.`;
+      return t('chatError.invalidRequest', { provider });
     default:
-      return "AGI couldn't finish the reply.";
+      return t('chatError.generic');
   }
 }
 
@@ -361,22 +367,18 @@ export function turnFailureOffer(failure: {
 }): ChatErrorAction | undefined {
   if (failure.action === 'sign_in_provider') {
     const provider =
-      failure.provider === undefined ? 'the provider' : providerDisplayLabel(failure.provider);
+      failure.provider === undefined
+        ? t('chatError.theProvider')
+        : providerDisplayLabel(failure.provider);
     return {
       kind: 'sign-in-provider',
-      label: `Sign in to ${provider}`,
+      label: t('chatError.signInToProvider', { provider }),
       ...(failure.provider === undefined ? {} : { provider: failure.provider }),
     };
   }
-  if (failure.action === 'sign_in_account') {
-    return { kind: 'sign-in-account', label: 'Sign in to AGI' };
-  }
-  if (failure.action === 'upgrade_plan') {
-    return { kind: 'upgrade-plan', label: 'Upgrade your plan' };
-  }
-  if (failure.action === 'open_settings') {
-    return { kind: 'open-settings', label: 'Open settings' };
-  }
+  if (failure.action === 'sign_in_account') return offer('sign-in-account');
+  if (failure.action === 'upgrade_plan') return offer('upgrade-plan');
+  if (failure.action === 'open_settings') return offer('open-settings');
   return undefined;
 }
 
@@ -394,12 +396,14 @@ const SWITCH_MODEL_CODES: ReadonlySet<string> = new Set([
 ]);
 
 function switchModelOffer(code: TurnFailureShape['code']): ChatErrorAction | undefined {
-  return SWITCH_MODEL_CODES.has(code) ? { kind: 'switch-model', label: 'Switch model' } : undefined;
+  return SWITCH_MODEL_CODES.has(code) ? offer('switch-model') : undefined;
 }
 
 export function presentTurnFailure(failure: TurnFailureShape): ChatErrorPresentation {
   const provider =
-    failure.provider === undefined ? 'the provider' : providerDisplayLabel(failure.provider);
+    failure.provider === undefined
+      ? t('chatError.theProvider')
+      : providerDisplayLabel(failure.provider);
   const headline = withFailureReference(failureHeadline(failure, provider), failure.requestId);
   const detail = failure.message.trim();
   const action = turnFailureOffer(failure) ?? switchModelOffer(failure.code);
@@ -419,7 +423,7 @@ export function presentChatError(
 ): ChatErrorPresentation {
   const text = raw.trim();
   if (text === '') {
-    return { category: 'unknown', headline: "AGI couldn't finish the reply.", retryable: false };
+    return { category: 'unknown', headline: t('chatError.generic'), retryable: false };
   }
 
   const classified = classify(text, activeProvider);
@@ -434,7 +438,7 @@ export function presentChatError(
   // the situation the call site happened to be in.
   const category = hint?.category ?? 'unknown';
   const retryable = hint?.retryable ?? false;
-  const offer = hint?.action === undefined ? {} : { action: hint.action };
+  const hinted = hint?.action === undefined ? {} : { action: offer(hint.action) };
 
   // Anything machine-shaped goes behind Details so a raw provider string is
   // never the first thing a user reads; an extension-authored sentence is
@@ -442,11 +446,11 @@ export function presentChatError(
   if (text.length > MACHINE_LENGTH || MACHINE_SHAPED.test(text)) {
     return {
       category,
-      headline: "AGI couldn't finish the reply.",
+      headline: t('chatError.generic'),
       detail: text,
       retryable,
-      ...offer,
+      ...hinted,
     };
   }
-  return { category, headline: text, retryable, ...offer };
+  return { category, headline: text, retryable, ...hinted };
 }

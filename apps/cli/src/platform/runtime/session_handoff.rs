@@ -401,6 +401,7 @@ mod tests {
             detail: "./deploy.sh".to_string(),
             risk_level: Some(AgentEventApprovalRiskLevel::High),
             reversible: Some(false),
+            proposed_content: None,
         }];
 
         let admitted = developer_session_handoff(&session, context)

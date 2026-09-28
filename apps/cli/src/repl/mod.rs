@@ -698,6 +698,9 @@ async fn run_prompt_turn(session: &mut AgentSession, config: &CliConfig, full_in
     match result {
         Ok(turn) => {
             output::print_assistant_end();
+            if let Some(footer) = crate::sources::render_footer(&turn.sources) {
+                output::print_block(&footer);
+            }
             if turn.via_subscription {
                 output::print_subscription_cost(turn.input_tokens, turn.output_tokens);
             } else {

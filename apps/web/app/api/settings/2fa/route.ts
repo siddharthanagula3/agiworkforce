@@ -12,6 +12,7 @@ import { getIdentityProvider } from '@/lib/server/identity';
 import { rememberMfaEnrollment } from '@/lib/mfa-policy-gate';
 import { readSecondFactorStatus } from '@/lib/server/step-up/second-factor';
 import { announceTwoFactorChange } from '@/lib/server/two-factor-security-events';
+import { authenticatorEnrollmentAvailable } from '@/lib/authenticator-enrollment';
 
 const ENDPOINT = '/api/settings/2fa';
 
@@ -25,6 +26,7 @@ async function handleGet2FAStatus(request: NextRequest) {
   return NextResponse.json({
     enabled: status.authenticator,
     backup_codes_ready: status.authenticator && status.backupCodes,
+    enrollment_available: authenticatorEnrollmentAvailable(),
   });
 }
 
