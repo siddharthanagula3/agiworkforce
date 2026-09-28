@@ -289,6 +289,8 @@ import {
 import { takeStagedLibraryAttachments } from '@features/library/lib/library-chat-handoff';
 import {
   useMediaGeneration,
+  cancelImageGenerations,
+  IMAGE_GENERATION_CANCELLED_CODE,
   MediaGenerationApiError,
   type GeneratedImageResult,
   type GenerateVideoOptions,
@@ -2362,7 +2364,11 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             usage: managedUsageSummary,
           })
         : null;
-      const content = paywall ? '' : `Image generation failed: ${raw}`;
+      const content = paywall
+        ? ''
+        : apiError?.code === IMAGE_GENERATION_CANCELLED_CODE
+          ? raw
+          : `Image generation failed: ${raw}`;
       const metadata = imageGenerationFailureMetadata(readMessageMetadata(conversationId, msgId), {
         ...(paywall ? { paywall } : {}),
         ...(apiError?.resetAt ? { retryAt: apiError.resetAt } : {}),
@@ -2446,6 +2452,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         generate: async () => {
           generatedImage = await generateImage(turn.prompt, {
             ...turn.imageRequest,
+            cancelScope: turn.conversationId,
             ...(!turn.temporary ? { conversationId: turn.conversationId } : {}),
           });
           return generatedImage.imageUrl;
@@ -2720,6 +2727,25 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             ...((generatedImage?.model ?? requestedModel)
               ? { imageGenModel: generatedImage?.model ?? requestedModel }
               : {}),
+            ...(previousMetadata?.imageUrl
+              ? {
+                  imageVersions: [
+                    ...(previousMetadata.imageVersions ?? []),
+                    {
+                      imageUrl: previousMetadata.imageUrl,
+                      ...(previousMetadata.imageGenPrompt
+                        ? { prompt: previousMetadata.imageGenPrompt }
+                        : {}),
+                      ...(previousMetadata.imageGenAspect
+                        ? { aspect: previousMetadata.imageGenAspect }
+                        : {}),
+                      ...(previousMetadata.imageGenModel
+                        ? { model: previousMetadata.imageGenModel }
+                        : {}),
+                    },
+                  ],
+                }
+              : {}),
           });
 
         const outcome = await runDurableImageGenerationTurn({
@@ -2729,6 +2755,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           generate: async () => {
             generatedImage = await generateImage(opts.prompt, {
               ...imageRequest,
+              cancelScope: ownerConversationId,
               ...(!ownerConversationIsTemporary ? { conversationId: ownerConversationId } : {}),
             });
             return generatedImage.imageUrl;
@@ -3161,6 +3188,8 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             // Sizes VideoGenerationPlaceholder to the requested shape before the
             // provider returns anything, so the transcript doesn't jump later.
             ...(videoOptions?.aspectRatio ? { videoAspect: videoOptions.aspectRatio } : {}),
+            ...(videoOptions?.resolution ? { videoResolution: videoOptions.resolution } : {}),
+            ...(videoOptions?.durationSecs ? { videoDurationSecs: videoOptions.durationSecs } : {}),
           };
           addMessage(
             {
@@ -3254,6 +3283,10 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
               // sized correctly for the whole in-flight window, not just the
               // instant before the start request resolves.
               ...(videoOptions?.aspectRatio ? { videoAspect: videoOptions.aspectRatio } : {}),
+              ...(videoOptions?.resolution ? { videoResolution: videoOptions.resolution } : {}),
+              ...(videoOptions?.durationSecs
+                ? { videoDurationSecs: videoOptions.durationSecs }
+                : {}),
             };
             updateOwnMessage(assistantMessageId, {
               content: '',
@@ -3446,9 +3479,15 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         handleOpenUpgradeDialog();
         return;
       }
+      const failed = assistantMessage.metadata;
       handleGenerateVideo(userMessage.content, {
-        ...(typeof assistantMessage.metadata.videoModel === 'string'
-          ? { modelId: assistantMessage.metadata.videoModel }
+        ...(typeof failed.videoModel === 'string' ? { modelId: failed.videoModel } : {}),
+        ...(typeof failed.videoAspect === 'string' ? { aspectRatio: failed.videoAspect } : {}),
+        ...(typeof failed.videoResolution === 'string'
+          ? { resolution: failed.videoResolution }
+          : {}),
+        ...(typeof failed.videoDurationSecs === 'number'
+          ? { durationSecs: failed.videoDurationSecs }
           : {}),
       });
     },
@@ -3468,7 +3507,16 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
    * recently -- possibly another conversation's -- while its store teardown
    * resolved against `activeConversationId`, so the two halves could disagree.
    */
+  const imageTurnActive = useMemo(
+    () =>
+      displayedMessages.some(
+        (message) => message.isStreaming && message.metadata?.toolType === 'image-generation',
+      ),
+    [displayedMessages],
+  );
+
   const handleStopGeneration = useCallback(() => {
+    if (displayedConversationId && cancelImageGenerations(displayedConversationId)) return;
     stopGeneration(displayedConversationId ?? undefined);
   }, [stopGeneration, displayedConversationId]);
 
@@ -5840,7 +5888,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                         conversationId={displayedConversationId}
                         onStop={handleStopGeneration}
                         isLoading={isLoading}
-                        isGenerating={isStreaming}
+                        isGenerating={isStreaming || imageTurnActive}
                         placeholder={t('chat:placeholderEmpty')}
                         prefillText={composerPrefill}
                         onPrefillConsumed={handleComposerPrefillConsumed}
@@ -5952,7 +6000,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                         conversationId={displayedConversationId}
                         onStop={handleStopGeneration}
                         isLoading={isLoading}
-                        isGenerating={isStreaming}
+                        isGenerating={isStreaming || imageTurnActive}
                         placeholder={t('chat:placeholder')}
                         onEditLastMessage={editLastUserMessage}
                         prefillText={composerPrefill}
