@@ -3319,7 +3319,10 @@ export class ChatStateManager {
       try {
         const attachmentEntries = [...request.attachments];
         const attachmentInputs = attachmentEntries.map((entry) => entry.input);
-        const customInstructionInput = buildCustomInstructionInput(this._context);
+        const activeProject = getActiveCloudProject(this._context.workspaceState);
+        const customInstructionInput = buildCustomInstructionInput(this._context, {
+          projectAppliedByServer: activeProject !== undefined && thread.trustMode === 'managed',
+        });
         const memoryInput = buildMemoryContextInput(getAccountMemoryStore()?.cachedFacts() ?? []);
         const contextFiles = contextFilesForWorkspace(cwd, request.editorContext.contextFiles);
         const editorContextInputs: UserInput[] = request.editorContext.texts.map((text) => ({
@@ -3342,6 +3345,7 @@ export class ChatStateManager {
           agentMode: enforceAgentModeConsent(this._mode ?? Config.agentMode()),
           reasoningEffort: supportedEffort(requestedModel, this._effort ?? Config.agentEffort()),
           ...(contextFiles.length === 0 ? {} : { contextFiles }),
+          ...(activeProject === undefined ? {} : { cloudProjectId: activeProject.id }),
           ...(isAutoRoutingModel(requestedModel)
             ? {
                 model: requestedModel,
