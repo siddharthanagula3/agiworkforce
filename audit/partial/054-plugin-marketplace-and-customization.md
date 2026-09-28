@@ -102,33 +102,29 @@ Code: `apps/cli/src/lib.rs:1428-1462`, `apps/cli/src/lib.rs:3984-4025`
 
 - Done when: Plugins are grouped into role or use-case categories a user can browse.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Directory entries carry a category and the directory query can filter by it, but the web UI offers no category browse or filter. | ui |
-| desktop | partial | Same as web. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/plugins/server/directory/query.ts:100-108`, `apps/web/features/plugins/server/directory/entries.ts:235-235`
-
 ## S54.12: Publisher detail.
 
 - Done when: A user can see details about a plugin's publisher.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Detail shows publisher name, a verified badge and homepage/repo links; there is no publisher page with the publisher's other plugins or identity details. | ui |
-| desktop | partial | Detail shows publisher name, a verified badge and homepage/repo links; there is no publisher page with the publisher's other plugins or identity details. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | agi plugin list shows a signature label naming the trusted publisher when signed; no publisher detail. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `packages/ui/ui/src/directory/PluginDetailView.tsx:456-462`, `packages/ui/ui/src/directory/PluginDetailView.tsx:456-478`, `apps/cli/src/lib.rs:3613-3652`, `apps/cli/src/lib.rs:3617-3634`
+Code: `apps/cli/src/lib.rs:3613-3652`, `apps/cli/src/lib.rs:3617-3634`
 
 ## S54.13: Plugin detail.
 
@@ -216,17 +212,14 @@ Code: `packages/ui/ui/src/directory/PluginDetailView.tsx:113-145`, `apps/web/fea
 
 - Done when: Before and after installing, a user sees the permissions a plugin requires.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Migration 0289 is now applied in production (2026-09-27). Still open: Permission sets are stored and a changed set must be acknowledged before an update applies, but no screen shows a plugin's permissions; the update path reads pending migration 0289 columns. | ui |
-| desktop | partial | Migration 0289 is now applied in production (2026-09-27). Still open: Permission sets are stored and a changed set must be acknowledged before an update applies, but no screen shows a plugin's permissions; the update path reads pending migration 0289 columns. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/lib/services/plugin-installation-service.ts:213-230`, `apps/web/app/api/plugins/updates/route.ts:26-64`, `apps/web/lib/services/plugin-lifecycle.ts:100-102`
 
 ## S54.20: Supported surfaces.
 
@@ -298,33 +291,28 @@ Code: `packages/ui/ui/src/directory/PluginDetailView.tsx:311-340`, `apps/web/fea
 
 - Done when: A user can update an installed plugin to a newer version.
 - Wave: 3
-- Already works on: cli
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Migration 0289 is now applied in production (2026-09-27). Still open: An update-offer API exists but nothing in the product calls it, and it reads signature columns from pending migration 0289. | ui |
-| desktop | partial | Migration 0289 is now applied in production (2026-09-27). Still open: An update-offer API exists but nothing in the product calls it, and it reads signature columns from pending migration 0289. | ui |
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/api/plugins/updates/route.ts:26-64`, `apps/web/lib/services/plugin-lifecycle.ts:100-102`
 
 ## S54.26: Pin version.
 
 - Done when: A user can pin a plugin to a specific version.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Installs record installed_version and never auto-update, but a user cannot choose or hold a version. | ui |
-| desktop | partial | Installs record installed_version and never auto-update, but a user cannot choose or hold a version. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | --integrity sha256:<hex> pins the content on install, but there is no way to choose a version, and marketplace update moves every git plugin forward. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/services/plugin-installation-service.ts:185-202`, `packages/ui/ui/src/directory/PluginDetailView.tsx:568-577`, `apps/cli/src/lib.rs:1293-1326`, `apps/cli/src/lib.rs:3984-4025`
+Code: `apps/cli/src/lib.rs:1293-1326`, `apps/cli/src/lib.rs:3984-4025`
 
 ## S54.27: Customize installed plugin.
 
@@ -374,17 +362,14 @@ Code: `apps/web/features/workspace-console/components/WorkspaceConnectorPolicy.t
 
 - Done when: A user can see a plugin's security-scan result.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | An upload or install now shows what the scanner found (blocked: the reasons; warning: the findings with Continue anyway, as Claude's scan does); an installed plugin's detail does not yet show its scan result (next batch) | ui |
-| desktop | partial | An upload or install now shows what the scanner found (blocked: the reasons; warning: the findings with Continue anyway, as Claude's scan does); an installed plugin's detail does not yet show its scan result (next batch) | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/lib/services/plugin-owned-source-service.ts:77-77`, `packages/ui/ui/src/directory/UploadFileDialog.tsx:128-128`, `apps/web/lib/services/user-skill-service.ts:145-145`
 
 ## S54.33: Compatibility warning.
 
@@ -402,17 +387,14 @@ Code: `apps/web/lib/services/plugin-owned-source-service.ts:77-77`, `packages/ui
 
 - Done when: When a plugin's dependency is missing, the product offers to fix it.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Missing required connectors get a Connect button; other missing requirements (unavailable skills, runtime) have no repair path. | handler |
-| desktop | partial | Missing required connectors get a Connect button; other missing requirements (unavailable skills, runtime) have no repair path. | handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `packages/ui/ui/src/directory/PluginDetailView.tsx:311-340`, `apps/web/features/directory/hooks/useDirectoryAdapter.ts:1342-1345`
 
 ## S54.35: Plugin-creation assistant.
 

@@ -147,16 +147,15 @@ Code: `apps/extension/src/background.ts:4618-4631`, `apps/extension/src/side_pan
 
 - Done when: The user can browse a document's past revisions with their times and open or restore one.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Versions can be stepped one at a time (vN/M chip) and restored, but there is no history list with times or authors. | ui |
-| desktop | partial | Same as web (hosted): step-only version chip, no history list. | ui |
 | mobile | partial | The 'vN/M' chip appears only when there are two or more versions and steps one at a time; no list of versions to jump to. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1255-1281`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:444-454`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:519-556`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:147-152`
+Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:519-556`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:147-152`
 
 ## S27.35: Export to document formats.
 

@@ -214,6 +214,30 @@ export const PluginPackageRefusalDetailsSchema = z.object({
 export type PluginScanFindingSummary = z.infer<typeof PluginScanFindingSummarySchema>;
 export type PluginPackageRefusalDetails = z.infer<typeof PluginPackageRefusalDetailsSchema>;
 
+export interface PluginScanSummary {
+  verdict: 'pass' | 'review' | 'block';
+  findings: PluginScanFindingSummary[];
+  scannedAt: string;
+}
+
+export interface PluginScanResponse {
+  scan: PluginScanSummary | null;
+}
+
+export interface PluginPublishedVersion {
+  version: string;
+  publishedAt: string | null;
+  changelog: string;
+  permissions: string[];
+  declaredSkills: string[];
+}
+
+export interface PluginVersionsResponse {
+  versions: PluginPublishedVersion[];
+  installedVersion: string | null;
+  approvedPermissions: string[];
+}
+
 export interface PluginConnectorRequirementState {
   connectorId: string;
   connected: boolean;
