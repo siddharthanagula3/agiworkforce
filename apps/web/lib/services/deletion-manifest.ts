@@ -41,6 +41,7 @@ const CUSTOMER_CONTENT = [
   'conversation_branches',
   'conversation_tags',
   'conversations',
+  'external_resource_references',
   'feedback',
   'image_generation_job_assets',
   'image_generation_jobs',
@@ -86,7 +87,6 @@ const CUSTOMER_CONTENT = [
 
 const DERIVED_CONTENT = [
   'context_manifests',
-  'external_resource_references',
   'file_lineage',
   'retrieval_chunks',
   'retrieval_documents',
