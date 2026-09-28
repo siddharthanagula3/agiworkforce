@@ -622,6 +622,16 @@ const ru = {
   'localServers.unhealthy': '{provider} не отвечает: {reason}',
   'localServers.blocked': '{provider} заблокирован: {reason}',
   'localServers.noReason': 'причина не указана',
+  'cloudSteer.action': 'Написать агенту',
+  'cloudSteer.actionDescription': 'Добавьте указания или смените направление',
+  'cloudSteer.prompt': 'Агент прочтёт сообщение на следующем шаге и сохранит свой прогресс.',
+  'cloudSteer.sent': 'В очереди. Агент прочтёт его на следующем шаге.',
+  'cloudSteer.queued': 'В очереди. Агент прочтёт его на следующем шаге.',
+  'cloudSteer.unread': 'Задача остановилась до того, как агент это прочитал.',
+  'cloudSteer.delivered': 'Ваше сообщение, прочитанное агентом',
+  'cloudSteer.waitingSection': 'Ваши сообщения',
+  'cloudSteer.failed': 'не удалось отправить ваше сообщение',
+  'cloudSteer.tooLong': 'Сообщение может содержать не более {count} символов.',
 };
 
 export default ru;

@@ -702,6 +702,16 @@ const ar = {
   'localServers.unhealthy': '{provider} لا يستجيب: {reason}',
   'localServers.blocked': '{provider} محظور: {reason}',
   'localServers.noReason': 'لم يُذكر سبب',
+  'cloudSteer.action': 'مراسلة الوكيل',
+  'cloudSteer.actionDescription': 'أضف تعليمات أو غيّر المسار',
+  'cloudSteer.prompt': 'يقرأ رسالتك في خطوته التالية ويحتفظ بتقدمه.',
+  'cloudSteer.sent': 'في قائمة الانتظار. سيقرؤها الوكيل في خطوته التالية.',
+  'cloudSteer.queued': 'في قائمة الانتظار. سيقرؤها الوكيل في خطوته التالية.',
+  'cloudSteer.unread': 'توقفت المهمة قبل أن يقرأ الوكيل هذا.',
+  'cloudSteer.delivered': 'رسالتك، قرأها الوكيل',
+  'cloudSteer.waitingSection': 'رسائلك',
+  'cloudSteer.failed': 'تعذر إرسال رسالتك',
+  'cloudSteer.tooLong': 'يمكن أن تتكون الرسالة من {count} حرفًا كحد أقصى.',
 };
 
 export default ar;
