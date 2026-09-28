@@ -344,6 +344,10 @@ struct SharedModelMetadata {
     /// "fast" | "balanced" | "best", from models.json qualityTier field.
     #[serde(default, rename = "qualityTier")]
     quality_tier: Option<String>,
+    #[serde(default, rename = "bestFor")]
+    best_for: Vec<String>,
+    #[serde(default)]
+    deprecation_date: Option<String>,
     /// Optional env gate from models.json `requiresEnvironment` field.
     /// Absent on all current models → always deserializes to None.
     #[serde(default, rename = "requiresEnvironment")]
@@ -1675,6 +1679,25 @@ pub fn preferred_model_for_type(provider: &str, model_type: &str) -> Option<Stri
 ///
 /// Callers that want a CapabilityTier enum should use `design_system::capability_for_model`
 /// which delegates to this function.
+pub struct ModelDetail {
+    pub best_for: Vec<String>,
+    pub deprecation_date: Option<String>,
+    pub status: Option<String>,
+}
+
+pub fn model_detail(model_id: &str) -> Option<ModelDetail> {
+    let catalog = shared_catalog()?;
+    let meta = catalog.models.values().find(|meta| {
+        let api_id = meta.api_model_id.as_deref().unwrap_or(&meta.id);
+        api_id.eq_ignore_ascii_case(model_id) || meta.id.eq_ignore_ascii_case(model_id)
+    })?;
+    Some(ModelDetail {
+        best_for: meta.best_for.clone(),
+        deprecation_date: meta.deprecation_date.clone(),
+        status: meta.status.clone(),
+    })
+}
+
 pub fn quality_tier_for_model(model_id: &str) -> Option<String> {
     let Some(catalog) = shared_catalog() else {
         return None;

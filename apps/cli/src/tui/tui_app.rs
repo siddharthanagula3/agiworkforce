@@ -196,6 +196,7 @@ impl ToolTiming {
 }
 
 const CONTEXT_WARNING_PERCENT: u8 = 85;
+const BELL_AFTER_TURN_OF: std::time::Duration = std::time::Duration::from_secs(10);
 
 static EXPAND_TOOL_OUTPUT: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
@@ -3784,8 +3785,15 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         }
 
         "/status" => {
+            let account = match crate::tier_cache::load_jwt() {
+                None => "not signed in (agi login)".to_string(),
+                Some(_) => match crate::tier_cache::read_tier_cache() {
+                    Some(cached) => format!("signed in, {} plan", cached.tier.label()),
+                    None => "signed in".to_string(),
+                },
+            };
             let msg = format!(
-                "Version: {}\nModel: {}\nProvider: {}\nMode: {}\nSandbox: {}\nTurns: {}\nTokens: {} in / {} out\nContext: {}%",
+                "Account: {account}\nVersion: {}\nModel: {}\nProvider: {}\nMode: {}\nSandbox: {}\nTurns: {}\nTokens: {} in / {} out\nContext: {}%",
                 env!("CARGO_PKG_VERSION"),
                 crate::model_catalog::display_name(&app.session.model),
                 app.provider_name,
@@ -4562,6 +4570,22 @@ pub async fn run(
     auto_route_seed: Option<crate::routing::classify::AutoRouteSeed>,
 ) -> Result<()> {
     crate::tier_cache::ensure_plan_models_cached().await;
+    tokio::spawn(async {
+        let Ok(release) = crate::update_check::fetch_latest_release().await else {
+            return;
+        };
+        if crate::update_check::compare_versions(
+            crate::update_check::running_version(),
+            &release.version,
+        ) == crate::update_check::UpdateVerdict::Available
+        {
+            crate::tui::push_tui_notice(format!(
+                "agi {} is available (you have {}). Install it with: agi update --install",
+                release.version,
+                crate::update_check::running_version()
+            ));
+        }
+    });
     let effective_provider_override = crate::models::plan_first_provider_override(
         &crate::models::AccountRoute::load(),
         model,
@@ -5586,6 +5610,7 @@ async fn send_message_with_prompt(
     let turn_input_tokens = app.session.total_input_tokens;
     let turn_output_tokens = app.session.total_output_tokens;
     let turn_context_percent = app.context_percent();
+    let turn_started = Instant::now();
     let turn_cost_str = crate::output::format_session_credits(app.session.cost_ledger.total_usd);
     let turn_notice = app.live_notice().map(str::to_string);
     let side_query = app
@@ -5816,6 +5841,15 @@ async fn send_message_with_prompt(
             });
 
             app.sync_stats();
+
+            if app.config.ui.bell_on_finish == Some(true)
+                && turn_started.elapsed() >= BELL_AFTER_TURN_OF
+            {
+                use std::io::Write;
+                let mut stdout = std::io::stdout();
+                let _ = stdout.write_all(b"\x07");
+                let _ = stdout.flush();
+            }
 
             let context_percent = app.context_percent();
             if context_percent >= CONTEXT_WARNING_PERCENT
