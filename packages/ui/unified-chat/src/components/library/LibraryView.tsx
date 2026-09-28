@@ -38,6 +38,7 @@ import {
   ZoomOut,
 } from 'lucide-react';
 import { SEARCH_INPUT_DEBOUNCE_MS, formatBytes } from '@agiworkforce/utils';
+import { parseTabular } from '../../lib/tabular';
 import {
   LibraryListResponseSchema,
   LIBRARY_DEFAULT_PAGE_SIZE,
@@ -252,6 +253,7 @@ export interface LibraryTransport {
   restoreItem(id: string): Promise<Response>;
   openPreview(uri: string): void;
   inlinePreviewUri?: (uri: string) => string;
+  textPreviewUri?: (uri: string) => string;
   startChat?: () => void;
   /** Starts a chat seeded with `message`, opened from the file viewer's "Ask
    *  about this file" composer for `item`. */
@@ -574,6 +576,11 @@ export function LibraryView({
   const { addToChat, addToWork, addToProject, remixItem, shareArtifact, openConversation } =
     transport;
 
+  const loadTextPreview = useMemo(() => {
+    const { textPreviewUri, fetchAsset } = transport;
+    return textPreviewUri ? (uri: string) => fetchAsset(textPreviewUri(uri)) : undefined;
+  }, [transport]);
+
   const handleOpenConversation = useMemo(
     () =>
       openConversation
@@ -831,6 +838,7 @@ export function LibraryView({
           onClose={() => setViewerItem(null)}
           onDownload={handleDownload}
           inlinePreviewUri={transport.inlinePreviewUri}
+          loadTextPreview={loadTextPreview}
           askAboutFile={transport.askAboutFile}
           containerId={overlayContainerId}
         />
@@ -1011,6 +1019,113 @@ export function LibraryView({
   );
 }
 
+interface FileTextPreviewData {
+  kind: 'table' | 'text';
+  text: string;
+  truncated: boolean;
+}
+
+type FileTextPreviewState =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'ready'; preview: FileTextPreviewData }
+  | { status: 'failed' };
+
+const TEXT_PREVIEW_ROW_CAP = 500;
+
+function useFileTextPreview(
+  uri: string | null,
+  load: ((uri: string) => Promise<Response>) | undefined,
+): FileTextPreviewState {
+  const [state, setState] = useState<FileTextPreviewState>({ status: 'idle' });
+  useEffect(() => {
+    if (!uri || !load) {
+      setState({ status: 'idle' });
+      return;
+    }
+    let cancelled = false;
+    setState({ status: 'loading' });
+    void load(uri)
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const body = (await response.json()) as Partial<FileTextPreviewData>;
+        if (typeof body.text !== 'string') throw new Error('Unexpected preview');
+        if (!cancelled) {
+          setState({
+            status: 'ready',
+            preview: {
+              kind: body.kind === 'table' ? 'table' : 'text',
+              text: body.text,
+              truncated: body.truncated === true,
+            },
+          });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setState({ status: 'failed' });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [uri, load]);
+  return state;
+}
+
+function FileTextPreview({ preview }: { preview: FileTextPreviewData }) {
+  const table = useMemo(
+    () => (preview.kind === 'table' ? parseTabular(preview.text) : null),
+    [preview.kind, preview.text],
+  );
+  const rows = table ? table.rows.slice(0, TEXT_PREVIEW_ROW_CAP) : [];
+  const cut = preview.truncated || (table !== null && table.rows.length > rows.length);
+  return (
+    <div
+      data-testid="library-text-preview"
+      className="flex max-h-full w-full max-w-4xl flex-col gap-2 self-start overflow-auto rounded-lg bg-[var(--chat-surface-base)] p-4 text-sm text-[var(--chat-text-primary)]"
+    >
+      {table ? (
+        <table className="w-full border-collapse text-left text-xs">
+          <thead>
+            <tr>
+              {table.columns.map((header, index) => (
+                <th
+                  key={index}
+                  className="border-b border-[var(--chat-border)] px-2 py-1 font-semibold"
+                >
+                  {header}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, rowIndex) => (
+              <tr key={rowIndex}>
+                {row.map((cell, cellIndex) => (
+                  <td
+                    key={cellIndex}
+                    className="border-b border-[var(--chat-border)] px-2 py-1 align-top"
+                  >
+                    {cell}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <pre className="whitespace-pre-wrap break-words font-[var(--chat-font-mono)] text-xs">
+          {preview.text}
+        </pre>
+      )}
+      {cut ? (
+        <p className="text-xs text-[var(--chat-text-secondary)]">
+          Showing the start of this file. Download it to see all of it.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 const VIEWER_ZOOM_MIN = 25;
 const VIEWER_ZOOM_MAX = 400;
 const VIEWER_ZOOM_STEP = 25;
@@ -1021,6 +1136,7 @@ interface FileViewerOverlayProps {
   onClose: () => void;
   onDownload: (item: LibraryItem) => Promise<void>;
   inlinePreviewUri?: (uri: string) => string;
+  loadTextPreview?: (uri: string) => Promise<Response>;
   askAboutFile?: (item: LibraryItem, message: string) => void;
   containerId?: string;
 }
@@ -1030,6 +1146,7 @@ function FileViewerOverlay({
   onClose,
   onDownload,
   inlinePreviewUri,
+  loadTextPreview,
   askAboutFile,
   containerId,
 }: FileViewerOverlayProps) {
@@ -1041,6 +1158,9 @@ function FileViewerOverlay({
   const documentUri = isPdfItem(item)
     ? pdfPreviewUri(inlinePreviewUri?.(item.uri) ?? item.uri)
     : undefined;
+  const wantsTextPreview =
+    !previewUri && !playbackUri && !documentUri && item.previewable && Boolean(loadTextPreview);
+  const textPreview = useFileTextPreview(wantsTextPreview ? item.uri : null, loadTextPreview);
 
   useEffect(() => {
     setContainer(containerId ? document.getElementById(containerId) : null);
@@ -1168,6 +1288,10 @@ function FileViewerOverlay({
               Download to view
             </Button>
           </object>
+        ) : textPreview.status === 'loading' ? (
+          <Spinner size="md" />
+        ) : textPreview.status === 'ready' ? (
+          <FileTextPreview preview={textPreview.preview} />
         ) : (
           <div className="flex flex-col items-center gap-3 rounded-lg bg-[var(--chat-surface-base)] p-8 text-center text-sm text-[var(--chat-text-secondary)]">
             <FileKindIcon
