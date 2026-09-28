@@ -17,18 +17,19 @@ use agiworkforce_protocol::developer_session::{
     HandoffAdmissionContext, HandoffEnvironment, HandoffLastTurn, HandoffLocalResource,
     HandoffRefusal, HandoffTurnState, HookListResponse, HostModelSummary, LocalModelListResponse,
     LocalModelProvider, LocalModelSummary, McpLoginParams, McpLoginResponse,
-    McpServerConfiguredStatus, McpServerListResponse, MemoryAddParams, MemoryAddResponse,
-    ModelListParams, PendingApprovalSnapshot, PluginListResponse, PluginSetEnabledParams,
-    RewindSkippedFile, SettingsReadResponse, SettingsWriteParams, SkillConsentParams,
-    SkillConsentResponse, SkillListResponse, SkillSetEnabledParams, SlashCommandListResponse,
-    SlashCommandRunParams, SlashCommandRunResponse, ThreadCheckpoint, ThreadCheckpointsResponse,
-    ThreadForkParams, ThreadHandoffAcceptParams, ThreadHandoffParams, ThreadIdParams,
-    ThreadListParams, ThreadListResponse, ThreadPlanNotification, ThreadReadResponse,
-    ThreadReconnectResponse, ThreadRewindParams, ThreadRewindResponse, ThreadRewindRestore,
-    ThreadSearchHit, ThreadSearchParams, ThreadSearchResponse, ThreadStartParams, ThreadStatus,
-    ThreadSummary, ThreadWriterChangedNotification, ThreadWriterConflictData,
-    TurnEndedNotification, TurnFailure, TurnFailureCode, TurnInterruptParams,
-    TurnModelNotification, TurnStartParams, TurnStatus, TurnSteerParams, TurnSummary,
+    McpServerConfiguredStatus, McpServerListResponse, McpServerParams, McpServerTestResponse,
+    McpServerToolsResponse, MemoryAddParams, MemoryAddResponse, ModelListParams,
+    PendingApprovalSnapshot, PluginListResponse, PluginSetEnabledParams, RewindSkippedFile,
+    SettingsReadResponse, SettingsWriteParams, SkillConsentParams, SkillConsentResponse,
+    SkillListResponse, SkillSetEnabledParams, SlashCommandListResponse, SlashCommandRunParams,
+    SlashCommandRunResponse, ThreadCheckpoint, ThreadCheckpointsResponse, ThreadForkParams,
+    ThreadHandoffAcceptParams, ThreadHandoffParams, ThreadIdParams, ThreadListParams,
+    ThreadListResponse, ThreadPlanNotification, ThreadReadResponse, ThreadReconnectResponse,
+    ThreadRewindParams, ThreadRewindResponse, ThreadRewindRestore, ThreadSearchHit,
+    ThreadSearchParams, ThreadSearchResponse, ThreadStartParams, ThreadStatus, ThreadSummary,
+    ThreadWriterChangedNotification, ThreadWriterConflictData, TurnEndedNotification, TurnFailure,
+    TurnFailureCode, TurnInterruptParams, TurnModelNotification, TurnStartParams, TurnStatus,
+    TurnSteerParams, TurnSummary,
 };
 use agiworkforce_protocol::protocol::{NetworkPolicyRuleAction, ReviewDecision};
 use agiworkforce_protocol::task_state::AgentTaskState;
@@ -422,6 +423,7 @@ impl CliDeveloperSessionHost {
             plan: true,
             approval_notes: true,
             approval_edits: true,
+            mcp_tools: self.load_integrations,
         }
     }
 
@@ -3037,6 +3039,32 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 crate::mcp::McpCredentialState::Configured => McpServerConfiguredStatus::Configured,
             },
         })
+    }
+
+    async fn test_mcp_server(
+        &self,
+        params: McpServerParams,
+    ) -> Result<McpServerTestResponse, DeveloperSessionHostError> {
+        let _guard = self.admit_request().await?;
+        surfaces::test_mcp_server(
+            &self.workspace_root,
+            &params.name,
+            std::time::Duration::from_secs(MCP_LOAD_TIMEOUT_SECONDS),
+        )
+        .await
+    }
+
+    async fn list_mcp_server_tools(
+        &self,
+        params: McpServerParams,
+    ) -> Result<McpServerToolsResponse, DeveloperSessionHostError> {
+        let _guard = self.admit_request().await?;
+        surfaces::mcp_server_tools(
+            &self.workspace_root,
+            &params.name,
+            std::time::Duration::from_secs(MCP_LOAD_TIMEOUT_SECONDS),
+        )
+        .await
     }
 
     async fn list_hooks(&self) -> Result<HookListResponse, DeveloperSessionHostError> {

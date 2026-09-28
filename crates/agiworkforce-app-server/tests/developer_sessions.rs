@@ -343,6 +343,7 @@ fn capabilities() -> AppServerCapabilities {
         plan: false,
         approval_notes: false,
         approval_edits: false,
+        mcp_tools: false,
     }
 }
 

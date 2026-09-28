@@ -90,6 +90,8 @@ pub mod method {
     pub const PLUGINS_SET_ENABLED: &str = "plugins/setEnabled";
     pub const MCP_LIST: &str = "mcp/list";
     pub const MCP_LOGIN: &str = "mcp/login";
+    pub const MCP_TEST: &str = "mcp/test";
+    pub const MCP_TOOLS: &str = "mcp/tools";
     pub const HOOKS_LIST: &str = "hooks/list";
     pub const SETTINGS_READ: &str = "settings/read";
     pub const SETTINGS_WRITE: &str = "settings/write";
@@ -356,6 +358,8 @@ pub struct AppServerCapabilities {
     pub approval_notes: bool,
     #[serde(default, skip_serializing_if = "is_false")]
     pub approval_edits: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub mcp_tools: bool,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -1939,6 +1943,82 @@ pub struct McpLoginParams {
 pub struct McpLoginResponse {
     pub name: String,
     pub status: McpServerConfiguredStatus,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct McpServerParams {
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct McpServerTestResponse {
+    pub name: String,
+    pub connected: bool,
+    pub elapsed_ms: u64,
+    pub tool_count: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct McpToolSummary {
+    pub name: String,
+    pub description: String,
+    pub input_schema: Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct McpPromptArgumentSummary {
+    pub name: String,
+    pub description: String,
+    pub required: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct McpPromptSummary {
+    pub name: String,
+    pub description: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub arguments: Vec<McpPromptArgumentSummary>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct McpResourceSummary {
+    pub uri: String,
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub description: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub mime_type: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct McpServerToolsResponse {
+    pub name: String,
+    pub tools: Vec<McpToolSummary>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub prompts: Vec<McpPromptSummary>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub resources: Vec<McpResourceSummary>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]

@@ -6,7 +6,8 @@ use agiworkforce_protocol::developer_session::{
     AppServerResponse, ApprovalResponseParams, ContextInstructionsParams,
     ContextInstructionsResponse, DeveloperSessionHandoff, HandoffAdmission, HookListResponse,
     InitializeParams, InitializeResponse, LocalModelListResponse, McpLoginParams, McpLoginResponse,
-    McpServerListResponse, MemoryAddParams, MemoryAddResponse, ModelListParams, PluginListResponse,
+    McpServerListResponse, McpServerParams, McpServerTestResponse, McpServerToolsResponse,
+    MemoryAddParams, MemoryAddResponse, ModelListParams, PluginListResponse,
     PluginSetEnabledParams, ProtocolVersionUnsupportedData, SettingsReadResponse,
     SettingsWriteParams, SkillConsentParams, SkillConsentResponse, SkillListResponse,
     SkillSetEnabledParams, SlashCommandListResponse, SlashCommandRunParams,
@@ -273,6 +274,20 @@ pub trait DeveloperSessionHost: Send + Sync {
         _params: McpLoginParams,
     ) -> Result<McpLoginResponse, DeveloperSessionHostError> {
         Err(unsupported("mcp/login"))
+    }
+
+    async fn test_mcp_server(
+        &self,
+        _params: McpServerParams,
+    ) -> Result<McpServerTestResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::MCP_TEST))
+    }
+
+    async fn list_mcp_server_tools(
+        &self,
+        _params: McpServerParams,
+    ) -> Result<McpServerToolsResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::MCP_TOOLS))
     }
 
     async fn list_hooks(&self) -> Result<HookListResponse, DeveloperSessionHostError> {
@@ -815,6 +830,26 @@ impl DeveloperSessionProcessor {
                 };
                 self.host
                     .login_mcp_server(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::MCP_TEST => {
+                let params = match parse_params::<McpServerParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .test_mcp_server(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::MCP_TOOLS => {
+                let params = match parse_params::<McpServerParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .list_mcp_server_tools(params)
                     .await
                     .map(serde_json::to_value)
             }
