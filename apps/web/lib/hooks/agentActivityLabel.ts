@@ -1,6 +1,7 @@
 import {
   ITINERARY_TOOL_NAME,
   PLACES_SEARCH_TOOL_NAME,
+  PRODUCT_COMPARISON_TOOL_NAME,
   type AgentEventToolCategory,
 } from '@agiworkforce/types';
 
@@ -21,6 +22,7 @@ const RUNNING_CODE_LABEL = 'Running code';
 const LOOKING_UP_PLACE_LABEL = 'Looking up a place';
 const SEARCHING_FOR_PLACES_LABEL = 'Searching for places';
 const PLANNING_ITINERARY_LABEL = 'Planning the itinerary';
+const COMPARING_PRODUCTS_LABEL = 'Comparing products';
 const READING_FILE_FALLBACK_LABEL = 'Reading a file';
 const READING_PAGE_FALLBACK_LABEL = 'Reading a web page';
 const SEARCHING_WEB_FALLBACK_LABEL = 'Searching the web';
@@ -49,6 +51,7 @@ function deriveToolLabel(
 ): string {
   if (PLACES_SEARCH_TOOL_NAMES.has(name)) return SEARCHING_FOR_PLACES_LABEL;
   if (name === ITINERARY_TOOL_NAME) return PLANNING_ITINERARY_LABEL;
+  if (name === PRODUCT_COMPARISON_TOOL_NAME) return COMPARING_PRODUCTS_LABEL;
   if (MAP_SEARCH_TOOL_NAMES.has(name)) return LOOKING_UP_PLACE_LABEL;
   if (WEB_SEARCH_TOOL_NAMES.has(name) || category === 'web-search') {
     return argument ? `Searching the web for ${argument}` : SEARCHING_WEB_FALLBACK_LABEL;
