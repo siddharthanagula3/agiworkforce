@@ -183,7 +183,7 @@ export default function DesktopPage() {
             },
             {
               k: 'Updates',
-              v: 'The app checks the release API and offers the signed installer · nothing installs on its own',
+              v: 'The app checks the release API every day and downloads a signed update in the background · it installs when you choose Restart to update or the next time the app starts',
             },
             { k: 'Windows', v: 'Installer not published · no release date announced' },
           ]}
