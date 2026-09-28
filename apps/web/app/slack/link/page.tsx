@@ -38,12 +38,24 @@ function errorMessage(body: unknown, fallback: string): string {
 function isPreview(body: unknown): body is SlackLinkPreview {
   if (!body || typeof body !== 'object') return false;
   const candidate = body as Record<string, unknown>;
+  const workspaces = candidate['workspaces'];
   return (
     typeof candidate['teamName'] === 'string' &&
     typeof candidate['expiresAt'] === 'string' &&
-    typeof candidate['planAllowed'] === 'boolean' &&
     typeof candidate['requiredPlans'] === 'string' &&
-    (candidate['workspaceName'] === null || typeof candidate['workspaceName'] === 'string')
+    (candidate['selectedWorkspaceId'] === null ||
+      typeof candidate['selectedWorkspaceId'] === 'string') &&
+    Array.isArray(workspaces) &&
+    workspaces.length > 0 &&
+    workspaces.every((workspace: unknown) => {
+      const entry = workspace as Record<string, unknown> | null;
+      return (
+        !!entry &&
+        (entry['id'] === null || typeof entry['id'] === 'string') &&
+        typeof entry['name'] === 'string' &&
+        typeof entry['planAllowed'] === 'boolean'
+      );
+    })
   );
 }
 
@@ -56,6 +68,7 @@ function SlackLinkForm() {
   const [connecting, setConnecting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [connectedTeam, setConnectedTeam] = useState<string | null>(null);
+  const [workspaceId, setWorkspaceId] = useState<string | null>(null);
 
   const redirectPath = `/slack/link?token=${encodeURIComponent(token)}`;
   const signInHref = `/login?redirectTo=${encodeURIComponent(redirectPath)}`;
@@ -78,7 +91,10 @@ function SlackLinkForm() {
         const body = (await response.json().catch(() => null)) as unknown;
         if (!response.ok) throw new Error(errorMessage(body, LOOKUP_FAILED));
         if (!isPreview(body)) throw new Error(LOOKUP_FAILED);
-        if (!controller.signal.aborted) setLookup({ kind: 'ready', preview: body });
+        if (!controller.signal.aborted) {
+          setWorkspaceId(body.selectedWorkspaceId);
+          setLookup({ kind: 'ready', preview: body });
+        }
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;
@@ -87,8 +103,14 @@ function SlackLinkForm() {
     return () => controller.abort();
   }, [isLoaded, isSignedIn, token]);
 
+  const preview = lookup.kind === 'ready' ? lookup.preview : null;
+  const workspace =
+    preview?.workspaces.find((candidate) => candidate.id === workspaceId) ??
+    preview?.workspaces[0] ??
+    null;
+
   async function connect() {
-    if (lookup.kind !== 'ready' || !lookup.preview.planAllowed) return;
+    if (!preview || !workspace?.planAllowed) return;
     setConnecting(true);
     setMessage(null);
     try {
@@ -99,11 +121,11 @@ function SlackLinkForm() {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrf.token },
-        body: JSON.stringify({ token }),
+        body: JSON.stringify({ token, organizationId: workspace.id }),
       });
       const body = (await response.json().catch(() => null)) as unknown;
       if (!response.ok) throw new Error(errorMessage(body, CONNECT_FAILED));
-      setConnectedTeam(lookup.preview.teamName);
+      setConnectedTeam(preview.teamName);
     } catch (error) {
       setMessage(toUserMessage(error, CONNECT_FAILED));
     } finally {
@@ -127,8 +149,6 @@ function SlackLinkForm() {
       </section>
     );
   }
-
-  const preview = lookup.kind === 'ready' ? lookup.preview : null;
 
   return (
     <section aria-labelledby="slack-link-title" style={cardStyle}>
@@ -190,13 +210,35 @@ function SlackLinkForm() {
               {preview.teamName}
             </h2>
             <p style={{ fontSize: 'var(--agi-text-sm)', color: 'var(--agi-ink-2)' }}>
-              Answers as {accountLabel ?? 'your account'}, in{' '}
-              {preview.workspaceName ?? 'your personal workspace'}.
+              Answers as {accountLabel ?? 'your account'}.
             </p>
+            {preview.workspaces.length > 1 ? (
+              <div className="agi-ds-field">
+                <label htmlFor="slack-link-workspace" className="agi-ds-field-label">
+                  Workspace answers run in
+                </label>
+                <select
+                  id="slack-link-workspace"
+                  value={workspace?.id ?? ''}
+                  onChange={(event) => setWorkspaceId(event.target.value || null)}
+                  className="agi-ds-input"
+                >
+                  {preview.workspaces.map((candidate) => (
+                    <option key={candidate.id ?? 'personal'} value={candidate.id ?? ''}>
+                      {candidate.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <p style={{ fontSize: 'var(--agi-text-sm)', color: 'var(--agi-ink-2)' }}>
+                Answers run in your {workspace?.name ?? 'Personal'} workspace.
+              </p>
+            )}
           </section>
         ) : null}
 
-        {preview && !preview.planAllowed ? (
+        {preview && workspace && !workspace.planAllowed ? (
           <p role="alert" style={{ fontSize: 'var(--agi-text-sm)', color: 'var(--agi-error)' }}>
             AGI Workforce in Slack is available on {preview.requiredPlans} plans.{' '}
             <Link href="/pricing" className="agi-ds-link">
@@ -215,7 +257,7 @@ function SlackLinkForm() {
           type="button"
           className="agi-ds-btn"
           data-variant="primary"
-          disabled={connecting || !preview || !preview.planAllowed}
+          disabled={connecting || !preview || !workspace?.planAllowed}
           onClick={() => void connect()}
         >
           {connecting ? 'Connecting…' : 'Connect Slack account'}
