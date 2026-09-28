@@ -8,6 +8,7 @@ import {
   MAX_DEVICE_SEARCH_LENGTH,
   MAX_DEVICE_TYPE_LENGTH,
   MAX_DEVICE_WAIT_MS,
+  DEVICE_BROWSER_CONSOLE_LEVELS,
   DEVICE_KEY_MODIFIERS,
   DEVICE_MOUSE_BUTTONS,
   DEVICE_NAMED_KEYS,
@@ -340,6 +341,37 @@ function parametersFor(
     case 'device_browser_read_page':
     case 'device_browser_screenshot':
       return { type: 'object', properties: {}, required: [] };
+    case 'device_browser_console':
+      return {
+        type: 'object',
+        properties: {
+          level: {
+            type: 'string',
+            enum: [...DEVICE_BROWSER_CONSOLE_LEVELS],
+            description: 'Only messages of this level. Omit to read every level.',
+          },
+          pattern: {
+            type: 'string',
+            description: 'Only messages matching this regular expression, ignoring case.',
+          },
+        },
+        required: [],
+      };
+    case 'device_browser_network':
+      return {
+        type: 'object',
+        properties: {
+          failedOnly: {
+            type: 'boolean',
+            description: 'Only requests that failed or returned an error status.',
+          },
+          pattern: {
+            type: 'string',
+            description: 'Only requests whose address matches this regular expression.',
+          },
+        },
+        required: [],
+      };
     case 'device_browser_navigate':
     case 'device_browser_download':
       return {
