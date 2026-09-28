@@ -600,8 +600,8 @@ export {
   greetingTimeBand,
   greetingVariantIndex,
   resolveGreetingHeadline,
-} from './lib/greeting';
-export type { GreetingGroup, GreetingTimeBand } from './lib/greeting';
+} from '@agiworkforce/utils/greeting';
+export type { GreetingGroup, GreetingTimeBand } from '@agiworkforce/utils/greeting';
 export { AdvancedEmptyState } from './components/AdvancedEmptyState';
 export type { AdvancedEmptyStateProps } from './components/AdvancedEmptyState';
 export {
