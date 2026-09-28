@@ -335,7 +335,7 @@ export const CODE_GOAL_COMMAND_DESCRIPTIONS: Record<CloudCodeGoalCommand, string
 export const CODE_TURN_STEP_HINTS: Record<CloudCodeTurnStepBound, string> = {
   12: 'Quick fixes and questions',
   24: 'Most tasks',
-  48: 'Larger changes. Uses more of your plan.',
+  48: 'Larger changes that take longer and use more',
 };
 
 export function turnBudgetNote(): string {

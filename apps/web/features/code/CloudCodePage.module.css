@@ -168,6 +168,10 @@ svg + .menuRowLabel {
   font-size: 12px;
 }
 
+.railRowStateQuiet {
+  color: var(--chat-text-muted);
+}
+
 .railSectionHeader {
   display: flex;
   align-items: center;
@@ -1189,6 +1193,13 @@ svg + .menuRowLabel {
 
 .shareOption:hover {
   background: var(--chat-surface-hover);
+}
+
+.memoryInput {
+  min-height: 88px;
+  padding: 8px 10px;
+  line-height: 1.45;
+  resize: vertical;
 }
 
 .shareLinkRow {
