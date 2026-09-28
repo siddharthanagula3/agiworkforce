@@ -26,3 +26,14 @@ export const BROWSER_PAIRING_COMMANDS = [
 ] as const;
 
 export type BrowserPairingCommand = (typeof BROWSER_PAIRING_COMMANDS)[number];
+
+export type BrowserActivityOutcome = 'running' | 'ok' | 'failed';
+
+export interface BrowserActivityEntry {
+  atMs: number;
+  client: string;
+  command: string;
+  target: string | null;
+  outcome: BrowserActivityOutcome;
+  error: string | null;
+}
