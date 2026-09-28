@@ -2641,6 +2641,13 @@ export function getWebviewContent(
           <span class="plus-menu-description"></span>
         </span>
       </button>
+      <button type="button" class="plus-menu-item" data-context-kind="url" role="menuitem">
+        <span class="pm-icon codicon codicon-link" aria-hidden="true"></span>
+        <span class="plus-menu-copy">
+          <span class="plus-menu-title">Web page</span>
+          <span class="plus-menu-description"></span>
+        </span>
+      </button>
     </div>
 
     <!-- Model picker popover -->
