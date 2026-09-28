@@ -3,7 +3,10 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { hashSkillContent, type Skill } from '@agiworkforce/skills';
 import { validateSkillDraft, type SkillDraft } from '@agiworkforce/skills/validation';
+import { scanPluginPackage } from '@agiworkforce/client-runtime/plugins';
+import type { ManagedSkillOrigin } from '@agiworkforce/cloud-contracts';
 import { createError } from '@/lib/errors';
+import { isoTimestamp } from './skill-origin-service';
 import { requireUserSkillAuthoring, userSkillAuthoringEnabled } from './user-skill-authoring';
 
 const PG_UNIQUE_VIOLATION = '23505';
@@ -24,6 +27,7 @@ export interface UserSkillSummary {
   lifecycle: 'included';
   downloadable: false;
   editable: true;
+  origin: ManagedSkillOrigin;
 }
 
 interface UserSkillRow {
@@ -38,6 +42,12 @@ interface UserSkillRow {
 interface UserSkillSummaryRow {
   name: string;
   description: string;
+  created_at: string | Date | null;
+}
+
+function personalOrigin(createdAt: string | Date | null): ManagedSkillOrigin {
+  const addedAt = isoTimestamp(createdAt);
+  return { kind: 'personal', ...(addedAt ? { addedAt } : {}) };
 }
 
 function toRecord(row: UserSkillRow): UserSkillRecord {
@@ -59,9 +69,30 @@ function isUniqueViolation(error: unknown): boolean {
   );
 }
 
+const SKILL_SCAN_PATH = 'SKILL.md';
+const BLOCKING_SCAN_VERDICT = 'block';
+
 function requireValidDraft(draft: SkillDraft): void {
   const result = validateSkillDraft(draft);
   if (!result.ok) throw createError.validation(result.errors.join(' '));
+  const scan = scanPluginPackage([
+    {
+      path: SKILL_SCAN_PATH,
+      content: `${draft.name}\n${draft.description}\n${draft.body}`,
+    },
+  ]);
+  if (scan.verdict === BLOCKING_SCAN_VERDICT) {
+    const reasons = [
+      ...new Set(
+        scan.findings
+          .filter((finding) => finding.severity === BLOCKING_SCAN_VERDICT)
+          .map((finding) => finding.message),
+      ),
+    ];
+    throw createError.validation(
+      `This skill was not saved because it ${reasons.join('; it ')}. Remove that part and try again.`,
+    );
+  }
 }
 
 const USER_SKILL_SOURCE = 'personal' satisfies Skill['source'];
@@ -103,6 +134,7 @@ export function toUserSkillSummary(record: UserSkillRecord): UserSkillSummary {
     lifecycle: 'included',
     downloadable: false,
     editable: true,
+    origin: personalOrigin(record.createdAt),
   };
 }
 
@@ -112,7 +144,7 @@ export async function listUserSkills(
 ): Promise<UserSkillSummary[]> {
   if (!userSkillAuthoringEnabled()) return [];
   const rows = await db.query<UserSkillSummaryRow>(
-    `select name, description
+    `select name, description, created_at
        from user_skills
       where user_id = $1
       order by name asc`,
@@ -125,6 +157,7 @@ export async function listUserSkills(
     lifecycle: 'included',
     downloadable: false,
     editable: true,
+    origin: personalOrigin(row.created_at),
   }));
 }
 

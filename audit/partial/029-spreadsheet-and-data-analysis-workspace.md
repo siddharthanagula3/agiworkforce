@@ -133,7 +133,6 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1756`, `apps/mobile/sr
 | --- | --- | --- | --- |
 | mobile | partial | Code execution output appears only as a tool row in the transcript timeline; no analysis panel. | ui |
 | cli | partial | The agent can run Python only through its general shell tool (text output in the transcript) and can edit .ipynb cells without running them; no analysis panel, no chart display. | ui |
-| vscode | partial | The sidebar drives the local CLI runtime, whose general shell tool can run Python with text output only; no analysis panel or chart display in the extension. | ui |
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/mobile/src/features/chat/utils/toolCallAccumulator.ts:97-110`, `apps/mobile/src/features/chat/components/ToolCallTimeline.tsx:389-408`, `apps/cli/src/features/exec/tools/mod.rs:548-554`, `apps/cli/src/features/exec/tools/mod.rs:616-622`

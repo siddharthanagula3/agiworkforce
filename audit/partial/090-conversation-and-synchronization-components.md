@@ -16,14 +16,3 @@ nothing is left.
 | platform | partial | Attempts are recorded as durable runs only when the turn uses tools or AGI Work; a plain tool-less chat turn leaves no attempt record, only the final message and a usage row. | handler |
 
 Code: `apps/web/lib/services/cloud-agent-run-service.ts:650-653`, `apps/web/app/api/llm/v1/chat/completions/route.ts:776-779`
-
-## S90.22: Import and migration adapters.
-
-- Done when: Conversation history exported from another product (ChatGPT, Claude, Gemini) or an older local store can be imported as conversations.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Only memory facts are imported from ChatGPT/Claude/Gemini exports; no adapter imports conversation history itself. | handler |
-
-Code: `apps/mobile/src/features/memory/services/memoryImport.ts:2-2`, `apps/web/app/api/memory/import/route.ts:13-13`
