@@ -162,6 +162,7 @@ export { Tooltip } from './components/ui/Tooltip';
 export { ChatBadge } from './components/ui/ChatBadge';
 
 export { MarkdownContent, type MarkdownContentProps } from './components/markdown/MarkdownContent';
+export { toggleMarkdownTask } from './components/markdown/taskList';
 export {
   StreamingMarkdownContent,
   type StreamingMarkdownContentProps,

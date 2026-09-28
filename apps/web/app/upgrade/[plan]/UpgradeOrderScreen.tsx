@@ -36,7 +36,7 @@ export function UpgradeOrderScreen({ plan }: { plan: SelfServeIndividualPlanTier
   if (upgraded) {
     return (
       <div className="mx-auto flex w-full max-w-lg flex-col items-center gap-4 px-6 py-16 text-center">
-        <h1 className="text-2xl font-semibold">You&rsquo;re on {display.pricing.label}.</h1>
+        <h1 className="text-h1">You&rsquo;re on {display.pricing.label}.</h1>
         <p className="text-sm text-muted-foreground">
           Your new capacity is active. It can take a moment to appear everywhere.
         </p>
@@ -56,7 +56,7 @@ export function UpgradeOrderScreen({ plan }: { plan: SelfServeIndividualPlanTier
         >
           ← Upgrade
         </Link>
-        <h1 className="mt-4 text-3xl font-semibold tracking-tight">{display.pricing.label}</h1>
+        <h1 className="mt-4 text-display">{display.pricing.label}</h1>
         {selectedUsage && capacities.length === 0 ? (
           <p className="mt-2 text-sm text-muted-foreground">{selectedUsage}</p>
         ) : null}
