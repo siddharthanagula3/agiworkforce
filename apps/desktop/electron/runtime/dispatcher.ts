@@ -284,12 +284,6 @@ function requireRegion(args: Args): DeviceStepRegion {
   return requireRegionFields(value as Args);
 }
 
-function requireBoolean(args: Args, key: string): boolean {
-  const value = args[key];
-  if (typeof value !== 'boolean') throw new InvalidArguments(`"${key}" must be true or false.`);
-  return value;
-}
-
 const PERMISSION_SCOPE_KINDS: readonly PermissionScopeKind[] = [
   'workspace',
   'application',
