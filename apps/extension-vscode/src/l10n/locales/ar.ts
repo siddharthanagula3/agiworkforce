@@ -755,6 +755,12 @@ const ar = {
   'mcpDetails.field': '{label}: {value}',
   'chatNotice.webSearchDenied':
     'البحث على الويب غير متاح في هذه الجلسة. {reason} أوقف Browse the web للإرسال من دونه.',
+  'webSearchSetup.title': 'إعداد البحث على الويب',
+  'webSearchSetup.placeholder': 'اختر خدمة البحث التي لديك مفتاح API لها',
+  'webSearchSetup.detail':
+    'أدخل مفتاح API الخاص بها في الطرفية. تبحث به جلسات مفتاحك والجلسات المحلية، ولا تحتاج الجلسات المُدارة إليه.',
+  'webSearchSetup.unavailable':
+    'AGI Workforce: لا يذكر AGI CLI هذا مفاتيح البحث التي يمكنه حفظها. حدّث AGI CLI لإعداد البحث على الويب من VS Code.',
 };
 
 export default ar;

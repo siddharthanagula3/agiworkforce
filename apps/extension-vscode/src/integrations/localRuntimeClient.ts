@@ -480,6 +480,8 @@ const accountStatusResponseSchema = z.object({
   purchasedCredits: z.number().optional(),
   cached: z.boolean(),
   source: z.literal('cli'),
+  webSearchKey: z.string().max(64).optional(),
+  webSearchLogins: z.array(z.string().max(64)).max(20).optional(),
 });
 const accountLoginResponseSchema = z.object({
   loginId: z.string().min(1).max(200),

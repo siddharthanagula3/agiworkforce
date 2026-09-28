@@ -1110,6 +1110,7 @@ export function getWebviewContent(
       opacity: 0.5;
     }
     .plus-menu-item[disabled]:hover { background: transparent; color: var(--text-secondary); }
+    .plus-menu-item[hidden] { display: none; }
     .plus-menu-item[aria-checked="true"] {
       background: var(--vscode-list-activeSelectionBackground);
       color: var(--vscode-list-activeSelectionForeground);
@@ -2672,6 +2673,20 @@ export function getWebviewContent(
           <span class="plus-menu-description">CLI search · Local privacy mode refuses network</span>
         </span>
       </button>
+      <button
+        type="button"
+        class="plus-menu-item"
+        id="plusMenuSearchSetup"
+        role="menuitem"
+        hidden
+        disabled
+      >
+        <span class="pm-icon codicon codicon-key" aria-hidden="true"></span>
+        <span class="plus-menu-copy">
+          <span class="plus-menu-title">Set up web search</span>
+          <span class="plus-menu-description">Your key and Local sessions need a search key</span>
+        </span>
+      </button>
       <button type="button" class="plus-menu-item" id="plusMenuPlanMode" role="menuitem">
         <span class="pm-icon codicon codicon-lightbulb" aria-hidden="true"></span>
         <span class="plus-menu-copy">
@@ -2929,6 +2944,7 @@ export function getWebviewContent(
     // BYOK, or Managed Cloud. Keep the header neutral until that summary arrives.
     var sessionBoundaryAuthoritative = false;
     var webSearchDenial = null;
+    var webSearchNeedsKey = false;
     var activeAccountIdentity = null;
     var activeAccountStatus = 'loading';
     var activeProviderIdentity = '';
@@ -3229,6 +3245,16 @@ export function getWebviewContent(
       if (runtimeBlock !== null && source !== 'runtime-unavailable') return;
       activeRuntimeSource = source;
       renderSessionIdentity();
+      renderSearchSetup();
+    }
+
+    function renderSearchSetup() {
+      var setup = document.getElementById('plusMenuSearchSetup');
+      if (!setup) return;
+      var show = webSearchNeedsKey === true &&
+        (activeRuntimeSource === 'user-api-key' || activeRuntimeSource === 'unbounded');
+      setup.hidden = !show;
+      setup.disabled = !show;
     }
 
     function applyAuthoritativeSessionBoundary(trustMode, provider) {
@@ -5298,6 +5324,13 @@ export function getWebviewContent(
           userInput.focus();
         });
       }
+      var plusMenuSearchSetup = document.getElementById('plusMenuSearchSetup');
+      if (plusMenuSearchSetup) {
+        plusMenuSearchSetup.addEventListener('click', () => {
+          closePlusMenu();
+          vscode.postMessage({ type: 'setUpWebSearch' });
+        });
+      }
       var contextItems = plusMenu.querySelectorAll('[data-context-kind]');
       for (var ci = 0; ci < contextItems.length; ci++) {
         contextItems[ci].addEventListener('click', function(ev) {
@@ -6198,6 +6231,11 @@ export function getWebviewContent(
 
       else if (msg.type === 'sessionBoundary') {
         applyAuthoritativeSessionBoundary(msg.payload.trustMode, msg.payload.provider);
+      }
+
+      else if (msg.type === 'webSearchSetup') {
+        webSearchNeedsKey = Boolean(msg.payload && msg.payload.needsKey);
+        renderSearchSetup();
       }
 
       else if (msg.type === 'webSearchGate') {

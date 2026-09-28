@@ -501,6 +501,12 @@ const en = {
   'mcpDetails.field': '{label}: {value}',
   'chatNotice.webSearchDenied':
     'Web search is not available in this session. {reason} Turn off Browse the web to send without it.',
+  'webSearchSetup.title': 'Set up web search',
+  'webSearchSetup.placeholder': 'Choose the search service whose API key you have',
+  'webSearchSetup.detail':
+    'Enter its API key in the terminal. Your key and Local sessions search with it; Managed sessions do not need one.',
+  'webSearchSetup.unavailable':
+    'AGI Workforce: this AGI CLI does not say which search keys it can save. Update the AGI CLI to set up web search from VS Code.',
 };
 
 export default en;

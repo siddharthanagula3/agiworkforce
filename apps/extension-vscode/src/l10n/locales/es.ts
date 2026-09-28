@@ -616,6 +616,12 @@ const es = {
   'mcpDetails.field': '{label}: {value}',
   'chatNotice.webSearchDenied':
     'La búsqueda web no está disponible en esta sesión. {reason} Desactive Browse the web para enviar sin ella.',
+  'webSearchSetup.title': 'Configurar la búsqueda web',
+  'webSearchSetup.placeholder': 'Elija el servicio de búsqueda del que tiene una clave de API',
+  'webSearchSetup.detail':
+    'Introduzca su clave de API en el terminal. Las sesiones con su clave y las locales buscan con ella; las sesiones gestionadas no la necesitan.',
+  'webSearchSetup.unavailable':
+    'AGI Workforce: esta AGI CLI no indica qué claves de búsqueda puede guardar. Actualice la AGI CLI para configurar la búsqueda web desde VS Code.',
 };
 
 export default es;

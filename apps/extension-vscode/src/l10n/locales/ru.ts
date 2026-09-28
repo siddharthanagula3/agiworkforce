@@ -675,6 +675,12 @@ const ru = {
   'mcpDetails.field': '{label}: {value}',
   'chatNotice.webSearchDenied':
     'Веб-поиск недоступен в этом сеансе. {reason} Отключите Browse the web, чтобы отправить без него.',
+  'webSearchSetup.title': 'Настроить веб-поиск',
+  'webSearchSetup.placeholder': 'Выберите поисковый сервис, для которого у вас есть ключ API',
+  'webSearchSetup.detail':
+    'Введите его ключ API в терминале. Сеансы с вашим ключом и локальные сеансы ищут с ним; управляемым сеансам ключ не нужен.',
+  'webSearchSetup.unavailable':
+    'AGI Workforce: эта AGI CLI не сообщает, какие ключи поиска она может сохранить. Обновите AGI CLI, чтобы настроить веб-поиск из VS Code.',
 };
 
 export default ru;
