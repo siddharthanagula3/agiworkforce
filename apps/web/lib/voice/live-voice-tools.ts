@@ -1,6 +1,5 @@
 import 'server-only';
 
-import { connectorsAllowedWithoutRequest } from '@/lib/connectors/connector-capability';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { getTierPolicy, type ModelMetadata } from '@agiworkforce/types';
 import { loadConnectorToolPermissions } from '@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions';
@@ -338,18 +337,14 @@ export async function resolveLiveVoiceFunctionTools(input: {
   organizationId: string | null;
   planTier: string | null;
   backendModel: ModelMetadata;
+  connectorsAllowed: boolean;
 }): Promise<LiveVoiceFunctionTools> {
   const tierPolicy = getTierPolicy(input.planTier);
   if (input.backendModel.capabilities?.tools === false || tierPolicy.allowToolUse === false) {
     return { tools: [], names: [] };
   }
   const permissions = await loadConnectorToolPermissions(input.db, input.userId);
-  const connectorsAllowed = await connectorsAllowedWithoutRequest({
-    userId: input.userId,
-    organizationId: input.organizationId,
-    planTier: input.planTier,
-  });
-  const [operatorTools, connectorCatalog] = !connectorsAllowed
+  const [operatorTools, connectorCatalog] = !input.connectorsAllowed
     ? [[], { tools: [] }]
     : await Promise.all([
         loadMcpToolDefs(),
