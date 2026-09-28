@@ -22,8 +22,13 @@ export interface CloudRunListClient {
 }
 
 export type CloudRunClientResolution =
-  | { status: 'ready'; client: CloudRunListClient }
-  | { status: 'signed-out' };
+  { status: 'ready'; client: CloudRunListClient } | { status: 'signed-out' };
+
+const NEEDS_YOU_STATES: ReadonlySet<CloudAgentRun['state']> = new Set([
+  'awaiting_input',
+  'awaiting_approval',
+  'paused',
+]);
 
 export class CloudRunTreeItem extends vscode.TreeItem {
   constructor(readonly run: CloudAgentRun) {
@@ -101,7 +106,10 @@ export class CloudTasksTreeProvider
 
     try {
       const page = await resolution.client.listRuns({ limit: CLOUD_TASKS_PAGE_LIMIT });
-      return page.runs.map((run) => new CloudRunTreeItem(run));
+      const needsYou = (run: CloudAgentRun) => NEEDS_YOU_STATES.has(run.workState ?? run.state);
+      return [...page.runs.filter(needsYou), ...page.runs.filter((run) => !needsYou(run))].map(
+        (run) => new CloudRunTreeItem(run),
+      );
     } catch (error) {
       return [
         new CloudTasksNoticeItem(

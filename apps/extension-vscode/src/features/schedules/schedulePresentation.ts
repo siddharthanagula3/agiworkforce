@@ -1,7 +1,8 @@
-import type {
-  ManagedCloudScheduleRun,
-  ManagedCloudScheduleRunPendingApproval,
-  ManagedCloudScheduleTask,
+import {
+  describeScheduleRunTiming,
+  type ManagedCloudScheduleRun,
+  type ManagedCloudScheduleRunPendingApproval,
+  type ManagedCloudScheduleTask,
 } from '@agiworkforce/cloud-contracts';
 
 export type ScheduleStatus = ManagedCloudScheduleTask['status'];
@@ -128,7 +129,10 @@ export function scheduleContextValue(task: ManagedCloudScheduleTask): string {
 }
 
 export function scheduleRunLabel(run: ManagedCloudScheduleRun): string {
-  return `${scheduleRunStatusLabel(run.status)} · ${formatTimestamp(run.startedAt)}`;
+  const status = describeScheduleRunTiming(run, formatTimestamp)?.skipped
+    ? 'Skipped'
+    : scheduleRunStatusLabel(run.status);
+  return `${status} · ${formatTimestamp(run.startedAt)}`;
 }
 
 export function scheduleRunDetail(run: ManagedCloudScheduleRun): string {
@@ -140,7 +144,11 @@ export function scheduleRunDetail(run: ManagedCloudScheduleRun): string {
   if (run.pendingApproval) {
     parts.push(run.pendingApproval.toolCalls.map((call) => call.summary).join('; '));
   }
-  if (run.error !== null && run.error.trim() !== '') parts.push(run.error.trim());
+  const timing = describeScheduleRunTiming(run, formatTimestamp);
+  if (timing) parts.push(timing.note);
+  if (!timing?.skipped && run.error !== null && run.error.trim() !== '') {
+    parts.push(run.error.trim());
+  }
   return parts.join(' · ');
 }
 
