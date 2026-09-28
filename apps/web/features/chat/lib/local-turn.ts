@@ -7,6 +7,7 @@ import {
   type LocalChatMessage,
   type LocalModel,
 } from '@agiworkforce/local-runtime-contract';
+import type { ManagedMemoryCitations } from '@agiworkforce/types';
 import { cancelLocalChat, startLocalChat } from '@features/desktop-host';
 import { createFrameCoalescedAppender } from '@/lib/client/frame-coalesced-appender';
 import { useChatStore, type Message } from '@shared/stores/web-chat-store';
@@ -72,6 +73,8 @@ export interface LocalTurnInput {
   assistantMessageId: string;
   model: LocalModel;
   messages: LocalChatMessage[];
+  personalContextMissing: boolean;
+  memoryCitations: ManagedMemoryCitations | null;
   signal: AbortSignal;
 }
 
@@ -128,6 +131,8 @@ export async function runLocalTurn(input: LocalTurnInput): Promise<LocalTurnOutc
           model: input.model.name,
           provider: input.model.serverLabel,
           finishReason: result.stopReason,
+          ...(input.personalContextMissing ? { localPersonalContextMissing: true } : {}),
+          ...(input.memoryCitations ? { memoryCitations: input.memoryCitations } : {}),
           ...(result.thinking.trim() !== ''
             ? { thinkingContent: result.thinking, isThinkingStreaming: false }
             : {}),

@@ -14,6 +14,7 @@ import {
   interactiveCardRendersBeforeProse,
   resolveInteractiveCardRenderer,
   toolApprovalStakes,
+  type AgentEventSource,
   type InteractiveCard,
   type InteractiveCardRegistry,
   type InteractiveCardRenderContext,
@@ -61,6 +62,8 @@ import {
   buildProductComparisonCard,
 } from './interactiveCards';
 import { buildConnectorInputForm, type ConnectorInputBinding } from './connectorInputForm';
+import { buildAgiWorkPlanReview, type AgiWorkPlanReviewBinding } from './agiWorkPlanReview';
+import { buildImageViewerButton } from './mediaViewer';
 
 type ChatMessage = SidePanelChatMessage;
 export type ManagedApprovalDecision = 'approved' | 'rejected';
@@ -83,6 +86,7 @@ export interface BubbleInteractionOptions {
   onApproveForChat?: (toolCallId: string, toolName: string) => void;
   onApprovalGuidanceChange?: (toolCallId: string, guidance: string) => void;
   connectorInput?: ConnectorInputBinding;
+  planReview?: AgiWorkPlanReviewBinding;
   onRetry?: (messageId: string) => void;
   onSwitchModel?: () => void;
   quotaRecovery?: QuotaRecoveryControl;
@@ -350,7 +354,10 @@ function buildUserContext(msg: ChatMessage, previews: readonly string[] = []): H
     if (preview) {
       item.classList.add('sp-msg-context__item--thumb');
       item.appendChild(
-        el('img', { class: 'sp-msg-context__thumb', src: preview, alt: attachment.name }),
+        buildImageViewerButton(
+          el('img', { class: 'sp-msg-context__thumb', src: preview, alt: attachment.name }),
+          'sp-msg-context__open',
+        ),
       );
     } else {
       item.appendChild(renderIcon(attachment.kind === 'image' ? FileImage : FileText, 14));
@@ -742,10 +749,7 @@ function boundedJson(value: unknown): string {
   return formatted.length > 8_000 ? `${formatted.slice(0, 8_000)}\n…` : formatted;
 }
 
-function appendActivitySources(
-  parent: HTMLElement,
-  sources: Array<{ url: string; title?: string }>,
-): void {
+function appendActivitySources(parent: HTMLElement, sources: readonly AgentEventSource[]): void {
   if (sources.length === 0) return;
   const list = el('div', { class: 'sp-agent-step__sources' });
   for (const source of sources.slice(0, 20)) {
@@ -926,7 +930,7 @@ function buildAgentActivityStep(
 ): HTMLElement {
   const status = activityEntryStatus(entry);
   const detailParts: string[] = [];
-  let sources: Array<{ url: string; title?: string }> = [];
+  let sources: readonly AgentEventSource[] = [];
 
   if (entry.kind === 'progress' && entry.detail) detailParts.push(entry.detail);
   if (entry.kind === 'tool') {
@@ -1139,6 +1143,8 @@ export function buildBubbleWithTools(
       wrapper.appendChild(stack);
     }
   }
+
+  if (options.planReview) wrapper.appendChild(buildAgiWorkPlanReview(msg.id, options.planReview));
 
   appendAnswerExtras(wrapper, msg, options, all);
 

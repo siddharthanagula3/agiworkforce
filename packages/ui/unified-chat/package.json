@@ -9,6 +9,9 @@
     "./capabilities": "./src/lib/capabilities.tsx",
     "./model-picker": "./src/lib/modelPicker.ts",
     "./network-error": "./src/lib/network-error.ts",
+    "./tabular": "./src/lib/tabular.ts",
+    "./agi-work-progress": "./src/lib/agi-work-progress.ts",
+    "./task-display": "./src/components/tasks/task-display.ts",
     "./markdown-document": "./src/components/markdown/markdownDocument.ts",
     "./composer-editor": "./src/composer-editor/index.ts",
     "./composer-editor.css": "./src/composer-editor/composer-editor.css"

@@ -31,6 +31,9 @@ const LOCALIZED_SOURCES = [
   'src/features/side-panel/mapPreview.ts',
   'src/features/side-panel/interactiveCards.ts',
   'src/features/side-panel/connectorInputForm.ts',
+  'src/features/side-panel/mediaViewer.ts',
+  'src/features/side-panel/commandPalette.ts',
+  'src/features/side-panel/agiWorkPlanReview.ts',
 ] as const;
 
 const PLURAL_SUFFIX = /_(zero|one|two|few|many|other)$/;

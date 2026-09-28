@@ -137,14 +137,14 @@ Code: `apps/mobile/app/(app)/chat/[id].tsx:849-856`, `apps/mobile/stores/chat/ch
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Docusign is listed in the connector directory with no MCP endpoint, so it cannot be connected unless an endpoint is configured; there is no built-in send-for-signature flow. | handler, flag-off |
-| desktop | partial | Docusign is listed in the connector directory with no MCP endpoint, so it cannot be connected unless an endpoint is configured; there is no built-in send-for-signature flow. | handler, flag-off |
+| web | partial | partials/mcp-web 4a48dadc2: Claude ships a Docusign connector on https://mcp.docusign.com/mcp (claude.com/connectors/docusign, made by Docusign; the endpoint is also in developers.docusign.com/platform/mcp-server). The directory pins that endpoint with Claude's twenty tools, and docusign is a pre-registered OAuth catalog connector (Docusign's authorization server has no registration endpoint and takes only the confidential code grant), so once connected the assistant creates, sends and tracks envelopes for signature, asking first on every call. It stays Needs setup until the owner registers a Docusign app (integration key and secret, our callback as redirect URI) and adds the docusign CONNECTOR_OAUTH_PROVIDERS_JSON descriptor with CONNECTOR_OAUTH_DOCUSIGN_CLIENT_ID and CONNECTOR_OAUTH_DOCUSIGN_CLIENT_SECRET (docs/runbooks/connector-oauth-apps.md section 8). | flag-off |
+| desktop | partial | partials/mcp-web 4a48dadc2: desktop cloud settings list Docusign once the server reports it available, through the same web connector. Same owner step as web: register the Docusign app and add its descriptor and client pair. | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/connectors/directory/sources/vendor-directory.json:2322-2341`, `apps/web/features/directory/services/connectors-directory.ts:125-134`
+Code: `apps/web/lib/connectors/directory/sources/first-party.json:499-499`, `apps/web/lib/connectors/mcp-endpoints.ts:127-127`, `apps/web/lib/connectors/catalog.ts:248-248`, `apps/web/lib/connectors/oauth-scope-allowlist.ts:218-218`
 
 ## S31.24: Export fidelity preview.
 

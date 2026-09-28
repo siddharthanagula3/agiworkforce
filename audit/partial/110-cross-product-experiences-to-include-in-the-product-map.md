@@ -263,16 +263,16 @@ Code: `packages/contracts/types/src/billing-catalog.ts:587-587`, `apps/web/featu
 
 - Done when: When a connected integration expires mid-task, the user is prompted to reconnect and the interrupted turn or run continues from where it stopped once reauthorized.
 - Wave: 3
+- Already works on: api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Settings now offers Connect on an expired connection and the chat card offers Reconnect after a failed call, but nothing resumes the interrupted turn: the card itself says to use Retry, which reruns the exchange. | ui, states |
 | desktop | partial | Settings now offers Connect on an expired connection and the chat card offers Reconnect after a failed call, but nothing resumes the interrupted turn: the card itself says to use Retry, which reruns the exchange. | ui, states |
 | mobile | partial | Reconnect works in Settings, but chat never recognises an authorization-required tool result, and there is no resume. | ui, states |
-| cli | partial | agi mcp login reauthorises the user's own MCP servers, but account connectors have no CLI reauth path, and nothing resumes after reconnecting. | states |
-| vscode | partial | An MCP call whose sign-in expired now reaches app-server clients as mcp/authRequired (25fd8a679d); VS Code has to offer reconnect from it (p-sessions) | handler |
+| cli | partial | An expired account connector now prints its reconnect link (dc4299a638) and the next message continues the task; resuming the interrupted turn itself needs a server resume path after reconnect, the same gap as web | handler |
+| vscode | partial | mcp/authRequired now carries connectUrl for account connectors (dc4299a638); VS Code has to open it (p-sessions) | handler |
 | chrome | partial | Only a generic Connectors link-out; retry replays some turns but nothing resumes the interrupted call. | ui, states |
-| api | partial | API-key calls reach the account's connectors (connector_tools_enabled, documented), and an expired connector answers with the agi_connector_authorization_required payload streamed as x_tool_result content, but openapi.json does not document x_tool_result or that payload, its connectUrl is a path on the app origin, and nothing resumes the interrupted turn after reconnecting. | states |
 
 Code: `packages/ui/ui/src/settings-modal/SettingsModal.tsx:282-282`, `packages/ui/unified-chat/src/components/ConnectorConnectCard.tsx:129-129`, `apps/web/features/chat/components/messages/MessageBubble.tsx:890-890`, `apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx:318-318`
 

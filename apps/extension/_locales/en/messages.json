@@ -575,16 +575,12 @@
     "message": "Delete chat",
     "description": "Conversation history delete button before the first click"
   },
-  "spHistoryDeleteConfirm": {
-    "message": "Click again to delete this chat",
-    "description": "Conversation history delete button after the first click, waiting for confirmation"
-  },
   "spHistoryDeleteConfirmDevice": {
-    "message": "Click delete again to remove this chat from this device. It cannot be recovered.",
+    "message": "Delete this chat from this device? It cannot be recovered.",
     "description": "Confirmation notice for deleting a chat stored only in this browser"
   },
   "spHistoryDeleteConfirmAccount": {
-    "message": "Click delete again to remove this chat from this device and from your AGI account. It cannot be recovered.",
+    "message": "Delete this chat from this device and from your AGI account? It cannot be recovered.",
     "description": "Confirmation notice for deleting a chat that is also mirrored to the account"
   },
   "spHistoryDeleteFailed": {
@@ -3252,5 +3248,669 @@
   "spConnectorInputSendFailed": {
     "message": "Your answer could not be sent. Try again.",
     "description": "The side panel could not hand the answer to a connector request to the background worker"
+  },
+  "spMediaViewerClose": {
+    "message": "Close",
+    "description": "Closes the full-size image viewer and returns to the chat"
+  },
+  "spMediaViewerOpen": {
+    "message": "View $NAME$ full size",
+    "description": "Opens an image from the chat in the full-size viewer",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "diagram.png"
+      }
+    }
+  },
+  "spPaletteLabel": {
+    "message": "Commands",
+    "description": "Accessible name of the command palette"
+  },
+  "spPalettePlaceholder": {
+    "message": "Search commands and chats",
+    "description": "Placeholder of the command palette search box"
+  },
+  "spPaletteGoTo": {
+    "message": "Go to",
+    "description": "Command palette heading over views, menus and actions"
+  },
+  "spPaletteChats": {
+    "message": "Chats",
+    "description": "Command palette heading over saved conversations"
+  },
+  "spPaletteEmpty": {
+    "message": "No command or chat matches.",
+    "description": "Shown when nothing in the command palette matches the search"
+  },
+  "spPaletteNewChat": {
+    "message": "New chat",
+    "description": "Command palette action that starts a new conversation"
+  },
+  "spPaletteSearchChats": {
+    "message": "Search chats",
+    "description": "Command palette action that opens the recent chats list with its search"
+  },
+  "spPaletteViewDetail": {
+    "message": "View",
+    "description": "Marks a command palette entry that switches the side panel view"
+  },
+  "spPaletteMenuDetail": {
+    "message": "Menu",
+    "description": "Marks a command palette entry that opens a section of the side panel menu"
+  },
+  "spMenuHelp": {
+    "message": "Help",
+    "description": "Side panel menu section with help links and keyboard shortcuts"
+  },
+  "spHelpCenter": {
+    "message": "Help center",
+    "description": "Opens the help center on the web"
+  },
+  "spHelpCenterDetail": {
+    "message": "Answers to common questions.",
+    "description": "Describes the help center link"
+  },
+  "spHelpDocs": {
+    "message": "Documentation",
+    "description": "Opens the documentation on the web"
+  },
+  "spHelpDocsDetail": {
+    "message": "Guides for every surface, from chat to the CLI.",
+    "description": "Describes the documentation link"
+  },
+  "spHelpContact": {
+    "message": "Contact support",
+    "description": "Opens the support page on the web"
+  },
+  "spHelpContactDetail": {
+    "message": "Reach a person about your account.",
+    "description": "Describes the contact support link"
+  },
+  "spHelpReportBug": {
+    "message": "Report a bug",
+    "description": "Opens the bug report form on the web"
+  },
+  "spHelpReportBugDetail": {
+    "message": "Tell us what broke and how to reproduce it.",
+    "description": "Describes the bug report link"
+  },
+  "spHelpStatus": {
+    "message": "System status",
+    "description": "Opens the service status page"
+  },
+  "spHelpStatusDetail": {
+    "message": "Current availability of managed services.",
+    "description": "Describes the status page link"
+  },
+  "spHelpReleaseNotes": {
+    "message": "Release notes",
+    "description": "Opens the changelog on the web"
+  },
+  "spHelpReleaseNotesDetail": {
+    "message": "What shipped, and when.",
+    "description": "Describes the release notes link"
+  },
+  "spHelpShortcutsTitle": {
+    "message": "Keyboard shortcuts",
+    "description": "Heading of the keyboard shortcut list in the Help menu"
+  },
+  "spHelpShortcutsChange": {
+    "message": "Change browser shortcuts",
+    "description": "Opens Chrome's page for editing extension shortcuts"
+  },
+  "spHelpKeyCtrl": {
+    "message": "Ctrl",
+    "description": "Name of the Control key in a shortcut"
+  },
+  "spHelpKeyEnter": {
+    "message": "Enter",
+    "description": "Name of the Enter key in a shortcut"
+  },
+  "spHelpKeyShift": {
+    "message": "Shift",
+    "description": "Name of the Shift key in a shortcut"
+  },
+  "spHelpKeyEscape": {
+    "message": "Esc",
+    "description": "Name of the Escape key in a shortcut"
+  },
+  "spHelpShortcutPalette": {
+    "message": "Search commands and chats",
+    "description": "What the command palette shortcut does"
+  },
+  "spHelpShortcutSend": {
+    "message": "Send the message",
+    "description": "What Enter does in the composer"
+  },
+  "spHelpShortcutNewLine": {
+    "message": "Start a new line",
+    "description": "What Shift Enter does in the composer"
+  },
+  "spHelpShortcutSlash": {
+    "message": "Prompts and saved shortcuts",
+    "description": "What typing a slash in the composer opens"
+  },
+  "spHelpShortcutMention": {
+    "message": "Attach a tab or choose a project",
+    "description": "What typing @ in the composer opens"
+  },
+  "spHelpShortcutEscape": {
+    "message": "Close a menu or dialog",
+    "description": "What Escape does in the side panel"
+  },
+  "spHelpShortcutOpenPanel": {
+    "message": "Open the side panel",
+    "description": "What the browser shortcut for the extension does"
+  },
+  "spHelpShortcutCapture": {
+    "message": "Capture the page",
+    "description": "What the page capture browser shortcut does"
+  },
+  "spAttachmentUploadsOff": {
+    "message": "File uploads aren’t available for this account.",
+    "description": "The account's capability document denies file uploads, so an attached file was not added"
+  },
+  "spSchedulesRuns": {
+    "message": "Runs",
+    "description": "Button and heading for a schedule's past runs"
+  },
+  "spSchedulesRunsLabel": {
+    "message": "Runs of $NAME$",
+    "description": "Accessible name of a schedule's run history",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Morning briefing"
+      }
+    }
+  },
+  "spSchedulesPrompt": {
+    "message": "Prompt",
+    "description": "Heading over the prompt a schedule sends"
+  },
+  "spSchedulesRunsLoading": {
+    "message": "Loading runs…",
+    "description": "Shown while a schedule's runs load"
+  },
+  "spSchedulesRunsEmpty": {
+    "message": "This schedule hasn’t run yet.",
+    "description": "Shown when a schedule has no runs"
+  },
+  "spScheduleRunSucceeded": {
+    "message": "Finished",
+    "description": "Status of a schedule run that completed"
+  },
+  "spScheduleRunFailed": {
+    "message": "Failed",
+    "description": "Status of a schedule run that failed"
+  },
+  "spScheduleRunTimedOut": {
+    "message": "Timed out",
+    "description": "Status of a schedule run that ran out of time"
+  },
+  "spScheduleRunCancelled": {
+    "message": "Cancelled",
+    "description": "Status of a schedule run that was cancelled"
+  },
+  "spScheduleRunAwaitingApproval": {
+    "message": "Waiting for approval",
+    "description": "Status of a schedule run paused for an approval"
+  },
+  "spScheduleRunRunning": {
+    "message": "Running",
+    "description": "Status of a schedule run in progress"
+  },
+  "spScheduleRunNoAnswer": {
+    "message": "This run finished without an answer to show.",
+    "description": "A finished schedule run carried no answer text"
+  },
+  "spArtifactsDownload": {
+    "message": "Download source",
+    "description": "Saves an artifact's own content as a file"
+  },
+  "spArtifactsDownloaded": {
+    "message": "Saved $NAME$.",
+    "description": "Confirms that an artifact's source was saved as a file",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "landing-page.html"
+      }
+    }
+  },
+  "spArtifactsDownloadFailed": {
+    "message": "The artifact could not be saved. Try again.",
+    "description": "Saving an artifact's source failed"
+  },
+  "spHistoryMore": {
+    "message": "More actions",
+    "description": "Tooltip of the button that opens a recent chat's actions"
+  },
+  "spHistoryMoreNamed": {
+    "message": "More actions for $TITLE$",
+    "description": "Accessible name of a recent chat's action menu and its button",
+    "placeholders": {
+      "title": {
+        "content": "$1",
+        "example": "Trip to Lisbon"
+      }
+    }
+  },
+  "spHistoryRename": {
+    "message": "Rename",
+    "description": "Recent chat menu action that renames the chat"
+  },
+  "spHistoryRenameLabel": {
+    "message": "Chat name",
+    "description": "Accessible name of the field that renames a chat"
+  },
+  "spHistoryRenamed": {
+    "message": "Chat renamed.",
+    "description": "Confirms a chat was renamed"
+  },
+  "spHistorySave": {
+    "message": "Save",
+    "description": "Saves a rename or a project move"
+  },
+  "spHistoryCancel": {
+    "message": "Cancel",
+    "description": "Closes a rename, move or delete prompt without changing the chat"
+  },
+  "spHistoryPin": {
+    "message": "Pin",
+    "description": "Recent chat menu action that keeps the chat at the top"
+  },
+  "spHistoryUnpin": {
+    "message": "Unpin",
+    "description": "Recent chat menu action that stops keeping the chat at the top"
+  },
+  "spHistoryPinned": {
+    "message": "Chat pinned to the top.",
+    "description": "Confirms a chat was pinned"
+  },
+  "spHistoryUnpinned": {
+    "message": "Chat unpinned.",
+    "description": "Confirms a chat was unpinned"
+  },
+  "spHistoryPinnedMarker": {
+    "message": "Pinned",
+    "description": "Marks a pinned chat in the recents list"
+  },
+  "spHistoryMove": {
+    "message": "Move to project",
+    "description": "Recent chat menu action that files the chat under a project"
+  },
+  "spHistoryMoveLabel": {
+    "message": "Project for this chat",
+    "description": "Accessible name of the project picker for a chat"
+  },
+  "spHistoryNoProject": {
+    "message": "No project",
+    "description": "Picker option that takes a chat out of its project"
+  },
+  "spHistoryMoved": {
+    "message": "Moved to $PROJECT$.",
+    "description": "Confirms a chat was moved into a project",
+    "placeholders": {
+      "project": {
+        "content": "$1",
+        "example": "Launch plan"
+      }
+    }
+  },
+  "spHistoryMovedOut": {
+    "message": "Chat taken out of its project.",
+    "description": "Confirms a chat no longer belongs to a project"
+  },
+  "spHistoryArchive": {
+    "message": "Archive",
+    "description": "Recent chat menu action that archives the chat"
+  },
+  "spHistoryUnarchive": {
+    "message": "Unarchive",
+    "description": "Menu action that returns an archived chat to recents"
+  },
+  "spHistoryArchivedDone": {
+    "message": "Chat archived. Find it under Archived.",
+    "description": "Confirms a chat was archived"
+  },
+  "spHistoryUnarchived": {
+    "message": "Chat returned to recents.",
+    "description": "Confirms a chat was unarchived"
+  },
+  "spHistoryShowArchived": {
+    "message": "Archived",
+    "description": "Toggle that lists archived chats instead of recent ones"
+  },
+  "spHistoryArchivedEmpty": {
+    "message": "No archived chats",
+    "description": "Shown when the archived list is empty"
+  },
+  "spHistoryChangeFailed": {
+    "message": "That change could not be saved. Try again.",
+    "description": "A rename, pin, move or archive failed"
+  },
+  "spHistoryShare": {
+    "message": "Share",
+    "description": "Recent chat menu action that creates a link to the chat"
+  },
+  "spHistoryShareConfirm": {
+    "message": "Create a link that anyone who has it can use to read this chat?",
+    "description": "Asks before a public link to a chat is created"
+  },
+  "spHistoryShareCreate": {
+    "message": "Create link",
+    "description": "Creates the public link to a chat"
+  },
+  "spHistoryShareCopied": {
+    "message": "Link copied.",
+    "description": "Confirms a chat's share link was copied"
+  },
+  "spHistoryShareCopiedUntil": {
+    "message": "Link copied. It works until $DATE$.",
+    "description": "Confirms a chat's share link was copied and says when it expires",
+    "placeholders": {
+      "date": {
+        "content": "$1",
+        "example": "10/5/2026"
+      }
+    }
+  },
+  "spHistoryShareFailed": {
+    "message": "The share link could not be created. Try again.",
+    "description": "Creating a chat's share link failed"
+  },
+  "spHistoryShareSignIn": {
+    "message": "Sign in to share a chat.",
+    "description": "Sharing needs a signed-in account"
+  },
+  "spOnboardingStepLabel": {
+    "message": "Step $STEP$ of $TOTAL$",
+    "description": "Names a first-run setup step and how many there are",
+    "placeholders": {
+      "step": {
+        "content": "$1",
+        "example": "2"
+      },
+      "total": {
+        "content": "$2",
+        "example": "6"
+      }
+    }
+  },
+  "spSetupAccountTitle": {
+    "message": "Your account",
+    "description": "Heading of the first-run setup step that signs in"
+  },
+  "spSetupAccountSignedOut": {
+    "message": "Sign in to use AGI Cloud from the side panel. You can also sign in later from the menu.",
+    "description": "First-run setup text while signed out"
+  },
+  "spSetupAccountSignIn": {
+    "message": "Sign in",
+    "description": "Opens sign-in from the first-run setup"
+  },
+  "spSetupAccountSignedIn": {
+    "message": "Signed in as $NAME$.",
+    "description": "First-run setup text once signed in",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Ada Lovelace"
+      }
+    }
+  },
+  "spSetupNameLabel": {
+    "message": "What should AGI call you?",
+    "description": "Label of the first-run setup name field"
+  },
+  "spSetupModelTitle": {
+    "message": "Choose a default model",
+    "description": "Heading of the first-run setup step that picks the model new chats start with"
+  },
+  "spSetupModelBody": {
+    "message": "New chats start with this model. You can switch any time from the model menu.",
+    "description": "Explains the default model choice"
+  },
+  "spSetupModelSignedOut": {
+    "message": "Sign in to choose a model. Until then, Auto picks one for each message.",
+    "description": "Model step text while signed out"
+  },
+  "spSetupModelAuto": {
+    "message": "Auto",
+    "description": "The automatic model choice"
+  },
+  "spSetupMemoryTitle": {
+    "message": "Memory",
+    "description": "Heading of the first-run setup step about memory"
+  },
+  "spSetupMemoryBody": {
+    "message": "AGI can remember details you share and use them in later chats. You decide whether it does, and you can change it any time under Settings in the menu.",
+    "description": "Explains memory during first-run setup"
+  },
+  "spSetupMemoryRemember": {
+    "message": "Remember details across chats",
+    "description": "Turns saved memory on or off"
+  },
+  "spSetupMemorySearch": {
+    "message": "Search past chats for context",
+    "description": "Lets AGI search earlier chats when answering"
+  },
+  "spSetupMemorySignedOut": {
+    "message": "Sign in to choose how AGI uses memory.",
+    "description": "Memory step text while signed out"
+  },
+  "spSetupMemoryOrgOff": {
+    "message": "Your workspace has turned memory off.",
+    "description": "The workspace does not allow memory"
+  },
+  "spSetupMemoryUnavailable": {
+    "message": "Your memory settings could not be loaded. You can change them later under Settings.",
+    "description": "Loading memory settings failed"
+  },
+  "spSetupSaving": {
+    "message": "Saving…",
+    "description": "The final setup button while choices are saved"
+  },
+  "spSetupSaveFailed": {
+    "message": "Your choices could not be saved: $REASON$",
+    "description": "Saving first-run setup choices failed",
+    "placeholders": {
+      "reason": {
+        "content": "$1",
+        "example": "Network error."
+      }
+    }
+  },
+  "spSetupSaveFailedGeneric": {
+    "message": "try again, or skip and change them later.",
+    "description": "Fallback reason when setup saving fails without a message"
+  },
+  "spMemoryPreferenceSaved": {
+    "message": "Memory setting saved.",
+    "description": "Confirms a memory switch in the menu was saved"
+  },
+  "spMemoryPreferenceSaveFailed": {
+    "message": "The memory setting could not be saved. Try again.",
+    "description": "Saving a memory switch failed"
+  },
+  "spSchedulesDescriptionLabel": {
+    "message": "Description (optional)",
+    "description": "Label of the optional schedule description field"
+  },
+  "spSchedulesEdit": {
+    "message": "Edit",
+    "description": "Button that opens a schedule's name, description and instructions for editing"
+  },
+  "spSchedulesEditAria": {
+    "message": "Edit $NAME$",
+    "description": "Accessible name of a schedule's edit button and of the edit form",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Morning briefing"
+      }
+    }
+  },
+  "spSchedulesSave": {
+    "message": "Save changes",
+    "description": "Submit button of the schedule form while editing an existing schedule"
+  },
+  "spSchedulesUpdated": {
+    "message": "Saved $NAME$.",
+    "description": "Status after a schedule's details are saved",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Morning briefing"
+      }
+    }
+  },
+  "spSchedulesDelete": {
+    "message": "Delete",
+    "description": "Button that deletes a schedule, and the confirm button that finishes it"
+  },
+  "spSchedulesDeleteAria": {
+    "message": "Delete $NAME$",
+    "description": "Accessible name of a schedule's delete button",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Morning briefing"
+      }
+    }
+  },
+  "spSchedulesDeleteConfirm": {
+    "message": "Delete $NAME$ and its run history? This cannot be undone.",
+    "description": "Confirmation question shown before a schedule is deleted",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Morning briefing"
+      }
+    }
+  },
+  "spSchedulesDeleting": {
+    "message": "Deleting…",
+    "description": "Confirm button label while a schedule is being deleted"
+  },
+  "spSchedulesDeleted": {
+    "message": "Deleted $NAME$.",
+    "description": "Status after a schedule is deleted",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Morning briefing"
+      }
+    }
+  },
+  "spSchedulesLastRunError": {
+    "message": "Last run: $ERROR$",
+    "description": "Why a schedule's most recent run did not finish, shown on its row",
+    "placeholders": {
+      "error": {
+        "content": "$1",
+        "example": "The model took too long to answer."
+      }
+    }
+  },
+  "spTaskDescriptionLabel": {
+    "message": "Description (optional)",
+    "description": "Label of the optional description field on the scheduled-task form"
+  },
+  "spTaskDescriptionPlaceholder": {
+    "message": "What this task is for",
+    "description": "Placeholder of the scheduled-task description field"
+  },
+  "spTaskSaveChanges": {
+    "message": "Save changes",
+    "description": "Scheduled-task form submit button while editing an existing task"
+  },
+  "spTaskSaving": {
+    "message": "Saving…",
+    "description": "Scheduled-task form submit button while an edit is being saved"
+  },
+  "spTaskSaveFailed": {
+    "message": "The scheduled task could not be saved.",
+    "description": "Scheduled-task form error when saving an edit fails and the background gives no reason"
+  },
+  "spTaskUpdated": {
+    "message": "$NAME$ updated.",
+    "description": "Workflows status after a scheduled task is edited",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Daily brief"
+      }
+    }
+  },
+  "spTaskEdit": {
+    "message": "Edit $NAME$",
+    "description": "Accessible name of the edit button on a scheduled task",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Daily brief"
+      }
+    }
+  },
+  "spTaskDeleteConfirm": {
+    "message": "Select delete again to remove $NAME$. It stops running and cannot be recovered.",
+    "description": "Confirmation shown after the first press of delete on a scheduled task",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Daily brief"
+      }
+    }
+  },
+  "spPlanReviewHeading": {
+    "message": "Plan",
+    "description": "Heading of the AGI Work plan a person reviews before the work starts"
+  },
+  "spPlanReviewHelp": {
+    "message": "Edit any step before the work starts. The agent follows the plan you start here.",
+    "description": "Explanation under the AGI Work plan review heading"
+  },
+  "spPlanReviewStep": {
+    "message": "Step $NUMBER$",
+    "description": "Accessible name of one editable step in the AGI Work plan review",
+    "placeholders": {
+      "number": {
+        "content": "$1",
+        "example": "2"
+      }
+    }
+  },
+  "spPlanReviewRemoveStep": {
+    "message": "Remove step $NUMBER$",
+    "description": "Accessible name of the button that removes one step from the AGI Work plan",
+    "placeholders": {
+      "number": {
+        "content": "$1",
+        "example": "2"
+      }
+    }
+  },
+  "spPlanReviewAddStep": {
+    "message": "Add a step",
+    "description": "Button that adds an empty step to the AGI Work plan review"
+  },
+  "spPlanReviewStart": {
+    "message": "Start work",
+    "description": "Button that approves the reviewed AGI Work plan and starts the work"
+  },
+  "spPlanReviewCancel": {
+    "message": "Cancel",
+    "description": "Button that rejects the proposed AGI Work plan"
+  },
+  "spPlanReviewEmpty": {
+    "message": "Add at least one step, or cancel.",
+    "description": "Hint shown when every step of the AGI Work plan review is empty"
+  },
+  "spPlanReviewDeclined": {
+    "message": "You cancelled this plan. Nothing was run.",
+    "description": "Note left on an AGI Work turn whose plan the person cancelled"
   }
 }

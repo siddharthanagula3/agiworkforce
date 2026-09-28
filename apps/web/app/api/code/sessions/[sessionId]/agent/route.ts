@@ -7,7 +7,10 @@ import {
   getMinimumRequiredTier,
   getModelMetadataById,
   modelDisplayNameById,
+  CLOUD_CODE_DEFAULT_TURN_MODE,
+  CLOUD_CODE_TURN_MODES,
   CLOUD_CODE_TURN_STEP_BOUNDS,
+  isCloudCodeTurnMode,
   isCloudCodeTurnStepBound,
 } from '@agiworkforce/types';
 import { canAccessModel } from '@/lib/model-tiers';
@@ -150,6 +153,10 @@ async function handleAgentTurn(request: NextRequest, context: RouteContext) {
       `"maxSteps" must be one of ${CLOUD_CODE_TURN_STEP_BOUNDS.join(', ')}`,
     );
   }
+  const mode = record['mode'] ?? CLOUD_CODE_DEFAULT_TURN_MODE;
+  if (!isCloudCodeTurnMode(mode)) {
+    throw createError.validation(`"mode" must be one of ${CLOUD_CODE_TURN_MODES.join(', ')}`);
+  }
   if (!getModelMetadataById(model)) {
     throw createError.validation('"model" must name a model from the catalog');
   }
@@ -180,6 +187,7 @@ async function handleAgentTurn(request: NextRequest, context: RouteContext) {
       idempotencyKey,
       signal: request.signal,
       maxSteps,
+      mode,
     });
     return NextResponse.json(result);
   } catch (error) {

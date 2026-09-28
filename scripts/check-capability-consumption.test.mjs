@@ -108,12 +108,12 @@ test('a client that re-reads the deployment flag the document folds in fails', (
 test('a gap that closes fails until it is recorded as a reader', () => {
   const root = fixture({
     added: {
-      'apps/extension/src/capabilities.ts':
+      'apps/extension-vscode/src/capabilities.ts':
         'export const read = (me: { capability_handshake?: unknown }) => me.capability_handshake;\n',
     },
   });
   assert.ok(
-    checkCapabilityConsumption(root).some((entry) => /the chrome gap has closed/.test(entry)),
+    checkCapabilityConsumption(root).some((entry) => /the vscode gap has closed/.test(entry)),
   );
 });
 

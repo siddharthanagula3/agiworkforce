@@ -20,14 +20,13 @@ nothing is left.
 
 - Done when: Each work task shows a readable title in the task list, and the user can set or change it.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli
+- Already works on: web, desktop, mobile, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | vscode | partial | Cloud task rows are labelled by work mode and state, not by a task title; there is no way to name a task. | ui |
-| chrome | partial | Chrome run rows show only "work mode • model", never the task or chat title. | ui |
 
-Code: `apps/extension-vscode/src/features/cloud-tasks/cloudRunPresentation.ts:78-86`, `apps/extension-vscode/src/features/cloud-tasks/cloudTasksTree.ts:101-105`, `apps/extension/src/features/side-panel/cloudRunsPanel.ts:773-777`
+Code: `apps/extension-vscode/src/features/cloud-tasks/cloudRunPresentation.ts:78-86`, `apps/extension-vscode/src/features/cloud-tasks/cloudTasksTree.ts:101-105`
 
 ## S60.03: Objective.
 
@@ -136,39 +135,14 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1725-1731`, `apps/mobile/sr
 
 - Done when: Before the agent acts, the user sees its plan and can approve, edit or reject it.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Research runs wait for Approve plan before starting; AGI Work plan steps appear only as Activity log lines, with no plan view and no approve, edit or reject. | ui, handler |
 | vscode | partial | VS Code shows a plan card and offers Plan mode, but has no approve/reject control for the plan. | ui |
-| chrome | partial | Chrome run detail lists plan steps as journal lines only; no approve/reject, and Chrome cannot start AGI Work. | ui, handler |
 
 Code: `apps/mobile/src/features/tasks/runPresentation.ts:227-237`, `apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx:313-329`, `apps/mobile/src/features/chat/components/research/ResearchRunCard.tsx:262-270`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:5576-5606`
-
-## S60.14: Step list.
-
-- Done when: The task view lists its steps with an accurate per-step status.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | Run detail is a flat journal of events; no step list with status. | ui |
-
-Code: `apps/extension/src/features/side-panel/cloudRunsPanel.ts:471-481`
-
-## S60.16: Running-step indicator.
-
-- Done when: While a task runs, the view marks which step is currently executing.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | Chrome shows the run state badge and a log; no current-step marker. | ui |
-
-Code: `apps/extension/src/features/side-panel/cloudRunsPanel.ts:471-481`, `apps/extension/src/features/side-panel/cloudRunsPanel.ts:832-837`
 
 ## S60.17: Parallel-work indicator.
 
@@ -189,27 +163,14 @@ Code: `apps/cli/src/subagent.rs:247-253`, `apps/cli/src/tui/transcript_cell.rs:1
 
 - Done when: The agent can pause a task to ask the user a clarifying question and continue with the answer.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Mobile shows "Waiting for connector input" but cannot answer it ("answered where the task was started"); no clarifying questions. | ui |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Chrome shows "Waiting on connector details" for a run but cannot answer it; no clarifying questions. | ui |
 
-Code: `apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx:252-265`, `apps/extension/src/features/side-panel/cloudRunsPanel.ts:693-705`
-
-## S60.20: Task steering.
-
-- Done when: The user can redirect a running task with new guidance without starting over.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | The cited guidance field lives inside buildApprovalCard, so it exists only while a run is awaiting_input on a tool approval; a run that is simply running offers Stop and nothing else (no pause, no guidance). The criterion is redirecting a running task; chrome can steer only at an approval prompt. miss: states; remaining: add a pause/steer control for running runs (web has Pause -> Resume with guidance). |  |
-
-Code: `apps/extension/src/features/side-panel/cloudRunsPanel.ts:663-671`, `apps/extension/src/features/cloud-bridge/managedRunControl.ts:386-394`
+Code: `apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx:252-265`
 
 ## S60.21: Pause.
 
@@ -291,27 +252,23 @@ Code: `apps/cli/src/agent/chat.rs:1047-1057`
 
 - Done when: Files the task produced are listed and can be opened or downloaded.
 - Wave: 3
-- Already works on: web, desktop, cli, vscode
+- Already works on: web, desktop, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Produced files appear only as an Activity line "Produced <name>" with no open or download. | ui |
-| chrome | partial | Produced files appear only as "Artifact: <name>" journal lines, with no open or download. | ui |
 
-Code: `apps/mobile/src/features/tasks/runPresentation.ts:248-249`, `apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx:313-329`, `apps/extension/src/features/side-panel/cloudRunsPanel.ts:477-478`
+Code: `apps/mobile/src/features/tasks/runPresentation.ts:248-249`, `apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx:313-329`
 
 ## S60.31: Partial-outcome summary.
 
 - Done when: When a task stops short, the user sees what was done and what remains.
 - Wave: 3
-- Already works on: web, desktop, mobile, vscode
+- Already works on: web, desktop, mobile, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
-| chrome | partial | Only the state label in the journal; no done-versus-remaining summary. | ui |
-
-Code: `apps/extension/src/features/side-panel/cloudRunsPanel.ts:479-480`
 
 ## S60.33: Task sharing.
 

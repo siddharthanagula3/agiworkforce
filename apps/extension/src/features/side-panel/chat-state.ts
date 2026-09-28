@@ -3,7 +3,7 @@ import type {
   GeneratedFileWire,
   ManagedCloudAgentRunReference,
 } from '@agiworkforce/cloud-contracts';
-import type { InteractiveCard } from '@agiworkforce/types';
+import type { AgentEventSource, InteractiveCard } from '@agiworkforce/types';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import { normalizeSourceUrlKey } from '@agiworkforce/utils/source-url';
 import type { ManagedCodeExecution, ManagedQuotaRecovery } from '../cloud-bridge/freeTrialClient';
@@ -21,10 +21,7 @@ export interface SidePanelPageReference {
   title: string;
 }
 
-export interface SidePanelSource {
-  url: string;
-  title: string;
-  snippet?: string;
+export interface SidePanelSource extends AgentEventSource {
   publishedDate?: string;
 }
 
@@ -53,6 +50,7 @@ export interface SidePanelChatMessage {
   cloudApprovalDecisions?: Record<string, 'approved' | 'rejected'>;
   cloudApprovalError?: string;
   managedQuickMode?: boolean;
+  agiWorkPlanDeclined?: boolean;
   model?: string;
   provider?: string;
   generatedFiles?: GeneratedFileWire[];
@@ -87,6 +85,7 @@ export interface StoredSidePanelChatMessage {
   cloudApprovalDecisions?: Record<string, 'approved' | 'rejected'>;
   cloudApprovalError?: string;
   managedQuickMode?: boolean;
+  agiWorkPlanDeclined?: boolean;
   model?: string;
   provider?: string;
   generatedFiles?: GeneratedFileWire[];
@@ -175,6 +174,7 @@ export function hydrateStoredChatMessage(
       : {}),
     ...(message.cloudApprovalError ? { cloudApprovalError: message.cloudApprovalError } : {}),
     ...(message.managedQuickMode ? { managedQuickMode: true } : {}),
+    ...(message.agiWorkPlanDeclined ? { agiWorkPlanDeclined: true } : {}),
     ...(message.model ? { model: message.model } : {}),
     ...(message.provider ? { provider: message.provider } : {}),
     ...(message.generatedFiles

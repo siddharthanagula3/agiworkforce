@@ -338,6 +338,14 @@ pub(super) async fn handle_slash_command(
                 return SlashResult::Btw(arg.to_string());
             }
         }
+        "/search" => {
+            if arg.is_empty() {
+                output::print_warn("Usage: /search <question>");
+            } else {
+                session.search_next_turn = true;
+                return SlashResult::Prompt(arg.to_string());
+            }
+        }
         "/advisor" => {
             if arg.is_empty() {
                 output::print_warn(
@@ -690,6 +698,7 @@ fn repl_runtime_command_names() -> std::collections::BTreeSet<&'static str> {
         "migrate",
         "compact",
         "btw",
+        "search",
         "advisor",
         "plan",
         "fast",
