@@ -93,14 +93,13 @@ Code: `apps/mobile/src/features/chat/ChatsListScreen.tsx:174-178`
 
 - Done when: Each row has an overflow (⋯) menu with its actions (share, rename, pin, archive, move, delete).
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | The cited row has no overflow control: actions open only on long-press (DrawerContent.tsx:496-504, hint "Long press to pin or delete"; ChatsListScreen.tsx:331-333 likewise) and the sheet offers rename, pin, archive (cloud only) and delete (useConversationActions.ts:115-133), with no share or move. partial, miss ui; remaining: add a visible more-options control and share/move actions. |  |
 | cli | partial | The /history picker only resumes; rename, fork and export are separate commands on the current session and deletion is agi history delete. | ui |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | History rows have only an inline delete (two-step confirm); no menu for rename, pin, share or move. | ui |
 
 Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:494-504`, `apps/mobile/src/features/conversation-actions/useConversationActions.ts:115-125`, `apps/cli/src/tui/widgets/session_picker.rs:10-13`, `apps/cli/src/tui/tui_app.rs:3574-3579`
 
@@ -134,14 +133,13 @@ Code: `apps/extension/src/side_panel.ts:6639-6640`, `apps/extension/src/side_pan
 
 - Done when: A global command palette (keyboard-invoked) searches and runs app commands and destinations.
 - Wave: 3
-- Already works on: web, desktop, cli, vscode
+- Already works on: web, desktop, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Only a composer slash palette (/image, /voice, /compare, /export); no global palette for destinations or settings. | ui |
-| chrome | partial | Only the composer "/" slash menu; there is no global palette for views, history or settings. | ui |
 
-Code: `apps/mobile/src/features/chat/components/CommandPalette.tsx:9-9`, `apps/extension/src/side_panel.ts:9664-9668`
+Code: `apps/mobile/src/features/chat/components/CommandPalette.tsx:9-9`
 
 ## S5.28: Notification center.
 
@@ -159,14 +157,13 @@ Code: `apps/mobile/src/features/chat/components/CommandPalette.tsx:9-9`, `apps/e
 
 - Done when: A help menu gathers help centre, support contact, feedback and shortcuts in one place.
 - Wave: 3
-- Already works on: web, desktop, cli, vscode
+- Already works on: web, desktop, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Help & About (about.tsx) has a Support section with Contact Support (mailto) and Send Feedback only; no help-centre or docs link exists in the file, so two of the criterion's four parts are missing (shortcuts do not apply on a phone). partial, miss ui; remaining: add a help-centre link to Help & About. |  |
-| chrome | partial | One drawer "Get help" button that opens web help; no help menu with support, feedback or shortcuts. | surface-only |
 
-Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:569-569`, `apps/mobile/app/(app)/about.tsx:255-265`, `apps/extension/src/side_panel.ts:7140-7150`
+Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:569-569`, `apps/mobile/app/(app)/about.tsx:255-265`
 
 ## S5.31: Upgrade entry.
 
