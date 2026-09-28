@@ -440,7 +440,9 @@
     "videoModeAttachments_one": "A geração de vídeo usa apenas o seu prompt. Os arquivos anexados não são enviados ao modelo de vídeo. Saia do modo vídeo primeiro se quiser enviar este arquivo ao modelo de chat.",
     "videoModeAttachments_other": "A geração de vídeo usa apenas o seu prompt. Os arquivos anexados não são enviados ao modelo de vídeo. Saia do modo vídeo primeiro se quiser enviar estes arquivos ao modelo de chat.",
     "viewSources_one": "Ver {{count}} fonte",
-    "viewSources_other": "Ver {{count}} fontes"
+    "viewSources_other": "Ver {{count}} fontes",
+    "folderFilesLeftOut_one": "{{count}} arquivo em {{folder}} não foi anexado. Anexe-o a partir de uma pasta local.",
+    "folderFilesLeftOut_other": "{{count}} arquivos em {{folder}} não foram anexados. Anexe-os a partir de uma pasta local."
   },
   "markdownTable": {
     "label": "Tabela",

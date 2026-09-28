@@ -560,7 +560,11 @@
     "viewSources_few": "Показать {{count}} источника",
     "viewSources_many": "Показать {{count}} источников",
     "viewSources_one": "Показать {{count}} источник",
-    "viewSources_other": "Показать {{count}} источника"
+    "viewSources_other": "Показать {{count}} источника",
+    "folderFilesLeftOut_one": "{{count}} файл из {{folder}} не прикреплён. Прикрепите его из локальной папки.",
+    "folderFilesLeftOut_few": "{{count}} файла из {{folder}} не прикреплены. Прикрепите их из локальной папки.",
+    "folderFilesLeftOut_many": "{{count}} файлов из {{folder}} не прикреплены. Прикрепите их из локальной папки.",
+    "folderFilesLeftOut_other": "{{count}} файла из {{folder}} не прикреплены. Прикрепите их из локальной папки."
   },
   "markdownTable": {
     "label": "Таблица",

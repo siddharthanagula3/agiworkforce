@@ -680,7 +680,13 @@
     "viewSources_one": "عرض مصدر واحد",
     "viewSources_other": "عرض {{count}} مصدر",
     "viewSources_two": "عرض مصدرين",
-    "viewSources_zero": "لا مصادر للعرض"
+    "viewSources_zero": "لا مصادر للعرض",
+    "folderFilesLeftOut_zero": "لم يُستثنَ أي ملف من {{folder}}.",
+    "folderFilesLeftOut_one": "لم يُرفَق ملف واحد من {{folder}}. أرفقه من مجلد محلي.",
+    "folderFilesLeftOut_two": "لم يُرفَق ملفان من {{folder}}. أرفقهما من مجلد محلي.",
+    "folderFilesLeftOut_few": "لم تُرفَق {{count}} ملفات من {{folder}}. أرفقها من مجلد محلي.",
+    "folderFilesLeftOut_many": "لم يُرفَق {{count}} ملفاً من {{folder}}. أرفقها من مجلد محلي.",
+    "folderFilesLeftOut_other": "لم يُرفَق {{count}} ملف من {{folder}}. أرفقها من مجلد محلي."
   },
   "markdownTable": {
     "label": "جدول",

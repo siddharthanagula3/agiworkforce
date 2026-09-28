@@ -54,6 +54,7 @@ import { useMicrophoneNoticeStore } from '@features/chat/stores/microphone-notic
 import {
   DesktopRuntimeError,
   LOCAL_ATTACHMENT_REFUSAL,
+  type WorkspaceRoot,
 } from '@agiworkforce/local-runtime-contract';
 import {
   BrowserToolsDialog,
@@ -89,6 +90,7 @@ import { chatDraftRefusalNotes } from '@features/chat/lib/attachment-metadata';
 import { preloadTranscriptMarkdown } from '@features/chat/lib/preload-transcript-markdown';
 import { isChatImageMimeType } from '@/lib/chat-attachment-policy';
 import { useSkillsList, type SkillItem } from '@features/chat/hooks/use-skills-list';
+import { readFolderForMention, useMentionFolders } from '@features/chat/hooks/use-mention-folders';
 import { useMediaModelAvailability } from '@features/chat/hooks/use-media-model-availability';
 import { usePromotionalMediaModels } from '@features/chat/hooks/use-promotional-media-models';
 import { useSearchAllowance } from '@features/chat/hooks/use-search-allowance';
@@ -171,6 +173,7 @@ import {
   MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH,
   MANAGED_MEDIA_MAX_IMAGE_REFERENCES,
   MANAGED_OFFICE_FILE_TOOL_NAME,
+  MAX_CHAT_ATTACHMENT_COUNT,
   cloudAgentRunSteerProgressId,
   isCloudAgentRunSteerProgressId,
   type LibraryItem,
@@ -2519,6 +2522,10 @@ const ChatComposerNewComponent = ({
 
   const mentionFiles = useLibraryFiles(showMentions && !attachmentsUnavailable, mentionQuery);
   const mentionFileItems = attachmentsUnavailable ? NO_MENTION_FILES : mentionFiles.items;
+  const mentionFolders = useMentionFolders(
+    showMentions && desktopHost !== null && !attachmentsUnavailable,
+    mentionQuery,
+  );
 
   const mentionItems = useMemo(
     () => [
@@ -2528,9 +2535,16 @@ const ChatComposerNewComponent = ({
         kind: 'connector' as const,
         connector,
       })),
+      ...mentionFolders.map((folder) => ({ kind: 'folder' as const, folder })),
       ...mentionFileItems.map((file) => ({ kind: 'file' as const, file })),
     ],
-    [filteredSkills, filteredMentionProjects, filteredMentionConnectors, mentionFileItems],
+    [
+      filteredSkills,
+      filteredMentionProjects,
+      filteredMentionConnectors,
+      mentionFolders,
+      mentionFileItems,
+    ],
   );
 
   const activeMentionIndex =
@@ -2647,12 +2661,44 @@ const ChatComposerNewComponent = ({
     [replaceMentionToken, handleFileDrop],
   );
 
+  const handleMentionFolderSelect = useCallback(
+    (folder: WorkspaceRoot) => {
+      replaceMentionToken();
+      void readFolderForMention(folder, MAX_CHAT_ATTACHMENT_COUNT - attachments.length)
+        .then(({ files, leftOut, unreadable }) => {
+          if (files.length === 0 && leftOut === 0 && unreadable === 0) {
+            setLocalNotice(`${folder.name} has no files this chat can read.`);
+            return;
+          }
+          handleFileDrop(files);
+          const skipped = leftOut + unreadable;
+          if (skipped > 0) {
+            setLocalNotice(
+              plural(
+                'counts.folderFilesLeftOut',
+                skipped,
+                {
+                  one: '{{count}} file in {{folder}} was not attached. Attach it from a local folder.',
+                  other:
+                    '{{count}} files in {{folder}} were not attached. Attach them from a local folder.',
+                },
+                { folder: folder.name },
+              ),
+            );
+          }
+        })
+        .catch(() => setLocalNotice(COMPOSER_FILES_ATTACH_FAILED_COPY));
+    },
+    [replaceMentionToken, attachments.length, handleFileDrop, plural],
+  );
+
   const commitActiveMention = useCallback(() => {
     const item = mentionItems[activeMentionIndex];
     if (!item) return;
     if (item.kind === 'skill') handleMentionSelect(item.skill);
     else if (item.kind === 'project') handleMentionProjectSelect(item.project.id);
     else if (item.kind === 'connector') handleMentionConnectorSelect(item.connector);
+    else if (item.kind === 'folder') handleMentionFolderSelect(item.folder);
     else handleMentionFileSelect(item.file);
   }, [
     mentionItems,
@@ -2660,6 +2706,7 @@ const ChatComposerNewComponent = ({
     handleMentionSelect,
     handleMentionProjectSelect,
     handleMentionConnectorSelect,
+    handleMentionFolderSelect,
     handleMentionFileSelect,
   ]);
 
@@ -4669,6 +4716,41 @@ const ChatComposerNewComponent = ({
               </>
             )}
 
+            {mentionFolders.length > 0 && (
+              <>
+                <div className="mb-1.5 mt-2 border-t border-border/40 px-3 pt-2 text-caption font-medium uppercase tracking-wider text-muted-foreground">
+                  Local folders
+                </div>
+                {mentionFolders.map((folder, i) => {
+                  const index =
+                    filteredSkills.length +
+                    filteredMentionProjects.length +
+                    filteredMentionConnectors.length +
+                    i;
+                  return (
+                    <button
+                      key={folder.id}
+                      type="button"
+                      role="option"
+                      aria-selected={index === activeMentionIndex}
+                      onMouseEnter={() => setMentionIndex(index)}
+                      onClick={() => handleMentionFolderSelect(folder)}
+                      className={cn(
+                        'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors',
+                        index === activeMentionIndex ? 'bg-muted/70' : 'hover:bg-muted/60',
+                      )}
+                    >
+                      <FolderOpen aria-hidden className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-medium">{folder.name}</div>
+                        <div className="truncate text-xs text-muted-foreground">{folder.path}</div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </>
+            )}
+
             {!attachmentsUnavailable && (
               <>
                 <div className="mb-1.5 mt-2 border-t border-border/40 px-3 pt-2 text-caption font-medium uppercase tracking-wider text-muted-foreground">
@@ -4689,6 +4771,7 @@ const ChatComposerNewComponent = ({
                       filteredSkills.length +
                       filteredMentionProjects.length +
                       filteredMentionConnectors.length +
+                      mentionFolders.length +
                       i;
                     const Glyph = libraryFileGlyph(file);
                     return (
