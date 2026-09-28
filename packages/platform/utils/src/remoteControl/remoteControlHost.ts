@@ -1,6 +1,7 @@
 import { SignalingClient, endsPairing, type SignalingEvent } from '../signaling';
 import {
   REMOTE_CODE_LIMITS,
+  clipRemoteResult,
   clipRemoteText,
   isRelayPairingCode,
   type DispatchTaskLifecycleStatus,
@@ -166,7 +167,10 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
     detail: { message?: string; result?: string; error?: string } = {},
   ): Promise<void> {
     const message = clipped(detail.message);
-    const result = clipped(detail.result);
+    const result =
+      detail.result === undefined || detail.result === ''
+        ? undefined
+        : clipRemoteResult(detail.result, REMOTE_CODE_LIMITS.partialResponseLength);
     const error = clipped(detail.error);
     const payload: Record<string, unknown> = {
       version: 1,

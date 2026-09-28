@@ -238,6 +238,15 @@ export function clipRemoteText(value: string, limit: number): { text: string; tr
   return { text: value.slice(value.length - limit), truncated: true };
 }
 
+export const REMOTE_RESULT_SHORTENED_NOTE =
+  '[The start of this answer was cut to fit. The full answer is on the computer.]\n';
+
+export function clipRemoteResult(value: string, limit: number): string {
+  if (value.length <= limit) return value;
+  const kept = clipRemoteText(value, limit - REMOTE_RESULT_SHORTENED_NOTE.length).text;
+  return `${REMOTE_RESULT_SHORTENED_NOTE}${kept}`;
+}
+
 const DIFF_HEADER = /^(diff --git |--- (?:a\/|\/dev\/null)|\+\+\+ (?:b\/|\/dev\/null)|@@ )/m;
 
 export function extractUnifiedDiff(output: string): string | null {
