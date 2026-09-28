@@ -291,6 +291,57 @@ function parametersFor(
         },
         required: ['key'],
       };
+    case 'device_browser_read_page':
+    case 'device_browser_screenshot':
+      return { type: 'object', properties: {}, required: [] };
+    case 'device_browser_navigate':
+    case 'device_browser_download':
+      return {
+        type: 'object',
+        properties: {
+          url: {
+            type: 'string',
+            description:
+              tool === 'device_browser_navigate'
+                ? 'The http or https address to open.'
+                : 'The http or https address of the file to download.',
+          },
+        },
+        required: ['url'],
+      };
+    case 'device_browser_click':
+      return {
+        type: 'object',
+        properties: {
+          selector: {
+            type: 'string',
+            description: 'CSS selector of the element to click, taken from the page you read.',
+          },
+          review: REVIEW,
+        },
+        required: ['selector'],
+      };
+    case 'device_browser_type':
+      return {
+        type: 'object',
+        properties: {
+          selector: {
+            type: 'string',
+            description: 'CSS selector of the field to type into, taken from the page you read.',
+          },
+          text: {
+            type: 'string',
+            maxLength: MAX_DEVICE_TYPE_LENGTH,
+            description: 'The text to type.',
+          },
+          clear: {
+            type: 'boolean',
+            description: 'Empty the field before typing.',
+          },
+          review: REVIEW,
+        },
+        required: ['selector', 'text'],
+      };
     case 'device_wait':
       return {
         type: 'object',
