@@ -23764,6 +23764,7 @@
       "provider": "qwen",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-qwen",
+      "responseFormats": ["json_object"],
       "requestParameters": ["top_p", "stop", "seed", "presence_penalty"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {
@@ -23777,6 +23778,7 @@
       "provider": "moonshot",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-moonshot",
+      "responseFormats": ["json_object"],
       "requestParameters": ["stop"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {},
@@ -23797,6 +23799,7 @@
       "provider": "zhipu",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-zhipu",
+      "responseFormats": ["json_object"],
       "requestParameters": ["top_p", "stop"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {},
@@ -23807,6 +23810,7 @@
       "provider": "perplexity",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-perplexity",
+      "responseFormats": ["json_schema"],
       "requestParameters": ["top_p", "stop"],
       "trustModes": ["managed_cloud", "byok"],
       "features": { "webSearch": { "providerSupport": "native", "implementation": "implemented" } },
@@ -23817,6 +23821,7 @@
       "provider": "groq",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-groq",
+      "responseFormats": ["json_object"],
       "requestParameters": ["top_p", "stop", "seed", "user"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {},
@@ -39427,6 +39432,13 @@
       "verifiedBy": "official-provider-image-guides",
       "status": "ADDITION",
       "notes": "Harness media input limits. platform.claude.com/docs/en/build-with-claude/vision, retrieved 2026-09-28: 600 images per API request, 100 for models with a 200k-token context window. developers.openai.com/api/docs/guides/images-vision, retrieved 2026-09-28: up to 1,500 images per request. ai.google.dev/gemini-api/docs/image-understanding, retrieved 2026-09-28: 3,600 image files per request; ai.google.dev/gemini-api/docs/document-processing: PDFs up to 1,000 pages."
+    },
+    {
+      "id": "verification/2026-09-28/57",
+      "date": "2026-09-28",
+      "verifiedBy": "official-provider-structured-output-guides",
+      "status": "ADDITION",
+      "notes": "Native JSON response formats for five more chat harnesses, read on 2026-09-28. docs.z.ai/guides/capabilities/struct-output: response_format {\"type\": \"json_object\"} enables JSON mode on models that support structured output such as glm-5, glm-4.7, glm-4.5 and glm-4.6, with no json_schema type, so zhipu/chat-completions lists json_object. platform.kimi.ai/docs/guide/use-json-mode-feature-of-kimi-api: set response_format to {\"type\": \"json_object\"} to enable JSON Mode, with no json_schema type, so moonshot/chat-completions lists json_object. alibabacloud.com/help/en/model-studio/qwen-structured-output (last updated 2026-09-28): JSON Object mode covers most Qwen models plus kimi-k3, deepseek-v4-pro, deepseek-v4-flash and glm-5.x, and needs the word JSON in the messages, which the enforced JSON directive always supplies; JSON Schema mode covers only the Qwen3.7 and Qwen3.8 Plus, Flash and Max series, so qwen/chat-completions lists json_object only. docs.perplexity.ai/api-reference/sonar-post: response_format is text or json_schema (\"Set type to json_schema for structured output\"), and its json_schema object takes schema, name and strict, the three fields the translation sends, so perplexity/chat-completions lists json_schema. console.groq.com/docs/structured-outputs: JSON Object Mode is supported on all models while json_schema is limited to named models, so groq/chat-completions lists json_object. Not listed: MiniMax's OpenAI-compatible reference (platform.minimax.io/docs/api-reference/text-openai-api) documents no response_format; DeepInfra (docs.deepinfra.com/chat/structured-outputs, 'many of our models'), Together (docs.together.ai structured outputs, per-model catalogue), Novita (docs.novita.ai/guides/llm-structured-outputs, per-model list) and Workers AI (developers.cloudflare.com/workers-ai/features/json-mode, per-model list) name support per model rather than per API, so a harness-wide entry could send the field to a model that refuses it. The gateways (OpenRouter, Vercel AI Gateway, CheaperInference, Experiential Labs) and the Anthropic-compatible relays were not checked. Every JSON request keeps the enforced directive and reply validation whether or not the route takes the native format."
     }
   ],
   "retiredModels": {
