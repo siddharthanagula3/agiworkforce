@@ -11,7 +11,9 @@ const state = vi.hoisted(() => ({
   enrolledAt: null as Date | null,
   verifiedSessions: new Set<string>(),
   noteSessionSighting: vi.fn(),
-  createDesktopSignInGrant: vi.fn(async () => 'desktop-grant-code'),
+  createDesktopSignInGrant: vi.fn(
+    async (_userId: string, _challenge: string) => 'desktop-grant-code',
+  ),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -33,7 +35,8 @@ vi.mock('@/lib/server/session-sightings', () => ({
 }));
 vi.mock('@/lib/server/desktop-sign-in', () => ({
   isDesktopSignInChallenge: (value: unknown) => typeof value === 'string' && value.length === 43,
-  createDesktopSignInGrant: (...args: unknown[]) => state.createDesktopSignInGrant(...args),
+  createDesktopSignInGrant: (userId: string, challenge: string) =>
+    state.createDesktopSignInGrant(userId, challenge),
 }));
 vi.mock('@/lib/server/identity', () => {
   const provider = {
