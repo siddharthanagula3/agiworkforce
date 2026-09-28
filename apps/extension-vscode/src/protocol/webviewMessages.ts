@@ -70,6 +70,7 @@ export const CONTEXT_ATTACHMENT_KINDS = [
   'open-files',
   'problems',
   'git-diff',
+  'url',
 ] as const;
 export const ContextAttachmentKindSchema = z.enum(CONTEXT_ATTACHMENT_KINDS);
 export type ContextAttachmentKind = z.infer<typeof ContextAttachmentKindSchema>;
