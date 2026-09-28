@@ -173,9 +173,12 @@ function SessionItemBase({
 
   // The dot is the only thing separating a task from a chat, so the row's
   // accessible name has to carry the mode rather than leave it to colour.
-  const rowAccessibleName = session.agiWork
-    ? `${rowLabel}, ${t('sidebar.agiWork', 'AGI Work')}`
-    : undefined;
+  const rowNameParts = [
+    rowLabel,
+    session.agiWork ? t('sidebar.agiWork', 'AGI Work') : null,
+    session.unread ? t('sidebar.unread', 'Unread') : null,
+  ].filter((part): part is string => Boolean(part));
+  const rowAccessibleName = rowNameParts.length > 1 ? rowNameParts.join(', ') : undefined;
 
   const rowClassName = cn(
     'flex h-[34px] min-w-0 flex-1 items-center overflow-hidden px-3 text-left pointer-coarse:h-11',

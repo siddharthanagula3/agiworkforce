@@ -117,6 +117,7 @@
     "renameProject": "プロジェクト名を変更",
     "restore": "復元",
     "running": "実行中",
+    "unread": "未読",
     "searchConversations": "会話を検索",
     "searchConversationsDescription": "会話履歴を検索して、該当する会話を開きます。",
     "share": "共有",
@@ -233,7 +234,8 @@
     "temporaryChatPersonalizationHint": "パーソナライズはプロフィール、指示、応答スタイルを使います。パーソナライズなしではそれらを使いません。",
     "toggleArtifacts": "アーティファクトパネルの表示切り替え",
     "toggleArtifactsCount": "アーティファクトパネルの表示切り替え（{{count}}）",
-    "toggleStats": "統計"
+    "toggleStats": "統計",
+    "untitledConversation": "会話"
   },
   "interface": {
     "closeRewindCheckpoints": "巻き戻しチェックポイントを閉じる",

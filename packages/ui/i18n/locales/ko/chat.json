@@ -117,6 +117,7 @@
     "renameProject": "프로젝트 이름 변경",
     "restore": "복원",
     "running": "실행 중",
+    "unread": "읽지 않음",
     "searchConversations": "대화 검색",
     "searchConversationsDescription": "대화 기록을 검색하고 일치하는 대화를 엽니다.",
     "share": "공유",
@@ -233,7 +234,8 @@
     "temporaryChatPersonalizationHint": "개인화는 프로필, 지침, 응답 스타일을 사용합니다. 개인화 안 함은 이를 제외합니다.",
     "toggleArtifacts": "아티팩트 패널 전환",
     "toggleArtifactsCount": "아티팩트 패널 전환 ({{count}})",
-    "toggleStats": "통계"
+    "toggleStats": "통계",
+    "untitledConversation": "대화"
   },
   "interface": {
     "closeRewindCheckpoints": "되감기 체크포인트 닫기",
