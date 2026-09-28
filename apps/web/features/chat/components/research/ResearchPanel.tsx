@@ -176,9 +176,11 @@ function SourcesEmptyState() {
 function ReportTab({
   conversationId,
   onAskFollowUp,
+  onRunAgain,
 }: {
   conversationId: string | null;
   onAskFollowUp?: (prompt: string) => void;
+  onRunAgain?: (query: string) => void;
 }) {
   const [report, setReport] = useState<ResearchReport | null>(null);
   const [state, setState] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle');
@@ -267,6 +269,7 @@ function ReportTab({
       report={report}
       onCreateArtifact={createArtifact}
       {...(onAskFollowUp ? { onAskFollowUp } : {})}
+      {...(onRunAgain ? { onRunAgain } : {})}
     />
   );
 }
@@ -282,9 +285,11 @@ interface ResearchPanelProps {
    * composer whose question would go nowhere.
    */
   onAskFollowUp?: (prompt: string) => void;
+  /** Start a new Deep Research run on a report's question, when a turn can start. */
+  onRunAgain?: (query: string) => void;
 }
 
-export function ResearchPanel({ onAskFollowUp }: ResearchPanelProps) {
+export function ResearchPanel({ onAskFollowUp, onRunAgain }: ResearchPanelProps) {
   const panelOpen = useResearchPanelStore((s) => s.panelOpen);
   const closePanel = useResearchPanelStore((s) => s.closePanel);
   const sourcesFor = useResearchPanelStore((s) => s.sourcesFor);
@@ -298,6 +303,12 @@ export function ResearchPanel({ onAskFollowUp }: ResearchPanelProps) {
   const askFollowUpAndClose = onAskFollowUp
     ? (prompt: string) => {
         onAskFollowUp(prompt);
+        closePanel();
+      }
+    : undefined;
+  const runAgainAndClose = onRunAgain
+    ? (query: string) => {
+        onRunAgain(query);
         closePanel();
       }
     : undefined;
@@ -414,6 +425,7 @@ export function ResearchPanel({ onAskFollowUp }: ResearchPanelProps) {
             <ReportTab
               conversationId={activeConversationId}
               {...(askFollowUpAndClose ? { onAskFollowUp: askFollowUpAndClose } : {})}
+              {...(runAgainAndClose ? { onRunAgain: runAgainAndClose } : {})}
             />
           </div>
         ) : (
