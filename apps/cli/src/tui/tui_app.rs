@@ -156,6 +156,7 @@ enum ChatRole {
     System,
     Tool,
     Error,
+    Detail,
 }
 
 /// A live tool-call row in the transcript. Populated from the agent's tool
@@ -383,6 +384,7 @@ struct TuiApp {
     /// derived from them because a `ContentBlock::Image` carries base64 bytes
     /// and no provenance, so the composer would have nothing to name in a chip.
     staged_images: Vec<String>,
+    turn_context: Vec<String>,
     /// Images `/image` generated this session, newest last. Held as paths so
     /// the chip can name a real file and `/image open` can hand it to the
     /// user's default viewer.
@@ -562,6 +564,7 @@ impl TuiApp {
             tool_cells: Vec::new(),
             mcp_elicitation_handler: Arc::new(crate::mcp::tui_handler::TuiElicitationHandler::new()),
             staged_images: Vec::new(),
+            turn_context: Vec::new(),
             generated_images: Vec::new(),
             mention_candidates: None,
             mention_anchor: None,
@@ -1532,6 +1535,26 @@ fn spinner_frame(tick: u8) -> &'static str {
     FRAMES[(tick as usize) % FRAMES.len()]
 }
 
+fn answer_details(
+    model: &str,
+    turn: &crate::agent::TurnResult,
+    elapsed: std::time::Duration,
+) -> String {
+    let mut parts = vec![
+        crate::model_catalog::display_name(model),
+        format!(
+            "{} in · {} out",
+            crate::output::format_tokens(turn.input_tokens),
+            crate::output::format_tokens(turn.output_tokens)
+        ),
+    ];
+    if turn.cost_usd > 0.0 && !turn.via_subscription {
+        parts.push(crate::output::format_session_credits(turn.cost_usd));
+    }
+    parts.push(crate::output::format_duration_ms(elapsed.as_millis() as u64));
+    parts.join(" · ")
+}
+
 /// AGI loading verb shown beside the spinner: one plain, steady word, the same
 /// register Claude Code and Codex use, not a rotating vocabulary.
 fn loading_verb_for(_turn_count: u32) -> &'static str {
@@ -1757,6 +1780,13 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
         )));
     } else {
         for msg in ctx.chat_messages {
+            if msg.role == ChatRole::Detail {
+                lines.push(Line::from(Span::styled(
+                    format!("    ↳ {}", msg.text),
+                    Style::default().fg(ui_muted()),
+                )));
+                continue;
+            }
             if !lines.is_empty() {
                 lines.push(Line::from(""));
             }
@@ -1785,6 +1815,7 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
                         .fg(ui_danger())
                         .add_modifier(Modifier::BOLD),
                 ),
+                ChatRole::Detail => ("  ↳ ", Style::default().fg(ui_muted())),
             };
 
             // Render prefix line
@@ -1801,7 +1832,7 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
                         ChatRole::User => Style::default(),
                         ChatRole::System => Style::default(),
                         ChatRole::Error => Style::default(),
-                        ChatRole::Tool => Style::default().fg(ui_muted()),
+                        ChatRole::Tool | ChatRole::Detail => Style::default().fg(ui_muted()),
                         // Assistant is handled by the outer if-branch; reaching
                         // here would be a logic error but we render it as plain
                         // default foreground rather than panicking so the TUI stays responsive.
@@ -3240,6 +3271,7 @@ fn resolve_composer_mentions(app: &mut TuiApp, text: &str) -> String {
     let root = app.workspace_root();
     let trusted = app.workspace_is_trusted();
     let expansion = crate::mentions::expand_mentions(text, &root, trusted);
+    app.turn_context = expansion.inlined.clone();
     let known_agents: Vec<String> = crate::agents::discover_agents()
         .into_iter()
         .map(|agent| agent.name)
@@ -3385,7 +3417,7 @@ fn find_in_transcript(messages: &[ChatMessage], query: &str) -> String {
         let who = match message.role {
             ChatRole::User => "you",
             ChatRole::Assistant => "assistant",
-            ChatRole::System | ChatRole::Tool | ChatRole::Error => continue,
+            ChatRole::System | ChatRole::Tool | ChatRole::Error | ChatRole::Detail => continue,
         };
         for line in message.text.lines() {
             if line.to_lowercase().contains(&needle) {
@@ -5981,15 +6013,20 @@ async fn send_message_with_prompt(
             ),
         }),
     }
-    let attachments = if app.staged_images.is_empty() {
-        String::new()
-    } else {
-        format!("\n[attached: {}]", app.staged_images.join(", "))
-    };
+    let context: Vec<String> = std::mem::take(&mut app.turn_context)
+        .into_iter()
+        .chain(app.staged_images.iter().cloned())
+        .collect();
     app.chat_messages.push(ChatMessage {
         role: ChatRole::User,
-        text: format!("{transcript_text}{attachments}"),
+        text: transcript_text.to_string(),
     });
+    if !context.is_empty() {
+        app.chat_messages.push(ChatMessage {
+            role: ChatRole::Detail,
+            text: format!("with {}", context.join(" · ")),
+        });
+    }
 
     // The session drains `pending_image_blocks` into this turn, so the chips
     // that named them go with it.
@@ -6338,6 +6375,10 @@ async fn send_message_with_prompt(
             app.chat_messages.push(ChatMessage {
                 role: ChatRole::Assistant,
                 text: response_text,
+            });
+            app.chat_messages.push(ChatMessage {
+                role: ChatRole::Detail,
+                text: answer_details(&app.session.model, &turn, turn_started.elapsed()),
             });
 
             app.sync_stats();
