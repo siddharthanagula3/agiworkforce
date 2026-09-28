@@ -181,7 +181,7 @@ export function classifyPluginTree(
   }
   const skills = new Map<string, string>();
   const agents = new Set<string>();
-  let commands = 0;
+  const commandPaths: string[] = [];
   const skillPattern = new RegExp(
     `^${CLAUDE_PLUGIN_SKILLS_DIRECTORY}/([^/]+)/${CLAUDE_SKILL_FILE_NAME.replace('.', '\\.')}$`,
   );
@@ -195,7 +195,7 @@ export function classifyPluginTree(
       relative.startsWith(`${CLAUDE_PLUGIN_COMMANDS_DIRECTORY}/`) &&
       relative.endsWith(MARKDOWN_SUFFIX)
     ) {
-      commands += 1;
+      commandPaths.push(relative);
     } else if (
       relative.startsWith(`${CLAUDE_PLUGIN_AGENTS_DIRECTORY}/`) &&
       relative.endsWith(MARKDOWN_SUFFIX)
@@ -215,7 +215,8 @@ export function classifyPluginTree(
       ...EMPTY_COMPONENTS,
       skills: names,
       skillPaths: names.map((name) => skills.get(name) ?? ''),
-      commands,
+      commands: commandPaths.length,
+      commandPaths: commandPaths.sort(),
       agents: [...agents].sort(),
       hooks: blobs.has(CLAUDE_PLUGIN_HOOKS_PATH),
     },
@@ -385,6 +386,7 @@ export async function inspectPluginSource(
     skills,
     skillPaths: skills.map((name) => skillNames.get(name) ?? ''),
     commands: classified.components.commands,
+    commandPaths: classified.components.commandPaths ?? [],
     agents: classified.components.agents,
     hooks: classified.components.hooks || metadata.hooks,
     mcpServers: mergeServers(fileServers, metadata.mcpServers),
@@ -431,6 +433,8 @@ export function runtimeFitFor(
   ) {
     return blocked(RUNTIME_NOTE_STDIO_MCP);
   }
-  if (components.skills.length === 0) return blocked(RUNTIME_NOTE_NO_SKILLS);
+  if (components.skills.length === 0 && (components.commandPaths ?? []).length === 0) {
+    return blocked(RUNTIME_NOTE_NO_SKILLS);
+  }
   return { webInstallable: true, inspected: true, components, note: null };
 }

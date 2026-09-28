@@ -42,7 +42,7 @@ import {
 import { installedVersion } from './entries';
 import { findPluginDirectoryRecord } from './memory-cache';
 import { isDirectoryMarketplaceRepository, type DirectoryFetch } from './official-marketplace';
-import { fetchPluginSkillFiles } from './skill-files';
+import { fetchPluginSkillFiles, pluginContentPaths } from './skill-files';
 import { installedSkillsCacheParams, writeInstalledSkills } from './snapshot-cache';
 import type { InstalledDirectorySkill, PluginDirectoryEntry } from './types';
 
@@ -319,7 +319,7 @@ export async function installDirectoryPlugin(
 
   const skills = await fetchPluginSkillFiles(
     { ...root.location, sha: root.sha },
-    record.runtime.components.skillPaths,
+    pluginContentPaths(record.runtime.components),
     context.fetchImpl,
   );
   if (skills.length === 0) {
