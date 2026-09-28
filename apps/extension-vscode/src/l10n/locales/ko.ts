@@ -417,6 +417,29 @@ const ko = {
   'webview.alwaysAllowHint':
     '규칙을 저장해 모든 세션에서 AGI가 이 작업을 더 이상 묻지 않게 합니다. 저장된 승인에서 관리하세요.',
   'webview.alwaysAllowedOutcome': '항상 허용됨. AGI가 이 작업을 다시 묻지 않습니다.',
+  'mcpDetails.action': '서버 세부 정보',
+  'mcpDetails.checking': 'AGI Workforce: {name} 확인 중',
+  'mcpDetails.documentTitle': 'MCP 서버 {name}',
+  'mcpDetails.health': '상태',
+  'mcpDetails.responding': '응답함',
+  'mcpDetails.notResponding': '연결되었지만 ping에 응답하지 않음',
+  'mcpDetails.notConnected': '연결하지 못함',
+  'mcpDetails.connection': '연결',
+  'mcpDetails.live': '실행 중인 세션에서 활성',
+  'mcpDetails.probe': '이 확인을 위해 시작한 뒤 중지함',
+  'mcpDetails.protocol': '프로토콜',
+  'mcpDetails.server': '서버',
+  'mcpDetails.notReported': '보고되지 않음',
+  'mcpDetails.capabilities': '기능',
+  'mcpDetails.noCapabilities': '알린 기능 없음',
+  'mcpDetails.error': '오류',
+  'mcpDetails.checkedAt': '확인 시각: {time}',
+  'mcpDetails.instructions': '지침',
+  'mcpDetails.output': '최근 출력',
+  'mcpDetails.noOutput': '이 서버의 출력이 아직 없습니다.',
+  'mcpDetails.expired':
+    '이 세부 정보는 더 이상 보관되지 않습니다. {name}을(를) 다시 확인하려면 AGI Workforce: Show MCP Servers를 실행하고 서버 세부 정보를 선택하세요.',
+  'mcpDetails.field': '{label}: {value}',
 };
 
 export default ko;

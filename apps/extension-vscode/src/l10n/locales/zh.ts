@@ -369,6 +369,29 @@ const zh = {
   'webview.alwaysAllowHint':
     '保存一条规则，让 AGI 在所有会话中不再询问此操作。可在“已保存的批准”中管理。',
   'webview.alwaysAllowedOutcome': '已始终允许。AGI 不会再询问此操作。',
+  'mcpDetails.action': '服务器详情',
+  'mcpDetails.checking': 'AGI Workforce：正在检查 {name}',
+  'mcpDetails.documentTitle': 'MCP 服务器 {name}',
+  'mcpDetails.health': '状态',
+  'mcpDetails.responding': '有响应',
+  'mcpDetails.notResponding': '已连接，但未响应 ping',
+  'mcpDetails.notConnected': '未能连接',
+  'mcpDetails.connection': '连接',
+  'mcpDetails.live': '活动中，位于正在运行的会话',
+  'mcpDetails.probe': '为此次检查启动，随后已停止',
+  'mcpDetails.protocol': '协议',
+  'mcpDetails.server': '服务器',
+  'mcpDetails.notReported': '未报告',
+  'mcpDetails.capabilities': '能力',
+  'mcpDetails.noCapabilities': '未声明任何能力',
+  'mcpDetails.error': '错误',
+  'mcpDetails.checkedAt': '检查时间：{time}',
+  'mcpDetails.instructions': '说明',
+  'mcpDetails.output': '最近输出',
+  'mcpDetails.noOutput': '此服务器尚无输出。',
+  'mcpDetails.expired':
+    '这些详情已不再保留。请运行 AGI Workforce: Show MCP Servers 并选择“服务器详情”，以再次检查 {name}。',
+  'mcpDetails.field': '{label}：{value}',
 };
 
 export default zh;

@@ -430,6 +430,29 @@ const ja = {
   'webview.alwaysAllowHint':
     'ルールを保存し、どのセッションでも AGI がこれを確認しないようにします。「保存済みの承認」で管理できます。',
   'webview.alwaysAllowedOutcome': '常に許可しました。AGI はこれを再び確認しません。',
+  'mcpDetails.action': 'サーバーの詳細',
+  'mcpDetails.checking': 'AGI Workforce: {name} を確認しています',
+  'mcpDetails.documentTitle': 'MCP サーバー {name}',
+  'mcpDetails.health': '状態',
+  'mcpDetails.responding': '応答あり',
+  'mcpDetails.notResponding': '接続済みですが、ping に応答しませんでした',
+  'mcpDetails.notConnected': '接続できませんでした',
+  'mcpDetails.connection': '接続',
+  'mcpDetails.live': '稼働中のセッションで接続中',
+  'mcpDetails.probe': 'この確認のために起動し、その後停止しました',
+  'mcpDetails.protocol': 'プロトコル',
+  'mcpDetails.server': 'サーバー',
+  'mcpDetails.notReported': '報告なし',
+  'mcpDetails.capabilities': '機能',
+  'mcpDetails.noCapabilities': '公開なし',
+  'mcpDetails.error': 'エラー',
+  'mcpDetails.checkedAt': '確認日時: {time}',
+  'mcpDetails.instructions': '指示',
+  'mcpDetails.output': '最近の出力',
+  'mcpDetails.noOutput': 'このサーバーからの出力はまだありません。',
+  'mcpDetails.expired':
+    'この詳細はもう保持されていません。{name} をもう一度確認するには、AGI Workforce: Show MCP Servers を実行して「サーバーの詳細」を選んでください。',
+  'mcpDetails.field': '{label}: {value}',
 };
 
 export default ja;

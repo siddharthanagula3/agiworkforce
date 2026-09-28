@@ -371,6 +371,22 @@ const savedPermissionsResponseSchema = z.object({
 
 export type SavedPermissionList = z.infer<typeof savedPermissionsResponseSchema>;
 
+const mcpServerInspectionSchema = z.object({
+  name: z.string().min(1).max(512),
+  connected: z.boolean(),
+  live: z.boolean(),
+  responding: z.boolean(),
+  protocolVersion: z.string().max(200).optional(),
+  serverName: z.string().max(512).optional(),
+  serverVersion: z.string().max(200).optional(),
+  capabilities: z.array(z.string().max(200)).max(100).default([]),
+  instructions: z.string().max(100_000).optional(),
+  logs: z.array(z.string().max(10_000)).max(1_000).default([]),
+  error: z.string().max(10_000).optional(),
+});
+
+export type McpServerInspection = z.infer<typeof mcpServerInspectionSchema>;
+
 const threadReconnectResponseSchema = z.object({
   activeTurn: z
     .object({
@@ -1228,6 +1244,13 @@ export class LocalRuntimeClient {
     }
     return threadSearchResponseSchema.parse(
       await connection.request('thread/search', { query, includeArchived }),
+    );
+  }
+
+  async inspectMcpServer(name: string): Promise<McpServerInspection> {
+    const connection = await this.readyConnection();
+    return mcpServerInspectionSchema.parse(
+      await connection.request('mcp/inspect', { name }, MCP_PROBE_TIMEOUT_MS),
     );
   }
 

@@ -527,6 +527,29 @@ const de = {
   'webview.alwaysAllowHint':
     'Speichert eine Regel, damit AGI in keiner Sitzung mehr danach fragt. Verwaltbar unter Gespeicherte Genehmigungen.',
   'webview.alwaysAllowedOutcome': 'Immer erlaubt. AGI fragt danach nicht mehr.',
+  'mcpDetails.action': 'Serverdetails',
+  'mcpDetails.checking': 'AGI Workforce: {name} wird geprüft',
+  'mcpDetails.documentTitle': 'MCP-Server {name}',
+  'mcpDetails.health': 'Zustand',
+  'mcpDetails.responding': 'Antwortet',
+  'mcpDetails.notResponding': 'Verbunden, hat aber auf einen Ping nicht geantwortet',
+  'mcpDetails.notConnected': 'Keine Verbindung',
+  'mcpDetails.connection': 'Verbindung',
+  'mcpDetails.live': 'Aktiv, in einer laufenden Sitzung',
+  'mcpDetails.probe': 'Für diese Prüfung gestartet und danach beendet',
+  'mcpDetails.protocol': 'Protokoll',
+  'mcpDetails.server': 'Server',
+  'mcpDetails.notReported': 'Nicht angegeben',
+  'mcpDetails.capabilities': 'Funktionen',
+  'mcpDetails.noCapabilities': 'Keine angegeben',
+  'mcpDetails.error': 'Fehler',
+  'mcpDetails.checkedAt': 'Geprüft: {time}',
+  'mcpDetails.instructions': 'Anweisungen',
+  'mcpDetails.output': 'Letzte Ausgabe',
+  'mcpDetails.noOutput': 'Dieser Server hat noch nichts ausgegeben.',
+  'mcpDetails.expired':
+    'Diese Details liegen nicht mehr vor. Führen Sie AGI Workforce: Show MCP Servers aus und wählen Sie Serverdetails, um {name} erneut zu prüfen.',
+  'mcpDetails.field': '{label}: {value}',
 };
 
 export default de;

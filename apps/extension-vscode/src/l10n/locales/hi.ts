@@ -485,6 +485,29 @@ const hi = {
   'webview.alwaysAllowHint':
     'एक नियम सहेजता है ताकि AGI किसी भी सत्र में इसके लिए न पूछे। इसे सहेजी गई स्वीकृतियाँ में प्रबंधित करें।',
   'webview.alwaysAllowedOutcome': 'हमेशा अनुमत। AGI इसके लिए फिर नहीं पूछेगा।',
+  'mcpDetails.action': 'सर्वर का विवरण',
+  'mcpDetails.checking': 'AGI Workforce: {name} की जाँच हो रही है',
+  'mcpDetails.documentTitle': 'MCP सर्वर {name}',
+  'mcpDetails.health': 'स्थिति',
+  'mcpDetails.responding': 'जवाब दे रहा है',
+  'mcpDetails.notResponding': 'कनेक्ट है, पर ping का जवाब नहीं दिया',
+  'mcpDetails.notConnected': 'कनेक्ट नहीं हुआ',
+  'mcpDetails.connection': 'कनेक्शन',
+  'mcpDetails.live': 'सक्रिय, चल रहे सत्र में',
+  'mcpDetails.probe': 'इस जाँच के लिए शुरू हुआ, फिर बंद हुआ',
+  'mcpDetails.protocol': 'प्रोटोकॉल',
+  'mcpDetails.server': 'सर्वर',
+  'mcpDetails.notReported': 'नहीं बताया गया',
+  'mcpDetails.capabilities': 'क्षमताएँ',
+  'mcpDetails.noCapabilities': 'कोई घोषित नहीं',
+  'mcpDetails.error': 'त्रुटि',
+  'mcpDetails.checkedAt': 'जाँचा गया: {time}',
+  'mcpDetails.instructions': 'निर्देश',
+  'mcpDetails.output': 'हाल का आउटपुट',
+  'mcpDetails.noOutput': 'इस सर्वर ने अभी तक कोई आउटपुट नहीं दिया।',
+  'mcpDetails.expired':
+    'ये विवरण अब सहेजे नहीं हैं। {name} को फिर से जाँचने के लिए AGI Workforce: Show MCP Servers चलाएँ और सर्वर का विवरण चुनें।',
+  'mcpDetails.field': '{label}: {value}',
 };
 
 export default hi;

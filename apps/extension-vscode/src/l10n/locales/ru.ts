@@ -650,6 +650,29 @@ const ru = {
   'webview.alwaysAllowHint':
     'Сохраняет правило, чтобы AGI больше не спрашивал об этом ни в одной сессии. Управлять им можно в разделе «Сохранённые подтверждения».',
   'webview.alwaysAllowedOutcome': 'Всегда разрешено. AGI больше не будет спрашивать об этом.',
+  'mcpDetails.action': 'Сведения о сервере',
+  'mcpDetails.checking': 'AGI Workforce: проверка {name}',
+  'mcpDetails.documentTitle': 'Сервер MCP {name}',
+  'mcpDetails.health': 'Состояние',
+  'mcpDetails.responding': 'Отвечает',
+  'mcpDetails.notResponding': 'Подключён, но не ответил на ping',
+  'mcpDetails.notConnected': 'Не удалось подключиться',
+  'mcpDetails.connection': 'Подключение',
+  'mcpDetails.live': 'Активное, в работающем сеансе',
+  'mcpDetails.probe': 'Запущен для этой проверки и затем остановлен',
+  'mcpDetails.protocol': 'Протокол',
+  'mcpDetails.server': 'Сервер',
+  'mcpDetails.notReported': 'Не указано',
+  'mcpDetails.capabilities': 'Возможности',
+  'mcpDetails.noCapabilities': 'Не заявлены',
+  'mcpDetails.error': 'Ошибка',
+  'mcpDetails.checkedAt': 'Проверено: {time}',
+  'mcpDetails.instructions': 'Инструкции',
+  'mcpDetails.output': 'Последний вывод',
+  'mcpDetails.noOutput': 'Этот сервер пока ничего не вывел.',
+  'mcpDetails.expired':
+    'Эти сведения больше не хранятся. Выполните AGI Workforce: Show MCP Servers и выберите «Сведения о сервере», чтобы снова проверить {name}.',
+  'mcpDetails.field': '{label}: {value}',
 };
 
 export default ru;
