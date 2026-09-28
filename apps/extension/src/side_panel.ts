@@ -9573,7 +9573,12 @@ function buildUI(): void {
   chrome.storage.local.get(SELECTED_EFFORT_STORAGE_KEY, (result) => {
     if (chrome.runtime.lastError) return;
     const storedEffort = result[SELECTED_EFFORT_STORAGE_KEY];
-    if (typeof storedEffort !== 'string' || !Object.hasOwn(EFFORT_LABEL, storedEffort)) return;
+    if (
+      typeof storedEffort !== 'string' ||
+      !Object.prototype.hasOwnProperty.call(EFFORT_LABEL, storedEffort)
+    ) {
+      return;
+    }
     newChatEffortSelection = storedEffort as Effort;
     if (_ctx.messages.length === 0 && _ctx.reasoningEffort === undefined) {
       _ctx.reasoningEffort = effortForNewChat();
