@@ -23,6 +23,7 @@ import {
 import { selectIsActiveConversationStreaming, useChatStore } from '@shared/stores/web-chat-store';
 import { cn } from '@shared/lib/utils';
 import { ClarifyCard, type ClarifyCardContext } from './cards/ClarifyCard';
+import { ImageToolCard } from './cards/ImageToolCard';
 import { ItineraryCardLazy, MapSearchCardLazy, PlacesMapCardLazy } from './cards/lazyMapCards';
 import { McpAppCard } from './cards/McpAppCard';
 import { ProductComparisonCard } from './cards/ProductComparisonCard';
@@ -35,6 +36,7 @@ const WEB_CARD_REGISTRY: WebCardRegistry = {
   'clarify.v1': ({ card, body, ctx }) => (
     <ClarifyCard card={card} body={body} ctx={ctx as ClarifyCardContext} />
   ),
+  'image.v1': ({ body }) => <ImageToolCard body={body} />,
   'itinerary.v1': ({ body }) => <ItineraryCardLazy body={body} />,
   'map-search.v1': ({ body, ctx }) => <MapSearchCardLazy body={body} ctx={ctx} />,
   'mcp-app.v1': ({ body }) => <McpAppCard body={body} />,

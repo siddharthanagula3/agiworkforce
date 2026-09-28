@@ -161,7 +161,7 @@ const ACCESS: { label: string; value: string }[] = [
   {
     label: 'Sessions and protected routes',
     value:
-      'Authentication is handled by Clerk. Fifteen route groups (chat, code, library, models, open, quick-ask, schedules, tasks, settings, billing, upgrade, admin, workspace, operator, and welcome) are checked at the edge before the page renders; a request without a session cookie is redirected to login carrying its intended destination, so a protected page never renders and then complains.',
+      'Authentication is handled by Clerk. Sixteen route groups (chat, code, library, models, developers, open, quick-ask, schedules, tasks, settings, billing, upgrade, admin, workspace, operator, and welcome) are checked at the edge before the page renders; a request without a session cookie is redirected to login carrying its intended destination, so a protected page never renders and then complains.',
   },
   {
     label: 'Administrative access',

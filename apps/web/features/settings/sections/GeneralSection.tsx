@@ -993,7 +993,8 @@ export function GeneralSection() {
         <h2 className="mb-1 text-h4 text-foreground">Custom commands</h2>
         <p className="mb-4 text-xs leading-relaxed text-muted-foreground">
           Commands you define here appear in the composer&apos;s slash menu alongside the built-in
-          ones.
+          ones. They are saved to your account, so they follow you to every browser and the desktop
+          app.
         </p>
         <CustomCommandsSettings />
       </div>

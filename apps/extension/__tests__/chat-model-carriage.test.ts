@@ -111,7 +111,8 @@ describe('Chrome routing adapter is managed-cloud-only and canonically classifie
 
   it('pins the managed_cloud trust mode and the chrome/managed-chat runtime profile', () => {
     expect(codeOnly).toMatch(/trustMode:\s*'managed_cloud'/);
-    expect(codeOnly).toMatch(/runtimeProfileId:\s*'chrome\/managed-chat'/);
+    expect(codeOnly).toMatch(/CHROME_MANAGED_RUNTIME_PROFILE = 'chrome\/managed-chat'/);
+    expect(codeOnly).toMatch(/runtimeProfileId:\s*CHROME_MANAGED_RUNTIME_PROFILE/);
     expect(codeOnly).not.toContain("'local'");
     expect(codeOnly).not.toContain("'byok'");
   });
