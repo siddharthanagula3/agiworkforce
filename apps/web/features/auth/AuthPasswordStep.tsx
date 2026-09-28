@@ -14,6 +14,7 @@ import { AuthSubmitButton } from './AuthSubmitButton';
 import {
   AUTH_DETAIL_ROW_CLASS,
   AUTH_ERROR_CLASS,
+  AUTH_LINK_CLASS,
   AUTH_QUIET_BUTTON_CLASS,
   AUTH_STEP_LINKS_CLASS,
 } from './authStyles';
