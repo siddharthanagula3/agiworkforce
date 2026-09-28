@@ -5,7 +5,7 @@ import {
   type ArtifactChangeKind,
   type ArtifactChangeRun,
   type ArtifactChangeUnit,
-} from './artifactChanges';
+} from '@agiworkforce/artifacts';
 
 export interface ArtifactChangesViewProps {
   previous: string;
