@@ -127,7 +127,17 @@ export async function showSurfaceQuickPick(options: SurfaceQuickPickOptions): Pr
     pick.busy = true;
     try {
       const children = (await options.provider.getChildren()) ?? [];
-      pick.items = buildSurfaceRows(children, rowActions);
+      const expanded = await Promise.all(
+        children.map(async (child) =>
+          child.collapsibleState === vscode.TreeItemCollapsibleState.Expanded
+            ? [
+                surfaceSectionItem(treeItemLabel(child)),
+                ...((await options.provider.getChildren(child)) ?? []),
+              ]
+            : [child],
+        ),
+      );
+      pick.items = buildSurfaceRows(expanded.flat(), rowActions);
     } finally {
       pick.busy = false;
     }
