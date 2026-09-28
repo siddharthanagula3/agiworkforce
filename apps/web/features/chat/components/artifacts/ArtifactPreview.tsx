@@ -180,6 +180,7 @@ interface ArtifactPreviewProps {
   versionHistory?: SharedArtifact[];
   publishArtifact?: (selection: ArtifactPublishSelection) => Promise<PublishResult>;
   artifactAudience?: ArtifactAudienceControl;
+  publishedLink?: string;
   projectLink?: ArtifactProjectLink;
   projectSave?: ArtifactProjectSave;
 }
@@ -234,6 +235,7 @@ export function ArtifactPreview({
   versionHistory,
   publishArtifact,
   artifactAudience,
+  publishedLink,
   projectLink,
   projectSave,
 }: ArtifactPreviewProps) {
@@ -248,6 +250,7 @@ export function ArtifactPreview({
   // so one artifact's link can never be shown under another's title.
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
+  const shownPublishedUrl = publishedUrl ?? publishedLink ?? null;
   const [isChangingAudience, setIsChangingAudience] = useState(false);
   const [mermaidSvg, setMermaidSvg] = useState<string | null>(null);
 
@@ -1709,26 +1712,26 @@ if (__AgiApp) {
 
         {/* CAP-015: the live link for this artifact. Shown only after a publish
             actually returned a URL, never as an aspirational bar. */}
-        {publishedUrl && (
+        {shownPublishedUrl && (
           <div
             className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border/30 bg-muted/20 px-4 py-2"
             data-testid="artifact-published-url"
           >
             <Globe className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
             <a
-              href={publishedUrl}
+              href={shownPublishedUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="min-w-0 flex-1 truncate text-xs text-primary underline-offset-2 hover:underline"
             >
-              {publishedUrl}
+              {shownPublishedUrl}
             </a>
             <Button
               variant="ghost"
               size="sm"
               className="h-6 px-2 text-xs"
               onClick={() => {
-                void writeToClipboard(publishedUrl).then((ok) => {
+                void writeToClipboard(shownPublishedUrl).then((ok) => {
                   if (ok) toast.success('Link copied');
                   else toast.error('Could not copy the link');
                 });
