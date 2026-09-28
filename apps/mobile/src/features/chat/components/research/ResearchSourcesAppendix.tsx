@@ -32,6 +32,8 @@ export function ResearchSourcesAppendix({ sources }: ResearchSourcesAppendixProp
               index={index + 1}
               title={source.title}
               url={source.url}
+              {...(source.snippet ? { snippet: source.snippet } : {})}
+              {...(source.publishedDate ? { publishedDate: source.publishedDate } : {})}
             />
           ))}
         </View>
