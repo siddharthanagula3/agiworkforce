@@ -170,6 +170,10 @@ const openSessionRow = z.object({
 const requestSlashCommands = z.object({ type: z.literal('requestSlashCommands') });
 const continueInCloud = z.object({ type: z.literal('continueInCloud') });
 const regenerate = z.object({ type: z.literal('regenerate') });
+const openSuggestedProject = z.object({
+  type: z.literal('openSuggestedProject'),
+  payload: z.object({ projectId: z.string().min(1).max(200) }),
+});
 
 const runSlashCommand = z.object({
   type: z.literal('runSlashCommand'),
@@ -273,6 +277,7 @@ export const WebviewToExtSchema = z.discriminatedUnion('type', [
   runSlashCommand,
   continueInCloud,
   regenerate,
+  openSuggestedProject,
 ]);
 
 export type WebviewToExtMessage = z.infer<typeof WebviewToExtSchema>;
