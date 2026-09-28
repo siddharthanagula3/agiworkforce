@@ -1183,6 +1183,17 @@ const DELIVERABLE_FORMAT_DIRECTIVE: Record<ResearchDeliverableSpec['format'], st
     ' Write it as bullets, one claim per bullet, each with its citation. No paragraphs.',
 };
 
+export const MAX_REPORT_CHARTS = 3;
+
+const CHART_DIRECTIVE =
+  ' Where the sources give comparable figures, such as a trend over time or three or more options measured the same way,' +
+  ` add a chart of them as a mermaid code block, at most ${MAX_REPORT_CHARTS} in the report.` +
+  ' Use xychart-beta for bars or lines and pie for shares of a whole, in exactly this shape:' +
+  '\n```mermaid\nxychart-beta\n    title "Revenue by year"\n    x-axis ["2022", "2023", "2024"]\n    y-axis "USD billion"\n    bar [12.1, 15.4, 19.8]\n```\n' +
+  '```mermaid\npie title Market share, 2024\n    "Company A" : 41\n    "Company B" : 33\n    "Others" : 26\n```\n' +
+  'Chart only figures the report states and cites, keep their citations in the sentence that introduces the chart,' +
+  ' and never estimate or invent a value to complete one. Leave the chart out when the figures are not comparable.';
+
 function synthesisDirective(
   sources: SourceAggregator,
   cutShortReason: string | null,
@@ -1207,6 +1218,7 @@ function synthesisDirective(
     'Synthesis phase: write the final research report now, based on your research notes above.' +
     DELIVERABLE_DEPTH_DIRECTIVE[deliverable.depth] +
     DELIVERABLE_FORMAT_DIRECTIVE[deliverable.format] +
+    CHART_DIRECTIVE +
     ' Inline-cite every factual claim with a bracketed number, e.g. [1], matching the numbered source list below when present.' +
     ' Do not end with a Sources or References list and never paste a raw URL into the report:' +
     ' the app renders the numbered sources beside the report from the numbers you cite.' +
