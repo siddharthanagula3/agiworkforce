@@ -370,33 +370,30 @@ Code: `apps/web/lib/connectors/oauth-registry.ts:77-77`, `apps/web/lib/user-conn
 
 - Done when: The assistant can run queries against a connected database.
 - Wave: 3
-- Already works on: vscode
+- Already works on: web, desktop, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Postgres, MongoDB and Redis connectors have no remote server (shown unavailable); only hosted Supabase/Neon servers connect, with tools discovered at connect. | handler |
-| desktop | partial | Postgres, MongoDB and Redis connectors have no remote server (shown unavailable); only hosted Supabase/Neon servers connect, with tools discovered at connect. | handler |
-| mobile | partial | Postgres, MongoDB and Redis connectors have no remote server (shown unavailable); only hosted Supabase/Neon servers connect, with tools discovered at connect. | handler |
+| mobile | partial | Mobile chats query Neon and Supabase once they are connected on the web, but the mobile connectors screen lists only its static catalog and custom connectors, so they cannot be connected from the phone. That screen is held by Codex. | ui |
 | cli | missing | Not built on this surface. |  |
-| chrome | partial | Postgres, MongoDB and Redis connectors have no remote server (shown unavailable); only hosted Supabase/Neon servers connect, with tools discovered at connect. | handler |
 
-Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `packages/ui/ui/src/settings-modal/SettingsModal.tsx:1967-1969`, `apps/web/app/api/llm/v1/chat/completions/route.ts:735-741`, `apps/web/lib/user-connector-tools.ts:2269-2289`
+Code: `apps/web/lib/connectors/directory/sources/first-party.json:538-538`
 
 ## S56.37: Warehouse analysis.
 
 - Done when: The assistant can analyze data in a connected data warehouse.
-- Wave: 2
+- Wave: 3
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | BigQuery has scopes but no pinned server (operator must supply one); Snowflake and Databricks have no remote server; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for BigQuery. | handler, flag-off |
-| desktop | partial | BigQuery has scopes but no pinned server (operator must supply one); Snowflake and Databricks have no remote server; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for BigQuery. | handler, flag-off |
-| mobile | partial | BigQuery has scopes but no pinned server (operator must supply one); Snowflake and Databricks have no remote server; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for BigQuery. | handler, flag-off |
+| web | partial | partials/mcp-web 2e08cf2e6: Snowflake and Databricks are added by account URL, as custom connectors are in Claude (support.claude.com/en/articles/11175166, 2026-09-28): the cards open the custom connector form with the vendor's MCP URL format, documentation link and OAuth client fields, and a URL on either vendor's host must use that vendor's MCP path (docs.snowflake.com cortex-agents-mcp GA; docs.databricks.com managed-mcp Public Preview, updated 2026-09-21). Neither vendor supports dynamic client registration, so the user brings an OAuth client or a personal access token. Still owed: a run against a real Snowflake and Databricks account, since neither page says whether the server publishes the MCP authorization metadata the OAuth sign-in needs. BigQuery stays unpinned by decision. | states |
+| desktop | partial | partials/mcp-web 2e08cf2e6: Snowflake and Databricks are added by account URL, as custom connectors are in Claude (support.claude.com/en/articles/11175166, 2026-09-28): the cards open the custom connector form with the vendor's MCP URL format, documentation link and OAuth client fields, and a URL on either vendor's host must use that vendor's MCP path (docs.snowflake.com cortex-agents-mcp GA; docs.databricks.com managed-mcp Public Preview, updated 2026-09-21). Neither vendor supports dynamic client registration, so the user brings an OAuth client or a personal access token. Still owed: a run against a real Snowflake and Databricks account, since neither page says whether the server publishes the MCP authorization metadata the OAuth sign-in needs. BigQuery stays unpinned by decision. | states |
+| mobile | partial | Mobile can add a custom connector by URL in AddCustomConnectorModal, which the new URL check also governs, but the modal is held by Codex and has no Snowflake or Databricks preset. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | BigQuery has scopes but no pinned server (operator must supply one); Snowflake and Databricks have no remote server; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for BigQuery. | handler, flag-off |
+| chrome | partial | partials/mcp-web 2e08cf2e6: Snowflake and Databricks are added by account URL, as custom connectors are in Claude (support.claude.com/en/articles/11175166, 2026-09-28): the cards open the custom connector form with the vendor's MCP URL format, documentation link and OAuth client fields, and a URL on either vendor's host must use that vendor's MCP path (docs.snowflake.com cortex-agents-mcp GA; docs.databricks.com managed-mcp Public Preview, updated 2026-09-21). Neither vendor supports dynamic client registration, so the user brings an OAuth client or a personal access token. Still owed: a run against a real Snowflake and Databricks account, since neither page says whether the server publishes the MCP authorization metadata the OAuth sign-in needs. BigQuery stays unpinned by decision. | states |
 
-Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `packages/ui/ui/src/settings-modal/SettingsModal.tsx:1967-1969`, `apps/web/app/api/llm/v1/chat/completions/route.ts:735-741`, `apps/web/lib/user-connector-tools.ts:2269-2289`
+Code: `apps/web/lib/connectors/account-url-connectors.ts:12-12`, `apps/web/lib/connectors/account-url-connectors.ts:21-21`, `apps/web/app/api/connectors/route.ts:617-617`, `apps/web/features/connectors/hooks/use-connectors-settings-adapter.tsx:669-669`
 
 ## S56.38: Dashboard creation.
 
