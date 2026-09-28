@@ -1076,7 +1076,12 @@ async function dispatchChatCompletions(
         },
         isCancellationRequested: () =>
           isCloudAgentRunCancellationRequested(runDb, { userId, runId: run.id }),
-        takeSteerMessages: () => takeCloudAgentRunSteers(runDb, { userId, runId: run.id }),
+        takeSteerMessages: () =>
+          takeCloudAgentRunSteers(runDb, {
+            userId,
+            organizationId: processed.organizationId ?? null,
+            runId: run.id,
+          }),
         onApprovalCheckpoint: async (checkpoint) => {
           await saveCloudAgentApprovalCheckpoint(runDb, {
             userId,

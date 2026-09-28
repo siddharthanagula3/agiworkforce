@@ -41,7 +41,7 @@ async function handleSteer(request: NextRequest, context: RouteContext) {
   const rateLimitResponse = await withRateLimit(request, 'llm-completion');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
   const csrfError = await requireCsrfToken(request, userId);
   if (csrfError) return csrfError as NextResponse;
   const parsedRunId = RunIdSchema.safeParse((await context.params).runId);
@@ -59,6 +59,7 @@ async function handleSteer(request: NextRequest, context: RouteContext) {
   try {
     const queued = await queueCloudAgentRunSteer(db, {
       userId,
+      organizationId,
       runId: parsedRunId.data,
       text,
     });
