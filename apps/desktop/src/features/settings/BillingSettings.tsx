@@ -74,7 +74,7 @@ export function BillingSettings() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="flex items-center gap-2 text-lg font-semibold text-foreground">
+        <h2 className="flex items-center gap-2 text-h3 text-foreground">
           <CreditCard className="h-5 w-5" aria-hidden="true" />
           Billing
         </h2>
@@ -128,7 +128,7 @@ export function BillingSettings() {
 
           <p className="text-sm text-muted-foreground">{ownerPolicy.description}</p>
 
-          {error && <p className="text-sm text-rose-400">{error}</p>}
+          {error && <p className="text-sm text-danger-text">{error}</p>}
 
           {ownerPolicy.canOpenStripePortal ? (
             <Button onClick={() => void handleManageBilling()} disabled={opening}>

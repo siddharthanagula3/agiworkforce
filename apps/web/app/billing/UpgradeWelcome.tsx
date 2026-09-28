@@ -83,9 +83,7 @@ export function UpgradeWelcome({
 
           {planActivated ? (
             <>
-              <h1 className="mt-6 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-                You&rsquo;re all set.
-              </h1>
+              <h1 className="mt-6 text-display text-foreground">You&rsquo;re all set.</h1>
               <div className="mt-4 flex flex-wrap items-center justify-center gap-x-2.5 gap-y-1 text-sm">
                 <span
                   className="rounded-full px-3 py-1 font-semibold text-[var(--chat-accent-on-primary)]"
@@ -112,7 +110,7 @@ export function UpgradeWelcome({
             </>
           ) : (
             <>
-              <h1 className="mt-6 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+              <h1 className="mt-6 text-display text-foreground">
                 {checkoutState === 'paid'
                   ? 'Payment received.'
                   : checkoutState === 'confirmed'
