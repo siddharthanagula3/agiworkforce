@@ -1,7 +1,5 @@
-import type { ChildProcess } from 'node:child_process';
-
 import { loadConfig } from './config.ts';
-import { refreshSignatures, startDaemons } from './daemons.ts';
+import { refreshSignatures, startClamd, startFreshclam, type Daemon } from './daemons.ts';
 import { log } from './log.ts';
 import { createScannerServer } from './server.ts';
 
@@ -11,7 +9,7 @@ const SHUTDOWN_GRACE_MS = 15_000;
 
 const config = loadConfig(process.env);
 const server = createScannerServer({ tokens: config.tokens, clamd: CLAMD });
-const daemons: ChildProcess[] = [];
+const daemons: Daemon[] = [];
 let stopping = false;
 
 function stop(code: number): void {
@@ -20,7 +18,7 @@ function stop(code: number): void {
   log('info', 'stopping', { code });
   setTimeout(() => process.exit(code), SHUTDOWN_GRACE_MS).unref();
   server.close(() => {
-    for (const daemon of daemons) daemon.kill('SIGTERM');
+    for (const daemon of daemons) daemon.stop();
     process.exit(code);
   });
 }
@@ -30,4 +28,9 @@ process.once('SIGINT', () => stop(0));
 
 server.listen(config.port, LISTEN_HOST, () => log('info', 'listening', { port: config.port }));
 await refreshSignatures();
-if (!stopping) daemons.push(...startDaemons(() => stop(1)));
+if (!stopping) {
+  daemons.push(
+    startClamd(() => stop(1)),
+    startFreshclam(),
+  );
+}

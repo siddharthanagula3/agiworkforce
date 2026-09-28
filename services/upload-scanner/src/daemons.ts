@@ -1,32 +1,71 @@
 import { spawn, type ChildProcess } from 'node:child_process';
-import { once } from 'node:events';
 
 import { log } from './log.ts';
 
 const CLAMD_CONFIG = '--config-file=/etc/clamav/clamd.conf';
 const FRESHCLAM_CONFIG = '--config-file=/etc/clamav/freshclam.conf';
 const SIGNATURE_REFRESH_TIMEOUT_MS = 120_000;
+const FRESHCLAM_RESTART_DELAY_MS = 60 * 60 * 1000;
 
-export async function refreshSignatures(): Promise<void> {
-  const freshclam = spawn('freshclam', [FRESHCLAM_CONFIG, '--stdout'], {
-    stdio: 'inherit',
-    timeout: SIGNATURE_REFRESH_TIMEOUT_MS,
-  });
-  const [code, signal] = await once(freshclam, 'exit');
-  if (code !== 0) log('warn', 'signature_refresh_failed', { code, signal });
+export interface Daemon {
+  stop: () => void;
 }
 
-export function startDaemons(onExit: () => void): ChildProcess[] {
-  const daemons: Array<[string, string[]]> = [
-    ['clamd', [CLAMD_CONFIG, '--foreground']],
-    ['freshclam', [FRESHCLAM_CONFIG, '--daemon', '--foreground', '--stdout']],
-  ];
-  return daemons.map(([command, args]) => {
-    const child = spawn(command, args, { stdio: 'inherit' });
-    child.once('exit', (code, signal) => {
-      log('error', 'daemon_exited', { command, code, signal });
-      onExit();
-    });
-    return child;
+type Ending = { code: number | null; signal: NodeJS.Signals | null } | { error: string };
+
+function ended(child: ChildProcess): Promise<Ending> {
+  return new Promise((resolve) => {
+    child.on('error', (error) => resolve({ error: error.message }));
+    child.once('exit', (code, signal) => resolve({ code, signal }));
   });
+}
+
+export async function refreshSignatures(): Promise<void> {
+  const ending = await ended(
+    spawn('freshclam', [FRESHCLAM_CONFIG, '--stdout'], {
+      stdio: 'inherit',
+      timeout: SIGNATURE_REFRESH_TIMEOUT_MS,
+    }),
+  );
+  if (!('code' in ending) || ending.code !== 0) log('warn', 'signature_refresh_failed', ending);
+}
+
+export function startClamd(onExit: () => void): Daemon {
+  let stopping = false;
+  const clamd = spawn('clamd', [CLAMD_CONFIG, '--foreground'], { stdio: 'inherit' });
+  void ended(clamd).then((ending) => {
+    if (stopping) return;
+    log('error', 'clamd_exited', ending);
+    onExit();
+  });
+  return {
+    stop: () => {
+      stopping = true;
+      clamd.kill('SIGTERM');
+    },
+  };
+}
+
+export function startFreshclam(restartDelayMs = FRESHCLAM_RESTART_DELAY_MS): Daemon {
+  let stopping = false;
+  let current: ChildProcess | undefined;
+  let restart: ReturnType<typeof setTimeout> | undefined;
+  const run = () => {
+    current = spawn('freshclam', [FRESHCLAM_CONFIG, '--daemon', '--foreground', '--stdout'], {
+      stdio: 'inherit',
+    });
+    void ended(current).then((ending) => {
+      if (stopping) return;
+      log('error', 'freshclam_exited', { ...ending, restartInMs: restartDelayMs });
+      restart = setTimeout(run, restartDelayMs);
+    });
+  };
+  run();
+  return {
+    stop: () => {
+      stopping = true;
+      clearTimeout(restart);
+      current?.kill('SIGTERM');
+    },
+  };
 }
