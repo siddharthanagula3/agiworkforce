@@ -1,13 +1,17 @@
 import * as vscode from 'vscode';
 import {
   parseCloudTaskHandoffQuery,
+  parseDeveloperSessionHandoffQuery,
   parseLocalContextHandoffQuery,
   VSCODE_CLOUD_TASK_HANDOFF_PATH,
+  VSCODE_DEVELOPER_SESSION_HANDOFF_PATH,
   VSCODE_CONTEXT_HANDOFF_PATH,
   type CloudTaskHandoff,
+  type DeveloperSessionHandoffLink,
   type LocalContextHandoff,
 } from '@agiworkforce/types';
 
+export { openDeveloperSessionLink, resumePendingDeveloperSession } from './developerSessionLink';
 export {
   parseCloudTaskHandoffQuery,
   VSCODE_CLOUD_TASK_HANDOFF_PATH,
@@ -224,9 +228,21 @@ export async function handleContextHandoffUri(
   uri: vscode.Uri,
   target: ContextHandoffTarget | undefined,
   resolvePullHost?: () => Promise<CloudResultPullHost>,
+  openDeveloperSession?: (link: DeveloperSessionHandoffLink) => Promise<void>,
 ): Promise<boolean> {
   if (uri.path === VSCODE_CLOUD_TASK_HANDOFF_PATH) {
     return handleCloudTaskHandoffUri(uri, target, resolvePullHost);
+  }
+  if (uri.path === VSCODE_DEVELOPER_SESSION_HANDOFF_PATH && openDeveloperSession !== undefined) {
+    const link = parseDeveloperSessionHandoffQuery(uri.query);
+    if (link === null) {
+      void vscode.window.showWarningMessage(
+        'AGI Workforce: that session link names no session or folder. Send it again from the desktop app.',
+      );
+      return false;
+    }
+    await openDeveloperSession(link);
+    return true;
   }
   if (uri.path !== VSCODE_CONTEXT_HANDOFF_PATH) {
     void vscode.window.showWarningMessage(
@@ -305,10 +321,11 @@ export async function continueCloudWorkHere(
 export function registerContextHandoffUriHandler(
   resolveTarget: () => ContextHandoffTarget | undefined,
   resolvePullHost: () => Promise<CloudResultPullHost> = resolveGitCheckoutHost,
+  openDeveloperSession?: (link: DeveloperSessionHandoffLink) => Promise<void>,
 ): vscode.Disposable {
   return vscode.window.registerUriHandler({
     handleUri: (uri) => {
-      void handleContextHandoffUri(uri, resolveTarget(), resolvePullHost);
+      void handleContextHandoffUri(uri, resolveTarget(), resolvePullHost, openDeveloperSession);
     },
   });
 }

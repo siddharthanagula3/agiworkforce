@@ -1,12 +1,14 @@
 import * as vscode from 'vscode';
 import {
   continueCloudWorkHere,
+  openDeveloperSessionLink,
   PULL_CLOUD_TASK_COMMAND,
   parseCloudTaskHandoffQuery,
   pullCloudResultIntoCheckout,
   readWorkspaceCloudSource,
   registerContextHandoffUriHandler,
   resolveGitCheckoutHost,
+  resumePendingDeveloperSession,
   type ContextHandoffTarget,
 } from './features/context-handoff';
 import {
@@ -146,7 +148,11 @@ export function activate(context: vscode.ExtensionContext): void {
       },
     };
   };
-  context.subscriptions.push(registerContextHandoffUriHandler(resolveChatTarget));
+  context.subscriptions.push(
+    registerContextHandoffUriHandler(resolveChatTarget, resolveGitCheckoutHost, (link) =>
+      openDeveloperSessionLink(link, context.globalState),
+    ),
+  );
 
   runBoot('cloud-task-pull', () => {
     context.subscriptions.push(
@@ -274,6 +280,7 @@ export function activate(context: vscode.ExtensionContext): void {
         diagnosticsProvider: providers.diagnosticsProvider,
         nativeChatAvailable: chat.nativeChatAvailable,
       });
+      void resumePendingDeveloperSession(context.globalState);
     } catch (err) {
       reportBootFailure('commands', err, 'Some AGI Workforce commands could not be registered');
     }
