@@ -1,4 +1,4 @@
-import { SignalingClient, endsPairing, type SignalingEvent } from '@agiworkforce/utils';
+import { SignalingClient, endsPairing, type SignalingEvent } from '../signaling';
 import {
   REMOTE_CODE_LIMITS,
   clipRemoteText,
@@ -13,7 +13,7 @@ import {
   type RemoteControlStartRequest,
   type RemoteControlState,
 } from '@agiworkforce/local-runtime-contract';
-import { createControlReceiptLedger } from '../../src/services/controlReceipts';
+import { createControlReceiptLedger } from './controlReceipts';
 import {
   createCodeRemoteController,
   parseDispatchTask,

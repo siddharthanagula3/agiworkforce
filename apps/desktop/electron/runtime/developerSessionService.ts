@@ -38,6 +38,7 @@ import {
   DEVELOPER_FILE_CHANGES,
   normalizeDeveloperAgentMode,
 } from '@agiworkforce/local-runtime-contract';
+import type { DeveloperSessionActivity } from '@agiworkforce/utils/remote-control';
 import {
   DEVELOPER_SESSION_PROTOCOL_VERSION as PROTOCOL_VERSION,
   MINIMUM_SUPPORTED_RUNTIME_VERSION,
@@ -945,16 +946,7 @@ export async function readDeveloperSession(
   };
 }
 
-export interface DeveloperSessionActivity {
-  transcript: DeveloperSessionTranscript;
-  branch: string | null;
-  fileChanges: DeveloperSessionFileChange[];
-  activeTurn: {
-    turnId: string;
-    partialResponse: string;
-    pendingApprovals: Array<{ requestId: string; summary: string; detail: string }>;
-  } | null;
-}
+export type { DeveloperSessionActivity };
 
 function toFileChanges(raw: unknown): DeveloperSessionFileChange[] {
   if (!Array.isArray(raw)) return [];

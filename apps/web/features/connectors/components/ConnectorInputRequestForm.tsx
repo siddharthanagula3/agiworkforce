@@ -18,7 +18,7 @@ import {
   type ConnectorInputField,
   type ConnectorInputPrompt,
   type ConnectorInputResponse,
-} from '../lib/connector-input-request';
+} from '@agiworkforce/client-runtime';
 
 const SUBMIT_LABEL = 'Submit';
 const CONTINUE_LABEL = 'Continue';

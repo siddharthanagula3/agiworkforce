@@ -323,6 +323,28 @@ const threadCheckpointsResponseSchema = z.object({
 
 export type ThreadCheckpointList = z.infer<typeof threadCheckpointsResponseSchema>;
 
+const threadReconnectResponseSchema = z.object({
+  activeTurn: z
+    .object({
+      turnId: z.string().min(1),
+      partialResponse: z.string(),
+      pendingApprovals: z
+        .array(
+          z.object({
+            requestId: z.string().min(1),
+            summary: z.string(),
+            detail: z.string(),
+          }),
+        )
+        .default([]),
+    })
+    .optional(),
+});
+
+export type ThreadActiveTurn = NonNullable<
+  z.infer<typeof threadReconnectResponseSchema>['activeTurn']
+>;
+
 const threadRewindResponseSchema = z.object({
   thread: threadSummarySchema,
   prompt: z.string().max(1_000_000),
@@ -1144,6 +1166,15 @@ export class LocalRuntimeClient {
   async archiveThread(threadId: string): Promise<void> {
     const connection = await this.readyConnection();
     await connection.request('thread/archive', { threadId });
+  }
+
+  async reconnectThread(threadId: string): Promise<ThreadActiveTurn | null> {
+    const connection = await this.readyConnection();
+    if (!(await this.offers('reconnect'))) return null;
+    const result = threadReconnectResponseSchema.parse(
+      await connection.request('thread/reconnect', { threadId }),
+    );
+    return result.activeTurn ?? null;
   }
 
   async releaseWriter(threadId: string): Promise<void> {

@@ -9,6 +9,8 @@ import {
   type FreeDailyCap,
   type MonthlyMeteredUnit,
   type RateCardFeature,
+  type TierUnitAllowance,
+  type TierUnitUsage,
 } from '@agiworkforce/types';
 import { AppError, ErrorCode } from '@/lib/errors';
 import { logger } from '@/lib/logger';
@@ -28,11 +30,6 @@ const FREE_DAILY_CAP_BY_UNIT: Readonly<Record<FreeDailyUnit, FreeDailyCap>> = Ob
   email_sends: 'emailSends',
   vector_queries: 'vectorQueries',
 });
-
-export interface TierUnitAllowance {
-  hardLimit: number | null;
-  softLimit: number | null;
-}
 
 export interface TierUnitQuotaDecision {
   unit: TierMeteredUnit;
@@ -230,11 +227,6 @@ async function readConsumedTierUnits(
   }
   const raw = Number(row.consumed ?? 0);
   return Number.isFinite(raw) && raw > 0 ? toUnits(raw) : 0;
-}
-
-export interface TierUnitUsage extends TierUnitAllowance {
-  unit: MonthlyMeteredUnit;
-  consumed: number;
 }
 
 export interface TierUnitUsagePeriod {

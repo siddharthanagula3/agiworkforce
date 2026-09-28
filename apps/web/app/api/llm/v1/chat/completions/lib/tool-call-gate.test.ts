@@ -396,6 +396,24 @@ describe('the lethal-trifecta escalation, and the three limits published for it'
     }
   });
 
+  it('never lets an escalation fall through to an allow, even on a run that can pause', () => {
+    const escalations = COMBINATIONS.filter(
+      (combination) => gateOf(combination).reason === 'lethal_trifecta',
+    );
+    expect(escalations.length).toBeGreaterThan(0);
+    for (const combination of escalations) {
+      for (const unattendedEscalationPauses of [false, true]) {
+        const gate = resolveToolCallGate(combination.request, {
+          ...combination.context,
+          unattendedEscalationPauses,
+        });
+        const expected =
+          combination.context.unattended && !unattendedEscalationPauses ? 'deny' : 'ask';
+        expect(gate.verdict, describeCase(combination)).toBe(expected);
+      }
+    }
+  });
+
   it('derives S from the offered catalog rather than from what was read', () => {
     expect(
       sensitiveSourceReachable({

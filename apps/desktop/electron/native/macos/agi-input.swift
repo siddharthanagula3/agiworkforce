@@ -228,7 +228,7 @@ func frontWindow(excluding excludedOwner: Int32?) -> [String: Any] {
     else {
       continue
     }
-    var front: [String: Any] = ["app": name]
+    var front: [String: Any] = ["app": name, "pid": Int(owner)]
     if let number = window[kCGWindowNumber as String] as? Int {
       front["windowId"] = number
     }
@@ -247,6 +247,35 @@ func frontWindow(excluding excludedOwner: Int32?) -> [String: Any] {
   return [:]
 }
 
+func windowOwner(at target: CGPoint) -> [String: Any] {
+  let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
+  guard let windows = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]]
+  else {
+    return [:]
+  }
+  for window in windows {
+    guard let layer = window[kCGWindowLayer as String] as? Int, layer >= 0, layer < 1000,
+      let owner = window[kCGWindowOwnerPID as String] as? Int32,
+      let boundsInfo = window[kCGWindowBounds as String] as? [String: Any],
+      let bounds = CGRect(dictionaryRepresentation: boundsInfo as CFDictionary),
+      bounds.contains(target)
+    else {
+      continue
+    }
+    if let alpha = window[kCGWindowAlpha as String] as? Double, alpha <= 0 {
+      continue
+    }
+    var hit: [String: Any] = [
+      "app": window[kCGWindowOwnerName as String] as? String ?? "", "pid": Int(owner),
+    ]
+    if let bundle = NSRunningApplication(processIdentifier: owner)?.bundleIdentifier {
+      hit["bundleId"] = bundle
+    }
+    return hit
+  }
+  return [:]
+}
+
 func perform(_ request: [String: Any]) throws -> [String: Any] {
   guard let action = request["action"] as? String else {
     throw Failure(message: "Every request needs an \"action\".")
@@ -256,6 +285,8 @@ func perform(_ request: [String: Any]) throws -> [String: Any] {
     return [:]
   case "front":
     return ["front": frontWindow(excluding: (request["excludePid"] as? NSNumber)?.int32Value)]
+  case "at":
+    return ["at": windowOwner(at: try point(request, "x", "y"))]
   case "move":
     try moveMouse(to: point(request, "x", "y"))
   case "click":

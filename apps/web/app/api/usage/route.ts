@@ -7,15 +7,11 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getUserScopedDb, type UserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
-import {
-  getManagedUsageSummary,
-  type AccountUsageSummary,
-} from '@/lib/services/managed-usage-summary-service';
+import type { ManagedUsageSummaryResponse } from '@agiworkforce/types';
+import { getManagedUsageSummary } from '@/lib/services/managed-usage-summary-service';
 import { isApiKeyScopeError } from '@/lib/api-key-scope-error';
 import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
 import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
-
-export type AccountUsageSummaryResponse = AccountUsageSummary;
 
 async function handler(request: NextRequest) {
   let scoped: UserScopedDb;
@@ -29,7 +25,11 @@ async function handler(request: NextRequest) {
   }
 
   try {
-    return NextResponse.json(await getManagedUsageSummary(scoped.db, scoped.userId));
+    const body: ManagedUsageSummaryResponse = await getManagedUsageSummary(
+      scoped.db,
+      scoped.userId,
+    );
+    return NextResponse.json(body);
   } catch (error) {
     logger.error({ error, userId: scoped.userId }, 'Failed to fetch usage data');
     throw createError.internal('Failed to fetch usage data');
