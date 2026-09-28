@@ -125,7 +125,7 @@ export function createScannerServer(options: ScannerOptions): Server {
   const now = options.now ?? Date.now;
 
   const server = createServer((req, res) => {
-    const path = new URL(req.url ?? '/', 'http://scanner').pathname;
+    const path = (req.url ?? '/').split('?', 1)[0];
     if (path === '/scan' && req.method === 'POST') {
       if (!isAuthorized(req.headers.authorization)) {
         log('warn', 'scan_unauthorized');
