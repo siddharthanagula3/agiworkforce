@@ -297,3 +297,17 @@ Claude lists memory as topics and shows no generated profile summary of the
 person (support.claude.com/en/articles/11817273, checked 2026-09-28), and the
 web and desktop apps show none either, so the mobile app does not add one
 (S39.07 mobile).
+
+## D-2026-09-28-18 Artifact engines follow the leaders
+
+Code artifacts get a code editor and document templates get direct editing,
+because Gemini and Claude's template documents edit in place
+(support.google.com/gemini/answer/16047321, support.claude.com/en/articles/17153992),
+and images get a select-an-area edit as ChatGPT offers
+(learn.chatgpt.com/docs/image-generation). A spreadsheet grid editor (S104.05)
+is not built: both leaders only download or regenerate tables
+(support.claude.com/en/articles/12111783, learn.chatgpt.com/docs/artifacts-viewer).
+Video editing (S104.08) is not built: neither leader documents one. An
+integrated terminal on the web (S104.T09) is not built: ChatGPT offers it only
+in its desktop app and Claude Code on the web has no terminal input. Checked
+2026-09-28.
