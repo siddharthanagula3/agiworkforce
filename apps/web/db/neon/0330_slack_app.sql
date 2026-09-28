@@ -150,7 +150,9 @@ create table if not exists public.slack_assistant_runs (
   surface text not null check (surface = any (array['direct_message', 'channel'])),
   mode text not null default 'answer' check (mode = any (array['answer', 'task'])),
   status text not null default 'running'
-    check (status = any (array['running', 'awaiting_approval', 'completed', 'failed', 'expired'])),
+    check (
+      status = any (array['running', 'awaiting_approval', 'completed', 'failed', 'expired', 'cancelled'])
+    ),
   model text check (model is null or char_length(model) between 1 and 200),
   agent_run_id uuid references public.cloud_agent_runs(id) on delete set null,
   approval_checkpoint jsonb

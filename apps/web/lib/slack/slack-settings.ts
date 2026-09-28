@@ -1,7 +1,11 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import { billingPlanCapabilityPlanLabels, canUseBillingPlanCapability } from '@agiworkforce/types';
+import {
+  billingPlanCapabilityPlanLabels,
+  canUseBillingPlanCapability,
+  productLinkPath,
+} from '@agiworkforce/types';
 
 import { listWorkspaceMemberships } from '@/lib/services/active-workspace-service';
 import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
@@ -73,6 +77,7 @@ export async function loadSlackOverview(
       runId: approval.runId,
       teamName: approval.teamName,
       surface: approval.surface,
+      taskPath: approval.agentRunId ? productLinkPath('work', approval.agentRunId) : null,
       requestedAt: approval.requestedAt,
       expiresAt: approval.expiresAt,
       toolCalls: approval.toolCalls,

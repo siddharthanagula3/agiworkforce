@@ -38,6 +38,7 @@ export interface SlackPendingApprovalView {
   runId: string;
   teamName: string;
   surface: 'direct_message' | 'channel';
+  taskPath: string | null;
   requestedAt: string;
   expiresAt: string;
   toolCalls: ManagedCloudScheduleRunApprovalToolCall[];

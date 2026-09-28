@@ -154,13 +154,24 @@ function ApprovalItem({
     <li style={{ ...rowStyle, alignItems: 'flex-start' }}>
       <div style={{ minWidth: 0, flex: '1 1 20rem' }}>
         <p style={{ margin: 0, fontSize: 13, color: 'var(--text-1)' }}>
-          {approval.surface === 'channel' ? 'A channel mention' : 'A direct message'} in{' '}
-          {approval.teamName}
+          {approval.taskPath
+            ? 'A task from a channel mention'
+            : approval.surface === 'channel'
+              ? 'A channel mention'
+              : 'A direct message'}{' '}
+          in {approval.teamName}
         </p>
         <p style={{ margin: 0, fontSize: 12, color: 'var(--text-3)' }}>
           Asked {formatDateTime(approval.requestedAt)} · Expires{' '}
           {formatDateTime(approval.expiresAt)}
         </p>
+        {approval.taskPath ? (
+          <p style={{ margin: 'var(--space-1) 0 0', fontSize: 12 }}>
+            <a href={approval.taskPath} style={{ color: 'var(--text-1)' }}>
+              View task
+            </a>
+          </p>
+        ) : null}
         <ul style={{ margin: 'var(--space-2) 0 0', padding: 0, listStyle: 'none' }}>
           {approval.toolCalls.map((call) => (
             <li key={call.id} style={{ marginTop: 'var(--space-2)' }}>
