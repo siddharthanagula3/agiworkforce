@@ -97,7 +97,7 @@ function recentConversationCommands(
   router: ReturnType<typeof useRouter>,
 ): CommandOption[] {
   return [...conversations]
-    .filter((conversation) => !conversation.isArchived)
+    .filter((conversation) => !conversation.isArchived && !conversation.isTemporary)
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
     .slice(0, RECENTS_LIMIT)
     .map((conversation) => ({
