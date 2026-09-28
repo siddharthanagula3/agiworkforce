@@ -1994,21 +1994,16 @@ export const commitAndPushCloudCodeSession = tracedCodeAction(
     }
 
     try {
-      const add = files
-        ? await stageChosenFiles(executor.git, claim.session.workspacePath, files, {
-            userId: owner.userId,
-            sessionId,
-          })
-        : await executor.git.add({ path: claim.session.workspacePath, all: true });
-      if (!add.ok) {
-        throw gitStepFailure('Staging changes failed', add, {
-          userId: owner.userId,
-          sessionId,
-        });
-      }
-      const commit = await executor.git.commit({ path: claim.session.workspacePath, message });
-      if (!commit.ok) {
-        throw gitStepFailure('Commit failed', commit, { userId: owner.userId, sessionId });
+      const context = { userId: owner.userId, sessionId };
+      const status = await executor.git.status({ path: claim.session.workspacePath });
+      if (!status.ok) throw gitStepFailure('Workspace status could not be read', status, context);
+      if (files || parseGitPorcelainEntries(status.stdout).length > 0) {
+        const add = files
+          ? await stageChosenFiles(executor.git, claim.session.workspacePath, files, context)
+          : await executor.git.add({ path: claim.session.workspacePath, all: true });
+        if (!add.ok) throw gitStepFailure('Staging changes failed', add, context);
+        const commit = await executor.git.commit({ path: claim.session.workspacePath, message });
+        if (!commit.ok) throw gitStepFailure('Commit failed', commit, context);
       }
       const push = await executor.git.push({
         path: claim.session.workspacePath,
@@ -2470,6 +2465,7 @@ export const openCloudCodeSessionPullRequest = tracedCodeAction(
     db: DatabaseAdapter,
     owner: CloudCodeOwner,
     sessionId: string,
+    linkedIssues: readonly number[] = [],
   ): Promise<CloudCodePullRequestResponse> {
     const session = await getCloudCodeSession(db, owner, sessionId);
     assertSessionAcceptsWork(session, 'open a pull request');
@@ -2533,6 +2529,7 @@ export const openCloudCodeSessionPullRequest = tracedCodeAction(
         // Work that cannot back its own "done" claim opens as a draft rather
         // than asking for a review it has not earned.
         draft: !result.verdict.complete,
+        linkedIssues,
       });
     } catch (error) {
       if (!(error instanceof GitHubPullRequestError)) throw error;

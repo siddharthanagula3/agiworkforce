@@ -237,6 +237,12 @@ export interface CloudCodeAgentTurnRecord {
   steps: CloudCodeAgentStep[];
 }
 
+export const CLOUD_CODE_PAGE_ROUTE = '/code';
+
+export function cloudCodeSessionPagePath(sessionId: string): string {
+  return `${CLOUD_CODE_PAGE_ROUTE}/${encodeURIComponent(sessionId)}`;
+}
+
 export const CLOUD_CODE_GOAL_COMMANDS = ['/review', '/security-review'] as const;
 export type CloudCodeGoalCommand = (typeof CLOUD_CODE_GOAL_COMMANDS)[number];
 

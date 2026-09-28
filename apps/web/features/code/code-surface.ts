@@ -2,9 +2,11 @@ import {
   buildVsCodeCloudTaskHandoffUri,
   buildVsCodeDeveloperSessionHandoffUri,
   CLOUD_CODE_LIMITS,
+  CLOUD_CODE_PAGE_ROUTE,
   CLOUD_CODE_SESSION_STATUS_FILTERS,
   CLOUD_CODE_SESSION_COPY,
   cloudCodeRepositoryLabel,
+  cloudCodeSessionPagePath,
   type CloudCodeChangeState,
   type CloudCodeGoalCommand,
   type CloudCodeNetworkAccess,
@@ -13,7 +15,7 @@ import {
 } from '@agiworkforce/types';
 
 export const CODE_ROUTES = {
-  root: '/code',
+  root: CLOUD_CODE_PAGE_ROUTE,
   chat: '/chat',
   artifacts: '/chat/library?surface=artifact',
   customize: '/settings/capabilities',
@@ -32,7 +34,7 @@ export function codeHomeAfterMissingSession(): string {
 }
 
 export function codeSessionPath(sessionId: string): string {
-  return `${CODE_ROUTES.root}/${encodeURIComponent(sessionId)}`;
+  return cloudCodeSessionPagePath(sessionId);
 }
 
 export const CODE_LIMITS = {
