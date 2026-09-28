@@ -14,10 +14,10 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | The CLI web_search tool only works after the user exports their own SEARCH_API_KEY (Brave or Tavily); there is no in-product way to supply a key or use the hosted search. | handler |
+| cli | partial | Hosted search needs the gateway web_search flag carried on the shared agiworkforce-llm ChatRequest (desktop also constructs it) or a hosted search endpoint; BYOK/Local still need SEARCH_API_KEY. | handler |
 | vscode | partial | The VS Code chat runs the local CLI, whose web_search needs a SEARCH_API_KEY environment variable the user must set outside the product. | handler |
 
-Code: `apps/cli/src/features/exec/tools/mod.rs:567-567`, `apps/cli/src/features/exec/tools/web/mod.rs:286-293`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:2836-2845`
+Code: `apps/cli/src/features/exec/tools/web/mod.rs:286-286`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:2836-2845`, `apps/cli/src/features/exec/tools/web/mod.rs:286-293`
 
 ## S57.03: Source-reader tool.
 
@@ -29,7 +29,7 @@ Code: `apps/cli/src/features/exec/tools/mod.rs:567-567`, `apps/cli/src/features/
 | web | partial | url_fetch now reads PDFs and Word, Excel and PowerPoint files by URL (d67ced36f), but the served tool description is still v1, which says binary content is unsupported; tool.url_fetch_description@2 is recorded on the internal channel and needs a canary advance to stable. Uploaded files and connector sources are still not opened by reference. | handler |
 | desktop | partial | url_fetch now reads PDFs and Word, Excel and PowerPoint files by URL (d67ced36f), but the served tool description is still v1, which says binary content is unsupported; tool.url_fetch_description@2 is recorded on the internal channel and needs a canary advance to stable. Uploaded files and connector sources are still not opened by reference. | handler |
 | mobile | partial | url_fetch now reads PDFs and Word, Excel and PowerPoint files by URL (d67ced36f), but the served tool description is still v1, which says binary content is unsupported; tool.url_fetch_description@2 is recorded on the internal channel and needs a canary advance to stable. Uploaded files and connector sources are still not opened by reference. | handler |
-| cli | partial | read_file and web_fetch read plain text sources only; there is no PDF or Office reader in the CLI tool set. | handler |
+| cli | partial | No PDF/Office text extraction in the CLI; adding a PDF crate changes Cargo.lock (lead-owned). | handler |
 | vscode | partial | Runs the CLI tools: read_file and web_fetch read plain text only; no PDF or Office source reader. | handler |
 | chrome | partial | No tool opens a document source by reference: url_fetch refuses PDFs and other non-text types, and uploaded documents are only extracted up front; add a reader tool for PDF/Office sources. | handler |
 | api | partial | url_fetch now reads PDFs and Word, Excel and PowerPoint files by URL (d67ced36f), but the served tool description is still v1, which says binary content is unsupported; tool.url_fetch_description@2 is recorded on the internal channel and needs a canary advance to stable. Uploaded files and connector sources are still not opened by reference. | handler |
@@ -206,12 +206,12 @@ Code: `apps/web/features/desktop-host/components/BrowserToolsDialog.tsx:56-56`, 
 | web | partial | Images are generated when the user's message is classified as an image request or Image mode is chosen; the model cannot call image generation as a tool mid-turn or inside AGI Work. | handler |
 | desktop | partial | Images are generated when the user's message is classified as an image request or Image mode is chosen; the model cannot call image generation as a tool mid-turn or inside AGI Work. | handler |
 | mobile | partial | Images are generated when the user's message is classified as an image request or Image mode is chosen; the model cannot call image generation as a tool mid-turn or inside AGI Work. | handler |
-| cli | partial | Images are generated only by the user's /image command or `agi image`; the agent has no image tool. | handler |
+| cli | partial | Expose cloud::image::generate as an agent tool for Managed sessions. | handler |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 | api | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/pages/WebChatPage.tsx:3409-3422`, `apps/web/lib/hooks/useMediaGeneration.ts:253-253`, `apps/mobile/app/(app)/chat/[id].tsx:113-113`, `apps/cli/src/cloud/image.rs:17-17`
+Code: `apps/web/features/chat/pages/WebChatPage.tsx:3409-3422`, `apps/web/lib/hooks/useMediaGeneration.ts:253-253`, `apps/mobile/app/(app)/chat/[id].tsx:113-113`, `apps/cli/src/cloud/image.rs:556-556`
 
 ## S57.17: Image-editing tool.
 
@@ -251,29 +251,29 @@ Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:1218-1220
 
 - Done when: The assistant can call a memory tool to save, recall or delete a remembered fact during a turn.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Memory is extracted and injected automatically around the turn; the model cannot call a memory tool to save, look up or forget a fact on request. | handler |
 | desktop | partial | Memory is extracted and injected automatically around the turn; the model cannot call a memory tool to save, look up or forget a fact on request. | handler |
 | mobile | partial | Memory is extracted and injected automatically around the turn; the model cannot call a memory tool to save, look up or forget a fact on request. | handler |
-| cli | partial | Memories are managed by the user's /memory command and the automatic pipeline; the agent has no memory tool. | handler |
 | vscode | partial | The CLI runtime injects and saves memory automatically; the agent has no memory tool. | handler |
 | chrome | partial | Memory is extracted and injected automatically around the turn; the model cannot call a memory tool to save, look up or forget a fact on request. | handler |
 
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:3056-3064`, `apps/cli/src/tui/widgets/command_popup.rs:233-233`
+Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:3056-3064`
 
 ## S57.22: Calendar tool.
 
 - Done when: The assistant can call a calendar tool to read or create events in the user's calendar.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Lane ruling (R-t clarification): an MCP endpoint that exists only through CONNECTOR_OAUTH_PROVIDERS_JSON is a feature gate, so the cell is partial/flag-off, not unverified. google-calendar, outlook and calendly are mcpConnector catalog entries (catalog.ts 154/164/174) with no MCP_ENDPOINTS record (0 hits), so getMcpEndpoint returns null (177-179) until the operator JSON supplies one. miss: flag-off. remaining: 'Calendar connectors ship no MCP endpoint; supply one in CONNECTOR_OAUTH_PROVIDERS_JSON (Codex queue: confirm the production env).' |  |
 | desktop | partial | Lane ruling (R-t clarification): an MCP endpoint that exists only through CONNECTOR_OAUTH_PROVIDERS_JSON is a feature gate, so the cell is partial/flag-off, not unverified. google-calendar, outlook and calendly are mcpConnector catalog entries (catalog.ts 154/164/174) with no MCP_ENDPOINTS record (0 hits), so getMcpEndpoint returns null (177-179) until the operator JSON supplies one. miss: flag-off. remaining: 'Calendar connectors ship no MCP endpoint; supply one in CONNECTOR_OAUTH_PROVIDERS_JSON (Codex queue: confirm the production env).' |  |
 | mobile | partial | Lane ruling (R-t clarification): an MCP endpoint that exists only through CONNECTOR_OAUTH_PROVIDERS_JSON is a feature gate, so the cell is partial/flag-off, not unverified. google-calendar, outlook and calendly are mcpConnector catalog entries (catalog.ts 154/164/174) with no MCP_ENDPOINTS record (0 hits), so getMcpEndpoint returns null (177-179) until the operator JSON supplies one. miss: flag-off. remaining: 'Calendar connectors ship no MCP endpoint; supply one in CONNECTOR_OAUTH_PROVIDERS_JSON (Codex queue: confirm the production env).' |  |
-| cli | partial | No calendar tool ships; the user can only register a third-party calendar MCP server themselves (agi mcp add). | handler |
 | vscode | partial | No calendar tool ships in the CLI runtime; only a user-registered MCP server could add one. | handler |
 | chrome | partial | Lane ruling (R-t clarification): an MCP endpoint that exists only through CONNECTOR_OAUTH_PROVIDERS_JSON is a feature gate, so the cell is partial/flag-off, not unverified. google-calendar, outlook and calendly are mcpConnector catalog entries (catalog.ts 154/164/174) with no MCP_ENDPOINTS record (0 hits), so getMcpEndpoint returns null (177-179) until the operator JSON supplies one. miss: flag-off. remaining: 'Calendar connectors ship no MCP endpoint; supply one in CONNECTOR_OAUTH_PROVIDERS_JSON (Codex queue: confirm the production env).' |  |
 | api | partial | Lane ruling (R-t clarification): an MCP endpoint that exists only through CONNECTOR_OAUTH_PROVIDERS_JSON is a feature gate, so the cell is partial/flag-off, not unverified. google-calendar, outlook and calendly are mcpConnector catalog entries (catalog.ts 154/164/174) with no MCP_ENDPOINTS record (0 hits), so getMcpEndpoint returns null (177-179) until the operator JSON supplies one. miss: flag-off. remaining: 'Calendar connectors ship no MCP endpoint; supply one in CONNECTOR_OAUTH_PROVIDERS_JSON (Codex queue: confirm the production env).' API turns load the same catalog. |  |
@@ -284,11 +284,10 @@ Code: `apps/cli/src/lib.rs:1338-1341`
 
 - Done when: The assistant can call a messaging tool to read or send messages on a connected service (e.g. Slack) after approval.
 - Wave: 3
-- Already works on: web, desktop, mobile, chrome, api
+- Already works on: web, desktop, mobile, cli, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | send_message only messages the user's own agent teammates; no external messaging tool ships unless the user registers an MCP server. | handler |
 | vscode | partial | The CLI runtime's send_message reaches only agent teammates; no external messaging tool. | handler |
 
 Code: `apps/cli/src/platform/runtime/tool_catalog.rs:337-340`
@@ -342,40 +341,15 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-schema-loader.ts:152-16
 
 - Done when: Each tool carries a readable description and typed parameter schema that the model uses and the user can inspect.
 - Wave: 3
-- Already works on: web, desktop, api
+- Already works on: web, desktop, cli, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Every tool reaches the model with a description and typed input schema, but the user has no view of what each tool does or what parameters it takes; connector settings list tool names only. | ui |
-| cli | partial | The catalog gives the model descriptions and input schemas, but no command shows a tool's description or parameters to the user. | ui |
 | vscode | partial | The runtime's tools carry schemas for the model; the sidebar never shows a tool's description or parameters. | ui |
 | chrome | partial | Every tool reaches the model with a description and typed input schema, but the user has no view of what each tool does or what parameters it takes; connector settings list tool names only. | ui |
 
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-metadata.ts:344-349`, `apps/cli/src/features/exec/tools/mod.rs:581-588`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:2836-2845`
-
-## S57.32: Tool-call progress.
-
-- Done when: While a tool runs the transcript shows it as running (with elapsed time), then completed or failed.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | The cited apply_tool_event shows a running row that becomes complete/failed, but the criterion's elapsed time is absent: ToolCompleted carries duration_ms (app_event.rs 61-67) and the handler discards it with '..' (4884-4896); ToolCell has no timing field and transcript_cell.rs never prints one. Every other surface shows per-tool elapsed time. remaining: 'Show per-tool elapsed time on the TUI tool row (duration_ms is already emitted).' miss: ui. |  |
-
-Code: `apps/cli/src/tui/tui_app.rs:4865-4883`, `apps/cli/src/features/exec/tools/mod.rs:549-551`
-
-## S57.34: Tool result expansion.
-
-- Done when: The user can expand a tool call to see its full arguments and result, and collapse it again.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | TUI rows show a one-line output preview only; there is no control to expand a tool call to its full output (overflow is saved to a file path). | ui |
-
-Code: `apps/cli/src/tui/tui_app.rs:4902-4906`
+Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-metadata.ts:344-349`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:2836-2845`
 
 ## S57.36: Large-result references.
 
@@ -396,13 +370,12 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:353-353`, `apps
 
 - Done when: After tool calls run, the user can later review a record of which tool ran, with what input, and its outcome.
 - Wave: 3
-- Already works on: web, desktop, api
+- Already works on: web, desktop, cli, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | The transcript keeps each tool's input and output, but mobile has no call log or receipt view for connector actions. | ui |
-| cli | partial | Approvals are appended to an audit log and tool rows stay in the session transcript, but there is no receipt view of past tool outcomes. | ui |
 | vscode | partial | Tool cards persist only in the current sidebar session; no receipt or call log view. | ui |
 | chrome | partial | Tool steps show in the transcript only; Chrome has no call log or receipt view. | ui |
 
-Code: `apps/mobile/src/features/chat/components/ToolCallTimeline.tsx:368-386`, `apps/cli/src/approval_audit.rs:12-16`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:5908-5913`, `apps/extension/src/features/side-panel/bubbles.ts:537-538`
+Code: `apps/mobile/src/features/chat/components/ToolCallTimeline.tsx:368-386`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:5908-5913`, `apps/extension/src/features/side-panel/bubbles.ts:537-538`

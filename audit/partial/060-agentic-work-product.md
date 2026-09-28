@@ -157,28 +157,26 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:4719-4719`, `ap
 
 - Done when: The task view lists its steps with an accurate per-step status.
 - Wave: 3
-- Already works on: web, desktop, vscode
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Steps appear only as a chronological Activity log, not a step list with status. | ui |
 | cli | partial | update_plan/todo_write steps are saved to ~/.agiworkforce/plans and narrated in the REPL; the TUI has no step-list panel. | ui |
 | chrome | partial | Run detail is a flat journal of events; no step list with status. | ui |
 
-Code: `apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx:313-329`, `apps/mobile/src/features/tasks/runPresentation.ts:227-237`, `apps/cli/src/agent/mod.rs:1332-1341`, `apps/cli/src/agent/chat.rs:2197-2212`
+Code: `apps/cli/src/agent/mod.rs:1332-1341`, `apps/cli/src/agent/chat.rs:2197-2212`, `apps/extension/src/features/side-panel/cloudRunsPanel.ts:471-481`
 
 ## S60.16: Running-step indicator.
 
 - Done when: While a task runs, the view marks which step is currently executing.
 - Wave: 3
-- Already works on: web, desktop, cli, vscode
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Only the run state ("Running") and a log line appear; no current-step marker. | ui |
 | chrome | partial | Chrome shows the run state badge and a log; no current-step marker. | ui |
 
-Code: `apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx:313-329`, `apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx:164-166`, `apps/extension/src/features/side-panel/cloudRunsPanel.ts:471-481`, `apps/extension/src/features/side-panel/cloudRunsPanel.ts:832-837`
+Code: `apps/extension/src/features/side-panel/cloudRunsPanel.ts:471-481`, `apps/extension/src/features/side-panel/cloudRunsPanel.ts:832-837`
 
 ## S60.17: Parallel-work indicator.
 
@@ -335,16 +333,15 @@ Code: `apps/mobile/src/features/tasks/runPresentation.ts:248-249`, `apps/mobile/
 
 - Done when: When a task stops short, the user sees what was done and what remains.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Only the "Partially completed" state label and log; no done-versus-remaining summary. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | partial | Only the run state and last error; no done-versus-remaining summary. | ui |
 | chrome | partial | Only the state label in the journal; no done-versus-remaining summary. | ui |
 
-Code: `apps/mobile/src/features/tasks/runPresentation.ts:252-257`, `apps/extension-vscode/src/features/cloud-tasks/cloudRunDetail.ts:78-81`, `apps/extension/src/features/side-panel/cloudRunsPanel.ts:479-480`
+Code: `apps/extension-vscode/src/features/cloud-tasks/cloudRunDetail.ts:78-81`, `apps/extension/src/features/side-panel/cloudRunsPanel.ts:479-480`
 
 ## S60.33: Task sharing.
 
