@@ -74,13 +74,14 @@ export const LibraryItemSchema = z.object({
   model: z.string().nullable(),
   prompt: z.string().nullable(),
   created_at: z.string(),
+  updated_at: z.string().optional(),
 });
 export type LibraryItem = z.infer<typeof LibraryItemSchema>;
 
 export const LIBRARY_DEFAULT_PAGE_SIZE = 24;
 export const LIBRARY_MAX_PAGE_SIZE = 100;
 
-export const LIBRARY_SORTS = ['modified', 'name', 'size'] as const;
+export const LIBRARY_SORTS = ['modified', 'name', 'size', 'type'] as const;
 export type LibrarySort = (typeof LIBRARY_SORTS)[number];
 export const LIBRARY_DEFAULT_SORT: LibrarySort = 'modified';
 

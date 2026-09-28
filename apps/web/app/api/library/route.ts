@@ -63,6 +63,7 @@ function toLibraryItem(row: LibraryAssetRow): LibraryItem {
     model: row.model,
     prompt: row.prompt,
     created_at: row.createdAt,
+    updated_at: row.updatedAt,
   };
 }
 

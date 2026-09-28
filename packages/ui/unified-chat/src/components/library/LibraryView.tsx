@@ -112,6 +112,7 @@ const SORT_OPTIONS: ReadonlyArray<{ id: LibrarySort; label: string }> = [
   { id: 'modified', label: 'Modified' },
   { id: 'name', label: 'Name' },
   { id: 'size', label: 'Size' },
+  { id: 'type', label: 'Type' },
 ];
 
 const VIEW_MODE_STORAGE_KEY = 'agi-library-view-mode';
@@ -1317,7 +1318,7 @@ function LibraryGrid(props: LibraryListProps) {
             key={item.id}
             testId="library-tile"
             name={libraryItemDisplayName(item)}
-            meta={formatModified(item.created_at)}
+            meta={formatModified(item.updated_at ?? item.created_at)}
             ariaLabel={`Open ${libraryItemDisplayName(item)}`}
             onOpen={() => props.actions.onOpen(item)}
             menu={
@@ -1477,7 +1478,7 @@ function LibraryList(props: LibraryListProps) {
                     ) : null}
                   </td>
                   <td className="whitespace-nowrap px-3 py-2 text-[var(--chat-text-muted)]">
-                    {formatModified(item.created_at)}
+                    {formatModified(item.updated_at ?? item.created_at)}
                   </td>
                   <td className="hidden whitespace-nowrap px-3 py-2 text-[var(--chat-text-muted)] sm:table-cell">
                     {formatSize(item.byte_count)}
