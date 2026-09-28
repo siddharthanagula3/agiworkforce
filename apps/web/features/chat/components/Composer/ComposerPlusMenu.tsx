@@ -68,11 +68,15 @@ import {
   TEMPORARY_CHAT_PRIVACY_EXPLANATION,
   TEMPORARY_CHAT_RETENTION_NOTE,
 } from '@/lib/temporary-chat-policy';
+import { RESOURCE_RECOVERY_WINDOW_DAYS } from '@/lib/resources/deletion-policies';
 
 export const COMPOSER_PALETTE_SEARCH_TESTID = 'composer-palette-search';
 
 const MENU_LABEL = 'More composer options';
 const ROW_LABEL_ATTACH = 'Add photos & files';
+const ATTACH_RETENTION_NOTE = `Files you attach are saved to your Library and kept until you delete them. A deleted file can be restored for ${RESOURCE_RECOVERY_WINDOW_DAYS} days.`;
+const TEMPORARY_ATTACH_RETENTION_NOTE =
+  'Files you attach in a temporary chat stay out of your Library and are deleted along with the chat.';
 const ROW_LABEL_IMAGE = 'Create image';
 const ROW_LABEL_VIDEO = 'Create video';
 const ROW_LABEL_SCREENSHOT = 'Take a screenshot';
@@ -662,7 +666,9 @@ function AttachRow({ props, role }: { props: ComposerPlusMenuProps; role?: strin
         props.attachmentsUnavailable
           ? (props.attachmentUnavailableTitle ??
             `${props.mediaModeNoun} generation works from your prompt only. Leave ${props.mediaModeNoun.toLowerCase()} mode to attach files.`)
-          : undefined
+          : props.isIncognito
+            ? TEMPORARY_ATTACH_RETENTION_NOTE
+            : ATTACH_RETENTION_NOTE
       }
       className={cn(ROW_CLASS, props.attachmentsUnavailable ? ROW_DISABLED_CLASS : ROW_HOVER_CLASS)}
     >
