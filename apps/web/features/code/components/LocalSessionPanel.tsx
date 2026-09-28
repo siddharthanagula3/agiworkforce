@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import {
+  ArrowRight,
   ArrowUp,
   ChevronLeft,
   Code2,
@@ -17,7 +18,12 @@ import type {
 } from '@agiworkforce/local-runtime-contract';
 import { openWorkspaceInEditor } from '@/features/desktop-host';
 import { toUserMessage } from '@/lib/user-error-message';
-import { CODE_LIMITS } from '../code-surface';
+import {
+  CODE_COPY,
+  CODE_LIMITS,
+  continueLocalSessionInVsCodeHref,
+  localSessionResumeCommand,
+} from '../code-surface';
 import {
   LOCAL_CODE_COPY,
   LOCAL_FAILURE_ACTION_LABELS,
@@ -119,6 +125,9 @@ export function LocalSessionPanel({
   const state = useLocalSession(session);
   const tests = useLocalTests(session.rootId);
   const [editorError, setEditorError] = useState<string | null>(null);
+  const [handoffOpen, setHandoffOpen] = useState(false);
+  const vsCodeHref = continueLocalSessionInVsCodeHref(session);
+  const resumeCommand = localSessionResumeCommand(session.id);
   const testsRunning = tests.status === 'running';
   const [draft, setDraft] = useState('');
   const [focused, setFocused] = useState(false);
@@ -206,6 +215,17 @@ export function LocalSessionPanel({
           >
             <Code2 size={HEADER_GLYPH_SIZE} aria-hidden="true" />
           </button>
+          <button
+            type="button"
+            className={`${styles['headerButton']} ${handoffOpen ? styles['headerButtonActive'] : ''}`}
+            aria-label={CODE_COPY.continueElsewhere}
+            aria-expanded={handoffOpen}
+            aria-controls="local-session-handoff"
+            title={CODE_COPY.continueElsewhere}
+            onClick={() => setHandoffOpen((open) => !open)}
+          >
+            <ArrowRight size={HEADER_GLYPH_SIZE} aria-hidden="true" />
+          </button>
         </div>
       </header>
 
@@ -275,6 +295,29 @@ export function LocalSessionPanel({
               {state.error !== null && (
                 <div className={styles['notice']} role="alert">
                   <span>{state.error}</span>
+                </div>
+              )}
+
+              {handoffOpen && (
+                <div
+                  id="local-session-handoff"
+                  className={styles['notice']}
+                  role="group"
+                  aria-label={CODE_COPY.continueElsewhere}
+                >
+                  <div className={styles['testsNoticeBody']}>
+                    <span>{CODE_COPY.resumeInTerminal}</span>
+                    <pre>{resumeCommand}</pre>
+                    <div className={styles['noticeActions']}>
+                      <CopyOffer offer={{ kind: 'copy', text: resumeCommand }} />
+                      {vsCodeHref !== null && (
+                        <a className={styles['secondaryButton']} href={vsCodeHref}>
+                          <ArrowRight size={HEADER_GLYPH_SIZE} aria-hidden="true" />
+                          <span>{CODE_COPY.continueInVsCode}</span>
+                        </a>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
 
