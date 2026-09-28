@@ -19,6 +19,9 @@ export const DEVICE_STEP_TOOLS = [
   'device_read_file',
   'device_list_folder',
   'device_write_file',
+  'device_edit_file',
+  'device_find_files',
+  'device_search_text',
   'device_run_command',
   'device_screenshot',
   'device_zoom',
@@ -88,6 +91,27 @@ export const DEVICE_STEP_DEFINITIONS: Readonly<Record<DeviceStepTool, DeviceStep
     scope: 'workspace',
     description:
       'Create or replace a text file inside a folder the user granted on their desktop. The whole file is replaced by the text supplied.',
+  },
+  device_edit_file: {
+    command: 'file_edit_text',
+    capability: 'filesystem.write',
+    scope: 'workspace',
+    description:
+      'Change part of a text file inside a folder the user granted on their desktop by replacing one exact passage with new text. Read the file first and copy the passage exactly; it must appear once, unless replaceAll is set.',
+  },
+  device_find_files: {
+    command: 'file_glob',
+    capability: 'filesystem.read',
+    scope: 'workspace',
+    description:
+      'Find files by name inside a folder the user granted on their desktop, with a glob pattern such as **/*.md or **/*invoice*. Returns the matching paths.',
+  },
+  device_search_text: {
+    command: 'file_grep',
+    capability: 'filesystem.read',
+    scope: 'workspace',
+    description:
+      'Search the text of the files inside a folder the user granted on their desktop. Returns each matching line with its file and line number.',
   },
   device_run_command: {
     command: 'shell_run',
@@ -252,6 +276,7 @@ export const MAX_DEVICE_STEP_ROOTS = 12;
 export const MAX_DEVICE_STEP_RESULT_LENGTH = 24_000;
 export const DEVICE_STEP_TTL_MINUTES = 15;
 export const MAX_DEVICE_REVIEW_LENGTH = 200;
+export const MAX_DEVICE_SEARCH_LENGTH = 500;
 
 const MAX_FIELD_LENGTH = 200;
 
@@ -404,6 +429,12 @@ export interface DeviceStepRequest {
   region?: DeviceStepRegion;
   display?: number;
   review?: string;
+  pattern?: string;
+  query?: string;
+  ignoreCase?: boolean;
+  oldText?: string;
+  newText?: string;
+  replaceAll?: boolean;
 }
 
 export class DeviceStepRefused extends Error {
@@ -626,6 +657,22 @@ export function planDeviceStep(
     return { tool, rootId, ...(path ? { path } : {}) };
   }
 
+  if (tool === 'device_find_files' || tool === 'device_search_text') {
+    const key = tool === 'device_find_files' ? 'pattern' : 'query';
+    const value = readBoundedString(args[key], MAX_DEVICE_SEARCH_LENGTH);
+    if (!value) {
+      throw new DeviceStepRefused('invalid-arguments', `${tool} needs a "${key}".`);
+    }
+    const path = readBoundedString(args['path'], 1_000);
+    return {
+      tool,
+      rootId,
+      [key]: value,
+      ...(path ? { path } : {}),
+      ...(tool === 'device_search_text' && args['ignoreCase'] === true ? { ignoreCase: true } : {}),
+    };
+  }
+
   const path = readBoundedString(args['path'], 1_000);
   if (!path) {
     throw new DeviceStepRefused('invalid-arguments', `${tool} needs a "path" inside the folder.`);
@@ -636,6 +683,30 @@ export function planDeviceStep(
       throw new DeviceStepRefused('invalid-arguments', 'A write step needs "text" to write.');
     }
     return { tool, rootId, path, text };
+  }
+  if (tool === 'device_edit_file') {
+    const oldText = args['oldText'];
+    const newText = args['newText'];
+    if (typeof oldText !== 'string' || oldText.length === 0) {
+      throw new DeviceStepRefused(
+        'invalid-arguments',
+        'An edit step needs the "oldText" to replace.',
+      );
+    }
+    if (typeof newText !== 'string') {
+      throw new DeviceStepRefused(
+        'invalid-arguments',
+        'An edit step needs the "newText" to put in its place.',
+      );
+    }
+    return {
+      tool,
+      rootId,
+      path,
+      oldText,
+      newText,
+      ...(args['replaceAll'] === true ? { replaceAll: true } : {}),
+    };
   }
   return { tool, rootId, path };
 }
@@ -653,6 +724,12 @@ export function describeDeviceStep(
       return request.path ? `List ${request.path} in ${where}` : `List ${where}`;
     case 'device_write_file':
       return `Write ${request.path} in ${where}`;
+    case 'device_edit_file':
+      return `Edit ${request.path} in ${where}`;
+    case 'device_find_files':
+      return `Find ${request.pattern} in ${where}`;
+    case 'device_search_text':
+      return `Search ${where} for "${request.query}"`;
     case 'device_run_command':
       return `Run ${request.command} in ${where}`;
     case 'device_screenshot':
