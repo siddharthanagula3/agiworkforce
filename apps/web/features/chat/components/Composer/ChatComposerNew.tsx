@@ -118,6 +118,7 @@ import {
   resolveNewChatTemporary,
 } from '@/lib/temporary-chat-policy';
 import { Spinner, useConfirmAction } from '@agiworkforce/ui';
+import { CHAT_OUTPUT_FORMAT_LABEL, type ChatOutputFormat } from '@/lib/chat-output-format';
 import { useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 import {
@@ -168,6 +169,8 @@ import {
   MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH,
   MANAGED_MEDIA_MAX_IMAGE_REFERENCES,
   MANAGED_OFFICE_FILE_TOOL_NAME,
+  cloudAgentRunSteerProgressId,
+  isCloudAgentRunSteerProgressId,
   type LibraryItem,
 } from '@agiworkforce/cloud-contracts';
 import {
@@ -251,6 +254,7 @@ interface QueuedFollowUp {
   args: ComposerSendArgs;
   preview: string;
   toolsLabel: string | null;
+  steerId?: string;
 }
 
 const WORK_MODE_LABELS: Record<ComposerWorkMode, string> = {
@@ -303,6 +307,7 @@ const TURN_ACTIVE_PLACEHOLDER = 'Follow up';
  * only has to name which message and keep its Edit and Cancel reachable.
  */
 const QUEUED_ROW_LEAD = 'Queued';
+const STEERED_ROW_LEAD = 'Sent to the running reply';
 
 type SkillToolToggle = 'officeCreationEnabled' | 'codeExecutionEnabled';
 const SKILL_TOOL_TOGGLES: Readonly<Record<string, SkillToolToggle>> = {
@@ -340,6 +345,7 @@ export interface ComposerSendMeta {
   thinkingEnabled?: boolean;
   codeExecutionEnabled?: boolean;
   officeCreationEnabled?: boolean;
+  officeOutputFormat?: ChatOutputFormat;
   /** Deep Research mode: server injects research system prompt and forces web search. */
   researchEnabled?: boolean;
   /** Resolved Response-Style instruction (preset or custom) from StyleSelector. */
@@ -413,6 +419,7 @@ interface ChatComposerProps {
   onTypingChange?: (isTyping: boolean) => void;
   /** Called when the user clicks the stop button. */
   onStop?: () => void;
+  onSteerQueuedMessage?: (message: string) => Promise<string | null>;
   /** ArrowUp on an empty composer opens the last user message for editing, as both leaders do. */
   onEditLastMessage?: () => void;
   /**
@@ -723,6 +730,7 @@ const ChatComposerNewComponent = ({
   onRemoveAttachmentUpload,
   onTypingChange,
   onStop,
+  onSteerQueuedMessage,
   onEditLastMessage,
   onEnterVoiceMode,
   clearSignal,
@@ -959,6 +967,7 @@ const ChatComposerNewComponent = ({
     researchEnabled,
     codeExecutionEnabled,
     officeCreationEnabled,
+    officeOutputFormat,
     imageMode,
     videoMode,
     selectedSkillName,
@@ -1447,7 +1456,7 @@ const ChatComposerNewComponent = ({
   useEffect(() => {
     if (!billingPolicyReady) return;
     if (officeCreationEnabled && !modelSupportsOfficeCreation)
-      setComposerToggles({ officeCreationEnabled: false });
+      setComposerToggles({ officeCreationEnabled: false, officeOutputFormat: null });
   }, [billingPolicyReady, officeCreationEnabled, modelSupportsOfficeCreation, setComposerToggles]);
 
   // AUDIT-FIX CMP-11: image mode is Pro-only server-side; a downgrade (or a
@@ -2189,9 +2198,12 @@ const ChatComposerNewComponent = ({
     setComposerToggles({ codeExecutionEnabled: !codeExecutionEnabled });
   }, [codeExecutionEnabled, setComposerToggles]);
 
-  const handleOfficeCreationToggle = useCallback(() => {
-    setComposerToggles({ officeCreationEnabled: !officeCreationEnabled });
-  }, [officeCreationEnabled, setComposerToggles]);
+  const handleSelectOfficeOutput = useCallback(
+    (format: ChatOutputFormat | null) => {
+      setComposerToggles({ officeCreationEnabled: format !== null, officeOutputFormat: format });
+    },
+    [setComposerToggles],
+  );
 
   const handleMemoryToggle = useCallback(() => {
     setMemoryEnabledForChat(!memoryEnabledForChat);
@@ -2829,7 +2841,11 @@ const ChatComposerNewComponent = ({
     if (webSearchEnabled) labels.push('Web search');
     if (researchEnabled) labels.push('Deep Research');
     if (codeExecutionEnabled) labels.push('Run code');
-    if (officeCreationEnabled) labels.push('Office files');
+    if (officeCreationEnabled) {
+      labels.push(
+        officeOutputFormat ? CHAT_OUTPUT_FORMAT_LABEL[officeOutputFormat] : 'Office files',
+      );
+    }
     if (thinkingEnabled) labels.push('Extended thinking');
     if (selectedSkillName) labels.push(`/${selectedSkillName}`);
     if (selectedMcpContext?.prompt) labels.push(`Prompt: ${selectedMcpContext.prompt.name}`);
@@ -2846,6 +2862,7 @@ const ChatComposerNewComponent = ({
     researchEnabled,
     codeExecutionEnabled,
     officeCreationEnabled,
+    officeOutputFormat,
     thinkingEnabled,
     selectedSkillName,
     selectedMcpContext,
@@ -3179,6 +3196,7 @@ const ChatComposerNewComponent = ({
           (isAutoModeModelId(composerSelectedModelId) || modelSupportsThinkingCap),
         codeExecutionEnabled: sendCodeExecutionEnabled,
         officeCreationEnabled,
+        ...(officeCreationEnabled && officeOutputFormat ? { officeOutputFormat } : {}),
         researchEnabled,
         // AUDIT-FIX CMP-6/CMP-7: ONE style value reaches the server. The old
         // `styleMode` hint was always dropped in favour of `styleInstruction`
@@ -3305,6 +3323,7 @@ const ChatComposerNewComponent = ({
     modelSupportsThinkingCap,
     codeExecutionEnabled,
     officeCreationEnabled,
+    officeOutputFormat,
     agiWorkConstraints,
     agiWorkDeliverable,
     agiWorkExcludedTools,
@@ -3609,6 +3628,60 @@ const ChatComposerNewComponent = ({
     setQueuedFollowUps((current) => current.filter((item) => item.id !== id));
   }, []);
 
+  const streamingRunId = useChatStore((state) => {
+    const last = state.messages.at(-1);
+    return last?.role === 'assistant' && last.isStreaming
+      ? (last.metadata?.cloudAgentRun?.runId ?? null)
+      : null;
+  });
+  const readSteerProgressIds = useChatStore((state) =>
+    (state.messages.at(-1)?.metadata?.agentActivity?.entries ?? [])
+      .flatMap((entry) =>
+        entry.kind === 'progress' && isCloudAgentRunSteerProgressId(entry.progressId)
+          ? [entry.progressId]
+          : [],
+      )
+      .join(' '),
+  );
+
+  useEffect(() => {
+    if (!readSteerProgressIds) return;
+    const read = new Set(readSteerProgressIds.split(' '));
+    const remaining = queuedFollowUpsRef.current.filter(
+      (item) => !item.steerId || !read.has(cloudAgentRunSteerProgressId(item.steerId)),
+    );
+    if (remaining.length === queuedFollowUpsRef.current.length) return;
+    queuedFollowUpsRef.current = remaining;
+    setQueuedFollowUps(remaining);
+  }, [readSteerProgressIds]);
+
+  const steerQueuedMessage = useCallback(
+    async (id: string) => {
+      const target = queuedFollowUpsRef.current.find((item) => item.id === id);
+      if (!target || target.steerId || !onSteerQueuedMessage) return;
+      let steerId: string | null;
+      try {
+        steerId = await onSteerQueuedMessage(target.args[0]);
+      } catch (error) {
+        setLocalNotice(
+          toUserMessage(error, 'Your message did not reach the running reply. It is still queued.'),
+        );
+        return;
+      }
+      if (!steerId) {
+        setLocalNotice('This reply cannot take a message now, so yours sends when it finishes.');
+        return;
+      }
+      if (editingQueuedIdRef.current === id) editingQueuedIdRef.current = null;
+      const next = queuedFollowUpsRef.current.map((item) =>
+        item.id === id ? { ...item, steerId } : item,
+      );
+      queuedFollowUpsRef.current = next;
+      setQueuedFollowUps(next);
+    },
+    [onSteerQueuedMessage],
+  );
+
   const editQueuedMessage = useCallback(
     (id: string) => {
       const target = queuedFollowUpsRef.current.find((item) => item.id === id);
@@ -3644,13 +3717,15 @@ const ChatComposerNewComponent = ({
     if (!pending) return;
     const meta = pending.args[3];
     if (!meta) return;
+    const { officeOutputFormat: _queuedOutputFormat, ...queuedMeta } = meta;
     pending.args[3] = {
-      ...meta,
+      ...queuedMeta,
       workMode: canUseAgiWork ? workMode : 'chat',
       webSearchEnabled,
       researchEnabled,
       codeExecutionEnabled,
       officeCreationEnabled,
+      ...(officeCreationEnabled && officeOutputFormat ? { officeOutputFormat } : {}),
       thinkingEnabled:
         thinkingEnabled && (isAutoModeModelId(composerSelectedModelId) || modelSupportsThinkingCap),
       styleInstruction: getStyleInstruction(responseStyle, activeCustomStyleId, responseLength),
@@ -3667,6 +3742,7 @@ const ChatComposerNewComponent = ({
     researchEnabled,
     codeExecutionEnabled,
     officeCreationEnabled,
+    officeOutputFormat,
     thinkingEnabled,
     composerSelectedModelId,
     modelSupportsThinkingCap,
@@ -3861,7 +3937,10 @@ const ChatComposerNewComponent = ({
     overflowActiveOptions.push({ label: 'Run code', Icon: Terminal });
   }
   if (officeCreationEnabled) {
-    overflowActiveOptions.push({ label: 'Office files', Icon: FileText });
+    overflowActiveOptions.push({
+      label: officeOutputFormat ? CHAT_OUTPUT_FORMAT_LABEL[officeOutputFormat] : 'Office files',
+      Icon: FileText,
+    });
   }
   // Temporary chat deliberately does not join this chip: the founder keeps
   // the composer face to plus, mode pill, Style, model trigger, mic, send,
@@ -3974,9 +4053,11 @@ const ChatComposerNewComponent = ({
             >
               <Clock className="h-4 w-4 shrink-0" aria-hidden="true" />
               <span className="min-w-0 flex-1 truncate">
-                {queuedFollowUps.length > 1
-                  ? `${QUEUED_ROW_LEAD} ${index + 1} of ${queuedFollowUps.length}: `
-                  : `${QUEUED_ROW_LEAD}: `}
+                {queued.steerId
+                  ? `${STEERED_ROW_LEAD}: `
+                  : queuedFollowUps.length > 1
+                    ? `${QUEUED_ROW_LEAD} ${index + 1} of ${queuedFollowUps.length}: `
+                    : `${QUEUED_ROW_LEAD}: `}
                 {queued.preview}
                 {/* AUDIT-FIX CMP-16: say which toggles the queued turn will carry.
                     they are editable while it waits (the "+" menu stays open during
@@ -3985,22 +4066,41 @@ const ChatComposerNewComponent = ({
                   <span className="ml-1 text-[var(--chat-text-muted)]">· {queued.toolsLabel}</span>
                 )}
               </span>
-              <button
-                type="button"
-                onClick={() => editQueuedMessage(queued.id)}
-                className="shrink-0 rounded-compact px-1.5 py-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-                aria-label={`Edit queued message: ${queued.preview}`}
-              >
-                Edit
-              </button>
-              <button
-                type="button"
-                onClick={() => cancelQueuedMessage(queued.id)}
-                className="shrink-0 rounded-compact px-1.5 py-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-                aria-label={`Cancel queued message: ${queued.preview}`}
-              >
-                Cancel
-              </button>
+              {onSteerQueuedMessage &&
+              streamingRunId &&
+              !queued.steerId &&
+              queued.conversationId === (conversationId ?? null) &&
+              queued.args[0].trim().length > 0 &&
+              !queued.args[1]?.length ? (
+                <button
+                  type="button"
+                  onClick={() => void steerQueuedMessage(queued.id)}
+                  className="shrink-0 rounded-compact px-1.5 py-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  aria-label={`Steer the running reply with: ${queued.preview}`}
+                >
+                  Steer
+                </button>
+              ) : null}
+              {queued.steerId ? null : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => editQueuedMessage(queued.id)}
+                    className="shrink-0 rounded-compact px-1.5 py-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                    aria-label={`Edit queued message: ${queued.preview}`}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => cancelQueuedMessage(queued.id)}
+                    className="shrink-0 rounded-compact px-1.5 py-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                    aria-label={`Cancel queued message: ${queued.preview}`}
+                  >
+                    Cancel
+                  </button>
+                </>
+              )}
             </li>
           ))}
         </ul>
@@ -4853,15 +4953,15 @@ const ChatComposerNewComponent = ({
                       handleCodeExecutionToggle();
                       closeMenu();
                     }}
-                    officeCreationEnabled={officeCreationEnabled}
+                    officeOutputFormat={officeCreationEnabled ? officeOutputFormat : null}
                     officeCreationDisabled={disabled || !modelSupportsOfficeCreation}
                     officeCreationTitle={
                       !modelSupportsOfficeCreation
                         ? "Office file creation isn't available for this model."
                         : undefined
                     }
-                    onToggleOfficeCreation={() => {
-                      handleOfficeCreationToggle();
+                    onSelectOfficeOutput={(format) => {
+                      handleSelectOfficeOutput(format);
                       closeMenu();
                     }}
                     memoryEnabled={memoryCapabilityEnabled && memoryEnabledForChat && !isIncognito}

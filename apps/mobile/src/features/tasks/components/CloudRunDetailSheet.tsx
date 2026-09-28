@@ -18,6 +18,7 @@ import {
   CLOUD_RUN_PLAN_STATUS_LABELS,
 } from '../runPresentation';
 import type { CloudRunDetail } from '../store';
+import { CloudRunSteerSection } from './CloudRunSteerSection';
 
 const DEVICE_STEP_NOTE =
   'Open the AGI Cloud app on that computer to carry this out, or stop the task below.';
@@ -376,6 +377,8 @@ export function CloudRunDetailSheet({
                 ))}
               </View>
             ) : null}
+
+            {run ? <CloudRunSteerSection key={run.id} run={run} /> : null}
 
             {conversationId ? (
               <Button

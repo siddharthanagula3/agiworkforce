@@ -298,6 +298,7 @@ export function translateChatRequestToResponses(
     ...(options.store !== undefined ? { store: options.store } : {}),
     ...(options.serviceTier ? { service_tier: options.serviceTier } : {}),
     ...(req.metadata ? { metadata: req.metadata as Record<string, string> } : {}),
+    ...(req.endUserId ? { user: req.endUserId } : {}),
     ...(promptCacheKey ? { prompt_cache_key: promptCacheKey } : {}),
     ...(req.responseFormat ? { text: { format: req.responseFormat } } : {}),
   };

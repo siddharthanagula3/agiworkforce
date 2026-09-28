@@ -1256,7 +1256,6 @@ describe('durable report persistence', () => {
 describe('retry with carried sources', () => {
   it('pre-seeds prior sources with stable leading positions and skips finished queries', async () => {
     streamRequestMock
-      .mockResolvedValueOnce(planStream(['fresh query']))
       .mockResolvedValueOnce(
         sseStream([
           searchResultsEvent([{ url: 'https://new.com', title: 'New' }]),
@@ -1281,13 +1280,17 @@ describe('retry with carried sources', () => {
     expect(sources?.[0]).toMatchObject({ url: 'https://prior.com', position: 1 });
     expect(sources?.[1]).toMatchObject({ url: 'https://new.com', position: 2 });
 
-    // The planning turn is told not to repeat the completed query.
-    const planRequest = streamRequestMock.mock.calls[0]?.[2] as {
+    // A retry continues the run instead of planning it again, and the gathering
+    // turn is told not to repeat the completed query.
+    expect(streamRequestMock).toHaveBeenCalledTimes(2);
+    const gathering = streamRequestMock.mock.calls[0]?.[2] as {
       messages: Array<{ role: string; content: string }>;
     };
-    const planDirective = planRequest.messages[planRequest.messages.length - 1]?.content ?? '';
-    expect(planDirective).toContain('do NOT repeat them');
-    expect(planDirective).toContain('- already ran');
+    const resumeNote =
+      gathering.messages.find((message) => message.content.includes('resuming from where it'))
+        ?.content ?? '';
+    expect(resumeNote).toContain('do NOT repeat them');
+    expect(resumeNote).toContain('- already ran');
 
     // The restored completed step is carried into the plan surface as-is; the
     // pending step from the previous attempt is NOT resurrected as completed.
@@ -1296,9 +1299,8 @@ describe('retry with carried sources', () => {
     expect(firstPlan.some((s) => s['description'] === 'never ran')).toBe(false);
   });
 
-  it('drops a replanned query that duplicates a completed one', async () => {
+  it('drops an approved query that duplicates a completed one', async () => {
     streamRequestMock
-      .mockResolvedValueOnce(planStream(['Already Ran', 'fresh query']))
       .mockResolvedValueOnce(sseStream([contentEvent(READY_MARKER), finishEvent()]))
       .mockResolvedValueOnce(sseStream([contentEvent('report'), finishEvent()]));
 
@@ -1306,6 +1308,10 @@ describe('retry with carried sources', () => {
       runResearchLoop(makeProcessed(), BILLING, {
         priorSteps: [
           { id: 'plan-1', type: 'search', description: 'already ran', status: 'completed' },
+        ],
+        approvedPlan: [
+          { id: 'plan-2', type: 'search', description: 'Already Ran', status: 'pending' },
+          { id: 'plan-3', type: 'search', description: 'fresh query', status: 'pending' },
         ],
       }),
     );
