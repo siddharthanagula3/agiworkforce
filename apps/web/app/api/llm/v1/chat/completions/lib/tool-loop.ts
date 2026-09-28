@@ -146,6 +146,13 @@ import {
 } from './tool-schema-loader';
 import { stageTurnAttachments } from '@/lib/e2b/attachment-staging';
 import {
+  STORED_RESULT_NOTICE_MARKER,
+  TOOL_RESULT_READER_TOOL_NAME,
+  readStoredToolResult,
+  referenceOversizedToolResult,
+  toolResultReaderToolDef,
+} from './tool-result-store';
+import {
   EXECUTE_CODE_TOOL,
   isExecutionTool,
   routeExecutionTool,
@@ -2159,7 +2166,14 @@ async function runMcpTool(
       );
       if (connectorResult.handled) {
         return {
-          content: capOutput(connectorResult.content),
+          content: connectorResult.isError
+            ? capOutput(connectorResult.content)
+            : ((await referenceOversizedToolResult({
+                userId: executionContext?.userId,
+                toolCallId: toolCall.id,
+                toolName: toolCall.qualifiedName,
+                content: connectorResult.content,
+              })) ?? capOutput(connectorResult.content)),
           isError: connectorResult.isError,
           ...(connectorResult.interactiveCard
             ? { interactiveCard: connectorResult.interactiveCard }
@@ -2239,10 +2253,18 @@ async function runMcpTool(
         };
       }
     }
+    const output =
+      text || (result.task ? `MCP task started: ${result.task.taskId}` : '(no output)');
     return {
-      content: capOutput(
-        text || (result.task ? `MCP task started: ${result.task.taskId}` : '(no output)'),
-      ),
+      content:
+        (result.isError === true
+          ? null
+          : await referenceOversizedToolResult({
+              userId: executionContext?.userId,
+              toolCallId: toolCall.id,
+              toolName: toolCall.qualifiedName,
+              content: output,
+            })) ?? capOutput(output),
       isError: result.isError === true,
       ...(interactiveCard ? { interactiveCard } : {}),
     };
@@ -3048,7 +3070,17 @@ export async function* runToolLoop(
   const offeredMcpToolDefs = (): WebMcpToolDef[] => {
     const loaded = mcpTools.filter((tool) => loadedToolNames.has(tool.qualifiedName));
     const directory = toolDirectoryToolDef(deferredToolSchemas);
-    return directory ? [...loaded, directory] : loaded;
+    const storedResults = messages.some(
+      (message) =>
+        message.role === 'tool' &&
+        typeof message.content === 'string' &&
+        message.content.includes(STORED_RESULT_NOTICE_MARKER),
+    );
+    return [
+      ...loaded,
+      ...(directory ? [directory] : []),
+      ...(storedResults ? [toolResultReaderToolDef()] : []),
+    ];
   };
   const loadDeferredToolSchemas = (args: Record<string, unknown>): ToolLoopToolResult => {
     const raw = args['names'];
@@ -4174,6 +4206,9 @@ export async function* runToolLoop(
       }
       if (tc.qualifiedName === TOOL_DIRECTORY_TOOL_NAME) {
         return Promise.resolve(loadDeferredToolSchemas(tc.args));
+      }
+      if (tc.qualifiedName === TOOL_RESULT_READER_TOOL_NAME) {
+        return readStoredToolResult(options.userId, tc.args);
       }
       const argumentProblem = toolArgumentProblem(tc, externalToolSchemas.get(tc.qualifiedName));
       if (argumentProblem) {
