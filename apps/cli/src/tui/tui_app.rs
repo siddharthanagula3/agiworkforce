@@ -581,6 +581,14 @@ impl TuiApp {
     /// Stage one image file on the next turn, as `--file` does at launch.
     /// Returns the label the composer chip shows.
     fn stage_image_path(&mut self, path: &str) -> Result<String, String> {
+        self.stage_image_path_with(path, agiworkforce_utils_image::PromptImageMode::ResizeToFit)
+    }
+
+    fn stage_image_path_with(
+        &mut self,
+        path: &str,
+        mode: agiworkforce_utils_image::PromptImageMode,
+    ) -> Result<String, String> {
         let root = self.workspace_root();
         let resolved = crate::path_security::validate_workspace_path_with_cwd(path, &root)?;
         if !resolved.is_file() {
@@ -597,7 +605,7 @@ impl TuiApp {
                 crate::model_catalog::display_name(&self.session.model)
             ));
         }
-        let attachment = crate::load_image_attachment(&resolved.to_string_lossy())
+        let attachment = crate::load_image_attachment_with(&resolved.to_string_lossy(), mode)
             .map_err(|error| format!("{error:#}"))?;
         let path_label = resolved
             .strip_prefix(&root)
@@ -607,7 +615,15 @@ impl TuiApp {
         let size = std::fs::metadata(&resolved)
             .map(|meta| meta.len())
             .unwrap_or(0);
-        let label = format!("{path_label} ({})", crate::tools::format_size(size));
+        let label = match mode {
+            agiworkforce_utils_image::PromptImageMode::Original => format!(
+                "{path_label} ({}, full resolution)",
+                crate::tools::format_size(size)
+            ),
+            agiworkforce_utils_image::PromptImageMode::ResizeToFit => {
+                format!("{path_label} ({})", crate::tools::format_size(size))
+            }
+        };
         if self.staged_images.contains(&label) {
             return Err(format!("{path_label} is already attached"));
         }
@@ -3786,6 +3802,7 @@ const ADD_CONTEXT_MENU: &str = "Ways to add context to your next message:
   @path            Inline a file, or list a folder with @dir/
   @agent-<name>    Hand the message to one of your agents
   /attach <image>  Attach an image file (png, jpg, gif, webp)
+  /attach --full <image>  Attach it without scaling it down, for fine detail
   /attach <url>    Fetch a web page and add its text to the conversation
   Ctrl+V           Attach the image on the clipboard
   Paste            Long pastes collapse to [Pasted text #N]; the full text is sent
@@ -4436,6 +4453,18 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                         Err(reason) => SlashResult::SystemMessage(reason),
                     }
                 }
+                "--full" => match app.stage_image_path_with(
+                    rest.trim(),
+                    agiworkforce_utils_image::PromptImageMode::Original,
+                ) {
+                    Ok(label) => SlashResult::SystemMessage(format!(
+                        "Attached {label}. It is sent without being scaled down, so it costs more input; /attach remove drops it."
+                    )),
+                    Err(reason) => SlashResult::SystemMessage(format!(
+                        "Could not attach {}: {reason}",
+                        rest.trim()
+                    )),
+                },
                 "clipboard" => match app.stage_clipboard_image() {
                     Ok(label) => SlashResult::SystemMessage(format!("Attached {label}.")),
                     Err(reason) => SlashResult::SystemMessage(format!("Could not attach: {reason}")),
