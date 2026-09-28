@@ -69,6 +69,13 @@ import {
  * them to one conversation, so turning Deep Research on in chat A no longer
  * leaks into chat B.
  */
+export interface ImageVersion {
+  imageUrl: string;
+  prompt?: string;
+  aspect?: string;
+  model?: string;
+}
+
 export interface ComposerToggleState {
   /** Chat | AGI Work. Stamped into send meta and enforced server-side. */
   workMode: CloudWorkMode;
@@ -408,6 +415,7 @@ export interface MessageMetadata {
   imageGenModel?: string;
   /** Bounded ISO instant before which provider-directed image retry should stay disabled. */
   imageRetryAt?: string;
+  imageVersions?: ImageVersion[];
   /**
    * Generated video URL. Displayed inline when toolType === 'video-generation';
    * its ABSENCE while the tool is running is what drives MessageBubble's
