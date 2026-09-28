@@ -18,18 +18,6 @@ nothing is left.
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S34.02: Search conversation history.
-
-- Done when: The user can search past conversations by title and message text and open a matching chat; only conversations the user can see in history are returned.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Session search matches titles only (sessions sheet and Sessions History quick pick); message content is not searched, and the box appears only after 10 sessions. | handler |
-
-Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2257-2257`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:4153-4158`, `apps/extension-vscode/src/core/commandSetup.ts:1268-1274`
-
 ## S34.03: Search Projects.
 
 - Done when: The user can search their Projects by name or description and open a match.
