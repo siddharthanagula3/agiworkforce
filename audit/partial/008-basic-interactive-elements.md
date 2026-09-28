@@ -10,15 +10,14 @@ nothing is left.
 
 - Done when: Irreversible actions use a distinct destructive button style (danger colour before hover) whose label meets contrast.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | The "Deny All" choice in the approval row is styled like every other choice; give destructive choices a danger colour. | ui |
 | vscode | partial | Destructive actions confirm through VS Code's modal warning, whose buttons the extension cannot style; the webview itself has no danger button style. | ui |
 | chrome | partial | b21db27be: delete and remove show danger text at rest; workflow lane delete buttons left | .sp-wf-btn-delete, .sp-wf-task-delete |
 
-Code: `apps/cli/src/tui/widgets/approval_overlay.rs:76-76`, `apps/cli/src/tui/widgets/approval_overlay.rs:248-248`, `apps/extension-vscode/src/core/commandSetup.ts:1171-1175`, `apps/extension/src/side_panel.ts:3213-3213`
+Code: `apps/extension-vscode/src/core/commandSetup.ts:1171-1175`, `apps/extension/src/side_panel.ts:3213-3213`, `apps/extension/src/features/side-panel/projectsDrawer.ts:137-137`
 
 ## S8.06: Toggle buttons.
 
@@ -41,18 +40,6 @@ Code: `apps/cli/src/tui/widgets/approval_overlay.rs:76-76`, `apps/cli/src/tui/wi
 | mobile | partial | Choices are grouped as tab or radio sets (ModeToggle tablist, StyleSelector radiogroup), but there is no labelled group of ordinary action buttons. | ui |
 
 Code: `apps/mobile/src/features/chat/components/ModeToggle.tsx:78-78`, `apps/mobile/src/features/chat/components/StyleSelector.tsx:136-136`
-
-## S8.08: Text links.
-
-- Done when: Links in text are visibly styled as links and open their destination when activated.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Markdown links render as underlined accent text, but the renderer discards the URL (Tag::Link { .. }) and emits no OSC 8 hyperlink, so the reader can neither see nor open the destination. | handler |
-
-Code: `apps/cli/src/tui/markdown_renderer.rs:138-143`, `apps/cli/src/tui/markdown_renderer.rs:194-197`
 
 ## S8.13: One-time-code fields.
 
@@ -216,18 +203,6 @@ Code: `apps/cli/src/tui/widgets/screen_renderers.rs:497-497`, `apps/cli/src/tui/
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-## S8.33: Disclosure controls.
-
-- Done when: A disclosure control (a toggle that shows or hides one block of detail, exposing its expanded state) is used in shipped UI.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Transcript cells declare is_expandable/is_expanded, but every implementation returns false and no key toggles them; long tool output cannot be shown or hidden. | handler |
-
-Code: `apps/cli/src/tui/transcript_cell.rs:49-55`
 
 ## S8.35: Context menus.
 

@@ -9,15 +9,17 @@ import {
   normalizeResponseStylePreference,
   type ResponseStylePreference,
 } from '@agiworkforce/types';
-import { getAccountToken, getCloudWebOrigin } from '../../utils/api';
-import { platformRequestHeaders } from '../../platform/platformHeaders';
+import {
+  patchAccountPreferences,
+  readAccountPreferences,
+  type PreferenceNamespace,
+} from '../../utils/accountPreferences';
 
 const PERSONALIZATION_NAMESPACE = 'personalization';
-const PREFERENCES_PATH = '/api/settings/preferences';
 const TRAIT_LOW = 0;
 const TRAIT_HIGH = 100;
 
-type Namespace = Record<string, unknown>;
+type Namespace = PreferenceNamespace;
 
 interface ChoiceItem extends vscode.QuickPickItem {
   value: unknown;
@@ -62,30 +64,6 @@ const TRAITS: readonly { key: string; label: string; less: string; more: string 
   },
   { key: 'emoji', label: 'Emoji', less: 'No emoji', more: 'Emoji welcome' },
 ];
-
-async function request(
-  secrets: vscode.SecretStorage,
-  method: 'GET' | 'PUT',
-  body?: unknown,
-): Promise<Namespace | undefined> {
-  const token = await getAccountToken(secrets);
-  if (token === undefined || token === '') return undefined;
-  const url = `${getCloudWebOrigin()}${PREFERENCES_PATH}?namespace=${PERSONALIZATION_NAMESPACE}`;
-  const response = await fetch(url, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-      ...platformRequestHeaders(),
-    },
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-  });
-  if (!response.ok) throw new Error(`AGI Workforce answered HTTP ${response.status}`);
-  const payload = (await response.json()) as { settings?: unknown };
-  return method === 'GET' && payload.settings !== null && typeof payload.settings === 'object'
-    ? (payload.settings as Namespace)
-    : {};
-}
 
 async function chooseOne<T extends string>(
   title: string,
@@ -235,7 +213,7 @@ export async function managePersonalization(secrets: vscode.SecretStorage): Prom
   for (;;) {
     let namespace: Namespace | undefined;
     try {
-      namespace = await request(secrets, 'GET');
+      namespace = await readAccountPreferences(secrets, PERSONALIZATION_NAMESPACE);
     } catch (error) {
       void vscode.window.showErrorMessage(
         `AGI Workforce: personalization could not be loaded, ${error instanceof Error ? error.message : String(error)}.`,
@@ -261,7 +239,7 @@ export async function managePersonalization(secrets: vscode.SecretStorage): Prom
     const patch = await picked.edit();
     if (patch === undefined) continue;
     try {
-      await request(secrets, 'PUT', { namespace: PERSONALIZATION_NAMESPACE, patch });
+      await patchAccountPreferences(secrets, PERSONALIZATION_NAMESPACE, patch);
     } catch (error) {
       void vscode.window.showErrorMessage(
         `AGI Workforce: that change was not saved, ${error instanceof Error ? error.message : String(error)}.`,

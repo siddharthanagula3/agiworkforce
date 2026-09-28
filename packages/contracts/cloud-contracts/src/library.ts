@@ -74,13 +74,16 @@ export const LibraryItemSchema = z.object({
   model: z.string().nullable(),
   prompt: z.string().nullable(),
   created_at: z.string(),
+  updated_at: z.string().optional(),
+  conversation_id: z.string().nullable().optional(),
+  erase_after: z.string().optional(),
 });
 export type LibraryItem = z.infer<typeof LibraryItemSchema>;
 
 export const LIBRARY_DEFAULT_PAGE_SIZE = 24;
 export const LIBRARY_MAX_PAGE_SIZE = 100;
 
-export const LIBRARY_SORTS = ['modified', 'name', 'size'] as const;
+export const LIBRARY_SORTS = ['modified', 'name', 'size', 'type'] as const;
 export type LibrarySort = (typeof LIBRARY_SORTS)[number];
 export const LIBRARY_DEFAULT_SORT: LibrarySort = 'modified';
 
@@ -115,5 +118,6 @@ export const LibraryListResponseSchema = z.object({
   items: z.array(LibraryItemSchema),
   has_more: z.boolean(),
   next_offset: z.number().int().nonnegative().nullable(),
+  storage_used_bytes: z.number().nonnegative().optional(),
 });
 export type LibraryListResponse = z.infer<typeof LibraryListResponseSchema>;

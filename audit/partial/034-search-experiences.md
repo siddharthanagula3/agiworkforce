@@ -94,17 +94,6 @@ Code: `apps/cli/src/lib.rs:2453-2453`, `apps/extension-vscode/package.json:638-6
 
 Code: `apps/cli/src/features/exec/tools/web/mod.rs:286-294`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:2407-2407`, `apps/extension/src/features/cloud-bridge/freeTrialClient.ts:834-850`, `apps/web/lib/web-search/required-search.ts:129-129`
 
-## S34.08: Search within specified websites.
-
-- Done when: The user can restrict a web search to one or more named websites and get results only from them.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| api | partial | research_sources.allow_domains works on the chat endpoint but only for research runs and is not in the published OpenAPI spec. | api |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:410-417`
-
 ## S34.15: Date-range filters.
 
 - Done when: The user can limit a search to a date range and get only results inside it.
@@ -117,17 +106,6 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:410-417
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-## S34.18: Include/exclude domains.
-
-- Done when: The user can include or exclude specific domains for a search and results respect it.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| api | partial | research_sources.allow_domains/deny_domains work on the chat endpoint only for research runs and are not in the published OpenAPI spec. | api |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:410-417`
 
 ## S34.19: User-selected source collections.
 

@@ -409,6 +409,9 @@ export interface LibraryAssetRow {
   sourceSurface: string | null;
   metadata: Record<string, unknown>;
   createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+  conversationId: string | null;
 }
 
 export interface ListLibraryAssetsOptions {
@@ -427,9 +430,10 @@ const UPLOAD_ORIGINS = ['upload', 'uploaded'] as const;
 const DELETED_ORDER_CLAUSE = 'deleted_at desc';
 
 const ORDER_CLAUSE_BY_SORT: Readonly<Record<LibrarySort, string>> = {
-  modified: 'created_at desc',
+  modified: 'updated_at desc',
   name: "coalesce(metadata->>'filename', kind) asc",
   size: 'byte_size desc nulls last',
+  type: "mime_type asc, coalesce(metadata->>'filename', kind) asc",
 };
 
 function escapeIlike(term: string): string {
@@ -448,7 +452,24 @@ function mapLibraryRow(row: Record<string, unknown>): LibraryAssetRow {
     sourceSurface: (row['source_surface'] as string | null) ?? null,
     metadata: (row['metadata'] as Record<string, unknown> | null) ?? {},
     createdAt: new Date(row['created_at'] as string).toISOString(),
+    updatedAt: new Date((row['updated_at'] ?? row['created_at']) as string).toISOString(),
+    deletedAt: row['deleted_at'] ? new Date(row['deleted_at'] as string).toISOString() : null,
+    conversationId: (row['conversation_id'] as string | null) ?? null,
   };
+}
+
+export async function sumLibraryStorageBytes(userId: string, db: DatabaseAdapter): Promise<number> {
+  const organizationId = await resolveActiveOrganizationId(db, userId);
+  const [row] = await db.query<{ total: string | number | null }>(
+    `select coalesce(sum(byte_size), 0) as total
+       from public.media_assets
+      where user_id = $1
+        and organization_id is not distinct from $2::uuid
+        and not temporary_chat
+        and deleted_at is null`,
+    [userId, organizationId],
+  );
+  return Number(row?.total ?? 0);
 }
 
 export async function listLibraryAssets(
@@ -498,7 +519,8 @@ export async function listLibraryAssets(
 
     params.push(limit, offset);
     const rows = await db.query<Record<string, unknown>>(
-      `select id, kind, mime_type, byte_size, prompt, provider, model, source_surface, metadata, created_at, deleted_at
+      `select id, kind, mime_type, byte_size, prompt, provider, model, source_surface, metadata, created_at, updated_at, deleted_at,
+              conversation_id
          from public.media_assets
         where user_id = $1
           and organization_id is not distinct from $2::uuid

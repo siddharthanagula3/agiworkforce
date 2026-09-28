@@ -195,13 +195,13 @@ Code: `apps/mobile/src/features/chat/components/AttachmentPreview.tsx:137-150`, 
 
 - Done when: Each attachment shows its file name and size before sending.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Show name and size on image attachments too; documents show both, but an image shows only its thumbnail (name only as alt text). | ui |
 | desktop | partial | Show name and size on image attachments too; documents show both, but an image shows only its thumbnail (name only as alt text). | ui |
 | mobile | partial | Show name and size on photo attachments; documents show both, photos show only the thumbnail. | ui |
-| cli | partial | Show each staged file's size; the chip and /attach list show names only. | ui |
 | vscode | partial | Show the file size in the chip; it shows the name only. | ui |
 | chrome | missing | Not built on this surface. |  |
 
@@ -286,17 +286,17 @@ Code: `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:12
 
 - Done when: Adding the same file twice is detected and handled visibly (skipped, merged or flagged) rather than sent twice silently.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Warn or skip when the same file is added twice; today the composer shows two chips and sends both, and only the server quietly reuses the stored copy. | ui |
 | desktop | partial | Warn or skip when the same file is added twice; today the composer shows two chips and sends both, and only the server quietly reuses the stored copy. | ui |
 | mobile | partial | Warn or skip when the same file is added twice; the composer accepts it twice, and only the server quietly reuses the stored copy. | ui |
-| cli | partial | Flag a repeated /attach of the same image; /files already answers "already attached", but /attach stages the image again. | handler |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/app/api/uploads/chat-attachment/complete/route.ts:221-241`, `apps/web/features/chat/hooks/use-attachments.ts:148-188`, `apps/mobile/src/features/chat/components/ChatInput.tsx:247-257`, `apps/cli/src/claude_parity.rs:279-284`
+Code: `apps/web/app/api/uploads/chat-attachment/complete/route.ts:221-241`, `apps/web/features/chat/hooks/use-attachments.ts:148-188`, `apps/mobile/src/features/chat/components/ChatInput.tsx:247-257`
 
 ## S14.32: Per-file error display.
 

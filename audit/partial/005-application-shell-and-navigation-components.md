@@ -34,18 +34,6 @@ Code: `apps/web/features/chat/pages/WebChatPage.tsx:5386-5400`, `apps/web/featur
 
 Code: `apps/mobile/app/(app)/settings/workspace.tsx:27-35`, `apps/mobile/src/features/settings/index.tsx:451-456`
 
-## S5.07: Sidebar search input.
-
-- Done when: The navigation sidebar has a search entry that filters or searches conversations.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Session search exists only in the --no-tui REPL (/sessions search); the default TUI /history picker has no filter. | ui |
-
-Code: `apps/cli/src/repl/registry.rs:698-720`
-
 ## S5.09: Pinned-item section.
 
 - Done when: Pinned items appear in their own section at the top of navigation.
@@ -95,16 +83,6 @@ Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:439-470`
 | chrome | partial | History rows show the title and open on click, but nothing marks the active conversation: the cited lines (side_panel.ts:6729-6755) set no aria-current or active class, and _ctx.conversationId is only compared when deleting (6785). The criterion's "indicates the active one" is absent. partial, miss ui; remaining: mark the open conversation in the history list. |  |
 
 Code: `apps/extension/src/side_panel.ts:6726-6755`, `apps/extension/src/side_panel.ts:6833-6836`
-
-## S5.15: Task row.
-
-- Done when: Background work/tasks appear as rows marked as tasks (distinct from chats) with their state, and open on selection.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | The auditor searched for cloud-run vocabulary and missed the REPL slash command: `/task list` (aliases /tasks, ls) prints every subagent task of the session as a row with id, [status] and description (repl/slash_commands.rs:214-231, subagent.rs:45-61). Rows cannot be opened and the command exists only in the --no-tui REPL (no "tasks" entry in tui_app.rs or the TUI command popup), so R-l caps it at partial. |  |
 
 ## S5.16: Resource-type icon.
 

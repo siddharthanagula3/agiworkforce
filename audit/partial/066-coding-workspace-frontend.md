@@ -37,17 +37,17 @@ Code: `apps/web/features/code/components/CodeComposer.tsx:688-708`, `apps/web/fe
 ## S66.03: Worktree picker.
 
 - Done when: The user picks or creates a git worktree for a coding session so parallel work stays isolated.
-- Wave: 2
+- Wave: 3
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Only the --no-tui REPL has /worktree (list, create, remove); the default TUI sends it to the model as a prompt, and the session does not move into the new worktree. | mount |
+| cli | partial | TUI /worktree now lists, creates and removes worktrees, but the session does not move into a new worktree. | handler |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/cli/src/repl/slash_commands.rs:417-419`, `apps/cli/src/repl/registry.rs:1376-1406`
+Code: `apps/cli/src/tui/tui_app.rs:3877-3877`
 
 ## S66.04: Local/cloud execution selector.
 
@@ -207,16 +207,15 @@ Code: `apps/cli/src/agent/mod.rs:430-430`
 
 - Done when: The user runs shell commands in a terminal attached to the coding session and sees their output.
 - Wave: 2
-- Already works on: vscode
+- Already works on: cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Terminal box runs one command at a time in the sandbox (no interactive PTY); Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
 | desktop | partial | Only the hosted-web cloud terminal exists and it is gated; local AGI Code sessions have no terminal pane. | flag-off |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Only the --no-tui REPL runs "!command" in the shell; the default TUI has no shell escape. | mount |
 
-Code: `apps/web/features/code/components/CodeChangesPanel.tsx:338-355`, `apps/web/features/code/CloudCodePage.tsx:672-680`, `apps/web/lib/e2b/gate.ts:22-27`, `apps/cli/src/repl/mod.rs:238-241`
+Code: `apps/web/features/code/components/CodeChangesPanel.tsx:338-355`, `apps/web/features/code/CloudCodePage.tsx:672-680`, `apps/web/lib/e2b/gate.ts:22-27`
 
 ## S66.16: Terminal tabs.
 
@@ -388,32 +387,30 @@ Code: `apps/mobile/src/features/settings/cloud-usage/index.tsx:179-179`
 ## S66.29: Background task list.
 
 - Done when: The user sees a list of the session's background tasks (long commands, spawned jobs) and their state.
-- Wave: 2
+- Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Only the --no-tui REPL has /tasks (subagent task list); the TUI sends /tasks to the model, and background shells are not listed anywhere. | mount |
 | vscode | partial | L1/F1: the cited CloudTasksTreeProvider lists account-level AGI Cloud runs (cloudTasksTree.ts:88-100, "Cloud tasks belong to your AGI Cloud account"), not this session's background commands or spawned jobs; the local runtime has no background shell and nothing lists its jobs. A related list exists, so partial rather than missing. |  |
 
-Code: `apps/cli/src/repl/slash_commands.rs:214-223`, `apps/cli/src/subagent.rs:476-479`, `apps/extension-vscode/src/features/cloud-tasks/cloudTasksTree.ts:59-69`, `apps/extension-vscode/src/core/commandSetup.ts:2196-2196`
+Code: `apps/extension-vscode/src/features/cloud-tasks/cloudTasksTree.ts:59-69`, `apps/extension-vscode/src/core/commandSetup.ts:2196-2196`
 
 ## S66.30: Subagent panel.
 
 - Done when: The user sees the subagents the session spawned, what each is doing and its result.
-- Wave: 2
+- Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Subagent tasks are listed only by /tasks in the --no-tui REPL; the TUI /agents picker lists agent definitions, not running subagents. | mount |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/repl/slash_commands.rs:214-223`, `apps/cli/src/subagent.rs:247-250`
 
 ## S66.36: Pull-request panel.
 

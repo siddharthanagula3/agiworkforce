@@ -81,7 +81,7 @@ export const BUILT_IN_SLASH_COMMANDS: readonly SlashCommandItem[] = [
     description: 'Resume a developer session',
     command: 'agi-workforce.showSessionsHistory',
   },
-  { name: '/memory', description: 'Workspace memory facts', command: 'agi-workforce.memory' },
+  { name: '/memory', description: 'Your account memory', command: 'agi-workforce.memory' },
   { name: '/skills', description: 'Skills the CLI loads', command: 'agi-workforce.showSkills' },
   { name: '/plugins', description: 'Installed plugins', command: 'agi-workforce.showPlugins' },
   { name: '/mcp', description: 'MCP servers', command: 'agi-workforce.showMcpServers' },

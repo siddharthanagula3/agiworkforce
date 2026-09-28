@@ -53,6 +53,16 @@ interface VoiceSessionStoreState {
   toolActivity: readonly LiveVoiceToolActivity[];
   toolApprovals: readonly LiveVoicePendingApproval[];
   toolOutcomes: readonly LiveVoiceToolOutcome[];
+  paused: boolean;
+  rejoinOffer: VoiceRejoinOffer | null;
+}
+
+export interface VoiceRejoinOffer {
+  surface: string;
+  voice: string | null;
+  language: string | null;
+  pace: number | null;
+  startedAt: string;
 }
 
 interface VoiceSessionStoreActions {
@@ -63,6 +73,8 @@ interface VoiceSessionStoreActions {
   setToolActivity: (toolActivity: readonly LiveVoiceToolActivity[]) => void;
   setToolApprovals: (toolApprovals: readonly LiveVoicePendingApproval[]) => void;
   addToolOutcome: (outcome: LiveVoiceToolOutcome) => void;
+  setPaused: (paused: boolean) => void;
+  setRejoinOffer: (offer: VoiceRejoinOffer | null) => void;
   toggleFocusMode: () => void;
   setDockOpen: (open: boolean) => void;
   setSettingsOpen: (open: boolean) => void;
@@ -94,6 +106,8 @@ export const useVoiceSessionStore = create<VoiceSessionStoreState & VoiceSession
       toolActivity: [],
       toolApprovals: [],
       toolOutcomes: [],
+      paused: false,
+      rejoinOffer: null,
 
       resetOnLogout: () =>
         set({
@@ -107,6 +121,8 @@ export const useVoiceSessionStore = create<VoiceSessionStoreState & VoiceSession
           toolActivity: [],
           toolApprovals: [],
           toolOutcomes: [],
+          paused: false,
+          rejoinOffer: null,
         }),
 
       dispatch: (event) => {
@@ -121,6 +137,8 @@ export const useVoiceSessionStore = create<VoiceSessionStoreState & VoiceSession
                 toolActivity: [],
                 toolApprovals: [],
                 toolOutcomes: [],
+                paused: false,
+                rejoinOffer: null,
                 ...PANELS_CLOSED,
               },
         );
@@ -129,6 +147,8 @@ export const useVoiceSessionStore = create<VoiceSessionStoreState & VoiceSession
       setBackendBusy: (backendBusy) => set({ backendBusy }),
       setToolActivity: (toolActivity) => set({ toolActivity }),
       setToolApprovals: (toolApprovals) => set({ toolApprovals }),
+      setPaused: (paused) => set({ paused }),
+      setRejoinOffer: (rejoinOffer) => set({ rejoinOffer }),
       addToolOutcome: (outcome) =>
         set((state) => ({
           toolOutcomes: [

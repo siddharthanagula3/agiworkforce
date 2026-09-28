@@ -10,17 +10,16 @@ nothing is left.
 
 - Done when: A dashboard lists the user's generated/published sites with their state and actions.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Settings > Shared links lists published pages with Open/Copy/Unpublish, but it does not show each page's audience and its copy says every page is public even when workspace-only. | ui |
-| desktop | partial | Settings > Shared links lists published pages with Open/Copy/Unpublish, but it does not show each page's audience and its copy says every page is public even when workspace-only. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | `agi artifacts list` lists account artifacts, not published pages; render_published exists but no command calls it. | ui |
 | vscode | partial | The Artifacts view marks published rows and opens their page, but cannot unpublish or change audience. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/settings/sections/PublishedArtifactsSection.tsx:118-134`, `apps/web/features/settings/components/WebSettingsModal.tsx:202-202`, `apps/web/app/api/artifacts/publish/route.ts:405-433`, `apps/cli/src/lib.rs:1023-1032`
+Code: `apps/cli/src/lib.rs:1023-1032`, `apps/cli/src/cloud/artifacts.rs:538-541`, `apps/extension-vscode/src/features/artifacts/artifactsTree.ts:36-43`, `apps/extension-vscode/src/core/commandSetup.ts:2302-2306`
 
 ## S33.02: Application name and description.
 

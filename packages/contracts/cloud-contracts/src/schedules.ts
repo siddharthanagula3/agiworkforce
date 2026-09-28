@@ -258,6 +258,18 @@ export const ManagedCloudScheduleRunListResponseSchema = z.object({
   pagination: ManagedCloudSchedulePaginationSchema,
 });
 
+export const ManagedCloudScheduleRecentRunSchema = ManagedCloudScheduleRunSchema.extend({
+  taskName: z.string(),
+});
+export type ManagedCloudScheduleRecentRun = z.infer<typeof ManagedCloudScheduleRecentRunSchema>;
+
+export const ManagedCloudScheduleRecentRunListResponseSchema = z.object({
+  runs: z.array(ManagedCloudScheduleRecentRunSchema),
+  pagination: ManagedCloudSchedulePaginationSchema,
+});
+
+export const MANAGED_CLOUD_SCHEDULE_RECENT_RUNS_PATH = `${MANAGED_CLOUD_SCHEDULES_PATH}/runs`;
+
 export const ManagedCloudScheduleRunResponseSchema = z.object({
   run: ManagedCloudScheduleRunSchema,
   replay: z.boolean(),
@@ -392,6 +404,11 @@ export interface ManagedCloudSchedulesClient {
     input: ManagedCloudScheduleRunApproval,
     signal?: AbortSignal,
   ): Promise<ManagedCloudScheduleRun>;
+  listRecentRuns(input: ManagedCloudSchedulesPageInput): Promise<{
+    runs: ManagedCloudScheduleRecentRun[];
+    pagination: { limit: number; offset: number };
+    hasMore: boolean;
+  }>;
   shareSchedule(scheduleId: string, signal?: AbortSignal): Promise<ManagedCloudScheduleShare>;
   unshareSchedule(scheduleId: string, signal?: AbortSignal): Promise<void>;
 }
@@ -612,6 +629,20 @@ export function createManagedCloudSchedulesClient(
         { body, signal, label: 'approval' },
       );
       return result.run;
+    },
+    async listRecentRuns({ limit, offset, signal }) {
+      const query = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+      const result = await request(
+        `${MANAGED_CLOUD_SCHEDULE_RECENT_RUNS_PATH}?${query.toString()}`,
+        'GET',
+        ManagedCloudScheduleRecentRunListResponseSchema,
+        { signal, label: 'recent runs' },
+      );
+      return {
+        runs: result.runs,
+        pagination: result.pagination,
+        hasMore: result.runs.length === result.pagination.limit,
+      };
     },
     async shareSchedule(scheduleId, signal) {
       const result = await request(
