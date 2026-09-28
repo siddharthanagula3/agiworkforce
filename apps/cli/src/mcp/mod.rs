@@ -666,19 +666,18 @@ fn needs_sign_in(error: &anyhow::Error) -> bool {
     })
 }
 
-fn remember_step_up(error: &anyhow::Error) {
-    let Some((url, scope)) = error.chain().find_map(|cause| {
+fn remember_step_up(error: &anyhow::Error) -> Option<String> {
+    let (url, scope) = error.chain().find_map(|cause| {
         cause
             .downcast_ref::<agiworkforce_mcp::McpError>()
             .and_then(agiworkforce_mcp::McpError::step_up_scope)
-    }) else {
-        return;
-    };
+    })?;
     if let Err(store_error) =
         McpServerOAuthStore::new().and_then(|store| store.save_step_up_scope(url, scope))
     {
         eprintln!("  could not record the scope {url} asked for: {store_error:#}");
     }
+    Some(scope.to_string())
 }
 
 /// Forget the stored OAuth token for a remote MCP server. Returns whether a
@@ -1585,11 +1584,16 @@ impl McpManager {
             .await
             .map_err(|error| {
                 if needs_sign_in(&error) {
-                    remember_step_up(&error);
-                    anyhow::anyhow!(
-                        "{error:#}. Run `agi mcp login {}` to sign in again.",
-                        tool.server_name
-                    )
+                    match remember_step_up(&error) {
+                        Some(scope) => anyhow::anyhow!(
+                            "{error:#}. MCP server '{0}' needs the additional permission '{scope}'. Run `agi mcp login {0}` to grant it.",
+                            tool.server_name
+                        ),
+                        None => anyhow::anyhow!(
+                            "{error:#}. Run `agi mcp login {}` to sign in again.",
+                            tool.server_name
+                        ),
+                    }
                 } else {
                     error
                 }
