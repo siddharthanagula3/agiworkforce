@@ -94,6 +94,7 @@ export type NativeMessageType =
   | 'GET_QUICK_MODE'
   | 'SET_QUICK_MODE'
   | 'SYNC_CONVERSATION'
+  | 'ENSURE_CLOUD_CONVERSATION'
   | 'DELETE_CLOUD_CONVERSATION'
   | 'START_DOWNLOAD'
   | 'LIST_DOWNLOADS'
@@ -508,6 +509,7 @@ export interface ChatMessageMessage extends BaseMessage {
   modelSelection?: string;
   quickMode?: boolean;
   workMode?: 'chat' | 'agiwork';
+  agiWorkPlan?: string[];
   webSearch?: boolean;
   effort?: Effort;
   currentModelKey?: string;
@@ -827,6 +829,7 @@ export type ScheduleType = 'hourly' | 'daily' | 'weekly' | 'monthly';
 export interface ScheduledTask {
   id: string;
   name: string;
+  description?: string;
   enabled: boolean;
   scheduleType: ScheduleType;
   scheduleValue: string;
@@ -856,7 +859,13 @@ export interface UpdateScheduledTaskMessage extends BaseMessage {
   updates: Partial<
     Pick<
       ScheduledTask,
-      'name' | 'enabled' | 'scheduleType' | 'scheduleValue' | 'shortcutId' | 'prompt'
+      | 'name'
+      | 'description'
+      | 'enabled'
+      | 'scheduleType'
+      | 'scheduleValue'
+      | 'shortcutId'
+      | 'prompt'
     >
   >;
 }
@@ -893,6 +902,12 @@ export interface SyncConversationMessage extends BaseMessage {
   owner: ManagedCloudOwner;
   conversationId: string;
   streaming?: boolean;
+}
+
+export interface EnsureCloudConversationMessage extends BaseMessage {
+  type: 'ENSURE_CLOUD_CONVERSATION';
+  owner: ManagedCloudOwner;
+  conversationId: string;
 }
 
 export interface DeleteCloudConversationMessage extends BaseMessage {
@@ -1100,6 +1115,7 @@ export type ExtensionMessage =
   | GetQuickModeMessage
   | SetQuickModeMessage
   | SyncConversationMessage
+  | EnsureCloudConversationMessage
   | DeleteCloudConversationMessage
   | RunAutofillMessage
   | StartComputerUseMessage

@@ -14,12 +14,12 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile lists numbered [n] chips under the answer, but the [n] markers inside the answer text are not linked to them. | ui |
+| mobile | partial | partials/slack f1e1d8113e: the renderer turns [n] into a tappable marker when it is given the sources. Left: an answer's [n] markers become tappable citations that open the source preview once post-codex/p-slack-mobile-research-citations-outline.patch passes them from MessageBubble and ReportsScreen (both held by Codex; git apply --check passes on the Codex working copy, and the patch typechecks on this branch). | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:1008-1013`, `apps/mobile/src/features/chat/components/CitationChip.tsx:18-20`
+Code: `apps/mobile/src/features/chat/components/MessageContentRenderer.tsx:195-195`, `apps/mobile/src/features/chat/components/MessageContentRenderer.tsx:203-203`, `apps/mobile/src/features/chat/components/CitationChip.tsx:30-30`
 
 ## S36.02: Source title.
 
@@ -63,12 +63,12 @@ Code: `apps/cli/src/markdown.rs:434-440`, `apps/cli/src/features/exec/tools/web/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The server sends a publication date, but mobile's ToolSearchResult type has no date field, so cards never show it. | ui |
+| mobile | partial | Live search cards and report chips show a source's publication date. Left: the report screen forwards it in post-codex/p-slack-mobile-research-citations-outline.patch, which replaces p-slack-s36.05-mobile-report-published-date.patch; the source list under an answer shows no date because message citations are AgentEventSource, which carries none. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/types/chat.ts:35-39`, `apps/mobile/src/features/chat/components/WebSearchResultCard.tsx:42-42`
+Code: `apps/mobile/src/features/chat/components/WebSearchResultCard.tsx:29-29`, `apps/mobile/src/features/chat/components/CitationChip.tsx:30-30`
 
 ## S36.06: Retrieval date.
 
@@ -78,7 +78,7 @@ Code: `apps/mobile/types/chat.ts:35-39`, `apps/mobile/src/features/chat/componen
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The report detail's 'Sources retrieved <date>' line is post-codex/p-privacy-s36.06-mobile-report-retrieved.patch, because ReportsScreen.tsx is held by Codex; apply after Codex finishes | ui |
+| mobile | partial | The report screen's "Sources retrieved <date>" line is folded into post-codex/p-slack-mobile-research-citations-outline.patch with the report's other changes, superseding p-privacy-s36.06-mobile-report-retrieved.patch; ReportsScreen.tsx is held by Codex. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
@@ -89,16 +89,15 @@ Code: `apps/mobile/src/features/research/service.ts:52-52`
 
 - Done when: Each source shows an icon for its type (web page, file, chat, connector...).
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile shows a coloured letter badge for web results only; there is no type icon because other source types are never cited. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | Activity-step source links always carry the same Globe icon; plain chat answers carry no citations. | ui |
 
-Code: `apps/mobile/src/features/chat/components/WebSearchResultCard.tsx:57-67`, `apps/extension/src/features/side-panel/bubbles.ts:406-432`
+Code: `apps/extension/src/features/side-panel/bubbles.ts:406-432`
 
 ## S36.08: Quoted supporting excerpt.
 
@@ -154,12 +153,12 @@ Code: `apps/mobile/src/features/chat/components/WebSearchResultCard.tsx:57-67`, 
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile lists sources under the whole answer, so a claim cannot be traced to its source. | ui |
+| mobile | partial | partials/slack f1e1d8113e: the renderer turns [n] into a tappable marker when it is given the sources. Left: each [n] marker sits at the claim it backs and opens that source, so a claim can be traced once post-codex/p-slack-mobile-research-citations-outline.patch passes them from MessageBubble and ReportsScreen (both held by Codex; git apply --check passes on the Codex working copy, and the patch typechecks on this branch). | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:1008-1013`
+Code: `apps/mobile/src/features/chat/components/MessageContentRenderer.tsx:195-195`, `apps/mobile/src/features/chat/components/MessageContentRenderer.tsx:203-203`, `apps/mobile/src/features/chat/components/CitationChip.tsx:30-30`
 
 ## S36.17: Multiple sources per claim.
 

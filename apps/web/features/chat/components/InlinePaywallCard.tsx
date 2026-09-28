@@ -207,7 +207,7 @@ interface TierBadgeProps {
 
 const TierBadge = memo(function TierBadge({ tier }: TierBadgeProps) {
   return (
-    <Badge variant="secondary" className="ml-2 text-xs font-semibold tracking-wide uppercase">
+    <Badge variant="secondary" className="ms-2 text-xs font-semibold tracking-wide uppercase">
       {getBillingPlanPricing(tier).label}
     </Badge>
   );
@@ -418,7 +418,7 @@ const InlinePaywallCardComponent = function InlinePaywallCard({
           <CardTitle
             id="paywall-card-title"
             as="h3"
-            className="ml-3 text-base font-semibold leading-snug"
+            className="ms-3 text-base font-semibold leading-snug"
           >
             {headline}
             {/* Non-plan recovery must not advertise a tier badge. */}

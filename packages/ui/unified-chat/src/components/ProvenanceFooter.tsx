@@ -120,7 +120,7 @@ export function ProvenanceFooter({
             <button
               type="button"
               onClick={() => onPinModel(routing)}
-              className="ml-1 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-caption transition-colors hover:bg-[var(--chat-surface-hover)]"
+              className="ms-1 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-caption transition-colors hover:bg-[var(--chat-surface-hover)]"
               style={{
                 borderColor: 'var(--chat-border)',
                 color: 'var(--chat-text-secondary)',

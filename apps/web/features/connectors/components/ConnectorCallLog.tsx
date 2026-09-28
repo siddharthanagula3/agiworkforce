@@ -125,7 +125,7 @@ export function ConnectorCallLog({ connectorId }: { connectorId: string }) {
           {EMPTY_COPY}
         </p>
       ) : (
-        <ul className="max-h-48 space-y-1.5 overflow-y-auto pr-0.5">
+        <ul className="max-h-48 space-y-1.5 overflow-y-auto pe-0.5">
           {calls.map((call) => {
             const duration = formatDuration(call.durationMs);
             return (

@@ -297,7 +297,12 @@ import {
   completedResearchSteps,
   researchResumeSources,
 } from '../utils/research-plan';
-import { notifyJobComplete, useLocalModelSelection } from '@/features/desktop-host';
+import {
+  notifyJobComplete,
+  PanelWindowPortal,
+  useDetachablePanels,
+  useLocalModelSelection,
+} from '@/features/desktop-host';
 import type { AgiWorkGoalInput } from '../utils/agiwork-plan';
 import {
   planEditRollback,
@@ -1010,6 +1015,17 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   // selector: `useArtifactsStore` re-renders this page on every artifact write.
   const artifactPanelOpen = useZustandStore(_sharedArtifactStore, (state) => state.panelOpen);
   const researchPanelOpen = useResearchPanelStore((state) => state.panelOpen);
+  const setResearchPanelOpen = useCallback((open: boolean) => {
+    const research = useResearchPanelStore.getState();
+    if (research.panelOpen !== open) research.togglePanel();
+  }, []);
+  const detachablePanels = useDetachablePanels({
+    enabled: !compact,
+    workOpen: workSessionPanelOpen,
+    setWorkOpen: setWorkSessionPanelOpen,
+    researchOpen: researchPanelOpen,
+    setResearchOpen: setResearchPanelOpen,
+  });
   const [projectSourcesOpen, setProjectSourcesOpen] = useState(false);
   const [activeSecondaryPanel, setActiveSecondaryPanel] = useState<SecondaryPanel | null>(null);
   const previousSecondaryPanels = useRef<SecondaryPanelFlags>(CLOSED_SECONDARY_PANELS);
@@ -1051,6 +1067,10 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
 
   const toggleSecondaryPanel = useCallback(
     (panel: SecondaryPanel) => {
+      if ((panel === 'work' || panel === 'research') && detachablePanels.isDetached(panel)) {
+        detachablePanels.focus(panel);
+        return;
+      }
       const isOpen = secondaryPanelFlags[panel] && activeSecondaryPanel === panel;
       setActiveSecondaryPanel(isOpen ? null : panel);
       setWorkSessionPanelOpen(!isOpen && panel === 'work');
@@ -1063,6 +1083,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     [
       activeSecondaryPanel,
       artifactPanelOpen,
+      detachablePanels,
       researchPanelOpen,
       secondaryPanelFlags,
       setWorkSessionPanelOpen,
@@ -5820,7 +5841,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             aria-label={`Account menu for ${displayName}`}
             aria-busy={isAccountLoading}
             disabled={isAccountLoading}
-            className="flex w-full items-center gap-2 px-3 py-3 text-left transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.05] outline-none focus-visible:ring-2 focus-visible:ring-focus-ring disabled:cursor-wait disabled:opacity-70"
+            className="flex w-full items-center gap-2 px-3 py-3 text-start transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.05] outline-none focus-visible:ring-2 focus-visible:ring-focus-ring disabled:cursor-wait disabled:opacity-70"
           >
             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
               {userInitial}
@@ -6056,7 +6077,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                     aria-label={t('chat:openNavigation')}
                     aria-expanded={mobileNavOpen}
                     aria-controls={MOBILE_NAV_DRAWER_ID}
-                    className="-ml-1 h-8 w-8 shrink-0 p-0"
+                    className="-ms-1 h-8 w-8 shrink-0 p-0"
                   >
                     <Menu className="h-5 w-5" aria-hidden="true" />
                   </Button>
@@ -6095,7 +6116,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                     aria-label={t('chat:header.temporaryChatPersonalized')}
                     title={t('chat:header.temporaryChatPersonalizationHint')}
                     onClick={() => setTemporaryChatPersonalized(!temporaryChatPersonalized)}
-                    className="ml-1 inline-flex h-7 min-w-[24px] shrink-0 items-center rounded-md border border-border px-2 text-caption font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="ms-1 inline-flex h-7 min-w-[24px] shrink-0 items-center rounded-md border border-border px-2 text-caption font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     {temporaryChatPersonalized
                       ? t('chat:header.temporaryChatPersonalized')
@@ -6516,7 +6537,21 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             open={workSessionPanelOpen}
             onClose={() => setWorkSessionPanelOpen(false)}
             agiWork={isAgiWorkConversation}
+            {...(detachablePanels.available
+              ? { windowControls: detachablePanels.inlineControls('work') }
+              : {})}
           />
+        )}
+        {detachablePanels.available && showWorkSession && (
+          <PanelWindowPortal panel="work">
+            <WorkSessionPanel
+              messages={displayedMessages}
+              open
+              onClose={() => detachablePanels.close('work')}
+              agiWork={isAgiWorkConversation}
+              windowControls={detachablePanels.detachedControls('work')}
+            />
+          </PanelWindowPortal>
         )}
         {!compact && voiceModeActive && (
           <VoiceActivityPanel
@@ -6530,7 +6565,21 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             {...(isStreaming
               ? {}
               : { onAskFollowUp: handleResearchFollowUp, onRunAgain: handleResearchRunAgain })}
+            {...(detachablePanels.available
+              ? { windowControls: detachablePanels.inlineControls('research') }
+              : {})}
           />
+        )}
+        {detachablePanels.available && (
+          <PanelWindowPortal panel="research">
+            <ResearchPanel
+              {...(isStreaming
+                ? {}
+                : { onAskFollowUp: handleResearchFollowUp, onRunAgain: handleResearchRunAgain })}
+              onClose={() => detachablePanels.close('research')}
+              windowControls={detachablePanels.detachedControls('research')}
+            />
+          </PanelWindowPortal>
         )}
         {!compact && activeSecondaryPanel === 'artifacts' && <ArtifactsPanel />}
         {!compact && activeSecondaryPanel === 'sources' && conversationProject ? (

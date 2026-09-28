@@ -215,6 +215,7 @@ export const CONNECTOR_OAUTH_SCOPE_CEILINGS: Readonly<Record<string, ConnectorSc
     'files.content.write',
   ],
   box: ['root_readonly', 'item_preview', 'item_download', 'item_upload'],
+  docusign: ['signature', 'adm_store_unified_repo_read', 'aow_manage'],
   instagram: [
     'instagram_basic',
     'instagram_manage_insights',

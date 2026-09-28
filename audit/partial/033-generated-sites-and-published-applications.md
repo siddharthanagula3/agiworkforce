@@ -162,7 +162,7 @@ Code: `apps/cli/src/lib.rs:1053-1068`, `apps/cli/src/cloud/artifacts.rs:391-400`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile saves the source as a text/markdown file with an added header, not the raw source file. | ui |
+| mobile | partial | post-codex/p-slack-s26.29-mobile-artifact-download-formats.patch: a code artifact downloads as its raw source file with the right extension and no added header. The export options, the raw source export and the sheet are new free files in the patch; the viewer that opens them, ArtifactFullScreen.tsx, is held by Codex. The viewer hunk passes git apply --check on the Codex working copy, the free files on integration, and it composes in either order with no-yearly-s32-34-mobile-show-changes.patch; the edit was typechecked against this branch. | ui |
 
 Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:426-436`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:236-241`
 

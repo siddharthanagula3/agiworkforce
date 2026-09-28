@@ -65,6 +65,6 @@ alter table public.user_projects
   drop column if exists space_kind;
 
 delete from public.schema_migrations
- where filename = '0336_health_space.sql';
+ where filename = '0337_health_space.sql';
 
 commit;

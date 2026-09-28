@@ -161,6 +161,9 @@
     "conversation_tags": {
       "createdAt": "classified_at"
     },
+    "desktop_sign_in_grants": {
+      "updatedAt": "consumed_at"
+    },
     "ediscovery_exports": {
       "createdAt": "started_at"
     },
@@ -250,6 +253,9 @@
         "table": "published_artifacts"
       }
     },
+    "published_artifacts": {
+      "version": "version"
+    },
     "referrals": {
       "ownerAccount": "referrer_id"
     },
@@ -314,9 +320,6 @@
     "website_auto_economy_trial_usage": {
       "createdAt": "first_prompt_at",
       "updatedAt": "last_prompt_at"
-    },
-    "published_artifacts": {
-      "version": "version"
     }
   },
   "gaps": [
@@ -738,7 +741,9 @@
       "retry": {
         "none": "a redelivery from Slack is deduplicated on the event id and a failed answer is final; asking again in Slack is a new row"
       },
-      "result": { "none": "the answer is posted to Slack and is not kept here" },
+      "result": {
+        "none": "the answer is posted to Slack and is not kept here"
+      },
       "error": "error",
       "requestId": "event_id",
       "cost": {

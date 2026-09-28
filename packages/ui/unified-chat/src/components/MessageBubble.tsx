@@ -158,7 +158,7 @@ function CodeBlock({ code, language }: CodeBlockProps) {
         </div>
       )}
       {!language && (
-        <div className="absolute top-2 right-2">
+        <div className="absolute top-2 end-2">
           <Button
             variant="ghost"
             size="icon"
@@ -217,7 +217,7 @@ function renderContent(content: string): React.ReactNode[] {
                     {cells(header ?? '').map((cell, ci) => (
                       <th
                         key={ci}
-                        className="border border-[var(--chat-border)] px-3 py-1.5 text-left font-medium text-[var(--chat-text-primary)] bg-[var(--chat-surface-elevated)]"
+                        className="border border-[var(--chat-border)] px-3 py-1.5 text-start font-medium text-[var(--chat-text-primary)] bg-[var(--chat-surface-elevated)]"
                       >
                         {cell}
                       </th>
@@ -249,8 +249,8 @@ function renderContent(content: string): React.ReactNode[] {
         if (!listBuffer) return;
         const Tag = listBuffer.ordered ? 'ol' : 'ul';
         const listClass = listBuffer.ordered
-          ? 'list-decimal pl-6 my-2 space-y-1 text-[15px] text-[var(--chat-text-primary)]'
-          : 'list-disc pl-6 my-2 space-y-1 text-[15px] text-[var(--chat-text-primary)]';
+          ? 'list-decimal ps-6 my-2 space-y-1 text-[15px] text-[var(--chat-text-primary)]'
+          : 'list-disc ps-6 my-2 space-y-1 text-[15px] text-[var(--chat-text-primary)]';
         nodes.push(
           <Tag key={`${keyPrefix}-list`} className={listClass}>
             {listBuffer.items.map((item, idx) => (
@@ -325,7 +325,7 @@ function renderContent(content: string): React.ReactNode[] {
             nodes.push(
               <blockquote
                 key={`${i}-${li}`}
-                className="border-l-3 border-[var(--chat-text-muted)] pl-3 my-2 text-[15px] text-[var(--chat-text-secondary)] italic leading-relaxed"
+                className="border-s-3 border-[var(--chat-text-muted)] ps-3 my-2 text-[15px] text-[var(--chat-text-secondary)] italic leading-relaxed"
               >
                 {renderInline(quoteText)}
               </blockquote>,
@@ -575,7 +575,7 @@ function UserMessageAttachments({ attachments }: { attachments: Attachment[] }) 
               )}
             </div>
             {downloadErrors[attachment.id] && (
-              <p role="alert" className="mt-1 text-right text-xs text-danger-text">
+              <p role="alert" className="mt-1 text-end text-xs text-danger-text">
                 {downloadErrors[attachment.id]}
               </p>
             )}
@@ -735,7 +735,7 @@ export function MessageBubble({
             />
             <div className="flex justify-end gap-2">
               <Button variant="ghost" size="sm" onClick={() => setEditDraft(null)}>
-                <X size={13} className="mr-1" />
+                <X size={13} className="me-1" />
                 {t('bubble.cancelEdit', 'Cancel')}
               </Button>
               <Button variant="default" size="sm" onClick={commitEdit}>

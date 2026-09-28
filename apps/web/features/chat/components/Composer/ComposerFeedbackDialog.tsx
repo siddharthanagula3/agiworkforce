@@ -279,8 +279,8 @@ export function ComposerFeedbackDialog({
                         onClick={() => setKind(option.value)}
                         className={
                           kind === option.value
-                            ? 'rounded-lg border border-primary/50 bg-primary/10 px-3 py-2 text-left text-xs font-medium text-foreground'
-                            : 'rounded-lg border border-border bg-muted/30 px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground'
+                            ? 'rounded-lg border border-primary/50 bg-primary/10 px-3 py-2 text-start text-xs font-medium text-foreground'
+                            : 'rounded-lg border border-border bg-muted/30 px-3 py-2 text-start text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground'
                         }
                       >
                         {option.label}
@@ -309,7 +309,7 @@ export function ComposerFeedbackDialog({
                         type="button"
                         onClick={() => setScreenshot(null)}
                         aria-label="Remove screenshot"
-                        className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full border border-border bg-background/90 text-foreground"
+                        className="absolute end-2 top-2 flex h-7 w-7 items-center justify-center rounded-full border border-border bg-background/90 text-foreground"
                       >
                         <X className="h-4 w-4" aria-hidden="true" />
                       </button>
@@ -324,7 +324,7 @@ export function ComposerFeedbackDialog({
                           onClick={() => void captureScreen()}
                           isLoading={captureState === 'capturing'}
                         >
-                          <Camera className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                          <Camera className="me-1.5 h-4 w-4" aria-hidden="true" />
                           Capture screen
                         </Button>
                       ) : null}
@@ -334,7 +334,7 @@ export function ComposerFeedbackDialog({
                         size="sm"
                         onClick={() => fileInputRef.current?.click()}
                       >
-                        <ImagePlus className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                        <ImagePlus className="me-1.5 h-4 w-4" aria-hidden="true" />
                         Upload image
                       </Button>
                       <input

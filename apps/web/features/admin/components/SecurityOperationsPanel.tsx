@@ -170,7 +170,7 @@ export default function SecurityOperationsPanel() {
             <span className="text-xs text-muted-foreground">Latest 25</span>
           </div>
           <div className="max-h-[430px] overflow-auto">
-            <table className="w-full min-w-[720px] border-collapse text-left text-sm">
+            <table className="w-full min-w-[720px] border-collapse text-start text-sm">
               <thead className="sticky top-0 bg-background text-xs uppercase text-muted-foreground">
                 <tr>
                   <th className="px-4 py-3 font-medium">When</th>

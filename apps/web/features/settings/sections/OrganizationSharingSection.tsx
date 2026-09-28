@@ -379,23 +379,39 @@ function SharedArtifacts({ overview }: { overview: OrgSharedOverview }) {
                       : 'Also reachable by public link'}
                   </div>
                 </div>
-                {canWithdraw ? (
-                  <button
-                    type="button"
-                    style={buttonStyle}
-                    disabled={unshareArtifact.isPending}
-                    onClick={() =>
-                      confirm({
-                        title: `Stop sharing ${name}?`,
-                        description: `${everyoneHere(overview.members.length)} loses access to this artifact, and any workspace link to it stops opening. It is not made public in its place: it stays yours until you choose an audience again from the artifact panel.`,
-                        confirmLabel: 'Stop sharing',
-                        onConfirm: () => unshareArtifact.mutate(artifact.publishedArtifactId),
-                      })
-                    }
+                <div style={{ display: 'flex', gap: 'var(--space-2)', flexShrink: 0 }}>
+                  <a
+                    href={`/shared-artifact/${encodeURIComponent(artifact.token)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`Open ${name}`}
+                    style={{
+                      ...buttonStyle,
+                      textDecoration: 'none',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                    }}
                   >
-                    Stop sharing
-                  </button>
-                ) : null}
+                    Open
+                  </a>
+                  {canWithdraw ? (
+                    <button
+                      type="button"
+                      style={buttonStyle}
+                      disabled={unshareArtifact.isPending}
+                      onClick={() =>
+                        confirm({
+                          title: `Stop sharing ${name}?`,
+                          description: `${everyoneHere(overview.members.length)} loses access to this artifact, and any workspace link to it stops opening. It is not made public in its place: it stays yours until you choose an audience again from the artifact panel.`,
+                          confirmLabel: 'Stop sharing',
+                          onConfirm: () => unshareArtifact.mutate(artifact.publishedArtifactId),
+                        })
+                      }
+                    >
+                      Stop sharing
+                    </button>
+                  ) : null}
+                </div>
               </li>
             );
           })}
@@ -470,23 +486,39 @@ function SharedConversations({ overview }: { overview: OrgSharedOverview }) {
                     · {expired ? 'Expired' : `Expires ${formatExpiry(conversation.expiresAt)}`}
                   </div>
                 </div>
-                {canWithdraw ? (
-                  <button
-                    type="button"
-                    style={buttonStyle}
-                    disabled={unshareConversation.isPending}
-                    onClick={() =>
-                      confirm({
-                        title: `Stop sharing ${name}?`,
-                        description: `${everyoneHere(overview.members.length)} loses access to this transcript, and any workspace link to it stops opening. It is not reopened to the public in its place: it stays yours until you choose an audience again from the share dialog.`,
-                        confirmLabel: 'Stop sharing',
-                        onConfirm: () => unshareConversation.mutate(conversation.sharedSessionId),
-                      })
-                    }
+                <div style={{ display: 'flex', gap: 'var(--space-2)', flexShrink: 0 }}>
+                  <a
+                    href={`/share/${encodeURIComponent(conversation.token)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`Open ${name}`}
+                    style={{
+                      ...buttonStyle,
+                      textDecoration: 'none',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                    }}
                   >
-                    Stop sharing
-                  </button>
-                ) : null}
+                    Open
+                  </a>
+                  {canWithdraw ? (
+                    <button
+                      type="button"
+                      style={buttonStyle}
+                      disabled={unshareConversation.isPending}
+                      onClick={() =>
+                        confirm({
+                          title: `Stop sharing ${name}?`,
+                          description: `${everyoneHere(overview.members.length)} loses access to this transcript, and any workspace link to it stops opening. It is not reopened to the public in its place: it stays yours until you choose an audience again from the share dialog.`,
+                          confirmLabel: 'Stop sharing',
+                          onConfirm: () => unshareConversation.mutate(conversation.sharedSessionId),
+                        })
+                      }
+                    >
+                      Stop sharing
+                    </button>
+                  ) : null}
+                </div>
               </li>
             );
           })}

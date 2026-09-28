@@ -194,7 +194,7 @@ describe('InlineToolCallStack', () => {
     );
     const stack = container.querySelector('[data-tool-stack]');
     expect(stack).not.toBeNull();
-    expect(stack?.className).toMatch(/border-l/);
+    expect(stack?.className).toMatch(/border-s/);
     const children = container.querySelectorAll('[data-tool-id]');
     expect(children).toHaveLength(3);
   });

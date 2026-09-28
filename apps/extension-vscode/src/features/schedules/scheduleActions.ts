@@ -13,9 +13,12 @@ import {
   scheduleCadence,
   scheduleRunDetail,
   scheduleRunLabel,
+  scheduleRunOutput,
+  scheduleRunOutputPreview,
   scheduleRunStatusIcon,
   scheduleTitle,
 } from './schedulePresentation';
+import type { ScheduleRunOutputProvider } from './scheduleRunOutput';
 
 export const PAUSE_SCHEDULE_COMMAND = 'agi-workforce.pauseSchedule';
 export const RESUME_SCHEDULE_COMMAND = 'agi-workforce.resumeSchedule';
@@ -40,6 +43,10 @@ export interface ScheduleActionHost {
   onChanged: () => void;
 }
 
+export interface ScheduleRunsHost extends ScheduleActionHost {
+  outputs: Pick<ScheduleRunOutputProvider, 'show'>;
+}
+
 export function schedulesWebUrl(webOrigin: string): string {
   return `${webOrigin}/chat/schedules?from=vscode-extension`;
 }
@@ -57,11 +64,15 @@ export function scheduleRunNowConsequence(task: ManagedCloudScheduleTask): strin
 export function scheduleRunQuickPickItems(
   runs: readonly ManagedCloudScheduleRun[],
 ): ScheduleRunQuickPickItem[] {
-  return runs.map((run) => ({
-    label: `$(${scheduleRunStatusIcon(run.status)}) ${scheduleRunLabel(run)}`,
-    detail: scheduleRunDetail(run),
-    run,
-  }));
+  return runs.map((run) => {
+    const preview = scheduleRunOutputPreview(run);
+    return {
+      label: `$(${scheduleRunStatusIcon(run.status)}) ${scheduleRunLabel(run)}`,
+      detail:
+        preview === undefined ? scheduleRunDetail(run) : `${scheduleRunDetail(run)} · ${preview}`,
+      run,
+    };
+  });
 }
 
 async function withScheduleRetry(
@@ -173,7 +184,7 @@ export async function resolveScheduleApprovalInteractively(
 export async function showScheduleRuns(
   client: ScheduleRunHistoryClient,
   task: ManagedCloudScheduleTask,
-  host: ScheduleActionHost,
+  host: ScheduleRunsHost,
 ): Promise<void> {
   let runs: ManagedCloudScheduleRun[];
   try {
@@ -204,9 +215,13 @@ export async function showScheduleRuns(
   const picked = await vscode.window.showQuickPick(scheduleRunQuickPickItems(runs), {
     title: `Runs of "${scheduleTitle(task)}"`,
     placeHolder:
-      'Newest first. Pick a run waiting for approval to approve or deny it. Editing a schedule happens on the web.',
+      'Newest first. Pick a run to read its answer, or one waiting for approval to approve or deny it. Editing a schedule happens on the web.',
+    matchOnDetail: true,
   });
-  if (picked?.run.status === 'awaiting_approval') {
+  if (picked === undefined) return;
+  if (picked.run.status === 'awaiting_approval') {
     await resolveScheduleApprovalInteractively(client, task, picked.run, host);
+    return;
   }
+  if (scheduleRunOutput(picked.run) !== undefined) await host.outputs.show(task, picked.run);
 }

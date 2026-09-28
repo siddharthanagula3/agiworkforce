@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi, afterEach } from 'vitest';
 import * as vscode from 'vscode';
-import type { ThreadReadResponse, ThreadSummary } from '@agiworkforce/types';
+import {
+  isAutoModeModelId,
+  type ThreadReadResponse,
+  type ThreadSummary,
+} from '@agiworkforce/types';
 import {
   ChatStateManager,
   type ExtToWebviewMessage,
@@ -120,6 +124,7 @@ function makeHarness(
       listeners.add(listener);
       return { dispose: () => listeners.delete(listener) };
     }),
+    onNotification: vi.fn(() => ({ dispose: () => undefined })),
   };
   const pool = {
     forWorkspace: vi.fn(() => runtime as unknown as LocalRuntimeClient),
@@ -412,7 +417,7 @@ describe('ChatStateManager local turn lifecycle', () => {
         }),
       );
 
-      harness.runtime.readThread.mockResolvedValueOnce({
+      const answered = {
         thread: threadSummary({ id: 'history-1', title: 'Persisted work' }),
         messages: [
           ...persisted.messages,
@@ -420,7 +425,10 @@ describe('ChatStateManager local turn lifecycle', () => {
           { role: 'assistant', text: 'The fix is complete.' },
         ],
         transcriptTruncated: false,
-      });
+      } satisfies ThreadReadResponse;
+      harness.runtime.readThread.mockImplementation(async () =>
+        harness.runtime.startTurn.mock.calls.length > 0 ? answered : persisted,
+      );
       const send = harness.manager.handleMessage({
         type: 'sendMessage',
         payload: { text: 'Make the narrow fix', clientMessageId: 'msg-resumed' },
@@ -1492,7 +1500,7 @@ describe('ChatStateManager local turn lifecycle', () => {
       .find((message) => message.type === 'attachFilesAck') as
       Extract<ExtToWebviewMessage, { type: 'attachFilesAck' }> | undefined;
     const attachmentId = attachmentAck?.payload.added[0]?.id;
-    const catalogModel = MODEL_PICKER_OPTIONS.find((option) => option.id !== 'auto')!;
+    const catalogModel = MODEL_PICKER_OPTIONS.find((option) => !isAutoModeModelId(option.id))!;
     await harness.manager.handleMessage({
       type: 'selectModel',
       payload: { modelId: catalogModel.id },
@@ -2199,14 +2207,18 @@ describe('ChatStateManager local turn lifecycle', () => {
     expect(harness.runtime.startTurn).toHaveBeenCalledWith(
       expect.objectContaining({
         routingTaskType: 'research',
-        input: expect.arrayContaining([
+        input: [
+          expect.objectContaining({
+            type: 'text',
+            text: 'What changed in the latest Rust release?',
+          }),
           expect.objectContaining({
             type: 'text',
             text: expect.stringMatching(
-              /Use the web_search tool[\s\S]*Local privacy boundary refuses network access[\s\S]*latest Rust release/u,
+              /Use the web_search tool[\s\S]*request above[\s\S]*Local privacy boundary refuses network access/u,
             ),
           }),
-        ]),
+        ],
       }),
     );
     harness.emit({
@@ -2224,7 +2236,7 @@ describe('ChatStateManager local turn lifecycle', () => {
   it('keeps the same runtime thread when a model changes within one catalog provider', async () => {
     const harness = makeHarness();
     await harness.context.globalState.update('tierStatus.cachedTier', 'max');
-    const manualModels = MODEL_PICKER_OPTIONS.filter((option) => option.id !== 'auto');
+    const manualModels = MODEL_PICKER_OPTIONS.filter((option) => !isAutoModeModelId(option.id));
     const firstModel = manualModels.find(
       (option) => getModelProviderInfo(option.id).providerId !== null,
     );
@@ -2281,7 +2293,7 @@ describe('ChatStateManager local turn lifecycle', () => {
   it('keeps the developer session when the model changes inside a managed session', async () => {
     const harness = makeHarness();
     await harness.context.globalState.update('tierStatus.cachedTier', 'max');
-    const manualModels = MODEL_PICKER_OPTIONS.filter((option) => option.id !== 'auto');
+    const manualModels = MODEL_PICKER_OPTIONS.filter((option) => !isAutoModeModelId(option.id));
     const firstModel = manualModels.find(
       (option) => getModelProviderInfo(option.id).providerId !== null,
     );
@@ -2351,7 +2363,7 @@ describe('ChatStateManager local turn lifecycle', () => {
   it('starts a fresh runtime thread when catalog providers change', async () => {
     const harness = makeHarness();
     await harness.context.globalState.update('tierStatus.cachedTier', 'max');
-    const manualModels = MODEL_PICKER_OPTIONS.filter((option) => option.id !== 'auto');
+    const manualModels = MODEL_PICKER_OPTIONS.filter((option) => !isAutoModeModelId(option.id));
     const firstModel = manualModels.find(
       (option) => getModelProviderInfo(option.id).providerId !== null,
     );
@@ -2448,7 +2460,8 @@ describe('ChatStateManager local turn lifecycle', () => {
     const harness = makeHarness();
     await harness.context.globalState.update('tierStatus.cachedTier', 'local');
     const lockedModel = buildGroupedQuickPickItems('local').find(
-      (item) => item.modelId !== undefined && item.modelId !== 'auto' && item.disabled === true,
+      (item) =>
+        item.modelId !== undefined && !isAutoModeModelId(item.modelId) && item.disabled === true,
     );
     expect(lockedModel).toBeDefined();
 
@@ -3426,7 +3439,7 @@ describe('ChatStateManager context usage reporting', () => {
   it('reports the runtime-measured turn tokens against the catalog context window', async () => {
     const harness = makeHarness();
     await harness.context.globalState.update('tierStatus.cachedTier', 'max');
-    const model = MODEL_PICKER_OPTIONS.filter((option) => option.id !== 'auto').find(
+    const model = MODEL_PICKER_OPTIONS.filter((option) => !isAutoModeModelId(option.id)).find(
       (option) => MODEL_CONTEXT_LIMITS[option.id] !== undefined,
     );
     expect(model).toBeDefined();

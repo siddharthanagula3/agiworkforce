@@ -71,7 +71,7 @@ function ApprovalCard({
       {children}
       <div className="mt-2.5 flex flex-wrap items-center gap-2">
         <Button size="sm" className="h-7 px-2.5 text-xs" disabled={pending} onClick={onApprove}>
-          {pending ? <Spinner size="sm" className="mr-1 h-3.5 w-3.5" aria-hidden /> : null}
+          {pending ? <Spinner size="sm" className="me-1 h-3.5 w-3.5" aria-hidden /> : null}
           {approveLabel}
         </Button>
         <Button

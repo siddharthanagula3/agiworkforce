@@ -11,7 +11,8 @@ pub use provider_dispatch::{
     resolve_selected_provider, resolve_turn_route, select_turn_route, selection_provider_override,
     try_detect_provider, turn_can_start, AccountRoute, TurnRoute,
 };
-pub use streaming::{parse_paywall_body, stream_completion};
+pub use streaming::{parse_paywall_body, stream_completion, WEB_SEARCH_TOOL};
+pub(crate) use streaming::{routed, searching};
 
 // Chat wire types are shared with other surfaces through the extracted
 // `agiworkforce-llm` crate (Wave 5c1). Re-exported here so every existing
@@ -224,4 +225,5 @@ pub struct CompletionResult {
     /// not report this field.
     pub reasoning_output_tokens: u32,
     pub managed_request_id: Option<String>,
+    pub resolved_model: Option<String>,
 }

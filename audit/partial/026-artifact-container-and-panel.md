@@ -201,22 +201,10 @@ Code: `apps/cli/src/lib.rs:1024-1027`, `apps/cli/src/cloud/artifacts.rs:306-316`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | A single Download action exports Markdown or plain text through the share sheet; there is no menu to pick another format (HTML, CSV, SVG). | ui |
+| mobile | partial | post-codex/p-slack-s26.29-mobile-artifact-download-formats.patch: Download in the artifact viewer opens a Download as sheet with the formats the artifact supports: Markdown, PDF and plain text for prose, and the raw source file for code. The export options, the raw source export and the sheet are new free files in the patch; the viewer that opens them, ArtifactFullScreen.tsx, is held by Codex. The viewer hunk passes git apply --check on the Codex working copy, the free files on integration, and it composes in either order with no-yearly-s32-34-mobile-show-changes.patch; the edit was typechecked against this branch. | ui |
 | cli | partial | `agi artifacts show <id> --out <path>` writes only the raw source; there is no choice of export format. | ui |
 
 Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:421-435`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:228-252`, `apps/cli/src/lib.rs:1034-1041`, `apps/cli/src/lib.rs:1944-1948`
-
-## S26.31: Share controls.
-
-- Done when: The user can publish an artifact to a link, copy/share the link, choose who can open it, and take it down.
-- Wave: 3
-- Already works on: web, desktop, cli
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Publish, copy link and share link work, but mobile has no way to unpublish an artifact or choose who can open it (workspace vs anyone). | ui |
-
-Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:405-418`, `apps/mobile/src/features/chat/services/artifactPublishing.ts:13-25`
 
 ## S26.32: Public/private state.
 

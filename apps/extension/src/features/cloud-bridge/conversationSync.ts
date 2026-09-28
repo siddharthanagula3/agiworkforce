@@ -53,8 +53,13 @@ interface ScheduledFlush {
   streaming: boolean;
 }
 
+interface InFlightFlush {
+  controller: AbortController;
+  done: Promise<void>;
+}
+
 const scheduledFlushes = new Map<string, ScheduledFlush>();
-const inFlightFlushes = new Map<string, AbortController>();
+const inFlightFlushes = new Map<string, InFlightFlush>();
 
 function flushKey(owner: ManagedCloudOwner, conversationId: string): string {
   return `${managedCloudOwnerKey(owner)}:${conversationId}`;
@@ -100,7 +105,7 @@ export async function sweepConversationSync(): Promise<boolean> {
 export function abortConversationSyncForOwnerChange(): void {
   for (const pending of scheduledFlushes.values()) clearTimeout(pending.timer);
   scheduledFlushes.clear();
-  for (const controller of inFlightFlushes.values()) {
+  for (const { controller } of inFlightFlushes.values()) {
     try {
       controller.abort();
     } catch {
@@ -110,24 +115,60 @@ export function abortConversationSyncForOwnerChange(): void {
   inFlightFlushes.clear();
 }
 
+export async function ensureCloudConversation(
+  owner: ManagedCloudOwner,
+  conversationId: string,
+): Promise<string | null> {
+  const key = flushKey(owner, conversationId);
+  const scheduled = scheduledFlushes.get(key);
+  if (scheduled) {
+    clearTimeout(scheduled.timer);
+    scheduledFlushes.delete(key);
+  }
+  await flushConversation(owner, conversationId);
+  let entry = await getConversation(owner, conversationId);
+  if (entry?.cloudSync?.createAcknowledged !== true) {
+    await flushConversation(owner, conversationId);
+    entry = await getConversation(owner, conversationId);
+  }
+  const cloudConversationId = entry?.cloudSync?.conversationId;
+  return entry?.cloudSync?.createAcknowledged === true && cloudConversationId
+    ? cloudConversationId
+    : null;
+}
+
 function combineTimeoutSignal(controller: AbortController): AbortSignal {
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   controller.signal.addEventListener('abort', () => clearTimeout(timer), { once: true });
   return controller.signal;
 }
 
-export async function flushConversation(
+export function flushConversation(
   owner: ManagedCloudOwner,
   conversationId: string,
   streaming = false,
 ): Promise<void> {
   const key = flushKey(owner, conversationId);
-  if (inFlightFlushes.has(key)) return;
-  if (!(await readCloudMirroringEnabled())) return;
+  const running = inFlightFlushes.get(key);
+  if (running) return running.done;
 
   const controller = new AbortController();
-  inFlightFlushes.set(key, controller);
+  const done = runConversationFlush(owner, conversationId, streaming, controller).finally(() => {
+    if (inFlightFlushes.get(key)?.controller === controller) inFlightFlushes.delete(key);
+    controller.abort();
+  });
+  inFlightFlushes.set(key, { controller, done });
+  return done;
+}
+
+async function runConversationFlush(
+  owner: ManagedCloudOwner,
+  conversationId: string,
+  streaming: boolean,
+  controller: AbortController,
+): Promise<void> {
   try {
+    if (!(await readCloudMirroringEnabled())) return;
     const context = await getManagedCloudAuthContext();
     if (!context) {
       await recordCloudSyncState(owner, conversationId, {
@@ -159,9 +200,6 @@ export async function flushConversation(
     await flushEligibleConversation(owner, entry, streaming, combineTimeoutSignal(controller));
   } catch (error) {
     logger.debug('Conversation cloud sync failed', error);
-  } finally {
-    inFlightFlushes.delete(key);
-    controller.abort();
   }
 }
 

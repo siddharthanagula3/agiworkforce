@@ -88,7 +88,7 @@ export function ConversationStatsPanel({ messages }: { messages: readonly ChatMe
             {present.map(({ key, label }) => (
               <div key={key} className="contents">
                 <dt className="text-[var(--chat-text-muted)]">{label}</dt>
-                <dd className="text-right font-medium tabular-nums text-[var(--chat-text-primary)]">
+                <dd className="text-end font-medium tabular-nums text-[var(--chat-text-primary)]">
                   {format(totals[key] ?? 0)}
                 </dd>
               </div>
@@ -96,7 +96,7 @@ export function ConversationStatsPanel({ messages }: { messages: readonly ChatMe
             <dt className="border-t border-[var(--chat-border)] pt-1 text-[var(--chat-text-secondary)]">
               {t('stats.billableTotal', 'Billable total')}
             </dt>
-            <dd className="border-t border-[var(--chat-border)] pt-1 text-right font-medium tabular-nums text-[var(--chat-text-primary)]">
+            <dd className="border-t border-[var(--chat-border)] pt-1 text-end font-medium tabular-nums text-[var(--chat-text-primary)]">
               {format(billable)}
             </dd>
           </dl>

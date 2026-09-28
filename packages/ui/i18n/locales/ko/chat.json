@@ -74,7 +74,10 @@
     "runtimeConsent": "이 앱이 내 계정으로 AI를 사용하려고 합니다. 각 요청은 요금제 사용량에 포함됩니다.",
     "runtimeConsentConnectors": "이 앱이 내 계정으로 AI를 사용하고 {{apps}}의 데이터를 읽거나 변경하려고 합니다. 앱은 해당 앱이 반환하는 내용을 볼 수 있으며, 각 요청은 요금제 사용량에 포함됩니다.",
     "runtimeAllow": "허용",
-    "runtimeDecline": "허용 안 함"
+    "runtimeDecline": "허용 안 함",
+    "saveCopy": "내 채팅에 사본 저장",
+    "saveCopyBusy": "복사 중…",
+    "saveCopyFailed": "이 아티팩트를 복사할 수 없습니다."
   },
   "sidebar": {
     "activeConversation": "활성 대화",
@@ -441,6 +444,8 @@
     "videoModeAttachments_other": "동영상 생성은 프롬프트만 사용합니다. 첨부된 파일은 동영상 모델로 전송되지 않습니다. 이 파일을 채팅 모델로 보내려면 먼저 동영상 모드를 종료하세요.",
     "viewSources_one": "출처 {{count}}개 보기",
     "viewSources_other": "출처 {{count}}개 보기",
+    "folderFilesLeftOut_one": "{{folder}}의 파일 {{count}}개가 첨부되지 않았습니다. 로컬 폴더에서 첨부하세요.",
+    "folderFilesLeftOut_other": "{{folder}}의 파일 {{count}}개가 첨부되지 않았습니다. 로컬 폴더에서 첨부하세요.",
     "savedMemoriesUsed_one": "저장된 메모리 {{count}}개 사용",
     "savedMemoriesUsed_other": "저장된 메모리 {{count}}개 사용",
     "moreSavedMemories_one": "외 {{count}}개",
@@ -466,7 +471,9 @@
     "expand": "코드 확대",
     "close": "확대한 코드 닫기",
     "codeTitle": "{{language}} 코드",
-    "codeBlockLabel": "{{language}} 코드 블록"
+    "codeBlockLabel": "{{language}} 코드 블록",
+    "edit": "편집",
+    "editLabel": "채팅 옆에서 이 코드 편집"
   },
   "streaming": {
     "reconnecting": "재연결 중…",

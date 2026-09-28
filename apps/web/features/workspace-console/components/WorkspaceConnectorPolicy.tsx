@@ -2,6 +2,11 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Ban, Check, PlugZap, X } from 'lucide-react';
+import {
+  CONNECTOR_POLICY_MCP_HOST_PATTERN,
+  CONNECTOR_POLICY_PLUGIN_KEY_PATTERN,
+  normalizeWebDomain,
+} from '@agiworkforce/cloud-contracts';
 
 import {
   useConnectorPolicy,
@@ -50,10 +55,6 @@ function EffectiveChip({ state }: { state: Effective }) {
   );
 }
 
-const PLUGIN_KEY_PATTERN = /^[a-z0-9][a-z0-9._-]{0,127}$/;
-const MCP_HOST_PATTERN =
-  /^(\*\.)?(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/;
-
 const inputClass =
   'min-w-0 flex-1 rounded-md border bg-transparent px-2.5 py-1.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50';
 const smallButtonClass =
@@ -98,7 +99,7 @@ function EntryList({
           {entries.map((entry) => (
             <li
               key={entry}
-              className="flex items-center gap-1 rounded-sm border py-0.5 pl-2 pr-0.5 text-xs"
+              className="flex items-center gap-1 rounded-sm border py-0.5 ps-2 pe-0.5 text-xs"
               style={{
                 borderColor: destructive ? 'currentColor' : 'var(--settings-border)',
                 color: destructive ? 'var(--settings-destructive-text)' : 'var(--text-1)',
@@ -133,7 +134,7 @@ function PluginPolicySection({
 }) {
   const [value, setValue] = useState('');
   const key = value.trim().toLowerCase();
-  const valid = PLUGIN_KEY_PATTERN.test(key);
+  const valid = CONNECTOR_POLICY_PLUGIN_KEY_PATTERN.test(key);
 
   const approve = () => {
     onChange({
@@ -195,7 +196,7 @@ function PluginPolicySection({
             className={smallButtonClass}
             style={{ borderColor: 'var(--settings-border)', color: 'var(--text-1)' }}
           >
-            <Check aria-hidden className="mr-1 inline h-3 w-3" />
+            <Check aria-hidden className="me-1 inline h-3 w-3" />
             Approve
           </button>
           <button
@@ -208,7 +209,7 @@ function PluginPolicySection({
               color: 'var(--settings-destructive-text)',
             }}
           >
-            <Ban aria-hidden className="mr-1 inline h-3 w-3" />
+            <Ban aria-hidden className="me-1 inline h-3 w-3" />
             Block
           </button>
         </form>
@@ -279,9 +280,126 @@ function McpHostPolicySection({
           disabled={!canEdit}
           normalize={(raw) => raw.trim().toLowerCase()}
           validate={(host) =>
-            MCP_HOST_PATTERN.test(host)
+            CONNECTOR_POLICY_MCP_HOST_PATTERN.test(host)
               ? null
               : 'Enter a host name, such as mcp.example.com or *.example.com.'
+          }
+        />
+      </div>
+    </section>
+  );
+}
+
+function WebDomainPolicySection({
+  draft,
+  canEdit,
+  onChange,
+}: {
+  draft: ConnectorPolicyLists;
+  canEdit: boolean;
+  onChange: (next: ConnectorPolicyLists) => void;
+}) {
+  const [value, setValue] = useState('');
+  const domain = normalizeWebDomain(value);
+
+  const allow = (site: string) => {
+    onChange({
+      ...draft,
+      allowedWebDomains: withEntry(draft.allowedWebDomains, site),
+      blockedWebDomains: withoutEntry(draft.blockedWebDomains, site),
+    });
+    setValue('');
+  };
+  const block = (site: string) => {
+    onChange({
+      ...draft,
+      blockedWebDomains: withEntry(draft.blockedWebDomains, site),
+      allowedWebDomains: withoutEntry(draft.allowedWebDomains, site),
+    });
+    setValue('');
+  };
+
+  return (
+    <section style={cardStyle} aria-labelledby="web-domains-heading">
+      <div className="border-b px-5 py-3.5" style={{ borderColor: 'var(--settings-border)' }}>
+        <h2
+          id="web-domains-heading"
+          className="text-sm font-semibold"
+          style={{ color: 'var(--text-1)' }}
+        >
+          Websites
+        </h2>
+        <p className="mt-1 text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>
+          Limits the sites web search and page fetching read for everyone in this workspace, in
+          chat, Research, scheduled tasks and Slack. A site includes its subdomains. Allowing any
+          site makes the allowed list the only sites that are read, and a blocked site is never
+          read. Voice sessions do not search the web while a site rule is set.
+        </p>
+      </div>
+      <div className="flex flex-col gap-4 px-5 py-4">
+        <form
+          className="flex flex-wrap items-center gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (domain && canEdit) allow(domain);
+          }}
+        >
+          <label htmlFor="web-domain-policy-site" className="sr-only">
+            Website
+          </label>
+          <input
+            id="web-domain-policy-site"
+            value={value}
+            disabled={!canEdit}
+            onChange={(event) => setValue(event.target.value)}
+            placeholder="example.com"
+            autoComplete="off"
+            spellCheck={false}
+            className={inputClass}
+            style={{ borderColor: 'var(--settings-border)', color: 'var(--text-1)' }}
+          />
+          <button
+            type="submit"
+            disabled={!canEdit || !domain}
+            className={smallButtonClass}
+            style={{ borderColor: 'var(--settings-border)', color: 'var(--text-1)' }}
+          >
+            <Check aria-hidden className="me-1 inline h-3 w-3" />
+            Allow site
+          </button>
+          <button
+            type="button"
+            disabled={!canEdit || !domain}
+            onClick={() => {
+              if (domain) block(domain);
+            }}
+            className={smallButtonClass}
+            style={{
+              borderColor: 'var(--settings-border)',
+              color: 'var(--settings-destructive-text)',
+            }}
+          >
+            <Ban aria-hidden className="me-1 inline h-3 w-3" />
+            Block site
+          </button>
+        </form>
+        <EntryList
+          label="Allowed sites"
+          entries={draft.allowedWebDomains}
+          empty="None allowed, so any site that is not blocked can be read."
+          disabled={!canEdit}
+          onRemove={(entry) =>
+            onChange({ ...draft, allowedWebDomains: withoutEntry(draft.allowedWebDomains, entry) })
+          }
+        />
+        <EntryList
+          label="Blocked sites"
+          entries={draft.blockedWebDomains}
+          empty="No sites are blocked."
+          destructive
+          disabled={!canEdit}
+          onRemove={(entry) =>
+            onChange({ ...draft, blockedWebDomains: withoutEntry(draft.blockedWebDomains, entry) })
           }
         />
       </div>
@@ -310,6 +428,8 @@ export function WorkspaceConnectorPolicy() {
       allowedPlugins: [...data.policy.allowedPlugins],
       blockedPlugins: [...data.policy.blockedPlugins],
       allowedMcpHosts: [...data.policy.allowedMcpHosts],
+      allowedWebDomains: [...data.policy.allowedWebDomains],
+      blockedWebDomains: [...data.policy.blockedWebDomains],
     });
   }, [data]);
 
@@ -324,6 +444,8 @@ export function WorkspaceConnectorPolicy() {
         p: sorted(l.allowedPlugins),
         q: sorted(l.blockedPlugins),
         h: sorted(l.allowedMcpHosts),
+        w: sorted(l.allowedWebDomains),
+        x: sorted(l.blockedWebDomains),
       });
     return norm(data.policy) !== norm(draft);
   }, [data, draft]);
@@ -385,7 +507,9 @@ export function WorkspaceConnectorPolicy() {
       draft.blockedConnectors.length +
       draft.allowedPlugins.length +
       draft.blockedPlugins.length +
-      draft.allowedMcpHosts.length >
+      draft.allowedMcpHosts.length +
+      draft.allowedWebDomains.length +
+      draft.blockedWebDomains.length >
       0 || !draft.allowCustomConnectors;
 
   return (
@@ -422,6 +546,8 @@ export function WorkspaceConnectorPolicy() {
       </section>
 
       <McpHostPolicySection draft={draft} canEdit={canEdit} onChange={setDraft} />
+
+      <WebDomainPolicySection draft={draft} canEdit={canEdit} onChange={setDraft} />
 
       <PluginPolicySection draft={draft} canEdit={canEdit} onChange={setDraft} />
 
@@ -491,7 +617,7 @@ export function WorkspaceConnectorPolicy() {
                         color: explicitlyAllowed ? 'var(--text-1)' : 'var(--text-3)',
                       }}
                     >
-                      <Check aria-hidden className="mr-1 inline h-3 w-3" />
+                      <Check aria-hidden className="me-1 inline h-3 w-3" />
                       Approve
                     </button>
                     <button
@@ -515,7 +641,7 @@ export function WorkspaceConnectorPolicy() {
                           : 'var(--text-3)',
                       }}
                     >
-                      <Ban aria-hidden className="mr-1 inline h-3 w-3" />
+                      <Ban aria-hidden className="me-1 inline h-3 w-3" />
                       Block
                     </button>
                   </div>

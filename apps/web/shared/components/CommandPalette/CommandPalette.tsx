@@ -526,7 +526,7 @@ export function CommandPalette({ open, onOpenChange }: Props) {
                         {...optionProps}
                         onClick={() => execute(cmd)}
                         className={cn(
-                          'w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+                          'w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors text-start focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
                           isSelected
                             ? 'bg-accent text-accent-foreground'
                             : 'text-foreground hover:bg-accent/60',
@@ -543,7 +543,7 @@ export function CommandPalette({ open, onOpenChange }: Props) {
                             <span className="sr-only">, {cmd.typeLabel}</span>
                           ) : null}
                           {cmd.subtitle && (
-                            <span className="ml-2 text-xs text-muted-foreground truncate">
+                            <span className="ms-2 text-xs text-muted-foreground truncate">
                               {cmd.subtitle}
                             </span>
                           )}

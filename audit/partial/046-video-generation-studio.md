@@ -53,14 +53,11 @@ Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:690-695`, `ap
 
 - Done when: User picks the output resolution of the clip and gets that resolution.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile never sends duration_secs, so a quality that requires a longer clip (e.g. 8s-only 1080p) is rejected by the route at the 4s default. | handler |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:693-700`, `apps/mobile/src/features/chat/actions/runVideoGenerationTurn.ts:103-110`, `apps/web/app/api/media/video/generate/route.ts:421-424`
 
 ## S46.26: Progress display.
 
@@ -76,14 +73,11 @@ Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:693-700`, `ap
 
 - Done when: User sees the estimated or actual credit cost of a video before or after generating.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Only a per-second list price appears in the model picker; the cost of this clip is never shown. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:889-897`, `apps/web/app/api/media/video/generate/route.ts:1001-1007`
 
 ## S46.28: Cancel request.
 
@@ -126,10 +120,10 @@ Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:911-915`, `app
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | No in-app player: the chat clip opens in the in-app browser, which may lack the app session for the auth-gated /api/files URL, and Library opens the share sheet; add an inline player. | ui |
+| mobile | partial | partials/slack c7c9fefbe1: Play downloads the clip with the account's credentials and plays it full screen in a web view with the native video controls (file access limited to the app's exports folder, no scripts, no navigation). Left: a playback check on an iPhone and an Android phone, which this lane cannot run; the Library's video player is in held library/index.tsx. ChatGPT parity waits on founder research entry 2 in founder-research-needed-to-proceed.md (help.openai.com returned 403). | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/chat/components/GeneratedVideo.tsx:23-31`
+Code: `apps/mobile/src/features/chat/components/GeneratedVideo.tsx:30-30`, `apps/mobile/src/features/chat/components/GeneratedVideo.tsx:183-183`, `apps/mobile/services/fileCreation.ts:373-373`
 
 ## S46.32: Download.
 
@@ -139,10 +133,10 @@ Code: `apps/mobile/src/features/chat/components/GeneratedVideo.tsx:23-31`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Only through the OS share sheet after a download to cache; no direct Save to Photos. | ui |
+| mobile | partial | partials/slack c7c9fefbe1: Save on a chat video downloads it and opens the share sheet, whose Save Video puts it in Photos. Left: a direct Save to Photos action needs expo-media-library and a photo-library add permission in app.config.js, both in files Codex holds (apps/mobile/package.json, apps/mobile/app.config.js). ChatGPT parity waits on founder research entry 2 in founder-research-needed-to-proceed.md (help.openai.com returned 403). | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/library/index.tsx:144-148`
+Code: `apps/mobile/src/features/chat/components/GeneratedVideo.tsx:56-56`, `apps/mobile/src/features/chat/components/GeneratedVideo.tsx:138-138`
 
 ## S46.33: Share.
 

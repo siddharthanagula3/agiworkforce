@@ -129,7 +129,7 @@ export function FreeQuotaModelSection({
                   disabled={model.status !== 'ready'}
                   aria-pressed={selectedId === model.key}
                   onClick={() => onSelect(model.key)}
-                  className="flex min-h-11 w-full items-center gap-2 rounded-md px-2 py-2 text-left hover:enabled:bg-muted/60 disabled:cursor-not-allowed"
+                  className="flex min-h-11 w-full items-center gap-2 rounded-md px-2 py-2 text-start hover:enabled:bg-muted/60 disabled:cursor-not-allowed"
                 >
                   <span className="min-w-0 flex-1">
                     <span className="block break-words text-xs font-medium text-foreground">
@@ -191,7 +191,7 @@ export function FreeQuotaModelSection({
                       disabled={!selectable}
                       aria-pressed={selectedId === model.key}
                       onClick={() => onSelect(model.key)}
-                      className="flex min-h-11 w-full items-center gap-2 rounded-md px-2 py-2 text-left hover:enabled:bg-muted/60 disabled:cursor-not-allowed"
+                      className="flex min-h-11 w-full items-center gap-2 rounded-md px-2 py-2 text-start hover:enabled:bg-muted/60 disabled:cursor-not-allowed"
                     >
                       <span className="min-w-0 flex-1">
                         <span

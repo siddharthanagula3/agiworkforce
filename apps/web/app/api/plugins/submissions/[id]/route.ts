@@ -1,7 +1,8 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+
+import { PluginSubmissionParamsSchema } from '@agiworkforce/cloud-contracts';
 
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -15,8 +16,6 @@ import { withdrawSubmission } from '@/lib/services/plugin-submission-service';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const ParamsSchema = z.object({ id: z.string().uuid() });
-
 type RouteContext = { params: Promise<{ id: string }> };
 
 async function handleDelete(request: NextRequest, context: RouteContext): Promise<NextResponse> {
@@ -25,7 +24,7 @@ async function handleDelete(request: NextRequest, context: RouteContext): Promis
   const { db, userId, organizationId } = await getUserScopedDb(request);
   const limited = await withRateLimit(request, 'plugin-installation-write', `user:${userId}`);
   if (limited) return limited;
-  const params = ParamsSchema.safeParse(await context.params);
+  const params = PluginSubmissionParamsSchema.safeParse(await context.params);
   if (!params.success || !(await withdrawSubmission(db, userId, params.data.id))) {
     throw createError
       .notFound('That submission is not yours, or it is no longer in review or listed.')

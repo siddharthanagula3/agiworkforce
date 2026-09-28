@@ -74,7 +74,10 @@
     "runtimeConsent": "このアプリがあなたのアカウントで AI を使おうとしています。各リクエストはプランの使用量に含まれます。",
     "runtimeConsentConnectors": "このアプリがあなたのアカウントで AI を使い、{{apps}} のデータを読み取ったり変更したりしようとしています。アプリはそれらのアプリが返す内容を見ることができ、各リクエストはプランの使用量に含まれます。",
     "runtimeAllow": "許可",
-    "runtimeDecline": "許可しない"
+    "runtimeDecline": "許可しない",
+    "saveCopy": "コピーを自分のチャットに保存",
+    "saveCopyBusy": "コピー中…",
+    "saveCopyFailed": "このアーティファクトをコピーできませんでした。"
   },
   "sidebar": {
     "activeConversation": "アクティブな会話",
@@ -441,6 +444,8 @@
     "videoModeAttachments_other": "動画生成はプロンプトのみを使用します。添付されたファイルは動画モデルには送信されません。このファイルをチャットモデルに送信する場合は、先に動画モードを終了してください。",
     "viewSources_one": "{{count}} 件のソースを表示",
     "viewSources_other": "{{count}} 件のソースを表示",
+    "folderFilesLeftOut_one": "{{folder}} の {{count}} 件のファイルは添付されませんでした。ローカルフォルダーから添付してください。",
+    "folderFilesLeftOut_other": "{{folder}} の {{count}} 件のファイルは添付されませんでした。ローカルフォルダーから添付してください。",
     "savedMemoriesUsed_one": "保存されたメモリを {{count}} 件使用",
     "savedMemoriesUsed_other": "保存されたメモリを {{count}} 件使用",
     "moreSavedMemories_one": "ほか {{count}} 件",
@@ -466,7 +471,9 @@
     "expand": "コードを拡大",
     "close": "拡大したコードを閉じる",
     "codeTitle": "{{language}} のコード",
-    "codeBlockLabel": "{{language}} のコードブロック"
+    "codeBlockLabel": "{{language}} のコードブロック",
+    "edit": "編集",
+    "editLabel": "このコードをチャットの横で編集"
   },
   "streaming": {
     "reconnecting": "再接続中…",

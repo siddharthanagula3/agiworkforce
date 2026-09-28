@@ -440,6 +440,39 @@ const ko = {
   'mcpDetails.expired':
     '이 세부 정보는 더 이상 보관되지 않습니다. {name}을(를) 다시 확인하려면 AGI Workforce: Show MCP Servers를 실행하고 서버 세부 정보를 선택하세요.',
   'mcpDetails.field': '{label}: {value}',
+  'chatNotice.webSearchDenied':
+    '이 세션에서는 웹 검색을 사용할 수 없습니다. {reason} 검색 없이 보내려면 Browse the web을 끄세요.',
+  'webSearchSetup.title': '웹 검색 설정',
+  'webSearchSetup.placeholder': 'API 키가 있는 검색 서비스를 선택하세요',
+  'webSearchSetup.detail':
+    '터미널에서 해당 API 키를 입력하세요. 내 키 세션과 로컬 세션은 이 키로 검색하며, 관리형 세션에는 필요하지 않습니다.',
+  'webSearchSetup.unavailable':
+    'AGI Workforce: 이 AGI CLI는 저장할 수 있는 검색 키를 알려 주지 않습니다. VS Code에서 웹 검색을 설정하려면 AGI CLI를 업데이트하세요.',
+  'pluginUpdate.action': '업데이트',
+  'pluginUpdate.progress': 'AGI Workforce: {name} 업데이트 중',
+  'pluginUpdate.upToDate': 'AGI Workforce: {name}은(는) 이미 최신 상태입니다.',
+  'pluginUpdate.updated': 'AGI Workforce: {name}을(를) 업데이트했습니다.',
+  'pluginUpdate.updatedTo': 'AGI Workforce: {name}을(를) {to}(으)로 업데이트했습니다.',
+  'pluginUpdate.updatedFromTo':
+    'AGI Workforce: {name}을(를) {from}에서 {to}(으)로 업데이트했습니다.',
+  'chatError.usageLimitResetsAt': '계정의 사용 한도에 도달했습니다. {time}에 초기화됩니다.',
+  'chatError.continueWith': '{model}(으)로 계속',
+  'chatError.addCredits': '크레딧 추가',
+  'chatError.comparePlans': '요금제 비교',
+  'chatError.seeUsage': '사용량 보기',
+  'chatError.seeOptions': '옵션 보기',
+  'webview.mcpAuthRequired':
+    '{server}에 다시 로그인해야 합니다. AGI가 이 단계에서 사용할 수 없었습니다.',
+  'webview.mcpReconnect': '로그인하고 계속',
+  'webview.mcpReconnecting': '로그인 중…',
+  'webview.mcpReconnected': '{server}에 로그인했습니다. AGI가 계속 진행합니다.',
+  'mcpReconnect.progress': 'AGI Workforce: {server}에 로그인하는 중',
+  'mcpReconnect.notFinished':
+    'AGI Workforce: {server} 로그인이 끝나지 않아 AGI가 계속하지 않았습니다. 준비되면 다시 시도하세요.',
+  'mcpReconnect.failed': 'AGI Workforce: {server}에 로그인하지 못했습니다: {reason}',
+  'mcpReconnect.noSession':
+    'AGI Workforce: {server}에 로그인한 뒤 이어서 진행할 세션이 여기에 없습니다.',
+  'mcpReconnect.continue': '계속해',
 };
 
 export default ko;

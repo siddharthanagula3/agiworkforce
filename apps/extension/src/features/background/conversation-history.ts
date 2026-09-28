@@ -55,6 +55,7 @@ const MAX_BACKGROUND_MESSAGES = 100;
 const MAX_CONVERSATION_TITLE_CHARS = 80;
 const MAX_CONVERSATION_PROJECT_ID_CHARS = 128;
 const BACKGROUND_DELIVERY_ID_PATTERN = /^[A-Za-z0-9._:-]{8,128}$/;
+const AUTO_ROUTE_REASON_PATTERN = /^[a-z_]{1,40}$/;
 export const BACKGROUND_ANSWER_TRUNCATION_NOTICE =
   '\n\n[Answer truncated because it exceeded the browser-local history limit.]';
 
@@ -82,7 +83,10 @@ export interface HistoryMessage {
   cloudApprovalDecisions?: Record<string, 'approved' | 'rejected'>;
   cloudApprovalError?: string;
   managedQuickMode?: boolean;
+  agiWorkPlanDeclined?: boolean;
   model?: string;
+  autoRouteReason?: string;
+  movedFromModel?: string;
   provider?: string;
   generatedFiles?: GeneratedFileWire[];
   interactiveCards?: InteractiveCard[];
@@ -364,6 +368,7 @@ function normalizeHistoryMessage(
       normalized.cloudApprovalError = message['cloudApprovalError'];
     }
     if (message['managedQuickMode'] === true) normalized.managedQuickMode = true;
+    if (message['agiWorkPlanDeclined'] === true) normalized.agiWorkPlanDeclined = true;
     if (message['streaming'] === true) normalized.streaming = true;
     if (isSafeModelReference(message['model'])) {
       const modelMetadata = getModelMetadataById(message['model']);
@@ -371,6 +376,18 @@ function normalizeHistoryMessage(
         normalized.model = message['model'];
         normalized.provider = modelMetadata.provider;
       }
+    }
+    if (
+      typeof message['autoRouteReason'] === 'string' &&
+      AUTO_ROUTE_REASON_PATTERN.test(message['autoRouteReason'])
+    ) {
+      normalized.autoRouteReason = message['autoRouteReason'];
+    }
+    if (
+      isSafeModelReference(message['movedFromModel']) &&
+      getModelMetadataById(message['movedFromModel'])
+    ) {
+      normalized.movedFromModel = message['movedFromModel'];
     }
     const rawGeneratedFiles = message['generatedFiles'];
     const generatedFiles = parseGeneratedFilesDelta({
