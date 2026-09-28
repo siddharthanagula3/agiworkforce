@@ -28,4 +28,7 @@ export type TurnFailure = {
    * a placeholder.
    */
   requestId?: string;
+  alternativeModel?: string;
+  resetsAt?: string;
+  recoveryHref?: string;
 };
