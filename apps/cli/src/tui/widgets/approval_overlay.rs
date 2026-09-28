@@ -139,6 +139,7 @@ pub struct ApprovalOverlayState {
     pub note: String,
     pub note_choice: Option<ApprovalChoice>,
     pub editing_note: bool,
+    pub always_allow_unavailable: bool,
 }
 
 impl Default for ApprovalOverlayState {
@@ -152,6 +153,7 @@ impl Default for ApprovalOverlayState {
             note: String::new(),
             note_choice: None,
             editing_note: false,
+            always_allow_unavailable: false,
         }
     }
 }
@@ -187,6 +189,27 @@ impl ApprovalOverlayState {
         if self.editing_note {
             self.note
                 .extend(text.chars().filter(|character| !character.is_control()));
+        }
+    }
+
+    fn offered(&self, index: usize) -> bool {
+        !(self.always_allow_unavailable && CHOICES[index] == ApprovalChoice::AlwaysAllow)
+    }
+
+    fn step(&mut self, forward: bool, wrap: bool) {
+        let mut next = self.cursor;
+        for _ in 0..CHOICES.len() {
+            next = match (forward, wrap) {
+                (true, _) if next + 1 < CHOICES.len() => next + 1,
+                (true, true) => 0,
+                (false, _) if next > 0 => next - 1,
+                (false, true) => CHOICES.len() - 1,
+                _ => return,
+            };
+            if self.offered(next) {
+                self.cursor = next;
+                return;
+            }
         }
     }
 
@@ -362,7 +385,11 @@ impl ApprovalOverlayState {
     fn button_rows(&self, max_cols: usize) -> Vec<Vec<usize>> {
         let mut rows: Vec<Vec<usize>> = vec![Vec::new()];
         let mut width = 2;
-        for (index, choice) in CHOICES.iter().enumerate() {
+        for (index, choice) in CHOICES
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| self.offered(*index))
+        {
             let cell = display_width(choice.label()) + 4;
             let row_is_empty = rows.last().is_none_or(Vec::is_empty);
             if width + cell > max_cols && !row_is_empty {
@@ -468,27 +495,19 @@ impl InteractiveView for ApprovalOverlayState {
             }
             KeyAction::Char('t') | KeyAction::Char('T') => self.submit(ApprovalChoice::AllowAll),
             KeyAction::Left | KeyAction::Char('h') => {
-                if self.cursor > 0 {
-                    self.cursor -= 1;
-                }
+                self.step(false, false);
                 ViewAction::Continue
             }
             KeyAction::Right | KeyAction::Char('l') => {
-                if self.cursor + 1 < CHOICES.len() {
-                    self.cursor += 1;
-                }
+                self.step(true, false);
                 ViewAction::Continue
             }
             KeyAction::Tab => {
-                self.cursor = (self.cursor + 1) % CHOICES.len();
+                self.step(true, true);
                 ViewAction::Continue
             }
             KeyAction::ShiftTab => {
-                if self.cursor == 0 {
-                    self.cursor = CHOICES.len() - 1;
-                } else {
-                    self.cursor -= 1;
-                }
+                self.step(false, true);
                 ViewAction::Continue
             }
             KeyAction::Enter => self.submit(CHOICES[self.cursor]),
@@ -517,7 +536,7 @@ impl InteractiveView for ApprovalOverlayState {
                 self.visible = false;
                 ViewAction::Submit(self.cursor)
             }
-            KeyAction::Char('a') | KeyAction::Char('A') => {
+            KeyAction::Char('a') | KeyAction::Char('A') if !self.always_allow_unavailable => {
                 self.cursor = ApprovalChoice::AlwaysAllow.index();
                 self.result = Some(ApprovalChoice::AlwaysAllow);
                 self.visible = false;

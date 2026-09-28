@@ -92,9 +92,7 @@ pub async fn run_review(
         post_review(pull_request, &review).await?;
         println!(
             "{}",
-            ts::success(&format!(
-                "Posted the review to pull request {pull_request}."
-            ))
+            ts::success(format!("Posted the review to pull request {pull_request}."))
         );
     }
     Ok(review)
