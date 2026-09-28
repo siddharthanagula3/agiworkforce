@@ -4961,6 +4961,7 @@ async function handleChatMessage(
         attachments: message.attachments,
         fileAttachments: message.fileAttachments,
         extendedThinking: message.extendedThinking,
+        ...(message.workMode === 'agiwork' ? { workMode: 'agiwork' as const } : {}),
         currentModelKey: message.currentModelKey,
         previousTaskType: message.previousTaskType,
         conversationId: message.conversationId,
