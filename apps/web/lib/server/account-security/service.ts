@@ -207,12 +207,16 @@ export async function readAccountSecurityStatus(
   return { state: 'available', credentials: credentials.map(toCredentialSummary) };
 }
 
-async function accountHandle(db: DatabaseAdapter, userId: string): Promise<string> {
+async function recordedEmail(db: DatabaseAdapter, userId: string): Promise<string | null> {
   const [row] = await db.query<{ email: string | null }>(
     `select email from public.profiles where id = $1`,
     [userId],
   );
-  return row?.email?.trim() || userId;
+  return row?.email?.trim() || null;
+}
+
+async function accountHandle(db: DatabaseAdapter, userId: string): Promise<string> {
+  return (await recordedEmail(db, userId)) ?? userId;
 }
 
 async function enrolledOrAvailable(caller: AccountSecurityCaller): Promise<EnrollmentState | null> {
@@ -416,6 +420,12 @@ async function requireSettledAddress(caller: AccountSecurityCaller): Promise<str
       'Verify the email address on your account before you turn on Advanced Account Security.',
     );
   }
+  const recorded = await recordedEmail(caller.db, caller.userId);
+  if (recorded?.toLowerCase() !== primary.toLowerCase()) {
+    throw createError.conflict(
+      `The email address you sign in with does not match the one on record here, which happens when it was changed outside Settings, Account. Change it in Settings, Account, then turn on Advanced Account Security ${days} days later.`,
+    );
+  }
   return primary;
 }
 
@@ -495,6 +505,7 @@ export async function enrollAccountSecurity(
 ): Promise<AccountSecurityEnrollmentResponse> {
   await requireAvailable(caller.userId);
   const credentials = await requireEnrollmentMethods(caller);
+  await requireSettledAddress(caller);
   const credential = await consumeAssertion(caller, input.response, request);
   const codeAccepted = await takeEnrollmentCode(caller.db, {
     userId: caller.userId,
