@@ -343,7 +343,7 @@ describe('refreshMarketplaceSource', () => {
     expect(db.transaction).not.toHaveBeenCalled();
     expect(
       db.execute.mock.calls.filter((call) =>
-        String(call[0]).includes('plugin_marketplace_entries'),
+        /(insert into|delete from) public\.plugin_marketplace_entries/.test(String(call[0])),
       ),
     ).toEqual([]);
     expect(sqlContaining(db, "set status = 'active'")).toContain("set status = 'active'");

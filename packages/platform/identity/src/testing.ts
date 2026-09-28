@@ -47,6 +47,7 @@ export interface FakeIdentityCalls {
   deletedUsers: string[];
   suspendedUsers: Array<{ userId: string; suspended: boolean }>;
   revokedSessions: string[];
+  signInTokens: Array<{ userId: string; expiresInSeconds: number }>;
   verifiedTokens: string[];
   authorizedParties: string[][];
   secondFactorRegistrations: Array<{
@@ -106,6 +107,7 @@ export class FakeIdentityProvider<
     deletedUsers: [],
     suspendedUsers: [],
     revokedSessions: [],
+    signInTokens: [],
     verifiedTokens: [],
     authorizedParties: [],
     secondFactorRegistrations: [],
@@ -207,6 +209,7 @@ export class FakeIdentityProvider<
     this.calls.deletedUsers.length = 0;
     this.calls.suspendedUsers.length = 0;
     this.calls.revokedSessions.length = 0;
+    this.calls.signInTokens.length = 0;
     this.calls.verifiedTokens.length = 0;
     this.calls.authorizedParties.length = 0;
     this.calls.secondFactorRegistrations.length = 0;
@@ -271,6 +274,11 @@ export class FakeIdentityProvider<
   async revokeSession(sessionId: string): Promise<void> {
     this.calls.revokedSessions.push(sessionId);
     this.sessions.delete(sessionId);
+  }
+
+  async createSignInToken(userId: string, expiresInSeconds: number): Promise<string> {
+    this.calls.signInTokens.push({ userId, expiresInSeconds });
+    return `sign_in_token_${this.calls.signInTokens.length}`;
   }
 
   async listOrganizationMemberships(userId: string): Promise<readonly IdentityMembership[]> {

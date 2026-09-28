@@ -17,9 +17,11 @@ import type {
   CloudCodeSession,
   CloudCodeShareVisibility,
   CloudCodeTerminalEntry,
+  CloudCodeTurnMode,
   CloudCodeTurnStepBound,
 } from '@agiworkforce/types';
 import {
+  CLOUD_CODE_DEFAULT_TURN_MODE,
   CLOUD_CODE_DEFAULT_TURN_STEPS,
   cloudCodeStopReasonIsRetryable,
   normalizeBillingPlanTier,
@@ -136,6 +138,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
   const [draft, setDraft] = useState<CodeDraft>(EMPTY_CODE_DRAFT);
   const [task, setTask] = useState('');
   const [turnSteps, setTurnSteps] = useState<CloudCodeTurnStepBound>(CLOUD_CODE_DEFAULT_TURN_STEPS);
+  const [turnMode, setTurnMode] = useState<CloudCodeTurnMode>(CLOUD_CODE_DEFAULT_TURN_MODE);
   const [shareOpen, setShareOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [running, setRunning] = useState(false);
@@ -447,7 +450,8 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
   }, []);
 
   const startTurn = useCallback(
-    async (session: CloudCodeSession, goal: string) => {
+    async (session: CloudCodeSession, goal: string, mode: CloudCodeTurnMode) => {
+      const ownAgent = runtimeRunsOwnAgent(session.runtimeId);
       const recordId = makeRequestId();
       setTurns((current) => [
         ...current,
@@ -456,6 +460,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
           turnId: null,
           at: new Date().toISOString(),
           goal,
+          mode: ownAgent ? CLOUD_CODE_DEFAULT_TURN_MODE : mode,
           stopReason: null,
           finalMessage: '',
           errorMessage: null,
@@ -472,7 +477,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
           goal,
           model: agentModel,
           idempotencyKey: makeRequestId(),
-          ...(runtimeRunsOwnAgent(session.runtimeId) ? {} : { maxSteps: turnSteps }),
+          ...(ownAgent ? {} : { maxSteps: turnSteps, mode }),
         });
         applyTurn(recordId, turn, goal);
         void loadSessions(statusFilter);
@@ -568,7 +573,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
   );
 
   const handleSubmit = useCallback(
-    async (text: string) => {
+    async (text: string, mode: CloudCodeTurnMode = turnMode) => {
       if (busy) return;
 
       if (draft.environment === 'local' && !selectedSession) {
@@ -581,7 +586,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
 
       if (selectedSession && selectedSession.state === 'ready') {
         setTask('');
-        await startTurn(selectedSession, text);
+        await startTurn(selectedSession, text, mode);
         return;
       }
 
@@ -591,7 +596,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
         return;
       }
       setTask('');
-      if (created.state === 'ready') await startTurn(created, text);
+      if (created.state === 'ready') await startTurn(created, text, mode);
     },
     [
       busy,
@@ -603,6 +608,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
       selectedSession,
       startLocalSession,
       startTurn,
+      turnMode,
     ],
   );
 
@@ -621,6 +627,9 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
           turnId: approval.turnId,
           at: new Date().toISOString(),
           goal: approval.goal,
+          mode:
+            current.find((record) => record.turnId === approval.turnId)?.mode ??
+            CLOUD_CODE_DEFAULT_TURN_MODE,
           stopReason: null,
           finalMessage: '',
           errorMessage: null,
@@ -1155,7 +1164,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
                             onDecideApproval={(approval, decision) =>
                               void handleApproval(approval, decision)
                             }
-                            onRetryTask={(goal) => void handleSubmit(goal)}
+                            onRetryTask={(goal, mode) => void handleSubmit(goal, mode)}
                           />
                         )}
 
@@ -1259,6 +1268,8 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
                       turnControls={turnControls}
                       turnSteps={turnSteps}
                       onTurnStepsChange={setTurnSteps}
+                      turnMode={turnMode}
+                      onTurnModeChange={setTurnMode}
                     />
                   )}
                 </div>

@@ -80,6 +80,7 @@ import {
   CloudToolApprovalProjectionSchema,
   DEVICE_STEP_RESUME_PATH,
   TOOL_APPROVAL_RESUME_PATH,
+  TOOL_INPUT_RESUME_PATH,
   type ManagedCloudAgentRunHandle,
   type ManagedCloudAgentRunReference,
   type ManagedCloudSaveMessageOptions,
@@ -699,8 +700,6 @@ interface PendingInputTurn {
 }
 
 const pendingInputTurns = new Map<string, PendingInputTurn>();
-
-const TOOL_INPUT_RESUME_PATH = '/api/llm/v1/chat/completions/resume-input';
 
 export function __resetPendingTurnsForTests(): void {
   pendingTurns.clear();
@@ -1413,7 +1412,7 @@ async function driveDeviceSteps(
     });
   }
 
-  const hostContext = await readChatHostContext();
+  const hostContext = await readChatHostContext(ctx.conversationId);
   const headers = await addCsrfHeaders({
     'Content-Type': 'application/json',
     Authorization: `Bearer ${await ctx.getAuthToken()}`,
@@ -3704,7 +3703,7 @@ export function useChatStream(
             }
           }
 
-          const hostContext = await readChatHostContext();
+          const hostContext = await readChatHostContext(conversationId);
           const headers = await addCsrfHeaders({
             'Content-Type': 'application/json',
             Authorization: `Bearer ${await getAuthToken()}`,
@@ -4534,7 +4533,7 @@ export function useResolveToolApproval(
 
       try {
         const resumeOperationId = crypto.randomUUID();
-        const hostContext = await readChatHostContext();
+        const hostContext = await readChatHostContext(turn.conversationId);
         const headers = await addCsrfHeaders({
           'Content-Type': 'application/json',
           Authorization: `Bearer ${authToken}`,
@@ -4785,7 +4784,7 @@ function useResolveToolInput(
       setError(null, turn.conversationId);
 
       try {
-        const hostContext = await readChatHostContext();
+        const hostContext = await readChatHostContext(turn.conversationId);
         const headers = await addCsrfHeaders({
           'Content-Type': 'application/json',
           Authorization: `Bearer ${authToken}`,

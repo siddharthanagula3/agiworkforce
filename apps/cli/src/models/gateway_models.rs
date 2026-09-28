@@ -35,10 +35,23 @@ pub struct GatewayModel {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RoutingProfileOption {
+    pub id: String,
+    #[serde(default)]
+    pub label: String,
+    #[serde(default)]
+    pub description: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct GatewayCatalog {
     pub user_tier: String,
     pub authenticated: bool,
     pub models: Vec<GatewayModel>,
+    #[serde(default)]
+    pub temporarily_unavailable: Vec<String>,
+    #[serde(default)]
+    pub routing_profiles: Vec<RoutingProfileOption>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -51,6 +64,10 @@ struct ModelsResponse {
 #[derive(Debug, Deserialize)]
 struct GatewayMetadata {
     user_tier: String,
+    #[serde(default)]
+    temporarily_unavailable: Vec<String>,
+    #[serde(default)]
+    routing_profiles: Vec<RoutingProfileOption>,
 }
 
 fn models_endpoint(raw_base: &str) -> Result<String> {
@@ -132,10 +149,16 @@ async fn fetch_from_endpoint(
             && seen.insert(model.id.clone())
     });
 
+    let mut temporarily_unavailable = payload.x_agi_workforce.temporarily_unavailable;
+    temporarily_unavailable
+        .retain(|id| !id.trim().is_empty() && id.len() <= 256 && !id.chars().any(char::is_control));
+    temporarily_unavailable.truncate(MAX_MODELS);
     Ok(GatewayCatalog {
         user_tier: payload.x_agi_workforce.user_tier,
         authenticated: jwt.is_some_and(|token| !token.is_empty()),
         models: payload.data,
+        temporarily_unavailable,
+        routing_profiles: payload.x_agi_workforce.routing_profiles,
     })
 }
 
@@ -233,6 +256,21 @@ pub fn cached_picker_models() -> Vec<Model> {
         .lock()
         .ok()
         .and_then(|slot| slot.as_ref().map(picker_models))
+        .unwrap_or_default()
+}
+
+pub fn catalog_user_tier(catalog: &GatewayCatalog) -> UserTier {
+    user_tier(&catalog.user_tier)
+}
+
+pub fn cached_routing_profiles() -> Vec<RoutingProfileOption> {
+    LIVE_CATALOG
+        .lock()
+        .ok()
+        .and_then(|slot| {
+            slot.as_ref()
+                .map(|catalog| catalog.routing_profiles.clone())
+        })
         .unwrap_or_default()
 }
 
@@ -379,6 +417,8 @@ mod tests {
             user_tier: "free".to_string(),
             authenticated: false,
             models: vec![remote.clone()],
+            temporarily_unavailable: Vec::new(),
+            routing_profiles: Vec::new(),
         };
         assert!(picker_models(&free).is_empty());
 
@@ -386,6 +426,8 @@ mod tests {
             user_tier: "pro".to_string(),
             authenticated: true,
             models: vec![remote],
+            temporarily_unavailable: Vec::new(),
+            routing_profiles: Vec::new(),
         };
         let models = picker_models(&pro);
         assert_eq!(models.len(), 1);

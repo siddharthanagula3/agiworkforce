@@ -10,6 +10,7 @@
 export * from './embeddings';
 export * from './generated-files';
 export * from './artifact-index';
+export * from './artifact-runtime';
 export * from './library';
 export * from './managed-media';
 export * from './me';

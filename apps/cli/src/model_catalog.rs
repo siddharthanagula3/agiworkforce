@@ -806,6 +806,27 @@ pub fn tier_allowed_models(tier_slot: &str) -> Vec<String> {
     }
 }
 
+pub fn managed_plan_needed(model_id: &str) -> Option<&'static str> {
+    let in_slot = |slot: &str| tier_allowed_models(slot).iter().any(|id| id == model_id);
+    if in_slot("flagship_additions") {
+        Some("Max")
+    } else if in_slot("pro_additions") || in_slot("economy") {
+        Some("Pro")
+    } else {
+        None
+    }
+}
+
+pub fn managed_catalog_models() -> Vec<String> {
+    let mut models: Vec<String> = ["economy", "pro_additions", "flagship_additions"]
+        .into_iter()
+        .flat_map(tier_allowed_models)
+        .collect();
+    let mut seen = std::collections::HashSet::new();
+    models.retain(|id| seen.insert(id.clone()));
+    models
+}
+
 pub fn standard_model_for_tier(tier: &crate::tier_cache::UserTier) -> Option<String> {
     ["pro_additions", "economy"]
         .into_iter()

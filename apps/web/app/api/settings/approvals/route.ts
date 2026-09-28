@@ -11,12 +11,21 @@ import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
 import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest } from '@/lib/cors';
+import { buildPage, decodeKeysetCursor, keysetSql } from '@/lib/identity/pagination';
 
 type ScopedDb = Awaited<ReturnType<typeof getUserScopedDb>>['db'];
+
+const PAGE_SORT_COLUMN = 'page_sort_key';
+const PAGE_SORT_KEY_FORMAT = `'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'`;
 
 const QuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(50),
   offset: z.coerce.number().int().min(0).default(0),
+});
+
+const CursorSchema = z.object({
+  sortValue: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/),
+  id: z.string().uuid(),
 });
 
 interface ApprovalRow {
@@ -25,6 +34,7 @@ interface ApprovalRow {
   decision: string | null;
   conversation_id: string | null;
   created_at: string;
+  page_sort_key: string;
 }
 
 export interface ApprovalHistoryEntry {
@@ -59,22 +69,37 @@ async function handleGetApprovals(request: NextRequest) {
     throw createError.validation('Invalid query parameters', parsed.error.issues);
   }
   const { limit, offset } = parsed.data;
+  const cursorParam = searchParams.get('cursor');
+  const cursor = cursorParam ? CursorSchema.safeParse(decodeKeysetCursor(cursorParam)) : null;
+  if (cursor && !cursor.success) {
+    throw createError.validation('Invalid query parameters', cursor.error.issues);
+  }
+  const keyset = keysetSql({
+    sortColumn: PAGE_SORT_COLUMN,
+    idColumn: 'id',
+    ...(cursor ? { cursor: cursor.data } : {}),
+    firstParamIndex: 3,
+  });
 
   try {
     const rows = await db.query<ApprovalRow>(
-      `select id,
-              details->>'resourceName' as tool_name,
-              details->>'status' as decision,
-              details->>'conversationId' as conversation_id,
-              created_at
-         from public.security_audit_logs
-        where user_id = $1 and event_type = 'tool_approval_decided'
-        order by created_at desc
-        limit $2
-       offset $3`,
-      [userId, limit, offset],
+      `select * from (
+         select id,
+                details->>'resourceName' as tool_name,
+                details->>'status' as decision,
+                details->>'conversationId' as conversation_id,
+                created_at,
+                to_char(created_at at time zone 'utc', ${PAGE_SORT_KEY_FORMAT}) as ${PAGE_SORT_COLUMN}
+           from public.security_audit_logs
+          where user_id = $1 and event_type = 'tool_approval_decided'
+       ) approvals
+       ${keyset.where ? `where ${keyset.where}` : ''}
+       ${keyset.orderBy}
+       limit $2 ${cursor ? '' : 'offset $3'}`,
+      cursor ? [userId, limit + 1, ...keyset.params] : [userId, limit + 1, offset],
     );
-    const approvals = rows.flatMap((row): ApprovalHistoryEntry[] =>
+    const page = buildPage(rows, limit, (row) => ({ sortValue: row.page_sort_key, id: row.id }));
+    const approvals = page.items.flatMap((row): ApprovalHistoryEntry[] =>
       row.tool_name && (row.decision === 'approved' || row.decision === 'rejected')
         ? [
             {
@@ -87,7 +112,12 @@ async function handleGetApprovals(request: NextRequest) {
           ]
         : [],
     );
-    return NextResponse.json({ approvals, limit, offset });
+    return NextResponse.json({
+      approvals,
+      limit,
+      hasMore: page.hasMore,
+      nextCursor: page.nextCursor,
+    });
   } catch (error) {
     logger.error({ error, userId }, 'Failed to fetch approval history');
     throw createError.internal('Failed to fetch approval history');

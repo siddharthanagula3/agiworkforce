@@ -1,5 +1,6 @@
 import 'server-only';
 
+import type { CloudAgentRunSteerWithdrawResponse } from '@agiworkforce/cloud-contracts';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -39,16 +40,17 @@ async function handleWithdraw(request: NextRequest, context: RouteContext) {
   if (!runId.success || !steerId.success) throw createError.notFound('Message not found');
 
   try {
-    const run = await withdrawCloudAgentRunSteer(db, {
-      userId,
-      organizationId,
-      runId: runId.data,
-      steerId: steerId.data,
+    const withdrawn: CloudAgentRunSteerWithdrawResponse = {
+      run: await withdrawCloudAgentRunSteer(db, {
+        userId,
+        organizationId,
+        runId: runId.data,
+        steerId: steerId.data,
+      }),
+    };
+    return NextResponse.json(withdrawn, {
+      headers: { ...getCorsHeaders(request), ...getSecurityHeaders() },
     });
-    return NextResponse.json(
-      { run },
-      { headers: { ...getCorsHeaders(request), ...getSecurityHeaders() } },
-    );
   } catch (error) {
     if (error instanceof CloudAgentRunNotFoundError) {
       throw createError.notFound('Cloud agent run not found');

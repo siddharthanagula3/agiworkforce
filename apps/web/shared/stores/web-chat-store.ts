@@ -109,6 +109,7 @@ export interface ComposerToggleState {
     aspectRatio: ManagedMediaImageAspectRatio | null;
   } | null;
   agiWorkScope: AgiWorkComposerScope | null;
+  deviceStepsEnabled?: boolean;
 }
 
 export interface AgiWorkComposerScope {
