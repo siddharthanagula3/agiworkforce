@@ -12,6 +12,7 @@ export const MAX_AGIWORK_GOAL_FIELD_CHARS = 1000;
 
 export const AGIWORK_GOAL_PROGRESS_ID = 'agiwork:goal';
 export const AGIWORK_PLAN_PROGRESS_ID_PREFIX = 'agiwork:plan:';
+export const AGIWORK_PLAN_OVERVIEW_PROGRESS_ID = 'agiwork:plan-overview';
 
 export const AgiWorkGoalSchema = z
   .object({
@@ -144,7 +145,7 @@ export function buildAgiWorkPlan(descriptions: string[]): AgiWorkPlanStep[] {
 
 export function advanceAgiWorkPlan(
   steps: AgiWorkPlanStep[],
-  transition: 'start' | 'complete' | 'fail' | 'cancel',
+  transition: 'start' | 'complete' | 'fail' | 'cancel' | 'stop',
 ): AgiWorkPlanStep[] {
   if (transition === 'start') {
     let marked = false;
@@ -167,6 +168,40 @@ export function advanceAgiWorkPlan(
   return steps.map((step) =>
     step.status === 'in_progress' ? { ...step, status: terminal } : step,
   );
+}
+
+export function advanceAgiWorkPlanToStep(
+  steps: AgiWorkPlanStep[],
+  ordinal: number,
+): AgiWorkPlanStep[] {
+  if (ordinal < 1 || ordinal > steps.length) return steps;
+  return steps.map((step, index) => {
+    if (step.status === 'failed' || step.status === 'cancelled') return step;
+    if (index < ordinal - 1) return { ...step, status: 'completed' };
+    if (index === ordinal - 1 && step.status !== 'completed') {
+      return { ...step, status: 'in_progress' };
+    }
+    return step;
+  });
+}
+
+const STEP_MARKER_PATTERN = /^[\s>*_#-]*Step\s+(\d{1,2})\s*[:.)]/gim;
+
+export function agiWorkPlanStepMarker(text: string): number | null {
+  let latest: number | null = null;
+  for (const match of text.matchAll(STEP_MARKER_PATTERN)) {
+    const ordinal = Number(match[1]);
+    if (Number.isInteger(ordinal) && (latest === null || ordinal > latest)) latest = ordinal;
+  }
+  return latest;
+}
+
+export function agiWorkExecutionDirective(steps: AgiWorkPlanStep[]): string {
+  return [
+    'Work through this plan in order:',
+    ...steps.map((step, index) => `${index + 1}. ${step.description}`),
+    'When you begin a step, first write a line of its own that starts with "Step N:" and names the step, so the user can follow your progress.',
+  ].join('\n');
 }
 
 export function agiWorkPlanEvent(steps: AgiWorkPlanStep[], responseModel: string): string {
@@ -202,11 +237,34 @@ export function agiWorkGoalProgressEvent(goal: AgiWorkGoal): AgentEvent {
   };
 }
 
+const PLAN_STEP_PROGRESS_STATUS: Partial<
+  Record<AgiWorkPlanStepStatus, Extract<AgentEvent, { type: 'progress-update' }>['status']>
+> = {
+  in_progress: 'running',
+  completed: 'completed',
+  failed: 'failed',
+};
+
 export function agiWorkPlanProgressEvents(steps: AgiWorkPlanStep[]): AgentEvent[] {
-  return steps.map((step, index) => ({
+  const overview: AgentEvent = {
     type: 'progress-update',
-    progressId: `${AGIWORK_PLAN_PROGRESS_ID_PREFIX}${step.id}`,
-    summary: `${index + 1}. ${step.description}`,
+    progressId: AGIWORK_PLAN_OVERVIEW_PROGRESS_ID,
+    summary: `Plan · ${steps.length} step${steps.length === 1 ? '' : 's'}`,
+    detail: steps.map((step, index) => `${index + 1}. ${step.description}`).join('\n'),
     status: 'completed',
-  }));
+  };
+  const started = steps.flatMap((step, index): AgentEvent[] => {
+    const status = PLAN_STEP_PROGRESS_STATUS[step.status];
+    return status
+      ? [
+          {
+            type: 'progress-update',
+            progressId: `${AGIWORK_PLAN_PROGRESS_ID_PREFIX}${step.id}`,
+            summary: `${index + 1}. ${step.description}`,
+            status,
+          },
+        ]
+      : [];
+  });
+  return [...started, overview];
 }
