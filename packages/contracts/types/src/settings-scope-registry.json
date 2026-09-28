@@ -22,7 +22,7 @@
     },
     "organization_connector_policies": {
       "scope": "organization",
-      "why": "which connectors, plugins and MCP hosts the tenant permits at all"
+      "why": "which connectors, plugins, MCP hosts and websites the tenant permits at all"
     },
     "organization_domain_retention_policies": {
       "scope": "organization",

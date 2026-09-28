@@ -2,10 +2,9 @@ import 'server-only';
 
 import { deflateSync } from 'node:zlib';
 
+import { MAX_FILE_TEXT_CHARS } from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
 import { truncateExtractedText } from '@/lib/server/extraction-truncation';
-
-export const MAX_PDF_TEXT_CHARS = 200_000;
 
 const MAX_TEXT_PAGES = 250;
 const MAX_IMAGE_PAGES = 30;
@@ -137,7 +136,7 @@ function toRgb(bitmap: {
 function boundText(value: string): string | null {
   const normalized = value.replace(/\r\n?/g, '\n').trim();
   if (normalized.length < MIN_TEXT_CHARS) return null;
-  return truncateExtractedText(normalized, MAX_PDF_TEXT_CHARS);
+  return truncateExtractedText(normalized, MAX_FILE_TEXT_CHARS);
 }
 
 /**

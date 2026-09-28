@@ -279,7 +279,6 @@ export const PLUGIN_SOURCE_KIND_REPOSITORY = 'repository';
 export const PLUGIN_SOURCE_KIND_AUTHORED = 'authored';
 export const PLUGIN_UPLOADS_PATH = `${PLUGINS_API_PATH}/uploads`;
 export const PLUGIN_AUTHORED_PATH = '/api/plugins/authored';
-export const PLUGIN_CUSTOMIZE_PATH = '/api/plugins/customize';
 export const PLUGIN_EDIT_LOAD_FAILED_COPY = 'That plugin could not be opened for editing.';
 export const PLUGIN_EDIT_FAILED_COPY = 'That plugin could not be saved.';
 export const PLUGIN_CUSTOMIZE_FAILED_COPY = 'A copy of that plugin could not be made.';

@@ -100,9 +100,9 @@ function buildTierLayerGrant(tier: string | null | undefined): CapabilityLayerGr
   const policy = getTierPolicy(tier);
   const granted = allCapabilities();
   if (!policy.allowSearch) granted.delete('canUseWebSearch');
-  if (!policy.allowDeepResearch) granted.delete('canUseDeepResearch');
   if (!policy.allowVoice) granted.delete('canUseVoice');
   if (!policy.allowMCP) granted.delete('canUseConnectors');
+  if (!canUseBillingPlanCapability(tier, 'deep_research')) granted.delete('canUseDeepResearch');
   if (!canUseBillingPlanCapability(tier, 'image_generation')) granted.delete('canUseImages');
   return { layer: 'tier', sourceId: `tier:${policy.tier}`, granted };
 }
