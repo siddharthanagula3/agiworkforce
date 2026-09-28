@@ -206,10 +206,10 @@ Code: `packages/ui/ui/src/settings-modal/SettingsModal.tsx:281-281`, `apps/web/f
 
 - Done when: Before installing or updating, a dialog lists the permissions the plugin requires and asks the user to accept them.
 - Wave: 3
+- Already works on: web
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Migration 0289 is now applied in production (2026-09-27). Still open: Permission sets are stored and a changed set must be acknowledged before an update applies, but no screen shows a plugin's permissions; the update path reads pending migration 0289 columns. | ui |
 | desktop | partial | Migration 0289 is now applied in production (2026-09-27). Still open: Permission sets are stored and a changed set must be acknowledged before an update applies, but no screen shows a plugin's permissions; the update path reads pending migration 0289 columns. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
@@ -222,11 +222,10 @@ Code: `apps/web/lib/services/plugin-installation-service.ts:213-230`, `apps/web/
 
 - Done when: An update dialog offers a newer plugin version, shows what changes, and applies it.
 - Wave: 3
-- Already works on: cli
+- Already works on: web, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Migration 0289 is now applied in production (2026-09-27). Still open: An update-offer API exists but nothing in the product calls it, and it reads signature columns from pending migration 0289. | ui |
 | desktop | partial | Migration 0289 is now applied in production (2026-09-27). Still open: An update-offer API exists but nothing in the product calls it, and it reads signature columns from pending migration 0289. | ui |
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
