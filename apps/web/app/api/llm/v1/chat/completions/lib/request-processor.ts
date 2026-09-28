@@ -43,6 +43,7 @@ import { hostedCodeExecutionReserveMicrousd } from '@/lib/e2b/hosted-code-execut
 import {
   DEVICE_HOST_HEADER,
   parseDesktopHostDeclaration,
+  type DesktopCapability,
   type DesktopHostDeclaration,
 } from '@agiworkforce/local-runtime-contract';
 import { deviceStepToolDefs } from '@/lib/device-steps/device-tools';
@@ -2530,10 +2531,15 @@ export function withoutWorkspaceDisabledDeviceCapabilities(
   deviceHost: DesktopHostDeclaration | null,
   controls: ResolvedWorkspaceControls | null,
 ): DesktopHostDeclaration | null {
-  if (!deviceHost || !controls || controls.featureAccess.computer_use) return deviceHost;
+  if (!deviceHost || !controls) return deviceHost;
+  const withheld = new Set<DesktopCapability>([
+    ...(controls.featureAccess.computer_use ? [] : ['computer.use' as const]),
+    ...(controls.featureAccess.browser ? [] : ['browser.site' as const, 'browser.cdp' as const]),
+  ]);
+  if (withheld.size === 0) return deviceHost;
   return {
     ...deviceHost,
-    capabilities: deviceHost.capabilities.filter((capability) => capability !== 'computer.use'),
+    capabilities: deviceHost.capabilities.filter((capability) => !withheld.has(capability)),
   };
 }
 
