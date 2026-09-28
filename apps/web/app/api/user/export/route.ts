@@ -1131,6 +1131,29 @@ const githubInstallationExportSchema = z.object({
   created_at: timestampSchema,
 });
 
+const slackAccountLinkExportSchema = z.object({
+  id: z.string(),
+  team_id: z.string(),
+  team_name: z.string(),
+  slack_user_id: z.string(),
+  slack_user_name: z.string().nullable(),
+  organization_id: z.string().nullable(),
+  created_at: timestampSchema,
+});
+
+const slackAssistantRunExportSchema = z.object({
+  id: z.string(),
+  team_id: z.string().nullable(),
+  channel_id: z.string(),
+  surface: z.string(),
+  mode: z.string(),
+  status: z.string(),
+  model: z.string().nullable(),
+  error: z.string().nullable(),
+  created_at: timestampSchema,
+  completed_at: nullableTimestampSchema,
+});
+
 const featureFlagExportSchema = z.object({
   id: z.string(),
   flag_name: z.string(),
@@ -1666,6 +1689,30 @@ const ADDITIONAL_EXPORT_SECTIONS: ReadonlyArray<{
           where user_id = $1
           order by created_at asc`,
     schema: githubInstallationExportSchema,
+  },
+  {
+    section: 'slack_account_links',
+    table: 'slack_account_links',
+    sql: `select link.id, installation.team_id, installation.team_name, link.slack_user_id,
+                 link.slack_user_name, link.organization_id, link.created_at
+          from slack_account_links as link
+          join slack_installations as installation on installation.id = link.installation_id
+          where link.user_id = $1
+          order by link.created_at asc`,
+    schema: slackAccountLinkExportSchema,
+  },
+  {
+    section: 'slack_assistant_runs',
+    table: 'slack_assistant_runs',
+    sql: `select run.id, installation.team_id, run.channel_id, run.surface, run.mode, run.status,
+                 run.model, run.error, run.created_at, run.completed_at
+          from slack_assistant_runs as run
+          left join slack_installations as installation on installation.id = run.installation_id
+          where run.user_id = $1
+          order by run.created_at desc
+          limit 1000`,
+    schema: slackAssistantRunExportSchema,
+    rowLimit: EXPORT_ROW_LIMIT,
   },
   {
     section: 'feature_flags',

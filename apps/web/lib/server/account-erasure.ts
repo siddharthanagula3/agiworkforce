@@ -71,6 +71,8 @@ export const USER_SCOPED_TABLES: ReadonlyArray<{
   { table: 'mcp_task_bindings', column: 'user_id' },
   { table: 'messaging_connections', column: 'user_id' },
   { table: 'github_installations', column: 'user_id' },
+  { table: 'slack_account_links', column: 'user_id' },
+  { table: 'slack_assistant_runs', column: 'user_id' },
   { table: 'plugin_installations', column: 'user_id' },
   { table: 'plugin_marketplace_sources', column: 'user_id' },
   { table: 'plugin_marketplace_installations', column: 'user_id' },
@@ -285,6 +287,12 @@ export const ANONYMIZED_USER_COLUMNS: ReadonlyArray<{
     table: 'project_knowledge_files',
     column: 'added_by_user_id',
     reason: 'Files this user added to an organization-shared project owned by someone else.',
+  },
+  {
+    table: 'slack_installations',
+    column: 'installed_by_user_id',
+    reason:
+      'The Slack workspace keeps the app its other members linked to; the installer is detached.',
   },
   {
     table: 'provider_cost_events',

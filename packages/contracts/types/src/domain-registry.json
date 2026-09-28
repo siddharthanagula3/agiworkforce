@@ -479,7 +479,11 @@
       "tables": [
         "connector_oauth_authorizations",
         "connector_oauth_grants",
-        "messaging_connections"
+        "messaging_connections",
+        "slack_account_links",
+        "slack_assistant_runs",
+        "slack_installations",
+        "slack_link_requests"
       ]
     },
     {
