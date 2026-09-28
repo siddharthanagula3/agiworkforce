@@ -2243,7 +2243,20 @@ export class ChatStateManager {
       { title: 'AGI Workforce, Checkpoints', placeHolder: 'Pick the prompt to go back to' },
     );
     if (picked === undefined) return;
-    const choice = await vscode.window.showQuickPick(REWIND_CHOICES, {
+    const hasConversation = picked.checkpoint.messageIndex !== undefined;
+    const hasCode = picked.checkpoint.trackedFiles > 0;
+    const choices = REWIND_CHOICES.filter(
+      (candidate) =>
+        (candidate.restore === 'code' || hasConversation) &&
+        (candidate.restore === 'conversation' || hasCode),
+    );
+    if (choices.length === 0) {
+      void vscode.window.showInformationMessage(
+        'AGI Workforce: this checkpoint has nothing left to restore. Its conversation was compacted and it tracked no files.',
+      );
+      return;
+    }
+    const choice = await vscode.window.showQuickPick(choices, {
       title: `AGI Workforce, Rewind to “${picked.label}”`,
       placeHolder: 'What goes back to this point',
     });

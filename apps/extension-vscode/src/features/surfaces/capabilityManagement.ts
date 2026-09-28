@@ -123,6 +123,19 @@ async function showManagedSurface(surface: ManagedSurface, noun: string): Promis
   }
 }
 
+async function confirmInstall(
+  question: string,
+  consequence: string,
+  action: string,
+): Promise<boolean> {
+  const choice = await vscode.window.showWarningMessage(
+    question,
+    { modal: true, detail: consequence },
+    action,
+  );
+  return choice === action;
+}
+
 async function confirmRemoval(question: string, consequence: string): Promise<boolean> {
   const choice = await vscode.window.showWarningMessage(
     question,
@@ -242,6 +255,12 @@ async function installPlugin(adapter: CliCapabilityAdapter): ReturnType<ManagedR
         : 'A pin starts with sha256:',
   });
   if (integrity === undefined) return undefined;
+  const confirmed = await confirmInstall(
+    `Install the plugin from ${source.trim()}?`,
+    'Its skills, commands, hooks and MCP servers run on this computer with your permissions. Install plugins only from publishers you trust.',
+    'Install',
+  );
+  if (!confirmed) return undefined;
   return adapter.call('pluginsInstall', {
     source: source.trim(),
     ...(integrity.trim() === '' ? {} : { integrity: integrity.trim() }),
@@ -392,6 +411,12 @@ async function addMcpServer(
     if (line === undefined) return undefined;
     const env = await askNamedValues(title, 'an environment variable');
     if (env === undefined) return undefined;
+    const confirmed = await confirmInstall(
+      `Add the MCP server “${name.trim()}”?`,
+      `AGI starts ${line.trim()} on this computer, with your permissions, whenever a chat needs its tools.`,
+      'Add',
+    );
+    if (!confirmed) return undefined;
     const [command, ...args] = splitCommandLine(line);
     return adapter.call('mcpAdd', {
       name: name.trim(),
@@ -420,6 +445,12 @@ async function addMcpServer(
   if (url === undefined) return undefined;
   const headers = await askNamedValues(title, 'a request header');
   if (headers === undefined) return undefined;
+  const confirmed = await confirmInstall(
+    `Add the MCP server “${name.trim()}”?`,
+    `Chats send tool calls, and the data in them, to ${url.trim()}.`,
+    'Add',
+  );
+  if (!confirmed) return undefined;
   return adapter.call('mcpAdd', {
     name: name.trim(),
     url: url.trim(),
@@ -586,6 +617,12 @@ async function addHook(adapter: CliCapabilityAdapter): ReturnType<ManagedRun> {
     validateInput: (value) => (value.trim() === '' ? 'Enter a command.' : undefined),
   });
   if (command === undefined) return undefined;
+  const confirmed = await confirmInstall(
+    `Add this ${event.trim()} hook?`,
+    `${command.trim()} runs on this computer, with your permissions, every time ${event.trim()} happens.`,
+    'Add',
+  );
+  if (!confirmed) return undefined;
   return adapter.call('hooksAdd', { event: event.trim(), command: command.trim() });
 }
 
