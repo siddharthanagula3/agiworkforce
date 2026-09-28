@@ -311,6 +311,7 @@ import {
   getManagedCloudAuthContext,
   getManagedModelAccess,
   clearAuthToken,
+  signOutOfAccount,
   MANAGED_CHAT_MAX_ATTACHMENTS,
   MANAGED_CHAT_MAX_ATTACHMENT_BYTES,
   MANAGED_CHAT_MAX_ATTACHMENT_FILE_BYTES,
@@ -345,8 +346,6 @@ import {
   isClerkExtensionAuthConfigured,
   observeClerkAuth,
   openClerkSignIn,
-  revokeSyncedWebSession,
-  signOutClerk,
 } from './features/cloud-bridge/clerkAuth';
 import {
   agiWorkUnlockPlanLabel,
@@ -12970,19 +12969,9 @@ function buildUI(): void {
 
   signoutBtn.addEventListener('click', async () => {
     signoutStatusEl.textContent = '';
-    try {
-      await revokeSyncedWebSession();
-    } catch (error) {
-      console.warn('[SidePanel] Revoking the synced web session failed:', error);
-      signoutStatusEl.textContent = t('spCloudSignOutSyncFailed');
-    }
-    try {
-      await signOutClerk();
-    } catch (error) {
-      console.warn('[SidePanel] Clerk sign-out failed:', error);
-    }
+    const { webSessionEnded } = await signOutOfAccount();
+    if (!webSessionEnded) signoutStatusEl.textContent = t('spCloudSignOutSyncFailed');
     await transitionManagedCloudOwner(null);
-    await clearAuthToken();
     await refreshCloudAccountUI();
   });
 
