@@ -29,7 +29,10 @@ import type {
   TurnFailureAction,
   TurnFailureCode,
 } from '@agiworkforce/types/protocol';
-import { DEVELOPER_FILE_CHANGES } from '@agiworkforce/local-runtime-contract';
+import {
+  DEVELOPER_FILE_CHANGES,
+  normalizeDeveloperAgentMode,
+} from '@agiworkforce/local-runtime-contract';
 import {
   DEVELOPER_SESSION_PROTOCOL_VERSION as PROTOCOL_VERSION,
   MINIMUM_SUPPORTED_RUNTIME_VERSION,
@@ -901,6 +904,9 @@ export async function readDeveloperModels(
     models,
     hostModels: toHostModels(isRecord(modelList) ? modelList['hostModels'] : null),
     defaultModelId: isRecord(settings) ? readString(settings, 'defaultModel') : null,
+    defaultAgentMode: isRecord(settings)
+      ? normalizeDeveloperAgentMode(readString(settings, 'permissionMode'))
+      : null,
     managedSignedIn: isRecord(account) && account['signedIn'] === true,
   };
 }
@@ -1036,6 +1042,7 @@ export async function startDeveloperTurn(input: DeveloperTurnRequest): Promise<{
     input: [{ type: 'text', text: input.text, text_elements: [] }],
     cwd: root.path,
     ...(input.model ? { model: input.model } : {}),
+    ...(input.agentMode ? { agentMode: input.agentMode } : {}),
   });
   const turn = isRecord(result) ? result['turn'] : null;
   const turnId = isRecord(turn) ? readString(turn, 'id') : null;
