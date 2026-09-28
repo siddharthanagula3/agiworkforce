@@ -7,6 +7,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { readValidatedJsonBody } from '@/lib/read-json-body';
+import { recordAuditEvent } from '@/lib/security-audit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import {
   DEVELOPER_PROJECT_CREDIT_LIMIT_MAX,
@@ -48,6 +49,17 @@ async function handleCreate(request: NextRequest) {
     `A project needs a name of up to ${DEVELOPER_PROJECT_NAME_MAX} characters and, optionally, a whole number of credits as its monthly limit.`,
   );
   const project = await createDeveloperProject(db, userId, body);
+  await recordAuditEvent({
+    userId,
+    eventType: 'developer_project_created',
+    request,
+    detail: {
+      resourceType: 'developer_project',
+      resourceId: project.id,
+      resourceName: project.name,
+      changedKeys: ['name', 'monthlyCreditLimit'],
+    },
+  });
   return NextResponse.json({ project }, { status: 201 });
 }
 
