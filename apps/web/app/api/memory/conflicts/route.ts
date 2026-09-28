@@ -10,6 +10,7 @@ import {
   unexpiredMemoryPredicate,
   workspaceMemoryPredicate,
 } from '@/lib/services/managed-memory-context-service';
+import type { ManagedMemoryConflictsResponse } from '@agiworkforce/types';
 
 const MAX_CONFLICTS = 50;
 
@@ -64,7 +65,7 @@ async function handleListConflicts(request: NextRequest) {
         source: row.kept_source,
       },
     })),
-  });
+  } satisfies ManagedMemoryConflictsResponse);
 }
 
 export const GET = withCorsRoute(withErrorHandler(handleListConflicts));
