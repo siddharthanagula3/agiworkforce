@@ -44,6 +44,7 @@ export const USER_OWNED_TABLES = new Set([
   'notifications',
   'user_shortcuts',
   'user_skill_files',
+  'organization_plugin_members',
   'support_tickets',
   'support_ticket_replies',
   'agent_tools',

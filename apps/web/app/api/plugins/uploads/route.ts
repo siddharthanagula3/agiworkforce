@@ -6,16 +6,11 @@ import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
-import { refuseUnsafeUpload } from '@/lib/security/upload-scan';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { isMissingPluginMarketplaceSchema } from '@/lib/services/plugin-marketplace-service';
 import { storeOwnedPluginSource } from '@/lib/services/plugin-owned-source-service';
 import { recordWorkspaceAuditEvent } from '@/lib/workspace-audit';
-import {
-  PluginArchiveError,
-  readPluginArchive,
-  type UploadedPluginArchive,
-} from '@/features/plugins/server/directory/archive';
+import { readArchiveUpload } from '@/features/plugins/server/directory/archive-upload';
 import { installedDependencies } from '@/features/plugins/server/directory/dependencies';
 import {
   prepareOwnedPluginDependencies,
@@ -29,76 +24,13 @@ import {
   installRefusalResponse,
   installsDisabledResponse,
 } from '@/features/plugins/server/directory/install-responses';
-import {
-  PLUGIN_UPLOAD_FILE_FIELD,
-  PLUGIN_UPLOAD_NAME_FIELD,
-  UPLOAD_NOT_AN_ARCHIVE_MESSAGE,
-} from '@/features/plugins/server/directory/constants';
-import { PayloadCeilingExceededError } from '@/lib/payload-ceiling';
-import {
-  isPluginMarketplaceContentHash,
-  PLUGIN_UPLOAD_ACKNOWLEDGED_SCAN_FIELD,
-  type PluginSourceInstallResponse,
-} from '@agiworkforce/cloud-contracts';
+import type { PluginSourceInstallResponse } from '@agiworkforce/cloud-contracts';
 import { recordAuditEvent } from '@/lib/security-audit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const SOURCE_KIND_UPLOAD = 'upload';
-const ARCHIVE_EXTENSION = /\.zip$/i;
-const INVALID_UPLOAD_CODE = 'PLUGIN_UPLOAD_INVALID';
-const REJECTED_UPLOAD_CODE = 'PLUGIN_UPLOAD_REJECTED';
-
-function fallbackName(fileName: string | null, provided: string | null): string {
-  const chosen = provided?.trim();
-  if (chosen && chosen.length > 0) return chosen;
-  const base = (fileName ?? '').replace(ARCHIVE_EXTENSION, '').trim();
-  return base.length > 0 ? base : SOURCE_KIND_UPLOAD;
-}
-
-const PLUGIN_ARCHIVE_MIME = 'application/zip';
-
-function invalidUpload(message: string, issues?: readonly string[]): NextResponse {
-  return NextResponse.json(
-    { error: { code: INVALID_UPLOAD_CODE, message, ...(issues ? { issues } : {}) } },
-    { status: 400 },
-  );
-}
-
-interface ArchiveUpload {
-  bytes: Uint8Array;
-  fileName: string | null;
-  name: string | null;
-  acknowledgedScans: string[];
-}
-
-async function readArchiveField(request: NextRequest): Promise<ArchiveUpload | NextResponse> {
-  let form: FormData;
-  try {
-    form = (await request.formData()) as unknown as FormData;
-  } catch (error) {
-    if (error instanceof PayloadCeilingExceededError) throw error;
-    return invalidUpload(UPLOAD_NOT_AN_ARCHIVE_MESSAGE);
-  }
-  const file = form.get(PLUGIN_UPLOAD_FILE_FIELD);
-  if (!file || typeof file === 'string') return invalidUpload(UPLOAD_NOT_AN_ARCHIVE_MESSAGE);
-  const buffer = await file.arrayBuffer();
-  const fileName = 'name' in file && typeof file.name === 'string' ? file.name : '';
-  await refuseUnsafeUpload(new Uint8Array(buffer), PLUGIN_ARCHIVE_MIME, {
-    leadsObject: true,
-    filename: fileName || undefined,
-  });
-  const provided = form.get(PLUGIN_UPLOAD_NAME_FIELD);
-  return {
-    bytes: new Uint8Array(buffer),
-    fileName: fileName.length > 0 ? fileName : null,
-    name: typeof provided === 'string' ? provided : null,
-    acknowledgedScans: form
-      .getAll(PLUGIN_UPLOAD_ACKNOWLEDGED_SCAN_FIELD)
-      .filter((value): value is string => isPluginMarketplaceContentHash(value)),
-  };
-}
 
 async function handlePost(request: NextRequest): Promise<NextResponse> {
   const csrf = await requireCsrfToken(request);
@@ -109,23 +41,9 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
   const limited = await withRateLimit(request, 'plugin-installation-write', `user:${userId}`);
   if (limited) return limited;
 
-  const read = await readArchiveField(request);
+  const read = await readArchiveUpload(request);
   if (read instanceof NextResponse) return read;
-
-  let archive: UploadedPluginArchive;
-  try {
-    archive = await readPluginArchive(read.bytes, fallbackName(read.fileName, read.name));
-  } catch (error) {
-    if (error instanceof PluginArchiveError) {
-      return NextResponse.json(
-        {
-          error: { code: REJECTED_UPLOAD_CODE, message: error.message, issues: error.issues },
-        },
-        { status: 422 },
-      );
-    }
-    throw error;
-  }
+  const { archive } = read;
 
   const refused = await refusePluginInstall(request, scope, {
     pluginKeys: archive.plugins.map((plugin) => plugin.key),
@@ -133,7 +51,7 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
   });
   if (refused) return refused;
 
-  const sourceName = read.name?.trim() || archive.sourceName;
+  const sourceName = read.name ?? archive.sourceName;
   try {
     const prepared = await prepareOwnedPluginDependencies(
       db,

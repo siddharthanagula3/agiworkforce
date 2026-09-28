@@ -1059,6 +1059,16 @@ const pluginMarketplaceInstallationExportSchema = z.object({
   updated_at: timestampSchema,
 });
 
+const organizationPluginMemberExportSchema = z.object({
+  plugin_id: z.string(),
+  organization_id: z.string(),
+  installed: z.boolean(),
+  enabled: z.boolean(),
+  enabled_skills: z.unknown(),
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+
 const agentToolExportSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -1598,6 +1608,16 @@ const ADDITIONAL_EXPORT_SECTIONS: ReadonlyArray<{
           where user_id = $1
           order by installed_at asc`,
     schema: pluginMarketplaceInstallationExportSchema,
+  },
+  {
+    section: 'organization_plugin_members',
+    table: 'organization_plugin_members',
+    sql: `select plugin_id, organization_id, installed, enabled, enabled_skills,
+                 created_at, updated_at
+          from organization_plugin_members
+          where user_id = $1
+          order by created_at asc`,
+    schema: organizationPluginMemberExportSchema,
   },
   {
     section: 'agent_tools',

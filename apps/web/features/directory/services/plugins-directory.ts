@@ -1,10 +1,14 @@
-import type {
-  PluginInstalledDependency,
-  PluginMarketplaceEntry,
-  PluginMarketplaceInstallation,
-  PluginMarketplaceSourceSummary,
-  PluginScanResponse,
-  PluginVersionsResponse,
+import {
+  MEMBER_ORGANIZATION_PLUGINS_PATH,
+  type MemberOrganizationPlugin,
+  type MemberOrganizationPluginPatch,
+  type MemberOrganizationPluginsResponse,
+  type PluginInstalledDependency,
+  type PluginMarketplaceEntry,
+  type PluginMarketplaceInstallation,
+  type PluginMarketplaceSourceSummary,
+  type PluginScanResponse,
+  type PluginVersionsResponse,
 } from '@agiworkforce/cloud-contracts';
 import {
   isPluginEntryWebInstallable,
@@ -92,6 +96,8 @@ import {
   PLUGIN_STATE_DESKTOP_AND_CLI,
   PLUGIN_STATE_INSTALL,
   PLUGIN_STATE_INSTALLED,
+  PLUGIN_STATE_REQUIRED,
+  PLUGIN_STATE_TURNED_OFF,
   PLUGIN_UNINSTALL_FAILED_COPY,
   PLUGIN_UNPUBLISHED_LABEL,
   PLUGIN_SCAN_LEAF,
@@ -104,6 +110,12 @@ import {
   PLUGIN_WORKS_WITH_GROUP_LABEL,
   PLUGIN_WORKS_WITH_LABELS,
   PLUGIN_WORKS_WITH_ORDER,
+  PLUGIN_WORKSPACE_AVAILABLE_NOTE,
+  PLUGIN_WORKSPACE_DEFAULT_NOTE,
+  PLUGIN_WORKSPACE_GROUP_ID,
+  PLUGIN_WORKSPACE_PUBLISHER,
+  PLUGIN_WORKSPACE_REQUIRED_NOTE,
+  workspaceGroupHeading,
 } from '../constants';
 import { DirectoryRequestError } from './request-error';
 
@@ -162,6 +174,12 @@ export const EMPTY_INSTALL_STATE: PluginInstallState = {
 };
 
 export const EMPTY_USER_MARKETPLACES: UserMarketplaceState = { sources: [], entries: [] };
+
+export const EMPTY_WORKSPACE_PLUGINS: MemberOrganizationPluginsResponse = {
+  organizationId: null,
+  organizationName: null,
+  plugins: [],
+};
 
 function isSourceFacet(value: string | null): value is PluginSourceFacet {
   return value !== null && PLUGIN_SOURCE_FACETS.includes(value);
@@ -373,6 +391,102 @@ export async function fetchUserMarketplaces(): Promise<UserMarketplaceState> {
   return { sources: sources?.sources ?? [], entries: entries?.entries ?? [] };
 }
 
+export async function fetchWorkspacePlugins(): Promise<MemberOrganizationPluginsResponse> {
+  return (
+    (await readOptional<MemberOrganizationPluginsResponse>(MEMBER_ORGANIZATION_PLUGINS_PATH)) ??
+    EMPTY_WORKSPACE_PLUGINS
+  );
+}
+
+export async function updateWorkspacePlugin(
+  id: string,
+  patch: MemberOrganizationPluginPatch,
+  csrfToken: string,
+): Promise<MemberOrganizationPlugin> {
+  const response = await fetch(`${MEMBER_ORGANIZATION_PLUGINS_PATH}/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': JSON_CONTENT_TYPE, [CSRF_HEADER]: csrfToken },
+    body: JSON.stringify(patch),
+  });
+  const body = (await response.json().catch(() => ({}))) as {
+    plugin?: MemberOrganizationPlugin;
+    error?: { message?: string };
+  };
+  if (!response.ok || !body.plugin) {
+    throw new DirectoryRequestError(
+      response.status,
+      body.error?.message ?? PLUGIN_INSTALL_FAILED_COPY,
+    );
+  }
+  return body.plugin;
+}
+
+function workspacePublisher(workspace: MemberOrganizationPluginsResponse): string {
+  return workspace.organizationName ?? PLUGIN_WORKSPACE_PUBLISHER;
+}
+
+function workspaceStatusLabel(plugin: MemberOrganizationPlugin): string {
+  if (plugin.installPreference === 'required') return PLUGIN_STATE_REQUIRED;
+  if (!plugin.installed) return PLUGIN_STATE_INSTALL;
+  return plugin.enabled ? PLUGIN_STATE_INSTALLED : PLUGIN_STATE_TURNED_OFF;
+}
+
+export function toWorkspacePluginEntry(
+  plugin: MemberOrganizationPlugin,
+  workspace: MemberOrganizationPluginsResponse,
+): DirectoryEntry {
+  return {
+    id: plugin.id,
+    name: plugin.name,
+    publisher: workspacePublisher(workspace),
+    description: plugin.description,
+    monogram: monogramOf(plugin.name),
+    installed: plugin.installed,
+    installable: true,
+    statusLabel: workspaceStatusLabel(plugin),
+    updatedAt: plugin.updatedAt,
+    facets: {},
+  };
+}
+
+function workspaceNote(plugin: MemberOrganizationPlugin): string {
+  if (plugin.installPreference === 'required') return PLUGIN_WORKSPACE_REQUIRED_NOTE;
+  return plugin.installPreference === 'installed_by_default'
+    ? PLUGIN_WORKSPACE_DEFAULT_NOTE
+    : PLUGIN_WORKSPACE_AVAILABLE_NOTE;
+}
+
+export function toWorkspacePluginDetail(
+  plugin: MemberOrganizationPlugin,
+  workspace: MemberOrganizationPluginsResponse,
+): DirectoryPluginDetail {
+  return {
+    kind: 'plugin',
+    id: plugin.id,
+    name: plugin.name,
+    publisher: workspacePublisher(workspace),
+    description: plugin.description,
+    version: plugin.version,
+    enabled: plugin.enabled,
+    examplePrompts: [],
+    components: {
+      skills: plugin.skills,
+      commands: 0,
+      agents: 0,
+      hooks: false,
+      mcpServers: [],
+      lspServers: [],
+    },
+    sourceLabel: workspacePublisher(workspace),
+    updatedAt: plugin.updatedAt,
+    installed: plugin.installed,
+    installable: true,
+    removable: plugin.installPreference === 'available',
+    locked: plugin.installPreference === 'required',
+    managedNote: workspaceNote(plugin),
+  };
+}
+
 export function isPluginInstalled(entry: PluginDirectoryEntry, installs: PluginInstallState) {
   return entry.sourceFacet === PLUGIN_SOURCE_BUILTIN
     ? installs.builtinIds.has(entry.id)
@@ -482,6 +596,7 @@ export interface PluginManageInput {
   details: readonly PluginDirectoryEntry[];
   user: UserMarketplaceState;
   installs: PluginInstallState;
+  workspace?: MemberOrganizationPluginsResponse;
 }
 
 function findRecord(input: PluginManageInput, id: string): PluginDirectoryEntry | undefined {
@@ -544,6 +659,18 @@ export function toPluginManageRows(input: PluginManageInput): DirectoryManageRow
       ...(source ? { author: source.name } : {}),
       skillCount: entry?.declaredSkills.length ?? installation.enabledSkills.length,
       updatedAt: installation.updatedAt,
+    });
+  }
+
+  const workspace = input.workspace ?? EMPTY_WORKSPACE_PLUGINS;
+  for (const plugin of workspace.plugins) {
+    if (!plugin.installed) continue;
+    push({
+      id: plugin.id,
+      name: plugin.name,
+      author: workspacePublisher(workspace),
+      skillCount: plugin.skills.length,
+      updatedAt: plugin.updatedAt,
     });
   }
 
@@ -754,6 +881,7 @@ export interface PluginSectionInput {
   stats: PluginDirectoryStats | null;
   user: UserMarketplaceState;
   installs: PluginInstallState;
+  workspace?: MemberOrganizationPluginsResponse;
 }
 
 interface PluginGroupSlice {
@@ -786,6 +914,7 @@ export function toPluginSection({
   stats,
   user,
   installs,
+  workspace = EMPTY_WORKSPACE_PLUGINS,
 }: PluginSectionInput): DirectorySection {
   const request = toPluginRequest(query);
   const userSourceId = userMarketplaceSourceId(query);
@@ -817,6 +946,21 @@ export function toPluginSection({
   } else {
     const facet = request.source;
     if (facet !== null) catalogHeading = PLUGIN_GROUP_HEADINGS[facet];
+    if (facet === null && workspace.plugins.length > 0) {
+      slices.push({
+        group: {
+          id: PLUGIN_WORKSPACE_GROUP_ID,
+          heading: workspaceGroupHeading(workspace.organizationName),
+        },
+        entries: sortDirectoryEntries(
+          workspace.plugins
+            .map((plugin) => toWorkspacePluginEntry(plugin, workspace))
+            .filter(matches),
+          query.sort,
+        ),
+        remote: false,
+      });
+    }
     if (facet === null || facet === PLUGIN_SOURCE_BUILTIN) {
       slices.push({
         group: facetGroup(PLUGIN_SOURCE_BUILTIN),

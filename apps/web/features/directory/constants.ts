@@ -94,6 +94,21 @@ export const PLUGIN_GROUP_HEADINGS: Readonly<Record<string, string>> = {
   [PLUGIN_SOURCE_PARTNER]: 'Partner plugins',
   [PLUGIN_SOURCE_MARKETPLACE]: 'Marketplace plugins',
 };
+export const PLUGIN_WORKSPACE_GROUP_ID = 'workspace-plugins';
+export const PLUGIN_WORKSPACE_GROUP_HEADING = 'From your workspace';
+export const PLUGIN_WORKSPACE_PUBLISHER = 'Your workspace';
+export const PLUGIN_STATE_REQUIRED = 'Required';
+export const PLUGIN_STATE_TURNED_OFF = 'Turned off';
+export const PLUGIN_WORKSPACE_REQUIRED_NOTE =
+  'Your workspace requires this plugin, so it stays on with all its skills.';
+export const PLUGIN_WORKSPACE_DEFAULT_NOTE =
+  'Your workspace installs this plugin for everyone. You can turn it off.';
+export const PLUGIN_WORKSPACE_AVAILABLE_NOTE = 'Your workspace offers this plugin to its members.';
+
+export function workspaceGroupHeading(workspaceName: string | null): string {
+  return workspaceName ? `From ${workspaceName}` : PLUGIN_WORKSPACE_GROUP_HEADING;
+}
+
 export const PLUGIN_USER_GROUP_ID = 'user-marketplaces';
 export const PLUGIN_USER_GROUP_HEADING = 'Your marketplaces';
 

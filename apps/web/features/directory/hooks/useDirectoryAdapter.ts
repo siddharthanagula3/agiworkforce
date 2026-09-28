@@ -7,6 +7,8 @@ import type { ReactNode } from 'react';
 import {
   PLUGIN_UPLOAD_ACKNOWLEDGED_SCAN_FIELD,
   type ManagedSkillSummary,
+  type MemberOrganizationPluginPatch,
+  type MemberOrganizationPluginsResponse,
 } from '@agiworkforce/cloud-contracts';
 import type { DirectoryRecord } from '@/lib/connectors/directory/types';
 import type {
@@ -47,7 +49,7 @@ import { useChatStore } from '@shared/stores/web-chat-store';
 import { getCsrfToken } from '@/lib/client/csrf';
 import { usePluginsSettingsAdapter } from '@features/plugins/hooks/use-plugins-settings-adapter';
 import { useSettingsModal } from '@features/settings/components/SettingsModalProvider';
-import type { PluginInstallationTarget } from '@/features/plugins/routes';
+import { PLUGIN_TARGET_WORKSPACE, type PluginInstallationTarget } from '@/features/plugins/routes';
 
 import {
   buildSettingsBrowseHash,
@@ -136,6 +138,7 @@ import {
   DEFAULT_PLUGIN_QUERY,
   EMPTY_INSTALL_STATE,
   EMPTY_USER_MARKETPLACES,
+  EMPTY_WORKSPACE_PLUGINS,
   applyPluginVersion,
   facetRequest,
   fetchPluginDirectoryEntry,
@@ -144,6 +147,7 @@ import {
   fetchPluginDirectoryPage,
   fetchPluginInstallState,
   fetchUserMarketplaces,
+  fetchWorkspacePlugins,
   initialPluginSection,
   installPlugin as requestPluginInstall,
   marketplaceRequest,
@@ -153,7 +157,9 @@ import {
   toPluginRequest,
   toPluginSection,
   toUserMarketplaceDetail,
+  toWorkspacePluginDetail,
   uninstallPlugin as requestPluginUninstall,
+  updateWorkspacePlugin,
   userMarketplaceSourceId,
   withInstallBlock,
   type PluginInstallOutcome,
@@ -230,6 +236,7 @@ interface PluginPageState {
   stats: PluginDirectoryStats | null;
   user: UserMarketplaceState;
   installs: PluginInstallState;
+  workspace: MemberOrganizationPluginsResponse;
 }
 
 const EMPTY_PLUGIN_PAGE: PluginPageState = {
@@ -239,6 +246,7 @@ const EMPTY_PLUGIN_PAGE: PluginPageState = {
   stats: null,
   user: EMPTY_USER_MARKETPLACES,
   installs: EMPTY_INSTALL_STATE,
+  workspace: EMPTY_WORKSPACE_PLUGINS,
 };
 
 function pluginQueryKey(query: DirectoryQuery): string {
@@ -631,6 +639,7 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
         stats: page.stats,
         user: page.user,
         installs: page.installs,
+        workspace: page.workspace,
       });
       const notice = [page.installs.notice, pluginRegistryNotice.current].filter(Boolean).join(' ');
       const next: DirectorySection = {
@@ -648,6 +657,7 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
           details: [...pluginDetails.current.values()],
           user: page.user,
           installs: page.installs,
+          workspace: page.workspace,
         }),
         loading: next.loading === true,
         error: next.error ?? null,
@@ -662,11 +672,12 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
   const primePlugins = useCallback((): Promise<void> => {
     if (pluginPrime.current) return pluginPrime.current;
     const promise = (async () => {
-      const [builtin, partner, installs, user] = await Promise.all([
+      const [builtin, partner, installs, user, workspace] = await Promise.all([
         fetchPluginDirectoryPage(facetRequest(PLUGIN_SOURCE_BUILTIN)),
         fetchPluginDirectoryPage(facetRequest(PLUGIN_SOURCE_PARTNER)),
         fetchPluginInstallState(),
         fetchUserMarketplaces(),
+        fetchWorkspacePlugins(),
       ]);
       pluginPageRef.current = {
         ...pluginPageRef.current,
@@ -675,6 +686,7 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
         stats: builtin.stats,
         installs,
         user,
+        workspace,
       };
     })().catch((error: unknown) => {
       pluginPrime.current = null;
@@ -797,6 +809,34 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
     publishPlugins({});
   }, [publishPlugins]);
 
+  const refreshWorkspacePlugins = useCallback(async () => {
+    const workspace = await fetchWorkspacePlugins();
+    pluginPageRef.current = { ...pluginPageRef.current, workspace };
+    publishPlugins({});
+  }, [publishPlugins]);
+
+  const findWorkspacePlugin = useCallback(
+    (id: string) => pluginPageRef.current.workspace.plugins.find((plugin) => plugin.id === id),
+    [],
+  );
+
+  const changeWorkspacePlugin = useCallback(
+    async (id: string, patch: MemberOrganizationPluginPatch, failureCopy: string) => {
+      try {
+        await updateWorkspacePlugin(id, patch, await getCsrfToken());
+      } catch (caught: unknown) {
+        throw describeActionFailure(
+          caught,
+          caught instanceof DirectoryRequestError ? caught.message : failureCopy,
+        );
+      }
+      invalidateSkillsCatalog();
+      announceSkillCatalogChanged();
+      await refreshWorkspacePlugins();
+    },
+    [refreshWorkspacePlugins],
+  );
+
   const findPluginRecord = useCallback((id: string): PluginDirectoryEntry | undefined => {
     const page = pluginPageRef.current;
     return (
@@ -885,6 +925,16 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
           ),
         );
       }
+      const workspacePlugin = findWorkspacePlugin(id);
+      if (workspacePlugin) {
+        setSettingsPluginId(workspacePlugin.installed ? id : null);
+        setSettingsTarget(
+          workspacePlugin.installed ? { kind: PLUGIN_TARGET_WORKSPACE, pluginId: id } : null,
+        );
+        setSettingsSkills(workspacePlugin.skills);
+        setSettingsEnabled(workspacePlugin.enabled);
+        return toWorkspacePluginDetail(workspacePlugin, page.workspace);
+      }
       const fetched = await fetchPluginDirectoryEntry(id);
       if (!fetched) return null;
       pluginDetails.current.set(id, fetched);
@@ -895,6 +945,7 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       primePlugins,
       findPluginRecord,
       findUserEntry,
+      findWorkspacePlugin,
       selectSettingsTarget,
       ensureSkillCatalog,
       withPluginReview,
@@ -1056,6 +1107,17 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
 
   const installPlugin = useCallback(
     async (id: string): Promise<string | undefined> => {
+      const workspacePlugin = findWorkspacePlugin(id);
+      if (workspacePlugin) {
+        await changeWorkspacePlugin(
+          id,
+          workspacePlugin.installPreference === 'available'
+            ? { installed: true, enabled: true }
+            : { enabled: true },
+          PLUGIN_INSTALL_FAILED_COPY,
+        );
+        return undefined;
+      }
       const record = findPluginRecord(id);
       const userEntry = record ? undefined : findUserEntry(id);
       const target: PluginInstallTarget = record
@@ -1090,7 +1152,14 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
         outcome.dependencies.map((dependency) => dependency.name),
       );
     },
-    [findPluginRecord, findUserEntry, patchPluginRecord, refreshPluginInstalls],
+    [
+      findWorkspacePlugin,
+      changeWorkspacePlugin,
+      findPluginRecord,
+      findUserEntry,
+      patchPluginRecord,
+      refreshPluginInstalls,
+    ],
   );
 
   const runSkillInstall = useCallback(
@@ -1123,6 +1192,10 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
 
   const removePlugin = useCallback(
     async (id: string) => {
+      if (findWorkspacePlugin(id)) {
+        await changeWorkspacePlugin(id, { installed: false }, PLUGIN_UNINSTALL_FAILED_COPY);
+        return;
+      }
       const installs = pluginPageRef.current.installs;
       const record = findPluginRecord(id);
       const installation = record ? installs.byPluginKey.get(id) : installs.byEntryId.get(id);
@@ -1147,7 +1220,7 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       announceSkillCatalogChanged();
       await refreshPluginInstalls();
     },
-    [findPluginRecord, refreshPluginInstalls],
+    [findWorkspacePlugin, changeWorkspacePlugin, findPluginRecord, refreshPluginInstalls],
   );
 
   const runSkillDelete = useCallback(
@@ -1485,9 +1558,16 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       await pluginSettingsState.setEnabled(enabled);
       invalidateSkillsCatalog();
       announceSkillCatalogChanged();
-      await refreshPluginInstalls();
+      if (settingsTarget.kind === PLUGIN_TARGET_WORKSPACE) await refreshWorkspacePlugins();
+      else await refreshPluginInstalls();
     },
-    [settingsPluginId, settingsTarget, pluginSettingsState, refreshPluginInstalls],
+    [
+      settingsPluginId,
+      settingsTarget,
+      pluginSettingsState,
+      refreshPluginInstalls,
+      refreshWorkspacePlugins,
+    ],
   );
 
   const setPluginSkillEnabled = useCallback(
