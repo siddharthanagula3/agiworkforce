@@ -574,6 +574,17 @@ pub(super) async fn handle_slash_command(
             let subcmd = if arg.is_empty() { "scan" } else { arg };
             return SlashResult::Ecosystem(subcmd.to_string());
         }
+        "/plugin" | "/plugins"
+            if matches!(
+                arg.split_whitespace().next(),
+                Some("enable" | "disable" | "remove" | "uninstall")
+            ) =>
+        {
+            match crate::installs::plugin_command(arg) {
+                Some(message) => output::print_info(&message),
+                None => output::print_warn("Usage: /plugins enable|disable|remove <name>"),
+            }
+        }
         "/marketplace" | "/market" | "/plugin" | "/plugins" => {
             let subcmd = if arg.is_empty() { "list" } else { arg };
             return SlashResult::Marketplace(subcmd.to_string());

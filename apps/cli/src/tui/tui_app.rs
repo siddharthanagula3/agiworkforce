@@ -4395,6 +4395,17 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
             }
         }
 
+        "/plugin" | "/plugins"
+            if matches!(
+                arg.split_whitespace().next(),
+                Some("enable" | "disable" | "remove" | "uninstall")
+            ) =>
+        {
+            SlashResult::SystemMessage(crate::installs::plugin_command(arg).unwrap_or_else(|| {
+                "Usage: /plugins enable|disable|remove <name>".to_string()
+            }))
+        }
+
         "/plugin" | "/plugins" | "/marketplace" | "/market" => {
             use crate::tui::widgets::screen_renderers::{
                 PluginGroup, PluginSummary, PluginTab, render_plugin,

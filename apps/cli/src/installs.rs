@@ -165,3 +165,33 @@ pub(crate) fn remove_skill(project_root: &Path, name: &str) -> Result<PathBuf> {
     };
     Ok(target)
 }
+
+pub(crate) fn set_plugin_enabled(name: &str, enabled: bool) -> Result<String> {
+    let mut manager = plugins::PluginsManager::new();
+    manager.load_all(std::env::current_dir().ok().as_deref())?;
+    let plugin = manager
+        .plugins()
+        .iter()
+        .find(|plugin| plugin.config_name == name)
+        .with_context(|| format!("no plugin named '{name}' is installed"))?;
+    plugins::set_plugin_enabled(&plugin.config_name, enabled)
+        .with_context(|| format!("saving whether '{name}' is enabled"))?;
+    Ok(format!(
+        "{} plugin '{name}'. Restart agi for its skills, commands, MCP servers and hooks to {}.",
+        if enabled { "Enabled" } else { "Disabled" },
+        if enabled { "load" } else { "stop loading" }
+    ))
+}
+
+pub(crate) fn plugin_command(args: &str) -> Option<String> {
+    let (action, name) = args.trim().split_once(char::is_whitespace)?;
+    let name = name.trim();
+    let outcome = match action {
+        "enable" => set_plugin_enabled(name, true),
+        "disable" => set_plugin_enabled(name, false),
+        "remove" | "uninstall" => remove_plugin(name)
+            .map(|path| format!("Removed plugin '{name}' from {}.", path.display())),
+        _ => return None,
+    };
+    Some(outcome.unwrap_or_else(|error| format!("{error:#}")))
+}
