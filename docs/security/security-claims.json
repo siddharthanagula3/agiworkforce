@@ -1426,7 +1426,7 @@
       "id": "the-scope-ceiling-table",
       "section": "Ceiling table",
       "kind": "rows",
-      "rows": 65,
+      "rows": 66,
       "implementation": ["apps/web/lib/connectors/oauth-scope-allowlist.ts"],
       "proof": [
         {
