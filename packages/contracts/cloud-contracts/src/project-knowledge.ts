@@ -55,7 +55,7 @@ export const ManagedCloudProjectKnowledgeFileSchema = z.object({
   byteCount: z.number().int().positive(),
   checksumSha256: z.string().regex(/^[a-f0-9]{64}$/i),
   summary: z.string().nullable().optional(),
-  sourceSurface: z.enum(['web', 'desktop', 'mobile']),
+  sourceSurface: z.enum(['web', 'desktop', 'mobile', 'cli']),
   addedByUserId: z.string().nullable(),
   addedAt: z.string().min(1),
   retentionExpiresAt: z.string().nullable().optional(),
@@ -77,7 +77,7 @@ export const ManagedCloudProjectKnowledgeRegisterRequestSchema = z.object({
   mimeType: z.string().min(1).max(255),
   byteCount: z.number().int().positive(),
   checksumSha256: z.string().regex(/^[a-f0-9]{64}$/i),
-  sourceSurface: z.enum(['web', 'desktop', 'mobile']),
+  sourceSurface: z.enum(['web', 'desktop', 'mobile', 'cli']),
   storageUri: z.string().min(1),
 });
 export type ManagedCloudProjectKnowledgeRegisterRequest = z.infer<

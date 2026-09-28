@@ -35,7 +35,8 @@ export interface ChatErrorAction {
     | 'upgrade-plan'
     | 'open-settings'
     | 'switch-model'
-    | 'update-extension';
+    | 'update-extension'
+    | 'open-recovery';
   label: string;
   provider?: string;
 }
@@ -59,6 +60,7 @@ const OFFER_LABELS: Readonly<Record<OfferKind, MessageKey>> = Object.freeze({
   'open-settings': 'chatError.openSettings',
   'switch-model': 'chatError.switchModel',
   'update-extension': 'chatError.updateExtension',
+  'open-recovery': 'chatError.seeOptions',
 });
 
 function offer(kind: OfferKind): ChatErrorAction {
@@ -74,6 +76,7 @@ export interface ChatErrorPresentation {
   /** True only when resending the identical turn could plausibly succeed. */
   retryable: boolean;
   action?: ChatErrorAction;
+  alternative?: { model: string; label: string };
 }
 
 type Classification = Omit<ChatErrorPresentation, 'detail'>;
@@ -263,6 +266,9 @@ export interface TurnFailureShape {
   retryAfterSeconds?: number;
   /** The id the host logged this failure under, shown so a reader can quote it. */
   requestId?: string;
+  alternativeModel?: string;
+  resetsAt?: string;
+  recoveryHref?: string;
 }
 
 const FAILURE_CATEGORY: Readonly<Record<string, ChatErrorCategory>> = Object.freeze({
@@ -316,6 +322,40 @@ export function withFailureReference(text: string, requestId: string | undefined
   return reference ? t('chatError.withReference', { text, reference }) : text;
 }
 
+function resetTime(resetsAt: string | undefined): string | null {
+  if (resetsAt === undefined) return null;
+  const at = Date.parse(resetsAt);
+  if (!Number.isFinite(at) || at <= Date.now()) return null;
+  return new Date(at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+const LOCAL_HOSTS: ReadonlySet<string> = new Set(['localhost', '127.0.0.1', '[::1]']);
+
+export function safeRecoveryHref(href: string | undefined): string | undefined {
+  if (href === undefined) return undefined;
+  try {
+    const url = new URL(href);
+    const secure =
+      url.protocol === 'https:' || (url.protocol === 'http:' && LOCAL_HOSTS.has(url.hostname));
+    return secure && url.username === '' && url.password === '' ? url.toString() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+const RECOVERY_LABELS: Readonly<Record<string, MessageKey>> = Object.freeze({
+  '/settings/billing': 'chatError.addCredits',
+  '/pricing': 'chatError.comparePlans',
+  '/settings/usage': 'chatError.seeUsage',
+});
+
+function recoveryOffer(href: string | undefined): ChatErrorAction | undefined {
+  const safe = safeRecoveryHref(href);
+  if (safe === undefined) return undefined;
+  const label = RECOVERY_LABELS[new URL(safe).pathname] ?? 'chatError.seeOptions';
+  return { kind: 'open-recovery', label: t(label) };
+}
+
 function failureHeadline(failure: TurnFailureShape, provider: string): string {
   const wait = statedWait(failure.retryAfterSeconds);
   switch (failure.code) {
@@ -323,8 +363,11 @@ function failureHeadline(failure: TurnFailureShape, provider: string): string {
       return t('chatError.signInToRun');
     case 'plan_excludes_model':
       return t('chatError.planExcludesModel');
-    case 'usage_limit_reached':
-      return wait ? t('chatError.usageLimitWait', { wait }) : t('chatError.usageLimit');
+    case 'usage_limit_reached': {
+      if (wait) return t('chatError.usageLimitWait', { wait });
+      const time = resetTime(failure.resetsAt);
+      return time ? t('chatError.usageLimitResetsAt', { time }) : t('chatError.usageLimit');
+    }
     case 'provider_auth_missing':
       return t('chatError.noProviderKey', { provider });
     case 'provider_auth_invalid':
@@ -406,13 +449,26 @@ export function presentTurnFailure(failure: TurnFailureShape): ChatErrorPresenta
       : providerDisplayLabel(failure.provider);
   const headline = withFailureReference(failureHeadline(failure, provider), failure.requestId);
   const detail = failure.message.trim();
-  const action = turnFailureOffer(failure) ?? switchModelOffer(failure.code);
+  const action =
+    recoveryOffer(failure.recoveryHref) ??
+    turnFailureOffer(failure) ??
+    switchModelOffer(failure.code);
+  const alternative =
+    failure.alternativeModel === undefined
+      ? undefined
+      : {
+          model: failure.alternativeModel,
+          label: t('chatError.continueWith', {
+            model: modelDisplayLabel(failure.alternativeModel),
+          }),
+        };
   return {
     category: FAILURE_CATEGORY[failure.code] ?? 'unknown',
     headline,
     ...(detail === '' || detail === headline ? {} : { detail }),
     retryable: failure.retryable,
     ...(action === undefined ? {} : { action }),
+    ...(alternative === undefined ? {} : { alternative }),
   };
 }
 

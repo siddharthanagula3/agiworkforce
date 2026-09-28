@@ -9,6 +9,7 @@ import type {
 import type {
   McpServerInspection,
   McpServerProbe,
+  PluginUpdate,
   SavedPermissionList,
 } from '../../integrations/localRuntimeClient';
 import { createSkill } from './skillAuthoring';
@@ -272,8 +273,37 @@ async function installPlugin(adapter: CliCapabilityAdapter): ReturnType<ManagedR
   });
 }
 
+async function updatePlugin(
+  adapter: CliCapabilityAdapter,
+  plugin: PluginListResponse['plugins'][number],
+): ReturnType<ManagedRun> {
+  const result = await vscode.window.withProgress(
+    {
+      location: vscode.ProgressLocation.Notification,
+      title: t('pluginUpdate.progress', { name: plugin.name }),
+    },
+    () => adapter.call<PluginUpdate>('pluginsUpdate', plugin.id),
+  );
+  if (result.status !== 'ok') return result;
+  const { updated, previousVersion, version } = result.value;
+  const name = plugin.name;
+  void vscode.window.showInformationMessage(
+    !updated
+      ? t('pluginUpdate.upToDate', { name })
+      : version === undefined
+        ? t('pluginUpdate.updated', { name })
+        : previousVersion === undefined || previousVersion === version
+          ? t('pluginUpdate.updatedTo', { name, to: version })
+          : t('pluginUpdate.updatedFromTo', { name, from: previousVersion, to: version }),
+  );
+  return undefined;
+}
+
 export async function managePlugins(adapter: CliCapabilityAdapter): Promise<void> {
-  const installs = await adapter.offers('installs');
+  const [installs, updates] = await Promise.all([
+    adapter.offers('installs'),
+    adapter.offers('pluginUpdates'),
+  ]);
   return showManagedSurface(
     {
       title: 'AGI Workforce, Plugins',
@@ -302,6 +332,28 @@ export async function managePlugins(adapter: CliCapabilityAdapter): Promise<void
             ]
           : [];
         for (const plugin of result.value.plugins) {
+          const actions: ManagedAction[] = [];
+          if (updates && plugin.source === 'user') {
+            actions.push({
+              button: {
+                iconPath: new vscode.ThemeIcon('sync'),
+                tooltip: t('pluginUpdate.action'),
+              },
+              followUp: { run: () => updatePlugin(adapter, plugin), reopen: true },
+            });
+          }
+          if (installs && plugin.source === 'user') {
+            actions.push(
+              removeAction(async () =>
+                (await confirmRemoval(
+                  `Remove the plugin “${plugin.name}”?`,
+                  'It is deleted from this computer with the skills, commands, hooks and servers it adds. Installing it again needs its source.',
+                ))
+                  ? adapter.call('pluginsRemove', plugin.id)
+                  : undefined,
+              ),
+            );
+          }
           items.push({
             label: toggleLabel(plugin.name, plugin.enabled),
             description: [plugin.version, plugin.source].filter(Boolean).join(', '),
@@ -310,20 +362,7 @@ export async function managePlugins(adapter: CliCapabilityAdapter): Promise<void
                 ? plugin.path
                 : `Skills: ${includedSkills(plugin.path).join(', ')}`,
             run: () => adapter.call('pluginsSetEnabled', plugin.id, !plugin.enabled),
-            ...(installs && plugin.source === 'user'
-              ? {
-                  actions: [
-                    removeAction(async () =>
-                      (await confirmRemoval(
-                        `Remove the plugin “${plugin.name}”?`,
-                        'It is deleted from this computer with the skills, commands, hooks and servers it adds. Installing it again needs its source.',
-                      ))
-                        ? adapter.call('pluginsRemove', plugin.id)
-                        : undefined,
-                    ),
-                  ],
-                }
-              : {}),
+            ...(actions.length === 0 ? {} : { actions }),
           });
         }
         return { status: 'ok', value: items };

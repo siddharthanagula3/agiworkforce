@@ -10,14 +10,13 @@ nothing is left.
 
 - Done when: One resolver combines model, plan, surface and operator switches to say whether each feature is available here, and the surface's controls read it.
 - Wave: 3
-- Already works on: mobile, chrome
+- Already works on: mobile, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | partials/platform 62f0721b9f: Deep Research is the billing plan capability deep_research, on Pro, Max, Max 20x, Team and Enterprise with Basic and Free excluded (D-2026-09-28-11). The capability document, the web composer toggle and the desktop entitlement all read it. Still open: video generation and AGI Work stay plan checks, because the capability vocabulary has no id for either | ui |
 | desktop | partial | partials/platform 62f0721b9f: Deep Research is the billing plan capability deep_research, on Pro, Max, Max 20x, Team and Enterprise with Basic and Free excluded (D-2026-09-28-11). The capability document, the web composer toggle and the desktop entitlement all read it. Still open: video generation and AGI Work stay plan checks, because the capability vocabulary has no id for either | ui |
-| cli | partial | Commands and indicators are now gated per model and privacy mode, but there is still no single feature resolver, and the CLI reads operator kill switches only indirectly through the managed model list. | handler |
-| vscode | missing | Not built on this surface. |  |
+| cli | partial | The CLI reads the capability document (034deed768) for cloud models, image generation and /search; voice, connectors, plugins and skills controls still decide locally | handler |
 
 Code: `packages/contracts/types/src/billing-catalog.ts:225-225`, `apps/web/lib/services/capability-handshake-service.ts:105-105`, `apps/desktop/src/services/desktopCloudEntitlements.ts:60-60`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:1398-1398`
 

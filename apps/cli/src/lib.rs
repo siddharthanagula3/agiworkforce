@@ -475,9 +475,8 @@ pub struct Cli {
 
     /// Use automatic model routing (mutually exclusive with --model).
     ///
-    /// Resolves the economy profile through AGI's canonical model policy, then
-    /// sends the concrete provider model ID through the managed-cloud transport.
-    /// Responses disclose the selected provider/model provenance.
+    /// AGI Workforce picks the model for each message from the task, the tools
+    /// in play, your plan and cost, and the CLI names the model that answered.
     ///
     /// Only applies to managed-cloud sessions; BYOK and local (Ollama / LMStudio)
     /// providers always require an explicit --model.
@@ -981,7 +980,8 @@ enum Command {
         #[command(subcommand)]
         action: MemorySubcommand,
     },
-    /// List, show or open your cloud Code sessions by the id every client uses.
+    /// Start, list, show or open your cloud Code sessions by the id every
+    /// client uses.
     Code {
         #[command(subcommand)]
         action: CodeSubcommand,
@@ -1052,6 +1052,22 @@ enum Command {
 
 #[derive(Subcommand, Debug)]
 enum CodeSubcommand {
+    /// Hand a task to a new cloud Code session for this GitHub checkout, after
+    /// a review of what moves to the cloud and what stays on this machine.
+    Start {
+        /// What the cloud session should do.
+        task: String,
+        /// Model for the cloud session. Defaults to `default.cloud_model`, then
+        /// to a coding model your plan includes.
+        #[arg(long)]
+        model: Option<String>,
+        /// Start without the review prompt.
+        #[arg(long, short = 'y')]
+        yes: bool,
+        /// Print the result as JSON.
+        #[arg(long)]
+        json: bool,
+    },
     /// List cloud Code sessions.
     List {
         /// Which sessions to list.
@@ -1124,6 +1140,15 @@ enum ProjectsSubcommand {
     Link {
         /// Project id or name.
         project: String,
+    },
+    /// Add a file to a project's knowledge, where its chats can search it.
+    AddFile {
+        /// Project id or name.
+        project: String,
+        /// The file to add.
+        path: std::path::PathBuf,
+        #[arg(long)]
+        json: bool,
     },
     /// Delete a project from the account by id or name.
     Delete {
@@ -2059,12 +2084,22 @@ async fn print_hosted_history(limit: usize) {
     }
 }
 
-async fn handle_code_command(action: &CodeSubcommand, output: Option<OutputFormat>) -> Result<()> {
+async fn handle_code_command(
+    action: &CodeSubcommand,
+    config: &config::CliConfig,
+    output: Option<OutputFormat>,
+) -> Result<()> {
     use cloud::code_sessions;
 
     let client = cloud::CloudClient::connect(account_privacy_mode())
         .map_err(|error| anyhow::anyhow!("{error}"))?;
     match action {
+        CodeSubcommand::Start {
+            task,
+            model,
+            yes,
+            json,
+        } => handle_code_start(&client, config, task, model.as_deref(), *yes, *json, output).await,
         CodeSubcommand::List { status, json } => {
             let sessions = code_sessions::list(&client, status)
                 .await
@@ -2092,8 +2127,10 @@ async fn handle_code_command(action: &CodeSubcommand, output: Option<OutputForma
                 .await
                 .map_err(|error| anyhow::anyhow!("{error}"))?;
             let url = code_sessions::page_url(client.base(), id);
-            if crate::oauth::open_external_url(&url, crate::oauth::UserActionContext::user_initiated())
-            {
+            if crate::oauth::open_external_url(
+                &url,
+                crate::oauth::UserActionContext::user_initiated(),
+            ) {
                 println!("Opened {url}");
             } else {
                 println!("Open this link to continue the session: {url}");
@@ -2101,6 +2138,177 @@ async fn handle_code_command(action: &CodeSubcommand, output: Option<OutputForma
             Ok(())
         }
     }
+}
+
+async fn handle_code_start(
+    client: &cloud::CloudClient,
+    config: &config::CliConfig,
+    task: &str,
+    model: Option<&str>,
+    yes: bool,
+    json: bool,
+    output: Option<OutputFormat>,
+) -> Result<()> {
+    use cloud::code_handoff;
+    use cloud::code_sessions;
+
+    let task = code_handoff::validate_task(task).map_err(anyhow::Error::msg)?;
+    let checkout = code_handoff::inspect().map_err(anyhow::Error::msg)?;
+    let model = match model
+        .or(config.default.cloud_model.as_deref())
+        .map(str::trim)
+        .filter(|model| !model.is_empty())
+    {
+        Some(model) => model_catalog::canonical_model_id(model),
+        None => model_catalog::resolve_auto_model(
+            "auto",
+            agiworkforce_model_registry::RoutingTaskType::Coding,
+            crate::tier_cache::managed_auto_routing_tier().await,
+            agiworkforce_model_registry::TrustMode::ManagedCloud,
+        )
+        .map(|route| route.model_key)
+        .map_err(|error| {
+            anyhow::anyhow!(
+                "No coding model your plan includes could be chosen ({error}). Name one with --model."
+            )
+        })?,
+    };
+    let access = code_handoff::repository_access(client, &checkout.full_name)
+        .await
+        .map_err(|error| anyhow::anyhow!("{error}"))?;
+    let review = code_handoff::review(&checkout, &access, &model, client.base());
+    eprintln!("{}\n", code_handoff::render_review(&review, &task));
+    match resolve_destructive_decision(yes, interactive::can_prompt()) {
+        DestructiveDecision::Proceed => {}
+        DestructiveDecision::Refuse => anyhow::bail!(
+            "Nothing was started: this run cannot ask for confirmation. Re-run with --yes to start \
+             the cloud session."
+        ),
+        DestructiveDecision::Prompt => {
+            if !dialoguer::Confirm::new()
+                .with_prompt("Start the cloud session?")
+                .default(false)
+                .interact()
+                .unwrap_or(false)
+            {
+                println!("Nothing was started.");
+                return Ok(());
+            }
+        }
+    }
+
+    let body = code_handoff::create_body(
+        &format!("agi-cli-{}", uuid::Uuid::new_v4().simple()),
+        &code_handoff::title_for(&task),
+        &checkout,
+        &access,
+    );
+    eprintln!(
+        "Setting up the cloud session: cloning {} at {}.",
+        checkout.full_name, checkout.branch
+    );
+    let session = code_handoff::create(client, &body)
+        .await
+        .map_err(|error| anyhow::anyhow!("{error}"))?;
+    let url = code_sessions::page_url(client.base(), &session.id);
+    let session_text = code_handoff::render_session(&session, &checkout.remote, &url);
+    if session.state == "failed" {
+        anyhow::bail!(
+            "The cloud session could not be set up: {}\n{session_text}",
+            session
+                .last_error
+                .as_deref()
+                .unwrap_or("it did not say why")
+        );
+    }
+    eprintln!(
+        "Working on it in the cloud with {}. Follow along at {url}\nCtrl-C stops the turn; the session stays open.",
+        model_catalog::display_name(&model)
+    );
+    let outcome = tokio::select! {
+        outcome = code_handoff::start_turn(client, &session.id, &task, &model) => Some(outcome),
+        _ = code_interrupt() => None,
+    };
+    let Some(outcome) = outcome else {
+        let stopped = match code_handoff::cancel_turn(client, &session.id).await {
+            Ok(()) => "Stopped the cloud turn. The session stays open.".to_string(),
+            Err(error) => format!(
+                "The cloud turn could not be stopped from here ({error}). Stop it on the web."
+            ),
+        };
+        println!("{stopped}\n\n{session_text}");
+        return Ok(());
+    };
+    match outcome {
+        Ok(turn) => {
+            let text = [code_handoff::render_outcome(&turn, &url), session_text]
+                .into_iter()
+                .filter(|section| !section.is_empty())
+                .collect::<Vec<_>>()
+                .join("\n\n");
+            render_structured(
+                serde_json::json!({
+                    "ok": true,
+                    "sessionId": session.id,
+                    "url": url,
+                    "repository": checkout.full_name,
+                    "branch": checkout.branch,
+                    "workingBranch": session.working_branch,
+                    "model": model,
+                    "review": review,
+                    "turn": turn,
+                }),
+                text,
+                json,
+                output,
+            )
+        }
+        Err(cloud::CloudError::Api {
+            status: 409,
+            message,
+        }) => render_structured(
+            serde_json::json!({
+                "ok": true,
+                "sessionId": session.id,
+                "url": url,
+                "workingBranch": session.working_branch,
+                "model": model,
+                "review": review,
+                "turn": null,
+                "note": message,
+            }),
+            format!("{message}\n\n{session_text}"),
+            json,
+            output,
+        ),
+        Err(error) => {
+            if structured_output(json, output) == StructuredOutput::Text {
+                println!("{session_text}");
+            } else {
+                print_structured(
+                    &serde_json::json!({
+                        "ok": false,
+                        "sessionId": session.id,
+                        "url": url,
+                        "error": error.to_string(),
+                    }),
+                    structured_output(json, output),
+                )?;
+            }
+            Err(anyhow::anyhow!("The cloud turn did not run: {error}"))
+        }
+    }
+}
+
+async fn code_interrupt() {
+    if tokio::signal::ctrl_c().await.is_err() {
+        std::future::pending::<()>().await;
+    }
+    output::print_info("Stopping the cloud turn. Press Ctrl-C again to quit without waiting.");
+    tokio::spawn(async {
+        let _ = tokio::signal::ctrl_c().await;
+        std::process::exit(130);
+    });
 }
 
 async fn handle_devices_command(json: bool, output: Option<OutputFormat>) -> Result<()> {
@@ -2431,6 +2639,31 @@ async fn handle_projects_command(
                 "Created '{}' in your account ({}).",
                 project.name, project.id
             );
+            Ok(())
+        }
+        ProjectsSubcommand::AddFile {
+            project,
+            path,
+            json,
+        } => {
+            let cache = cloud::refresh_projects(privacy)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            let found = cache
+                .find(project)
+                .with_context(|| format!("No project '{project}' in your AGI Workforce account"))?;
+            let file = cloud::knowledge::add_file(privacy, &found.id, path)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            if *json {
+                println!("{}", serde_json::to_string_pretty(&file)?);
+            } else {
+                println!(
+                    "Added {} to '{}'. Chats in the project, and managed turns in a directory linked to it, can search it.",
+                    terminal_text::sanitize_terminal_text(&file.file_name),
+                    found.name
+                );
+            }
             Ok(())
         }
         ProjectsSubcommand::Link { project } => {
@@ -5300,7 +5533,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
             Command::Artifacts { action } => handle_artifacts_command(action, cli.output).await,
             Command::Memory { action } => handle_memory_command(action).await,
             Command::Devices { json } => handle_devices_command(*json, cli.output).await,
-            Command::Code { action } => handle_code_command(action, cli.output).await,
+            Command::Code { action } => handle_code_command(action, &app_config, cli.output).await,
             Command::Image {
                 prompt,
                 out,
@@ -5649,8 +5882,8 @@ async fn run_cli(cli: Cli) -> Result<()> {
     };
     if let Some((route, _, _)) = &auto_route {
         eprintln!(
-            "Auto route: managed_cloud -> {}/{} (harness: {})",
-            route.upstream_provider, route.provider_model_id, route.harness_id
+            "Auto: AGI Workforce picks the model for each message; starting with {}.",
+            model_catalog::display_name(&route.provider_model_id)
         );
     }
 
@@ -5758,6 +5991,23 @@ async fn run_cli(cli: Cli) -> Result<()> {
             None
         }
     });
+    // Seed interactive sessions with the Auto launch state so per-turn
+    // re-classification has full continuity (selection, model_key, task,
+    // trust, tier), see AgentSession::re_resolve_auto_route_for_turn.
+    let auto_route_seed =
+        auto_route
+            .as_ref()
+            .map(|(route, tier, task)| routing::classify::AutoRouteSeed {
+                state: crate::runtime::session::ManagedSessionAutoRouting {
+                    selection: "auto".to_string(),
+                    model_key: route.model_key.clone(),
+                    task_type: routing::classify::developer_task_type(*task),
+                    trust_mode: agiworkforce_model_registry::TrustMode::ManagedCloud,
+                    speed_first: false,
+                },
+                tier: tier.clone(),
+            });
+
     if let Some(ref prompt) = effective_prompt {
         return run_oneshot(
             &app_config,
@@ -5782,6 +6032,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
             cli.json_events,
             cli.agent.clone(),
             model_fallback_chain.clone(),
+            auto_route_seed,
         )
         .await;
     }
@@ -5849,22 +6100,6 @@ async fn run_cli(cli: Cli) -> Result<()> {
 
     // Resolve team mode from --team flag or AGI_TEAM env var
     let team_mode = cli.team || std::env::var("AGI_TEAM").is_ok_and(|v| v == "1" || v == "true");
-
-    // Seed interactive sessions with the Auto launch state so per-turn
-    // re-classification has full continuity (selection, model_key, task,
-    // trust, tier), see AgentSession::re_resolve_auto_route_for_turn.
-    let auto_route_seed =
-        auto_route
-            .as_ref()
-            .map(|(route, tier, task)| routing::classify::AutoRouteSeed {
-                state: crate::runtime::session::ManagedSessionAutoRouting {
-                    selection: "auto".to_string(),
-                    model_key: route.model_key.clone(),
-                    task_type: routing::classify::developer_task_type(*task),
-                    trust_mode: agiworkforce_model_registry::TrustMode::ManagedCloud,
-                },
-                tier: tier.clone(),
-            });
 
     // Interactive mode: TUI (default) or classic REPL (--no-tui)
     if cli.no_tui || output::plain_output() {
@@ -6286,6 +6521,7 @@ pub async fn run_oneshot(
     json_events: bool,
     agent_name: Option<String>,
     fallback_chain: routing::fallback::FallbackChain,
+    auto_route_seed: Option<routing::classify::AutoRouteSeed>,
 ) -> Result<()> {
     crate::tier_cache::ensure_plan_models_cached().await;
     let resolved_provider_override = models::plan_first_provider_override(
@@ -6344,6 +6580,10 @@ pub async fn run_oneshot(
     // the managed session object exists.
     if let Some(ref sid) = session_id_override {
         session.override_session_id(sid)?;
+    }
+    if let Some(seed) = auto_route_seed {
+        session.auto_routing_tier = Some(seed.tier);
+        session.set_managed_auto_routing(Some(seed.state));
     }
     // Event-stream correlation id. `--no-session-persistence` suppresses the
     // managed session entirely, so an explicit `--session-id` has to be read

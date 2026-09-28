@@ -6,6 +6,7 @@ import {
   type ManagedCloudScheduleShare,
   type ManagedCloudScheduleTask,
   type ManagedCloudSchedulesClient,
+  type ManagedCloudScheduleRecentRunsPageInput,
   type ManagedCloudSchedulesPageInput,
 } from '@agiworkforce/cloud-contracts';
 import { CLOUD_API_BASE_URL } from '../api/cloudApi';
@@ -102,7 +103,7 @@ export const desktopCloudSchedules = {
     );
   },
 
-  listRecentRuns(input: ManagedCloudSchedulesPageInput) {
+  listRecentRuns(input: ManagedCloudScheduleRecentRunsPageInput) {
     return withSchedulesClient('Managed Cloud schedule recent results', (client) =>
       client.listRecentRuns(input),
     );

@@ -141,11 +141,11 @@ Code: `apps/web/features/chat/components/messages/ChatMessageList.tsx:1046-1046`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | A 'Switch model' link appears only on failed answers and just opens the model picker; add 'try again with model X' on any answer. | ui |
+| mobile | partial | 'Retry with Another Model' on an answer opens the model picker and reruns the question with the chosen model (retryMessage takes a model override; threaded Cloud chats keep the old answer as a sibling), in post-codex/chat-gates-s17.22-mobile-retry-with-model.patch. ChatGPT's iOS app runs a message on a chosen model (help.openai.com 6825453, 2026-06-08). | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:1082-1096`, `apps/mobile/app/(app)/chat/[id].tsx:1441-1441`
+Code: `apps/mobile/stores/chat/chatExecutionStore.ts:2987-2987`
 
 ## S17.23: Shorten answer.
 
@@ -220,12 +220,12 @@ Code: `apps/extension-vscode/src/core/commandSetup.ts:1210-1229`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Regenerating a cloud answer keeps the old one as a sibling, but there is no pager to switch back to it. | ui |
+| mobile | partial | Same pager as S16.11, in post-codex/chat-gates-s16.11-s17.28-mobile-version-pager.patch. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:2939-2944`, `apps/mobile/app/(app)/chat/[id].tsx:235-241`
+Code: `packages/contracts/cloud-contracts/src/message-thread.ts:253-253`
 
 ## S17.29: Positive feedback.
 
@@ -304,10 +304,10 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:2939-2944`, `apps/mobile/ap
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The answering model is shown per answer; token/cost usage is shown only as tokens-per-second for on-device models, not for cloud answers. | ui |
+| mobile | partial | An answer shows its tokens and time under the model line from the usage the server persists (tokensUsed, inputTokens, outputTokens, totalDurationMs), in post-codex/chat-gates-s17.36-mobile-answer-usage.patch. Cost is not shown, as users see credits. | ui |
 | cli | partial | The cited /usage and /cost print session-wide totals (total_input_tokens, cost_ledger.total_usd, turn_count) and the session model; nothing is stored or shown per answer (ChatMessage is role+text). The criterion is per-answer model and usage. Partial, miss ui; remaining: record and show per-turn model/tokens/cost (e.g. a trailing line after each answer or /usage --last). |  |
 
-Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:1101-1104`, `apps/mobile/src/features/chat/components/MessageBubble.tsx:1113-1124`, `apps/mobile/src/features/chat/components/MessageList.tsx:92-92`, `apps/cli/src/tui/tui_app.rs:3897-3910`
+Code: `packages/contracts/cloud-contracts/src/message-metadata-projection.ts:60-60`, `apps/cli/src/tui/tui_app.rs:3897-3910`, `apps/cli/src/tui/tui_app.rs:3324-3331`
 
 ## S17.38: Refusal state.
 

@@ -69,11 +69,8 @@ nothing is left.
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
-| mobile | partial | Add an in-app cloud-drive picker; today cloud files are reachable only through the phone's own document picker (iCloud Drive and installed provider apps), and only in Cloud mode. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/app/(app)/(tabs)/chat.tsx:635-638`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:382-389`
 
 ## S14.10: Library-file picker.
 
@@ -106,9 +103,9 @@ Code: `apps/mobile/app/(app)/(tabs)/chat.tsx:635-638`, `apps/mobile/src/features
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Let the File picker select several documents at once; today Photos allows up to 5 but File picks one document per trip. | ui |
+| mobile | partial | The File picker allows several documents in one pick in post-codex/chat-gates-s12.19-s12.21-s14.15-mobile-new-chat.patch (both chat screens are held). | ui |
 
-Code: `apps/mobile/app/(app)/(tabs)/chat.tsx:613-618`, `apps/mobile/app/(app)/(tabs)/chat.tsx:635-638`
+Code: `apps/mobile/app/(app)/(tabs)/chat.tsx:635-635`, `apps/mobile/app/(app)/chat/[id].tsx:851-851`
 
 ## S14.17: File-type icon.
 

@@ -613,6 +613,39 @@ const pt = {
   'mcpDetails.expired':
     'Estes detalhes não estão mais guardados. Execute AGI Workforce: Show MCP Servers e escolha Detalhes do servidor para verificar {name} de novo.',
   'mcpDetails.field': '{label}: {value}',
+  'chatNotice.webSearchDenied':
+    'A pesquisa na web não está disponível nesta sessão. {reason} Desative Browse the web para enviar sem ela.',
+  'webSearchSetup.title': 'Configurar a pesquisa na web',
+  'webSearchSetup.placeholder': 'Escolha o serviço de pesquisa do qual você tem uma chave de API',
+  'webSearchSetup.detail':
+    'Digite a chave de API no terminal. As sessões com sua chave e as locais pesquisam com ela; as sessões gerenciadas não precisam de uma.',
+  'webSearchSetup.unavailable':
+    'AGI Workforce: esta AGI CLI não informa quais chaves de pesquisa pode salvar. Atualize a AGI CLI para configurar a pesquisa na web pelo VS Code.',
+  'pluginUpdate.action': 'Atualizar',
+  'pluginUpdate.progress': 'AGI Workforce: atualizando {name}',
+  'pluginUpdate.upToDate': 'AGI Workforce: {name} já está atualizado.',
+  'pluginUpdate.updated': 'AGI Workforce: {name} foi atualizado.',
+  'pluginUpdate.updatedTo': 'AGI Workforce: {name} foi atualizado para {to}.',
+  'pluginUpdate.updatedFromTo': 'AGI Workforce: {name} foi atualizado de {from} para {to}.',
+  'chatError.usageLimitResetsAt':
+    'Você atingiu um limite de uso da sua conta. Ele será redefinido em {time}.',
+  'chatError.continueWith': 'Continuar com {model}',
+  'chatError.addCredits': 'Adicionar créditos',
+  'chatError.comparePlans': 'Comparar planos',
+  'chatError.seeUsage': 'Ver seu uso',
+  'chatError.seeOptions': 'Ver suas opções',
+  'webview.mcpAuthRequired':
+    '{server} precisa que você entre de novo. O AGI não conseguiu usá-lo nesta etapa.',
+  'webview.mcpReconnect': 'Entrar e continuar',
+  'webview.mcpReconnecting': 'Entrando…',
+  'webview.mcpReconnected': 'Conectado a {server}. O AGI está continuando.',
+  'mcpReconnect.progress': 'AGI Workforce: entrando em {server}',
+  'mcpReconnect.notFinished':
+    'AGI Workforce: a entrada em {server} não terminou, então o AGI não continuou. Tente de novo quando quiser.',
+  'mcpReconnect.failed': 'AGI Workforce: não foi possível entrar em {server}: {reason}',
+  'mcpReconnect.noSession':
+    'AGI Workforce: não há sessão aqui para continuar depois de entrar em {server}.',
+  'mcpReconnect.continue': 'continue',
 };
 
 export default pt;

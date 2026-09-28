@@ -203,6 +203,13 @@ export async function exportToText(
   return { uri: destUri, format: 'text', fileName, file: exportedFile(destUri, fileName, lineage) };
 }
 
+export async function exportPngImage(base64Png: string, title: string): Promise<string> {
+  await ensureExportsDir();
+  const destUri = `${EXPORTS_DIR}${sanitizeFileName(title)}.png`;
+  await writeAsStringAsync(destUri, base64Png, { encoding: EncodingType.Base64 });
+  return destUri;
+}
+
 /**
  * Share a file using the native share sheet.
  * Falls back to a descriptive error if sharing is unavailable on the device.

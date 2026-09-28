@@ -18,6 +18,7 @@ import {
   Bot,
   Film,
   Check,
+  Sparkles,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import {
@@ -27,7 +28,11 @@ import {
   getVideoAspectOptionsForModel,
   getVideoQualityOptionsForModel,
 } from '@agiworkforce/types';
-import { supportsManagedMediaImageEdit } from '@agiworkforce/cloud-contracts';
+import {
+  CHAT_OUTPUT_FORMATS,
+  CHAT_OUTPUT_FORMAT_LABEL,
+  supportsManagedMediaImageEdit,
+} from '@agiworkforce/cloud-contracts';
 import { Text } from '@/components/ui/text';
 import { Switch } from '@/components/ui/switch';
 import { useChatStore } from '@/stores/chatStore';
@@ -53,6 +58,8 @@ import { executionModeForConversation } from '@/src/features/chat/utils/conversa
 import { collectSearchableMobileFiles } from '@/src/features/search/mobileGlobalSearch';
 import { fetchLibraryPage } from '@/src/features/library/libraryClient';
 import { useCapability } from '@/src/lib/capabilities';
+import { useMobileSkillSelectionStore } from '@/src/features/skills/selectionStore';
+import { useOutputFormatStore } from '@/src/features/chat/store/outputFormatStore';
 import type { Attachment } from './AttachmentPreview';
 
 interface AddToChatSheetProps {
@@ -64,12 +71,16 @@ interface AddToChatSheetProps {
   onOpenModelPicker: () => void;
   onOpenProjectPicker: () => void;
   onAttachFromLibrary: (attachment: Attachment) => void;
+  onOpenSkills?: () => void;
+  offersOutputFormat?: boolean;
 }
 
 const SNAP_POINTS = ['75%'];
 const LIBRARY_PICKER_SIZE = 12;
 const CLOUD_ATTACH_RETENTION_NOTE =
   'Files you attach are uploaded to AGI Cloud and kept in your Library until you delete them.';
+const TEMPORARY_ATTACH_RETENTION_NOTE =
+  'Files you attach to a temporary chat stay out of your Library and are deleted with the chat.';
 
 interface LibraryPick {
   id: string;
@@ -95,6 +106,8 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     onOpenModelPicker,
     onOpenProjectPicker,
     onAttachFromLibrary,
+    onOpenSkills,
+    offersOutputFormat = false,
   },
   ref,
 ) {
@@ -102,6 +115,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
   const { colors: themeColors } = useTheme();
   const cameraAllowed = useCapability('canUseCamera');
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
+  const isTemporaryChat = useSettingsStore((s) => s.isTemporaryChat);
 
   const chatStyle = useChatStore((s) => s.chatStyle);
   const localConversations = useChatStore((s) => s.conversations);
@@ -172,6 +186,18 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     grantedCapabilities.includes('canUseImages') &&
     canUseBillingPlanCapability(tier, 'video_generation');
   const canUseConnectors = grantedCapabilities.includes('canUseConnectors');
+  const codeExecutionAvailable = useTierStore((s) => s.codeExecutionAvailable);
+  const outputFormat = useOutputFormatStore((s) => s.format);
+  const setOutputFormat = useOutputFormatStore((s) => s.setFormat);
+  const showOutputSection =
+    offersOutputFormat &&
+    appMode === 'cloud' &&
+    mediaMode === 'text' &&
+    FEATURES.codeExecution &&
+    selectedModelMetadata?.capabilities?.tools === true &&
+    codeExecutionAvailable &&
+    grantedCapabilities.includes('canUseCloudExecution');
+  const selectedSkillName = useMobileSkillSelectionStore((s) => s.selection?.name ?? null);
 
   const localActiveProjectId = useProjectStore((s) => s.activeProjectId);
   const localProjects = useProjectStore((s) => s.projects);
@@ -328,6 +354,13 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     exitMediaMode();
   }, [haptic]);
 
+  const handleOpenSkills = useCallback(() => {
+    if (!onOpenSkills) return;
+    haptic();
+    closeSheet();
+    onOpenSkills();
+  }, [closeSheet, haptic, onOpenSkills]);
+
   const handleConnectors = useCallback(() => {
     haptic();
     if (!FEATURES.connectors) {
@@ -458,7 +491,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
               color: themeColors.textMuted,
             }}
           >
-            {CLOUD_ATTACH_RETENTION_NOTE}
+            {isTemporaryChat ? TEMPORARY_ATTACH_RETENTION_NOTE : CLOUD_ATTACH_RETENTION_NOTE}
           </Text>
         ) : null}
 
@@ -842,6 +875,39 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
           </>
         ) : null}
 
+        {showOutputSection ? (
+          <>
+            <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
+              <Text
+                style={{
+                  fontSize: 11,
+                  fontWeight: '600',
+                  color: themeColors.textMuted,
+                  textTransform: 'uppercase',
+                  marginBottom: 4,
+                }}
+              >
+                Output
+              </Text>
+              {CHAT_OUTPUT_FORMATS.map((format) => (
+                <MediaOptionRow
+                  key={format}
+                  label={CHAT_OUTPUT_FORMAT_LABEL[format]}
+                  selected={outputFormat === format}
+                  onPress={() => {
+                    haptic();
+                    setOutputFormat(outputFormat === format ? null : format);
+                  }}
+                  textColor={themeColors.textPrimary}
+                  mutedColor={themeColors.textMuted}
+                  activeColor={themeColors.teal}
+                />
+              ))}
+            </View>
+            <View style={{ height: 1, backgroundColor: dividerColor, marginHorizontal: 20 }} />
+          </>
+        ) : null}
+
         {/* Section 3: Tool availability */}
         {showToolSection ? (
           <View style={{ paddingHorizontal: 20, paddingVertical: 16, gap: 4 }}>
@@ -887,6 +953,16 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
             pending={handoff === 'style'}
             onPress={handleOpenStyleSelector}
           />
+          {appMode === 'cloud' && FEATURES.skills && onOpenSkills ? (
+            <ConfigLink
+              icon={<Sparkles size={18} color={themeColors.textMuted} />}
+              label="Skills"
+              value={selectedSkillName ?? 'Choose'}
+              textColor={themeColors.textPrimary}
+              mutedColor={themeColors.textMuted}
+              onPress={handleOpenSkills}
+            />
+          ) : null}
           {appMode === 'cloud' && FEATURES.connectors && canUseConnectors ? (
             <ConfigLink
               icon={<Link size={18} color={themeColors.textMuted} />}
