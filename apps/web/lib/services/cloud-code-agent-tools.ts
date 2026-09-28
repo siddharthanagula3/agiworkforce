@@ -118,6 +118,21 @@ const VERSION_PROBE_BINARIES = new Set([
 
 const VERSION_PROBE_FLAGS = new Set(['--version', '-v', '-V', '--help']);
 
+const READ_ONLY_GIT_SUBCOMMANDS = new Set([
+  'status',
+  'diff',
+  'log',
+  'show',
+  'blame',
+  'ls-files',
+  'rev-parse',
+  'describe',
+  'shortlog',
+  'grep',
+]);
+
+const GIT_WRITING_FLAG = /^(?:--output\b|--ext-diff$|-o$)/;
+
 const VERSION_PROBE_TOKEN_COUNT = 2;
 
 const DENIED_PATTERNS: Array<{ pattern: RegExp; reason: string }> = [
@@ -215,6 +230,13 @@ export function classifyCommandRisk(rawCommand: string): CommandClassification {
   }
   if (READ_ONLY_COMMANDS.has(firstToken)) {
     return { risk: 'safe', reason: 'Read-only, workspace-scoped command.' };
+  }
+  if (
+    firstToken === 'git' &&
+    READ_ONLY_GIT_SUBCOMMANDS.has(tokens[1] ?? '') &&
+    !tokens.slice(2).some((token) => GIT_WRITING_FLAG.test(token))
+  ) {
+    return { risk: 'safe', reason: 'Reads the repository history or working tree.' };
   }
   if (
     tokens.length === VERSION_PROBE_TOKEN_COUNT &&
