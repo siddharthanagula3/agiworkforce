@@ -201,6 +201,12 @@ const ERROR_CODE_MESSAGES: Record<ErrorCodeValue, FriendlyError> = {
     suggestion: 'Connect from an allowed network or contact your administrator.',
     icon: 'auth',
   },
+  [ErrorCode.PASSKEY_REQUIRED]: {
+    title: 'Verify It Is You',
+    message: 'Advanced Account Security is on for this account.',
+    suggestion: 'Continue with one of your passkeys or security keys.',
+    icon: 'auth',
+  },
   [ErrorCode.VALIDATION_ERROR]: {
     title: 'Invalid Input',
     message: 'Some of the information provided is incorrect.',

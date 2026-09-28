@@ -5,7 +5,7 @@
       "retryable": false,
       "providerDetail": "hidden",
       "suggestedAction": "sign_in",
-      "codes": ["UNAUTHORIZED", "MFA_REQUIRED"]
+      "codes": ["UNAUTHORIZED", "MFA_REQUIRED", "PASSKEY_REQUIRED"]
     },
     "authorization": {
       "why": "the caller is known and this principal may not do it",

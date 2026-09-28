@@ -271,6 +271,23 @@ const ALLOWLIST = [
       'security event for staff review',
   },
   {
+    match: /lib\/server\/account-security\/store\.ts$/,
+    tables: [
+      'account_security_challenges',
+      'scim_provisioned_users',
+      'sso_connections',
+      'profiles',
+    ],
+    functions: ['readOpenHandoff', 'readOrganizationControl'],
+    reason:
+      'readOpenHandoff finds a browser verification handoff by the hash of its unguessable ' +
+      'token, because the browser that opens it holds no session: the token is the capability, ' +
+      'and every later write on that row is constrained by the user_id the row names. ' +
+      'readOrganizationControl reads the account by its own id and asks whether an ' +
+      "organization's directory has linked it or has verified its email domain, which the " +
+      'directory and domain tables can answer only across organizations',
+  },
+  {
     match: /lib\/server\/security-log-retention\.ts$/,
     tables: ['security_audit_logs'],
     reason:
