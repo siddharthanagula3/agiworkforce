@@ -13,6 +13,7 @@ import { CODE_COPY, changeStateLabel } from '../code-surface';
 import { diffByPath } from '../code-diff';
 import { LOCAL_CODE_COPY } from '../local-code';
 import { DiffBody } from './CodeChangesPanel';
+import { LocalTerminal } from './LocalTerminal';
 import styles from '../CloudCodePage.module.css';
 
 const GLYPH_SIZE = 15;
@@ -198,6 +199,8 @@ export function LocalChangesPanel({ rootId, refreshKey, onClose }: LocalChangesP
         {changes?.diffTruncated && (
           <p className={styles['formHelp']}>{CODE_COPY.changesDiffTruncated}</p>
         )}
+
+        <LocalTerminal rootId={rootId} onCommandFinished={() => void load()} />
       </div>
       {dialog}
     </aside>

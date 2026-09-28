@@ -65,6 +65,8 @@ export const LOCAL_CODE_COPY = {
   changesFailed: 'The changes in this folder could not be read.',
   changesNotRepository: 'This folder is not a git repository, so there are no changes to show.',
   discardFailed: 'That change could not be discarded.',
+  commandFailed: 'That command could not be run.',
+  commandStopped: 'stopped',
   extensions: 'Skills and plugins',
   skillsHeading: 'Skills',
   pluginsHeading: 'Plugins',
