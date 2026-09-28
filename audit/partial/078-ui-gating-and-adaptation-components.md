@@ -287,22 +287,6 @@ Code: `apps/web/features/chat/components/Composer/ComposerFooter.tsx:167-167`, `
 
 Code: `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:678-686`
 
-## S78.27: Effective-capability inspector.
-
-- Done when: A view shows what is effectively available to this user on this surface and why anything is not.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | The model catalogue shows each model's capabilities and whether your plan admits it, but no view shows feature availability across plan, policy, surface and device with the reason. | ui |
-| desktop | partial | The model catalogue shows each model's capabilities and whether your plan admits it, but no view shows feature availability across plan, policy, surface and device with the reason. | ui |
-| mobile | partial | The Capabilities screen lists what AGI can use with on/off states, but it does not read the server capability document or say which layer (plan, policy, device) blocks something. | ui |
-| cli | missing | Not built on this surface. |  |
-| vscode | partial | Upgrade to partial (miss ui) for consistency with the web cell: the VS Code picker names why each locked model is unavailable on this session (sign in, upgrade, provider key via modelLockForRoute) and the settings webview has a read-only "Resolved entitlement" diagnostics card with the resolved tier. Remaining: no view lists feature availability across plan, policy, surface and runtime with reasons; the diagnostics card is developer-only. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/ModelCatalogue.tsx:227-229`, `apps/web/features/chat/components/Composer/ModelCatalogue.tsx:64-64`, `apps/mobile/src/features/settings/capabilities/index.tsx:230-232`
-
 ## S78.28: Live updates after a plan, policy, connection, or device change.
 
 - Done when: After a plan, policy, connection or device change, gated controls update without reinstalling or restarting.
