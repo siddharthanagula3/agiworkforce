@@ -425,6 +425,26 @@ export const rateLimitConfigs = {
     window: '1 m', // 300 provider events per minute per IP across Slack, Gmail, Calendar and connectors
     failClosed: false, // A dead Redis must not stop a provider's push; the signature check still gates it
   },
+  'slack-assistant-team': {
+    limit: 120,
+    window: '1 m',
+    failClosed: false,
+  },
+  'slack-assistant-user': {
+    limit: 12,
+    window: '1 m',
+    failClosed: false,
+  },
+  'slack-settings': {
+    limit: 60,
+    window: '1 m',
+    failClosed: false,
+  },
+  'slack-link': {
+    limit: 20,
+    window: '1 m',
+    failClosed: true,
+  },
   'settings-org': {
     limit: 60,
     window: '1 m',
