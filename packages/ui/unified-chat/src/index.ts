@@ -353,6 +353,7 @@ export type {
   LibraryViewMode,
   SurfaceFilter,
 } from './components/library/LibraryView';
+export type { MediaJobsTransport } from './components/library/MediaJobsSection';
 export { TasksPage } from './components/tasks/TasksPage';
 export type { TasksTransport } from './components/tasks/TasksPage';
 export type { AgiWorkRerunGoal } from './components/tasks/task-display';
