@@ -25,11 +25,13 @@ import {
   type FreeTrialMessage,
   type ManagedChatFileAttachment,
   type ManagedChatStreamOptions,
+  type ManagedMemoryCommandTurn,
   type ManagedModelAccess,
   type ManagedQuotaBlock,
   type ManagedQuotaWarningSignal,
 } from './freeTrialClient';
 import { resolveChromeManagedChatRoute } from './managedChatRouting';
+import { MEMORY_COMMAND_KINDS, MEMORY_COMMAND_STATUSES } from './memoryClient';
 import type { ChromeManagedRoutingMetadata } from '../../types';
 
 const MAX_MESSAGE_CHARS = 32_000;
@@ -92,6 +94,7 @@ export interface ChromeManagedChatRequest {
   completionMode?: 'interactive' | 'unattended';
   conversationId?: string;
   assistantMessageId?: string;
+  memoryCommand?: ManagedMemoryCommandTurn;
   signal?: AbortSignal;
 }
 
@@ -199,6 +202,13 @@ function validateRequest(request: ChromeManagedChatRequest): string | null {
   }
   if (request.quickMode !== undefined && typeof request.quickMode !== 'boolean') {
     return 'Invalid Quick mode value.';
+  }
+  if (
+    request.memoryCommand !== undefined &&
+    (!MEMORY_COMMAND_KINDS.has(request.memoryCommand.kind) ||
+      !MEMORY_COMMAND_STATUSES.has(request.memoryCommand.status))
+  ) {
+    return 'Invalid memory command.';
   }
   if (
     request.effort !== undefined &&
@@ -547,6 +557,7 @@ export async function executeChromeManagedChat(
       : {}),
     ...(request.conversationId ? { conversationId: request.conversationId } : {}),
     ...(request.assistantMessageId ? { assistantMessageId: request.assistantMessageId } : {}),
+    ...(request.memoryCommand ? { memoryCommand: request.memoryCommand } : {}),
     signal: request.signal,
   };
   let latestTaskState: AgentTaskState | undefined;

@@ -6,18 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S23.02: Project name and description.
-
-- Done when: A project has a name and an optional description that the user can set at creation and edit later.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | The side panel names a project at creation only; it cannot rename it, set a description, or edit either afterwards. | ui |
-
-Code: `apps/extension/src/features/side-panel/projectsDrawer.ts:531-533`
-
 ## S23.03: Project icon and color.
 
 - Done when: The user can choose a project's icon and colour, and the choice is shown wherever the project appears.
@@ -35,27 +23,25 @@ Code: `apps/mobile/src/features/projects/components/ProjectHeader.tsx:190-220`, 
 
 - Done when: Opening a project shows an overview: its name, description, counts and its main sections (chats, files, instructions).
 - Wave: 2
-- Already works on: web, desktop, cli, vscode
+- Already works on: web, desktop, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | A cloud project's page shows only its name and 'Cloud project · synced across your devices'; the full header (description, counts) is fetched only when crossDeviceSync is on, and that v1 flag is off. | flag-off |
-| chrome | partial | The side panel's expanded row shows the description (or instructions) and recent chat titles, but no files, counts beyond chats, or links into the chats. | ui |
 
-Code: `apps/mobile/app/(app)/projects/[id].tsx:82-84`, `apps/mobile/app/(app)/projects/[id].tsx:172-175`, `apps/mobile/app/(app)/projects/[id].tsx:100-101`, `apps/extension/src/features/side-panel/projectsDrawer.ts:361-368`
+Code: `apps/mobile/app/(app)/projects/[id].tsx:82-84`, `apps/mobile/app/(app)/projects/[id].tsx:172-175`, `apps/mobile/app/(app)/projects/[id].tsx:100-101`
 
 ## S23.06: Project conversations.
 
 - Done when: A project lists its conversations, opens them, and starts new chats that are filed under the project.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli
+- Already works on: web, desktop, mobile, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | vscode | partial | Project conversations now open (f6f8c2f2a). VS Code turns are still not filed under the project: the CLI app-server's thread/start takes no project id (p-desktop-cli). | handler |
-| chrome | partial | Chrome files its chats under the active project and shows recent chat titles per project, but the titles are plain text that cannot be opened. | ui |
 
-Code: `apps/extension-vscode/src/features/projects/projectActions.ts:120-120`, `apps/extension/src/side_panel.ts:6419-6425`, `apps/extension/src/features/cloud-bridge/conversationSync.ts:226-226`, `apps/extension/src/features/side-panel/projectsDrawer.ts:355-357`
+Code: `apps/extension-vscode/src/features/projects/projectActions.ts:120-120`
 
 ## S23.07: Project files.
 
@@ -82,18 +68,6 @@ Code: `apps/extension-vscode/src/features/projects/projectActions.ts:120-120`, `
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/web/app/api/projects/[id]/knowledge-files/google-drive/route.ts:123-123`, `apps/web/features/projects/components/AddSourcesModal.tsx:295-295`, `apps/web/features/projects/lib/google-drive-picker.ts:82-82`, `apps/mobile/src/features/projects/components/ProjectSourcesTab.tsx:199-199`
-
-## S23.09: Project instructions.
-
-- Done when: Instructions saved on a project are applied to every chat in that project.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | Chrome can set instructions only while creating a project and shows them read-only; they apply server-side once the chat is synced under the project, and there is no way to edit them in the side panel. | ui |
-
-Code: `apps/extension/src/features/side-panel/projectsDrawer.ts:531-533`, `apps/extension/src/side_panel.ts:6419-6425`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2550-2555`
 
 ## S23.11: Project Memory.
 

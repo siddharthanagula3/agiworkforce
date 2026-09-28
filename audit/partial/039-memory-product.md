@@ -28,18 +28,6 @@ nothing is left.
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S39.04: Saved-Memory list.
-
-- Done when: The user can open a list of every memory the assistant has saved about them.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | The drawer lists only the first 100 account memories (GET /api/memory?limit=100) with no paging or count. | states |
-
-Code: `apps/extension/src/side_panel.ts:7870-7915`, `apps/extension/src/features/cloud-bridge/memoryClient.ts:99-110`, `apps/extension/src/background.ts:3842-3851`
-
 ## S39.05: Memory search.
 
 - Done when: The user can search or filter their saved memories by text.
@@ -89,18 +77,6 @@ Code: `apps/mobile/app/(app)/settings/memory-summary.tsx:36-60`, `apps/mobile/sr
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S39.11: Explicit “remember this” action.
-
-- Done when: From inside a conversation the user can explicitly ask the assistant to remember something and gets confirmation it was saved.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | Migration 0285 is now applied in production (2026-09-27). Still open: Add a 'remember this' action in the side-panel chat; only the drawer's Add memory exists, and it saves through pending migration 0285. | ui |
-
-Code: `apps/extension/src/side_panel.ts:7928-7938`
-
 ## S39.15: Delete all Memory.
 
 - Done when: One action deletes every saved memory, after a confirmation, and afterwards none remain.
@@ -127,14 +103,13 @@ Code: `apps/extension/src/side_panel.ts:7928-7938`
 
 - Done when: Each saved memory shows where it came from (typed by the user, imported, or learned from a named conversation).
 - Wave: 3
-- Already works on: web, desktop, mobile, vscode
+- Already works on: web, desktop, mobile, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | Migration 0285 is now applied in production (2026-09-27). Still open: Show which chat a memory came from; agi memory list prints only the writer label (web, mobile, auto...), and the chat link needs pending migration 0285. | ui |
-| chrome | partial | Show where each memory came from; drawer rows show only text and a relative time although GET /api/memory returns a source label. | ui |
 
-Code: `apps/cli/src/lib.rs:2070-2074`, `apps/extension/src/side_panel.ts:7768-7775`, `apps/web/app/api/memory/route.ts:62-68`
+Code: `apps/cli/src/lib.rs:2070-2074`
 
 ## S39.19: Correction of stale information.
 
@@ -151,15 +126,12 @@ Code: `apps/cli/src/lib.rs:2070-2074`, `apps/extension/src/side_panel.ts:7768-77
 
 - Done when: When two memories disagree, a stated rule decides which one the assistant uses, and the user can see or settle the conflict.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Migration 0285 is now applied in production (2026-09-27). Still open: Side-panel learning goes through the server ranking rule that needs pending migration 0285; the drawer never shows a conflict. | ui |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:1278-1296`, `apps/web/lib/services/managed-memory-context-service.ts:603-606`, `apps/web/lib/services/managed-memory-context-service.ts:720-724`
 
 ## S39.21: Memory import.
 
@@ -216,14 +188,13 @@ Code: `apps/cli/src/tui/tui_app.rs:3914-3928`, `apps/cli/src/memory_pipeline.rs:
 
 - Done when: Organization or workspace knowledge is kept apart from personal memory: work memories never appear in personal chats and vice versa, and the user can tell which is which.
 - Wave: 3
-- Already works on: web, desktop, mobile, vscode
+- Already works on: web, desktop, mobile, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | Say which workspace's memory this surface shows; memory follows the account's active workspace on the server, but the surface never names it and has no shared workspace knowledge view. | ui |
-| chrome | partial | Say which workspace's memory this surface shows; memory follows the account's active workspace on the server, but the surface never names it and has no shared workspace knowledge view. | ui |
 
-Code: `apps/cli/src/cloud/mod.rs:322-334`, `apps/web/app/api/memory/sync/route.ts:57-63`, `apps/web/lib/services/active-workspace-service.ts:63-88`, `apps/extension/src/features/cloud-bridge/memoryClient.ts:99-110`
+Code: `apps/cli/src/cloud/mod.rs:322-334`, `apps/web/app/api/memory/sync/route.ts:57-63`, `apps/web/lib/services/active-workspace-service.ts:63-88`
 
 ## S39.27: Memory-used indication.
 
@@ -258,14 +229,13 @@ Code: `apps/web/features/chat/components/messages/MessageBubble.tsx:2730-2733`, 
 
 - Done when: The user can stop sensitive information from being remembered (e.g. never-remember terms or categories), and sensitive facts such as credentials are refused automatically.
 - Wave: 3
-- Already works on: web, desktop, cli, vscode
+- Already works on: web, desktop, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Add sensitive-memory controls on mobile; the never-remember list can only be edited on web, and on-device learning (Local mode) has no credential or special-category filter at all. | ui, handler |
-| chrome | partial | Migration 0285 is now applied in production (2026-09-27). Still open: Add never-remember controls in the side panel; its adds go through POST /api/memory, which enforces the web list but whose writer needs pending migration 0285. | ui |
 
-Code: `packages/ai/agent-core/src/memory.ts:78-104`, `apps/mobile/src/features/memory/services/consolidation.ts:146-160`, `apps/web/app/api/memory/sync/route.ts:159-169`, `apps/extension/src/background.ts:3853-3859`
+Code: `packages/ai/agent-core/src/memory.ts:78-104`, `apps/mobile/src/features/memory/services/consolidation.ts:146-160`, `apps/web/app/api/memory/sync/route.ts:159-169`
 
 ## S39.30: Memory reset independent from chat deletion.
 
@@ -290,15 +260,3 @@ Code: `packages/ai/agent-core/src/memory.ts:78-104`, `apps/mobile/src/features/m
 | desktop | partial | Apply memory to every model: free-pool models (free-quota, experiential-free routes) and local Ollama/LM Studio models never receive saved memory; only the managed route injects it. | handler |
 
 Code: `apps/web/features/chat/lib/free-quota-selection.ts:35-42`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2904-2921`, `apps/web/app/api/models/free-quota/completions/route.ts:586-590`
-
-## S39.32: Cross-surface Memory continuity.
-
-- Done when: A memory saved on one client appears and is used on every other client signed in to the same account.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | Migration 0285 is now applied in production (2026-09-27). Still open: Reads, edits and deletes reach the account, but adds from the drawer go through POST /api/memory, whose writer needs pending migration 0285, and the drawer lists only the first 100. | states |
-
-Code: `apps/extension/src/features/cloud-bridge/memoryClient.ts:99-118`, `apps/web/app/api/memory/route.ts:140-149`, `apps/web/lib/services/managed-memory-context-service.ts:720-724`
