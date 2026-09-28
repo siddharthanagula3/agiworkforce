@@ -187,6 +187,9 @@ async fn read_body_capped(mut resp: reqwest::Response) -> std::result::Result<St
 async fn fetch_with_pinned_hops(url: &str) -> std::result::Result<String, String> {
     let mut current = url.to_string();
     for hop in 0..=WEB_FETCH_MAX_REDIRECTS {
+        if let Some(reason) = crate::permissions::url_blocked_by_domain_rule(&current) {
+            return Err(reason);
+        }
         let addrs = validate_hop(&current)
             .await
             .map_err(|reason| format!("URL blocked for security: {current} ({reason})"))?;
