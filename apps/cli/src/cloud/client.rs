@@ -14,6 +14,7 @@ use crate::schedules::api_error_message;
 use crate::tier_cache;
 
 const CLOUD_TIMEOUT: Duration = Duration::from_secs(20);
+const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(3600);
 
 #[derive(Debug)]
 pub enum CloudError {
@@ -374,6 +375,63 @@ impl CloudClient {
             .map(|bytes| (bytes.to_vec(), value))
             .map_err(|error| CloudError::Transport(error.to_string()))
     }
+
+    pub async fn download_to(
+        &self,
+        path: &str,
+        target: &std::path::Path,
+    ) -> Result<u64, CloudError> {
+        let response = self.download_response(path).await?;
+        write_body(response, target).await
+    }
+
+    async fn download_response(&self, path: &str) -> Result<reqwest::Response, CloudError> {
+        let response = self
+            .request(reqwest::Method::GET, path)
+            .header("Accept", "*/*")
+            .timeout(DOWNLOAD_TIMEOUT)
+            .send()
+            .await
+            .map_err(|error| CloudError::Transport(error.to_string()))?;
+        let status = response.status().as_u16();
+        if status == 401 {
+            tier_cache::invalidate_tier_cache();
+            return Err(CloudError::SessionExpired);
+        }
+        if !(200..300).contains(&status) {
+            let body = response.text().await.unwrap_or_default();
+            return Err(CloudError::Api {
+                status,
+                message: api_error_message(&body),
+            });
+        }
+        Ok(response)
+    }
+}
+
+async fn write_body(
+    mut response: reqwest::Response,
+    target: &std::path::Path,
+) -> Result<u64, CloudError> {
+    let write_error = |error: std::io::Error| {
+        CloudError::Transport(format!("could not write {}: {error}", target.display()))
+    };
+    let mut file = tokio::fs::File::create(target).await.map_err(write_error)?;
+    let mut written = 0u64;
+    while let Some(chunk) = response
+        .chunk()
+        .await
+        .map_err(|error| CloudError::Transport(error.to_string()))?
+    {
+        tokio::io::AsyncWriteExt::write_all(&mut file, &chunk)
+            .await
+            .map_err(write_error)?;
+        written += chunk.len() as u64;
+    }
+    tokio::io::AsyncWriteExt::flush(&mut file)
+        .await
+        .map_err(write_error)?;
+    Ok(written)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

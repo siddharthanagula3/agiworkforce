@@ -931,6 +931,12 @@ enum Command {
     Logout,
     /// Show authentication status for all configured providers.
     AuthStatus,
+    /// Export your account data: request an export, or download the one that is ready.
+    ExportData {
+        /// Directory to save the export in (defaults to the current directory).
+        #[arg(long)]
+        out: Option<std::path::PathBuf>,
+    },
     /// Run local preflight diagnostics.
     Doctor {
         /// Emit the diagnostic report as JSON.
@@ -5162,6 +5168,45 @@ async fn run_cli(cli: Cli) -> Result<()> {
             }
 
             // --- Auth Status ---
+            Command::ExportData { out } => {
+                let client = cloud::CloudClient::connect_managed()
+                    .map_err(|error| anyhow::anyhow!("{error}"))?;
+                let archive = cloud::data_export::current(&client)
+                    .await
+                    .map_err(|error| anyhow::anyhow!("{error}"))?;
+                match archive {
+                    Some(archive) if archive.status == "ready" => {
+                        let directory = match out {
+                            Some(directory) => directory.clone(),
+                            None => std::env::current_dir()?,
+                        };
+                        let saved = cloud::data_export::download(&client, &archive, &directory)
+                            .await
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        for path in &saved {
+                            println!("Saved {}", path.display());
+                        }
+                    }
+                    Some(archive) if archive.status == "preparing" => println!(
+                        "Your export requested at {} is still being prepared. Run `agi export-data` again later to download it.",
+                        terminal_text::sanitize_terminal_text(&archive.requested_at)
+                    ),
+                    _ => {
+                        let requested = cloud::data_export::request(&client)
+                            .await
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        match requested {
+                            Some(archive) if archive.status == "ready" => println!(
+                                "Your export is ready. Run `agi export-data` again to download it."
+                            ),
+                            _ => println!(
+                                "Your account export is being prepared. Run `agi export-data` again later to download it."
+                            ),
+                        }
+                    }
+                }
+                Ok(())
+            }
             Command::AuthStatus => {
                 let statuses = auth::auth_status()?;
                 if statuses.is_empty() {
