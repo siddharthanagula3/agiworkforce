@@ -287,6 +287,20 @@ export async function getOrgReadableSessionByToken(
   return rows[0] ? rowToSession(rows[0]) : null;
 }
 
+export async function readSharedSessionSharerName(
+  db: DatabaseAdapter,
+  ownerUserId: string,
+): Promise<string | null> {
+  const [row] = await db.query<{ display_name: string | null; email: string | null }>(
+    `select display_name, email
+       from public.profiles
+      where id = $1
+      limit 1`,
+    [ownerUserId],
+  );
+  return row?.display_name?.trim() || row?.email?.trim() || null;
+}
+
 export interface SessionShareTarget {
   organizationId: string;
   sharedSessionId: string;

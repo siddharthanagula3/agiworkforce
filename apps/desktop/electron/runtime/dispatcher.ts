@@ -2,6 +2,8 @@ import os from 'node:os';
 import { app, dialog, shell, type BrowserWindow } from 'electron';
 import {
   DESKTOP_RUNTIME_EVENT_CHANNEL,
+  DISPATCH_TASK_REPORT,
+  DISPATCH_TASK_RUNNER_READY,
   LOCAL_INFERENCE_COMMANDS,
   LocalInferenceRefused,
   ShellCommandRefused,
@@ -101,6 +103,8 @@ import { RemoteControlRefused } from '../remote/remoteControlHost';
 import {
   remoteControlAvailable,
   remoteControlState,
+  reportDispatchTask,
+  setDispatchTaskRunner,
   startRemoteControl,
   stopRemoteControl,
 } from '../remote/remoteControlService';
@@ -1098,6 +1102,10 @@ async function execute(
       return startRemoteControl(args);
     case 'remote_control_stop':
       return stopRemoteControl();
+    case DISPATCH_TASK_RUNNER_READY:
+      return setDispatchTaskRunner(window, requireBoolean(args, 'ready'));
+    case DISPATCH_TASK_REPORT:
+      return reportDispatchTask(window, args);
     case 'developer_runtime_status':
       return readDeveloperRuntimeStatus();
     case 'developer_model_list':

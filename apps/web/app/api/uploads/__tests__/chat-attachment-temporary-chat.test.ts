@@ -44,6 +44,10 @@ vi.mock('@/lib/server/media-assets', () => ({
   getMediaAssetByStoragePathname: mockGetMediaAssetByStoragePathname,
   getMediaAssetByContentHash: mockGetMediaAssetByContentHash,
 }));
+vi.mock('@/lib/server/file-storage', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/file-storage')>()),
+  assertFileStorageAvailable: vi.fn().mockResolvedValue(undefined),
+}));
 
 import { POST } from '@/app/api/uploads/chat-attachment/complete/route';
 

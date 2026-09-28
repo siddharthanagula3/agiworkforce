@@ -20,6 +20,7 @@ import {
   isProjectKnowledgeObjectStorageConfigured,
 } from '@/lib/server/project-knowledge-object-storage';
 import { deleteE2BSessionsForUser } from '@/lib/e2b/session-store';
+import { eraseUserDataExportArchives } from '@/lib/server/data-export-archive';
 import { isWorkspaceScopedContentTable } from '@/lib/server/workspace-scope';
 import {
   mcpAuthorizationContext,
@@ -397,6 +398,8 @@ export interface AccountErasureReport {
   backupObjectsFailed: number;
   knowledgeObjectsDeleted: number;
   knowledgeObjectsFailed: number;
+  exportObjectsDeleted: number;
+  exportObjectsFailed: number;
   avatarObjectsDeleted: number;
   avatarObjectsFailed: number;
   cacheKeysDeleted: number;
@@ -856,6 +859,8 @@ function heldReport(userId: string, error: string | undefined): AccountErasureRe
     backupObjectsFailed: 0,
     knowledgeObjectsDeleted: 0,
     knowledgeObjectsFailed: 0,
+    exportObjectsDeleted: 0,
+    exportObjectsFailed: 0,
     avatarObjectsDeleted: 0,
     avatarObjectsFailed: 0,
     cacheKeysDeleted: 0,
@@ -900,6 +905,8 @@ export async function eraseUserAccountData(
       backupObjectsFailed: 0,
       knowledgeObjectsDeleted: 0,
       knowledgeObjectsFailed: 0,
+      exportObjectsDeleted: 0,
+      exportObjectsFailed: 0,
       avatarObjectsDeleted: 0,
       avatarObjectsFailed: 0,
       cacheKeysDeleted: 0,
@@ -920,6 +927,7 @@ export async function eraseUserAccountData(
   try {
     const media = await eraseUserMedia(userId);
     const knowledge = await eraseUserKnowledgeObjects(userId);
+    const exportArchives = await eraseUserDataExportArchives(db, userId);
     const avatar = await eraseUserAvatarObject(userId);
     const cache = await deleteE2BSessionsForUser(userId);
     const tables: AccountErasureReport['tables'] = {};
@@ -995,6 +1003,7 @@ export async function eraseUserAccountData(
     const dataDisposed =
       media.mediaObjectsFailed === 0 &&
       knowledge.failed === 0 &&
+      exportArchives.failed === 0 &&
       avatar.failed === 0 &&
       cache.failed === 0 &&
       Object.values(tables).every((result) => result.deleted || result.skipped === true) &&
@@ -1029,6 +1038,8 @@ export async function eraseUserAccountData(
       ...media,
       knowledgeObjectsDeleted: knowledge.deleted,
       knowledgeObjectsFailed: knowledge.failed,
+      exportObjectsDeleted: exportArchives.deleted,
+      exportObjectsFailed: exportArchives.failed,
       avatarObjectsDeleted: avatar.deleted,
       avatarObjectsFailed: avatar.failed,
       cacheKeysDeleted: cache.deleted,

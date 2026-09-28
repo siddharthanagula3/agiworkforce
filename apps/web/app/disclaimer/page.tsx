@@ -10,6 +10,7 @@ import {
   POLICY_LAST_UPDATED,
   contactMailto,
 } from '@/lib/legal-constants';
+import { PolicyVersionsLink } from '@shared/components/legal/PolicyVersionsLink';
 
 export const metadata = buildMetadata({
   title: 'Disclaimer',
@@ -31,7 +32,7 @@ export default function DisclaimerPage() {
             <>
               AGI generates text, code, and files with language models. Model output can be wrong,
               out of date, or confidently invented. Check anything you intend to rely on. Last
-              updated: {POLICY_LAST_UPDATED.disclaimer}.
+              updated: {POLICY_LAST_UPDATED.disclaimer}. <PolicyVersionsLink policy="disclaimer" />
             </>
           }
           ctas={[]}

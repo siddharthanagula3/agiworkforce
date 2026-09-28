@@ -421,16 +421,16 @@ Code: `apps/web/features/code/components/CodeChangesPanel.tsx:307-332`, `apps/we
 
 - Done when: The user shares a coding session with someone else, who can open it.
 - Wave: 2
+- Already works on: web
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Copy link copies the page URL, but code sessions are owner-scoped (403/404 for anyone else), so nothing is actually shared; sessions also need AGI_E2B_EXECUTION=1. | handler, flag-off |
 | desktop | partial | Same owner-only copy link via hosted web; local sessions cannot be shared. | handler, flag-off |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | /export writes the transcript (markdown/json) for the user to pass on; there is no share link another person can open. | ui |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/code/components/CodeSessionMenu.tsx:75-83`, `apps/web/features/code/CloudCodePage.tsx:90-90`, `apps/cli/src/tui/tui_app.rs:3581-3589`, `apps/cli/src/repl/registry.rs:368-378`
+Code: `apps/web/features/code/components/CodeSessionMenu.tsx:75-83`, `apps/cli/src/tui/tui_app.rs:3581-3589`, `apps/cli/src/repl/registry.rs:368-378`
 
 ## S66.41: Continue in another client.
 
