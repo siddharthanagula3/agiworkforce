@@ -131,10 +131,10 @@ Code: `apps/extension/src/side_panel.ts:10879-10887`, `apps/extension/src/backgr
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Migration 0284 is now applied in production (2026-09-27). Still open: A Slack message event can start a saved routine with the message as data, but nothing replies in the DM (the routine would have to post through the user's own Slack connector). The product Slack app has no in-product install path (only SLACK_SIGNING_SECRET); every triggered run fails at production schema until pending migration 0284 ships. | handler, ui |
-| desktop | partial | Migration 0284 is now applied in production (2026-09-27). Still open: Same as web (hosted web): Slack events start a routine, no DM reply. The product Slack app has no in-product install path (only SLACK_SIGNING_SECRET); every triggered run fails at production schema until pending migration 0284 ships. | handler, ui |
+| web | partial | Owner: create the product Slack app and set SLACK_APP_CLIENT_ID, SLACK_APP_CLIENT_SECRET and SLACK_SIGNING_SECRET (docs/runbooks/connector-oauth-apps.md); built at partials/slack d1f8520cef, migration 0330 live. partials/slack d1f8520cef: the product Slack app installs per Slack workspace from Settings > Slack (OAuth v2, bot token sealed, migration 0330); an unlinked Slack user who DMs it gets a single-use link to /slack/link; a linked user's DM is deduplicated on the event id, rate limited per workspace an | owner |
+| desktop | partial | Owner: create the product Slack app and set SLACK_APP_CLIENT_ID, SLACK_APP_CLIENT_SECRET and SLACK_SIGNING_SECRET (docs/runbooks/connector-oauth-apps.md); built at partials/slack d1f8520cef, migration 0330 live. partials/slack d1f8520cef: the product Slack app installs per Slack workspace from Settings > Slack (OAuth v2, bot token sealed, migration 0330); an unlinked Slack user who DMs it gets a single-use link to /slack/link; a linked user's DM is deduplicated on the event id, rate limited per workspace an | owner |
 
-Code: `apps/web/features/schedules/components/ScheduleTriggersPanel.tsx:43-50`, `apps/web/features/schedules/components/ScheduleCard.tsx:430-436`, `apps/web/app/api/webhooks/slack/route.ts:82-100`, `apps/web/lib/triggers/trigger-fire.ts:126-141`
+Code: `apps/web/app/api/webhooks/slack/route.ts:84-84`, `apps/web/app/api/webhooks/slack/route.ts:89-89`, `apps/web/lib/slack/slack-events.ts:67-67`, `apps/web/lib/slack/slack-assistant.ts:276-276`
 
 ## S106.14: Slack channel agent.
 
@@ -180,10 +180,10 @@ Code: `apps/web/features/schedules/components/ScheduleTriggersPanel.tsx:43-50`, 
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Credential-based connectors (API key, PAT, service account) can hold a shared service account the agent uses, but Slack, Teams, Google and Microsoft act through the user's own OAuth sign-in, so the agent posts as the user; no bot identity. | handler |
-| desktop | partial | Same as web (hosted web): service accounts only for credential-based connectors; channel actions post as the user. | handler |
+| web | partial | Owner: create the product Slack app and set SLACK_APP_CLIENT_ID, SLACK_APP_CLIENT_SECRET and SLACK_SIGNING_SECRET (docs/runbooks/connector-oauth-apps.md); built at partials/slack d1f8520cef, migration 0330 live. partials/slack d1f8520cef: the Slack app installs with bot scopes only and stores only the bot token, so every Slack post is made by the app's own bot identity (the APP badge), never as the person; channel answers carry a line naming the person they answer for and the model, as Claude in Slack does. | owner |
+| desktop | partial | Owner: create the product Slack app and set SLACK_APP_CLIENT_ID, SLACK_APP_CLIENT_SECRET and SLACK_SIGNING_SECRET (docs/runbooks/connector-oauth-apps.md); built at partials/slack d1f8520cef, migration 0330 live. partials/slack d1f8520cef: the Slack app installs with bot scopes only and stores only the bot token, so every Slack post is made by the app's own bot identity (the APP badge), never as the person; channel answers carry a line naming the person they answer for and the model, as Claude in Slack does. | owner |
 
-Code: `apps/web/features/connectors/components/ConnectorAccountSelector.tsx:43-48`, `apps/web/lib/connectors/catalog.ts:274-285`, `apps/web/lib/connectors/accounts.ts:1-1`
+Code: `apps/web/lib/slack/slack-api.ts:108-108`, `apps/web/lib/slack/slack-api.ts:109-109`, `apps/web/lib/slack/slack-installations.ts:87-87`, `apps/web/lib/slack/slack-assistant.ts:134-134`
 
 ## S106.25: Native-host and standalone-app handoff.
 

@@ -203,12 +203,14 @@ describe('getWebviewContent, structural smoke', () => {
       'work',
       'connectors',
       'memory',
+      'personalization',
       'skills',
       'plugins',
       'mcp',
       'hooks',
       'instructions',
       'settings',
+      'help',
       'account',
     ]);
     expect(scriptBody).toContain("msg.type === 'accountStatus'");

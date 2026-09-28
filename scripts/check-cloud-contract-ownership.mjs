@@ -53,6 +53,7 @@ const cloudModules = [
   'triggers',
   'skills',
   'plugin-marketplaces',
+  'plugin-packages',
   'device-registry',
   'header-names',
 ];

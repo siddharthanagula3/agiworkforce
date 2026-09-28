@@ -1,0 +1,24 @@
+{
+  "name": "@agiworkforce/upload-scanner",
+  "version": "0.0.1",
+  "description": "Self-hosted ClamAV scanner that answers the web's upload scan webhook.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint src __tests__ --cache --cache-strategy content --cache-location .cache/eslint --max-warnings=0"
+  },
+  "devDependencies": {
+    "@agiworkforce/cloud-contracts": "workspace:*",
+    "@agiworkforce/types": "workspace:*",
+    "@types/node": "^24.13.3",
+    "typescript": "5.9.3",
+    "vitest": "^4.1.11"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}
