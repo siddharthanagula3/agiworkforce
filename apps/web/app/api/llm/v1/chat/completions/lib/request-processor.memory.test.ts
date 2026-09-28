@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ChatCompletionRequest } from './request-processor';
-import { isUnreportedToolAssistedTurn, prepareManagedAutoMemoryFacts } from './request-processor';
+import {
+  applyMemoryToolCapability,
+  isUnreportedToolAssistedTurn,
+  prepareManagedAutoMemoryFacts,
+} from './request-processor';
 import type { ManagedMemoryPolicy } from '@/lib/services/managed-memory-context-service';
 import { resolveInteractiveTurnContext } from '@/lib/services/turn-context-service';
 
@@ -310,5 +314,35 @@ describe('prepareManagedAutoMemoryFacts', () => {
         tools: [{ type: 'function', function: { name: 'web_search' } }],
       } as ChatCompletionRequest),
     ).toBe(false);
+  });
+});
+
+describe('applyMemoryToolCapability', () => {
+  const MEMORY_TOOLS = ['save_memory', 'search_memory', 'forget_memory'];
+
+  function offeredMemoryTools(
+    overrides: Partial<Parameters<typeof applyMemoryToolCapability>[1]> = {},
+  ): string[] {
+    const request: ChatCompletionRequest = { ...makeRequest(), stream: true };
+    applyMemoryToolCapability(request, {
+      surface: 'web',
+      toolsCapable: true,
+      memoryEnabled: true,
+      isTemporary: false,
+      ambientToolsAllowed: true,
+      ...overrides,
+    });
+    return (request.tools ?? [])
+      .map((tool) => (tool as { function?: { name?: string } }).function?.name ?? '')
+      .filter((name) => MEMORY_TOOLS.includes(name));
+  }
+
+  it('offers the memory tools only on the apps, only with Memory on and never in a temporary chat', () => {
+    expect(offeredMemoryTools()).toEqual(MEMORY_TOOLS);
+    expect(offeredMemoryTools({ surface: 'desktop' })).toEqual(MEMORY_TOOLS);
+    expect(offeredMemoryTools({ surface: 'mobile' })).toEqual(MEMORY_TOOLS);
+    expect(offeredMemoryTools({ surface: 'api' })).toEqual([]);
+    expect(offeredMemoryTools({ memoryEnabled: false })).toEqual([]);
+    expect(offeredMemoryTools({ isTemporary: true })).toEqual([]);
   });
 });
