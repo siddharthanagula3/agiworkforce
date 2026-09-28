@@ -301,22 +301,6 @@ Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:72-73`, `
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S4.29: Video studio.
-
-- Done when: A dedicated video studio where the user prompts, configures and generates videos and sees results/history in one place.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Videos are generated from a chat composer mode ("Create video") as in-chat cards; there is no dedicated video studio page. | ui |
-| desktop | partial | Videos are generated from a chat composer mode ("Create video") as in-chat cards; there is no dedicated video studio page. | ui |
-| mobile | partial | Videos are generated from the chat composer with an in-chat progress card; there is no dedicated video studio screen. | ui |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:72-73`, `apps/web/app/api/media/video/generate/route.ts:1642-1643`, `apps/mobile/src/features/chat/actions/runVideoGenerationTurn.ts:65-80`, `apps/mobile/src/features/chat/components/VideoGenProgress.tsx:1-40`
-
 ## S4.30: Media job history.
 
 - Done when: A media job history lists image/video generation jobs with their status (queued, running, failed, done) and links to results.

@@ -112,6 +112,8 @@ build it, and the audit cell is recorded as not applicable by this decision.
   Claude.
 - **Onboarding extras (S3.22, S3.25).** No language, time zone or memory step at
   sign-up.
+- **Video studio destination (S4.29).** Video is generated in chat and kept in the
+  Library; ChatGPT's video studio is the separate Sora app and Claude has none.
 - **Periodic usage recap (S42.20).** Neither delivers one; Reflect builds a recap
   on demand.
 - **Search domain, source-type and per-answer source controls (S34.08, S34.09,
