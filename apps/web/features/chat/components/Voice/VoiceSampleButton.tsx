@@ -3,11 +3,22 @@
 import { useEffect, useRef, useState } from 'react';
 import { Square, Volume2 } from '@agiworkforce/icons';
 
-const SAMPLE_BASE_URL = process.env.NEXT_PUBLIC_LIVE_VOICE_SAMPLE_BASE_URL ?? '';
+import {
+  parseVoiceSampleManifest,
+  VOICE_SAMPLE_MANIFEST_URL,
+  voiceSampleUrl,
+} from '@features/chat/lib/voice-samples';
 
-function sampleUrl(voiceUri: string): string | null {
-  if (!SAMPLE_BASE_URL) return null;
-  return `${SAMPLE_BASE_URL.replace(/\/+$/, '')}/${encodeURIComponent(voiceUri)}.mp3`;
+let samplesRequest: Promise<Record<string, string>> | null = null;
+
+function loadVoiceSamples(): Promise<Record<string, string>> {
+  samplesRequest ??= fetch(VOICE_SAMPLE_MANIFEST_URL)
+    .then((response) => (response.ok ? response.json() : null))
+    .then(parseVoiceSampleManifest, () => {
+      samplesRequest = null;
+      return {};
+    });
+  return samplesRequest;
 }
 
 export function VoiceSampleButton({
@@ -17,29 +28,26 @@ export function VoiceSampleButton({
   voiceUri: string;
   voiceName: string;
 }) {
-  const [available, setAvailable] = useState(false);
+  const [url, setUrl] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const url = sampleUrl(voiceUri);
 
   useEffect(() => {
-    setAvailable(false);
+    let active = true;
+    setUrl(null);
     setPlaying(false);
-    audioRef.current?.pause();
-    audioRef.current = null;
-    if (!url) return undefined;
-    const controller = new AbortController();
-    void fetch(url, { method: 'HEAD', signal: controller.signal }).then(
-      (response) => setAvailable(response.ok),
-      () => setAvailable(false),
-    );
+    void loadVoiceSamples().then((samples) => {
+      const file = samples[voiceUri];
+      if (active && file) setUrl(voiceSampleUrl(file));
+    });
     return () => {
-      controller.abort();
+      active = false;
       audioRef.current?.pause();
+      audioRef.current = null;
     };
-  }, [url]);
+  }, [voiceUri]);
 
-  if (!url || !available) return null;
+  if (!url) return null;
 
   const toggle = () => {
     if (playing) {
@@ -53,7 +61,7 @@ export function VoiceSampleButton({
     audio.onended = () => setPlaying(false);
     audio.onerror = () => {
       setPlaying(false);
-      setAvailable(false);
+      setUrl(null);
     };
     void audio.play().then(
       () => setPlaying(true),
