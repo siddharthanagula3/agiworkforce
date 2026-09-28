@@ -17,6 +17,7 @@ import {
   updateUserSkill,
 } from '@/lib/services/user-skill-service';
 import { listEnabledPluginIds } from '@/lib/services/plugin-installation-service';
+import { workspaceAllowsPlugins } from '@/lib/services/workspace-plugin-access';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { recordWorkspaceAuditEvent } from '@/lib/workspace-audit';
 
@@ -37,11 +38,15 @@ async function handleGetBody(request: NextRequest, context: { params: Promise<{ 
   const { db, userId } = await getUserScopedDb(request);
   const name = requireSkillName((await context.params).name);
 
+  const pluginsAllowed = await workspaceAllowsPlugins(db, userId);
+
   const skill = await findSelectableSkillByName({
     db,
     userId,
     name,
-    loadEnabledPluginIds: () => listEnabledPluginIds(db, userId),
+    loadEnabledPluginIds: () =>
+      pluginsAllowed ? listEnabledPluginIds(db, userId) : Promise.resolve(new Set<string>()),
+    pluginsAllowed,
   });
   if (!skill) {
     throw createError.notFound(`Skill "${name}" not found`);

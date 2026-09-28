@@ -31,6 +31,7 @@ import {
   PLUGIN_SETTINGS_LOADING_LABEL,
   PLUGIN_SKILL_TOGGLE_PREFIX,
   PLUGIN_AGENTS_LABEL,
+  PLUGIN_AGENTS_NOTE,
   PLUGIN_COMMANDS_LABEL,
   PLUGIN_COMMAND_COPIED_LABEL,
   PLUGIN_COMMAND_COPIED_RESET_MS,
@@ -151,7 +152,15 @@ function componentRows(
     rows.push({ label: PLUGIN_COMMANDS_LABEL, body: String(components.commands) });
   }
   if (components.agents > 0) {
-    rows.push({ label: PLUGIN_AGENTS_LABEL, body: String(components.agents) });
+    rows.push({
+      label: PLUGIN_AGENTS_LABEL,
+      body: (
+        <>
+          {components.agents}
+          <span className="block text-xs text-muted-foreground">{PLUGIN_AGENTS_NOTE}</span>
+        </>
+      ),
+    });
   }
   if (components.mcpServers.length > 0) {
     rows.push({
