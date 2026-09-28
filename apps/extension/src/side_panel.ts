@@ -269,6 +269,7 @@ import {
   signOutClerk,
 } from './features/cloud-bridge/clerkAuth';
 import {
+  agiWorkUnlockPlanLabel,
   formatManagedTierLabel,
   getManagedCapabilityLabel,
   getManagedModelBadgeLabel,
@@ -706,6 +707,7 @@ export interface SharedSidePanelContext {
   isConnected: boolean;
   thinkingEnabled: boolean;
   quickMode: boolean;
+  workMode: 'chat' | 'agiwork';
   conversationId: string;
   conversationScope: string | null;
   conversationGeneration: number;
@@ -731,6 +733,7 @@ function createSharedSidePanelContext(): SharedSidePanelContext {
     isConnected: false,
     thinkingEnabled: false,
     quickMode: false,
+    workMode: 'chat',
     conversationId: createBrowserConversationId(),
     conversationScope: null,
     conversationGeneration: 0,
@@ -1213,6 +1216,7 @@ function clearStoredMessages(): void {
   clearActivePersistenceState();
   persistCurrentConversationOwner();
   _ctx.selectedModel = newChatModelSelection;
+  _ctx.workMode = 'chat';
   _ctx.currentModelKey = undefined;
   _ctx.previousTaskType = undefined;
   _ctx.reasoningEffort = undefined;
@@ -1268,6 +1272,7 @@ async function transitionManagedCloudOwner(nextOwner: ManagedCloudOwner | null):
   }
   _ctx.managedCloudOwner = nextOwner ? { ...nextOwner } : null;
   followUpQueue.clear();
+  _ctx.workMode = 'chat';
   _ctx.messages.length = 0;
   turnPayloadByMessageId.clear();
   streamStartedAtById.clear();
@@ -5049,6 +5054,16 @@ function injectStyles(): void {
       line-height: var(--type-body-height);
       white-space: nowrap;
     }
+    #sp-model-mode-badge {
+      padding: 0 6px;
+      border-radius: var(--corner-control);
+      background: var(--agi-ext-overlay);
+      color: var(--agi-ext-text);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      white-space: nowrap;
+    }
+    #sp-model-mode-badge[hidden] { display: none; }
 
     .sp-autonomy-chip {
       justify-content: center;
@@ -6237,6 +6252,7 @@ function postTurn(
       extendedThinking: _ctx.thinkingEnabled || undefined,
       modelSelection: _ctx.selectedModel,
       quickMode: quickMode || undefined,
+      ...(_ctx.workMode === 'agiwork' ? { workMode: 'agiwork' } : {}),
       ...managedOutboundRoutingPayload(quickMode),
       ...managedTurnPersistencePayload(streamId),
     },
@@ -7579,7 +7595,11 @@ function buildUI(): void {
   modelBadge.textContent = t('spModelBadgeDefault');
   const modelEffortBadge = document.createElement('span');
   modelEffortBadge.id = 'sp-model-effort-badge';
-  modelSelectorBtn.replaceChildren(modelBadge, modelEffortBadge);
+  const modelModeBadge = document.createElement('span');
+  modelModeBadge.id = 'sp-model-mode-badge';
+  modelModeBadge.textContent = t('spAgiWork');
+  modelModeBadge.hidden = true;
+  modelSelectorBtn.replaceChildren(modelBadge, modelEffortBadge, modelModeBadge);
   const modelDropdownEl = el('div', {
     id: 'sp-model-dropdown',
     role: 'menu',
@@ -7783,6 +7803,38 @@ function buildUI(): void {
     modelDropdownEl.appendChild(row);
   }
 
+  function appendWorkModeRow(): void {
+    if (!managedModelAccess) return;
+    if (canUseBillingPlanCapability(managedModelAccess.subscriptionTier, 'agi_work')) {
+      appendToggleRow(
+        'sp-agi-work-toggle',
+        t('spAgiWork'),
+        t('spAgiWorkDescription'),
+        _ctx.workMode === 'agiwork',
+        (next) => {
+          _ctx.workMode = next ? 'agiwork' : 'chat';
+          renderModelDropdown();
+          renderModelTrigger();
+        },
+      );
+      return;
+    }
+    const unlockPlanLabel = agiWorkUnlockPlanLabel();
+    if (!unlockPlanLabel) return;
+    const gatedCopy = t('spAgiWorkGated', [unlockPlanLabel]);
+    const row = el('div', {
+      class: 'sp-menu-toggle-row',
+      'aria-disabled': 'true',
+      title: gatedCopy,
+    });
+    const copy = el('div', { class: 'sp-menu-toggle-copy' });
+    copy.appendChild(el('span', { class: 'sp-menu-toggle-label' }, t('spAgiWork')));
+    copy.appendChild(el('span', { class: 'sp-menu-toggle-desc' }, gatedCopy));
+    row.appendChild(copy);
+    row.appendChild(el('span', { class: 'sp-effort-option-badge' }, unlockPlanLabel));
+    modelDropdownEl.appendChild(row);
+  }
+
   function applyQuickMode(next: boolean): void {
     const previous = _ctx.quickMode;
     _ctx.quickMode = next;
@@ -7836,6 +7888,7 @@ function buildUI(): void {
         renderModelDropdown();
       },
     );
+    appendWorkModeRow();
 
     if (more.length === 0) return;
     modelDropdownEl.appendChild(el('div', { class: 'sp-menu-heading' }, t('spMoreModels')));
@@ -7875,10 +7928,14 @@ function buildUI(): void {
         : t('spEffortAuto');
     modelEffortBadge.textContent = state.status === 'ready' ? effortLabel : '';
     modelEffortBadge.hidden = state.status !== 'ready';
+    modelModeBadge.hidden = _ctx.workMode !== 'agiwork';
     modelSelectorBtn.title = state.description;
     modelSelectorBtn.setAttribute(
       'aria-label',
-      t('spModelMenuAria', [getModelBadgeLabel(_ctx.selectedModel), effortLabel]),
+      t(_ctx.workMode === 'agiwork' ? 'spModelMenuAriaWork' : 'spModelMenuAria', [
+        getModelBadgeLabel(_ctx.selectedModel),
+        effortLabel,
+      ]),
     );
   }
   refreshEffortUI = renderModelTrigger;
@@ -8130,6 +8187,7 @@ function buildUI(): void {
         _ctx.streamTimeoutHandle = null;
       }
       returnFollowUpsToComposer();
+      _ctx.workMode = 'chat';
       _ctx.messages.length = 0;
       turnPayloadByMessageId.clear();
       _ctx.lastRenderedCount = 0;
@@ -10150,6 +10208,7 @@ function buildUI(): void {
 
     managedModelAccess = access;
     signInAwaitingCompletion = false;
+    if (!canUseBillingPlanCapability(access.subscriptionTier, 'agi_work')) _ctx.workMode = 'chat';
     const reconciledSelection = reconcileManagedModelSelection(_ctx.selectedModel, access);
     const unavailableSelection =
       reconciledSelection !== _ctx.selectedModel ? _ctx.selectedModel : null;

@@ -500,6 +500,7 @@ export interface ChatMessageMessage extends BaseMessage {
   extendedThinking?: boolean;
   modelSelection?: string;
   quickMode?: boolean;
+  workMode?: 'chat' | 'agiwork';
   effort?: Effort;
   currentModelKey?: string;
   previousTaskType?: RoutingTaskType;

@@ -2386,5 +2386,37 @@
         "example": "example.com"
       }
     }
+  },
+  "spAgiWork": {
+    "message": "AGI Work",
+    "description": "Name of the mode in which the assistant plans and runs multi-step tasks with tools"
+  },
+  "spAgiWorkDescription": {
+    "message": "Plans and runs multi-step tasks with tools and files, for example researching a topic and building a report. Later messages in this chat use it until you turn it off.",
+    "description": "Description of the AGI Work toggle in the model menu"
+  },
+  "spAgiWorkGated": {
+    "message": "Multi-step tasks with tools and files, available on $PLAN$",
+    "description": "Description of the AGI Work row for a plan that does not include it",
+    "placeholders": {
+      "plan": {
+        "content": "$1",
+        "example": "Pro"
+      }
+    }
+  },
+  "spModelMenuAriaWork": {
+    "message": "Model $MODEL$, effort $EFFORT$, AGI Work on",
+    "description": "Accessible name of the model menu button while AGI Work is on",
+    "placeholders": {
+      "model": {
+        "content": "$1",
+        "example": "Auto"
+      },
+      "effort": {
+        "content": "$2",
+        "example": "Medium"
+      }
+    }
   }
 }

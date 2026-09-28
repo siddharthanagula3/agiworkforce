@@ -2,6 +2,7 @@ import {
   CAPABILITY_LABEL,
   SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER,
   canAccessManualModelSelection,
+  canUseBillingPlanCapability,
   clampEffortToEntitlement,
   getBillingPlanPricing,
   getModelEffortOptions,
@@ -116,6 +117,13 @@ export function reconcileManagedModelSelection(
 export function getManagedModelBadgeLabel(modelId: string): string {
   if (modelId === 'auto') return AUTO_OPTION.label;
   return getModelMetadataById(modelId)?.name ?? modelId;
+}
+
+export function agiWorkUnlockPlanLabel(): string | undefined {
+  const tier = SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER.find((candidate) =>
+    canUseBillingPlanCapability(candidate, 'agi_work'),
+  );
+  return tier ? getBillingPlanPricing(tier).label : undefined;
 }
 
 function manualModelSelectionPlanLabel(): string | undefined {
