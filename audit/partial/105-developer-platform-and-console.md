@@ -19,10 +19,10 @@ nothing is left.
 
 - Done when: A developer can submit a plugin/app for review and publish versions to users.
 - Wave: 3
+- Already works on: web
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Submit/publish/deprecate/suspend exist only for platform admins; a developer cannot submit a plugin for public listing, only install it privately or share a custom marketplace. | ui, handler |
 | desktop | partial | Hosted web: publishing is platform-admin only. | ui, handler |
 | cli | partial | `agi plugin sign` signs a plugin with a publisher key, but there is no command to submit or publish it. | handler |
 

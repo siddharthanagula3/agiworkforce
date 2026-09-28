@@ -172,27 +172,14 @@ Code: `apps/web/features/workspace-console/components/WorkspaceConnectorPolicy.t
 | --- | --- | --- | --- |
 | cli | partial | Not 'missing': the CLI ships a connector-policy evaluator, the /api/settings/organization/connector-policy path, a /connectors slash command that renders the policy, and an install-app gate that consults it; the chain is dead only because fetch_workspace_policy is never called. That is a partial with miss ['handler'] (remaining: call connectors::fetch_workspace_policy at session start so /connectors and the install gate see the workspace policy). The auditor treated the same code as partial for S87.17 cli, so the cell is inconsistent (L7). |  |
 
-## S87.17: Skill and Plugin policy.
-
-- Done when: An administrator controls which skills and plugins members may install or use, per item, and the product enforces it.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Plugins have an allow/block list, but skills can only be switched on or off for everyone; there is no per-skill allow or block list. | ui, handler |
-| desktop | partial | Plugins have an allow/block list, but skills can only be switched on or off for everyone; there is no per-skill allow or block list. | ui, handler |
-| cli | partial | On the CLI an administrator can only require signed plugins through the machine-wide managed-settings.json; there is no per-plugin or per-skill allow list, and the workspace plugin list is never fetched. | ui, handler |
-
-Code: `apps/web/features/workspace-console/components/WorkspaceConnectorPolicy.tsx:155-166`, `apps/web/features/workspace-console/components/WorkspaceFeatureControls.tsx:51-52`, `apps/web/lib/services/connector-policy-gate.ts:123-132`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:3740-3744`
-
 ## S87.18: Private marketplace.
 
 - Done when: A workspace curates its own private catalogue of plugins, skills or servers that members browse and install, separate from the public directory.
 - Wave: 3
+- Already works on: web
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | There is no workspace-owned plugin or skill marketplace: marketplace sources are registered per user; the workspace can only publish MCP servers to its members and allow-list plugins. | ui, persistence |
 | desktop | partial | There is no workspace-owned plugin or skill marketplace: marketplace sources are registered per user; the workspace can only publish MCP servers to its members and allow-list plugins. | ui, persistence |
 | cli | missing | Not built on this surface. |  |
 
