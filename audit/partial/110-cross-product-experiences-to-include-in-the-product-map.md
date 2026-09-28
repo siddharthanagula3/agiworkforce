@@ -278,43 +278,36 @@ Code: `packages/ui/ui/src/settings-modal/SettingsModal.tsx:282-282`, `packages/u
 
 - Done when: A published output is updated in place: the user changes it, republishes to the same link, and the new version is recorded and reversible.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Edit and republish to the same link work and each publish is recorded in published_artifact_versions, but nothing reads that history back: no publish-history view and no way to put an earlier published version live except restoring a local version and republishing. S33.09 was declined with the hosting dashboard, so this remaining gap needs its own cell. | ui |
-| desktop | partial | Edit and republish to the same link work and each publish is recorded in published_artifact_versions, but nothing reads that history back: no publish-history view and no way to put an earlier published version live except restoring a local version and republishing. S33.09 was declined with the hosting dashboard, so this remaining gap needs its own cell. | ui |
 | mobile | partial | Republish and restore-then-republish work, but mobile cannot edit an artifact and has no publish history. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/web/app/api/artifacts/publish/route.ts:113-113`, `apps/web/app/api/artifacts/publish/route.ts:265-265`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:662-662`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:414-414`
+Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:414-414`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:579-579`
 
 ## S110.29: Public creation → private fork.
 
 - Done when: A viewer of a public/shared creation (conversation, artifact, app) can make a private copy in their own account and continue it.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Open in AGI copies a shared conversation's text into a private chat (attachments and artifacts are dropped); the public artifact viewer has no fork action, and the panel's Duplicate works only on the viewer's own artifacts. | handler |
-| desktop | partial | Open in AGI copies a shared conversation's text into a private chat (attachments and artifacts are dropped); the public artifact viewer has no fork action, and the panel's Duplicate works only on the viewer's own artifacts. | handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/app/chat/from-share/[token]/page.tsx:25-25`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1806-1806`
-
 ## S110.30: Personal resource → explicitly shared workspace resource.
 
 - Done when: A user explicitly shares a resource they own (project, conversation, artifact, skill) into their workspace with an access level, and members then find and open it.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Projects now share end to end (invited people or the workspace, and shared projects appear in the recipient's Projects list; a separate Shared with me view was declined). Artifacts and conversations shared to the workspace are listed on Workspace > Sharing by name only, with no link and no place in the recipient's Library or history, and skills, assistants and plugins cannot be shared. | ui |
-| desktop | partial | Projects now share end to end (invited people or the workspace, and shared projects appear in the recipient's Projects list; a separate Shared with me view was declined). Artifacts and conversations shared to the workspace are listed on Workspace > Sharing by name only, with no link and no place in the recipient's Library or history, and skills, assistants and plugins cannot be shared. | ui |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/projects/components/ProjectShareDialog.tsx:60-60`, `apps/web/app/api/projects/route.ts:54-54`, `apps/web/features/settings/sections/OrganizationSharingSection.tsx:322-322`

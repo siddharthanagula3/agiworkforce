@@ -134,9 +134,9 @@ Code: `apps/cli/src/cloud/artifacts.rs:50-58`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | Web and mobile read sources as the protocol's AgentEventSource (97a8ff4744); the Chrome (SidePanelSource, ManagedChatSourceWire, bubbles.ts) and VS Code (sourceList payload) adoption patches are with p-chrome and p-sessions. | surface-only |
+| platform | partial | Web and mobile read sources as the protocol's AgentEventSource, and check-client-inference now refuses any new client record that restates its fields (six existing copies recorded in its shrinking baseline); the Chrome and VS Code adoption patches are with p-chrome and p-sessions. | surface-only |
 
-Code: `apps/mobile/src/features/chat/components/CollapsibleSources.tsx:17-17`, `apps/mobile/types/chat.ts:115-115`
+Code: `scripts/check-client-inference.mjs:154-154`, `packages/contracts/types/src/shared-ownership.json:69-69`, `apps/web/features/chat/stores/research-panel-store.ts:6-6`, `apps/mobile/types/chat.ts:115-115`
 
 ## S101.19: Shared Memory contracts.
 
@@ -145,9 +145,9 @@ Code: `apps/mobile/src/features/chat/components/CollapsibleSources.tsx:17-17`, `
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | Web routes and clients share memory-wire.ts and one 20,000-character limit, and the CLI's Rust memory structs are held to the contract by check-cli-wire-parity; the Chrome memory client adoption patch (scratch/p-privacy/adoption/chrome-s101-19-memory-contract.patch) is with p-chrome and VS Code's MemorySyncRejectionSchema adoption with p-sessions. | surface-only |
+| platform | partial | Memory request and response bodies, limits and the CLI's Rust structs now all follow the shared contract; the Chrome memory client patch (p-chrome) and VS Code's MemorySyncRejectionSchema adoption (p-sessions) have not landed. | surface-only |
 
-Code: `packages/contracts/types/src/memory-wire.ts:1-1`, `packages/contracts/cloud-contracts/src/sync.ts:278-278`, `scripts/check-cli-wire-parity.mjs:31-31`
+Code: `packages/contracts/types/src/memory-wire.ts:495-495`, `apps/web/app/api/memory/route.ts:118-118`, `scripts/check-cli-wire-parity.mjs:21-21`
 
 ## S101.20: Shared tool definitions.
 
