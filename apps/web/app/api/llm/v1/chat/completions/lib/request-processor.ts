@@ -201,8 +201,11 @@ import {
   getSlotForModel,
   isFlagshipRoutingSlot,
   normalizeModelId,
+  BILLING_PLAN_CAPABILITY_TIERS,
+  billingPlanCapabilityPlanLabels,
   canUseBillingPlanCapability,
   isFreeBillingPlanTier,
+  normalizeBillingPlanTier,
   isValidIanaTimeZone,
   resolveMaxOutputTokens,
   resolvePromptCachePrivacyClass,
@@ -407,6 +410,7 @@ import { moderateManagedPrompt } from '@/lib/moderation';
 import { timePhase } from '@/lib/observability/phase-timer';
 import { assertCapabilityAvailable } from '@/lib/feature-flags/capability-gate';
 import { buildFlagSubject } from '@/lib/feature-flags/flag-evaluation-service';
+import { WORK_CAPABILITY } from '@/lib/feature-flags/kill-switches';
 import { CHAT_TURN_PHASE } from './turn-phases';
 
 export const ChatCompletionRequestSchema = z
@@ -1130,11 +1134,39 @@ export function getWorkModeEntitlementError(
   workMode: ChatCompletionRequest['work_mode'],
   planTier: string | null | undefined,
 ): WorkModeEntitlementError | null {
-  if (workMode !== 'agiwork' || canUseBillingPlanCapability(planTier, 'agi_work')) return null;
+  if (
+    workMode !== 'agiwork' ||
+    canUseBillingPlanCapability(normalizeBillingPlanTier(planTier), 'agi_work')
+  ) {
+    return null;
+  }
   return {
     code: 'agi_work_plan_required',
     message: 'AGI Work requires Pro or higher.',
     requiredTier: 'pro',
+  };
+}
+
+export function getResearchPlanRefusal(
+  research: ChatCompletionRequest['research'],
+  planTier: string | null | undefined,
+): ProcessFailure | null {
+  const plan = normalizeBillingPlanTier(planTier);
+  if (research !== true || canUseBillingPlanCapability(plan, 'deep_research')) return null;
+  return {
+    ok: false,
+    response: NextResponse.json(
+      {
+        error: {
+          message: `Deep Research is available on ${billingPlanCapabilityPlanLabels('deep_research')} plans. Upgrade your plan to use it.`,
+          type: 'invalid_request_error',
+          code: 'plan_upgrade_required',
+          current_plan: plan,
+          required_plans: [...BILLING_PLAN_CAPABILITY_TIERS.deep_research],
+        },
+      },
+      { status: 403 },
+    ),
   };
 }
 
@@ -4124,19 +4156,23 @@ export async function processRequest(
     );
   }
 
-  if (chatRequest.research === true) {
-    const { organizationId: researchWorkspaceId } = await scopedDbPromise;
-    await assertCapabilityAvailable(
-      buildFlagSubject(request, {
-        userId,
-        workspaceId: researchWorkspaceId,
-        role: null,
-        plan: subscription.plan_tier,
-        surface: chatSurface,
-      }),
-      'canUseDeepResearch',
-      'Deep Research',
-    );
+  const researchPlanRefusal = getResearchPlanRefusal(chatRequest.research, subscription.plan_tier);
+  if (researchPlanRefusal) return researchPlanRefusal;
+  if (chatRequest.research === true || chatRequest.work_mode === 'agiwork') {
+    const { organizationId: gatedWorkspaceId } = await scopedDbPromise;
+    const gatedSubject = buildFlagSubject(request, {
+      userId,
+      workspaceId: gatedWorkspaceId,
+      role: null,
+      plan: subscription.plan_tier,
+      surface: chatSurface,
+    });
+    if (chatRequest.work_mode === 'agiwork') {
+      await assertCapabilityAvailable(gatedSubject, WORK_CAPABILITY, 'AGI Work');
+    }
+    if (chatRequest.research === true) {
+      await assertCapabilityAvailable(gatedSubject, 'canUseDeepResearch', 'Deep Research');
+    }
   }
   const researchMode = researchModeAllowed(
     chatRequest,
