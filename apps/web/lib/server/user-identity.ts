@@ -242,8 +242,13 @@ export async function readProjectPersonalizationScope(
               from public.organization_shared_projects s
               join public.organization_members m
                 on m.organization_id = s.organization_id
+              left join public.organization_project_access a
+                on a.organization_id = s.organization_id
+               and a.project_id = s.project_id
+               and a.user_id = $2
              where s.project_id = p.id
                and m.user_id = $2
+               and coalesce(a.access, s.default_access) <> 'none'
           )
         )
       limit 1`,

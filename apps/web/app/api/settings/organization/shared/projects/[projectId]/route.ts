@@ -23,7 +23,11 @@ export const runtime = 'nodejs';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-const ShareSchema = z.object({}).strict();
+const ShareSchema = z
+  .object({
+    audience: z.enum(['workspace', 'invited']).optional(),
+  })
+  .strict();
 
 const MemberAccessSchema = z
   .object({
@@ -72,7 +76,7 @@ async function handleShare(
     organizationId: membership.organizationId,
     projectId: parsedProjectId,
     actorUserId: userId,
-    defaultAccess: 'read',
+    defaultAccess: parsed.data.audience === 'invited' ? 'none' : 'read',
   });
 
   await recordAuditEvent({

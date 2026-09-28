@@ -97,7 +97,14 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
       displayName: row.display_name,
       email: row.email,
     })),
-    sharedProjects,
+    sharedProjects: canManageSharing
+      ? sharedProjects
+      : sharedProjects.filter(
+          (project) =>
+            project.ownerUserId === userId ||
+            (project.memberGrants.find((grant) => grant.userId === userId)?.access ??
+              project.defaultAccess) !== 'none',
+        ),
     sharedConnectors,
     sharedArtifacts,
     sharedConversations,
