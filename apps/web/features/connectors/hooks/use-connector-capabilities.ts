@@ -1,93 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { z } from 'zod';
+import {
+  ConnectorCapabilityCatalogSchema,
+  connectorCapabilitiesPath,
+  type ConnectorCapabilityCatalog,
+} from '@agiworkforce/cloud-contracts';
 
 import { toUserMessage } from '@/lib/user-error-message';
-
-const CatalogItemSchema = z.object({
-  name: z.string(),
-  title: z.string().optional(),
-  description: z.string().optional(),
-});
-
-const ConnectorCapabilityCatalogSchema = z.object({
-  connectorId: z.string(),
-  connectorLabel: z.string(),
-  source: z.enum(['github-adapter', 'operator', 'oauth', 'custom', 'organization']),
-  generatedAt: z.number(),
-  protocolEra: z.enum(['modern', 'legacy']),
-  protocolVersion: z.string().optional(),
-  supportedVersions: z.array(z.string()).default([]),
-  transport: z.enum(['stdio', 'sse', 'streamable-http']).optional(),
-  serverInfo: z.object({ name: z.string(), version: z.string() }).optional(),
-  capabilityKeys: z.array(z.string()),
-  tasksSupported: z.boolean(),
-  rejectedTools: z
-    .array(
-      z.object({
-        toolName: z.string().optional(),
-        reason: z.enum(['non-canonical-name', 'invalid-input-schema']),
-        detail: z.string().optional(),
-      }),
-    )
-    .default([]),
-  tools: z.array(
-    CatalogItemSchema.extend({
-      parameters: z
-        .array(
-          z.object({
-            name: z.string(),
-            required: z.boolean(),
-            type: z.string().optional(),
-            description: z.string().optional(),
-          }),
-        )
-        .default([]),
-      visibility: z.enum(['model', 'app', 'both']),
-      hasApp: z.boolean(),
-      readOnly: z.boolean().default(false),
-    }),
-  ),
-  resources: z.array(
-    CatalogItemSchema.extend({
-      uri: z.string(),
-      mimeType: z.string().optional(),
-      size: z.number().optional(),
-      isApp: z.boolean(),
-    }),
-  ),
-  resourceTemplates: z.array(
-    CatalogItemSchema.extend({ uriTemplate: z.string(), mimeType: z.string().optional() }),
-  ),
-  prompts: z.array(
-    CatalogItemSchema.extend({
-      arguments: z.array(
-        z.object({
-          name: z.string(),
-          description: z.string().optional(),
-          required: z.boolean().optional(),
-        }),
-      ),
-    }),
-  ),
-  apps: z.array(
-    z.object({
-      serverName: z.string(),
-      toolName: z.string(),
-      resourceUri: z.string(),
-      visibility: z.enum(['model', 'app', 'both']),
-    }),
-  ),
-  discoveryErrors: z.array(
-    z.object({
-      capability: z.enum(['tools', 'resources', 'resourceTemplates', 'prompts']),
-      message: z.string(),
-    }),
-  ),
-});
-
-export type ConnectorCapabilityCatalog = z.infer<typeof ConnectorCapabilityCatalogSchema>;
 
 const CACHE_TTL_MS = 30_000;
 const cache = new Map<string, { value: ConnectorCapabilityCatalog; fetchedAt: number }>();
@@ -101,7 +21,7 @@ async function fetchCatalog(connectorRef: string): Promise<ConnectorCapabilityCa
   if (pending) return pending;
 
   const requestGeneration = generation;
-  const request = fetch(`/api/connectors/${encodeURIComponent(connectorRef)}/capabilities`, {
+  const request = fetch(connectorCapabilitiesPath(connectorRef), {
     credentials: 'include',
     cache: 'no-store',
   })

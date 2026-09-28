@@ -1,18 +1,11 @@
-export const DIRECTORY_CATEGORIES = [
-  'Code',
-  'Communication',
-  'Data',
-  'Design',
-  'Financial services',
-  'Health',
-  'Legal',
-  'Life sciences',
-  'Productivity',
-  'Sales and marketing',
-  'Other',
-] as const;
+import {
+  CONNECTOR_DIRECTORY_CATEGORIES,
+  type ConnectorDirectoryCategory,
+} from '@agiworkforce/cloud-contracts';
 
-export type DirectoryCategory = (typeof DIRECTORY_CATEGORIES)[number];
+export const DIRECTORY_CATEGORIES = CONNECTOR_DIRECTORY_CATEGORIES;
+
+export type DirectoryCategory = ConnectorDirectoryCategory;
 
 export const OTHER_CATEGORY: DirectoryCategory = 'Other';
 

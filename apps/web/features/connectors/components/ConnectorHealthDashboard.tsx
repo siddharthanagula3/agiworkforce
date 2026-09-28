@@ -1,36 +1,19 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { z } from 'zod';
+import {
+  CONNECTOR_HEALTH_PATH,
+  ConnectorHealthResponseSchema,
+  type ConnectorCallHealth,
+  type ConnectorCallHealthState,
+} from '@agiworkforce/cloud-contracts';
 import { Spinner } from '@agiworkforce/ui';
 
 import { cn } from '@shared/lib/utils';
 import { toUserMessage } from '@/lib/user-error-message';
 import { CONNECTORS } from '@/features/connectors/data/connectors';
 
-const HEALTH_ENDPOINT = '/api/connectors/health';
 const MS_PER_SECOND = 1000;
-
-const HealthEntrySchema = z.object({
-  connectorId: z.string(),
-  state: z.enum(['responding', 'degraded', 'not-responding', 'unknown']),
-  calls: z.number(),
-  meteredCalls: z.number(),
-  failures: z.number(),
-  blocked: z.number(),
-  failureRatio: z.number(),
-  consecutiveFailures: z.number(),
-  p50LatencyMs: z.number().nullable(),
-  p95LatencyMs: z.number().nullable(),
-  lastCallAt: z.string().nullable(),
-  circuit: z.enum(['closed', 'half-open', 'open']),
-  retryAfterMs: z.number(),
-});
-
-const HealthSchema = z.object({ connectors: z.array(HealthEntrySchema) });
-
-type HealthEntry = z.infer<typeof HealthEntrySchema>;
-type HealthState = HealthEntry['state'];
 
 const HEADING = 'Connector health';
 const EXPLANATION =
@@ -41,21 +24,21 @@ const EMPTY_COPY = 'No connector has been called in the last hour, so there is n
 const RETRY_LABEL = 'Retry';
 const REFRESH_LABEL = 'Refresh';
 
-const STATE_LABEL: Record<HealthState, string> = {
+const STATE_LABEL: Record<ConnectorCallHealthState, string> = {
   responding: 'Responding',
   degraded: 'Degraded',
   'not-responding': 'Not responding',
   unknown: 'Not called yet',
 };
 
-const STATE_CLASS: Record<HealthState, string> = {
+const STATE_CLASS: Record<ConnectorCallHealthState, string> = {
   responding: 'text-success-text',
   degraded: 'text-warning-text',
   'not-responding': 'text-danger-text',
   unknown: 'text-muted-foreground',
 };
 
-const DOT_CLASS: Record<HealthState, string> = {
+const DOT_CLASS: Record<ConnectorCallHealthState, string> = {
   responding: 'bg-success-fill',
   degraded: 'bg-warning-fill',
   'not-responding': 'bg-danger-fill',
@@ -75,7 +58,7 @@ function formatWait(ms: number): string {
   return `${Math.max(1, Math.ceil(ms / MS_PER_SECOND))}s`;
 }
 
-function circuitSentence(entry: HealthEntry): string | null {
+function circuitSentence(entry: ConnectorCallHealth): string | null {
   if (entry.circuit === 'open') {
     return `Paused after ${entry.consecutiveFailures} failures in a row. The next call is allowed in ${formatWait(entry.retryAfterMs)}.`;
   }
@@ -85,8 +68,8 @@ function circuitSentence(entry: HealthEntry): string | null {
   return null;
 }
 
-async function fetchHealth(signal: AbortSignal): Promise<HealthEntry[]> {
-  const response = await fetch(HEALTH_ENDPOINT, {
+async function fetchHealth(signal: AbortSignal): Promise<ConnectorCallHealth[]> {
+  const response = await fetch(CONNECTOR_HEALTH_PATH, {
     credentials: 'include',
     cache: 'no-store',
     signal,
@@ -95,7 +78,7 @@ async function fetchHealth(signal: AbortSignal): Promise<HealthEntry[]> {
   if (!response.ok) {
     throw new Error(body?.error?.message ?? `Request failed (${response.status})`);
   }
-  const parsed = HealthSchema.safeParse(body);
+  const parsed = ConnectorHealthResponseSchema.safeParse(body);
   if (!parsed.success) {
     throw new Error('Connector health came back in a shape this page cannot read.');
   }
@@ -103,7 +86,7 @@ async function fetchHealth(signal: AbortSignal): Promise<HealthEntry[]> {
 }
 
 export function ConnectorHealthDashboard({ className }: { className?: string }) {
-  const [entries, setEntries] = useState<HealthEntry[] | null>(null);
+  const [entries, setEntries] = useState<ConnectorCallHealth[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
