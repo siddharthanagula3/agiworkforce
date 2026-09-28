@@ -1,13 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SignalingClientOptions } from '@agiworkforce/types';
 import type { RemoteControlState } from '@agiworkforce/local-runtime-contract';
-import { createRemoteControlHost } from '../remote/remoteControlHost';
 import {
   createDispatchSession,
+  createRemoteControlHost,
   deriveDispatchKey,
   signDispatchEnvelope,
   verifyDispatchEnvelope,
-} from '../remote/dispatchEnvelope';
+} from '@agiworkforce/utils/remote-control';
 
 const CODE = 'ABCD1234WXYZ';
 const SALT = 'a1b2c3d4e5f60718';

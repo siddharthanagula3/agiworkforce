@@ -409,6 +409,51 @@ const de = {
     'Die Sitzung konnte nicht übernommen werden. Senden Sie erneut, um es noch einmal zu versuchen.',
   'sessionSync.stopBeforeTerminal':
     'Beenden Sie die laufende Antwort, bevor Sie diese Sitzung im Terminal fortsetzen.',
+  'remote.title': 'Fernsteuerung',
+  'remote.intro':
+    'Koppeln Sie Ihr Telefon, um die AGI-Sitzungen in den Ordnern dieses Fensters zu verfolgen: Schritte genehmigen, Diffs, Testergebnisse und neue Dateien lesen und den nächsten Zug steuern.',
+  'remote.howToPair':
+    'Öffnen Sie die AGI Workforce-App auf Ihrem Telefon, wählen Sie „Pair with Desktop“ und scannen Sie diesen Code. Der Code funktioniert einmal und läuft nach wenigen Minuten ab.',
+  'remote.qrLabel': 'QR-Code zum Koppeln',
+  'remote.pairingCode': 'Kopplungscode',
+  'remote.copyLink': 'Kopplungslink kopieren',
+  'remote.linkCopied':
+    'AGI Workforce: Kopplungslink kopiert. Fügen Sie ihn in der AGI Workforce-App auf Ihrem Telefon ein.',
+  'remote.noPairing':
+    'AGI Workforce: Es wartet keine Kopplung. Starten Sie die Fernsteuerung, um einen neuen Code zu erhalten.',
+  'remote.connected': 'Verbunden: {phone}.',
+  'remote.yourPhone': 'Ihr Telefon',
+  'remote.reconnecting':
+    'Verbindung verloren. Die Verbindung wird wiederhergestellt, damit Ihr Telefon dort weitermachen kann, wo es aufgehört hat.',
+  'remote.pair': 'Telefon koppeln',
+  'remote.pairAgain': 'Erneut koppeln',
+  'remote.cancelPairing': 'Kopplung abbrechen',
+  'remote.disconnect': 'Telefon trennen',
+  'remote.stop': 'Fernsteuerung beenden',
+  'remote.disconnectTitle': '{phone} trennen?',
+  'remote.disconnectConsequence':
+    'Das Telefon wird von diesem Fenster getrennt und kann seine Sitzungen nicht mehr verfolgen oder steuern. Um es wieder zu verbinden, koppeln Sie es mit einem neuen Code.',
+  'remote.starting': 'Fernsteuerung wird gestartet',
+  'remote.startFailed': 'AGI Workforce: Die Fernsteuerung konnte nicht starten. {reason}',
+  'remote.pairFailed': 'Die Kopplung konnte nicht starten.',
+  'remote.signInFirst':
+    'AGI Workforce: Melden Sie sich zuerst an. Die Fernsteuerung koppelt Ihr Telefon über Ihr Konto.',
+  'remote.trustFirst':
+    'AGI Workforce: Vertrauen Sie diesem Arbeitsbereich, bevor ein Telefon darin Sitzungen ausführen kann.',
+  'remote.openFolderFirst':
+    'AGI Workforce: Öffnen Sie zuerst einen Ordner. Die Fernsteuerung führt Sitzungen in den Ordnern dieses Fensters aus.',
+  'remote.folderClosed': 'Dieser Ordner ist in diesem Fenster nicht mehr geöffnet.',
+  'remote.runtimeUnavailable': 'Die AGI CLI konnte die Sitzungen in diesem Ordner nicht auflisten.',
+  'remote.runtimeHint':
+    'Prüfen Sie, ob die AGI CLI installiert und angemeldet ist, und aktualisieren Sie dann die Liste auf Ihrem Telefon.',
+  'remote.deviceName': '{host} (VS Code)',
+  'remote.statusWaiting': 'Fernsteuerung: wartet auf Ihr Telefon',
+  'remote.statusConnected': 'Fernsteuerung: {phone}',
+  'remote.statusReconnecting': 'Fernsteuerung: Verbindung wird wiederhergestellt',
+  'remote.statusError': 'Fernsteuerung: beendet',
+  'remote.statusTooltip': 'Fernsteuerung anzeigen',
+  'remote.attached_one': '{count} Sitzung ist auf dem Telefon geöffnet.',
+  'remote.attached_other': '{count} Sitzungen sind auf dem Telefon geöffnet.',
 };
 
 export default de;
