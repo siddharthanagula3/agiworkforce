@@ -1904,7 +1904,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
 
       if (action.detail === 'list') {
         await memoryTreeProvider.refresh();
-        await openMemorySurface(memoryTreeProvider);
+        await openMemorySurface(memoryTreeProvider, memoryTreeProvider.surfacePlaceholder());
         return;
       }
 
