@@ -3814,5 +3814,55 @@
         "example": "The model took too long to answer."
       }
     }
+  },
+  "spTaskDescriptionLabel": {
+    "message": "Description (optional)",
+    "description": "Label of the optional description field on the scheduled-task form"
+  },
+  "spTaskDescriptionPlaceholder": {
+    "message": "What this task is for",
+    "description": "Placeholder of the scheduled-task description field"
+  },
+  "spTaskSaveChanges": {
+    "message": "Save changes",
+    "description": "Scheduled-task form submit button while editing an existing task"
+  },
+  "spTaskSaving": {
+    "message": "Saving…",
+    "description": "Scheduled-task form submit button while an edit is being saved"
+  },
+  "spTaskSaveFailed": {
+    "message": "The scheduled task could not be saved.",
+    "description": "Scheduled-task form error when saving an edit fails and the background gives no reason"
+  },
+  "spTaskUpdated": {
+    "message": "$NAME$ updated.",
+    "description": "Workflows status after a scheduled task is edited",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Daily brief"
+      }
+    }
+  },
+  "spTaskEdit": {
+    "message": "Edit $NAME$",
+    "description": "Accessible name of the edit button on a scheduled task",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Daily brief"
+      }
+    }
+  },
+  "spTaskDeleteConfirm": {
+    "message": "Select delete again to remove $NAME$. It stops running and cannot be recovered.",
+    "description": "Confirmation shown after the first press of delete on a scheduled task",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Daily brief"
+      }
+    }
   }
 }
