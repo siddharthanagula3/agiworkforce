@@ -108,6 +108,19 @@ import {
 import { buildMicrophoneNotice, setupVoiceInput } from './features/side-panel/voice';
 import { replaceComposerText } from './features/side-panel/composerText';
 import {
+  expandPromptShortcut,
+  expandSlashCommand,
+  matchSlashCommands,
+  promptShortcutsFromSaved,
+  shortcutCommand,
+  shortcutCommandConflict,
+  SHORTCUT_INPUT_PLACEHOLDER,
+  SLASH_COMMANDS,
+  type PromptShortcut,
+  type SlashCommandMeta,
+} from './features/side-panel/pageCommands';
+import { SHORTCUTS_STORAGE_KEY } from './features/background/shortcuts';
+import {
   dictationLanguageChoices,
   readDictationLanguage,
   resolveDictationLanguage,
@@ -149,6 +162,7 @@ import {
   FileText,
   Zap,
   FileEdit,
+  SquarePen,
   Square,
   Settings,
   Shield,
@@ -3254,6 +3268,7 @@ function injectStyles(): void {
     .sp-wf-btn-delete { background: none; border: 1px solid var(--agi-ext-border); color: var(--agi-ext-danger-text); font-size: var(--type-caption-size); line-height: var(--type-caption-height); padding: 3px 7px; border-radius: var(--corner-control); cursor: pointer; transition: color var(--duration-instant), border-color var(--duration-instant); }
     .sp-wf-btn-delete:hover { color: var(--agi-ext-danger-text); border-color: var(--agi-ext-danger-border); }
     .sp-wf-btn-delete:disabled, .sp-wf-task-delete:disabled { cursor: wait; opacity: 0.55; }
+    .sp-wf-btn-delete.is-confirm { color: var(--agi-ext-on-danger); background: var(--agi-ext-danger); border-color: var(--agi-ext-danger); }
     .sp-wf-tasks-list { display: flex; flex-direction: column; gap: 6px; }
     .sp-wf-task-item { display: flex; align-items: center; gap: 8px; padding: 7px 9px; background: var(--agi-ext-bg); border: 1px solid var(--agi-ext-border); border-radius: var(--corner-control); }
     .sp-wf-task-info { flex: 1; min-width: 0; }
@@ -3315,6 +3330,9 @@ function injectStyles(): void {
     .sp-create-shortcut-textarea:focus { border-color: var(--agi-ext-focus); }
     .sp-create-shortcut-textarea:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
     .sp-create-shortcut-textarea::placeholder { color: var(--agi-ext-text-placeholder); }
+    .sp-create-shortcut-input[aria-invalid='true'], .sp-create-shortcut-textarea[aria-invalid='true'] { border-color: var(--agi-ext-danger); }
+    .sp-create-shortcut-hint { color: var(--agi-ext-text-muted); font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
+    .sp-create-shortcut-hint:empty { display: none; }
     .sp-create-shortcut-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 2px; }
     .sp-create-shortcut-cancel { background: none; border: 1px solid var(--agi-ext-border); color: var(--agi-ext-text-muted); border-radius: var(--corner-control); padding: 6px 14px; font-size: var(--type-caption-size); line-height: var(--type-caption-height); cursor: pointer; transition: color var(--duration-instant); }
     .sp-create-shortcut-cancel:hover { color: var(--agi-ext-text); }
@@ -5277,6 +5295,19 @@ function iconButton(attrs: Record<string, string>, icon: string): HTMLElement {
   return button;
 }
 
+let promptShortcuts: PromptShortcut[] = [];
+let editPromptShortcut: (shortcut: PromptShortcut) => void = () => {};
+
+function loadPromptShortcuts(): void {
+  chrome.storage.local.get(SHORTCUTS_STORAGE_KEY, (items) => {
+    if (chrome.runtime.lastError) {
+      console.warn('[SidePanel] Could not read saved shortcuts:', chrome.runtime.lastError.message);
+      return;
+    }
+    promptShortcuts = promptShortcutsFromSaved(items[SHORTCUTS_STORAGE_KEY]);
+  });
+}
+
 const RECENT_PROJECT_LIMIT = 3;
 let recentProjects: ActiveProjectSelection[] = [];
 let recentProjectsGeneration = 0;
@@ -5585,83 +5616,6 @@ async function capturePageContext(): Promise<PageContextCapture> {
   });
 }
 
-interface SlashCommandMeta {
-  display: string;
-  prompt: string;
-  captureContext: boolean;
-  hint: string;
-}
-
-const SLASH_COMMANDS: Record<string, SlashCommandMeta> = {
-  '/summarize': {
-    display: '/summarize',
-    prompt:
-      'Summarize this page concisely. Include key points, main arguments, and any important details.',
-    captureContext: true,
-    hint: 'Key points and main arguments of this page',
-  },
-  '/tldr': {
-    display: '/tldr',
-    prompt: 'Give me a TL;DR of this page in 2-3 sentences.',
-    captureContext: true,
-    hint: 'Two or three sentences, nothing more',
-  },
-  '/explain': {
-    display: '/explain',
-    prompt: 'Explain the content of this page in simple terms. Break down any complex concepts.',
-    captureContext: true,
-    hint: 'Plain-language explanation of this page',
-  },
-  '/translate': {
-    display: '/translate',
-    prompt:
-      'Translate the main content of this page to English. If already in English, translate to Spanish.',
-    captureContext: true,
-    hint: 'Translate the page, add a language to choose',
-  },
-  '/extract': {
-    display: '/extract',
-    prompt:
-      'Extract the key structured data from this page: names, dates, numbers, prices, and any tabular information.',
-    captureContext: true,
-    hint: 'Pull out names, dates, numbers and tables',
-  },
-  '/code': {
-    display: '/code',
-    prompt:
-      'Extract and explain all code snippets on this page. For each snippet, describe what it does and suggest improvements.',
-    captureContext: true,
-    hint: 'Find and explain code on this page',
-  },
-};
-
-function matchSlashCommands(fragment: string): Array<[string, SlashCommandMeta]> {
-  const q = fragment.trim().toLowerCase();
-  if (!q.startsWith('/') || q.includes(' ')) return [];
-  return Object.entries(SLASH_COMMANDS).filter(([name]) => name.startsWith(q));
-}
-
-function expandSlashCommand(
-  raw: string,
-): { display: string; prompt: string; captureContext: boolean } | null {
-  const trimmed = raw.trim();
-  const exact = SLASH_COMMANDS[trimmed];
-  if (exact) return exact;
-
-  for (const [cmd, meta] of Object.entries(SLASH_COMMANDS)) {
-    if (trimmed.startsWith(cmd + ' ')) {
-      const extra = trimmed.slice(cmd.length + 1).trim();
-      return {
-        display: trimmed,
-        prompt: `${meta.prompt}\n\nAdditional instruction: ${extra}`,
-        captureContext: meta.captureContext,
-      };
-    }
-  }
-
-  return null;
-}
-
 function requestStreamCancellation(streamId: string): Promise<void> {
   const owner = ownerByStreamId.get(streamId);
   if (!owner) return Promise.resolve();
@@ -5885,11 +5839,14 @@ function pageReference(source: PageContextSource): SidePanelPageReference {
 
 function sendMessage(text: string, displayText?: string): void {
   if (!canAdmitComposerMessage(text)) return;
-  const prompt = resolveComposerPrompt(
-    text,
-    pendingAttachmentCount(),
-    pendingDocuments.length > 0 ? 'file' : 'image',
-  )!;
+  const prompt = expandPromptShortcut(
+    resolveComposerPrompt(
+      text,
+      pendingAttachmentCount(),
+      pendingDocuments.length > 0 ? 'file' : 'image',
+    )!,
+    promptShortcuts,
+  );
   _ctx.conversationGeneration += 1;
   renderModelNotice(null);
 
@@ -10699,20 +10656,19 @@ function buildUI(): void {
     'aria-labelledby': 'sp-create-shortcut-title',
   });
   const modalHeader = el('div', { class: 'sp-create-shortcut-header' });
-  modalHeader.appendChild(
-    el(
-      'div',
-      { class: 'sp-create-shortcut-title', id: 'sp-create-shortcut-title' },
-      'Create shortcut',
-    ),
+  const modalTitle = el(
+    'div',
+    { class: 'sp-create-shortcut-title', id: 'sp-create-shortcut-title' },
+    t('spShortcutCreate'),
   );
+  modalHeader.appendChild(modalTitle);
   const modalCloseBtn = el(
     'button',
     {
       class: 'sp-create-shortcut-close',
       type: 'button',
       title: 'Close',
-      'aria-label': 'Close create shortcut dialog',
+      'aria-label': 'Close shortcut dialog',
     },
     '×',
   );
@@ -10720,28 +10676,50 @@ function buildUI(): void {
   createShortcutModal.appendChild(modalHeader);
 
   const nameField = el('div', { class: 'sp-create-shortcut-field' });
-  nameField.appendChild(el('div', { class: 'sp-create-shortcut-label' }, 'Name'));
+  nameField.appendChild(
+    el('label', { class: 'sp-create-shortcut-label', for: 'sp-sc-name' }, 'Name'),
+  );
   const scNameInput = el('input', {
     class: 'sp-create-shortcut-input',
     placeholder: 'e.g. Daily research',
     id: 'sp-sc-name',
+    'aria-describedby': 'sp-sc-command',
   }) as HTMLInputElement;
   nameField.appendChild(scNameInput);
+  const scCommandHint = el('div', { class: 'sp-create-shortcut-hint', id: 'sp-sc-command' });
+  nameField.appendChild(scCommandHint);
   createShortcutModal.appendChild(nameField);
 
   const promptField = el('div', { class: 'sp-create-shortcut-field' });
-  promptField.appendChild(el('div', { class: 'sp-create-shortcut-label' }, 'Prompt'));
+  promptField.appendChild(
+    el('label', { class: 'sp-create-shortcut-label', for: 'sp-sc-prompt' }, 'Prompt'),
+  );
   const scPromptInput = el('textarea', {
     class: 'sp-create-shortcut-textarea',
-    placeholder: 'Enter your prompt text...',
+    placeholder: t('spShortcutPromptPlaceholder', [SHORTCUT_INPUT_PLACEHOLDER]),
     id: 'sp-sc-prompt',
+    'aria-describedby': 'sp-sc-prompt-hint',
   }) as HTMLTextAreaElement;
   promptField.appendChild(scPromptInput);
+  promptField.appendChild(
+    el(
+      'div',
+      { class: 'sp-create-shortcut-hint', id: 'sp-sc-prompt-hint' },
+      t('spShortcutInputHint', [SHORTCUT_INPUT_PLACEHOLDER]),
+    ),
+  );
   createShortcutModal.appendChild(promptField);
+
+  const scError = el('div', { class: 'sp-wf-form-error', role: 'status', 'aria-live': 'polite' });
+  createShortcutModal.appendChild(scError);
 
   const modalActions = el('div', { class: 'sp-create-shortcut-actions' });
   const scCancelBtn = el('button', { class: 'sp-create-shortcut-cancel' }, 'Cancel');
-  const scSaveBtn = el('button', { class: 'sp-create-shortcut-save' }, 'Create shortcut');
+  const scSaveBtn = el(
+    'button',
+    { class: 'sp-create-shortcut-save' },
+    t('spShortcutCreate'),
+  ) as HTMLButtonElement;
   modalActions.appendChild(scCancelBtn);
   modalActions.appendChild(scSaveBtn);
   createShortcutModal.appendChild(modalActions);
@@ -10749,10 +10727,34 @@ function buildUI(): void {
   document.body.appendChild(createShortcutOverlay);
 
   let createShortcutReturnFocus: HTMLElement = createShortcutBtn;
+  let editingShortcutId: string | null = null;
 
-  function openCreateShortcutModal(): void {
-    scNameInput.value = '';
-    scPromptInput.value = '';
+  function renderShortcutCommandHint(): void {
+    const command = shortcutCommand(scNameInput.value);
+    scCommandHint.textContent = command ? t('spShortcutCommandHint', [command]) : '';
+  }
+
+  function showShortcutProblem(
+    field: HTMLInputElement | HTMLTextAreaElement,
+    message: string,
+  ): void {
+    scNameInput.removeAttribute('aria-invalid');
+    scPromptInput.removeAttribute('aria-invalid');
+    field.setAttribute('aria-invalid', 'true');
+    scError.textContent = message;
+    field.focus();
+  }
+
+  function openShortcutModal(shortcut: PromptShortcut | null): void {
+    editingShortcutId = shortcut?.id ?? null;
+    scNameInput.value = shortcut?.name ?? '';
+    scPromptInput.value = shortcut?.prompt ?? '';
+    scNameInput.removeAttribute('aria-invalid');
+    scPromptInput.removeAttribute('aria-invalid');
+    scError.textContent = '';
+    modalTitle.textContent = shortcut ? t('spShortcutEditTitle') : t('spShortcutCreate');
+    scSaveBtn.textContent = shortcut ? t('spShortcutSaveChanges') : t('spShortcutCreate');
+    renderShortcutCommandHint();
     if (document.activeElement instanceof HTMLElement) {
       createShortcutReturnFocus = document.activeElement;
     }
@@ -10765,8 +10767,10 @@ function buildUI(): void {
     createShortcutOverlay.setAttribute('aria-hidden', 'true');
     createShortcutReturnFocus.focus();
   }
+  editPromptShortcut = openShortcutModal;
 
-  createShortcutBtn.addEventListener('click', openCreateShortcutModal);
+  createShortcutBtn.addEventListener('click', () => openShortcutModal(null));
+  scNameInput.addEventListener('input', renderShortcutCommandHint);
   modalCloseBtn.addEventListener('click', closeCreateShortcutModal);
   scCancelBtn.addEventListener('click', closeCreateShortcutModal);
   createShortcutOverlay.addEventListener('click', (e: MouseEvent) => {
@@ -10799,41 +10803,43 @@ function buildUI(): void {
   scSaveBtn.addEventListener('click', () => {
     const name = scNameInput.value.trim();
     const prompt = scPromptInput.value.trim();
-    if (!name) {
-      scNameInput.style.borderColor = 'var(--agi-ext-danger)';
-      setTimeout(() => {
-        scNameInput.style.borderColor = '';
-      }, 1500);
+    const editing = editingShortcutId;
+    const conflict = shortcutCommandConflict(name, promptShortcuts, editing ?? undefined);
+    if (conflict === 'unnamed') {
+      showShortcutProblem(scNameInput, t('spShortcutNameUnusable'));
       return;
     }
-    if (!prompt) {
-      scPromptInput.style.borderColor = 'var(--agi-ext-danger)';
-      setTimeout(() => {
-        scPromptInput.style.borderColor = '';
-      }, 1500);
+    if (conflict === 'taken') {
+      showShortcutProblem(scNameInput, t('spShortcutNameTaken', [shortcutCommand(name)]));
       return;
     }
-    (scSaveBtn as HTMLButtonElement).disabled = true;
+    if (!prompt.split(SHORTCUT_INPUT_PLACEHOLDER).join('').trim()) {
+      showShortcutProblem(scPromptInput, t('spShortcutPromptMissing'));
+      return;
+    }
+    scNameInput.removeAttribute('aria-invalid');
+    scPromptInput.removeAttribute('aria-invalid');
+    scError.textContent = '';
+    scSaveBtn.disabled = true;
     scSaveBtn.textContent = t('spShortcutSaving');
     chrome.runtime.sendMessage(
-      { type: 'SAVE_SHORTCUT', name, actions: [], prompt },
+      editing
+        ? { type: 'UPDATE_SHORTCUT', shortcutId: editing, name, prompt }
+        : { type: 'SAVE_SHORTCUT', name, actions: [], prompt },
       (response: { success?: boolean; error?: string } | undefined) => {
-        (scSaveBtn as HTMLButtonElement).disabled = false;
-        scSaveBtn.textContent = t('spShortcutCreate');
+        scSaveBtn.disabled = false;
+        scSaveBtn.textContent = editing ? t('spShortcutSaveChanges') : t('spShortcutCreate');
         const runtimeError = chrome.runtime.lastError;
         if (runtimeError || !response?.success) {
-          scNameInput.style.borderColor = 'var(--agi-ext-danger)';
-          announceWorkflowMutation(
-            response?.error ?? runtimeError?.message ?? t('spShortcutSaveFailed'),
-            'error',
-          );
-          setTimeout(() => {
-            scNameInput.style.borderColor = '';
-          }, 2000);
+          scError.textContent =
+            response?.error ?? runtimeError?.message ?? t('spShortcutSaveFailed');
           return;
         }
         closeCreateShortcutModal();
-        announceWorkflowMutation(`Shortcut "${name}" created.`, 'success');
+        announceWorkflowMutation(
+          editing ? t('spShortcutUpdated', [name]) : `Shortcut "${name}" created.`,
+          'success',
+        );
         refreshWorkflowsShortcuts();
       },
     );
@@ -11362,6 +11368,9 @@ function buildUI(): void {
     });
     slashMenu.classList.add('visible');
     inputEl.setAttribute('aria-activedescendant', `sp-slash-opt-${slashActive}`);
+    slashMenu.querySelector<HTMLElement>('.sp-slash-item.active')?.scrollIntoView({
+      block: 'nearest',
+    });
   }
 
   function closeSlashMenu(): void {
@@ -11380,7 +11389,7 @@ function buildUI(): void {
   }
 
   function refreshSlashMenu(): void {
-    slashMatches = matchSlashCommands(inputEl.value);
+    slashMatches = matchSlashCommands(inputEl.value, promptShortcuts);
     if (slashActive >= slashMatches.length) slashActive = 0;
     renderSlashMenu();
   }
@@ -12102,9 +12111,11 @@ function renderShortcutRows(
   storedConversationIds: ReadonlySet<string>,
 ): void {
   clearChildren(list);
+  const savedPromptShortcuts = promptShortcutsFromSaved(shortcuts);
   for (const sc of shortcuts) {
     const item = el('div', { class: 'sp-wf-shortcut-item' });
-    const isPromptBased = sc.prompt && Array.isArray(sc.actions) && sc.actions.length === 0;
+    const promptShortcut = savedPromptShortcuts.find((candidate) => candidate.id === sc.id);
+    const isPromptBased = promptShortcut !== undefined;
     const shortcutIcon = el('div', { class: 'sp-wf-shortcut-icon' });
     if (isPromptBased) {
       shortcutIcon.textContent = '/';
@@ -12119,8 +12130,13 @@ function renderShortcutRows(
       month: 'short',
       day: 'numeric',
     });
+    const command =
+      promptShortcut &&
+      shortcutCommandConflict(promptShortcut.name, savedPromptShortcuts, promptShortcut.id) === null
+        ? shortcutCommand(promptShortcut.name)
+        : '';
     const metaText = isPromptBased
-      ? `prompt shortcut · ${dateStr}`
+      ? `${command || 'prompt shortcut'} · ${dateStr}`
       : `${actionsCount} actions · ${dateStr}`;
     info.appendChild(el('div', { class: 'sp-wf-shortcut-meta' }, metaText));
     item.appendChild(info);
@@ -12172,11 +12188,40 @@ function renderShortcutRows(
       });
       btns.appendChild(resultBtn);
     }
+    if (promptShortcut) {
+      const editBtn = iconButton(
+        { class: 'sp-wf-task-result', title: t('spShortcutEdit', [sc.name]) },
+        SquarePen,
+      ) as HTMLButtonElement;
+      editBtn.addEventListener('click', () => editPromptShortcut(promptShortcut));
+      btns.appendChild(editBtn);
+    }
     const delBtn = iconButton(
       { class: 'sp-wf-btn-delete', title: 'Delete' },
       Trash2,
     ) as HTMLButtonElement;
+    let deleteConfirmTimer: ReturnType<typeof setTimeout> | null = null;
     delBtn.addEventListener('click', () => {
+      if (!delBtn.classList.contains('is-confirm')) {
+        delBtn.classList.add('is-confirm');
+        delBtn.title = t('spShortcutDeleteAgain');
+        const confirmText = command
+          ? t('spShortcutDeleteConfirm', [sc.name, command])
+          : t('spWorkflowDeleteConfirm', [sc.name]);
+        announceWorkflowMutation(confirmText);
+        deleteConfirmTimer = setTimeout(() => {
+          delBtn.classList.remove('is-confirm');
+          delBtn.title = 'Delete';
+          if (document.getElementById('sp-wf-mutation-status')?.textContent === confirmText) {
+            announceWorkflowMutation('');
+          }
+          deleteConfirmTimer = null;
+        }, DRAWER_DELETE_CONFIRM_MS);
+        return;
+      }
+      if (deleteConfirmTimer !== null) clearTimeout(deleteConfirmTimer);
+      deleteConfirmTimer = null;
+      delBtn.classList.remove('is-confirm');
       delBtn.disabled = true;
       announceWorkflowMutation(t('spWorkflowDeleting', [sc.name]));
       chrome.runtime.sendMessage(
@@ -12614,6 +12659,7 @@ followThemePreference();
 watchCloudMirroringEnabled();
 void readCloudMirroringEnabled().then(() => refreshActivePersistenceState());
 buildUI();
+loadPromptShortcuts();
 chrome.tabs.onActivated?.addListener(() => {
   refreshPageHostname();
 });
@@ -12858,6 +12904,9 @@ async function releaseContextHandoffTo(
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && changes[BROWSER_STORE_KEY]) {
     void refreshActivePersistenceState();
+  }
+  if (area === 'local' && changes[SHORTCUTS_STORAGE_KEY]) {
+    promptShortcuts = promptShortcutsFromSaved(changes[SHORTCUTS_STORAGE_KEY].newValue);
   }
   if (area === 'session' && changes['agi_pending_chat']?.newValue) {
     checkPendingChat();
