@@ -118,6 +118,7 @@ import {
   resolveNewChatTemporary,
 } from '@/lib/temporary-chat-policy';
 import { Spinner, useConfirmAction } from '@agiworkforce/ui';
+import { CHAT_OUTPUT_FORMAT_LABEL, type ChatOutputFormat } from '@/lib/chat-output-format';
 import { useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 import {
@@ -340,6 +341,7 @@ export interface ComposerSendMeta {
   thinkingEnabled?: boolean;
   codeExecutionEnabled?: boolean;
   officeCreationEnabled?: boolean;
+  officeOutputFormat?: ChatOutputFormat;
   /** Deep Research mode: server injects research system prompt and forces web search. */
   researchEnabled?: boolean;
   /** Resolved Response-Style instruction (preset or custom) from StyleSelector. */
@@ -959,6 +961,7 @@ const ChatComposerNewComponent = ({
     researchEnabled,
     codeExecutionEnabled,
     officeCreationEnabled,
+    officeOutputFormat,
     imageMode,
     videoMode,
     selectedSkillName,
@@ -1447,7 +1450,7 @@ const ChatComposerNewComponent = ({
   useEffect(() => {
     if (!billingPolicyReady) return;
     if (officeCreationEnabled && !modelSupportsOfficeCreation)
-      setComposerToggles({ officeCreationEnabled: false });
+      setComposerToggles({ officeCreationEnabled: false, officeOutputFormat: null });
   }, [billingPolicyReady, officeCreationEnabled, modelSupportsOfficeCreation, setComposerToggles]);
 
   // AUDIT-FIX CMP-11: image mode is Pro-only server-side; a downgrade (or a
@@ -2189,9 +2192,12 @@ const ChatComposerNewComponent = ({
     setComposerToggles({ codeExecutionEnabled: !codeExecutionEnabled });
   }, [codeExecutionEnabled, setComposerToggles]);
 
-  const handleOfficeCreationToggle = useCallback(() => {
-    setComposerToggles({ officeCreationEnabled: !officeCreationEnabled });
-  }, [officeCreationEnabled, setComposerToggles]);
+  const handleSelectOfficeOutput = useCallback(
+    (format: ChatOutputFormat | null) => {
+      setComposerToggles({ officeCreationEnabled: format !== null, officeOutputFormat: format });
+    },
+    [setComposerToggles],
+  );
 
   const handleMemoryToggle = useCallback(() => {
     setMemoryEnabledForChat(!memoryEnabledForChat);
@@ -2829,7 +2835,11 @@ const ChatComposerNewComponent = ({
     if (webSearchEnabled) labels.push('Web search');
     if (researchEnabled) labels.push('Deep Research');
     if (codeExecutionEnabled) labels.push('Run code');
-    if (officeCreationEnabled) labels.push('Office files');
+    if (officeCreationEnabled) {
+      labels.push(
+        officeOutputFormat ? CHAT_OUTPUT_FORMAT_LABEL[officeOutputFormat] : 'Office files',
+      );
+    }
     if (thinkingEnabled) labels.push('Extended thinking');
     if (selectedSkillName) labels.push(`/${selectedSkillName}`);
     if (selectedMcpContext?.prompt) labels.push(`Prompt: ${selectedMcpContext.prompt.name}`);
@@ -2846,6 +2856,7 @@ const ChatComposerNewComponent = ({
     researchEnabled,
     codeExecutionEnabled,
     officeCreationEnabled,
+    officeOutputFormat,
     thinkingEnabled,
     selectedSkillName,
     selectedMcpContext,
@@ -3179,6 +3190,7 @@ const ChatComposerNewComponent = ({
           (isAutoModeModelId(composerSelectedModelId) || modelSupportsThinkingCap),
         codeExecutionEnabled: sendCodeExecutionEnabled,
         officeCreationEnabled,
+        ...(officeCreationEnabled && officeOutputFormat ? { officeOutputFormat } : {}),
         researchEnabled,
         // AUDIT-FIX CMP-6/CMP-7: ONE style value reaches the server. The old
         // `styleMode` hint was always dropped in favour of `styleInstruction`
@@ -3305,6 +3317,7 @@ const ChatComposerNewComponent = ({
     modelSupportsThinkingCap,
     codeExecutionEnabled,
     officeCreationEnabled,
+    officeOutputFormat,
     agiWorkConstraints,
     agiWorkDeliverable,
     agiWorkExcludedTools,
@@ -3644,13 +3657,15 @@ const ChatComposerNewComponent = ({
     if (!pending) return;
     const meta = pending.args[3];
     if (!meta) return;
+    const { officeOutputFormat: _queuedOutputFormat, ...queuedMeta } = meta;
     pending.args[3] = {
-      ...meta,
+      ...queuedMeta,
       workMode: canUseAgiWork ? workMode : 'chat',
       webSearchEnabled,
       researchEnabled,
       codeExecutionEnabled,
       officeCreationEnabled,
+      ...(officeCreationEnabled && officeOutputFormat ? { officeOutputFormat } : {}),
       thinkingEnabled:
         thinkingEnabled && (isAutoModeModelId(composerSelectedModelId) || modelSupportsThinkingCap),
       styleInstruction: getStyleInstruction(responseStyle, activeCustomStyleId, responseLength),
@@ -3667,6 +3682,7 @@ const ChatComposerNewComponent = ({
     researchEnabled,
     codeExecutionEnabled,
     officeCreationEnabled,
+    officeOutputFormat,
     thinkingEnabled,
     composerSelectedModelId,
     modelSupportsThinkingCap,
@@ -3861,7 +3877,10 @@ const ChatComposerNewComponent = ({
     overflowActiveOptions.push({ label: 'Run code', Icon: Terminal });
   }
   if (officeCreationEnabled) {
-    overflowActiveOptions.push({ label: 'Office files', Icon: FileText });
+    overflowActiveOptions.push({
+      label: officeOutputFormat ? CHAT_OUTPUT_FORMAT_LABEL[officeOutputFormat] : 'Office files',
+      Icon: FileText,
+    });
   }
   // Temporary chat deliberately does not join this chip: the founder keeps
   // the composer face to plus, mode pill, Style, model trigger, mic, send,
@@ -4853,15 +4872,15 @@ const ChatComposerNewComponent = ({
                       handleCodeExecutionToggle();
                       closeMenu();
                     }}
-                    officeCreationEnabled={officeCreationEnabled}
+                    officeOutputFormat={officeCreationEnabled ? officeOutputFormat : null}
                     officeCreationDisabled={disabled || !modelSupportsOfficeCreation}
                     officeCreationTitle={
                       !modelSupportsOfficeCreation
                         ? "Office file creation isn't available for this model."
                         : undefined
                     }
-                    onToggleOfficeCreation={() => {
-                      handleOfficeCreationToggle();
+                    onSelectOfficeOutput={(format) => {
+                      handleSelectOfficeOutput(format);
                       closeMenu();
                     }}
                     memoryEnabled={memoryCapabilityEnabled && memoryEnabledForChat && !isIncognito}

@@ -37,6 +37,7 @@ import type {
   ResearchStep,
 } from '@agiworkforce/types';
 import type { PastChatCitation } from '@/lib/past-chat-citation';
+import type { ChatOutputFormat } from '@/lib/chat-output-format';
 import type { CloudWorkMode } from '@agiworkforce/types';
 import type { ManagedMediaImageAspectRatio } from '@agiworkforce/cloud-contracts';
 import type {
@@ -92,6 +93,7 @@ export interface ComposerToggleState {
   researchEnabled: boolean;
   codeExecutionEnabled: boolean;
   officeCreationEnabled: boolean;
+  officeOutputFormat: ChatOutputFormat | null;
   /** Image-generation composer mode (routes to the media harness, not chat). */
   imageMode: boolean;
   /** Video-generation composer mode. Mutually exclusive with `imageMode`. */
@@ -129,6 +131,7 @@ export const DEFAULT_COMPOSER_TOGGLES: ComposerToggleState = Object.freeze({
   researchEnabled: false,
   codeExecutionEnabled: false,
   officeCreationEnabled: false,
+  officeOutputFormat: null,
   imageMode: false,
   videoMode: false,
   selectedSkillName: null,
