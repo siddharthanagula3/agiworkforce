@@ -34,7 +34,7 @@ Nothing left in this wave.
 
 ## Wave 2: switch on and wire up what is already built (flag off or not mounted)
 
-200 open items.
+199 open items.
 
 | Section | Items | File |
 | --- | ---: | --- |
@@ -77,7 +77,6 @@ Nothing left in this wave.
 | 88. Support, trust, and policy product | 1 | [partial/088-support-trust-and-policy-product.md](../partial/088-support-trust-and-policy-product.md) |
 | 92. Tool-calling and agent-loop components | 1 | [partial/092-tool-calling-and-agent-loop-components.md](../partial/092-tool-calling-and-agent-loop-components.md) |
 | 96. Artifact and generated-application components | 2 | [partial/096-artifact-and-generated-application-components.md](../partial/096-artifact-and-generated-application-components.md) |
-| 98. Integration and extensibility components | 1 | [partial/098-integration-and-extensibility-components.md](../partial/098-integration-and-extensibility-components.md) |
 | 100. Commercial and administrative components | 1 | [partial/100-commercial-and-administrative-components.md](../partial/100-commercial-and-administrative-components.md) |
 | 102. Runtime inventory | 1 | [partial/102-runtime-inventory.md](../partial/102-runtime-inventory.md) |
 | 104. Named technology options-not claims about competitor internals | 2 | [partial/104-named-technology-options-not-claims-about-competitor-interna.md](../partial/104-named-technology-options-not-claims-about-competitor-interna.md) |
@@ -87,7 +86,7 @@ Nothing left in this wave.
 
 ## Wave 3: finish half-built features
 
-1522 open items.
+1523 open items.
 
 | Section | Items | File |
 | --- | ---: | --- |
@@ -181,7 +180,7 @@ Nothing left in this wave.
 | 94. Memory and personalization components | 2 | [partial/094-memory-and-personalization-components.md](../partial/094-memory-and-personalization-components.md) |
 | 95. File and Library components | 5 | [partial/095-file-and-library-components.md](../partial/095-file-and-library-components.md) |
 | 96. Artifact and generated-application components | 3 | [partial/096-artifact-and-generated-application-components.md](../partial/096-artifact-and-generated-application-components.md) |
-| 98. Integration and extensibility components | 5 | [partial/098-integration-and-extensibility-components.md](../partial/098-integration-and-extensibility-components.md) |
+| 98. Integration and extensibility components | 6 | [partial/098-integration-and-extensibility-components.md](../partial/098-integration-and-extensibility-components.md) |
 | 99. Coding and local-runtime components | 8 | [partial/099-coding-and-local-runtime-components.md](../partial/099-coding-and-local-runtime-components.md) |
 | 101. Shared package boundaries | 35 | [partial/101-shared-package-boundaries.md](../partial/101-shared-package-boundaries.md) |
 | 102. Runtime inventory | 3 | [partial/102-runtime-inventory.md](../partial/102-runtime-inventory.md) |
