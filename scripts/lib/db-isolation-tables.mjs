@@ -18,6 +18,7 @@ export const USER_OWNED_TABLES = new Set([
   'user_custom_connectors',
   'connector_tool_permissions',
   'api_keys',
+  'developer_projects',
   'managed_usage_requests',
   'managed_usage_request_extensions',
   'usage_events',
