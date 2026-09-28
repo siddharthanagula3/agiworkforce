@@ -414,7 +414,11 @@ export function ArtifactPreview({
         const mammoth = (await import('mammoth')).default;
         // content may be a base64 data-URI or raw binary string
         let arrayBuffer: ArrayBuffer;
-        if (artifact.content.startsWith('data:')) {
+        if (artifact.content.startsWith('/api/files/')) {
+          const response = await fetch(artifact.content, { credentials: 'same-origin' });
+          if (!response.ok) throw new Error('The document could not be loaded for preview.');
+          arrayBuffer = await response.arrayBuffer();
+        } else if (artifact.content.startsWith('data:')) {
           const base64 = artifact.content.split(',')[1] ?? '';
           const binary = atob(base64);
           arrayBuffer = new Uint8Array(binary.length).map((_, i) => binary.charCodeAt(i)).buffer;
