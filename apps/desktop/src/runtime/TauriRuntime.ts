@@ -1144,6 +1144,21 @@ export class TauriRuntime implements ChatRuntime {
     return { id: response.data.id, content: response.data.content };
   }
 
+  async restoreArtifactVersion(
+    artifactId: string,
+    version: number,
+  ): Promise<{ id: string; content: string }> {
+    const realId = artifactId.split('::v')[0] ?? artifactId;
+    const response = await invoke<RawArtifactResponse<RawArtifact>>('artifact_rollback', {
+      id: realId,
+      version,
+    });
+    if (!response.success || !response.data) {
+      throw new Error(response.error ?? `Could not restore version ${version}`);
+    }
+    return { id: response.data.id, content: response.data.content };
+  }
+
   async getArtifactVersions(
     current: import('@agiworkforce/unified-chat').Artifact,
   ): Promise<import('@agiworkforce/unified-chat').Artifact[]> {

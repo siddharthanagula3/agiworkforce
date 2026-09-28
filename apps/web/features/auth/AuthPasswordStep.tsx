@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+
 import { useState } from 'react';
 
 import { useAuthCopy } from './authCopy';
@@ -16,6 +18,7 @@ import {
   AUTH_STEP_LINKS_CLASS,
 } from './authStyles';
 import type { AuthMethodId, AuthPhase } from './authContract';
+import { ACCOUNT_RECOVERY_PATH } from './authRoutes';
 
 export function AuthPasswordStep({
   email,
@@ -90,6 +93,9 @@ export function AuthPasswordStep({
         >
           {copy.text('flow.password.forgot', 'Forgot password?')}
         </button>
+        <Link href={`${ACCOUNT_RECOVERY_PATH}?lost=email`} className={AUTH_LINK_CLASS}>
+          {copy.text('flow.password.lostEmail', 'Can’t reach this email?')}
+        </Link>
       </div>
 
       <AuthMethodPicker methods={methods} disabled={busy} onChooseMethod={onChooseMethod} />

@@ -107,6 +107,11 @@ build it, and the audit cell is recorded as not applicable by this decision.
 - **Library extras (S24.01, S24.10, S24.11, S24.32, S25.13, S25.21, S25.22).** No
   shared-with-me view, folders, version history, project files in All, or
   page-level PDF controls; files open in the browser viewer.
+- **Voice and media platform extras (S49.04, S97.03, S97.13).** No interim
+  dictation text, saved reference sets or subtitle files, as in ChatGPT and
+  Claude.
+- **Onboarding extras (S3.22, S3.25).** No language, time zone or memory step at
+  sign-up.
 - **Periodic usage recap (S42.20).** Neither delivers one; Reflect builds a recap
   on demand.
 - **Search domain, source-type and per-answer source controls (S34.08, S34.09,
