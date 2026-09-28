@@ -70,6 +70,7 @@ export {
 export { routingStageEnabled } from './routing-stages';
 export {
   buildRoutingDecisionTrace,
+  ROUTING_POLICY_VERSION,
   ROUTING_TRACE_SCHEMA_VERSION,
   type RoutingResponseAssessmentTrace,
 } from './routing-trace';

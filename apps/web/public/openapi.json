@@ -458,6 +458,36 @@
           },
           "max_output": {
             "type": "integer"
+          },
+          "capabilities": {
+            "type": "object",
+            "description": "What the model accepts and produces, from the model registry. `null` means the registry has no verified answer.",
+            "properties": {
+              "image_input": {
+                "type": "boolean",
+                "nullable": true
+              },
+              "audio_input": {
+                "type": "boolean",
+                "nullable": true
+              },
+              "video_input": {
+                "type": "boolean",
+                "nullable": true
+              },
+              "structured_output": {
+                "type": "boolean",
+                "nullable": true
+              },
+              "function_calling": {
+                "type": "boolean",
+                "nullable": true
+              },
+              "reasoning": {
+                "type": "boolean",
+                "nullable": true
+              }
+            }
           }
         }
       },
@@ -725,7 +755,7 @@
           },
           "connector_tools_enabled": {
             "type": "boolean",
-            "description": "A request made with an API key can use the connectors connected to the account. The model sees their tools by name and loads a tool's schema on demand with `load_connector_tools`. A connector call that needs approval pauses the run, and `POST /llm/v1/chat/completions/approve` resumes it. `false` offers no connector tools for this turn."
+            "description": "A request made with an API key can use the connectors connected to the account. The model sees their tools by name and loads a tool's schema on demand with `load_connector_tools`, by exact name or by a keyword query that returns the best matches with their descriptions. A connector call that needs approval pauses the run, and `POST /llm/v1/chat/completions/approve` resumes it. `false` offers no connector tools for this turn."
           },
           "disabled_connector_ids": {
             "type": "array",

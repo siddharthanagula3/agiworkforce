@@ -65,6 +65,9 @@ pub struct UiConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reduced_motion: Option<bool>,
 
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bell_on_finish: Option<bool>,
+
     /// Line-editing mode for the classic REPL: `emacs` or `vi`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub edit_mode: Option<String>,
@@ -706,6 +709,9 @@ impl CliConfig {
         if other.ui.reduced_motion.is_some() {
             self.ui.reduced_motion = other.ui.reduced_motion;
         }
+        if other.ui.bell_on_finish.is_some() {
+            self.ui.bell_on_finish = other.ui.bell_on_finish;
+        }
         for (action, binding) in &other.ui.keybindings {
             self.ui.keybindings.insert(action.clone(), binding.clone());
         }
@@ -923,6 +929,9 @@ impl CliConfig {
         if let Some(reduced_motion) = self.ui.reduced_motion {
             out.push_str(&format!("Reduced motion: {}\n", reduced_motion));
         }
+        if let Some(bell) = self.ui.bell_on_finish {
+            out.push_str(&format!("Bell when a long turn finishes: {}\n", bell));
+        }
         if !self.ui.keybindings.is_empty() {
             out.push_str("Keybindings:\n");
             for (action, binding) in &self.ui.keybindings {
@@ -1028,6 +1037,9 @@ impl CliConfig {
             "reduced-motion" | "ui.reduced-motion" | "ui.reduced_motion" => {
                 self.ui.reduced_motion.map(|reduced| reduced.to_string())
             }
+            "bell" | "ui.bell" | "ui.bell_on_finish" => {
+                self.ui.bell_on_finish.map(|bell| bell.to_string())
+            }
             "crash-reports" | "telemetry.crash-reports" | "telemetry.crash_reports" => {
                 Some(self.telemetry.crash_reports.to_string())
             }
@@ -1121,6 +1133,14 @@ impl CliConfig {
                         .trim()
                         .parse::<bool>()
                         .context("reduced-motion must be true or false")?,
+                );
+            }
+            "bell" | "ui.bell" | "ui.bell_on_finish" => {
+                self.ui.bell_on_finish = Some(
+                    value
+                        .trim()
+                        .parse::<bool>()
+                        .context("bell must be true or false")?,
                 );
             }
             "crash-reports" | "telemetry.crash-reports" | "telemetry.crash_reports" => {

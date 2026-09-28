@@ -108,8 +108,11 @@ describe('ArtifactsPanel · publish wiring', () => {
       'https://agiworkforce.com/shared-artifact/aaaaaaaaaaaaaaaaaaaaaaaa',
     );
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchMock.mock.calls[0]! as unknown as [string, RequestInit];
+    const posts = fetchMock.mock.calls.filter(
+      (call) => (call as unknown as [string, RequestInit | undefined])[1]?.method === 'POST',
+    );
+    expect(posts).toHaveLength(1);
+    const [url, init] = posts[0]! as unknown as [string, RequestInit];
     expect(url).toBe('/api/artifacts/publish');
     expect(init.method).toBe('POST');
     expect((init.headers as Record<string, string>)['x-csrf-token']).toBe('test-token');
@@ -140,7 +143,9 @@ describe('ArtifactsPanel · publish wiring', () => {
     render(<ArtifactsPanel />);
     await capturedPublish!({ content: OLDER, versionIndex: 0 });
 
-    const [, init] = fetchMock.mock.calls[0]! as unknown as [string, RequestInit];
+    const [, init] = fetchMock.mock.calls.filter(
+      (call) => (call as unknown as [string, RequestInit | undefined])[1]?.method === 'POST',
+    )[0]! as unknown as [string, RequestInit];
     const body = JSON.parse(String(init.body));
     expect(body.content).toBe(OLDER);
     expect(body.content).not.toBe(CONTENT);

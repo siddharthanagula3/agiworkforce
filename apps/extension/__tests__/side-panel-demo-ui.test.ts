@@ -93,7 +93,7 @@ describe('Chrome side-panel demo surface', () => {
 
   it('reveals the send button only once there is something to send', () => {
     expect(source).toContain(
-      'btn.hidden = text.trim().length === 0 && pendingAttachments.length === 0',
+      'btn.hidden = text.trim().length === 0 && pendingAttachmentCount() === 0',
     );
     expect(source).toContain('#sp-send-btn[hidden] { display: none; }');
   });

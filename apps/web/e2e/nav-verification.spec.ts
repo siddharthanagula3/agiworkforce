@@ -26,6 +26,7 @@ const ERROR_TEXT = /something went wrong|application error|unhandled runtime err
  */
 const RAIL_DESTINATIONS = [
   { label: 'Chat', path: '/chat' },
+  { label: 'Images', path: '/chat/images' },
   { label: 'Projects', path: '/chat/projects' },
   { label: 'Library', path: '/chat/library' },
   { label: 'Models', path: '/models' },

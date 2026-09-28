@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useMemo, useRef, useState } from 'react';
+import { VoiceSampleButton } from './VoiceSampleButton';
 import {
   AudioLines,
   Check,
@@ -271,6 +272,10 @@ export function VoiceSettingsModal({
             <ChevronRight className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
+
+        {activeVoice ? (
+          <VoiceSampleButton voiceUri={activeVoice.voiceURI} voiceName={activeVoice.name} />
+        ) : null}
 
         {voices.length > 1 && voices.length <= VOICE_CAROUSEL_DOTS_MAX && (
           <div className="flex justify-center gap-1.5" aria-hidden="true">

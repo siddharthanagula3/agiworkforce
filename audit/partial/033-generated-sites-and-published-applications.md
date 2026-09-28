@@ -183,18 +183,6 @@ Code: `apps/cli/src/lib.rs:1053-1068`, `apps/cli/src/cloud/artifacts.rs:391-400`
 
 Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:426-436`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:236-241`, `apps/extension/src/features/side-panel/artifactsDrawer.ts:194-205`
 
-## S33.29: Content moderation.
-
-- Done when: Published sites are subject to content moderation (review/takedown).
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Moderation is reactive: an operator looks up a public token and takes it down (audited), and publish scans for secrets; published content is not screened for harmful material and reports are not queued for review. | handler |
-| desktop | partial | Moderation is reactive: an operator looks up a public token and takes it down (audited), and publish scans for secrets; published content is not screened for harmful material and reports are not queued for review. | handler |
-
-Code: `apps/web/features/admin/pages/OperatorDashboardPage.tsx:448-448`, `apps/web/app/api/admin/takedown/route.ts:56-60`, `apps/web/app/api/artifacts/publish/route.ts:206-216`
-
 ## S33.30: Deletion of app and associated data.
 
 - Done when: Deleting an app removes it and its associated data.

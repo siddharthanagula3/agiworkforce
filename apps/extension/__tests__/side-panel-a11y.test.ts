@@ -123,7 +123,10 @@ describe('Chrome side-panel composer at side-panel widths', () => {
   });
 
   it('gives the permission chip a pointer target of at least 24px', () => {
-    expect(source).toMatch(/\.sp-autonomy-chip \{[\s\S]*?width: 30px;[\s\S]*?height: 30px;/);
+    expect(source).toContain('--control-sm: 30px;');
+    expect(source).toMatch(
+      /\.sp-autonomy-chip \{[\s\S]*?width: var\(--control-sm\);[\s\S]*?height: var\(--control-sm\);/,
+    );
   });
 
   it('drops attached page text once its source page is no longer the active one', () => {

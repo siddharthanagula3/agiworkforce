@@ -7,6 +7,7 @@ import { getUserScopedDb, type UserScopedDb } from '@/lib/server/rls-db';
 import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
 import { getCorsHeaders } from '@/lib/cors';
 import { getAllowedAutoModesForTier } from '@shared/config/llm';
+import { modelRegistry } from '@agiworkforce/model-registry';
 import { ROUTING_PROFILE_CHOICE_OPTIONS } from '@agiworkforce/types';
 import {
   ANONYMOUS_PLAN_TIER,
@@ -42,7 +43,29 @@ type OpenAiCompatibleModel = {
   tier: 'free' | 'basic' | 'pro' | 'max';
   context_window: number;
   max_output: number;
+  capabilities: Record<string, boolean | null>;
 };
+
+const PUBLISHED_CAPABILITIES = {
+  image_input: 'imageInput',
+  audio_input: 'audioInput',
+  video_input: 'videoInput',
+  structured_output: 'structuredOutput',
+  function_calling: 'functionCalling',
+  reasoning: 'reasoning',
+} as const;
+
+function publishedCapabilities(modelId: string): Record<string, boolean | null> {
+  const record = (
+    modelRegistry.capabilities as Readonly<Record<string, Readonly<Record<string, boolean | null>>>>
+  )[modelId];
+  return Object.fromEntries(
+    Object.entries(PUBLISHED_CAPABILITIES).map(([name, source]) => [
+      name,
+      record?.[source] ?? null,
+    ]),
+  );
+}
 
 const CREATED_AT_TIMESTAMP = 1_704_067_200;
 const ANONYMOUS_FLAG_SUBJECT_ID = 'anonymous';
@@ -72,6 +95,7 @@ function toModelRecord(model: CatalogueEntry): OpenAiCompatibleModel | null {
     tier,
     context_window: contextWindow,
     max_output: resolveMaxOutputTokens(model.id),
+    capabilities: publishedCapabilities(model.id),
   };
 }
 

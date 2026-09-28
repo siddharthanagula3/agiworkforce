@@ -12,7 +12,7 @@
 use crate::core::mcp::config::{
     encrypt_oauth_token, open_mcp_settings_db, upsert_settings_v2_value,
 };
-use crate::core::mcp::{emit_mcp_event, McpEvent, McpServerConfig};
+use crate::core::mcp::{emit_mcp_event, HttpSseConfig, McpEvent, McpServerConfig, TransportConfig};
 use crate::sys::commands::mcp::McpState;
 use crate::sys::security::aead_nonce::random_nonce;
 use crate::sys::security::machine_key::{derive_key, KeyPurpose};
@@ -47,6 +47,14 @@ enum ConnectorCredentialSource {
     // Used by: public MCP servers that require no authentication
     #[allow(dead_code)]
     None,
+    /// Remote MCP server that signs the user in through the MCP authorization
+    /// flow. `client` names a pre-registered OAuth app for servers without
+    /// dynamic registration, and `token_url` pins where its secret may go.
+    Remote {
+        url: &'static str,
+        client: Option<McpOAuthProvider>,
+        token_url: Option<&'static str>,
+    },
 }
 
 /// Maps a connector ID to its MCP server configuration
@@ -82,28 +90,14 @@ const CONNECTOR_MCP_MAPPINGS: &[(&str, ConnectorMcpMapping)] = &[
         "github",
         ConnectorMcpMapping {
             server_name: "connector-github",
-            command: "npx",
-            args: &[
-                "-y",
-                "--ignore-scripts",
-                "@modelcontextprotocol/server-github",
-            ],
-            env_keys: &[("GITHUB_PERSONAL_ACCESS_TOKEN", "GitHub token")],
-            credential_source: ConnectorCredentialSource::OAuth { provider: "github" },
-        },
-    ),
-    (
-        "slack",
-        ConnectorMcpMapping {
-            server_name: "connector-slack",
-            command: "npx",
-            args: &[
-                "-y",
-                "--ignore-scripts",
-                "@modelcontextprotocol/server-slack",
-            ],
-            env_keys: &[("SLACK_BOT_TOKEN", "Slack bot token")],
-            credential_source: ConnectorCredentialSource::OAuth { provider: "slack" },
+            command: "",
+            args: &[],
+            env_keys: &[],
+            credential_source: ConnectorCredentialSource::Remote {
+                url: "https://api.githubcopilot.com/mcp/",
+                client: Some(McpOAuthProvider::GitHub),
+                token_url: Some("https://github.com/login/oauth/access_token"),
+            },
         },
     ),
     (
@@ -118,16 +112,6 @@ const CONNECTOR_MCP_MAPPINGS: &[(&str, ConnectorMcpMapping)] = &[
             ],
             env_keys: &[("GDRIVE_OAUTH_TOKEN", "Google Drive OAuth token")],
             credential_source: ConnectorCredentialSource::OAuth { provider: "google" },
-        },
-    ),
-    (
-        "figma",
-        ConnectorMcpMapping {
-            server_name: "connector-figma",
-            command: "npx",
-            args: &["-y", "--ignore-scripts", "@sethdouglasford/mcp-figma"],
-            env_keys: &[("FIGMA_ACCESS_TOKEN", "Figma access token")],
-            credential_source: ConnectorCredentialSource::OAuth { provider: "figma" },
         },
     ),
     (
@@ -174,10 +158,28 @@ const CONNECTOR_MCP_MAPPINGS: &[(&str, ConnectorMcpMapping)] = &[
         "notion",
         ConnectorMcpMapping {
             server_name: "connector-notion",
-            command: "npx",
-            args: &["-y", "--ignore-scripts", "@notionhq/notion-mcp-server"],
-            env_keys: &[("OPENAPI_MCP_HEADERS", "Notion auth headers")],
-            credential_source: ConnectorCredentialSource::OAuth { provider: "notion" },
+            command: "",
+            args: &[],
+            env_keys: &[],
+            credential_source: ConnectorCredentialSource::Remote {
+                url: "https://mcp.notion.com/mcp",
+                client: None,
+                token_url: None,
+            },
+        },
+    ),
+    (
+        "atlassian",
+        ConnectorMcpMapping {
+            server_name: "connector-atlassian",
+            command: "",
+            args: &[],
+            env_keys: &[],
+            credential_source: ConnectorCredentialSource::Remote {
+                url: "https://mcp.atlassian.com/v2/mcp",
+                client: None,
+                token_url: None,
+            },
         },
     ),
     (
@@ -447,6 +449,27 @@ impl McpOAuthProvider {
             McpOAuthProvider::Figma => "FIGMA_CLIENT_SECRET",
             McpOAuthProvider::Microsoft => "MICROSOFT_CLIENT_SECRET",
             McpOAuthProvider::Atlassian => "ATLASSIAN_CLIENT_SECRET",
+        }
+    }
+
+    pub fn accepts_public_client(&self) -> bool {
+        matches!(self, McpOAuthProvider::Microsoft)
+    }
+
+    fn bundled_client_id(&self) -> Option<&'static str> {
+        match self {
+            McpOAuthProvider::GitHub => option_env!("AGI_GITHUB_OAUTH_CLIENT_ID"),
+            McpOAuthProvider::Google => option_env!("AGI_GOOGLE_OAUTH_CLIENT_ID"),
+            McpOAuthProvider::Microsoft => option_env!("AGI_MICROSOFT_OAUTH_CLIENT_ID"),
+            _ => None,
+        }
+    }
+
+    fn bundled_client_secret(&self) -> Option<&'static str> {
+        match self {
+            McpOAuthProvider::GitHub => option_env!("AGI_GITHUB_OAUTH_CLIENT_SECRET"),
+            McpOAuthProvider::Google => option_env!("AGI_GOOGLE_OAUTH_CLIENT_SECRET"),
+            _ => None,
         }
     }
 
@@ -818,28 +841,42 @@ fn delete_tokens(provider: McpOAuthProvider) -> Result<(), String> {
 // OAuth Client Credentials
 // ============================================================================
 
-/// Get client credentials from environment or stored settings
-fn get_client_credentials(provider: McpOAuthProvider) -> Result<(String, String), String> {
-    // Try environment variables first
-    let client_id = std::env::var(provider.client_id_env())
+/// Get client credentials from the environment, stored settings, or the
+/// client registered for this build, in that order.
+fn get_client_credentials(provider: McpOAuthProvider) -> Result<(String, Option<String>), String> {
+    let configured_id = std::env::var(provider.client_id_env())
         .or_else(|_| get_stored_credential(provider, "client_id"))
-        .map_err(|_| {
-            format!(
-                "Missing {} for {}. Set it as an environment variable or store it in settings.",
-                provider.client_id_env(),
-                provider.as_str()
-            )
-        })?;
-
-    let client_secret = std::env::var(provider.client_secret_env())
-        .or_else(|_| get_stored_credential(provider, "client_secret"))
-        .map_err(|_| {
-            format!(
-                "Missing {} for {}. Set it as an environment variable or store it in settings.",
-                provider.client_secret_env(),
-                provider.as_str()
-            )
-        })?;
+        .ok()
+        .filter(|id| !id.trim().is_empty());
+    let (client_id, client_secret) = match configured_id {
+        Some(client_id) => (
+            client_id,
+            std::env::var(provider.client_secret_env())
+                .or_else(|_| get_stored_credential(provider, "client_secret"))
+                .ok()
+                .filter(|secret| !secret.trim().is_empty()),
+        ),
+        None => match provider.bundled_client_id() {
+            Some(client_id) => (
+                client_id.to_string(),
+                provider.bundled_client_secret().map(str::to_string),
+            ),
+            None => {
+                return Err(format!(
+                    "Missing {} for {}. Set it as an environment variable or store it in settings.",
+                    provider.client_id_env(),
+                    provider.as_str()
+                ))
+            }
+        },
+    };
+    if client_secret.is_none() && !provider.accepts_public_client() {
+        return Err(format!(
+            "Missing {} for {}. Set it as an environment variable or store it in settings.",
+            provider.client_secret_env(),
+            provider.as_str()
+        ));
+    }
 
     Ok((client_id, client_secret))
 }
@@ -1100,7 +1137,9 @@ async fn complete_oauth_exchange(
     params.insert("code", &code);
     params.insert("redirect_uri", &redirect_uri);
     params.insert("client_id", &client_id);
-    params.insert("client_secret", &client_secret);
+    if let Some(client_secret) = client_secret.as_deref() {
+        params.insert("client_secret", client_secret);
+    }
     params.insert("code_verifier", &pending_flow.code_verifier);
 
     let response = http_client
@@ -1575,6 +1614,13 @@ pub async fn mcp_oauth_disconnect(
         }
     }
 
+    if let Some(ConnectorCredentialSource::Remote { url, .. }) =
+        get_connector_mcp_mapping(&provider).map(|mapping| mapping.credential_source)
+    {
+        crate::core::mcp::oauth::DesktopTokenStore::forget(url)
+            .map_err(|e| format!("Failed to remove the sign-in for '{}': {}", provider, e))?;
+    }
+
     // Remove OAuth tokens if this is an OAuth provider.
     if let Some(oauth_provider) = McpOAuthProvider::from_str(&provider) {
         delete_tokens(oauth_provider)?;
@@ -1619,7 +1665,9 @@ pub async fn mcp_oauth_refresh(
     params.insert("grant_type", "refresh_token");
     params.insert("refresh_token", &refresh_token);
     params.insert("client_id", &client_id);
-    params.insert("client_secret", &client_secret);
+    if let Some(client_secret) = client_secret.as_deref() {
+        params.insert("client_secret", client_secret);
+    }
 
     let response = state
         .http_client
@@ -1727,11 +1775,25 @@ pub async fn mcp_oauth_set_credentials(
     upsert_settings_v2_value(&conn, &id_key, &encrypted_id, "security", true)
         .map_err(|e| format!("Failed to store client_id: {}", e))?;
 
-    // Encrypt and store client_secret (FIX-001, uses master-password key when configured)
-    let encrypted_secret = encrypt_credential(helper, &client_secret)?;
     let secret_key = format!("mcp_oauth_config_{}_client_secret", oauth_provider.as_str());
-    upsert_settings_v2_value(&conn, &secret_key, &encrypted_secret, "security", true)
-        .map_err(|e| format!("Failed to store client_secret: {}", e))?;
+    if client_secret.trim().is_empty() {
+        if !oauth_provider.accepts_public_client() {
+            return Err(format!(
+                "{} needs a client secret as well as a client ID.",
+                oauth_provider.as_str()
+            ));
+        }
+        conn.execute(
+            "DELETE FROM settings_v2 WHERE key = ?1",
+            rusqlite::params![secret_key],
+        )
+        .map_err(|e| format!("Failed to clear client_secret: {}", e))?;
+    } else {
+        // Encrypt and store client_secret (FIX-001, uses master-password key when configured)
+        let encrypted_secret = encrypt_credential(helper, &client_secret)?;
+        upsert_settings_v2_value(&conn, &secret_key, &encrypted_secret, "security", true)
+            .map_err(|e| format!("Failed to store client_secret: {}", e))?;
+    }
 
     tracing::info!(
         "OAuth credentials stored for provider: {}",
@@ -1745,8 +1807,8 @@ pub async fn mcp_oauth_set_credentials(
 /// stored for a given provider.  Does NOT decrypt, uses a COUNT(*) presence
 /// check on settings_v2 rows so the vault lock state is irrelevant.
 ///
-/// Returns `{ configured: true }` when BOTH client_id and client_secret rows
-/// exist for the resolved provider, `{ configured: false }` otherwise.
+/// Returns `{ configured: true }` when the client_id row exists and, unless the
+/// provider accepts a public client, the client_secret row too.
 ///
 /// The provider string is resolved via `McpOAuthProvider::from_str` exactly as
 /// `get_client_credentials` and `mcp_oauth_set_credentials` do, so badge state
@@ -1777,7 +1839,7 @@ pub async fn mcp_oauth_credentials_status(provider: String) -> Result<serde_json
         )
         .unwrap_or(0);
 
-    let configured = id_count > 0 && secret_count > 0;
+    let configured = id_count > 0 && (secret_count > 0 || oauth_provider.accepts_public_client());
     Ok(serde_json::json!({ "configured": configured }))
 }
 
@@ -2015,6 +2077,20 @@ fn resolve_connected_providers(
     let mut providers = Vec::new();
 
     for provider in known_providers {
+        let mapping = get_connector_mcp_mapping(provider);
+        if let Some(mapping) = mapping.as_ref().filter(|mapping| {
+            matches!(
+                mapping.credential_source,
+                ConnectorCredentialSource::Remote { .. }
+            )
+        }) {
+            if configured_servers.contains(mapping.server_name)
+                && live_connected_servers.contains(mapping.server_name)
+            {
+                providers.push(provider.to_string());
+            }
+            continue;
+        }
         let has_token = has_stored_tokens_for_provider(conn, provider)?;
 
         let has_api_key = if has_token {
@@ -2034,7 +2110,7 @@ fn resolve_connected_providers(
             continue;
         }
 
-        match get_connector_mcp_mapping(provider) {
+        match mapping {
             Some(mapping) => {
                 if configured_servers.contains(mapping.server_name)
                     && live_connected_servers.contains(mapping.server_name)
@@ -2172,77 +2248,39 @@ async fn connect_connector_internal(
         }
     };
 
-    // Build both runtime env (with decrypted secrets) and persisted env (placeholders only).
-    let mut runtime_env = HashMap::new();
-    let mut persisted_env = HashMap::new();
-    match &mapping.credential_source {
-        ConnectorCredentialSource::OAuth { provider } => {
-            // Try to get OAuth token from stored tokens
-            let oauth_provider_str = *provider;
-            match retrieve_tokens_by_id(oauth_provider_str) {
-                Ok(Some(tokens)) => {
-                    let placeholder = format!("<from_oauth:{}>", oauth_provider_str);
-                    persisted_env.insert(mapping.env_keys[0].0.to_string(), placeholder);
-
-                    // For Notion, the MCP server expects headers in JSON format
-                    if connector_id == "notion" {
-                        let headers = format!(
-                            r#"{{"Authorization": "Bearer {}","Notion-Version": "2022-06-28"}}"#,
-                            tokens.access_token
-                        );
-                        runtime_env.insert(mapping.env_keys[0].0.to_string(), headers);
-                    } else {
-                        runtime_env.insert(mapping.env_keys[0].0.to_string(), tokens.access_token);
-                    }
+    let (server_config, persisted_config, interactive) = match &mapping.credential_source {
+        ConnectorCredentialSource::Remote {
+            url,
+            client,
+            token_url,
+        } => {
+            let (oauth_client_id, oauth_client_secret) = match client {
+                Some(provider) => {
+                    let (client_id, client_secret) = get_client_credentials(*provider)?;
+                    (Some(client_id), client_secret)
                 }
-                Ok(None) => {
-                    return Err(format!(
-                        "No OAuth tokens found for '{}'. Please authenticate first.",
-                        oauth_provider_str
-                    ));
-                }
-                Err(e) => {
-                    return Err(format!(
-                        "Failed to retrieve OAuth tokens for '{}': {}",
-                        oauth_provider_str, e
-                    ));
-                }
-            }
+                None => (None, None),
+            };
+            let config = McpServerConfig {
+                command: String::new(),
+                args: Vec::new(),
+                env: HashMap::new(),
+                enabled: true,
+                transport: Some(TransportConfig::Http(HttpSseConfig {
+                    url: url.to_string(),
+                    oauth_client_id,
+                    oauth_client_secret,
+                    oauth_token_url: token_url.map(str::to_string),
+                    ..Default::default()
+                })),
+            };
+            (config.clone(), config, true)
         }
-        ConnectorCredentialSource::ApiKey => {
-            // Retrieve API key from settings_v2 (FIX-001, master-password helper
-            // is grabbed off the AppHandle so legacy rows still decrypt via
-            // machine-key fallback when the vault isn't configured).
-            let encryption_state =
-                app_handle.state::<crate::sys::security::MasterPasswordEncryption>();
-            let api_key = retrieve_api_key(Some(encryption_state.inner()), connector_id)?;
-            for (env_var, _desc) in mapping.env_keys {
-                runtime_env.insert(env_var.to_string(), api_key.clone());
-                persisted_env.insert(
-                    env_var.to_string(),
-                    format!("<from_api_key:{}>", connector_id),
-                );
-            }
+        _ => {
+            let (server_config, persisted_config) =
+                stdio_connector_configs(connector_id, &mapping, app_handle)?;
+            (server_config, persisted_config, false)
         }
-        ConnectorCredentialSource::None => {
-            // No credentials needed
-        }
-    }
-
-    // Build the MCP server config
-    let server_config = McpServerConfig {
-        command: mapping.command.to_string(),
-        args: mapping.args.iter().map(|s| s.to_string()).collect(),
-        env: runtime_env,
-        enabled: true,
-        transport: None,
-    };
-    let persisted_config = McpServerConfig {
-        command: mapping.command.to_string(),
-        args: mapping.args.iter().map(|s| s.to_string()).collect(),
-        env: persisted_env,
-        enabled: true,
-        transport: None,
     };
 
     // Get MCP state and connect
@@ -2305,12 +2343,18 @@ async fn connect_connector_internal(
         return Err(format!("Failed to save MCP config: {}", err));
     }
 
-    // Connect the MCP server
-    if let Err(err) = mcp_state
-        .client
-        .connect_server(server_name.clone(), server_config)
-        .await
-    {
+    let connected = if interactive {
+        mcp_state
+            .client
+            .sign_in_and_connect(server_name.clone(), server_config)
+            .await
+    } else {
+        mcp_state
+            .client
+            .connect_server(server_name.clone(), server_config)
+            .await
+    };
+    if let Err(err) = connected {
         // Roll back persisted config to previous value.
         let rollback_snapshot = {
             let mut config = mcp_state.config.lock();
@@ -2374,6 +2418,76 @@ async fn connect_connector_internal(
     let _ = app_handle.emit("connector:connected", connector_id);
 
     Ok(())
+}
+
+fn stdio_connector_configs(
+    connector_id: &str,
+    mapping: &ConnectorMcpMapping,
+    app_handle: &tauri::AppHandle,
+) -> Result<(McpServerConfig, McpServerConfig), String> {
+    // Build both runtime env (with decrypted secrets) and persisted env (placeholders only).
+    let mut runtime_env = HashMap::new();
+    let mut persisted_env = HashMap::new();
+    match &mapping.credential_source {
+        ConnectorCredentialSource::OAuth { provider } => {
+            // Try to get OAuth token from stored tokens
+            let oauth_provider_str = *provider;
+            match retrieve_tokens_by_id(oauth_provider_str) {
+                Ok(Some(tokens)) => {
+                    let placeholder = format!("<from_oauth:{}>", oauth_provider_str);
+                    persisted_env.insert(mapping.env_keys[0].0.to_string(), placeholder);
+
+                    runtime_env.insert(mapping.env_keys[0].0.to_string(), tokens.access_token);
+                }
+                Ok(None) => {
+                    return Err(format!(
+                        "No OAuth tokens found for '{}'. Please authenticate first.",
+                        oauth_provider_str
+                    ));
+                }
+                Err(e) => {
+                    return Err(format!(
+                        "Failed to retrieve OAuth tokens for '{}': {}",
+                        oauth_provider_str, e
+                    ));
+                }
+            }
+        }
+        ConnectorCredentialSource::ApiKey => {
+            // Retrieve API key from settings_v2 (FIX-001, master-password helper
+            // is grabbed off the AppHandle so legacy rows still decrypt via
+            // machine-key fallback when the vault isn't configured).
+            let encryption_state =
+                app_handle.state::<crate::sys::security::MasterPasswordEncryption>();
+            let api_key = retrieve_api_key(Some(encryption_state.inner()), connector_id)?;
+            for (env_var, _desc) in mapping.env_keys {
+                runtime_env.insert(env_var.to_string(), api_key.clone());
+                persisted_env.insert(
+                    env_var.to_string(),
+                    format!("<from_api_key:{}>", connector_id),
+                );
+            }
+        }
+        ConnectorCredentialSource::None | ConnectorCredentialSource::Remote { .. } => {}
+    }
+
+    // Build the MCP server config
+    let server_config = McpServerConfig {
+        command: mapping.command.to_string(),
+        args: mapping.args.iter().map(|s| s.to_string()).collect(),
+        env: runtime_env,
+        enabled: true,
+        transport: None,
+    };
+    let persisted_config = McpServerConfig {
+        command: mapping.command.to_string(),
+        args: mapping.args.iter().map(|s| s.to_string()).collect(),
+        env: persisted_env,
+        enabled: true,
+        transport: None,
+    };
+
+    Ok((server_config, persisted_config))
 }
 
 /// Save an API key for a provider (encrypted) and activate it in the LLM router
@@ -2766,12 +2880,12 @@ mod tests {
     /// core structural fix for DESKTOP-CONNECTOR-MAPPING-DRIFT-FAKE-CONNECTED-01.
     #[tokio::test]
     async fn provider_with_no_mcp_mapping_is_never_reported_connected() {
-        assert!(get_connector_mcp_mapping("atlassian").is_none());
+        assert!(get_connector_mcp_mapping("hubspot").is_none());
         assert!(get_connector_mcp_mapping("google_sheets").is_none());
         assert!(get_connector_mcp_mapping("context7").is_none());
 
         let providers = with_temp_settings_db(|conn| async move {
-            let key = "api_key_atlassian".to_string();
+            let key = "api_key_hubspot".to_string();
             upsert_settings_v2_value(&conn, &key, "encrypted-placeholder", "security", true)
                 .expect("store stray api key");
 
@@ -2791,7 +2905,7 @@ mod tests {
         })
         .await;
 
-        assert!(!providers.contains(&"atlassian".to_string()));
+        assert!(!providers.contains(&"hubspot".to_string()));
     }
 
     /// AUDIT-FIX (custom-connectors-never-show-connected-01): a live
@@ -2850,9 +2964,8 @@ mod tests {
         assert_eq!(ids.len(), CONNECTOR_MCP_MAPPINGS.len());
         for expected in [
             "github",
-            "slack",
             "google_drive",
-            "figma",
+            "atlassian",
             "stripe",
             "vercel",
             "sentry",
@@ -2866,7 +2979,14 @@ mod tests {
         ] {
             assert!(ids.contains(&expected), "missing expected id: {expected}");
         }
-        for drifted in ["atlassian", "google_sheets", "context7", "canva", "hubspot"] {
+        for drifted in [
+            "slack",
+            "figma",
+            "google_sheets",
+            "context7",
+            "canva",
+            "hubspot",
+        ] {
             assert!(
                 !ids.contains(&drifted),
                 "id '{drifted}' should not be advertised as supported yet"
