@@ -290,7 +290,7 @@ function ConnectorDetail({
                     FOCUS_RING,
                   )}
                 >
-                  Connect
+                  {connection.needsReauthorization ? 'Reconnect' : 'Connect'}
                 </button>
               ) : null}
               <button

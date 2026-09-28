@@ -1,4 +1,4 @@
-import { dialog, type BrowserWindow } from 'electron';
+import type { BrowserWindow } from 'electron';
 import {
   MAX_DEVICE_REVIEW_LENGTH,
   type PermissionScope,
@@ -14,6 +14,7 @@ import {
   requestPermission,
 } from '../runtime/permissionManager';
 import { recordBrowserActivity, sendBrowserCommand, settleBrowserActivity } from './bridgeServer';
+import { showDevicePrompt } from '../runtime/devicePrompts';
 import {
   InvalidBrowserArguments,
   planBrowserCommand,
@@ -62,9 +63,7 @@ async function allowedByUser(window: BrowserWindow | null, reason: string): Prom
       'AGI is using your paired browser and stopped to check with you first. This step runs only if you allow it.',
     noLink: true,
   };
-  const result = window
-    ? await dialog.showMessageBox(window, options)
-    : await dialog.showMessageBox(options);
+  const result = await showDevicePrompt(window, options);
   return result.response === 1;
 }
 

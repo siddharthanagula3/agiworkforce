@@ -32,6 +32,9 @@ export {
   DESKTOP_RUNTIME_CHANNEL,
   DESKTOP_RUNTIME_ERROR_CODES,
   DESKTOP_RUNTIME_EVENT_CHANNEL,
+  DISPATCH_TASK_REPORT,
+  DISPATCH_TASK_REPORT_STATUSES,
+  DISPATCH_TASK_RUNNER_READY,
   DesktopRuntimeError,
   runtimeFailure,
   runtimeSuccess,
@@ -42,6 +45,9 @@ export type {
   DesktopRuntimeEvent,
   DesktopRuntimeRequest,
   DesktopRuntimeResponse,
+  DispatchTaskAssignment,
+  DispatchTaskReport,
+  DispatchTaskReportStatus,
 } from './protocol';
 
 export {

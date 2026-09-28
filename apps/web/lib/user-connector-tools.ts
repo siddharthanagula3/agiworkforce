@@ -74,6 +74,12 @@ import {
   isBankAccountsTool,
 } from '@/lib/connectors/bank-accounts';
 import { BANK_ACCOUNTS_CONNECTOR_ID, isPlaidConfigured } from '@/lib/connectors/plaid-config';
+import {
+  executeGraphTool,
+  graphToolDefs,
+  isGraphAdapterConnector,
+  isGraphAdapterTool,
+} from '@/lib/connectors/microsoft-graph';
 import { detectConnectorAuthChallenge } from '@/lib/connectors/oauth-challenge';
 import {
   getMcpStatelessRuntime,
@@ -1264,6 +1270,7 @@ interface ConnectorMcpTarget {
 }
 
 function resolveConnectorMcpTarget(connectorId: string): ConnectorMcpTarget | null {
+  if (isGraphAdapterConnector(connectorId)) return null;
   const provider = getConnectorOAuthProvider(connectorId);
   if (provider) {
     return {
@@ -1962,10 +1969,14 @@ async function connectorPolicyAllows(
   }
 }
 
-function githubAdapterCatalog(): McpToolCatalog {
-  const tools = GITHUB_TOOL_DEFS.map((definition) => ({
-    serverName: GITHUB_SERVER_ID,
-    safeServerName: GITHUB_SERVER_ID,
+function adapterCatalog(
+  serverId: string,
+  adapterName: string,
+  definitions: readonly Pick<WebMcpToolDef, 'toolName' | 'description' | 'inputSchema'>[],
+): McpToolCatalog {
+  const tools = definitions.map((definition) => ({
+    serverName: serverId,
+    safeServerName: serverId,
     toolName: definition.toolName,
     description: definition.description,
     inputSchema: definition.inputSchema,
@@ -1976,11 +1987,11 @@ function githubAdapterCatalog(): McpToolCatalog {
     version: 2,
     generatedAt: Date.now(),
     servers: {
-      [GITHUB_SERVER_ID]: {
-        serverName: GITHUB_SERVER_ID,
-        safeServerName: GITHUB_SERVER_ID,
+      [serverId]: {
+        serverName: serverId,
+        safeServerName: serverId,
         protocolEra: 'legacy',
-        serverInfo: { name: 'AGI GitHub App adapter', version: '1' },
+        serverInfo: { name: adapterName, version: '1' },
         capabilities: { tools: {} },
         tasksSupported: false,
         tools,
@@ -1997,6 +2008,16 @@ function githubAdapterCatalog(): McpToolCatalog {
     prompts: [],
     apps: [],
   };
+}
+
+function githubAdapterCatalog(): McpToolCatalog {
+  return adapterCatalog(GITHUB_SERVER_ID, 'AGI GitHub App adapter', GITHUB_TOOL_DEFS);
+}
+
+function firstPartyAdapterDefs(connectorId: string, label: string): WebMcpToolDef[] | null {
+  if (isGraphAdapterConnector(connectorId)) return graphToolDefs(connectorId, label);
+  if (connectorId === BANK_ACCOUNTS_CONNECTOR_ID) return bankAccountsToolDefs();
+  return null;
 }
 
 function filterCapabilityCatalogTools(
@@ -2085,6 +2106,21 @@ export async function loadUserConnectorCapabilityCatalog(
           connectorLabel: connectorRef,
           source: 'operator',
           catalog,
+        };
+      }
+    } else if (
+      isGraphAdapterConnector(connectorRef) ||
+      connectorRef === BANK_ACCOUNTS_CONNECTOR_ID
+    ) {
+      const grants = await getUserConnectorOAuthGrantSummaries(userId);
+      const label = getConnectorOAuthProvider(connectorRef)?.displayName ?? connectorRef;
+      const definitions = firstPartyAdapterDefs(connectorRef, label);
+      if (definitions && grants.some((grant) => grant.connectorId === connectorRef)) {
+        result = {
+          connectorId: connectorRef,
+          connectorLabel: label,
+          source: 'oauth',
+          catalog: adapterCatalog(connectorRef, `AGI ${label} adapter`, definitions),
         };
       }
     } else if (isConnectorOAuthSupported(connectorRef)) {
@@ -2374,6 +2410,15 @@ export async function loadUserConnectorToolCatalog(
 
     for (const connectorId of usableOAuthIds) {
       if (!grantedOAuthIds.has(connectorId)) continue;
+      if (isGraphAdapterConnector(connectorId)) {
+        defs.push(
+          ...graphToolDefs(
+            connectorId,
+            getConnectorOAuthProvider(connectorId)?.displayName ?? connectorId,
+          ),
+        );
+        continue;
+      }
       dials.push({
         member: false,
         load: async () => {
@@ -2629,6 +2674,13 @@ export function makeUserConnectorExecutor(
       return guarded(async (safeArgs) => ({
         handled: true,
         ...(await executeBankAccountsTool(userId, toolName, safeArgs)),
+      }));
+    }
+
+    if (isGraphAdapterTool(serverId, toolName)) {
+      return guarded(async (safeArgs) => ({
+        handled: true,
+        ...(await executeGraphTool(userId, serverId, toolName, safeArgs)),
       }));
     }
 

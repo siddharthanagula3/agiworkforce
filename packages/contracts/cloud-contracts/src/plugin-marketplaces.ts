@@ -186,6 +186,7 @@ export interface PluginSourceInstallResponse {
   kind: PluginMarketplaceSourceKind;
   plugins: PluginSourceInstalledPlugin[];
   omittedFiles?: string[];
+  dependencies?: PluginInstalledDependency[];
 }
 
 export interface PluginInstalledDependency {

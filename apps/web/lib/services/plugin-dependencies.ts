@@ -14,11 +14,14 @@ export interface PluginDependencyRef {
   version: string | null;
 }
 
-export interface PluginDependencyNode<T> {
+export interface PluginDependencyDeclarer {
   name: string;
   marketplace: string | null;
-  plugin: T;
   dependencies: readonly PluginDependencyRef[];
+}
+
+export interface PluginDependencyNode<T> extends PluginDependencyDeclarer {
+  plugin: T;
 }
 
 export interface PluginVersionConstraint {
@@ -62,7 +65,9 @@ function parseDependency(value: unknown): PluginDependencyRef | null {
   }
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const record = value as Record<string, unknown>;
-  const { name, marketplace, version } = record;
+  const name = record['name'];
+  const marketplace = record['marketplace'] ?? undefined;
+  const version = record['version'] ?? undefined;
   if (typeof name !== 'string') return null;
   if (marketplace !== undefined && typeof marketplace !== 'string') return null;
   if (version !== undefined && typeof version !== 'string') return null;
@@ -111,10 +116,10 @@ export function mergePluginDependencies(
 }
 
 export async function resolvePluginDependencies<T>(
-  root: PluginDependencyNode<T>,
+  root: PluginDependencyDeclarer,
   lookup: (
     reference: PluginDependencyRef,
-    declaredBy: PluginDependencyNode<T>,
+    declaredBy: PluginDependencyDeclarer,
   ) => Promise<PluginDependencyNode<T> | null>,
 ): Promise<ResolvedPluginDependency<T>[]> {
   const rootLabel = pluginLabel(root.name, root.marketplace);

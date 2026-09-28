@@ -70,6 +70,7 @@ import {
   isAcceptedAttachmentType,
 } from '@agiworkforce/types';
 import { FileKindIcon } from './FileKindIcon';
+import { MediaJobsSection, type MediaJobsTransport } from './MediaJobsSection';
 
 export type SurfaceFilter = 'all' | 'artifact' | 'file';
 export type LibraryTab =
@@ -283,6 +284,7 @@ export interface LibraryTransport {
   remixItem?: (item: LibraryItem) => Promise<void>;
   addToProject?: (item: LibraryItem, folder: LibraryFolder) => Promise<void>;
   shareArtifact?: (item: LibraryItem) => Promise<void>;
+  mediaJobs?: MediaJobsTransport;
 }
 
 interface PageState {
@@ -370,6 +372,7 @@ export function LibraryView({
   const [query, setQuery] = useState(initialQuery.trim());
   const [page, setPage] = useState<PageState>({ items: [], hasMore: false, nextOffset: null });
   const [storageUsedBytes, setStorageUsedBytes] = useState<number | null>(null);
+  const [storageLimitBytes, setStorageLimitBytes] = useState<number | null>(null);
   const [folders, setFolders] = useState<LibraryFolder[]>([]);
   const [loading, setLoading] = useState(false);
   const [hasResolvedPage, setHasResolvedPage] = useState(false);
@@ -445,6 +448,7 @@ export function LibraryView({
         }));
         if (parsed.data.storage_used_bytes !== undefined) {
           setStorageUsedBytes(parsed.data.storage_used_bytes);
+          setStorageLimitBytes(parsed.data.storage_limit_bytes ?? null);
         }
       } catch (err) {
         if (seq !== requestSeq.current) return;
@@ -860,7 +864,9 @@ export function LibraryView({
               data-testid="library-storage-used"
               className="text-xs text-[var(--chat-text-secondary)]"
             >
-              {formatBytes(storageUsedBytes, 1)} of files stored
+              {storageLimitBytes !== null
+                ? `${formatBytes(storageUsedBytes, 1)} of ${formatBytes(storageLimitBytes, 0)} file storage used`
+                : `${formatBytes(storageUsedBytes, 1)} of file storage used`}
             </p>
           ) : null}
         </div>
@@ -872,6 +878,10 @@ export function LibraryView({
           />
         ) : null}
       </header>
+
+      {transport.mediaJobs && !viewDeleted ? (
+        <MediaJobsSection transport={transport.mediaJobs} />
+      ) : null}
 
       {uploadFiles ? (
         <input

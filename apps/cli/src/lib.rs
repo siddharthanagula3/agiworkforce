@@ -114,6 +114,7 @@ pub mod approval_audit;
 pub(crate) mod approval_details;
 pub mod ecosystem;
 pub mod init;
+pub(crate) mod installs;
 pub mod interactive;
 pub mod keybindings;
 pub mod local_models;
@@ -140,9 +141,11 @@ pub mod powershell_tool;
 pub mod sandbox;
 pub mod schedules;
 pub mod shell_snapshot;
+pub(crate) mod sources;
 pub mod sync;
 pub mod terminal_style;
 pub mod terminal_text;
+pub(crate) mod terminals;
 pub mod tier_cache;
 pub(crate) mod tool_filters;
 pub mod tool_search;
@@ -152,15 +155,13 @@ pub mod usage_summary;
 
 // Phase-2 candidates, implementations exist but the user-facing surface is
 // not yet wired. Each carries an inline PHASE2 marker explaining the unblock.
-pub(crate) mod installs;
 #[allow(dead_code)]
 // PHASE2: registry.agiworkforce.com not deployed; rewires to plugin-manifest discovery (Sprint B6)
 pub mod marketplace;
 #[allow(dead_code)] // bidirectional SDK stdin/control remains intentionally inactive
-pub mod sdk_io;
-pub(crate) mod sources; // used by OneShotOutputMode::JsonLine in lib.rs
-                        // policy lives at platform::policy; re-exported here so callers using
-                        // `crate::policy::*` continue to resolve unchanged.
+pub mod sdk_io; // used by OneShotOutputMode::JsonLine in lib.rs
+                // policy lives at platform::policy; re-exported here so callers using
+                // `crate::policy::*` continue to resolve unchanged.
 pub use platform::policy;
 #[allow(dead_code)]
 // PHASE2: WS transport for a2a, wraps jsonrpc::handle_request over persistent WS connections
@@ -3916,6 +3917,7 @@ pub async fn run_main() -> Result<()> {
         None => None,
     };
     let outcome = run_cli(cli).await;
+    terminals::stop_all();
     if let Some(worktree) = session_worktree.filter(|_| interactive) {
         settle_session_worktree(&worktree).await;
     }
@@ -4258,6 +4260,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
                     // exits immediately.
                     tokio::spawn(async {
                         let _ = tokio::signal::ctrl_c().await;
+                        terminals::stop_all();
                         std::process::exit(130);
                     });
                     let partial = partial_buffer
@@ -4287,6 +4290,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
                         eprintln!("Interrupted, turn cancelled before completion.");
                     }
                     // 130 = 128 + SIGINT, the conventional exit code.
+                    terminals::stop_all();
                     std::process::exit(130);
                 };
                 match result {

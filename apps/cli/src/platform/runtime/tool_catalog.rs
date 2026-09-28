@@ -205,6 +205,12 @@ pub fn tool_status_line(
             None => "Read network requests".to_string(),
         }),
         "run_command" | "powershell" => value("command"),
+        "command_output" => Some(match (value("id"), value("input")) {
+            (Some(id), Some(_)) => format!("Type into {id}"),
+            (Some(id), None) => format!("Read {id}"),
+            (None, _) => "List background commands".to_string(),
+        }),
+        "command_stop" => value("id").map(|id| format!("Stop {id}")),
         "read_file" | "write_file" | "edit_file" | "multiedit" | "list_directory"
         | "notebook_edit" => value("path"),
         "search_files" | "grep_files" | "glob" => value("pattern").or_else(|| value("query")),
@@ -223,6 +229,8 @@ pub fn canonical_tool_name(tool_name: &str) -> &str {
         "Edit" | "edit" | "EditFile" => "edit_file",
         "MultiEdit" | "multi_edit" | "Multi_Edit" => "multiedit",
         "Bash" | "bash" | "Shell" | "shell" | "RunCommand" => "run_command",
+        "BashOutput" | "WriteStdin" | "write_stdin" => "command_output",
+        "KillShell" | "KillBash" => "command_stop",
         "PowerShell" => "powershell",
         "Glob" | "glob_search" | "GlobSearch" => "glob",
         "Grep" | "grep" | "GrepFiles" | "grep_search" | "GrepSearch" => "grep_files",
@@ -259,6 +267,8 @@ pub fn tool_aliases(tool_name: &str) -> &'static [&'static str] {
         "edit_file" => &["Edit", "edit", "EditFile"],
         "multiedit" => &["MultiEdit", "multi_edit", "Multi_Edit"],
         "run_command" => &["Bash", "bash", "Shell", "shell", "RunCommand"],
+        "command_output" => &["BashOutput", "WriteStdin", "write_stdin"],
+        "command_stop" => &["KillShell", "KillBash"],
         "powershell" => &["PowerShell"],
         "glob" => &["Glob", "glob_search", "GlobSearch"],
         "grep_files" => &["Grep", "grep", "GrepFiles", "grep_search", "GrepSearch"],
@@ -340,7 +350,9 @@ fn tool_owner(name: &str) -> &'static str {
     match name {
         "read_file" | "write_file" | "edit_file" | "multiedit" | "read_many_files"
         | "notebook_edit" => "cli-file-tools",
-        "run_command" | "powershell" | "batch" => "cli-exec-tools",
+        "run_command" | "command_output" | "command_stop" | "powershell" | "batch" => {
+            "cli-exec-tools"
+        }
         "search_files" | "grep_files" | "glob" | "list_directory" => "cli-navigation",
         "web_search" | "web_fetch" | "tool_search" => "cli-research",
         "skill" => "cli-skills",
@@ -485,16 +497,43 @@ fn core_tool_definitions() -> Vec<ToolDefinition> {
         ).with_size_cap(5_000),
         def(
             "run_command",
-            "Execute a shell command and return stdout/stderr. Use for system commands, builds, tests, git operations, etc.",
+            &format!(
+                "Execute a shell command and return stdout/stderr. Use for system commands, builds, tests, git operations, etc. A command is stopped after {} seconds unless it runs in the background: set run_in_background for dev servers, watchers, interactive programs and long builds.",
+                crate::tools::COMMAND_TIMEOUT.as_secs()
+            ),
             serde_json::json!({
                 "type": "object",
                 "properties": {
                     "command": {"type": "string", "description": "The shell command to execute"},
-                    "working_dir": {"type": "string", "description": "Directory inside the workspace to run the command in. Defaults to the workspace root."}
+                    "working_dir": {"type": "string", "description": "Directory inside the workspace to run the command in. Defaults to the workspace root."},
+                    "run_in_background": {"type": "boolean", "description": "Start the command in the background and return its id with its first output. It runs in a pseudo-terminal on macOS and Linux, keeps running across turns, and ends when you stop it with command_stop or the session ends."}
                 },
                 "required": ["command"]
             }),
         ).with_size_cap(50_000),
+        def(
+            "command_output",
+            "Read what a background command printed since you last read it, optionally typing input into it first, such as an answer to a prompt or a line for an interactive shell. Without an id, lists the session's background commands.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string", "description": "The id run_command returned for the background command, such as shell_1"},
+                    "input": {"type": "string", "description": "Text to type into the command before reading. End a line with \\n to press Enter; \\u0003 is Ctrl+C and \\u0004 is Ctrl+D."},
+                    "wait_seconds": {"type": "number", "description": format!("How long to wait for more output before returning, at most {}. Returns early when the command ends. Defaults to {}.", crate::terminals::MAX_WAIT.as_secs(), crate::terminals::DEFAULT_WAIT.as_secs())}
+                }
+            }),
+        ).with_size_cap(50_000),
+        def(
+            "command_stop",
+            "Stop a background command and every process it started.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string", "description": "The id run_command returned for the background command"}
+                },
+                "required": ["id"]
+            }),
+        ).with_size_cap(20_000),
         def(
             "powershell",
             "Execute a PowerShell command (Windows). Distinct from run_command because of safety checks for destructive verbs, registry paths, and ExecutionPolicy bypass.",
