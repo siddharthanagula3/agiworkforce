@@ -48,16 +48,16 @@ Code: `apps/web/features/code/components/CodeComposer.tsx:532-552`, `apps/web/fe
 
 - Done when: The user can pick the branch a coding session starts from or works on from a list of the repository's branches.
 - Wave: 2
+- Already works on: desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The cloud branch is a free-text field, not a list of the repository's branches, and cloud sessions need AGI_E2B_EXECUTION=1, which ships off. | ui, flag-off |
-| desktop | partial | Local folders only display the checked-out branch with no way to switch it; the hosted cloud branch field is free text and gated. | ui |
+| web | partial | done once AGI_E2B_EXECUTION is switched on at the end of the run (decisions.md); the managed sandbox ships off | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | partial | The extension has no branch choice of its own; it works on whatever VS Code has checked out and can only switch to a cloud task's branch ("Bring the branch in"). | ui |
 
-Code: `apps/web/features/code/components/CodeComposer.tsx:688-708`, `apps/web/lib/e2b/gate.ts:16-18`, `apps/web/features/code/components/CodeComposer.tsx:1124-1130`, `apps/extension-vscode/src/features/context-handoff/index.ts:105-127`
+Code: `apps/web/app/api/code/repositories/branches/route.ts:89-89`, `apps/web/lib/github-app.ts:764-764`, `apps/web/features/code/hooks/use-code-branches.ts:15-15`, `apps/web/features/code/components/CodeComposer.tsx:706-706`
 
 ## S9.09: Device picker.
 
