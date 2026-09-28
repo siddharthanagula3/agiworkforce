@@ -172,6 +172,8 @@ export const PLUGIN_VERSION_CONFIRM_TITLE_PREFIX = 'Switch to version';
 export const PLUGIN_VERSION_CONFIRM_BODY =
   'The plugin moves to this version for your account and stays on it until you choose another.';
 export const PLUGIN_VERSION_NEW_PERMISSIONS_PREFIX = 'It also asks for:';
+export const PLUGIN_VERSION_ADDED_SKILLS_PREFIX = 'It adds these skills:';
+export const PLUGIN_VERSION_REMOVED_SKILLS_PREFIX = 'It removes these skills:';
 export const PLUGIN_VERSION_CHANGELOG_LABEL = 'What changed';
 export const PLUGIN_REPAIRS_HEADING = 'Needs attention';
 

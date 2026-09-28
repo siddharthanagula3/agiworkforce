@@ -82,6 +82,8 @@ import {
   PLUGIN_PUBLISHER_GROUP_LABEL,
   PLUGIN_PUBLISHER_KIND_LABELS,
   PLUGIN_PUBLISHER_MORE_HEADING_PREFIX,
+  PLUGIN_PERMISSIONS_NOTICE_PREFIX,
+  PLUGIN_PERMISSIONS_NOTICE_SUFFIX,
   PLUGIN_SOURCE_BUILTIN,
   PLUGIN_SOURCE_FACETS,
   PLUGIN_SOURCE_MARKETPLACE,
@@ -397,6 +399,12 @@ function monogramOf(name: string): string {
   return name.slice(0, 1).toUpperCase();
 }
 
+function permissionsNotice(permissions: readonly string[]): string | null {
+  return permissions.length > 0
+    ? `${PLUGIN_PERMISSIONS_NOTICE_PREFIX} ${permissions.join(', ')}. ${PLUGIN_PERMISSIONS_NOTICE_SUFFIX}`
+    : null;
+}
+
 function isCommunityPlugin(entry: PluginDirectoryEntry): boolean {
   return !entry.verified && entry.sourceFacet === PLUGIN_SOURCE_MARKETPLACE;
 }
@@ -420,6 +428,7 @@ export function toPluginEntry(
   const installable = isPluginEntryWebInstallable(entry);
   const badges = pluginBadges(entry, installs);
   const category = pluginCategoryKey(entry);
+  const notice = installed ? null : permissionsNotice(entry.permissions);
   return {
     id: entry.id,
     name: entry.name,
@@ -432,6 +441,7 @@ export function toPluginEntry(
     installed,
     installable,
     statusLabel: pluginStateLabel(entry, installed, installable),
+    ...(notice ? { installNotice: notice } : {}),
     updatedAt: entry.updatedAt,
     facets: {
       [PLUGIN_WORKS_WITH_GROUP_ID]: entry.worksWith,
@@ -447,6 +457,7 @@ export function toUserMarketplaceEntry(
   installs: PluginInstallState,
 ): DirectoryEntry {
   const installed = installs.byEntryId.has(entry.id);
+  const notice = installed ? null : permissionsNotice(entry.permissions);
   return {
     id: entry.id,
     name: entry.name,
@@ -458,6 +469,7 @@ export function toUserMarketplaceEntry(
     installed,
     installable: true,
     statusLabel: installed ? PLUGIN_STATE_INSTALLED : PLUGIN_STATE_INSTALL,
+    ...(notice ? { installNotice: notice } : {}),
     updatedAt: entry.updatedAt,
     facets: {},
   };
@@ -1011,6 +1023,10 @@ export async function fetchPluginVersions(
   const body = await readOptional<PluginVersionsResponse>(pluginPath(id, PLUGIN_VERSIONS_LEAF));
   if (!body?.installedVersion) return null;
   const approved = new Set(body.approvedPermissions);
+  const installedSkills = new Set(
+    body.versions.find((version) => version.version === body.installedVersion)?.declaredSkills ??
+      [],
+  );
   return {
     installed: body.installedVersion,
     latest:
@@ -1024,6 +1040,10 @@ export async function fetchPluginVersions(
       publishedAt: version.publishedAt,
       changelog: version.changelog,
       newPermissions: version.permissions.filter((permission) => !approved.has(permission)),
+      addedSkills: version.declaredSkills.filter((skill) => !installedSkills.has(skill)),
+      removedSkills: [...installedSkills].filter(
+        (skill) => !version.declaredSkills.includes(skill),
+      ),
     })),
   };
 }

@@ -254,6 +254,8 @@ export interface DirectoryPluginVersionOption {
   publishedAt: string | null;
   changelog: string;
   newPermissions: readonly string[];
+  addedSkills: readonly string[];
+  removedSkills: readonly string[];
 }
 
 export interface DirectoryPluginVersions {

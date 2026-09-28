@@ -48,7 +48,9 @@ import {
   PLUGIN_VERSION_CHANGELOG_LABEL,
   PLUGIN_VERSION_CONFIRM_BODY,
   PLUGIN_VERSION_CONFIRM_TITLE_PREFIX,
+  PLUGIN_VERSION_ADDED_SKILLS_PREFIX,
   PLUGIN_VERSION_NEW_PERMISSIONS_PREFIX,
+  PLUGIN_VERSION_REMOVED_SKILLS_PREFIX,
   PLUGIN_VERSION_SWITCH_LABEL,
   CREATE_PLUGIN_ACTION_ID,
   CREATE_PLUGIN_LABEL,
@@ -529,6 +531,12 @@ function DirectorySectionPanel({
                 PLUGIN_VERSION_CONFIRM_BODY,
                 option.newPermissions.length > 0
                   ? `${PLUGIN_VERSION_NEW_PERMISSIONS_PREFIX} ${option.newPermissions.join(', ')}.`
+                  : '',
+                option.addedSkills.length > 0
+                  ? `${PLUGIN_VERSION_ADDED_SKILLS_PREFIX} ${option.addedSkills.join(', ')}.`
+                  : '',
+                option.removedSkills.length > 0
+                  ? `${PLUGIN_VERSION_REMOVED_SKILLS_PREFIX} ${option.removedSkills.join(', ')}.`
                   : '',
                 option.changelog ? `${PLUGIN_VERSION_CHANGELOG_LABEL}: ${option.changelog}` : '',
               ]
