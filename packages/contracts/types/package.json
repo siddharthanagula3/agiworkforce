@@ -8,6 +8,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./capabilities": "./src/capabilities.ts",
+    "./encryption-key": "./src/encryption-key.ts",
     "./live-voices": "./src/live-voices.ts",
     "./models.json": "./src/models.json",
     "./protocol": "./src/generated/protocol/index.ts",
@@ -15,6 +16,9 @@
   },
   "typesVersions": {
     "*": {
+      "encryption-key": [
+        "./src/encryption-key.ts"
+      ],
       "live-voices": [
         "./src/live-voices.ts"
       ],

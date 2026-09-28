@@ -22,7 +22,19 @@ import {
   type SupportReplyView,
   type SupportSurface,
   type SupportTurn,
-} from './contract';
+  SUPPORT_ACCOUNT_CONTEXT_PATH,
+  SUPPORT_ACTIONS_AVAILABLE_PATH,
+  SUPPORT_ACTIONS_CONFIRM_PATH,
+  SUPPORT_ACTIONS_PROPOSE_PATH,
+  SUPPORT_AGENT_QUEUE_PATH,
+  SUPPORT_ASK_PATH,
+  SUPPORT_HANDOFF_AVAILABILITY_PATH,
+  SUPPORT_HANDOFF_PATH,
+  supportAgentClaimPath,
+  supportAgentMessagesPath,
+  supportHandoffMessagesPath,
+  supportHandoffPath,
+} from '@agiworkforce/cloud-contracts/support';
 import { makeAbstention, normalizeAnswer, normalizeCitations } from './normalize-answer';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -78,7 +90,7 @@ export async function askSupport(input: AskSupportInput): Promise<SupportReplyVi
       }),
     };
     if (input.signal) init.signal = input.signal;
-    response = await fetch('/api/support/ask', init);
+    response = await fetch(SUPPORT_ASK_PATH, init);
   } catch {
     return makeAbstention('transport_error');
   }
@@ -103,7 +115,7 @@ export async function fetchPresence(signal?: AbortSignal): Promise<SupportPresen
   try {
     const init: RequestInit = { method: 'GET', headers: { Accept: 'application/json' } };
     if (signal) init.signal = signal;
-    response = await fetch('/api/support/handoff/availability', init);
+    response = await fetch(SUPPORT_HANDOFF_AVAILABILITY_PATH, init);
   } catch {
     return UNAVAILABLE_PRESENCE;
   }
@@ -181,7 +193,7 @@ export async function fetchAccountContext(
   try {
     const init: RequestInit = { method: 'GET', headers: { Accept: 'application/json' } };
     if (signal) init.signal = signal;
-    response = await fetch('/api/support/account/context', init);
+    response = await fetch(SUPPORT_ACCOUNT_CONTEXT_PATH, init);
   } catch {
     return { signedIn: false };
   }
@@ -205,7 +217,7 @@ export async function fetchAvailableActions(
   try {
     const init: RequestInit = { method: 'GET', headers: { Accept: 'application/json' } };
     if (signal) init.signal = signal;
-    response = await fetch('/api/support/actions/available', init);
+    response = await fetch(SUPPORT_ACTIONS_AVAILABLE_PATH, init);
   } catch {
     return [];
   }
@@ -243,7 +255,7 @@ export async function proposeAction(
   let response: Response;
   try {
     const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
-    response = await fetch('/api/support/actions/propose', {
+    response = await fetch(SUPPORT_ACTIONS_PROPOSE_PATH, {
       method: 'POST',
       headers,
       body: JSON.stringify({ actionId, surface: surface === 'app' ? 'web' : 'marketing' }),
@@ -322,7 +334,7 @@ export async function confirmAction(
   withStepUp: SupportStepUpRunner | null,
 ): Promise<SupportActionOutcome> {
   const send: StepUpSend = async (stepUpHeaders) =>
-    fetch('/api/support/actions/confirm', {
+    fetch(SUPPORT_ACTIONS_CONFIRM_PATH, {
       method: 'POST',
       headers: {
         ...(await addCsrfHeaders({ 'Content-Type': 'application/json' })),
@@ -549,7 +561,7 @@ export async function createHandoff(input: CreateHandoffInput): Promise<SupportH
     // facts, and a browser that guessed at them would report the guess. The
     // route fills them from the process that served the request.
     payload['diagnostics'] = collectDiagnostics({ surface: 'web' });
-    response = await fetch('/api/support/handoff', {
+    response = await fetch(SUPPORT_HANDOFF_PATH, {
       method: 'POST',
       headers,
       body: JSON.stringify(payload),
@@ -621,7 +633,7 @@ export function normalizeHandoffCreate(body: Record<string, unknown>): SupportHa
 export async function fetchHandoffStatus(sessionId: string): Promise<SupportHandoffView | null> {
   let response: Response;
   try {
-    response = await fetch(`/api/support/handoff/${encodeURIComponent(sessionId)}`, {
+    response = await fetch(supportHandoffPath(sessionId), {
       method: 'GET',
       headers: { Accept: 'application/json' },
     });
@@ -766,11 +778,11 @@ async function postMessage(url: string, body: string): Promise<SupportHandoffSen
 }
 
 function threadPath(sessionId: string, after: number): string {
-  return `/api/support/handoff/${encodeURIComponent(sessionId)}/messages?after=${String(after)}`;
+  return `${supportHandoffMessagesPath(sessionId)}?after=${String(after)}`;
 }
 
 function agentThreadPath(sessionId: string, after: number): string {
-  return `/api/support/handoff/agent/${encodeURIComponent(sessionId)}/messages?after=${String(after)}`;
+  return `${supportAgentMessagesPath(sessionId)}?after=${String(after)}`;
 }
 
 export function fetchHandoffMessages(
@@ -784,7 +796,7 @@ export function sendHandoffMessage(
   sessionId: string,
   body: string,
 ): Promise<SupportHandoffSendResult> {
-  return postMessage(`/api/support/handoff/${encodeURIComponent(sessionId)}/messages`, body);
+  return postMessage(supportHandoffMessagesPath(sessionId), body);
 }
 
 export function fetchAgentHandoffMessages(
@@ -798,7 +810,7 @@ export function sendAgentHandoffMessage(
   sessionId: string,
   body: string,
 ): Promise<SupportHandoffSendResult> {
-  return postMessage(`/api/support/handoff/agent/${encodeURIComponent(sessionId)}/messages`, body);
+  return postMessage(supportAgentMessagesPath(sessionId), body);
 }
 
 function toQueueEntry(value: unknown): SupportHandoffQueueEntryView | null {
@@ -819,7 +831,7 @@ function toQueueEntry(value: unknown): SupportHandoffQueueEntryView | null {
 export async function fetchAgentQueue(): Promise<SupportHandoffQueueEntryView[] | null> {
   let response: Response;
   try {
-    response = await fetch('/api/support/handoff/agent/queue', {
+    response = await fetch(SUPPORT_AGENT_QUEUE_PATH, {
       method: 'GET',
       headers: { Accept: 'application/json' },
       cache: 'no-store',
@@ -843,7 +855,7 @@ export async function claimHandoffSession(sessionId: string): Promise<SupportHan
   let response: Response;
   try {
     const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
-    response = await fetch(`/api/support/handoff/agent/${encodeURIComponent(sessionId)}/claim`, {
+    response = await fetch(supportAgentClaimPath(sessionId), {
       method: 'POST',
       headers,
     });

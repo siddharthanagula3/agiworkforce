@@ -3366,6 +3366,323 @@
       ]
     },
     {
+      "id": "advanced-security-passkey-completes-every-sign-in",
+      "doc": "account-security",
+      "section": "Advanced Account Security",
+      "kind": "prose",
+      "sentence": "A password or an email code alone no longer gets in.",
+      "implementation": [
+        "apps/web/lib/server/account-security/gate.ts",
+        "apps/web/lib/api-auth.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/account-security/__tests__/gate.test.ts",
+          "name": "refuses every request from an enrolled account until that session passes a passkey check"
+        }
+      ]
+    },
+    {
+      "id": "advanced-security-enrollment-needs-two-methods",
+      "doc": "account-security",
+      "section": "Advanced Account Security",
+      "kind": "prose",
+      "sentence": "To turn it on, add at least two passkeys or security keys, including one that works across devices, such as a passkey synced by your password manager or a hardware security key, then save your recovery keys.",
+      "implementation": [
+        "apps/web/lib/server/account-security/service.ts",
+        "apps/web/lib/server/account-security/webauthn.ts"
+      ],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/lib/server/account-security/service.ts",
+          "text": "passkeys or security keys, including one that works across devices, before you turn this on"
+        },
+        {
+          "kind": "copy",
+          "file": "packages/contracts/cloud-contracts/src/account-security.ts",
+          "text": "minimumSignInMethods: 2"
+        }
+      ]
+    },
+    {
+      "id": "advanced-security-enrollment-signs-out-other-devices",
+      "doc": "account-security",
+      "section": "Advanced Account Security",
+      "kind": "prose",
+      "sentence": "Every other device is signed out when you turn it on.",
+      "implementation": ["apps/web/lib/server/account-security/service.ts"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/lib/server/account-security/service.ts",
+          "text": "const sweep = await revokeEveryOtherSession("
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/lib/server/account-security/service.ts",
+          "text": "revokeEveryDeviceRefreshCredential(ownerDb, caller.userId)"
+        }
+      ]
+    },
+    {
+      "id": "advanced-security-enrollment-needs-email-code-and-passkey",
+      "doc": "account-security",
+      "section": "Advanced Account Security",
+      "kind": "prose",
+      "sentence": "Turning it on requires a code we email to the address on your account and one of the passkeys or security keys you added.",
+      "implementation": [
+        "apps/web/lib/server/account-security/service.ts",
+        "apps/web/lib/server/account-security/store.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/account-security/__tests__/gate.test.ts",
+          "name": "refuses a password step-up grant and passkeys the attacker added without the code emailed to the owner"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/lib/server/account-security/service.ts",
+          "text": "const credential = await consumeAssertion(caller, input.response, request);"
+        }
+      ]
+    },
+    {
+      "id": "advanced-security-enrollment-waits-after-email-change",
+      "doc": "account-security",
+      "section": "Advanced Account Security",
+      "kind": "prose",
+      "sentence": "It cannot be turned on within 7 days of the email address on your account being set or changed.",
+      "implementation": [
+        "apps/web/lib/server/account-security/service.ts",
+        "apps/web/lib/server/account-security/store.ts"
+      ],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "packages/contracts/cloud-contracts/src/account-security.ts",
+          "text": "emailChangeCooldownDays: 7"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/lib/server/account-security/service.ts",
+          "text": "coalesce(email_changed_at > now() - make_interval(days => $2::integer), false)"
+        }
+      ]
+    },
+    {
+      "id": "advanced-security-undo-link-for-forty-eight-hours",
+      "doc": "account-security",
+      "section": "Advanced Account Security",
+      "kind": "prose",
+      "sentence": "We also email the address that got the code a link that turns it off, signs everyone out and resets your password, without a passkey, for 48 hours after it was turned on, in case it was not you.",
+      "implementation": [
+        "apps/web/lib/server/account-security/undo.ts",
+        "apps/web/lib/server/account-security/store.ts"
+      ],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "packages/contracts/cloud-contracts/src/account-security.ts",
+          "text": "undoHours: 48"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/lib/server/account-security/undo.ts",
+          "text": "await identity.setPassword(open.userId, newUnusablePassword());"
+        }
+      ]
+    },
+    {
+      "id": "advanced-security-email-recovery-no-longer-restores",
+      "doc": "account-security",
+      "section": "Advanced Account Security",
+      "kind": "prose",
+      "sentence": "Email account recovery no longer restores access.",
+      "implementation": ["apps/web/lib/server/account-security/gate.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/account-security/__tests__/gate.test.ts",
+          "name": "refuses every request from an enrolled account until that session passes a passkey check"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/account-security/components/AdvancedAccountSecurityPanel.tsx",
+          "text": "Email account recovery no longer restores access."
+        }
+      ]
+    },
+    {
+      "id": "advanced-security-recovery-hold-is-forty-eight-hours",
+      "doc": "account-security",
+      "section": "Advanced Account Security",
+      "kind": "prose",
+      "sentence": "A recovery key starts recovery, and the account unlocks 48 hours later.",
+      "implementation": [
+        "apps/web/lib/server/account-security/store.ts",
+        "packages/contracts/cloud-contracts/src/account-security.ts"
+      ],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "packages/contracts/cloud-contracts/src/account-security.ts",
+          "text": "recoveryHoldHours: 48"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/lib/server/account-security/store.ts",
+          "text": "recovery_unlocks_at = now() + make_interval(hours => $4::integer)"
+        }
+      ]
+    },
+    {
+      "id": "advanced-security-recovery-keys-single-use",
+      "doc": "account-security",
+      "section": "Advanced Account Security",
+      "kind": "prose",
+      "sentence": "Each recovery key works once, and replacing your recovery keys stops the old ones from working.",
+      "implementation": ["apps/web/lib/server/account-security/store.ts"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/lib/server/account-security/store.ts",
+          "text": "set recovery_key_hashes = array_remove(recovery_key_hashes, $2::text)"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/lib/server/account-security/store.ts",
+          "text": "set recovery_key_hashes = pending_recovery_key_hashes"
+        }
+      ]
+    },
+    {
+      "id": "advanced-security-sign-ins-emailed-and-sessions-shorter",
+      "doc": "account-security",
+      "section": "Advanced Account Security",
+      "kind": "prose",
+      "sentence": "Every new sign-in is emailed to you, and sessions end sooner, so you confirm with your passkey or security key more often.",
+      "implementation": [
+        "apps/web/lib/services/account-activity-notifications.ts",
+        "apps/web/lib/server/account-security/gate.ts"
+      ],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/lib/services/account-activity-notifications.ts",
+          "text": "return (await securityAlertsRequired(db, userId)) ? row.email : null;"
+        },
+        {
+          "kind": "copy",
+          "file": "packages/contracts/cloud-contracts/src/account-security.ts",
+          "text": "verificationLifetimeHours: 7 * 24"
+        }
+      ]
+    },
+    {
+      "id": "advanced-security-support-cannot-remove",
+      "doc": "account-security",
+      "section": "Advanced Account Security",
+      "kind": "prose",
+      "sentence": "AGI support cannot turn this off or add a sign-in method for you.",
+      "implementation": ["apps/web/lib/server/account-security/service.ts"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/features/account-security/components/AdvancedAccountSecurityPanel.tsx",
+          "text": "AGI support cannot turn this off or add a sign-in method for you."
+        }
+      ]
+    },
+    {
+      "id": "advanced-security-disable-keeps-keys-removes-recovery",
+      "doc": "account-security",
+      "section": "Advanced Account Security",
+      "kind": "prose",
+      "sentence": "Your passkeys and security keys stay on the account, and your recovery keys are removed.",
+      "implementation": ["apps/web/lib/server/account-security/store.ts"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/lib/server/account-security/store.ts",
+          "text": "recovery_key_hashes = '{}',"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/account-security/components/AdvancedAccountSecurityPanel.tsx",
+          "text": "Your passkeys and security keys stay on your account."
+        }
+      ]
+    },
+    {
+      "id": "advanced-security-unavailable-to-managed-accounts",
+      "doc": "account-security",
+      "section": "Advanced Account Security",
+      "kind": "prose",
+      "sentence": "Advanced Account Security is not available for an account your organization manages or for an account on a domain an organization has verified.",
+      "implementation": [
+        "apps/web/lib/server/account-security/service.ts",
+        "apps/web/lib/server/account-security/store.ts"
+      ],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/lib/server/account-security/service.ts",
+          "text": "is not available for an account your organization manages"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/lib/server/account-security/service.ts",
+          "text": "is not available for an account on a domain an organization has verified"
+        }
+      ]
+    },
+    {
+      "id": "advanced-security-lost-every-key-uses-recovery-key",
+      "doc": "account-security",
+      "section": "If you cannot sign in",
+      "kind": "prose",
+      "sentence": "**Lost every passkey and security key with Advanced Account Security on.** On the screen that asks for your passkey, choose to use a recovery key.",
+      "implementation": ["apps/web/features/account-security/components/AccountSecurityVerify.tsx"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/features/account-security/components/AccountSecurityVerify.tsx",
+          "text": "Use a recovery key"
+        }
+      ]
+    },
+    {
+      "id": "advanced-security-recovery-finishes-on-same-device",
+      "doc": "account-security",
+      "section": "If you cannot sign in",
+      "kind": "prose",
+      "sentence": "We email you that recovery started, and you finish it on the same device once the 48 hours are up.",
+      "implementation": [
+        "apps/web/lib/server/account-security/service.ts",
+        "apps/web/lib/server/account-security/store.ts"
+      ],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/lib/server/account-security/service.ts",
+          "text": "event: 'advanced_security_recovery_started'"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/lib/server/account-security/store.ts",
+          "text": "and recovery_session_id = $2"
+        },
+        {
+          "kind": "copy",
+          "file": "packages/contracts/cloud-contracts/src/account-security.ts",
+          "text": "recoveryHoldHours: 48"
+        }
+      ]
+    },
+    {
       "id": "cli-installer-refuses-unverified-release",
       "doc": "install-the-cli",
       "section": "Getting the binary",
@@ -3546,9 +3863,9 @@
       "doc": "account-security",
       "section": "Second factors",
       "kind": "prose",
-      "sentence": "Hardware security keys and SMS MFA are not part of the current account contract, so they are not offered rather than silently ignored.",
+      "sentence": "SMS MFA is not part of the current account contract, so it is not offered rather than silently ignored.",
       "implementation": ["apps/web/features/auth"],
-      "reason": "Which second factors exist is decided at the identity provider, not in this repository, so nothing here can assert that a factor is absent. It stays unproven until the account contract enumerates the factors it accepts in code."
+      "reason": "Which second factors the identity provider offers is decided outside this repository, so nothing here can assert that SMS is absent. It stays unproven until the account contract enumerates the factors it accepts in code."
     },
     {
       "id": "privacy-managed-encrypted-in-transit-and-at-rest",

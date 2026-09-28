@@ -29,7 +29,10 @@ import {
   type InteractiveCard,
 } from '@agiworkforce/types';
 import { MAX_DEVICE_STEP_RESULT_LENGTH } from '@agiworkforce/local-runtime-contract';
-import { MAX_DEVICE_STEP_IMAGE_BASE64_LENGTH } from '@agiworkforce/cloud-contracts';
+import {
+  MAX_DEVICE_STEP_IMAGE_BASE64_LENGTH,
+  MAX_DEVICE_STEPS_PER_PAUSE,
+} from '@agiworkforce/cloud-contracts';
 import type { AgentEventEnvelope, AgentTaskState } from '@agiworkforce/types/protocol';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
@@ -214,7 +217,7 @@ const DeviceStepBindingSchema = z.object({
       }),
     )
     .min(1)
-    .max(8),
+    .max(MAX_DEVICE_STEPS_PER_PAUSE),
 });
 
 const InputRequestsMapSchema = z.record(z.string(), z.record(z.string(), z.unknown()));
@@ -497,7 +500,7 @@ function mapPendingDeviceStep(row: CloudAgentRunRow): CloudAgentRun['pendingDevi
   const calls = z
     .array(PendingToolCallSchema)
     .min(1)
-    .max(8)
+    .max(MAX_DEVICE_STEPS_PER_PAUSE)
     .safeParse(row.pending_device_tool_calls);
   const binding = DeviceStepBindingSchema.safeParse(row.pending_device_step);
   if (!calls.success || !binding.success) return undefined;
@@ -1474,6 +1477,19 @@ export async function claimCloudAgentApprovalCheckpoint(
         [input.runId, input.userId],
       );
       if (expiredRows[0]) throw new CloudAgentApprovalCheckpointExpiredError();
+      const decidedRows = await tx.query<{ state: string }>(
+        `select state from public.cloud_agent_approval_checkpoints
+          where run_id = $1 and user_id = $2 and checkpoint_kind = 'approval'
+          order by version desc
+          limit 1`,
+        [input.runId, input.userId],
+      );
+      const latestState = decidedRows[0]?.state;
+      if (latestState === 'resuming' || latestState === 'resolved') {
+        throw new CloudAgentApprovalCheckpointConflictError(
+          'This approval was already answered on another device',
+        );
+      }
     }
     const checkpoint = requireApprovalCheckpoint(rows);
     const pendingIds = new Set(checkpoint.pendingToolCalls.map((call) => call.id));
@@ -1981,7 +1997,7 @@ async function persistCloudAgentDeviceCheckpoint(
   const pendingToolCalls = z
     .array(PendingToolCallSchema)
     .min(1)
-    .max(8)
+    .max(MAX_DEVICE_STEPS_PER_PAUSE)
     .parse(input.pendingToolCalls);
   const deviceStep = DeviceStepBindingSchema.parse(input.deviceStep);
   const nextEventSequence = z.number().int().nonnegative().parse(input.nextEventSequence);
@@ -2153,7 +2169,7 @@ async function claimDeviceCheckpoint(
       }),
     )
     .min(1)
-    .max(8)
+    .max(MAX_DEVICE_STEPS_PER_PAUSE)
     .parse(input.results);
   const leaseSeconds = Math.min(3_600, Math.max(60, Math.trunc(input.leaseSeconds ?? 300)));
 

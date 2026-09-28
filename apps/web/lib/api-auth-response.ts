@@ -4,12 +4,13 @@ import { NextResponse } from 'next/server';
 import { handleError } from '@/lib/error-handler';
 import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
 import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
+import { isPasskeyRequiredError } from '@/lib/server/account-security/gate';
 
 const GENERIC_UNAUTHORIZED_MESSAGE = 'Authentication required';
 const GENERIC_UNAUTHORIZED_STATUS = 401;
 
 export function unauthorizedResponseFor(error: unknown): NextResponse {
-  if (isMfaRequiredError(error) || isIpNotAllowedError(error)) {
+  if (isMfaRequiredError(error) || isIpNotAllowedError(error) || isPasskeyRequiredError(error)) {
     return handleError(error);
   }
   return NextResponse.json(

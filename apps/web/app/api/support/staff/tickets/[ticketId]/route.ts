@@ -1,7 +1,6 @@
 import 'server-only';
 
 import { NextResponse, type NextRequest } from 'next/server';
-import { z } from 'zod';
 
 import { requirePlatformAdmin } from '@/lib/auth-guards';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -11,25 +10,19 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { readJsonBody } from '@/lib/read-json-body';
 import { recordAuditEvent } from '@/lib/security-audit';
 import {
-  MAX_TICKET_MESSAGE_CHARS,
   TicketClosedError,
   TicketNotFoundError,
   readTicketForStaff,
   replyToTicketAsStaff,
 } from '@/lib/support/tickets/service';
-import type { StaffTicketThread } from '@/lib/support/tickets/types';
+import {
+  type StaffTicketThread,
+  SupportStaffTicketReplyRequestSchema,
+  SupportTicketIdSchema,
+} from '@agiworkforce/cloud-contracts/support';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-const TicketIdSchema = z.string().uuid();
-
-const ReplySchema = z
-  .object({
-    reply: z.string().trim().min(1).max(MAX_TICKET_MESSAGE_CHARS),
-    resolve: z.boolean().default(false),
-  })
-  .strict();
 
 type RouteContext = { params: Promise<{ ticketId: string }> };
 
@@ -43,7 +36,7 @@ function translate(error: unknown): never {
 
 async function ticketIdFrom(context: RouteContext): Promise<string> {
   const { ticketId } = await context.params;
-  const parsed = TicketIdSchema.safeParse(ticketId);
+  const parsed = SupportTicketIdSchema.safeParse(ticketId);
   if (!parsed.success) throw createError.notFound('No such ticket');
   return parsed.data;
 }
@@ -94,7 +87,7 @@ async function handleReply(request: NextRequest, context: RouteContext) {
   if (limited) return limited;
 
   const ticketId = await ticketIdFrom(context);
-  const parsed = ReplySchema.safeParse(await readJsonBody(request));
+  const parsed = SupportStaffTicketReplyRequestSchema.safeParse(await readJsonBody(request));
   if (!parsed.success) {
     throw createError.validation('A reply needs a message', parsed.error);
   }

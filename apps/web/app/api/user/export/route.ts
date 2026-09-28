@@ -702,6 +702,24 @@ const developerProjectExportSchema = z.object({
   updated_at: timestampSchema,
 });
 
+const accountSecurityEnrollmentExportSchema = z.object({
+  enrolled_at: nullableTimestampSchema,
+  recovery_started_at: nullableTimestampSchema,
+  recovery_unlocks_at: nullableTimestampSchema,
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+
+const accountSecurityCredentialExportSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  device_type: z.string(),
+  backed_up: z.boolean(),
+  transports: z.array(z.string()),
+  created_at: timestampSchema,
+  last_used_at: nullableTimestampSchema,
+});
+
 const securityAuditLogExportSchema = z.object({
   id: z.string(),
   event_type: z.string(),
@@ -1452,6 +1470,25 @@ const ADDITIONAL_EXPORT_SECTIONS: ReadonlyArray<{
 }> = [
   // Two roles, two sections. Each one carries what this person supplied or was
   // given, and never the other party's account id.
+  {
+    section: 'account_security',
+    table: 'account_security_enrollments',
+    sql: `select enrolled_at, recovery_started_at, recovery_unlocks_at, created_at, updated_at
+          from account_security_enrollments
+          where user_id = $1`,
+    schema: accountSecurityEnrollmentExportSchema,
+    rowLimit: EXPORT_ROW_LIMIT,
+  },
+  {
+    section: 'account_security_sign_in_methods',
+    table: 'account_security_credentials',
+    sql: `select id, name, device_type, backed_up, transports, created_at, last_used_at
+          from account_security_credentials
+          where user_id = $1
+          order by created_at asc`,
+    schema: accountSecurityCredentialExportSchema,
+    rowLimit: EXPORT_ROW_LIMIT,
+  },
   {
     section: 'developer_webhook_deliveries',
     table: 'developer_webhook_deliveries',
