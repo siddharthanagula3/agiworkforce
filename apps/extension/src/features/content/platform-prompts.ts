@@ -23,6 +23,22 @@ const PLATFORM_PROMPTS: Record<string, string> = {
 - Side panel for event details, mini calendar in left sidebar
 - Settings via gear icon top-right`,
 
+  'docs.google.com/spreadsheets': `You are assisting on Google Sheets. Key patterns:
+- Cmd/Ctrl+/ : Keyboard shortcuts list
+- The grid is drawn on a canvas, so cell values are not in the page text; read the selected cell from the formula bar (#t-formula-bar-input) and its address from the Name box (#t-name-box)
+- Type a cell address such as B12 into the Name box and press Enter to jump to it
+- Sheet tabs are along the bottom; Data > Create a filter, Insert > Chart
+- Cmd/Ctrl+Alt+M: Insert comment
+- Share button top-right for permissions`,
+
+  'docs.google.com/presentation': `You are assisting on Google Slides. Key patterns:
+- Cmd/Ctrl+/ : Keyboard shortcuts list
+- Slide thumbnails are in the filmstrip on the left; the selected slide is in the main editor
+- Cmd/Ctrl+M: New slide; Cmd/Ctrl+D: Duplicate the selected object or slide
+- Speaker notes are below the slide ("Click to add speaker notes")
+- Slideshow button top-right presents; Cmd/Ctrl+Alt+M: Insert comment
+- Share button top-right for permissions`,
+
   'docs.google.com': `You are assisting on Google Docs. Key patterns:
 - Cmd/Ctrl+/ : Keyboard shortcuts list
 - Cmd/Ctrl+Shift+S: Toggle suggestion mode
@@ -97,14 +113,24 @@ Confluence:
 - Mute/unmute during calls: Ctrl+Shift+M / Cmd+Shift+M (same shortcut toggles)`,
 };
 
+function matchesPlatform(hostname: string, pathname: string, key: string): boolean {
+  const slash = key.indexOf('/');
+  const domain = slash === -1 ? key : key.slice(0, slash);
+  const path = slash === -1 ? '' : key.slice(slash);
+  if (hostname !== domain && !hostname.endsWith(`.${domain}`)) return false;
+  return path === '' || pathname === path || pathname.startsWith(`${path}/`);
+}
+
 export function getPlatformPrompt(url: string): string | null {
   try {
-    const hostname = new URL(url).hostname.replace(/^www\./, '');
-    for (const [domain, prompt] of Object.entries(PLATFORM_PROMPTS)) {
-      if (hostname === domain || hostname.endsWith(`.${domain}`)) {
-        return prompt;
-      }
+    const parsed = new URL(url);
+    const hostname = parsed.hostname.replace(/^www\./, '');
+    let best: { key: string; prompt: string } | null = null;
+    for (const [key, prompt] of Object.entries(PLATFORM_PROMPTS)) {
+      if (!matchesPlatform(hostname, parsed.pathname, key)) continue;
+      if (!best || key.length > best.key.length) best = { key, prompt };
     }
+    return best?.prompt ?? null;
   } catch (err) {
     void err;
   }
