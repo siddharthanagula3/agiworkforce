@@ -339,9 +339,9 @@ export function CommandPalette({ open, onOpenChange }: Props) {
         subtitle: result.matchedText,
         group: 'Search results',
         icon: result.type === 'project' ? ListChecks : MessageSquare,
-        action: () => router.push(globalSearchResultHref(result)),
+        action: () => router.push(globalSearchResultHref(result, query)),
       })),
-    [router, searchResults],
+    [query, router, searchResults],
   );
 
   const filtered = useMemo(() => {
