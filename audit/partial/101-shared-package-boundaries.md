@@ -46,9 +46,9 @@ Code: `crates/agiworkforce-model-registry/src/generated/model_registry.rs:2-2`, 
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | partials/platform 09897761b4, b83d89b1fd: check:capability-consumption (in check:llm-operability) requires each surface to name where it reads the capability document, records Chrome, VS Code and the CLI as owned gaps that fail once closed, and bans client imports of the static matrix and re-reads of feature_flags.code_execution; web and desktop read it, mobile reads it for requests. Remaining: Chrome, VS Code and CLI adoption (sent to the lead), and the mobile provider and code-execution flag (post-codex/p-platform-S78.01-mobile-capability-document.patch) | surface-only |
+| platform | partial | The cli gap is closed (034deed768: capability_handshake read and cached with the tier, check-capability-consumption records cli as a reader); Chrome and VS Code remain recorded gaps | handler |
 
-Code: `scripts/check-capability-consumption.mjs:22-22`, `scripts/check-capability-consumption.mjs:70-70`, `scripts/check-capability-consumption.mjs:223-223`, `package.json:130-130`
+Code: `scripts/check-capability-consumption.mjs:69-69`, `apps/cli/src/tier_cache.rs:384-384`
 
 ## S101.09: Shared policy contracts.
 
