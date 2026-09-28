@@ -19,6 +19,7 @@ const DATA_SOURCE = [
 const UNSET_STATE: Readonly<Record<string, string>> = {
   'WorkspaceAuditStreaming.tsx': 'No destination',
   'WorkspaceBillingSummary.tsx': 'No workspace selected',
+  'WorkspaceDataRegion.tsx': 'Choose a region…',
   'WorkspaceIdentityPanels.tsx': 'No workspace selected',
   'WorkspaceSpendLimit.tsx': 'Set limit',
 };

@@ -3,6 +3,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getWebviewContent } from '../features/sidebar-webview/webviewContent';
+import { vscodeApiStub } from './vscodeApiStub';
 
 function boot(): void {
   const html = getWebviewContent(
@@ -23,7 +24,7 @@ function boot(): void {
   document.body.innerHTML = parsed.body.innerHTML;
   Object.defineProperty(globalThis, 'acquireVsCodeApi', {
     configurable: true,
-    value: () => ({ postMessage: vi.fn() }),
+    value: () => vscodeApiStub({ postMessage: vi.fn() }),
   });
   const inline = Array.from(parsed.querySelectorAll('script')).find((script) =>
     script.textContent?.includes('acquireVsCodeApi()'),

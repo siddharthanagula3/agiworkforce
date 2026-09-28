@@ -1,15 +1,17 @@
 import 'server-only';
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 
 import { withErrorHandler } from '@/lib/error-handler';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { readSlackAssistantEvent } from '@/lib/slack/slack-events';
 import { ingestTriggerEvent } from '@/lib/triggers/trigger-ingest';
 import { SLACK_SIGNING_SECRET_ENV, verifySlackSignature } from '@/lib/triggers/trigger-signatures';
 
 export const runtime = 'nodejs';
+export const maxDuration = 300;
 
 const MAX_BODY_BYTES = 256 * 1024;
 const MAX_TEXT = 2_000;
@@ -77,6 +79,15 @@ async function handleSlackEvent(request: NextRequest): Promise<NextResponse> {
   const deliveryId = text(envelope.event_id, 200);
   if (envelope.type !== 'event_callback' || !teamId || !eventType || !deliveryId) {
     return NextResponse.json({ received: true, matched: 0 });
+  }
+
+  const assistantEvent = readSlackAssistantEvent(event, { teamId, eventId: deliveryId });
+  if (assistantEvent) {
+    const retrying = request.headers.has('x-slack-retry-num');
+    after(async () => {
+      const { handleSlackAssistantEvent } = await import('@/lib/slack/slack-assistant');
+      await handleSlackAssistantEvent(getNeonDb(), assistantEvent, { retrying, request });
+    });
   }
 
   const outcomes = await ingestTriggerEvent(getNeonDb(), {

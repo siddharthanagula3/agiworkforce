@@ -53,7 +53,8 @@ function plainReleaseLine(line: string): string {
     .trim();
 }
 
-function summarizeCliReleaseNotes(markdown: string): string | null {
+function summarizeCliReleaseNotes(markdown: string | undefined): string | null {
+  if (!markdown) return null;
   const items = markdown
     .replace(/\r\n/g, '\n')
     .split('\n')
