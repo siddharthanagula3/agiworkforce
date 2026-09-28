@@ -65,6 +65,8 @@ function props(overrides: Partial<ComposerInputProps> = {}): ComposerInputProps 
     disabled: false,
     maxLength: MAX_LENGTH,
     emptyState: false,
+    expanded: false,
+    reserveEndInset: false,
     ariaDescribedBy: undefined,
     existingFileNames: [],
     mention: { menu: {} },

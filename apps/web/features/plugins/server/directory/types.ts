@@ -1,4 +1,5 @@
 import type { PluginRegistryEntry } from '@agiworkforce/types';
+import type { PluginDependencyRef } from '@/lib/services/plugin-dependencies';
 import type { PLUGIN_SORTS, PLUGIN_SOURCE_FACETS, PLUGIN_WORKS_WITH } from './constants';
 
 export type PluginWorksWith = (typeof PLUGIN_WORKS_WITH)[number];
@@ -41,6 +42,7 @@ export interface PluginMarketplaceRef {
   repositoryUrl: string | null;
   manifestUrl: string | null;
   contentHash: string | null;
+  allowCrossMarketplaceDependenciesOn?: string[];
 }
 
 export interface PluginDirectoryEntry extends PluginRegistryEntry {
@@ -54,6 +56,7 @@ export interface PluginDirectoryEntry extends PluginRegistryEntry {
   installCommand: string | null;
   runtime: PluginRuntimeFit;
   sourceLocation: PluginSourceLocation | null;
+  dependencies?: PluginDependencyRef[] | null;
 }
 
 export interface PluginDirectoryStats {
@@ -98,4 +101,9 @@ export interface InstalledDirectorySkill {
   description: string;
   body: string;
   path: string;
+}
+
+export interface SkillCompanionFile {
+  path: string;
+  size: number;
 }

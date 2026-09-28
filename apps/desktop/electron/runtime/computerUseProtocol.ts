@@ -27,7 +27,8 @@ export function frameHelperLines(buffered: string): HelperFraming {
   return { lines, rest };
 }
 
-export type HelperReply = { ok: true } | { ok: false; error: string };
+export type HelperReply =
+  { ok: true; payload: Record<string, unknown> } | { ok: false; error: string };
 
 export function readHelperReply(line: string): HelperReply {
   let parsed: unknown;
@@ -40,7 +41,7 @@ export function readHelperReply(line: string): HelperReply {
     return { ok: false, error: 'The input helper sent an unreadable reply.' };
   }
   const record = parsed as { ok?: unknown; error?: unknown };
-  if (record.ok === true) return { ok: true };
+  if (record.ok === true) return { ok: true, payload: parsed as Record<string, unknown> };
   return {
     ok: false,
     error:

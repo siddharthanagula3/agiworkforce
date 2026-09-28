@@ -256,7 +256,7 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
 
   const handleResultClick = (result: SearchResult) => {
     onOpenChange(false);
-    router.push(globalSearchResultHref(result));
+    router.push(globalSearchResultHref(result, query));
   };
 
   const handleClearFilters = () => {

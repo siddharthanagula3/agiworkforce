@@ -29,7 +29,7 @@ import {
   type PlacesSearchQuery,
 } from '@/lib/places/places-provider';
 
-const GOOGLE_PLACES_PROVIDER_ID = 'google_places';
+export const GOOGLE_PLACES_PROVIDER_ID = 'google_places';
 const GOOGLE_PLACES_API_ORIGIN = 'https://places.googleapis.com';
 const GOOGLE_PLACES_TEXT_SEARCH_URL = `${GOOGLE_PLACES_API_ORIGIN}/v1/places:searchText`;
 const GOOGLE_PLACES_ATTRIBUTION = 'Powered by Google';

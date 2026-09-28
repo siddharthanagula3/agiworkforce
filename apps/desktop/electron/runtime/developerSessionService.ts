@@ -23,13 +23,18 @@ import type {
 import type {
   DeveloperMessage,
   DeveloperSessionFileChange,
+  PluginSummary,
+  SkillSummary,
   DeveloperSessionSource,
   DeveloperSessionTrustMode,
   ThreadStatus,
   TurnFailureAction,
   TurnFailureCode,
 } from '@agiworkforce/types/protocol';
-import { DEVELOPER_FILE_CHANGES } from '@agiworkforce/local-runtime-contract';
+import {
+  DEVELOPER_FILE_CHANGES,
+  normalizeDeveloperAgentMode,
+} from '@agiworkforce/local-runtime-contract';
 import {
   DEVELOPER_SESSION_PROTOCOL_VERSION as PROTOCOL_VERSION,
   MINIMUM_SUPPORTED_RUNTIME_VERSION,
@@ -464,6 +469,8 @@ function handleNotification(server: RunningServer, method: string, rawParams: un
     outcome,
     response: readString(params, 'response') ?? '',
     failure: readFailure(params),
+    inputTokens: readNumber(params, 'inputTokens') ?? 0,
+    outputTokens: readNumber(params, 'outputTokens') ?? 0,
   });
 }
 
@@ -901,6 +908,9 @@ export async function readDeveloperModels(
     models,
     hostModels: toHostModels(isRecord(modelList) ? modelList['hostModels'] : null),
     defaultModelId: isRecord(settings) ? readString(settings, 'defaultModel') : null,
+    defaultAgentMode: isRecord(settings)
+      ? normalizeDeveloperAgentMode(readString(settings, 'permissionMode'))
+      : null,
     managedSignedIn: isRecord(account) && account['signedIn'] === true,
   };
 }
@@ -1036,11 +1046,71 @@ export async function startDeveloperTurn(input: DeveloperTurnRequest): Promise<{
     input: [{ type: 'text', text: input.text, text_elements: [] }],
     cwd: root.path,
     ...(input.model ? { model: input.model } : {}),
+    ...(input.agentMode ? { agentMode: input.agentMode } : {}),
   });
   const turn = isRecord(result) ? result['turn'] : null;
   const turnId = isRecord(turn) ? readString(turn, 'id') : null;
   if (!turnId) throw new Error('The AGI CLI started no turn.');
   return { turnId };
+}
+
+function isSkillSummary(value: unknown): value is SkillSummary {
+  return (
+    isRecord(value) &&
+    typeof value['name'] === 'string' &&
+    typeof value['description'] === 'string' &&
+    typeof value['enabled'] === 'boolean' &&
+    typeof value['consented'] === 'boolean'
+  );
+}
+
+function isPluginSummary(value: unknown): value is PluginSummary {
+  return (
+    isRecord(value) &&
+    typeof value['id'] === 'string' &&
+    typeof value['name'] === 'string' &&
+    typeof value['enabled'] === 'boolean'
+  );
+}
+
+export async function listDeveloperSkills(rootId: string): Promise<SkillSummary[]> {
+  const server = await readyServer(requireRoot(rootId));
+  const result = await request(server, 'skills/list', {});
+  const skills = isRecord(result) ? result['skills'] : null;
+  return Array.isArray(skills) ? skills.filter(isSkillSummary) : [];
+}
+
+export async function setDeveloperSkillEnabled(
+  rootId: string,
+  name: string,
+  enabled: boolean,
+): Promise<boolean> {
+  const server = await readyServer(requireRoot(rootId));
+  await request(server, 'skills/setEnabled', { name, enabled });
+  return enabled;
+}
+
+export async function setDeveloperSkillConsent(rootId: string, granted: boolean): Promise<boolean> {
+  const server = await readyServer(requireRoot(rootId));
+  const result = await request(server, 'skills/consent', { granted });
+  return isRecord(result) && result['consented'] === true;
+}
+
+export async function listDeveloperPlugins(rootId: string): Promise<PluginSummary[]> {
+  const server = await readyServer(requireRoot(rootId));
+  const result = await request(server, 'plugins/list', {});
+  const plugins = isRecord(result) ? result['plugins'] : null;
+  return Array.isArray(plugins) ? plugins.filter(isPluginSummary) : [];
+}
+
+export async function setDeveloperPluginEnabled(
+  rootId: string,
+  id: string,
+  enabled: boolean,
+): Promise<boolean> {
+  const server = await readyServer(requireRoot(rootId));
+  await request(server, 'plugins/setEnabled', { id, enabled });
+  return enabled;
 }
 
 export async function interruptDeveloperTurn(

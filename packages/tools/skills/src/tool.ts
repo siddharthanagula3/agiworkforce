@@ -36,6 +36,11 @@ export interface SkillToolFileAccess {
   readFile: (skill: Skill, path: string) => Promise<SkillFileReadOutcome>;
 }
 
+export interface SkillWithFileAccess {
+  skill: Skill;
+  access: SkillToolFileAccess;
+}
+
 export interface FormatSkillsForToolPromptOptions {
   selectedSkillName?: string;
 }

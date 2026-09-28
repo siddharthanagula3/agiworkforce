@@ -45,6 +45,10 @@ pub enum ApprovalRequestKind {
     AskUser {
         question: String,
     },
+    Question {
+        question: String,
+        options: Vec<String>,
+    },
     Hook {
         hook_name: String,
     },
@@ -118,9 +122,10 @@ impl ApprovalRequestKind {
             }
             // Nothing outside the conversation moves, so there is nothing to
             // put back.
-            Self::LoopDetection { .. } | Self::AskUser { .. } | Self::McpElicitation { .. } => {
-                (Level::Low, true)
-            }
+            Self::LoopDetection { .. }
+            | Self::AskUser { .. }
+            | Self::Question { .. }
+            | Self::McpElicitation { .. } => (Level::Low, true),
             // A trust grant widens what may run without asking again, and the
             // user withdraws it the same way they gave it.
             Self::TrustDirectory { .. } => (Level::Medium, true),
@@ -144,6 +149,19 @@ impl ApprovalRequestKind {
             }
         };
         ApprovalRisk { level, reversible }
+    }
+}
+
+impl ApprovalRequestKind {
+    pub fn covered_by_turn_grant(&self) -> bool {
+        !matches!(
+            self,
+            Self::AskUser { .. }
+                | Self::Question { .. }
+                | Self::McpElicitation { .. }
+                | Self::TrustDirectory { .. }
+                | Self::GitPush { .. }
+        ) && self.risk().level != AgentEventApprovalRiskLevel::High
     }
 }
 
@@ -190,10 +208,11 @@ impl ApprovalDecision {
 #[derive(Default)]
 struct ApprovalBrokerState {
     pending: VecDeque<ApprovalRequest>,
-    responders: HashMap<Uuid, oneshot::Sender<ApprovalDecision>>,
+    responders: HashMap<Uuid, oneshot::Sender<(ApprovalDecision, Option<String>)>>,
     /// Once set, every new (and currently pending) request resolves to
     /// `Cancel` without prompting. Used for "Deny All" within a single turn.
     deny_all: bool,
+    allow_all: bool,
 }
 
 /// Shared broker handle. Clone it freely between the TUI and worker tasks.
@@ -223,11 +242,18 @@ impl ApprovalBroker {
             if state.deny_all {
                 return ApprovalDecision::Cancel;
             }
+            if state.allow_all && request.kind.covered_by_turn_grant() {
+                return ApprovalDecision::AllowOnce;
+            }
             state.pending.push_back(request);
             state.responders.insert(id, tx);
         }
         self.notify.notify_one();
-        rx.await.unwrap_or(ApprovalDecision::Cancel)
+        let (decision, note) = rx.await.unwrap_or((ApprovalDecision::Cancel, None));
+        if let Some(note) = note.filter(|note| !note.trim().is_empty()) {
+            crate::tools::record_approval_note(note);
+        }
+        decision
     }
 
     /// TUI-side: park until a request may be pending. Pairs with `drain_pending`
@@ -243,13 +269,40 @@ impl ApprovalBroker {
 
     /// TUI-side: resolve a pending request and wake the waiting worker task.
     pub async fn complete(&self, id: Uuid, decision: ApprovalDecision) -> bool {
+        self.complete_with_note(id, decision, None).await
+    }
+
+    pub async fn complete_with_note(
+        &self,
+        id: Uuid,
+        decision: ApprovalDecision,
+        note: Option<String>,
+    ) -> bool {
         let mut state = self.state.lock().await;
         if let Some(tx) = state.responders.remove(&id) {
-            let _ = tx.send(decision);
+            let _ = tx.send((decision, note));
             true
         } else {
             false
         }
+    }
+
+    pub async fn allow_all_remaining(&self) -> Vec<ApprovalRequest> {
+        let mut granted = Vec::new();
+        let mut state = self.state.lock().await;
+        state.allow_all = true;
+        let pending = std::mem::take(&mut state.pending);
+        for request in pending {
+            if request.kind.covered_by_turn_grant() {
+                if let Some(tx) = state.responders.remove(&request.id) {
+                    let _ = tx.send((ApprovalDecision::AllowOnce, None));
+                }
+                granted.push(request);
+            } else {
+                state.pending.push_back(request);
+            }
+        }
+        granted
     }
 
     pub async fn pending_count(&self) -> usize {
@@ -262,7 +315,7 @@ impl ApprovalBroker {
         state.pending.clear();
         let responders = std::mem::take(&mut state.responders);
         for (_, tx) in responders {
-            let _ = tx.send(ApprovalDecision::Cancel);
+            let _ = tx.send((ApprovalDecision::Cancel, None));
         }
     }
 
@@ -278,7 +331,7 @@ impl ApprovalBroker {
             std::mem::take(&mut state.responders)
         };
         for (_, tx) in responders {
-            let _ = tx.send(ApprovalDecision::Cancel);
+            let _ = tx.send((ApprovalDecision::Cancel, None));
         }
     }
 
