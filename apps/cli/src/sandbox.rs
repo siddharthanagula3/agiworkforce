@@ -688,6 +688,64 @@ pub(crate) async fn execute_sandboxed_program_with_timeout(
     .await
 }
 
+pub(crate) fn background_command(
+    manager: Option<&SandboxManager>,
+    invocation: Invocation<'_>,
+    cwd: &Path,
+    terminal: Option<&Path>,
+) -> Result<std::process::Command> {
+    let unsandboxed = || match invocation {
+        Invocation::Shell(script) => crate::process_tree::shell_command(script),
+        Invocation::Program { program, args } => {
+            let mut command = tokio::process::Command::new(program);
+            command.args(args);
+            command
+        }
+    };
+    let mut command = match manager {
+        None => unsandboxed(),
+        Some(manager) if matches!(manager.policy, SandboxPolicy::DangerFullAccess) => unsandboxed(),
+        Some(manager) => {
+            let scrub = scrub_environment_for(&manager.workspace_dir);
+            match manager.sandbox_type {
+                SandboxType::MacosSeatbelt => {
+                    let scratch_dir = program_scratch_dir()?;
+                    let mut profile = seatbelt_profile(manager, Some(&scratch_dir))?;
+                    if let Some(terminal) = terminal {
+                        profile.push_str(&format!(
+                            "(allow file-ioctl (literal \"{}\"))\n",
+                            validate_and_escape_seatbelt_path(terminal)?
+                        ));
+                    }
+                    let mut command = tokio::process::Command::new("sandbox-exec");
+                    apply_environment_policy(&mut command, scrub);
+                    command
+                        .arg("-p")
+                        .arg(profile)
+                        .args(invocation.argv())
+                        .env("TMPDIR", scratch_dir);
+                    command
+                }
+                SandboxType::LinuxBubblewrap => {
+                    let mut command = tokio::process::Command::new("bwrap");
+                    apply_environment_policy(&mut command, scrub);
+                    command.args(bubblewrap_args(manager, &invocation)?);
+                    command
+                }
+                SandboxType::None => {
+                    anyhow::bail!("{}", missing_sandbox_message(std::env::consts::OS))
+                }
+                _ => anyhow::bail!(
+                    "Unhandled SandboxType variant {}, sandbox config is broken; refusing exec",
+                    manager.sandbox_type.name()
+                ),
+            }
+        }
+    };
+    command.current_dir(cwd);
+    Ok(command.into_std())
+}
+
 async fn execute_sandboxed_in_environment(
     manager: &SandboxManager,
     invocation: Invocation<'_>,
