@@ -95,26 +95,24 @@ Code: `apps/cli/src/lib.rs:943-951`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile shows invite and member-management controls from the plan flag canManageTeam, not the member's role; non-admins are refused only by the server (members.manage). | ui |
+| mobile | partial | Gating member controls on the current user's owner/admin role is in post-codex/chat-gates-s78.10-mobile-role-controls.patch (workspace.tsx is Codex-held). | ui |
 
-Code: `apps/mobile/app/(app)/settings/workspace.tsx:268-268`, `apps/web/app/api/settings/team/route.ts:131-136`
+Code: `apps/mobile/app/(app)/settings/workspace.tsx:269-269`
 
 ## S78.11: Regional restrictions.
 
 - Done when: Features or routes restricted by region are enforced and the restriction is visible to the user.
 - Wave: 3
-- Already works on: api
+- Already works on: web, desktop, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Routing enforces the workspace residency region and excludes non-US vendor hosts, but nothing tells the user; the US-only preference has an endpoint (/api/me/routing-preferences) and no settings control. | ui |
-| desktop | partial | Routing enforces the workspace residency region and excludes non-US vendor hosts, but nothing tells the user; the US-only preference has an endpoint (/api/me/routing-preferences) and no settings control. | ui |
 | mobile | partial | The cited mobile evidence is the first-run age gate whose threshold varies by region: that is an age-eligibility rule (S78.12), not a feature or route restricted by region. The regional restriction that exists (workspace residency routing, non-US host exclusion) is enforced server-side and never shown on mobile, exactly the state that makes the web cell partial. Partial with miss ui; remaining: show the residency restriction to the user. |  |
 | cli | partial | Server routing applies the workspace residency region to this surface's requests, but the surface never shows or explains a regional restriction. | ui |
 | vscode | partial | Server routing applies the workspace residency region to this surface's requests, but the surface never shows or explains a regional restriction. | ui |
 | chrome | partial | Server routing applies the workspace residency region to this surface's requests, but the surface never shows or explains a regional restriction. | ui |
 
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:1904-1912`, `packages/ai/routing/src/auto.ts:1024-1034`, `apps/mobile/src/features/auth/services/ageGate.ts:128-135`, `apps/mobile/src/features/auth/services/rootRouting.ts:28-28`
+Code: `apps/mobile/src/features/auth/services/ageGate.ts:128-135`, `apps/mobile/src/features/auth/services/rootRouting.ts:28-28`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:1904-1912`, `apps/cli/src/provider.rs:260-267`
 
 ## S78.12: Age or account eligibility restrictions.
 
