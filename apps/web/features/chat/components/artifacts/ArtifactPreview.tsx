@@ -28,12 +28,14 @@ import {
   FolderOpen,
   FolderPlus,
   Globe,
+  Library,
   Pencil,
   GitFork,
   Sparkles,
 } from 'lucide-react';
 import type { PublishResult } from '@agiworkforce/artifacts';
 import { isSupportedChatAttachment } from '@agiworkforce/cloud-contracts';
+import { addCsrfHeaders } from '@/lib/client/csrf';
 import {
   summarizeGeneratedFileBundle,
   type ArtifactManifest,
@@ -848,6 +850,32 @@ if (__AgiApp) {
   }, [activeContent, artifact.language, artifact.title, artifact.type]);
 
   const [savingProjectId, setSavingProjectId] = useState<string | null>(null);
+  const [savingToLibrary, setSavingToLibrary] = useState(false);
+
+  const handleSaveToLibrary = useCallback(async () => {
+    setSavingToLibrary(true);
+    try {
+      const file = artifactSourceFile();
+      const response = await fetch('/api/library', {
+        method: 'POST',
+        credentials: 'include',
+        headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ fileName: file.name, content: await file.text() }),
+      });
+      if (!response.ok) {
+        const body = (await response.json().catch(() => null)) as {
+          error?: { message?: string } | string;
+        } | null;
+        const message = typeof body?.error === 'string' ? body.error : body?.error?.message;
+        throw new Error(message ?? 'That artifact could not be saved to your Library');
+      }
+      toast.success('Saved to your Library');
+    } catch (error) {
+      toast.error(toUserMessage(error, 'That artifact could not be saved to your Library'));
+    } finally {
+      setSavingToLibrary(false);
+    }
+  }, [artifactSourceFile]);
 
   const handleSaveToProject = useCallback(
     async (project: ArtifactProjectLink) => {
@@ -1592,6 +1620,24 @@ if (__AgiApp) {
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
+            )}
+
+            {variant === 'panel' && !hasGeneratedFileManifest && !isImage && !isPdf && !isDocx && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2"
+                disabled={savingToLibrary}
+                onClick={() => void handleSaveToLibrary()}
+                aria-label="Save this artifact to your Library"
+                title="Save to Library"
+                data-testid="artifact-save-to-library"
+              >
+                <Library className="h-3.5 w-3.5" aria-hidden="true" />
+                <span className="ml-1 hidden text-xs @[30rem]:inline">
+                  {savingToLibrary ? 'Saving…' : 'Save to Library'}
+                </span>
+              </Button>
             )}
 
             {/* Publish, only rendered when a host injected a real publisher
