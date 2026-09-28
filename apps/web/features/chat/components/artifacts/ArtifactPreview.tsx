@@ -185,6 +185,18 @@ interface ArtifactPreviewProps {
   projectSave?: ArtifactProjectSave;
 }
 
+function escapeHtmlAttribute(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function sandboxedPreviewPage(title: string, html: string): string {
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtmlAttribute(title)}</title><style>html,body{margin:0;height:100%}iframe{border:0;width:100%;height:100%;display:block}</style></head><body><iframe sandbox="allow-scripts allow-modals" referrerpolicy="no-referrer" srcdoc="${escapeHtmlAttribute(html)}"></iframe></body></html>`;
+}
+
 /**
  * Images render through an inert `<img>`, never an iframe. Accept the sources
  * that the product's persisted media pipeline can legitimately produce and
@@ -926,12 +938,8 @@ if (__AgiApp) {
   };
 
   const handleOpenInNewTab = () => {
-    // Keep executable artifact rendering inside SandboxedIframe. The new tab
-    // shows source text so untrusted artifact HTML does not execute on a Blob
-    // origin.
-    const html = getPreviewHTML();
-
-    const blob = new Blob([html], { type: 'text/plain;charset=utf-8' });
+    const page = sandboxedPreviewPage(artifact.title || 'Artifact', getPreviewHTML());
+    const blob = new Blob([page], { type: 'text/html;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     window.open(url, '_blank', 'noopener,noreferrer');
     setTimeout(() => URL.revokeObjectURL(url), 60_000);
@@ -1628,8 +1636,8 @@ if (__AgiApp) {
                 size="sm"
                 onClick={handleOpenInNewTab}
                 className="hidden h-7 px-2 @[22rem]:flex"
-                aria-label="Open source in new tab"
-                title="Open source in new tab"
+                aria-label="Open in new tab"
+                title="Open in new tab"
               >
                 <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
               </Button>
