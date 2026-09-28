@@ -242,12 +242,11 @@ Code: `apps/web/features/chat/components/cards/index.tsx:37-45`, `apps/web/featu
 
 - Done when: The user plans a trip (itinerary, places, routes) and can make reservations from the product.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | search_maps renders place/route cards; reservations only via generic third-party connectors (Booking.com, Expedia) through the chat tool loop; itinerary.v1 never produced or rendered; no native workspace. | ui |
-| desktop | partial | search_maps renders place/route cards; reservations only via generic third-party connectors (Booking.com, Expedia) through the chat tool loop; itinerary.v1 never produced or rendered; no native workspace. | ui |
-| mobile | partial | Mobile renders search_maps place and route cards. There is no itinerary builder and no bookings or reservations. | ui |
-| chrome | partial | The side panel renders search_maps place and route cards. There is no itinerary builder and no bookings or reservations. | ui |
+| mobile | partial | billing/no-yearly fd41d3eda renders itinerary cards natively on mobile (synced cloud chats show them now); mobile turns produce them once post-codex/no-yearly-s108-33-mobile-itinerary.patch adds itinerary.v1 to x_interactive_cards.supported in apps/mobile/stores/chat/chatExecutionStore.ts, which Codex holds | handler |
+| chrome | partial | server offers plan_itinerary to chrome once the side panel declares itinerary.v1; p-chrome adds it to supported in apps/extension/src/features/cloud-bridge/freeTrialClient.ts and an itinerary.v1 builder in apps/extension/src/features/side-panel/bubbles.ts | ui |
 
-Code: `apps/web/features/chat/components/messages/InteractiveCardBlock.tsx:37-37`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:744-762`, `apps/web/lib/services/map-search-tool-service.ts:41-50`, `apps/web/lib/connectors/directory/sources/vendor-directory.json:908-908`
+Code: `apps/mobile/src/features/chat/components/InteractiveCardBlock.tsx:361-361`, `apps/mobile/src/features/chat/components/InteractiveCardBlock.tsx:554-554`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:950-950`
