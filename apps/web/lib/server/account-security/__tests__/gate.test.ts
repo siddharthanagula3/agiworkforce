@@ -5,6 +5,7 @@ const ACCOUNT = 'user_advanced_security';
 const SESSION = 'sess_signed_in_with_password';
 const DESKTOP_SESSION = 'sess_redeemed_in_the_desktop_window';
 const CHALLENGE = 'c'.repeat(43);
+const OWNER_EMAIL = 'owner@example.com';
 
 const state = vi.hoisted(() => {
   process.env['CSRF_SECRET'] = 'gate-proof-signing-secret-that-is-long-enough';
@@ -75,7 +76,12 @@ vi.mock('@/lib/server/identity', () => {
       getToken: async () => 'session-token',
     }),
     verifyIdentitySessionToken: async () => null,
-    getIdentityUser: async () => null,
+    getIdentityUser: async () => ({
+      id: 'user_advanced_security',
+      primaryEmail: 'owner@example.com',
+      primaryEmailVerification: 'verified',
+      emailAddresses: [{ id: 'email_owner', emailAddress: 'owner@example.com', verified: true }],
+    }),
   };
 });
 
@@ -97,6 +103,12 @@ function passkeyRow(id: string, deviceType: 'singleDevice' | 'multiDevice') {
 function answer(sql: string, params: unknown[]): Record<string, unknown>[] {
   const statement = sql.toLowerCase();
   state.statements.push(statement);
+  if (statement.includes('select email from public.profiles')) {
+    return [{ email: OWNER_EMAIL }];
+  }
+  if (statement.includes("event_key = 'email_changed'")) {
+    return [{ changed: false }];
+  }
   if (statement.includes('from public.account_security_credentials')) {
     return state.attackerPasskeys
       ? [passkeyRow('attacker-phone', 'multiDevice'), passkeyRow('attacker-key', 'singleDevice')]
