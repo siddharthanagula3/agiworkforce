@@ -2103,8 +2103,15 @@ export class ChatStateManager {
     if (thread === undefined) return undefined;
     const read = await thread.runtime.readThread(thread.id);
     return {
+      id: read.thread.id,
       title: read.thread.title,
       cwd: thread.cwd,
+      model: read.thread.model ?? thread.model,
+      trustMode: thread.trustMode,
+      ...(read.thread.gitBranch === undefined ? {} : { branch: read.thread.gitBranch }),
+      createdAt: read.thread.createdAt,
+      updatedAt: read.thread.updatedAt,
+      createdBy: read.thread.createdBy,
       approvals: read.approvals ?? [],
       fileChanges: read.fileChanges ?? [],
     };
