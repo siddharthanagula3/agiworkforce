@@ -227,6 +227,11 @@ import {
   type ArtifactsDrawerAPI,
 } from './features/side-panel/artifactsDrawer';
 import {
+  buildCommandPalette,
+  COMMAND_PALETTE_CSS,
+  type PaletteCommand,
+} from './features/side-panel/commandPalette';
+import {
   beginPairing,
   loadPairingState,
   storeBridgeSecret,
@@ -5859,7 +5864,9 @@ function injectStyles(): void {
         '\n' +
         PROJECTS_DRAWER_CSS +
         '\n' +
-        ARTIFACTS_DRAWER_CSS,
+        ARTIFACTS_DRAWER_CSS +
+        '\n' +
+        COMMAND_PALETTE_CSS,
     );
     document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
   } else {
@@ -11861,6 +11868,67 @@ function buildUI(): void {
     const nextTab = viewTabs[nextIndex]!;
     switchTab(nextTab.dataset['tab'] as SidePanelTab);
     nextTab.focus();
+  });
+
+  const commandPalette = buildCommandPalette(async () => {
+    const destinations: PaletteCommand[] = [
+      {
+        id: 'new-chat',
+        section: 'go',
+        label: t('spPaletteNewChat'),
+        run: () => newChatBtn.click(),
+      },
+      {
+        id: 'search-chats',
+        section: 'go',
+        label: t('spPaletteSearchChats'),
+        run: openRecents,
+      },
+      ...viewTabs.map((tab): PaletteCommand => ({
+        id: `view-${tab.dataset['tab'] ?? ''}`,
+        section: 'go',
+        label: tab.textContent ?? '',
+        detail: t('spPaletteViewDetail'),
+        run: () => {
+          switchTab(tab.dataset['tab'] as SidePanelTab);
+          tab.focus();
+        },
+      })),
+      ...drawerGroups.map((group, index): PaletteCommand => ({
+        id: `menu-${index}`,
+        section: 'go',
+        label: group.label,
+        detail: t('spPaletteMenuDetail'),
+        run: () => {
+          openDrawer(menuBtn);
+          openDrawerGroup(group);
+        },
+      })),
+    ];
+    const owner = _ctx.managedCloudOwner;
+    const chats = owner ? await listConversations(owner).catch(() => []) : [];
+    return [
+      ...destinations,
+      ...chats.map((entry): PaletteCommand => ({
+        id: `chat-${entry.id}`,
+        section: 'chats',
+        label: entry.title,
+        detail: formatHistoryDate(entry.savedAt),
+        run: () => {
+          switchTab('chat');
+          void openStoredConversation(entry.id);
+        },
+      })),
+    ];
+  });
+  document.addEventListener('keydown', (event: KeyboardEvent) => {
+    if (event.key.toLowerCase() !== 'k' || event.altKey || event.shiftKey) return;
+    if (!(event.metaKey || event.ctrlKey)) return;
+    if (document.getElementById('sp-onboarding-overlay')?.classList.contains('visible')) return;
+    event.preventDefault();
+    commandPalette.open(
+      document.activeElement instanceof HTMLElement ? document.activeElement : null,
+    );
   });
 
   const chatPanel = el('div', {

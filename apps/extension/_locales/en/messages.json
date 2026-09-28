@@ -3266,5 +3266,41 @@
         "example": "diagram.png"
       }
     }
+  },
+  "spPaletteLabel": {
+    "message": "Commands",
+    "description": "Accessible name of the command palette"
+  },
+  "spPalettePlaceholder": {
+    "message": "Search commands and chats",
+    "description": "Placeholder of the command palette search box"
+  },
+  "spPaletteGoTo": {
+    "message": "Go to",
+    "description": "Command palette heading over views, menus and actions"
+  },
+  "spPaletteChats": {
+    "message": "Chats",
+    "description": "Command palette heading over saved conversations"
+  },
+  "spPaletteEmpty": {
+    "message": "No command or chat matches.",
+    "description": "Shown when nothing in the command palette matches the search"
+  },
+  "spPaletteNewChat": {
+    "message": "New chat",
+    "description": "Command palette action that starts a new conversation"
+  },
+  "spPaletteSearchChats": {
+    "message": "Search chats",
+    "description": "Command palette action that opens the recent chats list with its search"
+  },
+  "spPaletteViewDetail": {
+    "message": "View",
+    "description": "Marks a command palette entry that switches the side panel view"
+  },
+  "spPaletteMenuDetail": {
+    "message": "Menu",
+    "description": "Marks a command palette entry that opens a section of the side panel menu"
   }
 }
