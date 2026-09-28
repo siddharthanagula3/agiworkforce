@@ -1,7 +1,6 @@
 import 'server-only';
 
 import { NextResponse, after, type NextRequest } from 'next/server';
-import { z } from 'zod';
 
 import { getSuspendedAccountUser } from '@/lib/api-auth';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -19,14 +18,9 @@ import {
   submitAccountAppeal,
   submitSignedOutAppeal,
 } from '@/lib/support/tickets/appeals';
-import { MAX_TICKET_MESSAGE_CHARS } from '@/lib/support/tickets/types';
+import { SupportAppealRequestSchema } from '@agiworkforce/cloud-contracts/support';
 
 export const runtime = 'nodejs';
-
-const AppealSchema = z.object({
-  message: z.string().trim().min(1).max(MAX_TICKET_MESSAGE_CHARS),
-  email: z.string().trim().email().max(254).optional(),
-});
 
 const NO_STORE = { 'cache-control': 'no-store' };
 
@@ -59,7 +53,7 @@ async function handleSubmit(request: NextRequest) {
     : await withRateLimit(request, 'support-handoff-create');
   if (limited) return limited;
 
-  const parsed = AppealSchema.safeParse(await readJsonBody(request));
+  const parsed = SupportAppealRequestSchema.safeParse(await readJsonBody(request));
   if (!parsed.success) {
     throw createError.validation('Invalid appeal', parsed.error);
   }

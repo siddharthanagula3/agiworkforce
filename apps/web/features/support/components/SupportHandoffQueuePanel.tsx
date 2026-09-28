@@ -12,9 +12,11 @@ import {
   fetchAgentQueue,
   sendAgentHandoffMessage,
 } from '../lib/support-client';
-import type { SupportHandoffQueueEntryView } from '../lib/contract';
+import {
+  type SupportHandoffQueueEntryView,
+  SUPPORT_AGENT_PRESENCE_PATH,
+} from '@agiworkforce/cloud-contracts/support';
 
-const PRESENCE_ENDPOINT = '/api/support/handoff/agent/presence';
 const QUEUE_POLL_MS = 5000;
 
 const CARD_CLASS = 'rounded-2xl border border-border bg-card p-5';
@@ -160,7 +162,7 @@ function PresenceControl() {
       setError(null);
       try {
         const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
-        const response = await fetch(PRESENCE_ENDPOINT, {
+        const response = await fetch(SUPPORT_AGENT_PRESENCE_PATH, {
           method: 'POST',
           headers,
           body: JSON.stringify({ status, displayName: name }),

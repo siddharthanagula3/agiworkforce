@@ -1,6 +1,6 @@
 'use client';
 
-import type { SupportAccountFact } from '../lib/contract';
+import type { SupportAccountFact } from '@agiworkforce/cloud-contracts/support';
 import styles from './SupportWidget.module.css';
 
 export function SupportAccountFacts({

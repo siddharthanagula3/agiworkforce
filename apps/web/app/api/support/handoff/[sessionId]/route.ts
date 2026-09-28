@@ -1,4 +1,3 @@
-
 import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -9,6 +8,7 @@ import {
   getHandoffStatusForOwner,
 } from '@/lib/support/handoff/handoff-service';
 import { resolveHandoffIdentity } from '@/lib/support/handoff/request-identity';
+import { type HandoffStatusResponse } from '@agiworkforce/cloud-contracts/support';
 
 type RouteContext = { params: Promise<{ sessionId: string }> };
 
@@ -19,7 +19,10 @@ async function handleStatus(request: NextRequest, context: RouteContext) {
   const { sessionId } = await context.params;
   const identity = await resolveHandoffIdentity(request);
 
-  const status = await getHandoffStatusForOwner(sessionId, identity.ownerSessionKey);
+  const status: HandoffStatusResponse | null = await getHandoffStatusForOwner(
+    sessionId,
+    identity.ownerSessionKey,
+  );
   if (!status) {
     throw createError.notFound('Support request not found');
   }
@@ -37,7 +40,10 @@ async function handleCancel(request: NextRequest, context: RouteContext) {
   const { sessionId } = await context.params;
   const identity = await resolveHandoffIdentity(request);
 
-  const status = await cancelHandoffForOwner(sessionId, identity.ownerSessionKey);
+  const status: HandoffStatusResponse | null = await cancelHandoffForOwner(
+    sessionId,
+    identity.ownerSessionKey,
+  );
   if (!status) {
     throw createError.notFound('Support request not found');
   }

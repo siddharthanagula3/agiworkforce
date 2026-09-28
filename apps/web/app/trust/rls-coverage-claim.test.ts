@@ -67,16 +67,37 @@ describe('/trust row-level isolation claim', () => {
   const page = readFileSync(TRUST_PAGE, 'utf8');
   const databaseBacked = measured.rlsScoped + measured.ownerOnly;
 
-  it('states the measured number of RLS-bound routes', () => {
-    expect(page).toContain(`${measured.rlsScoped} of ${databaseBacked} database-backed`);
+  it('measures at build time exactly what this test measures from the tree', async () => {
+    const { measureRouteIsolation } = await import('@/lib/legal/published-counts');
+    expect(measureRouteIsolation(API_ROOT)).toEqual({
+      rlsScoped: measured.rlsScoped,
+      ownerConnection: measured.ownerOnly,
+      noDatabase: measured.noDatabase,
+      databaseBacked,
+    });
   });
 
-  it('states the measured number of routes excluded for touching no database', () => {
-    expect(page).toContain(`the other ${measured.noDatabase} hosted routes touch no database`);
+  it('renders the RLS-bound routes from that measurement', () => {
+    expect(page).toContain(
+      '${ROUTE_ISOLATION.rlsScoped} of ${ROUTE_ISOLATION.databaseBacked} database-backed',
+    );
   });
 
-  it('states the measured number still on the owner connection', () => {
-    expect(page).toContain(`The remaining ${measured.ownerOnly} connect as the database owner`);
+  it('renders the routes excluded for touching no database from that measurement', () => {
+    expect(page).toContain(
+      'the other ${ROUTE_ISOLATION.noDatabase} hosted routes touch no database',
+    );
+  });
+
+  it('renders the routes still on the owner connection from that measurement', () => {
+    expect(page).toContain(
+      'The remaining ${ROUTE_ISOLATION.ownerConnection} connect as the database owner',
+    );
+  });
+
+  it('builds the page statically, so the measurement runs where the route files exist', () => {
+    expect(page).toContain("export const dynamic = 'force-static';");
+    expect(page).toContain('const ROUTE_ISOLATION = measureRouteIsolation();');
   });
 
   it('never rounds the claim in its own favour', () => {
