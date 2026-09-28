@@ -147,8 +147,13 @@ export type { ClipboardCommand, ClipboardImage, ClipboardSnapshot } from './clip
 
 export {
   ALWAYS_REFUSED_PROGRAMS,
+  BACKGROUND_SHELL_COLUMNS,
+  BACKGROUND_SHELL_FIRST_OUTPUT_MS,
+  BACKGROUND_SHELL_READ_SETTLE_MS,
+  BACKGROUND_SHELL_ROWS,
   EMPTY_SHELL_POLICY,
   MAX_SHELL_COMMAND_LENGTH,
+  MAX_SHELL_INPUT_LENGTH,
   MAX_SHELL_OUTPUT_BYTES,
   SHELL_COMMANDS,
   SHELL_CONTROL_CHARACTERS,
@@ -161,6 +166,7 @@ export {
   parseCommandLine,
 } from './shell';
 export type {
+  BackgroundShellOutput,
   ShellCommand,
   ShellPolicy,
   ShellPolicyDecision,
