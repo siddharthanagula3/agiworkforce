@@ -1,4 +1,3 @@
-import { COUNT_PRECISION, INSTALL_COUNT_FLOOR, MILLION, THOUSAND } from './constants';
 import type {
   DirectoryDetailFile,
   DirectoryEntry,
@@ -44,10 +43,8 @@ function compareByUpdated(a: DirectoryEntry, b: DirectoryEntry): number {
 }
 
 function compareByPopularity(a: DirectoryEntry, b: DirectoryEntry): number {
-  const left = a.installCount ?? -1;
-  const right = b.installCount ?? -1;
-  if (left === right) return compareByName(a, b);
-  return right - left;
+  if (a.popular === b.popular) return compareByName(a, b);
+  return a.popular ? -1 : 1;
 }
 
 export function sortDirectoryEntries(
@@ -102,19 +99,6 @@ export function toggleFilterValue(
 
 export function countActiveFilters(selection: DirectoryFilterSelection): number {
   return Object.values(selection).reduce((total, values) => total + values.length, 0);
-}
-
-export function formatInstallCount(count: number | undefined): string | null {
-  if (count === undefined || !Number.isFinite(count) || count < INSTALL_COUNT_FLOOR) return null;
-  if (count >= MILLION) return `${trimZero((count / MILLION).toFixed(COUNT_PRECISION))}M`;
-  if (count >= THOUSAND) return `${trimZero((count / THOUSAND).toFixed(COUNT_PRECISION))}K`;
-  return String(count);
-}
-
-function trimZero(value: string): string {
-  return value.endsWith(`.${'0'.repeat(COUNT_PRECISION)}`)
-    ? value.slice(0, value.length - COUNT_PRECISION - 1)
-    : value;
 }
 
 export interface DirectoryTreeNode {

@@ -14,9 +14,9 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | The release feed carries no notes; showing notes in the terminal needs the CLI release route to include them (apps/web). | ui |
+| cli | partial | partials/auth dfff30ad7: GET /api/releases/cli/latest now carries releaseNotes {summary, url}. The terminal still has to print them: apps/cli/src/update_check.rs and render_release_notes in claude_parity.rs (p-desktop-cli, told the field shape). | ui |
 
-Code: `apps/cli/src/claude_parity.rs:1381-1381`
+Code: `apps/web/lib/releases/github-cli-releases.ts:157-157`, `apps/web/lib/releases/github-cli-releases.ts:56-56`, `apps/web/lib/releases/github-cli-releases.ts:76-76`
 
 ## S2.35: Contact and support page.
 

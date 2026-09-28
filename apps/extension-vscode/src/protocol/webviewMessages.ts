@@ -186,6 +186,19 @@ const runSlashCommand = z.object({
   payload: z.object({ name: z.string().min(1).max(120) }),
 });
 
+const rateAnswer = z.object({
+  type: z.literal('rateAnswer'),
+  payload: z.object({
+    key: z
+      .string()
+      .min(1)
+      .max(64)
+      .regex(/^[A-Za-z0-9-]+$/u),
+    text: z.string().min(1).max(500_000),
+    rating: z.enum(['up', 'down']).nullable(),
+  }),
+});
+
 export const APPROVAL_DECISIONS = ['once', 'session', 'deny', 'abort'] as const;
 export const ApprovalDecisionSchema = z.enum(APPROVAL_DECISIONS);
 export type ApprovalDecision = z.infer<typeof ApprovalDecisionSchema>;
@@ -286,6 +299,7 @@ export const WebviewToExtSchema = z.discriminatedUnion('type', [
   regenerate,
   cancelQueuedMessage,
   openSuggestedProject,
+  rateAnswer,
 ]);
 
 export type WebviewToExtMessage = z.infer<typeof WebviewToExtSchema>;

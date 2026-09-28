@@ -73,6 +73,9 @@ vi.mock('electron', () => {
         registeredAccelerators.push(accelerator);
         return true;
       }),
+      unregister: vi.fn((accelerator: string) => {
+        registeredAccelerators = registeredAccelerators.filter((entry) => entry !== accelerator);
+      }),
       unregisterAll: vi.fn(() => {
         registeredAccelerators = [];
       }),
@@ -85,6 +88,7 @@ vi.mock('../settingsStore', () => ({
   getShortcuts: () => ({
     quickAskShortcut: storedSettings['quickAskShortcut'] ?? HOST_SHORTCUT_CHOICES.quickAsk[0],
     screenshotShortcut: storedSettings['screenshotShortcut'] ?? HOST_SHORTCUT_CHOICES.screenshot[0],
+    windowShotShortcut: storedSettings['windowShotShortcut'] ?? HOST_SHORTCUT_CHOICES.windowShot[0],
     voiceShortcut: storedSettings['voiceShortcut'] ?? HOST_SHORTCUT_CHOICES.voice[0],
   }),
   getPreferences: () => ({
@@ -110,12 +114,14 @@ vi.mock('../browser/bridgeServer', () => ({
   stopBrowserBridge: vi.fn(),
 }));
 vi.mock('../quickAsk', () => ({
+  configureQuickAskBridge: vi.fn(),
   destroyQuickAsk: vi.fn(),
   toggleQuickAsk: vi.fn(),
   warmUpQuickAsk: vi.fn(),
 }));
 vi.mock('../screenshot', () => ({
   captureToChat: vi.fn(),
+  captureWindowToChat: vi.fn(),
   takeCaptureBackFromClipboard: vi.fn(),
 }));
 vi.mock('../voiceDictation', () => ({ toggleGlobalDictation: vi.fn() }));
@@ -159,7 +165,12 @@ describe('the host preferences channel', () => {
     expect(state.preferences['launchAtLogin']).toBe(false);
     expect(state.preferences['showInMenuBar']).toBe(true);
     expect(state.preferences['quickAskShortcut']).toBe(HOST_SHORTCUT_CHOICES.quickAsk[0]);
-    expect(Object.keys(state.shortcutStatus).sort()).toEqual(['quickAsk', 'screenshot', 'voice']);
+    expect(Object.keys(state.shortcutStatus).sort()).toEqual([
+      'quickAsk',
+      'screenshot',
+      'voice',
+      'windowShot',
+    ]);
   });
 
   it('applies launch at login rather than only recording it', async () => {
