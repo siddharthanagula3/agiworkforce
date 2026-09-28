@@ -353,3 +353,12 @@ export type {
   BackgroundCommandRun,
   BackgroundWorkKind,
 } from './background-activity';
+export {
+  BROWSER_SIGN_IN_START,
+  DESKTOP_SIGN_IN_COMPLETE_PATH,
+  DESKTOP_SIGN_IN_LINK_HOST,
+  DESKTOP_SIGN_IN_PATH,
+  desktopSignInLink,
+  isDesktopSignInLink,
+  readDesktopSignInCode,
+} from './desktop-sign-in';
