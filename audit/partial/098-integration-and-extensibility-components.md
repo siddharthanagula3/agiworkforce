@@ -35,25 +35,3 @@ Code: `apps/web/lib/services/plugin-dependencies.ts:52-52`, `apps/web/lib/servic
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-
-## S98.27: Organization distribution service.
-
-- Done when: An organization can distribute approved extensions (servers, plugins, skills) to its members.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Workspaces can publish MCP servers to members and allow or block plugins, but cannot push plugins or skills to members. | handler |
-
-Code: `apps/web/app/api/settings/organization/mcp/route.ts:132-142`, `apps/web/app/api/plugins/installations/route.ts:14-14`
-
-## S98.29: Extension evaluation service.
-
-- Done when: Extensions are evaluated (quality/safety runs) before or after publication.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | The package scan now covers every file of an uploaded plugin or skill with Pass, Warn (acknowledged) and Fail; organization-provisioned skills are scanned when org distribution lands (migration 0324, next batches) | handler |
-
-Code: `apps/web/lib/services/plugin-owned-source-service.ts:77-77`, `apps/web/lib/services/plugin-owned-source-service.ts:110-110`, `apps/web/lib/services/user-skill-service.ts:145-145`

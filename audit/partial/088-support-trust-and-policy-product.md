@@ -240,7 +240,7 @@ Code: `apps/mobile/app/(app)/settings/memory-import.tsx:5-8`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The trust page is a posture ledger; there are no audit reports or evidence documents to request or download (none exist yet, as the page says). | ui, handler |
-| desktop | partial | The trust page is a posture ledger; there are no audit reports or evidence documents to request or download (none exist yet, as the page says). | ui, handler |
+| web | partial | Owner: no SOC 2 report, ISO 27001 certificate or penetration test report exists to publish. What the trust page honestly offers is in place: a dated posture ledger, the documents behind each row, the audit-report row saying none exists, and questionnaires answered on request (enterprise security guide) | owner |
+| desktop | partial | Owner: no SOC 2 report, ISO 27001 certificate or penetration test report exists to publish. What the trust page honestly offers is in place: a dated posture ledger, the documents behind each row, the audit-report row saying none exists, and questionnaires answered on request (enterprise security guide) | owner |
 
-Code: `apps/web/app/trust/page.tsx:78-82`, `apps/web/app/trust/page.tsx:277-283`
+Code: `apps/web/app/trust/page.tsx:79-79`, `apps/web/app/trust/page.tsx:42-42`, `apps/web/content/support/enterprise-security.md:21-21`

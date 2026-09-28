@@ -448,19 +448,6 @@ Code: `apps/web/app/settings/billing/page.tsx:1-7`, `apps/web/features/settings/
 
 Code: `apps/mobile/src/features/settings/index.tsx:451-456`, `apps/mobile/app/(app)/settings/workspace.tsx:27-35`, `apps/mobile/app/(app)/settings/workspace.tsx:145-152`
 
-## S4.43: Developer console.
-
-- Done when: A developer console lets the user create/revoke API keys, see API usage per key, read API docs and try requests.
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
 ## S4.44: Help and feedback.
 
 - Done when: A help-and-feedback destination links to help/docs/status and lets the user send product feedback or a bug report from inside the product.

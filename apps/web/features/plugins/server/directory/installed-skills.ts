@@ -3,7 +3,18 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { hashSkillContent, type Skill, type SkillWithFileAccess } from '@agiworkforce/skills';
 
+import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
+import {
+  isMissingOrganizationPluginSchema,
+  listMemberOrganizationPlugins,
+  listOrganizationPluginSkillFiles,
+} from '@/lib/services/organization-plugin-service';
 import { isMissingPluginMarketplaceSchema } from '@/lib/services/plugin-marketplace-service';
+import {
+  isMissingPluginSubmissionSchema,
+  listCommunitySkillFiles,
+  listInstalledCommunityPlugins,
+} from '@/lib/services/plugin-submission-service';
 import {
   listOwnedEntryFiles,
   type OwnedEntryFile,
@@ -12,7 +23,12 @@ import { shaFromInstalledVersion } from './entries';
 import { findPluginDirectoryRecord } from './memory-cache';
 import type { DirectoryFetch } from './official-marketplace';
 import { fetchPluginSkillFiles, parseSkillFile } from './skill-files';
-import { ownedSkillFileAccess, repositorySkillFileAccess } from './skill-companions';
+import {
+  communitySkillFileAccess,
+  organizationSkillFileAccess,
+  ownedSkillFileAccess,
+  repositorySkillFileAccess,
+} from './skill-companions';
 import {
   installedSkillsCacheParams,
   readInstalledSkills,
@@ -75,6 +91,67 @@ async function listInstalledEntries(
     );
   } catch (error) {
     if (isMissingPluginMarketplaceSchema(error)) return [];
+    throw error;
+  }
+}
+
+interface OrganizationSkill {
+  organizationId: string;
+  pluginId: string;
+  pluginKey: string;
+  skill: InstalledDirectorySkill;
+}
+
+async function listOrganizationSkills(
+  db: DatabaseAdapter,
+  userId: string,
+): Promise<OrganizationSkill[]> {
+  try {
+    const organizationId = await resolveActiveOrganizationId(db, userId);
+    if (!organizationId) return [];
+    const plugins = (await listMemberOrganizationPlugins(db, userId, organizationId)).filter(
+      (plugin) => plugin.enabled,
+    );
+    const files = await listOrganizationPluginSkillFiles(
+      db,
+      organizationId,
+      plugins.map((plugin) => plugin.id),
+    );
+    return files.flatMap((file) => {
+      const plugin = plugins.find((candidate) => candidate.id === file.pluginId);
+      const skill = plugin ? parseSkillFile(file.path, file.content) : null;
+      if (!plugin || !skill) return [];
+      if (plugin.enabledSkills && !plugin.enabledSkills.includes(skill.name)) return [];
+      return [{ organizationId, pluginId: plugin.id, pluginKey: plugin.pluginKey, skill }];
+    });
+  } catch (error) {
+    if (isMissingOrganizationPluginSchema(error)) return [];
+    throw error;
+  }
+}
+
+interface CommunitySkill {
+  submissionId: string;
+  pluginKey: string;
+  skill: InstalledDirectorySkill;
+}
+
+async function listCommunitySkills(db: DatabaseAdapter, userId: string): Promise<CommunitySkill[]> {
+  try {
+    const plugins = await listInstalledCommunityPlugins(db, userId);
+    const files = await listCommunitySkillFiles(
+      db,
+      plugins.map((plugin) => plugin.id),
+    );
+    return files.flatMap((file) => {
+      const plugin = plugins.find((candidate) => candidate.id === file.submissionId);
+      const skill = plugin ? parseSkillFile(file.path, file.content) : null;
+      if (!plugin || !skill) return [];
+      if (plugin.enabledSkills && !plugin.enabledSkills.includes(skill.name)) return [];
+      return [{ submissionId: plugin.id, pluginKey: plugin.pluginKey, skill }];
+    });
+  } catch (error) {
+    if (isMissingPluginSubmissionSchema(error)) return [];
     throw error;
   }
 }
@@ -189,7 +266,11 @@ export async function listInstalledDirectorySkills(
   userId: string,
   fetchImpl?: DirectoryFetch,
 ): Promise<Skill[]> {
-  const rows = await listInstalledEntries(db, userId);
+  const [organizationSkills, communitySkills, rows] = await Promise.all([
+    listOrganizationSkills(db, userId),
+    listCommunitySkills(db, userId),
+    listInstalledEntries(db, userId),
+  ]);
   const stored = await listOwnedEntryFiles(
     db,
     userId,
@@ -197,6 +278,11 @@ export async function listInstalledDirectorySkills(
   );
   const seen = new Set<string>();
   const skills: Skill[] = [];
+  for (const { pluginKey, skill } of organizationSkills) {
+    if (seen.has(skill.name)) continue;
+    seen.add(skill.name);
+    skills.push(toSkill(pluginKey, skill));
+  }
   for (const row of rows) {
     const repositoryUrl = row.repository_url;
     const rowSkills =
@@ -209,6 +295,11 @@ export async function listInstalledDirectorySkills(
       skills.push(skill);
     }
   }
+  for (const { pluginKey, skill } of communitySkills) {
+    if (seen.has(skill.name)) continue;
+    seen.add(skill.name);
+    skills.push(toSkill(pluginKey, skill));
+  }
   return skills;
 }
 
@@ -218,6 +309,20 @@ export async function findInstalledDirectorySkillWithFiles(
   name: string,
   fetchImpl?: DirectoryFetch,
 ): Promise<SkillWithFileAccess | null> {
+  const organizationSkill = (await listOrganizationSkills(db, userId)).find(
+    (candidate) => candidate.skill.name === name,
+  );
+  if (organizationSkill) {
+    return {
+      skill: toSkill(organizationSkill.pluginKey, organizationSkill.skill),
+      access: organizationSkillFileAccess(
+        db,
+        organizationSkill.organizationId,
+        organizationSkill.pluginId,
+        organizationSkill.skill.path,
+      ),
+    };
+  }
   const rows = await listInstalledEntries(db, userId);
   const stored = await listOwnedEntryFiles(
     db,
@@ -251,6 +356,15 @@ export async function findInstalledDirectorySkillWithFiles(
         ),
       };
     }
+  }
+  const communitySkill = (await listCommunitySkills(db, userId)).find(
+    (candidate) => candidate.skill.name === name,
+  );
+  if (communitySkill) {
+    return {
+      skill: toSkill(communitySkill.pluginKey, communitySkill.skill),
+      access: communitySkillFileAccess(db, communitySkill.submissionId, communitySkill.skill.path),
+    };
   }
   return null;
 }
