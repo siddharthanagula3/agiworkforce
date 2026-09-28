@@ -16,6 +16,7 @@ import {
 } from '@/lib/custom-connector-crypto';
 import { missingGitHubInstallationLinkingVars } from '@/lib/github-app';
 
+import { accountUrlConnector } from './account-url-connectors';
 import { BANK_ACCOUNTS_CONNECTOR_ID, missingPlaidEnv } from './plaid-config';
 
 export type ConnectorSetupKind =
@@ -191,6 +192,7 @@ export function describeConnectorSetup(
   if (isDeviceLocalConnector(connectorId)) return deviceLocalRequirement(connectorId, displayName);
   if (connectorId === GITHUB_CONNECTOR_ID) return githubRequirement(displayName);
   if (connectorId === BANK_ACCOUNTS_CONNECTOR_ID) return plaidRequirement(displayName);
+  if (accountUrlConnector(connectorId)) return tokenStorageRequirement(connectorId, displayName);
   if (getMcpEndpoint(connectorId)) {
     return isSelfServiceConnector(connectorId)
       ? selfServiceRequirement(connectorId, displayName)

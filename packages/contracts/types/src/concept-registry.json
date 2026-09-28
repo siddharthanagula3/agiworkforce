@@ -1153,7 +1153,7 @@
       "tables": ["media_assets", "project_knowledge_files"],
       "writeFunctions": [],
       "mutators": [
-        "apps/web/app/api/projects/[id]/knowledge-files/route.ts",
+        "apps/web/lib/server/project-knowledge-files.ts",
         "apps/web/app/api/cron/purge-deleted-media/route.ts"
       ],
       "projections": ["packages/contracts/types/src/file-reference.ts"],

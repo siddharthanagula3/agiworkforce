@@ -3,6 +3,7 @@ import 'server-only';
 import { deflateSync } from 'node:zlib';
 
 import { logger } from '@/lib/logger';
+import { truncateExtractedText } from '@/lib/server/extraction-truncation';
 
 export const MAX_PDF_TEXT_CHARS = 200_000;
 
@@ -136,8 +137,7 @@ function toRgb(bitmap: {
 function boundText(value: string): string | null {
   const normalized = value.replace(/\r\n?/g, '\n').trim();
   if (normalized.length < MIN_TEXT_CHARS) return null;
-  if (normalized.length <= MAX_PDF_TEXT_CHARS) return normalized;
-  return `${normalized.slice(0, MAX_PDF_TEXT_CHARS)}\n\n[Content truncated during extraction.]`;
+  return truncateExtractedText(normalized, MAX_PDF_TEXT_CHARS);
 }
 
 /**

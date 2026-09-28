@@ -41,6 +41,7 @@ const CUSTOMER_CONTENT = [
   'conversation_branches',
   'conversation_tags',
   'conversations',
+  'external_resource_references',
   'feedback',
   'image_generation_job_assets',
   'image_generation_jobs',
@@ -86,7 +87,6 @@ const CUSTOMER_CONTENT = [
 
 const DERIVED_CONTENT = [
   'context_manifests',
-  'external_resource_references',
   'file_lineage',
   'retrieval_chunks',
   'retrieval_documents',
@@ -288,6 +288,19 @@ const NON_TABLE_STORES: readonly RetentionEntry[] = [
     cascadesFrom: null,
     maximumAgeDays: null,
     deletionPath: 'lib/server/account-erasure.ts eraseUserAccountData knowledge sweep',
+    retainedReason: null,
+  },
+  {
+    store: 'data export archive objects',
+    kind: 'object_store',
+    dataClass: 'customer_content',
+    erasedWithSubject: true,
+    erasedWithTenant: false,
+    cascadesFrom: null,
+    maximumAgeDays: null,
+    deletionPath:
+      'lib/server/account-erasure.ts eraseUserAccountData export sweep, and ' +
+      'lib/server/data-export-archive.ts expireDataExportArchive 24 hours after the export is ready',
     retainedReason: null,
   },
   {
@@ -558,6 +571,7 @@ export function accountErasureProgress(
       report.mediaObjectsFailed +
       report.backupObjectsFailed +
       report.knowledgeObjectsFailed +
+      report.exportObjectsFailed +
       report.avatarObjectsFailed +
       report.cacheKeysFailed,
   };

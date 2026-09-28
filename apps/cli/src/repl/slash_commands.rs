@@ -494,41 +494,26 @@ pub(super) async fn handle_slash_command(
         "/image" | "/imagine" => match arg {
             "" => output::print_info(
                 "/image <prompt> draws an image on your AGI Workforce account and saves it to \
-                 the working directory.",
+                 the working directory. Put --aspect 16:9, --quality hd, --transparent, --model \
+                 or -n before the prompt to change settings, and add --save-defaults to keep \
+                 them. /image again reuses your last prompt and settings, /image retry tries a \
+                 failed or stopped image again, /image last shows what the last one used.",
             ),
-            prompt => {
-                let options = crate::cloud::image::ImageRequestOptions {
-                    prompt: prompt.to_string(),
-                    count: 1,
-                    size: None,
-                    quality: None,
-                    model: None,
-                    out: None,
-                };
-                match std::env::current_dir() {
-                    Err(error) => output::print_warn(&format!(
-                        "Could not resolve the working directory: {error}"
-                    )),
-                    Ok(cwd) => {
-                        match crate::cloud::image::generate(session.privacy_mode, &options, &cwd)
-                            .await
-                        {
-                            Ok(generation) => {
-                                for path in &generation.paths {
-                                    output::print_info(&format!("{}", path.display()));
-                                }
-                                output::print_info(&format!(
-                                    "{} via {}",
-                                    generation.model, generation.provider
-                                ));
-                            }
-                            Err(error) => {
-                                output::print_warn(&format!("Image generation failed: {error}"))
-                            }
-                        }
-                    }
+            argument => match std::env::current_dir() {
+                Err(error) => {
+                    output::print_warn(&format!("Could not resolve the working directory: {error}"))
                 }
-            }
+                Ok(cwd) => output::print_info(
+                    &crate::cloud::image::run_slash(
+                        session.privacy_mode,
+                        argument,
+                        &cwd,
+                        std::future::pending(),
+                    )
+                    .await
+                    .text,
+                ),
+            },
         },
         "/theme" => {
             if arg.is_empty() {

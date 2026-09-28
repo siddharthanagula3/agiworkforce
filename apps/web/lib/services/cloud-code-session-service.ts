@@ -29,6 +29,7 @@ import {
   type NotebookCellOutput,
 } from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
+import { recordExternalResourceReferences } from '@/lib/server/external-resource-references';
 import { redactSecrets } from '@/lib/security/secrets-audit';
 import {
   CLOUD_CODE_COMMAND_DEADLINE_MS,
@@ -1236,6 +1237,26 @@ export const createCloudCodeSession = tracedCodeAction(
 
     if (claimed.reused) return mapCloudCodeSession(claimed.row);
     const row = claimed.row;
+
+    if (validated.repositoryUrl) {
+      await recordExternalResourceReferences(db, owner, [
+        {
+          kind: 'repository',
+          provider: 'github',
+          uri: validated.repositoryUrl,
+          version: validated.repositoryBranch
+            ? { kind: 'branch', value: validated.repositoryBranch }
+            : null,
+          access: validated.installationId ? 'connector' : 'public',
+          connectorId: validated.installationId ? 'github' : null,
+        },
+      ]).catch((error: unknown) => {
+        logger.warn(
+          { error, userId: owner.userId, sessionId: row.id },
+          '[code] the session repository was not recorded',
+        );
+      });
+    }
 
     const sessionId = row.id;
     const scope = managedCloudCodeSessionScope(

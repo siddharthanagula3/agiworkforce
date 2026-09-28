@@ -7,6 +7,7 @@ import {
   type MultipartUploadHandle,
   type ObjectStore,
   type PendingMultipartUpload,
+  type PresignGetInput,
   type PresignPutInput,
   type PresignUploadPartInput,
   type PutObjectInput,
@@ -215,6 +216,10 @@ export function createRetryingObjectStore(
 
     presignPut(input: PresignPutInput): Promise<string> {
       return run('presignPut', () => store.presignPut(input));
+    },
+
+    presignGet(input: PresignGetInput): Promise<string> {
+      return run('presignGet', () => store.presignGet(input));
     },
 
     ...(supportsMultipartUploads(store)

@@ -66,16 +66,15 @@ Code: `apps/mobile/app/(app)/settings/workspace.tsx:269-269`
 
 - Done when: Features or routes restricted by region are enforced and the restriction is visible to the user.
 - Wave: 3
-- Already works on: web, desktop, api
+- Already works on: web, desktop, mobile, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The cited mobile evidence is the first-run age gate whose threshold varies by region: that is an age-eligibility rule (S78.12), not a feature or route restricted by region. The regional restriction that exists (workspace residency routing, non-US host exclusion) is enforced server-side and never shown on mobile, exactly the state that makes the web cell partial. Partial with miss ui; remaining: show the residency restriction to the user. |  |
 | cli | partial | Server routing applies the workspace residency region to this surface's requests, but the surface never shows or explains a regional restriction. | ui |
 | vscode | partial | Server routing applies the workspace residency region to this surface's requests, but the surface never shows or explains a regional restriction. | ui |
 | chrome | partial | Server routing applies the workspace residency region to this surface's requests, but the surface never shows or explains a regional restriction. | ui |
 
-Code: `apps/mobile/src/features/auth/services/ageGate.ts:128-135`, `apps/mobile/src/features/auth/services/rootRouting.ts:28-28`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:1904-1912`, `apps/cli/src/provider.rs:260-267`
+Code: `apps/cli/src/provider.rs:260-267`, `apps/cli/src/models/streaming.rs:234-234`, `packages/ai/routing/src/auto.ts:1024-1034`, `apps/extension-vscode/src/features/model-picker/modelConstants.ts:239-249`
 
 ## S78.13: Required-connection detection.
 
