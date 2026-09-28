@@ -1385,6 +1385,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     resumeInteractiveCardTurn,
     resolveToolApproval,
     resolveToolInput,
+    steerActiveTurn,
   } = useChatStreamRuntime();
   const isStreaming = useChatStore(selectIsConversationStreaming(displayedConversationId));
   const isLoading = useChatStore(selectIsConversationLoading(displayedConversationId));
@@ -3566,6 +3567,12 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     if (displayedConversationId && cancelImageGenerations(displayedConversationId)) return;
     stopGeneration(displayedConversationId ?? undefined);
   }, [stopGeneration, displayedConversationId]);
+
+  const handleSendQueuedNow = useCallback(
+    async (message: string) =>
+      displayedConversationId ? steerActiveTurn(displayedConversationId, message) : false,
+    [steerActiveTurn, displayedConversationId],
+  );
 
   const handleSend = useCallback(
     (
@@ -6069,6 +6076,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                         onEnterVoiceMode={enterVoiceSession}
                         conversationId={displayedConversationId}
                         onStop={handleStopGeneration}
+                        onSendQueuedNow={handleSendQueuedNow}
                         isLoading={isLoading}
                         isGenerating={isStreaming || imageTurnActive}
                         placeholder={t('chat:placeholderEmpty')}
@@ -6184,6 +6192,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                         onEnterVoiceMode={enterVoiceSession}
                         conversationId={displayedConversationId}
                         onStop={handleStopGeneration}
+                        onSendQueuedNow={handleSendQueuedNow}
                         isLoading={isLoading}
                         isGenerating={isStreaming || imageTurnActive}
                         placeholder={t('chat:placeholder')}

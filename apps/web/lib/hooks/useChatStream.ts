@@ -297,6 +297,7 @@ export interface UseChatStreamReturn {
     toolCallId: string,
     inputResponses: Record<string, unknown>,
   ) => Promise<boolean>;
+  steerActiveTurn: (conversationId: string, message: string) => Promise<boolean>;
   isStreaming: boolean;
 }
 
@@ -3259,7 +3260,7 @@ export function useChatStream(): UseChatStreamReturn {
   const { getToken } = useSession();
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
   const activeRunsRef = useRef<
-    Map<string, ManagedCloudAgentRunHandle & { assistantMessageId: string }>
+    Map<string, ManagedCloudAgentRunHandle & { assistantMessageId: string; agiWork?: boolean }>
   >(new Map());
 
   // streamingConversationIds only flips after the auth-token await below, so it
@@ -3823,7 +3824,11 @@ export function useChatStream(): UseChatStreamReturn {
             ...(assistantParentId ? { assistantParentId } : {}),
             onRunHandle: (handle) => {
               if (handle) {
-                activeRunsRef.current.set(conversationId, { ...handle, assistantMessageId });
+                activeRunsRef.current.set(conversationId, {
+                  ...handle,
+                  assistantMessageId,
+                  agiWork: options.workMode === 'agiwork',
+                });
                 // AGI Work is the only mode sold as work that outlives the tab,
                 // so it is the only one that owes the reader a correction when
                 // the server could not give it the durable transport.
@@ -4261,6 +4266,20 @@ export function useChatStream(): UseChatStreamReturn {
     [getToken, stopStreaming, setLoading, abortConversation],
   );
 
+  const steerActiveTurn = useCallback(
+    async (conversationId: string, message: string): Promise<boolean> => {
+      const activeRun = activeRunsRef.current.get(conversationId);
+      if (!activeRun?.agiWork) return false;
+      const client = createManagedCloudAgentRunClient({
+        getAuthToken: getToken,
+        decorateMutationHeaders: addCsrfHeaders,
+      });
+      await client.steerRun(activeRun.runId, message);
+      return true;
+    },
+    [getToken],
+  );
+
   return {
     sendMessage,
     stopGeneration,
@@ -4268,6 +4287,7 @@ export function useChatStream(): UseChatStreamReturn {
     resumeInteractiveCardTurn,
     resolveToolApproval,
     resolveToolInput,
+    steerActiveTurn,
     isStreaming,
   };
 }

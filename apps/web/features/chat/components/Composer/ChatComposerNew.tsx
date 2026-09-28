@@ -404,6 +404,7 @@ interface ChatComposerProps {
   onTypingChange?: (isTyping: boolean) => void;
   /** Called when the user clicks the stop button. */
   onStop?: () => void;
+  onSendQueuedNow?: (message: string) => Promise<boolean>;
   /** ArrowUp on an empty composer opens the last user message for editing, as both leaders do. */
   onEditLastMessage?: () => void;
   /**
@@ -698,6 +699,7 @@ const ChatComposerNewComponent = ({
   onRemoveAttachmentUpload,
   onTypingChange,
   onStop,
+  onSendQueuedNow,
   onEditLastMessage,
   onEnterVoiceMode,
   clearSignal,
@@ -3499,6 +3501,33 @@ const ChatComposerNewComponent = ({
     setQueuedFollowUps((current) => current.filter((item) => item.id !== id));
   }, []);
 
+  const sendQueuedNow = useCallback(
+    async (id: string) => {
+      const target = queuedFollowUpsRef.current.find((item) => item.id === id);
+      if (!target || !onSendQueuedNow) return;
+      let steered: boolean;
+      try {
+        steered = await onSendQueuedNow(target.args[0]);
+      } catch (error) {
+        setLocalNotice(toUserMessage(error, 'Your message was not sent. It is still queued.'));
+        return;
+      }
+      if (editingQueuedIdRef.current === id) editingQueuedIdRef.current = null;
+      if (steered) {
+        const remaining = queuedFollowUpsRef.current.filter((item) => item.id !== id);
+        queuedFollowUpsRef.current = remaining;
+        setQueuedFollowUps(remaining);
+        setLocalNotice('Sent to the agent. It reads your message at its next step.');
+        return;
+      }
+      const reordered = [target, ...queuedFollowUpsRef.current.filter((item) => item.id !== id)];
+      queuedFollowUpsRef.current = reordered;
+      setQueuedFollowUps(reordered);
+      onStop?.();
+    },
+    [onSendQueuedNow, onStop],
+  );
+
   const editQueuedMessage = useCallback(
     (id: string) => {
       const target = queuedFollowUpsRef.current.find((item) => item.id === id);
@@ -3849,6 +3878,20 @@ const ChatComposerNewComponent = ({
                   <span className="ml-1 text-[var(--chat-text-muted)]">· {queued.toolsLabel}</span>
                 )}
               </span>
+              {onSendQueuedNow &&
+              isTurnActive &&
+              queued.conversationId === (conversationId ?? null) &&
+              queued.args[0].trim().length > 0 &&
+              !queued.args[1]?.length ? (
+                <button
+                  type="button"
+                  onClick={() => void sendQueuedNow(queued.id)}
+                  className="shrink-0 rounded-compact px-1.5 py-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  aria-label={`Send now: ${queued.preview}`}
+                >
+                  Send now
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={() => editQueuedMessage(queued.id)}
