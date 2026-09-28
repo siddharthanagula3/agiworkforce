@@ -31,8 +31,14 @@ export const MEMORY_COMMAND_SOURCE = 'web';
 export const MEMORY_COMMAND_CLIENT_SURFACES: ReadonlySet<CloudChatSurface> =
   new Set<CloudChatSurface>(['web', 'desktop', 'mobile']);
 
+const LABELLED_MEMORY_COMMAND_SURFACES: ReadonlySet<CloudChatSurface> = new Set<CloudChatSurface>([
+  'mobile',
+  'desktop',
+  'chrome',
+]);
+
 export function memoryCommandSource(surface: CloudChatSurface | null): string {
-  return surface === 'mobile' || surface === 'desktop' ? surface : MEMORY_COMMAND_SOURCE;
+  return surface && LABELLED_MEMORY_COMMAND_SURFACES.has(surface) ? surface : MEMORY_COMMAND_SOURCE;
 }
 
 /** A search that matched everything would offer to delete everything. */

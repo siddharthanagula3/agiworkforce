@@ -72,6 +72,7 @@ const EVENT_TYPE_SENTENCES: Record<string, string> = {
   api_key_revoked: 'Revoked an API key',
   connector_added: 'Connected an app',
   connector_removed: 'Disconnected an app',
+  connector_authorization_started: 'Started connecting an app',
   connector_setting_changed: 'Changed connector settings',
   session_revoked: 'Revoked a session',
   device_renamed: 'Renamed a linked device',
