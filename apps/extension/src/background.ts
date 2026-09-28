@@ -2842,14 +2842,6 @@ async function assertComputerUseOwnership(lease: ComputerUseRunLease): Promise<s
     rejectComputerUseOwnership(lease, 'tab_intent_changed');
   }
 
-  if (lease.windowId !== undefined) {
-    const activeTabs = await chrome.tabs.query({ active: true, windowId: lease.windowId });
-    computerUseRuns.assertCurrent(lease);
-    if (activeTabs[0]?.id !== lease.tabId) {
-      rejectComputerUseOwnership(lease, 'tab_intent_changed');
-    }
-  }
-
   return context.token;
 }
 
@@ -4974,20 +4966,6 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
   }
   if (changeInfo.url === undefined && changeInfo.status !== 'loading') return;
   invalidateWebMCPToolsForNavigation(tabId);
-});
-
-chrome.tabs.onActivated.addListener((activeInfo) => {
-  const lease = computerUseRuns.getActive();
-  if (!lease || lease.takeover) return;
-  if (
-    lease.windowId === undefined ||
-    activeInfo.windowId !== lease.windowId ||
-    activeInfo.tabId === lease.tabId
-  ) {
-    return;
-  }
-  computerUseStartGeneration += 1;
-  cancelActiveComputerUseRun('tab_intent_changed', lease.runId);
 });
 
 chrome.commands.onCommand.addListener((command) => {
